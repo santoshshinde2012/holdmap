@@ -423,7 +423,7 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
                     pr.name,
                     pr.git_branch
                         .as_ref()
-                        .map(|b| format!("  ⎇ {b}"))
+                        .map(|b| format!("  on branch {b}"))
                         .unwrap_or_default()
                 ),
             ));
@@ -668,7 +668,7 @@ fn draw_explain(f: &mut Frame, app: &mut App) {
 }
 
 fn draw_help(f: &mut Frame) {
-    let area = centered(f.area(), 64, 24);
+    let area = centered(f.area(), 84, 24);
     f.render_widget(Clear, area);
     let rows = [
         ("↑ ↓ / j k", "Move selection (PgUp/PgDn, g/G)"),
