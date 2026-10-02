@@ -1,0 +1,24 @@
+[
+  {
+    "Id": "8dfafdbc3a40aa9b6e0c1f7d1d5b2c8e4f0a9b7c6d5e4f3a2b1c0d9e8f7a6b5c",
+    "Names": ["/shop-db-1"],
+    "Image": "postgres:16",
+    "State": "running",
+    "Ports": [
+      {"IP": "0.0.0.0", "PrivatePort": 5432, "PublicPort": 5432, "Type": "tcp"},
+      {"IP": "::", "PrivatePort": 5432, "PublicPort": 5432, "Type": "tcp"}
+    ],
+    "Labels": {"com.docker.compose.project": "shop", "com.docker.compose.service": "db"}
+  },
+  {
+    "Id": "1a2b3c4d5e6f",
+    "Names": ["/cache"],
+    "Image": "redis:7-alpine",
+    "State": "running",
+    "Ports": [
+      {"IP": "127.0.0.1", "PrivatePort": 6379, "PublicPort": 6380, "Type": "tcp"},
+      {"PrivatePort": 9999, "Type": "tcp"}
+    ],
+    "Labels": null
+  }
+]
