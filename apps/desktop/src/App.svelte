@@ -115,7 +115,7 @@
     freePort = null;
     if (p === null || visible.some((e) => e.port === p)) return;
     const t = setTimeout(async () => {
-      try { freePort = await api.explain(p); } catch { /* ignore */ }
+      try { freePort = await api.explain(p); } catch (err) { toast("error", `Couldn't check port ${p}`, String(err)); }
     }, 150);
     return () => clearTimeout(t);
   });

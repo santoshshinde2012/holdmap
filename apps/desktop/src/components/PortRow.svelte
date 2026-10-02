@@ -116,7 +116,7 @@
   .sep { margin: 0 6px; color: var(--faint); }
   .addr { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
   .addr.exposed { color: var(--warn); font-weight: 500; }
-  .actions { display: flex; align-items: center; gap: 4px; opacity: 0; transition: opacity 0.12s; min-width: 0; }
+  .actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; opacity: 0; transition: opacity 0.12s; width: 104px; }
   .row:hover .actions, .actions.visible { opacity: 1; }
   @media (max-width: 980px) { .addr { display: none; } .row { grid-template-columns: 64px minmax(0, 1fr) auto; } }
 </style>
