@@ -25,3 +25,6 @@ tauri-plugin-opener = "2"
 
 [lints]
 workspace = true
+
+[package.metadata.dist]
+dist = false
