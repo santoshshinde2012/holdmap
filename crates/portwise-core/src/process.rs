@@ -58,7 +58,11 @@ impl ProcessTable {
                         .iter()
                         .map(|s| s.to_string_lossy().into_owned())
                         .collect(),
-                    cwd: p.cwd().map(PathBuf::from),
+                    // Linux appends " (deleted)" to a removed working directory.
+                    cwd: p.cwd().map(|c| {
+                        let s = c.to_string_lossy();
+                        PathBuf::from(s.strip_suffix(" (deleted)").unwrap_or(&s))
+                    }),
                     uid,
                     user,
                     start_time,
@@ -68,6 +72,7 @@ impl ProcessTable {
             })
             .map(|p| (p.pid, p))
             .collect();
+        #[cfg_attr(not(unix), allow(unused_mut))]
         let mut t = Self::from_processes(procs, std::process::id());
         #[cfg(unix)]
         {
