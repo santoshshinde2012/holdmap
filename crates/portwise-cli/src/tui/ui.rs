@@ -1,0 +1,713 @@
+//! TUI rendering.
+
+use super::app::{App, Modal, ProtoFilter};
+use crate::render::{address_label, what_label};
+use portwise_core::util::{human_bytes, human_duration, now_secs};
+use portwise_core::*;
+use ratatui::layout::{Alignment, Constraint, Flex, Layout, Rect};
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span, Text};
+use ratatui::widgets::{
+    Block, BorderType, Cell, Clear, Padding, Paragraph, Row, Scrollbar, ScrollbarOrientation,
+    ScrollbarState, Table, Wrap,
+};
+use ratatui::Frame;
+
+const ACCENT: Color = Color::Cyan;
+const MUTED: Color = Color::DarkGray;
+const SPIN: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+fn category_color(e: &PortEntry) -> Color {
+    if e.process.is_none() && e.container.is_none() {
+        return MUTED;
+    }
+    match e.framework.as_ref().map(|f| f.category) {
+        Some(FrameworkCategory::DevServer | FrameworkCategory::AppServer) => Color::Green,
+        Some(FrameworkCategory::Database | FrameworkCategory::Cache | FrameworkCategory::Queue) => {
+            Color::Magenta
+        }
+        Some(FrameworkCategory::Container) => Color::Blue,
+        Some(FrameworkCategory::WebServer | FrameworkCategory::Tool) => Color::Cyan,
+        Some(FrameworkCategory::System) => MUTED,
+        _ if e.is_dev => Color::Green,
+        _ => Color::Reset,
+    }
+}
+
+pub fn draw(f: &mut Frame, app: &mut App) {
+    let [header, search, body, footer] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(5),
+        Constraint::Length(1),
+    ])
+    .areas(f.area());
+    draw_header(f, app, header);
+    draw_search(f, app, search);
+    let wide = body.width >= 120;
+    let (list_area, detail_area) = if wide {
+        let [l, d] = Layout::horizontal([Constraint::Percentage(58), Constraint::Percentage(42)])
+            .areas(body);
+        (l, d)
+    } else {
+        let [l, d] =
+            Layout::vertical([Constraint::Percentage(55), Constraint::Percentage(45)]).areas(body);
+        (l, d)
+    };
+    draw_table(f, app, list_area);
+    draw_details(f, app, detail_area);
+    draw_footer(f, app, footer);
+    match &app.modal {
+        Modal::Confirm { .. } => draw_confirm(f, app),
+        Modal::Explain { .. } => draw_explain(f, app),
+        Modal::Help => draw_help(f),
+        Modal::None => {}
+    }
+}
+
+fn chip(label: &str, on: bool) -> Span<'static> {
+    if on {
+        Span::styled(
+            format!(" {label} "),
+            Style::new().fg(Color::Black).bg(ACCENT).bold(),
+        )
+    } else {
+        Span::styled(format!(" {label} "), Style::new().fg(MUTED))
+    }
+}
+
+fn draw_header(f: &mut Frame, app: &App, area: Rect) {
+    let mut spans = vec![
+        Span::styled(
+            " ◉ portwise ",
+            Style::new().fg(Color::Black).bg(ACCENT).bold(),
+        ),
+        Span::raw(" "),
+    ];
+    if let Some(e) = &app.engine {
+        let s = e.snapshot();
+        let dev = app.rows.iter().filter(|r| r.is_dev).count();
+        let exposed = app
+            .rows
+            .iter()
+            .filter(|r| r.exposure == Exposure::AllInterfaces)
+            .count();
+        spans.push(Span::styled(
+            format!("{} ports", app.rows.len()),
+            Style::new().bold(),
+        ));
+        spans.push(Span::styled(
+            format!(" · {dev} dev"),
+            Style::new().fg(Color::Green),
+        ));
+        if exposed > 0 {
+            spans.push(Span::styled(
+                format!(" · {exposed} exposed"),
+                Style::new().fg(Color::Yellow),
+            ));
+        }
+        if s.hidden_sockets > 0 {
+            spans.push(Span::styled(
+                format!(" · {} hidden", s.hidden_sockets),
+                Style::new().fg(MUTED),
+            ));
+        }
+        spans.push(Span::styled(
+            format!(" · {} ms", s.scan_ms),
+            Style::new().fg(MUTED),
+        ));
+    } else {
+        spans.push(Span::styled(
+            format!("{} scanning…", SPIN[app.spinner % SPIN.len()]),
+            Style::new().fg(MUTED),
+        ));
+    }
+    let left = Line::from(spans);
+    let right = Line::from(vec![
+        chip(
+            if app.show_all {
+                "All sockets"
+            } else {
+                "Listening"
+            },
+            true,
+        ),
+        Span::raw(" "),
+        chip(
+            match app.proto {
+                ProtoFilter::Both => "TCP+UDP",
+                ProtoFilter::Tcp => "TCP",
+                ProtoFilter::Udp => "UDP",
+            },
+            app.proto != ProtoFilter::Both,
+        ),
+        Span::raw(" "),
+        chip("Dev", app.dev_only),
+        Span::raw(" "),
+        chip("Mine", app.mine_only),
+        Span::raw(" "),
+        Span::styled(
+            if app.paused {
+                "⏸ paused "
+            } else if app.scanning {
+                "⟳ "
+            } else {
+                "  "
+            },
+            Style::new().fg(MUTED),
+        ),
+    ])
+    .alignment(Alignment::Right);
+    f.render_widget(Paragraph::new(left), area);
+    f.render_widget(Paragraph::new(right), area);
+}
+
+fn draw_search(f: &mut Frame, app: &App, area: Rect) {
+    let line = if app.searching {
+        Line::from(vec![
+            Span::styled(" / ", Style::new().fg(ACCENT).bold()),
+            Span::raw(app.query.clone()),
+            Span::styled(
+                "▏",
+                Style::new().fg(ACCENT).add_modifier(Modifier::SLOW_BLINK),
+            ),
+            Span::styled(
+                "   Enter to keep · Esc to clear · try :3000, 3000-3999, proto:udp, vite",
+                Style::new().fg(MUTED),
+            ),
+        ])
+    } else if !app.query.is_empty() {
+        Line::from(vec![
+            Span::styled(" filter ", Style::new().fg(MUTED)),
+            Span::styled(app.query.clone(), Style::new().fg(ACCENT).bold()),
+            Span::styled("  (/ to edit, Esc to clear)", Style::new().fg(MUTED)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled(" Press ", Style::new().fg(MUTED)),
+            Span::styled("/", Style::new().fg(ACCENT).bold()),
+            Span::styled(" to search · sorted by ", Style::new().fg(MUTED)),
+            Span::styled(
+                format!(
+                    "{}{}",
+                    app.sort.label(),
+                    if app.reverse { " ↓" } else { " ↑" }
+                ),
+                Style::new().fg(Color::Reset),
+            ),
+        ])
+    };
+    f.render_widget(Paragraph::new(line), area);
+}
+
+fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
+    app.table_area = area;
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(Style::new().fg(MUTED))
+        .title(Line::from(vec![Span::styled(
+            " Ports ",
+            Style::new().bold(),
+        )]));
+    if let Some(err) = &app.error {
+        let p = Paragraph::new(Text::from(vec![
+            Line::from(Span::styled(
+                "Couldn't scan sockets",
+                Style::new().fg(Color::Red).bold(),
+            )),
+            Line::from(err.clone()),
+            Line::from(Span::styled("Press r to retry.", Style::new().fg(MUTED))),
+        ]))
+        .block(block)
+        .wrap(Wrap { trim: true });
+        f.render_widget(p, area);
+        return;
+    }
+    if app.engine.is_none() {
+        let p = Paragraph::new(Line::from(Span::styled(
+            format!(
+                "{} Scanning sockets and processes…",
+                SPIN[app.spinner % SPIN.len()]
+            ),
+            Style::new().fg(MUTED),
+        )))
+        .block(block);
+        f.render_widget(p, area);
+        return;
+    }
+    if app.rows.is_empty() {
+        let msg = if app.query.is_empty() && !app.dev_only && !app.mine_only {
+            "Nothing is listening. Enjoy the quiet."
+        } else {
+            "No ports match your filters. Esc clears the search; d/m/t toggle filters."
+        };
+        let p = Paragraph::new(Text::from(vec![
+            Line::raw(""),
+            Line::from(Span::styled(msg, Style::new().fg(MUTED))),
+        ]))
+        .alignment(Alignment::Center)
+        .block(block);
+        f.render_widget(p, area);
+        return;
+    }
+    let header = Row::new(
+        ["PORT", "PROTO", "ADDRESS", "PID", "PROCESS", "WHAT"]
+            .map(|h| Cell::from(h).style(Style::new().fg(MUTED).bold())),
+    );
+    let rows: Vec<Row> = app
+        .rows
+        .iter()
+        .map(|e| {
+            let marker = if e.exposure == Exposure::AllInterfaces {
+                Span::styled("●", Style::new().fg(Color::Yellow))
+            } else {
+                Span::styled("●", Style::new().fg(category_color(e)))
+            };
+            Row::new(vec![
+                Cell::from(Line::from(vec![
+                    marker,
+                    Span::raw(" "),
+                    Span::styled(e.port.to_string(), Style::new().bold()),
+                ])),
+                Cell::from(Span::styled(e.protocol.to_string(), Style::new().fg(MUTED))),
+                Cell::from(Span::styled(
+                    address_label(e),
+                    if e.exposure == Exposure::AllInterfaces {
+                        Style::new().fg(Color::Yellow)
+                    } else {
+                        Style::new().fg(MUTED)
+                    },
+                )),
+                Cell::from(e.pid.map(|p| p.to_string()).unwrap_or_else(|| "–".into())),
+                Cell::from(Span::styled(
+                    e.process
+                        .as_ref()
+                        .map(|p| p.name.clone())
+                        .unwrap_or_else(|| "–".into()),
+                    if e.protected {
+                        Style::new().fg(MUTED)
+                    } else {
+                        Style::new()
+                    },
+                )),
+                Cell::from(Span::styled(
+                    what_label(e),
+                    Style::new().fg(category_color(e)),
+                )),
+            ])
+        })
+        .collect();
+    let widths = [
+        Constraint::Length(8),
+        Constraint::Length(5),
+        Constraint::Length(16),
+        Constraint::Length(8),
+        Constraint::Length(16),
+        Constraint::Min(10),
+    ];
+    let table = Table::new(rows, widths)
+        .header(header)
+        .block(block)
+        .column_spacing(1)
+        .row_highlight_style(
+            Style::new()
+                .bg(Color::Indexed(236))
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("▌");
+    f.render_stateful_widget(table, area, &mut app.state);
+    let mut sb = ScrollbarState::new(app.rows.len()).position(app.state.selected().unwrap_or(0));
+    f.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None)
+            .thumb_style(Style::new().fg(MUTED)),
+        area.inner(ratatui::layout::Margin {
+            vertical: 1,
+            horizontal: 0,
+        }),
+        &mut sb,
+    );
+}
+
+fn kv(k: &str, v: impl Into<String>) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(format!("{k:>9}  "), Style::new().fg(MUTED)),
+        Span::raw(v.into()),
+    ])
+}
+
+fn plan_lines(plan: &ActionPlan) -> Vec<Line<'static>> {
+    let mut out = Vec::new();
+    if let Some(b) = &plan.blocked {
+        let (label, color) = match b.kind {
+            BlockKind::NeedsElevation => ("Needs elevation", Color::Yellow),
+            BlockKind::NothingToStop => ("Nothing to stop", MUTED),
+            _ => ("Blocked", Color::Red),
+        };
+        out.push(Line::from(vec![
+            Span::styled(format!("{label}: "), Style::new().fg(color).bold()),
+            Span::raw(b.message.clone()),
+        ]));
+        return out;
+    }
+    for (i, s) in plan.steps.iter().enumerate() {
+        out.push(Line::from(vec![
+            Span::styled(format!(" {}. ", i + 1), Style::new().fg(ACCENT)),
+            Span::raw(s.describe()),
+        ]));
+    }
+    for w in &plan.warnings {
+        out.push(Line::from(Span::styled(
+            format!(" ! {w}"),
+            Style::new().fg(Color::Yellow),
+        )));
+    }
+    out
+}
+
+fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
+    let title = match app.selected() {
+        Some(e) => format!(
+            " :{} · {} ",
+            e.port,
+            e.framework
+                .as_ref()
+                .map(|f| f.name.clone())
+                .unwrap_or_else(|| e.protocol.to_string())
+        ),
+        None => " Details ".into(),
+    };
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(Style::new().fg(MUTED))
+        .title(Span::styled(title, Style::new().bold().fg(ACCENT)))
+        .padding(Padding::horizontal(1));
+    let Some(e) = app.selected().cloned() else {
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                "Select a port to see who owns it and why.",
+                Style::new().fg(MUTED),
+            ))
+            .block(block),
+            area,
+        );
+        return;
+    };
+    let ex = app.explanation();
+    let mut lines: Vec<Line> = Vec::new();
+    if let Some(ex) = &ex {
+        lines.push(Line::from(Span::styled(
+            ex.headline.clone(),
+            Style::new().bold(),
+        )));
+        lines.push(Line::raw(""));
+    }
+    if let Some(p) = &e.process {
+        lines.push(kv("Process", format!("{} (PID {})", p.name, p.pid)));
+        if let Some(u) = &e.user {
+            lines.push(kv("User", u.clone()));
+        }
+        let cmd = p.command();
+        let cmd = if cmd.chars().count() > 140 {
+            format!("{}…", cmd.chars().take(139).collect::<String>())
+        } else {
+            cmd
+        };
+        lines.push(kv("Command", cmd));
+        if let Some(pr) = &e.project {
+            lines.push(kv(
+                "Project",
+                format!(
+                    "{}{}",
+                    pr.name,
+                    pr.git_branch
+                        .as_ref()
+                        .map(|b| format!("  ⎇ {b}"))
+                        .unwrap_or_default()
+                ),
+            ));
+            lines.push(kv("Path", tilde(&pr.root)));
+        } else if let Some(cwd) = &p.cwd {
+            lines.push(kv("Cwd", tilde(cwd)));
+        }
+        lines.push(kv(
+            "Uptime",
+            human_duration(now_secs().saturating_sub(p.start_time)),
+        ));
+        if p.memory_bytes > 0 {
+            lines.push(kv("Memory", human_bytes(p.memory_bytes)));
+        }
+    }
+    if let Some(c) = &e.container {
+        lines.push(kv("Container", format!("{} ({})", c.name, c.runtime)));
+        lines.push(kv("Image", c.image.clone()));
+        lines.push(kv("Mapping", format!("{} → {}", e.port, c.private_port)));
+    }
+    lines.push(Line::from(vec![
+        Span::styled(format!("{:>9}  ", "Address"), Style::new().fg(MUTED)),
+        Span::styled(
+            e.addresses.join(", "),
+            if e.exposure == Exposure::AllInterfaces {
+                Style::new().fg(Color::Yellow)
+            } else {
+                Style::new()
+            },
+        ),
+        Span::styled(
+            if e.exposure == Exposure::AllInterfaces {
+                "  reachable from your network"
+            } else {
+                ""
+            },
+            Style::new().fg(Color::Yellow),
+        ),
+    ]));
+    if let Some(ex) = &ex {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(vec![
+            Span::styled("→ ", Style::new().fg(ACCENT)),
+            Span::styled(ex.recommendation.clone(), Style::new().fg(ACCENT)),
+        ]));
+        if let Some(plan) = &ex.plan {
+            lines.extend(plan_lines(plan));
+        }
+    }
+    if let Some(b) = &app.busy {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled(
+            format!("{} {b}", SPIN[app.spinner % SPIN.len()]),
+            Style::new().fg(ACCENT).bold(),
+        )));
+        for l in app.stop_log.iter().rev().take(6).rev() {
+            lines.push(Line::from(Span::styled(
+                format!("  · {l}"),
+                Style::new().fg(MUTED),
+            )));
+        }
+    }
+    f.render_widget(
+        Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false }),
+        area,
+    );
+}
+
+fn key(k: &str) -> Span<'static> {
+    Span::styled(
+        format!(" {k} "),
+        Style::new().fg(Color::Black).bg(Color::Gray),
+    )
+}
+
+fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
+    if let Some(t) = &app.toast {
+        let style = if t.ok {
+            Style::new().fg(Color::Green).bold()
+        } else {
+            Style::new().fg(Color::Red).bold()
+        };
+        f.render_widget(
+            Paragraph::new(Span::styled(format!(" {}", t.text), style)),
+            area,
+        );
+        return;
+    }
+    let hints = [
+        ("↑↓", "move"),
+        ("/", "search"),
+        ("x", "stop"),
+        ("X", "kill"),
+        ("e", "explain"),
+        ("o", "open"),
+        ("s", "sort"),
+        ("t", "proto"),
+        ("d", "dev"),
+        ("a", "all"),
+        ("?", "help"),
+        ("q", "quit"),
+    ];
+    let mut spans = Vec::new();
+    for (k, label) in hints {
+        spans.push(key(k));
+        spans.push(Span::styled(format!(" {label}  "), Style::new().fg(MUTED)));
+    }
+    f.render_widget(Paragraph::new(Line::from(spans)), area);
+}
+
+fn centered(area: Rect, w: u16, h: u16) -> Rect {
+    let [v] = Layout::vertical([Constraint::Length(h.min(area.height))])
+        .flex(Flex::Center)
+        .areas(area);
+    let [r] = Layout::horizontal([Constraint::Length(w.min(area.width))])
+        .flex(Flex::Center)
+        .areas(v);
+    r
+}
+
+fn draw_confirm(f: &mut Frame, app: &App) {
+    let Modal::Confirm { plan, headline } = &app.modal else {
+        return;
+    };
+    let area = centered(f.area(), 84, 18);
+    f.render_widget(Clear, area);
+    let blocked = plan.is_blocked();
+    let title = if blocked {
+        " Can't stop this safely "
+    } else if plan
+        .steps
+        .iter()
+        .any(|s| matches!(s, Step::SignalProcesses { force: true, .. }))
+    {
+        " Force kill? "
+    } else {
+        " Stop? "
+    };
+    let color = if blocked { Color::Yellow } else { Color::Red };
+    let mut lines = vec![
+        Line::from(Span::styled(headline.clone(), Style::new().bold())),
+        Line::raw(""),
+    ];
+    lines.extend(plan_lines(plan));
+    lines.push(Line::raw(""));
+    if blocked {
+        lines.push(Line::from(vec![
+            key("Enter"),
+            Span::styled(" close", Style::new().fg(MUTED)),
+        ]));
+    } else {
+        let risk = match plan.risk {
+            Risk::Low => Span::styled("low risk", Style::new().fg(Color::Green)),
+            Risk::Medium => Span::styled("medium risk", Style::new().fg(Color::Yellow)),
+            Risk::High => Span::styled("HIGH RISK", Style::new().fg(Color::Red).bold()),
+        };
+        lines.push(Line::from(vec![
+            Span::styled(" y ", Style::new().fg(Color::White).bg(Color::Red).bold()),
+            Span::raw(" stop   "),
+            key("n"),
+            Span::styled(" cancel     ", Style::new().fg(MUTED)),
+            risk,
+        ]));
+    }
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(Style::new().fg(color))
+        .title(Span::styled(title, Style::new().fg(color).bold()))
+        .padding(Padding::uniform(1));
+    f.render_widget(
+        Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false }),
+        area,
+    );
+}
+
+fn draw_explain(f: &mut Frame, app: &mut App) {
+    let scroll = match &app.modal {
+        Modal::Explain { scroll } => *scroll,
+        _ => 0,
+    };
+    let Some(ex) = app.explanation() else { return };
+    let area = centered(f.area(), 100, f.area().height.saturating_sub(4));
+    f.render_widget(Clear, area);
+    let mut lines = vec![
+        Line::from(Span::styled(ex.headline.clone(), Style::new().bold())),
+        Line::raw(""),
+    ];
+    for d in &ex.details {
+        lines.push(Line::from(Span::styled(
+            format!("• {d}"),
+            Style::new().fg(Color::Gray),
+        )));
+    }
+    lines.push(Line::raw(""));
+    lines.push(Line::from(vec![
+        Span::styled("Recommended: ", Style::new().fg(ACCENT).bold()),
+        Span::raw(ex.recommendation.clone()),
+    ]));
+    if let Some(plan) = &ex.plan {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled("Plan", Style::new().bold())));
+        lines.extend(plan_lines(plan));
+    }
+    if !ex.commands.is_empty() {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled("Commands", Style::new().bold())));
+        for c in &ex.commands {
+            lines.push(Line::from(vec![
+                Span::styled(" $ ", Style::new().fg(MUTED)),
+                Span::styled(c.clone(), Style::new().fg(Color::Green)),
+            ]));
+        }
+    }
+    lines.push(Line::raw(""));
+    lines.push(Line::from(vec![
+        key("x"),
+        Span::styled(" stop   ", Style::new().fg(MUTED)),
+        key("↑↓"),
+        Span::styled(" scroll   ", Style::new().fg(MUTED)),
+        key("any"),
+        Span::styled(" close", Style::new().fg(MUTED)),
+    ]));
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(Style::new().fg(ACCENT))
+        .title(Span::styled(
+            format!(" Why is :{} busy? ", ex.port),
+            Style::new().fg(ACCENT).bold(),
+        ))
+        .padding(Padding::uniform(1));
+    f.render_widget(
+        Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false })
+            .scroll((scroll, 0)),
+        area,
+    );
+}
+
+fn draw_help(f: &mut Frame) {
+    let area = centered(f.area(), 64, 24);
+    f.render_widget(Clear, area);
+    let rows = [
+        ("↑ ↓ / j k", "Move selection (PgUp/PgDn, g/G)"),
+        ("/", "Search: text, :3000, 3000-3999, proto:udp, pid:123"),
+        ("Enter / e", "Explain why the port is busy"),
+        (
+            "x / Del",
+            "Stop gracefully (SIGTERM → SIGKILL) with confirmation",
+        ),
+        ("X", "Force kill (SIGKILL) with confirmation"),
+        ("o", "Open http://localhost:<port> in the browser"),
+        ("c", "Copy URL to clipboard (OSC 52)"),
+        ("s / S", "Cycle sort key / reverse"),
+        ("t", "Protocol: TCP+UDP → TCP → UDP"),
+        ("d", "Only dev servers"),
+        ("m", "Only my processes"),
+        ("a", "Listening only ↔ all sockets"),
+        ("r / F5", "Refresh now (auto every 2 s)"),
+        ("p", "Pause auto-refresh"),
+        ("q / Esc", "Quit"),
+    ];
+    let mut lines: Vec<Line> = rows
+        .iter()
+        .map(|(k, v)| {
+            Line::from(vec![
+                Span::styled(format!("{k:>11}  "), Style::new().fg(ACCENT).bold()),
+                Span::raw(*v),
+            ])
+        })
+        .collect();
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled(
+        "Colours: green dev · magenta data · blue container · yellow exposed",
+        Style::new().fg(MUTED),
+    )));
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(Style::new().fg(ACCENT))
+        .title(Span::styled(" Keys ", Style::new().fg(ACCENT).bold()))
+        .padding(Padding::uniform(1));
+    f.render_widget(Paragraph::new(lines).block(block), area);
+}
