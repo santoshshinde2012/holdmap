@@ -164,17 +164,44 @@ fn tray_label(e: &PortEntry) -> String {
     format!(":{}  {}", e.port, what)
 }
 
-fn build_tray_menu(app: &AppHandle, snapshot: Option<&Snapshot>) -> tauri::Result<Menu<tauri::Wry>> {
+fn build_tray_menu(
+    app: &AppHandle,
+    snapshot: Option<&Snapshot>,
+) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::new(app)?;
-    menu.append(&MenuItem::with_id(app, "show", "Open portwise", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        "show",
+        "Open portwise",
+        true,
+        None::<&str>,
+    )?)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     let dev: Vec<&PortEntry> = snapshot
-        .map(|s| s.entries.iter().filter(|e| e.is_dev && e.is_mine).take(10).collect())
+        .map(|s| {
+            s.entries
+                .iter()
+                .filter(|e| e.is_dev && e.is_mine)
+                .take(10)
+                .collect()
+        })
         .unwrap_or_default();
     if dev.is_empty() {
-        menu.append(&MenuItem::with_id(app, "none", "No dev servers running", false, None::<&str>)?)?;
+        menu.append(&MenuItem::with_id(
+            app,
+            "none",
+            "No dev servers running",
+            false,
+            None::<&str>,
+        )?)?;
     } else {
-        menu.append(&MenuItem::with_id(app, "hdr", "Dev servers", false, None::<&str>)?)?;
+        menu.append(&MenuItem::with_id(
+            app,
+            "hdr",
+            "Dev servers",
+            false,
+            None::<&str>,
+        )?)?;
         for e in dev {
             menu.append(&MenuItem::with_id(
                 app,
@@ -186,8 +213,20 @@ fn build_tray_menu(app: &AppHandle, snapshot: Option<&Snapshot>) -> tauri::Resul
         }
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
-    menu.append(&MenuItem::with_id(app, "refresh", "Refresh", true, None::<&str>)?)?;
-    menu.append(&MenuItem::with_id(app, "quit", "Quit portwise", true, Some("CmdOrCtrl+Q"))?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        "refresh",
+        "Refresh",
+        true,
+        None::<&str>,
+    )?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        "quit",
+        "Quit portwise",
+        true,
+        Some("CmdOrCtrl+Q"),
+    )?)?;
     Ok(menu)
 }
 
@@ -228,7 +267,10 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 std::thread::spawn(move || tray_tick(&app));
             }
             id => {
-                if let Some(port) = id.strip_prefix("focus:").and_then(|p| p.parse::<u16>().ok()) {
+                if let Some(port) = id
+                    .strip_prefix("focus:")
+                    .and_then(|p| p.parse::<u16>().ok())
+                {
                     show_main(app);
                     let _ = app.emit("focus-port", port);
                 }
@@ -263,11 +305,16 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(state)
-        .invoke_handler(tauri::generate_handler![app_info, scan, explain, plan, stop])
+        .invoke_handler(tauri::generate_handler![
+            app_info, scan, explain, plan, stop
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
             match setup_tray(&handle) {
-                Ok(()) => app.state::<AppState>().tray_ok.store(true, Ordering::Relaxed),
+                Ok(()) => app
+                    .state::<AppState>()
+                    .tray_ok
+                    .store(true, Ordering::Relaxed),
                 Err(e) => eprintln!("portwise: tray unavailable ({e}); closing the window quits"),
             }
             let bg = handle.clone();
@@ -287,7 +334,12 @@ pub fn run() {
         .on_window_event(|window, event| {
             // With a tray, closing the window keeps portwise running in the menu bar.
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.app_handle().state::<AppState>().tray_ok.load(Ordering::Relaxed) {
+                if window
+                    .app_handle()
+                    .state::<AppState>()
+                    .tray_ok
+                    .load(Ordering::Relaxed)
+                {
                     api.prevent_close();
                     let _ = window.hide();
                 }

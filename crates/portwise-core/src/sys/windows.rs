@@ -49,7 +49,7 @@ fn creation_time(h: &Handle) -> Option<u64> {
     let mut u = c;
     // SAFETY: valid handle and out-pointers to stack FILETIMEs.
     let ok = unsafe { GetProcessTimes(h.0, &mut c, &mut e, &mut k, &mut u) };
-    (ok != 0).then(|| ((c.dwHighDateTime as u64) << 32) | c.dwLowDateTime as u64)
+    (ok != 0).then_some(((c.dwHighDateTime as u64) << 32) | c.dwLowDateTime as u64)
 }
 
 pub fn start_token(pid: u32) -> Option<u64> {
