@@ -17,6 +17,9 @@ fn helper_process() {
     let Ok(mode) = std::env::var("PW_HELPER") else {
         return;
     };
+    // Never outlive the test that spawned us, even if it panics or is interrupted.
+    // SAFETY: prctl(PR_SET_PDEATHSIG) only affects this process.
+    unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) };
     let (kind, arg) = mode.split_once(':').unwrap_or((mode.as_str(), ""));
     match kind {
         "tcp" | "ignore-term" => {
