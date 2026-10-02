@@ -67,9 +67,15 @@ PY
   echo "demo servers started in $DEMO (ports 3000 5173 8000 8080 8125/udp)"
 }
 
+killtree() {
+  local pid=$1 child
+  for child in $(pgrep -P "$pid" 2>/dev/null); do killtree "$child"; done
+  kill -9 "$pid" 2>/dev/null || true
+}
+
 stop() {
   [ -f "$PIDS" ] || { echo "no demo running"; return; }
-  while read -r pid; do pkill -TERM -P "$pid" 2>/dev/null || true; kill -9 "$pid" 2>/dev/null || true; done < "$PIDS"
+  while read -r pid; do killtree "$pid"; done < "$PIDS"
   rm -f "$PIDS"; echo "demo servers stopped"
 }
 
