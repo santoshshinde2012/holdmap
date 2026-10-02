@@ -194,6 +194,8 @@ export function matches(e: PortEntry, f: Filters): boolean {
       command(e),
       e.project?.name,
       e.project?.git_branch,
+      e.project?.root,
+      e.process?.cwd,
       e.framework?.name,
       e.container?.name,
       e.container?.image,
