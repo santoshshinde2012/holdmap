@@ -207,8 +207,9 @@ fn call_tool(name: &str, args: &Value) -> Result<(String, Value), ToolError> {
                 listening_only: true,
                 ..Default::default()
             };
-            let rows: Vec<Value> = filter
-                .apply(&e.snapshot().entries)
+            let shown = filter.apply(&e.snapshot().entries);
+            let hidden = shown.iter().filter(|x| x.is_hidden()).count();
+            let rows: Vec<Value> = shown
                 .into_iter()
                 .map(|x| {
                     json!({
@@ -223,8 +224,11 @@ fn call_tool(name: &str, args: &Value) -> Result<(String, Value), ToolError> {
                 })
                 .collect();
             Ok((
-                format!("{} port(s) in use.", rows.len()),
-                json!({"ports": rows, "hidden_sockets": e.snapshot().hidden_sockets}),
+                format!(
+                    "{} in use.",
+                    portwise_core::util::count(rows.len(), "port", "ports")
+                ),
+                json!({"ports": rows, "hidden_sockets": hidden}),
             ))
         }
         "get_topology" => {
@@ -340,6 +344,11 @@ fn call_tool(name: &str, args: &Value) -> Result<(String, Value), ToolError> {
                 ));
             }
             let report = execute(&plan, &mut |_| {});
+            // Like the CLI and the app: what an agent stopped shows up in `portwise history`
+            // and can be brought back with `portwise restart`. Best effort.
+            let _ = portwise_core::store::Store::open_default().record(
+                &portwise_core::history::entries_from_plan(&e.scan, &plan, &report),
+            );
             if report.success {
                 Ok((
                     format!("Port {port} is free (took {} ms).", report.elapsed_ms),
