@@ -1,63 +1,207 @@
-# Builds signed-ready desktop installers (.dmg/.app, .msi/.exe, .deb/.AppImage/.rpm) with
-# tauri-action and attaches them to a draft GitHub release. Triggered by `desktop-v*` tags.
+# Desktop installers (.dmg, .msi + NSIS .exe, .AppImage, .deb, .rpm) built by tauri-action and
+# attached to the GitHub Release that release.yml (dist) created for the same `vX.Y.Z` tag, with
+# SHA-256 checksums and SLSA build provenance.
+#
+# Optional, each skipped when its secrets are absent:
+# - macOS signing + notarisation: APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD,
+#   APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD (app-specific), APPLE_TEAM_ID.
+# - Windows Authenticode: WINDOWS_CERTIFICATE (base64 .pfx), WINDOWS_CERTIFICATE_PASSWORD.
+# - Signed auto-updates: TAURI_SIGNING_PRIVATE_KEY (+ TAURI_SIGNING_PRIVATE_KEY_PASSWORD) and the
+#   repository variable TAURI_UPDATER_PUBKEY. Adds updater bundles and latest.json.
+#
+# Dry run: run it manually with an empty tag; the bundles are kept as workflow artifacts.
 name: Desktop release
 
 on:
-  push:
-    tags: ["desktop-v*"]
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to upload to (vX.Y.Z); empty = dry run that only builds"
+        required: false
+        default: ""
 
-permissions:
-  contents: write
+permissions: {}
+
+concurrency:
+  group: desktop-release-${{ inputs.tag || github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  plan:
+    # After dist's Release workflow succeeded for a version tag, or when started by hand.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      ref: ${{ steps.plan.outputs.ref }}
+      updater: ${{ steps.plan.outputs.updater }}
+    steps:
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          RUN_TAG: ${{ github.event.workflow_run.head_branch }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && vars.TAURI_UPDATER_PUBKEY != '' }}
+        run: |
+          if [ "$EVENT" = workflow_run ]; then tag=$RUN_TAG; ref=$RUN_SHA; else tag=$INPUT_TAG; ref=${INPUT_TAG:-$GITHUB_SHA}; fi
+          if [ -n "$tag" ] && ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::$tag isn't a vX.Y.Z tag"; exit 1
+          fi
+          { echo "tag=$tag"; echo "ref=$ref"; echo "updater=$HAS_UPDATER_KEY"; } >> "$GITHUB_OUTPUT"
+          echo "### Desktop ${tag:-dry run} (updater: $HAS_UPDATER_KEY)" >> "$GITHUB_STEP_SUMMARY"
+
   build:
+    needs: plan
+    name: build (${{ matrix.name }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
+          - name: macos-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
-          - platform: macos-latest
+          - name: macos-x64
+            os: macos-latest
+            target: x86_64-apple-darwin
             args: --target x86_64-apple-darwin
-          - platform: ubuntu-22.04
+          - name: linux-x64
+            os: ubuntu-22.04
+            target: ""
             args: ""
-          - platform: windows-latest
+          - name: windows-x64
+            os: windows-latest
+            target: ""
             args: ""
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write # upload to the release
+      id-token: write # attestations
+      attestations: write
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: ${{ matrix.name }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
       - name: Install Tauri Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev rpm
       - run: npm ci
         working-directory: apps/desktop
-      - uses: tauri-apps/tauri-action@v0
+
+      # Each optional capability writes a config overlay and/or env vars only when its secrets
+      # exist, so forks and unsigned builds still succeed.
+      - name: Updater (signed latest.json), if configured
+        if: needs.plan.outputs.updater == 'true'
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Optional code signing / notarisation (macOS): set these secrets to enable.
+          PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          REPO: ${{ github.repository }}
+        run: |
+          jq -n --arg pk "$PUBKEY" --arg url "https://github.com/$REPO/releases/latest/download/latest.json" \
+            '{bundle: {createUpdaterArtifacts: true}, plugins: {updater: {pubkey: $pk, endpoints: [$url]}}}' \
+            > apps/desktop/src-tauri/tauri.updater.conf.json
+          {
+            echo "TAURI_SIGNING_PRIVATE_KEY<<__KEY__"; echo "$KEY"; echo "__KEY__"
+            echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$KEY_PASSWORD"
+            echo "EXTRA_ARGS=${EXTRA_ARGS:-} --config src-tauri/tauri.updater.conf.json"
+          } >> "$GITHUB_ENV"
+      - name: macOS signing and notarisation, if configured
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then echo "::notice::No Apple certificate: the app is unsigned"; exit 0; fi
+          for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            [ -n "${!v}" ] && echo "$v=${!v}" >> "$GITHUB_ENV"
+          done
+      - name: Windows signing, if configured
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE) { Write-Output "::notice::No Windows certificate: the installers are unsigned"; exit 0 }
+          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $pw = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+          Remove-Item $pfx
+          @{ bundle = @{ windows = @{ certificateThumbprint = $cert.Thumbprint; digestAlgorithm = "sha256"; timestampUrl = "http://timestamp.digicert.com" } } } |
+            ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 apps/desktop/src-tauri/tauri.windows-sign.conf.json
+          "EXTRA_ARGS=$env:EXTRA_ARGS --config src-tauri/tauri.windows-sign.conf.json" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build (and upload to the release)
+        id: tauri
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: apps/desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: "portwise desktop ${{ github.ref_name }}"
-          releaseBody: "See the assets below to download portwise for your platform."
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+          # With a tag the release already exists (dist created it), so tauri-action only uploads.
+          tagName: ${{ needs.plan.outputs.tag }}
+          args: ${{ matrix.args }} ${{ env.EXTRA_ARGS }}
+          uploadUpdaterJson: ${{ needs.plan.outputs.updater == 'true' }}
+          updaterJsonPreferNsis: true
+          uploadWorkflowArtifacts: ${{ needs.plan.outputs.tag == '' }}
+          workflowArtifactNamePattern: portwise-desktop-${{ matrix.name }}-[name]
+
+      - name: Collect the installers
+        id: files
+        shell: bash
+        run: |
+          shopt -s nullglob # (no globstar: macOS runners ship bash 3.2)
+          files=()
+          for d in target/release/bundle target/*/release/bundle; do
+            files+=("$d"/dmg/*.dmg "$d"/msi/*.msi "$d"/nsis/*.exe "$d"/deb/*.deb "$d"/rpm/*.rpm "$d"/appimage/*.AppImage)
+          done
+          [ ${#files[@]} -gt 0 ] || { echo "::error::no installers were built"; exit 1; }
+          sum="portwise-desktop-${{ matrix.name }}.sha256"
+          if command -v sha256sum >/dev/null; then sha256sum "${files[@]}"; else shasum -a 256 "${files[@]}"; fi \
+            | sed 's#  .*/#  #' > "$sum"
+          cat "$sum"
+          { echo "sum=$sum"; echo "paths<<__P__"; printf '%s\n' "${files[@]}"; echo "__P__"; } >> "$GITHUB_OUTPUT"
+      - name: Build provenance
+        if: env.TAG != ''
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.files.outputs.paths }}
+      - name: Upload checksums to the release
+        if: env.TAG != ''
+        shell: bash
+        run: gh release upload "$TAG" "${{ steps.files.outputs.sum }}" --clobber --repo "$GITHUB_REPOSITORY"
