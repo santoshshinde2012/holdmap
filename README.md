@@ -80,14 +80,32 @@ Windows (PowerShell):
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-installer.ps1 | iex"
 ```
 
-The installer puts the `portwise` binary in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on
-Windows; set `CARGO_HOME` to change it) and adds that folder to your `PATH` for new shells: it
-appends `. "$HOME/.cargo/env"` to `~/.profile`, `~/.zshrc` and any existing `~/.bashrc` /
-`~/.bash_profile` (fish gets a `conf.d` file; Windows gets the user `PATH`). Open a new terminal,
-or run `source "$HOME/.cargo/env"` to use it in the current one. That's Rust's usual folder, but
-Rust isn't needed.
+Where the binary goes: the v0.1.0 installer uses `~/.cargo/bin` (Rust's usual folder, though
+Rust isn't needed); later releases use `~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows).
+`PORTWISE_INSTALL_DIR=DIR` overrides it. Unless that folder is already on your `PATH`, the
+installer adds it for new shells: it appends a line that sources `~/.cargo/env` (v0.1.0) or
+`~/.config/portwise/env.sh` (later) to `~/.profile`, `~/.zshrc` and any existing `~/.bashrc` /
+`~/.bash_profile`, and adds a fish `conf.d` file (Windows: the user `PATH`). Open a new terminal
+to pick it up.
 
 Homebrew: coming soon (the tap isn't published yet).
+
+**Troubleshooting**
+
+- **`command not found: portwise` right after installing:** open a new terminal, or run
+  `source "$HOME/.cargo/env"` (v0.1.0) / `source "$HOME/.config/portwise/env.sh"` (later
+  releases) in the current one.
+- **`Permission denied` on `~/.bash_profile`, `mkdir: ~/.config/fish/conf.d` or `ERROR: command
+  failed`:** the binary is already installed; only the `PATH` edits failed, usually because an
+  old `sudo` left those files owned by root. Give them back with
+  `sudo chown "$USER" ~/.bash_profile` and `sudo chown -R "$USER" ~/.config/fish` and run the
+  installer again, or skip the edits with `curl … | PORTWISE_NO_MODIFY_PATH=1 sh` and add the
+  folder to `PATH` yourself (e.g. `export PATH="$HOME/.cargo/bin:$PATH"` in `~/.zshrc`, or `$HOME/.local/bin` for releases
+  after v0.1.0).
+- **Never run the installer with `sudo`.** It installs for your user only, and running it as
+  root is what creates root-owned files in your home folder.
+- **Upgrading from v0.1.0** to a later release: delete the old `~/.cargo/bin/portwise` so it
+  doesn't shadow the new one in `~/.local/bin` (`portwise --version` tells you which one runs).
 
 **Or download it yourself** from the [latest release](https://github.com/santoshshinde2012/portwise/releases/latest).
 Pick your archive (`aarch64-apple-darwin` for Apple silicon, `x86_64-apple-darwin` for Intel
@@ -175,10 +193,11 @@ Optional extras:
 
 ### Uninstall
 
-Delete the binary (`rm ~/.cargo/bin/portwise`, or `cargo uninstall portwise` if you built it with
-cargo) and the installer's receipt, `~/.config/portwise/portwise-receipt.json`
-(`%LOCALAPPDATA%\portwise\portwise-receipt.json` on Windows). Remove the
-`. "$HOME/.cargo/env"` line from your shell rc files if nothing else uses `~/.cargo/bin`. Remove
+Delete the binary (`rm ~/.cargo/bin/portwise` for v0.1.0, `rm ~/.local/bin/portwise` for later
+releases, or `cargo uninstall portwise` if you built it with cargo) and the installer's receipt,
+`~/.config/portwise/portwise-receipt.json` (`%LOCALAPPDATA%\portwise\portwise-receipt.json` on
+Windows). Remove the line the installer added to your shell rc files (`. "$HOME/.cargo/env"` if
+nothing else uses `~/.cargo/bin`, or `. "$HOME/.config/portwise/env.sh"`). Remove
 the desktop app the usual way for your OS (drag it to the Trash; Settings > Apps on Windows;
 `sudo apt remove portwise` / `sudo dnf remove portwise` on Linux). Your settings and history live
 in the configuration directory (see [Desktop and tray app](#desktop-and-tray-app)); delete it to
@@ -327,7 +346,7 @@ Claude Desktop (`claude_desktop_config.json`) and Cursor (`~/.cursor/mcp.json`):
 ```
 
 VS Code (`.vscode/mcp.json`) uses `"servers"` with `"type": "stdio"` instead. If the client can't
-find `portwise`, give the absolute path (for example `~/.cargo/bin/portwise`).
+find `portwise`, give the absolute path (for example `~/.local/bin/portwise`, or `~/.cargo/bin/portwise` for v0.1.0).
 
 ## Safety model
 
