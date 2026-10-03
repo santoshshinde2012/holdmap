@@ -165,6 +165,16 @@ fn bad_target_is_a_usage_error() {
 }
 
 #[test]
+fn stop_and_kill_reject_out_of_range_ports() {
+    for (cmd, port) in [("stop", "0"), ("stop", "99999"), ("kill", ":0")] {
+        pw().args([cmd, port, "--dry-run"])
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("not a valid port (1–65535)"));
+    }
+}
+
+#[test]
 fn tui_without_a_terminal_is_a_clean_error_not_a_panic() {
     pw().arg("tui")
         .write_stdin("")

@@ -274,6 +274,15 @@ struct StopResult {
 }
 
 pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
+    // A number is always meant as a port: reject 0 and >65535 up front (like every other
+    // command) instead of planning for port 0 or hunting for a process named "99999".
+    for t in &a.targets {
+        let n = t.trim();
+        let n = n.strip_prefix(':').unwrap_or(n);
+        if !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) {
+            crate::parse_port(n).map_err(anyhow::Error::msg)?;
+        }
+    }
     let mut targets: Vec<Target> = a.targets.iter().map(|t| Target::parse(t)).collect();
     targets.extend(a.pids.iter().map(|p| Target::Pid(*p)));
     targets.extend(a.names.iter().map(|n| Target::Name(n.clone())));
