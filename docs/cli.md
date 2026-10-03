@@ -26,9 +26,13 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`portwise history`](#portwise-history) | Ports portwise stopped recently, with the command that ran there |
 | [`portwise restart`](#portwise-restart) | Stop what holds a port and start the same command again (or re-run it from history) |
 | [`portwise open`](#portwise-open) | Open http://localhost:PORT in the browser |
-| [`portwise ssh`](#portwise-ssh) | Inspect another machine's ports over SSH (agentless, read-only) |
+| [`portwise up`](#portwise-up) | Start a project's services from its .portwise.toml, dependencies first |
+| [`portwise down`](#portwise-down) | Stop a project's services (dependents first), through the usual safety checks |
+| [`portwise status`](#portwise-status) | Show a project's services: running, stopped or held by something else, with HTTP status |
+| [`portwise init`](#portwise-init) | Print a shell hook that explains "port already in use" errors, or write a .portwise.toml |
+| [`portwise ssh`](#portwise-ssh) | Inspect another machine's ports over SSH (read-only, nothing to install remotely) |
 | [`portwise tui`](#portwise-tui) | Open the interactive terminal UI |
-| [`portwise mcp`](#portwise-mcp) | Run the MCP (Model Context Protocol) server on stdio for AI agents |
+| [`portwise mcp`](#portwise-mcp) | Run the MCP (Model Context Protocol) server on stdio for AI coding assistants |
 | [`portwise completions`](#portwise-completions) | Generate shell completions |
 | [`portwise man`](#portwise-man) | Print the man page (roff), or write one page per command with --out-dir |
 
@@ -62,9 +66,15 @@ Commands:
   history      Ports portwise stopped recently, with the command that ran there
   restart      Stop what holds a port and start the same command again (or re-run it from history)
   open         Open http://localhost:PORT in the browser
-  ssh          Inspect another machine's ports over SSH (agentless, read-only)
+  up           Start a project's services from its .portwise.toml, dependencies first
+  down         Stop a project's services (dependents first), through the usual safety checks
+  status       Show a project's services: running, stopped or held by something else, with HTTP
+               status
+  init         Print a shell hook that explains "port already in use" errors, or write a
+               .portwise.toml
+  ssh          Inspect another machine's ports over SSH (read-only, nothing to install remotely)
   tui          Open the interactive terminal UI
-  mcp          Run the MCP (Model Context Protocol) server on stdio for AI agents
+  mcp          Run the MCP (Model Context Protocol) server on stdio for AI coding assistants
   completions  Generate shell completions
   man          Print the man page (roff), or write one page per command with --out-dir
   help         Print this message or the help of the given subcommand(s)
@@ -97,6 +107,8 @@ EXAMPLES:
   portwise wait 5432 --timeout 30s
   portwise graph                Which services depend on which
   portwise stop --cluster shop  Stop a whole stack, dependents first
+  portwise up                   Start the services in .portwise.toml
+  eval "$(portwise init zsh)"   Explain port-in-use errors in your shell
   portwise watch                Stream new/closed/conflicting listeners
 
 EXIT CODES: 0 ok · 1 busy/not found/timeout · 2 error · 3 blocked by safety policy · 4 needs
@@ -124,6 +136,7 @@ Options:
   -s, --sort <SORT>    Sort order [default: port] [possible values: port, pid, name, proto, memory,
                        uptime]
   -w, --wide           Show the full command and user columns
+      --http           Ask each TCP listener for its HTTP status and page title (a short `GET /`)
       --json           Machine-readable JSON output
       --color <COLOR>  When to use colours [env: PORTWISE_COLOR=] [default: auto] [possible values:
                        auto, always, never]
@@ -180,6 +193,7 @@ Arguments:
   [TARGETS]...  Ports, `pid:<n>` or process names. Bare numbers are ports
 
 Options:
+      --all-dev            Stop every dev server you own (what `portwise list --dev --mine` shows)
       --pid <PID>          Stop a process by PID (repeatable)
       --name <NAME>        Stop processes by exact name (repeatable)
       --cluster <CLUSTER>  Stop every service in a cluster (see `portwise graph`), dependents first
@@ -210,6 +224,7 @@ Arguments:
   [TARGETS]...  Ports, `pid:<n>` or process names. Bare numbers are ports
 
 Options:
+      --all-dev            Stop every dev server you own (what `portwise list --dev --mine` shows)
       --pid <PID>          Stop a process by PID (repeatable)
       --name <NAME>        Stop processes by exact name (repeatable)
       --cluster <CLUSTER>  Stop every service in a cluster (see `portwise graph`), dependents first
@@ -437,10 +452,94 @@ Options:
   -h, --help           Print help
 ```
 
+## portwise up
+
+```text
+Start a project's services from its .portwise.toml, dependencies first
+
+Usage: portwise up [OPTIONS] [SERVICES]...
+
+Arguments:
+  [SERVICES]...  Services to start (default: all). Their dependencies are started too
+
+Options:
+      --file <PATH>    Use this project file instead of the nearest `.portwise.toml`
+      --replace        If a port is held by something outside the project, stop it (after
+                       confirmation)
+  -y, --yes            Don't ask before stopping a conflicting owner (with --replace)
+  -n, --dry-run        Show what would be started without starting anything
+      --color <COLOR>  When to use colours [env: PORTWISE_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## portwise down
+
+```text
+Stop a project's services (dependents first), through the usual safety checks
+
+Usage: portwise down [OPTIONS] [SERVICES]...
+
+Arguments:
+  [SERVICES]...  Services to stop (default: all). Services that depend on them are stopped first
+
+Options:
+      --file <PATH>        Use this project file instead of the nearest `.portwise.toml`
+  -a, --all                Also stop services without a `command` (for example a database container
+                           of this project)
+  -y, --yes                Don't ask for confirmation
+  -n, --dry-run            Show the plan but don't do anything
+  -f, --force              Skip SIGTERM: SIGKILL / TerminateProcess immediately
+  -t, --timeout <TIMEOUT>  Grace period before escalating to SIGKILL [default: 5s]
+      --color <COLOR>      When to use colours [env: PORTWISE_COLOR=] [default: auto] [possible
+                           values: auto, always, never]
+      --no-docker          Don't query Docker/Podman/OrbStack/Colima
+  -h, --help               Print help
+```
+
+## portwise status
+
+```text
+Show a project's services: running, stopped or held by something else, with HTTP status
+
+Usage: portwise status [OPTIONS]
+
+Options:
+      --file <PATH>    Use this project file instead of the nearest `.portwise.toml`
+      --no-http        Don't send HTTP requests to the services
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: PORTWISE_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## portwise init
+
+```text
+Print a shell hook that explains "port already in use" errors, or write a .portwise.toml
+
+Usage: portwise init [OPTIONS] [SHELL]
+
+Arguments:
+  [SHELL]  Print the integration script for this shell. Without a shell, write a starter
+           .portwise.toml from the dev servers running under the current directory [possible values:
+           zsh, bash, fish, powershell]
+
+Options:
+      --force          Overwrite an existing .portwise.toml
+      --print          Print the project file instead of writing it
+      --color <COLOR>  When to use colours [env: PORTWISE_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
 ## portwise ssh
 
 ```text
-Inspect another machine's ports over SSH (agentless, read-only)
+Inspect another machine's ports over SSH (read-only, nothing to install remotely)
 
 Usage: portwise ssh [OPTIONS] <HOST> [COMMAND]...
 
@@ -475,7 +574,7 @@ Options:
 ## portwise mcp
 
 ```text
-Run the MCP (Model Context Protocol) server on stdio for AI agents
+Run the MCP (Model Context Protocol) server on stdio for AI coding assistants
 
 Usage: portwise mcp [OPTIONS]
 

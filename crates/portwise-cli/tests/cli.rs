@@ -231,6 +231,149 @@ mod linux {
         let _ = child.wait();
     }
 
+    /// Stops whatever is left on a port when a stack test ends, even if it failed half-way.
+    struct Cleanup(u16, std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = pw()
+                .env("PORTWISE_HOME", &self.1)
+                .args(["stop", &self.0.to_string(), "--yes", "--force"])
+                .timeout(Duration::from_secs(10))
+                .output();
+        }
+    }
+
+    #[test]
+    fn project_stack_up_status_down() {
+        let port = free_port();
+        let dir = home();
+        let state = home();
+        std::fs::write(
+            dir.path().join(".portwise.toml"),
+            format!(
+                "name = \"e2e\"\n\n[services.web]\nport = {port}\ncommand = \"exec python3 -m http.server $PORT --bind 127.0.0.1\"\nhealth = \"/\"\nready_timeout_s = 20\n"
+            ),
+        )
+        .unwrap();
+        let _guard = Cleanup(port, state.path().to_path_buf());
+        let file = dir.path().to_str().unwrap();
+        let run = |args: &[&str]| {
+            let out = pw()
+                .env("PORTWISE_HOME", state.path())
+                .current_dir(dir.path())
+                .args(args)
+                .timeout(Duration::from_secs(30))
+                .output()
+                .unwrap();
+            (
+                out.status.code(),
+                String::from_utf8_lossy(&out.stdout).to_string(),
+                String::from_utf8_lossy(&out.stderr).to_string(),
+            )
+        };
+        if std::process::Command::new("python3")
+            .arg("-V")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+
+        let (code, out, err) = run(&["up", "--file", file]);
+        assert_eq!(code, Some(0), "up failed: {out}{err}");
+        assert!(out.contains("web") && out.contains("up after"), "{out}");
+
+        // Already running: nothing to do, still success.
+        let (code, out, _) = run(&["up"]);
+        assert_eq!(code, Some(0));
+        assert!(out.contains("already running"), "{out}");
+
+        let (code, out, err) = run(&["status", "--json"]);
+        assert_eq!(code, Some(0), "{out}{err}");
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let web = &v["services"][0];
+        assert_eq!(web["name"], "web");
+        assert_eq!(web["port"], port);
+        assert_eq!(web["state"], "running");
+        assert_eq!(web["http"]["status"], 200);
+
+        let (code, out, _) = run(&["down", "--dry-run"]);
+        assert_eq!(code, Some(0));
+        assert!(out.contains(&format!(":{port}")), "{out}");
+        assert!(
+            std::net::TcpStream::connect(("127.0.0.1", port)).is_ok(),
+            "dry run stopped it"
+        );
+
+        let (code, out, err) = run(&["down", "--yes"]);
+        assert_eq!(code, Some(0), "down failed: {out}{err}");
+        for _ in 0..50 {
+            if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        TcpListener::bind(("127.0.0.1", port)).expect("down freed the port");
+
+        let (code, _, _) = run(&["status", "--no-http"]);
+        assert_eq!(code, Some(1), "status is non-zero when a service is down");
+    }
+
+    #[test]
+    fn up_refuses_a_port_held_by_something_else() {
+        let port = free_port();
+        let Some(mut child) = python_listener(port, false) else {
+            return;
+        };
+        let dir = home();
+        std::fs::write(
+            dir.path().join(".portwise.toml"),
+            format!("[services.api]\nport = {port}\ncommand = \"true\"\n"),
+        )
+        .unwrap();
+        pw().env("PORTWISE_HOME", dir.path())
+            .current_dir(dir.path())
+            .args(["up"])
+            .timeout(Duration::from_secs(20))
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("--replace"));
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    #[test]
+    fn stop_all_dev_dry_run_lists_a_dev_server() {
+        let port = free_port();
+        let mut child = std::process::Command::new("python3")
+            .args([
+                "-m",
+                "http.server",
+                &port.to_string(),
+                "--bind",
+                "127.0.0.1",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        for _ in 0..50 {
+            if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let out = pw()
+            .args(["stop", "--all-dev", "--dry-run", "--json"])
+            .timeout(Duration::from_secs(20))
+            .output()
+            .unwrap();
+        let _ = child.kill();
+        let _ = child.wait();
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(text.contains(&format!(":{port}")), "{text}");
+    }
+
     #[test]
     fn run_frees_port_then_execs_with_port_env() {
         let port = free_port();
@@ -405,4 +548,92 @@ fn watch_runs_for_a_bounded_number_of_polls() {
     pw().args(["watch", "--json", "--polls", "2", "--interval", "50ms"])
         .assert()
         .success();
+}
+
+#[test]
+fn hint_explains_a_busy_port_and_stays_quiet_otherwise() {
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    pw().args([
+        "hint",
+        "--exit-code",
+        "1",
+        "--",
+        &format!("npm run dev -- --port {port}"),
+    ])
+    .assert()
+    .success()
+    .stderr(predicate::str::contains(format!("portwise stop {port}")));
+    // A client command, or a server whose port is free, prints nothing.
+    pw().args([
+        "hint",
+        "--exit-code",
+        "1",
+        "--",
+        &format!("curl localhost:{port}"),
+    ])
+    .assert()
+    .success()
+    .stderr(predicate::str::is_empty());
+    let free = free_port();
+    pw().args([
+        "hint",
+        "--exit-code",
+        "1",
+        "--",
+        &format!("vite --port {free}"),
+    ])
+    .assert()
+    .success()
+    .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn init_prints_shell_hooks() {
+    for (shell, needle) in [
+        ("zsh", "add-zsh-hook"),
+        ("bash", "PROMPT_COMMAND"),
+        ("fish", "fish_postexec"),
+        ("pwsh", "LASTEXITCODE"),
+    ] {
+        pw().args(["init", shell])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(needle))
+            .stdout(predicate::str::contains("portwise hint"));
+    }
+}
+
+#[test]
+fn project_file_errors_are_reported_with_the_path() {
+    let dir = home();
+    std::fs::write(
+        dir.path().join(".portwise.toml"),
+        "[services.web]\nport = 3000\nhealth = \"nope\"\n",
+    )
+    .unwrap();
+    pw().current_dir(dir.path())
+        .env("PORTWISE_HOME", dir.path())
+        .args(["status"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(".portwise.toml"));
+}
+
+#[test]
+fn init_project_writes_a_valid_file() {
+    let dir = home();
+    pw().current_dir(dir.path())
+        .env("PORTWISE_HOME", dir.path())
+        .args(["init"])
+        .assert()
+        .success();
+    let text = std::fs::read_to_string(dir.path().join(".portwise.toml")).unwrap();
+    assert!(text.contains("name ="), "{text}");
+    // A second run refuses to overwrite.
+    pw().current_dir(dir.path())
+        .env("PORTWISE_HOME", dir.path())
+        .args(["init"])
+        .assert()
+        .failure();
 }

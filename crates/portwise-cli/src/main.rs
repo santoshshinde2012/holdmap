@@ -4,6 +4,8 @@ mod commands;
 mod graph;
 mod remote;
 mod render;
+mod shell;
+mod stack;
 mod state;
 mod style;
 mod tui;
@@ -39,7 +41,7 @@ pub mod exit {
 explains in plain English why a port is busy (dev-server tree, Docker container, systemd/pm2/brew \
 service, OS feature, TIME_WAIT, another user) and stops the correct thing gracefully, verifying \
 the port is free afterwards.\n\nRun without arguments in a terminal to open the interactive TUI.",
-    after_help = "EXAMPLES:\n  portwise                      Open the interactive TUI\n  portwise list --dev           Only dev servers\n  portwise explain 3000         Why is 3000 busy?\n  portwise stop 3000            Gracefully stop whatever holds 3000\n  portwise stop 3000 --dry-run  Show the plan only\n  portwise run -p 3000 -- npm run dev\n  portwise free-port --near 3000\n  portwise wait 5432 --timeout 30s\n  portwise graph                Which services depend on which\n  portwise stop --cluster shop  Stop a whole stack, dependents first\n  portwise watch                Stream new/closed/conflicting listeners\n\nEXIT CODES: 0 ok · 1 busy/not found/timeout · 2 error · 3 blocked by safety policy · 4 needs elevation"
+    after_help = "EXAMPLES:\n  portwise                      Open the interactive TUI\n  portwise list --dev           Only dev servers\n  portwise explain 3000         Why is 3000 busy?\n  portwise stop 3000            Gracefully stop whatever holds 3000\n  portwise stop 3000 --dry-run  Show the plan only\n  portwise run -p 3000 -- npm run dev\n  portwise free-port --near 3000\n  portwise wait 5432 --timeout 30s\n  portwise graph                Which services depend on which\n  portwise stop --cluster shop  Stop a whole stack, dependents first\n  portwise up                   Start the services in .portwise.toml\n  eval \"$(portwise init zsh)\"   Explain port-in-use errors in your shell\n  portwise watch                Stream new/closed/conflicting listeners\n\nEXIT CODES: 0 ok · 1 busy/not found/timeout · 2 error · 3 blocked by safety policy · 4 needs elevation"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -101,12 +103,30 @@ enum Command {
     Restart(state::RestartArgs),
     /// Open http://localhost:PORT in the browser.
     Open(state::OpenArgs),
-    /// Inspect another machine's ports over SSH (agentless, read-only).
+    /// Start a project's services from its .portwise.toml, dependencies first.
+    Up(stack::UpArgs),
+    /// Stop a project's services (dependents first), through the usual safety checks.
+    Down(stack::DownArgs),
+    /// Show a project's services: running, stopped or held by something else, with HTTP status.
+    Status(stack::StatusArgs),
+    /// Print a shell hook that explains "port already in use" errors, or write a .portwise.toml.
+    Init(InitArgs),
+    /// Inspect another machine's ports over SSH (read-only, nothing to install remotely).
     Ssh(remote::SshArgs),
     /// Open the interactive terminal UI.
     Tui,
-    /// Run the MCP (Model Context Protocol) server on stdio for AI agents.
+    /// Run the MCP (Model Context Protocol) server on stdio for AI coding assistants.
     Mcp,
+    /// Explain busy ports a failed command wanted (called by the `portwise init` shell hook).
+    #[command(hide = true)]
+    Hint {
+        /// Exit status of the failed command.
+        #[arg(long)]
+        exit_code: Option<i32>,
+        /// The command line that failed.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        command: Vec<String>,
+    },
     /// Generate shell completions.
     Completions {
         /// Shell to generate completions for.
@@ -119,6 +139,20 @@ enum Command {
         #[arg(long, value_name = "DIR")]
         out_dir: Option<std::path::PathBuf>,
     },
+}
+
+#[derive(Args, Debug)]
+pub struct InitArgs {
+    /// Print the integration script for this shell. Without a shell, write a starter
+    /// .portwise.toml from the dev servers running under the current directory.
+    #[arg(value_enum)]
+    pub shell: Option<shell::InitShell>,
+    /// Overwrite an existing .portwise.toml.
+    #[arg(long)]
+    pub force: bool,
+    /// Print the project file instead of writing it.
+    #[arg(long)]
+    pub print: bool,
 }
 
 #[derive(Args, Debug, Default)]
@@ -152,6 +186,9 @@ pub struct ListArgs {
     /// Show the full command and user columns.
     #[arg(short, long)]
     pub wide: bool,
+    /// Ask each TCP listener for its HTTP status and page title (a short `GET /`).
+    #[arg(long)]
+    pub http: bool,
     /// Machine-readable JSON output.
     #[arg(long)]
     pub json: bool,
@@ -185,6 +222,9 @@ pub struct PortArgs {
 pub struct StopArgs {
     /// Ports, `pid:<n>` or process names. Bare numbers are ports.
     pub targets: Vec<String>,
+    /// Stop every dev server you own (what `portwise list --dev --mine` shows).
+    #[arg(long)]
+    pub all_dev: bool,
     /// Stop a process by PID (repeatable).
     #[arg(long = "pid", value_name = "PID")]
     pub pids: Vec<u32>,
@@ -353,6 +393,17 @@ fn main() -> ExitCode {
         Some(Command::History(a)) => state::history_cmd(&a),
         Some(Command::Restart(a)) => state::restart(&a, docker),
         Some(Command::Open(a)) => state::open(&a),
+        Some(Command::Up(a)) => stack::up(&a, docker),
+        Some(Command::Down(a)) => stack::down(&a, docker),
+        Some(Command::Status(a)) => stack::status(&a, docker),
+        Some(Command::Init(a)) => match a.shell {
+            Some(sh) => {
+                print!("{}", shell::script(sh));
+                Ok(exit::OK)
+            }
+            None => stack::init_project(a.force, a.print, docker),
+        },
+        Some(Command::Hint { command, .. }) => shell::hint(&command, docker),
         Some(Command::Ssh(a)) => remote::run(&a),
         Some(Command::Tui) => tui::run(docker),
         Some(Command::Mcp) => {

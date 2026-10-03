@@ -5,6 +5,7 @@ use crate::render;
 use crate::style::{self, bold, dim, paint, S};
 use crate::{FreePortArgs, ListArgs, PortArgs, RunArgs, SortKey, StopArgs, WaitArgs};
 use anyhow::{bail, Context, Result};
+use portwise_core::http;
 use portwise_core::*;
 use std::io::{IsTerminal, Write};
 use std::time::Instant;
@@ -13,7 +14,7 @@ fn engine(docker: bool, all_states: bool) -> Result<Engine> {
     Engine::new(&ScanOptions { all_states, docker }).context("failed to scan sockets")
 }
 
-fn print_json<T: serde::Serialize>(v: &T) -> Result<()> {
+pub(crate) fn print_json<T: serde::Serialize>(v: &T) -> Result<()> {
     let mut out = std::io::stdout().lock();
     serde_json::to_writer_pretty(&mut out, v)?;
     writeln!(out)?;
@@ -43,6 +44,35 @@ pub fn sort_entries(v: &mut [&PortEntry], key: SortKey) {
     }
 }
 
+/// HTTP summaries for the TCP listeners among `entries`, probed in parallel.
+pub fn probe_http(entries: &[&PortEntry]) -> std::collections::BTreeMap<u16, http::HttpInfo> {
+    let mut ports: Vec<u16> = entries
+        .iter()
+        .filter(|e| e.protocol == Protocol::Tcp && e.state.is_listening())
+        .map(|e| e.port)
+        .collect();
+    ports.sort_unstable();
+    ports.dedup();
+    let mut out = std::collections::BTreeMap::new();
+    // Bounded fan-out: a few dozen ports at a time, each with a short timeout.
+    for chunk in ports.chunks(32) {
+        std::thread::scope(|sc| {
+            let hs: Vec<_> = chunk
+                .iter()
+                .map(|p| {
+                    sc.spawn(move || http::probe(*p, "/", std::time::Duration::from_millis(800)))
+                })
+                .collect();
+            for h in hs {
+                if let Ok(Some(info)) = h.join() {
+                    out.insert(info.port, info);
+                }
+            }
+        });
+    }
+    out
+}
+
 pub fn list(a: &ListArgs, docker: bool) -> Result<u8> {
     let e = engine(docker, a.all)?;
     let filter = Filter {
@@ -64,8 +94,15 @@ pub fn list(a: &ListArgs, docker: bool) -> Result<u8> {
     sort_entries(&mut shown, a.sort);
     if a.json {
         let mut snap = e.snapshot().clone();
-        snap.entries = shown.into_iter().cloned().collect();
-        print_json(&snap)?;
+        snap.entries = shown.iter().map(|x| (*x).clone()).collect();
+        if a.http {
+            let http = probe_http(&shown);
+            let mut v = serde_json::to_value(&snap)?;
+            v["http"] = serde_json::to_value(http.values().collect::<Vec<_>>())?;
+            print_json(&v)?;
+        } else {
+            print_json(&snap)?;
+        }
         return Ok(exit::OK);
     }
     let mut out = std::io::stdout().lock();
@@ -82,10 +119,15 @@ pub fn list(a: &ListArgs, docker: bool) -> Result<u8> {
         .iter()
         .map(|p| p.port)
         .collect();
+    let http = if a.http {
+        probe_http(&shown)
+    } else {
+        Default::default()
+    };
     write!(
         out,
         "{}",
-        render::list_table_with(&shown, a.wide, a.all, &pins)
+        render::list_table_with(&shown, a.wide, a.all, &pins, a.http.then_some(&http))
     )?;
     writeln!(out, "\n{}", render::summary_line(e.snapshot(), &shown))?;
     Ok(exit::OK)
@@ -123,6 +165,12 @@ pub fn inspect(a: &PortArgs, docker: bool) -> Result<u8> {
             exit::BUSY
         });
     }
+    let http_info = ex
+        .entries
+        .iter()
+        .any(|x| x.protocol == Protocol::Tcp && x.state.is_listening())
+        .then(|| http::probe(a.port, "/", std::time::Duration::from_millis(1000)))
+        .flatten();
     let mut out = std::io::stdout().lock();
     for (i, entry) in ex.entries.iter().enumerate() {
         writeln!(
@@ -141,7 +189,7 @@ pub fn inspect(a: &PortArgs, docker: bool) -> Result<u8> {
             writeln!(
                 out,
                 "  {}  {}",
-                dim(format!("{:>14}", "Ancestry")),
+                dim(format!("{:>11}", "Ancestry")),
                 chain.join(&format!(" {} ", dim("←")))
             )?;
             let kids: Vec<String> = t
@@ -154,10 +202,22 @@ pub fn inspect(a: &PortArgs, docker: bool) -> Result<u8> {
                 writeln!(
                     out,
                     "  {}  {}",
-                    dim(format!("{:>14}", "Children")),
+                    dim(format!("{:>11}", "Children")),
                     kids.join(", ")
                 )?;
             }
+        }
+        if let Some(h) = http_info
+            .as_ref()
+            .filter(|_| entry.protocol == Protocol::Tcp)
+        {
+            writeln!(
+                out,
+                "  {}  {} {}",
+                dim(format!("{:>11}", "HTTP")),
+                h.summary(),
+                dim(format!("({} ms)", h.elapsed_ms))
+            )?;
         }
         writeln!(out)?;
     }
@@ -198,7 +258,7 @@ pub(crate) fn confirm(question: &str) -> Result<bool> {
     ))
 }
 
-fn block_code(plan: &ActionPlan) -> u8 {
+pub(crate) fn block_code(plan: &ActionPlan) -> u8 {
     match plan.blocked.as_ref().map(|b| b.kind) {
         Some(BlockKind::NeedsElevation) => exit::ELEVATION,
         Some(BlockKind::NothingToStop) => exit::BUSY,
@@ -218,9 +278,13 @@ pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
     targets.extend(a.pids.iter().map(|p| Target::Pid(*p)));
     targets.extend(a.names.iter().map(|n| Target::Name(n.clone())));
     targets.extend(a.clusters.iter().map(|c| Target::Cluster(c.clone())));
+    let e = engine(docker, true)?;
+    if a.all_dev {
+        targets.push(Target::AllDev);
+    }
     if targets.is_empty() {
         bail!(
-            "nothing to stop: give a port (e.g. `portwise stop 3000`), --pid, --name or --cluster"
+            "nothing to stop: give a port (e.g. `portwise stop 3000`), --pid, --name, --cluster or --all-dev"
         );
     }
     if a.json && !a.yes && !a.dry_run {
@@ -234,11 +298,26 @@ pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
         protocol: a.udp.then_some(Protocol::Udp),
         ..Default::default()
     };
-    let e = engine(docker, true)?;
+    let yes = a.yes;
+    let protect = crate::stack::protected_ports();
     let mut code = exit::OK;
     let mut results = Vec::new();
     for t in &targets {
         let plan = e.plan(t, &opts);
+        if let Target::Port(p) = t {
+            if protect.contains(p) && !a.allow_protected {
+                if !a.json {
+                    println!(
+                        "{} :{p} is listed in `protect` in {}; pass --allow-protected to stop it anyway",
+                        style::err_mark(),
+                        portwise_core::stack::FILE_NAME
+                    );
+                }
+                code = code.max(exit::BLOCKED);
+                results.push(StopResult { plan, report: None });
+                continue;
+            }
+        }
         if !a.json {
             if let Target::Port(p) = t {
                 let ex = e.explain(*p, &opts);
@@ -260,7 +339,7 @@ pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
             results.push(StopResult { plan, report: None });
             continue;
         }
-        if !a.yes {
+        if !yes {
             let q = if plan.risk == Risk::High {
                 "This is high risk. Proceed?"
             } else {
