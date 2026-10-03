@@ -43,9 +43,10 @@
   } = $props();
 
   let text = $state(value === null ? "" : String(value));
-  let editing = $state(false);
   let touched = $state(false);
-  $effect(() => { if (!editing) text = value === null ? "" : String(value); });
+  // Follow external value changes; invalid typed text stays (with its error) until fixed.
+  let synced = value;
+  $effect.pre(() => { if (value !== synced) { synced = value; text = value === null ? "" : String(value); } });
 
   const parsed = $derived(text.trim() === "" ? null : Number(text));
   // Only complain once the user has typed or left the field.
@@ -55,6 +56,7 @@
   function commit(v: number | null) {
     if (v === null || validateRange(v, min, max)) return;
     value = v;
+    synced = v;
     text = String(v);
     onchange?.(v);
   }
@@ -86,9 +88,8 @@
         aria-valuenow={value ?? undefined}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
-        onfocus={() => (editing = true)}
         oninput={() => (touched = true)}
-        onblur={() => { editing = false; if (text.trim() !== "") touched = true; commit(parsed); }}
+        onblur={() => { if (text.trim() !== "") touched = true; commit(parsed); }}
         onkeydown={key}
       />
       {#if unit}<span class="unit" aria-hidden="true">{unit}</span>{/if}
