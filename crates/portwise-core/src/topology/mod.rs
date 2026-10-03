@@ -26,4 +26,6 @@ pub use model::*;
 pub use order::{stop_order, StopOrder};
 
 #[cfg(test)]
+mod proptests;
+#[cfg(test)]
 pub(crate) mod tests;

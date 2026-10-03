@@ -32,6 +32,12 @@ windows-sys = { version = "0.61", features = [
 
 [dev-dependencies]
 tempfile.workspace = true
+proptest = { version = "1", default-features = false, features = ["std"] }
+criterion = { version = "0.7", default-features = false }
+
+[[bench]]
+name = "scan"
+harness = false
 
 [lints]
 workspace = true
