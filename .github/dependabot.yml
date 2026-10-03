@@ -19,6 +19,10 @@ updates:
       interval: weekly
     commit-message:
       prefix: deps
+    ignore:
+      # Types follow the Node major CI and the builds use (22); bump together with node-version.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-minor:
         update-types: [minor, patch]
