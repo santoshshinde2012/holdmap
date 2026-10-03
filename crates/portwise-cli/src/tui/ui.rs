@@ -612,6 +612,8 @@ fn draw_confirm(f: &mut Frame, app: &App) {
         .any(|s| matches!(s, Step::SignalProcesses { force: true, .. }))
     {
         " Force kill? "
+    } else if plan.target.starts_with("cluster ") {
+        " Stop cluster? "
     } else {
         " Stop? "
     };
