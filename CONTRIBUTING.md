@@ -70,13 +70,55 @@ Each ecosystem uses its own idiom. `cargo test` enforces these rules
 Names fixed by tools (`Cargo.toml`, `package.json`, `src-tauri/`, the Tauri icon set) are left
 alone. Rename files with `git mv` so their history follows them.
 
-## Commits and releases
+## Commits
 
 Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat(cli): add --wide to list`,
-`fix(core): …`, `docs: …`) and keep pull requests focused. Maintainers release the CLI by tagging
-`vX.Y.Z` (cargo-dist builds the archives, installers and Homebrew formula) and the desktop app by
-tagging `desktop-vX.Y.Z` (tauri-action builds the installers), after updating the versions and the
-changelog.
+`fix(core): …`, `docs: …`; `feat!:` or a `BREAKING CHANGE:` footer for breaking changes) and keep
+pull requests focused. The commit types drive the version bump and the changelog.
+
+## Releasing
+
+Versions follow [SemVer](https://semver.org/). One `vX.Y.Z` tag releases everything:
+
+- [release-please](https://github.com/googleapis/release-please) keeps a `chore: release X.Y.Z`
+  pull request open. It bumps every version (`Cargo.toml`, `Cargo.lock`, the desktop
+  `package.json`, `package-lock.json` and `tauri.conf.json`) and prepends `CHANGELOG.md`.
+  `scripts/check-versions.sh` fails CI if they ever disagree. It was picked over git-cliff because
+  it maintains the release PR itself; it doesn't create tags or releases here, so the tag stays a
+  deliberate maintainer step.
+- Pushing the tag runs `release.yml` ([dist](https://github.com/axodotdev/cargo-dist)): CLI
+  archives for six targets (macOS arm64/x64, Linux gnu arm64/x64, Linux musl x64, Windows x64),
+  shell and PowerShell installers, a Homebrew formula pushed to the tap, an npm package tarball, a
+  CycloneDX SBOM, SHA-256 checksums, binaries built with `cargo auditable`, and GitHub build
+  provenance (`gh attestation verify <file> -R santoshshinde2012/portwise`). It creates the GitHub
+  Release.
+- When that succeeds, `desktop-release.yml` (tauri-action) adds the `.dmg`, `.msi`, NSIS `.exe`,
+  `.AppImage`, `.deb` and `.rpm`, with checksums and provenance. Run it by hand with an empty tag
+  for a dry run that keeps the bundles as workflow artifacts.
+
+Check a change to the release setup locally with `dist plan`,
+`dist build --artifacts=local --target x86_64-unknown-linux-gnu` and `actionlint`.
+
+**Repository setup** (once; everything optional is skipped when absent):
+
+| What | Needed for |
+|---|---|
+| Repo `santoshshinde2012/homebrew-tap` and secret `HOMEBREW_TAP_TOKEN` (fine-grained, contents: write on the tap) | Homebrew formula (required by `release.yml`'s publish job) |
+| Secret `RELEASE_PLEASE_TOKEN` (fine-grained, contents and pull requests: write) | CI runs on the release PR (optional) |
+| Secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | Signed, notarised macOS app (optional) |
+| Secrets `WINDOWS_CERTIFICATE` (base64 `.pfx`), `WINDOWS_CERTIFICATE_PASSWORD` | Signed Windows installers (optional) |
+| `npm run tauri signer generate`, then secrets `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` and variable `TAURI_UPDATER_PUBKEY` | In-app updates with signed `latest.json` (optional; keep the private key backed up) |
+| `"npm"` in `publish-jobs` in `dist-workspace.toml`, `dist generate`, secret `NPM_TOKEN` | Publishing the npm package (optional) |
+
+**First release (v0.1.0).** There is no earlier tag, so release-please waits for this one:
+
+1. In `CHANGELOG.md`, change `## [0.1.0] - Unreleased` to today's date and point the `[0.1.0]`
+   link at `releases/tag/v0.1.0`. Commit (`chore: release 0.1.0`) and push; wait for CI.
+2. Tag and push: `git tag -s v0.1.0 -m "portwise 0.1.0" && git push origin v0.1.0`.
+3. Watch `Release`, then `Desktop release`, in the Actions tab. Check the release page, then
+   `brew install santoshshinde2012/tap/portwise` and the shell installer.
+
+**Later releases.** Merge the release PR, then tag its merge commit `vX.Y.Z` as in step 2.
 
 ## Licence
 

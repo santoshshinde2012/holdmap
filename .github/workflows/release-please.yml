@@ -1,0 +1,42 @@
+# Opens and maintains a "chore: release X.Y.Z" pull request from Conventional Commits: it bumps
+# every version (Cargo, npm, Tauri) and prepends CHANGELOG.md. Merging it doesn't publish
+# anything; a maintainer then tags the merge commit `vX.Y.Z`, which runs release.yml (CLI) and,
+# after that, desktop-release.yml. See CONTRIBUTING.md#releasing.
+name: Release PR
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # Until v0.1.0 is tagged by hand there's no release to count commits from, and
+      # release-please would propose a release of the whole history.
+      - name: Wait for the first release tag
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          n=$(gh api "repos/$REPO/git/matching-refs/tags/v" --jq length)
+          echo "enabled=$([ "$n" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          # A fine-grained token (contents + pull requests: write) lets CI run on the release PR;
+          # with the default token GitHub doesn't start workflows for it.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

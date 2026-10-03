@@ -1,23 +1,49 @@
 [workspace]
 members = ["cargo:."]
 
-# Config for 'dist'
+# Config for 'dist' (https://axodotdev.github.io/cargo-dist/book/reference/config.html).
+# Only the `portwise` CLI ships through dist; the desktop app ships through tauri-action
+# (.github/workflows/desktop-release.yml). After editing this file, run `dist generate`.
 [dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
 cargo-dist-version = "0.33.0"
 # CI backends to support
 ci = "github"
-# The installers to generate for each app
-installers = ["shell", "powershell", "homebrew"]
-# A GitHub repo to push Homebrew formulas to
+# The installers to generate for each app. The npm package is built and attached to the release;
+# add "npm" to publish-jobs (and an NPM_TOKEN secret) to publish it to the registry.
+installers = ["shell", "powershell", "homebrew", "npm"]
+# A GitHub repo to push Homebrew formulas to (needs the HOMEBREW_TAP_TOKEN secret)
 tap = "santoshshinde2012/homebrew-tap"
 # Publish jobs to run in CI
 publish-jobs = ["homebrew"]
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
+  "x86_64-pc-windows-msvc",
+]
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
 # Whether to install an updater program
 install-updater = false
-# Only the CLI ships via dist; the desktop app ships via tauri-action.
+# Build only the CLI package, not the whole workspace (the desktop crate needs WebKitGTK).
 precise-builds = true
+# A .sha256 file next to every archive, plus a combined sha256.sum.
+checksum = "sha256"
+# SLSA build provenance for every artifact (verify with `gh attestation verify`).
+github-attestations = true
+# A CycloneDX SBOM per package, uploaded with the release.
+cargo-cyclonedx = true
+# Embed the dependency tree in the binaries so `cargo audit bin portwise` works on them.
+cargo-auditable = true
+
+# Actions used by the generated release workflow, pinned to commit SHAs (Dependabot can't update
+# release.yml, so bump these with `dist generate` when upgrading dist).
+[dist.github-action-commits]
+"actions/checkout" = "3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
+"actions/upload-artifact" = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" # v7.0.1
+"actions/download-artifact" = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" # v8.0.1
+"actions/attest" = "1e69f48acb82d1966a394da916b4c1698aa569d6" # v4.2.2

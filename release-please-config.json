@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "include-v-in-tag": true,
+  "include-component-in-tag": false,
+  "skip-github-release": true,
+  "pull-request-title-pattern": "chore: release ${version}",
+  "pull-request-header": "Merging this PR bumps every version and updates CHANGELOG.md. Then tag the merge commit `v${version}` to build and publish the release (see CONTRIBUTING.md#releasing).",
+  "changelog-sections": [
+    { "type": "feat", "section": "Added" },
+    { "type": "fix", "section": "Fixed" },
+    { "type": "perf", "section": "Performance" },
+    { "type": "revert", "section": "Reverted" },
+    { "type": "deps", "section": "Dependencies" },
+    { "type": "docs", "section": "Documentation", "hidden": true },
+    { "type": "style", "section": "Style", "hidden": true },
+    { "type": "refactor", "section": "Refactoring", "hidden": true },
+    { "type": "test", "section": "Tests", "hidden": true },
+    { "type": "build", "section": "Build", "hidden": true },
+    { "type": "ci", "section": "CI", "hidden": true },
+    { "type": "chore", "section": "Chores", "hidden": true }
+  ],
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "portwise",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.package.version" },
+        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies['portwise-core'].version" },
+        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies['portwise-mcp'].version" },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value == 'portwise' || @.name.value == 'portwise-core' || @.name.value == 'portwise-mcp' || @.name.value == 'portwise-desktop')].version"
+        },
+        { "type": "json", "path": "apps/desktop/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "apps/desktop/package-lock.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "apps/desktop/package-lock.json", "jsonpath": "$.packages[''].version" },
+        { "type": "json", "path": "apps/desktop/src-tauri/tauri.conf.json", "jsonpath": "$.version" }
+      ]
+    }
+  }
+}
