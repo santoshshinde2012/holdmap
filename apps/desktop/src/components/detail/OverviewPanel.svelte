@@ -25,11 +25,11 @@
   };
   const stats = $derived.by(() => {
     const p = entry.process;
-    const out: { label: string; value: string; sub?: string; icon: string }[] = [];
+    const out: { label: string; value: string; sub?: string; icon: string; wide?: boolean }[] = [];
     if (uptime(entry)) out.push({ label: "Uptime", value: uptime(entry)!, icon: "clock" });
     if (p?.memory_bytes) out.push({ label: "Memory", value: humanBytes(node && node.pids.length > 1 ? node.memory_bytes : p.memory_bytes), sub: node && node.pids.length > 1 ? `${node.pids.length} processes` : undefined, icon: "activity" });
     if (p && p.cpu_percent !== undefined) out.push({ label: "CPU", value: `${(node?.cpu_percent ?? p.cpu_percent).toFixed(1)}%`, icon: "cpu" });
-    if (entry.project) out.push({ label: "Project", value: entry.project.name, sub: tildify(entry.project.root), icon: "folder" });
+    if (entry.project) out.push({ label: "Project", value: entry.project.name, sub: tildify(entry.project.root), icon: "folder", wide: true });
     return out;
   });
 </script>
@@ -53,9 +53,9 @@
 {/if}
 
 {#if stats.length}
-  <div class="stats" class:four={stats.length === 4}>
+  <div class="stats">
     {#each stats as s (s.label)}
-      <div class="stat" use:tooltip={s.sub ? { text: s.sub, onlyIfTruncated: false } : null}>
+      <div class="stat" class:wide={s.wide} use:tooltip={s.sub ? { text: s.sub, onlyIfTruncated: false } : null}>
         <span class="sl"><Icon name={s.icon} size={12} />{s.label}</span>
         <span class="sv">{s.value}</span>
         {#if s.sub}<span class="ss">{s.sub}</span>{/if}
@@ -99,10 +99,10 @@
   .web.bad :global(svg) { color: var(--danger); }
   .wl { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-medium); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
   .wv { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: var(--sp-5) 0 var(--sp-6); }
-  .stats.four { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .stats.four .stat:last-child { grid-column: 1 / -1; }
-  .stat { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; }
+  /* One card of facts split by hairlines (not a grid of separate cards): less chrome, same data. */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); margin: var(--sp-5) 0 var(--sp-6); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
+  .stat { display: grid; align-content: start; gap: 2px; padding: 10px 12px; min-width: 0; box-shadow: -1px 0 0 var(--border); }
+  .stat.wide { grid-column: 1 / -1; box-shadow: 0 -1px 0 var(--border); }
   .sl { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-label); line-height: var(--lh-label); color: var(--muted); font-weight: var(--fw-medium); text-transform: uppercase; letter-spacing: var(--ls-label); }
   .sv { font-size: var(--fs-heading); letter-spacing: var(--ls-heading); line-height: var(--lh-heading); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ss { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
