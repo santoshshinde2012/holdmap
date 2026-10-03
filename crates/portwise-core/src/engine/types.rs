@@ -313,7 +313,7 @@ pub struct Explanation {
 }
 
 /// Result of executing a plan.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StopReport {
     pub target: String,
     pub success: bool,

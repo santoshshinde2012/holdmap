@@ -63,6 +63,16 @@ pub fn what_label(e: &PortEntry) -> String {
 }
 
 pub fn list_table(entries: &[&PortEntry], wide: bool, all_states: bool) -> String {
+    list_table_with(entries, wide, all_states, &[])
+}
+
+/// [`list_table`] with pinned ports marked `★`.
+pub fn list_table_with(
+    entries: &[&PortEntry],
+    wide: bool,
+    all_states: bool,
+    pins: &[u16],
+) -> String {
     let mut cols = vec![rcol("PORT"), col("PROTO")];
     if all_states {
         cols.push(col("STATE"));
@@ -77,6 +87,7 @@ pub fn list_table(entries: &[&PortEntry], wide: bool, all_states: bool) -> Strin
         cols.extend([
             col("USER"),
             rcol("UPTIME"),
+            rcol("CPU"),
             rcol("MEM"),
             flex("COMMAND", 10),
         ]);
@@ -88,8 +99,13 @@ pub fn list_table(entries: &[&PortEntry], wide: bool, all_states: bool) -> Strin
     let rows: Vec<Vec<Cell>> = entries
         .iter()
         .map(|e| {
+            let port = if pins.contains(&e.port) {
+                format!("★ {}", e.port)
+            } else {
+                e.port.to_string()
+            };
             let mut r = vec![
-                Cell::new(e.port.to_string(), S::BoldCyan),
+                Cell::new(port, S::BoldCyan),
                 Cell::new(e.protocol.to_string(), S::Dim),
             ];
             if all_states {
@@ -126,6 +142,12 @@ pub fn list_table(entries: &[&PortEntry], wide: bool, all_states: bool) -> Strin
                 r.push(Cell::new(e.user.clone().unwrap_or_default(), S::Dim));
                 r.push(Cell::new(
                     p.map(|p| human_duration(now.saturating_sub(p.start_time)))
+                        .unwrap_or_default(),
+                    S::Dim,
+                ));
+                r.push(Cell::new(
+                    p.filter(|p| p.cpu_percent >= 0.05)
+                        .map(|p| format!("{:.1}%", p.cpu_percent))
                         .unwrap_or_default(),
                     S::Dim,
                 ));
@@ -263,6 +285,9 @@ pub fn plan_text(plan: &ActionPlan) -> String {
             paint(format!("{label}:"), st),
             b.message
         ));
+        for w in &plan.warnings {
+            out.push_str(&format!("  {} {}\n", style::warn_mark(), dim(w)));
+        }
         return out;
     }
     let risk = match plan.risk {
@@ -275,6 +300,9 @@ pub fn plan_text(plan: &ActionPlan) -> String {
         bold(format!("Plan for {}", plan.target)),
         dim(format!("({risk})"))
     ));
+    if plan.target.starts_with("cluster ") {
+        out.push_str(&format!("  {}\n", dim(&plan.summary)));
+    }
     for (i, s) in plan.steps.iter().enumerate() {
         out.push_str(&format!("  {}. {}\n", i + 1, s.describe()));
     }

@@ -53,6 +53,11 @@ const http = require('http');
 const h = (_, r) => r.end('vite');
 http.createServer(h).listen(5173, '127.0.0.1');
 http.createServer(h).listen(5173, '::1');
+// Like Vite's `server.proxy`: keep a connection to the orders API on 8080.
+(function dial() {
+  const s = require('net').connect(8080, '127.0.0.1');
+  s.on('error', () => {}); s.on('close', () => setTimeout(dial, 1000));
+})();
 JS
   launch docs-site "$DEMO/docs-site" node vite.js
 
@@ -83,8 +88,98 @@ PY
 
   # 5. A UDP service (statsd-like) on 8125
   launch statsd "$DEMO" python3 -c 'import socket,time; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(("127.0.0.1",8125)); time.sleep(10**9)'
-  sleep 1
-  echo "demo servers started in $DEMO (ports 3000 5173 8000 8080 8125/udp)"
+
+  # 6. acme-shop: a pnpm monorepo stack with live connections, for `portwise graph`:
+  #    concurrently → { web :3100 (Next.js), worker }   web → api :4000 (FastAPI) → db :5432, cache :6379
+  #    worker → api, cache;  api → one external host.  (docs-site's vite proxy → orders-api :8080)
+  acme
+  sleep 1.5
+  echo "demo servers started in $DEMO (ports 3000 3100 4000 5173 5432 6379 8000 8080 8125/udp)"
+}
+
+acme() {
+  local A="$DEMO/acme-shop"
+  mkdir -p "$A"/{apps/web,services/api,services/db,services/cache,services/worker,node_modules/concurrently/bin}
+  echo '{ "name": "acme-shop", "private": true, "scripts": { "dev": "concurrently npm:dev:*" } }' > "$A/package.json"
+  printf "packages:\n  - apps/*\n  - services/*\n" > "$A/pnpm-workspace.yaml"
+  printf "services:\n  db: { image: postgres:16, ports: ['5432:5432'] }\n  cache: { image: redis:7, ports: ['6379:6379'] }\n" > "$A/compose.yaml"
+  (cd "$A" && git init -q -b main 2>/dev/null || true)
+  # A tiny TCP "mesh" helper: listen on PORT (accept + hold), keep connections to upstreams open.
+  cat > "$A/tcpmesh.py" <<'PY'
+import socket, sys, threading, time
+def hold(conn):
+    try:
+        while conn.recv(4096): pass
+    except OSError: pass
+def serve(port):
+    s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(("127.0.0.1", port)); s.listen(64)
+    while True:
+        c, _ = s.accept(); threading.Thread(target=hold, args=(c,), daemon=True).start()
+def upstream(host, port, n=1):
+    while True:
+        try:
+            conns = [socket.create_connection((host, port), timeout=3) for _ in range(n)]
+            while True:
+                for c in conns: c.sendall(b"."); 
+                time.sleep(2)
+        except OSError:
+            time.sleep(2)
+def run(port, ups=()):
+    for u in ups: threading.Thread(target=upstream, args=u, daemon=True).start()
+    if port: serve(port)
+    else:
+        while True: time.sleep(60)
+PY
+  : > "$A/services/db/requirements.txt"; : > "$A/services/cache/requirements.txt"
+  echo 'import sys; sys.path.insert(0, "../.."); from tcpmesh import run; run(5432)' > "$A/services/db/postgres.py"
+  echo 'import sys; sys.path.insert(0, "../.."); from tcpmesh import run; run(6379)' > "$A/services/cache/redis-server.py"
+  printf '[project]\nname = "api"\ndependencies = ["fastapi>=0.110", "sqlalchemy", "redis"]\n' > "$A/services/api/pyproject.toml"
+  cat > "$A/services/api/main.py" <<'PY'
+import sys; sys.path.insert(0, "../..")
+from tcpmesh import run
+run(4000, [("127.0.0.1", 5432, 2), ("127.0.0.1", 6379, 1), ("api.github.com", 443, 1)])
+PY
+  echo '{ "name": "web", "scripts": { "dev": "next dev -p 3100" }, "dependencies": { "next": "15.0.0", "react": "19.0.0" } }' > "$A/apps/web/package.json"
+  echo '{ "name": "worker", "scripts": { "dev": "node worker.js" }, "dependencies": { "bullmq": "5" } }' > "$A/services/worker/package.json"
+  cat > "$A/node_modules/concurrently/bin/mesh.js" <<'JS'
+// Keep N connections to host:port open, reconnecting if they drop.
+const net = require('net');
+module.exports = (port, n = 1) => {
+  for (let i = 0; i < n; i++) (function dial() {
+    const s = net.connect(port, '127.0.0.1');
+    const t = setInterval(() => s.write('.'), 2000);
+    s.on('error', () => {}); s.on('close', () => { clearInterval(t); setTimeout(dial, 1000); });
+  })();
+};
+JS
+  cat > "$A/apps/web/server.js" <<'JS'
+const http = require('http');
+require('../../node_modules/concurrently/bin/mesh.js')(4000, 2);
+http.createServer((_, res) => res.end('<title>acme web</title>')).listen(3100, '127.0.0.1');
+JS
+  cat > "$A/services/worker/worker.js" <<'JS'
+const mesh = require('../../node_modules/concurrently/bin/mesh.js');
+mesh(6379, 1); mesh(4000, 1);
+setInterval(() => {}, 1 << 30);
+JS
+  # A supervisor like `concurrently` that runs web + worker side by side.
+  cat > "$A/node_modules/concurrently/bin/concurrently.js" <<'JS'
+const { spawn } = require('child_process');
+const path = require('path');
+const root = path.resolve(__dirname, '../../..');
+const kids = [['apps/web', 'server.js'], ['services/worker', 'worker.js']].map(([dir, file]) =>
+  spawn(process.execPath, [file], { cwd: path.join(root, dir), stdio: 'ignore' }));
+const stop = () => { kids.forEach(k => k.kill('SIGTERM')); process.exit(0); };
+process.on('SIGTERM', stop); process.on('SIGINT', stop);
+setInterval(() => {}, 1 << 30);
+JS
+  launch acme-db "$A/services/db" python3 postgres.py
+  launch acme-cache "$A/services/cache" python3 redis-server.py
+  sleep 0.3
+  launch acme-api "$A/services/api" python3 main.py
+  sleep 0.3
+  launch acme-dev "$A" node node_modules/concurrently/bin/concurrently.js "npm:dev:*"
 }
 
 killtree() {

@@ -254,3 +254,155 @@ mod linux {
         let _ = child.wait();
     }
 }
+
+fn home() -> tempfile::TempDir {
+    tempfile::tempdir().unwrap()
+}
+
+#[test]
+fn graph_exports_json_dot_and_mermaid() {
+    let out = pw().args(["graph", "--all", "--json"]).output().unwrap();
+    assert!(out.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(v["nodes"].is_array() && v["edges"].is_array() && v["clusters"].is_array());
+    pw().args(["graph", "--all", "--dot"])
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with("digraph portwise {"));
+    pw().args(["mesh", "--all", "--format", "mermaid"])
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with("flowchart LR"));
+    pw().args(["graph", "--cluster", "definitely-not-a-cluster"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("no cluster named"));
+}
+
+#[test]
+fn graph_shows_a_live_connection_between_two_processes() {
+    if std::process::Command::new("python3")
+        .arg("-V")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    let mut client = std::process::Command::new("python3")
+        .args([
+            "-c",
+            &format!("import socket,time; s=socket.create_connection(('127.0.0.1',{port})); print('ok', flush=True); time.sleep(30)"),
+        ])
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let (_conn, _) = l.accept().unwrap();
+    let mut line = String::new();
+    std::io::BufRead::read_line(
+        &mut std::io::BufReader::new(client.stdout.as_mut().unwrap()),
+        &mut line,
+    )
+    .unwrap();
+    let out = pw().args(["graph", "--all", "--json"]).output().unwrap();
+    let _ = client.kill();
+    let _ = client.wait();
+    let g: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let client_id = format!("svc:{}", client.id());
+    let edge = g["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["from"] == client_id.as_str() && e["port"] == port)
+        .unwrap_or_else(|| panic!("no edge from {client_id} to :{port}: {}", g["edges"]));
+    assert_eq!(edge["kind"], "local");
+}
+
+#[test]
+fn pins_round_trip_in_an_isolated_home() {
+    let h = home();
+    pw().env("PORTWISE_HOME", h.path())
+        .args(["pin", "3999", "--label", "demo"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Pinned :3999"));
+    let out = pw()
+        .env("PORTWISE_HOME", h.path())
+        .args(["pins", "--json"])
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v[0]["port"], 3999);
+    assert_eq!(v[0]["label"], "demo");
+    pw().env("PORTWISE_HOME", h.path())
+        .args(["unpin", "3999"])
+        .assert()
+        .success();
+    pw().env("PORTWISE_HOME", h.path())
+        .args(["pins", "--json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[]"));
+}
+
+#[test]
+fn history_restart_and_open() {
+    let h = home();
+    pw().env("PORTWISE_HOME", h.path())
+        .args(["history", "--json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[]"));
+    let port = free_port();
+    pw().env("PORTWISE_HOME", h.path())
+        .args(["restart", &port.to_string()])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("no record"));
+    pw().args(["open", "--print", "3000"])
+        .assert()
+        .success()
+        .stdout("http://localhost:3000\n");
+}
+
+#[test]
+fn stop_unknown_cluster_is_nothing_to_stop() {
+    pw().args(["stop", "--cluster", "nope", "--dry-run"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("No cluster named"));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn ssh_agentless_local_lists_ports() {
+    if std::process::Command::new("ss").arg("-V").output().is_err() {
+        return;
+    }
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    let out = pw()
+        .args(["ssh", "local", "list", "--json"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["platform"], "remote:local");
+    assert!(v["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|e| e["port"] == port));
+}
+
+#[test]
+fn watch_runs_for_a_bounded_number_of_polls() {
+    pw().args(["watch", "--json", "--polls", "2", "--interval", "50ms"])
+        .assert()
+        .success();
+}

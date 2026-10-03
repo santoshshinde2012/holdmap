@@ -76,7 +76,17 @@ pub fn list(a: &ListArgs, docker: bool) -> Result<u8> {
         }
         return Ok(exit::BUSY);
     }
-    write!(out, "{}", render::list_table(&shown, a.wide, a.all))?;
+    let pins: Vec<u16> = store::Store::open_default()
+        .config()
+        .pins
+        .iter()
+        .map(|p| p.port)
+        .collect();
+    write!(
+        out,
+        "{}",
+        render::list_table_with(&shown, a.wide, a.all, &pins)
+    )?;
     writeln!(out, "\n{}", render::summary_line(e.snapshot(), &shown))?;
     Ok(exit::OK)
 }
@@ -173,7 +183,7 @@ pub fn inspect(a: &PortArgs, docker: bool) -> Result<u8> {
     })
 }
 
-fn confirm(question: &str) -> Result<bool> {
+pub(crate) fn confirm(question: &str) -> Result<bool> {
     if !std::io::stdin().is_terminal() {
         bail!("refusing to act without confirmation in a non-interactive session; pass --yes (or --dry-run to preview)");
     }
@@ -207,8 +217,11 @@ pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
     let mut targets: Vec<Target> = a.targets.iter().map(|t| Target::parse(t)).collect();
     targets.extend(a.pids.iter().map(|p| Target::Pid(*p)));
     targets.extend(a.names.iter().map(|n| Target::Name(n.clone())));
+    targets.extend(a.clusters.iter().map(|c| Target::Cluster(c.clone())));
     if targets.is_empty() {
-        bail!("nothing to stop: give a port (e.g. `portwise stop 3000`), --pid or --name");
+        bail!(
+            "nothing to stop: give a port (e.g. `portwise stop 3000`), --pid, --name or --cluster"
+        );
     }
     if a.json && !a.yes && !a.dry_run {
         bail!("--json needs --yes (or --dry-run): JSON mode never prompts");
@@ -269,6 +282,7 @@ pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
         if !a.json {
             println!("{}", render::report_line(&report));
         }
+        crate::state::record(&e, &plan, &report);
         if !report.success {
             code = code.max(exit::BUSY);
         }

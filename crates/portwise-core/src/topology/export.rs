@@ -203,40 +203,85 @@ impl GraphExporter for MermaidExporter {
     }
 }
 
-/// Indented text tree: clusters → services → their dependencies.
-#[derive(Default)]
-pub struct TreeExporter {
-    /// Use ASCII instead of box-drawing characters.
-    pub ascii: bool,
+/// Styling hooks for [`TreeExporter`] (frontends add colour without re-implementing layout).
+pub trait TreeStyle {
+    fn heading(&self, s: &str) -> String {
+        s.to_string()
+    }
+    fn label(&self, s: &str) -> String {
+        s.to_string()
+    }
+    fn port(&self, s: &str) -> String {
+        s.to_string()
+    }
+    fn dim(&self, s: &str) -> String {
+        s.to_string()
+    }
+    fn warn(&self, s: &str) -> String {
+        s.to_string()
+    }
 }
 
-impl TreeExporter {
-    fn glyphs(
-        &self,
-    ) -> (
-        &'static str,
-        &'static str,
-        &'static str,
-        &'static str,
-        &'static str,
-    ) {
-        if self.ascii {
-            ("|-- ", "`-- ", "|   ", "    ", "->")
-        } else {
-            ("├─ ", "└─ ", "│  ", "   ", "→")
+/// No styling.
+pub struct PlainStyle;
+impl TreeStyle for PlainStyle {}
+
+/// Indented text tree: clusters → services → their dependencies.
+pub struct TreeExporter<'s> {
+    /// Use ASCII instead of box-drawing characters.
+    pub ascii: bool,
+    pub style: &'s dyn TreeStyle,
+}
+
+impl Default for TreeExporter<'_> {
+    fn default() -> Self {
+        Self {
+            ascii: false,
+            style: &PlainStyle,
+        }
+    }
+}
+
+impl TreeExporter<'_> {
+    pub fn ascii() -> Self {
+        Self {
+            ascii: true,
+            ..Default::default()
         }
     }
 
-    fn back_arrow(&self) -> &'static str {
+    fn glyphs(&self) -> [&'static str; 6] {
         if self.ascii {
-            "<-"
+            ["|-- ", "`-- ", "|   ", "    ", "->", "<-"]
         } else {
-            "←"
+            ["├─ ", "└─ ", "│  ", "   ", "→", "←"]
         }
+    }
+
+    fn header(&self, n: &Node) -> String {
+        let st = self.style;
+        let mut s = st.label(&n.label);
+        if let Some(sub) = &n.subtitle {
+            let _ = write!(s, " {}", st.dim(&format!("({sub})")));
+        }
+        for p in &n.ports {
+            let _ = write!(s, " {}", st.port(&format!(":{}", p.port)));
+        }
+        if let Some(pid) = n.root_pid {
+            let _ = write!(s, "  {}", st.dim(&format!("pid {pid}")));
+        }
+        if n.kind == NodeKind::Client {
+            let _ = write!(s, "  {}", st.dim("client"));
+        }
+        if let Some(t) = &n.tunnel {
+            let _ = write!(s, "  {}", st.warn(&format!("[tunnel: {}]", t.target)));
+        }
+        s
     }
 
     fn node_lines(&self, g: &Graph, n: &Node, prefix: &str, out: &mut String) {
-        let (tee, elbow, _, _, arrow) = self.glyphs();
+        let [tee, elbow, _, _, arrow, back] = self.glyphs();
+        let st = self.style;
         let mut deps: Vec<String> = g
             .edges
             .iter()
@@ -246,7 +291,7 @@ impl TreeExporter {
                     .node(&e.to)
                     .map(|t| t.label.clone())
                     .unwrap_or_else(|| e.to.clone());
-                format!("{arrow} {to} {}", edge_caption(e))
+                format!("{} {} {}", st.dim(arrow), to, st.port(&edge_caption(e)))
             })
             .collect();
         let inbound: usize = g
@@ -256,35 +301,36 @@ impl TreeExporter {
             .map(|e| e.connections)
             .sum();
         if inbound > 0 {
-            deps.push(format!(
-                "{} {inbound} external connection(s)",
-                self.back_arrow()
-            ));
+            deps.push(st.warn(&format!("{back} {inbound} external connection(s)")));
         }
         for (i, d) in deps.iter().enumerate() {
             let last = i + 1 == deps.len();
-            let _ = writeln!(out, "{prefix}{}{d}", if last { elbow } else { tee });
+            let _ = writeln!(out, "{prefix}{}{d}", st.dim(if last { elbow } else { tee }));
         }
     }
 
-    fn header(n: &Node) -> String {
-        let mut s = node_caption(n);
-        if let Some(pid) = n.root_pid {
-            let _ = write!(s, "  pid {pid}");
+    fn members(&self, g: &Graph, nodes: &[&Node], out: &mut String) {
+        let [tee, elbow, pipe, blank, _, _] = self.glyphs();
+        for (i, n) in nodes.iter().enumerate() {
+            let last = i + 1 == nodes.len();
+            let _ = writeln!(
+                out,
+                "{}{}",
+                self.style.dim(if last { elbow } else { tee }),
+                self.header(n)
+            );
+            let p = if last { blank } else { pipe };
+            self.node_lines(g, n, &format!("{}  ", self.style.dim(p)), out);
         }
-        if let Some(t) = &n.tunnel {
-            let _ = write!(s, "  [tunnel: {}]", t.target);
-        }
-        s
     }
 }
 
-impl GraphExporter for TreeExporter {
+impl GraphExporter for TreeExporter<'_> {
     fn name(&self) -> &'static str {
         "tree"
     }
     fn export(&self, g: &Graph) -> String {
-        let (tee, elbow, pipe, blank, _) = self.glyphs();
+        let st = self.style;
         let mut o = String::new();
         let (clusters, loose) = by_cluster(g);
         for c in &g.clusters {
@@ -294,14 +340,14 @@ impl GraphExporter for TreeExporter {
                 .as_ref()
                 .map(|d| format!(", {d}"))
                 .unwrap_or_default();
-            let _ = writeln!(o, "{} ({kind}{detail})", c.name);
+            let _ = writeln!(
+                o,
+                "{} {}",
+                st.heading(&c.name),
+                st.dim(&format!("({kind}{detail})"))
+            );
             let members = clusters.get(c.id.as_str()).cloned().unwrap_or_default();
-            for (i, n) in members.iter().enumerate() {
-                let last = i + 1 == members.len();
-                let _ = writeln!(o, "{}{}", if last { elbow } else { tee }, Self::header(n));
-                let p = if last { blank } else { pipe };
-                self.node_lines(g, n, &format!("{p}  "), &mut o);
-            }
+            self.members(g, &members, &mut o);
             o.push('\n');
         }
         let loose: Vec<&Node> = loose
@@ -309,30 +355,28 @@ impl GraphExporter for TreeExporter {
             .filter(|n| n.kind != NodeKind::External)
             .collect();
         if !loose.is_empty() {
-            let _ = writeln!(o, "Ungrouped");
-            for (i, n) in loose.iter().enumerate() {
-                let last = i + 1 == loose.len();
-                let _ = writeln!(o, "{}{}", if last { elbow } else { tee }, Self::header(n));
-                let p = if last { blank } else { pipe };
-                self.node_lines(g, n, &format!("{p}  "), &mut o);
-            }
+            let _ = writeln!(o, "{}", st.heading("Ungrouped"));
+            self.members(g, &loose, &mut o);
             o.push('\n');
         }
         let s = &g.stats;
         let plural = |n: usize, w: &str| format!("{n} {w}{}", if n == 1 { "" } else { "s" });
         let _ = writeln!(
             o,
-            "{} · {} · {} · {}",
-            plural(
-                g.nodes
-                    .iter()
-                    .filter(|n| n.kind != NodeKind::External)
-                    .count(),
-                "service"
-            ),
-            plural(s.edges, "link"),
-            plural(s.connections, "connection"),
-            plural(s.clusters, "cluster")
+            "{}",
+            st.dim(&format!(
+                "{} · {} · {} · {}",
+                plural(
+                    g.nodes
+                        .iter()
+                        .filter(|n| n.kind != NodeKind::External)
+                        .count(),
+                    "service"
+                ),
+                plural(s.edges, "link"),
+                plural(s.connections, "connection"),
+                plural(s.clusters, "cluster")
+            ))
         );
         if self.ascii {
             o = o.replace('×', "x").replace('·', "-");

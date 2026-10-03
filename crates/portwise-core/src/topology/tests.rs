@@ -435,7 +435,7 @@ fn exporters_render_all_formats() {
     assert!(tree.contains("acme-shop (workspace, pnpm)"), "{tree}");
     assert!(tree.contains("→ api :8080"), "{tree}");
     assert!(tree.contains("→ External hosts 140.82.112.3:443"), "{tree}");
-    let ascii = TreeExporter { ascii: true }.export(&g);
+    let ascii = TreeExporter::ascii().export(&g);
     assert!(ascii.is_ascii(), "{ascii}");
     let json: Graph = serde_json::from_str(&exporter("json").unwrap().export(&g)).unwrap();
     assert_eq!(json, g);
