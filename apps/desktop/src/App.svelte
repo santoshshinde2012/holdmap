@@ -719,7 +719,8 @@
         <Splitter bind:width={paneWidth} min={340} max={680} initial={PANE_DEFAULT} />
         <DetailPane entry={selected} explanation={selected ? explanations[selected.port] ?? null : null} http={selected ? httpInfo[selected.port] ?? null : null} loading={explaining} busy={selected ? !!busy[selected.id] : false} bind:tab={detailTab} {mod}
           onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy}
-          {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} />
+          {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)}
+          entries={snapshot?.entries ?? []} onselectentry={(e) => selectEntry(e, false)} />
       </div>
     {/if}
   </main>

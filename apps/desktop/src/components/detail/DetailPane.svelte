@@ -6,8 +6,8 @@
   import Button from "../ui/Button.svelte";
   import Tabs, { panelId, tabId } from "../ui/Tabs.svelte";
   import ScrollArea from "../ui/ScrollArea.svelte";
-  import Kbd from "../ui/Kbd.svelte";
   import DetailHeader from "./DetailHeader.svelte";
+  import AtAGlance from "./AtAGlance.svelte";
   import OverviewPanel from "./OverviewPanel.svelte";
   import ConnectionsPanel from "./ConnectionsPanel.svelte";
   import ProcessPanel from "./ProcessPanel.svelte";
@@ -38,6 +38,8 @@
     onstopcluster,
     onselectnode,
     mod = "Ctrl",
+    entries = [],
+    onselectentry = () => {},
   }: {
     entry: PortEntry | null;
     explanation: Explanation | null;
@@ -57,6 +59,9 @@
     onstopcluster?: (name: string) => void;
     onselectnode?: (n: GraphNode) => void;
     mod?: string;
+    /** Every port, for the summary shown while nothing is selected. */
+    entries?: PortEntry[];
+    onselectentry?: (e: PortEntry) => void;
   } = $props();
 
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -74,12 +79,7 @@
 
 <aside class="pane" class:drawer aria-label="Port details">
   {#if !entry}
-    <div class="placeholder">
-      <div class="ph-art" aria-hidden="true"><span class="ring r1"></span><span class="ring r2"></span><span class="core"><Icon name="radar" size={22} /></span></div>
-      <h3>Select a port</h3>
-      <p>See who owns it, why it's busy, and exactly what Stop will do before anything happens.</p>
-      <div class="ph-keys"><span><Kbd keys={["↑", "↓"]} size="sm" /> move</span><span><Kbd keys={[mod, "K"]} size="sm" /> commands</span><span><Kbd keys="?" size="sm" /> shortcuts</span></div>
-    </div>
+    <AtAGlance {entries} onselect={onselectentry} {mod} />
   {:else}
     <DetailHeader {entry} {pinned} {onpin} {oncopy} {onclose} />
     <Tabs {tabs} bind:value={tab} {base} label="Details sections" />
@@ -125,14 +125,4 @@
   .sp { flex: 1; }
   .why { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); font-weight: var(--fw-medium); }
 
-  .placeholder { margin: auto; text-align: center; max-width: 300px; color: var(--muted); padding: var(--sp-6); }
-  .placeholder h3 { color: var(--text); margin: var(--sp-5) 0 var(--sp-1); font-size: var(--fs-title); font-weight: var(--fw-semibold); letter-spacing: var(--ls-title); line-height: var(--lh-title); }
-  .placeholder p { margin: 0 0 var(--sp-5); }
-  .ph-keys { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
-  .ph-keys span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-  .ph-art { position: relative; width: 84px; height: 84px; margin: 0 auto; display: grid; place-items: center; }
-  .ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid var(--accent); opacity: 0; animation: ping 2.8s var(--ease) infinite; }
-  .ring.r2 { animation-delay: 1.4s; }
-  .core { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
-  @keyframes ping { 0% { transform: scale(0.55); opacity: 0.6; } 100% { transform: scale(1.15); opacity: 0; } }
 </style>

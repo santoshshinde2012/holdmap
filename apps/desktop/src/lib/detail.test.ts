@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cliCommands, detailTabs, resolveTab, stopState } from "./detail";
+import { cliCommands, detailTabs, glance, resolveTab, stopState } from "./detail";
 import { MOCK_SNAPSHOT, mockExplain, mockPlan } from "./mock";
 
 const entry = (port: number) => MOCK_SNAPSHOT.entries.find((e) => e.port === port)!;
@@ -34,5 +34,18 @@ describe("details pane logic", () => {
     expect(c.map((x) => x.cmd)).toContain("portwise stop 3000 --dry-run");
     expect(new Set(c.map((x) => x.cmd)).size).toBe(c.length);
     expect(cliCommands(entry(631), null).some((x) => x.cmd.includes("stop"))).toBe(false);
+  });
+});
+
+describe("at a glance", () => {
+  it("counts ports and lists exposed ones, owned ones first", () => {
+    const g = glance(MOCK_SNAPSHOT.entries, 2);
+    expect(g.total).toBe(MOCK_SNAPSHOT.entries.length);
+    expect(g.dev).toBe(MOCK_SNAPSHOT.entries.filter((e) => e.is_dev).length);
+    expect(g.exposedCount).toBe(MOCK_SNAPSHOT.entries.filter((e) => e.exposure === "all_interfaces").length);
+    expect(g.exposed.length).toBeLessThanOrEqual(2);
+    expect(g.exposed.every((e) => e.exposure === "all_interfaces")).toBe(true);
+    const ports = g.exposed.map((e) => e.port);
+    expect(ports).toEqual([...ports].sort((a, b) => a - b));
   });
 });

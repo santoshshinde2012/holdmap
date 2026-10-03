@@ -51,3 +51,13 @@ export function cliCommands(entry: PortEntry, explanation: Explanation | null): 
   add("Watch this port", `portwise wait ${p} --free`);
   return out;
 }
+
+export interface Glance { total: number; dev: number; exposed: PortEntry[]; exposedCount: number }
+
+/** The empty details pane's summary: counts, and the ports other devices can reach (owned ones first). */
+export function glance(entries: PortEntry[], max = 5): Glance {
+  const exposed = entries
+    .filter((e) => e.exposure === "all_interfaces")
+    .sort((a, b) => Number(!!b.process || !!b.container) - Number(!!a.process || !!a.container) || a.port - b.port);
+  return { total: entries.length, dev: entries.filter((e) => e.is_dev).length, exposed: exposed.slice(0, max), exposedCount: exposed.length };
+}
