@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeLabel, fitEdgeLabel, linksLabel, force, groupId, layered, NODE_H, NODE_W, nodeForEntry, orderFromSummary, related, sectionsByCluster, separate, toFlow, trafficDots } from "./graph";
+import { edgeLabel, fitEdgeLabel, linksLabel, needsMiniMap, force, groupId, layered, NODE_H, NODE_W, nodeForEntry, orderFromSummary, related, sectionsByCluster, separate, toFlow, trafficDots } from "./graph";
 import { MOCK_SNAPSHOT, mockTopology } from "./mock";
 
 const g = mockTopology();
@@ -99,6 +99,18 @@ describe("helpers", () => {
     expect(fitEdgeLabel(":5432", 0, 0, 10, 160).clipped).toBe(false);
     // Never collapses to nothing.
     expect(fitEdgeLabel(hosts, 0, 0, 4, 0).text.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("shows the minimap only while part of the graph is off-screen", () => {
+    const b = { x: 0, y: 0, width: 1000, height: 600 };
+    // Fitted: everything visible, so no minimap to cover nodes.
+    expect(needsMiniMap(b, { x: 20, y: 80, zoom: 0.9 }, 1000, 700)).toBe(false);
+    // Zoomed in or panned: content spills past an edge.
+    expect(needsMiniMap(b, { x: 0, y: 0, zoom: 1.5 }, 1000, 700)).toBe(true);
+    expect(needsMiniMap(b, { x: -200, y: 80, zoom: 0.9 }, 1000, 700)).toBe(true);
+    // A few px of rounding at the edge doesn't count; unmeasured canvas never shows it.
+    expect(needsMiniMap(b, { x: 4, y: 4, zoom: 1 }, 1000, 600)).toBe(false);
+    expect(needsMiniMap(b, { x: 0, y: 0, zoom: 1 }, 0, 0)).toBe(false);
   });
 
   it("labels the Graph badge count in words", () => {

@@ -1,14 +1,15 @@
 <script lang="ts">
   // Interactive service mesh: clusters as hulls, directed dependency edges with live-traffic
   // animation, hover highlighting of the dependency chain, click-to-select (synced with the
-  // details pane), zoom/fit controls, minimap and a layered ↔ force layout toggle.
-  import { SvelteFlow, Background, Controls, MiniMap, Panel, type NodeTypes, type EdgeTypes } from "@xyflow/svelte";
+  // details pane), zoom/fit controls, an on-demand minimap and a layered ↔ force layout toggle.
+  import { SvelteFlow, Background, Controls, Panel, type NodeTypes, type EdgeTypes } from "@xyflow/svelte";
   import "@xyflow/svelte/dist/style.css";
   import { setContext } from "svelte";
   import ServiceNode from "./graph/ServiceNode.svelte";
   import ClusterNode from "./graph/ClusterNode.svelte";
   import TrafficEdge from "./graph/TrafficEdge.svelte";
   import FitOnChange from "./graph/FitOnChange.svelte";
+  import AutoMiniMap from "./graph/AutoMiniMap.svelte";
   import Icon from "./Icon.svelte";
   import type { Graph, GraphNode } from "../lib/types";
   import { FIT_PADDING, layout, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Positions } from "../lib/graph";
@@ -127,17 +128,8 @@
     >
       <FitOnChange token={signature} {focus} {reduced} />
       <Background gap={22} size={1.2} />
-      <Controls showLock={false} position="bottom-left" />
-      <MiniMap
-        position="bottom-right"
-        pannable
-        zoomable
-        nodeColor={(n) => (n.type === "cluster" ? "transparent" : (n.data as FlowNode["data"]).node?.is_dev ? "var(--tone-green)" : "var(--border-strong)")}
-        nodeStrokeColor={(n) => (n.type === "cluster" ? "var(--accent)" : "transparent")}
-        maskColor={dark ? "rgb(0 0 0 / 0.55)" : "rgb(240 240 245 / 0.65)"}
-        width={180}
-        height={120}
-      />
+      <Controls showLock={false} position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.2, duration: reduced ? 0 : 320 }} />
+      <AutoMiniMap {dark} />
       <Panel position="top-left">
         <div class="bar" role="toolbar" aria-label="Graph view options">
           <div class="seg" role="radiogroup" aria-label="Layout">
@@ -170,7 +162,9 @@
   .graph :global(.svelte-flow) { --xy-background-color: var(--bg); --xy-node-border-radius: 14px; --xy-controls-button-background-color: var(--surface); --xy-controls-button-color: var(--text-2); --xy-controls-button-border-color: var(--border); --xy-minimap-background-color: var(--surface); }
   .graph :global(.svelte-flow__node-service), .graph :global(.svelte-flow__node-cluster) { padding: 0; border: 0; background: transparent; box-shadow: none; width: auto; }
   .graph :global(.svelte-flow__controls) { box-shadow: var(--shadow-sm); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
-  .graph :global(.svelte-flow__minimap) { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+  /* Shown only while part of the graph is off-screen; translucent until you reach for it. */
+  .graph :global(.svelte-flow__minimap) { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-sm); opacity: 0.72; transition: opacity var(--dur-2) var(--ease); }
+  .graph :global(.svelte-flow__minimap:hover), .graph :global(.svelte-flow__minimap:focus-within) { opacity: 1; }
   .graph :global(.svelte-flow__background) { --xy-background-pattern-color: var(--border); }
   .bar { display: flex; gap: 6px; align-items: center; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; box-shadow: var(--shadow-sm); }
   .seg { display: inline-flex; padding: 2px; background: var(--surface-2); border-radius: 8px; }
