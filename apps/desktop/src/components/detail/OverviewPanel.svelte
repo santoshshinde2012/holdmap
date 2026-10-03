@@ -3,11 +3,12 @@
   import Callout from "../ui/Callout.svelte";
   import RichText from "../ui/RichText.svelte";
   import Section from "./Section.svelte";
-  import type { Explanation, GraphNode, PortEntry, ProcRef } from "../../lib/types";
-  import { describeStep, humanBytes, tildify, uptime } from "../../lib/format";
+  import type { Explanation, GraphNode, HttpInfo, PortEntry, ProcRef } from "../../lib/types";
+  import { describeStep, httpSummary, humanBytes, tildify, uptime } from "../../lib/format";
   import { tooltip } from "../../lib/tooltip";
 
-  let { entry, explanation, loading, node }: { entry: PortEntry; explanation: Explanation | null; loading: boolean; node: GraphNode | null } = $props();
+  let { entry, explanation, http = null, loading, node }: { entry: PortEntry; explanation: Explanation | null; http?: HttpInfo | null; loading: boolean; node: GraphNode | null } = $props();
+  const web = $derived(http && http.port === entry.port ? http : null);
 
   const plan = $derived(explanation?.plan ?? null);
   const blocked = $derived(plan?.blocked ?? null);
@@ -44,6 +45,9 @@
       <Callout tone="warn" icon={blocked.kind === "needs_elevation" ? "lock" : "shield"} title={blockTitle[blocked.kind]}><p class="selectable"><RichText text={blocked.message} /></p></Callout>
     {:else}
       <Callout tone="tip" title="Recommended"><p class="selectable"><RichText text={explanation.recommendation} /></p></Callout>
+    {/if}
+    {#if web}
+      <p class="web selectable" class:bad={web.status >= 500}><Icon name="globe" size={12} /><span class="wl">HTTP</span><span class="wv">{httpSummary(web)}</span></p>
     {/if}
   </div>
 {/if}
@@ -90,6 +94,11 @@
   .sk { display: grid; gap: 10px; }
   .summary { display: grid; gap: var(--sp-3); }
   .headline { margin: 0; font-size: var(--fs-heading); letter-spacing: var(--ls-heading); line-height: var(--lh-heading); color: var(--text); font-weight: var(--fw-regular); text-wrap: pretty; }
+  .web { margin: 0; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--text-2); }
+  .web :global(svg) { color: var(--ok); flex: none; }
+  .web.bad :global(svg) { color: var(--danger); }
+  .wl { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-medium); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
+  .wv { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: var(--sp-5) 0 var(--sp-6); }
   .stats.four { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .stats.four .stat:last-child { grid-column: 1 / -1; }

@@ -109,6 +109,20 @@ pub async fn topology(app: AppHandle, all: bool) -> Result<Graph, String> {
     .await
 }
 
+/// Ask a local port what it serves over HTTP (status, page title, server), with a short
+/// `GET /`. `None` when it doesn't answer HTTP.
+#[tauri::command]
+pub async fn http_info(port: u16) -> Result<Option<portwise_core::http::HttpInfo>, String> {
+    blocking(move || {
+        Ok(portwise_core::http::probe(
+            port,
+            "/",
+            std::time::Duration::from_millis(1200),
+        ))
+    })
+    .await
+}
+
 /// Explain why `port` is busy, using the most recent scan (or a new one).
 #[tauri::command]
 pub async fn explain(app: AppHandle, port: u16) -> Result<Explanation, String> {

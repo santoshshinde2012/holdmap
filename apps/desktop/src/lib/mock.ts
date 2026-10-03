@@ -1,5 +1,5 @@
 // Realistic sample data so the UI can be developed in a plain browser (`npm run dev`) and tested.
-import type { ActionPlan, Cluster, Explanation, Graph, GraphEdge, GraphNode, PortEntry, Snapshot, StopReport } from "./types";
+import type { ActionPlan, Cluster, Explanation, Graph, GraphEdge, GraphNode, HttpInfo, PortEntry, Snapshot, StopReport } from "./types";
 
 const now = Math.floor(Date.now() / 1000);
 let token = 1000;
@@ -163,7 +163,31 @@ export function mockExplain(port: number): Explanation {
   };
 }
 
+/** Dev servers "Stop all dev servers" would include: yours, not protected, not containers. */
+export function mockDevServers(s: Snapshot = MOCK_SNAPSHOT): PortEntry[] {
+  return s.entries.filter((e) => e.is_dev && e.is_mine && !e.protected && !e.container && e.process && e.state === "listen");
+}
+
+/** Browser preview: web-ish ports answer with a title, databases don't speak HTTP. */
+export function mockHttp(port: number): HttpInfo | null {
+  const e = MOCK_SNAPSHOT.entries.find((x) => x.port === port);
+  if (!e || e.protocol !== "tcp" || e.framework?.category === "database" || e.framework?.category === "cache") return null;
+  return { port, status: 200, reason: "OK", title: e.project?.name ?? e.framework?.name ?? null, server: null, location: null, elapsed_ms: 3 };
+}
+
 export function mockPlan(target: string, force: boolean, allowProtected = false): ActionPlan {
+  if (target === "dev:all") {
+    const dev = mockDevServers();
+    if (!dev.length) return { target: "all dev servers", owners: [], summary: "", steps: [], blocked: { kind: "nothing_to_stop", message: "No dev servers of yours are running." }, warnings: [], risk: "low" };
+    const processes = dev.map((e, i) => ({ pid: e.process!.pid, name: e.process!.name, start_token: i + 1, command: e.process!.cmdline.join(" ") }));
+    return {
+      target: "all dev servers",
+      owners: dev.map((e) => ({ kind: "process", pid: e.process!.pid, name: e.process!.name })),
+      summary: `Stop ${dev.length} dev servers: ${dev.map((e) => `:${e.port} ${e.label}`).join(", ")}.`,
+      steps: [{ action: "signal_processes", processes, force, timeout_ms: 5000 }, ...dev.map((e) => ({ action: "verify_free" as const, port: e.port, protocol: e.protocol, timeout_ms: 3000 }))],
+      blocked: null, warnings: [], risk: "medium",
+    };
+  }
   const port = parseInt(target, 10);
   const e = MOCK_SNAPSHOT.entries.find((x) => x.port === port)!;
   if (!e?.process) {
@@ -197,6 +221,11 @@ export function mockPlan(target: string, force: boolean, allowProtected = false)
 }
 
 export function mockStop(target: string): StopReport {
+  if (target === "dev:all") {
+    const dev = mockDevServers();
+    for (const e of dev) MOCK_SNAPSHOT.entries.splice(MOCK_SNAPSHOT.entries.indexOf(e), 1);
+    return { target: "all dev servers", success: true, freed: true, ports_still_busy: [], signalled: dev.map((e) => e.process!.pid), escalated: false, survivors: [], elapsed_ms: 640, log: dev.map((e) => `port ${e.port} is free`), error: null };
+  }
   const port = parseInt(target, 10);
   const i = MOCK_SNAPSHOT.entries.findIndex((x) => x.port === port);
   if (i >= 0) MOCK_SNAPSHOT.entries.splice(i, 1);

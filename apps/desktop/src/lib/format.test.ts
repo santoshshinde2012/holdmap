@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { describeStep, groupOf, humanBytes, humanDuration, matches, type Filters } from "./format";
-import { MOCK_SNAPSHOT } from "./mock";
+import { describeStep, groupOf, httpSummary, humanBytes, humanDuration, matches, type Filters } from "./format";
+import { MOCK_SNAPSHOT, mockDevServers, mockHttp, mockPlan } from "./mock";
 
 const base: Filters = { query: "", all: false, proto: "any", dev: false, mine: false, exposed: false };
 const byPort = (p: number) => MOCK_SNAPSHOT.entries.find((e) => e.port === p)!;
@@ -57,5 +57,29 @@ describe("canOverride", () => {
     expect(canOverride({ blocked: { kind: "protected", message: "", overridable: false } })).toBe(false);
     expect(canOverride({ blocked: { kind: "needs_elevation", message: "", overridable: true } })).toBe(false);
     expect(canOverride({ blocked: null })).toBe(false);
+  });
+});
+
+describe("httpSummary", () => {
+  it("shows status, title, redirect and server", () => {
+    expect(httpSummary({ port: 3000, status: 200, reason: "OK", title: "Acme", server: null, location: null, elapsed_ms: 2 })).toBe("200 OK · “Acme”");
+    expect(httpSummary({ port: 80, status: 302, reason: "Found", title: null, server: "nginx", location: "/login", elapsed_ms: 2 })).toBe("302 Found → /login · nginx");
+  });
+  it("mock databases don't speak HTTP", () => {
+    const db = MOCK_SNAPSHOT.entries.find((e) => e.framework?.category === "database");
+    if (db) expect(mockHttp(db.port)).toBeNull();
+  });
+});
+
+describe("stop all dev servers (mock)", () => {
+  it("plans every dev server of yours and nothing protected", () => {
+    const dev = mockDevServers();
+    expect(dev.length).toBeGreaterThan(1);
+    expect(dev.every((e) => e.is_dev && e.is_mine && !e.protected && !e.container)).toBe(true);
+    const plan = mockPlan("dev:all", false);
+    expect(plan.blocked).toBeNull();
+    expect(plan.summary).toContain(`Stop ${dev.length} dev servers`);
+    const sig = plan.steps.find((s) => s.action === "signal_processes");
+    expect(sig && sig.action === "signal_processes" ? sig.processes.length : 0).toBe(dev.length);
   });
 });

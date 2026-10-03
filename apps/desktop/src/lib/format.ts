@@ -1,4 +1,4 @@
-import type { ActionPlan, Category, Owner, PortEntry, Step } from "./types";
+import type { ActionPlan, Category, HttpInfo, Owner, PortEntry, Step } from "./types";
 
 export type Group = "dev" | "containers" | "data" | "apps" | "system";
 
@@ -68,6 +68,15 @@ export function humanDuration(secs: number): string {
   if (h < 24) return `${h}h ${m % 60}m`;
   const d = Math.floor(h / 24);
   return `${d}d ${h % 24}h`;
+}
+
+/** One line for an HTTP probe: `200 OK · “Acme Shop”`, `302 Found → /login`. */
+export function httpSummary(h: HttpInfo): string {
+  let s = `${h.status} ${h.reason}`.trim();
+  if (h.title) s += ` · “${h.title}”`;
+  if (h.location) s += ` → ${h.location}`;
+  if (h.server) s += ` · ${h.server}`;
+  return s;
 }
 
 export function uptime(e: PortEntry, nowMs = Date.now()): string | null {

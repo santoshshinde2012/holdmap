@@ -70,6 +70,19 @@ fn build_tray_menu(
             )?)?;
         }
     }
+    if snapshot.is_some_and(|s| {
+        s.entries
+            .iter()
+            .any(|e| e.is_dev && e.is_mine && !e.protected)
+    }) {
+        menu.append(&MenuItem::with_id(
+            app,
+            "stop-all-dev",
+            "Stop all dev servers…",
+            true,
+            None::<&str>,
+        )?)?;
+    }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     if let Some(s) = snapshot {
         let exposed = s
@@ -136,6 +149,11 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_main(app),
             "quit" => app.exit(0),
+            // Confirmation happens in the window, with the full plan.
+            "stop-all-dev" => {
+                show_main(app);
+                let _ = app.emit("stop-all-dev", ());
+            }
             "refresh" => {
                 let _ = app.emit("refresh", ());
                 let app = app.clone();

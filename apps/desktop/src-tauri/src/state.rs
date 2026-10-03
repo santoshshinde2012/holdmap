@@ -9,6 +9,8 @@ pub struct AppState {
     pub engine: Mutex<Option<Engine>>,
     pub docker: AtomicBool,
     pub tray_ok: AtomicBool,
+    /// Whether the updater plugin is registered (release builds with an update key).
+    pub updater: AtomicBool,
     /// Config, pins and stop history (`$PORTWISE_HOME` or the platform config dir).
     pub store: Store,
 }
@@ -19,6 +21,7 @@ impl Default for AppState {
             engine: Mutex::new(None),
             docker: AtomicBool::new(true),
             tray_ok: AtomicBool::new(false),
+            updater: AtomicBool::new(false),
             store: Store::open_default(),
         }
     }

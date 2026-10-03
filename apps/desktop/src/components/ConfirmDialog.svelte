@@ -53,11 +53,19 @@
   });
   const escalated = $derived(log.some((l) => /SIGKILL/.test(l) && /send|sent/.test(l)));
   const freed = $derived(phase === "done" || log.some((l) => /is free/.test(l)));
+  /** Neither a port nor a cluster: a bulk stop ("all dev servers"). */
+  const bulk = $derived(!entry && !cluster);
   const verb = $derived(cluster ? "Stop cluster" : force ? "Force kill" : entry?.container ? "Stop container" : "Stop");
   const order = $derived(cluster ? orderFromSummary(plan.summary) : []);
   const subject = $derived(cluster ? cluster.name : entry ? title(entry) : plan.target);
-  const heading = $derived(phase === "done" ? (cluster ? `Cluster ${cluster.name} stopped` : `Port ${entry?.port} is free`) : blocked ? `Can't stop ${cluster ? cluster.name : `:${entry?.port}`} safely` : `${verb} ${subject}?`);
-  const sub = $derived(cluster ? `${CLUSTER_LABEL[cluster.kind]}${cluster.detail ? ` · ${cluster.detail}` : ""} · ${cluster.nodes.length} services` : entry ? `:${entry.port} · ${entry.process ? `${entry.process.name} · PID ${entry.process.pid}` : entry.container?.name ?? ""}` : "");
+  const heading = $derived(phase === "done" ? (cluster ? `Cluster ${cluster.name} stopped` : bulk ? "Dev servers stopped" : `Port ${entry?.port} is free`) : blocked ? (bulk ? `Nothing to stop` : `Can't stop ${cluster ? cluster.name : `:${entry?.port}`} safely`) : `${verb} ${subject}?`);
+  const sub = $derived(cluster ? `${CLUSTER_LABEL[cluster.kind]}${cluster.detail ? ` · ${cluster.detail}` : ""} · ${cluster.nodes.length} services` : entry ? `:${entry.port} · ${entry.process ? `${entry.process.name} · PID ${entry.process.pid}` : entry.container?.name ?? ""}` : bulk ? stepCount(plan) : "");
+
+  function stepCount(p: ActionPlan): string {
+    const s = p.steps.find((x) => x.action === "signal_processes");
+    const n = s && s.action === "signal_processes" ? s.processes.length : 0;
+    return n ? `${n} process${n === 1 ? "" : "es"} · yours, not protected` : "";
+  }
 
   function stepState(i: number): "done" | "active" | "pending" {
     if (phase === "done") return "done";
@@ -123,7 +131,7 @@
       {/if}
       <div class="notes">
         {#each plan.warnings as w}<Callout tone="warn" size="sm">{w}</Callout>{/each}
-        {#if plan.risk !== "low" && phase === "confirm" && !(cluster && plan.risk === "medium")}
+        {#if plan.risk !== "low" && phase === "confirm" && !((cluster || bulk) && plan.risk === "medium")}
           <Callout tone={plan.risk === "high" ? "danger" : "warn"} size="sm">{plan.risk === "high" ? "High risk: this isn't one of your dev servers." : "This isn't a dev server — make sure nothing needs it."}</Callout>
         {/if}
         {#if phase === "failed" && report}<Callout tone="danger" size="sm">{report.error ?? `Port still busy: ${report.ports_still_busy.join(", ")}`}</Callout>{/if}
