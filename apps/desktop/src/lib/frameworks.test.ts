@@ -11,6 +11,16 @@ describe("framework brands", () => {
     expect(brandFor(byPort(5432)).kind).toBe("container");
     expect(brandFor(byPort(631)).kind).toBe("hidden");
   });
+  it("anchors prefix patterns but still matches the runtime anywhere", () => {
+    const fw = (name: string) => brandFor({ ...byPort(3000), container: null, framework: { name, category: "app_server" } }).glyph;
+    expect(fw("Rails")).toBe("Rb");
+    expect(fw("Sinatra (ruby)")).toBe("Rb");
+    expect(fw("Laravel")).toBe("L");
+    expect(fw("Go")).toBe("Go");
+    expect(fw("Axum")).toBe("Rs");
+    expect(fw("Gunicorn")).toBe("U");
+    expect(fw("Cargo")).not.toBe("Go");
+  });
   it("derives initials for unknown names", () => {
     expect(initials("sand-egress-tun")).toBe("SE");
     expect(initials("x11vnc")).toBe("X1");
