@@ -27,12 +27,17 @@ fn refresh_kind() -> ProcessRefreshKind {
         .with_cwd(UpdateKind::Always)
         .with_user(UpdateKind::Always)
         .with_memory()
+        .with_cpu()
 }
 
 impl ProcessTable {
     /// Capture all processes visible to the current user.
     pub fn capture() -> Self {
-        let mut sys = System::new();
+        Self::capture_with(&mut System::new())
+    }
+
+    /// Capture using a long-lived [`System`], so CPU usage is measured since the previous call.
+    pub fn capture_with(sys: &mut System) -> Self {
         sys.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind());
         let users = Users::new_with_refreshed_list();
         let procs = sys
@@ -71,6 +76,7 @@ impl ProcessTable {
                     start_time,
                     start_token,
                     memory_bytes: p.memory(),
+                    cpu_percent: p.cpu_usage(),
                 }
             })
             .map(|p| (p.pid, p))
@@ -254,6 +260,7 @@ pub(crate) mod tests {
             start_time: 1_700_000_000,
             start_token: 1000 + pid as u64,
             memory_bytes: 1024,
+            cpu_percent: 0.0,
         }
     }
 

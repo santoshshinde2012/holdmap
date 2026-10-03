@@ -1,14 +1,19 @@
 //! Snapshot engine: sockets + processes + containers + projects → grouped [`PortEntry`] rows,
 //! plus the filter/query language shared by all surfaces.
 
-use crate::docker::{self, PublishedPort};
+use crate::docker::PublishedPort;
 use crate::model::*;
 use crate::process::ProcessTable;
 use crate::project::{detect_framework, ProjectDetector};
-use crate::safety::{protection, Protection};
+use crate::provider::{
+    ContainerProvider, DockerContainers, ProcessProvider, SocketProvider, StaticContainers,
+    StaticProcesses, StaticSockets, SystemProcesses, SystemSockets,
+};
+use crate::safety::{DefaultProtectionPolicy, Protection, ProtectionPolicy};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::net::IpAddr;
+use std::sync::Arc;
 use std::time::Instant;
 
 /// What to include in a scan.
@@ -39,41 +44,124 @@ pub struct Scan {
     pub raw: Vec<RawSocket>,
 }
 
-/// Run a full scan of the machine.
+/// Run a full scan of the machine with the system providers and default policy.
 pub fn scan(opts: &ScanOptions) -> Result<Scan, std::io::Error> {
-    let started = Instant::now();
-    let mut warnings = Vec::new();
-    // Sockets and processes are independent: collect them in parallel.
-    let docker_handle = opts
-        .docker
-        .then(|| std::thread::spawn(docker::published_ports));
-    let table_handle = std::thread::spawn(ProcessTable::capture);
-    let raw = crate::sys::list_sockets()?;
-    let table = table_handle.join().unwrap_or_default();
-    let (published, docker_available) = match docker_handle.map(|h| h.join()) {
-        Some(Ok(r)) => r,
-        Some(Err(_)) => {
-            warnings.push("container runtime query failed".to_string());
-            (Vec::new(), false)
+    Scanner::system().scan(opts)
+}
+
+/// Builds a [`Scan`] from injected providers and a protection policy.
+#[derive(Clone)]
+pub struct Scanner {
+    sockets: Arc<dyn SocketProvider>,
+    processes: Arc<dyn ProcessProvider>,
+    containers: Arc<dyn ContainerProvider>,
+    policy: Arc<dyn ProtectionPolicy>,
+    platform: String,
+}
+
+impl std::fmt::Debug for Scanner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Scanner")
+            .field("platform", &self.platform)
+            .field("policy", &self.policy)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Scanner {
+    /// The live machine: OS sockets, sysinfo processes, Docker-compatible runtimes.
+    pub fn system() -> Self {
+        Self::new(
+            Arc::new(SystemSockets),
+            SystemProcesses::shared(),
+            Arc::new(DockerContainers),
+        )
+    }
+
+    pub fn new(
+        sockets: Arc<dyn SocketProvider>,
+        processes: Arc<dyn ProcessProvider>,
+        containers: Arc<dyn ContainerProvider>,
+    ) -> Self {
+        Self {
+            sockets,
+            processes,
+            containers,
+            policy: Arc::new(DefaultProtectionPolicy),
+            platform: crate::sys::platform_name().to_string(),
         }
-        None => (Vec::new(), false),
-    };
-    let (entries, hidden) = build_entries(&raw, &table, &published, opts.all_states);
-    let snapshot = Snapshot {
-        entries,
-        hidden_sockets: hidden,
-        platform: crate::sys::platform_name().to_string(),
-        taken_at_ms: crate::util::now_ms(),
-        scan_ms: started.elapsed().as_millis() as u64,
-        docker_available,
-        warnings,
-    };
-    Ok(Scan {
-        snapshot,
-        table,
-        published,
-        raw,
-    })
+    }
+
+    /// A scanner over fixed data (tests, fixtures, remote snapshots).
+    pub fn fixed(raw: Vec<RawSocket>, table: ProcessTable, published: Vec<PublishedPort>) -> Self {
+        Self::new(
+            Arc::new(StaticSockets(raw)),
+            Arc::new(StaticProcesses(table)),
+            Arc::new(StaticContainers(published)),
+        )
+        .with_platform("fixture")
+    }
+
+    pub fn with_policy(mut self, policy: Arc<dyn ProtectionPolicy>) -> Self {
+        self.policy = policy;
+        self
+    }
+
+    pub fn with_platform(mut self, platform: impl Into<String>) -> Self {
+        self.platform = platform.into();
+        self
+    }
+
+    pub fn policy(&self) -> Arc<dyn ProtectionPolicy> {
+        self.policy.clone()
+    }
+
+    pub fn scan(&self, opts: &ScanOptions) -> Result<Scan, std::io::Error> {
+        let started = Instant::now();
+        let mut warnings = Vec::new();
+        // Sockets, processes and containers are independent: collect them in parallel.
+        let (raw, table, containers) = std::thread::scope(|s| {
+            let containers = opts.docker.then(|| s.spawn(|| self.containers.published()));
+            let table = s.spawn(|| self.processes.processes());
+            let raw = self.sockets.sockets();
+            (
+                raw,
+                table.join().unwrap_or_default(),
+                containers.map(|h| h.join()),
+            )
+        });
+        let raw = raw?;
+        let (published, docker_available) = match containers {
+            Some(Ok(r)) => r,
+            Some(Err(_)) => {
+                warnings.push("container runtime query failed".to_string());
+                (Vec::new(), false)
+            }
+            None => (Vec::new(), false),
+        };
+        let (entries, hidden) = build_entries_with(
+            &raw,
+            &table,
+            &published,
+            opts.all_states,
+            self.policy.as_ref(),
+        );
+        let snapshot = Snapshot {
+            entries,
+            hidden_sockets: hidden,
+            platform: self.platform.clone(),
+            taken_at_ms: crate::util::now_ms(),
+            scan_ms: started.elapsed().as_millis() as u64,
+            docker_available,
+            warnings,
+        };
+        Ok(Scan {
+            snapshot,
+            table,
+            published,
+            raw,
+        })
+    }
 }
 
 fn exposure(addrs: &[IpAddr]) -> Exposure {
@@ -147,12 +235,23 @@ fn primary_pid(pids: &[u32], table: &ProcessTable) -> Option<u32> {
 
 type Key = (Protocol, u16, Option<u32>, SocketState, Option<String>);
 
-/// Group raw sockets into rows. Returns (entries, hidden listening sockets).
+/// Group raw sockets into rows with the default protection policy.
 pub fn build_entries(
     raw: &[RawSocket],
     table: &ProcessTable,
     published: &[PublishedPort],
     all_states: bool,
+) -> (Vec<PortEntry>, usize) {
+    build_entries_with(raw, table, published, all_states, &DefaultProtectionPolicy)
+}
+
+/// Group raw sockets into rows. Returns (entries, hidden listening sockets).
+pub fn build_entries_with(
+    raw: &[RawSocket],
+    table: &ProcessTable,
+    published: &[PublishedPort],
+    all_states: bool,
+    policy: &dyn ProtectionPolicy,
 ) -> (Vec<PortEntry>, usize) {
     let mut groups: BTreeMap<Key, (Vec<&RawSocket>, Vec<u32>)> = BTreeMap::new();
     let mut hidden = 0;
@@ -235,7 +334,7 @@ pub fn build_entries(
         };
         let protected = process
             .as_ref()
-            .is_some_and(|p| protection(p, table) != Protection::None);
+            .is_some_and(|p| policy.protection(p, table) != Protection::None);
         let is_dev = container.is_some()
             || framework.as_ref().is_some_and(|f| f.category.is_dev())
             || (project.is_some()
@@ -582,11 +681,11 @@ mod tests {
             ),
         ];
         let body = include_bytes!("../tests/fixtures/docker_containers.json");
-        let rt = docker::Runtime {
-            endpoint: docker::Endpoint::Unix("/x".into()),
+        let rt = crate::docker::Runtime {
+            endpoint: crate::docker::Endpoint::Unix("/x".into()),
             label: "Docker".into(),
         };
-        let published = docker::parse_containers(body, &rt).unwrap();
+        let published = crate::docker::parse_containers(body, &rt).unwrap();
         let (entries, hidden) = build_entries(&raw, &t, &published, false);
         assert_eq!(hidden, 1);
         // 22 (hidden), 5173 (grouped), 5432 (container), 6380 (container, no host socket)

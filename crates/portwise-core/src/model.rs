@@ -103,7 +103,7 @@ pub struct RawSocket {
 }
 
 /// Information about one process.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProcessInfo {
     pub pid: u32,
     pub ppid: Option<u32>,
@@ -119,6 +119,9 @@ pub struct ProcessInfo {
     /// (Linux: `starttime` clock ticks from `/proc/<pid>/stat`; elsewhere: start_time).
     pub start_token: u64,
     pub memory_bytes: u64,
+    /// CPU usage since the previous scan in percent of one core (0 on the first scan).
+    #[serde(default)]
+    pub cpu_percent: f32,
 }
 
 impl ProcessInfo {
@@ -191,6 +194,21 @@ pub struct ProjectInfo {
     /// Manifest kind that identified the project: `package.json`, `Cargo.toml`, …
     pub kind: String,
     pub git_branch: Option<String>,
+    /// Enclosing monorepo / workspace (pnpm, turbo, nx, Cargo workspace, compose, …).
+    #[serde(default)]
+    pub workspace: Option<Workspace>,
+    /// Root of the git repository the project lives in.
+    #[serde(default)]
+    pub git_root: Option<PathBuf>,
+}
+
+/// A directory that groups several projects/services.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Workspace {
+    pub name: String,
+    pub root: PathBuf,
+    /// `pnpm`, `turbo`, `nx`, `lerna`, `npm-workspaces`, `cargo`, `go-work`, `compose`.
+    pub kind: String,
 }
 
 /// A container publishing a port (Docker / Podman / OrbStack / Colima).
