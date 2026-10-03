@@ -27,6 +27,7 @@ pub mod model;
 pub mod probe;
 pub mod process;
 pub mod project;
+pub mod provider;
 pub mod safety;
 pub mod scan;
 pub mod sys;
@@ -41,7 +42,8 @@ pub use exec::execute;
 pub use model::*;
 pub use probe::{ephemeral_port, probe_tcp, probe_udp, tcp_accepting, ProbeResult};
 pub use process::ProcessTable;
-pub use scan::{parse_range, scan, Filter, Scan, ScanOptions};
+pub use safety::{DefaultProtectionPolicy, ProtectionPolicy};
+pub use scan::{parse_range, scan, Filter, Scan, ScanOptions, Scanner};
 
 /// Version of the core library.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

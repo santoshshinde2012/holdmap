@@ -317,6 +317,26 @@ fn norm(name: &str) -> String {
     n.strip_suffix(".exe").map(str::to_owned).unwrap_or(n)
 }
 
+/// Which processes portwise may signal. Engines, scanners and executors depend on this
+/// abstraction, not on the concrete rule set, so frontends and tests can inject their own.
+pub trait ProtectionPolicy: Send + Sync + std::fmt::Debug {
+    fn protection(&self, p: &ProcessInfo, table: &ProcessTable) -> Protection;
+
+    fn is_protected(&self, p: &ProcessInfo, table: &ProcessTable) -> bool {
+        self.protection(p, table).is_protected()
+    }
+}
+
+/// The built-in rule set shared by the CLI, TUI, desktop app and MCP server (see [`protection`]).
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DefaultProtectionPolicy;
+
+impl ProtectionPolicy for DefaultProtectionPolicy {
+    fn protection(&self, p: &ProcessInfo, table: &ProcessTable) -> Protection {
+        protection(p, table)
+    }
+}
+
 /// Decide how protected `p` is.
 pub fn protection(p: &ProcessInfo, table: &ProcessTable) -> Protection {
     if p.pid <= 1 || (cfg!(windows) && p.pid == 4) {
