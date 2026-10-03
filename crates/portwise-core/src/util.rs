@@ -29,32 +29,48 @@ pub fn run_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Opti
         cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     let mut child = cmd.spawn().ok()?;
-    let start = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let mut out = String::new();
-                let mut err = String::new();
-                if let Some(mut s) = child.stdout.take() {
-                    let _ = s.read_to_string(&mut out);
-                }
-                if let Some(mut s) = child.stderr.take() {
-                    let _ = s.read_to_string(&mut err);
-                }
-                return Some(CmdOutput {
-                    success: status.success(),
-                    stdout: out,
-                    stderr: err,
-                });
+    // Drain both pipes while waiting: a child that writes more than the pipe buffer (64 KB on
+    // Linux) would otherwise block forever and only end at the timeout.
+    let read = |pipe: Option<Box<dyn Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(mut p) = pipe {
+                let _ = p.read_to_end(&mut buf);
             }
+            String::from_utf8_lossy(&buf).into_owned()
+        })
+    };
+    let out = read(
+        child
+            .stdout
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let err = read(
+        child
+            .stderr
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let start = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
             Ok(None) if start.elapsed() < timeout => std::thread::sleep(Duration::from_millis(15)),
             _ => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return None;
+                break None;
             }
         }
-    }
+    };
+    // On timeout, don't join: a grandchild may still hold the pipes open.
+    let status = status?;
+    Some(CmdOutput {
+        success: status.success(),
+        stdout: out.join().unwrap_or_default(),
+        stderr: err.join().unwrap_or_default(),
+    })
 }
 
 /// Current Unix time in milliseconds.
@@ -219,6 +235,34 @@ pub fn spawn_detached(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    #[test]
+    fn run_with_timeout_reads_output_larger_than_a_pipe_buffer() {
+        let t = std::time::Instant::now();
+        let out = super::run_with_timeout(
+            "sh",
+            &["-c", "head -c 300000 /dev/zero | tr '\\0' x"],
+            std::time::Duration::from_secs(10),
+        )
+        .expect("finishes well before the timeout");
+        assert_eq!(out.stdout.len(), 300_000);
+        assert!(t.elapsed() < std::time::Duration::from_secs(5));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_with_timeout_kills_a_hung_command() {
+        let t = std::time::Instant::now();
+        // `sh` forks `sleep`, which keeps the pipes open after `sh` is killed.
+        let out = super::run_with_timeout(
+            "sh",
+            &["-c", "sleep 5; echo done"],
+            std::time::Duration::from_millis(200),
+        );
+        assert!(out.is_none());
+        assert!(t.elapsed() < std::time::Duration::from_secs(2));
+    }
+
     #[test]
     fn counts_use_the_right_noun() {
         assert_eq!(super::count(1, "process", "processes"), "1 process");
