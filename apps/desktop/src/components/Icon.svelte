@@ -44,6 +44,18 @@
     tree: "M6 3v6M6 9a3 3 0 1 0 0 .01M6 12v3a3 3 0 0 0 3 3h6M18 18m-3 0a3 3 0 1 0 6 0 3 3 0 1 0-6 0",
     arrow: "M5 12h14M13 6l6 6-6 6",
     hash: "M4 9h16M4 15h16M10 3 8 21M16 3l-2 18",
+    sliders: "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6",
+    server: "M3 4h18v7H3zM3 13h18v7H3zM7 7.5h.01M7 16.5h.01",
+    "chevron-down": "m6 9 6 6 6-6",
+    "chevron-up": "m18 15-6-6-6 6",
+    "chevrons-ud": "m7 15 5 5 5-5M7 9l5-5 5 5",
+    plus: "M12 5v14M5 12h14",
+    minus: "M5 12h14",
+    pencil: "M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z",
+    activity: "M22 12h-4l-3 9L9 3l-3 9H2",
+    cpu: "M5 5h14v14H5zM9 9h6v6H9zM9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4",
+    link: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71",
+    "arrow-left": "M19 12H5M11 18l-6-6 6-6",
   };
 </script>
 
