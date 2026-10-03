@@ -349,8 +349,14 @@ pub fn build_entries_with(
         let protected = process
             .as_ref()
             .is_some_and(|p| policy.protection(p, table) != Protection::None);
+        // The runtime's own ports (Docker Desktop's API, OrbStack helpers) aren't dev servers;
+        // only the ones it publishes for a container are.
+        let runtime_itself = container.is_none()
+            && process
+                .as_ref()
+                .is_some_and(|p| is_container_forwarder(&p.name));
         let is_dev = container.is_some()
-            || framework.as_ref().is_some_and(|f| f.category.is_dev())
+            || !runtime_itself && framework.as_ref().is_some_and(|f| f.category.is_dev())
             || (project.is_some()
                 && !framework.as_ref().is_some_and(|f| {
                     matches!(
@@ -786,6 +792,29 @@ mod tests {
 
         let (all, _) = build_entries(&raw, &t, &[], true);
         assert!(all.iter().any(|e| e.state == SocketState::Established));
+    }
+
+    #[test]
+    fn a_container_runtime_port_without_a_container_is_not_a_dev_server() {
+        let backend = &["/Applications/Docker.app/Contents/MacOS/com.docker.backend"];
+        let t = table(
+            vec![
+                proc(1, 0, "init", &[]),
+                proc(30, 1, "com.docker.backend", backend),
+            ],
+            1,
+        );
+        let raw = vec![sock(
+            Protocol::Tcp,
+            Family::V4,
+            "127.0.0.1",
+            59582,
+            SocketState::Listen,
+            &[30],
+        )];
+        let (entries, _) = build_entries(&raw, &t, &[], false);
+        assert_eq!(entries.len(), 1);
+        assert!(!entries[0].is_dev, "{:?}", entries[0].label);
     }
 
     #[test]
