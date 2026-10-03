@@ -92,6 +92,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         chip("Graph", app.tab == Tab::Graph),
         Span::styled(" ⇥  ", theme::muted()),
     ];
+    let mut stats: Vec<Span> = Vec::new();
     if let Some(e) = &app.engine {
         let s = e.snapshot();
         let dev = app.rows.iter().filter(|r| r.is_dev).count();
@@ -100,34 +101,33 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
             .iter()
             .filter(|r| r.exposure == Exposure::AllInterfaces)
             .count();
-        spans.push(Span::styled(
+        stats.push(Span::styled(
             portwise_core::util::count(app.rows.len(), "port", "ports"),
             theme::heading(),
         ));
-        spans.push(Span::styled(
+        stats.push(Span::styled(
             format!(" · {dev} dev"),
             Style::new().fg(Color::Green),
         ));
         if exposed > 0 {
-            spans.push(Span::styled(
+            stats.push(Span::styled(
                 format!(" · {exposed} exposed"),
                 Style::new().fg(Color::Yellow),
             ));
         }
         if s.hidden_sockets > 0 {
-            spans.push(Span::styled(
+            stats.push(Span::styled(
                 format!(" · {} hidden", s.hidden_sockets),
                 theme::muted(),
             ));
         }
-        spans.push(Span::styled(format!(" · {} ms", s.scan_ms), theme::muted()));
+        stats.push(Span::styled(format!(" · {} ms", s.scan_ms), theme::muted()));
     } else {
-        spans.push(Span::styled(
+        stats.push(Span::styled(
             format!("{} scanning…", SPIN[app.spinner % SPIN.len()]),
             theme::muted(),
         ));
     }
-    let left = Line::from(spans);
     let right = Line::from(vec![
         chip(
             if app.show_all {
@@ -163,6 +163,12 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         ),
     ])
     .alignment(Alignment::Right);
+    // Stats are listed most-important first; on a narrow terminal the tail is dropped whole
+    // rather than cut mid-word under the filter chips.
+    let fixed: usize = spans.iter().map(Span::width).sum();
+    let budget = usize::from(area.width).saturating_sub(fixed + right.width() + 1);
+    spans.extend(fit_spans(stats, budget));
+    let left = Line::from(spans);
     f.render_widget(Paragraph::new(left), area);
     f.render_widget(Paragraph::new(right), area);
 }
@@ -334,6 +340,18 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
         }),
         &mut sb,
     );
+}
+
+/// Keeps the leading spans that fit in `budget` columns, dropping the rest whole.
+pub(super) fn fit_spans(spans: Vec<Span<'static>>, budget: usize) -> Vec<Span<'static>> {
+    let mut used = 0;
+    spans
+        .into_iter()
+        .take_while(|s| {
+            used += s.width();
+            used <= budget
+        })
+        .collect()
 }
 
 /// Section heading with a rule that fills the rest of the panel's inner `width` (never wraps).
@@ -769,7 +787,24 @@ fn draw_help(f: &mut Frame) {
 
 #[cfg(test)]
 mod tests {
-    use super::section;
+    use super::{fit_spans, section};
+    use ratatui::text::Span;
+
+    #[test]
+    fn header_stats_drop_whole_items_when_narrow() {
+        let stats = || {
+            vec![
+                Span::raw("12 ports"),
+                Span::raw(" · 3 dev"),
+                Span::raw(" · 24 ms"),
+            ]
+        };
+        let w = |v: Vec<Span<'static>>| v.iter().map(Span::width).sum::<usize>();
+        assert_eq!(w(fit_spans(stats(), 100)), 8 + 8 + 8);
+        assert_eq!(w(fit_spans(stats(), 20)), 16);
+        assert_eq!(fit_spans(stats(), 10).len(), 1);
+        assert!(fit_spans(stats(), 3).is_empty());
+    }
 
     #[test]
     fn section_rule_fills_the_panel_width_exactly() {
