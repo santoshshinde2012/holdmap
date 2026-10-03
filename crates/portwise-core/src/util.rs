@@ -90,6 +90,11 @@ pub fn human_duration(secs: u64) -> String {
 }
 
 /// "12.3 MB".
+/// `1 process`, `2 processes`: a count with the right noun form.
+pub fn count(n: usize, one: &str, many: &str) -> String {
+    format!("{n} {}", if n == 1 { one } else { many })
+}
+
 pub fn human_bytes(b: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
     let mut v = b as f64;
@@ -214,6 +219,13 @@ pub fn spawn_detached(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn counts_use_the_right_noun() {
+        assert_eq!(super::count(1, "process", "processes"), "1 process");
+        assert_eq!(super::count(0, "process", "processes"), "0 processes");
+        assert_eq!(super::count(3, "process", "processes"), "3 processes");
+    }
+
     use super::*;
 
     #[test]

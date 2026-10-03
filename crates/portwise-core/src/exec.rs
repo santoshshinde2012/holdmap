@@ -6,7 +6,7 @@ use crate::engine::{port_busy, ActionPlan, ProcRef, Step, StopReport};
 use crate::process::ProcessTable;
 use crate::safety::{protection, Protection};
 use crate::sys::{self, Sig, SignalError};
-use crate::util::run_with_timeout;
+use crate::util::{count, run_with_timeout};
 use std::time::{Duration, Instant};
 
 fn wait_exit(pids: &[&ProcRef], dur: Duration) -> Vec<u32> {
@@ -93,8 +93,8 @@ impl Run<'_> {
         if !left.is_empty() && !force {
             self.report.escalated = true;
             self.log(format!(
-                "{} process(es) still running after {} ms; sending SIGKILL",
-                left.len(),
+                "{} still running after {} ms; sending SIGKILL",
+                count(left.len(), "process", "processes"),
                 grace.as_millis()
             ));
             for pr in alive.iter().filter(|p| left.contains(&p.pid)) {

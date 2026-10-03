@@ -4,7 +4,7 @@ use super::{Resolution, ResolveCtx, StopStrategy};
 use crate::engine::text::{article, fmt_ms, process_details, short_cmd, tilde};
 use crate::engine::types::{Owner, Risk};
 use crate::model::{FrameworkCategory, PortEntry};
-use crate::util::{human_duration, now_secs};
+use crate::util::{count, human_duration, now_secs};
 
 /// Stops a dev-server process tree from its launcher root (the default strategy).
 pub struct ProcessTreeStrategy;
@@ -104,8 +104,8 @@ impl StopStrategy for ProcessTreeStrategy {
         r.details = details;
         r.recommendation = if opts.force {
             format!(
-                "Force-kill {} process(es) and verify port {port} is free.",
-                pids.len()
+                "Force-kill {} and verify port {port} is free.",
+                count(pids.len(), "process", "processes")
             )
         } else if pids.len() > 1 {
             format!(

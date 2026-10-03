@@ -4,6 +4,7 @@ use crate::model::{ContainerInfo, PortEntry, Protocol};
 use serde::{Deserialize, Serialize};
 
 use super::text::fmt_ms;
+use crate::util::count;
 
 /// Supervisors that would restart a process if it were simply killed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -189,13 +190,13 @@ impl Step {
                     .join(", ");
                 if *force {
                     format!(
-                        "Force-kill (SIGKILL) {} process(es): {list}",
-                        processes.len()
+                        "Force-kill (SIGKILL) {}: {list}",
+                        count(processes.len(), "process", "processes")
                     )
                 } else {
                     format!(
-                        "Send SIGTERM to {} process(es): {list}; SIGKILL any still running after {}",
-                        processes.len(),
+                        "Send SIGTERM to {}: {list}; SIGKILL any still running after {}",
+                        count(processes.len(), "process", "processes"),
                         fmt_ms(*timeout_ms)
                     )
                 }
