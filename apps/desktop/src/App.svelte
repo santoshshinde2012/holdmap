@@ -9,14 +9,18 @@
   import Onboarding from "./components/Onboarding.svelte";
   import EmptyState from "./components/EmptyState.svelte";
   import Toasts, { type Toast } from "./components/Toasts.svelte";
+  import GraphView from "./components/GraphView.svelte";
+  import HistoryPanel from "./components/HistoryPanel.svelte";
   import * as api from "./lib/api";
-  import type { ActionPlan, Explanation, PortEntry, Snapshot, StopReport } from "./lib/types";
+  import type { ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
+  import { nodeForEntry, sectionsByCluster } from "./lib/graph";
   import type { Command } from "./lib/palette";
   import { GROUPS, groupOf, matches, seconds, stopTarget, title, url, canOpen, type Filters, type Group } from "./lib/format";
 
   type Theme = "system" | "light" | "dark";
-  type Sort = "group" | "port" | "newest" | "memory";
-  interface Confirm { entry: PortEntry; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null }
+  type Sort = "group" | "cluster" | "port" | "newest" | "memory";
+  type View = "list" | "graph";
+  interface Confirm { entry: PortEntry | null; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null }
 
   const store = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
   let snapshot = $state<Snapshot | null>(null);
@@ -43,6 +47,26 @@
   let listEl = $state<HTMLDivElement | undefined>();
   let now = $state(Date.now());
   let toastSeq = 0;
+  let view = $state<View>((store("pw.view") as View) ?? "list");
+  let graph = $state<Graph | null>(null);
+  let graphAll = $state(false);
+  let selectedNode = $state<string | null>(null);
+  let config = $state<Config | null>(null);
+  let showHistory = $state(false);
+  let historyItems = $state<HistoryEntry[]>([]);
+  let reduced = $state(matchMedia("(prefers-reduced-motion: reduce)").matches);
+  let autostartOn = $state(false);
+  let shortcut = $state<string | null>(null);
+  $effect(() => { try { localStorage.setItem("pw.view", view); } catch { /* ignore */ } });
+  const pins = $derived(new Set((config?.pins ?? []).map((p) => p.port)));
+  const linkCount = $derived.by(() => {
+    const m = new Map<string, number>();
+    for (const n of graph?.nodes ?? []) {
+      const c = new Set(graph!.edges.filter((e) => e.kind === "local" && (e.from === n.id || e.to === n.id)).map((e) => (e.from === n.id ? e.to : e.from))).size;
+      for (const p of n.ports) m.set(p.entry_id, c);
+    }
+    return m;
+  });
   const mod = $derived(isMac ? "⌘" : "Ctrl");
   const modK = $derived(isMac ? "⌘K" : "Ctrl K");
 
@@ -57,6 +81,7 @@
     const list = (snapshot?.entries ?? []).filter((e) => matches(e, filters));
     const cmp: Record<Sort, (a: PortEntry, b: PortEntry) => number> = {
       group: (a, b) => a.port - b.port,
+      cluster: (a, b) => a.port - b.port,
       port: (a, b) => a.port - b.port,
       newest: (a, b) => (b.process?.start_time ?? 0) - (a.process?.start_time ?? 0),
       memory: (a, b) => (b.process?.memory_bytes ?? 0) - (a.process?.memory_bytes ?? 0),
@@ -64,8 +89,13 @@
     return list.sort(cmp[sort]);
   });
   const sections = $derived.by(() => {
-    if (sort !== "group") return [{ id: "all" as Group | "all", title: "", hint: "", items: visible }];
-    return GROUPS.map((g) => ({ ...g, id: g.id as Group | "all", items: visible.filter((e) => groupOf(e) === g.id) })).filter((g) => g.items.length);
+    type Section = { id: string; title: string; hint: string; items: PortEntry[] };
+    const pinned = visible.filter((e) => pins.has(e.port));
+    const rest = visible.filter((e) => !pins.has(e.port));
+    const head: Section[] = pinned.length ? [{ id: "pinned", title: "Pinned", hint: "Your favourites", items: pinned }] : [];
+    if (sort === "cluster") return [...head, ...sectionsByCluster(rest, graph)];
+    if (sort !== "group") return [...head, { id: "all", title: head.length ? "Everything else" : "", hint: "", items: rest }].filter((g) => g.items.length);
+    return [...head, ...GROUPS.map((g) => ({ ...g, id: g.id as Group | string, items: rest.filter((e) => groupOf(e) === g.id) }))].filter((g) => g.items.length);
   });
   const ordered = $derived(sections.flatMap((s) => s.items));
   const selected = $derived(ordered.find((e) => e.id === selectedId) ?? null);
@@ -90,6 +120,7 @@
       error = null;
       explanations = {};
       if (selectedId && !s.entries.some((e) => e.id === selectedId)) selectedId = null;
+      loadTopology();
       if (manual) toast("info", "Refreshed", `${s.entries.length} ports · scanned in ${s.scan_ms} ms`);
     } catch (e) {
       error = String(e);
@@ -97,6 +128,87 @@
       refreshing = false;
     }
   }
+
+  async function loadTopology() {
+    try {
+      graph = await api.topology(graphAll);
+      if (selectedNode && !graph.nodes.some((n) => n.id === selectedNode)) selectedNode = null;
+    } catch (e) {
+      if (view === "graph") toast("error", "Couldn't build the service graph", String(e));
+    }
+  }
+
+  // Keep the graph selection in step with the list selection.
+  $effect(() => {
+    const e = selected;
+    if (!e) return;
+    const n = nodeForEntry(graph, e.id);
+    if (n && n.id !== selectedNode) selectedNode = n.id;
+  });
+
+  function selectNode(n: GraphNode | null) {
+    selectedNode = n?.id ?? null;
+    const id = n?.ports[0]?.entry_id;
+    if (!id) { if (!n) selectedId = null; return; }
+    if (!ordered.some((e) => e.id === id)) clearFilters();
+    selectedId = id;
+    if (view === "list") requestAnimationFrame(() => document.getElementById("row-" + id)?.scrollIntoView({ block: "nearest" }));
+  }
+
+  async function requestClusterStop(name: string) {
+    const c = graph?.clusters.find((x) => x.name === name) ?? null;
+    try {
+      const plan = await api.plan(`cluster:${name}`, false, false);
+      confirm = { entry: null, cluster: c ?? { id: name, name, kind: "workspace", detail: null, root: null, nodes: [] }, plan, force: false, allowProtected: false, phase: "confirm", log: [], report: null };
+    } catch (e) {
+      toast("error", `Couldn't plan stopping ${name}`, String(e));
+    }
+  }
+
+  async function togglePin(e: PortEntry) {
+    try {
+      config = await api.togglePin(e.port, title(e));
+      toast("ok", pins.has(e.port) ? `Pinned :${e.port}` : `Unpinned :${e.port}`, pins.has(e.port) ? "Shown first; you'll be notified when it starts or stops." : undefined);
+    } catch (err) { toast("error", "Couldn't save the pin", String(err)); }
+  }
+
+  async function openHistory() {
+    try { historyItems = await api.history(50); showHistory = true; } catch (e) { toast("error", "Couldn't read history", String(e)); }
+  }
+
+  async function restartEntry(h: HistoryEntry) {
+    try {
+      const r = await api.restart(h);
+      showHistory = false;
+      toast("ok", `Restarted :${h.port}`, `${r.command} (PID ${r.pid}) · log ${r.log}`);
+      setTimeout(() => refresh(), 1200);
+    } catch (e) { toast("error", `Couldn't restart :${h.port}`, String(e)); }
+  }
+
+  async function toggleNotify() {
+    if (!config) return;
+    try { config = await api.setNotify(!config.notify, config.notify_dev_only); toast("info", config.notify ? "Notifications on" : "Notifications off", config.notify ? "New and conflicting listeners pop a desktop notification." : undefined); }
+    catch (e) { toast("error", "Couldn't save settings", String(e)); }
+  }
+
+  async function toggleAutostart() {
+    try { autostartOn = await api.autostart(!autostartOn); toast("info", autostartOn ? "portwise starts at login" : "Launch at login off"); }
+    catch (e) { toast("error", "Couldn't change launch at login", String(e)); }
+  }
+
+  /** Graph-view keyboard navigation: services in cluster order. */
+  const graphOrder = $derived.by(() => {
+    if (!graph) return [] as GraphNode[];
+    const byCluster = (n: GraphNode) => (n.cluster ? graph!.clusters.findIndex((c) => c.id === n.cluster) : 999);
+    return graph.nodes.filter((n) => n.kind !== "external").slice().sort((a, b) => byCluster(a) - byCluster(b) || a.label.localeCompare(b.label));
+  });
+  function selectGraph(delta: number) {
+    if (!graphOrder.length) return;
+    const i = graphOrder.findIndex((n) => n.id === selectedNode);
+    const next = i < 0 ? (delta > 0 ? 0 : graphOrder.length - 1) : Math.max(0, Math.min(graphOrder.length - 1, i + delta));
+    selectNode(graphOrder[next]);
+  }
+  const selectedGraphNode = $derived(graph?.nodes.find((n) => n.id === selectedNode) ?? null);
 
   $effect(() => {
     const e = selected;
@@ -130,7 +242,7 @@
   async function requestStop(entry: PortEntry, force: boolean, allowProtected = false) {
     try {
       const plan = await api.plan(stopTarget(entry), force, allowProtected);
-      confirm = { entry, plan, force, allowProtected, phase: "confirm", log: [], report: null };
+      confirm = { entry, cluster: null, plan, force, allowProtected, phase: "confirm", log: [], report: null };
     } catch (e) {
       toast("error", `Couldn't plan stopping :${entry.port}`, String(e));
     }
@@ -139,7 +251,7 @@
   function restartCommand(c: Confirm): string | null {
     const s = c.plan.steps.find((x) => x.action === "signal_processes");
     if (!s || s.action !== "signal_processes" || !s.processes.length) return null;
-    const dir = c.entry.project?.root ?? c.entry.process?.cwd;
+    const dir = c.entry?.project?.root ?? c.entry?.process?.cwd;
     return `${dir ? `cd ${JSON.stringify(dir)} && ` : ""}${s.processes[0].command}`;
   }
 
@@ -147,32 +259,35 @@
     if (!confirm || confirm.phase !== "confirm" || confirm.plan.blocked) return;
     const c = confirm;
     c.phase = "running";
-    busy[c.entry.id] = true;
+    const key = c.entry?.id ?? `cluster:${c.cluster?.name}`;
+    const what = c.entry ? title(c.entry) : `cluster ${c.cluster?.name}`;
+    busy[key] = true;
     // Keep keyboard flow: after a successful stop, the selection moves to the neighbouring row.
-    const idx = ordered.findIndex((e) => e.id === c.entry.id);
+    const idx = c.entry ? ordered.findIndex((e) => e.id === c.entry!.id) : -1;
     const neighbour = idx >= 0 ? (ordered[idx + 1] ?? ordered[idx - 1])?.id ?? null : null;
     try {
-      const r = await api.stop(stopTarget(c.entry), c.force, c.allowProtected);
+      const r = await api.stop(c.entry ? stopTarget(c.entry) : `cluster:${c.cluster!.name}`, c.force, c.allowProtected);
       c.report = r;
       if (!c.log.length) c.log = r.log;
       if (r.freed) {
         c.phase = "done";
-        if (selectedId === c.entry.id) selectedId = neighbour;
+        if (c.entry && selectedId === c.entry.id) selectedId = neighbour;
+        if (c.cluster) { selectedId = null; selectedNode = null; }
         const restart = restartCommand(c);
         setTimeout(() => {
           if (confirm === c) confirm = null;
-          toast("ok", `Port ${c.entry.port} is free`, `${title(c.entry)} stopped in ${seconds(r.elapsed_ms)}${r.escalated ? " (needed SIGKILL)" : ""}`,
-            restart ? { label: "Copy restart command", run: () => copy(restart, "Restart command") } : undefined);
+          toast("ok", c.entry ? `Port ${c.entry.port} is free` : `Cluster ${c.cluster?.name} stopped`, `${what} stopped in ${seconds(r.elapsed_ms)}${r.escalated ? " (needed SIGKILL)" : ""}`,
+            restart && c.entry ? { label: "Copy restart command", run: () => copy(restart, "Restart command") } : { label: "Restart…", run: openHistory });
         }, 900);
       } else {
         c.phase = "failed";
-        if (r.success) c.report = { ...r, error: `Stopped ${title(c.entry)}, but :${r.ports_still_busy.join(", :")} is still busy — something else grabbed it or a supervisor restarted it.` };
+        if (r.success) c.report = { ...r, error: `Stopped ${what}, but :${r.ports_still_busy.join(", :")} is still busy — something else grabbed it or a supervisor restarted it.` };
       }
     } catch (e) {
       c.phase = "failed";
       c.report = { target: c.plan.target, success: false, freed: false, ports_still_busy: [], signalled: [], escalated: false, survivors: [], elapsed_ms: 0, log: [], error: String(e) };
     } finally {
-      delete busy[c.entry.id];
+      delete busy[key];
       refresh();
     }
   }
@@ -224,6 +339,10 @@
   const commands = $derived.by((): Command[] => {
     const cmds: Command[] = [];
     const q = queryPort;
+    for (const c of graph?.clusters ?? []) {
+      cmds.push({ id: `stopc-${c.id}`, group: "Actions", icon: "stop", danger: true, title: `Stop cluster ${c.name}`, subtitle: `${c.nodes.length} services · dependency order · asks first`, keywords: `cluster ${c.kind} ${c.name}`, run: () => requestClusterStop(c.name) });
+    }
+    if (selected) cmds.push({ id: "pin", group: "Actions", icon: "star", title: pins.has(selected.port) ? `Unpin :${selected.port}` : `Pin :${selected.port}`, shortcut: ["P"], run: () => selected && togglePin(selected) });
     for (const e of (snapshot?.entries ?? []).slice(0, 60)) {
       const boost = (selected?.id === e.id ? 12 : 0) + (e.is_dev ? 3 : 0);
       const sub = `${e.framework?.name ?? e.process?.name ?? ""}${e.project ? ` · ${e.project.name}` : ""}`;
@@ -251,6 +370,11 @@
       { id: "sort-p", group: "View", icon: "hash", title: "Sort: by port", run: () => (sort = "port") },
       { id: "sort-n", group: "View", icon: "clock", title: "Sort: newest first", run: () => (sort = "newest") },
       { id: "help", group: "View", icon: "keyboard", title: "Keyboard shortcuts", shortcut: ["?"], run: () => (showHelp = true) },
+      { id: "view", group: "View", icon: view === "graph" ? "list" : "graph", title: view === "graph" ? "Show the list" : "Show the service graph", shortcut: ["G"], keywords: "mesh topology network dependencies", run: () => (view = view === "graph" ? "list" : "graph") },
+      { id: "sort-c", group: "View", icon: "layers", title: "Group by cluster (compose, workspace, supervisor…)", run: () => (sort = "cluster") },
+      { id: "history", group: "Actions", icon: "history", title: "Recently stopped — restart", shortcut: ["H"], keywords: "history restart undo", run: openHistory },
+      { id: "notify", group: "Settings", icon: "bell", title: config?.notify ? "Turn notifications off" : "Turn notifications on", keywords: "alert conflict new listener", run: toggleNotify },
+      { id: "autostart", group: "Settings", icon: "sparkles", title: autostartOn ? "Don't launch at login" : "Launch at login", keywords: "startup boot login", run: toggleAutostart },
     );
     return cmds;
   });
@@ -268,8 +392,10 @@
     if (showHelp) { if (e.key === "Escape" || e.key === "?") { showHelp = false; e.preventDefault(); } return; }
     if (!typing && (e.key === "/" || (modKey && e.key.toLowerCase() === "f"))) { search?.focus(); search?.select(); e.preventDefault(); return; }
     if (modKey && e.key.toLowerCase() === "r") { refresh(true); e.preventDefault(); return; }
-    if (e.key === "ArrowDown" || (!typing && e.key === "j")) { select(1); e.preventDefault(); return; }
-    if (e.key === "ArrowUp" || (!typing && e.key === "k")) { select(-1); e.preventDefault(); return; }
+    if (showHistory) { if (e.key === "Escape") { showHistory = false; e.preventDefault(); } return; }
+    const move = view === "graph" && !typing ? selectGraph : select;
+    if (e.key === "ArrowDown" || e.key === "ArrowRight" && view === "graph" && !typing || (!typing && e.key === "j")) { move(1); e.preventDefault(); return; }
+    if (e.key === "ArrowUp" || e.key === "ArrowLeft" && view === "graph" && !typing || (!typing && e.key === "k")) { move(-1); e.preventDefault(); return; }
     if (e.key === "Escape") {
       if (typing && filters.query) filters.query = "";
       else if (typing) search?.blur();
@@ -293,6 +419,10 @@
       case "m": filters.mine = !filters.mine; break;
       case "e": filters.exposed = !filters.exposed; break;
       case "L": cycleTheme(); break;
+      case "g": view = view === "graph" ? "list" : "graph"; break;
+      case "h": openHistory(); break;
+      case "p": if (s) togglePin(s); break;
+      case "s": { const n = selectedGraphNode; const c = n?.cluster ? graph?.clusters.find((x) => x.id === n.cluster) : null; if (c) requestClusterStop(c.name); else return; break; }
       case "?": showHelp = true; break;
       default: return;
     }
@@ -301,7 +431,12 @@
 
   onMount(() => {
     refresh();
-    api.appInfo().then((i) => { if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; });
+    api.appInfo().then((i) => { shortcut = i.shortcut ?? null; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; });
+    api.getConfig().then((c) => (config = c)).catch(() => {});
+    api.autostart().then((v) => (autostartOn = v)).catch(() => {});
+    const rq = matchMedia("(prefers-reduced-motion: reduce)");
+    const onRq = () => (reduced = rq.matches);
+    rq.addEventListener("change", onRq);
     const mq = matchMedia("(prefers-color-scheme: dark)");
     const nq = matchMedia("(max-width: 900px)");
     const onMq = () => (systemDark = mq.matches);
@@ -321,11 +456,18 @@
         if (e) selectEntry(e);
       }),
       api.onEvent("refresh", () => refresh()),
+      api.onEvent<PortEvent[]>("port-events", (evs) => {
+        for (const ev of evs) {
+          if (ev.event === "conflict") toast("error", `Port conflict on :${ev.port}`, ev.entries.map((x) => `${title(x)} on ${x.addresses.join("/")}`).join(" vs "));
+        }
+        if (evs.length && !refreshing && !confirm) refresh();
+      }),
     ];
     return () => {
       clearInterval(timer);
       mq.removeEventListener("change", onMq);
       nq.removeEventListener("change", onNq);
+      rq.removeEventListener("change", onRq);
       unlisten.forEach((u) => u.then((f) => f()));
     };
   });
@@ -372,12 +514,18 @@
         <Icon name="command" size={13} />Commands<kbd>{modK}</kbd>
       </button>
       <button class="icon-btn" onclick={() => refresh(true)} aria-label="Refresh (R)" title="Refresh (R)"><span class:spin={refreshing} style="display:inline-flex"><Icon name="refresh" size={16} /></span></button>
+      <button class="icon-btn" onclick={openHistory} aria-label="Recently stopped (H)" title="Recently stopped — restart (H)"><Icon name="history" size={16} /></button>
       <button class="icon-btn" onclick={cycleTheme} aria-label="Theme: {theme}. Click to change (Shift+L)" title="Theme: {theme} (⇧L)"><Icon name={themeIcon} size={16} /></button>
       <button class="icon-btn" onclick={() => (showHelp = true)} aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)"><Icon name="keyboard" size={16} /></button>
     </div>
   </header>
 
   <div class="toolbar" role="toolbar" aria-label="Filters">
+    <div class="seg view" role="radiogroup" aria-label="View">
+      <button role="radio" aria-checked={view === "list"} class:on={view === "list"} onclick={() => (view = "list")} title="List (G)"><Icon name="list" size={12} />List</button>
+      <button role="radio" aria-checked={view === "graph"} class:on={view === "graph"} onclick={() => (view = "graph")} title="Service graph (G)"><Icon name="graph" size={12} />Graph{#if graph && graph.stats.edges}<span class="vcount">{graph.stats.edges}</span>{/if}</button>
+    </div>
+    <span class="divider" aria-hidden="true"></span>
     <div class="seg" role="radiogroup" aria-label="Socket states">
       <button role="radio" aria-checked={!filters.all} class:on={!filters.all} onclick={() => { filters.all = false; refresh(); }}>Listening</button>
       <button role="radio" aria-checked={filters.all} class:on={filters.all} onclick={() => { filters.all = true; refresh(); }}>All sockets</button>
@@ -398,6 +546,7 @@
       <span>Sort</span>
       <select bind:value={sort} aria-label="Sort by">
         <option value="group">Grouped</option>
+        <option value="cluster">Cluster</option>
         <option value="port">Port</option>
         <option value="newest">Newest</option>
         <option value="memory">Memory</option>
@@ -406,6 +555,11 @@
   </div>
 
   <main class="content" class:narrow>
+    {#if view === "graph"}
+      <div class="graph-wrap">
+        <GraphView {graph} {selectedNode} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; loadTopology(); }} onselect={selectNode} onstopcluster={requestClusterStop} />
+      </div>
+    {:else}
     <div class="list" id="port-list" role="listbox" aria-label="Ports in use" aria-activedescendant={selectedId ? "row-" + selectedId : undefined} tabindex="0" bind:this={listEl}>
       {#if snapshot && !onboarded}<Onboarding mod={mod} ondismiss={dismissOnboarding} />{/if}
 
@@ -455,7 +609,7 @@
             </div>
           {/if}
           {#each s.items as e (e.id)}
-            <PortRow entry={e} selected={e.id === selectedId} busy={!!busy[e.id]} onselect={() => { selectEntry(e); listEl?.focus(); }} onstop={() => requestStop(e, false)} onopen={() => open(e)} />
+            <PortRow entry={e} pinned={pins.has(e.port)} links={linkCount.get(e.id) ?? 0} selected={e.id === selectedId} busy={!!busy[e.id]} onselect={() => { selectEntry(e); listEl?.focus(); }} onstop={() => requestStop(e, false)} onopen={() => open(e)} />
           {/each}
         {/each}
         {#if snapshot.hidden_sockets > 0 || !snapshot.docker_available}
@@ -466,10 +620,12 @@
         {/if}
       {/if}
     </div>
+    {/if}
 
     {#if !narrow}
       <DetailPane entry={selected} explanation={selected ? explanations[selected.port] ?? null : null} loading={explaining} busy={selected ? !!busy[selected.id] : false}
-        onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} />
+        onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy}
+        {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} />
     {/if}
   </main>
 
@@ -477,7 +633,7 @@
     {#if snapshot}
       <span><b>{stats.total}</b> ports</span><span class="g"><b>{stats.dev}</b> dev</span>{#if stats.exposed}<span class="w"><b>{stats.exposed}</b> exposed</span>{/if}
       <span class="sp"></span>
-      <span class="hints"><kbd>↑↓</kbd> move <kbd>⌫</kbd> stop <kbd>O</kbd> open <kbd>{modK}</kbd> commands <kbd>?</kbd> help</span>
+      <span class="hints"><kbd>↑↓</kbd> move <kbd>⌫</kbd> stop <kbd>O</kbd> open <kbd>G</kbd> graph <kbd>{modK}</kbd> commands <kbd>?</kbd> help{#if shortcut}<span class="gs" title="Global shortcut: shows portwise from anywhere"><kbd>{shortcut}</kbd> anywhere</span>{/if}</span>
     {/if}
   </footer>
 </div>
@@ -486,15 +642,17 @@
   <div class="drawer-wrap" role="presentation" onclick={() => (drawerOpen = false)}>
     <div class="drawer" role="dialog" aria-modal="true" aria-label="Port details" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
       <DetailPane drawer entry={selected} explanation={selected ? explanations[selected.port] ?? null : null} loading={explaining} busy={selected ? !!busy[selected.id] : false}
-        onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onclose={() => (drawerOpen = false)} />
+        onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onclose={() => (drawerOpen = false)}
+        {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} />
     </div>
   </div>
 {/if}
 {#if confirm}
-  <ConfirmDialog entry={confirm.entry} plan={confirm.plan} phase={confirm.phase} log={confirm.log} report={confirm.report}
-    onconfirm={runStop} oncancel={closeConfirm} onoverride={() => confirm && requestStop(confirm.entry, confirm.force, true)} />
+  <ConfirmDialog entry={confirm.entry} cluster={confirm.cluster} plan={confirm.plan} phase={confirm.phase} log={confirm.log} report={confirm.report}
+    onconfirm={runStop} oncancel={closeConfirm} onoverride={() => confirm?.entry && requestStop(confirm.entry, confirm.force, true)} />
 {/if}
 {#if showPalette}<CommandPalette {commands} onclose={() => { showPalette = false; listEl?.focus(); }} />{/if}
+{#if showHistory}<HistoryPanel items={historyItems} onrestart={restartEntry} oncopy={copy} onclose={() => (showHistory = false)} onclear={async () => { await api.clearHistory(); historyItems = []; }} />{/if}
 {#if showHelp}<ShortcutsDialog onclose={() => (showHelp = false)} />{/if}
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />
 
@@ -560,6 +718,9 @@
   .status .g b { color: var(--tone-green); }
   .status .w b { color: var(--warn); }
   .status .sp { flex: 1; }
+  .graph-wrap { position: relative; min-height: 0; min-width: 0; }
+  .seg.view button { display: inline-flex; align-items: center; gap: 5px; }
+  .vcount { font-size: 10px; font-weight: 700; padding: 0 5px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
   .hints { display: inline-flex; align-items: center; gap: 4px; }
   .hints kbd { margin-left: 8px; height: 16px; font-size: 10px; }
 

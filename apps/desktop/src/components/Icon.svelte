@@ -3,6 +3,14 @@
   let { name, size = 16, label }: { name: string; size?: number; label?: string } = $props();
 
   const paths: Record<string, string> = {
+    star: "m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z",
+    graph: "M5 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM19 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM12 22a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM6.5 5.5l4.5 12.5M17.5 5.5 13 18M7 4h10",
+    list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
+    layers: "m12 2 10 5-10 5L2 7l10-5ZM2 17l10 5 10-5M2 12l10 5 10-5",
+    play: "M6 4l14 8-14 8V4Z",
+    history: "M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 3",
+    fit: "M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6",
+    bell: "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0",
     search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35",
     refresh: "M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6",
     stop: "M7 7h10v10H7z",

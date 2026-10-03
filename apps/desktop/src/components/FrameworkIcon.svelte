@@ -1,10 +1,10 @@
 <script lang="ts">
   import Icon from "./Icon.svelte";
-  import type { PortEntry } from "../lib/types";
-  import { brandFor } from "../lib/frameworks";
+  import type { GraphNode, PortEntry } from "../lib/types";
+  import { brandFor, brandForNode } from "../lib/frameworks";
 
-  let { entry, size = 32 }: { entry: PortEntry; size?: number } = $props();
-  const b = $derived(brandFor(entry));
+  let { entry, node, size = 32 }: { entry?: PortEntry; node?: GraphNode; size?: number } = $props();
+  const b = $derived(node ? brandForNode(node) : brandFor(entry!));
 </script>
 
 <span

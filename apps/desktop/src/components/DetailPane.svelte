@@ -3,7 +3,8 @@
   import { fade } from "svelte/transition";
   import Icon from "./Icon.svelte";
   import FrameworkIcon from "./FrameworkIcon.svelte";
-  import type { Explanation, PortEntry, ProcRef } from "../lib/types";
+  import type { Explanation, Graph, GraphNode, PortEntry, ProcRef } from "../lib/types";
+  import { CLUSTER_LABEL, dependencies, dependents, edgeLabel, nodeForEntry } from "../lib/graph";
   import { canOpen, command, describeStep, humanBytes, tildify, title, uptime, url } from "../lib/format";
 
   let {
@@ -17,6 +18,11 @@
     onopen,
     oncopy,
     onclose,
+    graph = null,
+    pinned = false,
+    onpin,
+    onstopcluster,
+    onselectnode,
   }: {
     entry: PortEntry | null;
     explanation: Explanation | null;
@@ -28,7 +34,19 @@
     onopen: () => void;
     oncopy: (text: string, what: string) => void;
     onclose?: () => void;
+    graph?: Graph | null;
+    pinned?: boolean;
+    onpin?: () => void;
+    onstopcluster?: (name: string) => void;
+    onselectnode?: (n: GraphNode) => void;
   } = $props();
+
+  const node = $derived(entry ? nodeForEntry(graph, entry.id) : null);
+  const cluster = $derived(node?.cluster ? graph?.clusters.find((c) => c.id === node.cluster) ?? null : null);
+  const deps = $derived(node && graph ? dependencies(graph, node.id) : []);
+  const users = $derived(node && graph ? dependents(graph, node.id) : []);
+  const edgeTo = (to: string) => graph?.edges.find((e) => e.from === node?.id && e.to === to);
+  const edgeFrom = (from: string) => graph?.edges.find((e) => e.to === node?.id && e.from === from);
 
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const plan = $derived(explanation?.plan ?? null);
@@ -85,6 +103,9 @@
               <button class="btn" onclick={onkill} disabled={busy || !stoppable} title="Skip SIGTERM and kill immediately (⇧⌫)"><Icon name="zap" size={13} />Force kill</button>
             {/if}
           {/if}
+          {#if onpin}
+            <button class="icon-btn pin" class:on={pinned} aria-pressed={pinned} title={pinned ? "Unpin :" + entry.port : "Pin :" + entry.port + " — keep it at the top and get notified when it changes"} aria-label={pinned ? "Unpin port" : "Pin port"} onclick={onpin}><Icon name="star" size={14} /></button>
+          {/if}
           {#if canOpen(entry)}
             <button class="btn" onclick={onopen} aria-keyshortcuts="O"><Icon name="external" size={13} />Open</button>
             <button class="icon-btn" title="Copy {url(entry)}" aria-label="Copy URL" onclick={() => oncopy(url(entry), "URL")}><Icon name="copy" size={14} /></button>
@@ -109,6 +130,28 @@
                 </div>
               {/if}
             </section>
+
+            {#if node && (cluster || deps.length || users.length)}
+              <section class="topo">
+                <h4><Icon name="graph" size={12} />Connections</h4>
+                {#if cluster}
+                  <div class="cluster">
+                    <Icon name="layers" size={13} />
+                    <span><b>{cluster.name}</b> <span class="muted">{CLUSTER_LABEL[cluster.kind]} · {cluster.nodes.length} services</span></span>
+                    {#if onstopcluster}<button class="btn sm" onclick={() => onstopcluster?.(cluster.name)} title="Stop every service in {cluster.name}, dependents first"><Icon name="stop" size={10} />Stop cluster</button>{/if}
+                  </div>
+                {/if}
+                {#if deps.length}
+                  <div class="rel-h">Depends on</div>
+                  <ul class="rel">{#each deps as d}{@const e = edgeTo(d.id)}<li><button class="link" onclick={() => onselectnode?.(d)}><span class="arrow out">→</span>{d.label}</button><span class="mono muted">{e ? edgeLabel(e) : ""}</span></li>{/each}</ul>
+                {/if}
+                {#if users.length}
+                  <div class="rel-h">Used by</div>
+                  <ul class="rel">{#each users as d}{@const e = edgeFrom(d.id)}<li><button class="link" onclick={() => onselectnode?.(d)}><span class="arrow in">←</span>{d.label}</button><span class="mono muted">{e ? edgeLabel(e) : ""}</span></li>{/each}</ul>
+                  <div class="callout warn subtle"><Icon name="alert" size={14} /><p>{users.length === 1 ? `${users[0].label} depends` : `${users.length} services depend`} on this — stopping it will break {users.length === 1 ? "it" : "them"}.</p></div>
+                {/if}
+              </section>
+            {/if}
 
             {#if chain.length}
               <section>
@@ -142,7 +185,8 @@
                   <dt>Name</dt><dd>{entry.process.name} <span class="muted mono">PID {entry.process.pid}</span></dd>
                   {#if entry.user}<dt>User</dt><dd>{entry.user}{entry.is_mine ? "" : " · not you"}</dd>{/if}
                   {#if uptime(entry)}<dt>Uptime</dt><dd>{uptime(entry)}</dd>{/if}
-                  {#if entry.process.memory_bytes}<dt>Memory</dt><dd>{humanBytes(entry.process.memory_bytes)}</dd>{/if}
+                  {#if entry.process.memory_bytes}<dt>Memory</dt><dd>{humanBytes(entry.process.memory_bytes)}{#if node && node.pids.length > 1}<span class="muted"> · tree {humanBytes(node.memory_bytes)}</span>{/if}</dd>{/if}
+                  {#if entry.process.cpu_percent !== undefined}<dt>CPU</dt><dd>{(node?.cpu_percent ?? entry.process.cpu_percent).toFixed(1)}%{#if node && node.pids.length > 1}<span class="muted"> · {node.pids.length} processes</span>{/if}</dd>{/if}
                   {#if entry.process.cwd}<dt>Directory</dt><dd class="mono selectable path">{tildify(entry.process.cwd)}</dd>{/if}
                 </dl>
                 <div class="codeblock">
@@ -159,6 +203,7 @@
                   <dt>Name</dt><dd>{entry.project.name}</dd>
                   <dt>Path</dt><dd class="mono selectable path">{tildify(entry.project.root)}</dd>
                   <dt>Detected</dt><dd class="mono">{entry.project.kind}</dd>
+                  {#if entry.project.workspace}<dt>Workspace</dt><dd>{entry.project.workspace.name} <span class="muted mono">{entry.project.workspace.kind}</span></dd>{/if}
                 </dl>
               </section>
             {/if}
@@ -170,6 +215,7 @@
                   <dt>Name</dt><dd>{entry.container.name}</dd>
                   <dt>Image</dt><dd class="mono">{entry.container.image}</dd>
                   <dt>Mapping</dt><dd class="mono">{entry.port} → {entry.container.private_port}</dd>
+                  {#if entry.tunnel}<dt>Tunnel</dt><dd class="mono">{entry.tunnel.target}</dd>{/if}
                   {#if entry.container.compose_project}<dt>Compose</dt><dd class="mono">{entry.container.compose_project}/{entry.container.compose_service}</dd>{/if}
                 </dl>
               </section>
@@ -178,6 +224,7 @@
             <section>
               <h4>Network</h4>
               <dl>
+                {#if entry.tunnel && !entry.container}<dt>Tunnel</dt><dd class="mono selectable">{entry.tunnel.kind} → {entry.tunnel.target}</dd>{/if}
                 <dt>Address</dt><dd class="mono selectable">{entry.addresses.join(", ")}</dd>
                 <dt>State</dt><dd class="mono">{entry.state}</dd>
               </dl>
@@ -271,6 +318,18 @@
   .steps { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: grid; gap: 6px; color: var(--text-2); font-size: var(--fs-sm); }
   .steps li { display: flex; gap: var(--sp-2); align-items: flex-start; }
   .steps :global(svg) { color: var(--ok); margin-top: 3px; flex: none; }
+  .pin.on { color: var(--warn); }
+  .pin.on :global(svg) { fill: currentColor; }
+  .topo .cluster { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--r-md); background: var(--accent-soft); color: var(--accent); font-size: var(--fs-sm); }
+  .topo .cluster > span { flex: 1; color: var(--text); min-width: 0; }
+  .rel-h { margin: var(--sp-3) 0 4px; font-size: var(--fs-xs); color: var(--muted); font-weight: 600; }
+  .rel { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .rel li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: var(--fs-sm); }
+  .link { border: 0; background: none; padding: 3px 0; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+  .link:hover { color: var(--accent); }
+  .arrow { font-family: var(--mono); font-weight: 700; }
+  .arrow.out { color: var(--tone-green); }
+  .arrow.in { color: var(--warn); }
   .risk-low { color: var(--ok); background: var(--ok-soft); }
   .risk-medium { color: var(--warn); background: var(--warn-soft); }
   .risk-high { color: var(--danger); background: var(--danger-soft); }

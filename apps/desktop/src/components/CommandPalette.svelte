@@ -14,7 +14,7 @@
   const results = $derived(rank(query, commands, 50));
   const groups = $derived.by(() => {
     if (query.trim()) return [{ name: "Results", items: results }];
-    const order = ["Ports", "Actions", "Filters", "View"] as const;
+    const order = ["Ports", "Actions", "Filters", "View", "Settings"] as const;
     return order.map((g) => ({ name: g, items: results.filter((c) => c.group === g) })).filter((g) => g.items.length);
   });
   const flat = $derived(groups.flatMap((g) => g.items));

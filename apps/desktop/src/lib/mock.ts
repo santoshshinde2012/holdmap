@@ -1,5 +1,5 @@
 // Realistic sample data so the UI can be developed in a plain browser (`npm run dev`) and tested.
-import type { ActionPlan, Explanation, PortEntry, Snapshot, StopReport } from "./types";
+import type { ActionPlan, Cluster, Explanation, Graph, GraphEdge, GraphNode, PortEntry, Snapshot, StopReport } from "./types";
 
 const now = Math.floor(Date.now() / 1000);
 let token = 1000;
@@ -198,4 +198,39 @@ export function mockStop(target: string): StopReport {
   const i = MOCK_SNAPSHOT.entries.findIndex((x) => x.port === port);
   if (i >= 0) MOCK_SNAPSHOT.entries.splice(i, 1);
   return { target: `:${port}`, success: true, freed: true, ports_still_busy: [], signalled: [40000 + port], escalated: false, survivors: [], elapsed_ms: 412, log: ["SIGTERM → npm (42999), node (43000)", "all processes exited after 0.4s", `port ${port} is free`], error: null };
+}
+
+/** Browser-preview topology: shop-web → shop-api → db/redis (compose "shop"), docs → api,
+ *  ml-service → external. Built from MOCK_SNAPSHOT so ids line up with the list. */
+export function mockTopology(s: Snapshot = MOCK_SNAPSHOT): Graph {
+  const byPort = (p: number) => s.entries.find((e) => e.port === p)!;
+  const svc = (port: number, id: string, label: string, cluster: string | null, kind: GraphNode["kind"] = "service"): GraphNode => {
+    const e = byPort(port);
+    return {
+      id, kind: e.container ? "container" : kind, label, subtitle: e.label, root_pid: e.pid, pids: e.pids.length ? e.pids : e.pid ? [e.pid] : [],
+      ports: [{ port, protocol: e.protocol, exposure: e.exposure, entry_id: e.id }], framework: e.framework, project: e.project?.name ?? null,
+      project_root: e.project?.root ?? null, container: e.container, tunnel: null, cluster, cpu_percent: (port % 7) * 0.9,
+      memory_bytes: e.process?.memory_bytes ?? 0, is_dev: e.is_dev, protected: e.protected,
+    };
+  };
+  const nodes: GraphNode[] = [
+    svc(3000, "web", "shop-web", "shop"),
+    svc(3001, "api", "shop-api", "shop"),
+    svc(5432, "db", "db", "shop"),
+    svc(6379, "redis", "redis", "shop"),
+    svc(5173, "docs", "docs", null),
+    svc(8000, "ml", "ml-service", null),
+    { id: "external", kind: "external", label: "External", subtitle: null, root_pid: null, pids: [], ports: [], framework: null, project: null, project_root: null, container: null, tunnel: null, cluster: null, cpu_percent: 0, memory_bytes: 0, is_dev: false, protected: false },
+  ];
+  const edge = (from: string, to: string, port: number, connections: number, kind: GraphEdge["kind"] = "local", remotes: string[] = []): GraphEdge => ({ id: `${from}->${to}`, from, to, kind, port, connections, remotes });
+  const edges = [
+    edge("web", "api", 3001, 4),
+    edge("api", "db", 5432, 6),
+    edge("api", "redis", 6379, 2),
+    edge("docs", "api", 3001, 1),
+    edge("ml", "db", 5432, 1),
+    edge("ml", "external", 443, 2, "outbound", ["api.openai.com:443", "huggingface.co:443"]),
+  ];
+  const clusters: Cluster[] = [{ id: "shop", name: "shop", kind: "compose", detail: "docker compose", root: "/Users/santosh/code/shop", nodes: ["web", "api", "db", "redis"] }];
+  return { nodes, edges, clusters, stats: { nodes: nodes.length, edges: edges.length, clusters: 1, connections: 16 }, taken_at_ms: s.taken_at_ms };
 }
