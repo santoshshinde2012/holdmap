@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
+## Unreleased: shared protection rule
+
+- Core: one protection rule shared by every frontend. Portwise's own process tree (including the processes it started) is
+  hard-protected. Interactive shells, terminals, IDEs, IDE remote servers and AI-agent hosts, and their ancestors, are
+  soft-protected. Plans now report whether a block is `overridable`, and the desktop app only offers "stop anyway" when it is.
+- `scripts/demo-servers.sh start` is now idempotent and additive (it records names and pids and never truncates), and
+  `stop` stops everything any run started. It also no longer keeps the caller's stdout open.
+
 ## Unreleased: UI/UX polish
 
 - Desktop: added a design system (spacing, radius, type and motion tokens) with AA-checked light and dark themes, a ⌘K command palette,

@@ -55,6 +55,9 @@ fn park<T>(_keep: T) -> ! {
 }
 
 fn spawn_raw(mode: &str) -> Child {
+    // The fixture servers are children of this test process, which portwise would otherwise
+    // protect as "started by portwise itself".
+    portwise_core::safety::set_protect_own_tree(false);
     Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",

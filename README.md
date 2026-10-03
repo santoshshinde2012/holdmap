@@ -202,10 +202,19 @@ npm run tauri build        # release build + installers for your OS
   only killed the child, the launcher would just respawn it.
 - **Containers** are stopped through the runtime API, not by killing `com.docker.backend`.
   **Supervised services** go through their supervisor (`brew services`, `systemctl`, `pm2`).
-- **Protected processes are never stopped by default:** PID 1, kernel threads, portwise itself and
-  its parents, and the OS (launchd, WindowServer, `svchost`, `System`, …) are hard-protected. Editors,
-  terminals and system services are soft-protected; `--allow-protected` overrides them. OS features
-  like AirPlay Receiver and HTTP.sys get an explanation of how to turn them off instead.
+- **Protected processes are never stopped by default.** One rule lives in `portwise-core`
+  (`safety::protection`), so the CLI, TUI, desktop app and MCP server all behave the same:
+  - *Hard-protected (never stopped):* PID 1, kernel threads, core OS processes (launchd, WindowServer,
+    `System`, …), and portwise's **own process tree**: itself, its parents (your shell or editor), and
+    anything it started (such as the desktop app's WebView helpers).
+  - *Soft-protected (blocked unless you explicitly override):* system services and container daemons, plus
+    **your sessions and whatever hosts them**: interactive shells, terminals, tmux, IDEs and IDE remote
+    servers (`.vscode-server`, `.cursor-server`, …) and AI-agent hosts (Claude Code, Codex, Aider,
+    agent daemons…). An ancestor of any of these is protected too, so stopping a "node" that turns out to
+    be your editor's backend gets refused. Dev servers *started from* those sessions are not protected.
+    To override, use `--allow-protected` in the CLI or *"I understand — stop anyway"* in the desktop app.
+    The MCP server always refuses.
+  - OS features like AirPlay Receiver and HTTP.sys get an explanation of how to turn them off instead.
 - **PID-reuse guard:** every plan pins each process by its start time, and that is checked again right
   before the signal. Linux uses `pidfd_open` + `pidfd_send_signal`, so even a PID recycled in the
   microseconds before the signal can't be hit.

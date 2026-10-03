@@ -7,7 +7,7 @@
   import Icon from "./Icon.svelte";
   import FrameworkIcon from "./FrameworkIcon.svelte";
   import type { ActionPlan, PortEntry, StopReport } from "../lib/types";
-  import { describeStep, isForce, seconds, title } from "../lib/format";
+  import { canOverride, describeStep, isForce, seconds, title } from "../lib/format";
 
   let {
     entry,
@@ -135,7 +135,7 @@
 
       <footer>
         {#if blocked}
-          {#if blocked.kind === "protected"}<button class="btn danger-ghost" onclick={onoverride}>I understand — stop anyway</button>{/if}
+          {#if canOverride(plan)}<button class="btn danger-ghost" onclick={onoverride}>I understand — stop anyway</button>{/if}
           <button class="btn primary" onclick={oncancel} bind:this={confirmBtn}>Got it</button>
         {:else if phase === "failed"}
           <button class="btn primary" onclick={oncancel} bind:this={confirmBtn}>Close</button>

@@ -198,6 +198,10 @@ pub enum BlockKind {
 pub struct Blocked {
     pub kind: BlockKind,
     pub message: String,
+    /// True when an explicit override (`--allow-protected`, the GUI's "stop anyway") would
+    /// unblock it. Hard protections (portwise's own process tree, core OS processes) never are.
+    #[serde(default)]
+    pub overridable: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -367,7 +371,16 @@ impl Resolution {
         self.blocked = Some(Blocked {
             kind,
             message: msg.into(),
+            overridable: false,
         });
+        self
+    }
+
+    fn block_overridable(mut self, kind: BlockKind, msg: impl Into<String>) -> Self {
+        self = self.block(kind, msg);
+        if let Some(b) = &mut self.blocked {
+            b.overridable = true;
+        }
         self
     }
 }
@@ -682,7 +695,7 @@ impl Engine {
                         name: p.name.clone(),
                         reason: reason.clone(),
                     };
-                    r = r.block(
+                    r = r.block_overridable(
                         BlockKind::Protected,
                         format!("{reason}. Use --allow-protected if you really mean it."),
                     );
@@ -739,7 +752,11 @@ impl Engine {
         entries: &[PortEntry],
         opts: &StopOptions,
     ) -> ActionPlan {
-        let blocked = rs.iter().find_map(|r| r.blocked.clone());
+        // A hard block wins over one the user could override.
+        let blocked = rs
+            .iter()
+            .filter_map(|r| r.blocked.clone())
+            .min_by_key(|b| b.overridable);
         let mut steps: Vec<Step> = Vec::new();
         for s in rs.iter().flat_map(|r| r.steps.iter()) {
             if !steps.contains(s) {
@@ -1005,10 +1022,12 @@ impl Engine {
                     r.commands
                         .push(format!("portwise stop {port} --allow-protected"));
                 }
-                return r.block(
-                    BlockKind::Protected,
-                    format!("{} is protected: {reason}.", p.name),
-                );
+                let msg = format!("{} is protected: {reason}.", p.name);
+                return if soft {
+                    r.block_overridable(BlockKind::Protected, msg)
+                } else {
+                    r.block(BlockKind::Protected, msg)
+                };
             }
         }
 
@@ -1353,7 +1372,11 @@ fn blocked_plan(
         owners,
         summary: msg.clone(),
         steps: vec![],
-        blocked: Some(Blocked { kind, message: msg }),
+        blocked: Some(Blocked {
+            kind,
+            message: msg,
+            overridable: false,
+        }),
         warnings: vec![],
         risk: Risk::Low,
     }
@@ -1765,12 +1788,43 @@ mod tests {
                 ..Default::default()
             };
             let plan = e.plan(&Target::Pid(pid), &opts);
-            assert_eq!(
-                plan.blocked.unwrap().kind,
-                BlockKind::Protected,
-                "pid {pid}"
+            let b = plan.blocked.unwrap();
+            assert_eq!(b.kind, BlockKind::Protected, "pid {pid}");
+            assert!(
+                !b.overridable,
+                "pid {pid}: hard protection is never overridable"
             );
         }
+    }
+
+    #[test]
+    fn session_hosts_are_blocked_unless_allowed() {
+        // An IDE remote server holding a forwarded port: refused by default, allowed explicitly.
+        let mut procs = dev_tree();
+        procs.push(proc(
+            70,
+            1,
+            "node",
+            &["node", "/home/dev/.vscode-server/bin/x/out/server-main.js"],
+        ));
+        procs.push(proc(71, 70, "zsh", &["/bin/zsh", "-l"]));
+        let e = engine(procs, vec![listen(41000, &[70])], 99);
+        let entry = e
+            .snapshot()
+            .entries
+            .iter()
+            .find(|x| x.port == 41000)
+            .unwrap();
+        assert!(entry.protected);
+        let plan = e.plan(&Target::Port(41000), &StopOptions::default());
+        let b = plan.blocked.unwrap();
+        assert_eq!(b.kind, BlockKind::Protected);
+        assert!(b.overridable, "soft protection can be overridden");
+        let opts = StopOptions {
+            allow_protected: true,
+            ..Default::default()
+        };
+        assert!(e.plan(&Target::Port(41000), &opts).blocked.is_none());
     }
 
     #[test]
