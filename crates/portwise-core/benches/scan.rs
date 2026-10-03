@@ -1,4 +1,4 @@
-//! Performance budgets from the research (`04-platform-internals.md` §6): full scan < 50 ms warm.
+//! Performance budget: a full warm scan should take under 50 ms.
 //! Run with `cargo bench -p portwise-core`.
 
 use criterion::{criterion_group, criterion_main, Criterion};

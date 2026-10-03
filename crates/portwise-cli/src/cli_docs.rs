@@ -32,7 +32,7 @@ pub fn reference() -> String {
     );
     out.push_str(&format!(
         "This page is the `--help` output of every command of portwise {}. `cargo test` checks it\n\
-         against the code, so it never drifts. For a guided tour see the [user guide](user-guide.md).\n\n",
+         against the code, so it never drifts. For an overview see the [README](../README.md).\n\n",
         env!("CARGO_PKG_VERSION")
     ));
     out.push_str(
