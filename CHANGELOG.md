@@ -17,8 +17,8 @@ All notable changes to portwise are documented here. The format follows
   dependents stop first, and outside dependents become warnings.
 - **CLI commands**: `graph` (alias `mesh`; `--json`, `--dot`, `--mermaid`, `--cluster`,
   `--no-external`), `stop --cluster NAME` and `stop cluster:NAME`, `watch` (`--json` for NDJSON),
-  `pin`, `unpin`, `pins`, `history`, `restart`, `open`, and `ssh HOST [list|graph]` for agentless,
-  read-only remote inspection.
+  `pin`, `unpin`, `pins`, `history`, `restart`, `open`, and `ssh HOST [list|graph]` for read-only
+  remote inspection.
 - `portwise man --out-dir DIR` writes `portwise.1` and one man page per command.
 - CPU usage per process and per service tree.
 - **TUI**: a graph tab (`Tab`/`v`, the selection follows), `C` to stop a cluster, `h` to toggle
@@ -49,14 +49,9 @@ All notable changes to portwise are documented here. The format follows
     the header, or `←`/`→`), and Home/End and PageUp/PageDown in the list.
   - Bundled fonts: Inter Variable for the UI and JetBrains Mono Variable for code, PIDs and paths,
     loaded locally with `font-display: swap`.
-- **Documentation**: a rewritten README, a [user guide](docs/user-guide.md), a generated
-  [CLI reference](docs/cli.md), an [MCP guide](docs/mcp.md), [development](docs/development.md)
-  and [release](docs/releasing.md) guides, [architecture](docs/architecture.md) diagrams, a
-  [research audit](docs/audit.md), `SECURITY.md`, `CODE_OF_CONDUCT.md`, and GitHub issue and
-  pull request templates.
-- `scripts/gen-docs.sh` generates the man pages, shell completions and `docs/cli.md`;
-  `scripts/capture-desktop-screenshots.mjs` and `scripts/capture-terminal-screenshot.sh` recreate
-  the screenshots.
+- **Documentation**: a rewritten README, a generated [CLI reference](docs/cli.md),
+  [architecture](docs/architecture.md) notes and `SECURITY.md`. `scripts/gen-docs.sh` generates
+  the man pages, shell completions and `docs/cli.md`.
 - **Checks**:
   - `cargo test` verifies that `docs/cli.md` matches the clap definitions, that the README
     mentions every command and only real flags, that Markdown links, images and anchors
@@ -101,7 +96,7 @@ All notable changes to portwise are documented here. The format follows
   footer hints. CLI: ports are bold cyan.
 - `scripts/demo-servers.sh start` is idempotent and additive; `stop` stops everything any run started.
 - **File names follow one convention per ecosystem** (see `CONTRIBUTING.md`): docs under `docs/`
-  are kebab-case (`docs/architecture.md`, `docs/audit.md`), screenshots are
+  are kebab-case (`docs/architecture.md`, `docs/cli.md`), screenshots are
   `<surface>-<view>-<theme>.png`, the bundled fonts are kebab-case, and the desktop unit tests sit
   next to the module they test (`roving.test.ts`, `validate.test.ts`, `palette.test.ts`…).
 
@@ -114,13 +109,11 @@ All notable changes to portwise are documented here. The format follows
 - The status dot in list rows was squeezed into a bar, and long graph edge labels now truncate.
 - The browser preview of the desktop app records stops, so its history panel works.
 - Documentation: corrected the VS Code MCP configuration (it uses `servers` and `type: "stdio"`),
-  the desktop bundle size, the hotkey presets in the `Config` docs, the stop-strategy order, and
-  several stale file paths.
+  the hotkey presets in the `Config` docs, the stop-strategy order, and several stale file paths.
 
 ### Removed
 
-- About 100 outdated screenshots (the `before/` set and intermediate `ui-*`, `type-*` and
-  `list-*` captures) that no document used. They remain in the git history.
+- Outdated and redundant screenshots; the README keeps a small, current set.
 
 ## [0.1.0] - 2026-10-03
 
@@ -143,5 +136,5 @@ All notable changes to portwise are documented here. The format follows
 - Desktop app (Tauri v2 and Svelte 5): a grouped live list, search and filters, an explain pane,
   confirmed stop with live progress, light and dark themes, keyboard shortcuts and a tray menu.
 
-[Unreleased]: https://github.com/santoshshinde/portwise/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/santoshshinde/portwise/releases/tag/v0.1.0
+[Unreleased]: https://github.com/santoshshinde2012/portwise/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/santoshshinde2012/portwise/releases/tag/v0.1.0

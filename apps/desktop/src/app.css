@@ -2,7 +2,7 @@
  * Tokens: spacing (4px grid), radius, type scale, elevation, motion, and semantic colours for a light
  * and a dark theme. Text colours are chosen to meet WCAG AA (≥ 4.5:1) on their surfaces. */
 :root {
-  /* Typography (see docs/architecture.md § Typography). Inter for UI text, JetBrains Mono for ports in
+  /* Typography (see docs/architecture.md, "Desktop UI"). Inter for UI text, JetBrains Mono for ports in
    * code, PIDs, paths and commands; system stacks are the fallback while the files load. */
   --font: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas, monospace;

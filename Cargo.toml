@@ -14,8 +14,8 @@ edition = "2021"
 rust-version = "1.95"
 license = "MIT OR Apache-2.0"
 authors = ["Santosh Shinde"]
-repository = "https://github.com/santoshshinde/portwise"
-homepage = "https://github.com/santoshshinde/portwise"
+repository = "https://github.com/santoshshinde2012/portwise"
+homepage = "https://github.com/santoshshinde2012/portwise"
 keywords = ["port", "network", "process", "kill", "developer-tools"]
 categories = ["command-line-utilities", "development-tools", "network-programming"]
 

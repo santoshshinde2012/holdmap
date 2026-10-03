@@ -74,7 +74,6 @@ const ROOT_DOCS: &[&str] = &[
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "SECURITY.md",
-    "CODE_OF_CONDUCT.md",
     "LICENSE-MIT",
     "LICENSE-APACHE",
 ];
@@ -92,8 +91,6 @@ fn naming_problem(path: &str) -> Option<String> {
 
     // Names fixed by external tools or GitHub.
     if path.starts_with("apps/desktop/src-tauri/icons/")
-        || path.starts_with(".github/ISSUE_TEMPLATE/") && name == "config.yml"
-        || name == "PULL_REQUEST_TEMPLATE.md"
         || name.starts_with('.')
         || matches!(
             name,
