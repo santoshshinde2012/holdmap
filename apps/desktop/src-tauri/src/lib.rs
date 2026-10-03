@@ -138,6 +138,17 @@ async fn stop(
     .await
 }
 
+/// First free TCP port at or after `near` (checked with real bind probes).
+#[tauri::command]
+async fn free_port(near: u16) -> Result<Option<u16>, String> {
+    blocking(move || {
+        Ok((near.max(1)..=u16::MAX).take(2000).find(|p| {
+            portwise_core::probe::probe_tcp(*p) == portwise_core::probe::ProbeResult::Free
+        }))
+    })
+    .await
+}
+
 async fn with_engine<T: Send + 'static>(
     app: &AppHandle,
     f: impl FnOnce(&Engine) -> T + Send + 'static,
@@ -161,7 +172,7 @@ fn tray_label(e: &PortEntry) -> String {
         (None, Some(p)) => p.name.clone(),
         _ => e.label.clone(),
     };
-    format!(":{}  {}", e.port, what)
+    format!("● :{}   {}", e.port, what)
 }
 
 fn build_tray_menu(
@@ -198,7 +209,11 @@ fn build_tray_menu(
         menu.append(&MenuItem::with_id(
             app,
             "hdr",
-            "Dev servers",
+            format!(
+                "{} dev server{} running",
+                dev.len(),
+                if dev.len() == 1 { "" } else { "s" }
+            ),
             false,
             None::<&str>,
         )?)?;
@@ -213,6 +228,23 @@ fn build_tray_menu(
         }
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
+    if let Some(s) = snapshot {
+        let exposed = s
+            .entries
+            .iter()
+            .filter(|e| e.exposure != portwise_core::model::Exposure::Loopback)
+            .count();
+        menu.append(&MenuItem::with_id(
+            app,
+            "summary",
+            format!(
+                "{} ports in use · {exposed} network-exposed",
+                s.entries.len()
+            ),
+            false,
+            None::<&str>,
+        )?)?;
+    }
     menu.append(&MenuItem::with_id(
         app,
         "refresh",
@@ -306,7 +338,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
-            app_info, scan, explain, plan, stop
+            app_info, scan, explain, plan, stop, free_port
         ])
         .setup(|app| {
             let handle = app.handle().clone();

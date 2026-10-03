@@ -2,7 +2,7 @@
   let { onclose }: { onclose: () => void } = $props();
   const mod = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl";
   const groups: [string, [string[], string][]][] = [
-    ["Navigate", [[["/"], "Search"], [[mod, "K"], "Search"], [["↑", "↓"], "Move selection (or J / K)"], [["Esc"], "Clear search · close"]]],
+    ["Navigate", [[[mod, "K"], "Command palette"], [["/"], "Search"], [["↑", "↓"], "Move selection (or J / K)"], [["Esc"], "Clear search · close"]]],
     ["Act", [[["⌫"], "Stop selected (graceful)"], [["⇧", "⌫"], "Force kill selected"], [["O"], "Open in browser"], [["C"], "Copy URL"], [["R"], "Refresh now"]]],
     ["Filter", [[["A"], "Listening ↔ all sockets"], [["T"], "Protocol: any → TCP → UDP"], [["D"], "Dev servers only"], [["M"], "Mine only"], [["E"], "Network-exposed only"]]],
     ["App", [[["⇧", "L"], "Cycle theme (system/light/dark)"], [["?"], "Show this help"]]],
@@ -30,8 +30,10 @@
 
 <style>
   .backdrop { position: fixed; inset: 0; background: rgb(8 10 16 / 0.45); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 50; }
+  @media (prefers-reduced-motion: no-preference) { .dialog { animation: pop var(--dur-2, 160ms) var(--ease-out, ease-out); } }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
   .dialog { width: min(640px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg); padding: 22px; outline: none; }
-  h2 { margin: 0 0 14px; font-size: 16px; }
+  h2 { margin: 0 0 14px; font-size: var(--fs-lg, 16px); letter-spacing: -0.01em; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; }
   h4 { margin: 8px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
   .item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; color: var(--text-2); }

@@ -1,32 +1,46 @@
 <script lang="ts" module>
-  export interface Toast { id: number; kind: "ok" | "error" | "info"; text: string; detail?: string }
+  export interface Toast {
+    id: number;
+    kind: "ok" | "error" | "info";
+    text: string;
+    detail?: string;
+    action?: { label: string; run: () => void };
+  }
 </script>
 
 <script lang="ts">
+  import { fly } from "svelte/transition";
+  import { flip } from "svelte/animate";
   import Icon from "./Icon.svelte";
   let { toasts, ondismiss }: { toasts: Toast[]; ondismiss: (id: number) => void } = $props();
+  const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 </script>
 
-<div class="toasts" role="status" aria-live="polite">
+<div class="toasts" role="region" aria-label="Notifications">
   {#each toasts as t (t.id)}
-    <div class="toast {t.kind}">
+    <div class="toast {t.kind}" role={t.kind === "error" ? "alert" : "status"} in:fly={{ y: reduced ? 0 : 12, duration: reduced ? 0 : 200 }} out:fly={{ x: reduced ? 0 : 24, duration: reduced ? 0 : 160 }} animate:flip={{ duration: reduced ? 0 : 180 }}>
       <span class="ic"><Icon name={t.kind === "ok" ? "check" : t.kind === "error" ? "alert" : "info"} size={14} /></span>
-      <div class="body"><div class="text">{t.text}</div>{#if t.detail}<div class="detail">{t.detail}</div>{/if}</div>
-      <button class="icon-btn x" aria-label="Dismiss" onclick={() => ondismiss(t.id)}><Icon name="x" size={13} /></button>
+      <div class="body">
+        <div class="text">{t.text}</div>
+        {#if t.detail}<div class="detail">{t.detail}</div>{/if}
+        {#if t.action}<button class="act" onclick={() => { t.action?.run(); ondismiss(t.id); }}>{t.action.label}</button>{/if}
+      </div>
+      <button class="icon-btn x" aria-label="Dismiss notification" onclick={() => ondismiss(t.id)}><Icon name="x" size={13} /></button>
     </div>
   {/each}
 </div>
 
 <style>
-  .toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 60; width: min(380px, calc(100vw - 32px)); }
-  .toast { display: flex; gap: 10px; align-items: flex-start; padding: 10px 8px 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); animation: slide 0.2s var(--ease); }
-  .ic { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border-radius: 50%; }
+  .toasts { position: fixed; right: var(--sp-4); bottom: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); z-index: 60; width: min(380px, calc(100vw - 32px)); }
+  .toast { display: flex; gap: 10px; align-items: flex-start; padding: 12px 8px 12px 12px; background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow-lg); }
+  .ic { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: 50%; }
   .ok .ic { background: var(--ok-soft); color: var(--ok); }
   .error .ic { background: var(--danger-soft); color: var(--danger); }
   .info .ic { background: var(--accent-soft); color: var(--accent); }
   .body { flex: 1; min-width: 0; padding-top: 2px; }
-  .text { font-weight: 600; }
-  .detail { color: var(--muted); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+  .text { font-weight: 650; }
+  .detail { color: var(--muted); font-size: var(--fs-xs); margin-top: 2px; overflow-wrap: anywhere; }
+  .act { margin-top: 8px; border: 0; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: var(--fs-xs); height: 24px; padding: 0 10px; border-radius: var(--r-sm); }
+  .act:hover { background: var(--accent); color: var(--accent-fg); }
   .x { width: 24px; height: 24px; }
-  @keyframes slide { from { opacity: 0; transform: translateY(8px); } }
 </style>

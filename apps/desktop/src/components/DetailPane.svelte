@@ -1,226 +1,275 @@
 <script lang="ts">
+  import { fade } from "svelte/transition";
   import Icon from "./Icon.svelte";
-  import type { Explanation, PortEntry } from "../lib/types";
-  import { canOpen, command, describeStep, humanBytes, tildify, title, tone, uptime, url } from "../lib/format";
+  import FrameworkIcon from "./FrameworkIcon.svelte";
+  import type { Explanation, PortEntry, ProcRef } from "../lib/types";
+  import { canOpen, command, describeStep, humanBytes, tildify, title, uptime, url } from "../lib/format";
 
   let {
     entry,
     explanation,
     loading,
     busy,
+    drawer = false,
     onstop,
     onkill,
     onopen,
     oncopy,
+    onclose,
   }: {
     entry: PortEntry | null;
     explanation: Explanation | null;
     loading: boolean;
     busy: boolean;
+    drawer?: boolean;
     onstop: () => void;
     onkill: () => void;
     onopen: () => void;
     oncopy: (text: string, what: string) => void;
+    onclose?: () => void;
   } = $props();
 
+  const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const plan = $derived(explanation?.plan ?? null);
   const blocked = $derived(plan?.blocked ?? null);
+  const chain = $derived.by((): ProcRef[] => {
+    const s = plan?.steps.find((x) => x.action === "signal_processes");
+    return s && s.action === "signal_processes" ? s.processes : [];
+  });
+  const stoppable = $derived(!!entry && !!(entry.process || entry.container) && !blocked);
+  const blockTitle: Record<string, string> = {
+    needs_elevation: "Needs administrator rights",
+    os_service: "This is an operating-system feature",
+    nothing_to_stop: "Nothing to stop",
+    protected: "Protected process",
+  };
 </script>
 
-<aside class="pane" aria-label="Port details" aria-live="polite">
+<aside class="pane" class:drawer aria-label="Port details">
   {#if !entry}
     <div class="placeholder">
-      <div class="ph-icon"><Icon name="radar" size={28} /></div>
-      <h3>Pick a port</h3>
-      <p>Select a row to see who owns it, why it's busy, and exactly what stopping it will do.</p>
+      <div class="ph-art" aria-hidden="true">
+        <span class="ring r1"></span><span class="ring r2"></span><span class="core"><Icon name="radar" size={22} /></span>
+      </div>
+      <h3>Select a port</h3>
+      <p>See who owns it, why it's busy, and exactly what “Stop” will do — before anything happens.</p>
+      <div class="ph-keys"><kbd>↑</kbd><kbd>↓</kbd> to move · <kbd>⌘</kbd><kbd>K</kbd> for commands</div>
     </div>
   {:else}
-    <header class="head">
-      <div class="big mono">:{entry.port}<span class="proto">{entry.protocol}</span></div>
-      <div class="who">
-        <h2>{title(entry)}</h2>
-        <div class="tags">
-          {#if entry.framework}<span class="badge tone-{tone(entry)}"><span class="dot"></span>{entry.framework.name}</span>{/if}
+    {#key entry.id}
+      <div class="inner" in:fade={{ duration: reduced ? 0 : 140 }}>
+        <header class="head">
+          <FrameworkIcon {entry} size={44} />
+          <div class="who">
+            <div class="hero"><span class="colon">:</span>{entry.port}<span class="proto">{entry.protocol}</span></div>
+            <h2 title={title(entry)}>{title(entry)}{#if entry.framework && entry.framework.name !== title(entry)}<span class="fwn"> · {entry.framework.name}</span>{/if}</h2>
+          </div>
+          {#if onclose}<button class="icon-btn close" aria-label="Close details" onclick={onclose}><Icon name="x" size={16} /></button>{/if}
+        </header>
+
+        <div class="chips">
+          {#if entry.state === "listen" || entry.protocol === "udp"}<span class="badge tone-green"><span class="dot"></span>{entry.protocol === "udp" ? "Bound" : "Listening"}</span>{/if}
           {#if entry.project?.git_branch}<span class="badge"><Icon name="branch" size={11} />{entry.project.git_branch}</span>{/if}
-          {#if entry.exposure === "all_interfaces"}<span class="badge tone-amber"><Icon name="globe" size={11} />Network-exposed</span>{/if}
-          {#if entry.protected}<span class="badge"><Icon name="lock" size={11} />Protected</span>{/if}
+          {#if entry.exposure === "all_interfaces"}<span class="badge tone-amber"><Icon name="globe" size={11} />Network-exposed</span>{:else if entry.exposure === "loopback"}<span class="badge"><Icon name="lock" size={11} />Local only</span>{/if}
+          {#if entry.container}<span class="badge tone-blue"><Icon name="box" size={11} />{entry.container.runtime}</span>{/if}
+          {#if entry.protected}<span class="badge"><Icon name="shield" size={11} />Protected</span>{/if}
+        </div>
+
+        <div class="actions">
+          {#if entry.process || entry.container}
+            <button class="btn danger" onclick={onstop} disabled={busy || !stoppable} aria-keyshortcuts="Backspace">
+              {#if busy}<span class="spin"><Icon name="refresh" size={13} /></span>Stopping…{:else}<Icon name="stop" size={11} />Stop<kbd>⌫</kbd>{/if}
+            </button>
+            {#if entry.process && !entry.container}
+              <button class="btn" onclick={onkill} disabled={busy || !stoppable} title="Skip SIGTERM and kill immediately (⇧⌫)"><Icon name="zap" size={13} />Force kill</button>
+            {/if}
+          {/if}
+          {#if canOpen(entry)}
+            <button class="btn" onclick={onopen} aria-keyshortcuts="O"><Icon name="external" size={13} />Open</button>
+            <button class="icon-btn" title="Copy {url(entry)}" aria-label="Copy URL" onclick={() => oncopy(url(entry), "URL")}><Icon name="copy" size={14} /></button>
+          {/if}
+        </div>
+
+        <div class="scroll">
+          {#if loading && !explanation}
+            <div class="card"><div class="shimmer" style="height:14px;width:92%"></div><div class="shimmer" style="height:14px;width:64%;margin-top:10px"></div><div class="shimmer" style="height:44px;margin-top:16px"></div></div>
+          {:else if explanation}
+            <section class="card summary">
+              <p class="headline selectable">{explanation.headline}</p>
+              {#if blocked}
+                <div class="callout warn" role="note">
+                  <Icon name={blocked.kind === "needs_elevation" ? "lock" : "shield"} size={16} />
+                  <div><strong>{blockTitle[blocked.kind]}</strong><p class="selectable">{blocked.message}</p></div>
+                </div>
+              {:else}
+                <div class="callout tip">
+                  <Icon name="sparkles" size={16} />
+                  <div><strong>Recommended</strong><p class="selectable">{explanation.recommendation}</p></div>
+                </div>
+              {/if}
+            </section>
+
+            {#if chain.length}
+              <section>
+                <h4><Icon name="tree" size={12} />What “Stop” will signal{#if plan}<span class="badge risk-{plan.risk}">{plan.risk} risk</span>{/if}</h4>
+                <ol class="chain">
+                  {#each chain as p, i}
+                    <li class:holder={i === chain.length - 1}>
+                      <span class="node"></span>
+                      <div><span class="pname">{p.name}</span><span class="pid mono">PID {p.pid}</span>{#if i === chain.length - 1 && chain.length > 1}<span class="holds">holds :{entry.port}</span>{/if}
+                        <div class="pcmd mono" title={p.command}>{p.command}</div></div>
+                    </li>
+                  {/each}
+                </ol>
+                {#if plan}
+                  <ol class="steps">{#each plan.steps.filter((s) => s.action !== "signal_processes") as s}<li><Icon name="check" size={12} />{describeStep(s)}</li>{/each}</ol>
+                  {#each plan.warnings as w}<div class="callout warn subtle"><Icon name="alert" size={14} /><p>{w}</p></div>{/each}
+                {/if}
+              </section>
+            {:else if plan && !blocked && plan.steps.length}
+              <section>
+                <h4>What “Stop” will do <span class="badge risk-{plan.risk}">{plan.risk} risk</span></h4>
+                <ol class="steps">{#each plan.steps as s}<li><Icon name="arrow" size={12} />{describeStep(s)}</li>{/each}</ol>
+                {#each plan.warnings as w}<div class="callout warn subtle"><Icon name="alert" size={14} /><p>{w}</p></div>{/each}
+              </section>
+            {/if}
+
+            {#if entry.process}
+              <section>
+                <h4>Process</h4>
+                <dl>
+                  <dt>Name</dt><dd>{entry.process.name} <span class="muted mono">PID {entry.process.pid}</span></dd>
+                  {#if entry.user}<dt>User</dt><dd>{entry.user}{entry.is_mine ? "" : " · not you"}</dd>{/if}
+                  {#if uptime(entry)}<dt>Uptime</dt><dd>{uptime(entry)}</dd>{/if}
+                  {#if entry.process.memory_bytes}<dt>Memory</dt><dd>{humanBytes(entry.process.memory_bytes)}</dd>{/if}
+                  {#if entry.process.cwd}<dt>Directory</dt><dd class="mono selectable path">{tildify(entry.process.cwd)}</dd>{/if}
+                </dl>
+                <div class="codeblock">
+                  <code class="selectable">{command(entry)}</code>
+                  <button class="icon-btn tiny" aria-label="Copy command" title="Copy command" onclick={() => oncopy(command(entry), "Command")}><Icon name="copy" size={12} /></button>
+                </div>
+              </section>
+            {/if}
+
+            {#if entry.project}
+              <section>
+                <h4>Project</h4>
+                <dl>
+                  <dt>Name</dt><dd>{entry.project.name}</dd>
+                  <dt>Path</dt><dd class="mono selectable path">{tildify(entry.project.root)}</dd>
+                  <dt>Detected</dt><dd class="mono">{entry.project.kind}</dd>
+                </dl>
+              </section>
+            {/if}
+
+            {#if entry.container}
+              <section>
+                <h4>Container</h4>
+                <dl>
+                  <dt>Name</dt><dd>{entry.container.name}</dd>
+                  <dt>Image</dt><dd class="mono">{entry.container.image}</dd>
+                  <dt>Mapping</dt><dd class="mono">{entry.port} → {entry.container.private_port}</dd>
+                  {#if entry.container.compose_project}<dt>Compose</dt><dd class="mono">{entry.container.compose_project}/{entry.container.compose_service}</dd>{/if}
+                </dl>
+              </section>
+            {/if}
+
+            <section>
+              <h4>Network</h4>
+              <dl>
+                <dt>Address</dt><dd class="mono selectable">{entry.addresses.join(", ")}</dd>
+                <dt>State</dt><dd class="mono">{entry.state}</dd>
+              </dl>
+              {#if entry.exposure === "all_interfaces"}
+                <div class="callout warn subtle"><Icon name="globe" size={14} /><p>Reachable from other devices on your network. Bind to <code>127.0.0.1</code> if that isn't intended.</p></div>
+              {/if}
+            </section>
+
+            {#if explanation.commands.length}
+              <section>
+                <h4><Icon name="terminal" size={12} />From the terminal</h4>
+                {#each explanation.commands as c}
+                  <div class="codeblock shell">
+                    <span class="prompt">$</span><code class="selectable">{c}</code>
+                    <button class="icon-btn tiny" aria-label="Copy {c}" title="Copy" onclick={() => oncopy(c, "Command")}><Icon name="copy" size={12} /></button>
+                  </div>
+                {/each}
+              </section>
+            {/if}
+          {/if}
         </div>
       </div>
-    </header>
-
-    <div class="actions">
-      {#if entry.process || entry.container}
-        <button class="btn danger" onclick={onstop} disabled={busy || !!blocked}>
-          <Icon name="stop" size={12} /> Stop <kbd class="k">⌫</kbd>
-        </button>
-        {#if entry.process && !entry.container}
-          <button class="btn" onclick={onkill} disabled={busy || !!blocked} title="Skip SIGTERM and kill immediately (⇧⌫)">
-            <Icon name="zap" size={13} /> Force kill
-          </button>
-        {/if}
-      {/if}
-      {#if canOpen(entry)}
-        <button class="btn" onclick={onopen}><Icon name="external" size={13} /> Open</button>
-        <button class="icon-btn" title="Copy URL" aria-label="Copy URL" onclick={() => oncopy(url(entry), "URL")}><Icon name="copy" size={14} /></button>
-      {/if}
-    </div>
-
-    <div class="scroll">
-      {#if loading && !explanation}
-        <div class="skeleton" style="width: 90%"></div>
-        <div class="skeleton" style="width: 70%"></div>
-      {:else if explanation}
-        <section class="why">
-          <p class="headline selectable">{explanation.headline}</p>
-          {#if blocked}
-            <div class="callout warn" role="note">
-              <Icon name={blocked.kind === "needs_elevation" ? "lock" : "shield"} size={15} />
-              <div>
-                <strong>{blocked.kind === "needs_elevation" ? "Needs administrator rights" : blocked.kind === "os_service" ? "This is an OS feature" : blocked.kind === "nothing_to_stop" ? "Nothing to stop" : "Protected process"}</strong>
-                <p class="selectable">{blocked.message}</p>
-              </div>
-            </div>
-          {:else}
-            <div class="callout tip">
-              <Icon name="sparkles" size={15} />
-              <p class="selectable">{explanation.recommendation}</p>
-            </div>
-          {/if}
-        </section>
-
-        {#if entry.process}
-          <section>
-            <h4>Process</h4>
-            <dl>
-              <dt>Name</dt><dd>{entry.process.name} <span class="muted">PID {entry.process.pid}</span></dd>
-              {#if entry.user}<dt>User</dt><dd>{entry.user}{entry.is_mine ? "" : " (not you)"}</dd>{/if}
-              {#if uptime(entry)}<dt>Uptime</dt><dd>{uptime(entry)}</dd>{/if}
-              {#if entry.process.memory_bytes}<dt>Memory</dt><dd>{humanBytes(entry.process.memory_bytes)}</dd>{/if}
-              <dt>Command</dt>
-              <dd class="cmd">
-                <code class="selectable">{command(entry)}</code>
-                <button class="icon-btn tiny" aria-label="Copy command" title="Copy" onclick={() => oncopy(command(entry), "Command")}><Icon name="copy" size={12} /></button>
-              </dd>
-              {#if entry.process.cwd}<dt>Directory</dt><dd class="mono selectable path">{tildify(entry.process.cwd)}</dd>{/if}
-            </dl>
-          </section>
-        {/if}
-
-        {#if entry.project}
-          <section>
-            <h4>Project</h4>
-            <dl>
-              <dt>Name</dt><dd>{entry.project.name}</dd>
-              <dt>Path</dt><dd class="mono selectable path">{tildify(entry.project.root)}</dd>
-              <dt>Detected by</dt><dd class="mono">{entry.project.kind}</dd>
-              {#if entry.project.git_branch}<dt>Branch</dt><dd class="mono">{entry.project.git_branch}</dd>{/if}
-            </dl>
-          </section>
-        {/if}
-
-        {#if entry.container}
-          <section>
-            <h4>Container</h4>
-            <dl>
-              <dt>Name</dt><dd>{entry.container.name}</dd>
-              <dt>Image</dt><dd class="mono">{entry.container.image}</dd>
-              <dt>Runtime</dt><dd>{entry.container.runtime}</dd>
-              <dt>Mapping</dt><dd class="mono">{entry.port} → {entry.container.private_port}</dd>
-              {#if entry.container.compose_project}<dt>Compose</dt><dd class="mono">{entry.container.compose_project}/{entry.container.compose_service}</dd>{/if}
-            </dl>
-          </section>
-        {/if}
-
-        <section>
-          <h4>Network</h4>
-          <dl>
-            <dt>Address</dt><dd class="mono selectable">{entry.addresses.join(", ")}</dd>
-            <dt>State</dt><dd class="mono">{entry.state}</dd>
-          </dl>
-          {#if entry.exposure === "all_interfaces"}
-            <div class="callout warn subtle"><Icon name="globe" size={14} /><p>Reachable from other devices on your network. Bind to <code>127.0.0.1</code> if that isn't intended.</p></div>
-          {/if}
-        </section>
-
-        {#if explanation.details.length}
-          <section>
-            <h4>Why it's busy</h4>
-            <ul class="details selectable">
-              {#each explanation.details as d}<li>{d}</li>{/each}
-            </ul>
-          </section>
-        {/if}
-
-        {#if plan && !blocked && plan.steps.length}
-          <section>
-            <h4>What “Stop” will do <span class="badge risk-{plan.risk}">{plan.risk} risk</span></h4>
-            <ol class="steps">
-              {#each plan.steps as s}<li>{describeStep(s)}</li>{/each}
-            </ol>
-            {#each plan.warnings as w}<div class="callout warn subtle"><Icon name="alert" size={14} /><p>{w}</p></div>{/each}
-          </section>
-        {/if}
-
-        {#if explanation.commands.length}
-          <section>
-            <h4>From the terminal</h4>
-            {#each explanation.commands as c}
-              <div class="shell">
-                <span class="prompt">$</span><code class="selectable">{c}</code>
-                <button class="icon-btn tiny" aria-label="Copy command" title="Copy" onclick={() => oncopy(c, "Command")}><Icon name="copy" size={12} /></button>
-              </div>
-            {/each}
-          </section>
-        {/if}
-      {/if}
-    </div>
+    {/key}
   {/if}
 </aside>
 
 <style>
   .pane { display: flex; flex-direction: column; min-height: 0; height: 100%; background: var(--surface); border-left: 1px solid var(--border); }
-  .placeholder { margin: auto; text-align: center; max-width: 260px; color: var(--muted); padding: 24px; }
-  .placeholder h3 { color: var(--text); margin: 12px 0 4px; font-size: 14px; }
-  .placeholder p { margin: 0; }
-  .ph-icon { width: 56px; height: 56px; margin: 0 auto; display: grid; place-items: center; border-radius: 16px; background: var(--accent-soft); color: var(--accent); }
-  .head { display: flex; gap: 14px; align-items: center; padding: 18px 20px 10px; }
-  .big { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; display: flex; align-items: baseline; gap: 6px; }
-  .big .proto { font-size: 10px; text-transform: uppercase; color: var(--faint); letter-spacing: 0.08em; }
-  .who { min-width: 0; }
-  .who h2 { margin: 0 0 5px; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tags { display: flex; flex-wrap: wrap; gap: 5px; }
-  .actions { display: flex; gap: 8px; padding: 4px 20px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  .actions .k { background: rgb(255 255 255 / 0.18); color: inherit; border-color: transparent; height: 16px; }
-  .scroll { overflow-y: auto; padding: 6px 20px 24px; flex: 1; }
-  section { padding: 12px 0 4px; }
-  h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 650; display: flex; align-items: center; gap: 8px; }
-  .headline { font-size: 13.5px; margin: 4px 0 10px; color: var(--text); line-height: 1.5; }
-  dl { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 6px 10px; margin: 0; }
+  .pane.drawer { box-shadow: var(--shadow-lg); border-left: 0; }
+  .inner { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+
+  .placeholder { margin: auto; text-align: center; max-width: 280px; color: var(--muted); padding: var(--sp-6); }
+  .placeholder h3 { color: var(--text); margin: var(--sp-5) 0 var(--sp-1); font-size: var(--fs-md); }
+  .placeholder p { margin: 0 0 var(--sp-4); }
+  .ph-keys { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); }
+  .ph-art { position: relative; width: 84px; height: 84px; margin: 0 auto; display: grid; place-items: center; }
+  .ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid var(--accent); opacity: 0; animation: ping 2.8s var(--ease) infinite; }
+  .ring.r2 { animation-delay: 1.4s; }
+  .core { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+  @keyframes ping { 0% { transform: scale(0.55); opacity: 0.6; } 100% { transform: scale(1.15); opacity: 0; } }
+
+  .head { display: flex; gap: var(--sp-3); align-items: center; padding: var(--sp-5) var(--sp-5) var(--sp-3); }
+  .who { min-width: 0; flex: 1; }
+  .hero { font-family: var(--mono); font-size: var(--fs-hero); font-weight: 700; letter-spacing: -0.04em; line-height: 1; display: flex; align-items: baseline; }
+  .colon { color: var(--faint); margin-right: 1px; }
+  .hero .proto { font-family: var(--font); font-size: var(--fs-2xs); text-transform: uppercase; color: var(--muted); letter-spacing: 0.08em; font-weight: 650; margin-left: var(--sp-2); }
+  .who h2 { margin: 6px 0 0; font-size: var(--fs-md); font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fwn { color: var(--muted); font-weight: 500; }
+  .close { align-self: flex-start; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 var(--sp-5) var(--sp-3); }
+  .actions { display: flex; gap: var(--sp-2); padding: var(--sp-1) var(--sp-5) var(--sp-4); border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: center; }
+
+  .scroll { overflow-y: auto; padding: var(--sp-4) var(--sp-5) var(--sp-8); flex: 1; display: flex; flex-direction: column; gap: var(--sp-5); }
+  .card { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--sp-4); }
+  .summary { display: grid; gap: var(--sp-3); }
+  section h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  section h4 .badge { margin-left: auto; text-transform: none; letter-spacing: 0; }
+  .headline { font-size: var(--fs-md); margin: 0; color: var(--text); line-height: 1.5; font-weight: 500; }
+  dl { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 7px var(--sp-3); margin: 0; font-size: var(--fs-sm); }
   dt { color: var(--muted); }
   dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
   .muted { color: var(--muted); }
   .path { color: var(--text-2); }
-  .cmd { display: flex; gap: 6px; align-items: flex-start; }
-  .cmd code { background: var(--surface-2); padding: 4px 7px; border-radius: 6px; flex: 1; overflow-wrap: anywhere; max-height: 72px; overflow-y: auto; }
-  .tiny { width: 24px; height: 24px; }
-  .callout { display: flex; gap: 10px; padding: 10px 12px; border-radius: var(--radius); font-size: 12.5px; align-items: flex-start; margin: 6px 0; }
+  .codeblock { display: flex; gap: var(--sp-2); align-items: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px 4px 6px 10px; margin-top: var(--sp-2); }
+  .codeblock code { flex: 1; overflow-wrap: anywhere; max-height: 76px; overflow-y: auto; padding-top: 3px; color: var(--text-2); }
+  .codeblock.shell code { white-space: nowrap; overflow-x: auto; overflow-wrap: normal; }
+  .prompt { color: var(--faint); font-family: var(--mono); padding-top: 3px; }
+  .tiny { width: 24px; height: 24px; flex: none; }
+
+  .callout { display: flex; gap: 10px; padding: 10px 12px; border-radius: var(--r-md); font-size: var(--fs-sm); align-items: flex-start; }
   .callout p { margin: 0; }
-  .callout strong { display: block; margin-bottom: 2px; }
-  .callout.tip { background: var(--accent-soft); color: var(--text); }
-  .callout.tip :global(svg) { color: var(--accent); margin-top: 1px; }
-  .callout.warn { background: var(--warn-soft); color: var(--text); }
-  .callout.warn :global(svg) { color: var(--warn); margin-top: 1px; }
-  .callout.subtle { padding: 8px 10px; font-size: 12px; }
-  .details { margin: 0; padding-left: 16px; color: var(--text-2); display: grid; gap: 4px; }
-  .steps { margin: 0; padding-left: 0; list-style: none; counter-reset: s; display: grid; gap: 6px; }
-  .steps li { counter-increment: s; display: flex; gap: 10px; color: var(--text-2); }
-  .steps li::before { content: counter(s); flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--surface-2); color: var(--muted); }
-  .shell { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border-radius: 8px; padding: 4px 4px 4px 10px; margin-bottom: 6px; }
-  .shell code { flex: 1; overflow-x: auto; white-space: nowrap; }
-  .prompt { color: var(--faint); font-family: var(--mono); }
+  .callout strong { display: block; margin-bottom: 2px; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; }
+  .callout :global(svg) { margin-top: 1px; flex: none; }
+  .callout.tip { background: var(--accent-soft); }
+  .callout.tip strong, .callout.tip :global(svg) { color: var(--accent); }
+  .callout.warn { background: var(--warn-soft); }
+  .callout.warn strong, .callout.warn :global(svg) { color: var(--warn); }
+  .callout.subtle { padding: 8px 10px; font-size: var(--fs-xs); margin-top: var(--sp-2); }
+
+  .chain { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+  .chain li { display: flex; gap: var(--sp-3); position: relative; padding: 6px 0 6px 2px; }
+  .chain li:not(:last-child)::after { content: ""; position: absolute; left: 7px; top: 22px; bottom: -6px; width: 2px; background: var(--border-strong); border-radius: 2px; }
+  .node { flex: none; width: 12px; height: 12px; margin-top: 3px; border-radius: 50%; border: 2px solid var(--border-strong); background: var(--surface); position: relative; z-index: 1; }
+  .holder .node { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .chain > li > div { min-width: 0; flex: 1; }
+  .pname { font-weight: 600; }
+  .pid { color: var(--muted); margin-left: 8px; font-size: 11px; }
+  .holds { margin-left: 8px; font-size: var(--fs-2xs); color: var(--accent); font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; }
+  .pcmd { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .steps { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: grid; gap: 6px; color: var(--text-2); font-size: var(--fs-sm); }
+  .steps li { display: flex; gap: var(--sp-2); align-items: flex-start; }
+  .steps :global(svg) { color: var(--ok); margin-top: 3px; flex: none; }
   .risk-low { color: var(--ok); background: var(--ok-soft); }
   .risk-medium { color: var(--warn); background: var(--warn-soft); }
   .risk-high { color: var(--danger); background: var(--danger-soft); }
-  .skeleton { height: 12px; border-radius: 6px; margin: 14px 0; background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.3s infinite; }
-  @keyframes shimmer { to { background-position: -200% 0; } }
 </style>
