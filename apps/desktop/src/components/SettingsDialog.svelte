@@ -58,7 +58,7 @@
   let theme = $state<Theme>(untrack(() => model.theme));
 </script>
 
-<Dialog title="Settings" description="Changes apply immediately and are saved automatically." icon="sliders" size="xl" {onclose} initialFocus="[role=tab][aria-selected=true]">
+<Dialog title="Settings" description="Startup, appearance, notifications and scanning for this computer." icon="sliders" size="xl" {onclose} initialFocus="[role=tab][aria-selected=true]">
   <div class="layout">
     <div class="nav" role="tablist" aria-orientation="vertical" aria-label="Settings sections" tabindex="-1" onkeydown={navKey}>
       {#each SETTINGS_SECTIONS as s, i (s.id)}
