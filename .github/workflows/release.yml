@@ -323,3 +323,16 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+
+  custom-desktop-release:
+    needs:
+      - plan
+      - announce
+    uses: ./.github/workflows/desktop-release.yml
+    with:
+      plan: ${{ needs.plan.outputs.val }}
+    secrets: inherit
+    permissions:
+      "attestations": "write"
+      "contents": "write"
+      "id-token": "write"

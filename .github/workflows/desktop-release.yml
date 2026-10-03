@@ -1,6 +1,7 @@
 # Desktop installers (.dmg, .msi + NSIS .exe, .AppImage, .deb, .rpm) built by tauri-action and
 # attached to the GitHub Release that release.yml (dist) created for the same `vX.Y.Z` tag, with
-# SHA-256 checksums and SLSA build provenance.
+# SHA-256 checksums and SLSA build provenance. release.yml calls this reusable workflow after it
+# publishes the release (dist's `post-announce-jobs`), so it builds the tag's own commit.
 #
 # Optional, each skipped when its secrets are absent:
 # - macOS signing + notarisation: APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD,
@@ -9,13 +10,17 @@
 # - Signed auto-updates: TAURI_SIGNING_PRIVATE_KEY (+ TAURI_SIGNING_PRIVATE_KEY_PASSWORD) and the
 #   repository variable TAURI_UPDATER_PUBKEY. Adds updater bundles and latest.json.
 #
-# Dry run: run it manually with an empty tag; the bundles are kept as workflow artifacts.
+# Dry run: run it manually with an empty tag; the bundles are kept as workflow artifacts and
+# nothing is published. With a tag it (re)uploads to that existing release.
 name: Desktop release
 
 on:
-  workflow_run:
-    workflows: [Release]
-    types: [completed]
+  workflow_call:
+    inputs:
+      plan:
+        description: "dist's plan (JSON) for the release that was just published"
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -26,37 +31,28 @@ on:
 permissions: {}
 
 concurrency:
-  group: desktop-release-${{ inputs.tag || github.event.workflow_run.head_branch || github.ref }}
+  group: desktop-release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
 
 jobs:
   plan:
-    # After dist's Release workflow succeeded for a version tag, or when started by hand.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       startsWith(github.event.workflow_run.head_branch, 'v'))
     runs-on: ubuntu-latest
     permissions: {}
     outputs:
       tag: ${{ steps.plan.outputs.tag }}
-      ref: ${{ steps.plan.outputs.ref }}
       updater: ${{ steps.plan.outputs.updater }}
     steps:
       - id: plan
         env:
-          EVENT: ${{ github.event_name }}
+          PLAN: ${{ inputs.plan }}
           INPUT_TAG: ${{ inputs.tag }}
-          RUN_TAG: ${{ github.event.workflow_run.head_branch }}
-          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && vars.TAURI_UPDATER_PUBKEY != '' }}
         run: |
-          if [ "$EVENT" = workflow_run ]; then tag=$RUN_TAG; ref=$RUN_SHA; else tag=$INPUT_TAG; ref=${INPUT_TAG:-$GITHUB_SHA}; fi
+          if [ -n "$PLAN" ]; then tag=$(jq -r '.announcement_tag // empty' <<<"$PLAN"); else tag=$INPUT_TAG; fi
           if [ -n "$tag" ] && ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::$tag isn't a vX.Y.Z tag"; exit 1
           fi
-          { echo "tag=$tag"; echo "ref=$ref"; echo "updater=$HAS_UPDATER_KEY"; } >> "$GITHUB_OUTPUT"
+          { echo "tag=$tag"; echo "updater=$HAS_UPDATER_KEY"; } >> "$GITHUB_OUTPUT"
           echo "### Desktop ${tag:-dry run} (updater: $HAS_UPDATER_KEY)" >> "$GITHUB_STEP_SUMMARY"
 
   build:
@@ -91,9 +87,10 @@ jobs:
       TAG: ${{ needs.plan.outputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
+      # Called by release.yml: the pushed tag's commit. By hand: the tag, or the chosen branch.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.plan.outputs.ref }}
+          ref: ${{ inputs.tag }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:

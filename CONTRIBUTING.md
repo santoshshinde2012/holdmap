@@ -92,8 +92,8 @@ Versions follow [SemVer](https://semver.org/). One `vX.Y.Z` tag releases everyth
   CycloneDX SBOM, SHA-256 checksums, binaries built with `cargo auditable`, and GitHub build
   provenance (`gh attestation verify <file> -R santoshshinde2012/portwise`). It creates the GitHub
   Release.
-- When that succeeds, `desktop-release.yml` (tauri-action) adds the `.dmg`, `.msi`, NSIS `.exe`,
-  `.AppImage`, `.deb` and `.rpm`, with checksums and provenance. Run it by hand with an empty tag
+- Once the release is published, `release.yml` calls `desktop-release.yml` (tauri-action), which
+  adds the `.dmg`, `.msi`, NSIS `.exe`, `.AppImage`, `.deb` and `.rpm`, with checksums and provenance. Run it by hand with an empty tag
   for a dry run that keeps the bundles as workflow artifacts.
 
 Check a change to the release setup locally with `dist plan`,
