@@ -205,10 +205,10 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(MUTED))
-        .title(Line::from(vec![Span::styled(
-            " Ports ",
-            Style::new().bold(),
-        )]));
+        .title(Line::from(vec![
+            Span::styled(" Ports ", Style::new().bold()),
+            Span::styled(format!("{} ", app.rows.len()), Style::new().fg(MUTED)),
+        ]));
     if let Some(err) = &app.error {
         let p = Paragraph::new(Text::from(vec![
             Line::from(Span::styled(
@@ -267,7 +267,10 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
                 Cell::from(Line::from(vec![
                     marker,
                     Span::raw(" "),
-                    Span::styled(e.port.to_string(), Style::new().bold()),
+                    Span::styled(
+                        format!(":{}", e.port),
+                        Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
+                    ),
                 ])),
                 Cell::from(Span::styled(e.protocol.to_string(), Style::new().fg(MUTED))),
                 Cell::from(Span::styled(
@@ -295,10 +298,11 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
                     Style::new().fg(category_color(e)),
                 )),
             ])
+            .height(1)
         })
         .collect();
     let widths = [
-        Constraint::Length(8),
+        Constraint::Length(9),
         Constraint::Length(5),
         Constraint::Length(16),
         Constraint::Length(8),
@@ -314,7 +318,7 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
                 .bg(Color::Indexed(236))
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol("▌");
+        .highlight_symbol(Span::styled("▌", Style::new().fg(ACCENT)));
     f.render_stateful_widget(table, area, &mut app.state);
     let mut sb = ScrollbarState::new(app.rows.len()).position(app.state.selected().unwrap_or(0));
     f.render_stateful_widget(
@@ -328,6 +332,16 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
         }),
         &mut sb,
     );
+}
+
+fn section(name: &str) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(
+            format!("{} ", name.to_uppercase()),
+            Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("─".repeat(40), Style::new().fg(Color::Indexed(238))),
+    ])
 }
 
 fn kv(k: &str, v: impl Into<String>) -> Line<'static> {
@@ -404,6 +418,7 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
         lines.push(Line::raw(""));
     }
     if let Some(p) = &e.process {
+        lines.push(section("Process"));
         lines.push(kv("Process", format!("{} (PID {})", p.name, p.pid)));
         if let Some(u) = &e.user {
             lines.push(kv("User", u.clone()));
@@ -415,7 +430,16 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
             cmd
         };
         lines.push(kv("Command", cmd));
+        lines.push(kv(
+            "Uptime",
+            human_duration(now_secs().saturating_sub(p.start_time)),
+        ));
+        if p.memory_bytes > 0 {
+            lines.push(kv("Memory", human_bytes(p.memory_bytes)));
+        }
+        lines.push(Line::raw(""));
         if let Some(pr) = &e.project {
+            lines.push(section("Project"));
             lines.push(kv(
                 "Project",
                 format!(
@@ -428,22 +452,21 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
                 ),
             ));
             lines.push(kv("Path", tilde(&pr.root)));
+            lines.push(Line::raw(""));
         } else if let Some(cwd) = &p.cwd {
+            lines.push(section("Project"));
             lines.push(kv("Cwd", tilde(cwd)));
-        }
-        lines.push(kv(
-            "Uptime",
-            human_duration(now_secs().saturating_sub(p.start_time)),
-        ));
-        if p.memory_bytes > 0 {
-            lines.push(kv("Memory", human_bytes(p.memory_bytes)));
+            lines.push(Line::raw(""));
         }
     }
     if let Some(c) = &e.container {
+        lines.push(section("Container"));
         lines.push(kv("Container", format!("{} ({})", c.name, c.runtime)));
         lines.push(kv("Image", c.image.clone()));
         lines.push(kv("Mapping", format!("{} → {}", e.port, c.private_port)));
+        lines.push(Line::raw(""));
     }
+    lines.push(section("Network"));
     lines.push(Line::from(vec![
         Span::styled(format!("{:>9}  ", "Address"), Style::new().fg(MUTED)),
         Span::styled(
@@ -465,6 +488,7 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
     ]));
     if let Some(ex) = &ex {
         lines.push(Line::raw(""));
+        lines.push(section("Plan"));
         lines.push(Line::from(vec![
             Span::styled("→ ", Style::new().fg(ACCENT)),
             Span::styled(ex.recommendation.clone(), Style::new().fg(ACCENT)),
@@ -497,7 +521,10 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
 fn key(k: &str) -> Span<'static> {
     Span::styled(
         format!(" {k} "),
-        Style::new().fg(Color::Black).bg(Color::Gray),
+        Style::new()
+            .fg(Color::White)
+            .bg(Color::Indexed(238))
+            .add_modifier(Modifier::BOLD),
     )
 }
 
@@ -514,24 +541,31 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
         );
         return;
     }
-    let hints = [
-        ("↑↓", "move"),
-        ("/", "search"),
-        ("x", "stop"),
-        ("X", "kill"),
-        ("e", "explain"),
-        ("o", "open"),
-        ("s", "sort"),
-        ("t", "proto"),
-        ("d", "dev"),
-        ("a", "all"),
-        ("?", "help"),
-        ("q", "quit"),
-    ];
-    let mut spans = Vec::new();
-    for (k, label) in hints {
-        spans.push(key(k));
-        spans.push(Span::styled(format!(" {label}  "), Style::new().fg(MUTED)));
+    let groups: &[&[(&str, &str)]] = if app.searching {
+        &[
+            &[("Enter", "keep filter"), ("Esc", "clear")],
+            &[("↑↓", "move")],
+        ]
+    } else {
+        &[
+            &[("↑↓", "move"), ("/", "search"), ("e", "explain")],
+            &[("x", "stop"), ("X", "kill"), ("o", "open")],
+            &[("s", "sort"), ("t", "proto"), ("d", "dev"), ("a", "all")],
+            &[("?", "help"), ("q", "quit")],
+        ]
+    };
+    let mut spans = vec![Span::raw(" ")];
+    for (gi, g) in groups.iter().enumerate() {
+        if gi > 0 {
+            spans.push(Span::styled(" │ ", Style::new().fg(Color::Indexed(238))));
+        }
+        for (i, (k, label)) in g.iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::raw(" "));
+            }
+            spans.push(key(k));
+            spans.push(Span::styled(format!(" {label}"), Style::new().fg(MUTED)));
+        }
     }
     f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
