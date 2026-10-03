@@ -2,7 +2,7 @@
   import Icon from "./Icon.svelte";
   import Dialog from "./ui/Dialog.svelte";
   import Kbd from "./ui/Kbd.svelte";
-  import { rank, type Command } from "../lib/palette";
+  import { groupResults, rank, type Command } from "../lib/palette";
 
   let { commands, onclose }: { commands: Command[]; onclose: () => void } = $props();
 
@@ -11,11 +11,7 @@
   let listEl: HTMLDivElement | undefined = $state();
 
   const results = $derived(rank(query, commands, 50));
-  const groups = $derived.by(() => {
-    if (query.trim()) return [{ name: "Results", items: results }];
-    const order = ["Ports", "Actions", "Filters", "View", "Settings"] as const;
-    return order.map((g) => ({ name: g, items: results.filter((c) => c.group === g) })).filter((g) => g.items.length);
-  });
+  const groups = $derived(groupResults(query, results));
   const flat = $derived(groups.flatMap((g) => g.items));
 
   $effect(() => { void query; active = 0; });
@@ -98,7 +94,8 @@
   .item.active { background: var(--row-selected); }
   .ic { width: 24px; height: 24px; border-radius: var(--r-sm); display: grid; place-items: center; color: var(--muted); flex: none; border: 1px solid var(--border); background: var(--surface); }
   .item.active .ic { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
-  .item.danger .ic { color: var(--danger); }
+  /* Destructive commands stay quiet in a list of them and turn red only when highlighted. */
+  .item.danger.active .ic { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); background: var(--danger-soft); }
   .t { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; overflow: hidden; }
   .tt { font-weight: var(--fw-regular); color: var(--text); overflow: hidden; text-overflow: ellipsis; }
   .s { color: var(--muted); font-size: var(--fs-body); line-height: var(--lh-body); overflow: hidden; text-overflow: ellipsis; }

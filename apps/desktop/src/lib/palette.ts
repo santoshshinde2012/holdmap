@@ -50,3 +50,14 @@ export function rank(query: string, commands: Command[], limit = 40): Command[] 
     .slice(0, limit)
     .map((x) => x.c);
 }
+
+export const GROUP_ORDER = ["Ports", "Actions", "Filters", "View", "Settings"] as const;
+
+/**
+ * Sections for the palette. Without a query: the fixed group order. With one: still grouped (so a
+ * run of "Stop …" results reads as one section), but sections follow their best match.
+ */
+export function groupResults(query: string, results: Command[]): { name: Command["group"]; items: Command[] }[] {
+  const order: Command["group"][] = query.trim() ? [...new Set(results.map((c) => c.group))] : [...GROUP_ORDER];
+  return order.map((name) => ({ name, items: results.filter((c) => c.group === name) })).filter((g) => g.items.length);
+}
