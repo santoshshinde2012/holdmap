@@ -188,6 +188,51 @@ control in both themes (`src/dev/Gallery.svelte`).
 | `Dialog` | center / right sheet / top; focus trap + restore (`lib/focus.ts`), Esc + backdrop close, alertdialog |
 | `ScrollArea` · `CopyValue` · `Callout` · `Splitter` · `SettingRow` · `SettingsGroup` · `RichText` | scroll-edge shadows, truncate + tooltip + copy, resizable pane |
 
+### Typography
+
+**Typefaces.** The app bundles its own fonts in `apps/desktop/src/assets/fonts/`. They are
+loaded from `fonts.css` with `font-display: swap` and fall back to the system stack while
+loading. Nothing is fetched from a network.
+
+- **Inter Variable** (v4.1, `opsz` + `wght` axes) for all UI text. It was drawn for screens at
+  11–14 px: tall x-height, open apertures, and real tabular figures. The optical-size axis
+  switches to the Display cut automatically for the 24 px port hero. Features: `cv11`
+  (single-storey a), `ss01` (open digits) and `calt`. `tnum` is applied only where numbers must
+  line up (ports, counts, sizes, durations) through `font-variant-numeric`.
+- **JetBrains Mono Variable** (v2.304) for PIDs, paths, commands and code. Its 0/O and 1/l/I
+  are unambiguous, it stays legible at 11–12 px, and its x-height matches Inter's at one step
+  smaller. Ligatures are turned off.
+- Both are SIL OFL 1.1. They are subset to Latin, Latin Extended, punctuation and the UI
+  symbols we draw (⌘ ⌥ ⇧ ⌫ ↵, arrows, ✓, box drawing), about 290 KB together.
+
+**Scale.** 11 · 12 · 13 · 14 · 16 · 20 · 24 · 32 px, base 13 px, weights 400 / 500 / 600 only.
+Components use semantic roles, never the raw scale:
+
+| Role | Size / line height | Weight | Tracking | Used for |
+|---|---|---|---|---|
+| `display` | 24 / 30 | 600 | −2.1% | port hero |
+| `title` | 16 / 22 | 600 | −1.1% | dialog titles, row port numbers, empty states |
+| `heading` | 14 / 20 | 600 | −0.6% | settings groups, stat values, lead paragraphs (at 400) |
+| `body` | 13 / 20 | 400 | −0.25% | default text, controls, row names (600) |
+| `body-sm` | 12 / 17 | 400 | 0 | secondary lines, hints, small buttons |
+| `caption` | 11 / 15 | 400 | +0.5% | counts, edge labels, meta |
+| `label` | 11 / 15 | 500 | +6% | uppercase section labels |
+| `mono` | 12 / 18 | 400 | 0 | commands, paths, code |
+| `mono-sm` | 11 / 16 | 400 | 0 | PIDs, branches, inline meta |
+
+The weights follow one rule. 600 is for titles, headings, port numbers and row names. 500 is
+for controls, labels, tabs, chips and badges. Everything else is 400. `body` sets antialiased
+smoothing, `text-rendering: optimizeLegibility`, `font-synthesis: none` and automatic optical
+sizing. `lib/typography.test.ts` fails the build on any raw `font-size`, `font-weight`,
+`line-height`, `letter-spacing` or `font-family` outside the `:root` tokens. The one exempt
+case is the framework monogram, which scales with its tile and is marked `type-exempt`. The
+`#ui-gallery` page renders the full specimen.
+
+**Terminal surfaces.** A terminal only has weight and colour, so the TUI (`tui/theme.rs`) and
+the CLI (`style.rs`) map the same roles onto them. Headings are bold. Ports are accent and
+bold in the list table, the graph tree and the TUI alike. Labels and table headers are muted
+and bold. Captions are muted. Keys are accent and bold.
+
 Tooltips are one shared element driven by the `use:tooltip` action (`lib/tooltip.ts`); native
 `title` is not used. Tokens live in `app.css` (`--h-*`, `--r-*`, `--input-*`, `--focus-ring`,
 `--accent-fg`, `--danger-fg`), and `lib/kit.test.ts` checks the text tokens against WCAG AA in

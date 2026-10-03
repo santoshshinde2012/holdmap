@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
+## Unreleased: typography
+
+### Changed
+- **Bundled fonts**: Inter Variable (UI) and JetBrains Mono Variable (code, PIDs, paths) now
+  ship inside the app, loaded with `font-display: swap` and no CDN. Before, the app named Inter
+  but never shipped it, so macOS fell back to a mix of SF Pro and SF Mono.
+- **One type scale** (11/12/13/14/16/20/24/32, base 13 px) with nine semantic roles (display,
+  title, heading, body, body-sm, caption, label, mono, mono-sm). Weights are limited to
+  400/500/600, and line heights and tracking are defined per role. About 180 ad-hoc sizes and
+  weights (10px, 10.5px, 11.5px, 12.5px, 550, 650, 700 …) were replaced with tokens.
+- **Calmer hierarchy**: port numbers are set in Inter with tabular figures, and labels, counts,
+  palette items and toasts drop from semibold to medium or regular. Stat tiles, empty states
+  and dialogs use consistent title and heading sizes.
+- **Fixes**: the status dot in list rows was squeezed into a bar, and long graph edge labels
+  now truncate.
+- **Terminal**: the TUI uses semantic styles (`tui/theme.rs`), and graph ports match the list
+  table (accent and bold).
+
+### Added
+- A typography lint (`lib/typography.test.ts`) that fails on raw font values, and a
+  type-scale specimen on the `#ui-gallery` page.
+
 ## Unreleased: desktop UI/UX redesign
 
 ### Added
