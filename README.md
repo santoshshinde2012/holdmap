@@ -27,6 +27,14 @@ portwise answers the real questions:
 - **What should I do?** A previewable plan: stop the whole dev-server tree gracefully (SIGTERM →
   SIGKILL after a grace period), stop the container through its runtime, or run
   `brew services stop` / `systemctl --user stop`, and then **check that the port is actually free**.
+- **What depends on it?** A live **service mesh**: which local services talk to which (web → api →
+  db, cache), grouped into clusters (Compose project, Kubernetes namespace, pm2/turbo/nx parent,
+  workspace, git repo), with port-forwards and tunnels (kubectl, `ssh -L`, cloudflared, ngrok).
+  **Stop a whole cluster** in dependency order with one confirmed plan.
+
+<p align="center">
+  <img src="docs/screenshots/desktop-graph-light.png" width="860" alt="portwise desktop graph view" />
+</p>
 
 ## Contents
 
@@ -81,6 +89,13 @@ portwise kill 3000            Force-kill now (SIGKILL / TerminateProcess)
 portwise free-port --near 3000
 portwise wait 5432 --timeout 30s        Wait until something is listening (or --free)
 portwise run -p 3000 -- npm run dev     Free 3000 safely, then run the command with PORT=3000
+portwise graph                Service mesh as a tree (alias: mesh). --json, --dot, --mermaid, --cluster NAME, --no-external
+portwise stop --cluster acme-shop --dry-run   Stop a whole cluster in dependency order (also `stop cluster:acme-shop`)
+portwise watch [--json]       Stream events: new / closed listeners, conflicts (NDJSON with --json)
+portwise pin 3000 --label web Pin a port (shown first, watched even when free); unpin, pins
+portwise history              What portwise stopped, with the command and cwd; `restart 3000` re-runs it
+portwise open 3000            Open http://localhost:3000
+portwise ssh devbox [graph]   Another machine's ports over SSH (agentless, read-only)
 portwise mcp                  MCP server on stdio
 portwise completions zsh      Shell completions (bash, zsh, fish, powershell, elvish)
 portwise man                  Man page
@@ -92,6 +107,10 @@ text (`next`, `shop-web`, a branch name…).
 <p align="center"><img src="docs/screenshots/cli-list.png" width="820" alt="portwise list" /></p>
 <p align="center"><img src="docs/screenshots/cli-explain.png" width="820" alt="portwise explain 3000" /></p>
 <p align="center"><img src="docs/screenshots/cli-stop.png" width="820" alt="portwise stop 8080 escalating to SIGKILL" /></p>
+<p align="center"><img src="docs/screenshots/cli-graph.png" width="820" alt="portwise graph" /></p>
+<p align="center"><img src="docs/screenshots/cli-stop-cluster-dry-run.png" width="820" alt="portwise stop --cluster --dry-run" /></p>
+
+`portwise graph --mermaid` pastes straight into a GitHub comment, and `--dot | dot -Tsvg` renders it with Graphviz.
 
 **Exit codes:** `0` ok · `1` busy / not found / timed out · `2` error · `3` blocked by the safety
 policy · `4` needs elevation. Every command takes `--json` for scripting. Colour follows `--color`,
@@ -112,11 +131,16 @@ list on narrow ones. A grouped footer always shows the keys that matter right no
 | `X` | force kill, with confirmation | `o` / `c` | open in browser / copy URL (OSC 52) |
 | `s` / `S` | sort / reverse | `t` | protocol: TCP+UDP → TCP → UDP |
 | `d` / `m` / `a` | dev only / mine only / all sockets | `p` / `r` | pause / refresh |
-| `?` | help | `q` / `Esc` | quit |
+| `Tab` / `v` | ports ⇄ graph tab (selection follows) | `C` | stop the selected service's cluster (dependency order) |
+| `h` | graph: show / hide external hosts | `?` / `q` / `Esc` | help / quit |
 
 <p align="center">
   <img src="docs/screenshots/tui-confirm-stop.png" width="410" alt="TUI stop confirmation" />
   <img src="docs/screenshots/tui-explain.png" width="410" alt="TUI explain view" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/tui-graph.png" width="410" alt="TUI graph tab" />
+  <img src="docs/screenshots/tui-cluster-stop.png" width="410" alt="TUI cluster stop confirmation" />
 </p>
 
 ## Desktop & tray app
@@ -141,6 +165,15 @@ A Tauri v2 + Svelte 5 app (`apps/desktop`), designed to feel like a native, keyb
 - **Design system**: tokens for spacing, radius, type scale, colour and motion, plus light and dark themes checked for WCAG AA contrast
   (unit-tested). It has visible focus rings, ARIA roles (listbox, combobox, dialog, live regions) and `prefers-reduced-motion` support.
 - **Responsive**: below 900 px the details pane becomes a slide-over drawer.
+- **Graph view** (`g`). Services as cards grouped in cluster hulls, arrows from caller to callee,
+  animated traffic dots, hover to highlight neighbours, selection shared with the list, zoom/fit,
+  minimap, layered or force layout, light/dark, reduced motion respected. The details pane gains a
+  *Connections* section and *Stop cluster* (`s`) shows the dependency-ordered plan.
+- **Pins, history, restart.** Star a port (`p`) to keep it on top. The history panel (`h`) lists
+  everything portwise stopped, with one-click restart.
+- **Background helper.** Notifications for new or conflicting listeners, launch at login (starts
+  hidden in the tray), and a global hotkey (`Ctrl+Alt+P` / `⌘⌥P`) to bring the window up. It re-scans
+  every 4 s while visible and every 10 s while hidden.
 - **Tray / menu-bar icon.** It shows "N dev servers running" and each one (`● :3000  Next.js · shop-web`), plus
   "N ports in use · M network-exposed". Closing the window keeps portwise in the tray.
 
@@ -151,6 +184,8 @@ A Tauri v2 + Svelte 5 app (`apps/desktop`), designed to feel like a native, keyb
 | ![Stop success](docs/screenshots/desktop-stop-success.png) | ![Port freed toast](docs/screenshots/desktop-stopped-toast.png) |
 | ![First run](docs/screenshots/desktop-onboarding.png) | ![Needs elevation](docs/screenshots/desktop-explain-blocked.png) |
 | ![Free port answer](docs/screenshots/desktop-free-port.png) | ![Keyboard shortcuts](docs/screenshots/desktop-shortcuts.png) |
+| ![Graph, dark](docs/screenshots/desktop-graph-dark.png) | ![Cluster stop plan](docs/screenshots/desktop-cluster-stop-plan.png) |
+| ![List grouped by cluster](docs/screenshots/desktop-list-by-cluster.png) | ![Graph, light](docs/screenshots/desktop-graph-light.png) |
 
 <p align="center"><img src="docs/screenshots/desktop-narrow.png" width="420" alt="Narrow window: details as a drawer" /></p>
 
@@ -186,6 +221,8 @@ npm run tauri build        # release build + installers for your OS
 - `find_free_port`
 - `wait_for_port`
 - `stop_port`
+- `get_topology`: the service graph and its clusters
+- `plan_cluster_stop`: the dependency-ordered plan to stop a cluster (always a dry run)
 
 `stop_port` supports `dry_run`. It refuses high-risk targets, and it needs `allow_non_dev` before it will touch anything that isn't a dev server. Example config for Claude Desktop, Cursor or VS Code:
 
@@ -241,27 +278,29 @@ Sockets owned by other users are counted and explained ("hidden N sockets — ru
 
 ```text
 crates/
-  portwise-core/        the engine (no UI): scan → resolve → explain → plan → execute
-    sys/{linux,macos,windows}.rs   per-OS socket + process backends behind cfg
-    scan.rs        snapshot: v4/v6 grouping, container mapping, filters/query language
-    process.rs     process table, ancestry, tree roots
-    project.rs     cwd → project root (package.json, Cargo.toml, pyproject, go.mod, …), git branch, framework signatures
-    docker.rs      tiny sync HTTP client for Docker/Podman/OrbStack/Colima sockets & named pipes
-    engine.rs      Owner resolution, Explanation, ActionPlan (with risk + blocked reasons)
-    exec.rs        executes a plan: re-check identity → signal → escalate → verify free
-    safety.rs      protected-process policy        probe.rs  bind probes
+  portwise-core/        the engine (no UI)
+    provider.rs    Socket/Process/Container provider traits (+ Static* fakes for tests)
+    scan.rs        Scanner: snapshot, v4/v6 grouping, container mapping, query language
+    engine/        Engine (explain, plan, plan_cluster, topology) + strategies/ (one StopStrategy per owner kind)
+    safety.rs      ProtectionPolicy          exec.rs  re-check identity → signal → escalate → verify
+    project/       ProjectDetector, ManifestRegistry, workspace markers, git, framework signatures
+    topology/      TopologyBuilder, ClusterRegistry, stop_order, exporters (tree/JSON/DOT/Mermaid)
+    tunnel.rs remote.rs store.rs history.rs events.rs docker.rs sys/{linux,macos,windows}.rs
   portwise-cli/         `portwise` binary: clap CLI + ratatui TUI (src/tui)
   portwise-mcp/         MCP stdio server (JSON-RPC 2.0) on top of the core
-apps/desktop/           Tauri v2 shell (src-tauri) + Svelte 5 UI (src)
+apps/desktop/           Tauri v2 (src-tauri: commands/state/tray/watch/shortcuts) + Svelte 5 UI (src)
 ```
 
-All four surfaces call the same `Engine::explain`, `Engine::plan` and `execute` functions, so the CLI, TUI, desktop app and MCP server always agree on what will happen.
+All four surfaces call the same `Engine`, so the CLI, TUI, desktop app and MCP server always agree
+on what will happen. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for diagrams and the graph
+library choice, and [docs/AUDIT.md](docs/AUDIT.md) for how each research point is covered.
 
 ## Development
 
 ```sh
 cargo build                                   # core + CLI + MCP (default members)
-cargo test                                    # unit + Linux e2e tests (real listeners, real signals)
+cargo test                                    # unit + proptest + Linux e2e tests (real listeners, real signals)
+cargo bench -p portwise-core                  # criterion: scan, topology, explain, parsers
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
 scripts/demo-servers.sh start                 # realistic demo listeners on 3000/5173/8000/8080/8125
