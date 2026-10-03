@@ -2,13 +2,15 @@
   // Directed dependency edge with an optional "live traffic" animation: dots travel from the
   // client to the service it uses, more dots for more open connections.
   import { BaseEdge, EdgeLabel, getBezierPath, type EdgeProps, type Edge } from "@xyflow/svelte";
-  import { edgeLabel, trafficDots, type FlowEdgeData } from "../../lib/graph";
+  import { edgeLabel, fitEdgeLabel, trafficDots, type FlowEdgeData } from "../../lib/graph";
 
   let { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd }: EdgeProps<Edge<FlowEdgeData>> = $props();
   const geo = $derived(getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition }));
   const e = $derived(data!.edge);
   const dots = $derived(trafficDots(e.connections));
   const outbound = $derived(e.kind === "outbound");
+  const full = $derived(edgeLabel(e));
+  const fit = $derived(fitEdgeLabel(full, sourceX, sourceY, targetX, targetY));
 </script>
 
 <BaseEdge
@@ -24,8 +26,8 @@
     </circle>
   {/each}
 {/if}
-<EdgeLabel x={geo[1]} y={geo[2]} class="edge-label {data?.dim ? 'dim' : ''} {data?.hl ? 'hl' : ''}">
-  <span class="mono">{edgeLabel(e)}</span>
+<EdgeLabel x={geo[1]} y={geo[2]} class="edge-label {fit.clipped ? 'clipped' : ''} {data?.dim ? 'dim' : ''} {data?.hl ? 'hl' : ''}">
+  <span class="mono" title={fit.clipped ? full : undefined}>{fit.text}</span>
 </EdgeLabel>
 
 <style>
@@ -40,6 +42,8 @@
     border: 1px solid var(--border); pointer-events: none; transition: opacity var(--dur-2);
     max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums;
   }
+  /* A shortened label shows the full text on hover. */
+  :global(.edge-label.clipped) { pointer-events: auto; cursor: default; }
   :global(.edge-label.hl) { color: var(--accent); border-color: var(--accent); }
   :global(.edge-label.dim) { opacity: 0.35; }
 </style>

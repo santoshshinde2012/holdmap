@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeLabel, linksLabel, force, groupId, layered, NODE_H, NODE_W, nodeForEntry, orderFromSummary, related, sectionsByCluster, separate, toFlow, trafficDots } from "./graph";
+import { edgeLabel, fitEdgeLabel, linksLabel, force, groupId, layered, NODE_H, NODE_W, nodeForEntry, orderFromSummary, related, sectionsByCluster, separate, toFlow, trafficDots } from "./graph";
 import { MOCK_SNAPSHOT, mockTopology } from "./mock";
 
 const g = mockTopology();
@@ -85,6 +85,20 @@ describe("helpers", () => {
     expect(edgeLabel(g.edges.find((e) => e.kind === "outbound")!)).toBe("api.openai.com:443, huggingface.co:443");
     expect(trafficDots(1).count).toBe(1);
     expect(trafficDots(100).count).toBe(4);
+  });
+
+  it("shortens an edge label so it never covers the nodes it joins", () => {
+    const hosts = "api.openai.com:443, huggingface.co:443";
+    // Short horizontal hop between neighbouring nodes: clipped with an ellipsis, within the gap.
+    const short = fitEdgeLabel(hosts, 0, 0, 112, 10);
+    expect(short.clipped).toBe(true);
+    expect(short.text.endsWith("…")).toBe(true);
+    expect(short.text.length * 6.7 + 14).toBeLessThanOrEqual(112 - 28);
+    // Plenty of room, or a vertical edge that passes beside the nodes: left alone.
+    expect(fitEdgeLabel(":3001 ×4", 0, 0, 112, 0)).toEqual({ text: ":3001 ×4", clipped: false });
+    expect(fitEdgeLabel(":5432", 0, 0, 10, 160).clipped).toBe(false);
+    // Never collapses to nothing.
+    expect(fitEdgeLabel(hosts, 0, 0, 4, 0).text.length).toBeGreaterThanOrEqual(3);
   });
 
   it("labels the Graph badge count in words", () => {

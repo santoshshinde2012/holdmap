@@ -330,6 +330,25 @@ export function edgeLabel(e: GraphEdge): string {
   return `:${e.port}${e.connections > 1 ? ` ×${e.connections}` : ""}`;
 }
 
+/** Approximate advance of one mono caption glyph (11 px) and the label's horizontal chrome. */
+const LABEL_CH = 6.7;
+const LABEL_CHROME = 14;
+/** Room kept clear at each end of an edge for the arrowhead and the node border. */
+const LABEL_CLEAR = 14;
+
+/**
+ * Fits an edge label between the two handles so it never covers a node: on a mostly horizontal
+ * edge the label (centred on the midpoint) gets the gap minus the arrow clearance; vertical edges
+ * pass beside the nodes, so only the 180 px cap applies. Clipped labels end in "…".
+ */
+export function fitEdgeLabel(text: string, sx: number, sy: number, tx: number, ty: number): { text: string; clipped: boolean } {
+  const dx = Math.abs(tx - sx), dy = Math.abs(ty - sy);
+  const room = Math.min(180, dx >= dy ? dx - 2 * LABEL_CLEAR : 180);
+  const chars = Math.max(3, Math.floor((room - LABEL_CHROME) / LABEL_CH));
+  if (text.length <= chars) return { text, clipped: false };
+  return { text: `${text.slice(0, chars - 1).trimEnd()}…`, clipped: true };
+}
+
 /** Dots travelling along an edge: more connections → more dots (1–4), faster when busy. */
 export function trafficDots(connections: number): { count: number; duration: number } {
   const count = Math.max(1, Math.min(4, Math.ceil(Math.log2(connections + 1))));
