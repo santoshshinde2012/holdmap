@@ -46,6 +46,29 @@ fn untruncated_name(comm: &str, cmdline: &[String], exe: Option<&Path>) -> Optio
         .map(str::to_owned)
 }
 
+/// A process that rewrites its title in place (node's `process.title`: "next-server (v16.3.6)")
+/// leaves macOS reporting the environment strings after the title as extra arguments. Drop them
+/// so environment values (tokens included) never show up as part of a command line.
+fn without_leaked_env(mut cmd: Vec<String>) -> Vec<String> {
+    let retitled = cmd.first().is_some_and(|a| {
+        a.contains(char::is_whitespace) && !a.starts_with(['/', '\\']) && a.get(1..2) != Some(":")
+    });
+    if retitled {
+        let is_env = |a: &String| {
+            a.split_once('=').is_some_and(|(k, _)| {
+                k.chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                    && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            })
+        };
+        if let Some(i) = cmd.iter().skip(1).position(is_env) {
+            cmd.truncate(i + 1);
+        }
+    }
+    cmd
+}
+
 fn refresh_kind() -> ProcessRefreshKind {
     // Threads never own sockets separately from their process, and walking every
     // `/proc/<pid>/task` directory was the single largest cost of a scan on Linux.
@@ -85,11 +108,12 @@ impl ProcessTable {
                 let uid = None;
                 let start_time = p.start_time();
                 let start_token = crate::sys::start_token(pid).unwrap_or(start_time);
-                let cmdline: Vec<String> = p
-                    .cmd()
-                    .iter()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .collect();
+                let cmdline = without_leaked_env(
+                    p.cmd()
+                        .iter()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .collect(),
+                );
                 let comm = p.name().to_string_lossy().into_owned();
                 let name = untruncated_name(&comm, &cmdline, p.exe()).unwrap_or(comm);
                 ProcessInfo {
@@ -305,6 +329,27 @@ pub(crate) mod tests {
 
     pub fn table(list: Vec<ProcessInfo>, self_pid: u32) -> ProcessTable {
         ProcessTable::from_processes(list.into_iter().map(|p| (p.pid, p)).collect(), self_pid)
+    }
+
+    #[test]
+    fn retitled_processes_do_not_leak_their_environment() {
+        let v = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let next = v(&[
+            "next-server (v16.3.6)",
+            "npm_package_x=^0.45.3",
+            "API_TOKEN=secret",
+        ]);
+        assert_eq!(without_leaked_env(next), v(&["next-server (v16.3.6)"]));
+        // Ordinary command lines keep their arguments, even ones that look like assignments.
+        let make = v(&["make", "CC=clang"]);
+        assert_eq!(without_leaked_env(make.clone()), make);
+        let spaced = v(&[
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "A=b",
+        ]);
+        assert_eq!(without_leaked_env(spaced.clone()), spaced);
+        let npm = v(&["npm exec vite preview --port 4173", "--strictPort"]);
+        assert_eq!(without_leaked_env(npm.clone()), npm);
     }
 
     #[test]
