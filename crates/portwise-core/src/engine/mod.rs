@@ -34,6 +34,7 @@ use text::{exposure_detail, sudo};
 /// The engine: a consistent view of the machine plus the operations on it.
 #[derive(Debug, Clone)]
 pub struct Engine {
+    /// The scan this engine works on (snapshot, process table, published container ports, raw sockets).
     pub scan: Scan,
     policy: Arc<dyn ProtectionPolicy>,
     strategies: StrategyRegistry,
@@ -45,6 +46,7 @@ impl Engine {
         Ok(Self::from_scan(scan::scan(opts)?))
     }
 
+    /// Build an engine from an existing scan with the default policy and strategies.
     pub fn from_scan(scan: Scan) -> Self {
         Self {
             scan,
@@ -65,10 +67,12 @@ impl Engine {
         self
     }
 
+    /// The protection policy in use.
     pub fn policy(&self) -> &dyn ProtectionPolicy {
         self.policy.as_ref()
     }
 
+    /// The registered stop strategies.
     pub fn strategies(&self) -> &StrategyRegistry {
         &self.strategies
     }
@@ -87,10 +91,12 @@ impl Engine {
         self.strategies.resolve(&self.ctx(opts), e, &details)
     }
 
+    /// The port snapshot of the underlying scan.
     pub fn snapshot(&self) -> &Snapshot {
         &self.scan.snapshot
     }
 
+    /// The process table of the underlying scan.
     pub fn table(&self) -> &ProcessTable {
         &self.scan.table
     }

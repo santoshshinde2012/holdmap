@@ -47,12 +47,14 @@ impl Default for ManifestRegistry {
 }
 
 impl ManifestRegistry {
+    /// A registry with no parsers.
     pub fn empty() -> Self {
         Self {
             parsers: Vec::new(),
         }
     }
 
+    /// Add a manifest parser.
     pub fn with(mut self, p: impl ManifestParser + 'static) -> Self {
         self.parsers.push(Box::new(p));
         self
@@ -64,6 +66,7 @@ impl ManifestRegistry {
         R.get_or_init(ManifestRegistry::default)
     }
 
+    /// File names the registered parsers look for.
     pub fn markers(&self) -> Vec<&'static str> {
         self.parsers.iter().map(|p| p.marker()).collect()
     }
@@ -77,6 +80,7 @@ impl ManifestRegistry {
     }
 }
 
+/// `package.json` (name and dependencies).
 pub struct NodeManifest;
 impl ManifestParser for NodeManifest {
     fn marker(&self) -> &'static str {
@@ -87,6 +91,7 @@ impl ManifestParser for NodeManifest {
     }
 }
 
+/// `Cargo.toml` (package or workspace).
 pub struct CargoManifest;
 impl ManifestParser for CargoManifest {
     fn marker(&self) -> &'static str {
@@ -97,6 +102,7 @@ impl ManifestParser for CargoManifest {
     }
 }
 
+/// `pyproject.toml` (PEP 621 and Poetry).
 pub struct PyProjectManifest;
 impl ManifestParser for PyProjectManifest {
     fn marker(&self) -> &'static str {
@@ -110,6 +116,7 @@ impl ManifestParser for PyProjectManifest {
     }
 }
 
+/// `go.mod` (module path).
 pub struct GoModManifest;
 impl ManifestParser for GoModManifest {
     fn marker(&self) -> &'static str {
@@ -125,6 +132,7 @@ impl ManifestParser for GoModManifest {
     }
 }
 
+/// `composer.json` (PHP).
 pub struct ComposerManifest;
 impl ManifestParser for ComposerManifest {
     fn marker(&self) -> &'static str {

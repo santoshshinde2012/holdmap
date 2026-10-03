@@ -9,6 +9,7 @@ use std::path::Path;
 pub trait WorkspaceMarker: Send + Sync {
     /// Kind label shown to users, e.g. `pnpm`, `turbo`, `compose`.
     fn kind(&self) -> &'static str;
+    /// True when `dir` is the root of this kind of workspace.
     fn matches(&self, dir: &Path) -> bool;
 }
 

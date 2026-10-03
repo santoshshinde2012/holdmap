@@ -10,6 +10,7 @@ use crate::model::RawSocket;
 use std::io;
 use std::mem::MaybeUninit;
 
+/// Every TCP and UDP socket with its owning PIDs, from libproc (via `netstat2`).
 pub fn list_sockets() -> io::Result<Vec<RawSocket>> {
     super::netstat_backend::list_sockets()
 }
@@ -35,6 +36,8 @@ fn bsdinfo(pid: u32) -> Option<libc::proc_bsdinfo> {
     }
 }
 
+/// Process start time in microseconds (`proc_pidinfo`), unique per PID incarnation. Falls back
+/// to sysinfo's start time for other users' processes that libproc won't describe.
 pub fn start_token(pid: u32) -> Option<u64> {
     if let Some(info) = bsdinfo(pid) {
         return Some(info.pbi_start_tvsec * 1_000_000 + info.pbi_start_tvusec);
@@ -50,11 +53,14 @@ pub fn start_token(pid: u32) -> Option<u64> {
     crate::process::sysinfo_start_time(pid)
 }
 
+/// True when the process is a zombie (exited, not yet reaped).
 pub fn is_zombie(pid: u32) -> bool {
     // SZOMB == 5 in <sys/proc.h>.
     bsdinfo(pid).is_some_and(|i| i.pbi_status == 5)
 }
 
+/// Send `sig` to `pid` after checking that its start token still equals `expected_token`, so a
+/// recycled PID is never signalled.
 pub fn signal(pid: u32, expected_token: u64, sig: Sig) -> Result<(), SignalError> {
     if pid == 0 || pid > i32::MAX as u32 {
         return Err(SignalError::Other(format!("invalid pid {pid}")));

@@ -22,7 +22,9 @@ use std::path::{Path, PathBuf};
 /// A detected project plus the dependency names used to refine framework detection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectDetails {
+    /// Name, root and branch.
     pub info: ProjectInfo,
+    /// Dependency names, used for framework detection.
     pub deps: Vec<String>,
 }
 
@@ -34,6 +36,7 @@ pub struct ProjectDetector {
 }
 
 impl ProjectDetector {
+    /// A detector with the default registries and the current user's home directory.
     pub fn new() -> Self {
         let home = std::env::var_os("HOME")
             .or_else(|| std::env::var_os("USERPROFILE"))
@@ -41,6 +44,7 @@ impl ProjectDetector {
         Self::with_home(home)
     }
 
+    /// A detector that treats `home` as the upper bound when walking up.
     pub fn with_home(home: Option<PathBuf>) -> Self {
         Self {
             cache: HashMap::new(),
@@ -48,6 +52,7 @@ impl ProjectDetector {
         }
     }
 
+    /// Detect the project containing `cwd` (cached per directory).
     pub fn detect(&mut self, cwd: &Path) -> Option<ProjectDetails> {
         if let Some(hit) = self.cache.get(cwd) {
             return hit.clone();

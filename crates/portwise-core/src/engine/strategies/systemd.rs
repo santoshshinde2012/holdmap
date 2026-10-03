@@ -3,6 +3,7 @@
 use super::{Resolution, ResolveCtx, StopStrategy};
 use crate::model::PortEntry;
 
+/// Stops systemd service and socket units with `systemctl` instead of killing the process.
 pub struct SystemdStrategy;
 
 /// Parse `systemctl list-sockets --no-legend` lines: `LISTEN UNIT ACTIVATES`.

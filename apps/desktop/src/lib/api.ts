@@ -37,7 +37,13 @@ export async function plan(target: string, force: boolean, allowProtected = fals
 export async function stop(target: string, force: boolean, allowProtected = false): Promise<StopReport> {
   if (!isTauri) {
     await delay(700);
-    return mockStop(target);
+    // Browser preview: remember the stop so the "Recently stopped" panel has something to show.
+    const e = MOCK_SNAPSHOT.entries.find((x) => x.port === parseInt(target, 10));
+    const report = mockStop(target);
+    if (e?.process) {
+      mockHistory.unshift({ at_ms: Date.now(), port: e.port, protocol: e.protocol, label: e.label, command: e.process.cmdline, cwd: e.process.cwd, project: e.project?.name ?? null, framework: e.framework?.name ?? null, pid: e.process.pid });
+    }
+    return report;
   }
   return call("stop", { target, force, allowProtected });
 }

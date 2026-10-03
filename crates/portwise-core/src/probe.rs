@@ -40,7 +40,7 @@ fn addrs(port: u16) -> [SocketAddr; 4] {
     ]
 }
 
-/// Can a TCP listener bind `port` on 0.0.0.0, 127.0.0.1, [::] and [::1]?
+/// Can a TCP listener bind `port` on `0.0.0.0`, `127.0.0.1`, `[::]` and `[::1]`?
 pub fn probe_tcp(port: u16) -> ProbeResult {
     let mut result = ProbeResult::Free;
     for a in addrs(port) {

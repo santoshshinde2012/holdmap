@@ -1,6 +1,7 @@
 <script lang="ts">
   // Lives inside <SvelteFlow> so it can reach the viewport: re-fits when `token` changes
   // (new layout or structure) and centres on `focus` when the selection comes from the list.
+  import { untrack } from "svelte";
   import { useSvelteFlow } from "@xyflow/svelte";
   let { token, focus, reduced }: { token: string; focus: { x: number; y: number } | null; reduced: boolean } = $props();
   const flow = useSvelteFlow();
@@ -15,6 +16,10 @@
     return () => { clearTimeout(a); clearTimeout(b); };
   });
   $effect(() => {
-    if (focus) flow.setCenter(focus.x, focus.y, { zoom: flow.getZoom(), duration: reduced ? 0 : 300 });
+    const f = focus;
+    if (!f) return;
+    // Only `focus` drives this effect. Reading the zoom subscribes to the viewport, and with
+    // reduced motion `setCenter` writes it synchronously, so untracked to avoid a re-run loop.
+    untrack(() => flow.setCenter(f.x, f.y, { zoom: flow.getZoom(), duration: reduced ? 0 : 300 }));
   });
 </script>

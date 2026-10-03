@@ -11,16 +11,19 @@ use sysinfo::System;
 
 /// Lists every socket (listening and connected) with the PIDs holding it.
 pub trait SocketProvider: Send + Sync {
+    /// Every socket on the machine.
     fn sockets(&self) -> io::Result<Vec<RawSocket>>;
 }
 
 /// Captures the process table.
 pub trait ProcessProvider: Send + Sync {
+    /// A snapshot of every process.
     fn processes(&self) -> ProcessTable;
 }
 
 /// Published container ports, and whether any runtime answered.
 pub trait ContainerProvider: Send + Sync {
+    /// Container-published host ports, and whether a runtime answered.
     fn published(&self) -> (Vec<PublishedPort>, bool);
 }
 

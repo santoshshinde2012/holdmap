@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! # portwise-mcp
 //!
 //! A dependency-light [Model Context Protocol](https://modelcontextprotocol.io) server over stdio

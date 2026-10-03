@@ -5,18 +5,28 @@ use super::types::{ActionPlan, BlockKind, Blocked, Owner, Risk, Step};
 /// Per-entry resolution result produced by a stop strategy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Resolution {
+    /// Who effectively owns the port.
     pub owner: Owner,
+    /// One-line summary.
     pub headline: String,
+    /// Supporting facts, one per line.
     pub details: Vec<String>,
+    /// What the user should do.
     pub recommendation: String,
+    /// Copy-pasteable commands.
     pub commands: Vec<String>,
+    /// Steps of the stop plan.
     pub steps: Vec<Step>,
+    /// Why the plan is blocked, if it is.
     pub blocked: Option<Blocked>,
+    /// Non-fatal warnings to show with the plan.
     pub warnings: Vec<String>,
+    /// Overall risk of executing the plan.
     pub risk: Risk,
 }
 
 impl Resolution {
+    /// A resolution with an owner and headline and empty everything else.
     pub fn new(owner: Owner, headline: impl Into<String>) -> Self {
         Self {
             owner,
@@ -50,6 +60,7 @@ impl Resolution {
         self
     }
 
+    /// Replace the supporting details.
     pub fn with_details(mut self, details: Vec<String>) -> Self {
         self.details = details;
         self

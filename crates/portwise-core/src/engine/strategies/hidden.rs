@@ -5,6 +5,7 @@ use crate::engine::text::sudo;
 use crate::engine::types::{BlockKind, Owner};
 use crate::model::PortEntry;
 
+/// Explains listeners whose owning process isn't visible to the current user.
 pub struct HiddenOwnerStrategy;
 
 impl StopStrategy for HiddenOwnerStrategy {

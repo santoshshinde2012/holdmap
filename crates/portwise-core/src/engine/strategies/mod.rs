@@ -78,6 +78,7 @@ impl Default for StrategyRegistry {
 }
 
 impl StrategyRegistry {
+    /// A registry with no strategies (for tests and custom setups).
     pub fn empty() -> Self {
         Self {
             strategies: Vec::new(),
@@ -96,10 +97,12 @@ impl StrategyRegistry {
         self
     }
 
+    /// Names of the registered strategies, in priority order.
     pub fn names(&self) -> Vec<&'static str> {
         self.strategies.iter().map(|s| s.name()).collect()
     }
 
+    /// Resolve `entry` with the first strategy that applies.
     pub fn resolve(&self, ctx: &ResolveCtx, entry: &PortEntry, details: &[String]) -> Resolution {
         self.strategies
             .iter()

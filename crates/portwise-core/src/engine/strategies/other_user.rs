@@ -5,6 +5,7 @@ use crate::engine::text::{is_root, process_details, sudo};
 use crate::engine::types::{BlockKind, Owner};
 use crate::model::PortEntry;
 
+/// Blocks processes owned by another user and explains the elevation needed.
 pub struct OtherUserStrategy;
 
 impl StopStrategy for OtherUserStrategy {

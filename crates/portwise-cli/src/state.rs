@@ -11,11 +11,20 @@ use std::time::{Duration, Instant};
 
 #[derive(clap::Args, Debug)]
 pub struct PinArgs {
+    /// Port number (e.g. 3000 or :3000).
     #[arg(value_parser = crate::parse_port)]
     pub port: u16,
     /// A note shown next to the port.
     #[arg(short, long)]
     pub label: Option<String>,
+}
+
+/// Arguments of `portwise unpin`.
+#[derive(clap::Args, Debug)]
+pub struct UnpinArgs {
+    /// Port number (e.g. 3000 or :3000).
+    #[arg(value_parser = crate::parse_port)]
+    pub port: u16,
 }
 
 #[derive(clap::Args, Debug)]
@@ -26,12 +35,14 @@ pub struct HistoryArgs {
     /// Forget the history.
     #[arg(long)]
     pub clear: bool,
+    /// Machine-readable JSON output.
     #[arg(long)]
     pub json: bool,
 }
 
 #[derive(clap::Args, Debug)]
 pub struct RestartArgs {
+    /// Port number (e.g. 3000 or :3000).
     #[arg(value_parser = crate::parse_port)]
     pub port: u16,
     /// Don't ask before stopping the current owner.
@@ -44,6 +55,7 @@ pub struct RestartArgs {
 
 #[derive(clap::Args, Debug)]
 pub struct OpenArgs {
+    /// Port number (e.g. 3000 or :3000).
     #[arg(value_parser = crate::parse_port)]
     pub port: u16,
     /// Print the URL instead of opening it.
