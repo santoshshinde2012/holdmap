@@ -205,3 +205,36 @@ jobs:
         if: env.TAG != ''
         shell: bash
         run: gh release upload "$TAG" "${{ steps.files.outputs.sum }}" --clobber --repo "$GITHUB_REPOSITORY"
+
+  notes:
+    # tauri-action rewrites the existing release with an empty body; put dist's notes back.
+    needs: [plan, build]
+    if: needs.plan.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Restore the release notes from dist-manifest.json
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern dist-manifest.json --dir "$RUNNER_TEMP"
+          jq -r '.announcement_github_body // ""' "$RUNNER_TEMP/dist-manifest.json" > "$RUNNER_TEMP/notes.md"
+          title=$(jq -r '.announcement_title // empty' "$RUNNER_TEMP/dist-manifest.json")
+          [ -s "$RUNNER_TEMP/notes.md" ] || { echo "::warning::dist-manifest.json has no release notes"; exit 0; }
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+          {
+            printf '\n## Install the desktop app\n\n| File | Checksums |\n|--------|-----------|\n'
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' \
+              | grep -E '\.(dmg|msi|exe|AppImage|deb|rpm)$' | sort | while read -r f; do
+                  case "$f" in
+                    *aarch64.dmg) sum=macos-arm64 ;; *.dmg) sum=macos-x64 ;;
+                    *.msi|*.exe) sum=windows-x64 ;; *) sum=linux-x64 ;;
+                  esac
+                  echo "| [$f]($base/$f) | [portwise-desktop-$sum.sha256]($base/portwise-desktop-$sum.sha256) |"
+                done
+            # shellcheck disable=SC2016 # literal backticks for markdown
+            printf '\nThe installers have build-provenance attestations too (`gh attestation verify <file> --repo %s`).\n' "$GITHUB_REPOSITORY"
+          } >> "$RUNNER_TEMP/notes.md"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md" ${title:+--title "$title"}
