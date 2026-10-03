@@ -1,5 +1,6 @@
 //! TUI state and key handling. Scans and stops run on background threads so the UI never blocks.
 
+use super::graph::GraphView;
 use portwise_core::*;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use ratatui::widgets::TableState;
@@ -47,6 +48,13 @@ pub enum ProtoFilter {
     Udp,
 }
 
+/// Top-level tab: the port table or the service graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tab {
+    Ports,
+    Graph,
+}
+
 pub enum Modal {
     None,
     Confirm { plan: ActionPlan, headline: String },
@@ -81,6 +89,8 @@ pub struct App {
     pub sort: Sort,
     pub reverse: bool,
     pub modal: Modal,
+    pub tab: Tab,
+    pub graph: GraphView,
     pub toast: Option<Toast>,
     pub busy: Option<String>,
     pub stop_log: Vec<String>,
@@ -113,6 +123,8 @@ impl App {
             sort: Sort::Port,
             reverse: false,
             modal: Modal::None,
+            tab: Tab::Ports,
+            graph: GraphView::new(),
             toast: None,
             busy: None,
             stop_log: Vec::new(),
@@ -160,6 +172,7 @@ impl App {
                             self.engine = Some(Arc::new(e));
                             self.explain_cache.clear();
                             self.rebuild();
+                            self.rebuild_graph();
                         }
                         Err(e) => self.error = Some(e),
                     }
@@ -271,6 +284,94 @@ impl App {
         });
     }
 
+    /// Recompute the topology from the current scan (dev services unless "all" is on).
+    pub fn rebuild_graph(&mut self) {
+        let Some(engine) = &self.engine else { return };
+        if let Ok(g) = crate::graph::build(engine, self.show_all, None, true) {
+            self.graph.set_graph(g);
+        }
+    }
+
+    /// Switch tabs, carrying the selection across (entry ↔ node).
+    pub fn toggle_tab(&mut self) {
+        match self.tab {
+            Tab::Ports => {
+                if let Some(id) = self.selected().map(|e| e.id.clone()) {
+                    self.graph.select_entry(&id);
+                }
+                self.tab = Tab::Graph;
+            }
+            Tab::Graph => {
+                self.sync_from_graph();
+                self.tab = Tab::Ports;
+            }
+        }
+    }
+
+    /// Point the port table at the selected graph node's first port.
+    fn sync_from_graph(&mut self) {
+        let Some(entry) = self
+            .graph
+            .selected_node()
+            .and_then(|n| n.ports.first())
+            .map(|p| p.entry_id.clone())
+        else {
+            return;
+        };
+        if !self.rows.iter().any(|r| r.id == entry) && !self.query.is_empty() {
+            self.query.clear();
+            self.rebuild();
+        }
+        if let Some(i) = self.rows.iter().position(|r| r.id == entry) {
+            self.state.select(Some(i));
+        }
+    }
+
+    /// Ask to stop every service in the selected node's cluster, in dependency order.
+    fn request_cluster_stop(&mut self) {
+        let Some(name) = self.graph.selected_cluster().map(str::to_string) else {
+            self.toast = Some(Toast {
+                text: "This service isn't part of a cluster".into(),
+                ok: false,
+                at: Instant::now(),
+            });
+            return;
+        };
+        let Some(engine) = self.engine.clone() else {
+            return;
+        };
+        let plan = engine.plan(&Target::Cluster(name), &StopOptions::default());
+        self.modal = Modal::Confirm {
+            headline: plan.summary.clone(),
+            plan,
+        };
+    }
+
+    fn on_graph_key(&mut self, k: KeyEvent) -> bool {
+        match k.code {
+            KeyCode::Down | KeyCode::Char('j') => self.graph.move_by(1),
+            KeyCode::Up | KeyCode::Char('k') => self.graph.move_by(-1),
+            KeyCode::PageDown => self.graph.move_by(10),
+            KeyCode::PageUp => self.graph.move_by(-10),
+            KeyCode::Home | KeyCode::Char('g') => self.graph.move_by(-10_000),
+            KeyCode::End | KeyCode::Char('G') => self.graph.move_by(10_000),
+            KeyCode::Char('C') => self.request_cluster_stop(),
+            KeyCode::Char('h') => self.graph.toggle_external(),
+            KeyCode::Char('x')
+            | KeyCode::Char('X')
+            | KeyCode::Char('e')
+            | KeyCode::Enter
+            | KeyCode::Char('o')
+            | KeyCode::Char('c') => {
+                // Act on the node's port through the regular port actions.
+                self.sync_from_graph();
+                return false;
+            }
+            _ => return false,
+        }
+        true
+    }
+
     pub fn selected(&self) -> Option<&PortEntry> {
         self.state.selected().and_then(|i| self.rows.get(i))
     }
@@ -332,10 +433,15 @@ impl App {
         self.busy = Some(format!("Stopping {}…", plan.target));
         self.stop_log.clear();
         let tx = self.tx.clone();
+        let engine = self.engine.clone();
         std::thread::spawn(move || {
             let report = execute(&plan, &mut |l| {
                 let _ = tx.send(Msg::StopLine(l.to_string()));
             });
+            if let Some(e) = engine {
+                // Remember what was stopped so `portwise restart` / history can bring it back.
+                crate::state::record(&e, &plan, &report);
+            }
             let _ = tx.send(Msg::Stopped(Box::new(report)));
         });
     }
@@ -384,7 +490,10 @@ impl App {
     }
 
     pub fn on_mouse(&mut self, m: MouseEvent) {
+        let graph = self.tab == Tab::Graph;
         match m.kind {
+            MouseEventKind::ScrollDown if graph => self.graph.move_by(1),
+            MouseEventKind::ScrollUp if graph => self.graph.move_by(-1),
             MouseEventKind::ScrollDown => self.move_by(1),
             MouseEventKind::ScrollUp => self.move_by(-1),
             _ => {}
@@ -448,6 +557,13 @@ impl App {
             self.rebuild();
             return;
         }
+        if matches!(k.code, KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('v')) {
+            self.toggle_tab();
+            return;
+        }
+        if self.tab == Tab::Graph && self.on_graph_key(k) {
+            return;
+        }
         match k.code {
             KeyCode::Char('q') => self.quit = true,
             KeyCode::Esc => {
@@ -484,6 +600,12 @@ impl App {
             KeyCode::Char('d') => {
                 self.dev_only = !self.dev_only;
                 self.rebuild();
+            }
+            KeyCode::Char('C') => {
+                if let Some(id) = self.selected().map(|e| e.id.clone()) {
+                    self.graph.select_entry(&id);
+                    self.request_cluster_stop();
+                }
             }
             KeyCode::Char('m') => {
                 self.mine_only = !self.mine_only;

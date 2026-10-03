@@ -1,6 +1,6 @@
 //! TUI rendering.
 
-use super::app::{App, Modal, ProtoFilter};
+use super::app::{App, Modal, ProtoFilter, Tab};
 use crate::render::{address_label, what_label};
 use portwise_core::util::{human_bytes, human_duration, now_secs};
 use portwise_core::*;
@@ -13,8 +13,8 @@ use ratatui::widgets::{
 };
 use ratatui::Frame;
 
-const ACCENT: Color = Color::Cyan;
-const MUTED: Color = Color::DarkGray;
+pub(super) const ACCENT: Color = Color::Cyan;
+pub(super) const MUTED: Color = Color::DarkGray;
 const SPIN: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 fn category_color(e: &PortEntry) -> Color {
@@ -54,8 +54,12 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             Layout::vertical([Constraint::Percentage(55), Constraint::Percentage(45)]).areas(body);
         (l, d)
     };
-    draw_table(f, app, list_area);
-    draw_details(f, app, detail_area);
+    if app.tab == Tab::Graph {
+        super::graph_ui::draw_graph(f, app, list_area, detail_area);
+    } else {
+        draw_table(f, app, list_area);
+        draw_details(f, app, detail_area);
+    }
     draw_footer(f, app, footer);
     match &app.modal {
         Modal::Confirm { .. } => draw_confirm(f, app),
@@ -83,6 +87,9 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
             Style::new().fg(Color::Black).bg(ACCENT).bold(),
         ),
         Span::raw(" "),
+        chip("Ports", app.tab == Tab::Ports),
+        chip("Graph", app.tab == Tab::Graph),
+        Span::styled(" ⇥  ", Style::new().fg(MUTED)),
     ];
     if let Some(e) = &app.engine {
         let s = e.snapshot();
@@ -334,7 +341,7 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
     );
 }
 
-fn section(name: &str) -> Line<'static> {
+pub(super) fn section(name: &str) -> Line<'static> {
     Line::from(vec![
         Span::styled(
             format!("{} ", name.to_uppercase()),
@@ -344,7 +351,7 @@ fn section(name: &str) -> Line<'static> {
     ])
 }
 
-fn kv(k: &str, v: impl Into<String>) -> Line<'static> {
+pub(super) fn kv(k: &str, v: impl Into<String>) -> Line<'static> {
     Line::from(vec![
         Span::styled(format!("{k:>9}  "), Style::new().fg(MUTED)),
         Span::raw(v.into()),
@@ -518,7 +525,7 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
     );
 }
 
-fn key(k: &str) -> Span<'static> {
+pub(super) fn key(k: &str) -> Span<'static> {
     Span::styled(
         format!(" {k} "),
         Style::new()
@@ -546,9 +553,21 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
             &[("Enter", "keep filter"), ("Esc", "clear")],
             &[("↑↓", "move")],
         ]
+    } else if app.tab == Tab::Graph {
+        &[
+            &[("↑↓", "move"), ("Tab", "ports")],
+            &[("x", "stop"), ("C", "stop cluster"), ("o", "open")],
+            &[("h", "external"), ("a", "all")],
+            &[("?", "help"), ("q", "quit")],
+        ]
     } else {
         &[
-            &[("↑↓", "move"), ("/", "search"), ("e", "explain")],
+            &[
+                ("↑↓", "move"),
+                ("/", "search"),
+                ("e", "explain"),
+                ("Tab", "graph"),
+            ],
             &[("x", "stop"), ("X", "kill"), ("o", "open")],
             &[("s", "sort"), ("t", "proto"), ("d", "dev"), ("a", "all")],
             &[("?", "help"), ("q", "quit")],
@@ -584,8 +603,6 @@ fn draw_confirm(f: &mut Frame, app: &App) {
     let Modal::Confirm { plan, headline } = &app.modal else {
         return;
     };
-    let area = centered(f.area(), 84, 18);
-    f.render_widget(Clear, area);
     let blocked = plan.is_blocked();
     let title = if blocked {
         " Can't stop this safely "
@@ -624,6 +641,9 @@ fn draw_confirm(f: &mut Frame, app: &App) {
             risk,
         ]));
     }
+    let height = (lines.len() as u16 + 6).clamp(18, f.area().height.saturating_sub(2));
+    let area = centered(f.area(), 92, height);
+    f.render_widget(Clear, area);
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(color))
@@ -702,7 +722,7 @@ fn draw_explain(f: &mut Frame, app: &mut App) {
 }
 
 fn draw_help(f: &mut Frame) {
-    let area = centered(f.area(), 84, 24);
+    let area = centered(f.area(), 84, 27);
     f.render_widget(Clear, area);
     let rows = [
         ("↑ ↓ / j k", "Move selection (PgUp/PgDn, g/G)"),
@@ -713,6 +733,12 @@ fn draw_help(f: &mut Frame) {
             "Stop gracefully (SIGTERM → SIGKILL) with confirmation",
         ),
         ("X", "Force kill (SIGKILL) with confirmation"),
+        ("Tab / v", "Switch Ports ↔ Graph (selection follows)"),
+        (
+            "C",
+            "Stop the selected service's cluster in dependency order",
+        ),
+        ("h", "Graph: show/hide external hosts"),
         ("o", "Open http://localhost:<port> in the browser"),
         ("c", "Copy URL to clipboard (OSC 52)"),
         ("s / S", "Cycle sort key / reverse"),
