@@ -1,0 +1,17 @@
+/* Bundled typefaces (shipped with the app, no network). Subset to Latin + Latin Extended, general
+ * punctuation and the UI symbols portwise uses (arrows, ⌘ ⌥ ⇧ ⌫ ↵, ✓, box drawing), all OpenType
+ * features and the variable axes kept. Licences: assets/fonts/*-LICENSE.txt / *-OFL.txt (SIL OFL 1.1). */
+@font-face {
+  font-family: "Inter Variable";
+  src: url("./assets/fonts/InterVariable.woff2") format("woff2-variations"), url("./assets/fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono Variable";
+  src: url("./assets/fonts/JetBrainsMonoVariable.woff2") format("woff2-variations"), url("./assets/fonts/JetBrainsMonoVariable.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
