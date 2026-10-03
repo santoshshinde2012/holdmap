@@ -331,12 +331,18 @@ pub enum Target {
     Name(String),
     /// A topology cluster by id or name (`cluster:acme-shop`), stopped in dependency order.
     Cluster(String),
+    /// Every dev server the current user owns (`dev:all`), except protected processes and
+    /// containers.
+    AllDev,
 }
 
 impl Target {
-    /// Parse "3000", ":3000", "pid:1234", "cluster:NAME" or a process name.
+    /// Parse "3000", ":3000", "pid:1234", "cluster:NAME", "dev:all" or a process name.
     pub fn parse(s: &str) -> Target {
         let t = s.trim();
+        if t == "dev:all" {
+            return Target::AllDev;
+        }
         if let Some(c) = t.strip_prefix("cluster:").filter(|c| !c.is_empty()) {
             return Target::Cluster(c.to_string());
         }
@@ -360,6 +366,7 @@ impl std::fmt::Display for Target {
             Target::Pid(p) => write!(f, "PID {p}"),
             Target::Name(n) => write!(f, "\"{n}\""),
             Target::Cluster(c) => write!(f, "cluster {c}"),
+            Target::AllDev => write!(f, "all dev servers"),
         }
     }
 }

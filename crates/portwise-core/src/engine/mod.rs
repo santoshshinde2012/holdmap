@@ -10,6 +10,7 @@
 
 mod cluster;
 mod context;
+mod dev;
 mod resolution;
 pub mod strategies;
 mod text;
@@ -312,6 +313,7 @@ impl Engine {
                 plan
             }
             Target::Cluster(c) => self.plan_cluster(c, opts),
+            Target::AllDev => self.plan_all_dev(opts),
         }
     }
 

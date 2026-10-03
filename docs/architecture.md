@@ -208,5 +208,10 @@ doesn't move between refreshes.
   `ManifestRegistry`, `WorkspaceMarker`s and the `exporter(name)` factory.
 - `Engine` and `Scanner` take trait objects, so tests inject static providers and fixture tables.
   Only `Scanner::system()` (used by `Engine::new`) touches the real OS.
+- Project and shell features stay out of the engine: `stack` parses and validates
+  `.portwise.toml` and answers "is this listener ours?" (pure data, no I/O beyond reading the
+  file), `hint` reads a command line for the ports it would bind, and `http` probes a port with a
+  bounded `GET /`. The CLI composes them with the engine's normal plan → confirm → execute path,
+  so `down`, `up --replace` and `stop --all-dev` get the same protection checks as `stop`.
 - `docs/cli.md`, the man pages and the shell completions are all generated from the clap
   definitions; `cargo test` fails when `docs/cli.md` is stale.

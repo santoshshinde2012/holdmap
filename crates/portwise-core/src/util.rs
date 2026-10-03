@@ -150,6 +150,9 @@ pub fn open_url(url: &str) -> std::io::Result<()> {
 pub fn local_hms(epoch_secs: u64) -> String {
     #[cfg(unix)]
     {
+        // musl deprecates the `time_t` alias (it is moving to 64 bits); it is still exactly the
+        // type `localtime_r` takes on every libc.
+        #[allow(deprecated)]
         let t = epoch_secs as libc::time_t;
         // SAFETY: localtime_r writes into the provided, properly sized `tm`.
         let mut tm: libc::tm = unsafe { std::mem::zeroed() };
@@ -159,6 +162,54 @@ pub fn local_hms(epoch_secs: u64) -> String {
     }
     let s = epoch_secs % 86_400;
     format!("{:02}:{:02}:{:02}Z", s / 3600, (s / 60) % 60, s % 60)
+}
+
+/// A [`std::process::Command`] that runs `line` through the platform shell (`sh -c` on Unix,
+/// `cmd /C` on Windows), so stack files can use pipes, `&&` and quoting.
+pub fn shell_command(line: &str) -> std::process::Command {
+    #[cfg(windows)]
+    {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", line]);
+        c
+    }
+    #[cfg(not(windows))]
+    {
+        let mut c = std::process::Command::new("sh");
+        c.args(["-c", line]);
+        c
+    }
+}
+
+/// Spawn `cmd` detached from the caller: stdin closed, stdout and stderr written to `log`
+/// (created or truncated), and on Unix in its own process group so it survives the launching
+/// terminal's Ctrl-C and portwise exiting.
+pub fn spawn_detached(
+    cmd: &mut std::process::Command,
+    log: &std::path::Path,
+) -> std::io::Result<std::process::Child> {
+    use std::process::Stdio;
+    if let Some(dir) = log.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let out = std::fs::File::create(log)?;
+    let err = out.try_clone()?;
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::from(out))
+        .stderr(Stdio::from(err));
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+    }
+    cmd.spawn()
 }
 
 #[cfg(test)]

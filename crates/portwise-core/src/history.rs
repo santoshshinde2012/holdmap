@@ -7,7 +7,7 @@ use crate::scan::Scan;
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// One stopped port, remembered so it can be restarted (`history.jsonl`).
@@ -111,25 +111,13 @@ pub fn restart(entry: &HistoryEntry, log_dir: &Path) -> io::Result<(u32, PathBuf
         .command
         .split_first()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no command recorded"))?;
-    std::fs::create_dir_all(log_dir)?;
     let log = log_dir.join(format!("{}-{}.log", entry.port, crate::util::now_ms()));
-    let out = std::fs::File::create(&log)?;
-    let err = out.try_clone()?;
     let mut cmd = Command::new(prog);
-    cmd.args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::from(out))
-        .stderr(Stdio::from(err));
+    cmd.args(args);
     if let Some(cwd) = entry.cwd.as_ref().filter(|c| c.is_dir()) {
         cmd.current_dir(cwd);
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        // Own process group: survives portwise exiting and Ctrl-C in the launching terminal.
-        cmd.process_group(0);
-    }
-    let mut child = cmd.spawn()?;
+    let mut child = crate::util::spawn_detached(&mut cmd, &log)?;
     let pid = child.id();
     // Reap it when it exits so long-lived frontends don't accumulate zombies.
     std::thread::spawn(move || {

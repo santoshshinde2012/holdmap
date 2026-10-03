@@ -63,15 +63,16 @@ pub fn what_label(e: &PortEntry) -> String {
 }
 
 pub fn list_table(entries: &[&PortEntry], wide: bool, all_states: bool) -> String {
-    list_table_with(entries, wide, all_states, &[])
+    list_table_with(entries, wide, all_states, &[], None)
 }
 
-/// [`list_table`] with pinned ports marked `★`.
+/// [`list_table`] with pinned ports marked `★`, and an HTTP column when `http` is given.
 pub fn list_table_with(
     entries: &[&PortEntry],
     wide: bool,
     all_states: bool,
     pins: &[u16],
+    http: Option<&std::collections::BTreeMap<u16, portwise_core::http::HttpInfo>>,
 ) -> String {
     let mut cols = vec![rcol("PORT"), col("PROTO")];
     if all_states {
@@ -94,6 +95,9 @@ pub fn list_table_with(
     }
     if all_states {
         cols.insert(4, flex("REMOTE", 8));
+    }
+    if http.is_some() {
+        cols.push(flex("HTTP", 10));
     }
     let now = now_secs();
     let rows: Vec<Vec<Cell>> = entries
@@ -161,6 +165,16 @@ pub fn list_table_with(
                     p.map(|p| p.command()).unwrap_or_default(),
                     S::Dim,
                 ));
+            }
+            if let Some(h) = http {
+                let info = (e.protocol == Protocol::Tcp)
+                    .then(|| h.get(&e.port))
+                    .flatten();
+                r.push(match info {
+                    Some(i) if i.healthy() => Cell::new(i.summary(), S::Plain),
+                    Some(i) => Cell::new(i.summary(), S::Yellow),
+                    None => Cell::new("", S::Dim),
+                });
             }
             r
         })

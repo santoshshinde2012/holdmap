@@ -45,6 +45,7 @@ portwise answers the questions you actually have:
 - [Install](#install)
 - [Quick start](#quick-start)
 - [CLI](#cli)
+- [Project stacks and the shell hook](#project-stacks-and-the-shell-hook)
 - [TUI](#tui)
 - [Desktop and tray app](#desktop-and-tray-app)
 - [MCP server](#mcp-server)
@@ -83,6 +84,10 @@ brew install santoshshinde2012/tap/portwise
 powershell -c "irm https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-installer.ps1 | iex"
 ```
 
+Each release also carries the desktop installers (`.dmg`, `.msi`, `.exe`, `.AppImage`, `.deb`,
+`.rpm`), SHA-256 checksums, an SBOM and build provenance:
+`gh attestation verify <file> -R santoshshinde2012/portwise`.
+
 Shell completions and man pages: `portwise completions zsh` (also bash, fish, powershell, elvish)
 and `portwise man --out-dir DIR`.
 
@@ -105,16 +110,21 @@ highlights:
 | Command | What it does |
 |---|---|
 | `portwise` | Opens the TUI when run in a terminal (also `portwise tui`) |
-| `portwise list [QUERY]` (alias `ls`) | Listening ports. `--all` every socket, `--dev`, `--mine`, `--exposed`, `--tcp`, `--udp`, `--range 3000-3999`, `--sort memory`, `--wide`, `--json` |
+| `portwise list [QUERY]` (alias `ls`) | Listening ports. `--all` every socket, `--dev`, `--mine`, `--exposed`, `--tcp`, `--udp`, `--range 3000-3999`, `--sort memory`, `--http` (status and page title), `--wide`, `--json` |
 | `portwise inspect 3000` | Everything about a port: owner, process tree, project, plan |
 | `portwise explain 3000` (alias `why`) | Why is 3000 busy, and what should I do? |
 | `portwise stop 3000` | Gracefully stop whatever holds 3000, then check it is free. `--dry-run`, `--yes`, `--timeout 10s`, `--no-tree`, `--allow-protected` |
 | `portwise stop pid:1234 vite` | Stop by PID or process name (also `--pid`, `--name`) |
 | `portwise stop --cluster shop` | Stop a whole cluster, dependents first (also `stop cluster:shop`) |
+| `portwise stop --all-dev` | Stop every dev server of yours in one confirmed plan (protected processes and containers are skipped) |
 | `portwise kill 3000` | Force-kill now (SIGKILL / TerminateProcess), same as `stop --force` |
 | `portwise free-port --near 3000` | Print a free TCP port (`--range`, `--count 3`) |
 | `portwise wait 5432 --timeout 30s` | Wait until something accepts connections (`--free` waits until it's free) |
 | `portwise run -p 3000 -- npm run dev` | Free the port safely, then run the command with `PORT=3000` (`--fallback` picks the next free port instead) |
+| `portwise up [SERVICE…]` | Start the services in `.portwise.toml` in dependency order and wait until each accepts connections (`--replace` stops a conflicting holder first) |
+| `portwise down [SERVICE…]` | Stop the project's services, dependents first (`--dry-run`, `--all`) |
+| `portwise status` | Each service's state, PID and HTTP health; exits `1` unless all are up |
+| `portwise init [SHELL]` | Write a `.portwise.toml` from the dev servers running here, or print the shell hook for zsh, bash, fish or pwsh |
 | `portwise graph` (alias `mesh`) | The service graph as a tree. `--json`, `--dot`, `--mermaid`, `--cluster NAME`, `--no-external`, `--all` |
 | `portwise watch` | Stream new, closed and conflicting listeners (`--json` for NDJSON) |
 | `portwise pin 3000 --label web` | Pin a port: shown first and watched even when free |
@@ -135,6 +145,43 @@ highlights:
 timed out, `2` error, `3` blocked by the safety policy, and `4` needs elevation. Colour follows
 `--color auto|always|never` (or `PORTWISE_COLOR`), `NO_COLOR` and `CLICOLOR_FORCE`. `--no-docker`
 skips the container runtimes. `portwise list | head` doesn't print "broken pipe" errors.
+
+## Project stacks and the shell hook
+
+A `.portwise.toml` at the project root (found by walking up from the current directory) names
+the ports a project uses. `portwise init` writes one from what's running; edit it to add
+commands:
+
+```toml
+name = "shop"
+protect = [5432]                    # `stop` refuses these without --allow-protected
+
+[services.db]
+port = 5432                         # no command: started elsewhere, so up only checks it
+
+[services.api]
+port = 4000
+command = "npm run dev"             # run with PORT set, logs in <config dir>/logs/
+cwd = "api"
+depends_on = ["db"]
+health = "/healthz"                 # shown by `portwise status`
+
+[services.web]
+port = 3000
+command = "npm run dev"
+cwd = "web"
+env = { API_URL = "http://localhost:4000" }
+depends_on = ["api"]
+```
+
+`portwise up` starts what isn't running, `portwise status` shows the stack and `portwise down`
+stops it. Only processes started from the project (or its Compose project) count as its own; a
+different program on one of its ports is reported as a conflict, never stopped silently.
+
+Add `eval "$(portwise init zsh)"` to `~/.zshrc` (or `bash`, `fish | source`,
+`portwise init pwsh | Out-String | Invoke-Expression`). When a dev-server command fails because
+its port is taken, the hook prints who holds it and the command to free it. It never stops
+anything itself.
 
 ## TUI
 
