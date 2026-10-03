@@ -29,6 +29,14 @@ pub struct Config {
     pub notify_dev_only: bool,
     /// How many stopped ports to remember.
     pub history_limit: usize,
+    /// Foreground re-scan interval for the desktop app and its watcher, in seconds
+    /// (the background cadence is derived from it). Clamped to [`Config::SCAN_INTERVAL`].
+    pub scan_interval_secs: u64,
+    /// Global "show portwise" shortcut preset: `alt-p` (⌘⌥P / Ctrl+Alt+P), `shift-p`,
+    /// `shift-space` or `off`.
+    pub hotkey: String,
+    /// Recently used SSH hosts for the desktop remote view, newest first.
+    pub recent_hosts: Vec<String>,
 }
 
 impl Default for Config {
@@ -38,11 +46,60 @@ impl Default for Config {
             notify: true,
             notify_dev_only: true,
             history_limit: 200,
+            scan_interval_secs: 4,
+            hotkey: "alt-p".into(),
+            recent_hosts: Vec::new(),
         }
     }
 }
 
 impl Config {
+    /// Allowed foreground scan interval, in seconds.
+    pub const SCAN_INTERVAL: std::ops::RangeInclusive<u64> = 1..=60;
+    /// Allowed history length.
+    pub const HISTORY_LIMIT: std::ops::RangeInclusive<usize> = 10..=5000;
+    /// How many recent SSH hosts are remembered.
+    pub const RECENT_HOSTS: usize = 6;
+
+    /// Foreground scan interval, clamped to the allowed range.
+    pub fn scan_interval(&self) -> std::time::Duration {
+        let (lo, hi) = (*Self::SCAN_INTERVAL.start(), *Self::SCAN_INTERVAL.end());
+        std::time::Duration::from_secs(self.scan_interval_secs.clamp(lo, hi))
+    }
+
+    /// Background (window hidden) interval: 2.5× the foreground one, at least 10 s.
+    pub fn background_interval(&self) -> std::time::Duration {
+        (self.scan_interval() * 5 / 2).max(std::time::Duration::from_secs(10))
+    }
+
+    /// Pin `port` (or update its label). An empty label is stored as `None`.
+    pub fn set_pin(&mut self, port: u16, label: Option<String>) {
+        let label = label
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty());
+        match self.pins.iter_mut().find(|p| p.port == port) {
+            Some(p) => p.label = label,
+            None => {
+                self.pins.push(Pin { port, label });
+                self.pins.sort_by_key(|p| p.port);
+            }
+        }
+    }
+
+    /// Remove a pin; returns whether it existed.
+    pub fn unpin(&mut self, port: u16) -> bool {
+        let before = self.pins.len();
+        self.pins.retain(|p| p.port != port);
+        before != self.pins.len()
+    }
+
+    /// Move `host` to the front of the recent-hosts list.
+    pub fn remember_host(&mut self, host: &str) {
+        self.recent_hosts.retain(|h| h != host);
+        self.recent_hosts.insert(0, host.to_string());
+        self.recent_hosts.truncate(Self::RECENT_HOSTS);
+    }
+
     pub fn is_pinned(&self, port: u16) -> bool {
         self.pins.iter().any(|p| p.port == port)
     }
@@ -251,5 +308,51 @@ mod tests {
         s.clear_history().unwrap();
         assert!(s.history(10).is_empty());
         s.clear_history().unwrap();
+    }
+
+    #[test]
+    fn preferences_are_clamped_and_old_configs_load() {
+        let old: Config = serde_json::from_str(r#"{"pins":[],"notify":false}"#).unwrap();
+        assert_eq!(
+            old.scan_interval_secs, 4,
+            "missing fields fall back to defaults"
+        );
+        assert_eq!(old.hotkey, "alt-p");
+        assert!(!old.notify);
+        let mut c = Config {
+            scan_interval_secs: 0,
+            ..Config::default()
+        };
+        assert_eq!(c.scan_interval().as_secs(), 1);
+        assert_eq!(c.background_interval().as_secs(), 10);
+        c.scan_interval_secs = 600;
+        assert_eq!(c.scan_interval().as_secs(), 60);
+        assert_eq!(c.background_interval().as_secs(), 150);
+    }
+
+    #[test]
+    fn set_pin_upserts_and_unpin_removes() {
+        let mut c = Config::default();
+        c.set_pin(5173, Some("  docs ".into()));
+        c.set_pin(3000, None);
+        assert_eq!(
+            c.pins.iter().map(|p| p.port).collect::<Vec<_>>(),
+            [3000, 5173]
+        );
+        assert_eq!(c.pins[1].label.as_deref(), Some("docs"));
+        c.set_pin(5173, Some("   ".into()));
+        assert_eq!(c.pins.len(), 2, "updating doesn't duplicate");
+        assert_eq!(c.pins[1].label, None, "blank label clears it");
+        assert!(c.unpin(3000));
+        assert!(!c.unpin(3000));
+    }
+
+    #[test]
+    fn recent_hosts_are_deduplicated_and_capped() {
+        let mut c = Config::default();
+        for h in ["a", "b", "c", "a", "d", "e", "f", "g"] {
+            c.remember_host(h);
+        }
+        assert_eq!(c.recent_hosts, ["g", "f", "e", "d", "a", "c"]);
     }
 }

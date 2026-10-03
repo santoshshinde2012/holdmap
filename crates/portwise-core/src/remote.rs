@@ -21,6 +21,92 @@ pub trait RemoteRunner {
     fn run(&self, script: &str) -> io::Result<String>;
 }
 
+/// Validate an SSH destination typed by a user: `host`, `user@host`, `host:port`,
+/// `user@host:port`, an `~/.ssh/config` alias, or a bracketed IPv6 literal. Anything that could
+/// be read as an ssh *option* (a leading `-`) or contains whitespace / shell metacharacters is
+/// rejected. Returns a user-facing message on failure.
+pub fn validate_host(input: &str) -> Result<(), String> {
+    let h = input.trim();
+    if h.is_empty() {
+        return Err("Enter a host, like devbox or user@10.0.0.5".into());
+    }
+    if h.len() > 255 {
+        return Err("That host name is too long".into());
+    }
+    if h.starts_with('-') {
+        return Err("A host can't start with “-”".into());
+    }
+    let (user, rest) = match h.rsplit_once('@') {
+        Some((u, r)) => (Some(u), r),
+        None => (None, h),
+    };
+    if let Some(u) = user {
+        if u.is_empty()
+            || !u
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))
+        {
+            return Err("The user name before “@” has unsupported characters".into());
+        }
+    }
+    let (host, port) = if let Some(r) = rest.strip_prefix('[') {
+        let (v6, tail) = r.split_once(']').ok_or("Close the IPv6 address with “]”")?;
+        if v6.parse::<std::net::Ipv6Addr>().is_err() {
+            return Err("That isn't a valid IPv6 address".into());
+        }
+        (v6, tail.strip_prefix(':'))
+    } else {
+        match rest.rsplit_once(':') {
+            Some((h, p)) => (h, Some(p)),
+            None => (rest, None),
+        }
+    };
+    if let Some(p) = port {
+        match p.parse::<u16>() {
+            Ok(n) if n > 0 => {}
+            _ => return Err("The SSH port after “:” must be a number from 1 to 65535".into()),
+        }
+    }
+    if host.is_empty() {
+        return Err("Enter a host name after “@”".into());
+    }
+    if !rest.starts_with('[')
+        && (host.starts_with('-')
+            || !host
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || ".-_".contains(c)))
+    {
+        return Err("Host names may only contain letters, digits, “.”, “-” and “_”".into());
+    }
+    Ok(())
+}
+
+/// Split a validated destination into the `ssh` arguments (`-p PORT` and `user@host`).
+pub fn ssh_destination(input: &str) -> (Option<u16>, String) {
+    let h = input.trim();
+    let (user, rest) = match h.rsplit_once('@') {
+        Some((u, r)) => (Some(u), r),
+        None => (None, h),
+    };
+    let (host, port) = if let Some(r) = rest.strip_prefix('[') {
+        let (v6, tail) = r.split_once(']').unwrap_or((r, ""));
+        (
+            v6.to_string(),
+            tail.strip_prefix(':').and_then(|p| p.parse().ok()),
+        )
+    } else {
+        match rest.rsplit_once(':') {
+            Some((h, p)) if p.parse::<u16>().is_ok() => (h.to_string(), p.parse().ok()),
+            _ => (rest.to_string(), None),
+        }
+    };
+    let dest = match user {
+        Some(u) => format!("{u}@{host}"),
+        None => host,
+    };
+    (port, dest)
+}
+
 /// `ssh -o BatchMode=yes HOST sh -c SCRIPT`.
 pub struct SshRunner {
     pub host: String,
@@ -45,20 +131,18 @@ impl RemoteRunner for SshRunner {
         format!("ssh {}", self.host)
     }
     fn run(&self, script: &str) -> io::Result<String> {
+        validate_host(&self.host).map_err(io::Error::other)?;
         let remote = format!("sh -c {}", sh_quote(script));
-        let out = crate::util::run_with_timeout(
-            "ssh",
-            &[
-                "-o",
-                "BatchMode=yes",
-                "-o",
-                "ConnectTimeout=10",
-                &self.host,
-                &remote,
-            ],
-            self.timeout,
-        )
-        .ok_or_else(|| io::Error::other(format!("ssh {} failed or timed out", self.host)))?;
+        let (port, dest) = ssh_destination(&self.host);
+        let port = port.map(|p| p.to_string());
+        let mut args = vec!["-o", "BatchMode=yes", "-o", "ConnectTimeout=10"];
+        if let Some(p) = &port {
+            args.extend(["-p", p.as_str()]);
+        }
+        // `--` ends option parsing, so the destination can never be read as an option.
+        args.extend(["--", dest.as_str(), remote.as_str()]);
+        let out = crate::util::run_with_timeout("ssh", &args, self.timeout)
+            .ok_or_else(|| io::Error::other(format!("ssh {} failed or timed out", self.host)))?;
         if out.stdout.trim().is_empty() {
             return Err(io::Error::other(format!(
                 "ssh {} returned nothing{}",
@@ -256,6 +340,59 @@ pub fn parse_ps(text: &str) -> ProcessTable {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn host_validation_accepts_real_destinations() {
+        for ok in [
+            "devbox",
+            "user@devbox",
+            "dev.example.com",
+            "me@10.0.0.5:2222",
+            "[::1]",
+            "u@[fe80::1]:22",
+            "build_01",
+            "a-b.c",
+        ] {
+            assert_eq!(validate_host(ok), Ok(()), "{ok}");
+        }
+    }
+
+    #[test]
+    fn host_validation_rejects_options_and_shell_metacharacters() {
+        for bad in [
+            "",
+            "  ",
+            "-oProxyCommand=sh",
+            "x@-oProxyCommand=sh",
+            "host;rm -rf",
+            "a b",
+            "h:0",
+            "h:99999",
+            "h:abc",
+            "@host",
+            "us er@h",
+            "[::1",
+            "[nope]",
+            "u@",
+            "$(id)",
+        ] {
+            assert!(validate_host(bad).is_err(), "{bad:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn destinations_split_into_ssh_arguments() {
+        assert_eq!(ssh_destination("devbox"), (None, "devbox".into()));
+        assert_eq!(
+            ssh_destination("me@10.0.0.5:2222"),
+            (Some(2222), "me@10.0.0.5".into())
+        );
+        assert_eq!(
+            ssh_destination("u@[fe80::1]:22"),
+            (Some(22), "u@fe80::1".into())
+        );
+        assert_eq!(ssh_destination("[::1]"), (None, "::1".into()));
+    }
 
     const SS: &str = "\
 tcp   LISTEN 0      511          0.0.0.0:3000      0.0.0.0:*     users:((\"node\",pid=200,fd=20))

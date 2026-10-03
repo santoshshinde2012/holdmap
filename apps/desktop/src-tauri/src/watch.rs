@@ -8,10 +8,15 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 
-/// Re-scan cadence while the window is visible / hidden (research budget: idle CPU ≈ 0,
-/// 5–10 s in the background).
-const VISIBLE: Duration = Duration::from_secs(4);
-const HIDDEN: Duration = Duration::from_secs(10);
+/// Re-scan cadence while the window is visible comes from the user's *Scan every* setting;
+/// while hidden it slows to [`Config::background_interval`] (≥ 10 s; idle CPU ≈ 0).
+fn cadence(cfg: &Config, hidden: bool) -> Duration {
+    if hidden {
+        cfg.background_interval()
+    } else {
+        cfg.scan_interval()
+    }
+}
 
 /// Should this event pop a notification? Openings and conflicts by default (dev-only unless
 /// configured otherwise); closings only for pinned ports, which you explicitly care about.
@@ -66,7 +71,7 @@ pub fn spawn(app: AppHandle) {
                 .get_webview_window("main")
                 .and_then(|w| w.is_visible().ok())
                 .is_some_and(|v| !v);
-            std::thread::sleep(if hidden { HIDDEN } else { VISIBLE });
+            std::thread::sleep(cadence(&state.store.config(), hidden));
         }
     });
 }
@@ -88,6 +93,16 @@ mod tests {
             }))
             .expect("fixture entry"),
         )
+    }
+
+    #[test]
+    fn cadence_follows_the_setting() {
+        let cfg = Config {
+            scan_interval_secs: 2,
+            ..Config::default()
+        };
+        assert_eq!(cadence(&cfg, false), Duration::from_secs(2));
+        assert_eq!(cadence(&cfg, true), Duration::from_secs(10));
     }
 
     #[test]
