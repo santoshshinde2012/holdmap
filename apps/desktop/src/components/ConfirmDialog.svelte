@@ -135,7 +135,7 @@
           </div>
         {/if}
         {#each plan.warnings as w}<div class="warning"><Icon name="alert" size={14} />{w}</div>{/each}
-        {#if plan.risk !== "low" && phase === "confirm"}
+        {#if plan.risk !== "low" && phase === "confirm" && !(cluster && plan.risk === "medium")}
           <div class="warning strong"><Icon name="alert" size={14} />{plan.risk === "high" ? "High risk: this isn't one of your dev servers." : "This isn't a dev server — make sure nothing needs it."}</div>
         {/if}
         {#if phase === "failed" && report}

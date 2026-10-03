@@ -8,9 +8,13 @@
   $effect(() => {
     if (token === last) return;
     last = token;
-    requestAnimationFrame(() => flow.fitView({ padding: 0.14, duration: reduced ? 0 : 320, maxZoom: 1.15 }));
+    // Nodes need a frame to be measured before the bounds are right; fit twice to be safe.
+    const fit = () => flow.fitView({ padding: 0.08, duration: reduced ? 0 : 320, maxZoom: 1.2 });
+    const a = setTimeout(fit, 60);
+    const b = setTimeout(fit, 400);
+    return () => { clearTimeout(a); clearTimeout(b); };
   });
   $effect(() => {
-    if (focus) flow.setCenter(focus.x, focus.y, { zoom: Math.max(flow.getZoom(), 0.85), duration: reduced ? 0 : 300 });
+    if (focus) flow.setCenter(focus.x, focus.y, { zoom: flow.getZoom(), duration: reduced ? 0 : 300 });
   });
 </script>

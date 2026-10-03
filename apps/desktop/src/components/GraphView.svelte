@@ -119,7 +119,7 @@
       elementsSelectable={true}
       onlyRenderVisibleElements={shown.nodes.length > 120}
       proOptions={{ hideAttribution: true }}
-      onnodeclick={({ node }) => { if (node.type === "service") onselect((node.data as FlowNode["data"]).node ?? null); }}
+      onnodeclick={({ node }) => { if (node.type === "service") { lastSel = node.id; onselect((node.data as FlowNode["data"]).node ?? null); } }}
       onnodepointerenter={({ node }) => { if (node.type === "service") hover = node.id; }}
       onnodepointerleave={() => (hover = null)}
       onpaneclick={() => onselect(null)}
