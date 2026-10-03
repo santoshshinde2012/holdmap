@@ -36,13 +36,11 @@ pub fn enabled() -> bool {
     COLOR.load(Ordering::Relaxed)
 }
 
-#[allow(dead_code)] // full palette kept for consistency
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum S {
     Plain,
     Bold,
     Dim,
-    Red,
     Green,
     Yellow,
     Blue,
@@ -60,7 +58,6 @@ impl S {
             S::Plain => "",
             S::Bold => "1",
             S::Dim => "2",
-            S::Red => "31",
             S::Green => "32",
             S::Yellow => "33",
             S::Blue => "34",
