@@ -19,7 +19,9 @@ pub struct AppInfo {
     platform: &'static str,
     tray: bool,
     /// Global shortcut that shows the window, when it registered.
-    shortcut: Option<&'static str>,
+    shortcut: Option<String>,
+    /// Where config and history live.
+    config_dir: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -75,6 +77,7 @@ pub fn app_info(state: State<'_, AppState>) -> AppInfo {
         platform: std::env::consts::OS,
         tray: state.tray_ok.load(Ordering::Relaxed),
         shortcut: crate::shortcuts::registered(),
+        config_dir: state.store.dir().display().to_string(),
     }
 }
 
@@ -245,4 +248,120 @@ pub async fn restart(app: AppHandle, entry: HistoryEntry) -> Result<Restarted, S
 #[tauri::command]
 pub fn autostart(app: AppHandle, enable: Option<bool>) -> Result<bool, String> {
     crate::shortcuts::autostart(&app, enable)
+}
+
+fn save(state: &AppState, f: impl FnOnce(&mut Config)) -> Result<Config, String> {
+    state
+        .store
+        .update_config(f)
+        .map(|(c, _)| c)
+        .map_err(|e| format!("Couldn't save settings: {e}"))
+}
+
+/// Pin a port (or update its label).
+#[tauri::command]
+pub fn set_pin(
+    state: State<'_, AppState>,
+    port: u16,
+    label: Option<String>,
+) -> Result<Config, String> {
+    if port == 0 {
+        return Err("Port must be between 1 and 65535".into());
+    }
+    if label.as_ref().is_some_and(|l| l.chars().count() > 40) {
+        return Err("Keep the label to 40 characters or fewer".into());
+    }
+    save(&state, |c| c.set_pin(port, label))
+}
+
+#[tauri::command]
+pub fn unpin(state: State<'_, AppState>, port: u16) -> Result<Config, String> {
+    save(&state, |c| {
+        c.unpin(port);
+    })
+}
+
+/// Scan interval and history length (validated against the core's allowed ranges).
+#[tauri::command]
+pub fn set_preferences(
+    state: State<'_, AppState>,
+    scan_interval_secs: Option<u64>,
+    history_limit: Option<usize>,
+) -> Result<Config, String> {
+    if let Some(s) = scan_interval_secs {
+        if !Config::SCAN_INTERVAL.contains(&s) {
+            return Err(format!(
+                "Scan interval must be {}–{} seconds",
+                Config::SCAN_INTERVAL.start(),
+                Config::SCAN_INTERVAL.end()
+            ));
+        }
+    }
+    if let Some(h) = history_limit {
+        if !Config::HISTORY_LIMIT.contains(&h) {
+            return Err(format!(
+                "History must keep {}–{} entries",
+                Config::HISTORY_LIMIT.start(),
+                Config::HISTORY_LIMIT.end()
+            ));
+        }
+    }
+    save(&state, |c| {
+        if let Some(s) = scan_interval_secs {
+            c.scan_interval_secs = s;
+        }
+        if let Some(h) = history_limit {
+            c.history_limit = h;
+        }
+    })
+}
+
+#[derive(Serialize)]
+pub struct HotkeyPreset {
+    id: &'static str,
+    label: &'static str,
+}
+
+/// The global-shortcut presets, labelled for this OS.
+#[tauri::command]
+pub fn hotkeys() -> Vec<HotkeyPreset> {
+    crate::shortcuts::PRESETS
+        .iter()
+        .filter_map(|(id, ..)| crate::shortcuts::label(id).map(|label| HotkeyPreset { id, label }))
+        .collect()
+}
+
+/// Change the global shortcut; persists only when registration succeeded.
+#[tauri::command]
+pub fn set_hotkey(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    preset: String,
+) -> Result<Option<String>, String> {
+    let active = crate::shortcuts::apply(&app, &preset)?;
+    save(&state, |c| c.hotkey = preset)?;
+    Ok(active)
+}
+
+/// Read-only scan of another machine over SSH (agentless: `ss` + `ps`). `local` reads this
+/// machine through `sh`, which is handy without an SSH server.
+#[tauri::command]
+pub async fn remote_scan(app: AppHandle, host: String) -> Result<Snapshot, String> {
+    use portwise_core::remote::{scan_remote, validate_host, LocalShell, RemoteRunner, SshRunner};
+    let host = host.trim().to_string();
+    validate_host(&host)?;
+    blocking(move || {
+        let runner: Box<dyn RemoteRunner> = if host == "local" {
+            Box::new(LocalShell)
+        } else {
+            Box::new(SshRunner::new(host.clone()))
+        };
+        let scan = scan_remote(runner.as_ref(), &host).map_err(|e| e.to_string())?;
+        let _ = app
+            .state::<AppState>()
+            .store
+            .update_config(|c| c.remember_host(&host));
+        Ok(scan.snapshot)
+    })
+    .await
 }

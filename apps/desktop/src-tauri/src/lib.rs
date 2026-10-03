@@ -48,6 +48,12 @@ pub fn run() {
             commands::clear_history,
             commands::restart,
             commands::autostart,
+            commands::set_pin,
+            commands::unpin,
+            commands::set_preferences,
+            commands::set_hotkey,
+            commands::hotkeys,
+            commands::remote_scan,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -61,7 +67,8 @@ pub fn run() {
             app.state::<AppState>()
                 .tray_ok
                 .store(tray_ok, Ordering::Relaxed);
-            shortcuts::setup(app);
+            let hotkey = app.state::<AppState>().store.config().hotkey;
+            shortcuts::setup(app, &hotkey);
             if tray_ok && shortcuts::started_hidden() {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.hide();
