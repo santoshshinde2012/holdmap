@@ -193,7 +193,7 @@ jobs:
           [ ${#files[@]} -gt 0 ] || { echo "::error::no installers were built"; exit 1; }
           sum="portwise-desktop-${{ matrix.name }}.sha256"
           if command -v sha256sum >/dev/null; then sha256sum "${files[@]}"; else shasum -a 256 "${files[@]}"; fi \
-            | sed 's#  .*/#  #' > "$sum"
+            | sed -E 's#^([0-9a-f]+) [ *](.*/)?#\1  #' > "$sum" # bare names; Windows marks binary files with '*'
           cat "$sum"
           { echo "sum=$sum"; echo "paths<<__P__"; printf '%s\n' "${files[@]}"; echo "__P__"; } >> "$GITHUB_OUTPUT"
       - name: Build provenance
