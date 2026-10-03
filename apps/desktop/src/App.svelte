@@ -2,7 +2,13 @@
   import { onMount } from "svelte";
   import Icon from "./components/Icon.svelte";
   import PortRow from "./components/PortRow.svelte";
-  import DetailPane from "./components/DetailPane.svelte";
+  import DetailPane from "./components/detail/DetailPane.svelte";
+  import SettingsDialog from "./components/SettingsDialog.svelte";
+  import PinDialog from "./components/PinDialog.svelte";
+  import RemoteDialog from "./components/RemoteDialog.svelte";
+  import { Button, Dialog, FilterChip, IconButton, Kbd, SegmentedControl, Select, Splitter, TextField } from "./components/ui";
+  import type { DetailTab } from "./lib/detail";
+  import type { SettingsActions, SettingsModel, SettingsSection, HotkeyPreset } from "./lib/settings";
   import ConfirmDialog, { type Phase } from "./components/ConfirmDialog.svelte";
   import ShortcutsDialog from "./components/ShortcutsDialog.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
@@ -57,6 +63,15 @@
   let reduced = $state(matchMedia("(prefers-reduced-motion: reduce)").matches);
   let autostartOn = $state(false);
   let shortcut = $state<string | null>(null);
+  let showSettings = $state(false);
+  let settingsSection = $state<SettingsSection>("general");
+  let pinDialog = $state<{ port: number | null; label: string; pinned: boolean } | null>(null);
+  let showRemote = $state(false);
+  let hotkeyList = $state<HotkeyPreset[]>([]);
+  let info = $state<{ version: string; platform: string; configDir: string | null }>({ version: "", platform: "", configDir: null });
+  let detailTab = $state<DetailTab>("overview");
+  const PANE_DEFAULT = 460;
+  let paneWidth = $state(Math.min(680, Math.max(340, Number(store("pw.pane")) || PANE_DEFAULT)));
   $effect(() => { try { localStorage.setItem("pw.view", view); } catch { /* ignore */ } });
   const pins = $derived(new Set((config?.pins ?? []).map((p) => p.port)));
   const linkCount = $derived.by(() => {
@@ -110,6 +125,9 @@
   });
   const filtersActive = $derived(filters.query !== "" || filters.dev || filters.mine || filters.exposed || filters.proto !== "any");
   const showDrawer = $derived(narrow && drawerOpen && !!selected);
+  /** Any overlay that owns the keyboard (they stop key events themselves; this is a backstop). */
+  const modalOpen = $derived(!!confirm || showHelp || showHistory || showPalette || showSettings || showRemote || !!pinDialog || showDrawer);
+  const scanMs = $derived(Math.min(60, Math.max(1, config?.scan_interval_secs ?? 3)) * 1000);
 
   async function refresh(manual = false) {
     if (refreshing) return;
@@ -171,6 +189,33 @@
       toast("ok", pins.has(e.port) ? `Pinned :${e.port}` : `Unpinned :${e.port}`, pins.has(e.port) ? "Shown first; you'll be notified when it starts or stops." : undefined);
     } catch (err) { toast("error", "Couldn't save the pin", String(err)); }
   }
+
+  function openPin(e: PortEntry | null) {
+    const pin = e ? config?.pins.find((p) => p.port === e.port) : undefined;
+    pinDialog = { port: e?.port ?? null, label: pin?.label ?? (e ? title(e) : ""), pinned: !!pin };
+  }
+  async function savePin(port: number, label: string) {
+    config = await api.setPin(port, label || null);
+    toast("ok", `Pinned :${port}`, label ? `“${label}” — shown first; you'll be notified when it starts or stops.` : "Shown first; you'll be notified when it starts or stops.");
+  }
+  async function unpinPort(port: number) {
+    config = await api.unpin(port);
+    toast("info", `Unpinned :${port}`);
+  }
+  const portHolder = (port: number) => { const e = snapshot?.entries.find((x) => x.port === port); return e ? `${title(e)}${e.process ? ` (PID ${e.process.pid})` : ""}` : null; };
+
+  const settingsModel = $derived<SettingsModel | null>(config ? { theme, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir } : null);
+  const settingsActions: SettingsActions = {
+    setTheme: (t) => { theme = t; },
+    setAutostart: async (on) => { autostartOn = await api.autostart(on); },
+    setHotkey: async (id) => { shortcut = await api.setHotkey(id); config = await api.getConfig(); },
+    setNotify: async (on, devOnly) => { config = await api.setNotify(on, devOnly); },
+    setScanInterval: async (secs) => { config = await api.setPreferences({ scanIntervalSecs: secs }); },
+    setHistoryLimit: async (n) => { config = await api.setPreferences({ historyLimit: n }); },
+    clearHistory: async () => { await api.clearHistory(); historyItems = []; },
+    copy: (t, w) => copy(t, w),
+  };
+  function openSettings(section: SettingsSection = "general") { settingsSection = section; showSettings = true; }
 
   async function openHistory() {
     try { historyItems = await api.history(50); showHistory = true; } catch (e) { toast("error", "Couldn't read history", String(e)); }
@@ -372,6 +417,9 @@
       { id: "help", group: "View", icon: "keyboard", title: "Keyboard shortcuts", shortcut: ["?"], run: () => (showHelp = true) },
       { id: "view", group: "View", icon: view === "graph" ? "list" : "graph", title: view === "graph" ? "Show the list" : "Show the service graph", shortcut: ["G"], keywords: "mesh topology network dependencies", run: () => (view = view === "graph" ? "list" : "graph") },
       { id: "sort-c", group: "View", icon: "layers", title: "Group by cluster (compose, workspace, supervisor…)", run: () => (sort = "cluster") },
+      { id: "settings", group: "Settings", icon: "sliders", title: "Open settings", shortcut: [mod, ","], keywords: "preferences options config interval hotkey", run: () => openSettings() },
+      { id: "pin-new", group: "Actions", icon: "star", title: selected ? `Pin :${selected.port} with a label…` : "Pin a port…", shortcut: ["⇧", "P"], keywords: "favourite label watch", run: () => openPin(selected) },
+      { id: "remote", group: "Actions", icon: "server", title: "Inspect a remote host over SSH…", keywords: "ssh remote server machine", run: () => (showRemote = true) },
       { id: "history", group: "Actions", icon: "history", title: "Recently stopped — restart", shortcut: ["H"], keywords: "history restart undo", run: openHistory },
       { id: "notify", group: "Settings", icon: "bell", title: config?.notify ? "Turn notifications off" : "Turn notifications on", keywords: "alert conflict new listener", run: toggleNotify },
       { id: "autostart", group: "Settings", icon: "sparkles", title: autostartOn ? "Don't launch at login" : "Launch at login", keywords: "startup boot login", run: toggleAutostart },
@@ -382,24 +430,16 @@
   function onKey(e: KeyboardEvent) {
     const typing = document.activeElement === search;
     const modKey = e.metaKey || e.ctrlKey;
-    if (showPalette) return; // the palette handles its own keys
+    if (modalOpen) return; // overlays handle (and stop) their own keys
     if (modKey && e.key.toLowerCase() === "k") { showPalette = true; e.preventDefault(); return; }
-    if (confirm) {
-      if (e.key === "Escape") { closeConfirm(); e.preventDefault(); }
-      else if (e.key === "Enter" && confirm.phase === "confirm" && !confirm.plan.blocked && !(document.activeElement instanceof HTMLButtonElement && document.activeElement.textContent?.includes("Cancel"))) { runStop(); e.preventDefault(); }
-      return;
-    }
-    if (showHelp) { if (e.key === "Escape" || e.key === "?") { showHelp = false; e.preventDefault(); } return; }
+    if (modKey && e.key === ",") { openSettings(); e.preventDefault(); return; }
     if (!typing && (e.key === "/" || (modKey && e.key.toLowerCase() === "f"))) { search?.focus(); search?.select(); e.preventDefault(); return; }
     if (modKey && e.key.toLowerCase() === "r") { refresh(true); e.preventDefault(); return; }
-    if (showHistory) { if (e.key === "Escape") { showHistory = false; e.preventDefault(); } return; }
     const move = view === "graph" && !typing ? selectGraph : select;
     if (e.key === "ArrowDown" || e.key === "ArrowRight" && view === "graph" && !typing || (!typing && e.key === "j")) { move(1); e.preventDefault(); return; }
     if (e.key === "ArrowUp" || e.key === "ArrowLeft" && view === "graph" && !typing || (!typing && e.key === "k")) { move(-1); e.preventDefault(); return; }
     if (e.key === "Escape") {
-      if (typing && filters.query) filters.query = "";
-      else if (typing) search?.blur();
-      else if (showDrawer) drawerOpen = false;
+      if (typing) search?.blur();
       else if (filtersActive) clearFilters();
       else selectedId = null;
       e.preventDefault();
@@ -407,6 +447,8 @@
     }
     if (e.key === "Enter") { if (typing) { if (!selected) select(1); search?.blur(); } else if (selected) drawerOpen = true; return; }
     if (typing || modKey || e.altKey) return;
+    // Only plain keys below; the list (or the page) has focus.
+    if (e.target instanceof HTMLElement && e.target.closest("input, textarea, [role=combobox], [role=tablist], [role=separator]")) return;
     const s = selected;
     switch (e.key) {
       case "Backspace": case "Delete": if (s && (s.process || s.container)) requestStop(s, e.shiftKey); break;
@@ -422,6 +464,7 @@
       case "g": view = view === "graph" ? "list" : "graph"; break;
       case "h": openHistory(); break;
       case "p": if (s) togglePin(s); break;
+      case "P": openPin(s); break;
       case "s": { const n = selectedGraphNode; const c = n?.cluster ? graph?.clusters.find((x) => x.id === n.cluster) : null; if (c) requestClusterStop(c.name); else return; break; }
       case "?": showHelp = true; break;
       default: return;
@@ -431,7 +474,8 @@
 
   onMount(() => {
     refresh();
-    api.appInfo().then((i) => { shortcut = i.shortcut ?? null; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; });
+    api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, configDir: i.config_dir ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; });
+    api.hotkeys().then((h) => (hotkeyList = h)).catch(() => {});
     api.getConfig().then((c) => (config = c)).catch(() => {});
     api.autostart().then((v) => (autostartOn = v)).catch(() => {});
     const rq = matchMedia("(prefers-reduced-motion: reduce)");
@@ -443,10 +487,7 @@
     const onNq = () => (narrow = nq.matches);
     mq.addEventListener("change", onMq);
     nq.addEventListener("change", onNq);
-    const timer = setInterval(() => {
-      now = Date.now();
-      if (!document.hidden && !confirm && !refreshing && !showPalette) refresh();
-    }, 3000);
+    const clock = setInterval(() => (now = Date.now()), 1000);
     const unlisten: Promise<() => void>[] = [
       api.onEvent<{ target: string; line: string }>("stop-progress", (p) => { if (confirm) confirm.log = [...confirm.log, p.line]; }),
       api.onEvent<number>("focus-port", async (port) => {
@@ -464,13 +505,21 @@
       }),
     ];
     return () => {
-      clearInterval(timer);
+      clearInterval(clock);
       mq.removeEventListener("change", onMq);
       nq.removeEventListener("change", onNq);
       rq.removeEventListener("change", onRq);
       unlisten.forEach((u) => u.then((f) => f()));
     };
   });
+
+  // Foreground re-scan on the user's cadence (Settings → Scanning); paused while an action runs.
+  $effect(() => {
+    const ms = scanMs;
+    const t = setInterval(() => { if (!document.hidden && !confirm && !refreshing && !showPalette) refresh(); }, ms);
+    return () => clearInterval(t);
+  });
+  $effect(() => { try { localStorage.setItem("pw.pane", String(paneWidth)); } catch { /* ignore */ } });
 
   const ago = $derived(snapshot ? Math.max(0, Math.round((now - snapshot.taken_at_ms) / 1000)) : null);
   const themeIcon = $derived(theme === "system" ? "monitor" : theme === "light" ? "sun" : "moon");
@@ -485,76 +534,54 @@
       <span class="name">portwise</span>
     </div>
 
-    <label class="search" class:active={filters.query}>
-      <Icon name="search" size={15} />
-      <span class="sr-only">Search ports</span>
-      <input
-        bind:this={search}
+    <div class="search">
+      <TextField
+        bind:input={search}
         bind:value={filters.query}
         type="search"
+        variant="filled"
+        icon="search"
+        label="Search ports"
+        labelHidden
         placeholder="Search ports, projects, processes…"
+        clearable
+        kbdHint="/"
         spellcheck="false"
         autocomplete="off"
         aria-controls="port-list"
-        aria-describedby="search-hint"
       />
-      <span id="search-hint" class="sr-only">Supports :3000, 3000-3999, proto:udp and pid:123</span>
-      {#if filters.query}
-        <button class="clear" aria-label="Clear search" onclick={() => (filters.query = "")}><Icon name="x" size={12} /></button>
-      {:else}
-        <kbd>/</kbd>
-      {/if}
-    </label>
+    </div>
 
     <div class="tools">
-      <span class="live" class:stale={ago !== null && ago > 6} aria-live="off" title={snapshot ? `Last scan ${ago}s ago (${snapshot.scan_ms} ms)` : ""}>
-        <span class="pulse" class:on={refreshing}></span>{#if ago === null}starting…{:else if ago < 4}Live{:else}{ago}s ago{/if}
+      <span class="live" class:stale={ago !== null && ago > Math.max(6, scanMs / 500)} aria-live="off">
+        <span class="pulse" class:on={refreshing}></span>{#if ago === null}starting…{:else if ago < Math.max(4, scanMs / 1000 + 1)}Live{:else}{ago}s ago{/if}
       </span>
-      <button class="cmdk" onclick={() => (showPalette = true)} aria-label="Open command palette ({mod}K)" aria-keyshortcuts="Meta+K Control+K">
-        <Icon name="command" size={13} />Commands<kbd>{modK}</kbd>
-      </button>
-      <button class="icon-btn" onclick={() => refresh(true)} aria-label="Refresh (R)" title="Refresh (R)"><span class:spin={refreshing} style="display:inline-flex"><Icon name="refresh" size={16} /></span></button>
-      <button class="icon-btn" onclick={openHistory} aria-label="Recently stopped (H)" title="Recently stopped — restart (H)"><Icon name="history" size={16} /></button>
-      <button class="icon-btn" onclick={cycleTheme} aria-label="Theme: {theme}. Click to change (Shift+L)" title="Theme: {theme} (⇧L)"><Icon name={themeIcon} size={16} /></button>
-      <button class="icon-btn" onclick={() => (showHelp = true)} aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)"><Icon name="keyboard" size={16} /></button>
+      <Button size="sm" icon="command" kbd={modK} class="cmdk" onclick={() => (showPalette = true)} aria-keyshortcuts="Meta+K Control+K" tip={{ text: "Command palette", kbd: modK }}>Commands</Button>
+      <span class="tsep" aria-hidden="true"></span>
+      <IconButton icon="refresh" label="Refresh" kbd="R" onclick={() => refresh(true)} class={refreshing ? "spinning" : ""} />
+      <IconButton icon="history" label="Recently stopped" kbd="H" onclick={openHistory} />
+      <IconButton icon="server" label="Remote host…" onclick={() => (showRemote = true)} />
+      <IconButton icon={themeIcon} label="Theme: {theme}" kbd={["⇧", "L"]} onclick={cycleTheme} />
+      <IconButton icon="sliders" label="Settings" kbd={[mod, ","]} onclick={() => openSettings()} />
     </div>
   </header>
 
-  <div class="toolbar" role="toolbar" aria-label="Filters">
-    <div class="seg view" role="radiogroup" aria-label="View">
-      <button role="radio" aria-checked={view === "list"} class:on={view === "list"} onclick={() => (view = "list")} title="List (G)"><Icon name="list" size={12} />List</button>
-      <button role="radio" aria-checked={view === "graph"} class:on={view === "graph"} onclick={() => (view = "graph")} title="Service graph (G)"><Icon name="graph" size={12} />Graph{#if graph && graph.stats.edges}<span class="vcount">{graph.stats.edges}</span>{/if}</button>
-    </div>
+  <div class="toolbar" role="toolbar" aria-label="View and filters">
+    <SegmentedControl label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: "List (G)" }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, title: "Service graph (G)" }]} />
     <span class="divider" aria-hidden="true"></span>
-    <div class="seg" role="radiogroup" aria-label="Socket states">
-      <button role="radio" aria-checked={!filters.all} class:on={!filters.all} onclick={() => { filters.all = false; refresh(); }}>Listening</button>
-      <button role="radio" aria-checked={filters.all} class:on={filters.all} onclick={() => { filters.all = true; refresh(); }}>All sockets</button>
-    </div>
-    <div class="seg" role="radiogroup" aria-label="Protocol">
-      {#each [["any", "Any"], ["tcp", "TCP"], ["udp", "UDP"]] as [v, l]}
-        <button role="radio" aria-checked={filters.proto === v} class:on={filters.proto === v} onclick={() => (filters.proto = v as Filters["proto"])}>{l}</button>
-      {/each}
-    </div>
+    <SegmentedControl label="Socket states" value={filters.all ? "all" : "listen"} options={[{ value: "listen", label: "Listening" }, { value: "all", label: "All sockets", title: "Include established, TIME_WAIT… (A)" }]} onchange={(v) => { filters.all = v === "all"; refresh(); }} />
+    <SegmentedControl label="Protocol" bind:value={filters.proto} options={[{ value: "any", label: "Any" }, { value: "tcp", label: "TCP" }, { value: "udp", label: "UDP" }]} />
     <span class="divider" aria-hidden="true"></span>
-    <button class="chip" aria-pressed={filters.dev} class:on={filters.dev} onclick={() => (filters.dev = !filters.dev)}><span class="cdot green"></span>Dev servers<span class="count">{stats.dev}</span></button>
-    <button class="chip" aria-pressed={filters.mine} class:on={filters.mine} onclick={() => (filters.mine = !filters.mine)}><Icon name="lock" size={12} />Mine<span class="count">{stats.mine}</span></button>
-    <button class="chip" aria-pressed={filters.exposed} class:on={filters.exposed} class:warnchip={stats.exposed > 0} onclick={() => (filters.exposed = !filters.exposed)}><Icon name="globe" size={12} />Exposed<span class="count">{stats.exposed}</span></button>
-    {#if filtersActive}<button class="btn ghost sm" onclick={clearFilters}>Clear</button>{/if}
+    <FilterChip label="Dev servers" dot="var(--tone-green)" count={stats.dev} bind:pressed={filters.dev} title="Only dev servers" kbd="D" />
+    <FilterChip label="Mine" icon="lock" count={stats.mine} bind:pressed={filters.mine} title="Only my processes" kbd="M" />
+    <FilterChip label="Exposed" icon="globe" count={stats.exposed} tone={stats.exposed > 0 ? "warn" : "accent"} bind:pressed={filters.exposed} title="Reachable from the network" kbd="E" />
+    {#if filtersActive}<Button size="sm" variant="ghost" icon="x" onclick={clearFilters}>Clear</Button>{/if}
 
     <div class="spacer"></div>
-    <label class="sort">
-      <span>Sort</span>
-      <select bind:value={sort} aria-label="Sort by">
-        <option value="group">Grouped</option>
-        <option value="cluster">Cluster</option>
-        <option value="port">Port</option>
-        <option value="newest">Newest</option>
-        <option value="memory">Memory</option>
-      </select>
-    </label>
+    <Select size="sm" prefix="Sort" label="Sort by" labelHidden bind:value={sort} width="150px" options={[{ value: "group", label: "Grouped", description: "By kind: dev, containers, databases…" }, { value: "cluster", label: "Cluster", description: "Compose project, workspace, supervisor" }, { value: "port", label: "Port" }, { value: "newest", label: "Newest" }, { value: "memory", label: "Memory" }]} />
   </div>
 
-  <main class="content" class:narrow>
+  <main class="content" class:narrow style="--pane-w: {paneWidth}px">
     {#if view === "graph"}
       <div class="graph-wrap">
         <GraphView {graph} {selectedNode} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; loadTopology(); }} onselect={selectNode} onstopcluster={requestClusterStop} />
@@ -566,7 +593,7 @@
       {#if error && !snapshot}
         <EmptyState tone="err" title="Couldn't read the socket table">
           <p class="selectable">{error}</p>
-          <button class="btn primary" onclick={() => refresh(true)}><Icon name="refresh" size={14} />Try again</button>
+          <Button variant="primary" icon="refresh" onclick={() => refresh(true)}>Try again</Button>
         </EmptyState>
       {:else if !snapshot}
         <div class="skeletons" aria-busy="true" aria-label="Loading ports">
@@ -583,7 +610,8 @@
         {#if freePort && freePort.status === "free"}
           <EmptyState tone="ok" title="Port {freePort.port} is free">
             <p>Nothing is listening on it — start your server there:</p>
-            <button class="btn" onclick={() => copy(`portwise run -p ${freePort?.port} -- npm run dev`, "Command")}><Icon name="copy" size={13} /><code>portwise run -p {freePort.port} -- npm run dev</code></button>
+            <Button icon="copy" onclick={() => copy(`portwise run -p ${freePort?.port} -- npm run dev`, "Command")}><code>portwise run -p {freePort.port} -- npm run dev</code></Button>
+            <Button variant="ghost" icon="star" onclick={() => openPin(null)}>Pin :{freePort.port} and watch it</Button>
           </EmptyState>
         {:else if freePort}
           <EmptyState tone="warn" title="Port {freePort.port}">
@@ -593,12 +621,12 @@
         {:else if filtersActive}
           <EmptyState title="No ports match">
             <p>Nothing matches {filters.query ? `“${filters.query}”` : "these filters"}.</p>
-            <button class="btn" onclick={clearFilters}>Clear search & filters <kbd>Esc</kbd></button>
+            <Button kbd="Esc" onclick={clearFilters}>Clear search & filters</Button>
           </EmptyState>
         {:else}
           <EmptyState tone="ok" title="All quiet">
             <p>Nothing is listening right now. Start a dev server and it shows up here within a few seconds.</p>
-            <button class="btn" onclick={() => findFree(3000)}><Icon name="sparkles" size={13} />Find a free port</button>
+            <Button icon="sparkles" onclick={() => findFree(3000)}>Find a free port</Button>
           </EmptyState>
         {/if}
       {:else}
@@ -609,7 +637,7 @@
             </div>
           {/if}
           {#each s.items as e (e.id)}
-            <PortRow entry={e} pinned={pins.has(e.port)} links={linkCount.get(e.id) ?? 0} selected={e.id === selectedId} busy={!!busy[e.id]} onselect={() => { selectEntry(e); listEl?.focus(); }} onstop={() => requestStop(e, false)} onopen={() => open(e)} />
+            <PortRow entry={e} pinned={pins.has(e.port)} links={linkCount.get(e.id) ?? 0} selected={e.id === selectedId} busy={!!busy[e.id]} onselect={() => { selectEntry(e); listEl?.focus({ preventScroll: true }); }} onstop={() => requestStop(e, false)} onopen={() => open(e)} />
           {/each}
         {/each}
         {#if snapshot.hidden_sockets > 0 || !snapshot.docker_available}
@@ -623,9 +651,12 @@
     {/if}
 
     {#if !narrow}
-      <DetailPane entry={selected} explanation={selected ? explanations[selected.port] ?? null : null} loading={explaining} busy={selected ? !!busy[selected.id] : false}
-        onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy}
-        {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} />
+      <div class="pane-wrap">
+        <Splitter bind:width={paneWidth} min={340} max={680} initial={PANE_DEFAULT} />
+        <DetailPane entry={selected} explanation={selected ? explanations[selected.port] ?? null : null} loading={explaining} busy={selected ? !!busy[selected.id] : false} bind:tab={detailTab} {mod}
+          onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy}
+          {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} />
+      </div>
     {/if}
   </main>
 
@@ -633,75 +664,58 @@
     {#if snapshot}
       <span><b>{stats.total}</b> ports</span><span class="g"><b>{stats.dev}</b> dev</span>{#if stats.exposed}<span class="w"><b>{stats.exposed}</b> exposed</span>{/if}
       <span class="sp"></span>
-      <span class="hints"><kbd>↑↓</kbd> move <kbd>⌫</kbd> stop <kbd>O</kbd> open <kbd>G</kbd> graph <kbd>{modK}</kbd> commands <kbd>?</kbd> help{#if shortcut}<span class="gs" title="Global shortcut: shows portwise from anywhere"><kbd>{shortcut}</kbd> anywhere</span>{/if}</span>
+      <span class="hints"><span><Kbd keys={["↑", "↓"]} size="sm" />move</span><span><Kbd keys="⌫" size="sm" />stop</span><span><Kbd keys="G" size="sm" />graph</span><span><Kbd keys={[mod, "K"]} size="sm" />commands</span><span><Kbd keys="?" size="sm" />shortcuts</span>{#if shortcut}<span class="gs"><Kbd keys={shortcut} size="sm" />from anywhere</span>{/if}</span>
     {/if}
   </footer>
 </div>
 
-{#if showDrawer}
-  <div class="drawer-wrap" role="presentation" onclick={() => (drawerOpen = false)}>
-    <div class="drawer" role="dialog" aria-modal="true" aria-label="Port details" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
-      <DetailPane drawer entry={selected} explanation={selected ? explanations[selected.port] ?? null : null} loading={explaining} busy={selected ? !!busy[selected.id] : false}
-        onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onclose={() => (drawerOpen = false)}
-        {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} />
-    </div>
-  </div>
+{#if showDrawer && selected}
+  <Dialog placement="right" bare label="Details for port {selected.port}" onclose={() => (drawerOpen = false)} initialFocus="self">
+    <DetailPane drawer entry={selected} explanation={explanations[selected.port] ?? null} loading={explaining} busy={!!busy[selected.id]} bind:tab={detailTab} {mod}
+      onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onclose={() => (drawerOpen = false)}
+      {graph} pinned={pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} />
+  </Dialog>
 {/if}
 {#if confirm}
   <ConfirmDialog entry={confirm.entry} cluster={confirm.cluster} plan={confirm.plan} phase={confirm.phase} log={confirm.log} report={confirm.report}
     onconfirm={runStop} oncancel={closeConfirm} onoverride={() => confirm?.entry && requestStop(confirm.entry, confirm.force, true)} />
 {/if}
-{#if showPalette}<CommandPalette {commands} onclose={() => { showPalette = false; listEl?.focus(); }} />{/if}
+{#if showPalette}<CommandPalette {commands} onclose={() => { showPalette = false; }} />{/if}
 {#if showHistory}<HistoryPanel items={historyItems} onrestart={restartEntry} oncopy={copy} onclose={() => (showHistory = false)} onclear={async () => { await api.clearHistory(); historyItems = []; }} />{/if}
-{#if showHelp}<ShortcutsDialog onclose={() => (showHelp = false)} />{/if}
+{#if showHelp}<ShortcutsDialog {mod} onclose={() => (showHelp = false)} />{/if}
+{#if showSettings && settingsModel}<SettingsDialog model={settingsModel} actions={settingsActions} bind:section={settingsSection} onclose={() => (showSettings = false)} />{/if}
+{#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
+{#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />
 
 <style>
   .app { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100vh; }
   .titlebar { display: flex; align-items: center; gap: var(--sp-4); height: 52px; padding: 0 var(--sp-3) 0 var(--sp-4); background: var(--surface); border-bottom: 1px solid var(--border); }
   .app.mac .titlebar { padding-left: 84px; }
-  .brand { display: flex; align-items: center; gap: var(--sp-2); }
+  .brand { display: flex; align-items: center; gap: var(--sp-2); flex: none; }
   .brand img { border-radius: 6px; box-shadow: var(--shadow-sm); }
   .name { font-weight: 700; font-size: var(--fs-md); letter-spacing: -0.02em; }
-  .search { flex: 1; max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: var(--sp-2); height: 34px; padding: 0 var(--sp-2) 0 11px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); transition: border-color var(--dur-2), background var(--dur-2), box-shadow var(--dur-2); }
-  .search:hover { border-color: var(--border-strong); }
-  .search:focus-within { background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-  .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: var(--fs-base); }
-  .search input::placeholder { color: var(--faint); }
-  .search input::-webkit-search-cancel-button { display: none; }
-  .clear { border: 0; background: var(--surface-3); color: var(--muted); width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; }
-  .tools { display: flex; align-items: center; gap: 2px; }
-  .live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--muted); margin-right: var(--sp-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .search { flex: 1; max-width: 520px; margin: 0 auto; min-width: 140px; }
+  .tools { display: flex; align-items: center; gap: 2px; flex: none; }
+  .tools :global(.cmdk) { margin-right: 2px; color: var(--text-2); }
+  .tools :global(.spinning svg) { animation: spin 0.9s linear infinite; }
+  .tsep { width: 1px; height: 18px; background: var(--border-strong); margin: 0 6px; }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--muted); margin-right: var(--sp-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
   .pulse.on { animation: beat 0.9s ease-in-out infinite; }
   .live.stale .pulse { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
   @keyframes beat { 50% { transform: scale(0.6); opacity: 0.6; } }
-  .cmdk { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px 0 9px; margin-right: var(--sp-1); border-radius: var(--r-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); font-size: var(--fs-xs); font-weight: 550; box-shadow: var(--shadow-sm); }
-  .cmdk:hover { background: var(--surface-2); color: var(--text); }
 
-  .toolbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4); background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; white-space: nowrap; }
+  .toolbar { display: flex; align-items: center; gap: var(--sp-2); padding: 8px var(--sp-4); background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; white-space: nowrap; min-height: 46px; }
   .toolbar::-webkit-scrollbar { display: none; }
-  .seg { display: inline-flex; padding: 2px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); flex: none; }
-  .seg button { border: 0; background: transparent; height: 24px; padding: 0 10px; border-radius: 5px; color: var(--muted); font-weight: 550; font-size: var(--fs-xs); transition: background var(--dur-2), color var(--dur-2); }
-  .seg button:hover { color: var(--text); }
-  .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
   .divider { width: 1px; height: 18px; background: var(--border-strong); margin: 0 var(--sp-1); flex: none; }
-  .chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px 0 10px; border-radius: var(--r-full); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); font-size: var(--fs-xs); font-weight: 550; transition: all var(--dur-2) var(--ease); }
-  .chip:hover { background: var(--surface-2); color: var(--text); }
-  .chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-  .count { min-width: 20px; height: 18px; padding: 0 5px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-size: 10.5px; display: inline-grid; place-items: center; font-variant-numeric: tabular-nums; font-weight: 650; }
-  .chip.on .count { background: var(--accent); color: var(--accent-fg); }
-  .warnchip:not(.on) :global(svg) { color: var(--warn); }
-  .cdot { width: 7px; height: 7px; border-radius: 50%; }
-  .cdot.green { background: var(--tone-green); }
-  .spacer { flex: 1; }
-  .sort { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--fs-xs); flex: none; }
-  .sort select { height: 28px; border-radius: var(--r-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); padding: 0 6px; font-size: var(--fs-xs); }
+  .spacer { flex: 1; min-width: var(--sp-2); }
 
-  .content { display: grid; grid-template-columns: minmax(0, 1fr) clamp(360px, 36vw, 480px); min-height: 0; }
+  .content { display: grid; grid-template-columns: minmax(0, 1fr) var(--pane-w, 440px); min-height: 0; }
   .content.narrow { grid-template-columns: 1fr; }
+  .pane-wrap { position: relative; min-height: 0; min-width: 0; }
   .list { overflow-y: auto; padding: var(--sp-1) 0 var(--sp-6); outline: none; }
-  .list:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+  .list:focus-visible:not([aria-activedescendant]) { box-shadow: inset 0 0 0 2px var(--ring); }
   .group { position: sticky; top: -4px; z-index: 2; display: flex; align-items: baseline; gap: var(--sp-2); padding: var(--sp-4) var(--sp-5) var(--sp-2); background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(10px); }
   .gt { font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-2); }
   .gc { font-size: 10.5px; color: var(--muted); background: var(--surface-3); padding: 1px 6px; border-radius: var(--r-full); font-variant-numeric: tabular-nums; font-weight: 650; }
@@ -713,22 +727,16 @@
   .sk-gh { height: 10px; width: 120px; margin: var(--sp-3) var(--sp-3) var(--sp-3); }
   .sk-row { display: grid; grid-template-columns: 92px 32px 1fr; gap: var(--sp-3); align-items: center; padding: 12px var(--sp-4); }
 
-  .status { display: flex; align-items: center; gap: var(--sp-4); height: 28px; padding: 0 var(--sp-4); border-top: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+  .status { display: flex; align-items: center; gap: var(--sp-4); height: 30px; padding: 0 var(--sp-4); border-top: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
   .status b { color: var(--text); font-weight: 650; }
   .status .g b { color: var(--tone-green); }
   .status .w b { color: var(--warn); }
   .status .sp { flex: 1; }
+  .hints { display: inline-flex; align-items: center; gap: 14px; }
+  .hints > span { display: inline-flex; align-items: center; gap: 6px; }
   .graph-wrap { position: relative; min-height: 0; min-width: 0; }
-  .seg.view button { display: inline-flex; align-items: center; gap: 5px; }
-  .vcount { font-size: 10px; font-weight: 700; padding: 0 5px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
-  .hints { display: inline-flex; align-items: center; gap: 4px; }
-  .hints kbd { margin-left: 8px; height: 16px; font-size: 10px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-  .drawer-wrap { position: fixed; inset: 0; z-index: 40; background: var(--backdrop); animation: fadein var(--dur-2) var(--ease); }
-  .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: min(440px, 94vw); animation: slidein var(--dur-3) var(--ease); outline: none; }
-  @keyframes fadein { from { opacity: 0; } }
-  @keyframes slidein { from { transform: translateX(24px); opacity: 0.4; } }
-
-  @media (max-width: 1080px) { .cmdk { font-size: 0; gap: 0; padding: 0 6px; } .cmdk kbd { display: none; } }
-  @media (max-width: 760px) { .brand .name, .live, .sort span, .hints { display: none; } .titlebar { gap: var(--sp-2); } }
+  @media (max-width: 1080px) { .tools :global(.cmdk .lbl), .tools :global(.cmdk .kbds) { display: none; } .tools :global(.cmdk) { padding: 0 8px; } }
+  @media (max-width: 760px) { .brand .name, .live, .hints, .tsep { display: none; } .titlebar { gap: var(--sp-2); } }
 </style>
