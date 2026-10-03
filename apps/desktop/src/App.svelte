@@ -20,7 +20,7 @@
   import GraphView from "./components/GraphView.svelte";
   import HistoryPanel from "./components/HistoryPanel.svelte";
   import * as api from "./lib/api";
-  import type { ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
+  import type { ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
   import { nodeForEntry, sectionsByCluster } from "./lib/graph";
   import type { Command } from "./lib/palette";
   import { GROUPS, groupOf, matches, seconds, stopTarget, title, url, canOpen, type Filters, type Group } from "./lib/format";
@@ -39,6 +39,9 @@
   let selectedId = $state<string | null>(null);
   let explanations = $state<Record<number, Explanation>>({});
   let explaining = $state(false);
+  let httpInfo = $state<Record<number, HttpInfo | null>>({});
+  let update = $state<string | null>(null);
+  const installUpdate = () => api.installUpdate().catch((e) => toast("error", "Couldn't install the update", String(e)));
   let freePort = $state<Explanation | null>(null);
   let confirm = $state<Confirm | null>(null);
   let busy = $state<Record<string, boolean>>({});
@@ -196,6 +199,16 @@
     }
   }
 
+  /** Every running dev server of yours at once (tray, palette); the dialog shows the full plan. */
+  async function requestStopAllDev() {
+    try {
+      const plan = await api.plan("dev:all", false, false);
+      confirm = { entry: null, cluster: null, plan, force: false, allowProtected: false, phase: "confirm", log: [], report: null };
+    } catch (e) {
+      toast("error", "Couldn't plan stopping the dev servers", String(e));
+    }
+  }
+
   async function togglePin(e: PortEntry) {
     try {
       config = await api.togglePin(e.port, title(e));
@@ -275,6 +288,7 @@
     explaining = true;
     const port = e.port;
     const t = setTimeout(async () => {
+      if (e.protocol === "tcp" && !(port in httpInfo)) api.http(port).then((h) => { httpInfo[port] = h; }, () => { httpInfo[port] = null; });
       try { explanations[port] = await api.explain(port); }
       catch (err) { toast("error", "Couldn't explain this port", String(err)); }
       finally { explaining = false; }
@@ -318,24 +332,25 @@
     if (!confirm || confirm.phase !== "confirm" || confirm.plan.blocked) return;
     const c = confirm;
     c.phase = "running";
-    const key = c.entry?.id ?? `cluster:${c.cluster?.name}`;
-    const what = c.entry ? title(c.entry) : `cluster ${c.cluster?.name}`;
+    const target = c.entry ? stopTarget(c.entry) : c.cluster ? `cluster:${c.cluster.name}` : "dev:all";
+    const key = c.entry?.id ?? target;
+    const what = c.entry ? title(c.entry) : c.cluster ? `cluster ${c.cluster.name}` : "All dev servers";
     busy[key] = true;
     // Keep keyboard flow: after a successful stop, the selection moves to the neighbouring row.
     const idx = c.entry ? ordered.findIndex((e) => e.id === c.entry!.id) : -1;
     const neighbour = idx >= 0 ? (ordered[idx + 1] ?? ordered[idx - 1])?.id ?? null : null;
     try {
-      const r = await api.stop(c.entry ? stopTarget(c.entry) : `cluster:${c.cluster!.name}`, c.force, c.allowProtected);
+      const r = await api.stop(target, c.force, c.allowProtected);
       c.report = r;
       if (!c.log.length) c.log = r.log;
       if (r.freed) {
         c.phase = "done";
         if (c.entry && selectedId === c.entry.id) selectedId = neighbour;
-        if (c.cluster) { selectedId = null; selectedNode = null; }
+        if (!c.entry) { selectedId = null; selectedNode = null; }
         const restart = restartCommand(c);
         setTimeout(() => {
           if (confirm === c) confirm = null;
-          toast("ok", c.entry ? `Port ${c.entry.port} is free` : `Cluster ${c.cluster?.name} stopped`, `${what} stopped in ${seconds(r.elapsed_ms)}${r.escalated ? " (needed SIGKILL)" : ""}`,
+          toast("ok", c.entry ? `Port ${c.entry.port} is free` : c.cluster ? `Cluster ${c.cluster.name} stopped` : "Dev servers stopped", `${what} stopped in ${seconds(r.elapsed_ms)}${r.escalated ? " (needed SIGKILL)" : ""}`,
             restart && c.entry ? { label: "Copy restart command", run: () => copy(restart, "Restart command") } : { label: "Restart…", run: openHistory });
         }, 900);
       } else {
@@ -411,6 +426,9 @@
     for (const c of graph?.clusters ?? []) {
       cmds.push({ id: `stopc-${c.id}`, group: "Actions", icon: "stop", danger: true, title: `Stop cluster ${c.name}`, subtitle: `${c.nodes.length} services · dependency order · asks first`, keywords: `cluster ${c.kind} ${c.name}`, run: () => requestClusterStop(c.name) });
     }
+    const dev = (snapshot?.entries ?? []).filter((e) => e.is_dev && e.is_mine && !e.protected && !e.container && e.process);
+    if (dev.length > 1) cmds.push({ id: "stop-dev", group: "Actions", icon: "stop", danger: true, title: "Stop all dev servers", subtitle: `${dev.length} running · asks first`, keywords: "kill every dev server all", run: requestStopAllDev });
+    if (update) cmds.push({ id: "update", group: "Actions", icon: "sparkles", title: `Install portwise ${update} and restart`, keywords: "update upgrade new version", run: installUpdate });
     if (selected) cmds.push({ id: "pin", group: "Actions", icon: "star", title: pins.has(selected.port) ? `Unpin :${selected.port}` : `Pin :${selected.port}`, shortcut: ["P"], run: () => selected && togglePin(selected) });
     for (const e of (snapshot?.entries ?? []).slice(0, 60)) {
       const boost = (selected?.id === e.id ? 12 : 0) + (e.is_dev ? 3 : 0);
@@ -530,6 +548,11 @@
         if (e) selectEntry(e);
       }),
       api.onEvent("refresh", () => refresh()),
+      api.onEvent("stop-all-dev", () => { if (!confirm) requestStopAllDev(); }),
+      api.onEvent<{ version: string; notes: string | null }>("update-available", (u) => {
+        update = u.version;
+        toast("info", `portwise ${u.version} is available`, "Install it from here or the command palette; the app restarts.", { label: "Install and restart", run: installUpdate });
+      }),
       api.onEvent<PortEvent[]>("port-events", (evs) => {
         for (const ev of evs) {
           if (ev.event === "conflict") toast("error", `Port conflict on :${ev.port}`, ev.entries.map((x) => `${title(x)} on ${x.addresses.join("/")}`).join(" vs "));
@@ -694,7 +717,7 @@
     {#if !narrow}
       <div class="pane-wrap">
         <Splitter bind:width={paneWidth} min={340} max={680} initial={PANE_DEFAULT} />
-        <DetailPane entry={selected} explanation={selected ? explanations[selected.port] ?? null : null} loading={explaining} busy={selected ? !!busy[selected.id] : false} bind:tab={detailTab} {mod}
+        <DetailPane entry={selected} explanation={selected ? explanations[selected.port] ?? null : null} http={selected ? httpInfo[selected.port] ?? null : null} loading={explaining} busy={selected ? !!busy[selected.id] : false} bind:tab={detailTab} {mod}
           onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy}
           {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} />
       </div>
@@ -712,7 +735,7 @@
 
 {#if showDrawer && selected}
   <Dialog placement="right" bare label="Details for port {selected.port}" onclose={() => (drawerOpen = false)} initialFocus="self">
-    <DetailPane drawer entry={selected} explanation={explanations[selected.port] ?? null} loading={explaining} busy={!!busy[selected.id]} bind:tab={detailTab} {mod}
+    <DetailPane drawer entry={selected} explanation={explanations[selected.port] ?? null} http={httpInfo[selected.port] ?? null} loading={explaining} busy={!!busy[selected.id]} bind:tab={detailTab} {mod}
       onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onclose={() => (drawerOpen = false)}
       {graph} pinned={pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} />
   </Dialog>

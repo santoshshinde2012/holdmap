@@ -1,5 +1,5 @@
-import type { ActionPlan, AppInfo, Config, Explanation, Graph, HistoryEntry, PortEntry, Snapshot, StopReport } from "./types";
-import { MOCK_SNAPSHOT, mockExplain, mockPlan, mockStop, mockTopology } from "./mock";
+import type { ActionPlan, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortEntry, Snapshot, StopReport } from "./types";
+import { MOCK_SNAPSHOT, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
 /** True inside the Tauri webview; false in a plain browser (`npm run dev`), where mocks are used. */
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -27,6 +27,12 @@ export async function scan(all: boolean): Promise<Snapshot> {
 export async function explain(port: number): Promise<Explanation> {
   if (!isTauri) return mockExplain(port);
   return call("explain", { port });
+}
+
+/** HTTP status and page title of a local port, or null when it doesn't speak HTTP. */
+export async function http(port: number): Promise<HttpInfo | null> {
+  if (!isTauri) return mockHttp(port);
+  return call("http_info", { port });
 }
 
 export async function plan(target: string, force: boolean, allowProtected = false): Promise<ActionPlan> {
@@ -65,6 +71,12 @@ export async function openUrl(url: string): Promise<void> {
   }
   const { openUrl } = await import("@tauri-apps/plugin-opener");
   await openUrl(url);
+}
+
+/** Download, verify and install the update the backend announced, then restart. */
+export async function installUpdate(): Promise<void> {
+  if (!isTauri) return;
+  return call("install_update");
 }
 
 export async function onEvent<T>(name: string, cb: (payload: T) => void): Promise<() => void> {

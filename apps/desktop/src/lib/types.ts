@@ -129,6 +129,17 @@ export interface ActionPlan {
   risk: Risk;
 }
 
+/** What an HTTP server on a local port answered (portwise_core::http::HttpInfo). */
+export interface HttpInfo {
+  port: number;
+  status: number;
+  reason: string;
+  title: string | null;
+  server: string | null;
+  location: string | null;
+  elapsed_ms: number;
+}
+
 export interface Explanation {
   port: number;
   status: "free" | "busy" | "reserved";

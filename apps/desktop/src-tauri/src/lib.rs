@@ -8,11 +8,13 @@
 //! - [`watch`]: background re-scan → `port-events` + desktop notifications
 //! - [`shortcuts`]: global show-window shortcut and launch at login
 //! - [`state`]: shared state (last engine, config store)
+//! - [`update`]: optional self-update (release builds signed with an update key)
 
 mod commands;
 mod shortcuts;
 mod state;
 mod tray;
+mod update;
 mod watch;
 
 use state::AppState;
@@ -21,6 +23,8 @@ use tauri::{Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let context = tauri::generate_context!();
+    let updater = update::configured(&context);
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init());
@@ -30,6 +34,9 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![shortcuts::HIDDEN_ARG]),
         ));
+        if updater {
+            builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+        }
     }
     builder
         .manage(AppState::default())
@@ -38,6 +45,7 @@ pub fn run() {
             commands::scan,
             commands::topology,
             commands::explain,
+            commands::http_info,
             commands::plan,
             commands::stop,
             commands::free_port,
@@ -54,8 +62,9 @@ pub fn run() {
             commands::set_hotkey,
             commands::hotkeys,
             commands::remote_scan,
+            update::install_update,
         ])
-        .setup(|app| {
+        .setup(move |app| {
             let handle = app.handle().clone();
             let tray_ok = match tray::setup_tray(&handle) {
                 Ok(()) => true,
@@ -67,6 +76,9 @@ pub fn run() {
             app.state::<AppState>()
                 .tray_ok
                 .store(tray_ok, Ordering::Relaxed);
+            app.state::<AppState>()
+                .updater
+                .store(updater && cfg!(desktop), Ordering::Relaxed);
             let hotkey = app.state::<AppState>().store.config().hotkey;
             shortcuts::setup(app, &hotkey);
             if tray_ok && shortcuts::started_hidden() {
@@ -74,6 +86,7 @@ pub fn run() {
                     let _ = w.hide();
                 }
             }
+            update::spawn_check(handle.clone());
             watch::spawn(handle);
             Ok(())
         })
@@ -91,6 +104,6 @@ pub fn run() {
                 }
             }
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running portwise");
 }

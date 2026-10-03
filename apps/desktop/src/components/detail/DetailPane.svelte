@@ -13,7 +13,7 @@
   import ProcessPanel from "./ProcessPanel.svelte";
   import NetworkPanel from "./NetworkPanel.svelte";
   import CommandsPanel from "./CommandsPanel.svelte";
-  import type { Explanation, Graph, GraphNode, PortEntry } from "../../lib/types";
+  import type { Explanation, Graph, GraphNode, HttpInfo, PortEntry } from "../../lib/types";
   import { dependencies, dependents, nodeForEntry } from "../../lib/graph";
   import { canOpen } from "../../lib/format";
   import { detailTabs, resolveTab, stopState, type DetailTab } from "../../lib/detail";
@@ -22,6 +22,7 @@
   let {
     entry,
     explanation,
+    http = null,
     loading,
     busy,
     drawer = false,
@@ -40,6 +41,7 @@
   }: {
     entry: PortEntry | null;
     explanation: Explanation | null;
+    http?: HttpInfo | null;
     loading: boolean;
     busy: boolean;
     drawer?: boolean;
@@ -85,7 +87,7 @@
       <div class="body" in:fade={{ duration: reduced ? 0 : 120 }}>
         <ScrollArea bind:el={scroller}>
           <div role="tabpanel" id={panelId(base, active)} aria-labelledby={tabId(base, active)} class="panel">
-            {#if active === "overview"}<OverviewPanel {entry} {explanation} {loading} {node} />
+            {#if active === "overview"}<OverviewPanel {entry} {explanation} {http} {loading} {node} />
             {:else if active === "connections" && node && graph}<ConnectionsPanel {graph} {node} {cluster} {deps} {users} {onstopcluster} {onselectnode} />
             {:else if active === "process"}<ProcessPanel {entry} {node} {oncopy} />
             {:else if active === "network"}<NetworkPanel {entry} {oncopy} />
