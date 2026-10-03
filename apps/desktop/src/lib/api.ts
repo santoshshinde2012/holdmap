@@ -42,6 +42,16 @@ export async function stop(target: string, force: boolean, allowProtected = fals
   return call("stop", { target, force, allowProtected });
 }
 
+export async function freePort(near: number): Promise<number | null> {
+  if (!isTauri) {
+    const used = new Set(MOCK_SNAPSHOT.entries.map((e) => e.port));
+    let p = near;
+    while (used.has(p)) p++;
+    return p;
+  }
+  return call("free_port", { near });
+}
+
 export async function openUrl(url: string): Promise<void> {
   if (!isTauri) {
     window.open(url, "_blank", "noopener");

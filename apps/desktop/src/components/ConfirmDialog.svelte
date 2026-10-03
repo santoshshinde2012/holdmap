@@ -1,36 +1,60 @@
+<script lang="ts" module>
+  export type Phase = "confirm" | "running" | "done" | "failed";
+</script>
+
 <script lang="ts">
+  import { fly, fade } from "svelte/transition";
   import Icon from "./Icon.svelte";
-  import type { ActionPlan, PortEntry } from "../lib/types";
-  import { describeStep, isForce, title } from "../lib/format";
+  import FrameworkIcon from "./FrameworkIcon.svelte";
+  import type { ActionPlan, PortEntry, StopReport } from "../lib/types";
+  import { describeStep, isForce, seconds, title } from "../lib/format";
 
   let {
     entry,
     plan,
-    running,
+    phase,
     log,
+    report,
     onconfirm,
     oncancel,
     onoverride,
   }: {
     entry: PortEntry;
     plan: ActionPlan;
-    running: boolean;
+    phase: Phase;
     log: string[];
+    report: StopReport | null;
     onconfirm: () => void;
     oncancel: () => void;
     onoverride: () => void;
   } = $props();
 
+  const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   let dialog: HTMLDivElement | undefined = $state();
   let confirmBtn: HTMLButtonElement | undefined = $state();
   const force = $derived(isForce(plan));
   const blocked = $derived(plan.blocked);
+  const running = $derived(phase === "running");
+  const grace = $derived.by(() => {
+    const s = plan.steps.find((x) => x.action === "signal_processes");
+    return s && s.action === "signal_processes" && !s.force ? s.timeout_ms : 0;
+  });
+  const escalated = $derived(log.some((l) => /SIGKILL/.test(l) && /send|sent/.test(l)));
+  const freed = $derived(phase === "done" || log.some((l) => /is free/.test(l)));
+  const verb = $derived(force ? "Force kill" : entry.container ? "Stop container" : "Stop");
+
+  function stepState(i: number): "done" | "active" | "pending" {
+    if (phase === "done") return "done";
+    if (phase !== "running") return "pending";
+    const last = plan.steps.length - 1;
+    if (i < last) return freed || log.length > 1 ? "done" : "active";
+    return freed ? "done" : log.length > 0 ? "active" : "pending";
+  }
 
   $effect(() => {
-    (confirmBtn ?? dialog?.querySelector<HTMLButtonElement>("button"))?.focus();
+    if (phase === "confirm") (confirmBtn ?? dialog?.querySelector<HTMLButtonElement>("button"))?.focus();
   });
 
-  // Keep Tab inside the dialog.
   function trap(e: KeyboardEvent) {
     if (e.key !== "Tab" || !dialog) return;
     const items = [...dialog.querySelectorAll<HTMLElement>("button:not([disabled])")];
@@ -41,84 +65,124 @@
   }
 </script>
 
-<div class="backdrop" role="presentation" onclick={() => !running && oncancel()}>
+<div class="backdrop" role="presentation" transition:fade={{ duration: reduced ? 0 : 120 }} onclick={() => phase === "confirm" && oncancel()}>
   <div
     class="dialog"
     role="alertdialog"
     aria-modal="true"
     aria-labelledby="confirm-title"
     aria-describedby="confirm-summary"
+    aria-busy={running}
     tabindex="-1"
     bind:this={dialog}
+    in:fly={{ y: reduced ? 0 : 8, duration: reduced ? 0 : 180 }}
     onclick={(e) => e.stopPropagation()}
     onkeydown={trap}
   >
-    <div class="icon" class:danger={!blocked} class:warn={!!blocked}>
-      <Icon name={blocked ? "shield" : force ? "zap" : "stop"} size={18} />
-    </div>
-    <h2 id="confirm-title">
-      {#if blocked}Can't stop :{entry.port} safely
-      {:else if force}Force-kill {title(entry)} on :{entry.port}?
-      {:else}Stop {title(entry)} on :{entry.port}?{/if}
-    </h2>
-    <p id="confirm-summary" class="summary selectable">{blocked ? blocked.message : plan.summary}</p>
-
-    {#if !blocked}
-      <ol class="steps">
-        {#each plan.steps as s, i}
-          <li><span class="n">{i + 1}</span><span>{describeStep(s)}</span></li>
-        {/each}
-      </ol>
-      {#each plan.warnings as w}
-        <div class="warning"><Icon name="alert" size={14} />{w}</div>
-      {/each}
-      {#if plan.risk !== "low"}
-        <div class="warning strong"><Icon name="alert" size={14} />
-          {plan.risk === "high" ? "High risk: this isn't one of your dev servers." : "This isn't a dev server — make sure you don't need it."}
-        </div>
-      {/if}
-    {/if}
-
-    {#if running || log.length}
-      <div class="log mono" aria-live="polite">
-        {#each log as line}<div>› {line}</div>{/each}
-        {#if running}<div class="running"><span class="spin"><Icon name="refresh" size={12} /></span> working…</div>{/if}
+    {#if phase === "done" && report}
+      <div class="result" in:fade={{ duration: reduced ? 0 : 150 }} role="status">
+        <div class="big-check"><Icon name="check" size={26} /></div>
+        <h2 id="confirm-title">Port {entry.port} is free</h2>
+        <p id="confirm-summary">{title(entry)} stopped in {seconds(report.elapsed_ms)}{report.escalated ? " — it ignored SIGTERM, so portwise used SIGKILL" : ""}.</p>
       </div>
-    {/if}
+    {:else}
+      <div class="top">
+        <FrameworkIcon {entry} size={40} />
+        <div class="tt">
+          <h2 id="confirm-title">
+            {#if blocked}Can't stop :{entry.port} safely{:else}{verb} {title(entry)}?{/if}
+          </h2>
+          <div class="sub mono">:{entry.port} · {entry.process ? `${entry.process.name} · PID ${entry.process.pid}` : entry.container?.name ?? ""}</div>
+        </div>
+        {#if !blocked}<span class="badge risk-{plan.risk}">{plan.risk} risk</span>{/if}
+      </div>
+      <p id="confirm-summary" class="summary selectable">{blocked ? blocked.message : plan.summary}</p>
 
-    <footer>
-      {#if blocked}
-        {#if blocked.kind === "protected"}
-          <button class="btn danger-ghost" onclick={onoverride}>I understand, stop it anyway</button>
+      {#if !blocked}
+        <ol class="steps" aria-label="Plan">
+          {#each plan.steps as s, i}
+            {@const st = stepState(i)}
+            <li class={st}>
+              <span class="n" aria-hidden="true">
+                {#if st === "done"}<Icon name="check" size={11} />{:else if st === "active"}<span class="spin"><Icon name="refresh" size={11} /></span>{:else}{i + 1}{/if}
+              </span>
+              <span>{describeStep(s)}</span>
+              <span class="sr-only">{st}</span>
+            </li>
+          {/each}
+        </ol>
+        {#if running && grace && !freed}
+          <div class="grace" aria-hidden="true">
+            <div class="bar"><div class="fill" class:esc={escalated} style="--dur: {grace}ms"></div></div>
+            <span>{escalated ? "Still running — sent SIGKILL" : `Waiting up to ${seconds(grace)} for a graceful exit…`}</span>
+          </div>
         {/if}
-        <button class="btn primary" onclick={oncancel} bind:this={confirmBtn}>Got it</button>
-      {:else}
-        <button class="btn" onclick={oncancel} disabled={running}>Cancel <kbd>Esc</kbd></button>
-        <button class="btn danger" onclick={onconfirm} disabled={running} bind:this={confirmBtn}>
-          {#if running}<span class="spin"><Icon name="refresh" size={13} /></span> Stopping…{:else}{force ? "Force kill" : "Stop"} <kbd class="k">↵</kbd>{/if}
-        </button>
+        {#each plan.warnings as w}<div class="warning"><Icon name="alert" size={14} />{w}</div>{/each}
+        {#if plan.risk !== "low" && phase === "confirm"}
+          <div class="warning strong"><Icon name="alert" size={14} />{plan.risk === "high" ? "High risk: this isn't one of your dev servers." : "This isn't a dev server — make sure nothing needs it."}</div>
+        {/if}
+        {#if phase === "failed" && report}
+          <div class="warning strong" role="alert"><Icon name="alert" size={14} />{report.error ?? `Port still busy: ${report.ports_still_busy.join(", ")}`}</div>
+        {/if}
       {/if}
-    </footer>
+
+      {#if log.length}
+        <details class="log" open={phase === "failed"}>
+          <summary>Activity ({log.length})</summary>
+          <div class="mono" aria-live="polite">{#each log as line}<div>› {line}</div>{/each}</div>
+        </details>
+      {/if}
+
+      <footer>
+        {#if blocked}
+          {#if blocked.kind === "protected"}<button class="btn danger-ghost" onclick={onoverride}>I understand — stop anyway</button>{/if}
+          <button class="btn primary" onclick={oncancel} bind:this={confirmBtn}>Got it</button>
+        {:else if phase === "failed"}
+          <button class="btn primary" onclick={oncancel} bind:this={confirmBtn}>Close</button>
+        {:else}
+          <span class="hint">Nothing is sent until you confirm.</span>
+          <button class="btn" onclick={oncancel} disabled={running}>Cancel <kbd>Esc</kbd></button>
+          <button class="btn danger" onclick={onconfirm} disabled={running} bind:this={confirmBtn}>
+            {#if running}<span class="spin"><Icon name="refresh" size={13} /></span>Stopping…{:else}{verb} <kbd>↵</kbd>{/if}
+          </button>
+        {/if}
+      </footer>
+    {/if}
   </div>
 </div>
 
 <style>
-  .backdrop { position: fixed; inset: 0; background: rgb(8 10 16 / 0.45); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 50; animation: fade 0.15s var(--ease); }
-  .dialog { width: min(520px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg); padding: 22px 22px 18px; animation: pop 0.18s var(--ease); outline: none; }
-  .icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px; margin-bottom: 12px; }
-  .icon.danger { background: var(--danger-soft); color: var(--danger); }
-  .icon.warn { background: var(--warn-soft); color: var(--warn); }
-  h2 { margin: 0 0 6px; font-size: 16px; letter-spacing: -0.01em; }
-  .summary { margin: 0 0 14px; color: var(--text-2); }
-  .steps { list-style: none; margin: 0 0 12px; padding: 12px; display: grid; gap: 8px; background: var(--surface-2); border-radius: var(--radius); }
-  .steps li { display: flex; gap: 10px; align-items: flex-start; color: var(--text-2); font-size: 12.5px; }
-  .n { flex: none; width: 19px; height: 19px; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
-  .warning { display: flex; gap: 8px; align-items: center; color: var(--warn); font-size: 12.5px; margin: 6px 0; }
+  .backdrop { position: fixed; inset: 0; background: var(--backdrop); backdrop-filter: blur(4px) saturate(120%); display: grid; place-items: center; z-index: 50; padding: var(--sp-4); }
+  .dialog { width: min(540px, 100%); background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--shadow-lg); padding: var(--sp-6); outline: none; }
+  .top { display: flex; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3); }
+  .tt { flex: 1; min-width: 0; }
+  h2 { margin: 0; font-size: var(--fs-lg); letter-spacing: -0.015em; font-weight: 650; }
+  .sub { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .summary { margin: 0 0 var(--sp-4); color: var(--text-2); }
+  .steps { list-style: none; margin: 0 0 var(--sp-3); padding: var(--sp-3); display: grid; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .steps li { display: flex; gap: 10px; align-items: flex-start; color: var(--text-2); font-size: var(--fs-sm); transition: color var(--dur-2); }
+  .steps li.done { color: var(--text); }
+  .n { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; background: var(--surface); color: var(--muted); border: 1px solid var(--border-strong); transition: background var(--dur-2), color var(--dur-2); }
+  .done .n { background: var(--ok); border-color: transparent; color: #fff; }
+  .active .n { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+  .grace { display: grid; gap: 6px; font-size: var(--fs-xs); color: var(--muted); margin: 0 0 var(--sp-3); }
+  .bar { height: 4px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+  .fill { height: 100%; width: 0; background: var(--accent); border-radius: 4px; animation: fill var(--dur) linear forwards; }
+  .fill.esc { background: var(--danger); width: 100%; animation: none; }
+  @keyframes fill { to { width: 100%; } }
+  .warning { display: flex; gap: 8px; align-items: center; color: var(--warn); font-size: var(--fs-sm); margin: 6px 0; }
   .warning.strong { font-weight: 600; }
-  .log { max-height: 130px; overflow-y: auto; font-size: 11.5px; background: var(--surface-2); color: var(--text-2); border-radius: 8px; padding: 8px 10px; margin: 10px 0 0; display: grid; gap: 2px; }
-  .running { color: var(--muted); display: flex; gap: 6px; align-items: center; }
-  footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
-  .k { background: rgb(255 255 255 / 0.18); color: inherit; border-color: transparent; height: 16px; }
-  @keyframes fade { from { opacity: 0; } }
-  @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
+  .log { margin-top: var(--sp-2); font-size: var(--fs-xs); color: var(--muted); }
+  .log summary { cursor: pointer; width: max-content; }
+  .log .mono { max-height: 120px; overflow-y: auto; font-size: 11px; background: var(--surface-2); color: var(--text-2); border-radius: var(--r-sm); padding: 8px 10px; margin-top: 6px; display: grid; gap: 2px; }
+  footer { display: flex; justify-content: flex-end; align-items: center; gap: var(--sp-2); margin-top: var(--sp-5); }
+  .hint { margin-right: auto; color: var(--muted); font-size: var(--fs-xs); }
+  .result { text-align: center; padding: var(--sp-4) 0 var(--sp-2); }
+  .result p { color: var(--muted); margin: var(--sp-2) 0 0; }
+  .big-check { width: 56px; height: 56px; margin: 0 auto var(--sp-4); border-radius: 50%; display: grid; place-items: center; background: var(--ok-soft); color: var(--ok); animation: pop 360ms var(--ease-spring); }
+  @keyframes pop { from { transform: scale(0.5); opacity: 0; } }
+  .risk-low { color: var(--ok); background: var(--ok-soft); }
+  .risk-medium { color: var(--warn); background: var(--warn-soft); }
+  .risk-high { color: var(--danger); background: var(--danger-soft); }
+  @media (max-width: 520px) { .hint { display: none; } .dialog { padding: var(--sp-4); } }
 </style>
