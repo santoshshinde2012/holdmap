@@ -165,6 +165,17 @@ fn bad_target_is_a_usage_error() {
 }
 
 #[test]
+fn tui_without_a_terminal_is_a_clean_error_not_a_panic() {
+    pw().arg("tui")
+        .write_stdin("")
+        .timeout(Duration::from_secs(10))
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("needs an interactive terminal"))
+        .stderr(predicate::str::contains("panicked").not());
+}
+
+#[test]
 fn completions_and_man_render() {
     pw().args(["completions", "zsh"])
         .assert()

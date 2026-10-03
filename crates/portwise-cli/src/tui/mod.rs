@@ -7,13 +7,17 @@ mod graph_ui;
 mod theme;
 mod ui;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use app::App;
 use ratatui::crossterm::event::{self, Event, KeyEventKind};
 use std::time::Duration;
 
 pub fn run(docker: bool) -> Result<u8> {
-    let mut terminal = ratatui::init();
+    use std::io::IsTerminal;
+    if !(std::io::stdin().is_terminal() && std::io::stdout().is_terminal()) {
+        bail!("the TUI needs an interactive terminal; use `portwise list` for scripts and pipes");
+    }
+    let mut terminal = ratatui::try_init()?;
     let mut app = App::new(docker);
     let result = (|| -> Result<()> {
         while !app.quit {
