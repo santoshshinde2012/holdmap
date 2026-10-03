@@ -23,6 +23,15 @@ fn helper_process() {
     let (kind, arg) = mode.split_once(':').unwrap_or((mode.as_str(), ""));
     match kind {
         "tcp" | "ignore-term" => {
+            if arg == "accept" {
+                let l = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+                println!("\nPORT {}", l.local_addr().unwrap().port());
+                let mut held = Vec::new();
+                for s in l.incoming().flatten() {
+                    held.push(s);
+                }
+                park(held);
+            }
             if kind == "ignore-term" {
                 // SAFETY: setting a signal disposition to SIG_IGN is always sound.
                 unsafe { libc::signal(libc::SIGTERM, libc::SIG_IGN) };
@@ -30,6 +39,27 @@ fn helper_process() {
             let l = TcpListener::bind(("127.0.0.1", 0)).unwrap();
             println!("\nPORT {}", l.local_addr().unwrap().port());
             park(l);
+        }
+        "proxy" | "client" => {
+            // Hold a live connection to the upstream port (like api → db), and for "proxy" also
+            // listen (like a dev-server proxy).
+            let upstream: u16 = arg.parse().unwrap();
+            let conn = std::net::TcpStream::connect(("127.0.0.1", upstream)).unwrap();
+            if kind == "proxy" {
+                let l = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+                // Accept downstream clients in the background and keep them open.
+                let accept = l.try_clone().unwrap();
+                std::thread::spawn(move || {
+                    let mut held = Vec::new();
+                    for s in accept.incoming().flatten() {
+                        held.push(s);
+                    }
+                });
+                println!("\nPORT {}", l.local_addr().unwrap().port());
+                park((l, conn));
+            }
+            println!("\nPORT {}", conn.local_addr().unwrap().port());
+            park(conn);
         }
         "udp" => {
             let s = UdpSocket::bind(("127.0.0.1", 0)).unwrap();
@@ -54,22 +84,25 @@ fn park<T>(_keep: T) -> ! {
     }
 }
 
-fn spawn_raw(mode: &str) -> Child {
+fn spawn_raw_in(mode: &str, cwd: Option<&std::path::Path>) -> Child {
     // The fixture servers are children of this test process, which portwise would otherwise
     // protect as "started by portwise itself".
     portwise_core::safety::set_protect_own_tree(false);
-    Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "helper_process",
-            "--nocapture",
-            "--test-threads=1",
-        ])
-        .env("PW_HELPER", mode)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("spawn helper")
+    let mut cmd = Command::new(std::env::current_exe().unwrap());
+    if let Some(d) = cwd {
+        cmd.current_dir(d);
+    }
+    cmd.args([
+        "--exact",
+        "helper_process",
+        "--nocapture",
+        "--test-threads=1",
+    ])
+    .env("PW_HELPER", mode)
+    .stdout(Stdio::piped())
+    .stderr(Stdio::null())
+    .spawn()
+    .expect("spawn helper")
 }
 
 struct Helper {
@@ -81,7 +114,11 @@ struct Helper {
 
 impl Helper {
     fn spawn(mode: &str) -> Helper {
-        let mut child = spawn_raw(mode);
+        Self::spawn_in(mode, None)
+    }
+
+    fn spawn_in(mode: &str, cwd: Option<&std::path::Path>) -> Helper {
+        let mut child = spawn_raw_in(mode, cwd);
         let mut out = BufReader::new(child.stdout.take().unwrap());
         let mut child_pid = 0;
         let port = loop {
@@ -313,4 +350,75 @@ fn stop_by_pid() {
     let report = execute(&plan, &mut |_| {});
     assert!(report.success, "{report:?}");
     assert!(h.exited());
+}
+
+/// A real three-tier stack (web → api → db) in one workspace: the topology must show the live
+/// connections, group the stack, and stop it dependents-first until every port is free.
+#[test]
+fn topology_of_real_connected_services_and_cluster_stop() {
+    let tmp = tempfile::tempdir().unwrap();
+    let ws = tmp.path().join("e2e-stack");
+    for d in ["db", "api", "web"] {
+        std::fs::create_dir_all(ws.join(d)).unwrap();
+        std::fs::write(
+            ws.join(d).join("package.json"),
+            format!("{{\"name\":\"{d}\"}}"),
+        )
+        .unwrap();
+    }
+    std::fs::write(ws.join("pnpm-workspace.yaml"), "packages: ['*']\n").unwrap();
+    let mut db = Helper::spawn_in("tcp:accept", Some(&ws.join("db")));
+    let mut api = Helper::spawn_in(&format!("proxy:{}", db.port), Some(&ws.join("api")));
+    let mut web = Helper::spawn_in(&format!("client:{}", api.port), Some(&ws.join("web")));
+    // Give the kernel a moment to show both halves of each connection.
+    std::thread::sleep(Duration::from_millis(150));
+
+    let e = engine();
+    let g = e.topology();
+    let id = |pid: u32| format!("svc:{pid}");
+    let edge = |from: u32, to: u32| {
+        g.edges
+            .iter()
+            .find(|x| x.from == id(from) && x.to == id(to))
+            .cloned()
+    };
+    let wa = edge(web.pid(), api.pid()).expect("web → api edge");
+    assert_eq!((wa.kind, wa.port), (topology::EdgeKind::Local, api.port));
+    let ad = edge(api.pid(), db.pid()).expect("api → db edge");
+    assert_eq!(ad.port, db.port);
+    assert!(
+        edge(db.pid(), api.pid()).is_none(),
+        "no reverse edge from the server side"
+    );
+    assert_eq!(
+        g.node(&id(web.pid())).unwrap().kind,
+        topology::NodeKind::Client
+    );
+    let cluster = g.find_cluster("e2e-stack").expect("workspace cluster");
+    assert_eq!(cluster.kind, topology::ClusterKind::Workspace);
+    assert_eq!(cluster.nodes.len(), 3, "{:?}", cluster.nodes);
+
+    // Stopping only the db warns that api depends on it.
+    let p = e.plan(&Target::Port(db.port), &StopOptions::default());
+    assert!(
+        p.warnings.iter().any(|w| w.contains("depends on")),
+        "{:?}",
+        p.warnings
+    );
+
+    let plan = e.plan(&Target::parse("cluster:e2e-stack"), &StopOptions::default());
+    assert!(!plan.is_blocked(), "{plan:?}");
+    let order: Vec<u32> = plan
+        .steps
+        .iter()
+        .filter_map(|s| match s {
+            Step::SignalProcesses { processes, .. } => processes.first().map(|p| p.pid),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(order, [web.pid(), api.pid(), db.pid()], "dependents first");
+    let report = execute(&plan, &mut |_| {});
+    assert!(report.success && report.freed, "{report:?}");
+    assert!(web.exited() && api.exited() && db.exited());
+    assert!(!port_busy(api.port, Protocol::Tcp) && !port_busy(db.port, Protocol::Tcp));
 }

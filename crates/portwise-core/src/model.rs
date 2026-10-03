@@ -256,6 +256,9 @@ pub struct PortEntry {
     pub is_mine: bool,
     /// Protected by safety policy (system / IDE / terminal / self).
     pub protected: bool,
+    /// The listener is a tunnel / port-forward (kubectl, ssh -L, …).
+    #[serde(default)]
+    pub tunnel: Option<crate::tunnel::TunnelInfo>,
 }
 
 /// A full scan of the machine.
