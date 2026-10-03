@@ -104,7 +104,7 @@ Check a change to the release setup locally with `dist plan`,
 | What | Needed for |
 |---|---|
 | Secret `HOMEBREW_TAP_TOKEN` (fine-grained, contents: write on `santoshshinde2012/homebrew-tap`), then `publish-jobs = ["homebrew"]` in `dist-workspace.toml` and `dist generate` | Publishing the formula to the tap (until then `portwise.rb` is only attached to the release) |
-| Secret `RELEASE_PLEASE_TOKEN` (fine-grained, contents and pull requests: write) | CI runs on the release PR (optional) |
+| Secret `RELEASE_PLEASE_TOKEN` (fine-grained, contents and pull requests: write) | The release PR; the workflow skips with a notice until it exists |
 | Secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | Signed, notarised macOS app (optional) |
 | Secrets `WINDOWS_CERTIFICATE` (base64 `.pfx`), `WINDOWS_CERTIFICATE_PASSWORD` | Signed Windows installers (optional) |
 | `npm run tauri signer generate`, then secrets `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` and variable `TAURI_UPDATER_PUBKEY` | In-app updates with signed `latest.json` (optional; keep the private key backed up) |

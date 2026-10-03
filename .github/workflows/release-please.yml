@@ -23,20 +23,27 @@ jobs:
       pull-requests: write
     steps:
       # Until v0.1.0 is tagged by hand there's no release to count commits from, and
-      # release-please would propose a release of the whole history.
-      - name: Wait for the first release tag
+      # release-please would propose a release of the whole history. It also needs
+      # RELEASE_PLEASE_TOKEN: the repo doesn't let the default token open pull requests (and
+      # workflows wouldn't run on a PR opened by it anyway).
+      - name: Wait for the first release tag and the token
         id: gate
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          HAS_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN != '' }}
         run: |
           n=$(gh api "repos/$REPO/git/matching-refs/tags/v" --jq length)
-          echo "enabled=$([ "$n" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          enabled=true
+          if [ "$n" -eq 0 ]; then enabled=false; fi
+          if [ "$HAS_TOKEN" != true ]; then
+            enabled=false
+            echo "::notice::Skipping the release PR: add the RELEASE_PLEASE_TOKEN secret (see CONTRIBUTING.md#releasing)."
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         if: steps.gate.outputs.enabled == 'true'
         with:
-          # A fine-grained token (contents + pull requests: write) lets CI run on the release PR;
-          # with the default token GitHub doesn't start workflows for it.
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
