@@ -2,6 +2,36 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
+## Unreleased: desktop UI/UX redesign
+
+### Added
+- **UI kit** (`apps/desktop/src/components/ui`): TextField, NumberInput, Select, Switch,
+  Checkbox, SegmentedControl, FilterChip, Tabs, Button, IconButton, Kbd, Tooltip, Dialog,
+  ScrollArea, CopyValue, Callout and Splitter. They share one set of heights, radii and focus
+  rings, plus a `#ui-gallery` reference page.
+- **Settings** (⌘/Ctrl + ,): launch at login, global-shortcut presets (re-registered live),
+  theme, notifications, scan interval (1–60 s, which also drives the background watcher) and
+  history size. Changes save automatically.
+- **Pin dialog** (⇧P): pin any port with a label, with validation and an "in use by" hint.
+- **Remote host dialog**: scan another machine over SSH. The host is validated in the UI and
+  again in the core, so a value starting with `-` can't inject an ssh option. Recent hosts are
+  remembered.
+
+### Changed
+- **Details pane**:
+  - a header with the port, status and quick actions
+  - Overview / Connections / Process / Network / Commands tabs
+  - a sticky footer with Open, Force kill and Stop
+  - scroll shadows, and long values that truncate with a tooltip and copy
+  - resizable in wide mode (drag, arrow keys, double-click to reset)
+  - a focus-trapped sheet in narrow windows
+- Stop-anyway asks for an explicit "I understand" checkbox. Confirm, palette, history and
+  shortcuts dialogs are rebuilt on the kit.
+- Toolbar uses segmented controls, filter chips with counts and a custom sort select. Search
+  gains a clear button and a `/` hint.
+- Accessibility: AA contrast for placeholders, hints and solid buttons in both themes; no
+  native `title` tooltips; visible focus only for keyboard users.
+
 ## Unreleased: topology, mesh and research audit
 
 ### Added

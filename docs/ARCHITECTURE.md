@@ -143,11 +143,11 @@ flowchart LR
 flowchart TB
   subgraph Rust["src-tauri (portwise-desktop)"]
     LIB["lib.rs: builder, plugins<br/>(notification, autostart, global-shortcut)"]
-    CMD["commands.rs<br/>scan · topology · explain · plan · stop · pins · history · restart · autostart"]
+    CMD["commands.rs<br/>scan · topology · explain · plan · stop · pins · history · restart · autostart<br/>preferences · hotkeys · remote_scan"]
     ST["state.rs<br/>AppState (config, last snapshot)"]
     TR["tray.rs<br/>menu + top ports"]
-    W["watch.rs<br/>4 s visible / 10 s hidden → events → notifications + tray"]
-    SC["shortcuts.rs<br/>Ctrl+Alt+P / ⌘⌥P"]
+    W["watch.rs<br/>scan interval (default 4 s) / 2.5× hidden → events → notifications + tray"]
+    SC["shortcuts.rs<br/>presets, re-registered at runtime"]
     LIB --> CMD & TR & W & SC
     CMD & TR & W --> ST
   end
@@ -156,11 +156,12 @@ flowchart TB
     GV["GraphView.svelte<br/>@xyflow/svelte"]
     NODES["components/graph/<br/>ServiceNode · ClusterNode · TrafficEdge · FitOnChange"]
     LG["lib/graph.ts<br/>dagre layered · force · toFlow · related · sections"]
-    OTHER["DetailPane · ConfirmDialog · HistoryPanel · PortRow"]
+    OTHER["detail/DetailPane · Settings · Pin · Remote · Confirm · History · PortRow"]
+    KIT["components/ui/<br/>UI kit (see below)"]
     API["lib/api.ts (invoke) · lib/mock.ts (browser dev)"]
     APP --> GV --> NODES
     GV --> LG
-    APP --> OTHER
+    APP --> OTHER --> KIT
     APP --> API
   end
   API -- "Tauri IPC" --> CMD
@@ -169,6 +170,30 @@ flowchart TB
 `commands.rs` only converts arguments and calls the core. All behaviour lives in `portwise-core`,
 and all view logic (layout, filtering, ordering) lives in pure TypeScript modules that vitest
 covers.
+
+### Desktop UI kit
+
+`apps/desktop/src/components/ui/` is the only place that styles controls. Feature components
+compose it and never restyle inputs themselves. Open the app with `#ui-gallery` to see every
+control in both themes (`src/dev/Gallery.svelte`).
+
+| Component | Notes |
+|---|---|
+| `Field` | label, hint, error (`role=alert`), required/optional, counter; wires `aria-describedby` / `aria-invalid` |
+| `TextField` | default / filled, leading icon, clear button (Esc clears first), kbd hint, mono, trailing slot |
+| `NumberInput` | spinbutton: ↑/↓ (Shift ×10), Home/End, steppers, unit, never commits an invalid value |
+| `Select` | APG select-only combobox: popover listbox, type-ahead, descriptions, prefix label |
+| `Switch` · `Checkbox` · `SegmentedControl` · `FilterChip` · `Tabs` | roving focus via `lib/roving.ts` |
+| `Button` · `IconButton` · `Kbd` | variants primary / secondary / ghost / soft / danger / danger-outline; xs 24 · sm 28 · md 32 · lg 36; loading, `tip` |
+| `Dialog` | center / right sheet / top; focus trap + restore (`lib/focus.ts`), Esc + backdrop close, alertdialog |
+| `ScrollArea` · `CopyValue` · `Callout` · `Splitter` · `SettingRow` · `SettingsGroup` · `RichText` | scroll-edge shadows, truncate + tooltip + copy, resizable pane |
+
+Tooltips are one shared element driven by the `use:tooltip` action (`lib/tooltip.ts`); native
+`title` is not used. Tokens live in `app.css` (`--h-*`, `--r-*`, `--input-*`, `--focus-ring`,
+`--accent-fg`, `--danger-fg`), and `lib/kit.test.ts` checks the text tokens against WCAG AA in
+both themes. The details pane's logic (`lib/detail.ts`: tabs, footer state, CLI equivalents)
+and the Settings contract (`lib/settings.ts`: `SettingsModel` in, `SettingsActions` out) are
+pure, so the dialogs depend on interfaces rather than on `api.ts`.
 
 ## 6. Graph library choice
 
