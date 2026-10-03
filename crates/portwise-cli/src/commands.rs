@@ -229,7 +229,10 @@ pub fn inspect(a: &PortArgs, docker: bool) -> Result<u8> {
         writeln!(
             out,
             "\n{}",
-            bold(format!("{} other socket(s) on this port", others.len()))
+            bold(format!(
+                "{} on this port",
+                portwise_core::util::count(others.len(), "other socket", "other sockets")
+            ))
         )?;
         write!(out, "{}", render::list_table(&others, false, true))?;
     }

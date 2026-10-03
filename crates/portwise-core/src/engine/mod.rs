@@ -248,7 +248,12 @@ impl Engine {
                 if tw > 0 {
                     ex.owners = vec![Owner::TimeWait { connections: tw }];
                     ex.headline = format!(
-                        "Nothing is listening on port {port}; {tw} recently closed connection(s) are in TIME_WAIT."
+                        "Nothing is listening on port {port}; {} in TIME_WAIT.",
+                        crate::util::count(
+                            tw,
+                            "recently closed connection is",
+                            "recently closed connections are"
+                        )
                     );
                     ex.details.push("TIME_WAIT sockets have no owning process and clear by themselves (typically within 60 s).".into());
                     ex.details.push("Servers that set SO_REUSEADDR (Node, Python, Go, Rust and most frameworks do) can bind immediately.".into());

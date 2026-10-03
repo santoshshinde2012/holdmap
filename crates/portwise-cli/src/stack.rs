@@ -466,8 +466,8 @@ pub fn down(a: &DownArgs, docker: bool) -> Result<u8> {
     }
     if !a.yes
         && !confirm(&format!(
-            "Stop {} service(s) of {}?",
-            runnable.len(),
+            "Stop {} of {}?",
+            portwise_core::util::count(runnable.len(), "service", "services"),
             stack.name
         ))?
     {
@@ -719,10 +719,10 @@ pub fn init_project(force: bool, print: bool, docker: bool) -> Result<u8> {
         );
     } else {
         println!(
-            "{} wrote {} with {} service(s): {}",
+            "{} wrote {} with {}: {}",
             style::ok_mark(),
             bold(tilde(&path)),
-            services.len(),
+            portwise_core::util::count(services.len(), "service", "services"),
             services
                 .iter()
                 .map(|s| s.0.as_str())

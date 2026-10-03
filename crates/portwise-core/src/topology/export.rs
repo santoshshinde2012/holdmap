@@ -313,7 +313,10 @@ impl TreeExporter<'_> {
             .map(|e| e.connections)
             .sum();
         if inbound > 0 {
-            deps.push(st.warn(&format!("{back} {inbound} external connection(s)")));
+            deps.push(st.warn(&format!(
+                "{back} {}",
+                crate::util::count(inbound, "external connection", "external connections")
+            )));
         }
         for (i, d) in deps.iter().enumerate() {
             let last = i + 1 == deps.len();

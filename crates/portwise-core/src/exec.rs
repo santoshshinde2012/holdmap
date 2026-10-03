@@ -223,10 +223,16 @@ pub fn execute(plan: &ActionPlan, progress: &mut dyn FnMut(&str)) -> StopReport 
     report.elapsed_ms = started.elapsed().as_millis() as u64;
     if !report.success {
         report.error = Some(if !all_free {
-            format!(
-                "port(s) {:?} still in use: something else may hold them, or a supervisor restarted the process",
-                report.ports_still_busy
-            )
+            let ports: Vec<String> = report
+                .ports_still_busy
+                .iter()
+                .map(|p| format!(":{p}"))
+                .collect();
+            let (what, it) = match ports.as_slice() {
+                [one] => (format!("port {one} is"), "it"),
+                many => (format!("ports {} are", many.join(", ")), "them"),
+            };
+            format!("{what} still in use: something else may hold {it}, or a supervisor restarted the process")
         } else {
             "some steps failed (see log)".into()
         });
