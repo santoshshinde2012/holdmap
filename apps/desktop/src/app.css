@@ -2,15 +2,31 @@
  * Tokens: spacing (4px grid), radius, type scale, elevation, motion, and semantic colours for a light
  * and a dark theme. Text colours are chosen to meet WCAG AA (≥ 4.5:1) on their surfaces. */
 :root {
-  --font: "Inter var", Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  /* Typography (see docs/ARCHITECTURE.md § Typography). Inter for UI text, JetBrains Mono for ports in
+   * code, PIDs, paths and commands; system stacks are the fallback while the files load. */
+  --font: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas, monospace;
+  --font-features: "cv11", "ss01", "calt";
 
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
   --r-xs: 4px; --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-xl: 16px; --r-full: 999px;
   /* Control heights: xs (inline), sm (dense toolbars), md (default), lg (dialog primary). */
   --h-xs: 24px; --h-sm: 28px; --h-md: 32px; --h-lg: 36px;
-  --fs-2xs: 10.5px; --fs-xs: 11.5px; --fs-sm: 12.5px; --fs-base: 13px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-hero: 28px;
-  --lh: 1.45;
+
+  /* Modular scale (px). Components never use these directly — only the semantic roles below. */
+  --fs-11: 11px; --fs-12: 12px; --fs-13: 13px; --fs-14: 14px; --fs-16: 16px; --fs-20: 20px; --fs-24: 24px; --fs-32: 32px;
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600;
+
+  /* Semantic roles: size · line height · tracking (tighter as size grows, open on small caps). */
+  --fs-display: var(--fs-24); --lh-display: 30px; --ls-display: -0.021em;
+  --fs-title: var(--fs-16);   --lh-title: 22px;   --ls-title: -0.011em;
+  --fs-heading: var(--fs-14); --lh-heading: 20px; --ls-heading: -0.006em;
+  --fs-body: var(--fs-13);    --lh-body: 20px;    --ls-body: -0.0025em;
+  --fs-body-sm: var(--fs-12); --lh-body-sm: 17px; --ls-body-sm: 0em;
+  --fs-caption: var(--fs-11); --lh-caption: 15px; --ls-caption: 0.005em;
+  --fs-label: var(--fs-11);   --lh-label: 15px;   --ls-label: 0.06em;
+  --fs-mono: var(--fs-12);    --lh-mono: 18px;    --ls-mono: 0em;
+  --fs-mono-sm: var(--fs-11); --lh-mono-sm: 16px; --ls-mono-sm: 0em;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --dur-1: 90ms; --dur-2: 160ms; --dur-3: 240ms;
@@ -120,38 +136,50 @@
 html, body, #app { height: 100%; margin: 0; }
 body {
   font-family: var(--font);
-  font-size: var(--fs-base);
-  line-height: var(--lh);
-  font-feature-settings: "cv11", "ss01", "tnum";
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  letter-spacing: var(--ls-body);
+  font-weight: var(--fw-regular);
+  font-feature-settings: var(--font-features);
+  font-optical-sizing: auto;
+  font-synthesis: none;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
 }
-button, input, select { font: inherit; color: inherit; }
+button, input, select, textarea { font: inherit; letter-spacing: inherit; color: inherit; }
+h1, h2, h3, h4, h5, h6 { font-size: inherit; font-weight: var(--fw-semibold); }
+b, strong { font-weight: var(--fw-semibold); }
+/* Numbers that line up (ports, counts, sizes, durations). */
+.tnum { font-variant-numeric: tabular-nums; }
 button { cursor: pointer; }
 .selectable, code, .mono { user-select: text; -webkit-user-select: text; }
-.mono, code { font-family: var(--mono); font-size: 12px; font-variant-ligatures: none; }
+.mono, code, kbd.mono { font-family: var(--mono); font-size: var(--fs-mono); line-height: var(--lh-mono); letter-spacing: var(--ls-mono); font-feature-settings: "calt" 0; font-variant-ligatures: none; }
+/* Inline code inside prose keeps the line box of the sentence. */
+p code, li code, .prose code { line-height: inherit; }
 :focus { outline: none; }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 /* Shared tooltip surface (lib/tooltip.ts). */
 .pw-tooltip {
   position: fixed; z-index: 1000; pointer-events: none; max-width: min(360px, calc(100vw - 16px));
   padding: 5px 8px; border-radius: var(--r-sm); background: var(--tooltip-bg); color: var(--tooltip-fg);
-  font-size: var(--fs-xs); font-weight: 500; line-height: 1.35; box-shadow: var(--shadow);
+  font-size: var(--fs-body-sm); font-weight: var(--fw-medium); line-height: var(--lh-body-sm); box-shadow: var(--shadow);
   display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere;
   opacity: 0; transform: translateY(2px); transition: opacity var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
 }
 .pw-tooltip.on { opacity: 1; transform: none; }
-.pw-tooltip.mono { font-family: var(--mono); font-size: 11px; }
+.pw-tooltip.mono { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); }
 .pw-tooltip kbd { background: transparent; color: inherit; border-color: color-mix(in srgb, var(--tooltip-fg) 30%, transparent); opacity: 0.8; height: 16px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 kbd {
-  font-family: var(--font); font-size: 10.5px; font-weight: 550; line-height: 1;
+  font-family: var(--font); font-size: var(--fs-caption); font-weight: var(--fw-medium); line-height: 1;
   min-width: 18px; height: 18px; padding: 0 5px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: var(--r-xs);
@@ -167,7 +195,7 @@ kbd {
   border-radius: var(--r-md);
   border: 1px solid var(--input-border);
   background: var(--surface); color: var(--text);
-  font-weight: 550; font-size: var(--fs-sm);
+  font-weight: var(--fw-medium); font-size: var(--fs-body); line-height: var(--lh-body);
   box-shadow: var(--control-shadow);
   transition: background var(--dur-1) var(--ease), border-color var(--dur-1), box-shadow var(--dur-1), transform var(--dur-1);
   white-space: nowrap;
@@ -183,7 +211,7 @@ kbd {
 .btn.danger-ghost:hover:not(:disabled) { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
 .btn.ghost { border-color: transparent; background: transparent; box-shadow: none; color: var(--text-2); }
 .btn.ghost:hover:not(:disabled) { background: var(--row-hover); color: var(--text); border-color: transparent; }
-.btn.sm { height: var(--h-sm); padding: 0 10px; font-size: var(--fs-xs); gap: 6px; border-radius: var(--r-sm); }
+.btn.sm { height: var(--h-sm); padding: 0 10px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); gap: 6px; border-radius: var(--r-sm); }
 .btn kbd { background: rgb(255 255 255 / 0.18); color: inherit; border-color: transparent; height: 16px; }
 .btn:not(.primary):not(.danger) kbd { background: var(--surface-2); border-color: var(--border); }
 .icon-btn {
@@ -196,7 +224,7 @@ kbd {
 .badge {
   display: inline-flex; align-items: center; gap: 5px;
   height: 20px; padding: 0 7px; border-radius: var(--r-full);
-  font-size: var(--fs-2xs); font-weight: 600; white-space: nowrap; letter-spacing: 0.01em;
+  font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); white-space: nowrap; letter-spacing: var(--ls-caption);
   color: var(--tone-gray); background: var(--tone-gray-bg);
 }
 .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
