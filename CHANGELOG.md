@@ -2,6 +2,55 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
+## Unreleased: topology, mesh and research audit
+
+### Added
+- **Topology** (`portwise-core::topology`): a service graph built from local ESTABLISHED connections,
+  with listeners folded into service roots and remote peers collapsed per host. It has clusters
+  (Compose → Kubernetes → supervisor → workspace → git), tunnel and port-forward detection
+  (`tunnel.rs`: kubectl, `ssh -L`, cloudflared, ngrok), dependency-ordered stop
+  (`stop_order`, `Engine::plan_cluster`, `Target::Cluster`), and exporters (tree, JSON, DOT, Mermaid).
+- CLI:
+  - `graph` / `mesh` (`--json`, `--dot`, `--mermaid`, `--cluster`, `--no-external`)
+  - `stop --cluster NAME` and `stop cluster:NAME`
+  - `watch [--json]`
+  - `pin`, `unpin`, `pins`
+  - `history`, `restart`
+  - `open`
+  - `ssh HOST [list|graph]` (agentless remote)
+- CPU % per process.
+- TUI:
+  - graph tab (`Tab`/`v`, selection follows)
+  - `C` stops a cluster
+  - `h` toggles external hosts
+  - stops are recorded in history
+- Desktop:
+  - graph view (Svelte Flow + dagre: cluster hulls, directed edges with traffic dots, hover
+    highlighting, shared selection, minimap, layered/force layouts, both themes, reduced motion)
+  - list ⇄ graph (`g`), *Cluster* sort and grouping
+  - pinned section (`p`), history panel with restart (`h`), cluster stop (`s`) with an ordered plan
+  - *Connections* in the details pane
+  - notifications for new and conflicting listeners, launch at login (`--hidden`), global hotkey `Ctrl+Alt+P` / `⌘⌥P`
+- MCP: `get_topology`, `plan_cluster_stop`.
+- Tests:
+  - proptest (DAG stop order, deterministic ordering, parsers never panic)
+  - criterion benches (`cargo bench -p portwise-core`)
+  - topology e2e with real connected services
+  - vitest for graph layout/ordering
+- Docs:
+  - `docs/AUDIT.md`: a feature matrix of every research point
+  - `docs/ARCHITECTURE.md`: mermaid diagrams and the graph library rationale
+- New screenshots.
+
+### Changed
+- SOLID refactor of the core:
+  - `SocketProvider`/`ProcessProvider`/`ContainerProvider` behind a `Scanner`
+  - `engine/` split into one `StopStrategy` per owner kind in a `StrategyRegistry`
+  - `ProtectionPolicy` trait
+  - `project/` split into `ProjectDetector`, `ManifestRegistry` and `WorkspaceMarker`s
+- Desktop backend split into `commands`, `state`, `tray`, `watch` and `shortcuts`. The background re-scan
+  slows to every 10 s while the window is hidden.
+
 ## Unreleased: shared protection rule
 
 - Core: one protection rule shared by every frontend. Portwise's own process tree (including the processes it started) is
