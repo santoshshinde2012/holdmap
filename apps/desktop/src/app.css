@@ -6,7 +6,9 @@
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
 
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
-  --r-xs: 5px; --r-sm: 7px; --r-md: 10px; --r-lg: 14px; --r-xl: 18px; --r-full: 999px;
+  --r-xs: 4px; --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-xl: 16px; --r-full: 999px;
+  /* Control heights: xs (inline), sm (dense toolbars), md (default), lg (dialog primary). */
+  --h-xs: 24px; --h-sm: 28px; --h-md: 32px; --h-lg: 36px;
   --fs-2xs: 10.5px; --fs-xs: 11.5px; --fs-sm: 12.5px; --fs-base: 13px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-hero: 28px;
   --lh: 1.45;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -32,6 +34,7 @@
   --accent-softer: rgb(80 72 229 / 0.05);
   --ring: rgb(80 72 229 / 0.5);
   --danger: #c8261b;
+  --danger-fg: #ffffff;
   --danger-hover: #b01f15;
   --danger-soft: rgb(217 45 32 / 0.08);
   --warn: #a64206;
@@ -44,6 +47,16 @@
   --row-hover: rgb(17 24 39 / 0.035);
   --row-selected: rgb(80 72 229 / 0.075);
   --backdrop: rgb(15 18 30 / 0.36);
+  /* Inputs: placeholder uses --faint (≥ 4.5:1 on --input-bg). */
+  --input-bg: #ffffff;
+  --input-border: rgb(17 24 39 / 0.16);
+  --input-border-hover: rgb(17 24 39 / 0.28);
+  --input-disabled: #f3f4f6;
+  --focus-ring: 0 0 0 3px rgb(80 72 229 / 0.18);
+  --danger-ring: 0 0 0 3px rgb(200 38 27 / 0.16);
+  --control-shadow: 0 1px 2px rgb(16 24 40 / 0.05);
+  --tooltip-bg: #14161c;
+  --tooltip-fg: #f4f5f7;
 
   --tone-green: #067647; --tone-green-bg: rgb(18 183 106 / 0.12);
   --tone-blue: #1849a9; --tone-blue-bg: rgb(46 144 250 / 0.12);
@@ -72,6 +85,7 @@
   --accent-softer: rgb(142 140 255 / 0.07);
   --ring: rgb(142 140 255 / 0.6);
   --danger: #ff6a5c;
+  --danger-fg: #1c0503;
   --danger-hover: #ff8478;
   --danger-soft: rgb(255 106 92 / 0.12);
   --warn: #f7b955;
@@ -84,6 +98,15 @@
   --row-hover: rgb(255 255 255 / 0.03);
   --row-selected: rgb(142 140 255 / 0.11);
   --backdrop: rgb(0 0 0 / 0.55);
+  --input-bg: #0c0d11;
+  --input-border: rgb(255 255 255 / 0.12);
+  --input-border-hover: rgb(255 255 255 / 0.22);
+  --input-disabled: #15161b;
+  --focus-ring: 0 0 0 3px rgb(142 140 255 / 0.25);
+  --danger-ring: 0 0 0 3px rgb(255 106 92 / 0.22);
+  --control-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  --tooltip-bg: #eef0f4;
+  --tooltip-fg: #0b0f19;
 
   --tone-green: #47d18c; --tone-green-bg: rgb(71 209 140 / 0.13);
   --tone-blue: #6cb4ff; --tone-blue-bg: rgb(108 180 255 / 0.13);
@@ -113,49 +136,62 @@ button { cursor: pointer; }
 .selectable, code, .mono { user-select: text; -webkit-user-select: text; }
 .mono, code { font-family: var(--mono); font-size: 12px; font-variant-ligatures: none; }
 :focus { outline: none; }
-:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--r-sm); }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+/* Shared tooltip surface (lib/tooltip.ts). */
+.pw-tooltip {
+  position: fixed; z-index: 1000; pointer-events: none; max-width: min(360px, calc(100vw - 16px));
+  padding: 5px 8px; border-radius: var(--r-sm); background: var(--tooltip-bg); color: var(--tooltip-fg);
+  font-size: var(--fs-xs); font-weight: 500; line-height: 1.35; box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere;
+  opacity: 0; transform: translateY(2px); transition: opacity var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
+}
+.pw-tooltip.on { opacity: 1; transform: none; }
+.pw-tooltip.mono { font-family: var(--mono); font-size: 11px; }
+.pw-tooltip kbd { background: transparent; color: inherit; border-color: color-mix(in srgb, var(--tooltip-fg) 30%, transparent); opacity: 0.8; height: 16px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 kbd {
-  font-family: var(--font); font-size: 10.5px; font-weight: 500; line-height: 1;
+  font-family: var(--font); font-size: 10.5px; font-weight: 550; line-height: 1;
   min-width: 18px; height: 18px; padding: 0 5px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: var(--r-xs);
-  color: var(--muted); background: var(--surface);
-  border: 1px solid var(--border-strong); box-shadow: 0 1px 0 var(--border-strong);
+  color: var(--muted); background: var(--surface-2);
+  border: 1px solid var(--border-strong); border-bottom-width: 2px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 
+/* Legacy class API for buttons; mirrors components/ui/Button.svelte so both look identical. */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
-  height: 32px; padding: 0 var(--sp-3);
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
+  height: var(--h-md); padding: 0 var(--sp-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--input-border);
+  background: var(--surface); color: var(--text);
   font-weight: 550; font-size: var(--fs-sm);
-  box-shadow: var(--shadow-sm);
-  transition: background var(--dur-2) var(--ease), border-color var(--dur-2), transform var(--dur-1), box-shadow var(--dur-2);
+  box-shadow: var(--control-shadow);
+  transition: background var(--dur-1) var(--ease), border-color var(--dur-1), box-shadow var(--dur-1), transform var(--dur-1);
   white-space: nowrap;
 }
-.btn:hover { background: var(--surface-2); }
-.btn:active { transform: scale(0.98); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--input-border-hover); }
+.btn:active:not(:disabled) { transform: translateY(0.5px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 .btn.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
-.btn.primary:hover { background: var(--accent-hover); }
-.btn.danger { background: var(--danger); color: #fff; border-color: transparent; }
-.btn.danger:hover { background: var(--danger-hover); }
-.btn.danger-ghost { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); background: transparent; box-shadow: none; }
-.btn.danger-ghost:hover { background: var(--danger-soft); }
-.btn.ghost { border-color: transparent; background: transparent; box-shadow: none; }
-.btn.ghost:hover { background: var(--surface-2); }
-.btn.sm { height: 26px; padding: 0 var(--sp-2); font-size: var(--fs-xs); gap: 5px; }
-.btn kbd { background: rgb(255 255 255 / 0.16); color: inherit; border-color: transparent; box-shadow: none; height: 16px; }
-.btn:not(.primary):not(.danger) kbd { background: var(--surface-2); }
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn.danger { background: var(--danger); color: var(--danger-fg); border-color: transparent; }
+.btn.danger:hover:not(:disabled) { background: var(--danger-hover); }
+.btn.danger-ghost { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); background: transparent; box-shadow: none; }
+.btn.danger-ghost:hover:not(:disabled) { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
+.btn.ghost { border-color: transparent; background: transparent; box-shadow: none; color: var(--text-2); }
+.btn.ghost:hover:not(:disabled) { background: var(--row-hover); color: var(--text); border-color: transparent; }
+.btn.sm { height: var(--h-sm); padding: 0 10px; font-size: var(--fs-xs); gap: 6px; border-radius: var(--r-sm); }
+.btn kbd { background: rgb(255 255 255 / 0.18); color: inherit; border-color: transparent; height: 16px; }
+.btn:not(.primary):not(.danger) kbd { background: var(--surface-2); border-color: var(--border); }
 .icon-btn {
-  width: 30px; height: 30px; display: inline-grid; place-items: center;
-  border-radius: var(--r-sm); border: 1px solid transparent; background: transparent; color: var(--muted);
-  transition: background var(--dur-2), color var(--dur-2);
+  width: var(--h-md); height: var(--h-md); display: inline-grid; place-items: center;
+  border-radius: var(--r-md); border: 1px solid transparent; background: transparent; color: var(--muted);
+  transition: background var(--dur-1), color var(--dur-1);
 }
-.icon-btn:hover { background: var(--surface-2); color: var(--text); }
+.icon-btn:hover { background: var(--row-hover); color: var(--text); }
 
 .badge {
   display: inline-flex; align-items: center; gap: 5px;

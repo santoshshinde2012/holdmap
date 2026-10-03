@@ -20,5 +20,7 @@ export default defineConfig({
     minify: !process.env.TAURI_ENV_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
+  // Component tests mount real Svelte 5 components in jsdom (client build, not SSR).
+  resolve: process.env.VITEST ? { conditions: ["browser"] } : undefined,
   test: { environment: "node", include: ["src/**/*.test.ts"] },
 });

@@ -1,0 +1,24 @@
+// portwise UI kit: one consistent set of controls (see docs/ARCHITECTURE.md § Desktop UI kit).
+export { default as Button } from "./Button.svelte";
+export { default as IconButton } from "./IconButton.svelte";
+export { default as Kbd } from "./Kbd.svelte";
+export { default as Field } from "./Field.svelte";
+export { default as TextField } from "./TextField.svelte";
+export { default as NumberInput } from "./NumberInput.svelte";
+export { default as Select } from "./Select.svelte";
+export { default as Switch } from "./Switch.svelte";
+export { default as Checkbox } from "./Checkbox.svelte";
+export { default as SegmentedControl } from "./SegmentedControl.svelte";
+export { default as FilterChip } from "./FilterChip.svelte";
+export { default as Tabs } from "./Tabs.svelte";
+export { default as Dialog } from "./Dialog.svelte";
+export { default as ScrollArea } from "./ScrollArea.svelte";
+export { default as CopyValue } from "./CopyValue.svelte";
+export type { SelectOption } from "./Select.svelte";
+export type { Segment } from "./SegmentedControl.svelte";
+export type { TabItem } from "./Tabs.svelte";
+export { default as Callout } from "./Callout.svelte";
+export { default as Splitter } from "./Splitter.svelte";
+export { default as SettingRow } from "./SettingRow.svelte";
+export { default as SettingsGroup } from "./SettingsGroup.svelte";
+export { default as RichText } from "./RichText.svelte";
