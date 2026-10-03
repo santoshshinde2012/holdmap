@@ -10,6 +10,13 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/santoshshinde2012/portwise/actions/workflows/ci.yml"><img src="https://github.com/santoshshinde2012/portwise/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
+  <a href="#licence"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="Licence: MIT OR Apache-2.0" /></a>
+  <img src="https://img.shields.io/badge/rust-1.95%2B-orange" alt="Rust 1.95+" />
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platforms: macOS, Linux, Windows" />
+</p>
+
+<p align="center">
   <img src="docs/screenshots/desktop-overview-light.png" width="860" alt="The portwise desktop app: the port list grouped by kind, with the details pane for port 3000 open" />
 </p>
 
@@ -67,7 +74,7 @@ git clone https://github.com/santoshshinde2012/portwise && cd portwise
 cargo install --locked --path crates/portwise-cli   # installs `portwise` into ~/.cargo/bin
 ```
 
-Once a release is tagged, [cargo-dist](https://opensource.axo.dev/cargo-dist/) installers are
+Once a release is tagged, [cargo-dist](https://github.com/axodotdev/cargo-dist) installers are
 available for macOS, Linux and Windows:
 
 ```sh

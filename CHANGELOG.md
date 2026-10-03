@@ -115,7 +115,7 @@ All notable changes to portwise are documented here. The format follows
 
 - Outdated and redundant screenshots; the README keeps a small, current set.
 
-## [0.1.0] - 2026-10-03
+## 0.1.0 - 2026-10-03
 
 ### Added
 
@@ -136,5 +136,4 @@ All notable changes to portwise are documented here. The format follows
 - Desktop app (Tauri v2 and Svelte 5): a grouped live list, search and filters, an explain pane,
   confirmed stop with live progress, light and dark themes, keyboard shortcuts and a tray menu.
 
-[Unreleased]: https://github.com/santoshshinde2012/portwise/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/santoshshinde2012/portwise/releases/tag/v0.1.0
+[Unreleased]: https://github.com/santoshshinde2012/portwise/commits/main
