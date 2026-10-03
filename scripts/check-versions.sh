@@ -18,6 +18,16 @@ versions = {
     "version.txt": open("version.txt").read().strip(),
     ".release-please-manifest.json": json.load(open(".release-please-manifest.json"))["."],
 }
+readme = open("README.md").read()
+block = re.search(r"x-release-please-start-version -->\n(.*?)<!-- x-release-please-end", readme, re.S)
+if not block:
+    sys.exit("README.md lost its x-release-please version block (desktop download links)")
+for n, line in enumerate(block.group(1).splitlines()):
+    found = re.findall(r"\d+\.\d+\.\d+", line)
+    if len(found) > 1:
+        sys.exit(f"README.md download block line {n + 1} has more than one version; release-please only bumps the first")
+    if found:
+        versions[f"README.md download link {n + 1}"] = found[0]
 for p in lock["package"]:
     if p["name"] in ("portwise", "portwise-core", "portwise-mcp", "portwise-desktop"):
         versions[f"Cargo.lock {p['name']}"] = p["version"]
