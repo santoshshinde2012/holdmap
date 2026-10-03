@@ -80,32 +80,30 @@ Windows (PowerShell):
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-installer.ps1 | iex"
 ```
 
-Where the binary goes: the v0.1.0 installer uses `~/.cargo/bin` (Rust's usual folder, though
-Rust isn't needed); later releases use `~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows).
-`PORTWISE_INSTALL_DIR=DIR` overrides it. Unless that folder is already on your `PATH`, the
-installer adds it for new shells: it appends a line that sources `~/.cargo/env` (v0.1.0) or
-`~/.config/portwise/env.sh` (later) to `~/.profile`, `~/.zshrc` and any existing `~/.bashrc` /
-`~/.bash_profile`, and adds a fish `conf.d` file (Windows: the user `PATH`). Open a new terminal
-to pick it up.
+The binary goes to `~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows; v0.1.0 used
+`~/.cargo/bin`); `PORTWISE_INSTALL_DIR=DIR` overrides it. If that folder is already on your
+`PATH`, `portwise` works straight away. If not, the installer adds it for new shells (a line that
+sources `~/.config/portwise/env.sh` in `~/.profile`, `~/.zshrc` and any existing `~/.bashrc` /
+`~/.bash_profile`, plus a fish `conf.d` file; the user `PATH` on Windows) and says so: open a new
+terminal, or run the `source` command it prints.
 
 Homebrew: coming soon (the tap isn't published yet).
 
 **Troubleshooting**
 
-- **`command not found: portwise` right after installing:** open a new terminal, or run
-  `source "$HOME/.cargo/env"` (v0.1.0) / `source "$HOME/.config/portwise/env.sh"` (later
-  releases) in the current one.
+- **`command not found: portwise` right after installing:** the folder wasn't on `PATH` yet.
+  Open a new terminal, or run `source "$HOME/.config/portwise/env.sh"` (v0.1.0:
+  `source "$HOME/.cargo/env"`).
 - **`Permission denied` on `~/.bash_profile`, `mkdir: ~/.config/fish/conf.d` or `ERROR: command
   failed`:** the binary is already installed; only the `PATH` edits failed, usually because an
   old `sudo` left those files owned by root. Give them back with
   `sudo chown "$USER" ~/.bash_profile` and `sudo chown -R "$USER" ~/.config/fish` and run the
   installer again, or skip the edits with `curl … | PORTWISE_NO_MODIFY_PATH=1 sh` and add the
-  folder to `PATH` yourself (e.g. `export PATH="$HOME/.cargo/bin:$PATH"` in `~/.zshrc`, or `$HOME/.local/bin` for releases
-  after v0.1.0).
+  folder to `PATH` yourself (e.g. `export PATH="$HOME/.local/bin:$PATH"` in `~/.zshrc`).
 - **Never run the installer with `sudo`.** It installs for your user only, and running it as
   root is what creates root-owned files in your home folder.
-- **Upgrading from v0.1.0** to a later release: delete the old `~/.cargo/bin/portwise` so it
-  doesn't shadow the new one in `~/.local/bin` (`portwise --version` tells you which one runs).
+- **Upgrading from v0.1.0:** delete the old `~/.cargo/bin/portwise` so it can't shadow the new
+  one in `~/.local/bin` (`command -v portwise` shows which one runs).
 
 **Or download it yourself** from the [latest release](https://github.com/santoshshinde2012/portwise/releases/latest).
 Pick your archive (`aarch64-apple-darwin` for Apple silicon, `x86_64-apple-darwin` for Intel
@@ -145,12 +143,13 @@ shell's rc file.)
 [rpm]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-0.1.0%2D1.x86_64.rpm
 <!-- x-release-please-end -->
 
-The installers aren't code-signed yet, so the OS warns the first time:
+The installers aren't notarised or Authenticode-signed yet, so the OS asks once:
 
-- **macOS** says the app "can't be opened" or is "damaged". After dragging it to Applications,
-  right-click it and choose **Open** (macOS 15 and later: try once, then **System Settings >
-  Privacy & Security > Open Anyway**), or run
-  `xattr -dr com.apple.quarantine /Applications/portwise.app`.
+- **macOS** says Apple "could not verify" portwise (or that it's from an unidentified developer).
+  Drag it to Applications, try to open it once, then choose **System Settings > Privacy &
+  Security > Open Anyway** (macOS 14 and earlier: right-click the app > **Open**). Or clear the
+  download flag: `xattr -dr com.apple.quarantine /Applications/portwise.app`. (v0.1.0's app
+  could be reported as "damaged"; that's fixed from 0.1.1, which is ad-hoc signed.)
 - **Windows** SmartScreen shows "Windows protected your PC": click **More info**, then **Run anyway**.
 
 Each release lists SHA-256 checksums (`portwise-desktop-*.sha256`) and build provenance for every
