@@ -42,7 +42,8 @@ impl TreeStyle for Ansi {
         paint(s, S::Bold)
     }
     fn port(&self, s: &str) -> String {
-        paint(s, S::Cyan)
+        // Same as the `list` table's port column and the TUI: accent + bold.
+        paint(s, S::BoldCyan)
     }
     fn dim(&self, s: &str) -> String {
         style::dim(s)

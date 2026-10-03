@@ -1,6 +1,7 @@
 //! TUI rendering.
 
 use super::app::{App, Modal, ProtoFilter, Tab};
+use super::theme;
 use crate::render::{address_label, what_label};
 use portwise_core::util::{human_bytes, human_duration, now_secs};
 use portwise_core::*;
@@ -76,7 +77,7 @@ fn chip(label: &str, on: bool) -> Span<'static> {
             Style::new().fg(Color::Black).bg(ACCENT).bold(),
         )
     } else {
-        Span::styled(format!(" {label} "), Style::new().fg(MUTED))
+        Span::styled(format!(" {label} "), theme::muted())
     }
 }
 
@@ -89,7 +90,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         Span::raw(" "),
         chip("Ports", app.tab == Tab::Ports),
         chip("Graph", app.tab == Tab::Graph),
-        Span::styled(" ⇥  ", Style::new().fg(MUTED)),
+        Span::styled(" ⇥  ", theme::muted()),
     ];
     if let Some(e) = &app.engine {
         let s = e.snapshot();
@@ -101,7 +102,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
             .count();
         spans.push(Span::styled(
             format!("{} ports", app.rows.len()),
-            Style::new().bold(),
+            theme::heading(),
         ));
         spans.push(Span::styled(
             format!(" · {dev} dev"),
@@ -116,17 +117,14 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         if s.hidden_sockets > 0 {
             spans.push(Span::styled(
                 format!(" · {} hidden", s.hidden_sockets),
-                Style::new().fg(MUTED),
+                theme::muted(),
             ));
         }
-        spans.push(Span::styled(
-            format!(" · {} ms", s.scan_ms),
-            Style::new().fg(MUTED),
-        ));
+        spans.push(Span::styled(format!(" · {} ms", s.scan_ms), theme::muted()));
     } else {
         spans.push(Span::styled(
             format!("{} scanning…", SPIN[app.spinner % SPIN.len()]),
-            Style::new().fg(MUTED),
+            theme::muted(),
         ));
     }
     let left = Line::from(spans);
@@ -161,7 +159,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
             } else {
                 "  "
             },
-            Style::new().fg(MUTED),
+            theme::muted(),
         ),
     ])
     .alignment(Alignment::Right);
@@ -172,7 +170,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
 fn draw_search(f: &mut Frame, app: &App, area: Rect) {
     let line = if app.searching {
         Line::from(vec![
-            Span::styled(" / ", Style::new().fg(ACCENT).bold()),
+            Span::styled(" / ", theme::title()),
             Span::raw(app.query.clone()),
             Span::styled(
                 "▏",
@@ -180,20 +178,20 @@ fn draw_search(f: &mut Frame, app: &App, area: Rect) {
             ),
             Span::styled(
                 "   Enter to keep · Esc to clear · try :3000, 3000-3999, proto:udp, vite",
-                Style::new().fg(MUTED),
+                theme::muted(),
             ),
         ])
     } else if !app.query.is_empty() {
         Line::from(vec![
-            Span::styled(" filter ", Style::new().fg(MUTED)),
-            Span::styled(app.query.clone(), Style::new().fg(ACCENT).bold()),
-            Span::styled("  (/ to edit, Esc to clear)", Style::new().fg(MUTED)),
+            Span::styled(" filter ", theme::muted()),
+            Span::styled(app.query.clone(), theme::title()),
+            Span::styled("  (/ to edit, Esc to clear)", theme::muted()),
         ])
     } else {
         Line::from(vec![
-            Span::styled(" Press ", Style::new().fg(MUTED)),
-            Span::styled("/", Style::new().fg(ACCENT).bold()),
-            Span::styled(" to search · sorted by ", Style::new().fg(MUTED)),
+            Span::styled(" Press ", theme::muted()),
+            Span::styled("/", theme::title()),
+            Span::styled(" to search · sorted by ", theme::muted()),
             Span::styled(
                 format!(
                     "{}{}",
@@ -211,10 +209,10 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
     app.table_area = area;
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(MUTED))
+        .border_style(theme::muted())
         .title(Line::from(vec![
-            Span::styled(" Ports ", Style::new().bold()),
-            Span::styled(format!("{} ", app.rows.len()), Style::new().fg(MUTED)),
+            Span::styled(" Ports ", theme::heading()),
+            Span::styled(format!("{} ", app.rows.len()), theme::muted()),
         ]));
     if let Some(err) = &app.error {
         let p = Paragraph::new(Text::from(vec![
@@ -223,7 +221,7 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
                 Style::new().fg(Color::Red).bold(),
             )),
             Line::from(err.clone()),
-            Line::from(Span::styled("Press r to retry.", Style::new().fg(MUTED))),
+            Line::from(Span::styled("Press r to retry.", theme::muted())),
         ]))
         .block(block)
         .wrap(Wrap { trim: true });
@@ -236,7 +234,7 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
                 "{} Scanning sockets and processes…",
                 SPIN[app.spinner % SPIN.len()]
             ),
-            Style::new().fg(MUTED),
+            theme::muted(),
         )))
         .block(block);
         f.render_widget(p, area);
@@ -250,7 +248,7 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
         };
         let p = Paragraph::new(Text::from(vec![
             Line::raw(""),
-            Line::from(Span::styled(msg, Style::new().fg(MUTED))),
+            Line::from(Span::styled(msg, theme::muted())),
         ]))
         .alignment(Alignment::Center)
         .block(block);
@@ -259,7 +257,7 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
     }
     let header = Row::new(
         ["PORT", "PROTO", "ADDRESS", "PID", "PROCESS", "WHAT"]
-            .map(|h| Cell::from(h).style(Style::new().fg(MUTED).bold())),
+            .map(|h| Cell::from(h).style(theme::label())),
     );
     let rows: Vec<Row> = app
         .rows
@@ -274,18 +272,15 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
                 Cell::from(Line::from(vec![
                     marker,
                     Span::raw(" "),
-                    Span::styled(
-                        format!(":{}", e.port),
-                        Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
-                    ),
+                    Span::styled(format!(":{}", e.port), theme::port()),
                 ])),
-                Cell::from(Span::styled(e.protocol.to_string(), Style::new().fg(MUTED))),
+                Cell::from(Span::styled(e.protocol.to_string(), theme::muted())),
                 Cell::from(Span::styled(
                     address_label(e),
                     if e.exposure == Exposure::AllInterfaces {
                         Style::new().fg(Color::Yellow)
                     } else {
-                        Style::new().fg(MUTED)
+                        theme::muted()
                     },
                 )),
                 Cell::from(e.pid.map(|p| p.to_string()).unwrap_or_else(|| "–".into())),
@@ -295,7 +290,7 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
                         .map(|p| p.name.clone())
                         .unwrap_or_else(|| "–".into()),
                     if e.protected {
-                        Style::new().fg(MUTED)
+                        theme::muted()
                     } else {
                         Style::new()
                     },
@@ -332,7 +327,7 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
         Scrollbar::new(ScrollbarOrientation::VerticalRight)
             .begin_symbol(None)
             .end_symbol(None)
-            .thumb_style(Style::new().fg(MUTED)),
+            .thumb_style(theme::muted()),
         area.inner(ratatui::layout::Margin {
             vertical: 1,
             horizontal: 0,
@@ -343,17 +338,14 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
 
 pub(super) fn section(name: &str) -> Line<'static> {
     Line::from(vec![
-        Span::styled(
-            format!("{} ", name.to_uppercase()),
-            Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
-        ),
+        Span::styled(format!("{} ", name.to_uppercase()), theme::port()),
         Span::styled("─".repeat(40), Style::new().fg(Color::Indexed(238))),
     ])
 }
 
 pub(super) fn kv(k: &str, v: impl Into<String>) -> Line<'static> {
     Line::from(vec![
-        Span::styled(format!("{k:>9}  "), Style::new().fg(MUTED)),
+        Span::styled(format!("{k:>9}  "), theme::muted()),
         Span::raw(v.into()),
     ])
 }
@@ -401,14 +393,14 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
     };
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(MUTED))
-        .title(Span::styled(title, Style::new().bold().fg(ACCENT)))
+        .border_style(theme::muted())
+        .title(Span::styled(title, theme::title()))
         .padding(Padding::horizontal(1));
     let Some(e) = app.selected().cloned() else {
         f.render_widget(
             Paragraph::new(Span::styled(
                 "Select a port to see who owns it and why.",
-                Style::new().fg(MUTED),
+                theme::muted(),
             ))
             .block(block),
             area,
@@ -420,7 +412,7 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
     if let Some(ex) = &ex {
         lines.push(Line::from(Span::styled(
             ex.headline.clone(),
-            Style::new().bold(),
+            theme::heading(),
         )));
         lines.push(Line::raw(""));
     }
@@ -475,7 +467,7 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
     }
     lines.push(section("Network"));
     lines.push(Line::from(vec![
-        Span::styled(format!("{:>9}  ", "Address"), Style::new().fg(MUTED)),
+        Span::styled(format!("{:>9}  ", "Address"), theme::muted()),
         Span::styled(
             e.addresses.join(", "),
             if e.exposure == Exposure::AllInterfaces {
@@ -508,13 +500,10 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
         lines.push(Line::raw(""));
         lines.push(Line::from(Span::styled(
             format!("{} {b}", SPIN[app.spinner % SPIN.len()]),
-            Style::new().fg(ACCENT).bold(),
+            theme::title(),
         )));
         for l in app.stop_log.iter().rev().take(6).rev() {
-            lines.push(Line::from(Span::styled(
-                format!("  · {l}"),
-                Style::new().fg(MUTED),
-            )));
+            lines.push(Line::from(Span::styled(format!("  · {l}"), theme::muted())));
         }
     }
     f.render_widget(
@@ -583,7 +572,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
                 spans.push(Span::raw(" "));
             }
             spans.push(key(k));
-            spans.push(Span::styled(format!(" {label}"), Style::new().fg(MUTED)));
+            spans.push(Span::styled(format!(" {label}"), theme::muted()));
         }
     }
     f.render_widget(Paragraph::new(Line::from(spans)), area);
@@ -619,7 +608,7 @@ fn draw_confirm(f: &mut Frame, app: &App) {
     };
     let color = if blocked { Color::Yellow } else { Color::Red };
     let mut lines = vec![
-        Line::from(Span::styled(headline.clone(), Style::new().bold())),
+        Line::from(Span::styled(headline.clone(), theme::heading())),
         Line::raw(""),
     ];
     lines.extend(plan_lines(plan));
@@ -627,7 +616,7 @@ fn draw_confirm(f: &mut Frame, app: &App) {
     if blocked {
         lines.push(Line::from(vec![
             key("Enter"),
-            Span::styled(" close", Style::new().fg(MUTED)),
+            Span::styled(" close", theme::muted()),
         ]));
     } else {
         let risk = match plan.risk {
@@ -639,7 +628,7 @@ fn draw_confirm(f: &mut Frame, app: &App) {
             Span::styled(" y ", Style::new().fg(Color::White).bg(Color::Red).bold()),
             Span::raw(" stop   "),
             key("n"),
-            Span::styled(" cancel     ", Style::new().fg(MUTED)),
+            Span::styled(" cancel     ", theme::muted()),
             risk,
         ]));
     }
@@ -668,7 +657,7 @@ fn draw_explain(f: &mut Frame, app: &mut App) {
     let area = centered(f.area(), 100, f.area().height.saturating_sub(4));
     f.render_widget(Clear, area);
     let mut lines = vec![
-        Line::from(Span::styled(ex.headline.clone(), Style::new().bold())),
+        Line::from(Span::styled(ex.headline.clone(), theme::heading())),
         Line::raw(""),
     ];
     for d in &ex.details {
@@ -679,20 +668,20 @@ fn draw_explain(f: &mut Frame, app: &mut App) {
     }
     lines.push(Line::raw(""));
     lines.push(Line::from(vec![
-        Span::styled("Recommended: ", Style::new().fg(ACCENT).bold()),
+        Span::styled("Recommended: ", theme::title()),
         Span::raw(ex.recommendation.clone()),
     ]));
     if let Some(plan) = &ex.plan {
         lines.push(Line::raw(""));
-        lines.push(Line::from(Span::styled("Plan", Style::new().bold())));
+        lines.push(Line::from(Span::styled("Plan", theme::heading())));
         lines.extend(plan_lines(plan));
     }
     if !ex.commands.is_empty() {
         lines.push(Line::raw(""));
-        lines.push(Line::from(Span::styled("Commands", Style::new().bold())));
+        lines.push(Line::from(Span::styled("Commands", theme::heading())));
         for c in &ex.commands {
             lines.push(Line::from(vec![
-                Span::styled(" $ ", Style::new().fg(MUTED)),
+                Span::styled(" $ ", theme::muted()),
                 Span::styled(c.clone(), Style::new().fg(Color::Green)),
             ]));
         }
@@ -700,18 +689,18 @@ fn draw_explain(f: &mut Frame, app: &mut App) {
     lines.push(Line::raw(""));
     lines.push(Line::from(vec![
         key("x"),
-        Span::styled(" stop   ", Style::new().fg(MUTED)),
+        Span::styled(" stop   ", theme::muted()),
         key("↑↓"),
-        Span::styled(" scroll   ", Style::new().fg(MUTED)),
+        Span::styled(" scroll   ", theme::muted()),
         key("any"),
-        Span::styled(" close", Style::new().fg(MUTED)),
+        Span::styled(" close", theme::muted()),
     ]));
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(ACCENT))
         .title(Span::styled(
             format!(" Why is :{} busy? ", ex.port),
-            Style::new().fg(ACCENT).bold(),
+            theme::title(),
         ))
         .padding(Padding::uniform(1));
     f.render_widget(
@@ -756,7 +745,7 @@ fn draw_help(f: &mut Frame) {
         .iter()
         .map(|(k, v)| {
             Line::from(vec![
-                Span::styled(format!("{k:>11}  "), Style::new().fg(ACCENT).bold()),
+                Span::styled(format!("{k:>11}  "), theme::key()),
                 Span::raw(*v),
             ])
         })
@@ -764,12 +753,12 @@ fn draw_help(f: &mut Frame) {
     lines.push(Line::raw(""));
     lines.push(Line::from(Span::styled(
         "Colours: green dev · magenta data · blue container · yellow exposed",
-        Style::new().fg(MUTED),
+        theme::muted(),
     )));
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(ACCENT))
-        .title(Span::styled(" Keys ", Style::new().fg(ACCENT).bold()))
+        .title(Span::styled(" Keys ", theme::title()))
         .padding(Padding::uniform(1));
     f.render_widget(Paragraph::new(lines).block(block), area);
 }
