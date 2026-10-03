@@ -23,6 +23,9 @@ updates:
       # Types follow the Node major CI and the builds use (22); bump together with node-version.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # svelte-check 4 accepts typescript ^5 || ^6 only; revisit when it supports TS 7.
+      - dependency-name: typescript
+        versions: [">=7"]
     groups:
       npm-minor:
         update-types: [minor, patch]
