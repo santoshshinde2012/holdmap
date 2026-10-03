@@ -199,10 +199,20 @@ pub fn is_launcher(p: &ProcessInfo) -> bool {
         "pwsh",
     ];
     if SHELLS.contains(&n) {
-        return args
+        // Only a one-line command (what npm, make or a Procfile run). A multi-line or very long
+        // script is someone's session or automation: stopping it, or re-running it on
+        // `restart`, would do far more than restart the server.
+        let Some(i) = args
             .iter()
-            .skip(1)
-            .any(|a| a == "-c" || a == "/c" || a == "-command");
+            .position(|a| a == "-c" || a == "/c" || a == "-command")
+        else {
+            return false;
+        };
+        let script = p.cmdline.get(i + 1).map(String::as_str).unwrap_or("");
+        return !script.contains('\n') && script.len() <= MAX_LAUNCHER_SCRIPT;
     }
     false
 }
+
+/// Longest `sh -c` script still treated as a launcher.
+const MAX_LAUNCHER_SCRIPT: usize = 300;

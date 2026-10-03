@@ -544,6 +544,23 @@ mod tests {
     }
 
     #[test]
+    fn tree_root_stops_at_a_multi_line_shell_script() {
+        let script = "cd web\nnode server.js &\npython3 -m http.server 8000";
+        let tree = vec![
+            proc(1, 0, "init", &[]),
+            proc(30, 1, "bash", &["bash", "-c", script]),
+            proc(31, 30, "node", &["node", "server.js"]),
+            proc(40, 1, "sh", &["sh", "-c", "node server.js"]),
+            proc(41, 40, "node", &["node", "server.js"]),
+            proc(98, 1, "bash", &["bash"]),
+            proc(99, 98, "portwise", &["portwise"]),
+        ];
+        let e = engine(tree, vec![listen(3000, &[31]), listen(3001, &[41])], 99);
+        assert_eq!(e.tree_root(31), 31, "a multi-line script isn't a launcher");
+        assert_eq!(e.tree_root(41), 40, "a one-line sh -c still is");
+    }
+
+    #[test]
     fn explain_dev_server_tree() {
         let e = engine(dev_tree(), vec![listen(3000, &[22])], 99);
         let ex = e.explain(3000, &StopOptions::default());
