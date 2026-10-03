@@ -66,30 +66,123 @@ portwise answers the questions you actually have:
 
 ## Install
 
-portwise isn't on package managers yet. Build it from source with
-[Rust](https://rustup.rs) 1.95 or newer and a C toolchain (Xcode command line tools on macOS,
-`build-essential` on Debian/Ubuntu, the Visual Studio C++ build tools on Windows):
+### Command-line tool (no Rust needed)
 
-```sh
-git clone https://github.com/santoshshinde2012/portwise && cd portwise
-cargo install --locked --path crates/portwise-cli   # installs `portwise` into ~/.cargo/bin
-```
-
-Once a release is tagged, [cargo-dist](https://github.com/axodotdev/cargo-dist) installers are
-available for macOS, Linux and Windows:
+macOS and Linux:
 
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-installer.sh | sh
-brew install santoshshinde2012/tap/portwise   # once the formula is published to the tap
-powershell -c "irm https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-installer.ps1 | iex"
 ```
 
-Each release also carries the desktop installers (`.dmg`, `.msi`, `.exe`, `.AppImage`, `.deb`,
-`.rpm`), SHA-256 checksums, an SBOM and build provenance:
-`gh attestation verify <file> -R santoshshinde2012/portwise`.
+Windows (PowerShell):
 
-Shell completions and man pages: `portwise completions zsh` (also bash, fish, powershell, elvish)
-and `portwise man --out-dir DIR`.
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-installer.ps1 | iex"
+```
+
+The installer puts the `portwise` binary in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on
+Windows; set `CARGO_HOME` to change it) and adds that folder to your `PATH` for new shells: it
+appends `. "$HOME/.cargo/env"` to `~/.profile`, `~/.zshrc` and any existing `~/.bashrc` /
+`~/.bash_profile` (fish gets a `conf.d` file; Windows gets the user `PATH`). Open a new terminal,
+or run `source "$HOME/.cargo/env"` to use it in the current one. That's Rust's usual folder, but
+Rust isn't needed.
+
+Homebrew: coming soon (the tap isn't published yet).
+
+**Or download it yourself** from the [latest release](https://github.com/santoshshinde2012/portwise/releases/latest).
+Pick your archive (`aarch64-apple-darwin` for Apple silicon, `x86_64-apple-darwin` for Intel
+Macs, `x86_64-unknown-linux-gnu` / `-musl` / `aarch64-unknown-linux-gnu` for Linux,
+`x86_64-pc-windows-msvc.zip` for Windows), then check it and put the binary on your `PATH`:
+
+```sh
+f=portwise-aarch64-apple-darwin.tar.xz
+base=https://github.com/santoshshinde2012/portwise/releases/latest/download
+curl -LO "$base/$f" -LO "$base/$f.sha256"
+shasum -a 256 -c "$f.sha256"     # Linux: sha256sum -c; macOS also warns about a blank line, the OK is what counts
+gh attestation verify "$f" --repo santoshshinde2012/portwise   # optional: built by this repo's CI
+tar xf "$f" && mkdir -p ~/.local/bin && mv "${f%.tar.xz}/portwise" ~/.local/bin/
+```
+
+(If `~/.local/bin` isn't on your `PATH`, add `export PATH="$HOME/.local/bin:$PATH"` to your
+shell's rc file.)
+
+### Desktop app
+
+| Platform | Download |
+|---|---|
+| macOS, Apple silicon | [portwise_aarch64.dmg][dmg-arm64] |
+| macOS, Intel | [portwise_x64.dmg][dmg-x64] |
+| Windows | [.msi][msi] or [setup .exe][nsis] |
+| Linux | [.AppImage][appimage], [.deb][deb] or [.rpm][rpm] |
+
+<!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
+     suffix isn't read as part of the version). -->
+<!-- x-release-please-start-version -->
+[dmg-arm64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.0_aarch64.dmg
+[dmg-x64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.0_x64.dmg
+[msi]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.0_x64_en-US.msi
+[nsis]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.0_x64-setup.exe
+[appimage]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.0_amd64.AppImage
+[deb]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.0_amd64.deb
+[rpm]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-0.1.0%2D1.x86_64.rpm
+<!-- x-release-please-end -->
+
+The installers aren't code-signed yet, so the OS warns the first time:
+
+- **macOS** says the app "can't be opened" or is "damaged". After dragging it to Applications,
+  right-click it and choose **Open** (macOS 15 and later: try once, then **System Settings >
+  Privacy & Security > Open Anyway**), or run
+  `xattr -dr com.apple.quarantine /Applications/portwise.app`.
+- **Windows** SmartScreen shows "Windows protected your PC": click **More info**, then **Run anyway**.
+
+Each release lists SHA-256 checksums (`portwise-desktop-*.sha256`) and build provenance for every
+installer.
+
+### Build from source
+
+You need Rust (the repo's `rust-toolchain.toml` picks the stable toolchain; 1.95 is the minimum)
+and a C toolchain: `xcode-select --install` on macOS, `sudo apt-get install -y build-essential`
+on Debian/Ubuntu, the Visual Studio C++ build tools on Windows.
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # Windows: run rustup-init.exe from rustup.rs
+source "$HOME/.cargo/env"
+git clone https://github.com/santoshshinde2012/portwise && cd portwise
+cargo install --locked --path crates/portwise-cli               # installs portwise into ~/.cargo/bin
+```
+
+Or, without cloning: `cargo install --locked --git https://github.com/santoshshinde2012/portwise portwise`.
+
+The desktop app also needs Node.js 20.19+ or 22.12+ (and, on Linux, the WebKitGTK libraries); see
+[Desktop and tray app](#desktop-and-tray-app).
+
+### Check it works
+
+```sh
+portwise --version
+portwise list
+```
+
+Optional extras:
+
+- Shell completions, e.g. zsh: `mkdir -p ~/.zfunc && portwise completions zsh > ~/.zfunc/_portwise`,
+  then add `fpath=(~/.zfunc $fpath); autoload -U compinit && compinit` to `~/.zshrc`. Bash:
+  `portwise completions bash > ~/.local/share/bash-completion/completions/portwise`. Fish:
+  `portwise completions fish > ~/.config/fish/completions/portwise.fish` (also powershell, elvish).
+- The shell hook: add `eval "$(portwise init zsh)"` to `~/.zshrc` (see
+  [the shell hook](#project-stacks-and-the-shell-hook)).
+- Man pages: `portwise man --out-dir DIR`.
+
+### Uninstall
+
+Delete the binary (`rm ~/.cargo/bin/portwise`, or `cargo uninstall portwise` if you built it with
+cargo) and the installer's receipt, `~/.config/portwise/portwise-receipt.json`
+(`%LOCALAPPDATA%\portwise\portwise-receipt.json` on Windows). Remove the
+`. "$HOME/.cargo/env"` line from your shell rc files if nothing else uses `~/.cargo/bin`. Remove
+the desktop app the usual way for your OS (drag it to the Trash; Settings > Apps on Windows;
+`sudo apt remove portwise` / `sudo dnf remove portwise` on Linux). Your settings and history live
+in the configuration directory (see [Desktop and tray app](#desktop-and-tray-app)); delete it to
+remove them too.
 
 ## Quick start
 
