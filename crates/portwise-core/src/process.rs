@@ -2,7 +2,7 @@
 
 use crate::model::ProcessInfo;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind, Users};
 
 /// A point-in-time view of all processes.
@@ -18,6 +18,32 @@ pub struct ProcessTable {
     session_hosts: HashMap<u32, (u32, crate::safety::SessionKind)>,
     user_names: HashMap<u32, String>,
     self_uid: Option<u32>,
+}
+
+/// Linux cuts a process name (`comm`) to 15 bytes ("npm exec vite p", "containerd-shim"). When
+/// argv[0] or the executable starts with that prefix, return the full name instead, so labels
+/// read well and name-based rules (protection, agents) still match.
+fn untruncated_name(comm: &str, cmdline: &[String], exe: Option<&Path>) -> Option<String> {
+    const COMM_LEN: usize = 15;
+    if !cfg!(target_os = "linux") || comm.len() != COMM_LEN {
+        return None;
+    }
+    let argv0 = cmdline.first().map(String::as_str).unwrap_or("");
+    // A retitled process (npm, node's process.title) puts its whole title in argv[0].
+    if let Some(rest) = argv0.strip_prefix(comm) {
+        let tail = rest.split(char::is_whitespace).next().unwrap_or("");
+        return Some(format!("{comm}{tail}"));
+    }
+    let program = argv0.split_whitespace().next().unwrap_or("");
+    let base = program.rsplit('/').next().unwrap_or("");
+    let exe_base = exe
+        .and_then(Path::file_name)
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    [base, exe_base]
+        .into_iter()
+        .find(|c| c.len() > COMM_LEN && c.starts_with(comm))
+        .map(str::to_owned)
 }
 
 fn refresh_kind() -> ProcessRefreshKind {
@@ -59,16 +85,19 @@ impl ProcessTable {
                 let uid = None;
                 let start_time = p.start_time();
                 let start_token = crate::sys::start_token(pid).unwrap_or(start_time);
+                let cmdline: Vec<String> = p
+                    .cmd()
+                    .iter()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .collect();
+                let comm = p.name().to_string_lossy().into_owned();
+                let name = untruncated_name(&comm, &cmdline, p.exe()).unwrap_or(comm);
                 ProcessInfo {
                     pid,
                     ppid: p.parent().map(|pp| pp.as_u32()),
-                    name: p.name().to_string_lossy().into_owned(),
+                    name,
                     exe: p.exe().map(PathBuf::from),
-                    cmdline: p
-                        .cmd()
-                        .iter()
-                        .map(|s| s.to_string_lossy().into_owned())
-                        .collect(),
+                    cmdline,
                     // Linux appends " (deleted)" to a removed working directory.
                     cwd: p.cwd().map(|c| {
                         let s = c.to_string_lossy();
@@ -276,6 +305,38 @@ pub(crate) mod tests {
 
     pub fn table(list: Vec<ProcessInfo>, self_pid: u32) -> ProcessTable {
         ProcessTable::from_processes(list.into_iter().map(|p| (p.pid, p)).collect(), self_pid)
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn untruncated_name_recovers_linux_comm_names() {
+        let v = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        // A retitled npm process: the whole title is argv[0].
+        let npm = v(&["npm exec vite preview --port 4173"]);
+        assert_eq!(
+            untruncated_name("npm exec vite p", &npm, None).as_deref(),
+            Some("npm exec vite preview")
+        );
+        // A path in argv[0], or only the executable.
+        let shim = v(&["/usr/bin/containerd-shim-runc-v2", "-namespace", "moby"]);
+        assert_eq!(
+            untruncated_name("containerd-shim", &shim, None).as_deref(),
+            Some("containerd-shim-runc-v2")
+        );
+        let exe = Path::new("/opt/google/chrome/chrome_crashpad_handler");
+        assert_eq!(
+            untruncated_name("chrome_crashpad", &[], Some(exe)).as_deref(),
+            Some("chrome_crashpad_handler")
+        );
+        // Short names, and argv[0] that doesn't match, keep the kernel name.
+        assert_eq!(
+            untruncated_name("node", &v(&["node", "server.js"]), None),
+            None
+        );
+        assert_eq!(
+            untruncated_name("abcdefghijklmno", &v(&["python3", "x.py"]), None),
+            None
+        );
     }
 
     #[test]
