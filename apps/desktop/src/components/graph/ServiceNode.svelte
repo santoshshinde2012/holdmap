@@ -53,14 +53,15 @@
     width: 236px; height: 72px; box-sizing: border-box; display: flex; align-items: center; gap: 10px;
     padding: 0 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border-strong);
     box-shadow: var(--shadow-sm); color: var(--text); cursor: pointer;
-    transition: opacity 160ms var(--ease), box-shadow 160ms var(--ease), border-color 160ms var(--ease), transform 160ms var(--ease);
+    transition: opacity var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
   }
   .node:hover { box-shadow: var(--shadow-md); border-color: var(--accent); }
   .node.dev { border-left: 3px solid var(--tone-green); }
   .node.kind-external { background: var(--surface-2); border-style: dashed; }
   .node.kind-client { border-style: dashed; }
   .node.kind-hidden { opacity: 0.8; }
-  .node.dim { opacity: 0.28; }
+  /* Out of focus, but still legible: fade and desaturate rather than vanish. */
+  .node.dim { opacity: 0.5; filter: saturate(0.3); }
   .node.hl { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md); }
   .node.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px var(--accent-soft), var(--shadow-md); }
   .body { flex: 1; min-width: 0; display: grid; gap: 4px; }

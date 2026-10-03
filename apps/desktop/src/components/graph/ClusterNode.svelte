@@ -29,14 +29,14 @@
   .hull {
     --hue: var(--accent);
     box-sizing: border-box; border-radius: 20px; border: 1.5px dashed color-mix(in srgb, var(--hue) 45%, transparent);
-    background: color-mix(in srgb, var(--hue) 6%, transparent); transition: opacity 160ms var(--ease);
+    background: color-mix(in srgb, var(--hue) 6%, transparent); transition: opacity var(--dur-2) var(--ease);
   }
   .kind-compose { --hue: var(--tone-blue); }
   .kind-kubernetes { --hue: var(--tone-violet); }
   .kind-supervisor { --hue: var(--tone-amber); }
   .kind-workspace { --hue: var(--tone-green); }
   .kind-git { --hue: var(--tone-gray); }
-  .hull.dim { opacity: 0.35; }
+  .hull.dim { opacity: 0.5; }
   header { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 12px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .ic { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; color: var(--hue); background: color-mix(in srgb, var(--hue) 14%, transparent); }
   .name { font-weight: var(--fw-semibold); color: var(--text); letter-spacing: var(--ls-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
