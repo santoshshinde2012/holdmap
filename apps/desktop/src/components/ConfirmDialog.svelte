@@ -56,6 +56,8 @@
   /** Neither a port nor a cluster: a bulk stop ("all dev servers"). */
   const bulk = $derived(!entry && !cluster);
   const verb = $derived(cluster ? "Stop cluster" : force ? "Force kill" : entry?.container ? "Stop container" : "Stop");
+  /** The confirm button names its target ("Stop :3000"), so the click is unambiguous on its own. */
+  const confirmLabel = $derived(entry ? `${verb} :${entry.port}` : bulk ? "Stop all" : verb);
   const order = $derived(cluster ? orderFromSummary(plan.summary) : []);
   const subject = $derived(cluster ? cluster.name : entry ? title(entry) : plan.target);
   const heading = $derived(phase === "done" ? (cluster ? `Cluster ${cluster.name} stopped` : bulk ? "Dev servers stopped" : `Port ${entry?.port} is free`) : blocked ? (bulk ? `Nothing to stop` : `Can't stop ${cluster ? cluster.name : `:${entry?.port}`} safely`) : `${verb} ${subject}?`);
@@ -162,7 +164,7 @@
     {:else}
       <span class="hint">Nothing is sent until you confirm.</span>
       <Button variant="secondary" kbd="Esc" onclick={oncancel} disabled={running}>Cancel</Button>
-      <Button variant="danger" icon="stop" kbd="↵" loading={running} loadingText="Stopping…" onclick={onconfirm} data-primary>{verb}</Button>
+      <Button variant="danger" icon="stop" kbd="↵" loading={running} loadingText="Stopping…" onclick={onconfirm} data-primary>{confirmLabel}</Button>
     {/if}
   {/snippet}
 </Dialog>

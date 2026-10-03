@@ -173,7 +173,7 @@ describe("Dialogs", () => {
     render(ConfirmDialog, { entry: entry(3000), plan: mockPlan("3000", false), phase: "confirm", log: [], report: null, onconfirm: vi.fn(), oncancel, onoverride: vi.fn() });
     const dlg = screen.getByRole("alertdialog");
     await flush();
-    expect(document.activeElement?.textContent).toMatch(/Stop/);
+    expect(document.activeElement?.textContent).toMatch(/Stop :3000/); // names its target
     await fireEvent.keyDown(dlg, { key: "Escape" });
     expect(oncancel).toHaveBeenCalledOnce();
   });
