@@ -6,7 +6,7 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-10-03
 
 The first public release.
 
@@ -48,4 +48,4 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
-[0.1.0]: https://github.com/santoshshinde2012/portwise/commits/main
+[0.1.0]: https://github.com/santoshshinde2012/portwise/releases/tag/v0.1.0
