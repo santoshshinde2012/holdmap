@@ -151,7 +151,7 @@
       <Panel position="top-right">
         {#if stats}
           <div class="stats" aria-live="polite">
-            <span><b>{stats.n}</b> services</span><span><b>{stats.e}</b> links</span><span><b>{stats.c}</b> clusters</span><span><b>{stats.conns}</b> connections</span>
+            <span><b>{stats.n}</b> services</span><span><b>{stats.e}</b> links</span><span class="opt"><b>{stats.c}</b> clusters</span><span class="opt"><b>{stats.conns}</b> connections</span>
           </div>
         {/if}
         <div class="legend" aria-hidden="true">
@@ -165,7 +165,7 @@
 </div>
 
 <style>
-  .graph { position: relative; height: 100%; min-height: 0; background: var(--bg); --edge: var(--border-strong); }
+  .graph { position: relative; height: 100%; min-height: 0; background: var(--bg); --edge: var(--border-strong); container-type: inline-size; }
   .graph :global(.svelte-flow) { --xy-background-color: var(--bg); --xy-node-border-radius: 14px; --xy-controls-button-background-color: var(--surface); --xy-controls-button-color: var(--text-2); --xy-controls-button-border-color: var(--border); --xy-minimap-background-color: var(--surface); }
   .graph :global(.svelte-flow__node-service), .graph :global(.svelte-flow__node-cluster) { padding: 0; border: 0; background: transparent; box-shadow: none; width: auto; }
   .graph :global(.svelte-flow__controls) { box-shadow: var(--shadow-sm); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
@@ -188,5 +188,8 @@
   .empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 6px; color: var(--muted); text-align: center; }
   .empty p { margin: 6px 0 0; color: var(--text); font-weight: var(--fw-semibold); }
   .empty span { font-size: var(--fs-body); line-height: var(--lh-body); max-width: 340px; }
+  /* Keep the stats clear of the toolbar when the drawer leaves the canvas narrow. */
+  @container (max-width: 820px) { .stats .opt { display: none; } }
+  @container (max-width: 640px) { .stats, .legend { display: none; } }
   .reduced :global(*) { animation: none !important; }
 </style>
