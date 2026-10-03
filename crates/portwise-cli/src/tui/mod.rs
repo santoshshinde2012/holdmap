@@ -2,6 +2,8 @@
 //! pane with the plain-English explanation, and stop/kill with a confirmation dialog.
 
 mod app;
+mod graph;
+mod graph_ui;
 mod ui;
 
 use anyhow::Result;
