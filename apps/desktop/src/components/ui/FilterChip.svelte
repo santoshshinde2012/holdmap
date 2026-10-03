@@ -35,12 +35,12 @@
 </button>
 
 <style>
-  .chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: var(--h-sm); padding: 0 6px 0 10px; border-radius: var(--r-full); border: 1px solid var(--input-border); background: var(--surface); color: var(--text-2); font: inherit; font-size: var(--fs-xs); font-weight: 550; cursor: pointer; transition: background var(--dur-1), border-color var(--dur-1), color var(--dur-1); }
+  .chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: var(--h-sm); padding: 0 6px 0 10px; border-radius: var(--r-full); border: 1px solid var(--input-border); background: var(--surface); color: var(--text-2); font: inherit; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); cursor: pointer; transition: background var(--dur-1), border-color var(--dur-1), color var(--dur-1); }
   .chip:hover { background: var(--surface-2); color: var(--text); border-color: var(--input-border-hover); }
   .chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
   .chip.on { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: var(--accent-soft); color: var(--accent); }
   .warn:not(.on) :global(svg) { color: var(--warn); }
   .dot { width: 7px; height: 7px; border-radius: 50%; }
-  .count { min-width: 20px; height: 18px; padding: 0 5px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-size: 10.5px; display: inline-grid; place-items: center; font-variant-numeric: tabular-nums; font-weight: 650; }
+  .count { min-width: 20px; height: 18px; padding: 0 5px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); display: inline-grid; place-items: center; font-variant-numeric: tabular-nums; font-weight: var(--fw-medium); }
   .on .count { background: var(--accent); color: var(--accent-fg); }
 </style>

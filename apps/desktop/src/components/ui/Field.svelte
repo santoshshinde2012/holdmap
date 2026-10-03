@@ -53,13 +53,13 @@
 <style>
   .field { display: grid; gap: 6px; min-width: 0; }
   .top { display: flex; align-items: baseline; gap: 8px; }
-  label { font-size: var(--fs-sm); font-weight: 550; color: var(--text); }
+  label { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); color: var(--text); }
   .req { color: var(--danger); }
-  .opt { font-size: var(--fs-xs); color: var(--muted); }
-  .counter { margin-left: auto; font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .opt { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
+  .counter { margin-left: auto; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
   .invalid .counter { color: var(--danger); }
   .msgs:empty { display: none; }
-  .msg { margin: 0; font-size: var(--fs-xs); color: var(--muted); line-height: 1.4; display: flex; gap: 6px; align-items: flex-start; }
+  .msg { margin: 0; font-size: var(--fs-body-sm); color: var(--muted); line-height: var(--lh-body-sm); display: flex; gap: 6px; align-items: flex-start; }
   .msg :global(svg) { margin-top: 2px; }
-  .err { color: var(--danger); font-weight: 500; }
+  .err { color: var(--danger); font-weight: var(--fw-medium); }
 </style>

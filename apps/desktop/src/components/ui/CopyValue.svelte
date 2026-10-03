@@ -44,7 +44,7 @@
   .cv { display: flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
   .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wrap .txt { white-space: normal; overflow-wrap: anywhere; }
-  .mono { font-family: var(--mono); font-size: 12px; }
+  .mono { font-family: var(--mono); font-size: var(--fs-mono); line-height: var(--lh-mono); }
   .cp { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity var(--dur-1), background var(--dur-1), color var(--dur-1); }
   .cv:hover .cp, .cp:focus-visible, .cp.copied { opacity: 1; }
   .cp:hover { background: var(--surface-3); color: var(--text); }

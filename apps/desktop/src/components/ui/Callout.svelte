@@ -16,13 +16,13 @@
 </div>
 
 <style>
-  .callout { display: flex; gap: 10px; padding: 10px 12px; border-radius: var(--r-md); font-size: var(--fs-sm); line-height: 1.5; border: 1px solid transparent; }
-  .sm { padding: 8px 10px; font-size: var(--fs-xs); gap: 8px; }
+  .callout { display: flex; gap: 10px; padding: 10px 12px; border-radius: var(--r-md); font-size: var(--fs-body); line-height: var(--lh-body); border: 1px solid transparent; }
+  .sm { padding: 8px 10px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); gap: 8px; }
   .ic { flex: none; display: inline-grid; margin-top: 2px; }
   .body { min-width: 0; flex: 1; }
-  strong { display: block; font-weight: 650; margin-bottom: 1px; }
+  strong { display: block; font-weight: var(--fw-semibold); margin-bottom: 1px; }
   .txt :global(p) { margin: 0; }
-  .txt :global(code) { font-size: 11.5px; padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, currentColor 10%, transparent); }
+  .txt :global(code) { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, currentColor 10%, transparent); }
   .acts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   .info { background: var(--surface-2); border-color: var(--border); color: var(--text-2); }
   .info .ic { color: var(--muted); }

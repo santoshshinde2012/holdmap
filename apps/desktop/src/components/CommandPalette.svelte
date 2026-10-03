@@ -88,23 +88,23 @@
 
 <style>
   .search { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px 0 16px; border-bottom: 1px solid var(--border); color: var(--muted); flex: none; }
-  .search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; font: inherit; font-size: 15px; color: var(--text); user-select: text; }
+  .search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; font: inherit; font-size: var(--fs-heading); font-weight: var(--fw-regular); letter-spacing: var(--ls-heading); line-height: var(--lh-heading); color: var(--text); user-select: text; }
   .search input::placeholder { color: var(--faint); }
   .clear { width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); cursor: pointer; }
   .clear:hover { background: var(--surface-3); color: var(--text); }
   .list { overflow-y: auto; padding: 6px; flex: 1; min-height: 0; scroll-padding: 6px; }
-  .gh { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 650; padding: 10px 10px 4px; }
+  .gh { font-size: var(--fs-label); line-height: var(--lh-label); text-transform: uppercase; letter-spacing: var(--ls-label); color: var(--muted); font-weight: var(--fw-medium); padding: 10px 10px 4px; }
   .item { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 8px; border-radius: var(--r-md); cursor: default; }
   .item.active { background: var(--row-selected); }
   .ic { width: 24px; height: 24px; border-radius: var(--r-sm); display: grid; place-items: center; color: var(--muted); flex: none; border: 1px solid var(--border); background: var(--surface); }
   .item.active .ic { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
   .item.danger .ic { color: var(--danger); }
   .t { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; overflow: hidden; }
-  .tt { font-weight: 550; overflow: hidden; text-overflow: ellipsis; }
-  .s { color: var(--muted); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; }
+  .tt { font-weight: var(--fw-regular); color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+  .s { color: var(--muted); font-size: var(--fs-body); line-height: var(--lh-body); overflow: hidden; text-overflow: ellipsis; }
   .none { display: grid; gap: 4px; padding: var(--sp-8) var(--sp-4); text-align: center; color: var(--text-2); }
-  .none span { color: var(--muted); font-size: var(--fs-sm); }
-  .foot { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--fs-xs); background: var(--surface-2); flex: none; }
+  .none span { color: var(--muted); font-size: var(--fs-body); line-height: var(--lh-body); }
+  .foot { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); background: var(--surface-2); flex: none; }
   .foot span { display: inline-flex; gap: 6px; align-items: center; }
   .foot .n { margin-left: auto; font-variant-numeric: tabular-nums; }
 </style>

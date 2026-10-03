@@ -109,8 +109,8 @@
   .ctl.invalid { border-color: var(--danger); }
   .ctl.invalid:focus-within { box-shadow: var(--danger-ring); }
   .ctl.disabled { background: var(--input-disabled); opacity: 0.7; }
-  input { flex: 1; min-width: 0; border: 0; outline: 0; padding: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-base); font-variant-numeric: tabular-nums; user-select: text; -webkit-user-select: text; }
-  .unit { color: var(--muted); font-size: var(--fs-sm); padding: 0 8px 0 4px; }
+  input { flex: 1; min-width: 0; border: 0; outline: 0; padding: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-body); line-height: var(--lh-body); font-variant-numeric: tabular-nums; user-select: text; -webkit-user-select: text; }
+  .unit { color: var(--muted); font-size: var(--fs-body); line-height: var(--lh-body); padding: 0 8px 0 4px; }
   .steps { display: grid; grid-template-rows: 1fr 1fr; align-self: stretch; border-left: 1px solid var(--input-border); width: 22px; flex: none; }
   .steps button { border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; padding: 0; }
   .steps button + button { border-top: 1px solid var(--input-border); }

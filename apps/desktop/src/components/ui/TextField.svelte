@@ -127,9 +127,9 @@
   .ctl.disabled { background: var(--input-disabled); cursor: not-allowed; opacity: 0.7; box-shadow: none; }
   .ctl.readonly { background: var(--surface-2); }
   .lead { display: inline-grid; place-items: center; flex: none; }
-  input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; padding: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-base); user-select: text; -webkit-user-select: text; }
-  .sm input { font-size: var(--fs-sm); }
-  input.mono { font-family: var(--mono); font-size: 12.5px; }
+  input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; padding: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-body); line-height: var(--lh-body); user-select: text; -webkit-user-select: text; }
+  .sm input { font-size: var(--fs-body); line-height: var(--lh-body); }
+  input.mono { font-family: var(--mono); font-size: var(--fs-mono); line-height: var(--lh-mono); }
   input::placeholder { color: var(--faint); opacity: 1; }
   input:disabled { cursor: not-allowed; }
   input::-webkit-search-cancel-button, input::-webkit-search-decoration { display: none; -webkit-appearance: none; }

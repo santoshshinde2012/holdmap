@@ -20,8 +20,8 @@
   .row + :global(.row) { border-top: 1px solid var(--border); }
   .row.stack { flex-direction: column; align-items: stretch; gap: var(--sp-3); }
   .text { flex: 1; min-width: 0; }
-  .l { font-size: var(--fs-sm); font-weight: 550; color: var(--text); }
-  p { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--muted); line-height: 1.5; }
+  .l { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); color: var(--text); }
+  p { margin: 2px 0 0; font-size: var(--fs-body-sm); color: var(--muted); line-height: var(--lh-body-sm); }
   .ctl { flex: none; display: flex; align-items: center; gap: 8px; }
   .stack .ctl { flex: 1; }
   @media (max-width: 560px) { .row { flex-direction: column; align-items: stretch; gap: var(--sp-3); } }

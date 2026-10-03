@@ -121,12 +121,12 @@
   .panel { outline: none; }
   .actions { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-5); border-top: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
   .sp { flex: 1; }
-  .why { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--muted); font-weight: 550; }
+  .why { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); font-weight: var(--fw-medium); }
 
   .placeholder { margin: auto; text-align: center; max-width: 300px; color: var(--muted); padding: var(--sp-6); }
-  .placeholder h3 { color: var(--text); margin: var(--sp-5) 0 var(--sp-1); font-size: var(--fs-md); }
-  .placeholder p { margin: 0 0 var(--sp-5); line-height: 1.5; }
-  .ph-keys { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; font-size: var(--fs-xs); }
+  .placeholder h3 { color: var(--text); margin: var(--sp-5) 0 var(--sp-1); font-size: var(--fs-title); font-weight: var(--fw-semibold); letter-spacing: var(--ls-title); line-height: var(--lh-title); }
+  .placeholder p { margin: 0 0 var(--sp-5); }
+  .ph-keys { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .ph-keys span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .ph-art { position: relative; width: 84px; height: 84px; margin: 0 auto; display: grid; place-items: center; }
   .ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid var(--accent); opacity: 0; animation: ping 2.8s var(--ease) infinite; }

@@ -24,13 +24,13 @@
 </dl>
 
 <style>
-  dl { display: grid; grid-template-columns: minmax(84px, max-content) minmax(0, 1fr); column-gap: var(--sp-4); margin: 0; font-size: var(--fs-sm); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+  dl { display: grid; grid-template-columns: minmax(84px, max-content) minmax(0, 1fr); column-gap: var(--sp-4); margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
   dt, dd { padding: 7px 12px; min-height: 34px; display: flex; align-items: center; border-top: 1px solid var(--border); }
   dt:first-of-type, dt:first-of-type + dd { border-top: 0; }
   dt { color: var(--muted); padding-right: 0; }
   dd { margin: 0; min-width: 0; gap: 8px; color: var(--text); }
   .v { min-width: 0; overflow-wrap: anywhere; }
-  .mono { font-family: var(--mono); font-size: 12px; }
-  .m { color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; flex: none; }
+  .mono { font-family: var(--mono); font-size: var(--fs-mono); line-height: var(--lh-mono); }
+  .m { color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); white-space: nowrap; flex: none; }
   dd > :global(.cv) { flex: 1; }
 </style>

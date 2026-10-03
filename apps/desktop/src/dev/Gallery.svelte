@@ -17,7 +17,13 @@
 </script>
 
 <div class="gallery">
-  <header><h1>Controls</h1><p>One consistent set of inputs. 32 px default, 28 px compact, 36 px large.</p></header>
+  <header><h1>Type &amp; controls</h1><p>Nine semantic text roles; one consistent set of inputs (32 px default, 28 px compact, 36 px large).</p></header>
+  <section class="type" aria-label="Type scale">
+    <h2>Type scale · Inter Variable + JetBrains Mono</h2>
+    {#each [["display", "24 / 30 · 600", "3000"], ["title", "16 / 22 · 600", "Stop shop-web?"], ["heading", "14 / 20 · 600", "Global shortcut"], ["body", "13 / 20 · 400", "Port 3000 is held by Next.js (node, PID 43000)."], ["body-sm", "12 / 17 · 400", "Start portwise in the menu bar when you log in."], ["caption", "11 / 15 · 400", "Updated 2 s ago · 393 MB"], ["label", "11 / 15 · 500 · +6%", "DEV SERVERS"], ["mono", "12 / 18 · 400", "portwise stop 3000 --dry-run"], ["mono-sm", "11 / 16 · 400", "node · PID 43000 · 0O 1lI"]] as [r, spec, sample] (r)}
+      <div class="spec"><span class="rn">{r}</span><span class="rs">{spec}</span><span class="sample t-{r}">{sample}</span></div>
+    {/each}
+  </section>
   <div class="grid">
     <section>
       <h2>Text fields</h2>
@@ -65,13 +71,26 @@
 
 <style>
   .gallery { min-height: 100vh; padding: 28px 32px; background: var(--bg); color: var(--text); }
-  header h1 { margin: 0; font-size: 18px; letter-spacing: -0.02em; }
-  header p { margin: 4px 0 20px; color: var(--muted); font-size: var(--fs-sm); }
+  header h1 { margin: 0; font-size: var(--fs-title); font-weight: var(--fw-semibold); line-height: var(--lh-title); letter-spacing: var(--ls-title); }
+  header p { margin: 4px 0 20px; color: var(--muted); font-size: var(--fs-body); line-height: var(--lh-body); }
   .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   section { display: grid; gap: 14px; align-content: start; padding: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
-  h2 { margin: 0 0 2px; font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  h2 { margin: 0 0 2px; font-size: var(--fs-label); font-weight: var(--fw-medium); line-height: var(--lh-label); text-transform: uppercase; letter-spacing: var(--ls-label); color: var(--muted); }
   .row2, .flex { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .row2 { align-items: flex-start; gap: 16px; }
   .stack { display: grid; gap: 6px; justify-items: start; }
-  .lbl { font-size: var(--fs-sm); font-weight: 550; }
+  .type { margin-bottom: 16px; gap: 2px; }
+  .spec { display: grid; grid-template-columns: 90px 150px 1fr; align-items: baseline; gap: 12px; padding: 6px 0; border-top: 1px solid var(--border); }
+  .rn { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--accent); }
+  .rs { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .t-display { font-size: var(--fs-display); line-height: var(--lh-display); letter-spacing: var(--ls-display); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+  .t-title { font-size: var(--fs-title); line-height: var(--lh-title); letter-spacing: var(--ls-title); font-weight: var(--fw-semibold); }
+  .t-heading { font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); font-weight: var(--fw-semibold); }
+  .t-body { font-size: var(--fs-body); line-height: var(--lh-body); }
+  .t-body-sm { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--text-2); }
+  .t-caption { font-size: var(--fs-caption); line-height: var(--lh-caption); letter-spacing: var(--ls-caption); color: var(--muted); }
+  .t-label { font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); font-weight: var(--fw-medium); color: var(--text-2); }
+  .t-mono { font-family: var(--mono); font-size: var(--fs-mono); line-height: var(--lh-mono); }
+  .t-mono-sm { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); }
+  .lbl { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); }
 </style>

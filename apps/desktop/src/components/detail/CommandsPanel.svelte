@@ -13,6 +13,6 @@
 </Section>
 
 <style>
-  .lead { margin: -4px 0 0; color: var(--muted); font-size: var(--fs-sm); }
+  .lead { margin: -4px 0 0; color: var(--muted); font-size: var(--fs-body); line-height: var(--lh-body); }
   .list { display: grid; gap: 8px; }
 </style>

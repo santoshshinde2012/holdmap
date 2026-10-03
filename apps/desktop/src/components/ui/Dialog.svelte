@@ -130,8 +130,8 @@
   .tile.warn { background: var(--warn-soft); color: var(--warn); }
   .tile.ok { background: var(--ok-soft); color: var(--ok); }
   .tt { flex: 1; min-width: 0; padding-top: 1px; }
-  h2 { margin: 0; font-size: var(--fs-lg); font-weight: 650; letter-spacing: -0.015em; line-height: 1.3; }
-  .tt p { margin: 3px 0 0; color: var(--muted); font-size: var(--fs-sm); line-height: 1.45; }
+  h2 { margin: 0; font-size: var(--fs-title); font-weight: var(--fw-semibold); letter-spacing: var(--ls-title); line-height: var(--lh-title); }
+  .tt p { margin: 3px 0 0; color: var(--muted); font-size: var(--fs-body); line-height: var(--lh-body); }
   .db { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-2) var(--sp-6) var(--sp-5); display: flex; flex-direction: column; }
   .bare .db { padding: 0; overflow: hidden; }
   .df { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-2); padding: var(--sp-3) var(--sp-5) var(--sp-3) var(--sp-6); border-top: 1px solid var(--border); background: var(--surface-2); }

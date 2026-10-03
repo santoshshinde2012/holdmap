@@ -173,20 +173,20 @@
   .graph :global(.svelte-flow__background) { --xy-background-pattern-color: var(--border); }
   .bar { display: flex; gap: 6px; align-items: center; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; box-shadow: var(--shadow-sm); }
   .seg { display: inline-flex; padding: 2px; background: var(--surface-2); border-radius: 8px; }
-  .seg button, .tog { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; }
+  .seg button, .tog { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); cursor: pointer; }
   .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
   .tog.on { color: var(--accent); background: var(--accent-soft); }
   .tog:disabled { opacity: 0.5; cursor: not-allowed; }
-  .stats { display: flex; gap: 10px; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-sm); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; justify-content: flex-end; }
+  .stats { display: flex; gap: 10px; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-sm); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; justify-content: flex-end; }
   .stats b { color: var(--text); }
-  .legend { display: flex; gap: 10px; margin-top: 6px; justify-content: flex-end; font-size: 10.5px; color: var(--muted); }
+  .legend { display: flex; gap: 10px; margin-top: 6px; justify-content: flex-end; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .lg { display: inline-flex; align-items: center; gap: 5px; }
   .lg i { width: 10px; height: 10px; border-radius: 3px; border: 1.5px solid var(--border-strong); background: var(--surface); }
   .lg-service i { border-left: 3px solid var(--tone-green); }
   .lg-client i { border-style: dashed; }
   .lg-external i { border-style: dashed; background: var(--surface-2); }
   .empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 6px; color: var(--muted); text-align: center; }
-  .empty p { margin: 6px 0 0; color: var(--text); font-weight: 600; }
-  .empty span { font-size: var(--fs-sm); max-width: 340px; }
+  .empty p { margin: 6px 0 0; color: var(--text); font-weight: var(--fw-semibold); }
+  .empty span { font-size: var(--fs-body); line-height: var(--lh-body); max-width: 340px; }
   .reduced :global(*) { animation: none !important; }
 </style>

@@ -62,11 +62,11 @@
 <style>
   .tabs { position: relative; display: flex; gap: 0; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--border); padding: 0 var(--sp-3); outline: none; }
   .tabs::-webkit-scrollbar { display: none; }
-  button { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 9px; flex: none; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: var(--fs-sm); font-weight: 550; white-space: nowrap; cursor: pointer; border-radius: var(--r-sm) var(--r-sm) 0 0; transition: color var(--dur-1); }
+  button { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 9px; flex: none; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); white-space: nowrap; cursor: pointer; border-radius: var(--r-sm) var(--r-sm) 0 0; transition: color var(--dur-1); }
   button:hover { color: var(--text); }
   button.on { color: var(--text); }
   button:focus-visible { outline: 2px solid var(--ring); outline-offset: -4px; }
-  .count { font-size: 10.5px; font-weight: 650; min-width: 18px; height: 17px; padding: 0 5px; border-radius: 999px; display: inline-grid; place-items: center; background: var(--surface-3); color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .count { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); min-width: 18px; height: 17px; padding: 0 5px; border-radius: 999px; display: inline-grid; place-items: center; background: var(--surface-3); color: var(--text-2); font-variant-numeric: tabular-nums; }
   .on .count { background: var(--accent-soft); color: var(--accent); }
   .alert { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
   .ind { position: absolute; left: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); transition: transform var(--dur-2) var(--ease), width var(--dur-2) var(--ease); pointer-events: none; }

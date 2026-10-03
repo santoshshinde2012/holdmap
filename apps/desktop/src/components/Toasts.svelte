@@ -38,9 +38,9 @@
   .error .ic { background: var(--danger-soft); color: var(--danger); }
   .info .ic { background: var(--accent-soft); color: var(--accent); }
   .body { flex: 1; min-width: 0; padding-top: 2px; }
-  .text { font-weight: 650; }
-  .detail { color: var(--muted); font-size: var(--fs-xs); margin-top: 2px; overflow-wrap: anywhere; }
-  .act { margin-top: 8px; border: 0; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: var(--fs-xs); height: 24px; padding: 0 10px; border-radius: var(--r-sm); }
+  .text { font-weight: var(--fw-medium); }
+  .detail { color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); margin-top: 2px; overflow-wrap: anywhere; }
+  .act { margin-top: 8px; border: 0; background: var(--accent-soft); color: var(--accent); font-weight: var(--fw-medium); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); height: 24px; padding: 0 10px; border-radius: var(--r-sm); }
   .act:hover { background: var(--accent); color: var(--accent-fg); }
   .x { width: 24px; height: 24px; }
 </style>

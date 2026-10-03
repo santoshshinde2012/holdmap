@@ -62,18 +62,18 @@
 <style>
   .empty { display: grid; justify-items: center; gap: 6px; text-align: center; color: var(--muted); padding: var(--sp-8) var(--sp-6); }
   .empty b { color: var(--text); }
-  .empty span { max-width: 340px; font-size: var(--fs-sm); }
+  .empty span { max-width: 340px; font-size: var(--fs-body); line-height: var(--lh-body); }
   ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
   li { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 14px; }
   li + li { border-top: 1px solid var(--border); }
   li:hover { background: var(--row-hover); }
-  .port { font-family: var(--mono); font-weight: 700; font-size: 14px; min-width: 56px; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .port { font-family: var(--mono); font-weight: var(--fw-semibold); font-size: var(--fs-mono); line-height: var(--lh-mono); min-width: 56px; color: var(--accent); font-variant-numeric: tabular-nums; }
   .what { flex: 1; min-width: 0; }
   .t { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-  .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .fw { color: var(--muted); font-size: var(--fs-xs); }
-  .when { margin-left: auto; font-size: var(--fs-xs); color: var(--faint); white-space: nowrap; }
-  .c { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .name { font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fw { color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
+  .when { margin-left: auto; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--faint); white-space: nowrap; }
+  .c { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
   .sp { flex: 1; }
-  .ask { margin-right: auto; font-size: var(--fs-sm); color: var(--text-2); font-weight: 550; }
+  .ask { margin-right: auto; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text-2); font-weight: var(--fw-medium); }
 </style>

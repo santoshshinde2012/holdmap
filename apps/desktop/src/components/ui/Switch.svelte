@@ -63,8 +63,8 @@
   .row { display: flex; align-items: center; gap: var(--sp-4); justify-content: space-between; min-width: 0; }
   .row.bare { display: inline-flex; }
   .text { min-width: 0; }
-  label { font-size: var(--fs-sm); font-weight: 550; color: var(--text); cursor: pointer; }
-  p { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--muted); line-height: 1.45; }
+  label { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); color: var(--text); cursor: pointer; }
+  p { margin: 2px 0 0; font-size: var(--fs-body-sm); color: var(--muted); line-height: var(--lh-body-sm); }
   .disabled label { cursor: default; color: var(--muted); }
   .sw { --w: 34px; --h: 20px; position: relative; flex: none; width: var(--w); height: var(--h); border-radius: 999px; border: 0; padding: 0; background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border-strong); cursor: pointer; transition: background var(--dur-2) var(--ease), box-shadow var(--dur-2); }
   .sw.sm { --w: 28px; --h: 16px; }
