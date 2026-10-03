@@ -418,7 +418,11 @@
     filters.query = ""; filters.dev = filters.mine = filters.exposed = false; filters.proto = "any";
   }
   function cycleTheme() { theme = theme === "system" ? "light" : theme === "light" ? "dark" : "system"; }
-  function dismissOnboarding() { onboarded = true; try { localStorage.setItem("pw.onboarded", "1"); } catch { /* ignore */ } }
+  function dismissOnboarding() {
+    onboarded = true;
+    try { localStorage.setItem("pw.onboarded", "1"); } catch { /* ignore */ }
+    listEl?.focus(); // the banner's button disappears; keep keyboard focus in the list, not on <body>
+  }
 
   const commands = $derived.by((): Command[] => {
     const cmds: Command[] = [];
