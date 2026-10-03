@@ -89,6 +89,10 @@ describe("SegmentedControl and Tabs", () => {
     await fireEvent.keyDown(radios[1], { key: "End" });
     expect(onchange).toHaveBeenLastCalledWith("udp");
   });
+  it("a counted segment says what the number means to screen readers", () => {
+    render(SegmentedControl, { label: "View", value: "list", options: [{ value: "list", label: "List" }, { value: "graph", label: "Graph", count: 6, countLabel: "6 links" }] });
+    expect(screen.getByRole("radio", { name: "Graph, 6 links" })).toBeTruthy();
+  });
   it("tabs pair with panels and move with arrows", async () => {
     const onchange = vi.fn();
     render(Tabs, { base: "t", label: "Details", value: "a", tabs: [{ id: "a", label: "Overview" }, { id: "b", label: "Network", count: 2 }], onchange });

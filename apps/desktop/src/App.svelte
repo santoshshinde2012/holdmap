@@ -21,7 +21,7 @@
   import HistoryPanel from "./components/HistoryPanel.svelte";
   import * as api from "./lib/api";
   import type { ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
-  import { nodeForEntry, sectionsByCluster } from "./lib/graph";
+  import { linksLabel, nodeForEntry, sectionsByCluster } from "./lib/graph";
   import type { Command } from "./lib/palette";
   import { GROUPS, groupOf, matches, seconds, stopTarget, title, url, canOpen, type Filters, type Group } from "./lib/format";
 
@@ -626,7 +626,7 @@
   </header>
 
   <div class="toolbar" role="toolbar" aria-label="View and filters">
-    <SegmentedControl label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: "List (G)" }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, title: "Service graph (G)" }]} />
+    <SegmentedControl label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: "List (G)" }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, countLabel: linksLabel(graph?.stats.edges ?? 0), title: graph?.stats.edges ? `Service graph · ${linksLabel(graph.stats.edges)} between services (G)` : "Service graph (G)" }]} />
     <span class="divider" aria-hidden="true"></span>
     <SegmentedControl label="Socket states" value={filters.all ? "all" : "listen"} options={[{ value: "listen", label: "Listening" }, { value: "all", label: "All sockets", title: "Include established, TIME_WAIT… (A)" }]} onchange={(v) => { filters.all = v === "all"; refresh(); }} />
     <SegmentedControl label="Protocol" bind:value={filters.proto} options={[{ value: "any", label: "Any" }, { value: "tcp", label: "TCP" }, { value: "udp", label: "UDP" }]} />

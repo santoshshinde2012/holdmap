@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  export interface Segment<T extends string = string> { value: T; label: string; icon?: string; count?: number | null; title?: string; disabled?: boolean }
+  export interface Segment<T extends string = string> { value: T; label: string; icon?: string; count?: number | null; /** What the count means, e.g. "6 links"; read by screen readers instead of the bare number. */ countLabel?: string; title?: string; disabled?: boolean }
 </script>
 
 <script lang="ts" generics="T extends string">
@@ -68,7 +68,7 @@
       use:tooltip={o.title ?? null}
       onclick={() => select(i)}
     >
-      {#if o.icon}<Icon name={o.icon} size={size === "sm" ? 12 : 14} />{/if}<span>{o.label}</span>{#if o.count != null}<span class="count">{o.count}</span>{/if}
+      {#if o.icon}<Icon name={o.icon} size={size === "sm" ? 12 : 14} />{/if}<span>{o.label}</span>{#if o.count != null}<span class="count" aria-hidden={o.countLabel ? "true" : undefined}>{o.count}</span>{#if o.countLabel}<span class="sr-only">, {o.countLabel}</span>{/if}{/if}
     </button>
   {/each}
 </div>

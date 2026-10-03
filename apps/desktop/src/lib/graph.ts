@@ -318,6 +318,9 @@ export function sectionsByCluster(entries: PortEntry[], g: Graph | null): Cluste
   return out;
 }
 
+/** "1 link" / "6 links": what the Graph view's count badge means. */
+export const linksLabel = (n: number): string => `${n} link${n === 1 ? "" : "s"}`;
+
 /** Edge label: ":5432 ×3" or the remote host for outbound edges. */
 export function edgeLabel(e: GraphEdge): string {
   if (e.kind === "outbound") {

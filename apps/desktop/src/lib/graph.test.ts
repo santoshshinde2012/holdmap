@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeLabel, force, groupId, layered, NODE_H, NODE_W, nodeForEntry, orderFromSummary, related, sectionsByCluster, separate, toFlow, trafficDots } from "./graph";
+import { edgeLabel, linksLabel, force, groupId, layered, NODE_H, NODE_W, nodeForEntry, orderFromSummary, related, sectionsByCluster, separate, toFlow, trafficDots } from "./graph";
 import { MOCK_SNAPSHOT, mockTopology } from "./mock";
 
 const g = mockTopology();
@@ -85,6 +85,11 @@ describe("helpers", () => {
     expect(edgeLabel(g.edges.find((e) => e.kind === "outbound")!)).toBe("api.openai.com:443, huggingface.co:443");
     expect(trafficDots(1).count).toBe(1);
     expect(trafficDots(100).count).toBe(4);
+  });
+
+  it("labels the Graph badge count in words", () => {
+    expect(linksLabel(1)).toBe("1 link");
+    expect(linksLabel(6)).toBe("6 links");
   });
 });
 
