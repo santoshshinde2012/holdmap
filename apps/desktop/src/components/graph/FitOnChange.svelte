@@ -3,6 +3,7 @@
   // (new layout or structure) and centres on `focus` when the selection comes from the list.
   import { untrack } from "svelte";
   import { useSvelteFlow } from "@xyflow/svelte";
+  import { FIT_PADDING } from "../../lib/graph";
   let { token, focus, reduced }: { token: string; focus: { x: number; y: number } | null; reduced: boolean } = $props();
   const flow = useSvelteFlow();
   let last = "";
@@ -10,7 +11,7 @@
     if (token === last) return;
     last = token;
     // Nodes need a frame to be measured before the bounds are right; fit twice to be safe.
-    const fit = () => flow.fitView({ padding: 0.08, duration: reduced ? 0 : 320, maxZoom: 1.2 });
+    const fit = () => flow.fitView({ padding: FIT_PADDING, duration: reduced ? 0 : 320, maxZoom: 1.2 });
     const a = setTimeout(fit, 60);
     const b = setTimeout(fit, 400);
     return () => { clearTimeout(a); clearTimeout(b); };

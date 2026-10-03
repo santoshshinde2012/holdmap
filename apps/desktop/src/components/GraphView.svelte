@@ -11,7 +11,7 @@
   import FitOnChange from "./graph/FitOnChange.svelte";
   import Icon from "./Icon.svelte";
   import type { Graph, GraphNode } from "../lib/types";
-  import { layout, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Positions } from "../lib/graph";
+  import { FIT_PADDING, layout, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Positions } from "../lib/graph";
 
   let {
     graph,
@@ -112,6 +112,7 @@
       {edgeTypes}
       colorMode={dark ? "dark" : "light"}
       fitView
+      fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.2 }}
       minZoom={0.2}
       maxZoom={2}
       nodesDraggable={false}

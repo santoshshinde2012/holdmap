@@ -9,6 +9,8 @@ export const NODE_W = 236;
 export const NODE_H = 72;
 export const PAD = 22;
 export const HEADER = 34;
+/** Fit-view margins: the top clears the floating toolbar + legend so no cluster hides under them. */
+export const FIT_PADDING = { top: "84px", bottom: "28px", x: "28px" } as const;
 
 export type LayoutMode = "layered" | "force";
 export type Point = { x: number; y: number };
