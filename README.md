@@ -1,128 +1,60 @@
 <p align="center">
-  <img src="apps/desktop/assets/icon.png" width="96" alt="portwise logo" />
+  <img src="apps/desktop/assets/icon.png" width="88" alt="portwise logo" />
 </p>
 
 <h1 align="center">portwise</h1>
 
 <p align="center">
   <b>See which ports are in use, why they're busy, and stop the right thing safely.</b><br/>
-  One Rust core, four surfaces: CLI · TUI · desktop and tray app · MCP server for AI coding assistants.
+  CLI · TUI · desktop and tray app · MCP server, all on one Rust core.
 </p>
 
 <p align="center">
   <a href="https://github.com/santoshshinde2012/portwise/actions/workflows/ci.yml"><img src="https://github.com/santoshshinde2012/portwise/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
-  <a href="#licence"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="Licence: MIT OR Apache-2.0" /></a>
-  <img src="https://img.shields.io/badge/rust-1.95%2B-orange" alt="Rust 1.95+" />
+  <a href="https://github.com/santoshshinde2012/portwise/releases/latest"><img src="https://img.shields.io/github/v/release/santoshshinde2012/portwise" alt="Latest release" /></a>
+  <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License: MIT OR Apache-2.0" /></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platforms: macOS, Linux, Windows" />
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/desktop-overview-light.png" width="860" alt="The portwise desktop app: the port list grouped by kind, with the details pane for port 3000 open" />
+  <img src="docs/screenshots/desktop-overview-light.png" width="860" alt="The portwise desktop app: ports grouped by kind, with the details pane for port 3000 open" />
 </p>
 
----
+`EADDRINUSE: address already in use :::3000`? Most tools hand you a PID and a `kill -9`.
+portwise tells you what's really there and stops it properly.
 
-`EADDRINUSE: address already in use :::3000`. Most tools answer with a PID and a `kill -9`.
-portwise answers the questions you actually have:
+## Features
 
-- **Who owns it?** The process, PID, user, command line and working directory, plus the **project
-  name, git branch and framework** (Next.js, Vite, SvelteKit, Django, FastAPI, Rails, Postgres,
-  Redis…), or the **Docker, OrbStack, Colima or Podman container** that published it.
-- **Why is it busy?** A plain-English explanation: a dev-server process tree (`npm → sh → node`),
-  a container, a systemd, pm2 or Homebrew service, an OS feature (AirPlay Receiver on 5000/7000,
-  Windows HTTP.sys or an excluded port range), `TIME_WAIT`, or another user's process.
-- **What should I do?** A plan you can preview: stop the whole dev-server tree gracefully (SIGTERM,
-  then SIGKILL after a grace period), stop the container through its runtime, or run
-  `brew services stop` / `systemctl --user stop`. Afterwards portwise **checks the port is free**.
-- **What depends on it?** A live **service graph** showing which local services talk to which
-  (web → api → db), grouped into clusters (Compose project, Kubernetes namespace, pm2/turbo/nx
-  parent, workspace, git repo), with port-forwards and tunnels (kubectl, `ssh -L`, cloudflared,
-  ngrok). **Stop a whole cluster** in dependency order with one confirmed plan.
-
-## Contents
-
-- [Screenshots](#screenshots)
-- [Install](#install)
-- [Quick start](#quick-start)
-- [CLI](#cli)
-- [Project stacks and the shell hook](#project-stacks-and-the-shell-hook)
-- [TUI](#tui)
-- [Desktop and tray app](#desktop-and-tray-app)
-- [MCP server](#mcp-server)
-- [Safety model](#safety-model)
-- [Platform support](#platform-support)
-- [Contributing](#contributing)
-- [Licence](#licence)
-
-## Screenshots
-
-| Explain, then act | Service graph |
-|---|---|
-| ![Stop confirmation listing the exact steps](docs/screenshots/desktop-stop-confirm-light.png) | ![Service graph with cluster hulls, dark theme](docs/screenshots/desktop-graph-dark.png) |
-| **Dark theme** | **Command palette** |
-| ![Port list and details, dark theme](docs/screenshots/desktop-overview-dark.png) | ![Command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) |
-| **`portwise explain 3000`** | **TUI** |
-| ![portwise explain 3000](docs/screenshots/cli-explain-dark.png) | ![The portwise TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) |
+- **Who owns the port.** Process, user, command, folder, plus the project, git branch and
+  framework (Next.js, Vite, Django, Postgres…) or the Docker / Podman / OrbStack container.
+- **Why it's busy, in plain English.** A dev-server tree, a container, a systemd / pm2 / Homebrew
+  service, an OS feature like AirPlay Receiver, `TIME_WAIT`, or another user.
+- **A safe stop.** Preview the plan, stop the whole dev-server tree gracefully (SIGTERM, then
+  SIGKILL), and check the port is free afterwards. System processes and IDEs are protected.
+- **The service graph.** Which local services talk to which, grouped into clusters (Compose,
+  Kubernetes, workspaces). Stop a whole stack in dependency order.
+- **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
+  server for AI coding assistants. macOS, Linux and Windows. No telemetry.
 
 ## Install
 
-### Command-line tool (no Rust needed)
-
-macOS and Linux:
+**macOS and Linux**
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-installer.sh | sh
+curl -LsSf https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-installer.sh | sh
 ```
 
-Windows (PowerShell):
+**Windows (PowerShell)**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-installer.ps1 | iex"
 ```
 
-The binary goes to `~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows; v0.1.0 used
-`~/.cargo/bin`); `PORTWISE_INSTALL_DIR=DIR` overrides it. If that folder is already on your
-`PATH`, `portwise` works straight away. If not, the installer adds it for new shells (a line that
-sources `~/.config/portwise/env.sh` in `~/.profile`, `~/.zshrc` and any existing `~/.bashrc` /
-`~/.bash_profile`, plus a fish `conf.d` file; the user `PATH` on Windows) and says so: open a new
-terminal, or run the `source` command it prints.
+The binary goes to `~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows). If that folder is
+already on your `PATH`, `portwise` works right away. If not, the installer adds it and tells
+you: open a new terminal, or run the `source` line it prints.
 
-Homebrew: coming soon (the tap isn't published yet).
-
-**Troubleshooting**
-
-- **`command not found: portwise` right after installing:** the folder wasn't on `PATH` yet.
-  Open a new terminal, or run `source "$HOME/.config/portwise/env.sh"` (v0.1.0:
-  `source "$HOME/.cargo/env"`).
-- **`Permission denied` on `~/.bash_profile`, `mkdir: ~/.config/fish/conf.d` or `ERROR: command
-  failed`:** the binary is already installed; only the `PATH` edits failed, usually because an
-  old `sudo` left those files owned by root. Give them back with
-  `sudo chown "$USER" ~/.bash_profile` and `sudo chown -R "$USER" ~/.config/fish` and run the
-  installer again, or skip the edits with `curl … | PORTWISE_NO_MODIFY_PATH=1 sh` and add the
-  folder to `PATH` yourself (e.g. `export PATH="$HOME/.local/bin:$PATH"` in `~/.zshrc`).
-- **Never run the installer with `sudo`.** It installs for your user only, and running it as
-  root is what creates root-owned files in your home folder.
-- **Upgrading from v0.1.0:** delete the old `~/.cargo/bin/portwise` so it can't shadow the new
-  one in `~/.local/bin` (`command -v portwise` shows which one runs).
-
-**Or download it yourself** from the [latest release](https://github.com/santoshshinde2012/portwise/releases/latest).
-Pick your archive (`aarch64-apple-darwin` for Apple silicon, `x86_64-apple-darwin` for Intel
-Macs, `x86_64-unknown-linux-gnu` / `-musl` / `aarch64-unknown-linux-gnu` for Linux,
-`x86_64-pc-windows-msvc.zip` for Windows), then check it and put the binary on your `PATH`:
-
-```sh
-f=portwise-aarch64-apple-darwin.tar.xz
-base=https://github.com/santoshshinde2012/portwise/releases/latest/download
-curl -LO "$base/$f" -LO "$base/$f.sha256"
-shasum -a 256 -c "$f.sha256"     # Linux: sha256sum -c; macOS also warns about a blank line, the OK is what counts
-gh attestation verify "$f" --repo santoshshinde2012/portwise   # optional: built by this repo's CI
-tar xf "$f" && mkdir -p ~/.local/bin && mv "${f%.tar.xz}/portwise" ~/.local/bin/
-```
-
-(If `~/.local/bin` isn't on your `PATH`, add `export PATH="$HOME/.local/bin:$PATH"` to your
-shell's rc file.)
-
-### Desktop app
+**Desktop app**
 
 | Platform | Download |
 |---|---|
@@ -143,198 +75,91 @@ shell's rc file.)
 [rpm]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-0.1.1%2D1.x86_64.rpm
 <!-- x-release-please-end -->
 
-The installers aren't notarised or Authenticode-signed yet, so the OS asks once:
+**Homebrew:** coming soon.
 
-- **macOS** says Apple "could not verify" portwise (or that it's from an unidentified developer).
-  Drag it to Applications, try to open it once, then choose **System Settings > Privacy &
-  Security > Open Anyway** (macOS 14 and earlier: right-click the app > **Open**). Or clear the
-  download flag: `xattr -dr com.apple.quarantine /Applications/portwise.app`. (v0.1.0's app
-  could be reported as "damaged"; that's fixed from 0.1.1, which is ad-hoc signed.)
-- **Windows** SmartScreen shows "Windows protected your PC": click **More info**, then **Run anyway**.
+**From source** (Rust 1.95+): `cargo install --locked --git https://github.com/santoshshinde2012/portwise portwise`
 
-Each release lists SHA-256 checksums (`portwise-desktop-*.sha256`) and build provenance for every
-installer.
-
-### Build from source
-
-You need Rust (the repo's `rust-toolchain.toml` picks the stable toolchain; 1.95 is the minimum)
-and a C toolchain: `xcode-select --install` on macOS, `sudo apt-get install -y build-essential`
-on Debian/Ubuntu, the Visual Studio C++ build tools on Windows.
-
-```sh
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # Windows: run rustup-init.exe from rustup.rs
-source "$HOME/.cargo/env"
-git clone https://github.com/santoshshinde2012/portwise && cd portwise
-cargo install --locked --path crates/portwise-cli               # installs portwise into ~/.cargo/bin
-```
-
-Or, without cloning: `cargo install --locked --git https://github.com/santoshshinde2012/portwise portwise`.
-
-The desktop app also needs Node.js 20.19+ or 22.12+ (and, on Linux, the WebKitGTK libraries); see
-[Desktop and tray app](#desktop-and-tray-app).
-
-### Check it works
-
-```sh
-portwise --version
-portwise list
-```
-
-Optional extras:
-
-- Shell completions, e.g. zsh: `mkdir -p ~/.zfunc && portwise completions zsh > ~/.zfunc/_portwise`,
-  then add `fpath=(~/.zfunc $fpath); autoload -U compinit && compinit` to `~/.zshrc`. Bash:
-  `portwise completions bash > ~/.local/share/bash-completion/completions/portwise`. Fish:
-  `portwise completions fish > ~/.config/fish/completions/portwise.fish` (also powershell, elvish).
-- The shell hook: add `eval "$(portwise init zsh)"` to `~/.zshrc` (see
-  [the shell hook](#project-stacks-and-the-shell-hook)).
-- Man pages: `portwise man --out-dir DIR`.
-
-### Uninstall
-
-Delete the binary (`rm ~/.cargo/bin/portwise` for v0.1.0, `rm ~/.local/bin/portwise` for later
-releases, or `cargo uninstall portwise` if you built it with cargo) and the installer's receipt,
-`~/.config/portwise/portwise-receipt.json` (`%LOCALAPPDATA%\portwise\portwise-receipt.json` on
-Windows). Remove the line the installer added to your shell rc files (`. "$HOME/.cargo/env"` if
-nothing else uses `~/.cargo/bin`, or `. "$HOME/.config/portwise/env.sh"`). Remove
-the desktop app the usual way for your OS (drag it to the Trash; Settings > Apps on Windows;
-`sudo apt remove portwise` / `sudo dnf remove portwise` on Linux). Your settings and history live
-in the configuration directory (see [Desktop and tray app](#desktop-and-tray-app)); delete it to
-remove them too.
+Every release has SHA-256 checksums and build provenance (`gh attestation verify FILE --repo santoshshinde2012/portwise`).
 
 ## Quick start
 
 ```sh
-portwise                     # open the interactive TUI
-portwise list --dev          # just the dev servers
-portwise explain 3000        # who holds 3000, why, and what to do about it
-portwise stop 3000 --dry-run # the exact plan, without doing anything
-portwise stop 3000           # stop it gracefully and check the port is free
+portwise list                 # every listening port, grouped by kind
+portwise inspect 3000         # owner, process tree, project and the stop plan
+portwise stop 3000 --dry-run  # show exactly what stop would do
+portwise stop 3000            # stop it gracefully, then check the port is free
 portwise run -p 3000 -- npm run dev   # free 3000 safely, then start your server on it
+portwise                      # the interactive TUI
 ```
 
-## CLI
+<img src="docs/screenshots/cli-explain-dark.png" width="720" alt="portwise explain 3000: who holds the port, why, and the recommended plan" />
 
-Every command, flag and default is in the generated **[CLI reference](docs/cli.md)**. The
-highlights:
-
-| Command | What it does |
-|---|---|
-| `portwise` | Opens the TUI when run in a terminal (also `portwise tui`) |
-| `portwise list [QUERY]` (alias `ls`) | Listening ports. `--all` every socket, `--dev`, `--mine`, `--exposed`, `--tcp`, `--udp`, `--range 3000-3999`, `--sort memory`, `--http` (status and page title), `--wide`, `--json` |
-| `portwise inspect 3000` | Everything about a port: owner, process tree, project, plan |
-| `portwise explain 3000` (alias `why`) | Why is 3000 busy, and what should I do? |
-| `portwise stop 3000` | Gracefully stop whatever holds 3000, then check it is free. `--dry-run`, `--yes`, `--timeout 10s`, `--no-tree`, `--allow-protected` |
-| `portwise stop pid:1234 vite` | Stop by PID or process name (also `--pid`, `--name`) |
-| `portwise stop --cluster shop` | Stop a whole cluster, dependents first (also `stop cluster:shop`) |
-| `portwise stop --all-dev` | Stop every dev server of yours in one confirmed plan (protected processes and containers are skipped) |
-| `portwise kill 3000` | Force-kill now (SIGKILL / TerminateProcess), same as `stop --force` |
-| `portwise free-port --near 3000` | Print a free TCP port (`--range`, `--count 3`) |
-| `portwise wait 5432 --timeout 30s` | Wait until something accepts connections (`--free` waits until it's free) |
-| `portwise run -p 3000 -- npm run dev` | Free the port safely, then run the command with `PORT=3000` (`--fallback` picks the next free port instead) |
-| `portwise up [SERVICE…]` | Start the services in `.portwise.toml` in dependency order and wait until each accepts connections (`--replace` stops a conflicting holder first) |
-| `portwise down [SERVICE…]` | Stop the project's services, dependents first (`--dry-run`, `--all`) |
-| `portwise status` | Each service's state, PID and HTTP health; exits `1` unless all are up |
-| `portwise init [SHELL]` | Write a `.portwise.toml` from the dev servers running here, or print the shell hook for zsh, bash, fish or pwsh |
-| `portwise graph` (alias `mesh`) | The service graph as a tree. `--json`, `--dot`, `--mermaid`, `--cluster NAME`, `--no-external`, `--all` |
-| `portwise watch` | Stream new, closed and conflicting listeners (`--json` for NDJSON) |
-| `portwise pin 3000 --label web` | Pin a port: shown first and watched even when free |
-| `portwise unpin 3000` | Remove a pin |
-| `portwise pins` | List pinned ports and whether they're in use |
-| `portwise history` | What portwise stopped, with the command and directory (`--clear`) |
-| `portwise restart 3000` | Stop what holds 3000 and start the same command again, or re-run it from history |
-| `portwise open 3000` | Open `http://localhost:3000` (`--print` just prints the URL) |
-| `portwise ssh devbox [graph]` | Another machine's ports over SSH: read-only, nothing to install remotely |
-| `portwise mcp` | The MCP server on stdio, for AI coding assistants |
-| `portwise completions zsh` | Shell completions: bash, zsh, fish, powershell, elvish |
-| `portwise man` | The man page (`--out-dir DIR` writes one page per command) |
-
-**Queries.** `list` and the search boxes understand `:3000` (exact port), `3000-3999` (range),
-`proto:udp`, `pid:123`, `user:me` and free text (`next`, `shop-web`, a branch name).
-
-**Scripting.** Every read command takes `--json`. Exit codes are `0` ok, `1` busy, not found or
-timed out, `2` error, `3` blocked by the safety policy, and `4` needs elevation. Colour follows
-`--color auto|always|never` (or `PORTWISE_COLOR`), `NO_COLOR` and `CLICOLOR_FORCE`. `--no-docker`
-skips the container runtimes. `portwise list | head` doesn't print "broken pipe" errors.
-
-## Project stacks and the shell hook
-
-A `.portwise.toml` at the project root (found by walking up from the current directory) names
-the ports a project uses. `portwise init` writes one from what's running; edit it to add
-commands:
+**Project stacks.** Describe a project's services once in `.portwise.toml` (`portwise init` writes
+one from what's running) and start them in dependency order with `portwise up`:
 
 ```toml
 name = "shop"
-protect = [5432]                    # `stop` refuses these without --allow-protected
-
-[services.db]
-port = 5432                         # no command: started elsewhere, so up only checks it
 
 [services.api]
 port = 4000
-command = "npm run dev"             # run with PORT set, logs in <config dir>/logs/
-cwd = "api"
+command = "npm run dev"   # runs with PORT set
 depends_on = ["db"]
-health = "/healthz"                 # shown by `portwise status`
 
-[services.web]
-port = 3000
-command = "npm run dev"
-cwd = "web"
-env = { API_URL = "http://localhost:4000" }
-depends_on = ["api"]
+[services.db]
+port = 5432               # no command: started elsewhere, up just waits for it
 ```
 
-`portwise up` starts what isn't running, `portwise status` shows the stack and `portwise down`
-stops it. Only processes started from the project (or its Compose project) count as its own; a
-different program on one of its ports is reported as a conflict, never stopped silently.
+`portwise status` shows the stack and `portwise down` stops it, dependents first.
 
-Add `eval "$(portwise init zsh)"` to `~/.zshrc` (or `bash`, `fish | source`,
-`portwise init pwsh | Out-String | Invoke-Expression`). When a dev-server command fails because
-its port is taken, the hook prints who holds it and the command to free it. It never stops
-anything itself.
+## CLI
 
-## TUI
+| Purpose | Commands |
+|---|---|
+| Look | `portwise list`, `portwise inspect`, `portwise explain`, `portwise graph`, `portwise watch`, `portwise ssh HOST` (read-only, nothing to install remotely) |
+| Act | `portwise stop`, `portwise kill`, `portwise restart`, `portwise run`, `portwise open` |
+| Ports | `portwise free-port --near 3000`, `portwise wait 5432 --timeout 30s` |
+| Projects | `portwise up`, `portwise down`, `portwise status`, `portwise init` |
+| Remember | `portwise pin`, `portwise unpin`, `portwise pins`, `portwise history` |
+| Integrate | `portwise tui`, `portwise mcp`, `portwise completions zsh`, `portwise man` |
 
-`portwise` (or `portwise tui`) opens a keyboard-first terminal UI with search, filters, sorting,
-a details pane and a service-graph tab. The footer shows the keys that matter right now and `?`
-lists them all. The essentials: `/` search, `Enter` explain, `x` stop (after a confirmation that
-shows the plan), `X` force kill, `o` open in the browser, `c` copy the URL, `Tab` switch to the
-graph, `C` stop the selected cluster, `q` quit.
+Every read command takes `--json`. Exit codes: `0` ok, `1` busy / not found / timed out, `2`
+error, `3` blocked by the safety policy, `4` needs elevation. All flags are in the
+**[CLI reference](docs/cli.md)**.
 
-## Desktop and tray app
+**Shell hook.** Add `eval "$(portwise init zsh)"` to `~/.zshrc` (also `bash`, `fish`, `pwsh`).
+When a command fails with "port in use", it prints who holds the port and how to free it.
 
-A Tauri v2 and Svelte 5 app in `apps/desktop`. It lives in the tray or menu bar when its window is
-closed, notifies you about new and conflicting listeners, and can launch at login. It has the
-list (grouped by kind or by cluster), a details pane, the stop flow with live progress, the
-service graph (`g`), pins, history with one-click restart, remote machines over SSH and a
-command palette (`⌘K` / `Ctrl+K`). Press `?` in the app for every shortcut.
+## Desktop app
 
-```sh
-cd apps/desktop
-npm install
-npm run tauri dev       # the app with hot reload
-npm run tauri build     # a release build plus installers for your OS
-npm run dev             # just the UI in a browser at http://localhost:1420, with mock data
-```
+A tray and menu-bar app with the port list, details, the service graph (`G`), pins, history with
+one-click restart, remote hosts over SSH and a command palette (`⌘K` / `Ctrl+K`). Press `?` for
+every shortcut.
 
-Linux needs the WebKitGTK and tray libraries first:
-`sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev`.
+**First open.** The app isn't notarised yet, so the OS asks once:
 
-The CLI, TUI and desktop app share one configuration directory (`~/.config/portwise` on Linux,
-`~/Library/Application Support/portwise` on macOS, `%APPDATA%\portwise` on Windows, or
-`$PORTWISE_HOME`) holding `config.json` (pins and settings), `history.jsonl` and `logs/`.
+- **macOS:** open it once, then go to **System Settings > Privacy & Security > Open Anyway**
+  (macOS 14 and earlier: right-click the app, then **Open**). Or run
+  `xattr -dr com.apple.quarantine /Applications/portwise.app`.
+- **Windows:** in "Windows protected your PC", click **More info**, then **Run anyway**.
+
+<details>
+<summary>More screenshots</summary>
+
+| Stop confirmation | Service graph |
+|---|---|
+| ![The stop confirmation lists every step before anything happens](docs/screenshots/desktop-stop-confirm-light.png) | ![The service graph with a Compose cluster, dark theme](docs/screenshots/desktop-graph-dark.png) |
+| **Dark theme** | **Command palette** |
+| ![Port list and details, dark theme](docs/screenshots/desktop-overview-dark.png) | ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) |
+| **TUI** | |
+| ![The portwise TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) | |
+
+</details>
 
 ## MCP server
 
-`portwise mcp` speaks the [Model Context Protocol](https://modelcontextprotocol.io) over stdio, so
-AI coding assistants can list ports, explain why one is busy, find a free port, wait for a server,
-read the service graph and stop their own dev servers. Tools: `list_ports`, `explain_port`,
-`find_free_port`, `wait_for_port`, `get_topology`, `plan_cluster_stop` (always a dry run) and
-`stop_port` (low-risk owners only unless `allow_non_dev`; protected processes and other users'
-processes are always refused).
-
-Claude Desktop (`claude_desktop_config.json`) and Cursor (`~/.cursor/mcp.json`):
+`portwise mcp` lets AI coding assistants list ports, explain them, find a free port, wait for a
+server, read the service graph and stop their own dev servers (never protected processes).
+For Claude Desktop or Cursor (`~/.cursor/mcp.json`):
 
 ```json
 {
@@ -344,56 +169,47 @@ Claude Desktop (`claude_desktop_config.json`) and Cursor (`~/.cursor/mcp.json`):
 }
 ```
 
-VS Code (`.vscode/mcp.json`) uses `"servers"` with `"type": "stdio"` instead. If the client can't
-find `portwise`, give the absolute path (for example `~/.local/bin/portwise`, or `~/.cargo/bin/portwise` for v0.1.0).
+VS Code (`.vscode/mcp.json`) uses `"servers"` with `"type": "stdio"`. If the client can't find
+`portwise`, use the full path, for example `/Users/you/.local/bin/portwise`.
 
 ## Safety model
 
-portwise kills processes, so the rules are strict and live in one place (`portwise-core`); every
-surface behaves the same.
+portwise stops processes, so one set of rules in `portwise-core` applies to every surface:
 
-- **Graceful by default.** SIGTERM (on Windows, `taskkill` without `/F`), then SIGKILL or
-  `TerminateProcess` after the grace period (`--timeout`, default 5 s).
-- **Stop the right thing.** It climbs to the dev-server tree root (`npm`, `sh -c`, `nodemon`,
-  `uvicorn --reload`…) so the launcher can't respawn the child. Containers stop through their
-  runtime, supervised services through their supervisor.
-- **Protected processes.** PID 1, core OS processes and portwise's own process tree are never
-  stopped. System services, shells, terminals, IDEs and AI-assistant hosts are refused unless you
-  pass `--allow-protected` (the MCP server always refuses).
-- **PID-reuse guard.** Each plan pins processes by start time and re-checks before signalling
-  (race-free with `pidfd` on Linux).
-- **Dry run and verification.** `--dry-run` shows the exact plan; afterwards portwise checks the
-  port is free and tells you if a supervisor brought it back.
-- **Local and private.** No telemetry, and no network access beyond the local container runtime
-  and SSH connections you ask for.
+- **Graceful first:** SIGTERM (`taskkill` on Windows), then a force kill after `--timeout` (5 s).
+- **The right target:** the dev-server tree root (`npm`, `nodemon`, `uvicorn --reload`…) so nothing
+  respawns; containers through their runtime, services through their supervisor.
+- **Protected processes:** the OS, shells, terminals, IDEs, AI-assistant hosts and portwise itself
+  are refused unless you pass `--allow-protected` (the MCP server always refuses).
+- **No surprises:** a PID-reuse guard, `--dry-run` for every plan, and a check that the port is
+  really free afterwards.
 
-Sockets owned by other users need `sudo` (or an elevated terminal on Windows); portwise counts
-them instead of hiding them, and exits with code `4`.
+## Troubleshooting
 
-## Platform support
+- **`command not found: portwise`** right after installing: open a new terminal, or run
+  `source ~/.config/portwise/env.sh`.
+- **Upgrading from v0.1.0:** remove the old copy with `rm ~/.cargo/bin/portwise`.
+  `command -v portwise` shows which one runs.
+- **`Permission denied` on a shell rc file:** an old `sudo` left it owned by root. Run
+  `sudo chown "$USER" ~/.bash_profile` and install again. Never run the installer with `sudo`.
+- **Other users' ports are hidden:** run with `sudo` (an elevated terminal on Windows).
+- **Uninstall:** `rm ~/.local/bin/portwise`, remove the `env.sh` line the installer added to your
+  shell rc files, and delete the app. Settings and history live in `~/.config/portwise` (macOS:
+  `~/Library/Application Support/portwise`, Windows: `%APPDATA%\portwise`).
 
-| | Linux | macOS | Windows |
-|---|---|---|---|
-| Socket → PID | `/proc` | libproc | `GetExtendedTcpTable` / `GetExtendedUdpTable` |
-| PID-reuse guard | start time and pidfd | start time | creation time |
-| Graceful stop | SIGTERM → SIGKILL | SIGTERM → SIGKILL | `taskkill` → `TerminateProcess` |
-| Supervisors | systemd, pm2 | Homebrew services, pm2 | services reported as protected |
-| Containers | Docker, Podman | Docker Desktop, OrbStack, Colima, Rancher Desktop, Podman | Docker Desktop |
-| CLI, TUI, MCP, desktop | ✅ | ✅ | ✅ |
+## Learn more
+
+- [CLI reference](docs/cli.md): every command and flag.
+- [Architecture](docs/architecture.md): how the core, CLI, TUI, desktop app and MCP server fit together.
+- [Changelog](CHANGELOG.md) and [security policy](SECURITY.md).
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and
-conventions, [docs/architecture.md](docs/architecture.md) for how the pieces fit together,
-[SECURITY.md](SECURITY.md) for reporting vulnerabilities and [CHANGELOG.md](CHANGELOG.md) for
-release notes.
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, checks and
+conventions, including building the desktop app.
 
-## Licence
+## License
 
-Licensed under either of the [Apache License, Version 2.0](LICENSE-APACHE) or the
-[MIT license](LICENSE-MIT), at your option. Unless you explicitly state otherwise, any contribution
-you intentionally submit for inclusion in this work, as defined in the Apache-2.0 licence, is dual
-licensed as above, without any additional terms or conditions.
-
-The desktop app bundles Inter and JetBrains Mono under the SIL Open Font License 1.1 (see
-`apps/desktop/src/assets/fonts/`).
+Dual-licensed under [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option. Unless
+you state otherwise, any contribution you submit is dual-licensed the same way. The desktop app
+bundles Inter and JetBrains Mono under the SIL Open Font License 1.1.
