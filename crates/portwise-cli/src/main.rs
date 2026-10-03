@@ -1,9 +1,13 @@
 //! portwise — see which ports are in use, *why*, and stop the right thing safely.
 
 mod commands;
+mod graph;
+mod remote;
 mod render;
+mod state;
 mod style;
 mod tui;
+mod watch;
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use std::io::IsTerminal;
@@ -32,7 +36,7 @@ pub mod exit {
 explains in plain English why a port is busy (dev-server tree, Docker container, systemd/pm2/brew \
 service, OS feature, TIME_WAIT, another user) and stops the correct thing gracefully, verifying \
 the port is free afterwards.\n\nRun without arguments in a terminal to open the interactive TUI.",
-    after_help = "EXAMPLES:\n  portwise                      Open the interactive TUI\n  portwise list --dev           Only dev servers\n  portwise explain 3000         Why is 3000 busy?\n  portwise stop 3000            Gracefully stop whatever holds 3000\n  portwise stop 3000 --dry-run  Show the plan only\n  portwise run -p 3000 -- npm run dev\n  portwise free-port --near 3000\n  portwise wait 5432 --timeout 30s\n\nEXIT CODES: 0 ok · 1 busy/not found/timeout · 2 error · 3 blocked by safety policy · 4 needs elevation"
+    after_help = "EXAMPLES:\n  portwise                      Open the interactive TUI\n  portwise list --dev           Only dev servers\n  portwise explain 3000         Why is 3000 busy?\n  portwise stop 3000            Gracefully stop whatever holds 3000\n  portwise stop 3000 --dry-run  Show the plan only\n  portwise run -p 3000 -- npm run dev\n  portwise free-port --near 3000\n  portwise wait 5432 --timeout 30s\n  portwise graph                Which services depend on which\n  portwise stop --cluster shop  Stop a whole stack, dependents first\n  portwise watch                Stream new/closed/conflicting listeners\n\nEXIT CODES: 0 ok · 1 busy/not found/timeout · 2 error · 3 blocked by safety policy · 4 needs elevation"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -73,6 +77,28 @@ enum Command {
     Wait(WaitArgs),
     /// Free a port (safely) and run a command on it, with PORT set.
     Run(RunArgs),
+    /// Show which services talk to which (dependencies, clusters) as a tree, JSON, DOT or Mermaid.
+    #[command(visible_alias = "mesh")]
+    Graph(graph::GraphArgs),
+    /// Stream port events: new listeners, closed listeners, conflicts.
+    Watch(watch::WatchArgs),
+    /// Pin a port (favourite): shown first and watched even when free.
+    Pin(state::PinArgs),
+    /// Remove a pin.
+    Unpin(state::PinArgs),
+    /// List pinned ports and whether they are in use.
+    Pins {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Ports portwise stopped recently, with the command that ran there.
+    History(state::HistoryArgs),
+    /// Stop what holds a port and start the same command again (or re-run it from history).
+    Restart(state::RestartArgs),
+    /// Open http://localhost:PORT in the browser.
+    Open(state::OpenArgs),
+    /// Inspect another machine's ports over SSH (agentless, read-only).
+    Ssh(remote::SshArgs),
     /// Open the interactive terminal UI.
     Tui,
     /// Run the MCP (Model Context Protocol) server on stdio for AI agents.
@@ -156,6 +182,9 @@ pub struct StopArgs {
     /// Stop processes by exact name (repeatable).
     #[arg(long = "name", value_name = "NAME")]
     pub names: Vec<String>,
+    /// Stop every service in a cluster (see `portwise graph`), dependents first.
+    #[arg(long = "cluster", value_name = "CLUSTER")]
+    pub clusters: Vec<String>,
     /// Skip SIGTERM: SIGKILL / TerminateProcess immediately.
     #[arg(short, long)]
     pub force: bool,
@@ -242,7 +271,7 @@ pub struct RunArgs {
     pub command: Vec<String>,
 }
 
-fn parse_port(s: &str) -> Result<u16, String> {
+pub(crate) fn parse_port(s: &str) -> Result<u16, String> {
     let s = s.trim().trim_start_matches(':');
     match s.parse::<u16>() {
         Ok(0) | Err(_) => Err(format!("`{s}` is not a valid port (1–65535)")),
@@ -284,6 +313,15 @@ fn main() -> ExitCode {
         Some(Command::FreePort(a)) => commands::free_port(&a, docker),
         Some(Command::Wait(a)) => commands::wait(&a),
         Some(Command::Run(a)) => commands::run(&a, docker),
+        Some(Command::Graph(a)) => graph::run(&a, docker),
+        Some(Command::Watch(a)) => watch::run(&a, docker),
+        Some(Command::Pin(a)) => state::pin(&a, true),
+        Some(Command::Unpin(a)) => state::pin(&a, false),
+        Some(Command::Pins { json }) => state::pins(json, docker),
+        Some(Command::History(a)) => state::history_cmd(&a),
+        Some(Command::Restart(a)) => state::restart(&a, docker),
+        Some(Command::Open(a)) => state::open(&a),
+        Some(Command::Ssh(a)) => remote::run(&a),
         Some(Command::Tui) => tui::run(docker),
         Some(Command::Mcp) => {
             let stdin = std::io::stdin();

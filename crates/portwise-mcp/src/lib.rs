@@ -8,6 +8,7 @@
 //!   the agent passes `allow_non_dev: true`, and never on protected or other users' processes.
 //! * `dry_run: true` returns the plan without executing it.
 
+use portwise_core::topology::GraphExporter;
 use portwise_core::{
     ephemeral_port, execute, port_busy, probe_tcp, tcp_accepting, Engine, Filter, ProbeResult,
     Protocol, Risk, ScanOptions, StopOptions, Target,
@@ -142,6 +143,23 @@ fn tools() -> Value {
             "annotations": {"readOnlyHint": true, "openWorldHint": false}
         },
         {
+            "name": "get_topology",
+            "title": "Service dependency graph",
+            "description": "Which local services talk to which: nodes (services, containers, clients, external hosts), edges (live TCP connections; `a -> b` means a depends on b) and clusters (compose project, k8s namespace, supervisor such as turbo/pm2/concurrently, monorepo workspace, git repo). Use before stopping something to see what depends on it.",
+            "inputSchema": {"type": "object", "properties": {
+                "all": {"type": "boolean", "default": false, "description": "Include system/app services, not only dev services and their peers"},
+                "format": {"type": "string", "enum": ["json", "mermaid", "dot", "tree"], "default": "json"}
+            }},
+            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+        },
+        {
+            "name": "plan_cluster_stop",
+            "title": "Plan stopping a cluster",
+            "description": "Dry-run only: the dependency-ordered plan (dependents first) for stopping every service in a cluster, with warnings about outside dependents. Never executes; ask the user to run `portwise stop --cluster NAME`.",
+            "inputSchema": {"type": "object", "properties": {"cluster": {"type": "string"}}, "required": ["cluster"]},
+            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+        },
+        {
             "name": "stop_port",
             "title": "Stop whatever holds a port",
             "description": "Safely stop the owner of a port (graceful tree stop, container stop or supervisor command) and verify the port is free. By default only stops the user's own dev servers/containers; protected and other users' processes are always refused.",
@@ -207,6 +225,34 @@ fn call_tool(name: &str, args: &Value) -> Result<(String, Value), ToolError> {
                 format!("{} port(s) in use.", rows.len()),
                 json!({"ports": rows, "hidden_sockets": e.snapshot().hidden_sockets}),
             ))
+        }
+        "get_topology" => {
+            let e = engine()?;
+            let mut g = e.topology();
+            if !args["all"].as_bool().unwrap_or(false) {
+                g.retain_dev();
+            }
+            let format = args["format"].as_str().unwrap_or("json");
+            let exporter = portwise_core::topology::exporter(format)
+                .ok_or_else(|| ToolError::Failed(format!("unknown format `{format}`")))?;
+            let text = if format == "json" {
+                portwise_core::topology::TreeExporter::ascii().export(&g)
+            } else {
+                exporter.export(&g)
+            };
+            Ok((text, serde_json::to_value(&g).unwrap_or_default()))
+        }
+        "plan_cluster_stop" => {
+            let c = args["cluster"]
+                .as_str()
+                .filter(|c| !c.trim().is_empty())
+                .ok_or_else(|| ToolError::Failed("`cluster` is required".into()))?;
+            let plan = engine()?.plan(&Target::Cluster(c.to_string()), &StopOptions::default());
+            let mut text = plan.summary.clone();
+            for w in &plan.warnings {
+                text.push_str(&format!("\nWarning: {w}"));
+            }
+            Ok((text, serde_json::to_value(&plan).unwrap_or_default()))
         }
         "explain_port" => {
             let port = port_arg(args, "port")?;
@@ -340,7 +386,7 @@ mod tests {
     fn lists_tools_with_annotations() {
         let r = call(json!({"jsonrpc":"2.0","id":3,"method":"tools/list"}));
         let tools = r["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 5);
+        assert_eq!(tools.len(), 7);
         let stop = tools.iter().find(|t| t["name"] == "stop_port").unwrap();
         assert_eq!(stop["annotations"]["destructiveHint"], true);
     }
@@ -398,5 +444,34 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains("\"result\":{}"));
         assert!(lines[1].contains("-32700"));
+    }
+
+    #[test]
+    fn topology_and_cluster_plan_are_read_only() {
+        let tools = tools();
+        for name in ["get_topology", "plan_cluster_stop"] {
+            let t = tools
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|t| t["name"] == name)
+                .unwrap();
+            assert_eq!(t["annotations"]["readOnlyHint"], true, "{name}");
+        }
+        let r = call(
+            json!({"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"get_topology","arguments":{"all":true,"format":"mermaid"}}}),
+        );
+        assert!(r["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("flowchart LR"));
+        assert!(r["result"]["structuredContent"]["nodes"].is_array());
+        let r = call(
+            json!({"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"plan_cluster_stop","arguments":{"cluster":"nope"}}}),
+        );
+        assert!(r["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("No cluster named"));
     }
 }

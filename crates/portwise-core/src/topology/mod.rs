@@ -19,7 +19,8 @@ mod order;
 pub use builder::TopologyBuilder;
 pub use cluster::{ClusterDetector, ClusterRegistry};
 pub use export::{
-    exporter, DotExporter, GraphExporter, JsonExporter, MermaidExporter, TreeExporter,
+    exporter, DotExporter, GraphExporter, JsonExporter, MermaidExporter, PlainStyle, TreeExporter,
+    TreeStyle,
 };
 pub use model::*;
 pub use order::{stop_order, StopOrder};

@@ -217,12 +217,13 @@ impl Graph {
         self.edges.iter().filter(|e| e.kind == EdgeKind::Local)
     }
 
-    /// Keep dev nodes, everything connected to them, and the clusters that still have members.
+    /// Keep dev nodes (not protected), everything connected to them, and the clusters that still
+    /// have members.
     pub fn retain_dev(&mut self) {
         let dev: std::collections::HashSet<String> = self
             .nodes
             .iter()
-            .filter(|n| n.is_dev)
+            .filter(|n| n.is_dev && !n.protected)
             .map(|n| n.id.clone())
             .collect();
         let keep: std::collections::HashSet<String> = self

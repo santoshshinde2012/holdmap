@@ -22,14 +22,18 @@
 
 pub mod docker;
 pub mod engine;
+pub mod events;
 pub mod exec;
+pub mod history;
 pub mod model;
 pub mod probe;
 pub mod process;
 pub mod project;
 pub mod provider;
+pub mod remote;
 pub mod safety;
 pub mod scan;
+pub mod store;
 pub mod sys;
 pub mod topology;
 pub mod tunnel;
