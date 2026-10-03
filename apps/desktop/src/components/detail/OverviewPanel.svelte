@@ -91,6 +91,8 @@
   .summary { display: grid; gap: var(--sp-3); }
   .headline { margin: 0; font-size: var(--fs-md); line-height: 1.55; color: var(--text); font-weight: 500; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: var(--sp-5) 0 var(--sp-6); }
+  .stats.four { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stats.four .stat:last-child { grid-column: 1 / -1; }
   .stat { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; }
   .sl { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-2xs); color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
   .sv { font-size: var(--fs-md); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
