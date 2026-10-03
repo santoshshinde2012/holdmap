@@ -163,13 +163,16 @@ export function mockExplain(port: number): Explanation {
   };
 }
 
-export function mockPlan(target: string, force: boolean): ActionPlan {
+export function mockPlan(target: string, force: boolean, allowProtected = false): ActionPlan {
   const port = parseInt(target, 10);
   const e = MOCK_SNAPSHOT.entries.find((x) => x.port === port)!;
   if (!e?.process) {
     return { target: `:${port}`, owners: [{ kind: "hidden", uid: 0, user: "root" }], summary: "", steps: [], blocked: { kind: "needs_elevation", message: `The owner of port ${port} belongs to user root; run \`sudo portwise stop ${port}\`.` }, warnings: [], risk: "high" };
   }
-  if (e.protected) {
+  if (e.protected && e.framework?.category !== "system" && !allowProtected) {
+    return { target: `:${port}`, owners: [{ kind: "protected", pid: e.process.pid, name: e.process.name, reason: "IDE host" }], summary: "", steps: [], blocked: { kind: "protected", message: `${e.process.name} (PID ${e.process.pid}) is part of ${e.framework?.name ?? "an app"} — stopping it can close your editor windows.`, overridable: true }, warnings: [], risk: "high" };
+  }
+  if (e.protected && e.framework?.category === "system") {
     return { target: `:${port}`, owners: [{ kind: "protected", pid: e.process.pid, name: e.process.name, reason: "part of macOS" }], summary: "", steps: [], blocked: { kind: "os_service", message: `${e.label} is a macOS feature. Turn it off in System Settings → General → AirDrop & Handoff → AirPlay Receiver.` }, warnings: [], risk: "high" };
   }
   if (e.container) {
@@ -189,7 +192,7 @@ export function mockPlan(target: string, force: boolean): ActionPlan {
     ],
     blocked: null,
     warnings: [],
-    risk: e.is_dev ? "low" : "medium",
+    risk: allowProtected ? "high" : e.is_dev ? "low" : "medium",
   };
 }
 
