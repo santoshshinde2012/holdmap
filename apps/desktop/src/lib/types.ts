@@ -111,7 +111,7 @@ export interface ActionPlan {
   owners: Owner[];
   summary: string;
   steps: Step[];
-  blocked: { kind: BlockKind; message: string } | null;
+  blocked: { kind: BlockKind; message: string; overridable?: boolean } | null;
   warnings: string[];
   risk: Risk;
 }

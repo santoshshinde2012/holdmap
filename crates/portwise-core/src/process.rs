@@ -13,6 +13,9 @@ pub struct ProcessTable {
     self_pid: u32,
     self_user: Option<String>,
     self_ancestors: HashSet<u32>,
+    self_descendants: HashSet<u32>,
+    /// Process → the user session (interactive shell, terminal, IDE, agent) it hosts.
+    session_hosts: HashMap<u32, (u32, crate::safety::SessionKind)>,
     user_names: HashMap<u32, String>,
     self_uid: Option<u32>,
 }
@@ -105,12 +108,38 @@ impl ProcessTable {
             self_pid,
             self_user,
             self_ancestors: HashSet::new(),
+            self_descendants: HashSet::new(),
+            session_hosts: HashMap::new(),
             user_names: HashMap::new(),
             self_uid: None,
         };
         t.self_uid = t.procs.get(&self_pid).and_then(|p| p.uid);
         t.self_ancestors = t.ancestors(self_pid).into_iter().collect();
+        t.self_descendants = t.descendants(self_pid).into_iter().collect();
+        let mut pids: Vec<u32> = t.procs.keys().copied().collect();
+        pids.sort_unstable();
+        for pid in pids {
+            let Some(kind) = crate::safety::session_kind(&t.procs[&pid]) else {
+                continue;
+            };
+            for a in t.ancestors(pid) {
+                if a > 1 {
+                    t.session_hosts.entry(a).or_insert((pid, kind));
+                }
+            }
+        }
         t
+    }
+
+    /// True if `pid` was started (directly or indirectly) by this process.
+    pub fn is_self_descendant(&self, pid: u32) -> bool {
+        self.self_descendants.contains(&pid)
+    }
+
+    /// The user session (shell, terminal, IDE or agent) that `pid` is an ancestor of, if any.
+    pub fn hosted_session(&self, pid: u32) -> Option<(&ProcessInfo, crate::safety::SessionKind)> {
+        let (s, k) = self.session_hosts.get(&pid)?;
+        Some((self.get(*s)?, *k))
     }
 
     pub fn get(&self, pid: u32) -> Option<&ProcessInfo> {

@@ -3,6 +3,21 @@
 use crate::model::ProcessInfo;
 use crate::process::ProcessTable;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static PROTECT_OWN_TREE: AtomicBool = AtomicBool::new(true);
+
+/// Whether processes *started by* this portwise process (its descendants: the desktop app's
+/// WebView helpers, the MCP server's children, `portwise run`'s command…) are protected.
+/// On by default for every frontend. Test harnesses that spawn their own fixture servers as
+/// children can turn it off.
+pub fn set_protect_own_tree(on: bool) {
+    PROTECT_OWN_TREE.store(on, Ordering::Relaxed);
+}
+
+pub fn protect_own_tree() -> bool {
+    PROTECT_OWN_TREE.load(Ordering::Relaxed)
+}
 
 /// How strongly a process is protected.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,7 +57,8 @@ const HARD: &[&str] = &[
     "windowserver",
 ];
 
-/// Protected by default: OS services, container daemons, desktop shells, terminals and IDEs.
+/// Protected by default: OS services, container daemons and desktop shells. Terminals, IDEs,
+/// agents and interactive shells (and whatever hosts them) are covered by [`session_kind`].
 const SOFT: &[&str] = &[
     // macOS
     "finder",
@@ -111,7 +127,58 @@ const SOFT: &[&str] = &[
     "searchhost",
     "startmenuexperiencehost",
     "msmpeng",
-    // Terminals & editors (stopping them loses your work)
+];
+
+/// Shells: protected (and their ancestors too) when they are interactive.
+const SHELLS: &[&str] = &[
+    "sh",
+    "bash",
+    "zsh",
+    "dash",
+    "fish",
+    "ash",
+    "ksh",
+    "tcsh",
+    "csh",
+    "nu",
+    "elvish",
+    "xonsh",
+    "cmd",
+    "powershell",
+    "pwsh",
+];
+
+/// AI coding agents that run your commands. Stopping them (or their host) loses the session.
+const AGENTS: &[&str] = &[
+    "claude",
+    "codex",
+    "aider",
+    "goose",
+    "opencode",
+    "gemini",
+    "cursor-agent",
+    "amp",
+    "crush",
+    "copilot-language-server",
+];
+
+/// Path components that identify IDE remote servers and agent hosts running on a generic
+/// runtime (`node /home/me/.vscode-server/...`, `node /exec-daemon/index.js`, `node …/claude-code/cli.js`).
+const HOST_MARKERS: &[(&str, SessionKind)] = &[
+    (".vscode-server", SessionKind::Editor),
+    (".vscode-server-insiders", SessionKind::Editor),
+    (".vscode-remote", SessionKind::Editor),
+    (".cursor-server", SessionKind::Editor),
+    (".windsurf-server", SessionKind::Editor),
+    ("code-server", SessionKind::Editor),
+    ("openvscode-server", SessionKind::Editor),
+    ("remote-dev-server", SessionKind::Editor),
+    ("exec-daemon", SessionKind::Agent),
+    ("claude-code", SessionKind::Agent),
+    ("gemini-cli", SessionKind::Agent),
+];
+
+const TERMINALS: &[&str] = &[
     "terminal",
     "iterm2",
     "wezterm",
@@ -126,6 +193,12 @@ const SOFT: &[&str] = &[
     "tilix",
     "windowsterminal",
     "openconsole",
+    "tmux",
+    "tmux: server",
+    "screen",
+];
+
+const EDITORS: &[&str] = &[
     "code",
     "code helper",
     "code helper (plugin)",
@@ -142,10 +215,102 @@ const SOFT: &[&str] = &[
     "clion",
     "rider",
     "sublime_text",
-    "tmux",
-    "tmux: server",
-    "screen",
 ];
+
+/// Something the user is working *in*: stopping it, or anything hosting it, ends their session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionKind {
+    Shell,
+    Terminal,
+    Editor,
+    Agent,
+}
+
+impl SessionKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            SessionKind::Shell => "interactive shell",
+            SessionKind::Terminal => "terminal",
+            SessionKind::Editor => "editor/IDE",
+            SessionKind::Agent => "AI agent",
+        }
+    }
+}
+
+/// An interactive shell: a login shell (`-zsh`), `bash -i`/`-l`, or a bare `bash`, but not
+/// `sh -c "next dev"` or `bash script.sh`.
+pub fn is_interactive_shell(p: &ProcessInfo) -> bool {
+    let n = norm(&p.name);
+    if !SHELLS.contains(&n.as_str()) {
+        return false;
+    }
+    if p.cmdline.first().is_some_and(|a0| a0.starts_with('-')) {
+        return true;
+    }
+    let mut interactive_flag = false;
+    for a in p.cmdline.iter().skip(1) {
+        let al = a.to_ascii_lowercase();
+        if al == "-c" || al == "/c" || al == "/k" || al == "-command" || al == "-file" {
+            return false;
+        }
+        if let Some(flags) = a.strip_prefix('-').filter(|f| !f.starts_with('-')) {
+            if flags.contains('c') {
+                return false;
+            }
+            if flags.contains('i') || flags.contains('l') {
+                interactive_flag = true;
+            }
+            continue;
+        }
+        if a == "--login" || a == "--interactive" {
+            interactive_flag = true;
+            continue;
+        }
+        if a.starts_with("--") {
+            continue;
+        }
+        // A positional argument is a script to run.
+        return false;
+    }
+    interactive_flag || p.cmdline.len() <= 1
+}
+
+/// What kind of user session `p` is, if any.
+pub fn session_kind(p: &ProcessInfo) -> Option<SessionKind> {
+    let n = norm(&p.name);
+    if AGENTS.contains(&n.as_str()) {
+        return Some(SessionKind::Agent);
+    }
+    if EDITORS.contains(&n.as_str()) {
+        return Some(SessionKind::Editor);
+    }
+    if TERMINALS.contains(&n.as_str()) {
+        return Some(SessionKind::Terminal);
+    }
+    for a in p.cmdline.iter().take(3) {
+        for comp in a.split(['/', '\\']) {
+            if let Some((_, k)) = HOST_MARKERS.iter().find(|(m, _)| comp == *m) {
+                return Some(*k);
+            }
+        }
+        // `node /usr/local/bin/claude`, `node …/codex/bin/codex.js`: an agent entry point.
+        if let Some(base) = a
+            .rsplit(['/', '\\'])
+            .next()
+            .filter(|_| a.contains(['/', '\\']))
+        {
+            let base = norm(base);
+            let base = base.trim_end_matches(".js").trim_end_matches(".mjs");
+            if AGENTS.contains(&base) {
+                return Some(SessionKind::Agent);
+            }
+        }
+    }
+    if is_interactive_shell(p) {
+        return Some(SessionKind::Shell);
+    }
+    None
+}
 
 fn norm(name: &str) -> String {
     let n = name.trim().to_ascii_lowercase();
@@ -166,6 +331,12 @@ pub fn protection(p: &ProcessInfo, table: &ProcessTable) -> Protection {
             p.name, p.pid
         ));
     }
+    if protect_own_tree() && table.is_self_descendant(p.pid) {
+        return Protection::Hard(format!(
+            "{} ({}) was started by this portwise app",
+            p.name, p.pid
+        ));
+    }
     let n = norm(&p.name);
     if HARD.contains(&n.as_str()) {
         return Protection::Hard(format!("{} is a core operating-system process", p.name));
@@ -174,6 +345,24 @@ pub fn protection(p: &ProcessInfo, table: &ProcessTable) -> Protection {
         return Protection::Soft(format!(
             "{} is a system, desktop, container-runtime or editor process",
             p.name
+        ));
+    }
+    if let Some(kind) = session_kind(p) {
+        return Protection::Soft(format!(
+            "{} ({}) is your {}; stopping it ends that session",
+            p.name,
+            p.pid,
+            kind.label()
+        ));
+    }
+    if let Some((sp, kind)) = table.hosted_session(p.pid) {
+        return Protection::Soft(format!(
+            "{} ({}) hosts your {} {} ({}); stopping it would end that session",
+            p.name,
+            p.pid,
+            kind.label(),
+            sp.name,
+            sp.pid
         ));
     }
     Protection::None
@@ -215,7 +404,7 @@ mod tests {
                 proc(900, 1, "svchost.exe", &[]),
                 proc(901, 1, "lsass.exe", &[]),
             ],
-            1,
+            999,
         );
         assert!(matches!(
             protection(t.get(900).unwrap(), &t),
@@ -225,5 +414,112 @@ mod tests {
             protection(t.get(901).unwrap(), &t),
             Protection::Hard(_)
         ));
+    }
+
+    #[test]
+    fn interactive_shell_detection() {
+        let sh = |cmd: &[&str]| is_interactive_shell(&proc(5, 1, "bash", cmd));
+        assert!(sh(&["-bash"]), "login shell");
+        assert!(sh(&["bash"]), "bare shell");
+        assert!(sh(&["bash", "-i"]));
+        assert!(sh(&["bash", "--login"]));
+        assert!(!sh(&["bash", "-c", "next dev"]));
+        assert!(!sh(&["bash", "-lc", "npm run dev"]));
+        assert!(!sh(&["bash", "-O", "extglob", "-c", "x"]));
+        assert!(!sh(&["bash", "scripts/demo.sh"]));
+        assert!(!is_interactive_shell(&proc(5, 1, "node", &["node"])));
+    }
+
+    #[test]
+    fn terminal_session_and_its_hosts_are_protected_but_not_the_dev_server() {
+        // Desktop app launched from the OS (not from the terminal): ancestors don't help here.
+        let t = table(
+            vec![
+                proc(1, 0, "launchd", &[]),
+                proc(5, 1, "Terminal", &[]),
+                proc(6, 5, "login", &["login", "-pf", "dev"]),
+                proc(7, 6, "zsh", &["-zsh"]),
+                proc(8, 7, "npm", &["npm", "run", "dev"]),
+                proc(9, 8, "sh", &["sh", "-c", "next dev"]),
+                proc(10, 9, "node", &["node", "next", "dev"]),
+                proc(300, 1, "portwise-desktop", &[]),
+            ],
+            300,
+        );
+        let get = |pid| protection(t.get(pid).unwrap(), &t);
+        assert!(matches!(get(5), Protection::Soft(_)), "terminal");
+        match get(6) {
+            Protection::Soft(r) => assert!(r.contains("hosts your interactive shell"), "{r}"),
+            other => panic!("login should host the shell: {other:?}"),
+        }
+        assert!(matches!(get(7), Protection::Soft(_)), "interactive shell");
+        assert_eq!(get(8), Protection::None);
+        assert_eq!(get(9), Protection::None);
+        assert_eq!(get(10), Protection::None);
+    }
+
+    #[test]
+    fn ide_and_agent_hosts_are_protected() {
+        let t = table(
+            vec![
+                proc(1, 0, "init", &[]),
+                proc(
+                    40,
+                    1,
+                    "node",
+                    &["/exec-daemon/node", "/exec-daemon/index.js", "serve"],
+                ),
+                proc(41, 40, "bash", &["bash", "-c", "npm run dev"]),
+                proc(42, 41, "node", &["node", "server.js"]),
+                proc(
+                    50,
+                    1,
+                    "node",
+                    &[
+                        "node",
+                        "/home/dev/.vscode-server/bin/abc/out/server-main.js",
+                    ],
+                ),
+                proc(60, 1, "node", &["node", "/usr/local/bin/claude"]),
+                proc(61, 60, "bash", &["bash", "-c", "vite"]),
+                proc(62, 61, "node", &["node", "vite"]),
+                proc(70, 1, "node", &["node", "/home/dev/claude/server.js"]),
+                proc(80, 1, "claude", &["claude"]),
+                proc(300, 1, "portwise-desktop", &[]),
+            ],
+            300,
+        );
+        let get = |pid| protection(t.get(pid).unwrap(), &t);
+        assert!(matches!(get(40), Protection::Soft(_)), "agent daemon");
+        assert!(matches!(get(50), Protection::Soft(_)), "VS Code server");
+        assert!(matches!(get(60), Protection::Soft(_)), "claude via node");
+        assert!(matches!(get(80), Protection::Soft(_)), "claude binary");
+        assert_eq!(get(42), Protection::None, "dev server started by the agent");
+        assert_eq!(get(62), Protection::None);
+        assert_eq!(
+            get(70),
+            Protection::None,
+            "a project folder named claude is fine"
+        );
+    }
+
+    #[test]
+    fn own_process_tree_is_hard_protected() {
+        let t = table(
+            vec![
+                proc(1, 0, "launchd", &[]),
+                proc(300, 1, "portwise-desktop", &[]),
+                proc(301, 300, "WebKitWebProcess", &[]),
+                proc(302, 301, "WebKitNetworkProcess", &[]),
+            ],
+            300,
+        );
+        assert!(protect_own_tree());
+        for pid in [300, 301, 302] {
+            assert!(
+                matches!(protection(t.get(pid).unwrap(), &t), Protection::Hard(_)),
+                "pid {pid}"
+            );
+        }
     }
 }

@@ -48,3 +48,14 @@ describe("formatting", () => {
     ).toBe("Check that TCP port 3000 is free (up to 3s)");
   });
 });
+
+describe("canOverride", () => {
+  it("only offers 'stop anyway' for soft (overridable) protection", async () => {
+    const { canOverride } = await import("./format");
+    expect(canOverride({ blocked: { kind: "protected", message: "", overridable: true } })).toBe(true);
+    expect(canOverride({ blocked: { kind: "protected", message: "" } })).toBe(false);
+    expect(canOverride({ blocked: { kind: "protected", message: "", overridable: false } })).toBe(false);
+    expect(canOverride({ blocked: { kind: "needs_elevation", message: "", overridable: true } })).toBe(false);
+    expect(canOverride({ blocked: null })).toBe(false);
+  });
+});
