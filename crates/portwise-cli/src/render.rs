@@ -202,10 +202,11 @@ pub fn summary_line(snap: &Snapshot, shown: &[&PortEntry]) -> String {
             S::Yellow,
         ));
     }
-    if snap.hidden_sockets > 0 {
+    // Only the rows shown: a filtered list shouldn't count hidden listeners it filtered out.
+    let hidden = shown.iter().filter(|e| e.is_hidden()).count();
+    if hidden > 0 {
         parts.push(format!(
-            "{} owned by other users (run with sudo for details)",
-            snap.hidden_sockets
+            "{hidden} owned by other users (run with sudo for details)"
         ));
     }
     if snap.docker_available {

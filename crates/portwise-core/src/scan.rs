@@ -777,6 +777,12 @@ mod tests {
         assert!(pg.label.contains("shop-db-1"));
         assert!(entries[0].label.starts_with("hidden"));
         assert!(entries[3].pid.is_none() && entries[3].container.is_some());
+        let hidden_rows: Vec<u16> = entries
+            .iter()
+            .filter(|e| e.is_hidden())
+            .map(|e| e.port)
+            .collect();
+        assert_eq!(hidden_rows, [22]);
 
         let (all, _) = build_entries(&raw, &t, &[], true);
         assert!(all.iter().any(|e| e.state == SocketState::Established));

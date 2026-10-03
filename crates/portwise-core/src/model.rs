@@ -328,6 +328,14 @@ pub struct PortEntry {
     pub tunnel: Option<crate::tunnel::TunnelInfo>,
 }
 
+impl PortEntry {
+    /// A listener whose owner portwise can't see (another user or root, without elevation).
+    /// Published container ports with no host socket aren't hidden: the container is known.
+    pub fn is_hidden(&self) -> bool {
+        self.state.is_listening() && self.pids.is_empty() && self.container.is_none()
+    }
+}
+
 /// A full scan of the machine.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Snapshot {

@@ -108,9 +108,6 @@ pub fn list(a: &ListArgs, docker: bool) -> Result<u8> {
     let mut out = std::io::stdout().lock();
     if shown.is_empty() {
         writeln!(out, "{}", dim("No ports match."))?;
-        if e.snapshot().hidden_sockets > 0 {
-            writeln!(out, "{}", render::summary_line(e.snapshot(), &shown))?;
-        }
         return Ok(exit::BUSY);
     }
     let pins: Vec<u16> = store::Store::open_default()

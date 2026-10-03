@@ -89,12 +89,12 @@ pub fn human_duration(secs: u64) -> String {
     }
 }
 
-/// "12.3 MB".
 /// `1 process`, `2 processes`: a count with the right noun form.
 pub fn count(n: usize, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
 }
 
+/// "12.3 MB".
 pub fn human_bytes(b: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
     let mut v = b as f64;
