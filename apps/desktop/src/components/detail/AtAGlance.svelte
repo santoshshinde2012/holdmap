@@ -56,6 +56,8 @@
   button:hover { background: var(--row-hover); }
   button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
   button :global(svg:last-child) { color: var(--faint); margin-left: auto; flex: none; }
+  button :global(.tile) { border-radius: 5px; }
+  button :global(.corner) { border-color: var(--surface); }
   .port { width: 48px; font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
   .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .more, .calm { margin: var(--sp-1) 0 0; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
