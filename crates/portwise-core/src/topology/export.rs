@@ -5,9 +5,11 @@ use super::model::*;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
+/// Renders a [`Graph`] as text.
 pub trait GraphExporter {
     /// Format name (`json`, `dot`, `mermaid`, `tree`).
     fn name(&self) -> &'static str;
+    /// Render the graph.
     fn export(&self, g: &Graph) -> String;
 }
 
@@ -22,6 +24,7 @@ pub fn exporter(name: &str) -> Option<Box<dyn GraphExporter>> {
     }
 }
 
+/// JSON (the same shape as `portwise graph --json`).
 pub struct JsonExporter;
 impl GraphExporter for JsonExporter {
     fn name(&self) -> &'static str {
@@ -74,6 +77,7 @@ fn esc_dot(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// Graphviz DOT.
 pub struct DotExporter;
 impl GraphExporter for DotExporter {
     fn name(&self) -> &'static str {
@@ -143,6 +147,7 @@ fn esc_mermaid(s: &str) -> String {
     s.replace('"', "#quot;")
 }
 
+/// Mermaid flowchart (pastes into GitHub comments).
 pub struct MermaidExporter;
 impl GraphExporter for MermaidExporter {
     fn name(&self) -> &'static str {
@@ -205,18 +210,23 @@ impl GraphExporter for MermaidExporter {
 
 /// Styling hooks for [`TreeExporter`] (frontends add colour without re-implementing layout).
 pub trait TreeStyle {
+    /// Style a cluster heading.
     fn heading(&self, s: &str) -> String {
         s.to_string()
     }
+    /// Style a service label.
     fn label(&self, s: &str) -> String {
         s.to_string()
     }
+    /// Style a port.
     fn port(&self, s: &str) -> String {
         s.to_string()
     }
+    /// Style secondary text.
     fn dim(&self, s: &str) -> String {
         s.to_string()
     }
+    /// Style a warning.
     fn warn(&self, s: &str) -> String {
         s.to_string()
     }
@@ -230,6 +240,7 @@ impl TreeStyle for PlainStyle {}
 pub struct TreeExporter<'s> {
     /// Use ASCII instead of box-drawing characters.
     pub ascii: bool,
+    /// How to colour the output.
     pub style: &'s dyn TreeStyle,
 }
 
@@ -243,6 +254,7 @@ impl Default for TreeExporter<'_> {
 }
 
 impl TreeExporter<'_> {
+    /// An ASCII-only exporter.
     pub fn ascii() -> Self {
         Self {
             ascii: true,

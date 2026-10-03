@@ -6,6 +6,7 @@ use crate::engine::types::{BlockKind, Owner};
 use crate::model::PortEntry;
 use crate::safety::Protection;
 
+/// Blocks protected processes (system, editor, terminal, agent hosts, portwise itself).
 pub struct ProtectedStrategy;
 
 impl StopStrategy for ProtectedStrategy {

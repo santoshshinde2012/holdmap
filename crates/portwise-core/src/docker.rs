@@ -14,25 +14,35 @@ const TIMEOUT: Duration = Duration::from_millis(1500);
 /// Where a container runtime API is reachable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Endpoint {
+    /// Unix domain socket (`/var/run/docker.sock`, OrbStack, Colima, Podman).
     Unix(PathBuf),
+    /// TCP endpoint from `DOCKER_HOST=tcp://…`.
     Tcp(String),
+    /// Windows named pipe (`//./pipe/docker_engine`).
     Pipe(String),
 }
 
 /// A container runtime endpoint plus a human label ("Docker Desktop", "OrbStack", …).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Runtime {
+    /// Where the runtime API is reachable.
     pub endpoint: Endpoint,
+    /// Human label such as "Docker Desktop" or "OrbStack".
     pub label: String,
 }
 
 /// A container publishing one host port.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublishedPort {
+    /// Port published on the host.
     pub host_port: u16,
+    /// Protocol as reported by the runtime (`tcp` / `udp`).
     pub protocol: String,
+    /// Host address the port is bound to, when not all interfaces.
     pub host_ip: Option<String>,
+    /// The container that publishes the port.
     pub container: ContainerInfo,
+    /// The runtime that owns the container.
     pub runtime: Runtime,
 }
 
@@ -150,6 +160,7 @@ pub fn discover() -> Vec<Runtime> {
     out
 }
 
+/// Parse a `DOCKER_HOST` value (`unix://…`, `tcp://…`, `npipe://…`) into an endpoint.
 pub fn parse_docker_host(host: &str) -> Option<Endpoint> {
     if let Some(p) = host.strip_prefix("unix://") {
         Some(Endpoint::Unix(PathBuf::from(p)))

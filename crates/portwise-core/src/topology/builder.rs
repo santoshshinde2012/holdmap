@@ -42,6 +42,7 @@ fn fmt_endpoint(a: IpAddr, port: u16) -> String {
 }
 
 impl<'a> TopologyBuilder<'a> {
+    /// A builder over `scan` with the default policy and cluster detectors.
     pub fn new(scan: &'a Scan) -> Self {
         static DEFAULT: DefaultProtectionPolicy = DefaultProtectionPolicy;
         Self {
@@ -52,11 +53,13 @@ impl<'a> TopologyBuilder<'a> {
         }
     }
 
+    /// Use a custom protection policy.
     pub fn with_policy(mut self, policy: &'a dyn ProtectionPolicy) -> Self {
         self.policy = policy;
         self
     }
 
+    /// Use a custom cluster registry.
     pub fn with_clusters(mut self, clusters: ClusterRegistry) -> Self {
         self.clusters = clusters;
         self
@@ -227,6 +230,7 @@ impl<'a> TopologyBuilder<'a> {
         ))
     }
 
+    /// Build the graph.
     pub fn build(&self) -> Graph {
         let snap = &self.scan.snapshot;
         let mut nodes: BTreeMap<String, Node> = BTreeMap::new();

@@ -10,21 +10,30 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// One stopped port, remembered so it can be restarted (`history.jsonl`).
 pub struct HistoryEntry {
     /// Unix epoch milliseconds when it was stopped.
     pub at_ms: u64,
+    /// Port that was stopped.
     pub port: u16,
+    /// Its protocol.
     pub protocol: Protocol,
+    /// Display label at the time it was stopped.
     pub label: String,
     /// Command line of the process-tree root (e.g. `npm run dev`).
     pub command: Vec<String>,
+    /// Working directory of the stopped process.
     pub cwd: Option<PathBuf>,
+    /// Project name, when detected.
     pub project: Option<String>,
+    /// Framework name, when detected.
     pub framework: Option<String>,
+    /// PID of the stopped process.
     pub pid: u32,
 }
 
 impl HistoryEntry {
+    /// The command line as a shell-quoted string.
     pub fn command_line(&self) -> String {
         self.command.join(" ")
     }

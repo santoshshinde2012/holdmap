@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 /// A pinned ("favourite") port, shown first and watched even while it's free.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pin {
+    /// Pinned port.
     pub port: u16,
     /// Optional note such as "shop web".
     #[serde(default)]
@@ -22,6 +23,7 @@ pub struct Pin {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    /// Pinned ports.
     pub pins: Vec<Pin>,
     /// Desktop/watch notifications for new listeners, closed listeners and conflicts.
     pub notify: bool,
@@ -32,8 +34,8 @@ pub struct Config {
     /// Foreground re-scan interval for the desktop app and its watcher, in seconds
     /// (the background cadence is derived from it). Clamped to [`Config::SCAN_INTERVAL`].
     pub scan_interval_secs: u64,
-    /// Global "show portwise" shortcut preset: `alt-p` (⌘⌥P / Ctrl+Alt+P), `shift-p`,
-    /// `shift-space` or `off`.
+    /// Global "show portwise" shortcut preset: `alt-p` (⌘⌥P / Ctrl+Alt+P), `alt-space`
+    /// (⌥Space / Ctrl+Alt+Space), `alt-k` (⌘⌥K / Ctrl+Alt+K) or `off`.
     pub hotkey: String,
     /// Recently used SSH hosts for the desktop remote view, newest first.
     pub recent_hosts: Vec<String>,
@@ -100,6 +102,7 @@ impl Config {
         self.recent_hosts.truncate(Self::RECENT_HOSTS);
     }
 
+    /// True when `port` is pinned.
     pub fn is_pinned(&self, port: u16) -> bool {
         self.pins.iter().any(|p| p.port == port)
     }
@@ -124,6 +127,7 @@ pub struct Store {
 }
 
 impl Store {
+    /// A store rooted at `dir`.
     pub fn new(dir: impl Into<PathBuf>) -> Self {
         Self { dir: dir.into() }
     }
@@ -153,10 +157,12 @@ impl Store {
             .join("portwise")
     }
 
+    /// The store in the platform config directory (`PORTWISE_HOME` overrides it).
     pub fn open_default() -> Self {
         Self::new(Self::default_dir())
     }
 
+    /// Directory holding `config.json` and `history.jsonl`.
     pub fn dir(&self) -> &Path {
         &self.dir
     }
@@ -169,6 +175,7 @@ impl Store {
         self.dir.join("history.jsonl")
     }
 
+    /// Directory for logs of restarted commands.
     pub fn logs_dir(&self) -> PathBuf {
         self.dir.join("logs")
     }
@@ -181,6 +188,7 @@ impl Store {
             .unwrap_or_default()
     }
 
+    /// Write `config.json` atomically.
     pub fn save_config(&self, c: &Config) -> io::Result<()> {
         let text = serde_json::to_string_pretty(c).map_err(io::Error::other)?;
         self.write_atomic(&self.config_path(), text.as_bytes())
@@ -245,6 +253,7 @@ impl Store {
             .find(|h| h.port == port)
     }
 
+    /// Forget the stop history.
     pub fn clear_history(&self) -> io::Result<()> {
         match fs::remove_file(self.history_path()) {
             Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),

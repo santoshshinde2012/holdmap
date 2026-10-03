@@ -17,6 +17,8 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const ERROR_ACCESS_DENIED: i32 = 5;
 const ERROR_INVALID_PARAMETER: i32 = 87;
 
+/// Every TCP and UDP socket with its owning PID, from `GetExtendedTcpTable` /
+/// `GetExtendedUdpTable` (via `netstat2`).
 pub fn list_sockets() -> io::Result<Vec<RawSocket>> {
     super::netstat_backend::list_sockets()
 }
@@ -52,6 +54,8 @@ fn creation_time(h: &Handle) -> Option<u64> {
     (ok != 0).then_some(((c.dwHighDateTime as u64) << 32) | c.dwLowDateTime as u64)
 }
 
+/// Process creation time (`GetProcessTimes`), unique per PID incarnation; `None` once the process
+/// has exited.
 pub fn start_token(pid: u32) -> Option<u64> {
     if pid == 0 || pid == 4 {
         return Some(0); // System Idle / System: no creation time, never signalled anyway.
@@ -70,10 +74,13 @@ fn still_active(h: &Handle) -> bool {
     ok != 0 && code == STILL_ACTIVE as u32
 }
 
+/// Always false: Windows has no zombie processes.
 pub fn is_zombie(_pid: u32) -> bool {
     false
 }
 
+/// Stop `pid` after checking its creation time still equals `expected_token`. [`Sig::Term`] runs
+/// `taskkill` without `/F` (WM_CLOSE); [`Sig::Kill`] calls `TerminateProcess`.
 pub fn signal(pid: u32, expected_token: u64, sig: Sig) -> Result<(), SignalError> {
     if pid == 0 || pid == 4 {
         return Err(SignalError::Other(

@@ -15,6 +15,7 @@ pub fn set_protect_own_tree(on: bool) {
     PROTECT_OWN_TREE.store(on, Ordering::Relaxed);
 }
 
+/// Whether portwise protects its own process tree (on by default; see [`set_protect_own_tree`]).
 pub fn protect_own_tree() -> bool {
     PROTECT_OWN_TREE.load(Ordering::Relaxed)
 }
@@ -32,6 +33,7 @@ pub enum Protection {
 }
 
 impl Protection {
+    /// True for soft and hard protection.
     pub fn is_protected(&self) -> bool {
         !matches!(self, Protection::None)
     }
@@ -220,13 +222,18 @@ const EDITORS: &[&str] = &[
 /// Something the user is working *in*: stopping it, or anything hosting it, ends their session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionKind {
+    /// An interactive shell (bash, zsh, fish, PowerShell…).
     Shell,
+    /// A terminal emulator or multiplexer.
     Terminal,
+    /// An editor or IDE (including remote servers).
     Editor,
+    /// An AI coding agent host.
     Agent,
 }
 
 impl SessionKind {
+    /// Short human label, e.g. "interactive shell".
     pub fn label(self) -> &'static str {
         match self {
             SessionKind::Shell => "interactive shell",
@@ -320,8 +327,10 @@ fn norm(name: &str) -> String {
 /// Which processes portwise may signal. Engines, scanners and executors depend on this
 /// abstraction, not on the concrete rule set, so frontends and tests can inject their own.
 pub trait ProtectionPolicy: Send + Sync + std::fmt::Debug {
+    /// Classify `p` (with its ancestry from `table`).
     fn protection(&self, p: &ProcessInfo, table: &ProcessTable) -> Protection;
 
+    /// True when `p` is protected at any level.
     fn is_protected(&self, p: &ProcessInfo, table: &ProcessTable) -> bool {
         self.protection(p, table).is_protected()
     }

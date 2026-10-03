@@ -17,7 +17,9 @@ pub const REMOTE_SCRIPT: &str = "LC_ALL=C; (ss -tanupH 2>/dev/null || ss -tanup 
 
 /// Runs a shell script somewhere and returns its stdout.
 pub trait RemoteRunner {
+    /// Human description of where commands run (e.g. `ssh devbox`).
     fn describe(&self) -> String;
+    /// Run a shell script and return its stdout.
     fn run(&self, script: &str) -> io::Result<String>;
 }
 
@@ -109,11 +111,14 @@ pub fn ssh_destination(input: &str) -> (Option<u16>, String) {
 
 /// `ssh -o BatchMode=yes HOST sh -c SCRIPT`.
 pub struct SshRunner {
+    /// SSH destination (`user@host` or an `~/.ssh/config` alias).
     pub host: String,
+    /// Connection and command timeout.
     pub timeout: Duration,
 }
 
 impl SshRunner {
+    /// A runner for `host` with the default timeout.
     pub fn new(host: impl Into<String>) -> Self {
         Self {
             host: host.into(),

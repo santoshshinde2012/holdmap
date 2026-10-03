@@ -7,6 +7,7 @@ use crate::model::PortEntry;
 use crate::util::run_with_timeout;
 use std::time::Duration;
 
+/// Stops pm2-managed apps with `pm2 stop` so pm2 doesn't respawn them.
 pub struct Pm2Strategy;
 
 /// Is `pid` (or an ancestor) a pm2 daemon?

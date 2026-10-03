@@ -9,6 +9,9 @@ mod style;
 mod tui;
 mod watch;
 
+#[cfg(test)]
+mod cli_docs;
+
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use std::io::IsTerminal;
 use std::process::ExitCode;
@@ -85,9 +88,10 @@ enum Command {
     /// Pin a port (favourite): shown first and watched even when free.
     Pin(state::PinArgs),
     /// Remove a pin.
-    Unpin(state::PinArgs),
+    Unpin(state::UnpinArgs),
     /// List pinned ports and whether they are in use.
     Pins {
+        /// Machine-readable JSON output.
         #[arg(long)]
         json: bool,
     },
@@ -105,11 +109,16 @@ enum Command {
     Mcp,
     /// Generate shell completions.
     Completions {
+        /// Shell to generate completions for.
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
-    /// Print the man page (roff).
-    Man,
+    /// Print the man page (roff), or write one page per command with --out-dir.
+    Man {
+        /// Write `portwise.1` and `portwise-<command>.1` into this directory instead of printing.
+        #[arg(long, value_name = "DIR")]
+        out_dir: Option<std::path::PathBuf>,
+    },
 }
 
 #[derive(Args, Debug, Default)]
@@ -222,12 +231,14 @@ pub struct FreePortArgs {
     /// How many ports to return.
     #[arg(short = 'c', long, default_value_t = 1)]
     pub count: usize,
+    /// Machine-readable JSON output.
     #[arg(long)]
     pub json: bool,
 }
 
 #[derive(Args, Debug)]
 pub struct WaitArgs {
+    /// Port number (e.g. 3000 or :3000).
     #[arg(value_parser = parse_port)]
     pub port: u16,
     /// Give up after this long (exit code 1).
@@ -242,6 +253,7 @@ pub struct WaitArgs {
     /// Print nothing; just use the exit code.
     #[arg(short, long)]
     pub quiet: bool,
+    /// Machine-readable JSON output.
     #[arg(long)]
     pub json: bool,
 }
@@ -283,6 +295,20 @@ fn parse_range(s: &str) -> Result<(u16, u16), String> {
     portwise_core::parse_range(s).ok_or_else(|| format!("`{s}` is not a range like 3000-3999"))
 }
 
+/// Write `portwise.1` plus one `portwise-<command>.1` page per subcommand into `dir`.
+fn write_man_pages(dir: &std::path::Path) -> anyhow::Result<u8> {
+    std::fs::create_dir_all(dir)?;
+    let cmd = Cli::command();
+    clap_mangen::generate_to(cmd, dir)?;
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.extension().is_some_and(|e| e == "1") {
+            println!("{}", path.display());
+        }
+    }
+    Ok(exit::OK)
+}
+
 fn main() -> ExitCode {
     // Behave like a well-mannered Unix filter: `portwise list --json | head` must not print
     // "Broken pipe" errors.
@@ -316,7 +342,13 @@ fn main() -> ExitCode {
         Some(Command::Graph(a)) => graph::run(&a, docker),
         Some(Command::Watch(a)) => watch::run(&a, docker),
         Some(Command::Pin(a)) => state::pin(&a, true),
-        Some(Command::Unpin(a)) => state::pin(&a, false),
+        Some(Command::Unpin(a)) => state::pin(
+            &state::PinArgs {
+                port: a.port,
+                label: None,
+            },
+            false,
+        ),
         Some(Command::Pins { json }) => state::pins(json, docker),
         Some(Command::History(a)) => state::history_cmd(&a),
         Some(Command::Restart(a)) => state::restart(&a, docker),
@@ -338,12 +370,13 @@ fn main() -> ExitCode {
             );
             Ok(exit::OK)
         }
-        Some(Command::Man) => {
+        Some(Command::Man { out_dir: None }) => {
             let man = clap_mangen::Man::new(Cli::command());
             man.render(&mut std::io::stdout())
                 .map(|_| exit::OK)
                 .map_err(anyhow::Error::from)
         }
+        Some(Command::Man { out_dir: Some(dir) }) => write_man_pages(&dir),
     };
     match result {
         Ok(code) => ExitCode::from(code),

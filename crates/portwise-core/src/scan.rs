@@ -38,9 +38,13 @@ impl Default for ScanOptions {
 /// Everything learned in one scan; reused by explain/plan so they see a consistent world.
 #[derive(Debug, Clone)]
 pub struct Scan {
+    /// The user-facing snapshot.
     pub snapshot: Snapshot,
+    /// Process table used for the snapshot.
     pub table: ProcessTable,
+    /// Container-published ports.
     pub published: Vec<PublishedPort>,
+    /// Raw sockets as returned by the provider.
     pub raw: Vec<RawSocket>,
 }
 
@@ -78,6 +82,7 @@ impl Scanner {
         )
     }
 
+    /// A scanner over the given socket, process and container providers.
     pub fn new(
         sockets: Arc<dyn SocketProvider>,
         processes: Arc<dyn ProcessProvider>,
@@ -102,20 +107,24 @@ impl Scanner {
         .with_platform("fixture")
     }
 
+    /// Use a custom protection policy.
     pub fn with_policy(mut self, policy: Arc<dyn ProtectionPolicy>) -> Self {
         self.policy = policy;
         self
     }
 
+    /// Override the platform name reported in snapshots.
     pub fn with_platform(mut self, platform: impl Into<String>) -> Self {
         self.platform = platform.into();
         self
     }
 
+    /// The protection policy in use.
     pub fn policy(&self) -> Arc<dyn ProtectionPolicy> {
         self.policy.clone()
     }
 
+    /// Take a snapshot.
     pub fn scan(&self, opts: &ScanOptions) -> Result<Scan, std::io::Error> {
         let started = Instant::now();
         let mut warnings = Vec::new();
@@ -510,15 +519,22 @@ fn make_label(
 pub struct Filter {
     /// Free-text query: words, `:3000` / `3000`, `3000-3999`, `proto:udp`, `user:me`.
     pub query: String,
+    /// Only this protocol.
     pub protocol: Option<Protocol>,
+    /// Only listening (TCP) / bound (UDP) sockets.
     pub listening_only: bool,
+    /// Only likely development servers.
     pub dev_only: bool,
+    /// Only processes owned by the current user.
     pub mine_only: bool,
+    /// Only ports reachable from the network.
     pub exposed_only: bool,
+    /// Only ports in this inclusive range.
     pub range: Option<(u16, u16)>,
 }
 
 impl Filter {
+    /// True when `e` passes every condition.
     pub fn matches(&self, e: &PortEntry) -> bool {
         if self.listening_only && !e.state.is_listening() {
             return false;
@@ -545,6 +561,7 @@ impl Filter {
             .all(|tok| token_matches(tok, e))
     }
 
+    /// The entries that pass the filter.
     pub fn apply<'a>(&self, entries: &'a [PortEntry]) -> Vec<&'a PortEntry> {
         entries.iter().filter(|e| self.matches(e)).collect()
     }

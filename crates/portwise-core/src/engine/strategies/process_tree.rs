@@ -6,6 +6,7 @@ use crate::engine::types::{Owner, Risk};
 use crate::model::{FrameworkCategory, PortEntry};
 use crate::util::{human_duration, now_secs};
 
+/// Stops a dev-server process tree from its launcher root (the default strategy).
 pub struct ProcessTreeStrategy;
 
 impl StopStrategy for ProcessTreeStrategy {

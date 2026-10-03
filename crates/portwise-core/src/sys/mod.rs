@@ -37,7 +37,9 @@ use unsupported as imp;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Sig {
+    /// Graceful termination request (SIGTERM).
     Term,
+    /// Immediate kill (SIGKILL / TerminateProcess).
     Kill,
 }
 
@@ -54,12 +56,16 @@ impl std::fmt::Display for Sig {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SignalError {
     #[error("process has already exited")]
+    /// The process has already exited.
     NotFound,
     #[error("PID was reused by a different process (start time changed); refusing to signal")]
+    /// The PID now belongs to a different process.
     IdentityChanged,
     #[error("permission denied (process belongs to another user; elevation required)")]
+    /// Not allowed to signal the process.
     PermissionDenied,
     #[error("{0}")]
+    /// Any other OS error.
     Other(String),
 }
 

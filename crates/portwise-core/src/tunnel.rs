@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+/// What kind of tunnel a listener is.
 pub enum TunnelKind {
     /// `kubectl port-forward` (local port → pod/service in a cluster).
     Kubectl,
@@ -21,6 +22,7 @@ pub enum TunnelKind {
 /// A detected tunnel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TunnelInfo {
+    /// Tunnel kind.
     pub kind: TunnelKind,
     /// Human description, e.g. `svc/api:80 in namespace shop` or `db.internal:5432 via bastion`.
     pub target: String,

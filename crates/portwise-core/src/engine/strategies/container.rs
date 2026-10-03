@@ -5,6 +5,7 @@ use crate::docker;
 use crate::engine::types::{BlockKind, Owner, Step};
 use crate::model::PortEntry;
 
+/// Stops containers through their runtime API instead of killing the port forwarder.
 pub struct ContainerStrategy;
 
 pub(crate) fn endpoint_string(ep: &docker::Endpoint) -> String {

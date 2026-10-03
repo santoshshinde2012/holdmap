@@ -8,23 +8,32 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
+/// A change between two snapshots, as streamed by `portwise watch --json`.
 pub enum PortEvent {
+    /// A new listener appeared.
     Opened {
+        /// The new listener.
         entry: Box<PortEntry>,
     },
+    /// A listener went away.
     Closed {
+        /// The listener that closed.
         entry: Box<PortEntry>,
     },
     /// Several owners listen on the same port/protocol (requests go to whichever bound the
     /// address the client resolves to — a classic `localhost` vs `127.0.0.1` surprise).
     Conflict {
+        /// The port with several owners.
         port: u16,
+        /// Its protocol.
         protocol: Protocol,
+        /// The competing listeners.
         entries: Vec<PortEntry>,
     },
 }
 
 impl PortEvent {
+    /// The port the event is about.
     pub fn port(&self) -> u16 {
         match self {
             PortEvent::Opened { entry } | PortEvent::Closed { entry } => entry.port,
@@ -137,6 +146,7 @@ pub struct Watcher {
 }
 
 impl Watcher {
+    /// A watcher with no previous snapshot (the first diff reports nothing).
     pub fn new() -> Self {
         Self::default()
     }

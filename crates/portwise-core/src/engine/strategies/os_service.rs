@@ -4,6 +4,7 @@ use super::{Resolution, ResolveCtx, StopStrategy};
 use crate::engine::types::{BlockKind, Owner};
 use crate::model::PortEntry;
 
+/// Explains OS features (AirPlay, HTTP.sys, WSL relay) and how to turn them off.
 pub struct OsServiceStrategy;
 
 impl StopStrategy for OsServiceStrategy {

@@ -7,8 +7,11 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 /// Output of a finished command.
 #[derive(Debug, Clone)]
 pub struct CmdOutput {
+    /// True when the command exited with status 0.
     pub success: bool,
+    /// Captured standard output.
     pub stdout: String,
+    /// Captured standard error.
     pub stderr: String,
 }
 
@@ -54,6 +57,7 @@ pub fn run_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Opti
     }
 }
 
+/// Current Unix time in milliseconds.
 pub fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -61,6 +65,7 @@ pub fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+/// Current Unix time in seconds.
 pub fn now_secs() -> u64 {
     now_ms() / 1000
 }

@@ -10,6 +10,7 @@ pub const EXTERNAL_ID: &str = "external";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+/// What a node represents.
 pub enum NodeKind {
     /// A process tree that listens on at least one port.
     Service,
@@ -26,40 +27,57 @@ pub enum NodeKind {
 /// A port a node listens on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NodePort {
+    /// Port number.
     pub port: u16,
+    /// Transport protocol.
     pub protocol: Protocol,
+    /// Exposure of the listener.
     pub exposure: Exposure,
     /// [`PortEntry::id`](crate::model::PortEntry::id) of the listener row (for UI selection sync).
     pub entry_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// A service, container, client or external host in the graph.
 pub struct Node {
     /// Stable id: `svc:<root pid>`, `ctr:<container id>`, `port:<proto>:<port>` or `external`.
     pub id: String,
+    /// Node kind.
     pub kind: NodeKind,
     /// Main label (project / container / process name).
     pub label: String,
     /// Secondary label (framework or process name).
     pub subtitle: Option<String>,
+    /// PID of the process-tree root, for services.
     pub root_pid: Option<u32>,
     /// Every process in the service tree.
     pub pids: Vec<u32>,
+    /// Ports the node listens on.
     pub ports: Vec<NodePort>,
+    /// Detected framework.
     pub framework: Option<Framework>,
+    /// Project name.
     pub project: Option<String>,
+    /// Project root directory.
     pub project_root: Option<PathBuf>,
+    /// The container, for container nodes.
     pub container: Option<ContainerInfo>,
+    /// The tunnel, when the node is a port-forward.
     pub tunnel: Option<TunnelInfo>,
     /// Cluster id this node belongs to.
     pub cluster: Option<String>,
+    /// CPU usage of the whole tree since the previous scan, in percent.
     pub cpu_percent: f32,
+    /// Resident memory of the whole tree, in bytes.
     pub memory_bytes: u64,
+    /// Counts as a development service.
     pub is_dev: bool,
+    /// Protected by the safety policy.
     pub protected: bool,
 }
 
 impl Node {
+    /// True when the node listens on at least one port.
     pub fn listens(&self) -> bool {
         !self.ports.is_empty()
     }
@@ -77,6 +95,7 @@ impl Node {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+/// What an edge represents.
 pub enum EdgeKind {
     /// Local process → local listener. `from` depends on `to`.
     Local,
@@ -91,8 +110,11 @@ pub enum EdgeKind {
 pub struct Edge {
     /// `from->to:port`.
     pub id: String,
+    /// Source node ID (the dependent).
     pub from: String,
+    /// Target node ID (the dependency).
     pub to: String,
+    /// Edge kind.
     pub kind: EdgeKind,
     /// Target port (the listener port for local/inbound edges, the remote port for outbound).
     pub port: u16,
@@ -104,6 +126,7 @@ pub struct Edge {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+/// How a cluster was detected.
 pub enum ClusterKind {
     /// docker compose project (container labels).
     Compose,
@@ -118,40 +141,57 @@ pub enum ClusterKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// A group of nodes that belong together (compose project, workspace, repo…).
 pub struct Cluster {
     /// `compose:<project>`, `k8s:<ns>`, `sup:<pid>`, `ws:<root>`, `git:<root>`.
     pub id: String,
+    /// Display name.
     pub name: String,
+    /// Cluster kind.
     pub kind: ClusterKind,
     /// Detail such as the workspace kind (`pnpm`) or supervisor tool (`turbo`).
     pub detail: Option<String>,
+    /// Root directory, when there is one.
     pub root: Option<PathBuf>,
+    /// IDs of the member nodes.
     pub nodes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// Summary counts for a graph.
 pub struct GraphStats {
+    /// Number of nodes.
     pub nodes: usize,
+    /// Number of edges.
     pub edges: usize,
+    /// Number of clusters.
     pub clusters: usize,
+    /// Number of established connections behind the edges.
     pub connections: usize,
 }
 
 /// The service mesh of this machine.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Graph {
+    /// Nodes.
     pub nodes: Vec<Node>,
+    /// Edges.
     pub edges: Vec<Edge>,
+    /// Clusters.
     pub clusters: Vec<Cluster>,
+    /// Summary counts.
     pub stats: GraphStats,
+    /// When the graph was built (Unix epoch milliseconds).
     pub taken_at_ms: u64,
 }
 
 impl Graph {
+    /// Look up a node by ID.
     pub fn node(&self, id: &str) -> Option<&Node> {
         self.nodes.iter().find(|n| n.id == id)
     }
 
+    /// Look up a cluster by ID.
     pub fn cluster(&self, id: &str) -> Option<&Cluster> {
         self.clusters.iter().find(|c| c.id == id)
     }
@@ -213,6 +253,7 @@ impl Graph {
             })
     }
 
+    /// Edges between two local nodes.
     pub fn local_edges(&self) -> impl Iterator<Item = &Edge> {
         self.edges.iter().filter(|e| e.kind == EdgeKind::Local)
     }

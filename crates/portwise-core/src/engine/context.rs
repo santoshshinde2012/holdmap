@@ -7,25 +7,33 @@ use crate::process::ProcessTable;
 use crate::safety::{Protection, ProtectionPolicy};
 use crate::scan::Scan;
 
+/// Everything a [`StopStrategy`](super::strategies::StopStrategy) needs to resolve one port entry.
 pub struct ResolveCtx<'a> {
+    /// The scan being resolved.
     pub scan: &'a Scan,
+    /// Protection policy used to classify processes.
     pub policy: &'a dyn ProtectionPolicy,
+    /// User options (force, tree, timeouts, overrides).
     pub opts: &'a StopOptions,
 }
 
 impl<'a> ResolveCtx<'a> {
+    /// Bundle a scan, a policy and the stop options.
     pub fn new(scan: &'a Scan, policy: &'a dyn ProtectionPolicy, opts: &'a StopOptions) -> Self {
         Self { scan, policy, opts }
     }
 
+    /// Process table of the scan.
     pub fn table(&self) -> &'a ProcessTable {
         &self.scan.table
     }
 
+    /// How the policy classifies `p`.
     pub fn protection(&self, p: &ProcessInfo) -> Protection {
         self.policy.protection(p, self.table())
     }
 
+    /// Pin a PID by its start token for the PID-reuse guard, if it still exists.
     pub fn proc_ref(&self, pid: u32) -> Option<ProcRef> {
         self.table().get(pid).map(|p| ProcRef {
             pid,
@@ -35,6 +43,7 @@ impl<'a> ResolveCtx<'a> {
         })
     }
 
+    /// A signal step (graceful unless `force`) for `pids`, using the configured timeout.
     pub fn signal_step(&self, pids: &[u32]) -> Step {
         Step::SignalProcesses {
             processes: pids.iter().filter_map(|p| self.proc_ref(*p)).collect(),

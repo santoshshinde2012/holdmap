@@ -12,7 +12,9 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Protocol {
+    /// Transmission Control Protocol.
     Tcp,
+    /// User Datagram Protocol.
     Udp,
 }
 
@@ -29,7 +31,9 @@ impl fmt::Display for Protocol {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Family {
+    /// IPv4.
     V4,
+    /// IPv6.
     V6,
 }
 
@@ -37,19 +41,31 @@ pub enum Family {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SocketState {
+    /// Listening for connections (TCP) or bound (UDP).
     Listen,
     /// An unconnected UDP socket: the UDP equivalent of "listening".
     Bound,
+    /// Connected.
     Established,
+    /// Connection being opened (client side).
     SynSent,
+    /// Connection being opened (server side).
     SynRecv,
+    /// Closing (FIN sent).
     FinWait1,
+    /// Closing (FIN acknowledged).
     FinWait2,
+    /// Closed; waiting for stray packets.
     TimeWait,
+    /// Closed.
     Close,
+    /// Remote side closed; local side still open.
     CloseWait,
+    /// Waiting for the final ACK.
     LastAck,
+    /// Both sides closing at once.
     Closing,
+    /// State not reported by the OS.
     Unknown,
 }
 
@@ -59,6 +75,7 @@ impl SocketState {
         matches!(self, SocketState::Listen | SocketState::Bound)
     }
 
+    /// Lower-case name as shown by `ss` and the CLI.
     pub fn as_str(self) -> &'static str {
         match self {
             SocketState::Listen => "LISTEN",
@@ -87,12 +104,19 @@ impl fmt::Display for SocketState {
 /// A raw socket as reported by the platform backend, before grouping.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RawSocket {
+    /// Transport protocol.
     pub protocol: Protocol,
+    /// Address family.
     pub family: Family,
+    /// Local bind address.
     pub local_addr: IpAddr,
+    /// Local port.
     pub local_port: u16,
+    /// Remote address (connected sockets).
     pub remote_addr: Option<IpAddr>,
+    /// Remote port (connected sockets).
     pub remote_port: Option<u16>,
+    /// Socket state.
     pub state: SocketState,
     /// Owning uid if the platform reports it (Linux does, even for other users).
     pub uid: Option<u32>,
@@ -105,19 +129,28 @@ pub struct RawSocket {
 /// Information about one process.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProcessInfo {
+    /// Process ID.
     pub pid: u32,
+    /// Parent process ID.
     pub ppid: Option<u32>,
+    /// Process name.
     pub name: String,
+    /// Executable path, when readable.
     pub exe: Option<PathBuf>,
+    /// Full command line.
     pub cmdline: Vec<String>,
+    /// Working directory, when readable.
     pub cwd: Option<PathBuf>,
+    /// Owner UID.
     pub uid: Option<u32>,
+    /// Owner user name.
     pub user: Option<String>,
     /// Process start time as seconds since the Unix epoch.
     pub start_time: u64,
     /// Platform-specific high-resolution start token used for PID-reuse checks
     /// (Linux: `starttime` clock ticks from `/proc/<pid>/stat`; elsewhere: start_time).
     pub start_token: u64,
+    /// Resident memory in bytes.
     pub memory_bytes: u64,
     /// CPU usage since the previous scan in percent of one core (0 on the first scan).
     #[serde(default)]
@@ -151,20 +184,30 @@ pub enum Exposure {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FrameworkCategory {
+    /// Development server (Vite, Next.js, webpack…).
     DevServer,
+    /// Application server (Django, Rails, FastAPI…).
     AppServer,
+    /// Database (Postgres, MySQL, MongoDB…).
     Database,
+    /// Cache (Redis, Memcached).
     Cache,
+    /// Message queue (RabbitMQ, Kafka, NATS…).
     Queue,
+    /// Web server or proxy (nginx, Caddy…).
     WebServer,
+    /// Developer tool (language server, debugger, docs server…).
     Tool,
+    /// A container.
     Container,
     /// A desktop application (IDE helper, chat app, music player…).
     App,
+    /// Operating-system service.
     System,
 }
 
 impl FrameworkCategory {
+    /// True for categories that count as development servers.
     pub fn is_dev(self) -> bool {
         matches!(
             self,
@@ -182,17 +225,22 @@ impl FrameworkCategory {
 /// A detected framework/runtime label such as "Next.js" or "PostgreSQL".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Framework {
+    /// Framework or product name, e.g. "Next.js".
     pub name: String,
+    /// Broad category.
     pub category: FrameworkCategory,
 }
 
 /// The project a process belongs to (from its working directory).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectInfo {
+    /// Project name (manifest name or directory name).
     pub name: String,
+    /// Project root directory.
     pub root: PathBuf,
     /// Manifest kind that identified the project: `package.json`, `Cargo.toml`, …
     pub kind: String,
+    /// Current git branch, when in a repository.
     pub git_branch: Option<String>,
     /// Enclosing monorepo / workspace (pnpm, turbo, nx, Cargo workspace, compose, …).
     #[serde(default)]
@@ -205,7 +253,9 @@ pub struct ProjectInfo {
 /// A directory that groups several projects/services.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Workspace {
+    /// Workspace name.
     pub name: String,
+    /// Workspace root directory.
     pub root: PathBuf,
     /// `pnpm`, `turbo`, `nx`, `lerna`, `npm-workspaces`, `cargo`, `go-work`, `compose`.
     pub kind: String,
@@ -214,11 +264,17 @@ pub struct Workspace {
 /// A container publishing a port (Docker / Podman / OrbStack / Colima).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContainerInfo {
+    /// Container ID.
     pub id: String,
+    /// Container name.
     pub name: String,
+    /// Image reference, e.g. `postgres:16`.
     pub image: String,
+    /// Runtime label (Docker, OrbStack, Podman…).
     pub runtime: String,
+    /// docker compose project, from the container labels.
     pub compose_project: Option<String>,
+    /// docker compose service, from the container labels.
     pub compose_service: Option<String>,
     /// Port inside the container.
     pub private_port: u16,
@@ -229,24 +285,35 @@ pub struct ContainerInfo {
 pub struct PortEntry {
     /// Stable identifier for UI selection: `proto:port:pid:state[:remote]`.
     pub id: String,
+    /// Port number.
     pub port: u16,
+    /// Transport protocol.
     pub protocol: Protocol,
+    /// Socket state.
     pub state: SocketState,
     /// Local bind addresses, e.g. `["0.0.0.0", "::"]`.
     pub addresses: Vec<String>,
+    /// Address families the port is bound on.
     pub families: Vec<Family>,
+    /// Remote endpoint (connected sockets only).
     pub remote: Option<String>,
+    /// Whether the port is reachable from the network.
     pub exposure: Exposure,
     /// Primary owning process (the parent when several processes share the socket).
     pub pid: Option<u32>,
     /// Every process holding the socket (e.g. pre-fork servers, reloaders).
     pub pids: Vec<u32>,
+    /// Owner UID.
     pub uid: Option<u32>,
     /// Owning user name, when known.
     pub user: Option<String>,
+    /// Owning process, when visible.
     pub process: Option<ProcessInfo>,
+    /// Detected project.
     pub project: Option<ProjectInfo>,
+    /// Detected framework.
     pub framework: Option<Framework>,
+    /// The container that publishes the port, if any.
     pub container: Option<ContainerInfo>,
     /// Short human label such as "Next.js · shop-web".
     pub label: String,
@@ -264,13 +331,17 @@ pub struct PortEntry {
 /// A full scan of the machine.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Snapshot {
+    /// Port entries, sorted by port.
     pub entries: Vec<PortEntry>,
     /// Listening sockets whose owning process is not visible to us (other users / root).
     pub hidden_sockets: usize,
+    /// Platform name (`linux`, `macos`, `windows`).
     pub platform: String,
     /// Unix epoch milliseconds.
     pub taken_at_ms: u64,
+    /// How long the scan took, in milliseconds.
     pub scan_ms: u64,
+    /// True when a container runtime answered.
     pub docker_available: bool,
     /// Non-fatal problems hit while scanning.
     pub warnings: Vec<String>,

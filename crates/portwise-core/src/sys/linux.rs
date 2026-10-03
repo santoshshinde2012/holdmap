@@ -15,6 +15,7 @@ const TABLES: [(&str, Protocol, Family); 4] = [
     ("/proc/self/net/udp6", Protocol::Udp, Family::V6),
 ];
 
+/// Every socket from `/proc/net/{tcp,udp}{,6}`, joined to PIDs via `/proc/*/fd`.
 pub fn list_sockets() -> io::Result<Vec<RawSocket>> {
     let mut sockets = Vec::new();
     let mut any_ok = false;
@@ -172,6 +173,7 @@ pub fn start_token(pid: u32) -> Option<u64> {
     stat_fields(pid)?.get(19)?.parse().ok()
 }
 
+/// True when the process is a zombie (exited, not yet reaped).
 pub fn is_zombie(pid: u32) -> bool {
     stat_fields(pid)
         .and_then(|f| f.first().cloned())
@@ -181,6 +183,7 @@ pub fn is_zombie(pid: u32) -> bool {
 /// A systemd unit derived from `/proc/<pid>/cgroup`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CgroupUnit {
+    /// Unit name, e.g. `nginx.service`.
     pub unit: String,
     /// True when the unit runs in the user manager (`systemctl --user`).
     pub user: bool,
@@ -192,6 +195,7 @@ pub fn cgroup_unit(pid: u32) -> Option<CgroupUnit> {
     parse_cgroup_unit(&content)
 }
 
+/// Parse the contents of `/proc/<pid>/cgroup` into a systemd unit.
 pub fn parse_cgroup_unit(content: &str) -> Option<CgroupUnit> {
     // cgroup v2: "0::/user.slice/user-1000.slice/user@1000.service/app.slice/foo.service"
     // cgroup v1: "1:name=systemd:/system.slice/nginx.service"

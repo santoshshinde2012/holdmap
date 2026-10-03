@@ -5,6 +5,7 @@ use crate::engine::text::process_details;
 use crate::engine::types::{Owner, Step, Supervisor};
 use crate::model::{PortEntry, ProcessInfo};
 
+/// Stops `brew services` formulae through Homebrew instead of killing the daemon.
 pub struct BrewServiceStrategy;
 
 /// Homebrew formula for a launchd-started process under `/opt/homebrew` or `/usr/local`.

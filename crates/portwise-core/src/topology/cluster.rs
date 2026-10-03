@@ -12,25 +12,36 @@ use std::path::PathBuf;
 
 /// What a detector may look at for one node.
 pub struct NodeFacts<'a> {
+    /// The node being classified.
     pub node: &'a Node,
+    /// Its project, when detected.
     pub project: Option<&'a ProjectInfo>,
+    /// Process table, for ancestry checks.
     pub table: &'a ProcessTable,
+    /// Protection policy.
     pub policy: &'a dyn ProtectionPolicy,
 }
 
 /// A proposed cluster membership.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Candidate {
+    /// Cluster ID (`compose:<project>`, `k8s:<ns>`, …).
     pub id: String,
+    /// Display name.
     pub name: String,
+    /// Cluster kind.
     pub kind: ClusterKind,
+    /// Extra detail such as the workspace tool.
     pub detail: Option<String>,
+    /// Root directory, when there is one.
     pub root: Option<PathBuf>,
     /// Explicit groups (compose, k8s, supervisor) form even with a single member.
     pub explicit: bool,
 }
 
+/// Detects one kind of cluster for a node.
 pub trait ClusterDetector: Send + Sync {
+    /// Return the cluster this node belongs to, if any.
     fn detect(&self, facts: &NodeFacts) -> Option<Candidate>;
 }
 
@@ -51,12 +62,14 @@ impl Default for ClusterRegistry {
 }
 
 impl ClusterRegistry {
+    /// A registry with no detectors.
     pub fn empty() -> Self {
         Self {
             detectors: Vec::new(),
         }
     }
 
+    /// Add a detector (earlier detectors win).
     pub fn with(mut self, d: impl ClusterDetector + 'static) -> Self {
         self.detectors.push(Box::new(d));
         self
@@ -106,6 +119,7 @@ impl ClusterRegistry {
     }
 }
 
+/// docker compose projects, from container labels.
 pub struct ComposeDetector;
 impl ClusterDetector for ComposeDetector {
     fn detect(&self, f: &NodeFacts) -> Option<Candidate> {
@@ -122,6 +136,7 @@ impl ClusterDetector for ComposeDetector {
     }
 }
 
+/// Kubernetes namespaces, from `kubectl port-forward` command lines.
 pub struct KubernetesDetector;
 impl ClusterDetector for KubernetesDetector {
     fn detect(&self, f: &NodeFacts) -> Option<Candidate> {
@@ -219,6 +234,7 @@ pub fn supervisor_of(
     None
 }
 
+/// Supervisors and task runners (pm2, turbo, concurrently, nx) parenting several services.
 pub struct SupervisorDetector;
 impl ClusterDetector for SupervisorDetector {
     fn detect(&self, f: &NodeFacts) -> Option<Candidate> {
@@ -244,6 +260,7 @@ impl ClusterDetector for SupervisorDetector {
     }
 }
 
+/// Monorepo and workspace roots.
 pub struct WorkspaceDetector;
 impl ClusterDetector for WorkspaceDetector {
     fn detect(&self, f: &NodeFacts) -> Option<Candidate> {
@@ -259,6 +276,7 @@ impl ClusterDetector for WorkspaceDetector {
     }
 }
 
+/// Git repositories.
 pub struct GitRepoDetector;
 impl ClusterDetector for GitRepoDetector {
     fn detect(&self, f: &NodeFacts) -> Option<Candidate> {

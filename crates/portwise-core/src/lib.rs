@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! # portwise-core
 //!
 //! The engine behind every portwise surface: it lists which ports are in use and by whom,

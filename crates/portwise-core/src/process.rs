@@ -148,18 +148,22 @@ impl ProcessTable {
         Some((self.get(*s)?, *k))
     }
 
+    /// Look up a process.
     pub fn get(&self, pid: u32) -> Option<&ProcessInfo> {
         self.procs.get(&pid)
     }
 
+    /// Number of processes.
     pub fn len(&self) -> usize {
         self.procs.len()
     }
 
+    /// True when the table is empty.
     pub fn is_empty(&self) -> bool {
         self.procs.is_empty()
     }
 
+    /// PID of the current (portwise) process.
     pub fn self_pid(&self) -> u32 {
         self.self_pid
     }
@@ -187,6 +191,7 @@ impl ProcessTable {
         self.user_names.get(&uid).cloned()
     }
 
+    /// User name of the current user.
     pub fn current_user(&self) -> Option<&str> {
         self.self_user.as_deref()
     }
@@ -206,6 +211,7 @@ impl ProcessTable {
         out
     }
 
+    /// Direct children of `pid`.
     pub fn children(&self, pid: u32) -> &[u32] {
         self.children.get(&pid).map(Vec::as_slice).unwrap_or(&[])
     }
@@ -226,6 +232,7 @@ impl ProcessTable {
         out
     }
 
+    /// Iterate over every process.
     pub fn iter(&self) -> impl Iterator<Item = &ProcessInfo> {
         self.procs.values()
     }

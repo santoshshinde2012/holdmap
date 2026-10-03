@@ -3,13 +3,16 @@
 /// An excluded (reserved) port range from `netsh interface ipv4 show excludedportrange`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ExcludedRange {
+    /// First port of the range.
     pub start: u16,
+    /// Last port of the range (inclusive).
     pub end: u16,
     /// Marked with `*` (administered exclusion, added by an admin via netsh).
     pub administered: bool,
 }
 
 impl ExcludedRange {
+    /// True when `port` is inside the range.
     pub fn contains(&self, port: u16) -> bool {
         (self.start..=self.end).contains(&port)
     }
