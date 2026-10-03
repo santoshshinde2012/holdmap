@@ -3,6 +3,7 @@
 
 use super::app::App;
 use super::graph::GraphRow;
+use super::theme;
 use super::ui::{kv, section, ACCENT, MUTED};
 use portwise_core::topology::{EdgeKind, Graph, Node, NodeKind};
 use portwise_core::util::human_bytes;
@@ -64,7 +65,7 @@ fn draw_tree(f: &mut Frame, app: &mut App, area: Rect) {
         .map(|r| match r {
             GraphRow::Cluster { title, .. } => ListItem::new(Line::from(vec![
                 Span::styled("▾ ", Style::new().fg(ACCENT)),
-                Span::styled(title.clone(), Style::new().fg(ACCENT).bold()),
+                Span::styled(title.clone(), theme::title()),
             ])),
             GraphRow::Node { id, grouped, last } => {
                 let Some(n) = g.node(id) else {
@@ -84,12 +85,12 @@ fn draw_tree(f: &mut Frame, app: &mut App, area: Rect) {
                 };
                 let ports: Vec<String> = n.ports.iter().map(|p| format!(":{}", p.port)).collect();
                 ListItem::new(Line::from(vec![
-                    Span::styled(format!("  {branch}"), Style::new().fg(MUTED)),
+                    Span::styled(format!("  {branch}"), theme::muted()),
                     Span::styled(format!("{} ", glyph(n)), Style::new().fg(kind_color(n))),
                     Span::styled(n.label.clone(), Style::new().fg(kind_color(n)).bold()),
                     Span::raw(" "),
                     Span::styled(ports.join(" "), Style::new().fg(ACCENT)),
-                    Span::styled(outgoing(g, id), Style::new().fg(MUTED)),
+                    Span::styled(outgoing(g, id), theme::muted()),
                     Span::raw("  "),
                     Span::styled(mark, mark_style),
                 ]))
@@ -103,13 +104,13 @@ fn draw_tree(f: &mut Frame, app: &mut App, area: Rect) {
     );
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(MUTED))
-        .title(Span::styled(title, Style::new().bold()));
+        .border_style(theme::muted())
+        .title(Span::styled(title, theme::heading()));
     if items.is_empty() {
         f.render_widget(
             Paragraph::new(Span::styled(
                 "No dev services yet — press a to include everything.",
-                Style::new().fg(MUTED),
+                theme::muted(),
             ))
             .block(block),
             area,
@@ -135,26 +136,20 @@ fn draw_node(f: &mut Frame, app: &mut App, area: Rect) {
     let g = &app.graph.graph;
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(MUTED))
+        .border_style(theme::muted())
         .padding(Padding::horizontal(1));
     let Some(n) = app.graph.selected_node() else {
         f.render_widget(
-            Paragraph::new(Span::styled("Select a service.", Style::new().fg(MUTED)))
+            Paragraph::new(Span::styled("Select a service.", theme::muted()))
                 .block(block.title(" Service ")),
             area,
         );
         return;
     };
-    let block = block.title(Span::styled(
-        format!(" {} ", n.display()),
-        Style::new().bold().fg(ACCENT),
-    ));
+    let block = block.title(Span::styled(format!(" {} ", n.display()), theme::title()));
     let mut lines: Vec<Line> = Vec::new();
     if let Some(sub) = &n.subtitle {
-        lines.push(Line::from(Span::styled(
-            sub.clone(),
-            Style::new().fg(MUTED),
-        )));
+        lines.push(Line::from(Span::styled(sub.clone(), theme::muted())));
     }
     let users = g.dependents(&n.id);
     let deps = g.dependencies(&n.id);
@@ -172,12 +167,12 @@ fn draw_node(f: &mut Frame, app: &mut App, area: Rect) {
     };
     lines.push(Line::from(vec![
         Span::styled(names(&users), Style::new().fg(Color::Yellow)),
-        Span::styled("  ──▶  ", Style::new().fg(MUTED)),
+        Span::styled("  ──▶  ", theme::muted()),
         Span::styled(
             format!("[ {} ]", n.label),
             Style::new().fg(kind_color(n)).bold(),
         ),
-        Span::styled("  ──▶  ", Style::new().fg(MUTED)),
+        Span::styled("  ──▶  ", theme::muted()),
         Span::styled(names(&deps), Style::new().fg(Color::Green)),
     ]));
     lines.push(Line::raw(""));
@@ -239,9 +234,9 @@ fn draw_node(f: &mut Frame, app: &mut App, area: Rect) {
             };
             lines.push(Line::from(vec![
                 Span::styled(" → ", Style::new().fg(Color::Green)),
-                Span::styled(to, Style::new().bold()),
+                Span::styled(to, theme::heading()),
                 Span::raw(format!(" {what}")),
-                Span::styled(format!("  ×{}", e.connections), Style::new().fg(MUTED)),
+                Span::styled(format!("  ×{}", e.connections), theme::muted()),
             ]));
         }
     }
@@ -252,9 +247,9 @@ fn draw_node(f: &mut Frame, app: &mut App, area: Rect) {
             let from = g.node(&e.from).map(|n| n.label.clone()).unwrap_or_default();
             lines.push(Line::from(vec![
                 Span::styled(" ← ", Style::new().fg(Color::Yellow)),
-                Span::styled(from, Style::new().bold()),
+                Span::styled(from, theme::heading()),
                 Span::raw(format!(" :{}", e.port)),
-                Span::styled(format!("  ×{}", e.connections), Style::new().fg(MUTED)),
+                Span::styled(format!("  ×{}", e.connections), theme::muted()),
             ]));
         }
         lines.push(Line::from(Span::styled(

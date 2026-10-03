@@ -4,6 +4,7 @@
 mod app;
 mod graph;
 mod graph_ui;
+mod theme;
 mod ui;
 
 use anyhow::Result;
