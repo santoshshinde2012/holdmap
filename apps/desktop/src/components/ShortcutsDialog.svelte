@@ -3,7 +3,7 @@
   import Kbd from "./ui/Kbd.svelte";
   let { onclose, mod = "Ctrl" }: { onclose: () => void; mod?: string } = $props();
   const groups = $derived<[string, [string[], string][]][]>([
-    ["Navigate", [[[mod, "K"], "Command palette"], [["/"], "Search"], [["↑", "↓"], "Move selection (or J / K)"], [["↵"], "Open details"], [["Esc"], "Clear search · close"]]],
+    ["Navigate", [[[mod, "K"], "Command palette"], [["/"], "Search"], [["↑", "↓"], "Move selection (or J / K)"], [["←", "→"], "Collapse · expand section"], [["Home", "End"], "First · last port"], [["↵"], "Open details"], [["Esc"], "Clear search · close"]]],
     ["Act", [[["⌫"], "Stop selected (graceful)"], [["⇧", "⌫"], "Force kill selected"], [["O"], "Open in browser"], [["C"], "Copy URL"], [["P"], "Pin / unpin"], [["⇧", "P"], "Pin with a label…"], [["S"], "Stop the service's cluster"], [["R"], "Refresh now"]]],
     ["Filter", [[["A"], "Listening ↔ all sockets"], [["T"], "Protocol: any → TCP → UDP"], [["D"], "Dev servers only"], [["M"], "Mine only"], [["E"], "Network-exposed only"]]],
     ["View", [[["G"], "List ↔ graph"], [["H"], "Recently stopped"], [[mod, ","], "Settings"], [["⇧", "L"], "Cycle theme"], [["?"], "This help"]]],

@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Icon from "./components/Icon.svelte";
-  import PortRow from "./components/PortRow.svelte";
+  import PortRow from "./components/list/PortRow.svelte";
+  import GroupHeader from "./components/list/GroupHeader.svelte";
+  import { UsageHistory, parseCollapsed, parseDensity, toggled, usageRecord, type Density } from "./lib/rows";
   import DetailPane from "./components/detail/DetailPane.svelte";
   import SettingsDialog from "./components/SettingsDialog.svelte";
   import PinDialog from "./components/PinDialog.svelte";
@@ -45,6 +47,10 @@
   let showPalette = $state(false);
   let onboarded = $state(store("pw.onboarded") === "1");
   let theme = $state<Theme>((store("pw.theme") as Theme) ?? "system");
+  let density = $state<Density>(parseDensity(store("pw.density")));
+  let collapsed = $state<Set<string>>(parseCollapsed(store("pw.collapsed")));
+  const usageHist = new UsageHistory(24);
+  let usage = $state<Record<string, number[]>>({});
   let systemDark = $state(matchMedia("(prefers-color-scheme: dark)").matches);
   let narrow = $state(matchMedia("(max-width: 900px)").matches);
   let drawerOpen = $state(false);
@@ -91,6 +97,8 @@
     try { localStorage.setItem("pw.theme", theme); } catch { /* private mode */ }
   });
   $effect(() => { try { localStorage.setItem("pw.sort", sort); } catch { /* ignore */ } });
+  $effect(() => { try { localStorage.setItem("pw.density", density); } catch { /* ignore */ } });
+  $effect(() => { try { localStorage.setItem("pw.collapsed", JSON.stringify([...collapsed])); } catch { /* ignore */ } });
 
   const visible = $derived.by(() => {
     const list = (snapshot?.entries ?? []).filter((e) => matches(e, filters));
@@ -112,7 +120,10 @@
     if (sort !== "group") return [...head, { id: "all", title: head.length ? "Everything else" : "", hint: "", items: rest }].filter((g) => g.items.length);
     return [...head, ...GROUPS.map((g) => ({ ...g, id: g.id as Group | string, items: rest.filter((e) => groupOf(e) === g.id) }))].filter((g) => g.items.length);
   });
-  const ordered = $derived(sections.flatMap((s) => s.items));
+  /** Rows the keyboard can reach: everything except collapsed sections (untitled sections never collapse). */
+  const ordered = $derived(sections.flatMap((s) => (s.title && collapsed.has(s.id) ? [] : s.items)));
+  const sectionOf = (id: string) => sections.find((s) => s.items.some((e) => e.id === id));
+  function setCollapsed(id: string, on: boolean) { if (collapsed.has(id) !== on) collapsed = toggled(collapsed, id); }
   const selected = $derived(ordered.find((e) => e.id === selectedId) ?? null);
   const stats = $derived.by(() => {
     const es = snapshot?.entries ?? [];
@@ -135,6 +146,8 @@
     try {
       const s = await api.scan(filters.all);
       snapshot = s;
+      usageHist.push(s.entries);
+      usage = usageRecord(usageHist, s.entries.map((e) => e.id));
       error = null;
       explanations = {};
       if (selectedId && !s.entries.some((e) => e.id === selectedId)) selectedId = null;
@@ -204,9 +217,10 @@
   }
   const portHolder = (port: number) => { const e = snapshot?.entries.find((x) => x.port === port); return e ? `${title(e)}${e.process ? ` (PID ${e.process.pid})` : ""}` : null; };
 
-  const settingsModel = $derived<SettingsModel | null>(config ? { theme, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir } : null);
+  const settingsModel = $derived<SettingsModel | null>(config ? { theme, density, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir } : null);
   const settingsActions: SettingsActions = {
     setTheme: (t) => { theme = t; },
+    setDensity: (d) => { density = d; },
     setAutostart: async (on) => { autostartOn = await api.autostart(on); },
     setHotkey: async (id) => { shortcut = await api.setHotkey(id); config = await api.getConfig(); },
     setNotify: async (on, devOnly) => { config = await api.setNotify(on, devOnly); },
@@ -350,6 +364,16 @@
   function select(delta: number) {
     if (!ordered.length) return;
     const i = ordered.findIndex((e) => e.id === selectedId);
+    if (i < 0 && selectedId) {
+      // The selection sits in a collapsed section: continue from where it would be.
+      const all = sections.flatMap((x) => x.items);
+      const at = all.findIndex((e) => e.id === selectedId);
+      const visible = new Set(ordered.map((e) => e.id));
+      const after = all.slice(at + 1).find((e) => visible.has(e.id));
+      const before = all.slice(0, Math.max(0, at)).reverse().find((e) => visible.has(e.id));
+      const target = delta > 0 ? after ?? before : before ?? after;
+      if (target) { selectEntry(target, false); return; }
+    }
     const next = i < 0 ? (delta > 0 ? 0 : ordered.length - 1) : Math.max(0, Math.min(ordered.length - 1, i + delta));
     selectEntry(ordered[next], false);
   }
@@ -422,6 +446,7 @@
       { id: "remote", group: "Actions", icon: "server", title: "Inspect a remote host over SSH…", keywords: "ssh remote server machine", run: () => (showRemote = true) },
       { id: "history", group: "Actions", icon: "history", title: "Recently stopped — restart", shortcut: ["H"], keywords: "history restart undo", run: openHistory },
       { id: "notify", group: "Settings", icon: "bell", title: config?.notify ? "Turn notifications off" : "Turn notifications on", keywords: "alert conflict new listener", run: toggleNotify },
+      { id: "density", group: "Settings", icon: "list", title: density === "compact" ? "Comfortable rows" : "Compact rows", keywords: "density dense rows height compact comfortable", run: () => { density = density === "compact" ? "comfortable" : "compact"; } },
       { id: "autostart", group: "Settings", icon: "sparkles", title: autostartOn ? "Don't launch at login" : "Launch at login", keywords: "startup boot login", run: toggleAutostart },
     );
     return cmds;
@@ -436,6 +461,14 @@
     if (!typing && (e.key === "/" || (modKey && e.key.toLowerCase() === "f"))) { search?.focus(); search?.select(); e.preventDefault(); return; }
     if (modKey && e.key.toLowerCase() === "r") { refresh(true); e.preventDefault(); return; }
     const move = view === "graph" && !typing ? selectGraph : select;
+    if (view === "list" && !typing && !modKey && (e.key === "ArrowLeft" || e.key === "ArrowRight") && selectedId) {
+      // Tree-style: ← collapses the selected row's section, → expands it.
+      const sec = sectionOf(selectedId);
+      if (sec?.title) setCollapsed(sec.id, e.key === "ArrowLeft");
+      e.preventDefault(); return;
+    }
+    if (view === "list" && !typing && (e.key === "Home" || e.key === "End") && ordered.length) { selectEntry(ordered[e.key === "Home" ? 0 : ordered.length - 1], false); e.preventDefault(); return; }
+    if (view === "list" && !typing && (e.key === "PageDown" || e.key === "PageUp")) { select(e.key === "PageDown" ? 10 : -10); e.preventDefault(); return; }
     if (e.key === "ArrowDown" || e.key === "ArrowRight" && view === "graph" && !typing || (!typing && e.key === "j")) { move(1); e.preventDefault(); return; }
     if (e.key === "ArrowUp" || e.key === "ArrowLeft" && view === "graph" && !typing || (!typing && e.key === "k")) { move(-1); e.preventDefault(); return; }
     if (e.key === "Escape") {
@@ -587,7 +620,7 @@
         <GraphView {graph} {selectedNode} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; loadTopology(); }} onselect={selectNode} onstopcluster={requestClusterStop} />
       </div>
     {:else}
-    <div class="list" id="port-list" role="listbox" aria-label="Ports in use" aria-activedescendant={selectedId ? "row-" + selectedId : undefined} tabindex="0" bind:this={listEl}>
+    <div class="list {density}" id="port-list" role="listbox" aria-label="Ports in use" aria-activedescendant={selectedId ? "row-" + selectedId : undefined} tabindex="0" bind:this={listEl}>
       {#if snapshot && !onboarded}<Onboarding mod={mod} ondismiss={dismissOnboarding} />{/if}
 
       {#if error && !snapshot}
@@ -600,15 +633,16 @@
           <div class="sk-gh shimmer"></div>
           {#each Array(9) as _, i}
             <div class="sk-row" style="animation-delay: {i * 70}ms; opacity: {1 - i * 0.08}">
-              <div><div class="shimmer" style="height:16px;width:52px"></div><div class="shimmer" style="height:8px;width:64px;margin-top:6px"></div></div>
-              <div class="shimmer" style="height:32px;width:32px;border-radius:9px"></div>
-              <div><div class="shimmer" style="height:12px;width:{40 + ((i * 37) % 35)}%"></div><div class="shimmer" style="height:9px;width:{55 + ((i * 23) % 30)}%;margin-top:8px"></div></div>
+              <div class="shimmer" style="height:7px;width:7px;border-radius:50%"></div>
+              <div class="shimmer" style="height:12px;width:38px"></div>
+              <div style="display:flex;gap:8px;align-items:center"><div class="shimmer" style="height:22px;width:22px;border-radius:6px"></div><div class="shimmer" style="height:11px;width:{40 + ((i * 37) % 35)}%"></div></div>
+              <div class="shimmer" style="height:9px;width:{45 + ((i * 23) % 30)}%"></div>
             </div>
           {/each}
         </div>
       {:else if ordered.length === 0}
         {#if freePort && freePort.status === "free"}
-          <EmptyState tone="ok" title="Port {freePort.port} is free">
+          <EmptyState tone="ok" icon="check" title="Port {freePort.port} is free">
             <p>Nothing is listening on it — start your server there:</p>
             <Button icon="copy" onclick={() => copy(`portwise run -p ${freePort?.port} -- npm run dev`, "Command")}><code>portwise run -p {freePort.port} -- npm run dev</code></Button>
             <Button variant="ghost" icon="star" onclick={() => openPin(null)}>Pin :{freePort.port} and watch it</Button>
@@ -620,7 +654,7 @@
           </EmptyState>
         {:else if filtersActive}
           <EmptyState title="No ports match">
-            <p>Nothing matches {filters.query ? `“${filters.query}”` : "these filters"}.</p>
+            <p>Nothing matches {filters.query ? `“${filters.query}”` : "these filters"}{stats.total ? ` — ${stats.total} port${stats.total === 1 ? " is" : "s are"} hidden by your search and filters` : ""}.</p>
             <Button kbd="Esc" onclick={clearFilters}>Clear search & filters</Button>
           </EmptyState>
         {:else}
@@ -631,14 +665,21 @@
         {/if}
       {:else}
         {#each sections as s (s.id)}
-          {#if s.title}
-            <div class="group" role="presentation">
-              <span class="gt">{s.title}</span><span class="gc">{s.items.length}</span><span class="gh">{s.hint}</span>
-            </div>
-          {/if}
-          {#each s.items as e (e.id)}
-            <PortRow entry={e} pinned={pins.has(e.port)} links={linkCount.get(e.id) ?? 0} selected={e.id === selectedId} busy={!!busy[e.id]} onselect={() => { selectEntry(e); listEl?.focus({ preventScroll: true }); }} onstop={() => requestStop(e, false)} onopen={() => open(e)} />
-          {/each}
+          {@const isCollapsed = !!s.title && collapsed.has(s.id)}
+          <div class="lgroup" role="group" aria-labelledby={s.title ? `gl-${s.id}` : undefined} aria-label={s.title ? undefined : "Ports"}>
+            {#if s.title}
+              <GroupHeader id={s.id} title={s.title} count={s.items.length} hint={s.hint} showHint={sort === "cluster" && s.id !== "pinned"} collapsed={isCollapsed} ontoggle={() => setCollapsed(s.id, !isCollapsed)} />
+            {/if}
+            {#if !isCollapsed}
+              <div class="lrows" id="grp-{s.id}" role="presentation">
+                {#each s.items as e (e.id)}
+                  <PortRow entry={e} {density} pinned={pins.has(e.port)} links={linkCount.get(e.id) ?? 0} usage={usage[e.id] ?? []} selected={e.id === selectedId} busy={!!busy[e.id]}
+                    posinset={ordered.indexOf(e) + 1} setsize={ordered.length}
+                    onselect={() => { selectEntry(e); listEl?.focus({ preventScroll: true }); }} onstop={() => requestStop(e, false)} onopen={() => open(e)} onpin={() => togglePin(e)} />
+                {/each}
+              </div>
+            {/if}
+          </div>
         {/each}
         {#if snapshot.hidden_sockets > 0 || !snapshot.docker_available}
           <div class="foot-note">
@@ -714,18 +755,15 @@
   .content { display: grid; grid-template-columns: minmax(0, 1fr) var(--pane-w, 440px); min-height: 0; }
   .content.narrow { grid-template-columns: 1fr; }
   .pane-wrap { position: relative; min-height: 0; min-width: 0; }
-  .list { overflow-y: auto; padding: var(--sp-1) 0 var(--sp-6); outline: none; }
+  .list { overflow-y: auto; padding: 0 0 var(--sp-6); outline: none; container: portlist / inline-size; }
+  .lgroup + .lgroup { margin-top: var(--sp-2); }
   .list:focus-visible:not([aria-activedescendant]) { box-shadow: inset 0 0 0 2px var(--ring); }
-  .group { position: sticky; top: -4px; z-index: 2; display: flex; align-items: baseline; gap: var(--sp-2); padding: var(--sp-4) var(--sp-5) var(--sp-2); background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(10px); }
-  .gt { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-medium); text-transform: uppercase; letter-spacing: var(--ls-label); color: var(--text-2); }
-  .gc { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); background: var(--surface-3); padding: 1px 6px; border-radius: var(--r-full); font-variant-numeric: tabular-nums; font-weight: var(--fw-medium); }
-  .gh { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
   .foot-note { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); padding: var(--sp-5) var(--sp-5) 0; }
   .foot-note span { display: inline-flex; align-items: center; gap: 6px; }
 
   .skeletons { padding: var(--sp-3) var(--sp-2); }
-  .sk-gh { height: 10px; width: 120px; margin: var(--sp-3) var(--sp-3) var(--sp-3); }
-  .sk-row { display: grid; grid-template-columns: 92px 32px 1fr; gap: var(--sp-3); align-items: center; padding: 12px var(--sp-4); }
+  .sk-gh { height: 9px; width: 110px; margin: var(--sp-4) var(--sp-5) var(--sp-3); }
+  .sk-row { display: grid; grid-template-columns: 8px 48px minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--sp-3); align-items: center; height: 44px; padding: 0 var(--sp-3); }
 
   .status { display: flex; align-items: center; gap: var(--sp-4); height: 30px; padding: 0 var(--sp-4); border-top: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
   .status b { color: var(--text); font-weight: var(--fw-medium); }

@@ -16,6 +16,7 @@
   import Callout from "./ui/Callout.svelte";
   import Kbd from "./ui/Kbd.svelte";
   import { nextIndex } from "../lib/roving";
+  import type { Density } from "../lib/rows";
   import { SETTINGS_SECTIONS, cadenceText, type SettingsActions, type SettingsModel, type SettingsSection, type Theme } from "../lib/settings";
 
   let { model, actions, onclose, section = $bindable("general") }: { model: SettingsModel; actions: SettingsActions; onclose: () => void; section?: SettingsSection } = $props();
@@ -56,6 +57,11 @@
     { value: "dark", label: "Dark", icon: "moon" },
   ];
   let theme = $state<Theme>(untrack(() => model.theme));
+  const densities: { value: Density; label: string; icon: string }[] = [
+    { value: "comfortable", label: "Comfortable", icon: "list" },
+    { value: "compact", label: "Compact", icon: "minus" },
+  ];
+  let density = $state<Density>(untrack(() => model.density));
 </script>
 
 <Dialog title="Settings" description="Startup, appearance, notifications and scanning for this computer." icon="sliders" size="xl" {onclose} initialFocus="[role=tab][aria-selected=true]">
@@ -87,10 +93,15 @@
         </SettingsGroup>
         {#if errors.hotkey}<div class="err"><Callout tone="danger" size="sm" title="Shortcut unavailable">{errors.hotkey}</Callout></div>{/if}
       {:else if section === "appearance"}
-        <SettingsGroup title="Theme">
+        <SettingsGroup title="Display">
           <SettingRow label="Appearance" description="System follows your OS light/dark setting.">
             {#snippet children()}
               <SegmentedControl label="Theme" size="md" bind:value={theme} options={themes} onchange={(v) => save("theme", () => actions.setTheme(v))} />
+            {/snippet}
+          </SettingRow>
+          <SettingRow label="List density" description="Comfortable rows are 44 px tall; compact fits more ports on screen at 36 px.">
+            {#snippet children()}
+              <SegmentedControl label="List density" size="md" bind:value={density} options={densities} onchange={(v) => save("density", () => actions.setDensity(v))} />
             {/snippet}
           </SettingRow>
           <SettingRow label="Reduce motion" description="Animations follow your system's “Reduce motion” accessibility setting.">

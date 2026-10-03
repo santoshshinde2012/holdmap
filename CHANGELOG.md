@@ -2,6 +2,33 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
+## Unreleased: port list redesign
+
+### Changed
+- **Single-line rows on a fixed grid** (status · port · name · meta · badges · usage · age), so
+  ports, names, badges and numbers line up across every row and section. Rows were 58 px tall
+  with two lines each, and their badge columns started at a different x on every row.
+- **Status dot** moved to its own leading column, and the repeated "TCP · LISTENING" caption is
+  gone (it now lives in the dot's tooltip and accessible name).
+- **Badges**: at most two per row, by priority (Exposed › Protected › runtime › owner ›
+  links); the rest fold into "+N" with a tooltip. The link count is a quiet glyph, not a chip.
+- **Actions** (Open, Pin, Stop) overlay the trailing columns on hover or selection instead of
+  holding a 112 px empty column on every row. Stop is a quiet icon that turns red on hover.
+- **Section headers**: sticky, with a collapse chevron, an uppercase label and the count.
+  Generic blurbs ("Your running projects") moved into a tooltip, and cluster details stay inline.
+- **Selected / hover / focus**: a faint hover tint; selection adds an accent tint and a left
+  bar; keyboard focus adds an inset ring. Hairline separators replace the floating rows.
+- **Narrow panes** drop columns in order (age, usage, meta, badges) using container queries.
+  Before, all badges vanished below 760 px, Exposed included.
+- **Empty and no-match states** now share the details pane's icon-tile look and say how many
+  ports the filters hide.
+
+### Added
+- **Compact density** (36 px rows) in Settings → Appearance and the palette.
+- A **CPU sparkline and memory** column, plus uptime.
+- **Collapsible sections** (click the header, or ←/→), plus Home/End and PageUp/PageDown in the list.
+- `lib/rows.ts` with its unit tests, and component tests for `PortRow` and `GroupHeader`.
+
 ## Unreleased: typography
 
 ### Changed
