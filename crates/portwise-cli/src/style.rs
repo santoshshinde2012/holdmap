@@ -122,6 +122,11 @@ pub fn width(s: &str) -> usize {
     UnicodeWidthStr::width(s)
 }
 
+/// Collapse newlines and runs of spaces, then truncate: for multi-line commands in one row.
+pub fn one_line(s: &str, max: usize) -> String {
+    truncate(&s.split_whitespace().collect::<Vec<_>>().join(" "), max)
+}
+
 pub fn truncate(s: &str, max: usize) -> String {
     if width(s) <= max {
         return s.to_string();
@@ -252,6 +257,15 @@ mod tests {
     fn truncates_with_ellipsis() {
         assert_eq!(truncate("hello world", 6), "hello…");
         assert_eq!(truncate("hi", 6), "hi");
+    }
+
+    #[test]
+    fn one_line_collapses_whitespace() {
+        assert_eq!(
+            one_line("python3 -c import x\n  x.run()", 80),
+            "python3 -c import x x.run()"
+        );
+        assert_eq!(one_line("a\nb c d e f", 6), "a b c…");
     }
 
     #[test]

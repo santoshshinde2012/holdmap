@@ -69,22 +69,29 @@ fn store() -> Store {
 
 pub fn pin(a: &PinArgs, on: bool) -> Result<u8> {
     let s = store();
-    let (c, _) = s.update_config(|c| {
+    let (c, changed) = s.update_config(|c| {
         if c.is_pinned(a.port) != on {
             c.toggle_pin(a.port, a.label.clone());
-        } else if on {
-            if let Some(p) = c.pins.iter_mut().find(|p| p.port == a.port) {
-                p.label = a.label.clone().or(p.label.take());
+            true
+        } else {
+            if on {
+                if let Some(p) = c.pins.iter_mut().find(|p| p.port == a.port) {
+                    p.label = a.label.clone().or(p.label.take());
+                }
             }
+            false
         }
     })?;
-    println!(
-        "{} {} :{} {}",
-        style::ok_mark(),
-        if on { "Pinned" } else { "Unpinned" },
-        a.port,
-        dim(format!("({} pinned)", c.pins.len()))
-    );
+    let count = dim(format!("({} pinned)", c.pins.len()));
+    match (on, changed) {
+        (false, false) => {
+            println!("{} :{} isn't pinned {count}", style::err_mark(), a.port);
+            return Ok(crate::exit::BUSY);
+        }
+        (true, false) => println!("{} :{} is already pinned {count}", style::ok_mark(), a.port),
+        (true, true) => println!("{} Pinned :{} {count}", style::ok_mark(), a.port),
+        (false, true) => println!("{} Unpinned :{} {count}", style::ok_mark(), a.port),
+    }
     Ok(crate::exit::OK)
 }
 
@@ -146,6 +153,7 @@ pub fn history_cmd(a: &HistoryArgs) -> Result<u8> {
         return Ok(crate::exit::OK);
     }
     let now = now_ms();
+    let cmd_width = style::term_width().saturating_sub(45).max(30);
     for e in &h {
         println!(
             "{:>5}  {}  {}  {}",
@@ -156,7 +164,7 @@ pub fn history_cmd(a: &HistoryArgs) -> Result<u8> {
                 human_duration(now.saturating_sub(e.at_ms) / 1000)
             )),
             dim(if e.restartable() {
-                format!("`{}`", e.command_line())
+                format!("`{}`", style::one_line(&e.command_line(), cmd_width))
             } else {
                 "(no command recorded)".into()
             })

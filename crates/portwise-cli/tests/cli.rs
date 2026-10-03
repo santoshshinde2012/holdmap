@@ -5,9 +5,16 @@ use predicates::prelude::*;
 use std::net::TcpListener;
 use std::time::Duration;
 
+/// The binary with colour off, no Docker and a throwaway state directory, so tests that stop
+/// processes never write to the developer's real history. Tests that check state pass their own
+/// `PORTWISE_HOME` (the later `env` wins).
 fn pw() -> Command {
+    static HOME: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    let home = HOME.get_or_init(|| tempfile::tempdir().unwrap());
     let mut c = Command::cargo_bin("portwise").unwrap();
-    c.env("PORTWISE_COLOR", "never").arg("--no-docker");
+    c.env("PORTWISE_COLOR", "never")
+        .env("PORTWISE_HOME", home.path())
+        .arg("--no-docker");
     c
 }
 
@@ -479,9 +486,20 @@ fn pins_round_trip_in_an_isolated_home() {
     assert_eq!(v[0]["port"], 3999);
     assert_eq!(v[0]["label"], "demo");
     pw().env("PORTWISE_HOME", h.path())
+        .args(["pin", "3999"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(":3999 is already pinned"));
+    pw().env("PORTWISE_HOME", h.path())
         .args(["unpin", "3999"])
         .assert()
-        .success();
+        .success()
+        .stdout(predicate::str::contains("Unpinned :3999"));
+    pw().env("PORTWISE_HOME", h.path())
+        .args(["unpin", "3999"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(":3999 isn't pinned"));
     pw().env("PORTWISE_HOME", h.path())
         .args(["pins", "--json"])
         .assert()
