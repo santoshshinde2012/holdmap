@@ -344,6 +344,16 @@ pub fn build_entries_with(
                         FrameworkCategory::App | FrameworkCategory::System
                     )
                 }));
+        let tunnel = process
+            .as_ref()
+            .filter(|_| state.is_listening())
+            .and_then(|p| crate::tunnel::detect_tunnel(p, Some(port)));
+        if tunnel.is_some() && framework.is_none() {
+            framework = Some(Framework {
+                name: "Port forward".into(),
+                category: FrameworkCategory::Tool,
+            });
+        }
         let label = make_label(
             process.as_ref(),
             project.as_ref().map(|p| &p.info),
@@ -389,6 +399,7 @@ pub fn build_entries_with(
             is_dev,
             is_mine,
             protected,
+            tunnel,
         });
     }
 
@@ -444,6 +455,7 @@ pub fn build_entries_with(
             is_dev: true,
             is_mine: true,
             protected: false,
+            tunnel: None,
         });
     }
     entries.sort_by(|a, b| {

@@ -8,6 +8,7 @@
 //! [`ProtectionPolicy`], and the machine state comes from a [`Scan`] (built by any
 //! [`Scanner`](crate::scan::Scanner)).
 
+mod cluster;
 mod context;
 mod resolution;
 pub mod strategies;
@@ -130,7 +131,9 @@ impl Engine {
                 resolutions.push(r);
             }
         }
-        let plan = self.combine(format!(":{port}"), &resolutions, &entries, opts);
+        let mut plan = self.combine(format!(":{port}"), &resolutions, &entries, opts);
+        plan.warnings
+            .extend(self.dependent_warnings(&self.topology(), &entries));
         let first = &resolutions[0];
         let mut details = first.details.clone();
         for r in resolutions.iter().skip(1) {
@@ -302,84 +305,15 @@ impl Engine {
                 }
                 plan
             }
+            Target::Cluster(c) => self.plan_cluster(c, opts),
         }
     }
 
     pub(crate) fn plan_pids(&self, target: String, pids: &[u32], opts: &StopOptions) -> ActionPlan {
-        let t = self.table();
-        let mut resolutions = Vec::new();
-        for &pid in pids {
-            let Some(p) = t.get(pid) else {
-                resolutions.push(
-                    Resolution::new(
-                        Owner::Hidden {
-                            uid: None,
-                            user: None,
-                        },
-                        format!("PID {pid} is not running or not visible."),
-                    )
-                    .block(
-                        BlockKind::NothingToStop,
-                        format!("PID {pid} is not running or belongs to another user."),
-                    ),
-                );
-                continue;
-            };
-            let mut r = Resolution::new(
-                Owner::Process {
-                    pid,
-                    name: p.name.clone(),
-                },
-                format!("{} (PID {pid})", p.name),
-            );
-            match self.policy.protection(p, t) {
-                Protection::Hard(reason) => {
-                    r.owner = Owner::Protected {
-                        pid,
-                        name: p.name.clone(),
-                        reason: reason.clone(),
-                    };
-                    r = r.block(BlockKind::Protected, format!("Refusing: {reason}."));
-                }
-                Protection::Soft(reason) if !opts.allow_protected => {
-                    r.owner = Owner::Protected {
-                        pid,
-                        name: p.name.clone(),
-                        reason: reason.clone(),
-                    };
-                    r = r.block_overridable(
-                        BlockKind::Protected,
-                        format!("{reason}. Use --allow-protected if you really mean it."),
-                    );
-                }
-                prot => {
-                    let mut tree = vec![pid];
-                    if opts.tree {
-                        tree.extend(self.ctx(opts).safe_descendants(pid));
-                    }
-                    if tree.len() > 1 {
-                        r.owner = Owner::ProcessTree {
-                            root_pid: pid,
-                            root_name: p.name.clone(),
-                            pids: tree.clone(),
-                        };
-                    }
-                    if prot.is_protected() {
-                        r.risk = Risk::High;
-                    } else if !t.is_mine(pid) {
-                        r.risk = Risk::High;
-                        r.warnings
-                            .push(format!("{} (PID {pid}) belongs to another user.", p.name));
-                    } else {
-                        r.risk = Risk::Medium;
-                    }
-                    let step = self.ctx(opts).signal_step(&tree);
-                    r.recommendation = step.describe();
-                    r.steps.push(step);
-                }
-            }
-            resolutions.push(r);
-        }
+        let mut resolutions: Vec<Resolution> = pids
+            .iter()
+            .map(|pid| self.resolve_pid(*pid, opts))
+            .collect();
         let entries = self.ctx(opts).entries_held_by(pids);
         if !entries.is_empty() && entries.iter().all(|e| e.is_dev) {
             for r in &mut resolutions {
@@ -389,6 +323,78 @@ impl Engine {
             }
         }
         self.combine(target, &resolutions, &entries, opts)
+    }
+
+    /// Resolve a bare process (and, with `opts.tree`, its safe descendants).
+    pub(crate) fn resolve_pid(&self, pid: u32, opts: &StopOptions) -> Resolution {
+        let t = self.table();
+        let Some(p) = t.get(pid) else {
+            return Resolution::new(
+                Owner::Hidden {
+                    uid: None,
+                    user: None,
+                },
+                format!("PID {pid} is not running or not visible."),
+            )
+            .block(
+                BlockKind::NothingToStop,
+                format!("PID {pid} is not running or belongs to another user."),
+            );
+        };
+        let mut r = Resolution::new(
+            Owner::Process {
+                pid,
+                name: p.name.clone(),
+            },
+            format!("{} (PID {pid})", p.name),
+        );
+        match self.policy.protection(p, t) {
+            Protection::Hard(reason) => {
+                r.owner = Owner::Protected {
+                    pid,
+                    name: p.name.clone(),
+                    reason: reason.clone(),
+                };
+                r.block(BlockKind::Protected, format!("Refusing: {reason}."))
+            }
+            Protection::Soft(reason) if !opts.allow_protected => {
+                r.owner = Owner::Protected {
+                    pid,
+                    name: p.name.clone(),
+                    reason: reason.clone(),
+                };
+                r.block_overridable(
+                    BlockKind::Protected,
+                    format!("{reason}. Use --allow-protected if you really mean it."),
+                )
+            }
+            prot => {
+                let mut tree = vec![pid];
+                if opts.tree {
+                    tree.extend(self.ctx(opts).safe_descendants(pid));
+                }
+                if tree.len() > 1 {
+                    r.owner = Owner::ProcessTree {
+                        root_pid: pid,
+                        root_name: p.name.clone(),
+                        pids: tree.clone(),
+                    };
+                }
+                if prot.is_protected() {
+                    r.risk = Risk::High;
+                } else if !t.is_mine(pid) {
+                    r.risk = Risk::High;
+                    r.warnings
+                        .push(format!("{} (PID {pid}) belongs to another user.", p.name));
+                } else {
+                    r.risk = Risk::Medium;
+                }
+                let step = self.ctx(opts).signal_step(&tree);
+                r.recommendation = step.describe();
+                r.steps.push(step);
+                r
+            }
+        }
     }
 
     pub(crate) fn combine(
@@ -779,5 +785,63 @@ mod tests {
         let e = e.with_strategies(StrategyRegistry::empty());
         let plan = e.plan(&Target::Port(3000), &StopOptions::default());
         assert!(!plan.is_blocked(), "{plan:?}");
+    }
+
+    #[test]
+    fn cluster_plan_stops_dependents_first() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = Engine::from_scan(crate::topology::tests::acme(tmp.path()));
+        let plan = e.plan(&Target::parse("cluster:acme-shop"), &StopOptions::default());
+        assert!(!plan.is_blocked(), "{plan:?}");
+        assert!(
+            plan.summary.contains("web :3000 → api :8080 → worker"),
+            "{}",
+            plan.summary
+        );
+        let signalled: Vec<Vec<u32>> = plan
+            .steps
+            .iter()
+            .filter_map(|s| match s {
+                Step::SignalProcesses { processes, .. } => {
+                    Some(processes.iter().map(|p| p.pid).collect())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(signalled, vec![vec![20, 21], vec![30], vec![50]]);
+        let verify: Vec<u16> = plan
+            .steps
+            .iter()
+            .filter_map(|s| match s {
+                Step::VerifyFree { port, .. } => Some(*port),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(verify, [3000, 8080]);
+        assert!(plan.risk >= Risk::Medium);
+        let missing = e.plan(&Target::Cluster("nope".into()), &StopOptions::default());
+        assert!(missing
+            .blocked
+            .unwrap()
+            .message
+            .contains("Known clusters: acme-shop"));
+    }
+
+    #[test]
+    fn stopping_a_dependency_warns_about_dependents() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = Engine::from_scan(crate::topology::tests::acme(tmp.path()));
+        let plan = e.plan(&Target::Port(6379), &StopOptions::default());
+        let w = plan.warnings.join("\n");
+        assert!(
+            w.contains("api (PID 30), worker (PID 50) depend on Redis :6379"),
+            "{w}"
+        );
+        let plan = e.plan(&Target::Port(3000), &StopOptions::default());
+        assert!(
+            !plan.warnings.iter().any(|w| w.contains("depend")),
+            "{:?}",
+            plan.warnings
+        );
     }
 }

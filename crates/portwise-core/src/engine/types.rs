@@ -253,12 +253,17 @@ pub enum Target {
     Port(u16),
     Pid(u32),
     Name(String),
+    /// A topology cluster by id or name (`cluster:acme-shop`), stopped in dependency order.
+    Cluster(String),
 }
 
 impl Target {
-    /// Parse "3000", ":3000", "pid:1234" or a process name.
+    /// Parse "3000", ":3000", "pid:1234", "cluster:NAME" or a process name.
     pub fn parse(s: &str) -> Target {
         let t = s.trim();
+        if let Some(c) = t.strip_prefix("cluster:").filter(|c| !c.is_empty()) {
+            return Target::Cluster(c.to_string());
+        }
         if let Some(p) = t.strip_prefix(':').and_then(|p| p.parse().ok()) {
             return Target::Port(p);
         }
@@ -278,6 +283,7 @@ impl std::fmt::Display for Target {
             Target::Port(p) => write!(f, ":{p}"),
             Target::Pid(p) => write!(f, "PID {p}"),
             Target::Name(n) => write!(f, "\"{n}\""),
+            Target::Cluster(c) => write!(f, "cluster {c}"),
         }
     }
 }

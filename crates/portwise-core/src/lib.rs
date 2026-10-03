@@ -31,6 +31,8 @@ pub mod provider;
 pub mod safety;
 pub mod scan;
 pub mod sys;
+pub mod topology;
+pub mod tunnel;
 pub mod util;
 pub mod windiag;
 
