@@ -162,167 +162,40 @@ pub fn up(a: &UpArgs, docker: bool) -> Result<u8> {
         return Ok(exit::OK);
     }
     let mut started = 0;
+    let mut failed: Vec<&str> = Vec::new();
+    let mut code = exit::OK;
     for s in services {
-        let Some(port) = s.port else {
-            println!(
-                "  {} {} {}",
-                dim("·"),
-                bold(&s.name),
-                dim("has no port; skipped")
-            );
-            continue;
-        };
-        let e = engine(docker)?;
-        let st = status_of(&stack, &e, &s.name);
-        match st.state {
-            ServiceState::Running => {
-                println!(
-                    "  {} {} {} {}",
-                    style::ok_mark(),
-                    bold(&s.name),
-                    paint(format!(":{port}"), S::BoldCyan),
-                    dim(format!("already running ({})", holder_label(&st)))
-                );
-                continue;
-            }
-            ServiceState::Conflict => {
-                let who = holder_label(&st);
-                if !a.replace {
-                    eprintln!(
-                        "  {} {} {} is held by {who}, which isn't part of {}.",
-                        style::err_mark(),
-                        bold(&s.name),
-                        paint(format!(":{port}"), S::BoldCyan),
-                        stack.name
-                    );
-                    eprintln!(
-                        "    {}",
-                        dim(format!("Run `portwise explain {port}`, or `portwise up --replace` to stop it first."))
-                    );
-                    return Ok(exit::BUSY);
-                }
-                if stack.protect.contains(&port) {
-                    eprintln!(
-                        "  {} :{port} is in `protect`; not stopping {who}",
-                        style::err_mark()
-                    );
-                    return Ok(exit::BLOCKED);
-                }
-                let plan = e.plan(&Target::Port(port), &StopOptions::default());
-                print!("{}", render::plan_text(&plan));
-                if plan.is_blocked() {
-                    return Ok(crate::commands::block_code(&plan).max(exit::BUSY));
-                }
-                if a.dry_run {
-                    println!("{}", dim("Dry run: not stopping it."));
-                } else {
-                    if !a.yes && !confirm(&format!("Stop {who} to free :{port}?"))? {
-                        println!("{}", dim("Cancelled."));
-                        return Ok(exit::BUSY);
-                    }
-                    let report = execute(&plan, &mut |l| println!("    {} {}", dim("·"), dim(l)));
-                    println!("{}", render::report_line(&report));
-                    crate::state::record(&e, &plan, &report);
-                    if !report.success {
-                        return Ok(exit::BUSY);
-                    }
-                }
-            }
-            ServiceState::Stopped | ServiceState::Unknown => {}
-        }
-        let Some(cmd) = s.command.as_deref() else {
+        // Dependents of a service that didn't come up are skipped; unrelated ones still start.
+        if let Some(dep) = s.depends_on.iter().find(|d| failed.contains(&d.as_str())) {
             eprintln!(
-                "  {} {} {} isn't running, and the project file has no `command` for it; start it yourself.",
+                "  {} {} {}",
                 style::err_mark(),
                 bold(&s.name),
-                paint(format!(":{port}"), S::BoldCyan)
+                dim(format!("skipped: it depends on {dep}, which didn't start"))
             );
-            return Ok(exit::BUSY);
-        };
-        if a.dry_run {
-            println!(
-                "  {} {} {} {} `{cmd}` {}",
-                dim("·"),
-                bold(&s.name),
-                paint(format!(":{port}"), S::BoldCyan),
-                dim("would run"),
-                dim(format!("in {}", tilde(&s.cwd)))
-            );
+            failed.push(&s.name);
             continue;
         }
-        if !s.cwd.is_dir() {
-            bail!(
-                "service `{}`: directory {} doesn't exist",
-                s.name,
-                tilde(&s.cwd)
-            );
+        match up_one(&stack, s, a, docker)? {
+            UpStep::Started => started += 1,
+            UpStep::Done => {}
+            UpStep::Failed(c) => {
+                failed.push(&s.name);
+                code = code.max(c);
+            }
         }
-        let log = log_path(&stack, &s.name);
-        let mut command = shell_command(cmd);
-        command
-            .current_dir(&s.cwd)
-            .env("PORT", port.to_string())
-            .envs(&s.env);
-        let mut child = spawn_detached(&mut command, &log)
-            .with_context(|| format!("failed to start `{cmd}` for {}", s.name))?;
-        let t0 = Instant::now();
-        let timeout = Duration::from_secs(s.ready_timeout_s);
-        let interactive = std::io::IsTerminal::is_terminal(&std::io::stderr());
-        loop {
-            if tcp_accepting(port) {
-                if interactive {
-                    eprint!("\r\x1b[2K");
-                }
-                println!(
-                    "  {} {} {} up after {:.1} s {}",
-                    style::ok_mark(),
-                    bold(&s.name),
-                    paint(format!(":{port}"), S::BoldCyan),
-                    t0.elapsed().as_secs_f32(),
-                    dim(format!("PID {} · log {}", child.id(), tilde(&log)))
-                );
-                started += 1;
-                break;
-            }
-            if let Ok(Some(status)) = child.try_wait() {
-                if interactive {
-                    eprint!("\r\x1b[2K");
-                }
-                eprintln!(
-                    "  {} {} exited ({status}) before :{port} was ready. Last lines of {}:",
-                    style::err_mark(),
-                    bold(&s.name),
-                    tilde(&log)
-                );
-                for l in tail(&log, 12) {
-                    eprintln!("    {}", dim(l));
-                }
-                return Ok(exit::BUSY);
-            }
-            if t0.elapsed() >= timeout {
-                if interactive {
-                    eprint!("\r\x1b[2K");
-                }
-                eprintln!(
-                    "  {} {} didn't accept connections on :{port} within {} (PID {} is still running; see {}).",
-                    style::warn_mark(),
-                    bold(&s.name),
-                    humantime::format_duration(timeout),
-                    child.id(),
-                    tilde(&log)
-                );
-                return Ok(exit::BUSY);
-            }
-            if interactive {
-                eprint!(
-                    "\r  {} starting {}… {}",
-                    paint("◌", S::Cyan),
-                    s.name,
-                    dim(format!("{:.1}s", t0.elapsed().as_secs_f32()))
-                );
-            }
-            std::thread::sleep(Duration::from_millis(150));
-        }
+    }
+    if !failed.is_empty() {
+        eprintln!(
+            "{} {}",
+            style::err_mark(),
+            bold(format!(
+                "{} didn't start: {}",
+                stack.name,
+                failed.join(", ")
+            ))
+        );
+        return Ok(code);
     }
     if !a.dry_run {
         println!(
@@ -338,6 +211,179 @@ pub fn up(a: &UpArgs, docker: bool) -> Result<u8> {
         }
     }
     Ok(exit::OK)
+}
+
+/// What happened to one service in `up`.
+enum UpStep {
+    Started,
+    /// Already running, skipped or a dry run: nothing to wait for.
+    Done,
+    /// Didn't come up; the exit code to report.
+    Failed(u8),
+}
+
+fn up_one(stack: &Stack, s: &stack::Service, a: &UpArgs, docker: bool) -> Result<UpStep> {
+    let Some(port) = s.port else {
+        println!(
+            "  {} {} {}",
+            dim("·"),
+            bold(&s.name),
+            dim("has no port; skipped")
+        );
+        return Ok(UpStep::Done);
+    };
+    let e = engine(docker)?;
+    let st = status_of(stack, &e, &s.name);
+    match st.state {
+        ServiceState::Running => {
+            println!(
+                "  {} {} {} {}",
+                style::ok_mark(),
+                bold(&s.name),
+                paint(format!(":{port}"), S::BoldCyan),
+                dim(format!("already running ({})", holder_label(&st)))
+            );
+            return Ok(UpStep::Done);
+        }
+        ServiceState::Conflict => {
+            let who = holder_label(&st);
+            if !a.replace {
+                eprintln!(
+                    "  {} {} {} is held by {who}, which isn't part of {}.",
+                    style::err_mark(),
+                    bold(&s.name),
+                    paint(format!(":{port}"), S::BoldCyan),
+                    stack.name
+                );
+                eprintln!(
+                    "    {}",
+                    dim(format!("Run `portwise explain {port}`, or `portwise up --replace` to stop it first."))
+                );
+                return Ok(UpStep::Failed(exit::BUSY));
+            }
+            if stack.protect.contains(&port) {
+                eprintln!(
+                    "  {} :{port} is in `protect`; not stopping {who}",
+                    style::err_mark()
+                );
+                return Ok(UpStep::Failed(exit::BLOCKED));
+            }
+            let plan = e.plan(&Target::Port(port), &StopOptions::default());
+            print!("{}", render::plan_text(&plan));
+            if plan.is_blocked() {
+                return Ok(UpStep::Failed(
+                    crate::commands::block_code(&plan).max(exit::BUSY),
+                ));
+            }
+            if a.dry_run {
+                println!("{}", dim("Dry run: not stopping it."));
+            } else {
+                if !a.yes && !confirm(&format!("Stop {who} to free :{port}?"))? {
+                    println!("{}", dim("Cancelled."));
+                    return Ok(UpStep::Failed(exit::BUSY));
+                }
+                let report = execute(&plan, &mut |l| println!("    {} {}", dim("·"), dim(l)));
+                println!("{}", render::report_line(&report));
+                crate::state::record(&e, &plan, &report);
+                if !report.success {
+                    return Ok(UpStep::Failed(exit::BUSY));
+                }
+            }
+        }
+        ServiceState::Stopped | ServiceState::Unknown => {}
+    }
+    let Some(cmd) = s.command.as_deref() else {
+        eprintln!(
+            "  {} {} {} isn't running, and the project file has no `command` for it; start it yourself.",
+            style::err_mark(),
+            bold(&s.name),
+            paint(format!(":{port}"), S::BoldCyan)
+        );
+        return Ok(UpStep::Failed(exit::BUSY));
+    };
+    if a.dry_run {
+        println!(
+            "  {} {} {} {} `{cmd}` {}",
+            dim("·"),
+            bold(&s.name),
+            paint(format!(":{port}"), S::BoldCyan),
+            dim("would run"),
+            dim(format!("in {}", tilde(&s.cwd)))
+        );
+        return Ok(UpStep::Done);
+    }
+    if !s.cwd.is_dir() {
+        bail!(
+            "service `{}`: directory {} doesn't exist",
+            s.name,
+            tilde(&s.cwd)
+        );
+    }
+    let log = log_path(stack, &s.name);
+    let mut command = shell_command(cmd);
+    command
+        .current_dir(&s.cwd)
+        .env("PORT", port.to_string())
+        .envs(&s.env);
+    let mut child = spawn_detached(&mut command, &log)
+        .with_context(|| format!("failed to start `{cmd}` for {}", s.name))?;
+    let t0 = Instant::now();
+    let timeout = Duration::from_secs(s.ready_timeout_s);
+    let interactive = std::io::IsTerminal::is_terminal(&std::io::stderr());
+    loop {
+        if tcp_accepting(port) {
+            if interactive {
+                eprint!("\r\x1b[2K");
+            }
+            println!(
+                "  {} {} {} up after {:.1} s {}",
+                style::ok_mark(),
+                bold(&s.name),
+                paint(format!(":{port}"), S::BoldCyan),
+                t0.elapsed().as_secs_f32(),
+                dim(format!("PID {} · log {}", child.id(), tilde(&log)))
+            );
+            return Ok(UpStep::Started);
+        }
+        if let Ok(Some(status)) = child.try_wait() {
+            if interactive {
+                eprint!("\r\x1b[2K");
+            }
+            eprintln!(
+                "  {} {} exited ({status}) before :{port} was ready. Last lines of {}:",
+                style::err_mark(),
+                bold(&s.name),
+                tilde(&log)
+            );
+            for l in tail(&log, 12) {
+                eprintln!("    {}", dim(l));
+            }
+            return Ok(UpStep::Failed(exit::BUSY));
+        }
+        if t0.elapsed() >= timeout {
+            if interactive {
+                eprint!("\r\x1b[2K");
+            }
+            eprintln!(
+                "  {} {} didn't accept connections on :{port} within {} (PID {} is still running; see {}).",
+                style::warn_mark(),
+                bold(&s.name),
+                humantime::format_duration(timeout),
+                child.id(),
+                tilde(&log)
+            );
+            return Ok(UpStep::Failed(exit::BUSY));
+        }
+        if interactive {
+            eprint!(
+                "\r  {} starting {}… {}",
+                paint("◌", S::Cyan),
+                s.name,
+                dim(format!("{:.1}s", t0.elapsed().as_secs_f32()))
+            );
+        }
+        std::thread::sleep(Duration::from_millis(150));
+    }
 }
 
 pub fn down(a: &DownArgs, docker: bool) -> Result<u8> {

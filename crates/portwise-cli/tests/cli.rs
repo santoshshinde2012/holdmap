@@ -327,6 +327,29 @@ mod linux {
     }
 
     #[test]
+    fn up_skips_only_the_dependents_of_a_service_that_fails() {
+        let (db, api, docs) = (free_port(), free_port(), free_port());
+        let dir = home();
+        std::fs::write(
+            dir.path().join(".portwise.toml"),
+            format!(
+                "[services.db]\nport = {db}\n\n[services.api]\nport = {api}\ncommand = \"true\"\ndepends_on = [\"db\"]\n\n[services.docs]\nport = {docs}\ncommand = \"true\"\n"
+            ),
+        )
+        .unwrap();
+        pw().env("PORTWISE_HOME", dir.path())
+            .current_dir(dir.path())
+            .args(["up", "--dry-run"])
+            .timeout(Duration::from_secs(20))
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("db"))
+            .stderr(predicate::str::contains("skipped: it depends on db"))
+            .stdout(predicate::str::contains("docs"))
+            .stdout(predicate::str::contains("would run"));
+    }
+
+    #[test]
     fn up_refuses_a_port_held_by_something_else() {
         let port = free_port();
         let Some(mut child) = python_listener(port, false) else {
