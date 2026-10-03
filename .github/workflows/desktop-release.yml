@@ -5,7 +5,9 @@
 #
 # Optional, each skipped when its secrets are absent:
 # - macOS signing + notarisation: APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD,
-#   APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD (app-specific), APPLE_TEAM_ID.
+#   APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD (app-specific), APPLE_TEAM_ID. Without them
+#   the app is ad-hoc signed (tauri.conf.json signingIdentity "-"): macOS then shows the usual
+#   "unidentified developer" prompt instead of calling a quarantined download "damaged".
 # - Windows Authenticode: WINDOWS_CERTIFICATE (base64 .pfx), WINDOWS_CERTIFICATE_PASSWORD.
 # - Signed auto-updates: TAURI_SIGNING_PRIVATE_KEY (+ TAURI_SIGNING_PRIVATE_KEY_PASSWORD) and the
 #   repository variable TAURI_UPDATER_PUBKEY. Adds updater bundles and latest.json.
@@ -142,7 +144,7 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ -z "$APPLE_CERTIFICATE" ]; then echo "::notice::No Apple certificate: the app is unsigned"; exit 0; fi
+          if [ -z "$APPLE_CERTIFICATE" ]; then echo "::notice::No Apple certificate: the app is ad-hoc signed, not notarised"; exit 0; fi
           for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
             [ -n "${!v}" ] && echo "$v=${!v}" >> "$GITHUB_ENV"
           done
@@ -177,6 +179,27 @@ jobs:
           updaterJsonPreferNsis: true
           uploadWorkflowArtifacts: ${{ needs.plan.outputs.tag == '' }}
           workflowArtifactNamePattern: portwise-desktop-${{ matrix.name }}-[bundle] # [name] is the product name, the same for every bundle
+
+      # An unsealed bundle (only the linker's signature on the binary) is what macOS reports as
+      # "damaged" once the download is quarantined, so check the app inside each .dmg.
+      - name: Verify the macOS app signature
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          dmgs=(target/*/release/bundle/dmg/*.dmg)
+          [ ${#dmgs[@]} -gt 0 ] || { echo "::error::no .dmg was built"; exit 1; }
+          for dmg in "${dmgs[@]}"; do
+            mnt=$(mktemp -d)
+            hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" >/dev/null
+            app=("$mnt"/*.app)
+            codesign --verify --deep --strict --verbose=2 "${app[0]}"
+            info=$(codesign -dv --verbose=4 "${app[0]}" 2>&1)
+            echo "$info" | grep -E '^(Identifier|Format|CodeDirectory|Signature|TeamIdentifier|Sealed Resources|Info.plist)'
+            grep -q '^Sealed Resources version' <<<"$info" || { echo "::error::$dmg: app bundle isn't sealed"; exit 1; }
+            grep -q 'linker-signed' <<<"$info" && { echo "::error::$dmg: only the linker's signature"; exit 1; }
+            hdiutil detach "$mnt" >/dev/null
+          done
 
       - name: Collect the installers
         id: files
