@@ -8,7 +8,10 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 
-const INTERVAL: Duration = Duration::from_secs(4);
+/// Re-scan cadence while the window is visible / hidden (research budget: idle CPU ≈ 0,
+/// 5–10 s in the background).
+const VISIBLE: Duration = Duration::from_secs(4);
+const HIDDEN: Duration = Duration::from_secs(10);
 
 /// Should this event pop a notification? Openings and conflicts by default (dev-only unless
 /// configured otherwise); closings only for pinned ports, which you explicitly care about.
@@ -34,7 +37,6 @@ fn title(ev: &PortEvent) -> String {
 pub fn spawn(app: AppHandle) {
     std::thread::spawn(move || {
         let mut watcher = Watcher::new();
-        let mut ticks = 0u32;
         loop {
             let state = app.state::<AppState>();
             if let Ok(engine) = scan_now(false, state.docker()) {
@@ -56,12 +58,15 @@ pub fn spawn(app: AppHandle) {
                     .and_then(|w| w.is_visible().ok())
                     .map(|v| !v)
                     .unwrap_or(true);
-                if hidden && ticks.is_multiple_of(5) {
+                if hidden {
                     crate::tray::refresh_tray(&app, engine.snapshot());
                 }
             }
-            ticks = ticks.wrapping_add(1);
-            std::thread::sleep(INTERVAL);
+            let hidden = app
+                .get_webview_window("main")
+                .and_then(|w| w.is_visible().ok())
+                .is_some_and(|v| !v);
+            std::thread::sleep(if hidden { HIDDEN } else { VISIBLE });
         }
     });
 }
