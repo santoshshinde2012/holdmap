@@ -134,13 +134,13 @@ shell's rc file.)
 <!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
      suffix isn't read as part of the version). -->
 <!-- x-release-please-start-version -->
-[dmg-arm64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.0_aarch64.dmg
-[dmg-x64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.0_x64.dmg
-[msi]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.0_x64_en-US.msi
-[nsis]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.0_x64-setup.exe
-[appimage]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.0_amd64.AppImage
-[deb]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.0_amd64.deb
-[rpm]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-0.1.0%2D1.x86_64.rpm
+[dmg-arm64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.1_aarch64.dmg
+[dmg-x64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.1_x64.dmg
+[msi]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.1_x64_en-US.msi
+[nsis]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.1_x64-setup.exe
+[appimage]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.1_amd64.AppImage
+[deb]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.1_amd64.deb
+[rpm]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-0.1.1%2D1.x86_64.rpm
 <!-- x-release-please-end -->
 
 The installers aren't notarised or Authenticode-signed yet, so the OS asks once:
