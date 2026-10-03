@@ -6,6 +6,10 @@ import type { Density } from "./rows";
 
 export type Theme = "system" | "light" | "dark";
 
+/** One icon per theme. "Match system" uses sun-moon so it can't be mistaken for a device icon. */
+export const THEME_ICON: Record<Theme, string> = { system: "sun-moon", light: "sun", dark: "moon" };
+export const THEME_LABEL: Record<Theme, string> = { system: "match system", light: "light", dark: "dark" };
+
 export interface HotkeyPreset { id: string; label: string }
 
 export interface SettingsModel {

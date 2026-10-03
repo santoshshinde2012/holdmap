@@ -17,7 +17,7 @@
   import Kbd from "./ui/Kbd.svelte";
   import { nextIndex } from "../lib/roving";
   import type { Density } from "../lib/rows";
-  import { SETTINGS_SECTIONS, cadenceText, type SettingsActions, type SettingsModel, type SettingsSection, type Theme } from "../lib/settings";
+  import { SETTINGS_SECTIONS, THEME_ICON, cadenceText, type SettingsActions, type SettingsModel, type SettingsSection, type Theme } from "../lib/settings";
 
   let { model, actions, onclose, section = $bindable("general") }: { model: SettingsModel; actions: SettingsActions; onclose: () => void; section?: SettingsSection } = $props();
 
@@ -52,7 +52,7 @@
     if (n !== null) { section = SETTINGS_SECTIONS[n].id; navEls[n]?.focus(); e.preventDefault(); }
   }
   const themes: { value: Theme; label: string; icon: string }[] = [
-    { value: "system", label: "System", icon: "monitor" },
+    { value: "system", label: "System", icon: THEME_ICON.system },
     { value: "light", label: "Light", icon: "sun" },
     { value: "dark", label: "Dark", icon: "moon" },
   ];

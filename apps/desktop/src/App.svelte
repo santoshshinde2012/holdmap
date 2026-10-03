@@ -10,7 +10,7 @@
   import RemoteDialog from "./components/RemoteDialog.svelte";
   import { Button, Dialog, FilterChip, IconButton, Kbd, SegmentedControl, Select, Splitter, TextField } from "./components/ui";
   import type { DetailTab } from "./lib/detail";
-  import type { SettingsActions, SettingsModel, SettingsSection, HotkeyPreset } from "./lib/settings";
+  import { THEME_ICON, THEME_LABEL, type SettingsActions, type SettingsModel, type SettingsSection, type HotkeyPreset, type Theme } from "./lib/settings";
   import ConfirmDialog, { type Phase } from "./components/ConfirmDialog.svelte";
   import ShortcutsDialog from "./components/ShortcutsDialog.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
@@ -25,7 +25,6 @@
   import type { Command } from "./lib/palette";
   import { GROUPS, groupOf, matches, seconds, stopTarget, title, url, canOpen, type Filters, type Group } from "./lib/format";
 
-  type Theme = "system" | "light" | "dark";
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
   type View = "list" | "graph";
   interface Confirm { entry: PortEntry | null; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null }
@@ -456,7 +455,7 @@
       { id: "clear", group: "Filters", icon: "x", title: "Clear search and filters", shortcut: ["Esc"], run: clearFilters },
       { id: "t-light", group: "View", icon: "sun", title: "Theme: light", run: () => (theme = "light") },
       { id: "t-dark", group: "View", icon: "moon", title: "Theme: dark", run: () => (theme = "dark") },
-      { id: "t-sys", group: "View", icon: "monitor", title: "Theme: match system", run: () => (theme = "system") },
+      { id: "t-sys", group: "View", icon: THEME_ICON.system, title: "Theme: match system", run: () => (theme = "system") },
       { id: "sort-g", group: "View", icon: "filter", title: "Sort: grouped by kind", run: () => (sort = "group") },
       { id: "sort-p", group: "View", icon: "hash", title: "Sort: by port", run: () => (sort = "port") },
       { id: "sort-n", group: "View", icon: "clock", title: "Sort: newest first", run: () => (sort = "newest") },
@@ -582,7 +581,7 @@
   $effect(() => { try { localStorage.setItem("pw.pane", String(paneWidth)); } catch { /* ignore */ } });
 
   const ago = $derived(snapshot ? Math.max(0, Math.round((now - snapshot.taken_at_ms) / 1000)) : null);
-  const themeIcon = $derived(theme === "system" ? "monitor" : theme === "light" ? "sun" : "moon");
+  const themeIcon = $derived(THEME_ICON[theme]);
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -621,7 +620,7 @@
       <IconButton icon="refresh" label="Refresh" kbd="R" onclick={() => refresh(true)} class={refreshing ? "spinning" : ""} />
       <IconButton icon="history" label="Recently stopped" kbd="H" onclick={openHistory} />
       <IconButton icon="server" label="Remote host…" onclick={() => (showRemote = true)} />
-      <IconButton icon={themeIcon} label="Theme: {theme}" kbd={["⇧", "L"]} onclick={cycleTheme} />
+      <IconButton icon={themeIcon} label="Theme: {THEME_LABEL[theme]}" kbd={["⇧", "L"]} onclick={cycleTheme} />
       <IconButton icon="sliders" label="Settings" kbd={[mod, ","]} onclick={() => openSettings()} />
     </div>
   </header>
