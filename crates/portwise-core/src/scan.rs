@@ -265,6 +265,11 @@ pub fn build_entries_with(
     let mut groups: BTreeMap<Key, (Vec<&RawSocket>, Vec<u32>)> = BTreeMap::new();
     let mut hidden = 0;
     for s in raw {
+        // Local port 0 means the socket isn't bound to a port yet (macOS lists unbound UDP
+        // sockets that way): nothing can connect to it and there's no port to free.
+        if s.local_port == 0 {
+            continue;
+        }
         if !all_states && !s.state.is_listening() {
             continue;
         }
@@ -649,6 +654,46 @@ mod tests {
             uid: Some(1000),
             inode: Some(1),
             pids: pids.to_vec(),
+        }
+    }
+
+    #[test]
+    fn skips_sockets_without_a_port() {
+        let t = table(
+            vec![proc(1, 0, "init", &[]), proc(40, 1, "sharingd", &[])],
+            1,
+        );
+        let raw = vec![
+            sock(
+                Protocol::Udp,
+                Family::V4,
+                "0.0.0.0",
+                0,
+                SocketState::Bound,
+                &[40],
+            ),
+            sock(
+                Protocol::Udp,
+                Family::V6,
+                "::",
+                0,
+                SocketState::Bound,
+                &[40],
+            ),
+            sock(
+                Protocol::Udp,
+                Family::V6,
+                "::",
+                56327,
+                SocketState::Bound,
+                &[40],
+            ),
+        ];
+        for all_states in [false, true] {
+            let (entries, hidden) = build_entries(&raw, &t, &[], all_states);
+            assert_eq!(hidden, 0);
+            let ports: Vec<u16> = entries.iter().map(|e| e.port).collect();
+            assert_eq!(ports, [56327]);
         }
     }
 
