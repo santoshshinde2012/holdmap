@@ -21,7 +21,10 @@ pub struct ProcessTable {
 }
 
 fn refresh_kind() -> ProcessRefreshKind {
+    // Threads never own sockets separately from their process, and walking every
+    // `/proc/<pid>/task` directory was the single largest cost of a scan on Linux.
     ProcessRefreshKind::nothing()
+        .without_tasks()
         .with_cmd(UpdateKind::Always)
         .with_exe(UpdateKind::Always)
         .with_cwd(UpdateKind::Always)
@@ -245,7 +248,7 @@ pub fn sysinfo_start_time(pid: u32) -> Option<u64> {
     sys.refresh_processes_specifics(
         ProcessesToUpdate::Some(&[p]),
         true,
-        ProcessRefreshKind::nothing(),
+        ProcessRefreshKind::nothing().without_tasks(),
     );
     sys.process(p).map(|p| p.start_time())
 }
