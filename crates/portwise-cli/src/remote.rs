@@ -10,6 +10,7 @@ use anyhow::{bail, Result};
 use portwise_core::remote::{scan_remote, LocalShell, RemoteRunner, SshRunner};
 use portwise_core::topology::{exporter, GraphExporter, TreeExporter};
 use portwise_core::{Engine, Filter};
+use std::io::IsTerminal;
 
 #[derive(clap::Args, Debug)]
 pub struct SshArgs {
@@ -61,8 +62,12 @@ pub fn run(a: &SshArgs) -> Result<u8> {
                 .iter()
                 .map(|x| format!("'{}'", x.replace('\'', "'\\''")))
                 .collect();
+            // A remote TTY only when we have one: `-t` without a terminal makes ssh warn, and it
+            // turns "\n" into "\r\n", which would corrupt piped or --json output.
+            let tty = !json && std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
             let status = std::process::Command::new("ssh")
-                .args(["-t", "-o", "ConnectTimeout=10", &a.host, "portwise"])
+                .args(if tty { &["-t"][..] } else { &[] })
+                .args(["-o", "ConnectTimeout=10", &a.host, "portwise"])
                 .args(&quoted)
                 .status()?;
             return Ok(status.code().map(|c| c.clamp(0, 255) as u8).unwrap_or(2));
