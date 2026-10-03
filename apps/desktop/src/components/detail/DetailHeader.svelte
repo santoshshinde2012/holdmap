@@ -45,14 +45,14 @@
   .id { display: flex; gap: var(--sp-3); align-items: center; min-width: 0; }
   .who { flex: 1; min-width: 0; }
   .hero { display: flex; align-items: center; gap: 8px; line-height: 1; }
-  .port { font-family: var(--mono); font-size: 24px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-  .proto { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--border-strong); border-radius: var(--r-xs); padding: 2px 5px; }
-  .status { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); color: var(--muted); font-weight: 550; text-transform: capitalize; }
+  .port { font-size: var(--fs-display); line-height: var(--lh-display); font-weight: var(--fw-semibold); letter-spacing: var(--ls-display); font-variant-numeric: tabular-nums; }
+  .proto { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-medium); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); border: 1px solid var(--border-strong); border-radius: var(--r-xs); padding: 2px 5px; }
+  .status { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); font-weight: var(--fw-medium); text-transform: capitalize; }
   .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
   .status.live { color: var(--ok); }
   .status.live .dot { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
-  h2 { margin: 6px 0 0; font-size: var(--fs-md); font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
-  .fw { color: var(--muted); font-weight: 500; }
+  h2 { margin: 6px 0 0; font-size: var(--fs-heading); line-height: var(--lh-heading); font-weight: var(--fw-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: var(--ls-heading); }
+  .fw { color: var(--muted); font-weight: var(--fw-regular); }
   .sep { margin: 0 0.4em; }
   .tools { display: flex; gap: 2px; align-self: flex-start; }
   .tools :global(.pin.on) { color: var(--warn); }

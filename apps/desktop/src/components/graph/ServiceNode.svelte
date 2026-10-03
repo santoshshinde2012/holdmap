@@ -65,14 +65,14 @@
   .node.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px var(--accent-soft), var(--shadow-md); }
   .body { flex: 1; min-width: 0; display: grid; gap: 4px; }
   .top { display: flex; align-items: center; gap: 5px; min-width: 0; }
-  .label { font-weight: 650; font-size: 13px; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .label { font-weight: var(--fw-semibold); font-size: var(--fs-body); line-height: var(--lh-body); letter-spacing: var(--ls-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lock { color: var(--muted); display: inline-flex; }
   .exp { color: var(--warn); display: inline-flex; }
   .ports { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; }
-  .port { font-size: 10.5px; font-weight: 650; color: var(--accent); background: var(--accent-soft); padding: 1px 5px; border-radius: 5px; }
-  .more { font-size: 10px; color: var(--muted); }
-  .sub { font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
-  .usage { display: grid; justify-items: end; gap: 2px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .port { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--accent); background: var(--accent-soft); padding: 1px 5px; border-radius: 5px; }
+  .more { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
+  .sub { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  .usage { display: grid; justify-items: end; gap: 2px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
   .node :global(.svelte-flow__handle) { width: 7px; height: 7px; background: var(--border-strong); border: 2px solid var(--surface); opacity: 0.9; }
   @media (prefers-reduced-motion: reduce) { .node { transition: none; } }
 </style>

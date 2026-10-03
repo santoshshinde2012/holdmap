@@ -60,9 +60,9 @@
   .cluster { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: var(--r-lg); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); background: var(--accent-softer); margin-bottom: var(--sp-6); }
   .ct { width: 34px; height: 34px; border-radius: var(--r-md); display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex: none; }
   .cn { flex: 1; min-width: 0; display: grid; gap: 1px; }
-  .cn b { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cn span { font-size: var(--fs-xs); color: var(--muted); }
-  .hint { font-size: var(--fs-xs); color: var(--muted); }
+  .cn b { font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cn span { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
+  .hint { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
   .rel { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
   .rel li + li { border-top: 1px solid var(--border); }
   .relbtn { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 10px 6px 12px; border: 0; background: transparent; font: inherit; color: var(--text); cursor: pointer; text-align: left; }
@@ -72,8 +72,8 @@
   .arrow { width: 22px; height: 22px; border-radius: var(--r-sm); display: grid; place-items: center; flex: none; }
   .arrow.out { color: var(--tone-green); background: var(--tone-green-bg); }
   .arrow.in { color: var(--tone-amber); background: var(--tone-amber-bg); }
-  .rn { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rp { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
-  .rt { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .rn { font-weight: var(--fw-semibold); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rp { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); }
+  .rt { margin-left: auto; font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); white-space: nowrap; }
   .none { color: var(--muted); margin: 0; }
 </style>

@@ -37,16 +37,16 @@
   .kind-workspace { --hue: var(--tone-green); }
   .kind-git { --hue: var(--tone-gray); }
   .hull.dim { opacity: 0.35; }
-  header { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 12px; font-size: 11.5px; }
+  header { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 12px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .ic { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; color: var(--hue); background: color-mix(in srgb, var(--hue) 14%, transparent); }
-  .name { font-weight: 700; color: var(--text); letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .name { font-weight: var(--fw-semibold); color: var(--text); letter-spacing: var(--ls-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .kind { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
   .narrow .kind { display: none; }
   .narrow .name { flex: 1; }
   .narrow .sl { display: none; }
-  .count { flex: none; font-size: 10px; font-weight: 700; color: var(--muted); background: var(--surface-3); border-radius: 999px; padding: 0 6px; }
+  .count { flex: none; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--muted); background: var(--surface-3); border-radius: 999px; padding: 0 6px; }
   .stop {
-    flex: none; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 10.5px; font-weight: 600;
+    flex: none; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium);
     border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); cursor: pointer; opacity: 0.85;
   }
   .stop:hover { color: var(--danger); border-color: var(--danger); opacity: 1; }

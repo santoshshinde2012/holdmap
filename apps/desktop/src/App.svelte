@@ -694,13 +694,13 @@
   .app.mac .titlebar { padding-left: 84px; }
   .brand { display: flex; align-items: center; gap: var(--sp-2); flex: none; }
   .brand img { border-radius: 6px; box-shadow: var(--shadow-sm); }
-  .name { font-weight: 700; font-size: var(--fs-md); letter-spacing: -0.02em; }
+  .name { font-weight: var(--fw-semibold); font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); }
   .search { flex: 1; max-width: 520px; margin: 0 auto; min-width: 140px; }
   .tools { display: flex; align-items: center; gap: 2px; flex: none; }
   .tools :global(.cmdk) { margin-right: 2px; color: var(--text-2); }
   .tools :global(.spinning svg) { animation: spin 0.9s linear infinite; }
   .tsep { width: 1px; height: 18px; background: var(--border-strong); margin: 0 6px; }
-  .live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--muted); margin-right: var(--sp-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); margin-right: var(--sp-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
   .pulse.on { animation: beat 0.9s ease-in-out infinite; }
   .live.stale .pulse { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
@@ -717,18 +717,18 @@
   .list { overflow-y: auto; padding: var(--sp-1) 0 var(--sp-6); outline: none; }
   .list:focus-visible:not([aria-activedescendant]) { box-shadow: inset 0 0 0 2px var(--ring); }
   .group { position: sticky; top: -4px; z-index: 2; display: flex; align-items: baseline; gap: var(--sp-2); padding: var(--sp-4) var(--sp-5) var(--sp-2); background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(10px); }
-  .gt { font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-2); }
-  .gc { font-size: 10.5px; color: var(--muted); background: var(--surface-3); padding: 1px 6px; border-radius: var(--r-full); font-variant-numeric: tabular-nums; font-weight: 650; }
-  .gh { font-size: var(--fs-xs); color: var(--muted); }
-  .foot-note { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: var(--fs-xs); padding: var(--sp-5) var(--sp-5) 0; }
+  .gt { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-medium); text-transform: uppercase; letter-spacing: var(--ls-label); color: var(--text-2); }
+  .gc { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); background: var(--surface-3); padding: 1px 6px; border-radius: var(--r-full); font-variant-numeric: tabular-nums; font-weight: var(--fw-medium); }
+  .gh { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
+  .foot-note { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); padding: var(--sp-5) var(--sp-5) 0; }
   .foot-note span { display: inline-flex; align-items: center; gap: 6px; }
 
   .skeletons { padding: var(--sp-3) var(--sp-2); }
   .sk-gh { height: 10px; width: 120px; margin: var(--sp-3) var(--sp-3) var(--sp-3); }
   .sk-row { display: grid; grid-template-columns: 92px 32px 1fr; gap: var(--sp-3); align-items: center; padding: 12px var(--sp-4); }
 
-  .status { display: flex; align-items: center; gap: var(--sp-4); height: 30px; padding: 0 var(--sp-4); border-top: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
-  .status b { color: var(--text); font-weight: 650; }
+  .status { display: flex; align-items: center; gap: var(--sp-4); height: 30px; padding: 0 var(--sp-4); border-top: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+  .status b { color: var(--text); font-weight: var(--fw-medium); }
   .status .g b { color: var(--tone-green); }
   .status .w b { color: var(--warn); }
   .status .sp { flex: 1; }

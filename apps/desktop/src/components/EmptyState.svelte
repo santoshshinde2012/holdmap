@@ -19,7 +19,7 @@
 
 <style>
   .state { max-width: 400px; margin: 10vh auto 0; text-align: center; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-5); }
-  .state h3 { color: var(--text); margin: var(--sp-3) 0 0; font-size: var(--fs-lg); letter-spacing: -0.01em; }
+  .state h3 { color: var(--text); margin: var(--sp-3) 0 0; font-size: var(--fs-title); font-weight: var(--fw-semibold); line-height: var(--lh-title); letter-spacing: var(--ls-title); }
   .state :global(p) { margin: 0 0 var(--sp-2); }
   .art circle, .art path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
   .art .r1 { stroke: var(--accent); opacity: 0.35; }

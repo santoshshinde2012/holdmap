@@ -58,7 +58,7 @@
     --bh: var(--h-md);
     position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     height: var(--bh); padding: 0 12px; border-radius: var(--r-md);
-    border: 1px solid transparent; font: inherit; font-size: var(--fs-sm); font-weight: 550; line-height: 1;
+    border: 1px solid transparent; font: inherit; font-size: var(--fs-body); font-weight: var(--fw-medium); line-height: 1;
     white-space: nowrap; user-select: none; cursor: pointer; flex: none;
     transition: background var(--dur-1) var(--ease), border-color var(--dur-1), color var(--dur-1), box-shadow var(--dur-1), transform var(--dur-1);
   }
@@ -69,9 +69,9 @@
   .lbl { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .full { width: 100%; }
 
-  .xs { --bh: var(--h-xs); padding: 0 8px; font-size: var(--fs-xs); gap: 5px; border-radius: var(--r-sm); }
-  .sm { --bh: var(--h-sm); padding: 0 10px; font-size: var(--fs-xs); gap: 6px; border-radius: var(--r-sm); }
-  .lg { --bh: var(--h-lg); padding: 0 16px; font-size: var(--fs-base); gap: 8px; }
+  .xs { --bh: var(--h-xs); padding: 0 8px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); gap: 5px; border-radius: var(--r-sm); }
+  .sm { --bh: var(--h-sm); padding: 0 10px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); gap: 6px; border-radius: var(--r-sm); }
+  .lg { --bh: var(--h-lg); padding: 0 16px; font-size: var(--fs-body); line-height: var(--lh-body); gap: 8px; }
 
   .secondary { background: var(--surface); color: var(--text); border-color: var(--input-border); box-shadow: var(--control-shadow); }
   .secondary:hover:not(:disabled) { background: var(--surface-2); border-color: var(--input-border-hover); }

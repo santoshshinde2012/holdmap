@@ -36,8 +36,9 @@
   .dot { fill: var(--accent); filter: drop-shadow(0 0 3px var(--accent)); }
   .dot.outbound { fill: var(--tone-violet); }
   :global(.edge-label) {
-    font-size: 10px; padding: 1px 6px; border-radius: 6px; background: var(--surface); color: var(--muted);
+    font-size: var(--fs-caption); line-height: var(--lh-caption); padding: 1px 6px; border-radius: 6px; background: var(--surface); color: var(--muted);
     border: 1px solid var(--border); pointer-events: none; transition: opacity 160ms;
+    max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums;
   }
   :global(.edge-label.hl) { color: var(--accent); border-color: var(--accent); }
   :global(.edge-label.dim) { opacity: 0.2; }

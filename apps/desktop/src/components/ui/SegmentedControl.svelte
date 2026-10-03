@@ -79,12 +79,12 @@
   .full button { flex: 1; }
   .ind { position: absolute; top: 2px; bottom: 2px; left: 3px; z-index: -1; border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); transition: transform var(--dur-2) var(--ease), width var(--dur-2) var(--ease); }
   :global([data-theme="dark"]) .ind { background: var(--surface-3); }
-  button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; background: transparent; height: calc(var(--h-sm) - 6px); padding: 0 10px; border-radius: var(--r-sm); color: var(--muted); font: inherit; font-weight: 550; font-size: var(--fs-xs); white-space: nowrap; cursor: pointer; transition: color var(--dur-1); }
-  .md button { height: calc(var(--h-md) - 6px); font-size: var(--fs-sm); padding: 0 12px; }
+  button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; background: transparent; height: calc(var(--h-sm) - 6px); padding: 0 10px; border-radius: var(--r-sm); color: var(--muted); font: inherit; font-weight: var(--fw-medium); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); white-space: nowrap; cursor: pointer; transition: color var(--dur-1); }
+  .md button { height: calc(var(--h-md) - 6px); font-size: var(--fs-body); line-height: var(--lh-body); padding: 0 12px; }
   button:hover:not(:disabled) { color: var(--text); }
   button.on { color: var(--text); }
   button.on.noind { background: var(--surface); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
   button:disabled { opacity: 0.45; cursor: not-allowed; }
   button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-  .count { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-variant-numeric: tabular-nums; }
+  .count { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); padding: 1px 5px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-variant-numeric: tabular-nums; }
 </style>

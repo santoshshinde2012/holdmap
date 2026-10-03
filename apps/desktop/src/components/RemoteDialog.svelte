@@ -93,28 +93,28 @@
   .form { display: grid; gap: var(--sp-3); padding-top: var(--sp-1); }
   .line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-2); align-items: start; }
   .line :global(.go) { margin-top: 26px; }
-  .recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--muted); }
+  .recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
   .recent > span { margin-right: 2px; }
-  .rh { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: var(--r-full); border: 1px solid var(--input-border); background: var(--surface); color: var(--text-2); font: inherit; font-family: var(--mono); font-size: 11px; cursor: pointer; }
+  .rh { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: var(--r-full); border: 1px solid var(--input-border); background: var(--surface); color: var(--text-2); font: inherit; font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); cursor: pointer; }
   .rh:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
   .rh:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
   .out { margin-top: var(--sp-5); }
   .sk { display: grid; gap: 6px; }
   .sub { margin-top: 6px !important; color: var(--muted); }
-  .rhead { display: flex; align-items: center; gap: 8px; margin-bottom: var(--sp-3); font-size: var(--fs-sm); min-width: 0; }
+  .rhead { display: flex; align-items: center; gap: 8px; margin-bottom: var(--sp-3); font-size: var(--fs-body); line-height: var(--lh-body); min-width: 0; }
   .rhead > :global(svg) { color: var(--muted); }
-  .rhead span { color: var(--muted); font-size: var(--fs-xs); }
-  .cli { margin-left: auto; max-width: 45%; font-size: 11px; }
+  .rhead span { color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
+  .cli { margin-left: auto; max-width: 45%; font-size: var(--fs-caption); line-height: var(--lh-caption); }
   .tbl { border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; max-height: 300px; overflow-y: auto; }
-  .tr { display: grid; grid-template-columns: 90px minmax(0, 1.4fr) minmax(0, 0.6fr) minmax(0, 1fr); gap: 12px; align-items: center; padding: 0 12px; min-height: 36px; font-size: var(--fs-sm); }
+  .tr { display: grid; grid-template-columns: 90px minmax(0, 1.4fr) minmax(0, 0.6fr) minmax(0, 1fr); gap: 12px; align-items: center; padding: 0 12px; min-height: 36px; font-size: var(--fs-body); line-height: var(--lh-body); }
   .tr + .tr { border-top: 1px solid var(--border); }
-  .th { position: sticky; top: 0; background: var(--surface-2); min-height: 30px; font-size: var(--fs-2xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .th { position: sticky; top: 0; background: var(--surface-2); min-height: 30px; font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-medium); text-transform: uppercase; letter-spacing: var(--ls-label); color: var(--muted); }
   .tr span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .p { font-family: var(--mono); font-weight: 700; }
-  em { font-style: normal; font-weight: 500; color: var(--muted); font-size: 10.5px; margin-left: 6px; text-transform: uppercase; font-family: var(--font); }
+  .p { font-family: var(--mono); font-weight: var(--fw-semibold); }
+  em { font-style: normal; font-weight: var(--fw-medium); color: var(--muted); font-size: var(--fs-label); letter-spacing: var(--ls-label); line-height: var(--lh-label); margin-left: 6px; text-transform: uppercase; font-family: var(--font); }
   .n em { text-transform: none; font-family: var(--mono); }
   .u { color: var(--text-2); }
-  .a { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+  .a { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); }
   .a.exp { color: var(--warn); }
   .none { color: var(--muted); }
 </style>

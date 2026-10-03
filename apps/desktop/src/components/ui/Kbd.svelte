@@ -8,6 +8,6 @@
 
 <style>
   .kbds { display: inline-flex; gap: 3px; align-items: center; flex: none; }
-  .sm kbd { height: 16px; min-width: 16px; font-size: 10px; padding: 0 4px; border-bottom-width: 1px; }
+  .sm kbd { height: 16px; min-width: 16px; font-size: var(--fs-caption); line-height: var(--lh-caption); padding: 0 4px; border-bottom-width: 1px; }
   .inverse kbd { background: rgb(255 255 255 / 0.18); border-color: transparent; color: inherit; }
 </style>

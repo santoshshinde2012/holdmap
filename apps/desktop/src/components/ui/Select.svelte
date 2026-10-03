@@ -166,24 +166,24 @@
 </Field>
 
 <style>
-  .trigger { display: inline-flex; align-items: center; gap: 8px; height: var(--h-md); padding: 0 8px 0 10px; min-width: 0; border-radius: var(--r-md); border: 1px solid var(--input-border); background: var(--input-bg); color: var(--muted); box-shadow: var(--control-shadow); font: inherit; font-size: var(--fs-sm); cursor: pointer; transition: border-color var(--dur-1), box-shadow var(--dur-1); text-align: left; }
-  .trigger.sm { height: var(--h-sm); border-radius: var(--r-sm); font-size: var(--fs-xs); }
+  .trigger { display: inline-flex; align-items: center; gap: 8px; height: var(--h-md); padding: 0 8px 0 10px; min-width: 0; border-radius: var(--r-md); border: 1px solid var(--input-border); background: var(--input-bg); color: var(--muted); box-shadow: var(--control-shadow); font: inherit; font-size: var(--fs-body); line-height: var(--lh-body); cursor: pointer; transition: border-color var(--dur-1), box-shadow var(--dur-1); text-align: left; }
+  .trigger.sm { height: var(--h-sm); border-radius: var(--r-sm); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .trigger:hover:not(:disabled) { border-color: var(--input-border-hover); }
   .trigger:focus-visible, .trigger.open { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
   .trigger.invalid { border-color: var(--danger); }
   .trigger:disabled { opacity: 0.55; cursor: not-allowed; background: var(--input-disabled); }
   .prefix { color: var(--muted); }
-  .val { flex: 1; min-width: 0; color: var(--text); font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .val.ph { color: var(--faint); font-weight: 400; }
+  .val { flex: 1; min-width: 0; color: var(--text); font-weight: var(--fw-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .val.ph { color: var(--faint); font-weight: var(--fw-regular); }
   .pop { position: fixed; z-index: 200; max-height: 320px; overflow-y: auto; padding: 4px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); outline: none; animation: pop var(--dur-1) var(--ease); }
   .pop.up { animation-name: popup; }
   @keyframes pop { from { opacity: 0; transform: translateY(-3px); } }
   @keyframes popup { from { opacity: 0; transform: translateY(3px); } }
-  .opt { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 8px; border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--text); cursor: default; }
+  .opt { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 8px; border-radius: var(--r-sm); font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text); cursor: default; }
   .opt.active { background: var(--row-selected); }
   .opt.disabled { opacity: 0.45; }
   .oi { color: var(--muted); display: inline-grid; }
   .ot { flex: 1; display: grid; min-width: 0; }
-  .od { color: var(--muted); font-size: var(--fs-xs); }
+  .od { color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .check { color: var(--accent); display: inline-grid; }
 </style>

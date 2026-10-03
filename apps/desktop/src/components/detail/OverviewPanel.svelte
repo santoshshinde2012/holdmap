@@ -89,14 +89,14 @@
 <style>
   .sk { display: grid; gap: 10px; }
   .summary { display: grid; gap: var(--sp-3); }
-  .headline { margin: 0; font-size: var(--fs-md); line-height: 1.55; color: var(--text); font-weight: 500; }
+  .headline { margin: 0; font-size: var(--fs-heading); letter-spacing: var(--ls-heading); line-height: var(--lh-heading); color: var(--text); font-weight: var(--fw-regular); text-wrap: pretty; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: var(--sp-5) 0 var(--sp-6); }
   .stats.four { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .stats.four .stat:last-child { grid-column: 1 / -1; }
   .stat { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; }
-  .sl { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-2xs); color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
-  .sv { font-size: var(--fs-md); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ss { font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sl { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-label); line-height: var(--lh-label); color: var(--muted); font-weight: var(--fw-medium); text-transform: uppercase; letter-spacing: var(--ls-label); }
+  .sv { font-size: var(--fs-heading); letter-spacing: var(--ls-heading); line-height: var(--lh-heading); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ss { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .plan { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 14px; display: grid; gap: 10px; }
   .chain { list-style: none; margin: 0; padding: 0; display: grid; }
   .chain li { display: flex; gap: 12px; position: relative; padding: 5px 0; min-width: 0; }
@@ -105,11 +105,11 @@
   .holder .node { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .pc { min-width: 0; flex: 1; }
   .pl { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .pname { font-weight: 600; }
-  .pid { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-  .holds { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 999px; }
-  .pcmd { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-  .steps { list-style: none; margin: 0; padding: 10px 0 0; border-top: 1px dashed var(--border-strong); display: grid; gap: 6px; font-size: var(--fs-sm); color: var(--text-2); }
+  .pname { font-weight: var(--fw-semibold); }
+  .pid { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); }
+  .holds { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-medium); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 999px; }
+  .pcmd { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .steps { list-style: none; margin: 0; padding: 10px 0 0; border-top: 1px dashed var(--border-strong); display: grid; gap: 6px; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text-2); }
   .chain:empty + .steps, .steps:first-child { border-top: 0; padding-top: 0; }
   .steps:empty { display: none; }
   .steps li { display: flex; gap: 8px; align-items: flex-start; }

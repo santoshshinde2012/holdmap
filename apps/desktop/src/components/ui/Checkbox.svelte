@@ -46,7 +46,7 @@
   .mark { position: absolute; inset: 0; width: 16px; height: 16px; fill: none; stroke: var(--accent-fg); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; opacity: 0; transform: scale(0.7); transition: opacity var(--dur-1), transform var(--dur-2) var(--ease-spring); }
   input:checked + .mark { opacity: 1; transform: none; }
   .text { min-width: 0; }
-  label { font-size: var(--fs-sm); font-weight: 500; color: var(--text); cursor: pointer; line-height: 1.4; }
-  p { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--muted); line-height: 1.45; }
+  label { font-size: var(--fs-body); font-weight: var(--fw-medium); color: var(--text); cursor: pointer; line-height: var(--lh-body); }
+  p { margin: 2px 0 0; font-size: var(--fs-body-sm); color: var(--muted); line-height: var(--lh-body-sm); }
   .disabled label { color: var(--muted); cursor: default; }
 </style>

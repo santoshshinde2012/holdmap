@@ -160,7 +160,7 @@
 <style>
   .layout { display: grid; grid-template-columns: 188px minmax(0, 1fr); gap: var(--sp-6); min-height: 380px; }
   .nav { display: flex; flex-direction: column; gap: 2px; outline: none; }
-  .nav button { display: flex; align-items: center; gap: 10px; height: var(--h-md); padding: 0 10px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--text-2); font: inherit; font-size: var(--fs-sm); font-weight: 550; text-align: left; cursor: pointer; }
+  .nav button { display: flex; align-items: center; gap: 10px; height: var(--h-md); padding: 0 10px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--text-2); font: inherit; font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); text-align: left; cursor: pointer; }
   .nav button :global(svg) { color: var(--muted); }
   .nav button:hover { background: var(--row-hover); color: var(--text); }
   .nav button.on { background: var(--row-selected); color: var(--text); }
@@ -169,11 +169,11 @@
   .panel { min-width: 0; outline: none; }
   .row-in { padding: 4px 16px 16px; }
   .err { margin: calc(var(--sp-3) * -1) 0 var(--sp-4); padding-top: var(--sp-4); }
-  .ro { font-size: var(--fs-sm); color: var(--muted); }
-  .tip { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--fs-xs); margin: var(--sp-4) 0 0; }
-  .ver { font-size: 12.5px; }
-  .path { width: 100%; padding: 6px 10px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--border); font-size: 12px; }
-  .status { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--muted); }
+  .ro { font-size: var(--fs-body); line-height: var(--lh-body); color: var(--muted); }
+  .tip { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); margin: var(--sp-4) 0 0; }
+  .ver { font-size: var(--fs-body); line-height: var(--lh-body); }
+  .path { width: 100%; padding: 6px 10px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--border); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
+  .status { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
   .status.saved { color: var(--ok); }
   .status.error { color: var(--danger); }
   .dotspin { width: 10px; height: 10px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin 0.7s linear infinite; }
