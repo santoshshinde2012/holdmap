@@ -6,7 +6,8 @@
   import { fly, fade } from "svelte/transition";
   import Icon from "./Icon.svelte";
   import FrameworkIcon from "./FrameworkIcon.svelte";
-  import type { ActionPlan, PortEntry, StopReport } from "../lib/types";
+  import type { ActionPlan, Cluster, PortEntry, StopReport } from "../lib/types";
+  import { CLUSTER_LABEL, orderFromSummary } from "../lib/graph";
   import { canOverride, describeStep, isForce, seconds, title } from "../lib/format";
 
   let {
@@ -18,8 +19,12 @@
     onconfirm,
     oncancel,
     onoverride,
+    cluster = null,
   }: {
-    entry: PortEntry;
+    /** The port being stopped; null when stopping a whole cluster. */
+    entry: PortEntry | null;
+    /** Set when stopping a cluster in dependency order. */
+    cluster?: Cluster | null;
     plan: ActionPlan;
     phase: Phase;
     log: string[];
@@ -41,7 +46,9 @@
   });
   const escalated = $derived(log.some((l) => /SIGKILL/.test(l) && /send|sent/.test(l)));
   const freed = $derived(phase === "done" || log.some((l) => /is free/.test(l)));
-  const verb = $derived(force ? "Force kill" : entry.container ? "Stop container" : "Stop");
+  const verb = $derived(cluster ? "Stop cluster" : force ? "Force kill" : entry?.container ? "Stop container" : "Stop");
+  const order = $derived(cluster ? orderFromSummary(plan.summary) : []);
+  const subject = $derived(cluster ? cluster.name : entry ? title(entry) : plan.target);
 
   function stepState(i: number): "done" | "active" | "pending" {
     if (phase === "done") return "done";
@@ -82,22 +89,32 @@
     {#if phase === "done" && report}
       <div class="result" in:fade={{ duration: reduced ? 0 : 150 }} role="status">
         <div class="big-check"><Icon name="check" size={26} /></div>
-        <h2 id="confirm-title">Port {entry.port} is free</h2>
-        <p id="confirm-summary">{title(entry)} stopped in {seconds(report.elapsed_ms)}{report.escalated ? " — it ignored SIGTERM, so portwise used SIGKILL" : ""}.</p>
+        <h2 id="confirm-title">{cluster ? `Cluster ${cluster.name} stopped` : `Port ${entry?.port} is free`}</h2>
+        <p id="confirm-summary">{subject} stopped in {seconds(report.elapsed_ms)}{report.escalated ? " — it ignored SIGTERM, so portwise used SIGKILL" : ""}.</p>
       </div>
     {:else}
       <div class="top">
-        <FrameworkIcon {entry} size={40} />
+        {#if entry && !cluster}<FrameworkIcon {entry} size={40} />{:else}<span class="ctile"><Icon name="layers" size={20} /></span>{/if}
         <div class="tt">
           <h2 id="confirm-title">
-            {#if blocked}Can't stop :{entry.port} safely{:else}{verb} {title(entry)}?{/if}
+            {#if blocked}Can't stop {cluster ? cluster.name : `:${entry?.port}`} safely{:else}{verb} {subject}?{/if}
           </h2>
-          <div class="sub mono">:{entry.port} · {entry.process ? `${entry.process.name} · PID ${entry.process.pid}` : entry.container?.name ?? ""}</div>
+          {#if cluster}
+            <div class="sub">{CLUSTER_LABEL[cluster.kind]}{cluster.detail ? ` · ${cluster.detail}` : ""} · {cluster.nodes.length} services</div>
+          {:else if entry}
+            <div class="sub mono">:{entry.port} · {entry.process ? `${entry.process.name} · PID ${entry.process.pid}` : entry.container?.name ?? ""}</div>
+          {/if}
         </div>
         {#if !blocked}<span class="badge risk-{plan.risk}">{plan.risk} risk</span>{/if}
       </div>
       <p id="confirm-summary" class="summary selectable">{blocked ? blocked.message : plan.summary}</p>
 
+      {#if order.length > 1 && !blocked}
+        <div class="order" aria-label="Stop order">
+          <span class="ol">Order</span>
+          {#each order as o, i}{#if i > 0}<span class="arr" aria-hidden="true">→</span>{/if}<span class="chipo mono">{i + 1}. {o}</span>{/each}
+        </div>
+      {/if}
       {#if !blocked}
         <ol class="steps" aria-label="Plan">
           {#each plan.steps as s, i}
@@ -181,6 +198,11 @@
   .result p { color: var(--muted); margin: var(--sp-2) 0 0; }
   .big-check { width: 56px; height: 56px; margin: 0 auto var(--sp-4); border-radius: 50%; display: grid; place-items: center; background: var(--ok-soft); color: var(--ok); animation: pop 360ms var(--ease-spring); }
   @keyframes pop { from { transform: scale(0.5); opacity: 0; } }
+  .ctile { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex: none; }
+  .order { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 var(--sp-3); }
+  .ol { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; margin-right: 4px; }
+  .chipo { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
+  .arr { color: var(--muted); font-weight: 700; }
   .risk-low { color: var(--ok); background: var(--ok-soft); }
   .risk-medium { color: var(--warn); background: var(--warn-soft); }
   .risk-high { color: var(--danger); background: var(--danger-soft); }

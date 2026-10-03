@@ -26,6 +26,8 @@ export interface ProcessInfo {
   start_time: number;
   start_token: number;
   memory_bytes: number;
+  /** CPU usage since the previous scan (0 on the first scan). */
+  cpu_percent?: number;
 }
 
 export interface ProjectInfo {
@@ -33,6 +35,8 @@ export interface ProjectInfo {
   root: string;
   kind: string;
   git_branch: string | null;
+  workspace?: { name: string; root: string; kind: string } | null;
+  git_root?: string | null;
 }
 
 export interface ContainerInfo {
@@ -66,6 +70,15 @@ export interface PortEntry {
   is_dev: boolean;
   is_mine: boolean;
   protected: boolean;
+  tunnel?: TunnelInfo | null;
+}
+
+export interface TunnelInfo {
+  kind: "kubectl" | "ssh" | "cloudflared" | "ngrok";
+  target: string;
+  namespace: string | null;
+  context: string | null;
+  local_port?: number | null;
 }
 
 export interface Snapshot {
@@ -145,4 +158,91 @@ export interface AppInfo {
   version: string;
   platform: string;
   tray: boolean;
+  shortcut?: string | null;
 }
+
+// ---- topology (crates/portwise-core/src/topology/model.rs) ----
+
+export type NodeKind = "service" | "container" | "hidden" | "client" | "external";
+export type EdgeKind = "local" | "outbound" | "inbound";
+export type ClusterKind = "compose" | "kubernetes" | "supervisor" | "workspace" | "git";
+
+export interface NodePort {
+  port: number;
+  protocol: Protocol;
+  exposure: Exposure;
+  entry_id: string;
+}
+
+export interface GraphNode {
+  id: string;
+  kind: NodeKind;
+  label: string;
+  subtitle: string | null;
+  root_pid: number | null;
+  pids: number[];
+  ports: NodePort[];
+  framework: { name: string; category: Category } | null;
+  project: string | null;
+  project_root: string | null;
+  container: ContainerInfo | null;
+  tunnel: TunnelInfo | null;
+  cluster: string | null;
+  cpu_percent: number;
+  memory_bytes: number;
+  is_dev: boolean;
+  protected: boolean;
+}
+
+export interface GraphEdge {
+  id: string;
+  from: string;
+  to: string;
+  kind: EdgeKind;
+  port: number;
+  connections: number;
+  remotes: string[];
+}
+
+export interface Cluster {
+  id: string;
+  name: string;
+  kind: ClusterKind;
+  detail: string | null;
+  root: string | null;
+  nodes: string[];
+}
+
+export interface Graph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  clusters: Cluster[];
+  stats: { nodes: number; edges: number; clusters: number; connections: number };
+  taken_at_ms: number;
+}
+
+// ---- store / history ----
+
+export interface Config {
+  pins: { port: number; label: string | null }[];
+  notify: boolean;
+  notify_dev_only: boolean;
+  history_limit: number;
+}
+
+export interface HistoryEntry {
+  at_ms: number;
+  port: number;
+  protocol: Protocol;
+  label: string;
+  command: string[];
+  cwd: string | null;
+  project: string | null;
+  framework: string | null;
+  pid: number;
+}
+
+export type PortEvent =
+  | { event: "opened"; entry: PortEntry }
+  | { event: "closed"; entry: PortEntry }
+  | { event: "conflict"; port: number; protocol: Protocol; entries: PortEntry[] };

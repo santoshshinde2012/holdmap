@@ -1,6 +1,6 @@
 // Brand-ish monograms for frameworks/runtimes so rows are recognisable at a glance without
 // shipping logo assets. Colours are tuned so white text on them meets WCAG AA (≥ 4.5:1).
-import type { PortEntry } from "./types";
+import type { GraphNode, PortEntry } from "./types";
 
 export interface Brand {
   glyph: string;
@@ -74,6 +74,19 @@ export function brandFor(e: PortEntry): Brand & { kind: "container" | "brand" | 
   const hit = BRANDS.find(([re]) => re.test(name));
   if (hit) return { ...hit[1], kind: "brand" };
   return { ...B(initials(name), HUES[hash(name) % HUES.length]), kind: "generic" };
+}
+
+export type BrandKind = "container" | "brand" | "generic" | "hidden" | "external" | "client";
+
+/** The monogram for a topology node (same palette as rows). */
+export function brandForNode(n: GraphNode): Brand & { kind: BrandKind } {
+  if (n.kind === "external") return { ...B("◍", "#475467"), kind: "external" };
+  if (n.kind === "hidden") return { ...B("?", "#52525b"), kind: "hidden" };
+  const name = n.framework?.name ?? n.label;
+  const hit = BRANDS.find(([re]) => re.test(name));
+  const kind: BrandKind = n.kind === "container" ? "container" : n.kind === "client" ? "client" : hit ? "brand" : "generic";
+  if (hit) return { ...hit[1], kind };
+  return { ...B(initials(name), HUES[hash(name) % HUES.length]), kind };
 }
 
 /** WCAG relative luminance contrast ratio between two #rrggbb colours. */

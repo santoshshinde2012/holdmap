@@ -11,8 +11,13 @@
     onselect,
     onstop,
     onopen,
+    pinned = false,
+    links = 0,
   }: {
     entry: PortEntry;
+    pinned?: boolean;
+    /** Number of local services connected to/from this one (from the topology). */
+    links?: number;
     selected: boolean;
     busy: boolean;
     onselect: () => void;
@@ -42,7 +47,7 @@
   onkeydown={() => {}}
 >
   <div class="port">
-    <span class="num">{entry.port}</span>
+    <span class="num">{entry.port}{#if pinned}<span class="star" title="Pinned" aria-label="pinned"><Icon name="star" size={11} /></span>{/if}</span>
     <span class="meta"><span class="live" class:udp={entry.protocol === "udp"} class:other={entry.state !== "listen" && entry.protocol === "tcp"}></span>{entry.protocol} · {stateLabel}</span>
   </div>
 
@@ -62,6 +67,7 @@
   </div>
 
   <div class="badges">
+    {#if links}<span class="badge tone-violet" title="{links} connected service{links === 1 ? '' : 's'} — see the graph view"><Icon name="graph" size={11} />{links}</span>{/if}
     {#if entry.container}<span class="badge tone-blue"><Icon name="box" size={11} />{entry.container.runtime}</span>{/if}
     {#if exposed}
       <span class="badge tone-amber" title="Bound to {entry.addresses.join(', ')}: reachable from your network"><Icon name="globe" size={11} />Exposed</span>
@@ -85,6 +91,8 @@
 </div>
 
 <style>
+  .star { display: inline-flex; margin-left: 4px; color: var(--warn); vertical-align: 2px; }
+  .star :global(svg) { fill: currentColor; }
   .row {
     display: grid;
     grid-template-columns: 92px 32px minmax(0, 1fr) auto 112px;

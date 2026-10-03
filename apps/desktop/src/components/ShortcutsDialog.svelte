@@ -3,9 +3,9 @@
   const mod = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl";
   const groups: [string, [string[], string][]][] = [
     ["Navigate", [[[mod, "K"], "Command palette"], [["/"], "Search"], [["↑", "↓"], "Move selection (or J / K)"], [["Esc"], "Clear search · close"]]],
-    ["Act", [[["⌫"], "Stop selected (graceful)"], [["⇧", "⌫"], "Force kill selected"], [["O"], "Open in browser"], [["C"], "Copy URL"], [["R"], "Refresh now"]]],
+    ["Act", [[["⌫"], "Stop selected (graceful)"], [["⇧", "⌫"], "Force kill selected"], [["O"], "Open in browser"], [["P"], "Pin / unpin selected"], [["S"], "Stop the selected service's cluster"], [["C"], "Copy URL"], [["R"], "Refresh now"]]],
     ["Filter", [[["A"], "Listening ↔ all sockets"], [["T"], "Protocol: any → TCP → UDP"], [["D"], "Dev servers only"], [["M"], "Mine only"], [["E"], "Network-exposed only"]]],
-    ["App", [[["⇧", "L"], "Cycle theme (system/light/dark)"], [["?"], "Show this help"]]],
+    ["View", [[["G"], "List ↔ graph view"], [["H"], "Recently stopped (restart)"], [["⇧", "L"], "Cycle theme (system/light/dark)"], [["?"], "Show this help"]]],
   ];
   let el: HTMLDivElement | undefined = $state();
   $effect(() => el?.focus());

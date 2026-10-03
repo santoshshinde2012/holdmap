@@ -4,7 +4,7 @@ export interface Command {
   id: string;
   title: string;
   subtitle?: string;
-  group: "Ports" | "Actions" | "Filters" | "View";
+  group: "Ports" | "Actions" | "Filters" | "View" | "Settings";
   keywords?: string;
   shortcut?: string[];
   icon?: string;
