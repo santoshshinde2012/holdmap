@@ -159,6 +159,7 @@ export interface AppInfo {
   platform: string;
   tray: boolean;
   shortcut?: string | null;
+  config_dir?: string;
 }
 
 // ---- topology (crates/portwise-core/src/topology/model.rs) ----
@@ -228,6 +229,10 @@ export interface Config {
   notify: boolean;
   notify_dev_only: boolean;
   history_limit: number;
+  scan_interval_secs: number;
+  /** Global shortcut preset id ("alt-p", "alt-space", "alt-k", "off"). */
+  hotkey: string;
+  recent_hosts: string[];
 }
 
 export interface HistoryEntry {

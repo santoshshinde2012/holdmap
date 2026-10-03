@@ -12,7 +12,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function appInfo(): Promise<AppInfo> {
-  if (!isTauri) return { version: "0.1.0", platform: "browser", tray: false, shortcut: null };
+  if (!isTauri) return { version: "0.1.0", platform: "browser", tray: false, shortcut: mockShortcut, config_dir: "~/.config/portwise" };
   return call("app_info");
 }
 
@@ -30,7 +30,7 @@ export async function explain(port: number): Promise<Explanation> {
 }
 
 export async function plan(target: string, force: boolean, allowProtected = false): Promise<ActionPlan> {
-  if (!isTauri) return mockPlan(target, force);
+  if (!isTauri) return mockPlan(target, force, allowProtected);
   return call("plan", { target, force, allowProtected });
 }
 
@@ -73,7 +73,9 @@ export async function topology(all: boolean): Promise<Graph> {
   return call("topology", { all });
 }
 
-let mockConfig: Config = { pins: [{ port: 3000, label: null }], notify: true, notify_dev_only: true, history_limit: 200 };
+let mockConfig: Config = { pins: [{ port: 3000, label: null }], notify: true, notify_dev_only: true, history_limit: 200, scan_interval_secs: 4, hotkey: "alt-p", recent_hosts: ["devbox", "deploy@staging.internal"] };
+let mockShortcut: string | null = "Ctrl+Alt+P";
+const MOCK_HOTKEYS = [{ id: "alt-p", label: "Ctrl+Alt+P" }, { id: "alt-space", label: "Ctrl+Alt+Space" }, { id: "alt-k", label: "Ctrl+Alt+K" }, { id: "off", label: "Off" }];
 const mockHistory: HistoryEntry[] = [];
 
 export async function getConfig(): Promise<Config> {
@@ -114,4 +116,53 @@ export async function restart(entry: HistoryEntry): Promise<{ pid: number; comma
 export async function autostart(enable?: boolean): Promise<boolean> {
   if (!isTauri) return false;
   return call("autostart", { enable: enable ?? null });
+}
+
+/** Pin `port` or update its label. */
+export async function setPin(port: number, label: string | null): Promise<Config> {
+  if (!isTauri) {
+    const pins = mockConfig.pins.filter((p) => p.port !== port);
+    pins.push({ port, label: label?.trim() || null });
+    return (mockConfig = { ...mockConfig, pins: pins.sort((a, b) => a.port - b.port) });
+  }
+  return call("set_pin", { port, label: label?.trim() || null });
+}
+
+export async function unpin(port: number): Promise<Config> {
+  if (!isTauri) return (mockConfig = { ...mockConfig, pins: mockConfig.pins.filter((p) => p.port !== port) });
+  return call("unpin", { port });
+}
+
+export async function setPreferences(p: { scanIntervalSecs?: number; historyLimit?: number }): Promise<Config> {
+  if (!isTauri) {
+    await delay(150);
+    return (mockConfig = { ...mockConfig, scan_interval_secs: p.scanIntervalSecs ?? mockConfig.scan_interval_secs, history_limit: p.historyLimit ?? mockConfig.history_limit });
+  }
+  return call("set_preferences", { scanIntervalSecs: p.scanIntervalSecs ?? null, historyLimit: p.historyLimit ?? null });
+}
+
+export async function hotkeys(): Promise<{ id: string; label: string }[]> {
+  if (!isTauri) return MOCK_HOTKEYS;
+  return call("hotkeys");
+}
+
+/** Switch the global shortcut; resolves to the active label (null when off). */
+export async function setHotkey(preset: string): Promise<string | null> {
+  if (!isTauri) {
+    mockConfig = { ...mockConfig, hotkey: preset };
+    return (mockShortcut = MOCK_HOTKEYS.find((h) => h.id === preset && h.id !== "off")?.label ?? null);
+  }
+  return call("set_hotkey", { preset });
+}
+
+/** Read-only scan of another machine over SSH. */
+export async function remoteScan(host: string): Promise<Snapshot> {
+  if (!isTauri) {
+    await delay(900);
+    if (/fail|offline/.test(host)) throw new Error(`ssh ${host} failed or timed out: ssh: connect to host ${host} port 22: Connection refused`);
+    mockConfig = { ...mockConfig, recent_hosts: [host, ...mockConfig.recent_hosts.filter((h) => h !== host)].slice(0, 6) };
+    const entries = MOCK_SNAPSHOT.entries.filter((e) => e.process && !e.container).slice(0, 7).map((e) => ({ ...e, id: "r:" + e.id, user: e.port < 1024 ? "root" : "deploy", project: null }));
+    return { ...MOCK_SNAPSHOT, entries, scan_ms: 212, taken_at_ms: Date.now(), platform: `remote:${host}` };
+  }
+  return call("remote_scan", { host });
 }
