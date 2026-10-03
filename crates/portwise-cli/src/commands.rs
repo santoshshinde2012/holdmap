@@ -519,6 +519,16 @@ pub fn run(a: &RunArgs, docker: bool) -> Result<u8> {
                 let report = execute(&plan, &mut |l| eprintln!("  {} {}", dim("·"), dim(l)));
                 eprintln!("{}", render::report_line(&report));
                 freed = report.success;
+            } else if plan.risk == Risk::High {
+                eprintln!(
+                    "{} high-risk plan: not stopping it without --yes",
+                    style::arrow()
+                );
+            } else if !std::io::stdin().is_terminal() {
+                eprintln!(
+                    "{} not stopping it without confirmation in a non-interactive session (pass --yes)",
+                    style::arrow()
+                );
             }
         } else {
             eprint!("{}", render::plan_text(&plan));
