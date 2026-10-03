@@ -247,11 +247,6 @@ impl ProcessTable {
         self.user_names.get(&uid).cloned()
     }
 
-    /// User name of the current user.
-    pub fn current_user(&self) -> Option<&str> {
-        self.self_user.as_deref()
-    }
-
     /// Parent chain from the immediate parent upwards (cycle-safe).
     pub fn ancestors(&self, pid: u32) -> Vec<u32> {
         let mut out = Vec::new();
