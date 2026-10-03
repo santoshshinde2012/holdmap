@@ -336,10 +336,13 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
     );
 }
 
-pub(super) fn section(name: &str) -> Line<'static> {
+/// Section heading with a rule that fills the rest of the panel's inner `width` (never wraps).
+pub(super) fn section(name: &str, width: u16) -> Line<'static> {
+    let label = format!("{} ", name.to_uppercase());
+    let rule = usize::from(width).saturating_sub(label.chars().count());
     Line::from(vec![
-        Span::styled(format!("{} ", name.to_uppercase()), theme::port()),
-        Span::styled("─".repeat(40), Style::new().fg(Color::Indexed(238))),
+        Span::styled(label, theme::port()),
+        Span::styled("─".repeat(rule), Style::new().fg(Color::Indexed(238))),
     ])
 }
 
@@ -407,6 +410,7 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
         );
         return;
     };
+    let w = block.inner(area).width;
     let ex = app.explanation();
     let mut lines: Vec<Line> = Vec::new();
     if let Some(ex) = &ex {
@@ -417,7 +421,7 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
         lines.push(Line::raw(""));
     }
     if let Some(p) = &e.process {
-        lines.push(section("Process"));
+        lines.push(section("Process", w));
         lines.push(kv("Process", format!("{} (PID {})", p.name, p.pid)));
         if let Some(u) = &e.user {
             lines.push(kv("User", u.clone()));
@@ -438,7 +442,7 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
         }
         lines.push(Line::raw(""));
         if let Some(pr) = &e.project {
-            lines.push(section("Project"));
+            lines.push(section("Project", w));
             lines.push(kv(
                 "Project",
                 format!(
@@ -453,19 +457,19 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
             lines.push(kv("Path", tilde(&pr.root)));
             lines.push(Line::raw(""));
         } else if let Some(cwd) = &p.cwd {
-            lines.push(section("Project"));
+            lines.push(section("Project", w));
             lines.push(kv("Cwd", tilde(cwd)));
             lines.push(Line::raw(""));
         }
     }
     if let Some(c) = &e.container {
-        lines.push(section("Container"));
+        lines.push(section("Container", w));
         lines.push(kv("Container", format!("{} ({})", c.name, c.runtime)));
         lines.push(kv("Image", c.image.clone()));
         lines.push(kv("Mapping", format!("{} → {}", e.port, c.private_port)));
         lines.push(Line::raw(""));
     }
-    lines.push(section("Network"));
+    lines.push(section("Network", w));
     lines.push(Line::from(vec![
         Span::styled(format!("{:>9}  ", "Address"), theme::muted()),
         Span::styled(
@@ -487,7 +491,7 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
     ]));
     if let Some(ex) = &ex {
         lines.push(Line::raw(""));
-        lines.push(section("Plan"));
+        lines.push(section("Plan", w));
         lines.push(Line::from(vec![
             Span::styled("→ ", Style::new().fg(ACCENT)),
             Span::styled(ex.recommendation.clone(), Style::new().fg(ACCENT)),
@@ -761,4 +765,22 @@ fn draw_help(f: &mut Frame) {
         .title(Span::styled(" Keys ", theme::title()))
         .padding(Padding::uniform(1));
     f.render_widget(Paragraph::new(lines).block(block), area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::section;
+
+    #[test]
+    fn section_rule_fills_the_panel_width_exactly() {
+        for w in [12u16, 30, 57, 120] {
+            assert_eq!(section("Network", w).width(), usize::from(w));
+        }
+    }
+
+    #[test]
+    fn section_rule_never_overflows_a_tiny_panel() {
+        let l = section("Container", 4);
+        assert_eq!(l.width(), "CONTAINER ".len());
+    }
 }

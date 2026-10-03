@@ -150,6 +150,7 @@ fn draw_node(f: &mut Frame, app: &mut App, area: Rect) {
         return;
     };
     let block = block.title(Span::styled(format!(" {} ", n.display()), theme::title()));
+    let w = block.inner(area).width;
     let mut lines: Vec<Line> = Vec::new();
     if let Some(sub) = &n.subtitle {
         lines.push(Line::from(Span::styled(sub.clone(), theme::muted())));
@@ -179,7 +180,7 @@ fn draw_node(f: &mut Frame, app: &mut App, area: Rect) {
         Span::styled(names(&deps), Style::new().fg(Color::Green)),
     ]));
     lines.push(Line::raw(""));
-    lines.push(section("service"));
+    lines.push(section("service", w));
     let kind = format!("{:?}", n.kind).to_lowercase();
     lines.push(kv("kind", kind));
     if let Some(fw) = &n.framework {
@@ -227,7 +228,7 @@ fn draw_node(f: &mut Frame, app: &mut App, area: Rect) {
     let edges_in: Vec<_> = g.edges.iter().filter(|e| e.to == n.id).collect();
     if !edges_out.is_empty() {
         lines.push(Line::raw(""));
-        lines.push(section("depends on"));
+        lines.push(section("depends on", w));
         for e in edges_out {
             let to = g.node(&e.to).map(|n| n.label.clone()).unwrap_or_default();
             let what = if e.kind == EdgeKind::Outbound {
@@ -245,7 +246,7 @@ fn draw_node(f: &mut Frame, app: &mut App, area: Rect) {
     }
     if !edges_in.is_empty() {
         lines.push(Line::raw(""));
-        lines.push(section("used by"));
+        lines.push(section("used by", w));
         for e in edges_in {
             let from = g.node(&e.from).map(|n| n.label.clone()).unwrap_or_default();
             lines.push(Line::from(vec![
