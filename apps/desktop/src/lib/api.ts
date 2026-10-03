@@ -1,4 +1,4 @@
-import type { ActionPlan, AppInfo, Config, Explanation, Graph, HistoryEntry, Snapshot, StopReport } from "./types";
+import type { ActionPlan, AppInfo, Config, Explanation, Graph, HistoryEntry, PortEntry, Snapshot, StopReport } from "./types";
 import { MOCK_SNAPSHOT, mockExplain, mockPlan, mockStop, mockTopology } from "./mock";
 
 /** True inside the Tauri webview; false in a plain browser (`npm run dev`), where mocks are used. */
@@ -19,7 +19,7 @@ export async function appInfo(): Promise<AppInfo> {
 export async function scan(all: boolean): Promise<Snapshot> {
   if (!isTauri) {
     await delay(250);
-    return { ...MOCK_SNAPSHOT, entries: [...MOCK_SNAPSHOT.entries], taken_at_ms: Date.now() };
+    return { ...MOCK_SNAPSHOT, entries: MOCK_SNAPSHOT.entries.map(mockUsage), taken_at_ms: Date.now() };
   }
   return call("scan", { all });
 }
@@ -165,4 +165,13 @@ export async function remoteScan(host: string): Promise<Snapshot> {
     return { ...MOCK_SNAPSHOT, entries, scan_ms: 212, taken_at_ms: Date.now(), platform: `remote:${host}` };
   }
   return call("remote_scan", { host });
+}
+
+/** Browser demo only: a plausible, gently moving CPU figure per process so sparklines have a shape. */
+function mockUsage(e: PortEntry): PortEntry {
+  if (!e.process) return e;
+  const base = ((e.port * 7919) % 23) / 2 + 0.4;
+  const t = Date.now() / 4000 + e.port;
+  const cpu = Math.max(0, base * (1 + 0.55 * Math.sin(t) + 0.3 * Math.sin(t * 2.7)) + Math.random() * 0.6);
+  return { ...e, process: { ...e.process, cpu_percent: Math.round(cpu * 10) / 10 } };
 }

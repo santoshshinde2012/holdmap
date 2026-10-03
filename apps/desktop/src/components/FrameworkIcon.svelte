@@ -20,7 +20,7 @@
   {:else}
     {b.glyph}
   {/if}
-  {#if b.kind === "container"}<span class="corner"><Icon name="box" size={9} /></span>{/if}
+  {#if b.kind === "container"}<span class="corner" class:sm={size < 28}><Icon name="box" size={size < 28 ? 7 : 9} /></span>{/if}
 </span>
 
 <style>
@@ -32,6 +32,7 @@
     letter-spacing: -0.02em; /* type-exempt: optical tracking of the monogram */
     box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.12), 0 1px 2px rgb(0 0 0 / 0.12);
   }
+  .corner.sm { width: 12px; height: 12px; right: -3px; bottom: -3px; border-radius: 4px; border-width: 1.5px; }
   .tile.hidden { background: var(--surface-2); color: var(--muted); box-shadow: inset 0 0 0 1px var(--border); }
   .corner {
     position: absolute; right: -4px; bottom: -4px; width: 16px; height: 16px; border-radius: 6px;

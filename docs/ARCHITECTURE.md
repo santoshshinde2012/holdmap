@@ -156,12 +156,14 @@ flowchart TB
     GV["GraphView.svelte<br/>@xyflow/svelte"]
     NODES["components/graph/<br/>ServiceNode · ClusterNode · TrafficEdge · FitOnChange"]
     LG["lib/graph.ts<br/>dagre layered · force · toFlow · related · sections"]
-    OTHER["detail/DetailPane · Settings · Pin · Remote · Confirm · History · PortRow"]
+    OTHER["detail/DetailPane · Settings · Pin · Remote · Confirm · History"]
+    LIST["components/list/<br/>PortRow · GroupHeader · StatusDot · RowBadges · Sparkline<br/>(view model: lib/rows.ts)"]
     KIT["components/ui/<br/>UI kit (see below)"]
     API["lib/api.ts (invoke) · lib/mock.ts (browser dev)"]
     APP --> GV --> NODES
     GV --> LG
     APP --> OTHER --> KIT
+    APP --> LIST --> KIT
     APP --> API
   end
   API -- "Tauri IPC" --> CMD
@@ -187,6 +189,34 @@ control in both themes (`src/dev/Gallery.svelte`).
 | `Button` · `IconButton` · `Kbd` | variants primary / secondary / ghost / soft / danger / danger-outline; xs 24 · sm 28 · md 32 · lg 36; loading, `tip` |
 | `Dialog` | center / right sheet / top; focus trap + restore (`lib/focus.ts`), Esc + backdrop close, alertdialog |
 | `ScrollArea` · `CopyValue` · `Callout` · `Splitter` · `SettingRow` · `SettingsGroup` · `RichText` | scroll-edge shadows, truncate + tooltip + copy, resizable pane |
+
+### Port list
+
+The list is a `role=listbox` that keeps focus and points at the selected row with
+`aria-activedescendant`. Each section is a `role=group` named by its sticky `GroupHeader`.
+↑/↓/J/K, Home/End and PageUp/PageDown move the selection, and ←/→ collapse or expand the
+selected row's section. Collapsed sections are saved in `pw.collapsed` and skipped by the
+keyboard. Each row is an `option` with `aria-selected` and `aria-posinset`/`aria-setsize`.
+
+Every row uses the same fixed grid, so columns line up down the whole list:
+
+| status | port | tile + name · framework · ★ | meta (process · PID · branch) | badges (≤ 2, "+N") | CPU sparkline + memory | age |
+|---|---|---|---|---|---|---|
+| 8 px | 48 px | `minmax(160px, 1.25fr)` | `minmax(0, 1fr)` | 160 px, right-aligned | 84 px | 52 px |
+
+- **Narrow widths:** columns drop with container queries on the list itself (`container: portlist`),
+  so they follow the pane width rather than the window. Age goes at ≤ 900 px, usage at ≤ 740,
+  meta (and all but the top badge) at ≤ 600, and badges and the framework name at ≤ 420.
+- **Actions:** Open, Pin and Stop are absolutely positioned over the trailing data columns,
+  which fade out on hover or selection. Nothing reflows, and no width is kept empty for them.
+- **Density:** comfortable rows are 44 px and compact rows are 36 px. Change it in Settings → Appearance
+  or from the palette. The setting is stored in `pw.density`.
+- **States:** hover is a faint tint. Selected adds an accent tint and a 2.5 px accent bar on the left.
+  Keyboard focus adds a 2 px inset ring. Hairline separators are hidden next to tinted rows,
+  and there is no zebra striping.
+- **View model:** `lib/rows.ts` is pure and unit-tested. It holds the badge priority (exposed >
+  protected > container > owner > links), the "+N" split, status, meta, labels, the rolling
+  `UsageHistory` (24 CPU samples per entry) and the sparkline geometry.
 
 ### Typography
 

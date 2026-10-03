@@ -2,6 +2,7 @@
 // persists (Tauri commands) and applies. Every setter resolves when saved or rejects with a
 // user-facing message.
 import type { Config } from "./types";
+import type { Density } from "./rows";
 
 export type Theme = "system" | "light" | "dark";
 
@@ -9,6 +10,8 @@ export interface HotkeyPreset { id: string; label: string }
 
 export interface SettingsModel {
   theme: Theme;
+  /** Port list row height: comfortable (44px) or compact (36px). */
+  density: Density;
   config: Config;
   autostart: boolean;
   /** Label of the active global shortcut, or null when off / unavailable. */
@@ -21,6 +24,7 @@ export interface SettingsModel {
 
 export interface SettingsActions {
   setTheme(t: Theme): void;
+  setDensity(d: Density): void;
   setAutostart(on: boolean): Promise<void>;
   setHotkey(id: string): Promise<void>;
   setNotify(on: boolean, devOnly: boolean): Promise<void>;
