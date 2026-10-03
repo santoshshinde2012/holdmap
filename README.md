@@ -100,8 +100,8 @@ policy · `4` needs elevation. Every command takes `--json` for scripting. Colou
 ## TUI
 
 `portwise` (or `portwise tui`) opens a keyboard-first terminal UI. It refreshes every 2 s, has
-search, filters, sorting and a details pane that sits on the right on wide terminals and below the
-list on narrow ones.
+search, filters, sorting and a details pane (with PROCESS / PROJECT / NETWORK / PLAN sections) that sits on the right on wide terminals and below the
+list on narrow ones. A grouped footer always shows the keys that matter right now.
 
 <p align="center"><img src="docs/screenshots/tui.png" width="820" alt="portwise TUI" /></p>
 
@@ -121,20 +121,50 @@ list on narrow ones.
 
 ## Desktop & tray app
 
-A Tauri v2 + Svelte 5 app (`apps/desktop`). It includes:
+A Tauri v2 + Svelte 5 app (`apps/desktop`), designed to feel like a native, keyboard-first tool
+(think Linear or Raycast) while staying small: about 45 KB of gzipped JS and no UI framework beyond Svelte.
 
-- live list grouped into Dev servers / Containers / Databases / Apps / System
-- search and filter chips: Listening ↔ All, TCP/UDP, Dev, Mine, Exposed
-- a details pane with the explanation, process, project, container and network info, the exact stop plan, and copyable terminal commands
-- one-click **Stop** / **Force kill** with a confirmation dialog that shows the plan and live progress, then a "port is free" toast
-- light, dark and system themes, full keyboard control (`?` lists the shortcuts), empty, loading and error states, a "port N is free" answer when you search a free port, and ARIA roles, focus management and reduced-motion support
-- a **tray / menu-bar icon** listing your running dev servers. Closing the window keeps portwise in the tray.
+- **The port is the hero.** Each row leads with a large monospaced port number and a live status dot,
+  then a framework tile (Next.js, Vite, FastAPI, Postgres, Redis… each with its own AA-contrast colour),
+  then the project, git branch, PID and uptime. Clear badges mark *Exposed*, *Protected*, container runtime and other users' processes.
+- **Command palette** (`⌘K` / `Ctrl K`). Fuzzy search over every port and action: jump to a port, stop or open it,
+  find a free port, toggle filters, switch the theme or change the sort. The selected port ranks first.
+- **Details panel.** A plain-English summary with a *Recommended* or *Blocked* callout, a
+  **"What Stop will signal"** process-chain diagram (`npm run dev → sh → node`, with the holder marked),
+  sections for process, project, container and network, and copyable terminal commands.
+- **Quick stop you can trust.** `⌫` or the Stop button opens a confirmation listing the exact steps and their risk.
+  Then you see live progress (step states, a grace-period bar, an activity log), a "Port N is free" success state, and a
+  toast with a *Copy restart command* action. Selection moves to the next row, so you can keep going with the keyboard.
+- **States that help.** Skeleton rows match the real layout, an animated radar empty state appears, searching a free
+  port answers "Port 4321 is free" with a ready-to-copy `portwise run` command, and errors are actionable.
+- **First-run hints**: a dismissable welcome card teaches `⌘K`, `/` and `⌫`.
+- **Design system**: tokens for spacing, radius, type scale, colour and motion, plus light and dark themes checked for WCAG AA contrast
+  (unit-tested). It has visible focus rings, ARIA roles (listbox, combobox, dialog, live regions) and `prefers-reduced-motion` support.
+- **Responsive**: below 900 px the details pane becomes a slide-over drawer.
+- **Tray / menu-bar icon.** It shows "N dev servers running" and each one (`● :3000  Next.js · shop-web`), plus
+  "N ports in use · M network-exposed". Closing the window keeps portwise in the tray.
 
-| Light | Dark |
+| | |
 |---|---|
-| ![](docs/screenshots/desktop-light.png) | ![](docs/screenshots/desktop-dark.png) |
-| ![](docs/screenshots/desktop-stopping.png) | ![](docs/screenshots/desktop-explain-blocked.png) |
-| ![](docs/screenshots/desktop-stopped-toast.png) | ![](docs/screenshots/desktop-shortcuts.png) |
+| ![Light](docs/screenshots/desktop-light.png) | ![Dark](docs/screenshots/desktop-dark.png) |
+| ![Command palette](docs/screenshots/desktop-command-palette.png) | ![Stop confirmation](docs/screenshots/desktop-stopping.png) |
+| ![Stop success](docs/screenshots/desktop-stop-success.png) | ![Port freed toast](docs/screenshots/desktop-stopped-toast.png) |
+| ![First run](docs/screenshots/desktop-onboarding.png) | ![Needs elevation](docs/screenshots/desktop-explain-blocked.png) |
+| ![Free port answer](docs/screenshots/desktop-free-port.png) | ![Keyboard shortcuts](docs/screenshots/desktop-shortcuts.png) |
+
+<p align="center"><img src="docs/screenshots/desktop-narrow.png" width="420" alt="Narrow window: details as a drawer" /></p>
+
+<details>
+<summary>Before and after the UI/UX polish pass</summary>
+
+| Before | After |
+|---|---|
+| ![](docs/screenshots/before/desktop-light.png) | ![](docs/screenshots/desktop-light.png) |
+| ![](docs/screenshots/before/desktop-dark.png) | ![](docs/screenshots/desktop-dark.png) |
+| ![](docs/screenshots/before/desktop-stopping.png) | ![](docs/screenshots/desktop-stopping.png) |
+| ![](docs/screenshots/before/tui.png) | ![](docs/screenshots/tui.png) |
+
+</details>
 
 Run it from source:
 

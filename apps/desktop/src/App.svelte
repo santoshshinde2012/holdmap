@@ -44,6 +44,7 @@
   let now = $state(Date.now());
   let toastSeq = 0;
   const mod = $derived(isMac ? "⌘" : "Ctrl");
+  const modK = $derived(isMac ? "⌘K" : "Ctrl K");
 
   const resolvedTheme = $derived(theme === "system" ? (systemDark ? "dark" : "light") : theme);
   $effect(() => {
@@ -147,12 +148,16 @@
     const c = confirm;
     c.phase = "running";
     busy[c.entry.id] = true;
+    // Keep keyboard flow: after a successful stop, the selection moves to the neighbouring row.
+    const idx = ordered.findIndex((e) => e.id === c.entry.id);
+    const neighbour = idx >= 0 ? (ordered[idx + 1] ?? ordered[idx - 1])?.id ?? null : null;
     try {
       const r = await api.stop(stopTarget(c.entry), c.force, c.allowProtected);
       c.report = r;
       if (!c.log.length) c.log = r.log;
       if (r.freed) {
         c.phase = "done";
+        if (selectedId === c.entry.id) selectedId = neighbour;
         const restart = restartCommand(c);
         setTimeout(() => {
           if (confirm === c) confirm = null;
@@ -220,12 +225,13 @@
     const cmds: Command[] = [];
     const q = queryPort;
     for (const e of (snapshot?.entries ?? []).slice(0, 60)) {
+      const boost = (selected?.id === e.id ? 12 : 0) + (e.is_dev ? 3 : 0);
       const sub = `${e.framework?.name ?? e.process?.name ?? ""}${e.project ? ` · ${e.project.name}` : ""}`;
-      cmds.push({ id: `go-${e.id}`, group: "Ports", icon: "hash", title: `:${e.port}  ${title(e)}`, subtitle: sub, keywords: `${e.port} ${e.label} ${e.process?.name ?? ""}`, run: () => { clearFilters(); selectEntry(e); } });
+      cmds.push({ id: `go-${e.id}`, group: "Ports", icon: "hash", title: `:${e.port}  ${title(e)}`, subtitle: sub, boost, keywords: `${e.port} ${e.label} ${e.process?.name ?? ""}`, run: () => { clearFilters(); selectEntry(e); } });
       if ((e.process || e.container) && !e.protected && e.is_mine)
-        cmds.push({ id: `stop-${e.id}`, group: "Actions", icon: "stop", danger: true, title: `Stop :${e.port}  ${title(e)}`, subtitle: "asks first", keywords: `kill ${e.port} ${e.label}`, run: () => requestStop(e, false) });
+        cmds.push({ id: `stop-${e.id}`, group: "Actions", icon: "stop", danger: true, title: `Stop :${e.port}  ${title(e)}`, subtitle: selected?.id === e.id ? "selected · asks first" : "asks first", boost, keywords: `kill ${e.port} ${e.label}`, run: () => requestStop(e, false) });
       if (canOpen(e))
-        cmds.push({ id: `open-${e.id}`, group: "Actions", icon: "external", title: `Open :${e.port} in browser`, subtitle: title(e), keywords: `browser ${e.port}`, run: () => open(e) });
+        cmds.push({ id: `open-${e.id}`, group: "Actions", icon: "external", title: `Open :${e.port} in browser`, subtitle: title(e), boost, keywords: `browser ${e.port}`, run: () => open(e) });
     }
     if (q) cmds.unshift({ id: "check", group: "Ports", icon: "search", title: `Check port ${q}`, subtitle: "who's using it?", keywords: `${q} why explain`, run: () => { filters.query = String(q); } });
     cmds.push(
@@ -363,7 +369,7 @@
         <span class="pulse" class:on={refreshing}></span>{#if ago === null}starting…{:else if ago < 4}Live{:else}{ago}s ago{/if}
       </span>
       <button class="cmdk" onclick={() => (showPalette = true)} aria-label="Open command palette ({mod}K)" aria-keyshortcuts="Meta+K Control+K">
-        <Icon name="command" size={13} />Commands<kbd>{mod}K</kbd>
+        <Icon name="command" size={13} />Commands<kbd>{modK}</kbd>
       </button>
       <button class="icon-btn" onclick={() => refresh(true)} aria-label="Refresh (R)" title="Refresh (R)"><span class:spin={refreshing} style="display:inline-flex"><Icon name="refresh" size={16} /></span></button>
       <button class="icon-btn" onclick={cycleTheme} aria-label="Theme: {theme}. Click to change (Shift+L)" title="Theme: {theme} (⇧L)"><Icon name={themeIcon} size={16} /></button>
@@ -471,7 +477,7 @@
     {#if snapshot}
       <span><b>{stats.total}</b> ports</span><span class="g"><b>{stats.dev}</b> dev</span>{#if stats.exposed}<span class="w"><b>{stats.exposed}</b> exposed</span>{/if}
       <span class="sp"></span>
-      <span class="hints"><kbd>↑↓</kbd> move <kbd>⌫</kbd> stop <kbd>O</kbd> open <kbd>{mod}K</kbd> commands <kbd>?</kbd> help</span>
+      <span class="hints"><kbd>↑↓</kbd> move <kbd>⌫</kbd> stop <kbd>O</kbd> open <kbd>{modK}</kbd> commands <kbd>?</kbd> help</span>
     {/if}
   </footer>
 </div>

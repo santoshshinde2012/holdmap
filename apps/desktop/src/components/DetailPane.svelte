@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modKey = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl";
   import { fade } from "svelte/transition";
   import Icon from "./Icon.svelte";
   import FrameworkIcon from "./FrameworkIcon.svelte";
@@ -53,7 +54,7 @@
       </div>
       <h3>Select a port</h3>
       <p>See who owns it, why it's busy, and exactly what “Stop” will do — before anything happens.</p>
-      <div class="ph-keys"><kbd>↑</kbd><kbd>↓</kbd> to move · <kbd>⌘</kbd><kbd>K</kbd> for commands</div>
+      <div class="ph-keys"><span><kbd>↑</kbd><kbd>↓</kbd> to move</span><span aria-hidden="true">·</span><span><kbd>{modKey}</kbd><kbd>K</kbd> for commands</span></div>
     </div>
   {:else}
     {#key entry.id}
@@ -62,7 +63,7 @@
           <FrameworkIcon {entry} size={44} />
           <div class="who">
             <div class="hero"><span class="colon">:</span>{entry.port}<span class="proto">{entry.protocol}</span></div>
-            <h2 title={title(entry)}>{title(entry)}{#if entry.framework && entry.framework.name !== title(entry)}<span class="fwn"> · {entry.framework.name}</span>{/if}</h2>
+            <h2 title={title(entry)}>{title(entry)}{#if entry.framework && entry.framework.name !== title(entry)}<span class="fwn">· {entry.framework.name}</span>{/if}</h2>
           </div>
           {#if onclose}<button class="icon-btn close" aria-label="Close details" onclick={onclose}><Icon name="x" size={16} /></button>{/if}
         </header>
@@ -211,7 +212,7 @@
   .placeholder { margin: auto; text-align: center; max-width: 280px; color: var(--muted); padding: var(--sp-6); }
   .placeholder h3 { color: var(--text); margin: var(--sp-5) 0 var(--sp-1); font-size: var(--fs-md); }
   .placeholder p { margin: 0 0 var(--sp-4); }
-  .ph-keys { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); }
+  .ph-keys { display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px; white-space: nowrap; font-size: var(--fs-xs); }
   .ph-art { position: relative; width: 84px; height: 84px; margin: 0 auto; display: grid; place-items: center; }
   .ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid var(--accent); opacity: 0; animation: ping 2.8s var(--ease) infinite; }
   .ring.r2 { animation-delay: 1.4s; }
@@ -221,7 +222,8 @@
   .head { display: flex; gap: var(--sp-3); align-items: center; padding: var(--sp-5) var(--sp-5) var(--sp-3); }
   .who { min-width: 0; flex: 1; }
   .hero { font-family: var(--mono); font-size: var(--fs-hero); font-weight: 700; letter-spacing: -0.04em; line-height: 1; display: flex; align-items: baseline; }
-  .colon { color: var(--faint); margin-right: 1px; }
+  .colon { color: var(--faint); margin-right: -0.14em; }
+  .fwn { margin-left: 6px; }
   .hero .proto { font-family: var(--font); font-size: var(--fs-2xs); text-transform: uppercase; color: var(--muted); letter-spacing: 0.08em; font-weight: 650; margin-left: var(--sp-2); }
   .who h2 { margin: 6px 0 0; font-size: var(--fs-md); font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .fwn { color: var(--muted); font-weight: 500; }
@@ -256,8 +258,8 @@
   .callout.warn strong, .callout.warn :global(svg) { color: var(--warn); }
   .callout.subtle { padding: 8px 10px; font-size: var(--fs-xs); margin-top: var(--sp-2); }
 
-  .chain { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
-  .chain li { display: flex; gap: var(--sp-3); position: relative; padding: 6px 0 6px 2px; }
+  .chain { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .chain li { display: flex; min-width: 0; gap: var(--sp-3); position: relative; padding: 6px 0 6px 2px; }
   .chain li:not(:last-child)::after { content: ""; position: absolute; left: 7px; top: 22px; bottom: -6px; width: 2px; background: var(--border-strong); border-radius: 2px; }
   .node { flex: none; width: 12px; height: 12px; margin-top: 3px; border-radius: 50%; border: 2px solid var(--border-strong); background: var(--surface); position: relative; z-index: 1; }
   .holder .node { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

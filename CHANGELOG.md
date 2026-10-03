@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
 
+## Unreleased: UI/UX polish
+
+- Desktop: added a design system (spacing, radius, type and motion tokens) with AA-checked light and dark themes, a ⌘K command palette,
+  framework tiles, a hero port number, status badges, a process-chain view in the details pane, a stop flow with progress and success states,
+  toasts with actions, skeleton rows, an animated empty state, a free-port answer, first-run hints, a narrow-window drawer, reduced-motion support and a richer tray menu.
+- New `free_port` Tauri command.
+- TUI: added section headings in the details pane, an accent port column, and grouped context-aware footer hints.
+- CLI: the port column is now bold cyan.
+
 ## [Unreleased]
 
 ## [0.1.0] - 2026-10-03
