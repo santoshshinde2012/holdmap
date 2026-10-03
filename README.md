@@ -80,7 +80,7 @@ available for macOS, Linux and Windows:
 
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-installer.sh | sh
-brew install santoshshinde2012/tap/portwise
+brew install santoshshinde2012/tap/portwise   # once the formula is published to the tap
 powershell -c "irm https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-installer.ps1 | iex"
 ```
 
