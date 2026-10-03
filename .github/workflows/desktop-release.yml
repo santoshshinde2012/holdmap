@@ -176,7 +176,7 @@ jobs:
           uploadUpdaterJson: ${{ needs.plan.outputs.updater == 'true' }}
           updaterJsonPreferNsis: true
           uploadWorkflowArtifacts: ${{ needs.plan.outputs.tag == '' }}
-          workflowArtifactNamePattern: portwise-desktop-${{ matrix.name }}-[name]
+          workflowArtifactNamePattern: portwise-desktop-${{ matrix.name }}-[bundle] # [name] is the product name, the same for every bundle
 
       - name: Collect the installers
         id: files
