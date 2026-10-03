@@ -28,8 +28,9 @@ targets = [
   "x86_64-unknown-linux-musl",
   "x86_64-pc-windows-msvc",
 ]
-# Path that installers should place binaries in
-install-path = "CARGO_HOME"
+# Where the installers put the binary: ~/.local/bin (%USERPROFILE%\.local\bin on Windows), not
+# ~/.cargo/bin, so it doesn't look like a Rust tool. v0.1.0 installed into ~/.cargo/bin.
+install-path = "~/.local/bin"
 # Whether to install an updater program
 install-updater = false
 # Build only the CLI package, not the whole workspace (the desktop crate needs WebKitGTK).
