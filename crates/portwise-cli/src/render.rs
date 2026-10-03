@@ -89,7 +89,7 @@ pub fn list_table(entries: &[&PortEntry], wide: bool, all_states: bool) -> Strin
         .iter()
         .map(|e| {
             let mut r = vec![
-                Cell::new(e.port.to_string(), S::Bold),
+                Cell::new(e.port.to_string(), S::BoldCyan),
                 Cell::new(e.protocol.to_string(), S::Dim),
             ];
             if all_states {

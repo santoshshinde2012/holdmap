@@ -34,3 +34,12 @@ describe("command palette ranking", () => {
     expect(rank("", cmds)).toHaveLength(4);
   });
 });
+
+describe("palette boost", () => {
+  it("ranks boosted commands (selected port) first among equal matches", async () => {
+    const { rank } = await import("./palette");
+    const mk = (id: string, title: string, boost = 0) => ({ id, title, group: "Actions" as const, boost, run: () => {} });
+    const out = rank("stop", [mk("a", "Stop :6080 novnc"), mk("b", "Stop :3000 shop-web", 12)]);
+    expect(out[0].id).toBe("b");
+  });
+});

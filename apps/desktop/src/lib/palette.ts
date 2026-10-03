@@ -9,6 +9,8 @@ export interface Command {
   shortcut?: string[];
   icon?: string;
   danger?: boolean;
+  /** Added to the fuzzy score when the command matches (e.g. the selected port, dev servers). */
+  boost?: number;
   run: () => void;
 }
 
@@ -43,6 +45,7 @@ export function rank(query: string, commands: Command[], limit = 40): Command[] 
       ),
     }))
     .filter((x) => x.s >= 0)
+    .map((x) => ({ ...x, s: x.s + (x.c.boost ?? 0) }))
     .sort((a, b) => b.s - a.s)
     .slice(0, limit)
     .map((x) => x.c);
