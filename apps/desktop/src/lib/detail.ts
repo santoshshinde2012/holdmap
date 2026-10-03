@@ -5,8 +5,6 @@ import type { TabItem } from "../components/ui/Tabs.svelte";
 import { canOverride } from "./format";
 
 export type DetailTab = "overview" | "connections" | "process" | "network" | "commands";
-export const DETAIL_TABS: DetailTab[] = ["overview", "connections", "process", "network", "commands"];
-
 export interface Connections { deps: number; users: number; cluster: boolean }
 
 /** Tabs for an entry; Connections only when it is part of the graph, Process only when there is one. */

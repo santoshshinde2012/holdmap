@@ -4,7 +4,6 @@ import type { PortEntry } from "./types";
 import { humanBytes, title, uptime } from "./format";
 
 export type Density = "comfortable" | "compact";
-export const DENSITIES: Density[] = ["comfortable", "compact"];
 /** Row heights in px; mirrored by `--row-h` in the list CSS. */
 export const ROW_HEIGHT: Record<Density, number> = { comfortable: 44, compact: 36 };
 

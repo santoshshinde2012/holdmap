@@ -1,4 +1,4 @@
-import type { ActionPlan, Category, HttpInfo, Owner, PortEntry, Step } from "./types";
+import type { ActionPlan, Category, HttpInfo, PortEntry, Step } from "./types";
 
 export type Group = "dev" | "containers" | "data" | "apps" | "system";
 
@@ -47,12 +47,6 @@ export function subtitle(e: PortEntry): string {
   else if (e.pid) bits.push(`PID ${e.pid}`);
   else bits.push("process hidden — needs elevation");
   return bits.join(" · ");
-}
-
-export function addressLabel(e: PortEntry): string {
-  if (e.exposure === "loopback") return "localhost";
-  if (e.exposure === "all_interfaces") return "all interfaces";
-  return e.addresses.join(", ");
 }
 
 export function command(e: PortEntry): string {
@@ -119,31 +113,6 @@ export function describeStep(s: Step): string {
       return `Run \`${[s.program, ...s.args].join(" ")}\` — ${s.reason}`;
     case "verify_free":
       return `Check that ${s.protocol.toUpperCase()} port ${s.port} is free (up to ${seconds(s.timeout_ms)})`;
-  }
-}
-
-export function ownerLabel(o: Owner): string {
-  switch (o.kind) {
-    case "free":
-      return "Nothing";
-    case "process":
-      return `${o.name} (PID ${o.pid})`;
-    case "process_tree":
-      return `${o.root_name} and ${o.pids.length - 1} child process${o.pids.length === 2 ? "" : "es"}`;
-    case "container":
-      return `Container ${o.container.name}`;
-    case "supervised":
-      return `${o.name} (managed by a service manager)`;
-    case "os_service":
-      return o.service;
-    case "protected":
-      return `${o.name} — ${o.reason}`;
-    case "hidden":
-      return `A process owned by ${o.user ?? "another user"}`;
-    case "reserved":
-      return `OS reservation ${o.start}–${o.end}`;
-    case "time_wait":
-      return `${o.connections} closing connection(s)`;
   }
 }
 
