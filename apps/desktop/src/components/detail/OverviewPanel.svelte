@@ -1,0 +1,118 @@
+<script lang="ts">
+  import Icon from "../Icon.svelte";
+  import Callout from "../ui/Callout.svelte";
+  import RichText from "../ui/RichText.svelte";
+  import Section from "./Section.svelte";
+  import type { Explanation, GraphNode, PortEntry, ProcRef } from "../../lib/types";
+  import { describeStep, humanBytes, tildify, uptime } from "../../lib/format";
+  import { tooltip } from "../../lib/tooltip";
+
+  let { entry, explanation, loading, node }: { entry: PortEntry; explanation: Explanation | null; loading: boolean; node: GraphNode | null } = $props();
+
+  const plan = $derived(explanation?.plan ?? null);
+  const blocked = $derived(plan?.blocked ?? null);
+  const chain = $derived.by((): ProcRef[] => {
+    const s = plan?.steps.find((x) => x.action === "signal_processes");
+    return s && s.action === "signal_processes" ? s.processes : [];
+  });
+  const otherSteps = $derived(plan ? plan.steps.filter((s) => s.action !== "signal_processes") : []);
+  const blockTitle: Record<string, string> = {
+    needs_elevation: "Needs administrator rights",
+    os_service: "Operating-system feature",
+    nothing_to_stop: "Nothing to stop",
+    protected: "Protected process",
+  };
+  const stats = $derived.by(() => {
+    const p = entry.process;
+    const out: { label: string; value: string; sub?: string; icon: string }[] = [];
+    if (uptime(entry)) out.push({ label: "Uptime", value: uptime(entry)!, icon: "clock" });
+    if (p?.memory_bytes) out.push({ label: "Memory", value: humanBytes(node && node.pids.length > 1 ? node.memory_bytes : p.memory_bytes), sub: node && node.pids.length > 1 ? `${node.pids.length} processes` : undefined, icon: "activity" });
+    if (p && p.cpu_percent !== undefined) out.push({ label: "CPU", value: `${(node?.cpu_percent ?? p.cpu_percent).toFixed(1)}%`, icon: "cpu" });
+    if (entry.project) out.push({ label: "Project", value: entry.project.name, sub: tildify(entry.project.root), icon: "folder" });
+    return out;
+  });
+</script>
+
+{#if loading && !explanation}
+  <div class="sk" aria-busy="true" aria-label="Loading explanation">
+    <div class="shimmer" style="height:14px;width:92%"></div><div class="shimmer" style="height:14px;width:70%"></div><div class="shimmer" style="height:52px;margin-top:6px"></div>
+  </div>
+{:else if explanation}
+  <div class="summary">
+    <p class="headline selectable"><RichText text={explanation.headline} /></p>
+    {#if blocked}
+      <Callout tone="warn" icon={blocked.kind === "needs_elevation" ? "lock" : "shield"} title={blockTitle[blocked.kind]}><p class="selectable"><RichText text={blocked.message} /></p></Callout>
+    {:else}
+      <Callout tone="tip" title="Recommended"><p class="selectable"><RichText text={explanation.recommendation} /></p></Callout>
+    {/if}
+  </div>
+{/if}
+
+{#if stats.length}
+  <div class="stats" class:four={stats.length === 4}>
+    {#each stats as s (s.label)}
+      <div class="stat" use:tooltip={s.sub ? { text: s.sub, onlyIfTruncated: false } : null}>
+        <span class="sl"><Icon name={s.icon} size={12} />{s.label}</span>
+        <span class="sv">{s.value}</span>
+        {#if s.sub}<span class="ss">{s.sub}</span>{/if}
+      </div>
+    {/each}
+  </div>
+{/if}
+
+{#if plan && !blocked && plan.steps.length}
+  <Section title={chain.length ? "What Stop will signal" : "What Stop will do"} icon="tree">
+    {#snippet aside()}<span class="badge risk-{plan.risk}">{plan.risk} risk</span>{/snippet}
+    <div class="plan">
+      {#if chain.length}
+        <ol class="chain">
+          {#each chain as p, i}
+            {@const holder = i === chain.length - 1}
+            <li class:holder>
+              <span class="node" aria-hidden="true"></span>
+              <div class="pc">
+                <div class="pl"><span class="pname">{p.name}</span><span class="pid">PID {p.pid}</span>{#if holder && chain.length > 1}<span class="holds">holds :{entry.port}</span>{/if}</div>
+                <div class="pcmd" use:tooltip={{ text: p.command, mono: true, onlyIfTruncated: true }}>{p.command}</div>
+              </div>
+            </li>
+          {/each}
+        </ol>
+      {/if}
+      <ol class="steps">
+        {#each chain.length ? otherSteps : plan.steps as s}<li><Icon name="check" size={12} /><span>{describeStep(s)}</span></li>{/each}
+      </ol>
+    </div>
+    {#each plan.warnings as w}<Callout tone="warn" size="sm">{w}</Callout>{/each}
+  </Section>
+{/if}
+
+<style>
+  .sk { display: grid; gap: 10px; }
+  .summary { display: grid; gap: var(--sp-3); }
+  .headline { margin: 0; font-size: var(--fs-md); line-height: 1.55; color: var(--text); font-weight: 500; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: var(--sp-5) 0 var(--sp-6); }
+  .stat { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; }
+  .sl { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-2xs); color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  .sv { font-size: var(--fs-md); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ss { font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .plan { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 14px; display: grid; gap: 10px; }
+  .chain { list-style: none; margin: 0; padding: 0; display: grid; }
+  .chain li { display: flex; gap: 12px; position: relative; padding: 5px 0; min-width: 0; }
+  .chain li:not(:last-child)::after { content: ""; position: absolute; left: 5px; top: 20px; bottom: -6px; width: 2px; background: var(--border-strong); border-radius: 2px; }
+  .node { flex: none; width: 12px; height: 12px; margin-top: 3px; border-radius: 50%; border: 2px solid var(--border-strong); background: var(--surface); position: relative; z-index: 1; }
+  .holder .node { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .pc { min-width: 0; flex: 1; }
+  .pl { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .pname { font-weight: 600; }
+  .pid { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .holds { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 999px; }
+  .pcmd { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .steps { list-style: none; margin: 0; padding: 10px 0 0; border-top: 1px dashed var(--border-strong); display: grid; gap: 6px; font-size: var(--fs-sm); color: var(--text-2); }
+  .chain:empty + .steps, .steps:first-child { border-top: 0; padding-top: 0; }
+  .steps:empty { display: none; }
+  .steps li { display: flex; gap: 8px; align-items: flex-start; }
+  .steps :global(svg) { color: var(--ok); margin-top: 3px; flex: none; }
+  .risk-low { color: var(--ok); background: var(--ok-soft); }
+  .risk-medium { color: var(--warn); background: var(--warn-soft); }
+  .risk-high { color: var(--danger); background: var(--danger-soft); }
+</style>

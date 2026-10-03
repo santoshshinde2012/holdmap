@@ -1,5 +1,8 @@
 <script lang="ts">
   import Icon from "./Icon.svelte";
+  import IconButton from "./ui/IconButton.svelte";
+  import Button from "./ui/Button.svelte";
+  import { tooltip } from "../lib/tooltip";
   import FrameworkIcon from "./FrameworkIcon.svelte";
   import type { PortEntry } from "../lib/types";
   import { canOpen, subtitle, title, uptime } from "../lib/format";
@@ -47,7 +50,7 @@
   onkeydown={() => {}}
 >
   <div class="port">
-    <span class="num">{entry.port}{#if pinned}<span class="star" title="Pinned" aria-label="pinned"><Icon name="star" size={11} /></span>{/if}</span>
+    <span class="num">{entry.port}{#if pinned}<span class="star" use:tooltip={"Pinned"} aria-label="pinned"><Icon name="star" size={11} /></span>{/if}</span>
     <span class="meta"><span class="live" class:udp={entry.protocol === "udp"} class:other={entry.state !== "listen" && entry.protocol === "tcp"}></span>{entry.protocol} · {stateLabel}</span>
   </div>
 
@@ -58,7 +61,7 @@
       <span class="title">{title(entry)}</span>
       {#if fw}<span class="fw">{fw}</span>{/if}
       {#if entry.project?.git_branch}
-        <span class="branch" title="git branch"><Icon name="branch" size={11} />{entry.project.git_branch}</span>
+        <span class="branch" use:tooltip={"Git branch"}><Icon name="branch" size={11} />{entry.project.git_branch}</span>
       {/if}
     </div>
     <div class="line2">
@@ -67,25 +70,21 @@
   </div>
 
   <div class="badges">
-    {#if links}<span class="badge tone-violet" title="{links} connected service{links === 1 ? '' : 's'} — see the graph view"><Icon name="graph" size={11} />{links}</span>{/if}
+    {#if links}<span class="badge tone-violet" use:tooltip={`${links} connected service${links === 1 ? "" : "s"} — see the graph view`}><Icon name="graph" size={11} />{links}</span>{/if}
     {#if entry.container}<span class="badge tone-blue"><Icon name="box" size={11} />{entry.container.runtime}</span>{/if}
     {#if exposed}
-      <span class="badge tone-amber" title="Bound to {entry.addresses.join(', ')}: reachable from your network"><Icon name="globe" size={11} />Exposed</span>
+      <span class="badge tone-amber" use:tooltip={`Bound to ${entry.addresses.join(", ")}: reachable from your network`}><Icon name="globe" size={11} />Exposed</span>
     {/if}
-    {#if entry.protected}<span class="badge" title="Protected: portwise won't stop this without an explicit override"><Icon name="lock" size={11} />Protected</span>{/if}
-    {#if !entry.is_mine && entry.user}<span class="badge" title="Owned by {entry.user}">{entry.user}</span>{/if}
+    {#if entry.protected}<span class="badge" use:tooltip={"Protected: portwise won't stop this without an explicit override"}><Icon name="lock" size={11} />Protected</span>{/if}
+    {#if !entry.is_mine && entry.user}<span class="badge" use:tooltip={`Owned by ${entry.user}`}>{entry.user}</span>{/if}
   </div>
 
   <div class="actions" class:visible={selected || busy}>
     {#if canOpen(entry)}
-      <button class="icon-btn" title="Open http://localhost:{entry.port} (O)" aria-label="Open port {entry.port} in browser" onclick={(e) => { e.stopPropagation(); onopen(); }}>
-        <Icon name="external" size={15} />
-      </button>
+      <IconButton icon="external" size="sm" label="Open in browser" kbd="O" onclick={(e) => { e.stopPropagation(); onopen(); }} tabindex={-1} />
     {/if}
     {#if stoppable}
-      <button class="btn sm danger-ghost stop" disabled={busy} aria-label="Stop port {entry.port}" title="Stop (⌫)" onclick={(e) => { e.stopPropagation(); onstop(); }}>
-        {#if busy}<span class="spin"><Icon name="refresh" size={12} /></span>Stopping{:else}<Icon name="stop" size={10} />Stop{/if}
-      </button>
+      <Button size="xs" variant="danger-outline" icon="stop" loading={busy} loadingText="Stopping" aria-label="Stop port {entry.port}" tip={{ text: "Stop", kbd: "⌫" }} tabindex={-1} onclick={(e) => { e.stopPropagation(); onstop(); }}>Stop</Button>
     {/if}
   </div>
 </div>
@@ -108,6 +107,7 @@
   }
   .row:hover { background: var(--row-hover); }
   .row.selected { background: var(--row-selected); }
+  :global(.list:focus-visible) .row.selected { box-shadow: inset 0 0 0 1.5px var(--ring); }
   .row.selected::before {
     content: ""; position: absolute; left: 4px; top: 14px; bottom: 14px; width: 3px; border-radius: 3px; background: var(--accent);
     animation: grow var(--dur-2) var(--ease);
@@ -135,7 +135,6 @@
   .badges { display: flex; gap: var(--sp-1); justify-content: flex-end; }
   .actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-1); opacity: 0; transform: translateX(4px); transition: opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease); }
   .row:hover .actions, .row:focus-within .actions, .actions.visible { opacity: 1; transform: none; }
-  .stop { min-width: 64px; }
 
   @media (max-width: 1100px) { .badges .badge:not(.tone-amber):not(.tone-blue) { display: none; } }
   @media (max-width: 760px) {
