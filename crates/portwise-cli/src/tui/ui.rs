@@ -101,7 +101,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
             .filter(|r| r.exposure == Exposure::AllInterfaces)
             .count();
         spans.push(Span::styled(
-            format!("{} ports", app.rows.len()),
+            portwise_core::util::count(app.rows.len(), "port", "ports"),
             theme::heading(),
         ));
         spans.push(Span::styled(

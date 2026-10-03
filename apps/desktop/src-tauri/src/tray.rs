@@ -94,8 +94,8 @@ fn build_tray_menu(
             app,
             "summary",
             format!(
-                "{} ports in use · {exposed} network-exposed",
-                s.entries.len()
+                "{} in use · {exposed} network-exposed",
+                portwise_core::util::count(s.entries.len(), "port", "ports")
             ),
             false,
             None::<&str>,

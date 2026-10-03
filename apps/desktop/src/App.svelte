@@ -155,7 +155,7 @@
       explanations = {};
       if (selectedId && !s.entries.some((e) => e.id === selectedId)) selectedId = null;
       loadTopology();
-      if (manual) toast("info", "Refreshed", `${s.entries.length} ports · scanned in ${s.scan_ms} ms`);
+      if (manual) toast("info", "Refreshed", `${s.entries.length} port${s.entries.length === 1 ? "" : "s"} · scanned in ${s.scan_ms} ms`);
     } catch (e) {
       error = String(e);
     } finally {

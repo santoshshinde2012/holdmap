@@ -98,9 +98,12 @@ fn draw_tree(f: &mut Frame, app: &mut App, area: Rect) {
         })
         .collect();
     let s = &g.stats;
+    let n = portwise_core::util::count;
     let title = format!(
-        " Graph · {} services · {} links · {} clusters ",
-        s.nodes, s.edges, s.clusters
+        " Graph · {} · {} · {} ",
+        n(s.nodes, "service", "services"),
+        n(s.edges, "link", "links"),
+        n(s.clusters, "cluster", "clusters")
     );
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
