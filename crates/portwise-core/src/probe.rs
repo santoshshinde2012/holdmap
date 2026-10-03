@@ -100,7 +100,16 @@ mod tests {
         assert_eq!(probe_tcp(port), ProbeResult::InUse);
         assert!(tcp_accepting(port));
         drop(l);
-        assert_eq!(probe_tcp(port), ProbeResult::Free);
+        // The kernel may take a moment to release the port, and parallel tests can briefly
+        // receive the same ephemeral port, so allow a short grace period.
+        let freed = (0..40).any(|_| {
+            let free = probe_tcp(port) == ProbeResult::Free;
+            if !free {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            free
+        });
+        assert!(freed, "port {port} was not released");
         let p = ephemeral_port().unwrap();
         assert!(p > 0);
     }
