@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cliCommands, detailTabs, glance, resolveTab, stopState } from "./detail";
+import { canRestart, cliCommands, curlCommand, detailTabs, glance, killCommand, peerLabel, projectFolder, resolveTab, stopState } from "./detail";
 import { MOCK_SNAPSHOT, mockExplain, mockPlan } from "./mock";
 
 const entry = (port: number) => MOCK_SNAPSHOT.entries.find((e) => e.port === port)!;
@@ -47,5 +47,27 @@ describe("at a glance", () => {
     expect(g.exposed.every((e) => e.exposure === "all_interfaces")).toBe(true);
     const ports = g.exposed.map((e) => e.port);
     expect(ports).toEqual([...ports].sort((a, b) => a - b));
+  });
+});
+
+describe("quick actions", () => {
+  const e = MOCK_SNAPSHOT.entries.find((x) => x.port === 3000)!;
+  it("builds copyable commands", () => {
+    expect(curlCommand(e)).toBe("curl -i http://localhost:3000/");
+    expect(killCommand(e, "macos")).toBe(`kill -TERM ${e.process!.pid}`);
+    expect(killCommand(e, "windows")).toBe(`taskkill /PID ${e.process!.pid}`);
+    const ctr = MOCK_SNAPSHOT.entries.find((x) => x.container)!;
+    expect(killCommand(ctr, "macos")).toBe(`docker stop ${ctr.container!.name}`);
+    expect(projectFolder(e)).toBe(e.project?.root ?? e.process?.cwd ?? null);
+  });
+  it("offers restart only for a stoppable process of yours", () => {
+    expect(canRestart(e, mockPlan("3000", false))).toBe(e.is_mine && !e.protected);
+    expect(canRestart(e, null)).toBe(false);
+    const ctr = MOCK_SNAPSHOT.entries.find((x) => x.container)!;
+    expect(canRestart(ctr, mockPlan(String(ctr.port), false))).toBe(false);
+  });
+  it("labels peers", () => {
+    expect(peerLabel({ address: "127.0.0.1", connections: 3, process: "Google Chrome" })).toBe("Google Chrome ×3");
+    expect(peerLabel({ address: "192.168.1.24", connections: 1, process: null })).toBe("192.168.1.24");
   });
 });

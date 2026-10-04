@@ -129,6 +129,16 @@ export interface ActionPlan {
   risk: Risk;
 }
 
+/** Who is connected to a listening port (portwise_core::details::Connections). */
+export interface Peer { address: string; connections: number; local: boolean; process: string | null; pid: number | null }
+export interface Connections { total: number; established: number; by_state: Record<string, number>; peers: Peer[]; more_peers: number }
+export interface TreeProcess { pid: number; name: string; command: string; depth: number; memory_bytes: number; cpu_percent: number }
+export interface ProcessTree { ancestors: TreeProcess[]; process: TreeProcess; children: TreeProcess[]; more_children: number }
+export type RiskLevel = "low" | "medium" | "high";
+export interface BindRisk { level: RiskLevel; title: string; explanation: string; fix: string | null }
+/** The lazily loaded extras for one listener (portwise_core::details::PortDetails). */
+export interface PortDetails { id: string; port: number; started_at: number | null; uptime_secs: number | null; connections: Connections; tree: ProcessTree | null; bind_risk: BindRisk }
+
 /** What an HTTP server on a local port answered (portwise_core::http::HttpInfo). */
 export interface HttpInfo {
   port: number;

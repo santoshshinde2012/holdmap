@@ -5,7 +5,9 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "@testing-library/svelte";
 import { tick } from "svelte";
 import DetailPane from "./DetailPane.svelte";
-import { MOCK_SNAPSHOT, mockExplain } from "../../lib/mock";
+import NetworkPanel from "./NetworkPanel.svelte";
+import ProcessPanel from "./ProcessPanel.svelte";
+import { MOCK_SNAPSHOT, mockDetails, mockExplain } from "../../lib/mock";
 import type { PortEntry } from "../../lib/types";
 
 beforeAll(() => {
@@ -46,5 +48,28 @@ describe("DetailPane under polling", () => {
     const { container } = render(DetailPane, { ...props(polled(1)), explanation: null, loading: true });
     await tick();
     expect(container.querySelector(".sk")).not.toBeNull();
+  });
+});
+
+describe("lazy details", () => {
+  it("explains an exposed bind address and lists who is connected", async () => {
+    const exposed = MOCK_SNAPSHOT.entries.find((e) => e.exposure === "all_interfaces" && e.process && e.protocol === "tcp")!;
+    const d = { ...mockDetails(exposed.port)[0], connections: { total: 2, established: 2, by_state: { established: 2 }, peers: [{ address: "192.168.1.24", connections: 2, local: false, process: null, pid: null }], more_peers: 0 } };
+    const { container } = render(NetworkPanel, { entry: exposed, oncopy() {}, details: d });
+    await tick();
+    expect(container.textContent).toContain("Anyone on your network can connect");
+    expect(container.textContent).toContain("Fix:");
+    expect(container.textContent).toContain("192.168.1.24");
+    expect(container.textContent).toContain("×2");
+  });
+
+  it("draws the process tree with the listener marked", async () => {
+    const d = mockDetails(3000)[0];
+    const { container } = render(ProcessPanel, { entry: base, node: null, oncopy() {}, details: d });
+    await tick();
+    const items = [...container.querySelectorAll(".tree li")].map((li) => li.textContent ?? "");
+    expect(items[0]).toContain("launchd");
+    expect(items.find((t) => t.includes("listening"))).toContain(base.process!.name);
+    expect(items.at(-1)).toContain("esbuild");
   });
 });

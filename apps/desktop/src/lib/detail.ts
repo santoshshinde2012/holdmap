@@ -61,3 +61,52 @@ export function glance(entries: PortEntry[], max = 5): Glance {
     .sort((a, b) => Number(!!b.process || !!b.container) - Number(!!a.process || !!a.container) || a.port - b.port);
   return { total: entries.length, dev: entries.filter((e) => e.is_dev).length, exposed: exposed.slice(0, max), exposedCount: exposed.length };
 }
+
+/** `curl` for a quick look at what the port answers (headers included). */
+export function curlCommand(entry: PortEntry): string {
+  return `curl -i http://localhost:${entry.port}/`;
+}
+
+/** The terminal command that stops the owner, for people who'd rather run it themselves. */
+export function killCommand(entry: PortEntry, platform: string): string | null {
+  if (entry.container) return `docker stop ${entry.container.name}`;
+  const pid = entry.process?.pid;
+  if (!pid) return null;
+  return platform === "windows" ? `taskkill /PID ${pid}` : `kill -TERM ${pid}`;
+}
+
+/** The folder quick actions work on: the project root, else the process's directory. */
+export function projectFolder(entry: PortEntry): string | null {
+  return entry.project?.root ?? entry.process?.cwd ?? null;
+}
+
+/** Restart (stop, then run the same command in the same folder) only makes sense for a
+ * process of yours that portwise can stop and start again: not a container or a supervisor. */
+export function canRestart(entry: PortEntry, plan: ActionPlan | null): boolean {
+  if (!entry.process || entry.container || !entry.is_mine || entry.protected) return false;
+  if (!plan || plan.blocked) return false;
+  return plan.steps.some((s) => s.action === "signal_processes");
+}
+
+/** "Google Chrome ×3", "192.168.1.24". */
+export function peerLabel(p: { address: string; connections: number; process: string | null }): string {
+  const who = p.process ?? p.address;
+  return p.connections > 1 ? `${who} ×${p.connections}` : who;
+}
+
+/** Local date and time for a Unix timestamp in seconds: "Oct 4, 14:02" (with the year when it isn't this year). */
+export function startedAt(secs: number, now = new Date()): string {
+  const d = new Date(secs * 1000);
+  const sameYear = d.getFullYear() === now.getFullYear();
+  const date = d.toLocaleDateString(undefined, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
+  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return `${date}, ${time}`;
+}
+
+/** Compact start time for a tile: "14:02" today, "Oct 4" otherwise. */
+export function startedShort(secs: number, now = new Date()): string {
+  const d = new Date(secs * 1000);
+  return d.toDateString() === now.toDateString()
+    ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}

@@ -27,6 +27,7 @@
     oncancel,
     onoverride,
     cluster = null,
+    restart = false,
   }: {
     /** The port being stopped; null when stopping a whole cluster. */
     entry: PortEntry | null;
@@ -39,6 +40,8 @@
     onconfirm: () => void;
     oncancel: () => void;
     onoverride: () => void;
+    /** Stop, then start the same command again (the details pane's Restart). */
+    restart?: boolean;
   } = $props();
 
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -55,7 +58,7 @@
   const freed = $derived(phase === "done" || log.some((l) => /is free/.test(l)));
   /** Neither a port nor a cluster: a bulk stop ("all dev servers"). */
   const bulk = $derived(!entry && !cluster);
-  const verb = $derived(cluster ? "Stop cluster" : force ? "Force kill" : entry?.container ? "Stop container" : "Stop");
+  const verb = $derived(restart ? "Restart" : cluster ? "Stop cluster" : force ? "Force kill" : entry?.container ? "Stop container" : "Stop");
   /** The confirm button names its target ("Stop :3000"), so the click is unambiguous on its own. */
   const confirmLabel = $derived(entry ? `${verb} :${entry.port}` : bulk ? "Stop all" : verb);
   const order = $derived(cluster ? orderFromSummary(plan.summary) : []);
@@ -100,6 +103,7 @@
     </div>
   {:else}
     <p class="summary selectable"><RichText text={blocked ? blocked.message : plan.summary} /></p>
+    {#if restart && !blocked}<p class="summary restart-note">Then portwise starts the same command again in {entry?.project?.root ?? entry?.process?.cwd ?? "its folder"}.</p>{/if}
 
     {#if blocked && overridable}
       <div class="override">

@@ -13,10 +13,11 @@
   import ProcessPanel from "./ProcessPanel.svelte";
   import NetworkPanel from "./NetworkPanel.svelte";
   import CommandsPanel from "./CommandsPanel.svelte";
-  import type { Explanation, Graph, GraphNode, HttpInfo, PortEntry } from "../../lib/types";
+  import ActionMenu, { type MenuItem } from "../ui/ActionMenu.svelte";
+  import type { Explanation, Graph, GraphNode, HttpInfo, PortDetails, PortEntry } from "../../lib/types";
   import { dependencies, dependents, nodeForEntry } from "../../lib/graph";
-  import { canOpen } from "../../lib/format";
-  import { detailTabs, resolveTab, stopState, type DetailTab } from "../../lib/detail";
+  import { canOpen, url } from "../../lib/format";
+  import { canRestart, curlCommand, detailTabs, killCommand, projectFolder, resolveTab, stopState, type DetailTab } from "../../lib/detail";
   import { tooltip } from "../../lib/tooltip";
 
   let {
@@ -40,6 +41,13 @@
     mod = "Ctrl",
     entries = [],
     onselectentry = () => {},
+    details = null,
+    cpuTrend = [],
+    memTrend = [],
+    platform = "",
+    onrestart,
+    onreveal,
+    oneditor,
   }: {
     entry: PortEntry | null;
     explanation: Explanation | null;
@@ -62,6 +70,15 @@
     /** Every port, for the summary shown while nothing is selected. */
     entries?: PortEntry[];
     onselectentry?: (e: PortEntry) => void;
+    /** Lazily loaded extras for this listener (connections, tree, bind risk); null until loaded. */
+    details?: PortDetails | null;
+    /** Recent CPU % and memory samples, oldest first, for the trend lines. */
+    cpuTrend?: number[];
+    memTrend?: number[];
+    platform?: string;
+    onrestart?: () => void;
+    onreveal?: () => void;
+    oneditor?: () => void;
   } = $props();
 
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -73,6 +90,24 @@
   const active = $derived(resolveTab(tab, tabs));
   const stop = $derived(entry ? stopState(entry, explanation?.plan ?? null) : null);
   const base = $derived(drawer ? "dd" : "dp");
+  const restartable = $derived(!!entry && !!onrestart && canRestart(entry, explanation?.plan ?? null));
+  const fileManager = $derived(platform === "macos" ? "Finder" : platform === "windows" ? "Explorer" : "Files");
+  const menu = $derived.by((): MenuItem[] => {
+    if (!entry) return [];
+    const e = entry;
+    const out: MenuItem[] = [];
+    const web = e.protocol === "tcp" && e.state === "listen";
+    if (canOpen(e)) out.push({ id: "url", label: "Copy URL", icon: "link", hint: "C", run: () => oncopy(url(e), "URL") });
+    if (web) out.push({ id: "curl", label: "Copy curl command", icon: "terminal", run: () => oncopy(curlCommand(e), "curl command") });
+    const dir = projectFolder(e);
+    if (dir && oneditor) out.push({ id: "editor", label: "Open folder in editor", icon: "code", run: oneditor });
+    if (dir && onreveal) out.push({ id: "reveal", label: `Reveal in ${fileManager}`, icon: "folder", run: onreveal });
+    if (dir) out.push({ id: "path", label: "Copy folder path", icon: "copy", run: () => oncopy(dir, "Path") });
+    const kill = killCommand(e, platform);
+    if (kill) out.push({ id: "kill", label: e.container ? "Copy docker stop command" : "Copy kill command", icon: "copy", run: () => oncopy(kill, "Command") });
+    if (stop?.stoppable && e.process && !e.container) out.push({ id: "force", label: "Force kill…", icon: "zap", hint: "⇧⌫", run: onkill });
+    return out;
+  });
   let scroller: HTMLDivElement | undefined = $state();
   // Back to the top on a new port or tab only; a poll's fresh entry object must not scroll.
   const entryId = $derived(entry?.id ?? null);
@@ -89,10 +124,10 @@
       <div class="body" in:fade={{ duration: reduced ? 0 : 120 }}>
         <ScrollArea bind:el={scroller}>
           <div role="tabpanel" id={panelId(base, active)} aria-labelledby={tabId(base, active)} class="panel">
-            {#if active === "overview"}<OverviewPanel {entry} {explanation} {http} {loading} {node} />
+            {#if active === "overview"}<OverviewPanel {entry} {explanation} {http} {loading} {node} {details} {cpuTrend} {memTrend} />
             {:else if active === "connections" && node && graph}<ConnectionsPanel {graph} {node} {cluster} {deps} {users} {onstopcluster} {onselectnode} />
-            {:else if active === "process"}<ProcessPanel {entry} {node} {oncopy} />
-            {:else if active === "network"}<NetworkPanel {entry} {oncopy} />
+            {:else if active === "process"}<ProcessPanel {entry} {node} {oncopy} {details} />
+            {:else if active === "network"}<NetworkPanel {entry} {oncopy} {details} />
             {:else if active === "commands"}<CommandsPanel {entry} {explanation} {oncopy} />{/if}
           </div>
         </ScrollArea>
@@ -100,10 +135,11 @@
     {/key}
     <footer class="actions">
       {#if canOpen(entry)}<Button icon="external" kbd="O" onclick={onopen}>Open</Button>{/if}
+      {#if restartable}<Button variant="ghost" icon="refresh" onclick={onrestart} disabled={busy} tip={{ text: "Stop it, then run the same command again in the same folder" }}>Restart</Button>{/if}
+      {#if menu.length}<ActionMenu items={menu} />{/if}
       <span class="sp"></span>
       {#if stop && (entry.process || entry.container)}
         {#if stop.stoppable}
-          {#if entry.process && !entry.container}<Button variant="ghost" icon="zap" onclick={onkill} disabled={busy} tip={{ text: "Skip SIGTERM and kill immediately", kbd: ["⇧", "⌫"] }}>Force kill</Button>{/if}
           <Button variant="danger" icon="stop" kbd="⌫" loading={busy} loadingText="Stopping…" onclick={onstop}>{entry.container ? "Stop container" : "Stop"}</Button>
         {:else if stop.overridable}
           <span class="why" use:tooltip={stop.reason}><Icon name="shield" size={13} />Protected</span>

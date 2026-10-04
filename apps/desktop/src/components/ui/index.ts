@@ -22,3 +22,5 @@ export { default as Splitter } from "./Splitter.svelte";
 export { default as SettingRow } from "./SettingRow.svelte";
 export { default as SettingsGroup } from "./SettingsGroup.svelte";
 export { default as RichText } from "./RichText.svelte";
+export { default as ActionMenu } from "./ActionMenu.svelte";
+export type { MenuItem } from "./ActionMenu.svelte";

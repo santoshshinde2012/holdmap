@@ -87,13 +87,17 @@ export function memLabel(bytes: number | undefined): string | null {
  */
 export class UsageHistory {
   private samples = new Map<string, number[]>();
-  constructor(private readonly size = 24) {}
+  constructor(
+    private readonly size = 24,
+    /** What to sample: CPU percent by default; memory for the details pane's trend. */
+    private readonly pick: (e: Pick<PortEntry, "id" | "process">) => number | undefined = (e) => e.process?.cpu_percent,
+  ) {}
 
   push(entries: Pick<PortEntry, "id" | "process">[]): void {
     const seen = new Set<string>();
     for (const e of entries) {
       seen.add(e.id);
-      const cpu = e.process?.cpu_percent;
+      const cpu = this.pick(e);
       if (cpu === undefined || !Number.isFinite(cpu)) continue;
       const s = this.samples.get(e.id) ?? [];
       s.push(Math.max(0, cpu));
@@ -116,6 +120,21 @@ export function sparkPoints(values: number[], w: number, h: number, floor = 5): 
   const pad = 1;
   return values
     .map((v, i) => `${round(i * step)},${round(h - pad - (v / max) * (h - pad * 2))}`)
+    .join(" ");
+}
+
+/** Like `sparkPoints`, but scaled between the samples' own min and max (memory trends, where
+ * the interesting part is the change, not the distance from zero). Flat when nothing moved. */
+export function rangePoints(values: number[], w: number, h: number): string {
+  if (values.length < 2) return "";
+  const lo = Math.min(...values), hi = Math.max(...values);
+  const step = w / (values.length - 1);
+  const pad = 1;
+  const span = hi - lo;
+  // Changes under 1% of the value are noise: draw them flat.
+  const flat = span <= Math.abs(hi) * 0.01;
+  return values
+    .map((v, i) => `${round(i * step)},${round(flat ? h / 2 : h - pad - ((v - lo) / span) * (h - pad * 2))}`)
     .join(" ");
 }
 

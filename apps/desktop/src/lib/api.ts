@@ -1,5 +1,5 @@
-import type { ActionPlan, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortEntry, Snapshot, StopReport } from "./types";
-import { MOCK_SNAPSHOT, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
+import type { ActionPlan, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
+import { MOCK_SNAPSHOT, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
 /** True inside the Tauri webview; false in a plain browser (`npm run dev`), where mocks are used. */
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -12,7 +12,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function appInfo(): Promise<AppInfo> {
-  if (!isTauri) return { version: "0.1.3", platform: "browser", tray: false, shortcut: mockShortcut, config_dir: "~/.config/portwise" };
+  if (!isTauri) return { version: "0.1.4", platform: "browser", tray: false, shortcut: mockShortcut, config_dir: "~/.config/portwise" };
   return call("app_info");
 }
 
@@ -65,13 +65,37 @@ export async function freePort(near: number): Promise<number | null> {
   return call("free_port", { near });
 }
 
-export async function openUrl(url: string): Promise<void> {
+/** Open http://localhost:<port> in the default browser (the backend builds the URL). */
+export async function openPort(port: number): Promise<void> {
   if (!isTauri) {
-    window.open(url, "_blank", "noopener");
+    window.open(`http://localhost:${port}`, "_blank", "noopener");
     return;
   }
-  const { openUrl } = await import("@tauri-apps/plugin-opener");
-  await openUrl(url);
+  return call("open_port", { port });
+}
+
+/** Connections, process tree, uptime and bind risk for the listeners on a port (lazy). */
+export async function portDetails(port: number): Promise<PortDetails[]> {
+  if (!isTauri) return mockDetails(port);
+  return call("port_details", { port });
+}
+
+/** Show the project folder of the service on `port` in Finder / Explorer. */
+export async function revealProject(port: number): Promise<void> {
+  if (!isTauri) return;
+  return call("reveal_project", { port });
+}
+
+/** Open the project folder of the service on `port` in an editor; resolves to its name. */
+export async function openInEditor(port: number): Promise<string> {
+  if (!isTauri) return "VS Code";
+  return call("open_in_editor", { port });
+}
+
+/** Start again what portwise just stopped on `port` (the second half of "Restart"). */
+export async function restartStopped(port: number): Promise<{ pid: number; command: string; log: string }> {
+  if (!isTauri) return { pid: 4243, command: "npm run dev", log: "/tmp/portwise.log" };
+  return call("restart_stopped", { port });
 }
 
 /** Download, verify and install the update the backend announced, then restart. */
@@ -132,7 +156,8 @@ export async function clearHistory(): Promise<void> {
 
 export async function restart(entry: HistoryEntry): Promise<{ pid: number; command: string; log: string }> {
   if (!isTauri) return { pid: 4242, command: entry.command.join(" "), log: "/tmp/portwise.log" };
-  return call("restart", { entry });
+  // Name the entry only: the backend reads the command from its own history file.
+  return call("restart", { atMs: entry.at_ms, port: entry.port });
 }
 
 /** Query (enable = undefined) or change launch at login. */

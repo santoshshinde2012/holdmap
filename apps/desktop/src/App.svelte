@@ -21,14 +21,14 @@
   import GraphView from "./components/GraphView.svelte";
   import HistoryPanel from "./components/HistoryPanel.svelte";
   import * as api from "./lib/api";
-  import type { ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
+  import type { ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortDetails, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
   import { linksLabel, nodeForEntry, sectionsByCluster } from "./lib/graph";
   import type { Command } from "./lib/palette";
   import { GROUPS, groupOf, matches, seconds, stopTarget, title, url, canOpen, type Filters, type Group } from "./lib/format";
 
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
   type View = "list" | "graph";
-  interface Confirm { entry: PortEntry | null; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null }
+  interface Confirm { entry: PortEntry | null; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; restart?: boolean }
 
   const store = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
   // Live data is replaced wholesale on every poll, so it is raw state run through `share`:
@@ -68,6 +68,13 @@
   let density = $state<Density>(parseDensity(store("pw.density")));
   let collapsed = $state<Set<string>>(parseCollapsed(store("pw.collapsed")));
   const usageHist = new UsageHistory(24);
+  /** Memory samples for the details pane's trend line (one per scan, like CPU). */
+  const memHist = new UsageHistory(40, (e) => e.process?.memory_bytes);
+  let memUsage = $state.raw<Record<string, number[]>>({});
+  /** Connections, process tree and bind risk: loaded lazily for the selected port only. */
+  let portDetails = $state.raw<Record<number, PortDetails[]>>({});
+  const detailsAt = new Map<number, number>();
+  const DETAILS_TTL_MS = 3_000;
   let usage = $state.raw<Record<string, number[]>>({});
   let systemDark = $state(matchMedia("(prefers-color-scheme: dark)").matches);
   let narrow = $state(matchMedia("(max-width: 900px)").matches);
@@ -185,12 +192,15 @@
       snapshot = s;
       usageHist.push(s.entries);
       usage = share(usage, usageRecord(usageHist, s.entries.map((e) => e.id)));
+      memHist.push(s.entries);
+      memUsage = share(memUsage, usageRecord(memHist, s.entries.map((e) => e.id)));
       error = null;
       // Forget details for ports that are gone or now held by a different process.
       const holder = new Map(s.entries.map((e) => [e.port, e.pid]));
       const keep = (port: number) => holder.has(port) && (explainMeta.get(port)?.pid ?? null) === holder.get(port);
       explanations = pruned(explanations, keep);
       httpInfo = pruned(httpInfo, (port) => holder.has(port));
+      portDetails = pruned(portDetails, (port) => holder.has(port));
       for (const port of [...explainMeta.keys()]) if (!keep(port)) { explainMeta.delete(port); explainFailed.delete(port); }
       scanGen++;
       if (selectedId && !s.entries.some((e) => e.id === selectedId)) selectedId = null;
@@ -333,6 +343,10 @@
     const t = setTimeout(async () => {
       const seq = ++explainSeq;
       explainMeta.set(port, { pid, gen, seq });
+      if (Date.now() - (detailsAt.get(port) ?? -Infinity) > DETAILS_TTL_MS) {
+        detailsAt.set(port, Date.now());
+        api.portDetails(port).then((d) => { if (explainMeta.has(port)) portDetails = withKey(portDetails, port, share(portDetails[port], d)); }, () => detailsAt.delete(port));
+      }
       if (tcp && Date.now() - (httpAt.get(port) ?? -Infinity) > HTTP_TTL_MS) {
         httpAt.set(port, Date.now());
         api.http(port).then((h) => h, () => null).then((h) => { if (explainMeta.has(port)) httpInfo = withKey(httpInfo, port, share(httpInfo[port], h)); });
@@ -353,6 +367,9 @@
   });
   const explanation = $derived(selected ? explanations[selected.port] ?? null : null);
   const selectedHttp = $derived(selected ? httpInfo[selected.port] ?? null : null);
+  const selectedDetails = $derived(selected ? portDetails[selected.port]?.find((d) => d.id === selected.id) ?? null : null);
+  const cpuTrend = $derived(selected ? usage[selected.id] ?? [] : []);
+  const memTrend = $derived(selected ? memUsage[selected.id] ?? [] : []);
   const explaining = $derived(selPort !== null && explainingPort === selPort);
 
   $effect(() => {
@@ -407,6 +424,18 @@
         if (c.entry && selectedId === c.entry.id) selectedId = neighbour;
         if (!c.entry) { selectedId = null; selectedNode = null; }
         const restart = restartCommand(c);
+        if (c.restart && c.entry) {
+          const port = c.entry.port;
+          try {
+            const s = await api.restartStopped(port);
+            setTimeout(() => { if (confirm === c) confirm = null; }, 600);
+            toast("ok", `Restarted :${port}`, `${s.command} (PID ${s.pid}) · log ${s.log}`);
+          } catch (err) {
+            setTimeout(() => { if (confirm === c) confirm = null; }, 600);
+            toast("error", `Stopped :${port}, but couldn't start it again`, String(err), { label: "Restart…", run: openHistory });
+          }
+          return;
+        }
         setTimeout(() => {
           if (confirm === c) confirm = null;
           toast("ok", c.entry ? `Port ${c.entry.port} is free` : c.cluster ? `Cluster ${c.cluster.name} stopped` : "Dev servers stopped", `${what} stopped in ${seconds(r.elapsed_ms)}${r.escalated ? " (needed SIGKILL)" : ""}`,
@@ -453,7 +482,26 @@
   }
 
   async function open(e: PortEntry) {
-    try { await api.openUrl(url(e)); } catch (err) { toast("error", "Couldn't open the browser", String(err)); }
+    try { await api.openPort(e.port); } catch (err) { toast("error", "Couldn't open the browser", String(err)); }
+  }
+
+  async function reveal(e: PortEntry) {
+    try { await api.revealProject(e.port); } catch (err) { toast("error", "Couldn't show the folder", String(err)); }
+  }
+
+  async function openEditor(e: PortEntry) {
+    try { const name = await api.openInEditor(e.port); toast("ok", `Opened in ${name}`, e.project?.root ?? e.process?.cwd ?? undefined); }
+    catch (err) { toast("error", "Couldn't open an editor", String(err)); }
+  }
+
+  /** Restart = the normal confirmed stop, then the same command again in the same folder. */
+  async function requestRestart(entry: PortEntry) {
+    try {
+      const plan = await api.plan(stopTarget(entry), false, false);
+      confirm = { entry, cluster: null, plan, force: false, allowProtected: false, phase: "confirm", log: [], report: null, restart: true };
+    } catch (e) {
+      toast("error", `Couldn't plan restarting :${entry.port}`, String(e));
+    }
   }
 
   async function copy(text: string, what: string) {
@@ -800,7 +848,7 @@
         <DetailPane entry={selected} {explanation} http={selectedHttp} loading={explaining} busy={selected ? !!busy[selected.id] : false} bind:tab={detailTab} {mod}
           onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy}
           {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)}
-          entries={snapshot?.entries ?? []} onselectentry={(e) => selectEntry(e, false)} />
+          entries={snapshot?.entries ?? []} onselectentry={(e) => selectEntry(e, false)} details={selectedDetails} {cpuTrend} {memTrend} platform={info.platform} onrestart={() => selected && requestRestart(selected)} onreveal={() => selected && reveal(selected)} oneditor={() => selected && openEditor(selected)} />
       </div>
     {/if}
   </main>
@@ -818,11 +866,11 @@
   <Dialog placement="right" bare label="Details for port {selected.port}" onclose={() => (drawerOpen = false)} initialFocus="self">
     <DetailPane drawer entry={selected} {explanation} http={selectedHttp} loading={explaining} busy={!!busy[selected.id]} bind:tab={detailTab} {mod}
       onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onclose={() => (drawerOpen = false)}
-      {graph} pinned={pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} />
+      {graph} pinned={pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} details={selectedDetails} {cpuTrend} {memTrend} platform={info.platform} onrestart={() => selected && requestRestart(selected)} onreveal={() => selected && reveal(selected)} oneditor={() => selected && openEditor(selected)} />
   </Dialog>
 {/if}
 {#if confirm}
-  <ConfirmDialog entry={confirm.entry} cluster={confirm.cluster} plan={confirm.plan} phase={confirm.phase} log={confirm.log} report={confirm.report}
+  <ConfirmDialog entry={confirm.entry} cluster={confirm.cluster} plan={confirm.plan} restart={!!confirm.restart} phase={confirm.phase} log={confirm.log} report={confirm.report}
     onconfirm={runStop} oncancel={closeConfirm} onoverride={() => confirm?.entry && requestStop(confirm.entry, confirm.force, true)} />
 {/if}
 {#if showPalette}<CommandPalette {commands} onclose={() => { showPalette = false; }} />{/if}

@@ -96,3 +96,12 @@ describe("usage history", () => {
     expect(pts[1][1]).toBeLessThan(pts[0][1]); // higher CPU → higher on screen
   });
 });
+
+describe("memory trend", () => {
+  it("scales between min and max and stays flat on noise", async () => {
+    const { rangePoints } = await import("./rows");
+    expect(rangePoints([100, 200], 10, 10)).toBe("0,9 10,1");
+    expect(rangePoints([1000, 1001, 1000], 10, 10)).toBe("0,5 5,5 10,5");
+    expect(rangePoints([5], 10, 10)).toBe("");
+  });
+});

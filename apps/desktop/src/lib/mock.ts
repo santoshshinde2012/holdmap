@@ -1,5 +1,5 @@
 // Realistic sample data so the UI can be developed in a plain browser (`npm run dev`) and tested.
-import type { ActionPlan, Cluster, Explanation, Graph, GraphEdge, GraphNode, HttpInfo, PortEntry, Snapshot, StopReport } from "./types";
+import type { ActionPlan, BindRisk, Cluster, Explanation, Graph, GraphEdge, GraphNode, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
 
 const now = Math.floor(Date.now() / 1000);
 let token = 1000;
@@ -173,6 +173,27 @@ export function mockHttp(port: number): HttpInfo | null {
   const e = MOCK_SNAPSHOT.entries.find((x) => x.port === port);
   if (!e || e.protocol !== "tcp" || e.framework?.category === "database" || e.framework?.category === "cache") return null;
   return { port, status: 200, reason: "OK", title: e.project?.name ?? e.framework?.name ?? null, server: null, location: null, elapsed_ms: 3 };
+}
+
+/** Browser preview of the lazily loaded details: a believable tree, peers and bind risk. */
+export function mockDetails(port: number): PortDetails[] {
+  return MOCK_SNAPSHOT.entries.filter((e) => e.port === port && (e.state === "listen" || e.protocol === "udp")).map((e) => {
+    const p = e.process;
+    const exposed = e.exposure === "all_interfaces";
+    const data = ["database", "cache", "queue"].includes(e.framework?.category ?? "");
+    const risk: BindRisk = exposed
+      ? { level: data || e.is_dev ? "high" : "medium", title: "Anyone on your network can connect", explanation: `It listens on ${e.addresses.join(", ")} (every network interface). ${data ? "Databases and caches often accept connections without a password in development, so anyone on the same Wi-Fi could read or change your data." : "Dev servers rarely ask for a login and can expose source files, debug pages and admin routes to anyone on the same Wi-Fi (a café, an office, a conference)."}`, fix: e.container ? `Publish it on loopback only: \`-p 127.0.0.1:${e.port}:${e.container.private_port}\`.` : "Start it with `--host 127.0.0.1` (or `HOST=127.0.0.1`) unless you're testing from another device." }
+      : { level: "low", title: "Only this computer can connect", explanation: `It listens on ${e.addresses.join(", ")} (loopback), so other devices on your network can't reach it.`, fix: null };
+    const peers = e.protocol === "tcp" ? (port % 3 === 0 ? [{ address: "127.0.0.1", connections: 3, local: true, process: "Google Chrome", pid: 812 }, { address: "192.168.1.24", connections: 1, local: false, process: null, pid: null }] : port % 3 === 1 ? [{ address: "127.0.0.1", connections: 2, local: true, process: "node", pid: 4310 }] : []) : [];
+    const total = peers.reduce((n, x) => n + x.connections, 0);
+    const node = (pid: number, name: string, command: string, depth: number, mem = 0) => ({ pid, name, command, depth, memory_bytes: mem, cpu_percent: 0 });
+    return {
+      id: e.id, port: e.port, started_at: p?.start_time ?? null, uptime_secs: p ? Math.round(Date.now() / 1000 - p.start_time) : null,
+      connections: { total, established: total, by_state: (total ? { established: total } : {}) as Record<string, number>, peers, more_peers: 0 },
+      tree: p ? { ancestors: [node(1, "launchd", "/sbin/launchd", 3), node(p.pid - 40, "zsh", "-zsh", 2), node(p.pid - 2, "npm", "npm run dev", 1, 48_000_000)], process: node(p.pid, p.name, p.cmdline.join(" "), 0, p.memory_bytes), children: e.is_dev ? [node(p.pid + 3, "esbuild", "esbuild --service=0.21.5 --ping", 1, 21_000_000)] : [], more_children: 0 } : null,
+      bind_risk: risk,
+    };
+  });
 }
 
 export function mockPlan(target: string, force: boolean, allowProtected = false): ActionPlan {
