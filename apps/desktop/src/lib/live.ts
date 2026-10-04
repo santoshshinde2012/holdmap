@@ -62,3 +62,23 @@ export function freshness(ago: number | null, scanSecs: number): { text: string;
   const live = Math.max(6, scanSecs * 2 + 2);
   return { text: ago < live ? "Live" : `${ago}s ago`, stale: ago >= Math.max(9, scanSecs * 3 + 3) };
 }
+
+/**
+ * Seconds since the data was last known good: since the newest snapshot, or since the start
+ * of a scan still in flight (a scan that's merely running doesn't make the data stale).
+ */
+export function dataAge(nowMs: number, takenAtMs: number | null, inFlightSinceMs: number | null): number | null {
+  if (takenAtMs === null) return null;
+  const since = inFlightSinceMs === null ? takenAtMs : Math.max(takenAtMs, inFlightSinceMs);
+  return Math.max(0, Math.round((nowMs - since) / 1000));
+}
+
+/**
+ * Should the window poll by itself? In the app the watcher pushes a snapshot every interval,
+ * so the window's own timer (which macOS may throttle) only fills in when pushes stop
+ * arriving, or for "All sockets", which the watcher doesn't scan. In the browser it always polls.
+ */
+export function shouldPoll(o: { pushed: boolean; all: boolean; nowMs: number; takenAtMs: number | null; intervalMs: number }): boolean {
+  if (!o.pushed || o.all || o.takenAtMs === null) return true;
+  return o.nowMs - o.takenAtMs >= o.intervalMs * 1.5;
+}

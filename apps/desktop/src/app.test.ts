@@ -4,14 +4,14 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 
-const calls = vi.hoisted(() => ({ explain: 0, http: 0, scan: 0 }));
+const calls = vi.hoisted(() => ({ explain: 0, http: 0, scan: 0, scanDelayMs: 0 }));
 vi.mock("./lib/api", async (orig) => {
   const real = await orig<typeof import("./lib/api")>();
   const slow = <T,>(v: T, ms: number) => new Promise<T>((r) => setTimeout(() => r(v), ms));
   return {
     ...real,
     // Each scan is a fresh object graph, with the memory figure changing like a real poll.
-    scan: async (all: boolean) => { calls.scan++; const s = structuredClone(await real.scan(all)); s.entries.forEach((e) => e.process && (e.process.memory_bytes += calls.scan * 4096)); return s; },
+    scan: async (all: boolean) => { calls.scan++; if (calls.scanDelayMs) await slow(null, calls.scanDelayMs); const s = structuredClone(await real.scan(all)); s.entries.forEach((e) => e.process && (e.process.memory_bytes += calls.scan * 4096)); return s; },
     explain: async (port: number) => { calls.explain++; return slow(structuredClone(await real.explain(port)), 400); },
     http: async (port: number) => { calls.http++; return real.http(port); },
   };
@@ -53,5 +53,20 @@ describe("App live polling", () => {
     expect(calls.explain).toBeGreaterThan(explains); // still revalidated in the background…
     expect(skeleton).toBe(0); // …without ever falling back to the skeleton
     expect(pane.querySelector(".headline")).toBe(headline); // or remounting the summary
+  });
+
+  it("stays Live while a slow scan is in flight, and says how old the data is only when stalled", async () => {
+    vi.useFakeTimers();
+    const { container } = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    const live = () => container.querySelector(".live")!.textContent!.trim();
+    expect(live()).toBe("Live");
+    calls.scanDelayMs = 9_000; // the next scan (at the 4 s tick) takes 9 s
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(live()).toBe("Live"); // the last snapshot is 12 s old, but a scan is running
+    calls.scanDelayMs = 60_000; // now one truly stalls
+    await vi.advanceTimersByTimeAsync(16_000);
+    expect(live()).toMatch(/^\d+s ago$/);
+    calls.scanDelayMs = 0;
   });
 });

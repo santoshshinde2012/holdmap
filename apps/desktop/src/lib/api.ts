@@ -16,12 +16,13 @@ export async function appInfo(): Promise<AppInfo> {
   return call("app_info");
 }
 
-export async function scan(all: boolean): Promise<Snapshot> {
+/** A snapshot no older than `maxAgeMs` (the app shares a scan that just ran; 0 forces one). */
+export async function scan(all: boolean, maxAgeMs?: number): Promise<Snapshot> {
   if (!isTauri) {
     await delay(250);
     return { ...MOCK_SNAPSHOT, entries: mockEntries().map(mockUsage), taken_at_ms: Date.now() };
   }
-  return call("scan", { all });
+  return call("scan", { all, maxAgeMs });
 }
 
 export async function explain(port: number): Promise<Explanation> {

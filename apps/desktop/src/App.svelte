@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { freshness, pruned, share, withKey } from "./lib/live";
+  import { dataAge, freshness, pruned, share, shouldPoll, withKey } from "./lib/live";
   import Icon from "./components/Icon.svelte";
   import PortRow from "./components/list/PortRow.svelte";
   import GroupHeader from "./components/list/GroupHeader.svelte";
@@ -158,12 +158,30 @@
   const modalOpen = $derived(!!confirm || showHelp || showHistory || showPalette || showSettings || showRemote || !!pinDialog || showDrawer);
   const scanMs = $derived(Math.min(60, Math.max(1, config?.scan_interval_secs ?? 3)) * 1000);
 
+  /** When the scan in flight started: the header stays "Live" while one is merely running. */
+  let scanStarted = $state(0);
+
   async function refresh(manual = false) {
     if (refreshing) return;
     refreshing = true;
     manualRefresh = manual;
+    scanStarted = Date.now();
     try {
-      const s = share(snapshot, await api.scan(filters.all));
+      apply(await api.scan(filters.all, manual ? 0 : undefined));
+      if (manual && snapshot) toast("info", "Refreshed", `${snapshot.entries.length} port${snapshot.entries.length === 1 ? "" : "s"} · scanned in ${snapshot.scan_ms} ms`);
+    } catch (e) {
+      error = String(e);
+    } finally {
+      refreshing = false;
+      manualRefresh = false;
+    }
+  }
+
+  /** Take in a snapshot, from our own scan or pushed by the app's watcher; never go back in time. */
+  function apply(next: Snapshot) {
+    if (snapshot && next.taken_at_ms < snapshot.taken_at_ms) return;
+    {
+      const s = share(snapshot, next);
       snapshot = s;
       usageHist.push(s.entries);
       usage = share(usage, usageRecord(usageHist, s.entries.map((e) => e.id)));
@@ -177,12 +195,6 @@
       scanGen++;
       if (selectedId && !s.entries.some((e) => e.id === selectedId)) selectedId = null;
       loadTopology();
-      if (manual) toast("info", "Refreshed", `${s.entries.length} port${s.entries.length === 1 ? "" : "s"} · scanned in ${s.scan_ms} ms`);
-    } catch (e) {
-      error = String(e);
-    } finally {
-      refreshing = false;
-      manualRefresh = false;
     }
   }
 
@@ -608,11 +620,21 @@
         for (const ev of evs) {
           if (ev.event === "conflict") toast("error", `Port conflict on :${ev.port}`, ev.entries.map((x) => `${title(x)} on ${x.addresses.join("/")}`).join(" vs "));
         }
-        if (evs.length && !refreshing && !confirm) refresh();
+        // The snapshot these events came from follows as a `snapshot` push.
+      }),
+      api.onEvent<Snapshot>("snapshot", (s) => {
+        pushed = true;
+        if (!filters.all && !refreshing && !confirm) apply(s);
       }),
     ];
+    // Back from another app, Space or a covered window: catch up at once, not on the next tick.
+    const onVisible = () => { if (!document.hidden && !confirm && Date.now() - (snapshot?.taken_at_ms ?? 0) > 1000) refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
     return () => {
       clearInterval(clock);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
       mq.removeEventListener("change", onMq);
       nq.removeEventListener("change", onNq);
       rq.removeEventListener("change", onRq);
@@ -621,14 +643,20 @@
   });
 
   // Foreground re-scan on the user's cadence (Settings → Scanning); paused while an action runs.
+  // In the app the watcher pushes each scan, so this only fills in when pushes stop.
+  /** Whether the app's watcher has pushed a snapshot (the browser build has no watcher). */
+  let pushed = false;
   $effect(() => {
     const ms = scanMs;
-    const t = setInterval(() => { if (!document.hidden && !confirm && !refreshing && !showPalette) refresh(); }, ms);
+    const t = setInterval(() => {
+      if (document.hidden || confirm || refreshing || showPalette) return;
+      if (shouldPoll({ pushed, all: filters.all, nowMs: Date.now(), takenAtMs: snapshot?.taken_at_ms ?? null, intervalMs: ms })) refresh();
+    }, ms);
     return () => clearInterval(t);
   });
   $effect(() => { try { localStorage.setItem("pw.pane", String(paneWidth)); } catch { /* ignore */ } });
 
-  const ago = $derived(snapshot ? Math.max(0, Math.round((now - snapshot.taken_at_ms) / 1000)) : null);
+  const ago = $derived(dataAge(now, snapshot?.taken_at_ms ?? null, refreshing ? scanStarted : null));
   const fresh = $derived(freshness(ago, scanMs / 1000));
   const themeIcon = $derived(THEME_ICON[theme]);
 </script>

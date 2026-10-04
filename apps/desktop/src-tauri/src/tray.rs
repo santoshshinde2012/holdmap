@@ -1,6 +1,6 @@
 //! Tray / menu-bar icon with the running dev servers.
 
-use crate::state::{scan_now, AppState};
+use crate::state::AppState;
 use portwise_core::{PortEntry, Snapshot};
 use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
@@ -216,9 +216,11 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
 
 /// Background refresh of the tray menu so it stays useful while the window is hidden.
 pub fn tray_tick(app: &AppHandle) {
-    let docker = app.state::<AppState>().docker();
-    if let Ok(engine) = scan_now(false, docker) {
-        refresh_tray(app, engine.snapshot());
+    if let Ok(snapshot) = app
+        .state::<AppState>()
+        .snapshot(false, std::time::Duration::ZERO)
+    {
+        refresh_tray(app, &snapshot);
     }
 }
 

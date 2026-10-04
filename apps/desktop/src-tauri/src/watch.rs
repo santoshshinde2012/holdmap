@@ -1,7 +1,8 @@
 //! Background watcher: re-scans every few seconds, emits `port-events` to the UI, sends desktop
-//! notifications for new / conflicting listeners, and keeps the tray menu fresh while hidden.
+//! notifications for new / conflicting listeners, pushes each snapshot to the window (`snapshot`)
+//! and keeps the tray menu fresh.
 
-use crate::state::{scan_now, AppState};
+use crate::state::AppState;
 use portwise_core::events::{PortEvent, Watcher};
 use portwise_core::store::Config;
 use std::time::Duration;
@@ -44,8 +45,9 @@ pub fn spawn(app: AppHandle) {
         let mut watcher = Watcher::new();
         loop {
             let state = app.state::<AppState>();
-            if let Ok(engine) = scan_now(false, state.docker()) {
-                let events = watcher.observe(engine.snapshot().clone());
+            // Shares a scan the UI just asked for instead of running a second one.
+            if let Ok(snapshot) = state.snapshot(false, Duration::from_millis(1000)) {
+                let events = watcher.observe(snapshot.clone());
                 if !events.is_empty() {
                     let _ = app.emit("port-events", &events);
                     let cfg = state.store.config();
@@ -58,14 +60,16 @@ pub fn spawn(app: AppHandle) {
                             .show();
                     }
                 }
-                let hidden = app
+                let visible = app
                     .get_webview_window("main")
                     .and_then(|w| w.is_visible().ok())
-                    .map(|v| !v)
-                    .unwrap_or(true);
-                if hidden {
-                    crate::tray::refresh_tray(&app, engine.snapshot());
+                    .unwrap_or(false);
+                // Push every scan to the window. Its own timers can be throttled by the OS
+                // (WebKit, App Nap) while this thread keeps time, so the list stays live.
+                if visible {
+                    let _ = app.emit("snapshot", &snapshot);
                 }
+                crate::tray::refresh_tray(&app, &snapshot);
             }
             let hidden = app
                 .get_webview_window("main")

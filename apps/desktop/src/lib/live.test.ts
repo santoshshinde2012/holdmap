@@ -62,3 +62,21 @@ describe("freshness", () => {
     expect(freshness(20, 10).text).toBe("Live");
   });
 });
+
+import { dataAge, shouldPoll } from "./live";
+describe("dataAge / shouldPoll", () => {
+  it("counts from a scan in flight, so a running scan keeps the header Live", () => {
+    expect(dataAge(10_000, null, null)).toBeNull();
+    expect(dataAge(13_000, 1_000, null)).toBe(12);
+    expect(dataAge(13_000, 1_000, 12_500)).toBe(1);
+    expect(dataAge(13_000, 12_000, 2_000)).toBe(1); // an older in-flight start never makes it worse
+  });
+  it("only polls from the window when the watcher's pushes stop", () => {
+    const base = { pushed: true, all: false, nowMs: 10_000, intervalMs: 4_000 };
+    expect(shouldPoll({ ...base, takenAtMs: 8_000 })).toBe(false);
+    expect(shouldPoll({ ...base, takenAtMs: 3_000 })).toBe(true);
+    expect(shouldPoll({ ...base, takenAtMs: null })).toBe(true);
+    expect(shouldPoll({ ...base, all: true, takenAtMs: 9_900 })).toBe(true);
+    expect(shouldPoll({ ...base, pushed: false, takenAtMs: 9_900 })).toBe(true);
+  });
+});

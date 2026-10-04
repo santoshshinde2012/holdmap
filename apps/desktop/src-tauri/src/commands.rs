@@ -11,6 +11,7 @@ use portwise_core::{
 };
 use serde::Serialize;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[derive(Serialize)]
@@ -61,11 +62,11 @@ async fn with_engine<T: Send + 'static>(
     let app = app.clone();
     blocking(move || {
         let state = app.state::<AppState>();
-        let mut guard = state.engine.lock().unwrap();
-        if guard.is_none() {
-            *guard = Some(scan_now(false, state.docker())?);
+        if state.engine.lock().unwrap().is_none() {
+            state.snapshot(false, FRESH)?;
         }
-        Ok(f(guard.as_ref().unwrap()))
+        let guard = state.engine.lock().unwrap();
+        Ok(f(guard.as_ref().ok_or("no scan yet")?))
     })
     .await
 }
@@ -81,18 +82,28 @@ pub fn app_info(state: State<'_, AppState>) -> AppInfo {
     }
 }
 
-/// Scan the machine and return a fresh snapshot.
+/// How old a scan the UI's poll may share (the watcher scans on the same cadence).
+const FRESH: Duration = Duration::from_millis(1000);
+
+/// Scan the machine and return a snapshot no older than `max_age_ms` (default 1 s; 0 forces
+/// a new scan). Scans never overlap: one in flight is waited for and shared.
 #[tauri::command]
-pub async fn scan(app: AppHandle, all: bool, docker: Option<bool>) -> Result<Snapshot, String> {
+pub async fn scan(
+    app: AppHandle,
+    all: bool,
+    docker: Option<bool>,
+    max_age_ms: Option<u64>,
+) -> Result<Snapshot, String> {
     let state = app.state::<AppState>();
     if let Some(d) = docker {
         state.docker.store(d, Ordering::Relaxed);
     }
-    let docker = state.docker();
-    let engine = blocking(move || scan_now(all, docker)).await?;
-    let snapshot = engine.snapshot().clone();
-    *state.engine.lock().unwrap() = Some(engine);
-    refresh_tray(&app, &snapshot);
+    let max_age = max_age_ms.map_or(FRESH, Duration::from_millis);
+    let handle = app.clone();
+    let snapshot = blocking(move || handle.state::<AppState>().snapshot(all, max_age)).await?;
+    // The tray menu is updated on the main thread; don't make the scan wait for it.
+    let (handle, snap) = (app.clone(), snapshot.clone());
+    std::thread::spawn(move || refresh_tray(&handle, &snap));
     Ok(snapshot)
 }
 
