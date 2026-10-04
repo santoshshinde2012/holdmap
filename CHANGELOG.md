@@ -6,6 +6,39 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
+## [0.1.4] - 2026-10-04
+
+### Added
+
+- **Details pane**: who is connected (local apps by name, remote peers, counts), the full
+  process tree, start time, CPU and memory trend lines, and the bind address explained in plain
+  words with a fix. Loaded lazily for the selected port; nothing flashes while it refreshes.
+- **Quick actions**: Restart (a confirmed stop, then the same command in the same folder), open
+  the folder in your editor or Finder, copy the URL, a `curl` or the kill command. Force kill moved
+  into this menu (`⇧⌫` still works).
+- `portwise inspect` and MCP `explain_port` show the same connections, process tree, start time,
+  bind risk and HTTP status (`details` and `http` in the JSON).
+
+### Fixed
+
+- **Desktop**: a service restarted from the app (or its history) was listed as "Protected" and
+  couldn't be stopped again, because it counted as part of portwise's own process tree.
+
+### Security
+
+- Secrets in command lines are hidden everywhere: CLI, TUI, JSON, MCP, the app and history views.
+  The history file keeps the real command (so restart works) and is now `0600`; logs too.
+- Control characters from processes, manifests and local web pages are stripped before printing,
+  so they can't inject terminal escape sequences.
+- Desktop: the webview may only listen for events and drag the window, under a stricter CSP
+  (`script-src 'self'`; `object-src`, `base-uri`, `frame-ancestors` and `form-action` `'none'`).
+  Restart names a history entry and the backend reads the command from its own file; the opener
+  plugin is gone (URLs and folders are looked up by port from the scan).
+- URLs are opened without `cmd.exe` on Windows and only when they're plain `http(s)`.
+- A `.portwise.toml` owned by another user or writable by anyone is refused.
+- MCP: `stop_port` says to confirm with the user first; protected processes stay refused even if
+  an agent passes extra arguments (tested).
+
 ## [0.1.3] - 2026-10-04
 
 ### Fixed
@@ -116,6 +149,7 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
+[0.1.4]: https://github.com/santoshshinde2012/portwise/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/santoshshinde2012/portwise/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/santoshshinde2012/portwise/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/santoshshinde2012/portwise/compare/v0.1.0...v0.1.1
