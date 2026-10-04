@@ -6,6 +6,18 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
+## [0.1.5] - 2026-10-04
+
+### Fixed
+
+- **Desktop (macOS): the list no longer freezes behind the Documents privacy prompt.** Project
+  detection read files in each process's folder during the scan, and macOS holds the first read
+  under `~/Documents`, `~/Desktop` or `~/Downloads` until the prompt is answered, so the header
+  counted up instead of staying Live. Project lookups now run in the background with a short
+  budget and a per-folder cache; project and branch fill in when ready and stay put while they
+  refresh. If access is denied or a read hangs, the row just has no project.
+- **Desktop (macOS)**: the privacy prompt now says why portwise reads those folders.
+
 ## [0.1.4] - 2026-10-04
 
 ### Added
@@ -149,6 +161,7 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
+[0.1.5]: https://github.com/santoshshinde2012/portwise/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/santoshshinde2012/portwise/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/santoshshinde2012/portwise/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/santoshshinde2012/portwise/compare/v0.1.1...v0.1.2
