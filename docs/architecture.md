@@ -7,36 +7,37 @@ front-ends only render and confirm what it returns.
 ## 1. Layers
 
 ```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 260, "nodeSpacing": 40, "rankSpacing": 50}}}%%
 flowchart TB
   subgraph IF["Interfaces"]
     direction LR
-    HOOK("Shell hook<br/><small>portwise init zsh · bash · fish · powershell</small>")
-    CLI("CLI<br/><small>clap · portwise-cli</small>")
-    TUI("TUI<br/><small>ratatui · portwise-cli/tui</small>")
-    DESK("Desktop app + tray<br/><small>Tauri v2 · Svelte 5</small>")
-    MCP("MCP server<br/><small>JSON-RPC over stdio · portwise-mcp</small>")
+    HOOK("Shell hook<br/>portwise init")
+    CLI("CLI<br/>clap")
+    TUI("TUI<br/>ratatui")
+    DESK("Desktop app + tray<br/>Tauri v2 · Svelte 5")
+    MCP("MCP server<br/>JSON-RPC · stdio")
   end
 
   subgraph CORE["portwise-core"]
-    ENG{{"Engine<br/><small>explain · plan · stop</small>"}}
-    SCAN["Scanner<br/><small>sockets → PIDs → projects</small>"]
-    PROV["Platform providers<br/><small>Linux /proc · macOS libproc · Windows IP Helper</small>"]
-    POL["ProtectionPolicy<br/><small>OS, shells, IDEs, agents</small>"]
-    REG["StopStrategy registry<br/><small>process tree · container · systemd · pm2 · brew</small>"]
-    EXEC["Executor<br/><small>signal → wait → verify freed</small>"]
-    TOPO["Topology<br/><small>service graph · clusters · stop order</small>"]
-    HTTP["HTTP probe<br/><small>GET / → status · title</small>"]
-    STACK["Project config<br/><small>.portwise.toml · up / down</small>"]
+    ENG{{"Engine<br/>explain · plan · stop"}}
+    SCAN["Scanner<br/>sockets → PIDs → projects"]
+    PROV["Platform providers<br/>Linux · macOS · Windows"]
+    POL["ProtectionPolicy<br/>never touch the OS,<br/>shells, IDEs, agents"]
+    REG["StopStrategy registry<br/>process tree · container<br/>systemd · pm2 · brew"]
+    EXEC["Executor<br/>signal → verify freed"]
+    TOPO["Topology<br/>service graph<br/>clusters · stop order"]
+    HTTP["HTTP probe<br/>GET / → status, title"]
+    STACK["Project config<br/>.portwise.toml"]
   end
 
   subgraph OS["Operating system"]
     direction LR
     SOCK[["Sockets & processes"]]
-    SIG[["Signals<br/><small>SIGTERM → SIGKILL · TerminateProcess</small>"]]
-    CTR[["Container runtimes<br/><small>Docker · Podman · OrbStack · Colima</small>"]]
+    SIG[["Signals<br/>SIGTERM → SIGKILL"]]
+    CTR[["Containers<br/>Docker · Podman<br/>OrbStack · Colima"]]
   end
 
-  subgraph ST["Local state · ~/.config/portwise"]
+  subgraph ST["Local state"]
     direction LR
     PINS[("Pins & settings")]
     HIST[("Stop history")]
@@ -44,9 +45,9 @@ flowchart TB
 
   HOOK -->|"port taken?"| CLI
 
-  IF ==>|"scan · explain · plan · stop"| ENG
+  IF ==>|"scan · explain · stop"| ENG
   IF -.->|"HTTP status"| HTTP
-  IF -->|"pins · history"| ST
+  IF --> ST
   CLI -->|"up · down"| STACK
   STACK --> ENG
 
