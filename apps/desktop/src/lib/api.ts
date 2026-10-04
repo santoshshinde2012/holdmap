@@ -19,7 +19,7 @@ export async function appInfo(): Promise<AppInfo> {
 export async function scan(all: boolean): Promise<Snapshot> {
   if (!isTauri) {
     await delay(250);
-    return { ...MOCK_SNAPSHOT, entries: MOCK_SNAPSHOT.entries.map(mockUsage), taken_at_ms: Date.now() };
+    return { ...MOCK_SNAPSHOT, entries: mockEntries().map(mockUsage), taken_at_ms: Date.now() };
   }
   return call("scan", { all });
 }
@@ -87,7 +87,11 @@ export async function onEvent<T>(name: string, cb: (payload: T) => void): Promis
 
 /** Service topology of the latest scan (dev services and their peers unless `all`). */
 export async function topology(all: boolean): Promise<Graph> {
-  if (!isTauri) return mockTopology();
+  if (!isTauri) {
+    // Live like the real thing: every poll is a new graph whose CPU figures move.
+    const g = mockTopology();
+    return { ...g, nodes: g.nodes.map((n) => (n.root_pid ? { ...n, cpu_percent: Math.round((n.cpu_percent + Math.random()) * 10) / 10 } : n)) };
+  }
   return call("topology", { all });
 }
 
@@ -186,6 +190,18 @@ export async function remoteScan(host: string): Promise<Snapshot> {
 }
 
 /** Browser demo only: a plausible, gently moving CPU figure per process so sparklines have a shape. */
+/** The mock ports; `?mockPorts=N` pads the list to N for scrolling and polling load tests. */
+function mockEntries(): PortEntry[] {
+  const want = Number(new URLSearchParams(globalThis.location?.search ?? "").get("mockPorts")) || 0;
+  const out = [...MOCK_SNAPSHOT.entries];
+  const tmpl = MOCK_SNAPSHOT.entries.filter((e) => e.process);
+  for (let i = 0; out.length < want; i++) {
+    const t = tmpl[i % tmpl.length], port = 20000 + i;
+    out.push({ ...t, id: `tcp:${port}`, port, pid: 50000 + i, pids: [50000 + i], process: { ...t.process!, pid: 50000 + i } });
+  }
+  return out;
+}
+
 function mockUsage(e: PortEntry): PortEntry {
   if (!e.process) return e;
   const base = ((e.port * 7919) % 23) / 2 + 0.4;
