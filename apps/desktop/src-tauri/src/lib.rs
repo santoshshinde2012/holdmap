@@ -25,9 +25,7 @@ use tauri::{Manager, WindowEvent};
 pub fn run() {
     let context = tauri::generate_context!();
     let updater = update::configured(&context);
-    let mut builder = tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init());
+    let mut builder = tauri::Builder::default().plugin(tauri_plugin_notification::init());
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_autostart::init(
@@ -55,6 +53,11 @@ pub fn run() {
             commands::history,
             commands::clear_history,
             commands::restart,
+            commands::restart_stopped,
+            commands::port_details,
+            commands::open_port,
+            commands::reveal_project,
+            commands::open_in_editor,
             commands::autostart,
             commands::set_pin,
             commands::unpin,
@@ -106,4 +109,60 @@ pub fn run() {
         })
         .run(context)
         .expect("error while running portwise");
+}
+
+#[cfg(test)]
+mod security_tests {
+    //! The webview's privileges are part of the security model: fail loudly if they grow.
+
+    fn json(text: &str) -> serde_json::Value {
+        serde_json::from_str(text).unwrap()
+    }
+
+    #[test]
+    fn the_window_gets_only_the_permissions_it_uses() {
+        let cap = json(include_str!("../capabilities/default.json"));
+        let perms: Vec<&str> = cap["permissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p.as_str().unwrap())
+            .collect();
+        assert_eq!(
+            perms,
+            [
+                "core:event:allow-listen",
+                "core:event:allow-unlisten",
+                "core:window:allow-start-dragging"
+            ]
+        );
+        assert_eq!(cap["windows"], serde_json::json!(["main"]));
+    }
+
+    #[test]
+    fn the_csp_is_strict() {
+        let conf = json(include_str!("../tauri.conf.json"));
+        let sec = &conf["app"]["security"];
+        let csp = sec["csp"].as_str().unwrap();
+        for d in [
+            "default-src 'self'",
+            "script-src 'self'",
+            "object-src 'none'",
+            "base-uri 'none'",
+            "frame-ancestors 'none'",
+            "form-action 'none'",
+        ] {
+            assert!(csp.contains(d), "CSP lacks {d}");
+        }
+        assert!(!csp.contains("unsafe-eval"));
+        assert!(!csp
+            .split(';')
+            .any(|d| d.trim().starts_with("script-src") && d.contains("unsafe-inline")));
+        assert!(!csp.contains("http:") || csp.contains("http://ipc.localhost"));
+        // `freezePrototype` stays off: the bundle assigns `constructor` on plain objects and
+        // renders a blank window with a frozen prototype (caught by the end-to-end check).
+        assert!(
+            conf["app"]["withGlobalTauri"].is_null() || conf["app"]["withGlobalTauri"] == false
+        );
+    }
 }

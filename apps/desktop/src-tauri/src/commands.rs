@@ -237,10 +237,16 @@ pub fn set_notify(
         .map_err(|e| e.to_string())
 }
 
-/// Recently stopped services, newest first.
+/// Recently stopped services, newest first. Secrets in their commands are hidden: the real
+/// command never leaves the backend.
 #[tauri::command]
 pub fn history(state: State<'_, AppState>, limit: Option<usize>) -> Vec<HistoryEntry> {
-    state.store.history(limit.unwrap_or(50))
+    state
+        .store
+        .history(limit.unwrap_or(50))
+        .iter()
+        .map(HistoryEntry::redacted)
+        .collect()
 }
 
 #[tauri::command]
@@ -248,10 +254,17 @@ pub fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
     state.store.clear_history().map_err(|e| e.to_string())
 }
 
-/// Start a previously stopped command again in its original directory.
+/// Start a previously stopped command again in its original directory. The webview names the
+/// history entry (when it was stopped, which port); the command itself is read from the
+/// history file, so the UI can never make the app run a command of its choosing.
 #[tauri::command]
-pub async fn restart(app: AppHandle, entry: HistoryEntry) -> Result<Restarted, String> {
+pub async fn restart(app: AppHandle, at_ms: u64, port: u16) -> Result<Restarted, String> {
     blocking(move || {
+        let entry = app
+            .state::<AppState>()
+            .store
+            .entry(at_ms, port)
+            .ok_or_else(|| format!("portwise has no record of stopping :{port} then"))?;
         if !entry.restartable() {
             return Err(format!(
                 "portwise didn't record a command for :{} — start it the usual way",
@@ -267,6 +280,90 @@ pub async fn restart(app: AppHandle, entry: HistoryEntry) -> Result<Restarted, S
         })
     })
     .await
+}
+
+/// After the UI stopped `port` (through the normal confirm-and-stop flow), start what it just
+/// recorded again: "Restart" for a running dev server. Only an entry recorded in the last
+/// two minutes counts, so this never resurrects something stopped long ago.
+#[tauri::command]
+pub async fn restart_stopped(app: AppHandle, port: u16) -> Result<Restarted, String> {
+    blocking(move || {
+        let store = &app.state::<AppState>().store;
+        let entry = store
+            .last_for_port(port)
+            .filter(|e| portwise_core::util::now_ms().saturating_sub(e.at_ms) < 120_000)
+            .filter(HistoryEntry::restartable)
+            .ok_or_else(|| {
+                format!("portwise didn't record a command for :{port} — start it the usual way")
+            })?;
+        let (pid, log) = history::restart(&entry, &store.logs_dir()).map_err(|e| e.to_string())?;
+        Ok(Restarted {
+            pid,
+            command: entry.command_line(),
+            log: log.display().to_string(),
+        })
+    })
+    .await
+}
+
+/// Connections, process tree, uptime and bind risk for the listeners on `port`. Loaded
+/// lazily for the selected port only, from a scan that includes connected sockets.
+#[tauri::command]
+pub async fn port_details(port: u16) -> Result<Vec<portwise_core::details::PortDetails>, String> {
+    blocking(move || {
+        let engine = scan_now(true, false)?;
+        Ok(portwise_core::details::for_port(&engine.scan, port))
+    })
+    .await
+}
+
+/// The folder the service on `port` runs in: its project root, else the process's directory.
+/// Looked up from the latest scan; the webview only ever names a port.
+fn folder_for(app: &AppHandle, port: u16) -> Result<std::path::PathBuf, String> {
+    let state = app.state::<AppState>();
+    let guard = state.engine.lock().unwrap_or_else(|e| e.into_inner());
+    let e = guard
+        .as_ref()
+        .and_then(|e| {
+            e.snapshot()
+                .entries
+                .iter()
+                .find(|x| {
+                    x.port == port
+                        && x.state.is_listening()
+                        && (x.project.is_some()
+                            || x.process.as_ref().is_some_and(|p| p.cwd.is_some()))
+                })
+                .cloned()
+        })
+        .ok_or_else(|| format!("No project folder is known for :{port}"))?;
+    e.project
+        .map(|p| p.root)
+        .or_else(|| e.process.and_then(|p| p.cwd))
+        .ok_or_else(|| format!("No project folder is known for :{port}"))
+}
+
+/// Open `http://localhost:<port>` in the default browser.
+#[tauri::command]
+pub fn open_port(port: u16) -> Result<(), String> {
+    if port == 0 {
+        return Err("Port must be between 1 and 65535".into());
+    }
+    portwise_core::util::open_url(&format!("http://localhost:{port}")).map_err(|e| e.to_string())
+}
+
+/// Show the project folder of the service on `port` in Finder / Explorer.
+#[tauri::command]
+pub fn reveal_project(app: AppHandle, port: u16) -> Result<(), String> {
+    let dir = folder_for(&app, port)?;
+    portwise_core::util::reveal(&dir).map_err(|e| e.to_string())
+}
+
+/// Open the project folder of the service on `port` in the user's editor; returns its name.
+#[tauri::command]
+pub fn open_in_editor(app: AppHandle, port: u16) -> Result<String, String> {
+    let dir = folder_for(&app, port)?;
+    portwise_core::util::open_in_editor(&dir).map_err(|e| e.to_string())
 }
 
 /// Whether portwise launches at login.
