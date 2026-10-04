@@ -23,6 +23,10 @@ use tauri::{Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Project lookups read files in the user's folders; on macOS the first read under
+    // ~/Documents waits for the privacy prompt. Keep scans live: wait only a few ms for them
+    // and fill project fields in on a later scan.
+    portwise_core::project::set_scan_budget(std::time::Duration::from_millis(15));
     let context = tauri::generate_context!();
     let updater = update::configured(&context);
     let mut builder = tauri::Builder::default().plugin(tauri_plugin_notification::init());
@@ -164,5 +168,24 @@ mod security_tests {
         assert!(
             conf["app"]["withGlobalTauri"].is_null() || conf["app"]["withGlobalTauri"] == false
         );
+    }
+
+    #[test]
+    fn the_info_plist_explains_folder_access() {
+        let plist = include_str!("../Info.plist");
+        for key in [
+            "NSDocumentsFolderUsageDescription",
+            "NSDesktopFolderUsageDescription",
+            "NSDownloadsFolderUsageDescription",
+        ] {
+            let at = plist
+                .find(key)
+                .unwrap_or_else(|| panic!("Info.plist lacks {key}"));
+            let rest = &plist[at..];
+            let s = rest.find("<string>").unwrap() + 8;
+            let e = rest.find("</string>").unwrap();
+            let why = &rest[s..e];
+            assert!(why.len() > 20 && why.len() < 200, "{key}: {why}");
+        }
     }
 }

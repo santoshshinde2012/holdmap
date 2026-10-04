@@ -4,11 +4,13 @@
 //! Manifest formats are [`ManifestParser`] strategies in a [`ManifestRegistry`]; workspace kinds
 //! are [`WorkspaceMarker`](workspace::WorkspaceMarker)s. Both are open for extension.
 
+mod cache;
 mod framework;
 mod git;
 pub mod manifest;
 pub mod workspace;
 
+pub use cache::{scan_budget, set_scan_budget, ProjectCache, Resolver};
 pub use framework::detect_framework;
 pub use git::{git_branch, git_root};
 pub use manifest::{ManifestParser, ManifestRegistry};
@@ -18,6 +20,8 @@ use crate::model::ProjectInfo;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// A detected project plus the dependency names used to refine framework detection.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,11 +32,24 @@ pub struct ProjectDetails {
     pub deps: Vec<String>,
 }
 
-/// Caches project lookups per directory for one scan.
-#[derive(Debug, Default)]
+/// Project lookups for one scan.
+///
+/// Lookups go through a shared background [`ProjectCache`], so a slow or blocked read (a
+/// macOS privacy prompt, a hung mount) never holds up the scan: the whole scan waits at most
+/// [`scan_budget`] for lookups that aren't cached yet, and anything not ready by then is left
+/// empty and filled in on a later scan.
+#[derive(Debug)]
 pub struct ProjectDetector {
-    cache: HashMap<PathBuf, Option<ProjectDetails>>,
+    memo: HashMap<PathBuf, Option<ProjectDetails>>,
     home: Option<PathBuf>,
+    cache: Arc<ProjectCache>,
+    deadline: Instant,
+}
+
+impl Default for ProjectDetector {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ProjectDetector {
@@ -46,19 +63,37 @@ impl ProjectDetector {
 
     /// A detector that treats `home` as the upper bound when walking up.
     pub fn with_home(home: Option<PathBuf>) -> Self {
+        Self::with_cache(ProjectCache::global(), home, scan_budget())
+    }
+
+    /// A detector backed by `cache` that waits at most `budget` in total.
+    pub fn with_cache(cache: Arc<ProjectCache>, home: Option<PathBuf>, budget: Duration) -> Self {
         Self {
-            cache: HashMap::new(),
+            memo: HashMap::new(),
             home,
+            cache,
+            deadline: Instant::now() + budget,
         }
     }
 
-    /// Detect the project containing `cwd` (cached per directory).
+    /// Start lookups for all of `cwds` without waiting, so one slow directory doesn't use up
+    /// the budget before the others have even started.
+    pub fn prefetch<'a>(&mut self, cwds: impl IntoIterator<Item = &'a Path>) {
+        let now = Instant::now();
+        for cwd in cwds {
+            if !self.memo.contains_key(cwd) {
+                let _ = self.cache.get(cwd, self.home.as_deref(), now);
+            }
+        }
+    }
+
+    /// The project containing `cwd`, or `None` if there is none or it isn't known yet.
     pub fn detect(&mut self, cwd: &Path) -> Option<ProjectDetails> {
-        if let Some(hit) = self.cache.get(cwd) {
+        if let Some(hit) = self.memo.get(cwd) {
             return hit.clone();
         }
-        let found = detect_project(cwd, self.home.as_deref());
-        self.cache.insert(cwd.to_path_buf(), found.clone());
+        let found = self.cache.get(cwd, self.home.as_deref(), self.deadline);
+        self.memo.insert(cwd.to_path_buf(), found.clone());
         found
     }
 }

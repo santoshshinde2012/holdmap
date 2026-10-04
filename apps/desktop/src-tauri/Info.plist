@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>portwise reads project files (package.json, Cargo.toml, .git) in your Documents folder to show which project and branch a port belongs to. It never changes them.</string>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>portwise reads project files (package.json, Cargo.toml, .git) on your Desktop to show which project and branch a port belongs to. It never changes them.</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>portwise reads project files (package.json, Cargo.toml, .git) in your Downloads folder to show which project and branch a port belongs to. It never changes them.</string>
+</dict>
+</plist>

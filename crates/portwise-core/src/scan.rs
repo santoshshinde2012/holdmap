@@ -318,6 +318,19 @@ pub fn build_entries_with(
     all_states: bool,
     policy: &dyn ProtectionPolicy,
 ) -> (Vec<PortEntry>, usize) {
+    let mut detector = ProjectDetector::new();
+    build_entries_using(raw, table, published, all_states, policy, &mut detector)
+}
+
+/// [`build_entries_with`] with an explicit project detector.
+pub fn build_entries_using(
+    raw: &[RawSocket],
+    table: &ProcessTable,
+    published: &[PublishedPort],
+    all_states: bool,
+    policy: &dyn ProtectionPolicy,
+    detector: &mut ProjectDetector,
+) -> (Vec<PortEntry>, usize) {
     let mut groups: BTreeMap<Key, (Vec<&RawSocket>, Vec<u32>)> = BTreeMap::new();
     let mut hidden = 0;
     for s in raw {
@@ -353,7 +366,10 @@ pub fn build_entries_with(
         }
     }
 
-    let mut detector = ProjectDetector::new();
+    detector.prefetch(groups.keys().filter_map(|k| {
+        k.2.and_then(|p| table.get(p))
+            .and_then(|p| p.cwd.as_deref())
+    }));
     let mut entries = Vec::with_capacity(groups.len());
     for ((protocol, port, pid, state, remote), (socks, mut pids)) in groups {
         pids.sort_unstable();
@@ -696,6 +712,89 @@ fn token_matches(tok: &str, e: &PortEntry) -> bool {
 mod tests {
     use super::*;
     use crate::process::tests::{proc, table};
+
+    #[test]
+    fn a_hanging_project_read_does_not_delay_the_scan() {
+        use crate::project::{ProjectCache, ProjectDetails};
+        use std::sync::{mpsc, Mutex};
+        use std::time::{Duration, Instant};
+        let (tx, rx) = mpsc::channel::<()>();
+        let rx = Mutex::new(rx);
+        // The "shop" read blocks, like a read under ~/Documents behind an unanswered prompt.
+        let cache = ProjectCache::new(
+            Arc::new(move |cwd: &std::path::Path, _: Option<&std::path::Path>| {
+                let name = cwd.file_name().unwrap().to_string_lossy().into_owned();
+                if name == "shop" {
+                    let _ = rx.lock().unwrap().recv();
+                }
+                Some(ProjectDetails {
+                    info: crate::model::ProjectInfo {
+                        name,
+                        root: cwd.to_path_buf(),
+                        kind: "package.json".into(),
+                        git_branch: Some("main".into()),
+                        workspace: None,
+                        git_root: None,
+                    },
+                    deps: vec![],
+                })
+            }),
+            Duration::from_secs(60),
+        );
+        let mut p = proc(500, 1, "node", &["node", "server.js"]);
+        p.cwd = Some("/Users/me/Documents/shop".into());
+        let mut q = proc(501, 1, "python3", &["python3", "-m", "http.server"]);
+        q.cwd = Some("/Users/me/Documents/blog".into());
+        let t = table(vec![proc(1, 0, "init", &[]), p, q], 99_999);
+        let raw = vec![
+            sock(
+                Protocol::Tcp,
+                Family::V4,
+                "127.0.0.1",
+                3000,
+                SocketState::Listen,
+                &[500],
+            ),
+            sock(
+                Protocol::Tcp,
+                Family::V4,
+                "127.0.0.1",
+                8000,
+                SocketState::Listen,
+                &[501],
+            ),
+        ];
+        let build = |budget_ms: u64| {
+            let mut d =
+                ProjectDetector::with_cache(cache.clone(), None, Duration::from_millis(budget_ms));
+            let t0 = Instant::now();
+            let (e, _) =
+                build_entries_using(&raw, &t, &[], false, &DefaultProtectionPolicy, &mut d);
+            (e, t0.elapsed())
+        };
+        // The scan waits at most its budget, even though one read never finishes.
+        let (entries, took) = build(150);
+        assert!(took < Duration::from_millis(1_500), "scan waited {took:?}");
+        assert_eq!(entries.len(), 2, "rows still appear");
+        let name = |es: &[PortEntry], port: u16| {
+            es.iter()
+                .find(|e| e.port == port)
+                .and_then(|e| e.project.as_ref().map(|p| p.name.clone()))
+        };
+        assert_eq!(name(&entries, 3000), None, "no project yet, no error");
+        assert_eq!(
+            name(&entries, 8000).as_deref(),
+            Some("blog"),
+            "others aren't held up"
+        );
+        // The next scan doesn't wait either (the lookups are still hung).
+        let (_, took) = build(20);
+        assert!(took < Duration::from_millis(1_000), "scan waited {took:?}");
+        // Once the reads finish (prompt answered), a later scan has the project.
+        tx.send(()).unwrap();
+        let (entries, _) = build(5_000);
+        assert_eq!(name(&entries, 3000).as_deref(), Some("shop"));
+    }
 
     fn sock(
         proto: Protocol,
