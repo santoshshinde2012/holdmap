@@ -3,7 +3,32 @@
 use crate::model::ProcessInfo;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind, Users};
+
+/// The user list, cached. Listing users is a directory-service query (OpenDirectory on macOS)
+/// that is slow and can stall for seconds, yet accounts almost never change: refresh once a
+/// minute, or sooner (at most every few seconds) when a process runs as an unknown uid.
+struct UserCache {
+    users: Users,
+    at: Instant,
+    /// uids already missing from the list when it was read (system daemons on macOS): seeing
+    /// them again is no reason to re-read it.
+    missing: HashSet<sysinfo::Uid>,
+}
+static USERS: Mutex<Option<UserCache>> = Mutex::new(None);
+const USERS_TTL: Duration = Duration::from_secs(60);
+const USERS_MISS_TTL: Duration = Duration::from_secs(5);
+
+/// Should the cached user list be re-read? `unknown` says whether a process has a uid the
+/// list doesn't know.
+fn users_stale(age: Option<Duration>, unknown: bool) -> bool {
+    match age {
+        None => true,
+        Some(a) => a >= USERS_TTL || (unknown && a >= USERS_MISS_TTL),
+    }
+}
 
 /// A point-in-time view of all processes.
 #[derive(Debug, Clone, Default)]
@@ -91,7 +116,32 @@ impl ProcessTable {
     /// Capture using a long-lived [`System`], so CPU usage is measured since the previous call.
     pub fn capture_with(sys: &mut System) -> Self {
         sys.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind());
-        let users = Users::new_with_refreshed_list();
+        let mut cache = USERS.lock().unwrap_or_else(|e| e.into_inner());
+        let unknown = |c: &UserCache| {
+            sys.processes().values().any(|p| {
+                p.user_id()
+                    .is_some_and(|u| !c.missing.contains(u) && c.users.get_user_by_id(u).is_none())
+            })
+        };
+        if users_stale(
+            cache.as_ref().map(|c| c.at.elapsed()),
+            cache.as_ref().is_some_and(unknown),
+        ) {
+            let users = Users::new_with_refreshed_list();
+            let missing = sys
+                .processes()
+                .values()
+                .filter_map(|p| p.user_id())
+                .filter(|u| users.get_user_by_id(u).is_none())
+                .cloned()
+                .collect();
+            *cache = Some(UserCache {
+                users,
+                at: Instant::now(),
+                missing,
+            });
+        }
+        let users = &cache.as_ref().expect("just filled").users;
         let procs = sys
             .processes()
             .values()
@@ -303,6 +353,20 @@ pub fn sysinfo_start_time(pid: u32) -> Option<u64> {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    #[test]
+    fn the_user_list_is_cached() {
+        let s = Duration::from_secs;
+        assert!(users_stale(None, false), "first scan reads it");
+        assert!(!users_stale(Some(s(3)), false));
+        assert!(
+            !users_stale(Some(s(3)), true),
+            "a new uid waits for the short TTL"
+        );
+        assert!(users_stale(Some(s(6)), true));
+        assert!(!users_stale(Some(s(30)), false));
+        assert!(users_stale(Some(s(61)), false));
+    }
+
     use super::*;
 
     pub fn proc(pid: u32, ppid: u32, name: &str, cmd: &[&str]) -> ProcessInfo {

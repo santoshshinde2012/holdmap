@@ -53,6 +53,37 @@ pub fn scan(opts: &ScanOptions) -> Result<Scan, std::io::Error> {
     Scanner::system().scan(opts)
 }
 
+/// How long each part of a scan took (`PORTWISE_TRACE=scan` prints it to stderr).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScanTimings {
+    /// Reading the socket table.
+    pub sockets: std::time::Duration,
+    /// Capturing the process table (runs in parallel with the sockets).
+    pub processes: std::time::Duration,
+    /// Asking container runtimes for published ports (in parallel); `None` when skipped.
+    pub containers: Option<std::time::Duration>,
+    /// Joining it all into entries.
+    pub build: std::time::Duration,
+    /// Wall time.
+    pub total: std::time::Duration,
+}
+
+impl std::fmt::Display for ScanTimings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ms = |d: std::time::Duration| d.as_millis();
+        write!(
+            f,
+            "scan {} ms (sockets {}, processes {}, containers {}, build {})",
+            ms(self.total),
+            ms(self.sockets),
+            ms(self.processes),
+            self.containers
+                .map_or("off".to_string(), |d| ms(d).to_string()),
+            ms(self.build)
+        )
+    }
+}
+
 /// Builds a [`Scan`] from injected providers and a protection policy.
 #[derive(Clone)]
 pub struct Scanner {
@@ -129,16 +160,30 @@ impl Scanner {
         let started = Instant::now();
         let mut warnings = Vec::new();
         // Sockets, processes and containers are independent: collect them in parallel.
-        let (raw, table, containers) = std::thread::scope(|s| {
-            let containers = opts.docker.then(|| s.spawn(|| self.containers.published()));
-            let table = s.spawn(|| self.processes.processes());
-            let raw = self.sockets.sockets();
+        let ((raw, t_sockets), (table, t_procs), containers) = std::thread::scope(|s| {
+            let containers = opts.docker.then(|| {
+                s.spawn(|| {
+                    let t = Instant::now();
+                    (self.containers.published(), t.elapsed())
+                })
+            });
+            let table = s.spawn(|| {
+                let t = Instant::now();
+                (self.processes.processes(), t.elapsed())
+            });
+            let t = Instant::now();
+            let raw = (self.sockets.sockets(), t.elapsed());
             (
                 raw,
                 table.join().unwrap_or_default(),
                 containers.map(|h| h.join()),
             )
         });
+        let t_containers = match &containers {
+            Some(Ok((_, t))) => Some(*t),
+            _ => None,
+        };
+        let containers = containers.map(|r| r.map(|(v, _)| v));
         let raw = raw?;
         let (published, docker_available) = match containers {
             Some(Ok(r)) => r,
@@ -148,6 +193,7 @@ impl Scanner {
             }
             None => (Vec::new(), false),
         };
+        let t_build = Instant::now();
         let (entries, hidden) = build_entries_with(
             &raw,
             &table,
@@ -155,6 +201,16 @@ impl Scanner {
             opts.all_states,
             self.policy.as_ref(),
         );
+        let timings = ScanTimings {
+            sockets: t_sockets,
+            processes: t_procs,
+            containers: t_containers,
+            build: t_build.elapsed(),
+            total: started.elapsed(),
+        };
+        if crate::util::tracing("scan") {
+            eprintln!("portwise: {} · {} entries", timings, entries.len());
+        }
         let snapshot = Snapshot {
             entries,
             hidden_sockets: hidden,

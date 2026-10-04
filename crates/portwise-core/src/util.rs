@@ -73,6 +73,20 @@ pub fn run_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Opti
     })
 }
 
+/// Whether `PORTWISE_TRACE` asks for diagnostics on `topic` (`scan`, …): a comma-separated
+/// list of topics, or `1` / `all` for everything.
+pub fn tracing(topic: &str) -> bool {
+    trace_wants(std::env::var("PORTWISE_TRACE").ok().as_deref(), topic)
+}
+
+fn trace_wants(var: Option<&str>, topic: &str) -> bool {
+    var.is_some_and(|v| {
+        v.split(',')
+            .map(str::trim)
+            .any(|t| t == topic || t == "1" || t == "all")
+    })
+}
+
 /// Current Unix time in milliseconds.
 pub fn now_ms() -> u64 {
     SystemTime::now()
@@ -235,6 +249,16 @@ pub fn spawn_detached(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn trace_topics() {
+        assert!(!trace_wants(None, "scan"));
+        assert!(!trace_wants(Some("0"), "scan"));
+        assert!(trace_wants(Some("scan"), "scan"));
+        assert!(trace_wants(Some("http, scan"), "scan"));
+        assert!(trace_wants(Some("1"), "scan"));
+        assert!(!trace_wants(Some("http"), "scan"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn run_with_timeout_reads_output_larger_than_a_pipe_buffer() {

@@ -274,6 +274,8 @@ Modules, traits and data flow: [docs/architecture.md](docs/architecture.md).
 - **`Permission denied` on a shell rc file:** an old `sudo` left it owned by root. Run
   `sudo chown "$USER" ~/.bash_profile` and install again. Never run the installer with `sudo`.
 - **Other users' ports are hidden:** run with `sudo` (an elevated terminal on Windows).
+- **Slow or stale list:** `PORTWISE_TRACE=scan portwise list` prints how long each part of a scan
+  took (sockets, processes, containers).
 - **Uninstall:** `rm ~/.local/bin/portwise`, remove the `env.sh` line the installer added to your
   shell rc files, and delete the app. Settings and history live in `~/.config/portwise` (macOS:
   `~/Library/Application Support/portwise`, Windows: `%APPDATA%\portwise`).
