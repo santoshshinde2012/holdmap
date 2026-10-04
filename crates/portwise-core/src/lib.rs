@@ -32,6 +32,7 @@ pub mod model;
 pub mod probe;
 pub mod process;
 pub mod project;
+pub mod redact;
 pub mod provider;
 pub mod remote;
 pub mod safety;

@@ -65,8 +65,7 @@ pub(crate) fn exposure_detail(e: &PortEntry) -> String {
 }
 
 pub(crate) fn short_cmd(p: &ProcessInfo) -> String {
-    let parts: Vec<String> = p
-        .cmdline
+    let parts: Vec<String> = crate::redact::args(&p.cmdline)
         .iter()
         .take(4)
         .map(|a| {

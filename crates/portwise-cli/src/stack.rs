@@ -684,7 +684,10 @@ pub fn init_project(force: bool, print: bool, docker: bool) -> Result<u8> {
         }
         let command = proc_
             .filter(|p| !p.cmdline.is_empty())
-            .map(|p| match p.cmdline.as_slice() {
+            // Never copy a password or token from a running command into a file that tends
+            // to get committed; `••••` makes the gap obvious.
+            .map(|p| portwise_core::redact::args(&p.cmdline))
+            .map(|cmdline| match cmdline.as_slice() {
                 // A process that rewrote its title (`npm run dev`) shows one argument with spaces.
                 [one] => one.clone(),
                 many => many

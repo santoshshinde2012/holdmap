@@ -449,19 +449,7 @@ impl App {
     fn open_selected(&mut self) {
         let Some(e) = self.selected() else { return };
         let url = format!("http://localhost:{}", e.port);
-        let r = if cfg!(target_os = "macos") {
-            std::process::Command::new("open").arg(&url).spawn()
-        } else if cfg!(windows) {
-            std::process::Command::new("cmd")
-                .args(["/C", "start", "", &url])
-                .spawn()
-        } else {
-            std::process::Command::new("xdg-open")
-                .arg(&url)
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-        };
+        let r = portwise_core::util::open_url(&url);
         self.toast = Some(match r {
             Ok(_) => Toast {
                 text: format!("Opened {url}"),

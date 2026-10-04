@@ -145,7 +145,8 @@ pub fn history_cmd(a: &HistoryArgs) -> Result<u8> {
     }
     let h = s.history(a.limit);
     if a.json {
-        println!("{}", serde_json::to_string_pretty(&h)?);
+        let shown: Vec<HistoryEntry> = h.iter().map(HistoryEntry::redacted).collect();
+        println!("{}", serde_json::to_string_pretty(&shown)?);
         return Ok(crate::exit::OK);
     }
     if h.is_empty() {

@@ -103,8 +103,10 @@ pub fn detect_project_with(
 
 fn info(root: &Path, kind: &str, name: Option<String>, home: Option<&Path>) -> ProjectInfo {
     ProjectInfo {
+        // A manifest is someone else's text: keep control characters out of the terminal.
         name: name
             .filter(|n| !n.is_empty())
+            .map(|n| crate::util::printable(&n).into_owned())
             .unwrap_or_else(|| dir_name(root)),
         root: root.to_path_buf(),
         kind: kind.to_string(),

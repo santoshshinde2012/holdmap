@@ -203,10 +203,11 @@ impl Store {
     }
 
     fn write_atomic(&self, path: &Path, bytes: &[u8]) -> io::Result<()> {
-        fs::create_dir_all(&self.dir)?;
+        crate::util::create_private_dir(&self.dir)?;
         let tmp = path.with_extension("tmp");
         {
-            let mut f = fs::File::create(&tmp)?;
+            // Owner-only: the history keeps the real command lines of stopped services.
+            let mut f = crate::util::create_private(&tmp)?;
             f.write_all(bytes)?;
             f.sync_all()?;
         }
@@ -251,6 +252,14 @@ impl Store {
         self.history(usize::MAX)
             .into_iter()
             .find(|h| h.port == port)
+    }
+
+    /// The history entry stopped at `at_ms` on `port` (how a frontend names one to restart,
+    /// so the command that runs always comes from this file, never from the caller).
+    pub fn entry(&self, at_ms: u64, port: u16) -> Option<HistoryEntry> {
+        self.history(usize::MAX)
+            .into_iter()
+            .find(|e| e.at_ms == at_ms && e.port == port)
     }
 
     /// Forget the stop history.
@@ -301,6 +310,36 @@ mod tests {
         // Corrupt config falls back to defaults instead of failing.
         fs::write(tmp.path().join("pw/config.json"), "{nope").unwrap();
         assert_eq!(s.config(), Config::default());
+    }
+
+    #[test]
+    fn history_is_private_and_keeps_the_real_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let s = Store::new(tmp.path().join("pw"));
+        let mut e = h(3000, 7);
+        e.command = vec!["node".into(), "server.js".into(), "--token=abc".into()];
+        s.record(&[e]).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = |p: &str| {
+                fs::metadata(tmp.path().join(p))
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777
+            };
+            assert_eq!(mode("pw/history.jsonl"), 0o600);
+            assert_eq!(mode("pw"), 0o700);
+        }
+        let got = s.entry(7, 3000).unwrap();
+        assert_eq!(
+            got.command[2], "--token=abc",
+            "restart needs the real command"
+        );
+        assert_eq!(got.redacted().command[2], "--token=••••");
+        assert_eq!(got.command_line(), "node server.js --token=••••");
+        assert!(s.entry(7, 3001).is_none());
     }
 
     #[test]

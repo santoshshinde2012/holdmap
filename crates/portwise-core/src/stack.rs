@@ -47,6 +47,14 @@ pub enum StackError {
         /// The underlying error.
         source: std::io::Error,
     },
+    /// The file could be changed by someone else, so its commands won't be run.
+    #[error("refusing {path}: {message}")]
+    Unsafe {
+        /// The file.
+        path: PathBuf,
+        /// Why it isn't trusted.
+        message: String,
+    },
     /// The file isn't valid TOML or has unknown keys.
     #[error("{path}: {message}")]
     Parse {
@@ -141,8 +149,44 @@ pub fn find(start: &Path) -> Option<PathBuf> {
         .find(|f| f.is_file())
 }
 
-/// Read and validate a stack file.
+/// A stack file runs its commands through the shell, so like git's `safe.directory` only
+/// trust one the current user (or root) owns and other users can't write to. This stops a
+/// `.portwise.toml` dropped into a shared parent directory (`/tmp`, a shared checkout) from
+/// running someone else's commands as you.
+pub fn check_trusted(path: &Path) -> Result<(), StackError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let unsafe_ = |message: String| StackError::Unsafe {
+            path: path.to_path_buf(),
+            message,
+        };
+        let m = std::fs::metadata(path).map_err(|source| StackError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        // SAFETY: geteuid has no preconditions and can't fail.
+        let me = unsafe { libc::geteuid() };
+        if m.uid() != me && m.uid() != 0 {
+            return Err(unsafe_(format!(
+                "it belongs to another user (uid {}); portwise only runs stack files you own",
+                m.uid()
+            )));
+        }
+        if m.mode() & 0o002 != 0 {
+            return Err(unsafe_(
+                "anyone can write to it; run `chmod o-w` on it first".into(),
+            ));
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+/// Read and validate a stack file (refusing one that isn't [`check_trusted`]).
 pub fn load(path: &Path) -> Result<Stack, StackError> {
+    check_trusted(path)?;
     let text = std::fs::read_to_string(path).map_err(|source| StackError::Io {
         path: path.to_path_buf(),
         source,
@@ -607,6 +651,24 @@ port = 5432
         assert!(bad("[services.a]\nport = 1\nprot = 2").contains("unknown field"));
         assert!(bad("port = ").contains(".portwise.toml"));
         assert!(bad("[services.a]\nport = 70000").contains(".portwise.toml"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_a_world_writable_stack_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = tempfile::tempdir().unwrap();
+        let f = d.path().join(FILE_NAME);
+        std::fs::write(
+            &f,
+            "[services.web]\nport = 3000\ncommand = \"npm run dev\"\n",
+        )
+        .unwrap();
+        assert!(load(&f).is_ok());
+        std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o666)).unwrap();
+        let err = load(&f).unwrap_err();
+        assert!(matches!(err, StackError::Unsafe { .. }), "{err}");
+        assert!(err.to_string().contains("chmod o-w"));
     }
 
     #[test]

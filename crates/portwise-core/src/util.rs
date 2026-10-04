@@ -150,27 +150,214 @@ pub fn local_url(port: u16) -> String {
     format!("{scheme}://localhost:{port}")
 }
 
-/// Open `url` in the default browser without blocking (open / xdg-open / start).
+/// Text from outside portwise (process names, command lines, HTTP titles and headers,
+/// container names) made safe to print: control characters such as ESC can't reach the
+/// terminal, so a process or a local web page can't rewrite the screen or the title bar.
+/// Whitespace controls become spaces; anything else becomes `�`.
+pub fn printable(s: &str) -> std::borrow::Cow<'_, str> {
+    if !s.chars().any(char::is_control) {
+        return std::borrow::Cow::Borrowed(s);
+    }
+    std::borrow::Cow::Owned(
+        s.chars()
+            .map(|c| match c {
+                '\t' | '\n' | '\r' => ' ',
+                c if c.is_control() => '\u{FFFD}',
+                c => c,
+            })
+            .collect(),
+    )
+}
+
+/// Create (or truncate) a file only its owner can read or write (0600 on Unix).
+pub fn create_private(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        o.mode(0o600);
+        let f = o.open(path)?;
+        // `mode` only applies to new files; tighten one left over from an older version.
+        f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        Ok(f)
+    }
+    #[cfg(not(unix))]
+    o.open(path)
+}
+
+/// Create a directory (and parents) that only its owner can enter (0700 on Unix for the
+/// directories this creates; existing ones are left as they are).
+pub fn create_private_dir(dir: &std::path::Path) -> std::io::Result<()> {
+    let mut b = std::fs::DirBuilder::new();
+    b.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        b.mode(0o700);
+    }
+    b.create(dir)
+}
+
+/// Is `url` a plain http(s) URL that is safe to hand to the OS opener? No whitespace, quotes
+/// or shell/`cmd.exe` metacharacters, so it can't be read as an option or a second command.
+pub fn is_safe_url(url: &str) -> bool {
+    (url.starts_with("http://") || url.starts_with("https://"))
+        && url.len() <= 2048
+        && url
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-._~:/?#[]@!$&'()*+,;=%".contains(&b))
+        && !url.contains(['\'', '!', '$', '(', ')', ';'])
+}
+
+/// Open `url` in the default browser without blocking (open / xdg-open / the URL handler).
+/// Only [`is_safe_url`] URLs are accepted, and the URL is always passed as one argument.
 pub fn open_url(url: &str) -> std::io::Result<()> {
-    if !(url.starts_with("http://") || url.starts_with("https://")) {
+    if !is_safe_url(url) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "only http(s) URLs can be opened",
+            "only plain http(s) URLs can be opened",
         ));
     }
-    let mut cmd = if cfg!(target_os = "macos") {
+    let cmd = if cfg!(target_os = "macos") {
         let mut c = std::process::Command::new("open");
         c.arg(url);
         c
     } else if cfg!(windows) {
-        let mut c = std::process::Command::new("cmd");
-        c.args(["/C", "start", "", url]);
+        // Not `cmd /C start`: cmd.exe would parse `&`, `|` and `^` in the URL.
+        let mut c = std::process::Command::new("rundll32");
+        c.args(["url.dll,FileProtocolHandler", url]);
         c
     } else {
         let mut c = std::process::Command::new("xdg-open");
         c.arg(url);
         c
     };
+    spawn_quiet(cmd)
+}
+
+/// Show a directory in the file manager (Finder / Explorer / the desktop's handler).
+pub fn reveal(path: &std::path::Path) -> std::io::Result<()> {
+    if !path.is_absolute() || !path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("{} doesn't exist", path.display()),
+        ));
+    }
+    let cmd = if cfg!(target_os = "macos") {
+        let mut c = std::process::Command::new("open");
+        c.arg("-R").arg(path);
+        c
+    } else if cfg!(windows) {
+        let mut c = std::process::Command::new("explorer");
+        c.arg(path);
+        c
+    } else {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(path);
+        c
+    };
+    spawn_quiet(cmd)
+}
+
+/// Editors portwise knows how to open a folder in, in order of preference: (command, macOS app).
+const EDITORS: [(&str, &str); 5] = [
+    ("cursor", "Cursor"),
+    ("code", "Visual Studio Code"),
+    ("zed", "Zed"),
+    ("subl", "Sublime Text"),
+    ("idea", "IntelliJ IDEA"),
+];
+
+/// Open a project folder in the user's editor: `$PORTWISE_EDITOR`, then the first known
+/// editor installed (Cursor, VS Code, Zed, Sublime, IntelliJ). Returns the editor's name.
+/// The folder is passed as a single argument; nothing goes through a shell.
+pub fn open_in_editor(dir: &std::path::Path) -> std::io::Result<String> {
+    if !dir.is_absolute() || !dir.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("{} isn't a folder", dir.display()),
+        ));
+    }
+    let custom = std::env::var("PORTWISE_EDITOR")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+    if let Some(bin) = custom.as_deref().and_then(|e| which(e.trim())) {
+        let mut c = std::process::Command::new(&bin);
+        c.arg(dir);
+        spawn_quiet(c)?;
+        return Ok(bin
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default());
+    }
+    for (bin, app) in EDITORS {
+        if let Some(path) = which(bin) {
+            let mut c = std::process::Command::new(path);
+            c.arg(dir);
+            spawn_quiet(c)?;
+            return Ok(app.to_string());
+        }
+        // GUI apps on macOS start without the shell's PATH: look for the app bundle.
+        if cfg!(target_os = "macos") {
+            let installed = [
+                std::path::PathBuf::from("/Applications"),
+                home_dir().join("Applications"),
+            ]
+            .iter()
+            .any(|d| d.join(format!("{app}.app")).exists());
+            if installed {
+                let mut c = std::process::Command::new("open");
+                c.args(["-a", app]).arg(dir);
+                spawn_quiet(c)?;
+                return Ok(app.to_string());
+            }
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "no editor found (set PORTWISE_EDITOR, or install VS Code, Cursor or Zed)",
+    ))
+}
+
+fn home_dir() -> std::path::PathBuf {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .map(std::path::PathBuf::from)
+        .unwrap_or_default()
+}
+
+/// Find an executable on PATH (plus the usual Homebrew / local bins a GUI app doesn't see).
+/// Only bare names or absolute paths; never a relative path from the current directory.
+pub fn which(name: &str) -> Option<std::path::PathBuf> {
+    let p = std::path::Path::new(name);
+    if p.is_absolute() {
+        return p.is_file().then(|| p.to_path_buf());
+    }
+    if name.contains(['/', '\\']) || name.is_empty() {
+        return None;
+    }
+    let mut dirs: Vec<std::path::PathBuf> = std::env::var_os("PATH")
+        .map(|v| std::env::split_paths(&v).collect())
+        .unwrap_or_default();
+    dirs.extend(
+        ["/opt/homebrew/bin", "/usr/local/bin"]
+            .iter()
+            .map(std::path::PathBuf::from),
+    );
+    dirs.push(home_dir().join(".local/bin"));
+    let exts: &[&str] = if cfg!(windows) {
+        &[".exe", ".cmd", ""]
+    } else {
+        &[""]
+    };
+    dirs.iter().filter(|d| d.is_absolute()).find_map(|d| {
+        exts.iter()
+            .map(|e| d.join(format!("{name}{e}")))
+            .find(|c| c.is_file())
+    })
+}
+
+fn spawn_quiet(mut cmd: std::process::Command) -> std::io::Result<()> {
     cmd.stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
@@ -179,6 +366,40 @@ pub fn open_url(url: &str) -> std::io::Result<()> {
         let _ = child.wait();
     });
     Ok(())
+}
+
+/// `YYYY-MM-DD HH:MM` in local time (UTC with a `Z` suffix where local time isn't available).
+pub fn local_datetime(epoch_secs: u64) -> String {
+    #[cfg(unix)]
+    {
+        #[allow(deprecated)]
+        let t = epoch_secs as libc::time_t;
+        // SAFETY: localtime_r writes into the provided, properly sized `tm`.
+        let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+        if !unsafe { libc::localtime_r(&t, &mut tm) }.is_null() {
+            return format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}",
+                tm.tm_year + 1900,
+                tm.tm_mon + 1,
+                tm.tm_mday,
+                tm.tm_hour,
+                tm.tm_min
+            );
+        }
+    }
+    // Civil date from days since the epoch (Howard Hinnant's algorithm).
+    let days = (epoch_secs / 86_400) as i64;
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    let s = epoch_secs % 86_400;
+    format!("{y:04}-{m:02}-{d:02} {:02}:{:02}Z", s / 3600, (s / 60) % 60)
 }
 
 /// `HH:MM:SS` in local time (UTC with a `Z` suffix where local time isn't available).
@@ -225,9 +446,10 @@ pub fn spawn_detached(
 ) -> std::io::Result<std::process::Child> {
     use std::process::Stdio;
     if let Some(dir) = log.parent() {
-        std::fs::create_dir_all(dir)?;
+        create_private_dir(dir)?;
     }
-    let out = std::fs::File::create(log)?;
+    // Logs can hold whatever the program prints (tokens, connection strings): owner-only.
+    let out = create_private(log)?;
     let err = out.try_clone()?;
     cmd.stdin(Stdio::null())
         .stdout(Stdio::from(out))
@@ -244,7 +466,25 @@ pub fn spawn_detached(
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
     }
-    cmd.spawn()
+    let child = cmd.spawn()?;
+    DETACHED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(child.id());
+    Ok(child)
+}
+
+/// PIDs this process started on the user's behalf with [`spawn_detached`] (a restarted dev
+/// server). They're the user's services, not part of portwise, so self-protection skips them.
+static DETACHED: std::sync::Mutex<std::collections::BTreeSet<u32>> =
+    std::sync::Mutex::new(std::collections::BTreeSet::new());
+
+/// Was `pid` started detached by this process (see [`spawn_detached`])?
+pub fn started_detached(pid: u32) -> bool {
+    DETACHED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains(&pid)
 }
 
 #[cfg(test)]
@@ -325,5 +565,72 @@ mod tests {
         assert!(open_url("file:///etc/passwd").is_err());
         let t = local_hms(0);
         assert!(t.len() >= 8 && t.as_bytes()[2] == b':', "{t}");
+    }
+}
+
+#[cfg(test)]
+mod safety_tests {
+    use super::*;
+
+    #[test]
+    fn only_plain_http_urls_open() {
+        assert!(is_safe_url("http://localhost:3000"));
+        assert!(is_safe_url("http://localhost:3000/a/b?x=1&y=2#top"));
+        assert!(is_safe_url("https://127.0.0.1:8443/"));
+        for bad in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "-a Calculator",
+            "http://x\" & calc",
+            "http://x/ & calc",
+            "http://x/|calc",
+            "http://x/^calc",
+            "http://x/\ncalc",
+            "http://x/$(id)",
+            "http://x/`id`",
+            "http://x/\"",
+            "http://x/<a>",
+        ] {
+            assert!(!is_safe_url(bad), "{bad}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn private_files_are_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("f");
+        std::fs::write(&p, "old").unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644)).unwrap();
+        create_private(&p).unwrap();
+        assert_eq!(
+            std::fs::metadata(&p).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        let sub = d.path().join("a/b");
+        create_private_dir(&sub).unwrap();
+        assert_eq!(
+            std::fs::metadata(&sub).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+    }
+
+    #[test]
+    fn printable_strips_terminal_escapes() {
+        assert_eq!(printable("vite"), "vite");
+        assert_eq!(
+            printable("a\x1b]0;pwned\x07b"),
+            "a\u{FFFD}]0;pwned\u{FFFD}b"
+        );
+        assert_eq!(printable("x\ny\tz"), "x y z");
+        assert_eq!(printable("\u{9b}31m"), "\u{FFFD}31m");
+    }
+
+    #[test]
+    fn which_ignores_relative_paths() {
+        assert!(which("./evil").is_none());
+        assert!(which("../evil").is_none());
+        assert!(which("").is_none());
     }
 }

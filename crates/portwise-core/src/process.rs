@@ -165,7 +165,10 @@ impl ProcessTable {
                         .collect(),
                 );
                 let comm = p.name().to_string_lossy().into_owned();
-                let name = untruncated_name(&comm, &cmdline, p.exe()).unwrap_or(comm);
+                let name = crate::util::printable(
+                    &untruncated_name(&comm, &cmdline, p.exe()).unwrap_or(comm),
+                )
+                .into_owned();
                 ProcessInfo {
                     pid,
                     ppid: p.parent().map(|pp| pp.as_u32()),
@@ -227,7 +230,20 @@ impl ProcessTable {
         };
         t.self_uid = t.procs.get(&self_pid).and_then(|p| p.uid);
         t.self_ancestors = t.ancestors(self_pid).into_iter().collect();
-        t.self_descendants = t.descendants(self_pid).into_iter().collect();
+        // Portwise's own children (WebView helpers, `portwise run`'s command) are protected,
+        // but not a service it restarted for the user, nor anything that service starts.
+        t.self_descendants = {
+            let mut out = HashSet::new();
+            let mut queue = std::collections::VecDeque::from([self_pid]);
+            while let Some(p) = queue.pop_front() {
+                for &c in t.children(p) {
+                    if !crate::util::started_detached(c) && out.insert(c) {
+                        queue.push_back(c);
+                    }
+                }
+            }
+            out
+        };
         let mut pids: Vec<u32> = t.procs.keys().copied().collect();
         pids.sort_unstable();
         for pid in pids {
@@ -388,6 +404,20 @@ pub(crate) mod tests {
 
     pub fn table(list: Vec<ProcessInfo>, self_pid: u32) -> ProcessTable {
         ProcessTable::from_processes(list.into_iter().map(|p| (p.pid, p)).collect(), self_pid)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_restarted_service_is_not_protected_as_part_of_portwise() {
+        let d = tempfile::tempdir().unwrap();
+        let mut cmd = std::process::Command::new("sleep");
+        cmd.arg("30");
+        let mut child = crate::util::spawn_detached(&mut cmd, &d.path().join("x.log")).unwrap();
+        let t = ProcessTable::capture();
+        assert!(t.get(child.id()).is_some());
+        assert!(!t.is_self_descendant(child.id()));
+        let _ = child.kill();
+        let _ = child.wait();
     }
 
     #[test]

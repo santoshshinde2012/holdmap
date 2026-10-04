@@ -116,7 +116,7 @@ pub fn parse_response(port: u16, raw: &[u8]) -> Option<HttpInfo> {
         return None;
     }
     let status: u16 = parts.next()?.trim().parse().ok()?;
-    let reason = parts.next().unwrap_or("").trim().to_string();
+    let reason = clip(parts.next().unwrap_or("").trim(), 60);
     let mut server = None;
     let mut location = None;
     for l in lines {
@@ -144,6 +144,7 @@ pub fn parse_response(port: u16, raw: &[u8]) -> Option<HttpInfo> {
 }
 
 fn clip(s: &str, max: usize) -> String {
+    let s = &*crate::util::printable(s);
     if s.chars().count() <= max {
         s.to_string()
     } else {
@@ -174,6 +175,20 @@ pub fn title(html: &str) -> Option<String> {
 mod tests {
     use super::*;
     use std::net::TcpListener;
+
+    #[test]
+    fn a_local_page_cannot_inject_terminal_escapes() {
+        let raw =
+            b"HTTP/1.1 200 OK\x1b[2J\r\nServer: x\x1b]0;owned\x07\r\n\r\n<title>hi\x1b[31m</title>";
+        let i = parse_response(3000, raw).unwrap();
+        for s in [
+            &i.reason,
+            i.server.as_ref().unwrap(),
+            i.title.as_ref().unwrap(),
+        ] {
+            assert!(!s.contains('\x1b') && !s.contains('\x07'), "{s:?}");
+        }
+    }
 
     #[test]
     fn parses_status_headers_and_title() {

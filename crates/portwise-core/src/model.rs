@@ -137,7 +137,8 @@ pub struct ProcessInfo {
     pub name: String,
     /// Executable path, when readable.
     pub exe: Option<PathBuf>,
-    /// Full command line.
+    /// Full command line (serialized with secrets hidden, see [`crate::redact`]).
+    #[serde(serialize_with = "crate::redact::serialize_args")]
     pub cmdline: Vec<String>,
     /// Working directory, when readable.
     pub cwd: Option<PathBuf>,
@@ -158,12 +159,12 @@ pub struct ProcessInfo {
 }
 
 impl ProcessInfo {
-    /// Command line joined for display.
+    /// Command line joined for display, with secrets hidden.
     pub fn command(&self) -> String {
         if self.cmdline.is_empty() {
             self.name.clone()
         } else {
-            self.cmdline.join(" ")
+            crate::redact::args(&self.cmdline).join(" ")
         }
     }
 }

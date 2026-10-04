@@ -33,9 +33,18 @@ pub struct HistoryEntry {
 }
 
 impl HistoryEntry {
-    /// The command line as a shell-quoted string.
+    /// The command line for display, with secrets hidden.
     pub fn command_line(&self) -> String {
-        self.command.join(" ")
+        crate::redact::args(&self.command).join(" ")
+    }
+
+    /// A copy safe to show or export: secrets in the command hidden. The stored entry keeps
+    /// the real command so a restart works; never hand that one to a UI or an agent.
+    pub fn redacted(&self) -> HistoryEntry {
+        HistoryEntry {
+            command: crate::redact::args(&self.command),
+            ..self.clone()
+        }
     }
 
     /// Can this entry be started again? (we know a command, it isn't a container/supervisor)
