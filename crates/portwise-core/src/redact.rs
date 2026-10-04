@@ -2,7 +2,7 @@
 //!
 //! Process command lines often carry credentials: `--password=hunter2`, `API_TOKEN=… node`,
 //! `postgres://app:secret@db`, `?access_token=…`. portwise shows command lines in the CLI, the
-//! TUI, JSON, MCP results and the app, so every one of those goes through [`args`] / [`line`].
+//! TUI, JSON, MCP results and the app, so every one of those goes through [`args()`] / [`line()`].
 //! The raw command is kept only where it is needed to work (stopped-port history, so a restart
 //! runs the real command), and that file is private to the user (0600).
 
