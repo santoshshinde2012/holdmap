@@ -1,10 +1,24 @@
 # Changelog
 
 All notable changes to portwise are documented here. The project follows
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html). From 0.1.2 on, entries are generated
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html). Once release-please has its token, entries are generated
 by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
+
+## [0.1.2] - 2026-10-04
+
+### Fixed
+
+- **Desktop: the details pane no longer blinks.** Every scan (every 3 s) threw away the selected
+  port's explanation, so the Overview dropped to its loading skeleton, the stop plan vanished and
+  the tab counts and footer reset until it reloaded. Details now stay on screen and refresh in
+  the background; the skeleton only shows the first time a port is opened.
+- **Desktop**: polls reuse unchanged data, so rows, the graph and sparklines only update what
+  changed (about half the idle CPU with 400 ports); the pane keeps its scroll position across
+  scans; background scans don't spin the refresh button; the "Live" label no longer flickers to
+  "4s ago" between scans; the HTTP status is re-checked every 15 s instead of never; the tray
+  menu is only rebuilt when its content changes, so an open menu isn't closed by a scan.
 
 ## [0.1.1] - 2026-10-04
 
@@ -83,5 +97,6 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
+[0.1.2]: https://github.com/santoshshinde2012/portwise/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/santoshshinde2012/portwise/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/santoshshinde2012/portwise/releases/tag/v0.1.0

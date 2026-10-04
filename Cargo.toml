@@ -9,7 +9,7 @@ members = [
 default-members = ["crates/portwise-core", "crates/portwise-cli", "crates/portwise-mcp"]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 rust-version = "1.95"
 license = "MIT OR Apache-2.0"
@@ -20,8 +20,8 @@ keywords = ["port", "network", "process", "kill", "developer-tools"]
 categories = ["command-line-utilities", "development-tools", "network-programming"]
 
 [workspace.dependencies]
-portwise-core = { path = "crates/portwise-core", version = "0.1.1" }
-portwise-mcp = { path = "crates/portwise-mcp", version = "0.1.1" }
+portwise-core = { path = "crates/portwise-core", version = "0.1.2" }
+portwise-mcp = { path = "crates/portwise-mcp", version = "0.1.2" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
