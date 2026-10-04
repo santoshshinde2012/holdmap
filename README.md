@@ -31,6 +31,8 @@ portwise tells you what's really there and stops it properly.
   service, an OS feature like AirPlay Receiver, `TIME_WAIT`, or another user.
 - **A safe stop.** Preview the plan, stop the whole dev-server tree gracefully (SIGTERM, then
   SIGKILL), and check the port is free afterwards. System processes and IDEs are protected.
+- **What's behind it.** Who is connected right now, the full process tree, uptime, CPU and
+  memory trends, the HTTP status and title, and what the bind address means for your safety.
 - **The service graph.** Which local services talk to which, grouped into clusters (Compose,
   Kubernetes, workspaces). Stop a whole stack in dependency order.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
@@ -66,13 +68,13 @@ you: open a new terminal, or run the `source` line it prints.
 <!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
      suffix isn't read as part of the version). -->
 <!-- x-release-please-start-version -->
-[dmg-arm64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.3_aarch64.dmg
-[dmg-x64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.3_x64.dmg
-[msi]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.3_x64_en-US.msi
-[nsis]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.3_x64-setup.exe
-[appimage]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.3_amd64.AppImage
-[deb]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.3_amd64.deb
-[rpm]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-0.1.3%2D1.x86_64.rpm
+[dmg-arm64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.4_aarch64.dmg
+[dmg-x64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.4_x64.dmg
+[msi]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.4_x64_en-US.msi
+[nsis]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.4_x64-setup.exe
+[appimage]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.4_amd64.AppImage
+[deb]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.4_amd64.deb
+[rpm]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-0.1.4%2D1.x86_64.rpm
 <!-- x-release-please-end -->
 
 **Homebrew:** coming soon.
@@ -85,7 +87,7 @@ Every release has SHA-256 checksums and build provenance (`gh attestation verify
 
 ```sh
 portwise list                 # every listening port, grouped by kind
-portwise inspect 3000         # owner, process tree, project and the stop plan
+portwise inspect 3000         # owner, process tree, connections, bind risk and the stop plan
 portwise stop 3000 --dry-run  # show exactly what stop would do
 portwise stop 3000            # stop it gracefully, then check the port is free
 portwise run -p 3000 -- npm run dev   # free 3000 safely, then start your server on it
@@ -133,7 +135,9 @@ When a command fails with "port in use", it prints who holds the port and how to
 
 A tray and menu-bar app with the port list, details, the service graph (`G`), pins, history with
 one-click restart, remote hosts over SSH and a command palette (`⌘K` / `Ctrl+K`). Press `?` for
-every shortcut.
+every shortcut. From the details pane you can open the port in a browser, restart a dev server,
+open its folder in your editor (`PORTWISE_EDITOR`, else Cursor, VS Code, Zed…) or Finder, and copy
+its URL, a `curl` or the kill command.
 
 **First open.** The app isn't notarised yet, so the OS asks once:
 
@@ -183,6 +187,13 @@ portwise stops processes, so one set of rules in `portwise-core` applies to ever
   are refused unless you pass `--allow-protected` (the MCP server always refuses).
 - **No surprises:** a PID-reuse guard, `--dry-run` for every plan, and a check that the port is
   really free afterwards.
+- **Private:** passwords and tokens in command lines (`--password=…`, `API_TOKEN=…`,
+  `postgres://user:…@`) are hidden in every output, JSON and MCP result included. History and
+  logs are readable only by you. No telemetry: portwise only talks to localhost, to hosts you
+  `ssh` to, and (desktop) GitHub Releases for updates.
+- **Locked down:** the desktop webview can only listen to events and drag the window; it names
+  ports, never commands, paths or URLs. A `.portwise.toml` that another user owns or anyone can
+  write is refused.
 
 ## Architecture
 
