@@ -12,7 +12,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function appInfo(): Promise<AppInfo> {
-  if (!isTauri) return { version: "0.1.2", platform: "browser", tray: false, shortcut: mockShortcut, config_dir: "~/.config/portwise" };
+  if (!isTauri) return { version: "0.1.3", platform: "browser", tray: false, shortcut: mockShortcut, config_dir: "~/.config/portwise" };
   return call("app_info");
 }
 

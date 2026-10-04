@@ -1,7 +1,7 @@
 {
   "name": "portwise-desktop",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "portwise desktop and tray app",
   "type": "module",
   "license": "MIT OR Apache-2.0",

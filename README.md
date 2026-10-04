@@ -66,13 +66,13 @@ you: open a new terminal, or run the `source` line it prints.
 <!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
      suffix isn't read as part of the version). -->
 <!-- x-release-please-start-version -->
-[dmg-arm64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.2_aarch64.dmg
-[dmg-x64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.2_x64.dmg
-[msi]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.2_x64_en-US.msi
-[nsis]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.2_x64-setup.exe
-[appimage]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.2_amd64.AppImage
-[deb]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.2_amd64.deb
-[rpm]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-0.1.2%2D1.x86_64.rpm
+[dmg-arm64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.3_aarch64.dmg
+[dmg-x64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.3_x64.dmg
+[msi]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.3_x64_en-US.msi
+[nsis]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.3_x64-setup.exe
+[appimage]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.3_amd64.AppImage
+[deb]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.3_amd64.deb
+[rpm]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-0.1.3%2D1.x86_64.rpm
 <!-- x-release-please-end -->
 
 **Homebrew:** coming soon.

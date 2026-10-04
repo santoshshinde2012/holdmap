@@ -6,6 +6,25 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
+## [0.1.3] - 2026-10-04
+
+### Fixed
+
+- **Desktop: the header no longer drops to "12s ago" on macOS.** The window's own poll timer
+  can be throttled or paused by macOS (WebKit, App Nap, covered windows), and the age counted
+  from the last snapshot even while a scan was running. The app's watcher now pushes every
+  scan to the window, the window catches up as soon as it's focused or uncovered, and "Live"
+  holds while a scan is in flight.
+- **Desktop**: scans never overlap; the window, the watcher and the tray share one scan per
+  interval (previously up to two). The scan no longer waits for the tray menu to update.
+
+### Changed
+
+- **Core**: the user list (a directory-service query on macOS) is cached for a minute instead
+  of being re-read on every scan.
+- `PORTWISE_TRACE=scan` prints how long each part of a scan took (sockets, processes,
+  containers), for the CLI and the desktop app.
+
 ## [0.1.2] - 2026-10-04
 
 ### Fixed
@@ -97,6 +116,7 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
+[0.1.3]: https://github.com/santoshshinde2012/portwise/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/santoshshinde2012/portwise/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/santoshshinde2012/portwise/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/santoshshinde2012/portwise/releases/tag/v0.1.0
