@@ -8,33 +8,79 @@ front-ends only render and confirm what it returns.
 
 ```mermaid
 flowchart TB
-  subgraph Frontends
-    CLI["portwise CLI<br/>crates/portwise-cli"]
-    TUI["TUI (ratatui)<br/>portwise-cli/src/tui"]
-    DESK["Desktop (Tauri v2 + Svelte 5)<br/>apps/desktop"]
-    MCP["MCP server<br/>crates/portwise-mcp"]
+  subgraph IF["Interfaces"]
+    direction LR
+    HOOK("Shell hook<br/><small>portwise init zsh · bash · fish · powershell</small>")
+    CLI("CLI<br/><small>clap · portwise-cli</small>")
+    TUI("TUI<br/><small>ratatui · portwise-cli/tui</small>")
+    DESK("Desktop app + tray<br/><small>Tauri v2 · Svelte 5</small>")
+    MCP("MCP server<br/><small>JSON-RPC over stdio · portwise-mcp</small>")
   end
-  subgraph Core["portwise-core"]
-    ENG["Engine<br/>explain · plan · plan_cluster · topology"]
-    SCAN["Scanner"]
-    TOPO["topology::TopologyBuilder"]
-    EXEC["exec (signal → verify)"]
-    STORE["store / history / events / remote"]
+
+  subgraph CORE["portwise-core"]
+    ENG{{"Engine<br/><small>explain · plan · stop</small>"}}
+    SCAN["Scanner<br/><small>sockets → PIDs → projects</small>"]
+    PROV["Platform providers<br/><small>Linux /proc · macOS libproc · Windows IP Helper</small>"]
+    POL["ProtectionPolicy<br/><small>OS, shells, IDEs, agents</small>"]
+    REG["StopStrategy registry<br/><small>process tree · container · systemd · pm2 · brew</small>"]
+    EXEC["Executor<br/><small>signal → wait → verify freed</small>"]
+    TOPO["Topology<br/><small>service graph · clusters · stop order</small>"]
+    HTTP["HTTP probe<br/><small>GET / → status · title</small>"]
+    STACK["Project config<br/><small>.portwise.toml · up / down</small>"]
   end
-  subgraph OS["OS + runtimes"]
-    PROC["/proc · libproc · IP Helper"]
-    DOCK["Docker / Podman / OrbStack / Colima API"]
-    SUP["systemd · pm2 · brew · kubectl"]
+
+  subgraph OS["Operating system"]
+    direction LR
+    SOCK[["Sockets & processes"]]
+    SIG[["Signals<br/><small>SIGTERM → SIGKILL · TerminateProcess</small>"]]
+    CTR[["Container runtimes<br/><small>Docker · Podman · OrbStack · Colima</small>"]]
   end
-  CLI --> ENG
-  TUI --> ENG
-  DESK --> ENG
-  MCP --> ENG
-  CLI & TUI & DESK --> STORE
-  ENG --> SCAN --> PROC & DOCK
+
+  subgraph ST["Local state · ~/.config/portwise"]
+    direction LR
+    PINS[("Pins & settings")]
+    HIST[("Stop history")]
+  end
+
+  HOOK -->|"port taken?"| CLI
+
+  IF ==>|"scan · explain · plan · stop"| ENG
+  IF -.->|"HTTP status"| HTTP
+  IF -->|"pins · history"| ST
+  CLI -->|"up · down"| STACK
+  STACK --> ENG
+
+  ENG --> SCAN
+  SCAN --> PROV
+  ENG -->|"safe to touch?"| POL
+  ENG -->|"how to stop"| REG
   ENG --> TOPO
-  ENG --> EXEC --> PROC & DOCK & SUP
+  REG --> EXEC
+
+  PROV -->|"read"| SOCK
+  SCAN -->|"published ports"| CTR
+  EXEC -->|"send"| SIG
+  EXEC -->|"stop"| CTR
+  HTTP -.->|"localhost"| SOCK
+
+  classDef iface fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#0b1b3a
+  classDef core fill:#ede9fe,stroke:#7c3aed,stroke-width:1.5px,color:#1e1035
+  classDef engine fill:#7c3aed,stroke:#5b21b6,stroke-width:2px,color:#ffffff
+  classDef os fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#052e16
+  classDef state fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#3b2203
+  class HOOK,CLI,TUI,DESK,MCP iface
+  class SCAN,PROV,POL,REG,EXEC,TOPO,HTTP,STACK core
+  class ENG engine
+  class SOCK,SIG,CTR os
+  class PINS,HIST state
+  style IF fill:transparent,stroke:#60a5fa,stroke-dasharray:4 3
+  style CORE fill:transparent,stroke:#a78bfa,stroke-dasharray:4 3
+  style OS fill:transparent,stroke:#4ade80,stroke-dasharray:4 3
+  style ST fill:transparent,stroke:#f59e0b,stroke-dasharray:4 3
 ```
+
+Solid arrows are calls; the thick one is the API every interface shares, and dotted arrows are the
+optional HTTP probe.
 
 ## 2. Scan → plan → execute
 
