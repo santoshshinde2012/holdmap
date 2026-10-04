@@ -21,6 +21,7 @@
 //! # Ok::<(), std::io::Error>(())
 //! ```
 
+pub mod details;
 pub mod docker;
 pub mod engine;
 pub mod events;
@@ -32,8 +33,8 @@ pub mod model;
 pub mod probe;
 pub mod process;
 pub mod project;
-pub mod redact;
 pub mod provider;
+pub mod redact;
 pub mod remote;
 pub mod safety;
 pub mod scan;

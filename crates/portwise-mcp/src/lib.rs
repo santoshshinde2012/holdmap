@@ -121,7 +121,7 @@ fn tools() -> Value {
         {
             "name": "explain_port",
             "title": "Explain why a port is busy",
-            "description": "Plain-English root cause for a port (process tree, container, supervisor, OS service, TIME_WAIT, other user) plus the recommended fix and stop plan.",
+            "description": "Plain-English root cause for a port (process tree, container, supervisor, OS service, TIME_WAIT, other user) plus the recommended fix and stop plan, who is connected, uptime, bind-address risk and the HTTP status/title. Command lines have secrets hidden.",
             "inputSchema": {"type": "object", "properties": {"port": {"type": "integer", "minimum": 1, "maximum": 65535}}, "required": ["port"]},
             "annotations": {"readOnlyHint": true, "openWorldHint": false}
         },
@@ -163,7 +163,7 @@ fn tools() -> Value {
         {
             "name": "stop_port",
             "title": "Stop whatever holds a port",
-            "description": "Safely stop the owner of a port (graceful tree stop, container stop or supervisor command) and verify the port is free. By default only stops the user's own dev servers/containers; protected and other users' processes are always refused.",
+            "description": "Safely stop the owner of a port (graceful tree stop, container stop or supervisor command) and verify the port is free. Destructive: show the user the plan (dry_run=true) and get their OK first. By default only stops the user's own dev servers/containers; protected processes (system, IDE, terminal, the agent's own session) and other users' processes are always refused, with no override.",
             "inputSchema": {"type": "object", "properties": {
                 "port": {"type": "integer", "minimum": 1, "maximum": 65535},
                 "dry_run": {"type": "boolean", "default": false, "description": "Only return the plan"},
@@ -261,14 +261,61 @@ fn call_tool(name: &str, args: &Value) -> Result<(String, Value), ToolError> {
         }
         "explain_port" => {
             let port = port_arg(args, "port")?;
-            let ex = engine()?.explain(port, &StopOptions::default());
-            let text = format!(
+            // Connected sockets too, so the answer can say who is talking to the port.
+            let e = Engine::new(&ScanOptions {
+                all_states: true,
+                ..ScanOptions::default()
+            })
+            .map_err(|e| ToolError::Failed(format!("scan failed: {e}")))?;
+            let ex = e.explain(port, &StopOptions::default());
+            let details = portwise_core::details::for_port(&e.scan, port);
+            let http = ex
+                .entries
+                .iter()
+                .any(|x| {
+                    x.protocol == portwise_core::model::Protocol::Tcp && x.state.is_listening()
+                })
+                .then(|| portwise_core::http::probe(port, "/", Duration::from_millis(800)))
+                .flatten();
+            let mut text = format!(
                 "{}\n{}\nRecommendation: {}",
                 ex.headline,
                 ex.details.join("\n"),
                 ex.recommendation
             );
-            Ok((text, serde_json::to_value(&ex).unwrap_or_default()))
+            for d in &details {
+                let c = &d.connections;
+                if c.total > 0 {
+                    let peers: Vec<String> = c
+                        .peers
+                        .iter()
+                        .map(|p| {
+                            format!(
+                                "{} ×{}",
+                                p.process.as_deref().unwrap_or(&p.address),
+                                p.connections
+                            )
+                        })
+                        .collect();
+                    text.push_str(&format!(
+                        "\nConnections: {} ({} established): {}",
+                        c.total,
+                        c.established,
+                        peers.join(", ")
+                    ));
+                }
+                text.push_str(&format!(
+                    "\nBind risk ({:?}): {}. {}",
+                    d.bind_risk.level, d.bind_risk.title, d.bind_risk.explanation
+                ));
+            }
+            if let Some(h) = &http {
+                text.push_str(&format!("\nHTTP: {}", h.summary()));
+            }
+            let mut v = serde_json::to_value(&ex).unwrap_or_default();
+            v["details"] = serde_json::to_value(&details).unwrap_or_default();
+            v["http"] = serde_json::to_value(&http).unwrap_or_default();
+            Ok((text, v))
         }
         "find_free_port" => {
             let port = match args["near"].as_u64() {
@@ -443,6 +490,44 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("Refused"));
+    }
+
+    #[test]
+    fn protected_processes_cannot_be_unlocked_by_an_agent() {
+        let stop = tools()
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == "stop_port")
+            .cloned()
+            .unwrap();
+        assert!(stop["inputSchema"]["properties"]["allow_protected"].is_null());
+        let l = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = l.local_addr().unwrap().port();
+        // An unknown `allow_protected` is ignored: this test process (the agent's own session)
+        // stays refused, and nothing is signalled.
+        let r = call(
+            json!({"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"stop_port","arguments":{"port":port,"allow_protected":true,"allow_non_dev":true,"force":true}}}),
+        );
+        assert_eq!(r["result"]["isError"], true);
+        assert!(l.local_addr().is_ok());
+    }
+
+    #[test]
+    fn explain_includes_details() {
+        let l = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = l.local_addr().unwrap().port();
+        let _client = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let r = call(
+            json!({"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"explain_port","arguments":{"port":port}}}),
+        );
+        let v = &r["result"]["structuredContent"];
+        assert_eq!(v["details"][0]["bind_risk"]["level"], "low");
+        assert!(v["details"][0]["tree"]["process"]["pid"].as_u64().is_some());
+        assert!(r["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Bind risk"));
     }
 
     #[test]

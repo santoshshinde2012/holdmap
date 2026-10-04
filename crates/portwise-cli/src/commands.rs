@@ -154,21 +154,36 @@ pub fn explain(a: &PortArgs, docker: bool) -> Result<u8> {
 pub fn inspect(a: &PortArgs, docker: bool) -> Result<u8> {
     let e = engine(docker, true)?;
     let ex = e.explain(a.port, &port_opts(a.udp));
-    if a.json {
-        print_json(&ex)?;
-        return Ok(if ex.status == PortStatus::Free {
-            exit::OK
-        } else {
-            exit::BUSY
-        });
-    }
+    let details = portwise_core::details::for_port(&e.scan, a.port);
     let http_info = ex
         .entries
         .iter()
         .any(|x| x.protocol == Protocol::Tcp && x.state.is_listening())
         .then(|| http::probe(a.port, "/", std::time::Duration::from_millis(1000)))
         .flatten();
+    if a.json {
+        #[derive(serde::Serialize)]
+        struct Inspection<'a> {
+            #[serde(flatten)]
+            explanation: &'a portwise_core::engine::Explanation,
+            /// Connections, process tree, uptime and bind risk per listener.
+            details: &'a [portwise_core::details::PortDetails],
+            /// HTTP status and title, when the port speaks HTTP.
+            http: Option<&'a http::HttpInfo>,
+        }
+        print_json(&Inspection {
+            explanation: &ex,
+            details: &details,
+            http: http_info.as_ref(),
+        })?;
+        return Ok(if ex.status == PortStatus::Free {
+            exit::OK
+        } else {
+            exit::BUSY
+        });
+    }
     let mut out = std::io::stdout().lock();
+    let row = |k: &str| dim(format!("{k:>11}"));
     for (i, entry) in ex.entries.iter().enumerate() {
         writeln!(
             out,
@@ -176,32 +191,99 @@ pub fn inspect(a: &PortArgs, docker: bool) -> Result<u8> {
             bold(format!("Socket {} of {}", i + 1, ex.entries.len()))
         )?;
         write!(out, "{}", render::inspect_entry(entry))?;
-        if let Some(p) = &entry.process {
-            let t = e.table();
-            let chain: Vec<String> = std::iter::once(p.pid)
-                .chain(t.ancestors(p.pid))
-                .filter_map(|pid| t.get(pid))
+        let d = details.iter().find(|d| d.id == entry.id);
+        if let Some(t) = d.and_then(|d| d.started_at) {
+            writeln!(
+                out,
+                "  {}  {}",
+                row("Started"),
+                portwise_core::util::local_datetime(t)
+            )?;
+        }
+        if let Some(tree) = d.and_then(|d| d.tree.as_ref()) {
+            let chain: Vec<String> = std::iter::once(&tree.process)
+                .chain(tree.ancestors.iter().rev())
                 .map(|p| format!("{} ({})", p.name, p.pid))
                 .collect();
             writeln!(
                 out,
                 "  {}  {}",
-                dim(format!("{:>11}", "Ancestry")),
+                row("Ancestry"),
                 chain.join(&format!(" {} ", dim("←")))
             )?;
-            let kids: Vec<String> = t
-                .descendants(p.pid)
-                .iter()
-                .filter_map(|c| t.get(*c))
-                .map(|c| format!("{} ({})", c.name, c.pid))
-                .collect();
-            if !kids.is_empty() {
+            for c in &tree.children {
+                writeln!(
+                    out,
+                    "  {}  {}{} ({}) {}",
+                    row(if std::ptr::eq(c, &tree.children[0]) {
+                        "Children"
+                    } else {
+                        ""
+                    }),
+                    "  ".repeat(c.depth.saturating_sub(1)),
+                    c.name,
+                    c.pid,
+                    dim(portwise_core::util::human_bytes(c.memory_bytes))
+                )?;
+            }
+            if tree.more_children > 0 {
                 writeln!(
                     out,
                     "  {}  {}",
-                    dim(format!("{:>11}", "Children")),
-                    kids.join(", ")
+                    row(""),
+                    dim(format!("and {} more", tree.more_children))
                 )?;
+            }
+        }
+        if let Some(c) = d.map(|d| &d.connections).filter(|c| c.total > 0) {
+            let peers: Vec<String> = c
+                .peers
+                .iter()
+                .map(|p| {
+                    let who = match (&p.process, p.pid) {
+                        (Some(n), Some(pid)) => format!("{n} ({pid})"),
+                        _ => p.address.clone(),
+                    };
+                    if p.connections > 1 {
+                        format!("{who} ×{}", p.connections)
+                    } else {
+                        who
+                    }
+                })
+                .collect();
+            let more = if c.more_peers > 0 {
+                format!(", +{} more", c.more_peers)
+            } else {
+                String::new()
+            };
+            writeln!(
+                out,
+                "  {}  {} {}{}{}",
+                row("Connections"),
+                c.total,
+                dim(format!("({} established)", c.established)),
+                if peers.is_empty() {
+                    String::new()
+                } else {
+                    format!(" · {}", peers.join(", "))
+                },
+                more
+            )?;
+        } else if entry.protocol == Protocol::Tcp {
+            writeln!(out, "  {}  {}", row("Connections"), dim("none right now"))?;
+        }
+        if let Some(r) = d.map(|d| &d.bind_risk) {
+            let level = match r.level {
+                portwise_core::details::RiskLevel::Low => paint("low", S::Green),
+                portwise_core::details::RiskLevel::Medium => paint("medium", S::Yellow),
+                portwise_core::details::RiskLevel::High => paint("high", S::BoldRed),
+            };
+            writeln!(out, "  {}  {level} · {}", row("Bind risk"), r.title)?;
+            if r.level != portwise_core::details::RiskLevel::Low {
+                writeln!(out, "  {}  {}", row(""), dim(&r.explanation))?;
+                if let Some(f) = &r.fix {
+                    writeln!(out, "  {}  {} {f}", row(""), dim("Fix:"))?;
+                }
             }
         }
         if let Some(h) = http_info
@@ -211,7 +293,7 @@ pub fn inspect(a: &PortArgs, docker: bool) -> Result<u8> {
             writeln!(
                 out,
                 "  {}  {} {}",
-                dim(format!("{:>11}", "HTTP")),
+                row("HTTP"),
                 h.summary(),
                 dim(format!("({} ms)", h.elapsed_ms))
             )?;
