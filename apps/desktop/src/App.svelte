@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
+  import { freshness, pruned, share, withKey } from "./lib/live";
   import Icon from "./components/Icon.svelte";
   import PortRow from "./components/list/PortRow.svelte";
   import GroupHeader from "./components/list/GroupHeader.svelte";
@@ -30,15 +31,30 @@
   interface Confirm { entry: PortEntry | null; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null }
 
   const store = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
-  let snapshot = $state<Snapshot | null>(null);
+  // Live data is replaced wholesale on every poll, so it is raw state run through `share`:
+  // unchanged entries keep their identity and nothing downstream re-renders or re-fetches.
+  let snapshot = $state.raw<Snapshot | null>(null);
   let error = $state<string | null>(null);
   let refreshing = $state(false);
+  /** Only a refresh the user asked for spins the button; background scans stay quiet. */
+  let manualRefresh = $state(false);
   let filters = $state<Filters>({ query: "", all: false, proto: "any", dev: false, mine: false, exposed: false });
   let sort = $state<Sort>((store("pw.sort") as Sort) ?? "group");
   let selectedId = $state<string | null>(null);
-  let explanations = $state<Record<number, Explanation>>({});
-  let explaining = $state(false);
-  let httpInfo = $state<Record<number, HttpInfo | null>>({});
+  // Details are stale-while-revalidate: the last value stays on screen while each scan
+  // refreshes it in the background, and the skeleton only shows on a port's first load.
+  let explanations = $state.raw<Record<number, Explanation>>({});
+  let explainingPort = $state<number | null>(null);
+  let httpInfo = $state.raw<Record<number, HttpInfo | null>>({});
+  /** Bumped by every scan; the selected port's details are revalidated once per scan. */
+  let scanGen = $state(0);
+  /** Per port: the holder's PID the explanation is about, the scan it's from, the newest request. */
+  const explainMeta = new Map<number, { pid: number | null; gen: number; seq: number }>();
+  const httpAt = new Map<number, number>();
+  const HTTP_TTL_MS = 15_000;
+  let explainSeq = 0;
+  /** Ports whose explanation failed: retried quietly each scan, without a skeleton or toast. */
+  const explainFailed = new Set<number>();
   let update = $state<string | null>(null);
   const installUpdate = () => api.installUpdate().catch((e) => toast("error", "Couldn't install the update", String(e)));
   let freePort = $state<Explanation | null>(null);
@@ -52,7 +68,7 @@
   let density = $state<Density>(parseDensity(store("pw.density")));
   let collapsed = $state<Set<string>>(parseCollapsed(store("pw.collapsed")));
   const usageHist = new UsageHistory(24);
-  let usage = $state<Record<string, number[]>>({});
+  let usage = $state.raw<Record<string, number[]>>({});
   let systemDark = $state(matchMedia("(prefers-color-scheme: dark)").matches);
   let narrow = $state(matchMedia("(max-width: 900px)").matches);
   let drawerOpen = $state(false);
@@ -62,7 +78,7 @@
   let now = $state(Date.now());
   let toastSeq = 0;
   let view = $state<View>((store("pw.view") as View) ?? "list");
-  let graph = $state<Graph | null>(null);
+  let graph = $state.raw<Graph | null>(null);
   let graphAll = $state(false);
   let selectedNode = $state<string | null>(null);
   let config = $state<Config | null>(null);
@@ -145,13 +161,20 @@
   async function refresh(manual = false) {
     if (refreshing) return;
     refreshing = true;
+    manualRefresh = manual;
     try {
-      const s = await api.scan(filters.all);
+      const s = share(snapshot, await api.scan(filters.all));
       snapshot = s;
       usageHist.push(s.entries);
-      usage = usageRecord(usageHist, s.entries.map((e) => e.id));
+      usage = share(usage, usageRecord(usageHist, s.entries.map((e) => e.id)));
       error = null;
-      explanations = {};
+      // Forget details for ports that are gone or now held by a different process.
+      const holder = new Map(s.entries.map((e) => [e.port, e.pid]));
+      const keep = (port: number) => holder.has(port) && (explainMeta.get(port)?.pid ?? null) === holder.get(port);
+      explanations = pruned(explanations, keep);
+      httpInfo = pruned(httpInfo, (port) => holder.has(port));
+      for (const port of [...explainMeta.keys()]) if (!keep(port)) { explainMeta.delete(port); explainFailed.delete(port); }
+      scanGen++;
       if (selectedId && !s.entries.some((e) => e.id === selectedId)) selectedId = null;
       loadTopology();
       if (manual) toast("info", "Refreshed", `${s.entries.length} port${s.entries.length === 1 ? "" : "s"} · scanned in ${s.scan_ms} ms`);
@@ -159,12 +182,13 @@
       error = String(e);
     } finally {
       refreshing = false;
+      manualRefresh = false;
     }
   }
 
   async function loadTopology() {
     try {
-      graph = await api.topology(graphAll);
+      graph = share(graph, await api.topology(graphAll));
       if (selectedNode && !graph.nodes.some((n) => n.id === selectedNode)) selectedNode = null;
     } catch (e) {
       if (view === "graph") toast("error", "Couldn't build the service graph", String(e));
@@ -281,19 +305,43 @@
   }
   const selectedGraphNode = $derived(graph?.nodes.find((n) => n.id === selectedNode) ?? null);
 
+  // Primitives, so the effect below re-runs on a new selection or a new scan, not on every
+  // poll that hands the selected entry a fresh memory or CPU figure.
+  const selPort = $derived(selected?.port ?? null);
+  const selPid = $derived(selected?.pid ?? null);
+  const selTcp = $derived(selected?.protocol === "tcp");
   $effect(() => {
-    const e = selected;
-    if (!e || explanations[e.port]) return;
-    explaining = true;
-    const port = e.port;
+    const port = selPort, pid = selPid, tcp = selTcp, gen = scanGen;
+    if (port === null) return;
+    const meta = explainMeta.get(port);
+    const first = !untrack(() => explanations[port]) && !explainFailed.has(port);
+    if (!first && meta?.gen === gen) return;
+    if (first) explainingPort = port;
+    // Debounced so arrowing through the list doesn't fire a request per row.
     const t = setTimeout(async () => {
-      if (e.protocol === "tcp" && !(port in httpInfo)) api.http(port).then((h) => { httpInfo[port] = h; }, () => { httpInfo[port] = null; });
-      try { explanations[port] = await api.explain(port); }
-      catch (err) { toast("error", "Couldn't explain this port", String(err)); }
-      finally { explaining = false; }
-    }, 60);
+      const seq = ++explainSeq;
+      explainMeta.set(port, { pid, gen, seq });
+      if (tcp && Date.now() - (httpAt.get(port) ?? -Infinity) > HTTP_TTL_MS) {
+        httpAt.set(port, Date.now());
+        api.http(port).then((h) => h, () => null).then((h) => { if (explainMeta.has(port)) httpInfo = withKey(httpInfo, port, share(httpInfo[port], h)); });
+      }
+      try {
+        const x = await api.explain(port);
+        // Only the newest request for this port may land, and only while it's still wanted.
+        if (explainMeta.get(port)?.seq === seq) explanations = withKey(explanations, port, share(explanations[port], x));
+        explainFailed.delete(port);
+      } catch (err) {
+        if (first) toast("error", "Couldn't explain this port", String(err));
+        explainFailed.add(port);
+      } finally {
+        if (explainingPort === port) explainingPort = null;
+      }
+    }, first ? 60 : 0);
     return () => clearTimeout(t);
   });
+  const explanation = $derived(selected ? explanations[selected.port] ?? null : null);
+  const selectedHttp = $derived(selected ? httpInfo[selected.port] ?? null : null);
+  const explaining = $derived(selPort !== null && explainingPort === selPort);
 
   $effect(() => {
     const p = queryPort;
@@ -581,6 +629,7 @@
   $effect(() => { try { localStorage.setItem("pw.pane", String(paneWidth)); } catch { /* ignore */ } });
 
   const ago = $derived(snapshot ? Math.max(0, Math.round((now - snapshot.taken_at_ms) / 1000)) : null);
+  const fresh = $derived(freshness(ago, scanMs / 1000));
   const themeIcon = $derived(THEME_ICON[theme]);
 </script>
 
@@ -612,12 +661,12 @@
     </div>
 
     <div class="tools">
-      <span class="live" class:stale={ago !== null && ago > Math.max(6, scanMs / 500)} aria-live="off">
-        <span class="pulse" class:on={refreshing}></span>{#if ago === null}starting…{:else if ago < Math.max(4, scanMs / 1000 + 1)}Live{:else}{ago}s ago{/if}
+      <span class="live" class:stale={fresh.stale} aria-live="off">
+        <span class="pulse" class:on={refreshing}></span>{fresh.text}
       </span>
       <Button size="sm" icon="command" kbd={modK} class="cmdk" onclick={() => (showPalette = true)} aria-keyshortcuts="Meta+K Control+K" tip={{ text: "Command palette", kbd: modK }}>Commands</Button>
       <span class="tsep" aria-hidden="true"></span>
-      <IconButton icon="refresh" label="Refresh" kbd="R" onclick={() => refresh(true)} class={refreshing ? "spinning" : ""} />
+      <IconButton icon="refresh" label="Refresh" kbd="R" onclick={() => refresh(true)} class={manualRefresh ? "spinning" : ""} />
       <IconButton icon="history" label="Recently stopped" kbd="H" onclick={openHistory} />
       <IconButton icon="server" label="Remote host…" onclick={() => (showRemote = true)} />
       <IconButton icon={themeIcon} label="Theme: {THEME_LABEL[theme]}" kbd={["⇧", "L"]} onclick={cycleTheme} />
@@ -720,7 +769,7 @@
     {#if !narrow}
       <div class="pane-wrap">
         <Splitter bind:width={paneWidth} min={340} max={680} initial={PANE_DEFAULT} />
-        <DetailPane entry={selected} explanation={selected ? explanations[selected.port] ?? null : null} http={selected ? httpInfo[selected.port] ?? null : null} loading={explaining} busy={selected ? !!busy[selected.id] : false} bind:tab={detailTab} {mod}
+        <DetailPane entry={selected} {explanation} http={selectedHttp} loading={explaining} busy={selected ? !!busy[selected.id] : false} bind:tab={detailTab} {mod}
           onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy}
           {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)}
           entries={snapshot?.entries ?? []} onselectentry={(e) => selectEntry(e, false)} />
@@ -739,7 +788,7 @@
 
 {#if showDrawer && selected}
   <Dialog placement="right" bare label="Details for port {selected.port}" onclose={() => (drawerOpen = false)} initialFocus="self">
-    <DetailPane drawer entry={selected} explanation={explanations[selected.port] ?? null} http={httpInfo[selected.port] ?? null} loading={explaining} busy={!!busy[selected.id]} bind:tab={detailTab} {mod}
+    <DetailPane drawer entry={selected} {explanation} http={selectedHttp} loading={explaining} busy={!!busy[selected.id]} bind:tab={detailTab} {mod}
       onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onclose={() => (drawerOpen = false)}
       {graph} pinned={pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} />
   </Dialog>
@@ -768,7 +817,7 @@
   .tools :global(.cmdk) { margin-right: 2px; color: var(--text-2); }
   .tools :global(.spinning svg) { animation: spin 0.9s linear infinite; }
   .tsep { width: 1px; height: 18px; background: var(--border-strong); margin: 0 6px; }
-  .live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); margin-right: var(--sp-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); margin-right: var(--sp-3); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 76px; justify-content: flex-end; }
   .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
   .pulse.on { animation: beat 0.9s ease-in-out infinite; }
   .live.stale .pulse { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }

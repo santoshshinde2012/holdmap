@@ -74,7 +74,9 @@
   const stop = $derived(entry ? stopState(entry, explanation?.plan ?? null) : null);
   const base = $derived(drawer ? "dd" : "dp");
   let scroller: HTMLDivElement | undefined = $state();
-  $effect(() => { void active; void entry?.id; scroller?.scrollTo({ top: 0 }); });
+  // Back to the top on a new port or tab only; a poll's fresh entry object must not scroll.
+  const entryId = $derived(entry?.id ?? null);
+  $effect(() => { void active; void entryId; scroller?.scrollTo({ top: 0 }); });
 </script>
 
 <aside class="pane" class:drawer aria-label="Port details">
@@ -83,7 +85,7 @@
   {:else}
     <DetailHeader {entry} {pinned} {onpin} {oncopy} {onclose} />
     <Tabs {tabs} bind:value={tab} {base} label="Details sections" />
-    {#key entry.id + active}
+    {#key entryId + active}
       <div class="body" in:fade={{ duration: reduced ? 0 : 120 }}>
         <ScrollArea bind:el={scroller}>
           <div role="tabpanel" id={panelId(base, active)} aria-labelledby={tabId(base, active)} class="panel">
