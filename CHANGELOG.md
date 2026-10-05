@@ -6,6 +6,29 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
+## [0.1.7] - 2026-10-05
+
+### Fixed
+
+- **Windows desktop release:** NSIS `setup.exe` and `portwise-desktop-windows-x64.sha256` no longer drop
+  when the upload flaked after MSI. Collect runs whenever Tauri produced output, and installer/
+  checksum uploads retry with longer timeouts.
+
+### Performance
+
+- Watch path borrows the snapshot (one fewer clone per scan).
+- Desktop skips Live pushes while minimized and uses the slow cadence when minimized/occluded.
+- Graph / Svelte Flow loads only when you open Graph (~188 KB JS deferred from startup).
+- Live list updates coalesce onto `requestAnimationFrame`.
+
+### Measured (before → after where applicable)
+
+- CLI `list` / scan already ~40 ms / ~32 ms on Mac (unchanged; no scan rewrite).
+- Vite production: GraphView split into its own chunk (`GraphView-*.js` ~188 KB / ~60 KB gzip);
+  initial `index-*.js` no longer embeds the graph.
+- Slimming IPC by dropping cmdline/exe skipped (would empty Process details without a larger API).
+- List virtualization and font subsetting skipped (short lists; font risk).
+
 ## [0.1.6] - 2026-10-05
 
 ### Fixed
@@ -177,6 +200,7 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
+[0.1.7]: https://github.com/santoshshinde2012/portwise/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/santoshshinde2012/portwise/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/santoshshinde2012/portwise/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/santoshshinde2012/portwise/compare/v0.1.3...v0.1.4

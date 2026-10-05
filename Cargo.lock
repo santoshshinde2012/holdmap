@@ -3821,7 +3821,7 @@ dependencies = [
 
 [[package]]
 name = "portwise"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3842,7 +3842,7 @@ dependencies = [
 
 [[package]]
 name = "portwise-core"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "criterion",
  "libc",
@@ -3859,7 +3859,7 @@ dependencies = [
 
 [[package]]
 name = "portwise-desktop"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "portwise-core",
  "serde",
@@ -3874,7 +3874,7 @@ dependencies = [
 
 [[package]]
 name = "portwise-mcp"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "portwise-core",
  "serde",
