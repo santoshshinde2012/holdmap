@@ -10,6 +10,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Fixed
 
+- **macOS desktop release checksums:** installer re-upload no longer uses `mapfile` (bash 3.2
+  on macOS runners), so `portwise-desktop-macos-*.sha256` can be published after the DMG.
 - **Windows desktop release:** NSIS `setup.exe` and `portwise-desktop-windows-x64.sha256` no longer drop
   when the upload flaked after MSI. Collect runs whenever Tauri produced output, and installer/
   checksum uploads retry with longer timeouts.
