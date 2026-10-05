@@ -17,7 +17,7 @@
   import type { Explanation, Graph, GraphNode, HttpInfo, PortDetails, PortEntry } from "../../lib/types";
   import { dependencies, dependents, nodeForEntry } from "../../lib/graph";
   import { canOpen, url } from "../../lib/format";
-  import { canRestart, curlCommand, detailTabs, killCommand, projectFolder, resolveTab, stopState, type DetailTab } from "../../lib/detail";
+  import { canRestart, curlCommand, detailTabs, killCommand, killHelpersCommand, projectFolder, resolveTab, stopState, type DetailTab } from "../../lib/detail";
   import { tooltip } from "../../lib/tooltip";
 
   let {
@@ -105,6 +105,8 @@
     if (dir) out.push({ id: "path", label: "Copy folder path", icon: "copy", run: () => oncopy(dir, "Path") });
     const kill = killCommand(e, platform);
     if (kill) out.push({ id: "kill", label: e.container ? "Copy docker stop command" : "Copy kill command", icon: "copy", run: () => oncopy(kill, "Command") });
+    const helpers = killHelpersCommand(e, platform);
+    if (helpers) out.push({ id: "helpers", label: `Copy quit-helpers command (${e.helper_count} helper${e.helper_count === 1 ? "" : "s"})`, icon: "zap", run: () => oncopy(helpers, "Quit-helpers command") });
     if (stop?.stoppable && e.process && !e.container) out.push({ id: "force", label: "Force kill…", icon: "zap", hint: "⇧⌫", run: onkill });
     return out;
   });

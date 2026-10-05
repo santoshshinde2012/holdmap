@@ -22,7 +22,7 @@
     { label: "Name", value: p.name, muted: `PID ${p.pid}` },
     { label: "User", value: entry.user, muted: entry.is_mine ? undefined : "not you" },
     { label: "Uptime", value: uptime(entry), muted: p.start_time ? `since ${startedAt(p.start_time)}` : undefined },
-    { label: "Memory", value: p.memory_bytes ? humanBytes(p.memory_bytes) : null, muted: tree ? `tree ${humanBytes(tree.memory_bytes)}` : undefined },
+    { label: "Memory", value: (entry.app_memory_bytes || p.memory_bytes) ? humanBytes(entry.app_memory_bytes || p.memory_bytes) : null, muted: entry.helper_count ? `${entry.helper_count} helper${entry.helper_count === 1 ? "" : "s"}` : (tree ? `tree ${humanBytes(tree.memory_bytes)}` : undefined) },
     { label: "CPU", value: p.cpu_percent !== undefined ? `${p.cpu_percent.toFixed(1)}%` : null, muted: tree ? `${tree.pids.length} processes · ${tree.cpu_percent.toFixed(1)}%` : undefined },
     { label: "Directory", value: p.cwd, display: p.cwd ? tildify(p.cwd) : undefined, mono: true, copy: true },
     { label: "Executable", value: p.exe, display: p.exe ? tildify(p.exe) : undefined, mono: true, copy: true },

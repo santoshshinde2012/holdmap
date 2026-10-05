@@ -156,9 +156,13 @@ pub fn list_table_with(
                     S::Dim,
                 ));
                 r.push(Cell::new(
-                    p.filter(|p| p.memory_bytes > 0)
-                        .map(|p| human_bytes(p.memory_bytes))
-                        .unwrap_or_default(),
+                    (if e.app_memory_bytes > 0 {
+                        Some(e.app_memory_bytes)
+                    } else {
+                        p.map(|p| p.memory_bytes).filter(|b| *b > 0)
+                    })
+                    .map(human_bytes)
+                    .unwrap_or_default(),
                     S::Dim,
                 ));
                 r.push(Cell::new(
@@ -400,8 +404,23 @@ pub fn inspect_entry(e: &PortEntry) -> String {
             "Uptime".into(),
             human_duration(now_secs().saturating_sub(p.start_time)),
         ));
-        if p.memory_bytes > 0 {
-            rows.push(("Memory".into(), human_bytes(p.memory_bytes)));
+        let mem = if e.app_memory_bytes > 0 {
+            e.app_memory_bytes
+        } else {
+            p.memory_bytes
+        };
+        if mem > 0 {
+            let label = if e.helper_count > 0 {
+                format!(
+                    "{} · {} helper{}",
+                    human_bytes(mem),
+                    e.helper_count,
+                    if e.helper_count == 1 { "" } else { "s" }
+                )
+            } else {
+                human_bytes(mem)
+            };
+            rows.push(("Memory".into(), label));
         }
     } else if e.container.is_none() {
         rows.push(("Owner".into(), dim("not visible (another user / root)")));

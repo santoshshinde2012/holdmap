@@ -5,6 +5,7 @@
   import PortRow from "./components/list/PortRow.svelte";
   import GroupHeader from "./components/list/GroupHeader.svelte";
   import { UsageHistory, parseCollapsed, parseDensity, toggled, usageRecord, type Density } from "./lib/rows";
+  import { DETAILS_CACHE_MAX, LruMap, STAMP_CACHE_MAX } from "./lib/cache";
   import DetailPane from "./components/detail/DetailPane.svelte";
   import SettingsDialog from "./components/SettingsDialog.svelte";
   import PinDialog from "./components/PinDialog.svelte";
@@ -49,8 +50,8 @@
   /** Bumped by every scan; the selected port's details are revalidated once per scan. */
   let scanGen = $state(0);
   /** Per port: the holder's PID the explanation is about, the scan it's from, the newest request. */
-  const explainMeta = new Map<number, { pid: number | null; gen: number; seq: number }>();
-  const httpAt = new Map<number, number>();
+  const explainMeta = new LruMap<number, { pid: number | null; gen: number; seq: number }>(DETAILS_CACHE_MAX);
+  const httpAt = new LruMap<number, number>(STAMP_CACHE_MAX);
   const HTTP_TTL_MS = 15_000;
   let explainSeq = 0;
   /** Ports whose explanation failed: retried quietly each scan, without a skeleton or toast. */
@@ -69,11 +70,11 @@
   let collapsed = $state<Set<string>>(parseCollapsed(store("pw.collapsed")));
   const usageHist = new UsageHistory(24);
   /** Memory samples for the details pane's trend line (one per scan, like CPU). */
-  const memHist = new UsageHistory(40, (e) => e.process?.memory_bytes);
+  const memHist = new UsageHistory(24, (e) => e.app_memory_bytes || e.process?.memory_bytes);
   let memUsage = $state.raw<Record<string, number[]>>({});
   /** Connections, process tree and bind risk: loaded lazily for the selected port only. */
   let portDetails = $state.raw<Record<number, PortDetails[]>>({});
-  const detailsAt = new Map<number, number>();
+  const detailsAt = new LruMap<number, number>(STAMP_CACHE_MAX);
   const DETAILS_TTL_MS = 3_000;
   let usage = $state.raw<Record<string, number[]>>({});
   let systemDark = $state(matchMedia("(prefers-color-scheme: dark)").matches);
@@ -104,6 +105,7 @@
   const PANE_DEFAULT = 460;
   let paneWidth = $state(Math.min(680, Math.max(340, Number(store("pw.pane")) || PANE_DEFAULT)));
   $effect(() => { try { localStorage.setItem("pw.view", view); } catch { /* ignore */ } });
+  $effect(() => { if (view === "graph") loadTopology(); });
   const pins = $derived(new Set((config?.pins ?? []).map((p) => p.port)));
   const linkCount = $derived.by(() => {
     const m = new Map<string, number>();
@@ -132,7 +134,7 @@
       cluster: (a, b) => a.port - b.port,
       port: (a, b) => a.port - b.port,
       newest: (a, b) => (b.process?.start_time ?? 0) - (a.process?.start_time ?? 0),
-      memory: (a, b) => (b.process?.memory_bytes ?? 0) - (a.process?.memory_bytes ?? 0),
+      memory: (a, b) => ((b.app_memory_bytes || b.process?.memory_bytes || 0) - (a.app_memory_bytes || a.process?.memory_bytes || 0)),
     };
     return list.sort(cmp[sort]);
   });
@@ -197,15 +199,32 @@
       error = null;
       // Forget details for ports that are gone or now held by a different process.
       const holder = new Map(s.entries.map((e) => [e.port, e.pid]));
-      const keep = (port: number) => holder.has(port) && (explainMeta.get(port)?.pid ?? null) === holder.get(port);
-      explanations = pruned(explanations, keep);
-      httpInfo = pruned(httpInfo, (port) => holder.has(port));
-      portDetails = pruned(portDetails, (port) => holder.has(port));
-      for (const port of [...explainMeta.keys()]) if (!keep(port)) { explainMeta.delete(port); explainFailed.delete(port); }
+      const selectedPort = s.entries.find((e) => e.id === selectedId)?.port ?? null;
+      const keep = (port: number) => holder.has(port) && (explainMeta.peek(port)?.pid ?? null) === holder.get(port);
+      explanations = capRecord(pruned(explanations, keep), DETAILS_CACHE_MAX, selectedPort);
+      httpInfo = capRecord(pruned(httpInfo, (port) => holder.has(port)), DETAILS_CACHE_MAX, selectedPort);
+      portDetails = capRecord(pruned(portDetails, (port) => holder.has(port)), DETAILS_CACHE_MAX, selectedPort);
+      explainMeta.prune(keep);
+      httpAt.prune((port) => holder.has(port));
+      detailsAt.prune((port) => holder.has(port));
+      for (const port of [...explainFailed]) if (!keep(port)) explainFailed.delete(port);
       scanGen++;
       if (selectedId && !s.entries.some((e) => e.id === selectedId)) selectedId = null;
-      loadTopology();
+      // Topology is heavy: only build it while the graph is on screen.
+      if (view === "graph") loadTopology();
+      else graph = null;
     }
+  }
+
+  /** Keep at most `max` keys, preferring `prefer` (the selected port). */
+  function capRecord<V>(rec: Record<number, V>, max: number, prefer: number | null): Record<number, V> {
+    const keys = Object.keys(rec).map(Number);
+    if (keys.length <= max) return rec;
+    const drop = keys.filter((k) => k !== prefer).slice(0, keys.length - max);
+    if (!drop.length) return rec;
+    const out = { ...rec };
+    for (const k of drop) delete out[k];
+    return out;
   }
 
   async function loadTopology() {
@@ -635,6 +654,11 @@
   }
 
   onMount(() => {
+    if (typeof window !== "undefined" && window.__portwiseRecovered) {
+      const why = window.__portwiseRecovered;
+      delete window.__portwiseRecovered;
+      toast("info", "portwise recovered from a UI glitch", why);
+    }
     refresh();
     api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, configDir: i.config_dir ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; });
     api.hotkeys().then((h) => (hotkeyList = h)).catch(() => {});
@@ -676,7 +700,18 @@
       }),
     ];
     // Back from another app, Space or a covered window: catch up at once, not on the next tick.
-    const onVisible = () => { if (!document.hidden && !confirm && Date.now() - (snapshot?.taken_at_ms ?? 0) > 1000) refresh(); };
+    const onVisible = () => {
+      if (document.hidden) {
+        // Drop sparkline history while hidden so a long overnight run can't grow the heap.
+        // The next visible scan re-seeds from the live snapshot.
+        usageHist.push([]);
+        memHist.push([]);
+        usage = {};
+        memUsage = {};
+        return;
+      }
+      if (!confirm && Date.now() - (snapshot?.taken_at_ms ?? 0) > 1000) refresh();
+    };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     return () => {

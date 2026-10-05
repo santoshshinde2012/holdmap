@@ -327,6 +327,14 @@ pub struct PortEntry {
     /// The listener is a tunnel / port-forward (kubectl, ssh -L, …).
     #[serde(default)]
     pub tunnel: Option<crate::tunnel::TunnelInfo>,
+    /// Memory of the owning app: the process plus its helpers (browser renderers, Electron
+    /// children, …). Equal to the process alone when there are no helpers. Same figure the
+    /// graph node shows, so the list, details and CLI agree.
+    #[serde(default)]
+    pub app_memory_bytes: u64,
+    /// Helper processes included in [`Self::app_memory_bytes`] (excludes the owner).
+    #[serde(default)]
+    pub helper_count: u32,
 }
 
 impl PortEntry {

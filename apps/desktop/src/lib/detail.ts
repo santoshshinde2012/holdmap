@@ -75,6 +75,19 @@ export function killCommand(entry: PortEntry, platform: string): string | null {
   return platform === "windows" ? `taskkill /PID ${pid}` : `kill -TERM ${pid}`;
 }
 
+/**
+ * Copy-paste command that stops helper children but leaves the listener alone.
+ * Only offered when the app has helpers and isn't protected — never run automatically.
+ */
+export function killHelpersCommand(entry: PortEntry, platform: string): string | null {
+  if (entry.protected || entry.container || !entry.process) return null;
+  if ((entry.helper_count ?? 0) < 1) return null;
+  const pid = entry.process.pid;
+  // pkill by parent: children of the listener. Safe to copy; user still runs it.
+  if (platform === "windows") return null; // no safe one-liner without enumerating PIDs
+  return `pkill -TERM -P ${pid}`;
+}
+
 /** The folder quick actions work on: the project root, else the process's directory. */
 export function projectFolder(entry: PortEntry): string | null {
   return entry.project?.root ?? entry.process?.cwd ?? null;

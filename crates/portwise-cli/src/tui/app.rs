@@ -263,7 +263,11 @@ impl App {
             }),
             Sort::Pid => rows.sort_by_key(|e| (e.pid.unwrap_or(u32::MAX), e.port)),
             Sort::Memory => rows.sort_by_key(|e| {
-                std::cmp::Reverse(e.process.as_ref().map(|p| p.memory_bytes).unwrap_or(0))
+                std::cmp::Reverse(if e.app_memory_bytes > 0 {
+                    e.app_memory_bytes
+                } else {
+                    e.process.as_ref().map(|p| p.memory_bytes).unwrap_or(0)
+                })
             }),
             Sort::Uptime => {
                 rows.sort_by_key(|e| e.process.as_ref().map(|p| p.start_time).unwrap_or(u64::MAX))

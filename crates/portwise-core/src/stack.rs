@@ -723,6 +723,8 @@ port = 5432
             is_mine: true,
             protected: false,
             tunnel: None,
+            app_memory_bytes: 0,
+            helper_count: 0,
         };
         if let Some(c) = compose {
             e.container = Some(ContainerInfo {

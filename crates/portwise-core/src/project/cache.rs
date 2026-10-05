@@ -29,8 +29,8 @@ const DEFAULT_TTL: Duration = Duration::from_secs(10);
 /// Lookups that may run at once. Hung lookups hold a slot, so this also caps hung threads.
 const MAX_IN_FLIGHT: usize = 8;
 /// Entries not asked for in this long are dropped once the cache grows.
-const IDLE_DROP: Duration = Duration::from_secs(300);
-const PRUNE_ABOVE: usize = 512;
+const IDLE_DROP: Duration = Duration::from_secs(120);
+const PRUNE_ABOVE: usize = 256;
 
 static BUDGET_MS: AtomicU64 = AtomicU64::new(DEFAULT_BUDGET.as_millis() as u64);
 

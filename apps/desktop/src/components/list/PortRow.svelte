@@ -11,7 +11,7 @@
   import { tooltip } from "../../lib/tooltip";
   import type { PortEntry } from "../../lib/types";
   import { canOpen, title } from "../../lib/format";
-  import { memLabel, rowBadges, rowFramework, rowLabel, rowMeta, rowStatus, type Density } from "../../lib/rows";
+  import { entryMemory, memLabel, memoryHint, rowBadges, rowFramework, rowLabel, rowMeta, rowStatus, type Density } from "../../lib/rows";
 
   let {
     entry,
@@ -50,9 +50,10 @@
   const fw = $derived(rowFramework(entry));
   const badges = $derived(rowBadges(entry, links));
   const stoppable = $derived(!!(entry.process || entry.container) && !entry.protected);
-  const mem = $derived(memLabel(entry.process?.memory_bytes));
+  const mem = $derived(memLabel(entryMemory(entry)));
+  const memTip = $derived(memoryHint(entry));
   const cpu = $derived(entry.process?.cpu_percent);
-  const usageTip = $derived([cpu !== undefined ? `CPU ${cpu.toFixed(1)}%` : null, mem ? `Memory ${mem}` : null].filter(Boolean).join(" · "));
+  const usageTip = $derived([cpu !== undefined ? `CPU ${cpu.toFixed(1)}%` : null, memTip ? `Memory ${memTip}` : mem ? `Memory ${mem}` : null].filter(Boolean).join(" · "));
   const tile = $derived(density === "compact" ? 18 : 22);
   const stop = (e: MouseEvent, fn?: () => void) => { e.stopPropagation(); fn?.(); };
 </script>

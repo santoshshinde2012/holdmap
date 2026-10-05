@@ -71,6 +71,10 @@ export interface PortEntry {
   is_mine: boolean;
   protected: boolean;
   tunnel?: TunnelInfo | null;
+  /** Process + helpers; same figure the graph node shows. */
+  app_memory_bytes?: number;
+  /** Helpers included in app_memory_bytes (excludes the owner). */
+  helper_count?: number;
 }
 
 export interface TunnelInfo {

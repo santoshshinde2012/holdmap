@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MOCK_SNAPSHOT } from "./mock";
 import {
-  ROW_HEIGHT, UsageHistory, parseCollapsed, parseDensity, rowBadges, rowFramework, rowLabel, rowMeta, rowStatus, sparkPoints, splitBadges, toggled,
+  ROW_HEIGHT, UsageHistory, entryMemory, memoryHeavy, memoryHint, parseCollapsed, parseDensity, rowBadges, rowFramework, rowLabel, rowMeta, rowStatus, sparkPoints, splitBadges, toggled,
   type RowBadge,
 } from "./rows";
 
@@ -22,7 +22,7 @@ describe("row badges", () => {
   it("orders by decision value: exposure and protection before context and trivia", () => {
     const ids = rowBadges(byPort(5432), 2).map((b) => b.id);
     expect(ids[0]).toBe("exposed");
-    expect(ids).toEqual(["exposed", "container", "links"]);
+    expect(ids).toEqual(["exposed", "container", "links", "memory"]);
     expect(rowBadges(byPort(5000)).map((b) => b.id)).toEqual(["exposed", "protected"]);
   });
   it("never shows more than two chips; the rest fold into +N with a tooltip", () => {
@@ -103,5 +103,46 @@ describe("memory trend", () => {
     expect(rangePoints([100, 200], 10, 10)).toBe("0,9 10,1");
     expect(rangePoints([1000, 1001, 1000], 10, 10)).toBe("0,5 5,5 10,5");
     expect(rangePoints([5], 10, 10)).toBe("");
+  });
+});
+
+import type { PortEntry } from "./types";
+
+const base = (over: Partial<PortEntry> = {}): PortEntry =>
+  ({
+    id: "tcp:1",
+    port: 1,
+    protocol: "tcp",
+    state: "listen",
+    addresses: ["127.0.0.1"],
+    families: [],
+    remote: null,
+    exposure: "loopback",
+    pid: 1,
+    pids: [1],
+    uid: null,
+    user: null,
+    process: { pid: 1, ppid: null, name: "node", exe: null, cmdline: [], cwd: null, uid: null, user: null, start_time: 0, start_token: 0, memory_bytes: 10 * 1024 * 1024 },
+    project: null,
+    framework: null,
+    container: null,
+    label: "node",
+    is_dev: true,
+    is_mine: true,
+    protected: false,
+    ...over,
+  }) as PortEntry;
+
+describe("app memory helpers", () => {
+  it("prefers app_memory_bytes over the process alone", () => {
+    const e = base({ app_memory_bytes: 300 * 1024 * 1024, helper_count: 3 });
+    expect(entryMemory(e)).toBe(300 * 1024 * 1024);
+    expect(memoryHeavy(e)).toBe(true);
+    expect(memoryHint(e)).toMatch(/3 helpers/);
+  });
+
+  it("stays quiet for small processes", () => {
+    expect(memoryHint(base())).toBeNull();
+    expect(memoryHeavy(base())).toBe(false);
   });
 });

@@ -184,7 +184,9 @@ impl ProcessTable {
                     user,
                     start_time,
                     start_token,
-                    memory_bytes: p.memory(),
+                    // Prefer the OS figure users see (phys_footprint / VmRSS / Working set);
+                    // fall back to sysinfo when the platform call can't see this process.
+                    memory_bytes: crate::memory::sample(pid, p.memory()),
                     cpu_percent: p.cpu_usage(),
                 }
             })

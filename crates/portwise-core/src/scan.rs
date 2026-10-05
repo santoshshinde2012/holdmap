@@ -460,6 +460,12 @@ pub fn build_entries_using(
             state.as_str(),
             remote.as_ref().map(|r| format!(":{r}")).unwrap_or_default()
         );
+        // App memory: the listener's process tree (helpers included), so the list matches
+        // Activity Monitor for browsers and Electron apps. Shared trees aren't summed twice
+        // per port — each row shows the same total for the same app.
+        let app_mem = pid
+            .map(|p| crate::memory::for_pid(table, p))
+            .unwrap_or_default();
         entries.push(PortEntry {
             id,
             port,
@@ -492,6 +498,8 @@ pub fn build_entries_using(
             is_mine,
             protected,
             tunnel,
+            app_memory_bytes: app_mem.bytes,
+            helper_count: app_mem.helpers,
         });
     }
 
@@ -548,6 +556,8 @@ pub fn build_entries_using(
             is_mine: true,
             protected: false,
             tunnel: None,
+            app_memory_bytes: 0,
+            helper_count: 0,
         });
     }
     entries.sort_by(|a, b| {

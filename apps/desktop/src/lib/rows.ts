@@ -38,6 +38,11 @@ export function rowBadges(e: PortEntry, links = 0): RowBadge[] {
   if (e.container) out.push({ id: "container", label: cap(e.container.runtime), tone: "blue", icon: "box", tip: `Container ${e.container.name} (${e.container.image})` });
   if (!e.is_mine && e.user) out.push({ id: "user", label: e.user, tone: "neutral", icon: "user", tip: `Owned by ${e.user}` });
   if (links > 0) out.push({ id: "links", label: String(links), tone: "quiet", icon: "graph", tip: `${links} connected service${links === 1 ? "" : "s"} — see the graph view` });
+  // Only badge really heavy apps so the column stays quiet for ordinary tools.
+  if (memoryHeavy(e)) {
+    const hint = memoryHint(e) ?? memLabel(entryMemory(e))!;
+    out.push({ id: "memory", label: memLabel(entryMemory(e)) ?? hint, tone: "violet", icon: "activity", tip: `Uses ${hint}` });
+  }
   return out;
 }
 
@@ -81,6 +86,28 @@ export function memLabel(bytes: number | undefined): string | null {
   return bytes && bytes > 0 ? humanBytes(bytes) : null;
 }
 
+/** Preferred memory for a row: the app total (with helpers) when known, else the process alone. */
+export function entryMemory(e: Pick<PortEntry, "app_memory_bytes" | "process" | "helper_count">): number {
+  if (e.app_memory_bytes && e.app_memory_bytes > 0) return e.app_memory_bytes;
+  return e.process?.memory_bytes ?? 0;
+}
+
+/** "1.2 GB · 4 helpers" when the app is heavy enough to call out; otherwise null. */
+export function memoryHint(e: Pick<PortEntry, "app_memory_bytes" | "helper_count" | "process">): string | null {
+  const bytes = entryMemory(e);
+  const helpers = e.helper_count ?? 0;
+  const notable = bytes >= 256 * 1024 * 1024 || (helpers >= 2 && bytes >= 64 * 1024 * 1024);
+  if (!notable) return null;
+  const size = humanBytes(bytes);
+  if (helpers <= 0) return size;
+  return helpers === 1 ? `${size} · 1 helper` : `${size} · ${helpers} helpers`;
+}
+
+/** True when the row should show a memory badge (≥ 256 MB app total). */
+export function memoryHeavy(e: Pick<PortEntry, "app_memory_bytes" | "process">): boolean {
+  return entryMemory(e) >= 256 * 1024 * 1024;
+}
+
 /**
  * Rolling CPU samples per entry, one per scan, for the row sparkline. Entries that vanish are
  * dropped so the map never grows without bound.
@@ -90,10 +117,10 @@ export class UsageHistory {
   constructor(
     private readonly size = 24,
     /** What to sample: CPU percent by default; memory for the details pane's trend. */
-    private readonly pick: (e: Pick<PortEntry, "id" | "process">) => number | undefined = (e) => e.process?.cpu_percent,
+    private readonly pick: (e: Pick<PortEntry, "id" | "process" | "app_memory_bytes">) => number | undefined = (e) => e.process?.cpu_percent,
   ) {}
 
-  push(entries: Pick<PortEntry, "id" | "process">[]): void {
+  push(entries: Pick<PortEntry, "id" | "process" | "app_memory_bytes">[]): void {
     const seen = new Set<string>();
     for (const e of entries) {
       seen.add(e.id);

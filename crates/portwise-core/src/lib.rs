@@ -29,6 +29,7 @@ pub mod exec;
 pub mod hint;
 pub mod history;
 pub mod http;
+pub mod memory;
 pub mod model;
 pub mod probe;
 pub mod process;

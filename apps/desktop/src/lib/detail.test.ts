@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canRestart, cliCommands, curlCommand, detailTabs, glance, killCommand, peerLabel, projectFolder, resolveTab, stopState } from "./detail";
+import { canRestart, cliCommands, curlCommand, detailTabs, glance, killCommand, killHelpersCommand, peerLabel, projectFolder, resolveTab, stopState } from "./detail";
 import { MOCK_SNAPSHOT, mockExplain, mockPlan } from "./mock";
 
 const entry = (port: number) => MOCK_SNAPSHOT.entries.find((e) => e.port === port)!;
@@ -69,5 +69,20 @@ describe("quick actions", () => {
   it("labels peers", () => {
     expect(peerLabel({ address: "127.0.0.1", connections: 3, process: "Google Chrome" })).toBe("Google Chrome ×3");
     expect(peerLabel({ address: "192.168.1.24", connections: 1, process: null })).toBe("192.168.1.24");
+  });
+});
+
+describe("killHelpersCommand", () => {
+  it("offers a pkill -P line only when there are unprotected helpers", () => {
+    const e = {
+      protected: false,
+      container: null,
+      helper_count: 3,
+      process: { pid: 42 },
+    } as any;
+    expect(killHelpersCommand(e, "macos")).toBe("pkill -TERM -P 42");
+    expect(killHelpersCommand({ ...e, helper_count: 0 }, "macos")).toBeNull();
+    expect(killHelpersCommand({ ...e, protected: true }, "macos")).toBeNull();
+    expect(killHelpersCommand(e, "windows")).toBeNull();
   });
 });
