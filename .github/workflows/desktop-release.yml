@@ -201,8 +201,12 @@ jobs:
             hdiutil detach "$mnt" >/dev/null
           done
 
+      # tauri-action uploads as it builds; a flaky GitHub upload once dropped the Windows NSIS
+      # mid-transfer ("other side closed") and skipped Collect/checksums. Always collect from
+      # disk and re-upload with retries so a network blip can't leave a release incomplete.
       - name: Collect the installers
         id: files
+        if: always() && steps.tauri.outcome != 'skipped'
         shell: bash
         run: |
           shopt -s nullglob # (no globstar: macOS runners ship bash 3.2)
@@ -215,16 +219,38 @@ jobs:
           if command -v sha256sum >/dev/null; then sha256sum "${files[@]}"; else shasum -a 256 "${files[@]}"; fi \
             | sed -E 's#^([0-9a-f]+) [ *](.*/)?#\1  #' > "$sum" # bare names; Windows marks binary files with '*'
           cat "$sum"
+          printf '%s\n' "${files[@]}" > "${sum}.paths"
           { echo "sum=$sum"; echo "paths<<__P__"; printf '%s\n' "${files[@]}"; echo "__P__"; } >> "$GITHUB_OUTPUT"
+      - name: Upload installers to the release
+        if: env.TAG != '' && steps.files.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < "${{ steps.files.outputs.sum }}.paths"
+          for attempt in 1 2 3 4 5; do
+            if gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"; then
+              echo "uploaded ${#files[@]} installers (attempt $attempt)"
+              exit 0
+            fi
+            echo "::warning::upload attempt $attempt failed; retrying..."
+            sleep $((attempt * 10))
+          done
+          echo "::error::could not upload installers after 5 attempts"
+          exit 1
       - name: Build provenance
-        if: env.TAG != ''
+        if: env.TAG != '' && steps.files.outcome == 'success'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: ${{ steps.files.outputs.paths }}
       - name: Upload checksums to the release
-        if: env.TAG != ''
+        if: env.TAG != '' && steps.files.outcome == 'success'
         shell: bash
-        run: gh release upload "$TAG" "${{ steps.files.outputs.sum }}" --clobber --repo "$GITHUB_REPOSITORY"
+        run: |
+          for attempt in 1 2 3 4 5; do
+            gh release upload "$TAG" "${{ steps.files.outputs.sum }}" --clobber --repo "$GITHUB_REPOSITORY" && exit 0
+            sleep $((attempt * 5))
+          done
+          exit 1
 
   notes:
     # tauri-action rewrites the existing release with an empty body; put dist's notes back.
