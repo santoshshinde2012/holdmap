@@ -47,7 +47,7 @@ pub fn spawn(app: AppHandle) {
             let state = app.state::<AppState>();
             // Shares a scan the UI just asked for instead of running a second one.
             if let Ok(snapshot) = state.snapshot(false, Duration::from_millis(1000)) {
-                let events = watcher.observe(snapshot.clone());
+                let events = watcher.observe(&snapshot);
                 if !events.is_empty() {
                     let _ = app.emit("port-events", &events);
                     let cfg = state.store.config();
@@ -60,21 +60,23 @@ pub fn spawn(app: AppHandle) {
                             .show();
                     }
                 }
-                let visible = app
-                    .get_webview_window("main")
-                    .and_then(|w| w.is_visible().ok())
-                    .unwrap_or(false);
-                // Push every scan to the window. Its own timers can be throttled by the OS
-                // (WebKit, App Nap) while this thread keeps time, so the list stays live.
-                if visible {
+                let win = app.get_webview_window("main");
+                let visible = win.as_ref().and_then(|w| w.is_visible().ok()).unwrap_or(false);
+                let minimized = win.as_ref().and_then(|w| w.is_minimized().ok()).unwrap_or(false);
+                // Push every scan while the window is actually on screen. Minimized still
+                // counts as "visible" on some platforms, so treat it like background.
+                if visible && !minimized {
                     let _ = app.emit("snapshot", &snapshot);
                 }
                 crate::tray::refresh_tray(&app, &snapshot);
             }
-            let hidden = app
-                .get_webview_window("main")
-                .and_then(|w| w.is_visible().ok())
-                .is_some_and(|v| !v);
+            let win = app.get_webview_window("main");
+            let hidden = win
+                .as_ref()
+                .map(|w| {
+                    !w.is_visible().unwrap_or(false) || w.is_minimized().unwrap_or(false)
+                })
+                .unwrap_or(true);
             std::thread::sleep(cadence(&state.store.config(), hidden));
         }
     });

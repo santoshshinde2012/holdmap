@@ -60,7 +60,7 @@ pub fn run(a: &WatchArgs, docker: bool) -> Result<u8> {
     }
     loop {
         let snap = scanner.scan(&opts)?.snapshot;
-        for ev in w.observe(snap) {
+        for ev in w.observe(&snap) {
             if !ev.notable(!a.all, &pins) {
                 continue;
             }

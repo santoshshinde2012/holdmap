@@ -19,7 +19,6 @@
   import Onboarding from "./components/Onboarding.svelte";
   import EmptyState from "./components/EmptyState.svelte";
   import Toasts, { type Toast } from "./components/Toasts.svelte";
-  import GraphView from "./components/GraphView.svelte";
   import HistoryPanel from "./components/HistoryPanel.svelte";
   import * as api from "./lib/api";
   import type { ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortDetails, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
@@ -86,6 +85,8 @@
   let now = $state(Date.now());
   let toastSeq = 0;
   let view = $state<View>((store("pw.view") as View) ?? "list");
+  /** GraphView (and @xyflow) loads only when the Graph tab is opened — keeps the first paint light. */
+  let GraphView = $state<typeof import("./components/GraphView.svelte").default | null>(null);
   let graph = $state.raw<Graph | null>(null);
   let graphAll = $state(false);
   let selectedNode = $state<string | null>(null);
@@ -105,7 +106,13 @@
   const PANE_DEFAULT = 460;
   let paneWidth = $state(Math.min(680, Math.max(340, Number(store("pw.pane")) || PANE_DEFAULT)));
   $effect(() => { try { localStorage.setItem("pw.view", view); } catch { /* ignore */ } });
-  $effect(() => { if (view === "graph") loadTopology(); });
+  $effect(() => {
+    if (view !== "graph") return;
+    loadTopology();
+    if (!GraphView) {
+      import("./components/GraphView.svelte").then((m) => { GraphView = m.default; }).catch((e) => console.error("Couldn't load the graph", e));
+    }
+  });
   const pins = $derived(new Set((config?.pins ?? []).map((p) => p.port)));
   const linkCount = $derived.by(() => {
     const m = new Map<string, number>();
@@ -186,8 +193,24 @@
     }
   }
 
+  /** Newest snapshot waiting for the next animation frame (coalesces bursty watcher + poll). */
+  let applyQueued: Snapshot | null = null;
+  let applyRaf = 0;
+
   /** Take in a snapshot, from our own scan or pushed by the app's watcher; never go back in time. */
   function apply(next: Snapshot) {
+    if (snapshot && next.taken_at_ms < snapshot.taken_at_ms) return;
+    applyQueued = next;
+    if (applyRaf) return;
+    applyRaf = requestAnimationFrame(() => {
+      applyRaf = 0;
+      const n = applyQueued;
+      applyQueued = null;
+      if (n) applyNow(n);
+    });
+  }
+
+  function applyNow(next: Snapshot) {
     if (snapshot && next.taken_at_ms < snapshot.taken_at_ms) return;
     {
       const s = share(snapshot, next);
@@ -803,7 +826,11 @@
   <main class="content" class:narrow style="--pane-w: {paneWidth}px">
     {#if view === "graph"}
       <div class="graph-wrap">
-        <GraphView {graph} {selectedNode} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; loadTopology(); }} onselect={selectNode} onstopcluster={requestClusterStop} />
+        {#if GraphView}
+          <GraphView {graph} {selectedNode} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; loadTopology(); }} onselect={selectNode} onstopcluster={requestClusterStop} />
+        {:else}
+          <div class="graph-loading" aria-busy="true">Loading graph…</div>
+        {/if}
       </div>
     {:else}
     <div class="list {density}" id="port-list" role="listbox" aria-label="Ports in use" aria-activedescendant={selectedId ? "row-" + selectedId : undefined} tabindex="0" bind:this={listEl}>
@@ -959,6 +986,7 @@
   .status .sp { flex: 1; }
   .hints { display: inline-flex; align-items: center; gap: 14px; }
   .hints > span { display: inline-flex; align-items: center; gap: 6px; }
+  .graph-loading { display: grid; place-items: center; height: 100%; color: var(--muted); font-size: var(--fs-body-sm); }
   .graph-wrap { position: relative; min-height: 0; min-width: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
 

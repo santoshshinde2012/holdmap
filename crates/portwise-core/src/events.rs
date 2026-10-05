@@ -152,12 +152,12 @@ impl Watcher {
     }
 
     /// Events since the previous call (none for the very first snapshot, which is the baseline).
-    pub fn observe(&mut self, next: Snapshot) -> Vec<PortEvent> {
+    pub fn observe(&mut self, next: &Snapshot) -> Vec<PortEvent> {
         let ev = match &self.prev {
-            Some(p) => diff(p, &next),
+            Some(p) => diff(p, next),
             None => Vec::new(),
         };
-        self.prev = Some(next);
+        self.prev = Some(next.clone());
         ev
     }
 }
@@ -195,13 +195,13 @@ mod tests {
     fn opened_closed_and_conflicts() {
         let mut w = Watcher::new();
         assert!(
-            w.observe(snap(vec![listen(3000, &[5])])).is_empty(),
+            w.observe(&snap(vec![listen(3000, &[5])])).is_empty(),
             "baseline"
         );
         let mut v6 = listen(3000, &[6]);
         v6.local_addr = "::1".parse().unwrap();
         v6.family = crate::model::Family::V6;
-        let ev = w.observe(snap(vec![
+        let ev = w.observe(&snap(vec![
             listen(3000, &[5]),
             v6.clone(),
             listen(8000, &[6]),
@@ -217,9 +217,9 @@ mod tests {
         assert_eq!(kinds, ["opened", "conflict", "opened"], "{ev:?}");
         assert!(ev[1].summary().contains("2 owners"), "{}", ev[1].summary());
         // Same conflict again: not re-reported.
-        let ev = w.observe(snap(vec![listen(3000, &[5]), v6, listen(8000, &[6])]));
+        let ev = w.observe(&snap(vec![listen(3000, &[5]), v6, listen(8000, &[6])]));
         assert!(ev.is_empty(), "{ev:?}");
-        let ev = w.observe(snap(vec![listen(3000, &[5])]));
+        let ev = w.observe(&snap(vec![listen(3000, &[5])]));
         assert_eq!(ev.len(), 2);
         assert!(ev.iter().all(|e| matches!(e, PortEvent::Closed { .. })));
         assert!(ev[0].summary().starts_with("▼ :3000"));
