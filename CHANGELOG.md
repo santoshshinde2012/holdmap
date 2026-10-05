@@ -6,6 +6,22 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
+## [0.1.6] - 2026-10-05
+
+### Fixed
+
+- **Desktop: blank white screen after long runs.** An uncaught error could leave the WebView
+  empty (only the native title bar). The app now remounts and tells you why. Explain/HTTP/
+  details caches and sparkline samples have hard size caps, history is dropped while the
+  window is hidden, and the service graph is only built in Graph view.
+
+### Added
+
+- **Accurate memory.** macOS uses Activity Monitor's `phys_footprint`, Linux `VmRSS`, Windows
+  Working set. Each port shows the app total (process + helpers) with a helper count in the
+  list, details, graph, CLI, JSON and MCP. Heavy apps get a memory badge; sort-by-memory uses
+  the app total; a copy-only quit-helpers command appears when safe.
+
 ## [0.1.5] - 2026-10-04
 
 ### Fixed
@@ -161,6 +177,7 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
+[0.1.6]: https://github.com/santoshshinde2012/portwise/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/santoshshinde2012/portwise/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/santoshshinde2012/portwise/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/santoshshinde2012/portwise/compare/v0.1.2...v0.1.3
