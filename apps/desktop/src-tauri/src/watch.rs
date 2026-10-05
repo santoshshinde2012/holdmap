@@ -61,8 +61,14 @@ pub fn spawn(app: AppHandle) {
                     }
                 }
                 let win = app.get_webview_window("main");
-                let visible = win.as_ref().and_then(|w| w.is_visible().ok()).unwrap_or(false);
-                let minimized = win.as_ref().and_then(|w| w.is_minimized().ok()).unwrap_or(false);
+                let visible = win
+                    .as_ref()
+                    .and_then(|w| w.is_visible().ok())
+                    .unwrap_or(false);
+                let minimized = win
+                    .as_ref()
+                    .and_then(|w| w.is_minimized().ok())
+                    .unwrap_or(false);
                 // Push every scan while the window is actually on screen. Minimized still
                 // counts as "visible" on some platforms, so treat it like background.
                 if visible && !minimized {
@@ -73,9 +79,7 @@ pub fn spawn(app: AppHandle) {
             let win = app.get_webview_window("main");
             let hidden = win
                 .as_ref()
-                .map(|w| {
-                    !w.is_visible().unwrap_or(false) || w.is_minimized().unwrap_or(false)
-                })
+                .map(|w| !w.is_visible().unwrap_or(false) || w.is_minimized().unwrap_or(false))
                 .unwrap_or(true);
             std::thread::sleep(cadence(&state.store.config(), hidden));
         }
