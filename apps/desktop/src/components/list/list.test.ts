@@ -35,8 +35,9 @@ describe("PortRow", () => {
     const { container } = render(PortRow, { entry: byPort(5432), links: 2, selected: false, busy: false, ...handlers() });
     const chips = container.querySelectorAll(".chip");
     expect(chips.length).toBe(2);
-    expect(chips[1].textContent).toBe("+2");
-    expect(chips[1].getAttribute("aria-label")).toBe("2 more: Docker · 2 connected");
+    // exposed + (+N) for container, links, and the memory badge on this 300 MB fixture
+    expect(chips[1].textContent).toBe("+3");
+    expect(chips[1].getAttribute("aria-label")).toMatch(/^3 more: Docker · 2 connected/);
   });
 
   it("actions overlay the row (absolutely positioned, not a grid column) and don't select the row", async () => {
