@@ -3,7 +3,7 @@
 <!-- Generated from the clap definitions in crates/portwise-cli. Do not edit by hand:
      PORTWISE_BLESS=1 cargo test -p portwise cli_reference -->
 
-This page is the `--help` output of every command of portwise 0.1.8. `cargo test` checks it
+This page is the `--help` output of every command of portwise 0.1.9. `cargo test` checks it
 against the code, so it never drifts. For an overview see the [README](../README.md).
 
 Global options (accepted by every command): `--color <auto|always|never>` (env `PORTWISE_COLOR`; `NO_COLOR` and `CLICOLOR_FORCE` are honoured too) and `--no-docker`.
