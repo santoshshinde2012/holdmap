@@ -8,7 +8,7 @@ import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 const { chromium } = await import(process.env.PLAYWRIGHT ?? "playwright");
 const [, , variant = "desktop", theme = "dark", fpsArg = "60", base = "http://127.0.0.1:4330/portwise/"] = process.argv;
 const FPS = +fpsArg, M = variant === "mobile";
-const VW = M ? 400 : 1280, VH = M ? 560 : 720, DPR = M ? 3 : 2;
+const VW = M ? 400 : 1152, VH = M ? 560 : 720, DPR = M ? 3 : 2;
 const dir = `.hero-frames/${variant}-${theme}`;
 rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true });
 
@@ -84,7 +84,7 @@ const hold = async (ms) => { for (let i = 0, n = Math.round((ms * FPS) / 1000); 
 const until = async (fn, max = 4000) => { for (let i = 0; i < (max * FPS) / 1000; i++) { if (await fn()) return; await step(); } };
 const center = async (loc) => { const r = await loc.boundingBox(); return [r.x + r.width / 2, r.y + r.height / 2]; };
 const move = async (xy, ms) => { await p.evaluate(([x, y, ms]) => window.__cur.move(x, y, ms), [...xy, ms]); await hold(ms); await p.mouse.move(...xy); };
-const click = async (xy) => { await p.evaluate(() => window.__cur.click()); if (M) await p.touchscreen.tap(...xy); else await p.mouse.click(...xy); };
+const click = async (xy) => { await p.evaluate(() => window.__cur.click()); if (M) { await p.touchscreen.tap(...xy); await p.mouse.move(-1, -1); } else await p.mouse.click(...xy); }; // touch leaves no hover
 const keys = (k, ms = 900) => p.evaluate(([k, ms]) => window.__keys(k, ms), [k, ms]);
 const type = async (s, d = 130) => { for (const ch of s) { await p.keyboard.type(ch); await hold(d); } };
 const show = (xy) => p.evaluate(([x, y]) => window.__cur.show(x, y), xy);
@@ -144,10 +144,40 @@ if (!M) {
   mark("free");
   await click(cxy);
 }
-await until(async () => (await p.locator('[role="status"]').count()) > 0, 6000);
-await hold(2800);
+// Land on the freed state (no details pane, search cleared, the toast saying so), then tidy up so
+// the last frame is the opening list minus :3000, which encode-hero.sh dissolves back into frame 0.
+const dismiss = p.getByRole("button", { name: "Dismiss notification" });
+await until(async () => (await dismiss.count()) > 0, 6000);
+await hold(500);
+if (M) {
+  await move(await center(p.getByRole("button", { name: "Close details" })), 650);
+  await hold(100);
+  await click(await center(p.getByRole("button", { name: "Close details" })));
+  await hold(450);
+  const clear = await center(p.getByRole("button", { name: /^Clear search/ }));
+  await move(clear, 650);
+  await hold(100);
+  await click(clear);
+  await hold(150);
+  await p.keyboard.press("Escape"); // leaves the search field
+  await hold(100);
+  await p.keyboard.press("Escape"); // drops the row selection
+} else {
+  await keys(["esc"], 900);
+  await hold(250);
+  await p.keyboard.press("Escape"); // clears the search
+  await hold(300);
+  await p.keyboard.press("Escape"); // closes the details pane
+}
+await hold(1700);
+const x = await center(dismiss.first());
+await move(x, 700);
+await hold(100);
+await click(x);
+await p.mouse.move(-1, -1); // no hover left on whatever was under the toast
+await hold(250);
 await p.evaluate(() => window.__cur.hide());
-await hold(1400);
+await hold(700);
 mark("end");
 writeFileSync(`${dir}/meta.json`, JSON.stringify({ variant, theme, VW, VH, DPR, FPS, frames: frame, marks }, null, 1));
 console.log(variant, theme, frame, "frames in", ((Date.now() - t0) / 1000).toFixed(0), "s", JSON.stringify(marks));
