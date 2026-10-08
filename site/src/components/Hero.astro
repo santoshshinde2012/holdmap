@@ -1,56 +1,66 @@
 ---
 import Icon from "./Icon.astro";
 import HeroVideo from "./HeroVideo.astro";
+import HeroChapters from "./HeroChapters.astro";
 import { downloads, install, repoUrl, version } from "../lib/site";
 
 const primary = Object.fromEntries(downloads.filter((d) => d.primary).map((d) => [d.os, d.url]));
 ---
 <section class="hero" aria-labelledby="hero-title">
-  <div class="wrap">
-    <h1 id="hero-title">
-      <span class="line">See who's on <span class="port"><i aria-hidden="true"></i>:3000</span>.</span>
-      <span class="line">Stop it safely.</span>
-    </h1>
-    <div class="lead">
+  <div class="wrap grid">
+    <div class="copy">
+      <h1 id="hero-title">
+        <span class="line">See who's on <span class="port"><i aria-hidden="true"></i>:3000</span>.</span>
+        <span class="line">Stop it safely.</span>
+      </h1>
       <p class="sub">
         portwise names the project, branch and process behind every port, then stops the whole
-        dev-server tree, and nothing it shouldn't.
+        <span class="nw">dev-server</span> tree, and nothing it shouldn't.
       </p>
-      <div class="act">
-        <div class="cta">
-          <a class="btn btn-primary" href="#install" data-download data-urls={JSON.stringify(primary)}>
-            <Icon name="Download" size={16} />
-            <span class="dl dl-any">Download the app</span>
-            <span class="dl dl-macos">Download for macOS</span>
-            <span class="dl dl-windows">Download for Windows</span>
-            <span class="dl dl-linux">Download for Linux</span>
-          </a>
-          <button type="button" class="btn btn-ghost copy-install" data-copy={install.sh} data-copy-sh={install.sh} data-copy-ps={install.ps} aria-describedby="hero-install-hint">
-            <Icon name="Terminal" size={16} class="i-copy" />
-            <Icon name="Check" size={16} class="i-done" />
-            <span class="l-copy">Copy install command</span>
-            <span class="l-done" aria-hidden="true">Copied</span>
-          </button>
-        </div>
-        <p class="meta" id="hero-install-hint">
-          <a href={`${repoUrl}/releases/tag/v${version}`}>v{version}</a>
-          <span aria-hidden="true">·</span> CLI, TUI, desktop app and MCP server
-        </p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#install" data-download data-urls={JSON.stringify(primary)}>
+          <Icon name="Download" size={16} />
+          <span class="dl dl-any">Download the app</span>
+          <span class="dl dl-macos">Download for macOS</span>
+          <span class="dl dl-windows">Download for Windows</span>
+          <span class="dl dl-linux">Download for Linux</span>
+        </a>
+        <button type="button" class="btn btn-ghost copy-install" data-copy={install.sh} data-copy-sh={install.sh} data-copy-ps={install.ps} aria-describedby="hero-install-hint">
+          <Icon name="Terminal" size={16} class="i-copy" />
+          <Icon name="Check" size={16} class="i-done" />
+          <span class="l-copy">Copy install command</span>
+          <span class="l-done" aria-hidden="true">Copied</span>
+        </button>
       </div>
+      <p class="meta" id="hero-install-hint">
+        <a href={`${repoUrl}/releases/tag/v${version}`}>v{version}</a>
+        <span aria-hidden="true">·</span> CLI, TUI, desktop app and MCP server
+      </p>
     </div>
-    <div class="stage"><HeroVideo /></div>
+    <div class="chapters"><HeroChapters /></div>
+    <div class="media"><HeroVideo /></div>
   </div>
 </section>
 
 <style>
-  .hero { padding-top: clamp(56px, 7vw, 96px); padding-bottom: clamp(72px, 8vw, 120px); }
+  .hero { padding-top: clamp(48px, 6vw, 88px); padding-bottom: clamp(72px, 8vw, 112px); overflow-x: clip; }
+  /* Two columns from 1024px: copy and chapters on the left (5/12), the laptop on the right (7/12),
+     bleeding a little into the page margin when there is one. */
+  .grid {
+    --bleed: clamp(0px, (100vw - var(--wrap)) / 2 - 48px, 96px);
+    display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); column-gap: 56px;
+    grid-template-areas: ". media" "copy media" "chapters media" ". media"; grid-template-rows: 1fr auto auto 1fr;
+  }
+  .copy { grid-area: copy; container-type: inline-size; }
+  .chapters { grid-area: chapters; margin-top: 40px; }
+  .media { grid-area: media; align-self: center; margin-right: calc(-1 * var(--bleed)); }
+  /* Sized to the column: line one is ~8.65em wide, so 11.2cqi always fits it. */
   h1 {
-    margin: 0;
-    font-size: clamp(36px, 8.6vw, 76px); line-height: 1.02; letter-spacing: -0.042em; font-weight: 600;
+    margin: 0; --max: 60px;
+    font-size: clamp(32px, 11.2cqi, var(--max)); line-height: 1.04; letter-spacing: -0.04em; font-weight: 600;
     font-variation-settings: "opsz" 32;
   }
   .line { display: block; white-space: nowrap; }
-  /* The port, styled like the app's port chip: mono, hairline, a listening dot. */
   .port {
     display: inline-flex; align-items: center; gap: 0.14em; margin: 0 0.04em; padding: 0 0.16em 0 0.14em;
     font: 500 0.8em/1.14 var(--mono); letter-spacing: -0.05em; vertical-align: 0.06em;
@@ -59,10 +69,8 @@ const primary = Object.fromEntries(downloads.filter((d) => d.primary).map((d) =>
   }
   .port i { width: 0.2em; height: 0.2em; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0.07em color-mix(in srgb, var(--green) 22%, transparent); }
 
-  .lead { display: grid; grid-template-columns: minmax(0, 520px) auto; justify-content: space-between; align-items: end; gap: 24px 48px; margin-top: 32px; }
-  .sub { margin: 0; font-size: var(--fs-sub); line-height: 1.55; color: var(--muted); text-wrap: pretty; }
-  .act { display: grid; justify-items: end; gap: 12px; }
-  .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .sub { margin: 20px 0 0; max-width: 34em; font-size: var(--fs-sub); line-height: 1.55; color: var(--muted); text-wrap: pretty; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
   /* The OS is known before first paint (inline script in Base), so the label never jumps. */
   .dl:not(.dl-any) { display: none; }
   :global(html[data-os="macos"]) .dl-macos, :global(html[data-os="windows"]) .dl-windows, :global(html[data-os="linux"]) .dl-linux { display: inline; }
@@ -71,19 +79,28 @@ const primary = Object.fromEntries(downloads.filter((d) => d.primary).map((d) =>
   .copy-install[data-copied] :global(.i-done), .copy-install[data-copied] .l-done { display: inline; }
   .copy-install[data-copied] :global(.i-done) { display: block; color: var(--green); }
   .copy-install[data-copied] :global(.i-copy), .copy-install[data-copied] .l-copy { display: none; }
-  .meta { margin: 0; font-size: var(--fs-sm); color: var(--muted); }
+  .meta { margin: 14px 0 0; font-size: var(--fs-sm); color: var(--muted); }
   .meta a { color: var(--text-2); font-family: var(--mono); font-size: var(--fs-xs); text-decoration: none; }
   .meta a:hover { color: var(--text); text-decoration: underline; }
-  .stage { margin-top: clamp(40px, 5vw, 56px); }
 
-  @media (max-width: 900px) {
-    .lead { grid-template-columns: minmax(0, 1fr); }
-    .act { justify-items: start; }
+  .nw { white-space: nowrap; }
+  /* Narrow two-column: chapters move under the laptop so the copy column stays short. */
+  @media (min-width: 1024px) and (max-width: 1199px) {
+    .grid { grid-template-columns: minmax(412px, 5fr) minmax(0, 7fr); column-gap: 40px; grid-template-areas: "copy media" "copy chapters"; grid-template-rows: auto auto; }
+    .copy { align-self: center; }
+    .chapters { margin-top: 12px; }
+  }
+  /* Stacked: copy, then the device at full width, then the chapters. */
+  @media (max-width: 1023px) {
+    .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "copy" "media" "chapters"; grid-template-rows: none; }
+    h1 { --max: 68px; }
+    .media { margin: 48px 0 0; }
+    .chapters { margin-top: 20px; }
   }
   @media (max-width: 640px) {
-    .cta { flex-direction: column; width: 100%; }
-    .act { justify-items: stretch; }
+    .cta { flex-direction: column; }
     .cta .btn { width: 100%; --h: 44px; }
+    .media { margin-top: 40px; }
   }
 </style>
 <script>
