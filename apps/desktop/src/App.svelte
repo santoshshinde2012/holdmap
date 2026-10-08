@@ -108,7 +108,9 @@
   $effect(() => { try { localStorage.setItem("pw.view", view); } catch { /* ignore */ } });
   $effect(() => {
     if (view !== "graph") return;
-    loadTopology();
+    // untrack: loadTopology reads `graph` before its await; tracking it re-ran this effect on
+    // every new graph (CPU moves each scan), so Graph view rebuilt the topology in a tight loop.
+    untrack(loadTopology);
     if (!GraphView) {
       import("./components/GraphView.svelte").then((m) => { GraphView = m.default; }).catch((e) => console.error("Couldn't load the graph", e));
     }
