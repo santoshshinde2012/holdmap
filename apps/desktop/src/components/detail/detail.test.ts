@@ -19,7 +19,7 @@ afterEach(cleanup);
 
 const base = MOCK_SNAPSHOT.entries.find((e) => e.port === 3000)!;
 /** What a poll hands over: a structurally new object, here with a new memory figure. */
-const polled = (mem: number): PortEntry => ({ ...structuredClone(base), process: { ...base.process!, memory_bytes: mem } });
+const polled = (mem: number): PortEntry => ({ ...structuredClone(base), app_memory_bytes: mem, process: { ...base.process!, memory_bytes: mem } });
 const props = (entry: PortEntry, loading = false) => ({ entry, explanation: mockExplain(3000), loading, busy: false, onstop() {}, onkill() {}, onopen() {}, oncopy() {} });
 
 describe("DetailPane under polling", () => {
