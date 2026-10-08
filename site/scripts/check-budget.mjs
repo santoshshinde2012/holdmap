@@ -6,7 +6,7 @@ import { gzipSync } from "node:zlib";
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 const gz = (f) => gzipSync(readFileSync(f), { level: 9 }).length;
-const kb = (n) => `${(n / 1024).toFixed(1)} KB`;
+const kb = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(2)} MB` : `${(n / 1024).toFixed(1)} KB`);
 const files = (d) => readdirSync(d).map((f) => join(d, f)).filter((f) => statSync(f).isFile());
 
 const index = readFileSync(join(dist, "index.html"), "utf8");
@@ -15,6 +15,7 @@ const astro = files(join(dist, "_astro"));
 const images = astro.filter((f) => /\.(avif|webp|png|jpe?g)$/.test(f));
 const fonts = astro.filter((f) => f.endsWith(".woff2"));
 const demoJs = files(join(dist, "demo", "assets")).filter((f) => f.endsWith(".js"));
+const videos = files(join(dist, "hero")).filter((f) => /\.(mp4|webm)$/.test(f));
 
 const rows = [
   ["Home page HTML (inline CSS)", gz(join(dist, "index.html")), 45 * 1024],
@@ -23,6 +24,7 @@ const rows = [
   ["Largest image", Math.max(...images.map((f) => statSync(f).size)), 260 * 1024],
   ["Open Graph image", statSync(join(dist, "og.png")).size, 300 * 1024],
   ["Live demo JS (loaded on demand)", demoJs.reduce((n, f) => n + gz(f), 0), 220 * 1024],
+  ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];
 
 let failed = false;

@@ -1,63 +1,68 @@
 ---
-import { Picture } from "astro:assets";
 import Icon from "./Icon.astro";
+import HeroVideo from "./HeroVideo.astro";
 import { downloads, install, repoUrl, version } from "../lib/site";
-import shotDark from "../../../docs/screenshots/desktop-overview-dark.png";
-import shotLight from "../../../docs/screenshots/desktop-overview-light.png";
 
 const primary = Object.fromEntries(downloads.filter((d) => d.primary).map((d) => [d.os, d.url]));
-const alt = "The portwise desktop app: ports grouped by kind, with port 3000 (Next.js, shop-web on feat/checkout) selected and its project, memory, connections and stop plan in the details pane";
-const widths = [640, 960, 1280, 1680, 2240, 2880];
-const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
 ---
 <section class="hero" aria-labelledby="hero-title">
-  <div class="wrap copy">
-    <h1 id="hero-title">Know what's on every port.<br class="br" /> <span class="soft">Free it safely.</span></h1>
-    <p class="sub">
-      portwise names the project and branch behind each port, explains why it's busy, and stops
-      the right thing safely.
-    </p>
-    <div class="cta">
-      <a class="btn btn-primary" href="#install" data-download data-urls={JSON.stringify(primary)}>
-        <Icon name="Download" size={16} />
-        <span class="dl dl-any">Download the app</span>
-        <span class="dl dl-macos">Download for macOS</span>
-        <span class="dl dl-windows">Download for Windows</span>
-        <span class="dl dl-linux">Download for Linux</span>
-      </a>
-      <button type="button" class="btn btn-ghost copy-install" data-copy={install.sh} data-copy-sh={install.sh} data-copy-ps={install.ps} aria-describedby="hero-install-hint">
-        <Icon name="Terminal" size={16} class="i-copy" />
-        <Icon name="Check" size={16} class="i-done" />
-        <span class="l-copy">Copy install command</span>
-        <span class="l-done" aria-hidden="true">Copied</span>
-      </button>
+  <div class="wrap">
+    <h1 id="hero-title">
+      <span class="line">See who's on <span class="port"><i aria-hidden="true"></i>:3000</span>.</span>
+      <span class="line">Stop it safely.</span>
+    </h1>
+    <div class="lead">
+      <p class="sub">
+        portwise names the project, branch and process behind every port, then stops the whole
+        dev-server tree, and nothing it shouldn't.
+      </p>
+      <div class="act">
+        <div class="cta">
+          <a class="btn btn-primary" href="#install" data-download data-urls={JSON.stringify(primary)}>
+            <Icon name="Download" size={16} />
+            <span class="dl dl-any">Download the app</span>
+            <span class="dl dl-macos">Download for macOS</span>
+            <span class="dl dl-windows">Download for Windows</span>
+            <span class="dl dl-linux">Download for Linux</span>
+          </a>
+          <button type="button" class="btn btn-ghost copy-install" data-copy={install.sh} data-copy-sh={install.sh} data-copy-ps={install.ps} aria-describedby="hero-install-hint">
+            <Icon name="Terminal" size={16} class="i-copy" />
+            <Icon name="Check" size={16} class="i-done" />
+            <span class="l-copy">Copy install command</span>
+            <span class="l-done" aria-hidden="true">Copied</span>
+          </button>
+        </div>
+        <p class="meta" id="hero-install-hint">
+          <a href={`${repoUrl}/releases/tag/v${version}`}>v{version}</a>
+          <span aria-hidden="true">·</span> CLI, TUI, desktop app and MCP server
+        </p>
+      </div>
     </div>
-    <p class="meta" id="hero-install-hint">
-      <a href={`${repoUrl}/releases/tag/v${version}`}>v{version}</a>
-      <span aria-hidden="true">·</span> CLI, TUI, desktop app and MCP server
-      <span aria-hidden="true">·</span> macOS, Linux, Windows
-    </p>
-  </div>
-
-  <div class="wrap stage">
-    <div class="spot" aria-hidden="true"></div>
-    <figure class="window shot">
-      <Picture src={shotDark} formats={["avif"]} fallbackFormat="webp" widths={widths} sizes={sizes} alt={alt} loading="eager" decoding="async" fetchpriority="high" pictureAttributes={{ class: "only-dark" }} />
-      <Picture src={shotLight} formats={["avif"]} fallbackFormat="webp" widths={widths} sizes={sizes} alt={alt} loading="lazy" decoding="async" pictureAttributes={{ class: "only-light" }} />
-    </figure>
+    <div class="stage"><HeroVideo /></div>
   </div>
 </section>
 
 <style>
-  .hero { position: relative; padding-top: clamp(64px, 8vw, 112px); padding-bottom: clamp(72px, 8vw, 120px); overflow: hidden; }
+  .hero { padding-top: clamp(56px, 7vw, 96px); padding-bottom: clamp(72px, 8vw, 120px); }
   h1 {
-    margin: 0; max-width: 840px;
-    font-size: var(--fs-display); line-height: 1.04; letter-spacing: -0.035em; font-weight: 560;
+    margin: 0;
+    font-size: clamp(36px, 8.6vw, 76px); line-height: 1.02; letter-spacing: -0.042em; font-weight: 600;
     font-variation-settings: "opsz" 32;
   }
-  h1 .soft { color: var(--muted); }
-  .sub { margin: 24px 0 0; max-width: 540px; font-size: var(--fs-sub); line-height: 1.55; color: var(--muted); text-wrap: pretty; }
-  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+  .line { display: block; white-space: nowrap; }
+  /* The port, styled like the app's port chip: mono, hairline, a listening dot. */
+  .port {
+    display: inline-flex; align-items: center; gap: 0.14em; margin: 0 0.04em; padding: 0 0.16em 0 0.14em;
+    font: 500 0.8em/1.14 var(--mono); letter-spacing: -0.05em; vertical-align: 0.06em;
+    border-radius: 0.16em; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border-strong);
+    font-variant-ligatures: none;
+  }
+  .port i { width: 0.2em; height: 0.2em; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0.07em color-mix(in srgb, var(--green) 22%, transparent); }
+
+  .lead { display: grid; grid-template-columns: minmax(0, 520px) auto; justify-content: space-between; align-items: end; gap: 24px 48px; margin-top: 32px; }
+  .sub { margin: 0; font-size: var(--fs-sub); line-height: 1.55; color: var(--muted); text-wrap: pretty; }
+  .act { display: grid; justify-items: end; gap: 12px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; }
   /* The OS is known before first paint (inline script in Base), so the label never jumps. */
   .dl:not(.dl-any) { display: none; }
   :global(html[data-os="macos"]) .dl-macos, :global(html[data-os="windows"]) .dl-windows, :global(html[data-os="linux"]) .dl-linux { display: inline; }
@@ -66,24 +71,21 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
   .copy-install[data-copied] :global(.i-done), .copy-install[data-copied] .l-done { display: inline; }
   .copy-install[data-copied] :global(.i-done) { display: block; color: var(--green); }
   .copy-install[data-copied] :global(.i-copy), .copy-install[data-copied] .l-copy { display: none; }
-  .meta { margin: 16px 0 0; font-size: var(--fs-sm); color: var(--muted); }
+  .meta { margin: 0; font-size: var(--fs-sm); color: var(--muted); }
   .meta a { color: var(--text-2); font-family: var(--mono); font-size: var(--fs-xs); text-decoration: none; }
   .meta a:hover { color: var(--text); text-decoration: underline; }
+  .stage { margin-top: clamp(40px, 5vw, 56px); }
 
-  .stage { position: relative; margin-top: clamp(48px, 5vw, 72px); }
-  .spot {
-    position: absolute; left: 50%; top: -120px; width: 90%; height: 520px; translate: -50% 0; z-index: -1;
-    background: radial-gradient(50% 50% at 50% 50%, var(--spot), transparent 70%);
+  @media (max-width: 900px) {
+    .lead { grid-template-columns: minmax(0, 1fr); }
+    .act { justify-items: start; }
   }
-  .shot { margin: 0; }
-  .shot :global(img) { width: 100%; aspect-ratio: 16 / 10; }
-
   @media (max-width: 640px) {
-    .cta { flex-direction: column; }
+    .cta { flex-direction: column; width: 100%; }
+    .act { justify-items: stretch; }
     .cta .btn { width: 100%; --h: 44px; }
   }
 </style>
-
 <script>
   // Point the download button at the visitor's OS (the default link scrolls to all downloads),
   // and copy the matching installer (PowerShell on Windows).
