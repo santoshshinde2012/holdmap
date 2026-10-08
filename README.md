@@ -82,13 +82,13 @@ you: open a new terminal, or run the `source` line it prints.
 <!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
      suffix isn't read as part of the version). -->
 <!-- x-release-please-start-version -->
-[dmg-arm64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.9_aarch64.dmg
-[dmg-x64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.9_x64.dmg
-[msi]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.9_x64_en-US.msi
-[nsis]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.9_x64-setup.exe
-[appimage]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.9_amd64.AppImage
-[deb]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.1.9_amd64.deb
-[rpm]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-0.1.9%2D1.x86_64.rpm
+[dmg-arm64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.2.0_aarch64.dmg
+[dmg-x64]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.2.0_x64.dmg
+[msi]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.2.0_x64_en-US.msi
+[nsis]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.2.0_x64-setup.exe
+[appimage]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.2.0_amd64.AppImage
+[deb]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise_0.2.0_amd64.deb
+[rpm]: https://github.com/santoshshinde2012/portwise/releases/latest/download/portwise-0.2.0%2D1.x86_64.rpm
 <!-- x-release-please-end -->
 
 **Homebrew:** coming soon.
@@ -170,8 +170,8 @@ its URL, a `curl` or the kill command.
 | ![The service graph: a Compose cluster with shop-web, shop-api, db and redis, dark theme](docs/screenshots/desktop-graph-dark.png) | ![The stop confirmation lists every step before anything is sent](docs/screenshots/desktop-stop-confirm-light.png) |
 | **Command palette** | **Settings** |
 | ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) | ![Settings: startup and the global shortcut, dark theme](docs/screenshots/desktop-settings-dark.png) |
-| **TUI** | |
-| ![The portwise TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) | |
+| **TUI** | **Agents** |
+| ![The portwise TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) | ![The agents view: Claude Code and Cursor with their folders, ports, connections and access, dark theme](docs/screenshots/desktop-agents-dark.png) |
 
 </details>
 

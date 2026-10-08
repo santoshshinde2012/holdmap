@@ -6,13 +6,23 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-09
 
 ### Added
 
+- **AI coding agents, end to end.** portwise now finds the coding agents running on your machine
+  (Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider, Cline and others) and shows,
+  for each one, the folders it works in, the ports it serves, the services and hosts it talks to,
+  and its access: account, sandbox, approval flags, network listeners and macOS-protected
+  folders. Each fact is marked seen, inferred or unknown. Chats, settings and tokens are never
+  read.
+  - **Desktop: Agents view** (`⇧A`): a card per agent next to a map of their shared footprint.
+    Click a port to open its details.
+  - **CLI: `portwise agents [AGENT] [-w] [--json]`.**
+  - **MCP: `list_agents`**, read-only.
 - **Website** at <https://santoshshinde2012.github.io/portwise/> with a live, in-browser demo of the
-  desktop app, install steps for every platform and a short guide. It is built from `site/` and
-  deployed by the Pages workflow.
+  desktop app, including the Agents view with sample agents, install steps for every platform and
+  a short guide. It is built from `site/` and deployed by the Pages workflow.
 
 ## [0.1.9] - 2026-10-08
 
@@ -230,6 +240,7 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
+[0.2.0]: https://github.com/santoshshinde2012/portwise/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/santoshshinde2012/portwise/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/santoshshinde2012/portwise/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/santoshshinde2012/portwise/compare/v0.1.6...v0.1.7
