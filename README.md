@@ -35,7 +35,8 @@ portwise tells you what's really there and stops it properly.
 - **A safe stop.** Preview the plan, stop the whole dev-server tree gracefully (SIGTERM, then
   SIGKILL), and check the port is free afterwards. System processes and IDEs are protected.
 - **What's behind it.** Who is connected right now, the full process tree, uptime, CPU and
-  memory trends, the HTTP status and title, and what the bind address means for your safety.
+  memory (the whole app, helpers included), the HTTP status and title, and what the bind address
+  means for your safety.
 - **The service graph.** Which local services talk to which, grouped into clusters (Compose,
   Kubernetes, workspaces). Stop a whole stack in dependency order.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
@@ -91,6 +92,7 @@ Every release has SHA-256 checksums and build provenance (`gh attestation verify
 ```sh
 portwise list                 # every listening port, grouped by kind
 portwise inspect 3000         # owner, process tree, connections, bind risk and the stop plan
+portwise list --sort memory   # heaviest apps first
 portwise stop 3000 --dry-run  # show exactly what stop would do
 portwise stop 3000            # stop it gracefully, then check the port is free
 portwise run -p 3000 -- npm run dev   # free 3000 safely, then start your server on it
@@ -131,14 +133,14 @@ Every read command takes `--json`. Exit codes: `0` ok, `1` busy / not found / ti
 error, `3` blocked by the safety policy, `4` needs elevation. All flags are in the
 **[CLI reference](docs/cli.md)**.
 
-**Shell hook.** Add `eval "$(portwise init zsh)"` to `~/.zshrc` (also `bash`, `fish`, `pwsh`).
+**Shell hook.** Add `eval "$(portwise init zsh)"` to `~/.zshrc` (also `bash`, `fish`, `powershell`).
 When a command fails with "port in use", it prints who holds the port and how to free it.
 
 ## Desktop app
 
 A tray and menu-bar app with the port list, details, the service graph (`G`), pins, history with
-one-click restart, remote hosts over SSH and a command palette (`⌘K` / `Ctrl+K`). Press `?` for
-every shortcut. From the details pane you can open the port in a browser, restart a dev server,
+one-click restart, remote hosts over SSH and a command palette (`⌘K` / `Ctrl+K`). `⌘⌥P`
+(`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. From the details pane you can open the port in a browser, restart a dev server,
 open its folder in your editor (`PORTWISE_EDITOR`, else Cursor, VS Code, Zed…) or Finder, and copy
 its URL, a `curl` or the kill command.
 
