@@ -6,12 +6,16 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
-## [Unreleased]
+## [0.1.8] - 2026-10-08
 
 ### Fixed
 
 - **Desktop: Graph view no longer rebuilds the topology in a loop.** It re-fetched the graph as soon
   as the previous one arrived, costing CPU while Graph was open.
+
+### Changed
+
+- README and release screenshots show the current UI (light and dark).
 
 ## [0.1.7] - 2026-10-05
 
@@ -209,6 +213,7 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
+[0.1.8]: https://github.com/santoshshinde2012/portwise/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/santoshshinde2012/portwise/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/santoshshinde2012/portwise/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/santoshshinde2012/portwise/compare/v0.1.4...v0.1.5
