@@ -67,7 +67,7 @@ Each ecosystem uses its own idiom. `cargo test` enforces these rules
 | Crate directories and package names | kebab-case | `portwise-core`, `portwise-mcp` |
 | Rust modules, files, directories and fixtures | snake_case | `process_tree.rs`, `proc_net_tcp6.txt` |
 | Svelte components | PascalCase | `PortRow.svelte` |
-| Astro components and layouts (`site/`) | PascalCase | `PortRail.astro`, `Docs.astro` |
+| Astro components and layouts (`site/`) | PascalCase | `Hero.astro`, `Docs.astro` |
 | TypeScript modules and tests | kebab-case, tests as `<module>.test.ts` | `rows.ts`, `rows.test.ts` |
 | Assets, scripts, workflows, files in `docs/` | kebab-case | `inter-variable.woff2`, `demo-servers.sh`, `architecture.md` |
 | Screenshots | `<surface>-<view>-<theme>.png` | `desktop-graph-dark.png` |

@@ -176,7 +176,7 @@ fn naming_rules_catch_common_mistakes() {
     assert!(naming_problem("NOTES.md").is_some());
     assert!(naming_problem("apps/desktop/src/lib/rows.test.ts").is_none());
     assert!(naming_problem("site/src/components/port_rail.astro").is_some());
-    assert!(naming_problem("site/src/components/PortRail.astro").is_none());
+    assert!(naming_problem("site/src/components/Hero.astro").is_none());
     assert!(naming_problem("site/src/pages/docs/[...slug].astro").is_none());
     assert!(naming_problem("site/scripts/checkLinks.mjs").is_some());
     assert!(naming_problem("docs/screenshots/desktop-graph-dark.png").is_none());
