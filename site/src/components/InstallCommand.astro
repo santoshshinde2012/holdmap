@@ -4,14 +4,14 @@
 import Icon from "./Icon.astro";
 import { install } from "../lib/site";
 
-interface Props { id: string; size?: "lg" | "md" }
-const { id, size = "lg" } = Astro.props;
+interface Props { id: string }
+const { id } = Astro.props;
 const tabs = [
   { key: "unix", label: "macOS · Linux", cmd: install.sh, prompt: "$" },
   { key: "windows", label: "Windows", cmd: install.ps, prompt: ">" },
 ];
 ---
-<div class:list={["installer", size]} data-installer>
+<div class="installer" data-installer>
   <div class="seg" role="tablist" aria-label="Install command for" data-tabs data-tabs-os>
     {tabs.map((t, i) => (
       <button type="button" role="tab" id={`${id}-tab-${t.key}`} aria-controls={`${id}-${t.key}`} aria-selected={i === 0 ? "true" : "false"} tabindex={i === 0 ? 0 : -1} data-key={t.key}>{t.label}</button>
@@ -19,8 +19,7 @@ const tabs = [
   </div>
   {tabs.map((t, i) => (
     <div class="cmd" role="tabpanel" id={`${id}-${t.key}`} aria-labelledby={`${id}-tab-${t.key}`} hidden={i !== 0} data-key={t.key}>
-      <span class="prompt" aria-hidden="true">{t.prompt}</span>
-      <code id={`${id}-code-${t.key}`} tabindex="0">{t.cmd}</code>
+      <code id={`${id}-code-${t.key}`}><span class="prompt" aria-hidden="true">{t.prompt} </span>{t.cmd}</code>
       <button type="button" class="copy" data-copy={t.cmd} aria-label={`Copy the ${t.label} install command`}>
         <Icon name="Copy" size={16} class="i-copy" />
         <Icon name="Check" size={16} class="i-done" />
@@ -30,36 +29,25 @@ const tabs = [
 </div>
 
 <style>
-  .installer {
-    width: 100%; max-width: 660px; padding: 3px; border-radius: var(--r-lg); text-align: left;
-    background: color-mix(in srgb, var(--surface) 82%, transparent);
-    border: 1px solid var(--border-strong);
-    box-shadow: 0 20px 50px -24px var(--glow), 0 1px 0 rgb(255 255 255 / 0.04) inset;
-    backdrop-filter: blur(10px);
-  }
-  .seg { display: flex; gap: 4px; }
+  /* The full command always shows: it wraps instead of truncating. */
+  .installer { width: 100%; max-width: 640px; text-align: left; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border-strong); overflow: hidden; }
+  .seg { display: flex; gap: 20px; padding: 0 16px; border-bottom: 1px solid var(--border); }
   .seg button {
-    height: 32px; padding: 0 12px; border-radius: var(--r-md); border: 0; background: transparent; cursor: pointer;
+    height: 40px; padding: 0; margin-bottom: -1px; border: 0; border-bottom: 1px solid transparent; background: transparent; cursor: pointer;
     font-size: var(--fs-sm); font-weight: 500; color: var(--muted);
   }
-  .seg button[aria-selected="true"] { background: var(--surface-3); color: var(--text); }
+  .seg button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); }
   .seg button:hover { color: var(--text); }
-  .cmd { display: flex; align-items: center; gap: 12px; margin-top: 4px; padding: 0 3px 0 15px; height: 48px; border-radius: var(--r-md); background: var(--term-bg); border: 1px solid var(--term-line); }
+  .cmd { display: flex; align-items: flex-start; gap: 12px; padding: 12px 8px 12px 16px; }
   .cmd[hidden] { display: none; }
-  .prompt { font-family: var(--mono); color: #8e8cff; font-size: var(--fs-ui); user-select: none; }
-  code {
-    flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none;
-    font-size: var(--fs-ui); color: #e6e8ef; padding: 4px 0;
-    mask-image: linear-gradient(90deg, #000 88%, transparent); -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
-  }
-  code::-webkit-scrollbar { display: none; }
-  code:focus-visible { outline-offset: 2px; mask-image: none; -webkit-mask-image: none; }
+  code { flex: 1; min-width: 0; padding: 4px 0; font-size: var(--fs-sm); line-height: 24px; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; font-variant-ligatures: none; }
+  .prompt { color: var(--muted); user-select: none; }
   .copy {
-    flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-sm); cursor: pointer;
-    background: rgb(255 255 255 / 0.06); border: 1px solid var(--term-line); color: #e6e8ef;
+    flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-sm); cursor: pointer;
+    background: transparent; border: 0; color: var(--muted);
   }
-  .copy:hover { background: rgb(255 255 255 / 0.12); }
-  .copy :global(.i-done) { display: none; color: #4ade80; }
+  .copy:hover { color: var(--text); background: var(--surface-2); }
+  .copy :global(.i-done) { display: none; color: var(--green); }
   .copy[data-copied] :global(.i-done) { display: block; }
   .copy[data-copied] :global(.i-copy) { display: none; }
 </style>

@@ -3,28 +3,22 @@ import Icon from "./Icon.astro";
 import InstallCommand from "./InstallCommand.astro";
 import { url, repoUrl } from "../lib/site";
 ---
-<section class="final" aria-labelledby="final-title">
+<section class="section final" aria-labelledby="final-title">
   <div class="wrap inner">
-    <h2 id="final-title">Free port 3000. <span class="grad">Properly.</span></h2>
+    <h2 class="h2" id="final-title">Free port 3000. <span class="soft">Properly.</span></h2>
     <p>Install the CLI in one line, or grab the desktop app.</p>
-    <InstallCommand id="final-install" size="md" />
+    <InstallCommand id="final-install" />
     <div class="row">
-      <a class="btn btn-ghost" href={url("#install")}><Icon name="Download" size={20} /> All downloads</a>
-      <a class="btn btn-ghost" href={url("docs/")}><Icon name="BookOpen" size={20} /> Read the guide</a>
-      <a class="btn btn-ghost" href={repoUrl}><Icon name="github" size={20} /> View on GitHub</a>
+      <a class="btn btn-primary" href={url("#install")}><Icon name="Download" size={16} /> All downloads</a>
+      <a class="btn btn-ghost" href={url("docs/")}>Read the guide</a>
+      <a class="btn btn-ghost" href={repoUrl}><Icon name="github" size={16} /> View on GitHub</a>
     </div>
   </div>
 </section>
 
 <style>
-  .final { position: relative; overflow: hidden; padding-block: clamp(80px, 11vw, 140px); text-align: center; isolation: isolate; }
-  .final::before {
-    content: ""; position: absolute; z-index: -1; left: 50%; top: 50%; width: 900px; height: 420px; translate: -50% -50%;
-    background: radial-gradient(closest-side, rgb(99 102 241 / 0.28), rgb(34 211 238 / 0.08) 60%, transparent); filter: blur(10px);
-  }
-  .inner { display: flex; flex-direction: column; align-items: center; }
-  h2 { margin: 0; font-size: var(--fs-display-2); line-height: 1.04; letter-spacing: -0.045em; font-weight: 800; text-wrap: balance; }
-  p { margin: 16px 0 32px; color: var(--muted); font-size: var(--fs-lg); }
-  .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 24px; }
-  @media (max-width: 520px) { .row { flex-direction: column; width: 100%; } .row :global(.btn) { width: 100%; } }
+  .inner { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  p { margin: 16px 0 32px; color: var(--muted); font-size: var(--fs-sub); line-height: 28px; }
+  .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 32px; }
+  @media (max-width: 520px) { .row { flex-direction: column; width: 100%; } .row :global(.btn) { width: 100%; height: 44px; } }
 </style>

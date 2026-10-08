@@ -10,20 +10,20 @@ const cards = [
   { icon: "BookOpen", title: "CLI reference", text: "Every command and flag, generated from <code>--help</code>.", href: url("docs/cli/") },
 ];
 ---
-<section class="section guide" aria-labelledby="guide-title">
+<section class="section" aria-labelledby="guide-title">
   <div class="wrap">
-    <div class="section-head split">
+    <div class="section-head head-row">
       <div>
         <span class="eyebrow">Guide</span>
-        <h2 class="h2" id="guide-title">Short docs. Straight answers.</h2>
+        <h2 class="h2" id="guide-title">Short docs. <span class="soft">Straight answers.</span></h2>
       </div>
-      <a class="all" href={url("docs/")}>Open the guide <Icon name="ArrowRight" size={16} /></a>
+      <a class="link-arrow" href={url("docs/")}>Open the guide <Icon name="ArrowRight" size={16} /></a>
     </div>
-    <ul class="cards" role="list">
+    <ul class="cells" role="list">
       {cards.map((c) => (
         <li>
-          <a class="card" href={c.href}>
-            <Icon name={c.icon} size={20} />
+          <a class="cell" href={c.href}>
+            <Icon name={c.icon} size={16} />
             <span class="t">{c.title}</span>
             <span class="d" set:html={c.text} />
           </a>
@@ -34,16 +34,14 @@ const cards = [
 </section>
 
 <style>
-  .split { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
-  .all { display: inline-flex; align-items: center; gap: 8px; color: var(--accent); font-weight: 600; text-decoration: none; margin-bottom: 20px; }
-  .all:hover { text-decoration: underline; }
-  .cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-  .card { display: grid; align-content: start; gap: 8px; height: 100%; padding: 24px; text-decoration: none; transition: border-color 160ms var(--ease), transform 160ms var(--ease); }
-  .card:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); transform: translateY(-2px); }
-  .card :global(svg) { color: var(--accent); margin-bottom: 8px; }
-  .t { font-weight: 600; font-size: var(--fs-base); }
-  .d { color: var(--muted); font-size: var(--fs-md); }
-  .d :global(code) { font-size: 0.875em; padding: 0.125em 0.375em; white-space: nowrap; border-radius: var(--r-xs); background: var(--surface-2); color: var(--text-2); }
-  @media (max-width: 900px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 560px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+  .cells { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--border); border-left: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+  .cells li { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .cell { display: grid; align-content: start; gap: 8px; height: 100%; padding: 32px; text-decoration: none; transition: background-color 160ms var(--ease); }
+  .cell:hover { background: var(--surface); }
+  .cell :global(svg) { color: var(--muted); margin-bottom: 8px; }
+  .cell:hover :global(svg) { color: var(--text); }
+  .t { font-weight: 600; font-size: var(--fs-base); line-height: 24px; }
+  .d { color: var(--muted); font-size: var(--fs-md); line-height: 24px; }
+  @media (max-width: 900px) { .cells { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .cells { grid-template-columns: minmax(0, 1fr); } .cell { padding: 24px 20px; } }
 </style>

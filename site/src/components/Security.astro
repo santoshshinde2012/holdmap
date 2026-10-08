@@ -8,17 +8,17 @@ const items = [
   { icon: "ShieldCheck", title: "Protected by default", text: "The OS, shells, IDEs and AI agents are refused unless you pass <code>--allow-protected</code>. MCP always refuses." },
 ];
 ---
-<section class="security" aria-labelledby="sec-title">
-  <div class="wrap inner">
-    <div class="head">
+<section class="section" aria-labelledby="sec-title">
+  <div class="wrap">
+    <div class="section-head">
       <span class="eyebrow">Security and privacy</span>
-      <h2 id="sec-title">It stops processes, so it's careful.</h2>
-      <p>A PID-reuse guard, <code>--dry-run</code> for every plan, history only you can read, and a locked-down desktop webview. <a href={securityUrl}>Security policy</a></p>
+      <h2 class="h2" id="sec-title">It stops processes, <span class="soft">so it's careful.</span></h2>
+      <p class="lede">A PID-reuse guard, <code>--dry-run</code> for every plan, history only you can read, and a locked-down desktop webview. Read the <a href={securityUrl}>security policy</a>.</p>
     </div>
-    <ul role="list">
+    <ul class="cols" role="list">
       {items.map((i) => (
         <li>
-          <Icon name={i.icon} size={20} />
+          <Icon name={i.icon} size={16} />
           <h3>{i.title}</h3>
           <p set:html={i.text} />
         </li>
@@ -28,19 +28,20 @@ const items = [
 </section>
 
 <style>
-  .security { padding-block: clamp(56px, 8vw, 96px); border-block: 1px solid var(--border); background:
-    radial-gradient(800px 300px at 15% 0%, rgb(71 209 140 / 0.08), transparent 70%), var(--bg-2); }
-  .inner { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr); gap: clamp(28px, 5vw, 64px); align-items: start; }
-  h2 { margin: 12px 0; font-size: var(--fs-h3); line-height: 1.12; letter-spacing: -0.03em; }
-  .head p { margin: 0; color: var(--muted); }
-  .head code { font-size: 0.875em; padding: 0.125em 0.375em; white-space: nowrap; border-radius: var(--r-xs); background: var(--surface-2); color: var(--text-2); }
-  .head a { color: var(--text-2); }
-  .eyebrow { color: var(--green); }
-  ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 32px; }
-  li :global(svg) { color: var(--green); }
-  h3 { margin: 12px 0 8px; font-size: var(--fs-base); }
-  li p { margin: 0; color: var(--muted); font-size: var(--fs-md); }
-  li p :global(code) { font-size: 0.875em; padding: 0.125em 0.375em; white-space: nowrap; border-radius: var(--r-xs); background: var(--surface-2); color: var(--text-2); }
-  @media (max-width: 900px) { .inner { grid-template-columns: minmax(0, 1fr); } }
-  @media (max-width: 560px) { ul { grid-template-columns: minmax(0, 1fr); } }
+  .lede a { color: var(--text-2); }
+  .cols { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--border); }
+  .cols li { padding: 32px 32px 0 0; }
+  .cols li + li { padding-left: 32px; border-left: 1px solid var(--border); }
+  li :global(svg) { color: var(--muted); }
+  h3 { margin: 16px 0 8px; font-size: var(--fs-base); line-height: 24px; font-weight: 600; }
+  li p { margin: 0; color: var(--muted); font-size: var(--fs-md); line-height: 24px; }
+  @media (max-width: 1000px) {
+    .cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cols li:nth-child(3) { padding-left: 0; border-left: 0; }
+    .cols li:nth-child(n + 3) { margin-top: 32px; }
+  }
+  @media (max-width: 560px) {
+    .cols { grid-template-columns: minmax(0, 1fr); border-top: 0; }
+    .cols li, .cols li + li { padding: 24px 0; border-left: 0; border-top: 1px solid var(--border); margin: 0; }
+  }
 </style>

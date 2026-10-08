@@ -15,7 +15,7 @@ const starLabel = stars ? new Intl.NumberFormat("en", { notation: "compact" }).f
 <header class="nav" data-nav>
   <div class="wrap nav-inner">
     <a class="brand" href={url()}>
-      <Logo size={28} id="pw-logo-nav" />
+      <Logo size={24} id="pw-logo-nav" />
       <span>portwise</span>
     </a>
     <nav class="links" id="nav-links" aria-label="Main">
@@ -27,12 +27,12 @@ const starLabel = stars ? new Intl.NumberFormat("en", { notation: "compact" }).f
     </nav>
     <div class="actions">
       <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch to light theme">
-        <Icon name="Sun" size={20} class="i-sun" />
-        <Icon name="Moon" size={20} class="i-moon" />
+        <Icon name="Sun" size={16} class="i-sun" />
+        <Icon name="Moon" size={16} class="i-moon" />
       </button>
       <a class="gh" href={repoUrl} aria-label={starLabel ? `Star portwise on GitHub (${stars} stars)` : "Star portwise on GitHub"}>
-        <Icon name="github" size={20} />
-        <span class="gh-label">Star</span>
+        <Icon name="github" size={16} />
+        <span class="gh-label">GitHub</span>
         {starLabel && <span class="gh-count">{starLabel}</span>}
       </a>
       <button class="icon-btn menu-btn" type="button" data-menu aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
@@ -45,32 +45,33 @@ const starLabel = stars ? new Intl.NumberFormat("en", { notation: "compact" }).f
 <style>
   .nav {
     position: sticky; top: 0; z-index: 50; height: var(--nav-h);
-    background: color-mix(in srgb, var(--bg) 72%, transparent);
-    backdrop-filter: saturate(160%) blur(14px); -webkit-backdrop-filter: saturate(160%) blur(14px);
+    background: color-mix(in srgb, var(--bg) 80%, transparent);
+    backdrop-filter: saturate(140%) blur(12px); -webkit-backdrop-filter: saturate(140%) blur(12px);
     border-bottom: 1px solid var(--border);
   }
-  .nav-inner { height: 100%; display: flex; align-items: center; gap: 28px; }
-  .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 700; font-size: var(--fs-lg); letter-spacing: -0.02em; }
+  .nav-inner { height: 100%; display: flex; align-items: center; gap: 40px; }
+  .brand { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 600; font-size: var(--fs-md); letter-spacing: -0.01em; }
   .links ul { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
   .links a {
-    display: inline-flex; align-items: center; height: 36px; padding: 0 12px; border-radius: var(--r-sm);
-    font-size: var(--fs-md); color: var(--muted); text-decoration: none; transition: color 140ms, background-color 140ms;
+    display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: var(--r-sm);
+    font-size: var(--fs-ui); color: var(--muted); text-decoration: none; transition: color 140ms;
   }
-  .links a:hover, .links a[aria-current="page"] { color: var(--text); background: var(--surface-2); }
+  .links a:hover, .links a[aria-current="page"] { color: var(--text); }
   .actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
   .icon-btn {
-    display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-sm);
-    background: transparent; border: 1px solid var(--border); color: var(--text-2); cursor: pointer;
+    display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-sm);
+    background: transparent; border: 0; color: var(--muted); cursor: pointer;
   }
-  .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+  .icon-btn:hover { color: var(--text); background: var(--surface-2); }
   :global(:root:not([data-theme="light"])) .icon-btn :global(.i-moon) { display: none; }
   :global(:root[data-theme="light"]) .icon-btn :global(.i-sun) { display: none; }
   .gh {
-    display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: var(--r-sm);
-    background: var(--text); color: var(--bg); text-decoration: none; font-size: var(--fs-ui); font-weight: 600;
+    display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: var(--r-sm);
+    background: var(--surface); border: 1px solid var(--border-strong); color: var(--text);
+    text-decoration: none; font-size: var(--fs-sm); font-weight: 500;
   }
-  .gh:hover { background: color-mix(in srgb, var(--text) 86%, var(--accent)); }
-  .gh-count { padding-left: 8px; border-left: 1px solid color-mix(in srgb, var(--bg) 25%, transparent); font-variant-numeric: tabular-nums; }
+  .gh:hover { background: var(--surface-2); }
+  .gh-count { padding-left: 8px; border-left: 1px solid var(--border-strong); color: var(--muted); font-variant-numeric: tabular-nums; }
   .menu-btn { display: none; }
 
   @media (max-width: 760px) {
@@ -82,9 +83,5 @@ const starLabel = stars ? new Intl.NumberFormat("en", { notation: "compact" }).f
     .nav[data-open] .links { display: block; }
     .links ul { flex-direction: column; }
     .links a { height: 44px; width: 100%; font-size: var(--fs-base); }
-  }
-  @media (max-width: 400px) {
-    .gh-label { display: none; }
-    .gh { padding: 0 12px; }
   }
 </style>

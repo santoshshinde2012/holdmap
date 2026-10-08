@@ -4,7 +4,7 @@ const root = document.documentElement;
 
 function apply(theme: "dark" | "light") {
   root.dataset.theme = theme;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#fbfbfd" : "#07070b");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#fafaf9" : "#0a0a0b");
   for (const b of document.querySelectorAll<HTMLButtonElement>("[data-theme-toggle]")) {
     b.setAttribute("aria-label", theme === "light" ? "Switch to dark theme" : "Switch to light theme");
   }

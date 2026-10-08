@@ -1,173 +1,98 @@
 ---
 import { Picture } from "astro:assets";
 import Icon from "./Icon.astro";
-import PortBay from "./PortBay.astro";
-import InstallCommand from "./InstallCommand.astro";
-import { downloads, repoUrl, url, version } from "../lib/site";
+import { downloads, install, repoUrl, version } from "../lib/site";
 import shotDark from "../../../docs/screenshots/desktop-overview-dark.png";
 import shotLight from "../../../docs/screenshots/desktop-overview-light.png";
 
 const primary = Object.fromEntries(downloads.filter((d) => d.primary).map((d) => [d.os, d.url]));
 const alt = "The portwise desktop app: ports grouped by kind, with port 3000 (Next.js, shop-web on feat/checkout) selected and its project, memory, connections and stop plan in the details pane";
-const widths = [640, 960, 1280, 1680, 2200];
-const sizes = "(max-width: 1180px) calc(100vw - 40px), 1100px";
+const widths = [640, 960, 1280, 1680, 2240, 2880];
+const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
 ---
 <section class="hero" aria-labelledby="hero-title">
-  <PortBay />
-  <div class="glow" aria-hidden="true"></div>
   <div class="wrap copy">
-    <a class="pill" href={`${repoUrl}/releases/tag/v${version}`}>
-      <span class="pill-tag">v{version}</span>
-      <span>CLI · TUI · Desktop · MCP</span>
-      <Icon name="ArrowRight" size={16} />
-    </a>
-    <h1 id="hero-title">
-      Who's on port<span class="sr-only"> 3000</span><span class="roll" aria-hidden="true" data-roll><span>3000</span></span>?
-    </h1>
+    <h1 id="hero-title">Know what's on every port.<br class="br" /> <span class="soft">Free it safely.</span></h1>
     <p class="sub">
-      portwise shows what's listening on every port, explains <em>why</em> it's busy, and stops the right
-      thing safely. One Rust core behind a CLI, a TUI, a desktop app and an MCP server for AI agents.
+      portwise names the project and branch behind each port, explains why it's busy, and stops
+      the right thing safely.
     </p>
     <div class="cta">
-      <InstallCommand id="hero-install" />
-      <div class="cta-row">
-        <a class="btn btn-primary" href={url("#install")} data-download data-urls={JSON.stringify(primary)}>
-          <Icon name="Download" size={20} />
-          <span data-download-label>Download desktop app</span>
-        </a>
-        <a class="btn btn-link" href={url("#demo")}>
-          Try the live demo <Icon name="ArrowRight" size={16} />
-        </a>
-      </div>
+      <a class="btn btn-primary" href="#install" data-download data-urls={JSON.stringify(primary)}>
+        <Icon name="Download" size={16} />
+        <span class="dl dl-any">Download the app</span>
+        <span class="dl dl-macos">Download for macOS</span>
+        <span class="dl dl-windows">Download for Windows</span>
+        <span class="dl dl-linux">Download for Linux</span>
+      </a>
+      <button type="button" class="btn btn-ghost copy-install" data-copy={install.sh} data-copy-sh={install.sh} data-copy-ps={install.ps} aria-describedby="hero-install-hint">
+        <Icon name="Terminal" size={16} class="i-copy" />
+        <Icon name="Check" size={16} class="i-done" />
+        <span class="l-copy">Copy install command</span>
+        <span class="l-done" aria-hidden="true">Copied</span>
+      </button>
     </div>
-    <p class="meta">Free and open source · macOS, Linux and Windows · Local-only, no telemetry</p>
+    <p class="meta" id="hero-install-hint">
+      <a href={`${repoUrl}/releases/tag/v${version}`}>v{version}</a>
+      <span aria-hidden="true">·</span> CLI, TUI, desktop app and MCP server
+      <span aria-hidden="true">·</span> macOS, Linux, Windows
+    </p>
   </div>
 
   <div class="wrap stage">
+    <div class="spot" aria-hidden="true"></div>
     <figure class="window shot">
-      <div class="window-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="window-title">portwise</span></div>
-      <Picture src={shotDark} formats={["avif"]} fallbackFormat="webp" widths={widths} sizes={sizes} alt={alt} loading="eager" decoding="async" pictureAttributes={{ class: "only-dark" }} />
+      <Picture src={shotDark} formats={["avif"]} fallbackFormat="webp" widths={widths} sizes={sizes} alt={alt} loading="eager" decoding="async" fetchpriority="high" pictureAttributes={{ class: "only-dark" }} />
       <Picture src={shotLight} formats={["avif"]} fallbackFormat="webp" widths={widths} sizes={sizes} alt={alt} loading="lazy" decoding="async" pictureAttributes={{ class: "only-light" }} />
     </figure>
-    <div class="window term hero-term" role="img" aria-label="Terminal: portwise explain 3000 finds Next.js from shop-web on branch feat/checkout; portwise stop 3000 frees the port in 412 ms.">
-      <div class="window-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="window-title">~/code/shop-web</span></div>
-<pre aria-hidden="true"><span class="p">$</span> portwise explain 3000
-<span class="r">●</span> <span class="b">Port 3000 is held by Next.js (node, PID 43000)</span>
-<span class="b">  in ~/code/shop-web (branch feat/checkout).</span>
-<span class="d">  Listening on 127.0.0.1, ::1 (this machine only).</span>
-→ Gracefully stop npm run dev (2 processes)
-  and verify port 3000 is free.
-<span class="p">$</span> portwise stop 3000 --yes
-  <span class="d">· sent SIGTERM to npm (42999), node (43000)</span>
-<span class="g">✔</span> <span class="b">:3000 is free (stopped 2 processes)</span> <span class="d">in 412 ms</span><span class="caret"></span></pre>
-    </div>
   </div>
 </section>
 
 <style>
-  .hero { position: relative; overflow: hidden; padding: clamp(56px, 9vw, 104px) 0 0; isolation: isolate; }
-  .glow {
-    position: absolute; z-index: -1; left: 50%; top: 340px; width: min(1100px, 120vw); height: 620px; translate: -50% 0;
-    background: radial-gradient(closest-side, rgb(99 102 241 / 0.32), rgb(34 211 238 / 0.10) 55%, transparent);
-    filter: blur(20px); pointer-events: none;
-  }
-  :global(:root[data-theme="light"]) .glow { opacity: 0.55; }
-  .copy { position: relative; text-align: center; display: flex; flex-direction: column; align-items: center; }
-  .pill {
-    display: inline-flex; align-items: center; gap: 12px; height: 36px; padding: 0 12px 0 4px; border-radius: 999px;
-    border: 1px solid var(--border-strong); background: color-mix(in srgb, var(--surface) 70%, transparent);
-    font-size: var(--fs-ui); color: var(--text-2); text-decoration: none; backdrop-filter: blur(8px);
-  }
-  .pill:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong)); color: var(--text); }
-  .pill-tag { padding: 4px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font: 600 var(--fs-xs) var(--mono); }
+  .hero { position: relative; padding-top: clamp(64px, 8vw, 112px); padding-bottom: clamp(72px, 8vw, 120px); overflow: hidden; }
   h1 {
-    margin: 28px 0 0; font-size: var(--fs-display); line-height: 0.98; letter-spacing: -0.05em; font-weight: 800;
-    font-variation-settings: "opsz" 32; text-wrap: balance;
+    margin: 0; max-width: 840px;
+    font-size: var(--fs-display); line-height: 1.04; letter-spacing: -0.035em; font-weight: 560;
+    font-variation-settings: "opsz" 32;
   }
-  .roll {
-    --n: 4;
-    display: inline-grid; margin-left: 0.22em; vertical-align: bottom; height: 1.04em; overflow: hidden;
-    width: calc(var(--n) * (1ch - 0.06em) + 0.04em);
-    font-family: var(--mono); font-weight: 700; letter-spacing: -0.06em; font-size: 0.875em; text-align: left;
-  }
-  .roll span {
-    grid-area: 1 / 1; display: block;
-    background: var(--brand); -webkit-background-clip: text; background-clip: text; color: transparent;
-  }
-  .roll :global(span.out) { animation: roll-out 380ms var(--ease) forwards; }
-  .roll :global(span.in) { animation: roll-in 420ms var(--ease) both; }
-  @keyframes roll-out { to { transform: translateY(-100%); opacity: 0; } }
-  @keyframes roll-in { from { transform: translateY(70%); opacity: 0; } }
-  .sub { margin: 24px auto 0; max-width: 640px; font-size: var(--fs-sub); line-height: 1.55; color: var(--muted); text-wrap: pretty; }
-  .sub em { color: var(--text-2); font-style: italic; }
-  .cta { margin-top: 36px; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-  .cta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 16px; }
-  .btn-link { color: var(--text-2); padding: 0 12px; }
-  .btn-link:hover { color: var(--text); }
-  .btn-link :global(svg) { transition: transform 160ms var(--ease); }
-  .btn-link:hover :global(svg) { transform: translateX(3px); }
-  .meta { margin: 24px 0 0; font-size: var(--fs-ui); color: var(--muted); }
+  h1 .soft { color: var(--muted); }
+  .sub { margin: 24px 0 0; max-width: 540px; font-size: var(--fs-sub); line-height: 1.55; color: var(--muted); text-wrap: pretty; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+  /* The OS is known before first paint (inline script in Base), so the label never jumps. */
+  .dl:not(.dl-any) { display: none; }
+  :global(html[data-os="macos"]) .dl-macos, :global(html[data-os="windows"]) .dl-windows, :global(html[data-os="linux"]) .dl-linux { display: inline; }
+  :global(html[data-os="macos"]) .dl-any, :global(html[data-os="windows"]) .dl-any, :global(html[data-os="linux"]) .dl-any { display: none; }
+  .copy-install :global(.i-done), .copy-install .l-done { display: none; }
+  .copy-install[data-copied] :global(.i-done), .copy-install[data-copied] .l-done { display: inline; }
+  .copy-install[data-copied] :global(.i-done) { display: block; color: var(--green); }
+  .copy-install[data-copied] :global(.i-copy), .copy-install[data-copied] .l-copy { display: none; }
+  .meta { margin: 16px 0 0; font-size: var(--fs-sm); color: var(--muted); }
+  .meta a { color: var(--text-2); font-family: var(--mono); font-size: var(--fs-xs); text-decoration: none; }
+  .meta a:hover { color: var(--text); text-decoration: underline; }
 
-  .stage { position: relative; margin-top: clamp(48px, 7vw, 80px); padding-bottom: clamp(64px, 9vw, 112px); max-width: 1100px; }
-  .shot { margin: 0; transform: perspective(2400px) rotateX(9deg); transform-origin: 50% 0; animation: rise 1100ms var(--ease) 120ms both; }
+  .stage { position: relative; margin-top: clamp(48px, 5vw, 72px); }
+  .spot {
+    position: absolute; left: 50%; top: -120px; width: 90%; height: 520px; translate: -50% 0; z-index: -1;
+    background: radial-gradient(50% 50% at 50% 50%, var(--spot), transparent 70%);
+  }
+  .shot { margin: 0; }
   .shot :global(img) { width: 100%; aspect-ratio: 16 / 10; }
-  @keyframes rise { from { transform: perspective(2400px) rotateX(22deg) translateY(30px); opacity: 0; } }
-  .hero-term {
-    position: absolute; left: -36px; bottom: clamp(24px, 4vw, 56px); width: min(460px, 46%);
-    border: 1px solid var(--term-line); animation: slide 900ms var(--ease) 520ms both;
-  }
-  .hero-term .window-bar { background: #12131a; border-color: rgb(255 255 255 / 0.06); color: #8a91a3; }
-  @keyframes slide { from { transform: translate(-24px, 24px); opacity: 0; } }
-  pre { margin: 0; padding: 16px; font-size: var(--fs-sm); line-height: var(--lh-code); white-space: pre; overflow: hidden; }
-  .caret { display: inline-block; width: 8px; height: 16px; margin-left: 4px; vertical-align: -2px; background: #8e8cff; animation: blink 1.1s steps(1) infinite; }
-  @keyframes blink { 50% { opacity: 0; } }
 
-  @media (max-width: 1240px) { .hero-term { left: 16px; } }
-  @media (max-width: 820px) {
-    .shot { transform: none; animation: none; }
-    .hero-term { position: relative; left: auto; bottom: auto; width: auto; margin: -28px 12px 0; }
+  @media (max-width: 640px) {
+    .cta { flex-direction: column; }
+    .cta .btn { width: 100%; --h: 44px; }
   }
-  @media (max-width: 520px) {
-    pre { padding: 12px; font-size: var(--fs-2xs); line-height: 16px; }
-    .hero-term { margin: -24px 0 0; }
-    .cta-row { flex-direction: column; width: 100%; }
-    .cta-row .btn-primary { width: 100%; }
-  }
-  /* Too narrow for 50-column terminal lines: the live demo's terminal covers this below. */
-  @media (max-width: 380px) { .hero-term { display: none; } .stage { padding-bottom: 48px; } }
 </style>
 
 <script>
-  // Roll the port number in the headline through a few usual suspects.
-  const roll = document.querySelector<HTMLElement>("[data-roll]");
-  const still = matchMedia("(prefers-reduced-motion: reduce)");
-  if (roll && !still.matches) {
-    // All four digits, so the headline never reflows (no layout shift).
-    const ports = ["3000", "5173", "5432", "8080", "8000", "4321"];
-    let i = 0;
-    const tick = () => {
-      if (document.hidden) return;
-      const cur = roll.querySelector("span:last-child");
-      i = (i + 1) % ports.length;
-      const next = document.createElement("span");
-      next.textContent = ports[i];
-      next.className = "in";
-      cur?.classList.add("out");
-      setTimeout(() => cur?.remove(), 380);
-      roll.append(next);
-    };
-    setInterval(tick, 2600);
-  }
-
-  // Point the download button at the visitor's OS (the default link scrolls to all downloads).
-  const dl = document.querySelector<HTMLAnchorElement>("[data-download]");
+  // Point the download button at the visitor's OS (the default link scrolls to all downloads),
+  // and copy the matching installer (PowerShell on Windows).
   const os = document.documentElement.dataset.os as "macos" | "windows" | "linux" | undefined;
+  const dl = document.querySelector<HTMLAnchorElement>("[data-download]");
   if (dl && os) {
     const urls = JSON.parse(dl.dataset.urls ?? "{}") as Record<string, string>;
-    const names = { macos: "macOS", windows: "Windows", linux: "Linux" } as const;
-    if (urls[os]) {
-      dl.href = urls[os];
-      dl.querySelector("[data-download-label]")!.textContent = `Download for ${names[os]}`;
-    }
+    if (urls[os]) dl.href = urls[os];
   }
+  const copy = document.querySelector<HTMLButtonElement>(".copy-install");
+  if (copy && os === "windows") copy.dataset.copy = copy.dataset.copyPs;
 </script>

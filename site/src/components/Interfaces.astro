@@ -4,8 +4,8 @@ import Icon from "./Icon.astro";
 import { url } from "../lib/site";
 import { cliSession, toHtml } from "../lib/cli-demo";
 import tuiShot from "../../../docs/screenshots/tui-list-dark.png";
-import graphShot from "../../../docs/screenshots/desktop-graph-dark.png";
-import paletteShot from "../../../docs/screenshots/desktop-command-palette-light.png";
+import appDark from "../assets/ui/app-graph-dark.png";
+import appLight from "../assets/ui/app-graph-light.png";
 
 const tabs = [
   { key: "cli", label: "CLI", icon: "Terminal" },
@@ -20,18 +20,18 @@ const mcpJson = `{
 }`;
 const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
 ---
-<section id="interfaces" class="section interfaces" aria-labelledby="if-title">
+<section id="interfaces" class="section" aria-labelledby="if-title">
   <div class="wrap">
-    <div class="section-head center">
+    <div class="section-head">
       <span class="eyebrow">Interfaces</span>
-      <h2 class="h2" id="if-title">One core. Four ways in.</h2>
+      <h2 class="h2" id="if-title">One core. <span class="soft">Four ways in.</span></h2>
       <p class="lede">The same Rust core decides who owns a port and whether it's safe to touch. Each interface only renders and confirms what it says.</p>
     </div>
 
     <div class="tabs" role="tablist" aria-label="Interfaces" data-tabs>
       {tabs.map((t, i) => (
         <button type="button" role="tab" id={`if-tab-${t.key}`} aria-controls={`if-${t.key}`} aria-selected={i === 0 ? "true" : "false"} tabindex={i === 0 ? 0 : -1} data-key={t.key}>
-          <Icon name={t.icon} size={20} /> {t.label}
+          <Icon name={t.icon} size={16} /> {t.label}
         </button>
       ))}
     </div>
@@ -45,9 +45,9 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
           <li><code>portwise wait 5432 --timeout 30s</code> for CI and scripts</li>
           <li><code>portwise free-port --near 3000</code> picks the next free one</li>
         </ul>
-        <a class="more" href={url("docs/cli/")}>CLI reference <Icon name="ArrowRight" size={16} /></a>
+        <a class="link-arrow" href={url("docs/cli/")}>CLI reference <Icon name="ArrowRight" size={16} /></a>
       </div>
-      <figure class="visual window cli-window">
+      <figure class="visual term-window">
         <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-title">~/code/shop-web</span></div>
         <pre class="term cli-term" aria-label="portwise explain, wait and free-port in a terminal"><code set:html={cliSession.map(toHtml).join("\n")} /></pre>
       </figure>
@@ -63,7 +63,7 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
           <li>Works over SSH sessions and in tmux</li>
         </ul>
       </div>
-      <figure class="visual"><Picture src={tuiShot} formats={["avif"]} fallbackFormat="webp" widths={[640, 1374]} sizes={sizes} alt="The portwise TUI: a port table with the details pane for the selected port" loading="lazy" /></figure>
+      <figure class="visual window tui"><Picture src={tuiShot} formats={["avif"]} fallbackFormat="webp" widths={[640, 1374]} sizes={sizes} alt="The portwise TUI: a port table with the details pane for the selected port" loading="lazy" /></figure>
     </div>
 
     <div class="panel" role="tabpanel" id="if-desktop" aria-labelledby="if-tab-desktop" hidden>
@@ -75,11 +75,11 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
           <li>Open in browser, editor or Finder; copy the URL or a <code>curl</code></li>
           <li>Light and dark, fully keyboard driven</li>
         </ul>
-        <a class="more" href={url("#demo")}>Try it live <Icon name="ArrowRight" size={16} /></a>
+        <a class="link-arrow" href={url("#demo")}>Try it live <Icon name="ArrowRight" size={16} /></a>
       </div>
-      <figure class="visual">
-        <Picture src={graphShot} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280]} sizes={sizes} alt="The service graph: a Compose cluster with shop-web, shop-api, db and redis" loading="lazy" pictureAttributes={{ class: "only-dark" }} />
-        <Picture src={paletteShot} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280]} sizes={sizes} alt="The command palette searching for stop" loading="lazy" pictureAttributes={{ class: "only-light" }} />
+      <figure class="visual window">
+        <Picture src={appDark} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280, 1920]} sizes={sizes} alt="The desktop app's service graph: a Compose cluster with shop-web, shop-api, db and redis" loading="lazy" pictureAttributes={{ class: "only-dark" }} />
+        <Picture src={appLight} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280, 1920]} sizes={sizes} alt="The desktop app's service graph: a Compose cluster with shop-web, shop-api, db and redis" loading="lazy" pictureAttributes={{ class: "only-light" }} />
       </figure>
     </div>
 
@@ -87,17 +87,17 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
       <div class="text">
         <h3>An MCP server for AI agents</h3>
         <p><code>portwise mcp</code> gives coding assistants seven tools: list, explain, find a free port, wait, read the graph, plan a cluster stop (dry run only) and stop their own dev servers. Protected processes are always refused.</p>
-        <div class="code">
-          <div class="code-bar"><span>~/.cursor/mcp.json</span><button type="button" class="copy" data-copy={mcpJson} aria-label="Copy the MCP configuration"><Icon name="Copy" size={16} class="i-copy" /><Icon name="Check" size={16} class="i-done" /></button></div>
+        <div class="code term-window">
+          <div class="code-bar"><span>~/.cursor/mcp.json</span><button type="button" class="copy" data-copy={mcpJson} aria-label="Copy the MCP configuration"><Icon name="Copy" size={14} class="i-copy" /><Icon name="Check" size={14} class="i-done" /></button></div>
           <pre><code>{mcpJson}</code></pre>
         </div>
-        <a class="more" href={url("docs/mcp/")}>Set up Claude, Cursor or VS Code <Icon name="ArrowRight" size={16} /></a>
+        <a class="link-arrow" href={url("docs/mcp/")}>Set up Claude, Cursor or VS Code <Icon name="ArrowRight" size={16} /></a>
       </div>
       <figure class="visual chat" aria-label="An AI agent using portwise tools">
         <div class="msg user">The dev server won't start, port 3000 is taken.</div>
-        <div class="tool"><Icon name="Wrench" size={16} /> explain_port <span>{"{ port: 3000 }"}</span></div>
+        <div class="tool"><Icon name="Wrench" size={14} /> explain_port <span>{"{ port: 3000 }"}</span></div>
         <div class="msg agent">It's an old <b>Next.js</b> server from <b>shop-web</b> on <code>feat/checkout</code>, started 2 hours ago. It's yours and safe to stop.</div>
-        <div class="tool"><Icon name="Wrench" size={16} /> stop_port <span>{"{ port: 3000 }"}</span></div>
+        <div class="tool"><Icon name="Wrench" size={14} /> stop_port <span>{"{ port: 3000 }"}</span></div>
         <div class="msg agent"><span class="ok">✔</span> Stopped 2 processes; port 3000 is free. Starting your server now.</div>
       </figure>
     </div>
@@ -105,46 +105,44 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
 </section>
 
 <style>
-  .tabs { display: flex; justify-content: center; gap: 8px; margin: 0 auto 28px; padding: 4px; width: fit-content; max-width: 100%; overflow-x: auto; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--surface); }
-  .tabs button { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); font-size: var(--fs-md); font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .tabs { display: flex; gap: 24px; margin: 0 0 48px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+  .tabs button {
+    display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0; margin-bottom: -1px; border: 0; border-bottom: 1px solid transparent;
+    background: transparent; color: var(--muted); font-size: var(--fs-md); font-weight: 500; cursor: pointer; white-space: nowrap;
+    transition: color 140ms, border-color 140ms;
+  }
   .tabs button :global(svg) { flex: none; }
   .tabs button:hover { color: var(--text); }
-  .tabs button[aria-selected="true"] { background: var(--surface-3); color: var(--text); }
-  .panel { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr); gap: clamp(28px, 4vw, 56px); align-items: center; padding: clamp(24px, 3vw, 40px); border-radius: var(--r-xl); border: 1px solid var(--border); background: var(--surface); }
+  .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); }
+  .panel { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 64px; align-items: center; }
   .panel[hidden] { display: none; }
-  h3 { margin: 0 0 12px; font-size: var(--fs-h3); letter-spacing: -0.025em; line-height: 1.2; }
-  .text > p { margin: 0; color: var(--muted); }
-  .text code { font-size: 0.875em; padding: 0.125em 0.375em; white-space: nowrap; border-radius: var(--r-xs); background: var(--surface-2); color: var(--text-2); }
-  .ticks { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 12px; color: var(--text-2); font-size: var(--fs-md); }
-  .ticks li { position: relative; padding-left: 28px; }
-  .ticks li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 12px; height: 12px; border-radius: var(--r-xs); border: 1.5px solid var(--accent); background: var(--accent-soft); }
-  .more { display: inline-flex; align-items: center; gap: 8px; margin-top: 20px; color: var(--accent); font-weight: 600; text-decoration: none; }
-  .more:hover { text-decoration: underline; }
-  .visual { margin: 0; border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow); background: var(--term-bg); }
+  h3 { margin: 0 0 12px; font-size: var(--fs-xl); line-height: 28px; font-weight: 600; letter-spacing: -0.015em; }
+  .text > p { margin: 0; color: var(--muted); font-size: var(--fs-md); line-height: 24px; }
+  .ticks { list-style: none; margin: 24px 0 0; padding: 24px 0 0; border-top: 1px solid var(--border); display: grid; gap: 12px; color: var(--text-2); font-size: var(--fs-md); line-height: 24px; }
+  .ticks li { position: relative; padding-left: 20px; }
+  .ticks li::before { content: ""; position: absolute; left: 2px; top: 10px; width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
+  .text .link-arrow { margin-top: 24px; }
+  .visual { margin: 0; }
   .visual :global(img) { width: 100%; }
   kbd { margin: 0 1px; }
-  .code { margin-top: 20px; border-radius: var(--r-md); overflow: hidden; background: var(--term-bg); border: 1px solid var(--term-line); }
-  .code-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 16px; font: 12px var(--mono); color: #8a91a3; border-bottom: 1px solid var(--term-line); }
-  .code pre { margin: 0; padding: 16px; font-size: var(--fs-sm); line-height: var(--lh-code); color: #d7dae3; overflow-x: auto; }
+  .code { margin-top: 24px; }
+  .code-bar { display: flex; align-items: center; justify-content: space-between; height: 40px; padding: 0 4px 0 16px; font: 12px var(--mono); color: var(--term-dim); background: var(--term-bar); border-bottom: 1px solid var(--term-line); }
+  .code pre { margin: 0; padding: 16px; font-size: var(--fs-sm); line-height: var(--lh-code); color: var(--term-text); overflow-x: auto; font-variant-ligatures: none; }
   .code pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
-  .copy { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-sm); border: 1px solid var(--term-line-strong); background: transparent; color: #d7dae3; cursor: pointer; }
-  .copy :global(.i-done) { display: none; color: #4ade80; }
+  .copy { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-xs); border: 0; background: transparent; color: var(--term-dim); cursor: pointer; }
+  .copy:hover { color: var(--term-text); }
+  .copy :global(.i-done) { display: none; color: var(--green); }
   .copy[data-copied] :global(.i-done) { display: block; }
   .copy[data-copied] :global(.i-copy) { display: none; }
-  .chat { display: flex; flex-direction: column; gap: 12px; padding: 24px; background: var(--bg-2); border: 1px solid var(--border); box-shadow: none; font-size: var(--fs-md); }
-  .msg { max-width: 88%; padding: 12px 16px; border-radius: var(--r-lg); line-height: 1.5; }
-  .user { align-self: flex-end; background: var(--accent); color: var(--accent-fg); border-bottom-right-radius: 4px; }
-  .agent { background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; color: var(--text-2); }
-  .agent code { font-size: 0.875em; color: var(--accent); }
+  .chat { display: flex; flex-direction: column; gap: 12px; padding: 32px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border); font-size: var(--fs-md); line-height: 24px; }
+  .msg { max-width: 88%; padding: 12px 16px; border-radius: var(--r-md); }
+  .user { align-self: flex-end; background: var(--surface-3); color: var(--text); }
+  .agent { color: var(--text-2); padding-left: 0; }
+  .agent code { font-size: 0.875em; }
   .ok { color: var(--green); }
-  .tool { display: inline-flex; align-items: center; gap: 8px; width: fit-content; padding: 4px 12px; border-radius: var(--r-sm); font: 500 var(--fs-sm) var(--mono); color: var(--muted); border: 1px dashed var(--border-strong); }
+  .tool { display: inline-flex; align-items: center; gap: 8px; width: fit-content; height: 28px; padding: 0 12px; border-radius: var(--r-xs); font: 500 var(--fs-xs) var(--mono); color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); }
   .tool span { color: var(--text-2); }
-  @media (max-width: 900px) { .panel { grid-template-columns: minmax(0, 1fr); } }
-  @media (max-width: 560px) {
-    .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
-    .tabs button { justify-content: center; padding: 0 4px; gap: 4px; font-size: var(--fs-ui); }
-  }
-  .cli-window { background: var(--term-bg); }
-  .cli-window .window-bar { background: #12131a; border-bottom: 1px solid var(--term-line); color: #8a91a3; }
-  .cli-term { margin: 0; padding: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .cli-term { margin: 0; padding: 16px 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (max-width: 900px) { .panel { grid-template-columns: minmax(0, 1fr); gap: 40px; } }
+  @media (max-width: 560px) { .tabs { gap: 20px; } }
 </style>
