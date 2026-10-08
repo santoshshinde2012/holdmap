@@ -774,7 +774,7 @@
 <div class="app" class:mac={isMac}>
   <header class="titlebar" data-tauri-drag-region>
     <div class="brand" data-tauri-drag-region>
-      <img src="/icon.svg" alt="" width="22" height="22" />
+      <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width="22" height="22" />
       <span class="name">portwise</span>
     </div>
 
