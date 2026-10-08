@@ -122,9 +122,12 @@ export async function topology(all: boolean): Promise<Graph> {
 }
 
 let mockConfig: Config = { pins: [{ port: 3000, label: null }], notify: true, notify_dev_only: true, history_limit: 200, scan_interval_secs: 4, hotkey: "alt-p", recent_hosts: ["devbox", "deploy@staging.internal"] };
-let mockShortcut: string | null = "Ctrl+Alt+P";
-const MOCK_HOTKEYS = [{ id: "alt-p", label: "Ctrl+Alt+P" }, { id: "alt-space", label: "Ctrl+Alt+Space" }, { id: "alt-k", label: "Ctrl+Alt+K" }, { id: "off", label: "Off" }];
+
+// Same labels as src-tauri/src/shortcuts.rs, so browser screenshots match the platform.
+const mac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+const MOCK_HOTKEYS = [{ id: "alt-p", label: mac ? "⌘⌥P" : "Ctrl+Alt+P" }, { id: "alt-space", label: mac ? "⌥Space" : "Ctrl+Alt+Space" }, { id: "alt-k", label: mac ? "⌘⌥K" : "Ctrl+Alt+K" }, { id: "off", label: "Off" }];
 const mockHistory: HistoryEntry[] = [];
+let mockShortcut: string | null = MOCK_HOTKEYS[0].label;
 
 export async function getConfig(): Promise<Config> {
   if (!isTauri) return mockConfig;
