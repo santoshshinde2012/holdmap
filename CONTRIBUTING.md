@@ -20,6 +20,10 @@ cd apps/desktop && npm install && npm run tauri dev   # or `npm run dev` for the
 [docs/architecture.md](docs/architecture.md) explains how the crates and the desktop app fit
 together.
 
+The website (`site/`, Astro, Node.js 22) embeds the desktop UI as its live demo, so install both:
+`(cd apps/desktop && npm ci) && cd site && npm ci && npm run build && npm run preview`. Guide pages
+are Markdown in `site/src/content/docs/`; the CLI reference page is `docs/cli.md` itself.
+
 ## Checks
 
 Run these before opening a pull request; CI runs them on Linux, macOS and Windows.
@@ -31,6 +35,7 @@ cargo test
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p portwise-core -p portwise-mcp -p portwise
 scripts/check-cross.sh                       # type-checks the macOS and Windows backends from Linux
 (cd apps/desktop && npm run check && npm test && npm run build)
+(cd site && npm run check && npm run build && npm test)  # website: types, links, size budget
 ```
 
 `cargo test` also checks the docs: `docs/cli.md` must match the clap definitions, the README must
@@ -62,6 +67,7 @@ Each ecosystem uses its own idiom. `cargo test` enforces these rules
 | Crate directories and package names | kebab-case | `portwise-core`, `portwise-mcp` |
 | Rust modules, files, directories and fixtures | snake_case | `process_tree.rs`, `proc_net_tcp6.txt` |
 | Svelte components | PascalCase | `PortRow.svelte` |
+| Astro components and layouts (`site/`) | PascalCase | `PortRail.astro`, `Docs.astro` |
 | TypeScript modules and tests | kebab-case, tests as `<module>.test.ts` | `rows.ts`, `rows.test.ts` |
 | Assets, scripts, workflows, files in `docs/` | kebab-case | `inter-variable.woff2`, `demo-servers.sh`, `architecture.md` |
 | Screenshots | `<surface>-<view>-<theme>.png` | `desktop-graph-dark.png` |

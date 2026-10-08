@@ -10,6 +10,12 @@
 </p>
 
 <p align="center">
+  <a href="https://santoshshinde2012.github.io/portwise/"><b>Website</b></a> ·
+  <a href="https://santoshshinde2012.github.io/portwise/#demo">Live demo</a> ·
+  <a href="https://santoshshinde2012.github.io/portwise/docs/">Guide</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/santoshshinde2012/portwise/actions/workflows/ci.yml"><img src="https://github.com/santoshshinde2012/portwise/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
   <a href="https://github.com/santoshshinde2012/portwise/releases/latest"><img src="https://img.shields.io/github/v/release/santoshshinde2012/portwise" alt="Latest release" /></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License: MIT OR Apache-2.0" /></a>
@@ -298,6 +304,7 @@ Modules, traits and data flow: [docs/architecture.md](docs/architecture.md).
 
 ## Learn more
 
+- [Website and guide](https://santoshshinde2012.github.io/portwise/): the live demo and short how-tos.
 - [CLI reference](docs/cli.md): every command and flag.
 - [Architecture](docs/architecture.md): how the core, CLI, TUI, desktop app and MCP server fit together.
 - [Changelog](CHANGELOG.md) and [security policy](SECURITY.md).

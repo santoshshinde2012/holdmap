@@ -6,6 +6,14 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
+## [Unreleased]
+
+### Added
+
+- **Website** at <https://santoshshinde2012.github.io/portwise/> with a live, in-browser demo of the
+  desktop app, install steps for every platform and a short guide. It is built from `site/` and
+  deployed by the Pages workflow.
+
 ## [0.1.9] - 2026-10-08
 
 ### Fixed

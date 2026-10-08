@@ -116,7 +116,18 @@ fn naming_problem(path: &str) -> Option<String> {
             Some("Rust modules, files and module directories are snake_case")
         }
         "svelte" if !is_pascal(stem) => Some("Svelte components are PascalCase.svelte"),
-        "ts" | "js" | "test.ts" if path.starts_with("apps/desktop/src/") && !is_kebab(stem) => {
+        "astro"
+            if (path.starts_with("site/src/components/") || path.starts_with("site/src/layouts/"))
+                && !is_pascal(stem) =>
+        {
+            Some("Astro components and layouts are PascalCase.astro")
+        }
+        "ts" | "js" | "mjs" | "test.ts"
+            if (path.starts_with("apps/desktop/src/")
+                || path.starts_with("site/src/")
+                || path.starts_with("site/scripts/"))
+                && !is_kebab(stem) =>
+        {
             Some("TypeScript modules are kebab-case (tests: <module>.test.ts)")
         }
         "md" if dirs == ["docs"] && !is_kebab(stem) => Some("files under docs/ are kebab-case"),
@@ -129,7 +140,9 @@ fn naming_problem(path: &str) -> Option<String> {
     if let Some(rule) = rule {
         return bad(rule);
     }
-    if path.starts_with("apps/desktop/src/assets/") && !is_kebab(stem) {
+    if (path.starts_with("apps/desktop/src/assets/") || path.starts_with("site/src/assets/"))
+        && !is_kebab(stem)
+    {
         return bad("assets are kebab-case");
     }
     if path.starts_with("crates/") && dirs.contains(&"fixtures") && !is_snake(stem) {
@@ -162,6 +175,10 @@ fn naming_rules_catch_common_mistakes() {
     assert!(naming_problem("scripts/demo_servers.sh").is_some());
     assert!(naming_problem("NOTES.md").is_some());
     assert!(naming_problem("apps/desktop/src/lib/rows.test.ts").is_none());
+    assert!(naming_problem("site/src/components/port_rail.astro").is_some());
+    assert!(naming_problem("site/src/components/PortRail.astro").is_none());
+    assert!(naming_problem("site/src/pages/docs/[...slug].astro").is_none());
+    assert!(naming_problem("site/scripts/checkLinks.mjs").is_some());
     assert!(naming_problem("docs/screenshots/desktop-graph-dark.png").is_none());
     assert!(naming_problem("apps/desktop/src-tauri/icons/Square44x44Logo.png").is_none());
 }
@@ -279,7 +296,11 @@ fn markdown_links_resolve() {
     };
     let root = repo_root();
     let mut problems = Vec::new();
-    for doc in files.iter().filter(|f| f.ends_with(".md")) {
+    // Website pages (site/) link by URL, not by file; the site's own link check covers them.
+    for doc in files
+        .iter()
+        .filter(|f| f.ends_with(".md") && !f.starts_with("site/"))
+    {
         let text = std::fs::read_to_string(root.join(doc)).unwrap();
         let dir = root.join(doc).parent().unwrap().to_path_buf();
         for link in links(&text) {
