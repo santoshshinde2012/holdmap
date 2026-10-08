@@ -28,12 +28,12 @@ const list = [
 
 const kv = (k: string, v: string) => `<d>${pad(k, 13, true)}</d>  ${v}`;
 
-const plan = [
+export const plan = [
   "<b>Plan for :3000</b> <d>(<g>low risk</g>)</d>",
   "  1. Send SIGTERM to 2 processes: npm (42999), node (43000); SIGKILL any still running after 5s",
   "  2. Verify TCP port 3000 is free (wait up to 3s)",
 ];
-const held = "<r>●</r> <b>Port 3000 is held by a Next.js dev server (node, PID 43000) in ~/code/shop-web (branch feat/checkout), running for 2h 3m.</b>";
+export const held = "<r>●</r> <b>Port 3000 is held by a Next.js dev server (node, PID 43000) in ~/code/shop-web (branch feat/checkout), running for 2h 3m.</b>";
 
 export const chapters: Chapter[] = [
   {
@@ -117,5 +117,18 @@ export function toHtml(line: string): string {
     .replace(/\u0001\/[bdcgryv]\u0002/g, "</span>")
     .replace(/\u0001([bdcgryv])\u0002/g, '<span class="$1">');
 }
+
+/** A short static session for the Interfaces section (real output formats, sample data). */
+export const cliSession: string[] = [
+  "<v>$</v> portwise explain 3000",
+  held,
+  "  <v>→</v> Gracefully stop npm run dev (2 processes) and verify port 3000 is free.",
+  "",
+  "<v>$</v> portwise wait 5432 --timeout 30s",
+  "<g>✔</g> Port 5432 is accepting connections after 840 ms",
+  "",
+  "<v>$</v> portwise free-port --near 3000",
+  "3002",
+];
 
 export const plain = (line: string) => line.replace(/<\/?[bdcgryv]>/g, "");

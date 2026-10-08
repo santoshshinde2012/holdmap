@@ -31,20 +31,19 @@ const cols: { title: string; links: [string, string][] }[] = [
 </footer>
 
 <style>
-  .footer { border-top: 1px solid var(--border); background: var(--bg-2); padding: 56px 0 32px; font-size: 14.5px; }
+  .footer { border-top: 1px solid var(--border); background: var(--bg-2); padding: 56px 0 32px; font-size: var(--fs-md); }
   .top { display: grid; grid-template-columns: 1.6fr repeat(3, 1fr); gap: 32px; }
-  .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 700; font-size: 17px; }
-  .about p { color: var(--muted); max-width: 34ch; margin: 14px 0 0; }
-  .ver { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 13px; }
+  .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 700; font-size: var(--fs-lg); }
+  .about p { color: var(--muted); max-width: 34ch; margin: 16px 0 0; }
+  .ver { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: var(--fs-sm); }
   .ver a { color: var(--text-2); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px color-mix(in srgb, var(--green) 20%, transparent); }
-  h2 { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: 0.02em; }
+  h2 { margin: 0 0 12px; font-size: var(--fs-sm); font-weight: 600; color: var(--text); letter-spacing: 0.02em; }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
   ul a { display: inline-block; padding: 4px 0; color: var(--muted); text-decoration: none; }
   ul a:hover { color: var(--text); }
-  .bottom { margin-top: 44px; padding-top: 22px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; color: var(--muted); font-size: 13.5px; }
+  .bottom { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; color: var(--muted); font-size: var(--fs-ui); }
   .bottom p { margin: 0; }
   .bottom a { color: var(--text-2); }
   @media (max-width: 860px) { .top { grid-template-columns: 1fr 1fr; } .about { grid-column: 1 / -1; } }
-  @media (max-width: 420px) { .top { grid-template-columns: 1fr; } }
 </style>

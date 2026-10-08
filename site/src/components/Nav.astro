@@ -15,7 +15,7 @@ const starLabel = stars ? new Intl.NumberFormat("en", { notation: "compact" }).f
 <header class="nav" data-nav>
   <div class="wrap nav-inner">
     <a class="brand" href={url()}>
-      <Logo size={26} id="pw-logo-nav" />
+      <Logo size={28} id="pw-logo-nav" />
       <span>portwise</span>
     </a>
     <nav class="links" id="nav-links" aria-label="Main">
@@ -27,11 +27,11 @@ const starLabel = stars ? new Intl.NumberFormat("en", { notation: "compact" }).f
     </nav>
     <div class="actions">
       <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch to light theme">
-        <Icon name="Sun" size={18} class="i-sun" />
-        <Icon name="Moon" size={18} class="i-moon" />
+        <Icon name="Sun" size={20} class="i-sun" />
+        <Icon name="Moon" size={20} class="i-moon" />
       </button>
       <a class="gh" href={repoUrl} aria-label={starLabel ? `Star portwise on GitHub (${stars} stars)` : "Star portwise on GitHub"}>
-        <Icon name="github" size={17} />
+        <Icon name="github" size={20} />
         <span class="gh-label">Star</span>
         {starLabel && <span class="gh-count">{starLabel}</span>}
       </a>
@@ -50,24 +50,24 @@ const starLabel = stars ? new Intl.NumberFormat("en", { notation: "compact" }).f
     border-bottom: 1px solid var(--border);
   }
   .nav-inner { height: 100%; display: flex; align-items: center; gap: 28px; }
-  .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 700; font-size: 17px; letter-spacing: -0.02em; }
+  .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 700; font-size: var(--fs-lg); letter-spacing: -0.02em; }
   .links ul { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
   .links a {
-    display: inline-flex; align-items: center; height: 34px; padding: 0 12px; border-radius: 9px;
-    font-size: 14.5px; color: var(--muted); text-decoration: none; transition: color 140ms, background-color 140ms;
+    display: inline-flex; align-items: center; height: 36px; padding: 0 12px; border-radius: var(--r-sm);
+    font-size: var(--fs-md); color: var(--muted); text-decoration: none; transition: color 140ms, background-color 140ms;
   }
   .links a:hover, .links a[aria-current="page"] { color: var(--text); background: var(--surface-2); }
   .actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
   .icon-btn {
-    display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
+    display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-sm);
     background: transparent; border: 1px solid var(--border); color: var(--text-2); cursor: pointer;
   }
   .icon-btn:hover { background: var(--surface-2); color: var(--text); }
   :global(:root:not([data-theme="light"])) .icon-btn :global(.i-moon) { display: none; }
   :global(:root[data-theme="light"]) .icon-btn :global(.i-sun) { display: none; }
   .gh {
-    display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 10px;
-    background: var(--text); color: var(--bg); text-decoration: none; font-size: 14px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: var(--r-sm);
+    background: var(--text); color: var(--bg); text-decoration: none; font-size: var(--fs-ui); font-weight: 600;
   }
   .gh:hover { background: color-mix(in srgb, var(--text) 86%, var(--accent)); }
   .gh-count { padding-left: 8px; border-left: 1px solid color-mix(in srgb, var(--bg) 25%, transparent); font-variant-numeric: tabular-nums; }
@@ -81,10 +81,10 @@ const starLabel = stars ? new Intl.NumberFormat("en", { notation: "compact" }).f
     }
     .nav[data-open] .links { display: block; }
     .links ul { flex-direction: column; }
-    .links a { height: 44px; width: 100%; font-size: 16px; }
+    .links a { height: 44px; width: 100%; font-size: var(--fs-base); }
   }
   @media (max-width: 400px) {
     .gh-label { display: none; }
-    .gh { padding: 0 10px; }
+    .gh { padding: 0 12px; }
   }
 </style>

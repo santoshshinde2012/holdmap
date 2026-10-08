@@ -20,7 +20,19 @@
   --mono: "JetBrains Mono Site", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --brand: linear-gradient(100deg, #22d3ee 0%, #6366f1 52%, #a855f7 100%);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px;
+  --r-xs: 6px; --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 24px;
+  /* One type scale. Fixed steps for UI text, fluid steps for headings. */
+  --fs-2xs: 11px; --fs-xs: 12px; --fs-sm: 13px; --fs-ui: 14px; --fs-md: 15px; --fs-base: 16px;
+  --fs-lg: 18px; --fs-xl: 20px; --fs-2xl: 24px;
+  --fs-lede: clamp(16px, 1.6vw, 18px);
+  --fs-sub: clamp(18px, 2vw, 20px);
+  --fs-h3: clamp(24px, 2.8vw, 32px);
+  --fs-h2: clamp(32px, 4.4vw, 48px);
+  --fs-display-2: clamp(36px, 5.6vw, 64px);
+  --fs-display: clamp(44px, 8.6vw, 104px);
+  --lh-code: 20px;
+  --term-line: rgb(255 255 255 / 0.08);
+  --term-line-strong: rgb(255 255 255 / 0.12);
   --wrap: 1180px;
   --nav-h: 64px;
 
@@ -87,8 +99,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: var(--fs-base);
+  line-height: 1.5;
   font-feature-settings: "cv11", "ss01", "calt";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -100,28 +112,28 @@ img { height: auto; }
 a { color: inherit; }
 button { font: inherit; color: inherit; }
 code, kbd, pre, samp { font-family: var(--mono); font-feature-settings: "calt"; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--r-xs); }
 ::selection { background: rgb(142 140 255 / 0.35); }
 
 .wrap { width: min(100% - 40px, var(--wrap)); margin-inline: auto; }
 .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.skip { position: absolute; left: 12px; top: -48px; z-index: 100; padding: 8px 14px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); font-weight: 600; text-decoration: none; }
+.skip { position: absolute; left: 12px; top: -48px; z-index: 100; padding: 8px 16px; border-radius: var(--r-sm); background: var(--accent); color: var(--accent-fg); font-weight: 600; text-decoration: none; }
 .skip:focus { top: 12px; }
 
 /* Section rhythm */
 .section { padding-block: clamp(64px, 9vw, 112px); position: relative; }
 .eyebrow {
   display: inline-flex; align-items: center; gap: 8px;
-  font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.04em; text-transform: uppercase;
+  font-family: var(--mono); font-size: var(--fs-sm); letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--accent);
 }
-.eyebrow::before { content: ""; width: 18px; height: 1px; background: currentColor; opacity: 0.7; }
+.eyebrow::before { content: ""; width: 20px; height: 1px; background: currentColor; opacity: 0.7; }
 .h2 {
-  margin: 12px 0 14px;
-  font-size: clamp(30px, 4.4vw, 50px); line-height: 1.06; letter-spacing: -0.035em; font-weight: 700;
+  margin: 12px 0 16px;
+  font-size: var(--fs-h2); line-height: 1.06; letter-spacing: -0.035em; font-weight: 700;
   text-wrap: balance;
 }
-.lede { margin: 0; max-width: 62ch; color: var(--muted); font-size: clamp(16px, 1.6vw, 18.5px); text-wrap: pretty; }
+.lede { margin: 0; max-width: 62ch; color: var(--muted); font-size: var(--fs-lede); line-height: 28px; text-wrap: pretty; }
 .section-head { margin-bottom: clamp(36px, 5vw, 56px); }
 .section-head.center { text-align: center; }
 .section-head.center .lede { margin-inline: auto; }
@@ -129,10 +141,10 @@ code, kbd, pre, samp { font-family: var(--mono); font-feature-settings: "calt"; 
 
 /* Buttons */
 .btn {
-  --h: 46px;
-  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
-  height: var(--h); padding: 0 18px; border-radius: 12px;
-  font-size: 15px; font-weight: 600; letter-spacing: -0.01em; text-decoration: none; white-space: nowrap;
+  --h: 48px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: var(--h); padding: 0 20px; border-radius: var(--r-md);
+  font-size: var(--fs-md); font-weight: 600; letter-spacing: -0.01em; text-decoration: none; white-space: nowrap;
   border: 1px solid transparent; cursor: pointer;
   transition: transform 160ms var(--ease), background-color 160ms var(--ease), border-color 160ms var(--ease), box-shadow 160ms var(--ease);
 }
@@ -141,12 +153,12 @@ code, kbd, pre, samp { font-family: var(--mono); font-feature-settings: "calt"; 
 .btn-primary:hover { background: color-mix(in srgb, var(--text) 88%, var(--accent)); }
 .btn-ghost { background: color-mix(in srgb, var(--surface) 70%, transparent); border-color: var(--border-strong); color: var(--text); backdrop-filter: blur(8px); }
 .btn-ghost:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--border-strong)); background: var(--surface-2); }
-.btn svg { width: 18px; height: 18px; flex: none; }
+.btn svg { width: 20px; height: 20px; flex: none; }
 
 kbd {
-  display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px;
-  border-radius: 6px; border: 1px solid var(--border-strong); border-bottom-width: 2px;
-  background: var(--surface-2); color: var(--text-2); font-size: 12px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 8px;
+  border-radius: var(--r-xs); border: 1px solid var(--border-strong); border-bottom-width: 2px;
+  background: var(--surface-2); color: var(--text-2); font-size: var(--fs-xs); line-height: 1;
 }
 
 /* Cards */
@@ -156,20 +168,20 @@ kbd {
 }
 
 /* Window chrome used by screenshots, the terminal and the demo */
-.window { border-radius: 14px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
+.window { border-radius: var(--r-lg); overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
 .window-bar {
-  display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px;
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px;
   background: color-mix(in srgb, var(--surface-2) 85%, transparent); border-bottom: 1px solid var(--border);
-  font-size: 12.5px; color: var(--muted);
+  font-size: var(--fs-sm); color: var(--muted);
 }
-.dots { display: flex; gap: 7px; margin-right: 6px; }
-.dots i { width: 11px; height: 11px; border-radius: 50%; background: #ff5f57; }
+.dots { display: flex; gap: 8px; margin-right: 8px; }
+.dots i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
 .dots i:nth-child(2) { background: #febc2e; }
 .dots i:nth-child(3) { background: #28c840; }
-.window-title { flex: 1; text-align: center; margin-right: 52px; font-family: var(--mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.window-title { flex: 1; text-align: center; margin-right: 60px; font-family: var(--mono); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Terminal colours (shared by the hero, problem strip and the CLI player) */
-.term { background: var(--term-bg); color: var(--term-text); font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+.term { background: var(--term-bg); color: var(--term-text); font-family: var(--mono); font-size: var(--fs-sm); line-height: var(--lh-code); }
 .term .d { color: var(--term-dim); }
 .term .b { font-weight: 700; color: #fff; }
 .term .c { color: #67e8f9; font-weight: 700; }

@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
 import interUrl from "../assets/fonts/inter-site.woff2?url";
+import monoUrl from "../assets/fonts/jetbrains-mono-site.woff2?url";
 import Nav from "../components/Nav.astro";
 import Footer from "../components/Footer.astro";
 import { description as siteDescription, siteUrl } from "../lib/site";
@@ -32,6 +33,7 @@ const og = `${siteUrl}og.png`;
     <meta name="color-scheme" content="dark light" />
     <meta name="theme-color" content="#07070b" />
     <link rel="preload" href={interUrl} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={monoUrl} as="font" type="font/woff2" crossorigin />
     <link rel="icon" href={`${base}/favicon.ico`} sizes="48x48" />
     <link rel="icon" href={`${base}/favicon.svg`} type="image/svg+xml" />
     <link rel="apple-touch-icon" href={`${base}/apple-touch-icon.png`} />

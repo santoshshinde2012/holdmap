@@ -14,10 +14,10 @@ import { url } from "../lib/site";
         <h3>A safe stop, with protection</h3>
         <p>Preview the plan, stop the whole dev-server tree (SIGTERM, then SIGKILL) and check the port is free. The OS, shells, terminals, IDEs and AI agents are protected.</p>
         <ol class="mini-plan" aria-label="Example stop plan">
-          <li><span class="n">1</span> SIGTERM <code>npm</code> (42999), <code>node</code> (43000)</li>
-          <li><span class="n">2</span> SIGKILL survivors after 5 s</li>
-          <li><span class="n ok">✓</span> TCP port 3000 is free</li>
-          <li class="blocked"><span class="n no">✕</span> VS Code helper on :49152 <span class="pill">protected</span></li>
+          <li><span class="n">1</span><span class="t">SIGTERM <code>npm</code> (42999), <code>node</code> (43000)</span></li>
+          <li><span class="n">2</span><span class="t">SIGKILL survivors after 5 s</span></li>
+          <li><span class="n ok">✓</span><span class="t">TCP port 3000 is free</span></li>
+          <li class="blocked"><span class="n no">✕</span><span class="t">VS Code helper on :49152</span><span class="pill">protected</span></li>
         </ol>
       </li>
       <li class="card">
@@ -78,28 +78,29 @@ import { url } from "../lib/site";
   }
   .wide { grid-column: span 2; }
   .ico {
-    display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; margin-bottom: 18px;
+    display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-md); margin-bottom: 20px;
     color: var(--accent); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
   }
-  h3 { margin: 0 0 8px; font-size: 17px; letter-spacing: -0.015em; line-height: 1.3; }
-  p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
-  p code, li code { font-size: 0.88em; padding: 1px 5px; border-radius: 5px; background: var(--surface-2); color: var(--text-2); }
+  h3 { margin: 0 0 8px; font-size: var(--fs-lg); letter-spacing: -0.015em; line-height: 1.3; }
+  p { margin: 0; color: var(--muted); font-size: var(--fs-md); line-height: 24px; }
+  p code, li code { font-size: 0.875em; padding: 0.125em 0.375em; white-space: nowrap; border-radius: var(--r-xs); background: var(--surface-2); color: var(--text-2); }
   p a { color: var(--text-2); }
-  .mini-plan { list-style: none; margin: 18px 0 0; padding: 14px; border-radius: 12px; background: var(--bg-2); border: 1px solid var(--border); display: grid; gap: 8px; font-size: 13.5px; color: var(--text-2); }
-  .mini-plan li { display: flex; align-items: center; gap: 10px; }
-  .n { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: var(--surface-3); font: 600 11.5px var(--mono); color: var(--text-2); flex: none; }
+  .mini-plan { list-style: none; margin: 20px 0 0; padding: 16px; border-radius: var(--r-md); background: var(--bg-2); border: 1px solid var(--border); display: grid; gap: 8px; font-size: var(--fs-ui); color: var(--text-2); }
+  .mini-plan li { display: flex; align-items: center; gap: 12px; }
+  .mini-plan .t { flex: 1; min-width: 0; }
+  .n { display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--r-sm); background: var(--surface-3); font: 600 var(--fs-2xs) var(--mono); color: var(--text-2); flex: none; }
   .n.ok { background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
   .n.no { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
   .blocked { color: var(--muted); }
-  .pill { margin-left: auto; padding: 2px 8px; border-radius: 999px; font: 600 11px var(--mono); color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, transparent); }
-  .mini-graph { margin-top: 18px; width: 100%; height: auto; }
+  .pill { flex: none; padding: 2px 8px; border-radius: 999px; font: 600 var(--fs-2xs) var(--mono); color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, transparent); }
+  .mini-graph { margin-top: 20px; width: 100%; height: auto; }
   .edges path { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 5; animation: flow 1.6s linear infinite; opacity: 0.8; }
   @keyframes flow { to { stroke-dashoffset: -18; } }
   .node rect { fill: var(--surface-2); stroke: var(--border-strong); }
   .node.db rect { stroke: color-mix(in srgb, var(--green) 50%, transparent); }
-  .node text { fill: var(--text-2); font: 500 11.5px var(--mono); text-anchor: middle; }
-  .os { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
-  .os span { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border-strong); font-size: 13px; color: var(--text-2); }
+  .node text { fill: var(--text-2); font: 500 var(--fs-2xs) var(--mono); text-anchor: middle; }
+  .os { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+  .os span { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border-strong); font-size: var(--fs-sm); color: var(--text-2); }
   @media (max-width: 1000px) { .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 640px) { .bento { grid-template-columns: minmax(0, 1fr); } .wide { grid-column: auto; } .card { padding: 20px; } }
 </style>
