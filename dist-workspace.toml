@@ -11,13 +11,10 @@ cargo-dist-version = "0.33.0"
 ci = "github"
 # The installers to generate for each app. The npm package is built and attached to the release;
 # add "npm" to publish-jobs (and an NPM_TOKEN secret) to publish it to the registry.
-installers = ["shell", "powershell", "homebrew", "npm"]
-# A GitHub repo to push Homebrew formulas to
-tap = "santoshshinde2012/homebrew-tap"
-# Publish jobs to run in CI. Empty until the HOMEBREW_TAP_TOKEN secret exists: without it the
-# Homebrew job would fail the whole Release run (and the desktop release that follows it). The
-# formula (portwise.rb) is still attached to every release. To publish to the tap, set
-# publish-jobs = ["homebrew"] and run `dist generate`.
+installers = ["shell", "powershell", "npm"]
+# Homebrew is off until the HOMEBREW_TAP_TOKEN secret exists; otherwise every release would
+# advertise a `brew install` that fails. To turn it on: add "homebrew" to installers, set
+# tap = "santoshshinde2012/homebrew-tap" and publish-jobs = ["homebrew"], then `dist generate`.
 publish-jobs = []
 # After the GitHub Release exists, build the desktop installers and attach them to it
 # (.github/workflows/desktop-release.yml, a reusable workflow).

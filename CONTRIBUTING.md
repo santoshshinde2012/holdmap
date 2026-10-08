@@ -88,7 +88,7 @@ Versions follow [SemVer](https://semver.org/). One `vX.Y.Z` tag releases everyth
   deliberate maintainer step.
 - Pushing the tag runs `release.yml` ([dist](https://github.com/axodotdev/cargo-dist)): CLI
   archives for six targets (macOS arm64/x64, Linux gnu arm64/x64, Linux musl x64, Windows x64),
-  shell and PowerShell installers, a Homebrew formula (pushed to the tap once enabled), an npm package tarball, a
+  shell and PowerShell installers, an npm package tarball, a
   CycloneDX SBOM, SHA-256 checksums, binaries built with `cargo auditable`, and GitHub build
   provenance (`gh attestation verify <file> -R santoshshinde2012/portwise`). It creates the GitHub
   Release.
@@ -103,7 +103,7 @@ Check a change to the release setup locally with `dist plan`,
 
 | What | Needed for |
 |---|---|
-| Secret `HOMEBREW_TAP_TOKEN` (fine-grained, contents: write on `santoshshinde2012/homebrew-tap`), then `publish-jobs = ["homebrew"]` in `dist-workspace.toml` and `dist generate` | Publishing the formula to the tap (until then `portwise.rb` is only attached to the release) |
+| Secret `HOMEBREW_TAP_TOKEN` (fine-grained, contents: write on `santoshshinde2012/homebrew-tap`), then in `dist-workspace.toml` add `"homebrew"` to `installers`, set `tap` and `publish-jobs = ["homebrew"]`, and run `dist generate` | Homebrew (`brew install santoshshinde2012/tap/portwise`); off until then, so release notes don't advertise it |
 | Secret `RELEASE_PLEASE_TOKEN` (fine-grained, contents and pull requests: write) | The release PR; the workflow skips with a notice until it exists |
 | Secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | Signed, notarised macOS app (optional) |
 | Secrets `WINDOWS_CERTIFICATE` (base64 `.pfx`), `WINDOWS_CERTIFICATE_PASSWORD` | Signed Windows installers (optional) |
@@ -116,7 +116,7 @@ Check a change to the release setup locally with `dist plan`,
    link at `releases/tag/v0.1.0`. Commit (`chore: release 0.1.0`) and push; wait for CI.
 2. Tag and push: `git tag -s v0.1.0 -m "portwise 0.1.0" && git push origin v0.1.0`.
 3. Watch `Release`, then `Desktop release`, in the Actions tab. Check the release page, then
-   the shell installer (and `brew install santoshshinde2012/tap/portwise` once the tap is enabled).
+   the shell installer.
 
 **Later releases.** Merge the release PR, then tag its merge commit `vX.Y.Z` as in step 2.
 
