@@ -17,7 +17,7 @@ function entry(p: Partial<PortEntry> & { port: number }): PortEntry {
     pid,
     pids: pid ? [pid] : [],
     uid: 501,
-    user: "santosh",
+    user: "dev",
     process: null,
     project: null,
     framework: null,
@@ -39,7 +39,7 @@ function proc(pid: number, name: string, cmd: string, cwd: string | null, ageSec
     cmdline: cmd.split(" "),
     cwd,
     uid: 501,
-    user: "santosh",
+    user: "dev",
     start_time: now - ageSecs,
     start_token: token++,
     memory_bytes: mem,
@@ -56,16 +56,18 @@ export const MOCK_SNAPSHOT: Snapshot = {
   entries: [
     entry({
       port: 3000,
-      process: proc(43000, "node", "node /Users/santosh/code/shop-web/node_modules/.bin/next dev", "/Users/santosh/code/shop-web", 7420, 412e6),
-      project: { name: "shop-web", root: "/Users/santosh/code/shop-web", kind: "package.json", git_branch: "feat/checkout" },
+      process: proc(43000, "node", "node /Users/dev/code/shop-web/node_modules/.bin/next dev", "/Users/dev/code/shop-web", 7420, 412e6),
+      project: { name: "shop-web", root: "/Users/dev/code/shop-web", kind: "package.json", git_branch: "feat/checkout" },
       framework: { name: "Next.js", category: "dev_server" },
       label: "Next.js · shop-web (feat/checkout)",
       is_dev: true,
+      app_memory_bytes: 1.18e9,
+      helper_count: 3,
     }),
     entry({
       port: 3001,
-      process: proc(43001, "node", "node server/index.js", "/Users/santosh/code/shop-api", 7300, 96e6),
-      project: { name: "shop-api", root: "/Users/santosh/code/shop-api", kind: "package.json", git_branch: "main" },
+      process: proc(43001, "node", "node server/index.js", "/Users/dev/code/shop-api", 7300, 96e6),
+      project: { name: "shop-api", root: "/Users/dev/code/shop-api", kind: "package.json", git_branch: "main" },
       framework: { name: "Express", category: "app_server" },
       label: "Express · shop-api (main)",
       is_dev: true,
@@ -74,10 +76,10 @@ export const MOCK_SNAPSHOT: Snapshot = {
       port: 5173,
       addresses: ["::1"],
       families: ["v6"],
-      process: proc(45173, "node", "node node_modules/.bin/vite dev", "/Users/santosh/code/docs", 900, 180e6),
-      project: { name: "docs", root: "/Users/santosh/code/docs", kind: "package.json", git_branch: "main" },
-      framework: { name: "SvelteKit", category: "dev_server" },
-      label: "SvelteKit · docs (main)",
+      process: proc(45173, "node", "node node_modules/.bin/vite dev", "/Users/dev/code/docs", 900, 180e6),
+      project: { name: "docs", root: "/Users/dev/code/docs", kind: "package.json", git_branch: "main" },
+      framework: { name: "Vite", category: "dev_server" },
+      label: "Vite · docs (main)",
       is_dev: true,
     }),
     entry({
@@ -85,8 +87,8 @@ export const MOCK_SNAPSHOT: Snapshot = {
       addresses: ["0.0.0.0"],
       families: ["v4"],
       exposure: "all_interfaces",
-      process: proc(48000, "Python", "python manage.py runserver 0.0.0.0:8000", "/Users/santosh/code/ml-service", 86400 * 2, 140e6),
-      project: { name: "ml-service", root: "/Users/santosh/code/ml-service", kind: "manage.py", git_branch: "exp/embeddings" },
+      process: proc(48000, "Python", "python manage.py runserver 0.0.0.0:8000", "/Users/dev/code/ml-service", 86400 * 2, 140e6),
+      project: { name: "ml-service", root: "/Users/dev/code/ml-service", kind: "manage.py", git_branch: "exp/embeddings" },
       framework: { name: "Django", category: "dev_server" },
       label: "Django · ml-service (exp/embeddings)",
       is_dev: true,
@@ -108,9 +110,15 @@ export const MOCK_SNAPSHOT: Snapshot = {
       label: "Redis",
     }),
     entry({
+      port: 11434,
+      process: proc(835, "ollama", "/Applications/Ollama.app/Contents/Resources/ollama serve", "/", 86400 * 4, 2.6e9),
+      framework: { name: "Ollama", category: "tool" },
+      label: "Ollama",
+    }),
+    entry({
       port: 8125,
       protocol: "udp",
-      process: proc(48125, "statsd", "node stats.js", "/Users/santosh/code/metrics", 4000, 30e6),
+      process: proc(48125, "statsd", "node stats.js", "/Users/dev/code/metrics", 4000, 30e6),
       framework: { name: "Node.js", category: "app_server" },
       label: "Node.js · metrics",
       is_dev: true,
@@ -284,6 +292,6 @@ export function mockTopology(s: Snapshot = MOCK_SNAPSHOT): Graph {
     edge("ml", "db", 5432, 1),
     edge("ml", "external", 443, 2, "outbound", ["api.openai.com:443", "huggingface.co:443"]),
   ];
-  const clusters: Cluster[] = [{ id: "shop", name: "shop", kind: "compose", detail: "docker compose", root: "/Users/santosh/code/shop", nodes: ["web", "api", "db", "redis"] }];
+  const clusters: Cluster[] = [{ id: "shop", name: "shop", kind: "compose", detail: "docker compose", root: "/Users/dev/code/shop", nodes: ["web", "api", "db", "redis"] }];
   return { nodes, edges, clusters, stats: { nodes: nodes.length, edges: edges.length, clusters: 1, connections: 16 }, taken_at_ms: s.taken_at_ms };
 }

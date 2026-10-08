@@ -63,7 +63,7 @@
       <div class="flex"><Button variant="danger" icon="stop" kbd="⌫">Stop</Button><Button variant="danger-outline" size="sm">Stop</Button><Button variant="primary" loading loadingText="Scanning…">Scan</Button><Button disabled>Disabled</Button></div>
       <div class="flex"><Button size="xs">XS 24</Button><Button size="sm">SM 28</Button><Button size="md">MD 32</Button><Button size="lg">LG 36</Button></div>
       <div class="flex"><IconButton icon="refresh" label="Refresh" kbd="R" /><IconButton icon="history" label="History" variant="outline" /><IconButton icon="star" label="Pin" pressed /><Kbd keys={["⌘", "K"]} /><Kbd keys="Esc" /></div>
-      <CopyValue value="/Users/santosh/code/shop-web/node_modules/.bin/next-server" mono oncopy={noop} what="Path" />
+      <CopyValue value="/Users/dev/code/shop-web/node_modules/.bin/next-server" mono oncopy={noop} what="Path" />
       <Callout tone="warn" title="Reachable from your network">Bind to <code>127.0.0.1</code> if that isn't intended.</Callout>
     </section>
   </div>

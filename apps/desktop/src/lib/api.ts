@@ -1,4 +1,5 @@
 import type { ActionPlan, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
+import { version as pkgVersion } from "../../package.json";
 import { MOCK_SNAPSHOT, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
 /** True inside the Tauri webview; false in a plain browser (`npm run dev`), where mocks are used. */
@@ -12,7 +13,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function appInfo(): Promise<AppInfo> {
-  if (!isTauri) return { version: "0.1.6", platform: "browser", tray: false, shortcut: mockShortcut, config_dir: "~/.config/portwise" };
+  if (!isTauri) return { version: pkgVersion, platform: "browser", tray: false, shortcut: mockShortcut, config_dir: "~/.config/portwise" };
   return call("app_info");
 }
 
