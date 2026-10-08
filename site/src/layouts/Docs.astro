@@ -1,0 +1,113 @@
+---
+import Base from "./Base.astro";
+import Icon from "../components/Icon.astro";
+import type { DocLink, Heading } from "../lib/docs";
+
+interface Props {
+  title: string; description: string; html: string; headings: Heading[];
+  nav: DocLink[]; current: string; edit: string; note?: string;
+}
+const { title, description, html, headings, nav, current, edit, note } = Astro.props;
+const i = nav.findIndex((n) => n.id === current);
+const prev = i > 0 ? nav[i - 1] : null;
+const next = i < nav.length - 1 ? nav[i + 1] : null;
+const toc = headings.filter((h) => h.depth === 2);
+---
+<Base title={title} description={description} ogType="article">
+  <div class="wrap docs">
+    <aside class="side" aria-label="Guide">
+      <details class="mobile-nav">
+        <summary>Guide <span>· {title}</span></summary>
+        <ul>{nav.map((n) => <li><a href={n.href} aria-current={n.id === current ? "page" : undefined}>{n.title}</a></li>)}</ul>
+      </details>
+      <nav class="desk-nav" aria-label="Guide pages">
+        <p class="side-title">Guide</p>
+        <ul>{nav.map((n) => <li><a href={n.href} aria-current={n.id === current ? "page" : undefined}>{n.title}</a></li>)}</ul>
+      </nav>
+    </aside>
+
+    <article class="content">
+      <header>
+        <p class="crumb">Docs</p>
+        <h1>{title}</h1>
+        <p class="desc">{description}</p>
+        {note && <p class="note"><Icon name="Info" size={15} /> <span set:html={note} /></p>}
+      </header>
+      <div class="prose" set:html={html} />
+      <footer class="doc-foot">
+        <a class="edit" href={edit}><Icon name="Pencil" size={15} /> Edit this page on GitHub</a>
+        <nav class="pager" aria-label="Previous and next page">
+          {prev ? <a class="prev" href={prev.href}><small>Previous</small>{prev.title}</a> : <span></span>}
+          {next && <a class="next" href={next.href}><small>Next</small>{next.title}</a>}
+        </nav>
+      </footer>
+    </article>
+
+    {toc.length > 1 && (
+      <nav class="toc" aria-label="On this page">
+        <p class="side-title">On this page</p>
+        <ul>{toc.map((h) => <li><a href={`#${h.slug}`}>{h.text}</a></li>)}</ul>
+      </nav>
+    )}
+  </div>
+</Base>
+
+<style>
+  .docs { display: grid; grid-template-columns: 220px minmax(0, 1fr) 200px; gap: 48px; padding-block: 48px 96px; align-items: start; }
+  .side, .toc { position: sticky; top: calc(var(--nav-h) + 32px); max-height: calc(100vh - var(--nav-h) - 48px); overflow-y: auto; }
+  .side-title { margin: 0 0 10px; font: 600 12px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .desk-nav a, .mobile-nav a { display: block; padding: 7px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14.5px; }
+  .desk-nav a:hover, .mobile-nav a:hover { color: var(--text); background: var(--surface-2); }
+  .desk-nav a[aria-current="page"], .mobile-nav a[aria-current="page"] { color: var(--text); background: var(--accent-soft); font-weight: 500; }
+  .toc a { display: block; padding: 4px 0 4px 12px; border-left: 1px solid var(--border); color: var(--muted); text-decoration: none; font-size: 13.5px; }
+  .toc a:hover { color: var(--text); border-color: var(--accent); }
+  .mobile-nav { display: none; }
+  .crumb { margin: 0; font: 600 12.5px var(--mono); color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+  h1 { margin: 8px 0 10px; font-size: clamp(32px, 4.5vw, 44px); letter-spacing: -0.035em; line-height: 1.1; }
+  .desc { margin: 0; color: var(--muted); font-size: 18px; }
+  .note { display: flex; gap: 8px; align-items: flex-start; margin: 18px 0 0; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); font-size: 14px; color: var(--muted); }
+  .note :global(svg) { flex: none; margin-top: 3px; color: var(--accent); }
+  .note :global(code) { font-size: 0.9em; }
+  header { padding-bottom: 28px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .doc-foot { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--border); }
+  .edit { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; text-decoration: none; }
+  .edit:hover { color: var(--text); }
+  .pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px; }
+  .pager a { display: grid; gap: 2px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border); text-decoration: none; font-weight: 600; }
+  .pager a:hover { border-color: var(--accent); }
+  .pager small { font-weight: 400; font-size: 12.5px; color: var(--muted); }
+  .next { text-align: right; grid-column: 2; }
+
+  @media (max-width: 1180px) { .docs { grid-template-columns: 200px minmax(0, 1fr); } .toc { display: none; } }
+  @media (max-width: 860px) {
+    .docs { grid-template-columns: minmax(0, 1fr); gap: 20px; padding-top: 20px; }
+    .side { position: static; max-height: none; overflow: visible; }
+    .desk-nav { display: none; }
+    .mobile-nav { display: block; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+    .mobile-nav summary { padding: 12px 14px; cursor: pointer; font-weight: 600; font-size: 15px; }
+    .mobile-nav summary span { color: var(--muted); font-weight: 400; }
+    .mobile-nav ul { padding: 0 8px 10px; }
+  }
+
+  /* Prose */
+  .prose { font-size: 16px; line-height: 1.7; color: var(--text-2); }
+  .prose :global(h2) { margin: 48px 0 14px; font-size: 24px; letter-spacing: -0.02em; line-height: 1.25; color: var(--text); scroll-margin-top: calc(var(--nav-h) + 20px); }
+  .prose :global(h3) { margin: 32px 0 10px; font-size: 18px; color: var(--text); }
+  .prose :global(p), .prose :global(ul), .prose :global(ol) { margin: 14px 0; }
+  .prose :global(ul), .prose :global(ol) { padding-left: 22px; }
+  .prose :global(li) { margin: 6px 0; }
+  .prose :global(a) { color: var(--accent); text-underline-offset: 3px; }
+  .prose :global(strong) { color: var(--text); }
+  .prose :global(:not(pre) > code) { font-size: 0.86em; padding: 2px 6px; border-radius: 6px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); white-space: nowrap; }
+  .prose :global(pre) { margin: 18px 0; padding: 16px 18px; border-radius: 12px; font-size: 13.5px; line-height: 1.65; overflow-x: auto; border: 1px solid var(--border); }
+  .prose :global(pre:not(.astro-code)) { background: var(--term-bg); color: var(--term-text); }
+  .prose :global(.astro-code), .prose :global(.astro-code span) { color: var(--shiki-dark) !important; }
+  .prose :global(.astro-code) { background-color: var(--term-bg) !important; }
+  :global(:root[data-theme="light"]) .prose :global(.astro-code), :global(:root[data-theme="light"]) .prose :global(.astro-code span) { color: var(--shiki-light) !important; }
+  :global(:root[data-theme="light"]) .prose :global(.astro-code) { background-color: #f6f7f9 !important; }
+  .prose :global(table) { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14.5px; display: block; overflow-x: auto; }
+  .prose :global(th), .prose :global(td) { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .prose :global(th) { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+  .prose :global(td code) { white-space: nowrap; }
+</style>

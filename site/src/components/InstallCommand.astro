@@ -1,0 +1,66 @@
+---
+// The one-line installer with an OS switch. The visitor's OS is picked before paint (see the
+// inline script in Base.astro) so nothing jumps; the buttons work as a tab list.
+import Icon from "./Icon.astro";
+import { install } from "../lib/site";
+
+interface Props { id: string; size?: "lg" | "md" }
+const { id, size = "lg" } = Astro.props;
+const tabs = [
+  { key: "unix", label: "macOS · Linux", cmd: install.sh, prompt: "$" },
+  { key: "windows", label: "Windows", cmd: install.ps, prompt: ">" },
+];
+---
+<div class:list={["installer", size]} data-installer>
+  <div class="seg" role="tablist" aria-label="Install command for" data-tabs data-tabs-os>
+    {tabs.map((t, i) => (
+      <button type="button" role="tab" id={`${id}-tab-${t.key}`} aria-controls={`${id}-${t.key}`} aria-selected={i === 0 ? "true" : "false"} tabindex={i === 0 ? 0 : -1} data-key={t.key}>{t.label}</button>
+    ))}
+  </div>
+  {tabs.map((t, i) => (
+    <div class="cmd" role="tabpanel" id={`${id}-${t.key}`} aria-labelledby={`${id}-tab-${t.key}`} hidden={i !== 0} data-key={t.key}>
+      <span class="prompt" aria-hidden="true">{t.prompt}</span>
+      <code id={`${id}-code-${t.key}`} tabindex="0">{t.cmd}</code>
+      <button type="button" class="copy" data-copy={t.cmd} aria-label={`Copy the ${t.label} install command`}>
+        <Icon name="Copy" size={16} class="i-copy" />
+        <Icon name="Check" size={16} class="i-done" />
+      </button>
+    </div>
+  ))}
+</div>
+
+<style>
+  .installer {
+    width: 100%; max-width: 660px; padding: 6px; border-radius: 16px; text-align: left;
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 20px 50px -24px var(--glow), 0 1px 0 rgb(255 255 255 / 0.04) inset;
+    backdrop-filter: blur(10px);
+  }
+  .seg { display: flex; gap: 2px; padding: 2px; }
+  .seg button {
+    height: 30px; padding: 0 12px; border-radius: 9px; border: 0; background: transparent; cursor: pointer;
+    font-size: 13px; font-weight: 500; color: var(--muted);
+  }
+  .seg button[aria-selected="true"] { background: var(--surface-3); color: var(--text); }
+  .seg button:hover { color: var(--text); }
+  .cmd { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 0 6px 0 14px; height: 50px; border-radius: 11px; background: var(--term-bg); border: 1px solid rgb(255 255 255 / 0.06); }
+  .cmd[hidden] { display: none; }
+  .md .cmd { height: 46px; }
+  .prompt { font-family: var(--mono); color: #8e8cff; font-size: 14px; user-select: none; }
+  code {
+    flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none;
+    font-size: 13.5px; color: #e6e8ef; padding: 4px 0;
+    mask-image: linear-gradient(90deg, #000 88%, transparent); -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+  }
+  code::-webkit-scrollbar { display: none; }
+  code:focus-visible { outline-offset: 2px; mask-image: none; -webkit-mask-image: none; }
+  .copy {
+    flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 9px; cursor: pointer;
+    background: rgb(255 255 255 / 0.06); border: 1px solid rgb(255 255 255 / 0.08); color: #e6e8ef;
+  }
+  .copy:hover { background: rgb(255 255 255 / 0.12); }
+  .copy :global(.i-done) { display: none; color: #4ade80; }
+  .copy[data-copied] :global(.i-done) { display: block; }
+  .copy[data-copied] :global(.i-copy) { display: none; }
+</style>

@@ -1,0 +1,21 @@
+---
+import { getEntry } from "astro:content";
+import Docs from "../../layouts/Docs.astro";
+import { editUrl, fixRepoLinks, guide, headingsOf } from "../../lib/docs";
+
+const entry = (await getEntry("reference", "cli"))!;
+// docs/cli.md opens with its own H1 and intro; the layout supplies the title.
+const html = fixRepoLinks((entry.rendered?.html ?? "").replace(/^\s*<h1[^>]*>[\s\S]*?<\/h1>/, ""));
+const headings = headingsOf(entry).filter((h) => h.depth > 1);
+const nav = await guide();
+---
+<Docs
+  title="CLI reference"
+  description="Every portwise command and flag, generated from the CLI's own --help."
+  html={html}
+  headings={headings}
+  nav={nav}
+  current="cli"
+  edit={editUrl(entry)}
+  note="This page is <code>docs/cli.md</code> from the repository, regenerated from <code>--help</code> and checked in CI, so it always matches the release."
+/>

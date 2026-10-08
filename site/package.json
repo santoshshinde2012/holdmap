@@ -1,0 +1,26 @@
+{
+  "name": "portwise-site",
+  "private": true,
+  "version": "0.0.0",
+  "description": "portwise website: landing page, live demo and guide (https://santoshshinde2012.github.io/portwise/)",
+  "type": "module",
+  "license": "MIT OR Apache-2.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build:demo": "node scripts/build-demo.mjs",
+    "build": "npm run build:demo && astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "check:links": "node scripts/check-links.mjs",
+    "check:budget": "node scripts/check-budget.mjs",
+    "test": "npm run check:links && npm run check:budget"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@types/node": "^22.20.5",
+    "astro": "^7.3.7",
+    "lucide-static": "^1.53.0",
+    "sharp": "^0.35.5",
+    "typescript": "^6.0.3"
+  }
+}

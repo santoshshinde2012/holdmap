@@ -1,0 +1,81 @@
+---
+import Icon from "./Icon.astro";
+---
+<section class="section problem" aria-labelledby="problem-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">The problem</span>
+      <h2 class="h2" id="problem-title"><code>EADDRINUSE</code>, again.</h2>
+      <p class="lede">
+        Most tools hand you a PID and a <code>kill -9</code>. That kills a child, the watcher respawns it,
+        and you still don't know what it was. portwise tells you what's really there and stops it properly.
+      </p>
+    </div>
+    <div class="pair">
+      <figure class="side before">
+        <figcaption><span class="tag bad">Before</span> The usual dance</figcaption>
+        <div class="window term">
+<pre><span class="p">$</span> PORT=3000 npm run dev
+<span class="r">Error: listen EADDRINUSE: address already in use :::3000</span>
+<span class="p">$</span> lsof -i :3000
+<span class="d">COMMAND   PID USER   FD   TYPE  NODE NAME</span>
+node    43000  dev   23u  IPv6  TCP *:hbci (LISTEN)
+<span class="p">$</span> kill -9 43000
+<span class="p">$</span> PORT=3000 npm run dev
+<span class="r">Error: listen EADDRINUSE: address already in use :::3000</span>
+<span class="d"># …the parent respawned it. Which project was that?</span></pre>
+        </div>
+        <ul class="notes">
+          <li><Icon name="CircleHelp" size={16} /> No idea which project or branch</li>
+          <li><Icon name="Zap" size={16} /> <code>kill -9</code> skips cleanup</li>
+          <li><Icon name="RefreshCw" size={16} /> The watcher brings it back</li>
+        </ul>
+      </figure>
+      <div class="arrow" aria-hidden="true"><Icon name="ArrowRight" size={22} /></div>
+      <figure class="side after">
+        <figcaption><span class="tag good">After</span> With portwise and its shell hook</figcaption>
+        <div class="window term">
+<pre><span class="p">$</span> PORT=3000 npm run dev
+<span class="r">Error: listen EADDRINUSE: address already in use :::3000</span>
+<span class="v">portwise:</span> Port 3000 is held by a <span class="b">Next.js dev server</span>
+  (node, PID 43000) in <span class="b">~/code/shop-web</span> (branch <span class="v">feat/checkout</span>).
+  <span class="d">→</span> portwise stop 3000 <span class="d">frees it ·</span> portwise free-port --near 3000
+<span class="p">$</span> portwise stop 3000 --yes
+  <span class="d">· sent SIGTERM to npm (42999), node (43000)</span>
+<span class="g">✔</span> <span class="b">:3000 is free (stopped 2 processes)</span> <span class="d">in 412 ms</span>
+<span class="p">$</span> PORT=3000 npm run dev  <span class="g">✓ Ready in 1.4s</span></pre>
+        </div>
+        <ul class="notes">
+          <li><Icon name="FolderGit2" size={16} /> Names the project and branch</li>
+          <li><Icon name="GitFork" size={16} /> Stops the whole tree, gracefully</li>
+          <li><Icon name="CircleCheck" size={16} /> Checks the port is really free</li>
+        </ul>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<style>
+  .h2 code { font-size: 0.86em; letter-spacing: -0.04em; color: var(--red); }
+  .lede code { font-size: 0.9em; padding: 1px 6px; border-radius: 6px; background: var(--surface-2); color: var(--text-2); }
+  .pair { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 20px; align-items: start; }
+  .side { margin: 0; min-width: 0; }
+  figcaption { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 14.5px; color: var(--text-2); font-weight: 500; }
+  .tag { padding: 2px 8px; border-radius: 6px; font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: 0.05em; }
+  .bad { background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--red); }
+  .good { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
+  .window { border: 1px solid rgb(255 255 255 / 0.07); }
+  .before .window { opacity: 0.92; }
+  .after .window { box-shadow: var(--shadow), 0 30px 80px -40px rgb(71 209 140 / 0.35); }
+  pre { margin: 0; padding: 18px 18px; font-size: 12.5px; line-height: 1.7; overflow-x: auto; white-space: pre; }
+  .notes { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 8px; font-size: 14.5px; color: var(--muted); }
+  .notes li { display: flex; align-items: center; gap: 10px; }
+  .before .notes :global(svg) { color: var(--red); }
+  .after .notes :global(svg) { color: var(--green); }
+  .notes code { font-size: 0.9em; }
+  .arrow { align-self: center; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface); color: var(--accent); margin-top: 40px; }
+  @media (max-width: 960px) {
+    .pair { grid-template-columns: minmax(0, 1fr); }
+    .arrow { justify-self: center; margin: 0; rotate: 90deg; }
+  }
+</style>

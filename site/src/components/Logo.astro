@@ -1,0 +1,18 @@
+---
+// The app icon as an inline SVG mark (same drawing as apps/desktop/public/icon.svg).
+interface Props { size?: number; class?: string; id?: string }
+const { size = 28, class: cls = "", id = "pw-logo" } = Astro.props;
+---
+<svg class={cls} width={size} height={size} viewBox="64 64 896 896" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee" /><stop offset="0.55" stop-color="#6366f1" /><stop offset="1" stop-color="#7c3aed" />
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill={`url(#${id})`} />
+  <circle cx="512" cy="512" r="300" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="28" />
+  <rect x="332" y="372" width="360" height="280" rx="72" fill="#0b1020" fill-opacity=".9" />
+  <rect x="412" y="452" width="56" height="120" rx="20" fill="#22d3ee" />
+  <rect x="556" y="452" width="56" height="120" rx="20" fill="#22d3ee" />
+  <circle cx="752" cy="292" r="64" fill="#34d399" stroke="#fff" stroke-width="20" />
+</svg>

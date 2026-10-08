@@ -1,0 +1,154 @@
+---
+import Icon from "./Icon.astro";
+import { downloads, install, checksumUrl, latestUrl, REPO, url, version, type Os } from "../lib/site";
+
+const tabs: { key: Os | "source"; label: string }[] = [
+  { key: "macos", label: "macOS" },
+  { key: "linux", label: "Linux" },
+  { key: "windows", label: "Windows" },
+  { key: "source", label: "Source" },
+];
+const cmdFor = (k: string) => (k === "windows" ? install.ps : k === "source" ? install.cargo : install.sh);
+const firstOpen: Record<string, string> = {
+  macos: "The app isn't notarised yet. Open it once, then go to <b>System Settings › Privacy &amp; Security › Open Anyway</b> (macOS 14 and earlier: right-click the app, then <b>Open</b>). Or run <code>xattr -dr com.apple.quarantine /Applications/portwise.app</code>.",
+  windows: "The installer isn't code-signed yet. In “Windows protected your PC”, click <b>More info</b>, then <b>Run anyway</b>.",
+  linux: "Make the AppImage executable (<code>chmod +x portwise_*.AppImage</code>) or install the .deb / .rpm with your package manager.",
+};
+---
+<section id="install" class="section install" aria-labelledby="install-title">
+  <div class="wrap">
+    <div class="section-head center">
+      <span class="eyebrow">Install</span>
+      <h2 class="h2" id="install-title">Up and running in a minute.</h2>
+      <p class="lede">One command for the CLI, TUI and MCP server. The desktop app is a normal download. Latest release: <a href={latestUrl}>v{version}</a>.</p>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="Platform" data-tabs data-tabs-os>
+      {tabs.map((t, i) => (
+        <button type="button" role="tab" id={`in-tab-${t.key}`} aria-controls={`in-${t.key}`} aria-selected={i === 0 ? "true" : "false"} tabindex={i === 0 ? 0 : -1} data-key={t.key}>{t.label}</button>
+      ))}
+    </div>
+
+    {tabs.map((t, i) => (
+      <div class="panel" role="tabpanel" id={`in-${t.key}`} aria-labelledby={`in-tab-${t.key}`} hidden={i !== 0}>
+        <div class="step">
+          <h3><span class="num">1</span> {t.key === "source" ? "Build the CLI with Cargo" : "Install the CLI"}</h3>
+          <div class="cmd">
+            <span class="prompt" aria-hidden="true">{t.key === "windows" ? ">" : "$"}</span>
+            <code tabindex="0">{cmdFor(t.key)}</code>
+            <button type="button" class="copy" data-copy={cmdFor(t.key)} aria-label={`Copy the ${t.label} install command`}><Icon name="Copy" size={16} class="i-copy" /><Icon name="Check" size={16} class="i-done" /></button>
+          </div>
+          <p class="hint">
+            {t.key === "source"
+              ? <Fragment>Needs Rust 1.95 or newer. The desktop app builds with <code>npm run tauri build</code> in <code>apps/desktop</code>; see <a href="https://github.com/santoshshinde2012/portwise/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</Fragment>
+              : <Fragment>Installs to <code>{t.key === "windows" ? "%USERPROFILE%\\.local\\bin" : "~/.local/bin"}</code> and adds it to your <code>PATH</code> if needed. Then run <code>portwise</code>.</Fragment>}
+          </p>
+        </div>
+        {t.key !== "source" && (
+          <div class="step">
+            <h3><span class="num">2</span> Get the desktop app <span class="opt">optional</span></h3>
+            <div class="dl">
+              {downloads.filter((d) => d.os === t.key).map((d) => (
+                <a class:list={["dl-btn", { primary: d.primary }]} href={d.url}>
+                  <Icon name="Download" size={17} />
+                  <span><b>{d.label.split(" · ")[1]}</b><small>{d.detail}</small></span>
+                </a>
+              ))}
+            </div>
+            <p class="hint first-open"><Icon name="Info" size={15} /> <span set:html={firstOpen[t.key]} /></p>
+          </div>
+        )}
+      </div>
+    ))}
+
+    <div class="grid">
+      <div class="card table-card">
+        <h3>All desktop downloads</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Platform</th><th scope="col">File</th><th scope="col">Checksum</th></tr></thead>
+            <tbody>
+              {downloads.map((d) => (
+                <tr>
+                  <th scope="row">{d.label}</th>
+                  <td><a href={d.url}>{d.file}</a></td>
+                  <td><a href={checksumUrl(d.checksum)} aria-label={`SHA-256 checksums for ${d.label}`}>.sha256</a></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card verify">
+        <h3><Icon name="BadgeCheck" size={19} /> Verify what you downloaded</h3>
+        <p>Every release ships SHA-256 checksums and GitHub build provenance.</p>
+<pre class="term"><code><span class="d"># the checksum file sits next to the download</span>
+shasum -a 256 -c portwise-desktop-macos-arm64.sha256
+<span class="d"># Windows (PowerShell): compare with the .sha256 file</span>
+Get-FileHash portwise_{version}_x64-setup.exe
+<span class="d"># where it was built, and from which commit</span>
+gh attestation verify portwise_{version}_aarch64.dmg \
+  --repo {REPO}</code></pre>
+        <p class="small">Homebrew is coming soon. Updating? Run the installer again; the desktop app checks GitHub Releases for updates. Trouble? See <a href={url("docs/troubleshooting/")}>troubleshooting</a>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .lede a { color: var(--text-2); }
+  .tabs { display: flex; justify-content: center; gap: 6px; margin: 0 auto 20px; padding: 5px; width: fit-content; max-width: 100%; overflow-x: auto; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); }
+  .tabs button { height: 38px; padding: 0 18px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-size: 14.5px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button[aria-selected="true"] { background: var(--surface-3); color: var(--text); }
+  .panel { max-width: 860px; margin: 0 auto; display: grid; gap: 28px; padding: clamp(22px, 3vw, 36px); border-radius: var(--r-xl); border: 1px solid var(--border); background: var(--surface); }
+  .panel[hidden] { display: none; }
+  .step { min-width: 0; }
+  h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font-size: 16.5px; letter-spacing: -0.01em; }
+  .num { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font: 600 12.5px var(--mono); }
+  .opt { font-size: 12px; font-weight: 500; color: var(--muted); padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; }
+  .cmd { display: flex; align-items: center; gap: 10px; height: 50px; padding: 0 6px 0 14px; border-radius: 11px; background: var(--term-bg); border: 1px solid rgb(255 255 255 / 0.06); }
+  .prompt { font-family: var(--mono); color: #8e8cff; }
+  .cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; color: #e6e8ef; font-size: 13.5px; padding: 4px 0; }
+  .cmd code::-webkit-scrollbar { display: none; }
+  .copy { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 9px; cursor: pointer; background: rgb(255 255 255 / 0.06); border: 1px solid rgb(255 255 255 / 0.08); color: #e6e8ef; }
+  .copy:hover { background: rgb(255 255 255 / 0.12); }
+  .copy :global(.i-done) { display: none; color: #4ade80; }
+  .copy[data-copied] :global(.i-done) { display: block; }
+  .copy[data-copied] :global(.i-copy) { display: none; }
+  .hint { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+  .hint code, .small code, .first-open :global(code) { font-size: 0.88em; padding: 1px 5px; border-radius: 5px; background: var(--surface-2); color: var(--text-2); }
+  .hint a { color: var(--text-2); }
+  .first-open { display: flex; gap: 8px; align-items: flex-start; }
+  .first-open :global(svg) { flex: none; margin-top: 3px; color: var(--accent); }
+  .first-open :global(b) { color: var(--text-2); font-weight: 600; }
+  .dl { display: flex; flex-wrap: wrap; gap: 10px; }
+  .dl-btn { flex: 1 1 180px; max-width: 260px; display: inline-flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 18px 8px 14px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface-2); text-decoration: none; }
+  .dl-btn:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--border-strong)); }
+  .dl-btn span { display: grid; line-height: 1.25; }
+  .dl-btn b { font-size: 14.5px; }
+  .dl-btn small { font: 12px var(--mono); color: var(--muted); }
+  .dl-btn.primary { background: var(--text); color: var(--bg); border-color: transparent; }
+  .dl-btn.primary small { color: color-mix(in srgb, var(--bg) 70%, transparent); }
+  .grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; margin-top: 40px; }
+  .card { padding: 24px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  thead th { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  tbody th { font-weight: 500; color: var(--text-2); }
+  tbody tr:last-child > * { border-bottom: 0; }
+  td a { color: var(--text-2); font-family: var(--mono); font-size: 13px; }
+  td a:hover { color: var(--accent); }
+  .verify h3 :global(svg) { color: var(--green); }
+  .verify p { margin: 0; color: var(--muted); font-size: 14.5px; }
+  .verify pre { margin: 14px 0; padding: 14px 16px; border-radius: 12px; overflow-x: auto; font-size: 12.5px; line-height: 1.7; }
+  .small { font-size: 13.5px !important; }
+  .small a { color: var(--text-2); }
+  @media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 560px) {
+    .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
+    .tabs button { padding: 0 4px; font-size: 14px; }
+    .dl-btn { max-width: none; }
+  }
+</style>

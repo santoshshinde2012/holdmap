@@ -1,0 +1,105 @@
+---
+import Icon from "./Icon.astro";
+import { url } from "../lib/site";
+---
+<section id="features" class="section features" aria-labelledby="features-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Features</span>
+      <h2 class="h2" id="features-title">Knows what's behind every port.<br /><span class="muted">Stops only what it should.</span></h2>
+    </div>
+    <ul class="bento" role="list">
+      <li class="card wide stop">
+        <div class="ico"><Icon name="ShieldCheck" size={20} /></div>
+        <h3>A safe stop, with protection</h3>
+        <p>Preview the plan, stop the whole dev-server tree (SIGTERM, then SIGKILL) and check the port is free. The OS, shells, terminals, IDEs and AI agents are protected.</p>
+        <ol class="mini-plan" aria-label="Example stop plan">
+          <li><span class="n">1</span> SIGTERM <code>npm</code> (42999), <code>node</code> (43000)</li>
+          <li><span class="n">2</span> SIGKILL survivors after 5 s</li>
+          <li><span class="n ok">✓</span> TCP port 3000 is free</li>
+          <li class="blocked"><span class="n no">✕</span> VS Code helper on :49152 <span class="pill">protected</span></li>
+        </ol>
+      </li>
+      <li class="card">
+        <div class="ico"><Icon name="MessageSquareText" size={20} /></div>
+        <h3>Why it's busy, in plain English</h3>
+        <p>A dev-server tree, a container, a systemd, pm2 or Homebrew service, AirPlay Receiver, <code>TIME_WAIT</code> or another user.</p>
+      </li>
+      <li class="card">
+        <div class="ico"><Icon name="MemoryStick" size={20} /></div>
+        <h3>Real memory, helpers included</h3>
+        <p>Whole-app memory for Chrome, Electron and friends. <code>--sort memory</code> puts the heaviest first.</p>
+      </li>
+      <li class="card">
+        <div class="ico"><Icon name="FolderGit2" size={20} /></div>
+        <h3>Project and branch aware</h3>
+        <p>The project, git branch and framework (Next.js, Vite, Django, Postgres…) or the Docker, Podman or OrbStack container.</p>
+      </li>
+      <li class="card">
+        <div class="ico"><Icon name="Bot" size={20} /></div>
+        <h3>MCP for AI agents</h3>
+        <p>Claude, Cursor and VS Code can list ports, find a free one, wait for a server and stop their own dev servers. Never protected ones.</p>
+      </li>
+      <li class="card wide graph">
+        <div class="ico"><Icon name="Waypoints" size={20} /></div>
+        <h3>The service graph</h3>
+        <p>Which local services talk to which, grouped by Compose, Kubernetes or workspace. Stop a whole stack in dependency order.</p>
+        <svg class="mini-graph" viewBox="0 0 420 120" role="img" aria-label="shop-web depends on shop-api, which depends on db and redis">
+          <g class="edges"><path d="M78 60 H160" /><path d="M250 60 C290 60 290 28 330 28" /><path d="M250 60 C290 60 290 92 330 92" /></g>
+          <g class="node"><rect x="8" y="44" width="70" height="32" rx="9" /><text x="43" y="64">web :3000</text></g>
+          <g class="node"><rect x="160" y="44" width="90" height="32" rx="9" /><text x="205" y="64">api :3001</text></g>
+          <g class="node db"><rect x="330" y="12" width="82" height="32" rx="9" /><text x="371" y="32">db :5432</text></g>
+          <g class="node db"><rect x="330" y="76" width="82" height="32" rx="9" /><text x="371" y="96">redis :6379</text></g>
+        </svg>
+      </li>
+      <li class="card wide">
+        <div class="ico"><Icon name="SquareTerminal" size={20} /></div>
+        <h3>A TUI for the keyboard</h3>
+        <p>Run <code>portwise</code> for a fast terminal UI with the same details, filters and actions. Over SSH too: <code>portwise ssh devbox</code> reads another machine without installing anything there.</p>
+      </li>
+      <li class="card wide">
+        <div class="ico"><Icon name="MonitorSmartphone" size={20} /></div>
+        <h3>Everywhere you work</h3>
+        <p>macOS, Linux and Windows, with a tray and menu-bar app, a CLI that speaks <code>--json</code> and <a href={url("docs/projects/")}>project stacks</a> that start in dependency order.</p>
+        <div class="os" aria-label="Supported platforms"><span>macOS</span><span>Linux</span><span>Windows</span></div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<style>
+  .muted { color: var(--muted); }
+  .bento { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .card { padding: 24px; overflow: hidden; transition: border-color 200ms var(--ease), transform 200ms var(--ease); }
+  .card:hover { border-color: var(--border-strong); }
+  .card::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: radial-gradient(400px circle at 0% 0%, var(--accent-soft), transparent 40%);
+  }
+  .wide { grid-column: span 2; }
+  .ico {
+    display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; margin-bottom: 18px;
+    color: var(--accent); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  h3 { margin: 0 0 8px; font-size: 17px; letter-spacing: -0.015em; line-height: 1.3; }
+  p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
+  p code, li code { font-size: 0.88em; padding: 1px 5px; border-radius: 5px; background: var(--surface-2); color: var(--text-2); }
+  p a { color: var(--text-2); }
+  .mini-plan { list-style: none; margin: 18px 0 0; padding: 14px; border-radius: 12px; background: var(--bg-2); border: 1px solid var(--border); display: grid; gap: 8px; font-size: 13.5px; color: var(--text-2); }
+  .mini-plan li { display: flex; align-items: center; gap: 10px; }
+  .n { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: var(--surface-3); font: 600 11.5px var(--mono); color: var(--text-2); flex: none; }
+  .n.ok { background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
+  .n.no { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
+  .blocked { color: var(--muted); }
+  .pill { margin-left: auto; padding: 2px 8px; border-radius: 999px; font: 600 11px var(--mono); color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, transparent); }
+  .mini-graph { margin-top: 18px; width: 100%; height: auto; }
+  .edges path { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 5; animation: flow 1.6s linear infinite; opacity: 0.8; }
+  @keyframes flow { to { stroke-dashoffset: -18; } }
+  .node rect { fill: var(--surface-2); stroke: var(--border-strong); }
+  .node.db rect { stroke: color-mix(in srgb, var(--green) 50%, transparent); }
+  .node text { fill: var(--text-2); font: 500 11.5px var(--mono); text-anchor: middle; }
+  .os { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  .os span { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border-strong); font-size: 13px; color: var(--text-2); }
+  @media (max-width: 1000px) { .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 640px) { .bento { grid-template-columns: minmax(0, 1fr); } .wide { grid-column: auto; } .card { padding: 20px; } }
+</style>

@@ -1,0 +1,133 @@
+---
+// Scripted CLI playback (asciinema-style, plain HTML). Server-rendered with the first session's
+// full output so it reads fine without JS or with reduced motion; the player animates it.
+import Icon from "./Icon.astro";
+import { chapters, toHtml } from "../lib/cli-demo";
+const first = chapters[0];
+---
+<div class="window term player" data-player>
+  <div class="bar">
+    <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+    <div class="chapters" role="tablist" aria-label="CLI sessions">
+      {chapters.map((c, i) => (
+        <button type="button" role="tab" aria-selected={i === 0 ? "true" : "false"} tabindex={i === 0 ? 0 : -1} aria-controls="player-screen" data-chapter={c.id}>{c.label}</button>
+      ))}
+    </div>
+    <button type="button" class="ctl" data-toggle aria-label="Pause the demo" hidden>
+      <Icon name="Pause" size={15} class="i-pause" />
+      <Icon name="Play" size={15} class="i-play" />
+    </button>
+  </div>
+  <div class="screen" id="player-screen" role="tabpanel" aria-live="off" tabindex="0" aria-label="Terminal output">
+<pre data-screen><span class="p">$</span> {first.cmd}
+<Fragment set:html={first.out.map(toHtml).join("\n")} /></pre>
+  </div>
+  <p class="caption" data-caption>{first.caption}</p>
+</div>
+
+<style>
+  .player { display: flex; flex-direction: column; border: 1px solid rgb(255 255 255 / 0.08); }
+  .bar { display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 10px 0 14px; background: #12131a; border-bottom: 1px solid rgb(255 255 255 / 0.06); }
+  .chapters { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+  .chapters button {
+    height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+    font: 500 12.5px var(--mono); color: #8a91a3; white-space: nowrap;
+  }
+  .chapters button::before { content: "portwise "; color: #5d6476; }
+  .chapters button:hover { color: #d7dae3; }
+  .chapters button[aria-selected="true"] { background: rgb(255 255 255 / 0.08); color: #fff; }
+  .ctl { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid rgb(255 255 255 / 0.1); background: transparent; color: #d7dae3; cursor: pointer; }
+  .ctl:hover { background: rgb(255 255 255 / 0.08); }
+  .ctl:not([data-paused]) :global(.i-play), .ctl[data-paused] :global(.i-pause) { display: none; }
+  .screen { height: 452px; overflow: auto; padding: 18px 20px; scrollbar-width: thin; scrollbar-color: #333849 transparent; }
+  pre { margin: 0; font-size: 12.5px; line-height: 1.6; white-space: pre; }
+  pre :global(.cursor) { display: inline-block; width: 8px; height: 15px; vertical-align: -3px; background: #8e8cff; animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .caption { margin: 0; padding: 12px 18px; border-top: 1px solid rgb(255 255 255 / 0.06); color: #9aa1b2; font-size: 13.5px; background: #0d0e14; }
+  @media (max-width: 640px) {
+    .chapters button::before { content: ""; }
+    .screen { height: 400px; padding: 14px; }
+    pre { font-size: 11.5px; }
+  }
+</style>
+
+<script>
+  import { chapters, toHtml } from "../lib/cli-demo";
+
+  const root = document.querySelector<HTMLElement>("[data-player]");
+  if (root) {
+    const screen = root.querySelector<HTMLElement>("[data-screen]")!;
+    const caption = root.querySelector<HTMLElement>("[data-caption]")!;
+    const toggle = root.querySelector<HTMLButtonElement>("[data-toggle]")!;
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>("[data-chapter]")];
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let index = 0, run = 0, paused = still, visible = false, timer = 0;
+
+    const wait = (ms: number, id: number) => new Promise<boolean>((done) => {
+      const step = () => {
+        if (id !== run) return done(false);
+        if (paused || !visible || document.hidden) { timer = window.setTimeout(step, 200); return; }
+        done(true);
+      };
+      timer = window.setTimeout(step, ms);
+    });
+
+    const mark = (i: number) => tabs.forEach((t, j) => { t.setAttribute("aria-selected", String(j === i)); t.tabIndex = j === i ? 0 : -1; });
+    const prompt = (cmd: string, cursor: boolean) => `<span class="p">$</span> ${cmd}${cursor ? '<span class="cursor"></span>' : ""}`;
+
+    function render(i: number) {
+      const c = chapters[i];
+      screen.innerHTML = `${prompt(c.cmd, false)}\n${c.out.map(toHtml).join("\n")}`;
+      caption.textContent = c.caption;
+    }
+
+    async function play(i: number) {
+      const id = ++run;
+      index = i; mark(i);
+      const c = chapters[i];
+      caption.textContent = c.caption;
+      if (still) { render(i); return; }
+      screen.innerHTML = prompt("", true);
+      if (!(await wait(450, id))) return;
+      for (let n = 1; n <= c.cmd.length; n++) {
+        screen.innerHTML = prompt(c.cmd.slice(0, n), true);
+        if (!(await wait(28 + Math.random() * 45, id))) return;
+      }
+      if (!(await wait(380, id))) return;
+      let html = prompt(c.cmd, false);
+      for (const line of c.out) {
+        html += `\n${toHtml(line)}`;
+        screen.innerHTML = html + '<span class="cursor"></span>';
+        screen.parentElement!.scrollTop = screen.parentElement!.scrollHeight;
+        if (!(await wait(line.includes("Proceed?") ? 900 : c.id === "list" ? 70 : 140, id))) return;
+      }
+      if (!(await wait(3600, id))) return;
+      play((i + 1) % chapters.length);
+    }
+
+    tabs.forEach((t, i) => t.addEventListener("click", () => { clearTimeout(timer); play(i); }));
+    root.querySelector('[role="tablist"]')!.addEventListener("keydown", (e) => {
+      const k = (e as KeyboardEvent).key;
+      const d = k === "ArrowRight" ? 1 : k === "ArrowLeft" ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      const n = (index + d + tabs.length) % tabs.length;
+      tabs[n].focus(); clearTimeout(timer); play(n);
+    });
+
+    if (!still) {
+      toggle.hidden = false;
+      toggle.addEventListener("click", () => {
+        paused = !paused;
+        toggle.toggleAttribute("data-paused", paused);
+        toggle.setAttribute("aria-label", paused ? "Play the demo" : "Pause the demo");
+      });
+    }
+
+    let started = false;
+    new IntersectionObserver(([e]) => {
+      visible = e.isIntersecting;
+      if (visible && !started) { started = true; play(0); }
+    }, { threshold: 0.3 }).observe(root);
+  }
+</script>
