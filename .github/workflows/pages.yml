@@ -1,0 +1,89 @@
+name: Pages
+
+# Builds the website (site/) with the live demo (apps/desktop in browser mode) and deploys it to
+# https://santoshshinde2012.github.io/portwise/. Pull requests only build and check.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "apps/desktop/**"
+      - "docs/**"
+      - "version.txt"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - "apps/desktop/**"
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  # Rebuild after each release so the version and download links follow the latest release.
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: build + check
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            apps/desktop/package-lock.json
+            site/package-lock.json
+      - name: Install (desktop app, for the live demo)
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Install (site)
+        working-directory: site
+        run: npm ci
+      - name: npm audit (high and critical)
+        working-directory: site
+        run: npm audit --audit-level=high
+      - name: Type check
+        working-directory: site
+        run: npm run check
+      - name: Build
+        working-directory: site
+        env:
+          # Read-only: the latest release tag and the star count, shown on the page.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build
+      - name: Links and size budget
+        working-directory: site
+        run: npm test
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: github.event_name != 'pull_request'
+        with:
+          path: site/dist
+
+  deploy:
+    name: deploy
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
