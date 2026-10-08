@@ -17,7 +17,10 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/desktop-overview-light.png" width="860" alt="The portwise desktop app: ports grouped by kind, with the details pane for port 3000 open" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/desktop-overview-dark.png" />
+    <img src="docs/screenshots/desktop-overview-light.png" width="860" alt="The portwise desktop app: ports grouped by kind, port 3000 selected with project, branch, memory, connections and what Stop will signal" />
+  </picture>
 </p>
 
 `EADDRINUSE: address already in use :::3000`? Most tools hand you a PID and a `kill -9`.
@@ -149,11 +152,11 @@ its URL, a `curl` or the kill command.
 <details>
 <summary>More screenshots</summary>
 
-| Stop confirmation | Service graph |
+| Service graph | Stop confirmation |
 |---|---|
-| ![The stop confirmation lists every step before anything happens](docs/screenshots/desktop-stop-confirm-light.png) | ![The service graph with a Compose cluster, dark theme](docs/screenshots/desktop-graph-dark.png) |
-| **Dark theme** | **Command palette** |
-| ![Port list and details, dark theme](docs/screenshots/desktop-overview-dark.png) | ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) |
+| ![The service graph: a Compose cluster with shop-web, shop-api, db and redis, dark theme](docs/screenshots/desktop-graph-dark.png) | ![The stop confirmation lists every step before anything is sent](docs/screenshots/desktop-stop-confirm-light.png) |
+| **Command palette** | **Settings** |
+| ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) | ![Settings: startup and the global shortcut, dark theme](docs/screenshots/desktop-settings-dark.png) |
 | **TUI** | |
 | ![The portwise TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) | |
 

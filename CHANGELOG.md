@@ -6,6 +6,13 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
+## [Unreleased]
+
+### Fixed
+
+- **Desktop: Graph view no longer rebuilds the topology in a loop.** It re-fetched the graph as soon
+  as the previous one arrived, costing CPU while Graph was open.
+
 ## [0.1.7] - 2026-10-05
 
 ### Fixed
