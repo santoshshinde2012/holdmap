@@ -262,11 +262,13 @@ export function mockStop(target: string): StopReport {
 }
 
 /** Browser-preview topology: shop-web → shop-api → db/redis (compose "shop"), docs → api,
- *  ml-service → external. Built from MOCK_SNAPSHOT so ids line up with the list. */
+ *  ml-service → external. Built from MOCK_SNAPSHOT so ids line up with the list; services the
+ *  demo has stopped drop out, with their edges. */
 export function mockTopology(s: Snapshot = MOCK_SNAPSHOT): Graph {
-  const byPort = (p: number) => s.entries.find((e) => e.port === p)!;
-  const svc = (port: number, id: string, label: string, cluster: string | null, kind: GraphNode["kind"] = "service"): GraphNode => {
+  const byPort = (p: number) => s.entries.find((e) => e.port === p);
+  const svc = (port: number, id: string, label: string, cluster: string | null, kind: GraphNode["kind"] = "service"): GraphNode | null => {
     const e = byPort(port);
+    if (!e) return null;
     return {
       id, kind: e.container ? "container" : kind, label, subtitle: e.label, root_pid: e.pid, pids: e.pids.length ? e.pids : e.pid ? [e.pid] : [],
       ports: [{ port, protocol: e.protocol, exposure: e.exposure, entry_id: e.id }], framework: e.framework, project: e.project?.name ?? null,
@@ -274,15 +276,16 @@ export function mockTopology(s: Snapshot = MOCK_SNAPSHOT): Graph {
       memory_bytes: e.process?.memory_bytes ?? 0, is_dev: e.is_dev, protected: e.protected,
     };
   };
-  const nodes: GraphNode[] = [
+  const nodes = [
     svc(3000, "web", "shop-web", "shop"),
     svc(3001, "api", "shop-api", "shop"),
     svc(5432, "db", "db", "shop"),
     svc(6379, "redis", "redis", "shop"),
     svc(5173, "docs", "docs", null),
     svc(8000, "ml", "ml-service", null),
-    { id: "external", kind: "external", label: "External", subtitle: null, root_pid: null, pids: [], ports: [], framework: null, project: null, project_root: null, container: null, tunnel: null, cluster: null, cpu_percent: 0, memory_bytes: 0, is_dev: false, protected: false },
-  ];
+    { id: "external", kind: "external", label: "External", subtitle: null, root_pid: null, pids: [], ports: [], framework: null, project: null, project_root: null, container: null, tunnel: null, cluster: null, cpu_percent: 0, memory_bytes: 0, is_dev: false, protected: false } as GraphNode,
+  ].filter((n): n is GraphNode => n !== null);
+  const ids = new Set(nodes.map((n) => n.id));
   const edge = (from: string, to: string, port: number, connections: number, kind: GraphEdge["kind"] = "local", remotes: string[] = []): GraphEdge => ({ id: `${from}->${to}`, from, to, kind, port, connections, remotes });
   const edges = [
     edge("web", "api", 3001, 4),
@@ -291,7 +294,7 @@ export function mockTopology(s: Snapshot = MOCK_SNAPSHOT): Graph {
     edge("docs", "api", 3001, 1),
     edge("ml", "db", 5432, 1),
     edge("ml", "external", 443, 2, "outbound", ["api.openai.com:443", "huggingface.co:443"]),
-  ];
-  const clusters: Cluster[] = [{ id: "shop", name: "shop", kind: "compose", detail: "docker compose", root: "/Users/dev/code/shop", nodes: ["web", "api", "db", "redis"] }];
-  return { nodes, edges, clusters, stats: { nodes: nodes.length, edges: edges.length, clusters: 1, connections: 16 }, taken_at_ms: s.taken_at_ms };
+  ].filter((e) => ids.has(e.from) && ids.has(e.to));
+  const clusters: Cluster[] = [{ id: "shop", name: "shop", kind: "compose", detail: "docker compose", root: "/Users/dev/code/shop", nodes: ["web", "api", "db", "redis"].filter((id) => ids.has(id)) }];
+  return { nodes, edges, clusters, stats: { nodes: nodes.length, edges: edges.length, clusters: 1, connections: edges.reduce((n, e) => n + e.connections, 0) }, taken_at_ms: s.taken_at_ms };
 }
