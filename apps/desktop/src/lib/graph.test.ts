@@ -21,6 +21,12 @@ describe("layout", () => {
         expect(Math.abs(pts[i].x - pts[j].x) >= NODE_W || Math.abs(pts[i].y - pts[j].y) >= NODE_H).toBe(true);
   });
 
+  it("force keeps nodes with no edges close enough to fit on screen", () => {
+    const lone = { ...g, nodes: g.nodes.filter((n) => n.id === "redis" || n.id === "docs").map((n) => ({ ...n, cluster: null })), edges: [], clusters: [] };
+    const p = force(lone);
+    expect(Math.abs(p.get("redis")!.x - p.get("docs")!.x)).toBeLessThan(1200);
+  });
+
   it("separate pushes stacked nodes apart", () => {
     const p = new Map([["a", { x: 0, y: 0 }], ["b", { x: 0, y: 0 }]]);
     separate(p);

@@ -70,7 +70,8 @@ function layeredConnected(g: Graph): Positions {
 }
 
 /** Deterministic force-directed layout seeded from the layered one: springs along edges,
- *  repulsion between nodes, and a pull towards each cluster's centroid so groups stay tight. */
+ *  repulsion between nodes, a pull towards each cluster's centroid so groups stay tight, and
+ *  gravity so unconnected nodes stay on screen. */
 export function force(g: Graph, iterations = 260): Positions {
   const pos = layered(g);
   const ids = g.nodes.map((n) => n.id);
@@ -111,6 +112,16 @@ export function force(g: Graph, iterations = 260): Positions {
         const p = pos.get(id)!, d = disp.get(id)!;
         d.x += (cx - p.x) * 0.8; d.y += (cy - p.y) * 0.8;
       }
+    }
+    // Gentle gravity beyond a radius: without it, nodes with no edges (and separate
+    // components) are pushed thousands of px apart and the fitted graph looks empty.
+    const gx = ids.reduce((s, id) => s + pos.get(id)!.x, 0) / ids.length;
+    const gy = ids.reduce((s, id) => s + pos.get(id)!.y, 0) / ids.length;
+    const radius = k * Math.sqrt(ids.length);
+    for (const id of ids) {
+      const p = pos.get(id)!, d = disp.get(id)!;
+      const r = Math.hypot(gx - p.x, gy - p.y);
+      if (r > radius) { d.x += ((gx - p.x) / r) * (r - radius) * 2; d.y += ((gy - p.y) / r) * (r - radius) * 2; }
     }
     for (const id of ids) {
       const p = pos.get(id)!, d = disp.get(id)!;

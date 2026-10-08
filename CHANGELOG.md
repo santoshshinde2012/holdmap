@@ -6,6 +6,13 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
+## [Unreleased]
+
+### Fixed
+
+- **Desktop: Force layout no longer looks empty** when services have no links between them. Unlinked
+  nodes were pushed thousands of pixels apart; a gentle pull now keeps them in view.
+
 ## [0.1.8] - 2026-10-08
 
 ### Fixed
