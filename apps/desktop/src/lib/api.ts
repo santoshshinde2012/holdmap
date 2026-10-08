@@ -1,6 +1,6 @@
-import type { ActionPlan, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
+import type { ActionPlan, AgentsReport, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
 import { version as pkgVersion } from "../../package.json";
-import { MOCK_SNAPSHOT, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
+import { MOCK_SNAPSHOT, mockAgents, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
 /** True inside the Tauri webview; false in a plain browser (`npm run dev`), where mocks are used. */
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -119,6 +119,12 @@ export async function topology(all: boolean): Promise<Graph> {
     return { ...g, nodes: g.nodes.map((n) => (n.root_pid ? { ...n, cpu_percent: Math.round((n.cpu_percent + Math.random()) * 10) / 10 } : n)) };
   }
   return call("topology", { all });
+}
+
+/** The AI coding agents of the latest scan and their footprint. */
+export async function agents(): Promise<AgentsReport> {
+  if (!isTauri) return mockAgents();
+  return call("agents");
 }
 
 let mockConfig: Config = { pins: [{ port: 3000, label: null }], notify: true, notify_dev_only: true, history_limit: 200, scan_interval_secs: 4, hotkey: "alt-p", recent_hosts: ["devbox", "deploy@staging.internal"] };

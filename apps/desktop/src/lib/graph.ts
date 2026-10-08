@@ -9,8 +9,7 @@ export const NODE_W = 236;
 export const NODE_H = 72;
 export const PAD = 22;
 export const HEADER = 34;
-/** Fit-view margins: the top clears the floating toolbar + legend so no cluster hides under them. */
-export const FIT_PADDING = { top: "84px", bottom: "28px", x: "28px" } as const;
+export { FIT_PADDING, needsMiniMap } from "./flow";
 
 export type LayoutMode = "layered" | "force";
 export type Point = { x: number; y: number };
@@ -329,26 +328,6 @@ export function sectionsByCluster(entries: PortEntry[], g: Graph | null): Cluste
   const out = [...sections.values()];
   if (rest.length) out.push({ id: "__ungrouped", title: out.length ? "Not in a cluster" : "", hint: "", items: rest });
   return out;
-}
-
-/**
- * Whether the minimap is worth showing: only when part of the graph is off-screen. When everything
- * fits (the default after fit-view) it adds nothing and would only sit on top of nodes.
- * `bounds` is in flow coordinates; `view` is the pan/zoom; `w`×`h` is the canvas in px.
- */
-export function needsMiniMap(
-  bounds: { x: number; y: number; width: number; height: number },
-  view: { x: number; y: number; zoom: number },
-  w: number,
-  h: number,
-  slack = 8,
-): boolean {
-  if (!w || !h || !bounds.width || !bounds.height) return false;
-  const left = bounds.x * view.zoom + view.x;
-  const top = bounds.y * view.zoom + view.y;
-  const right = left + bounds.width * view.zoom;
-  const bottom = top + bounds.height * view.zoom;
-  return left < -slack || top < -slack || right > w + slack || bottom > h + slack;
 }
 
 /** "1 link" / "6 links": what the Graph view's count badge means. */

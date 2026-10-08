@@ -1,5 +1,6 @@
 //! portwise — see which ports are in use, *why*, and stop the right thing safely.
 
+mod agents;
 mod commands;
 mod graph;
 mod remote;
@@ -41,7 +42,7 @@ pub mod exit {
 explains in plain English why a port is busy (dev-server tree, Docker container, systemd/pm2/brew \
 service, OS feature, TIME_WAIT, another user) and stops the correct thing gracefully, verifying \
 the port is free afterwards.\n\nRun without arguments in a terminal to open the interactive TUI.",
-    after_help = "EXAMPLES:\n  portwise                      Open the interactive TUI\n  portwise list --dev           Only dev servers\n  portwise explain 3000         Why is 3000 busy?\n  portwise stop 3000            Gracefully stop whatever holds 3000\n  portwise stop 3000 --dry-run  Show the plan only\n  portwise run -p 3000 -- npm run dev\n  portwise free-port --near 3000\n  portwise wait 5432 --timeout 30s\n  portwise graph                Which services depend on which\n  portwise stop --cluster shop  Stop a whole stack, dependents first\n  portwise up                   Start the services in .portwise.toml\n  eval \"$(portwise init zsh)\"   Explain port-in-use errors in your shell\n  portwise watch                Stream new/closed/conflicting listeners\n\nEXIT CODES: 0 ok · 1 busy/not found/timeout · 2 error · 3 blocked by safety policy · 4 needs elevation"
+    after_help = "EXAMPLES:\n  portwise                      Open the interactive TUI\n  portwise list --dev           Only dev servers\n  portwise explain 3000         Why is 3000 busy?\n  portwise stop 3000            Gracefully stop whatever holds 3000\n  portwise stop 3000 --dry-run  Show the plan only\n  portwise run -p 3000 -- npm run dev\n  portwise free-port --near 3000\n  portwise wait 5432 --timeout 30s\n  portwise graph                Which services depend on which\n  portwise agents               AI coding agents: folders, access, ports\n  portwise stop --cluster shop  Stop a whole stack, dependents first\n  portwise up                   Start the services in .portwise.toml\n  eval \"$(portwise init zsh)\"   Explain port-in-use errors in your shell\n  portwise watch                Stream new/closed/conflicting listeners\n\nEXIT CODES: 0 ok · 1 busy/not found/timeout · 2 error · 3 blocked by safety policy · 4 needs elevation"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -85,6 +86,8 @@ enum Command {
     /// Show which services talk to which (dependencies, clusters) as a tree, JSON, DOT or Mermaid.
     #[command(visible_alias = "mesh")]
     Graph(graph::GraphArgs),
+    /// Show the AI coding agents running here: their folders, access, ports and connections.
+    Agents(agents::AgentsArgs),
     /// Stream port events: new listeners, closed listeners, conflicts.
     Watch(watch::WatchArgs),
     /// Pin a port (favourite): shown first and watched even when free.
@@ -380,6 +383,7 @@ fn main() -> ExitCode {
         Some(Command::Wait(a)) => commands::wait(&a),
         Some(Command::Run(a)) => commands::run(&a, docker),
         Some(Command::Graph(a)) => graph::run(&a, docker),
+        Some(Command::Agents(a)) => agents::run(&a, docker),
         Some(Command::Watch(a)) => watch::run(&a, docker),
         Some(Command::Pin(a)) => state::pin(&a, true),
         Some(Command::Unpin(a)) => state::pin(

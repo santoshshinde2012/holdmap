@@ -45,6 +45,10 @@ portwise tells you what's really there and stops it properly.
   means for your safety.
 - **The service graph.** Which local services talk to which, grouped into clusters (Compose,
   Kubernetes, workspaces). Stop a whole stack in dependency order.
+- **Your AI coding agents.** Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider and
+  more: the folders each one works in, the ports and dev servers it started, the services and
+  hosts it talks to, and what the OS says about its access (account, sandbox, approval flags,
+  network exposure), each fact marked seen, inferred or unknown.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
   server for AI coding assistants. macOS, Linux and Windows. No telemetry.
 
@@ -128,7 +132,7 @@ port = 5432               # no command: started elsewhere, up just waits for it
 
 | Purpose | Commands |
 |---|---|
-| Look | `portwise list`, `portwise inspect`, `portwise explain`, `portwise graph`, `portwise watch`, `portwise ssh HOST` (read-only, nothing to install remotely) |
+| Look | `portwise list`, `portwise inspect`, `portwise explain`, `portwise graph`, `portwise agents`, `portwise watch`, `portwise ssh HOST` (read-only, nothing to install remotely) |
 | Act | `portwise stop`, `portwise kill`, `portwise restart`, `portwise run`, `portwise open` |
 | Ports | `portwise free-port --near 3000`, `portwise wait 5432 --timeout 30s` |
 | Projects | `portwise up`, `portwise down`, `portwise status`, `portwise init` |
@@ -144,9 +148,10 @@ When a command fails with "port in use", it prints who holds the port and how to
 
 ## Desktop app
 
-A tray and menu-bar app with the port list, details, the service graph (`G`), pins, history with
-one-click restart, remote hosts over SSH and a command palette (`⌘K` / `Ctrl+K`). `⌘⌥P`
-(`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. From the details pane you can open the port in a browser, restart a dev server,
+A tray and menu-bar app with the port list, details, the service graph (`G`), the agents map
+(`⇧A`), pins, history with one-click restart, remote hosts over SSH and a command palette (`⌘K` /
+`Ctrl+K`). `⌘⌥P` (`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. From the
+details pane you can open the port in a browser, restart a dev server,
 open its folder in your editor (`PORTWISE_EDITOR`, else Cursor, VS Code, Zed…) or Finder, and copy
 its URL, a `curl` or the kill command.
 
@@ -173,7 +178,8 @@ its URL, a `curl` or the kill command.
 ## MCP server
 
 `portwise mcp` lets AI coding assistants list ports, explain them, find a free port, wait for a
-server, read the service graph and stop their own dev servers (never protected processes).
+server, read the service graph, see which coding agents run where and stop their own dev servers
+(never protected processes).
 For Claude Desktop or Cursor (`~/.cursor/mcp.json`):
 
 ```json

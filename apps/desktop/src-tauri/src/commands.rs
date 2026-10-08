@@ -3,6 +3,7 @@
 
 use crate::state::{scan_now, AppState};
 use crate::tray::refresh_tray;
+use portwise_core::agents::AgentsReport;
 use portwise_core::history::{self, HistoryEntry};
 use portwise_core::store::Config;
 use portwise_core::topology::Graph;
@@ -105,6 +106,12 @@ pub async fn scan(
     let (handle, snap) = (app.clone(), snapshot.clone());
     std::thread::spawn(move || refresh_tray(&handle, &snap));
     Ok(snapshot)
+}
+
+/// The AI coding agents in the most recent scan: their folders, ports, connections and access.
+#[tauri::command]
+pub async fn agents(app: AppHandle) -> Result<AgentsReport, String> {
+    with_engine(&app, |e| e.agents()).await
 }
 
 /// The service graph of the most recent scan. Dev services (and their peers) unless `all`.

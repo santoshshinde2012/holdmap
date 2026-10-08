@@ -46,6 +46,7 @@ pub fn run() {
             commands::app_info,
             commands::scan,
             commands::topology,
+            commands::agents,
             commands::explain,
             commands::http_info,
             commands::plan,

@@ -21,6 +21,7 @@
 //! # Ok::<(), std::io::Error>(())
 //! ```
 
+pub mod agents;
 pub mod details;
 pub mod docker;
 pub mod engine;

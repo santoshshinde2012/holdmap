@@ -154,6 +154,15 @@ fn tools() -> Value {
             "annotations": {"readOnlyHint": true, "openWorldHint": false}
         },
         {
+            "name": "list_agents",
+            "title": "AI coding agents on this machine",
+            "description": "Running AI coding agents (Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider…) with the folders they work in, the ports and dev servers they started, the local services and remote hosts (by IP) they're connected to, and access facts (account, sandbox and approval flags, network exposure) marked observed, inferred or unknown. Command lines have secrets hidden; chats, settings and credentials are never read.",
+            "inputSchema": {"type": "object", "properties": {
+                "agent": {"type": "string", "description": "Only agents matching this product id, name or PID, e.g. 'claude'"}
+            }},
+            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+        },
+        {
             "name": "plan_cluster_stop",
             "title": "Plan stopping a cluster",
             "description": "Dry-run only: the dependency-ordered plan (dependents first) for stopping every service in a cluster, with warnings about outside dependents. Never executes; ask the user to run `portwise stop --cluster NAME`.",
@@ -246,6 +255,49 @@ fn call_tool(name: &str, args: &Value) -> Result<(String, Value), ToolError> {
                 exporter.export(&g)
             };
             Ok((text, serde_json::to_value(&g).unwrap_or_default()))
+        }
+        "list_agents" => {
+            let mut report = engine()?.agents();
+            if let Some(q) = args["agent"]
+                .as_str()
+                .map(|q| q.trim().to_ascii_lowercase())
+                .filter(|q| !q.is_empty())
+            {
+                report.agents.retain(|a| {
+                    a.pid.to_string() == q
+                        || a.product.contains(&q)
+                        || a.name.to_ascii_lowercase().contains(&q)
+                });
+            }
+            let lines: Vec<String> = report
+                .agents
+                .iter()
+                .map(|a| {
+                    let folders: Vec<&str> = a.folders.iter().map(|f| f.label.as_str()).collect();
+                    format!(
+                        "{} (pid {}): {}; {}; {}",
+                        a.name,
+                        a.pid,
+                        if folders.is_empty() {
+                            "no folders visible".to_string()
+                        } else {
+                            format!("works in {}", folders.join(", "))
+                        },
+                        portwise_core::util::count(a.ports.len(), "port", "ports"),
+                        portwise_core::util::count(
+                            a.links.len(),
+                            "connection target",
+                            "connection targets"
+                        ),
+                    )
+                })
+                .collect();
+            let text = if lines.is_empty() {
+                "No AI coding agents running.".to_string()
+            } else {
+                lines.join("\n")
+            };
+            Ok((text, serde_json::to_value(&report).unwrap_or_default()))
         }
         "plan_cluster_stop" => {
             let c = args["cluster"]
@@ -443,7 +495,7 @@ mod tests {
     fn lists_tools_with_annotations() {
         let r = call(json!({"jsonrpc":"2.0","id":3,"method":"tools/list"}));
         let tools = r["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 7);
+        assert_eq!(tools.len(), 8);
         let stop = tools.iter().find(|t| t["name"] == "stop_port").unwrap();
         assert_eq!(stop["annotations"]["destructiveHint"], true);
     }
@@ -544,7 +596,7 @@ mod tests {
     #[test]
     fn topology_and_cluster_plan_are_read_only() {
         let tools = tools();
-        for name in ["get_topology", "plan_cluster_stop"] {
+        for name in ["get_topology", "plan_cluster_stop", "list_agents"] {
             let t = tools
                 .as_array()
                 .unwrap()
@@ -568,5 +620,19 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("No cluster named"));
+    }
+
+    #[test]
+    fn list_agents_returns_a_report() {
+        let r = call(
+            json!({"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"list_agents","arguments":{"agent":"no-such-agent"}}}),
+        );
+        assert_eq!(r["result"]["isError"], false);
+        assert_eq!(r["result"]["structuredContent"]["agents"], json!([]));
+        assert!(r["result"]["structuredContent"]["limits"].is_array());
+        assert!(r["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("No AI coding agents running."));
     }
 }

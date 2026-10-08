@@ -2,7 +2,7 @@
   // Minimap that appears only when part of the graph is off-screen (zoomed in or panned away).
   // After fit-view everything is visible, so it stays out of the way instead of covering nodes.
   import { MiniMap, useNodes, useStore, useSvelteFlow, useViewport } from "@xyflow/svelte";
-  import { needsMiniMap, type FlowNode } from "../../lib/graph";
+  import { needsMiniMap } from "../../lib/flow";
 
   let { dark }: { dark: boolean } = $props();
   const flow = useSvelteFlow();
@@ -22,7 +22,7 @@
     pannable
     zoomable
     ariaLabel="Graph overview"
-    nodeColor={(n) => (n.type === "cluster" ? "transparent" : (n.data as FlowNode["data"]).node?.is_dev ? "var(--tone-green)" : "var(--border-strong)")}
+    nodeColor={(n) => (n.type === "cluster" || n.type === "header" ? "transparent" : (n.data as { node?: { is_dev?: boolean } }).node?.is_dev ? "var(--tone-green)" : n.type === "agent" ? "var(--accent)" : "var(--border-strong)")}
     nodeStrokeColor={(n) => (n.type === "cluster" ? "var(--accent)" : "transparent")}
     maskColor={dark ? "rgb(0 0 0 / 0.55)" : "rgb(240 240 245 / 0.65)"}
     width={160}

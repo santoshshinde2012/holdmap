@@ -150,20 +150,6 @@ const SHELLS: &[&str] = &[
     "pwsh",
 ];
 
-/// AI coding agents that run your commands. Stopping them (or their host) loses the session.
-const AGENTS: &[&str] = &[
-    "claude",
-    "codex",
-    "aider",
-    "goose",
-    "opencode",
-    "gemini",
-    "cursor-agent",
-    "amp",
-    "crush",
-    "copilot-language-server",
-];
-
 /// Path components that identify IDE remote servers and agent hosts running on a generic
 /// runtime (`node /home/me/.vscode-server/...`, `node /exec-daemon/index.js`, `node …/claude-code/cli.js`).
 const HOST_MARKERS: &[(&str, SessionKind)] = &[
@@ -285,7 +271,8 @@ pub fn is_interactive_shell(p: &ProcessInfo) -> bool {
 /// What kind of user session `p` is, if any.
 pub fn session_kind(p: &ProcessInfo) -> Option<SessionKind> {
     let n = norm(&p.name);
-    if AGENTS.contains(&n.as_str()) {
+    // AI coding agents that run your commands: stopping them (or their host) loses the session.
+    if crate::agents::catalog::is_agent_name(&n) {
         return Some(SessionKind::Agent);
     }
     if EDITORS.contains(&n.as_str()) {
@@ -306,9 +293,7 @@ pub fn session_kind(p: &ProcessInfo) -> Option<SessionKind> {
             .next()
             .filter(|_| a.contains(['/', '\\']))
         {
-            let base = norm(base);
-            let base = base.trim_end_matches(".js").trim_end_matches(".mjs");
-            if AGENTS.contains(&base) {
+            if crate::agents::catalog::is_agent_entry(&norm(base)) {
                 return Some(SessionKind::Agent);
             }
         }

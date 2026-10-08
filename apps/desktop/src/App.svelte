@@ -21,13 +21,14 @@
   import Toasts, { type Toast } from "./components/Toasts.svelte";
   import HistoryPanel from "./components/HistoryPanel.svelte";
   import * as api from "./lib/api";
-  import type { ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortDetails, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
+  import { step } from "./lib/agents";
+  import type { AgentsReport, ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortDetails, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
   import { linksLabel, nodeForEntry, sectionsByCluster } from "./lib/graph";
   import type { Command } from "./lib/palette";
   import { GROUPS, groupOf, matches, seconds, stopTarget, title, url, canOpen, type Filters, type Group } from "./lib/format";
 
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
-  type View = "list" | "graph";
+  type View = "list" | "graph" | "agents";
   interface Confirm { entry: PortEntry | null; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; restart?: boolean }
 
   const store = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -88,6 +89,10 @@
   /** GraphView (and @xyflow) loads only when the Graph tab is opened — keeps the first paint light. */
   let GraphView = $state<typeof import("./components/GraphView.svelte").default | null>(null);
   let graph = $state.raw<Graph | null>(null);
+  /** AgentsView loads, and agents are looked up, only while the Agents tab is open. */
+  let AgentsView = $state<typeof import("./components/AgentsView.svelte").default | null>(null);
+  let agentsReport = $state.raw<AgentsReport | null>(null);
+  let selectedAgent = $state<string | null>(null);
   let graphAll = $state(false);
   let selectedNode = $state<string | null>(null);
   let config = $state<Config | null>(null);
@@ -113,6 +118,13 @@
     untrack(loadTopology);
     if (!GraphView) {
       import("./components/GraphView.svelte").then((m) => { GraphView = m.default; }).catch((e) => console.error("Couldn't load the graph", e));
+    }
+  });
+  $effect(() => {
+    if (view !== "agents") return;
+    untrack(loadAgents); // same reason as above: loadAgents reads agentsReport
+    if (!AgentsView) {
+      import("./components/AgentsView.svelte").then((m) => { AgentsView = m.default; }).catch((e) => console.error("Couldn't load the agents map", e));
     }
   });
   const pins = $derived(new Set((config?.pins ?? []).map((p) => p.port)));
@@ -171,7 +183,8 @@
     return n > 0 && n < 65536 ? n : null;
   });
   const filtersActive = $derived(filters.query !== "" || filters.dev || filters.mine || filters.exposed || filters.proto !== "any");
-  const showDrawer = $derived(narrow && drawerOpen && !!selected);
+  // The agents map has no side pane: a port picked there opens in the drawer, as on narrow windows.
+  const showDrawer = $derived((narrow || view === "agents") && drawerOpen && !!selected);
   /** Any overlay that owns the keyboard (they stop key events themselves; this is a backstop). */
   const modalOpen = $derived(!!confirm || showHelp || showHistory || showPalette || showSettings || showRemote || !!pinDialog || showDrawer);
   const scanMs = $derived(Math.min(60, Math.max(1, config?.scan_interval_secs ?? 3)) * 1000);
@@ -238,6 +251,7 @@
       // Topology is heavy: only build it while the graph is on screen.
       if (view === "graph") loadTopology();
       else graph = null;
+      if (view === "agents") loadAgents();
     }
   }
 
@@ -250,6 +264,28 @@
     const out = { ...rec };
     for (const k of drop) delete out[k];
     return out;
+  }
+
+  async function loadAgents() {
+    try {
+      agentsReport = share(agentsReport, await api.agents());
+      if (selectedAgent && !agentsReport.agents.some((a) => a.id === selectedAgent)) selectedAgent = null;
+    } catch (e) {
+      if (view === "agents") toast("error", "Couldn't look up the agents", String(e));
+    }
+  }
+  /** Open a port from the agents map in the details drawer, making sure the list can show it. */
+  function openEntry(e: PortEntry) {
+    if (!ordered.some((x) => x.id === e.id)) {
+      clearFilters();
+      const sec = sections.find((x) => x.items.some((i) => i.id === e.id));
+      if (sec?.title && collapsed.has(sec.id)) setCollapsed(sec.id, false);
+    }
+    selectedId = e.id;
+    drawerOpen = true;
+  }
+  function selectAgent(delta: number) {
+    selectedAgent = step((agentsReport?.agents ?? []).map((a) => a.id), selectedAgent, delta);
   }
 
   async function loadTopology() {
@@ -613,6 +649,7 @@
       { id: "sort-n", group: "View", icon: "clock", title: "Sort: newest first", run: () => (sort = "newest") },
       { id: "help", group: "View", icon: "keyboard", title: "Keyboard shortcuts", shortcut: ["?"], run: () => (showHelp = true) },
       { id: "view", group: "View", icon: view === "graph" ? "list" : "graph", title: view === "graph" ? "Show the list" : "Show the service graph", shortcut: ["G"], keywords: "mesh topology network dependencies", run: () => (view = view === "graph" ? "list" : "graph") },
+      { id: "agents", group: "View", icon: view === "agents" ? "list" : "bot", title: view === "agents" ? "Show the list" : "Show the AI coding agents", shortcut: ["⇧", "A"], keywords: "ai coding agents claude codex cursor copilot gemini windsurf aider access folders", run: () => (view = view === "agents" ? "list" : "agents") },
       { id: "sort-c", group: "View", icon: "layers", title: "Group by cluster (compose, workspace, supervisor…)", run: () => (sort = "cluster") },
       { id: "settings", group: "Settings", icon: "sliders", title: "Open settings", shortcut: [mod, ","], keywords: "preferences options config interval hotkey", run: () => openSettings() },
       { id: "pin-new", group: "Actions", icon: "star", title: selected ? `Pin :${selected.port} with a label…` : "Pin a port…", shortcut: ["⇧", "P"], keywords: "favourite label watch", run: () => openPin(selected) },
@@ -633,7 +670,7 @@
     if (modKey && e.key === ",") { openSettings(); e.preventDefault(); return; }
     if (!typing && (e.key === "/" || (modKey && e.key.toLowerCase() === "f"))) { search?.focus(); search?.select(); e.preventDefault(); return; }
     if (modKey && e.key.toLowerCase() === "r") { refresh(true); e.preventDefault(); return; }
-    const move = view === "graph" && !typing ? selectGraph : select;
+    const move = view === "graph" && !typing ? selectGraph : view === "agents" && !typing ? selectAgent : select;
     if (view === "list" && !typing && !modKey && (e.key === "ArrowLeft" || e.key === "ArrowRight") && selectedId) {
       // Tree-style: ← collapses the selected row's section, → expands it.
       const sec = sectionOf(selectedId);
@@ -651,6 +688,7 @@
       e.preventDefault();
       return;
     }
+    if (e.key === "Enter" && view === "agents" && !typing) return; // buttons and map nodes handle it
     if (e.key === "Enter") { if (typing) { if (!selected) select(1); search?.blur(); } else if (selected) drawerOpen = true; return; }
     if (typing || modKey || e.altKey) return;
     // Only plain keys below; the list (or the page) has focus.
@@ -668,6 +706,7 @@
       case "e": filters.exposed = !filters.exposed; break;
       case "L": cycleTheme(); break;
       case "g": view = view === "graph" ? "list" : "graph"; break;
+      case "A": view = view === "agents" ? "list" : "agents"; break;
       case "h": openHistory(); break;
       case "p": if (s) togglePin(s); break;
       case "P": openPin(s); break;
@@ -811,7 +850,7 @@
   </header>
 
   <div class="toolbar" role="toolbar" aria-label="View and filters">
-    <SegmentedControl label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: "List (G)" }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, countLabel: linksLabel(graph?.stats.edges ?? 0), title: graph?.stats.edges ? `Service graph · ${linksLabel(graph.stats.edges)} between services (G)` : "Service graph (G)" }]} />
+    <SegmentedControl label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: "List (G)" }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, countLabel: linksLabel(graph?.stats.edges ?? 0), title: graph?.stats.edges ? `Service graph · ${linksLabel(graph.stats.edges)} between services (G)` : "Service graph (G)" }, { value: "agents", label: "Agents", icon: "bot", count: agentsReport?.agents.length || null, countLabel: agentsReport ? `${agentsReport.agents.length} agents` : undefined, title: "AI coding agents: their folders, access, ports and connections (⇧A)" }]} />
     <span class="divider" aria-hidden="true"></span>
     <SegmentedControl label="Socket states" value={filters.all ? "all" : "listen"} options={[{ value: "listen", label: "Listening" }, { value: "all", label: "All sockets", title: "Include established, TIME_WAIT… (A)" }]} onchange={(v) => { filters.all = v === "all"; refresh(); }} />
     <SegmentedControl label="Protocol" bind:value={filters.proto} options={[{ value: "any", label: "Any" }, { value: "tcp", label: "TCP" }, { value: "udp", label: "UDP" }]} />
@@ -825,13 +864,22 @@
     <Select size="sm" prefix="Sort" label="Sort by" labelHidden bind:value={sort} width="150px" options={[{ value: "group", label: "Grouped", description: "By kind: dev, containers, databases…" }, { value: "cluster", label: "Cluster", description: "Compose project, workspace, supervisor" }, { value: "port", label: "Port" }, { value: "newest", label: "Newest" }, { value: "memory", label: "Memory" }]} />
   </div>
 
-  <main class="content" class:narrow style="--pane-w: {paneWidth}px">
+  <main class="content" class:narrow class:wide={view === "agents"} style="--pane-w: {paneWidth}px">
     {#if view === "graph"}
       <div class="graph-wrap">
         {#if GraphView}
           <GraphView {graph} {selectedNode} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; loadTopology(); }} onselect={selectNode} onstopcluster={requestClusterStop} />
         {:else}
           <div class="graph-loading" aria-busy="true">Loading graph…</div>
+        {/if}
+      </div>
+    {:else if view === "agents"}
+      <div class="graph-wrap agents-wrap">
+        {#if AgentsView}
+          <AgentsView report={agentsReport} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced}
+            onselectagent={(id) => (selectedAgent = id)} onentry={openEntry} />
+        {:else}
+          <div class="graph-loading" aria-busy="true">Loading agents…</div>
         {/if}
       </div>
     {:else}
@@ -906,7 +954,7 @@
     </div>
     {/if}
 
-    {#if !narrow}
+    {#if !narrow && view !== "agents"}
       <div class="pane-wrap">
         <Splitter bind:width={paneWidth} min={340} max={680} initial={PANE_DEFAULT} />
         <DetailPane entry={selected} {explanation} http={selectedHttp} loading={explaining} busy={selected ? !!busy[selected.id] : false} bind:tab={detailTab} {mod}
@@ -921,7 +969,7 @@
     {#if snapshot}
       <span><b>{stats.total}</b> ports</span><span class="g"><b>{stats.dev}</b> dev</span>{#if stats.exposed}<span class="w"><b>{stats.exposed}</b> exposed</span>{/if}
       <span class="sp"></span>
-      <span class="hints"><span><Kbd keys={["↑", "↓"]} size="sm" />move</span><span><Kbd keys="⌫" size="sm" />stop</span><span><Kbd keys="G" size="sm" />graph</span><span><Kbd keys={[mod, "K"]} size="sm" />commands</span><span><Kbd keys="?" size="sm" />shortcuts</span>{#if shortcut}<span class="gs"><Kbd keys={shortcut} size="sm" />from anywhere</span>{/if}</span>
+      <span class="hints"><span><Kbd keys={["↑", "↓"]} size="sm" />move</span><span><Kbd keys="⌫" size="sm" />stop</span><span><Kbd keys="G" size="sm" />graph</span><span><Kbd keys={["⇧", "A"]} size="sm" />agents</span><span><Kbd keys={[mod, "K"]} size="sm" />commands</span><span><Kbd keys="?" size="sm" />shortcuts</span>{#if shortcut}<span class="gs"><Kbd keys={shortcut} size="sm" />from anywhere</span>{/if}</span>
     {/if}
   </footer>
 </div>
@@ -969,7 +1017,7 @@
   .spacer { flex: 1; min-width: var(--sp-2); }
 
   .content { display: grid; grid-template-columns: minmax(0, 1fr) var(--pane-w, 440px); min-height: 0; }
-  .content.narrow { grid-template-columns: 1fr; }
+  .content.narrow, .content.wide { grid-template-columns: 1fr; }
   .pane-wrap { position: relative; min-height: 0; min-width: 0; }
   .list { overflow-y: auto; padding: 0 0 var(--sp-6); outline: none; container: portlist / inline-size; }
   .lgroup + .lgroup { margin-top: var(--sp-2); }

@@ -26,6 +26,7 @@ flowchart TB
     REG["StopStrategy registry<br/>process tree · container<br/>systemd · pm2 · brew"]
     EXEC["Executor<br/>signal → verify freed"]
     TOPO["Topology<br/>service graph<br/>clusters · stop order"]
+    AGT["Agents<br/>AI coding agents · folders<br/>access · ports · links"]
     HTTP["HTTP probe<br/>GET / → status, title"]
     STACK["Project config<br/>.portwise.toml"]
   end
@@ -56,6 +57,8 @@ flowchart TB
   ENG -->|"safe to touch?"| POL
   ENG -->|"how to stop"| REG
   ENG --> TOPO
+  ENG --> AGT
+  AGT -.->|"same catalog"| POL
   REG --> EXEC
 
   PROV -->|"read"| SOCK
@@ -70,7 +73,7 @@ flowchart TB
   classDef os fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#052e16
   classDef state fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#3b2203
   class HOOK,CLI,TUI,DESK,MCP iface
-  class SCAN,PROV,POL,REG,EXEC,TOPO,HTTP,STACK core
+  class SCAN,PROV,POL,REG,EXEC,TOPO,AGT,HTTP,STACK core
   class ENG engine
   class SOCK,SIG,CTR os
   class PINS,HIST state
@@ -176,6 +179,23 @@ flowchart LR
   dependency mid-shutdown. The order is deterministic, which proptest checks.
   Dependents outside the cluster become warnings in the plan.
 
+### Agents
+
+`agents::AgentsBuilder` turns the same `Scan` into an `AgentsReport`:
+
+* **Who.** `agents::catalog` names each agent product: bundle, process name, install path or
+  entry script. `ProtectionPolicy` uses the same catalog, so what the view calls an agent is what
+  portwise refuses to stop. An editor or desktop app with many helpers is one agent. A terminal
+  agent started inside it is its own agent, linked by a parent edge.
+* **Where.** Folders are the members' working directories, with project details from the scan,
+  plus recent projects from a `RecentProjects` source. It reads only directory names under
+  `~/.claude/projects` and the window folder URIs in the editors' `storage.json`. It never opens
+  chats, settings or tokens.
+* **Reach.** Listening ports held by the agent or its children, and ESTABLISHED links grouped by
+  local service or remote `ip:port` (no DNS).
+* **Access.** Each fact (account, sandbox, approvals, network, privacy) carries `observed`,
+  `inferred` or `unknown`. Folders inside macOS privacy-protected areas are listed but not read.
+
 ## 4. Project detection
 
 ```mermaid
@@ -194,7 +214,7 @@ flowchart LR
 flowchart TB
   subgraph Rust["src-tauri (portwise-desktop)"]
     LIB["lib.rs: builder, plugins<br/>(notification, autostart, global-shortcut)"]
-    CMD["commands.rs<br/>scan · topology · explain · plan · stop · pins · history · restart · autostart<br/>preferences · hotkeys · remote_scan"]
+    CMD["commands.rs<br/>scan · topology · agents · explain · plan · stop · pins · history · restart · autostart<br/>preferences · hotkeys · remote_scan"]
     ST["state.rs<br/>AppState (config, last snapshot)"]
     TR["tray.rs<br/>menu + top ports"]
     W["watch.rs<br/>scan interval (default 4 s) / 2.5× hidden → events → notifications + tray"]
@@ -203,8 +223,9 @@ flowchart TB
     CMD & TR & W --> ST
   end
   subgraph UI["Svelte 5 front-end"]
-    APP["App.svelte<br/>list ⇄ graph (G), palette, keys"]
+    APP["App.svelte<br/>list ⇄ graph (G) ⇄ agents (⇧A), palette, keys"]
     GV["GraphView.svelte<br/>@xyflow/svelte"]
+    AV["AgentsView.svelte<br/>agent cards + footprint map<br/>(lib/agents.ts: column layout)"]
     NODES["components/graph/<br/>ServiceNode · ClusterNode · TrafficEdge · FitOnChange"]
     LG["lib/graph.ts<br/>dagre layered · force · toFlow · related · sections"]
     OTHER["detail/DetailPane · Settings · Pin · Remote · Confirm · History"]
@@ -212,6 +233,7 @@ flowchart TB
     KIT["components/ui/<br/>UI kit (see below)"]
     API["lib/api.ts (invoke) · lib/mock.ts (browser dev)"]
     APP --> GV --> NODES
+    APP --> AV --> NODES
     GV --> LG
     APP --> OTHER --> KIT
     APP --> LIST --> KIT

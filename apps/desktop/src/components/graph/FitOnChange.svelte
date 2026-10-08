@@ -3,7 +3,7 @@
   // (new layout or structure) and centres on `focus` when the selection comes from the list.
   import { untrack } from "svelte";
   import { useSvelteFlow } from "@xyflow/svelte";
-  import { FIT_PADDING } from "../../lib/graph";
+  import { FIT_PADDING } from "../../lib/flow";
   let { token, focus, reduced }: { token: string; focus: { x: number; y: number } | null; reduced: boolean } = $props();
   const flow = useSvelteFlow();
   let last = "";

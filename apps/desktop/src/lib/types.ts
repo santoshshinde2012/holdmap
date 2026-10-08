@@ -276,3 +276,45 @@ export type PortEvent =
   | { event: "opened"; entry: PortEntry }
   | { event: "closed"; entry: PortEntry }
   | { event: "conflict"; port: number; protocol: Protocol; entries: PortEntry[] };
+
+// ---- agents (crates/portwise-core/src/agents/model.rs) ----
+
+export type AgentKind = "cli" | "ide" | "desktop" | "extension" | "host";
+export type Evidence = "observed" | "inferred" | "unknown";
+export type ProcessRole = "agent" | "helper" | "child";
+export type FolderSource = "agent" | "child" | "recent";
+export type PortRole = "agent" | "dev_server" | "service";
+export type LinkKind = "local" | "remote";
+export type AccessLevel = "restricted" | "standard" | "elevated" | "unknown";
+export type AccessTopic = "user" | "sandbox" | "approvals" | "network" | "privacy";
+
+export interface AgentProcess { pid: number; ppid: number | null; name: string; command: string; role: ProcessRole; cwd: string | null; memory_bytes: number; cpu_percent: number }
+export interface AgentFolder { path: string; label: string; project: ProjectInfo | null; source: FolderSource; evidence: Evidence; pids: number[]; privacy_area: string | null; note: string | null }
+export interface AgentPort { entry_id: string; port: number; protocol: Protocol; exposure: Exposure; pid: number | null; process: string | null; label: string; role: PortRole; project: string | null; framework: string | null }
+export interface AgentLink { id: string; kind: LinkKind; label: string; address: string; port: number; connections: number; entry_id: string | null; process: string | null; pid: number | null; service: string | null }
+export interface AccessFact { topic: AccessTopic; level: AccessLevel; summary: string; evidence: Evidence }
+export interface AgentAccess { user: string | null; uid: number | null; root: boolean; mine: boolean; facts: AccessFact[] }
+
+export interface Agent {
+  id: string;
+  product: string;
+  name: string;
+  vendor: string;
+  kind: AgentKind;
+  pid: number;
+  process_name: string;
+  command: string;
+  started_at: number;
+  parent: string | null;
+  memory_bytes: number;
+  cpu_percent: number;
+  processes: AgentProcess[];
+  more_processes: number;
+  folders: AgentFolder[];
+  ports: AgentPort[];
+  links: AgentLink[];
+  more_links: number;
+  access: AgentAccess;
+}
+
+export interface AgentsReport { agents: Agent[]; platform: string; taken_at_ms: number; limits: string[] }

@@ -1,5 +1,5 @@
 // Realistic sample data so the UI can be developed in a plain browser (`npm run dev`) and tested.
-import type { ActionPlan, BindRisk, Cluster, Explanation, Graph, GraphEdge, GraphNode, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
+import type { AccessFact, ActionPlan, Agent, AgentLink, AgentPort, AgentsReport, BindRisk, Cluster, Explanation, Graph, GraphEdge, GraphNode, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
 
 const now = Math.floor(Date.now() / 1000);
 let token = 1000;
@@ -297,4 +297,114 @@ export function mockTopology(s: Snapshot = MOCK_SNAPSHOT): Graph {
   ].filter((e) => ids.has(e.from) && ids.has(e.to));
   const clusters: Cluster[] = [{ id: "shop", name: "shop", kind: "compose", detail: "docker compose", root: "/Users/dev/code/shop", nodes: ["web", "api", "db", "redis"].filter((id) => ids.has(id)) }];
   return { nodes, edges, clusters, stats: { nodes: nodes.length, edges: edges.length, clusters: 1, connections: edges.reduce((n, e) => n + e.connections, 0) }, taken_at_ms: s.taken_at_ms };
+}
+
+/** Browser-preview agents: Cursor running shop-web and docs in its terminal, and Claude Code
+ *  (started from that terminal) working on shop-api. Neutral sample projects and documentation
+ *  IP ranges; ports the demo has stopped drop out, like the topology. */
+export function mockAgents(s: Snapshot = MOCK_SNAPSHOT): AgentsReport {
+  const byPort = (p: number) => s.entries.find((e) => e.port === p);
+  const port = (p: number, role: AgentPort["role"]): AgentPort[] => {
+    const e = byPort(p);
+    return e ? [{ entry_id: e.id, port: p, protocol: e.protocol, exposure: e.exposure, pid: e.pid, process: e.process?.name ?? null, label: e.label, role, project: e.project?.name ?? null, framework: e.framework?.name ?? null }] : [];
+  };
+  const local = (p: number, connections: number, service: string | null = null): AgentLink[] => {
+    const e = byPort(p);
+    return e ? [{ id: `local:${e.id}`, kind: "local", label: e.label, address: `127.0.0.1:${p}`, port: p, connections, entry_id: e.id, process: e.process?.name ?? null, pid: e.pid, service }] : [];
+  };
+  const remote = (address: string, connections: number): AgentLink => ({ id: `remote:${address}`, kind: "remote", label: address, address, port: 443, connections, entry_id: null, process: null, pid: null, service: "HTTPS" });
+  const fact = (topic: AccessFact["topic"], level: AccessFact["level"], summary: string, evidence: AccessFact["evidence"]): AccessFact => ({ topic, level, summary, evidence });
+  const unknownPrivacy = fact("privacy", "unknown", "macOS privacy grants (Full Disk Access, Files and Folders) can't be read without Full Disk Access; portwise doesn't ask for it.", "unknown");
+  const network = (ports: AgentPort[], remotes: number) => {
+    const list = ports.map((p) => `:${p.port}`).join(", ");
+    const tail = remotes ? ` Talks to ${remotes} remote host${remotes === 1 ? "" : "s"}.` : "";
+    return fact("network", "standard", `${ports.length ? `Listens on ${list} on this machine only.` : "No listening sockets."}${tail}`, "observed");
+  };
+  const shopWeb = byPort(3000)?.project ?? { name: "shop-web", root: "/Users/dev/code/shop-web", kind: "package.json", git_branch: "feat/checkout" };
+  const shopApi = byPort(3001)?.project ?? { name: "shop-api", root: "/Users/dev/code/shop-api", kind: "package.json", git_branch: "main" };
+  const docs = byPort(5173)?.project ?? { name: "docs", root: "/Users/dev/code/docs", kind: "package.json", git_branch: "main" };
+  const started = Math.floor(Date.now() / 1000);
+
+  const cursorPorts = [...port(3000, "dev_server"), ...port(5173, "dev_server")];
+  const cursorLinks = [...local(3001, 2), remote("198.51.100.24:443", 4), remote("203.0.113.40:443", 1)];
+  const cursor: Agent = {
+    id: "agent:52000", product: "cursor", name: "Cursor", vendor: "Anysphere", kind: "ide", pid: 52000, process_name: "Cursor",
+    command: "/Applications/Cursor.app/Contents/MacOS/Cursor", started_at: started - 86400, parent: null, memory_bytes: 2.4e9, cpu_percent: 6.2,
+    processes: [
+      { pid: 52000, ppid: 1, name: "Cursor", command: "/Applications/Cursor.app/Contents/MacOS/Cursor", role: "agent", cwd: "/", memory_bytes: 410e6, cpu_percent: 1.8 },
+      { pid: 52011, ppid: 52000, name: "Cursor Helper (Plugin)", command: "Cursor Helper (Plugin) --type=utility", role: "helper", cwd: "/", memory_bytes: 820e6, cpu_percent: 2.1 },
+      { pid: 52040, ppid: 52011, name: "zsh", command: "-zsh", role: "child", cwd: shopWeb.root, memory_bytes: 6e6, cpu_percent: 0 },
+      { pid: 43000, ppid: 52040, name: "node", command: "node node_modules/.bin/next dev", role: "child", cwd: shopWeb.root, memory_bytes: 412e6, cpu_percent: 1.6 },
+      { pid: 52060, ppid: 52011, name: "zsh", command: "-zsh", role: "child", cwd: docs.root, memory_bytes: 6e6, cpu_percent: 0 },
+      { pid: 45173, ppid: 52060, name: "node", command: "node node_modules/.bin/vite dev", role: "child", cwd: docs.root, memory_bytes: 180e6, cpu_percent: 0.7 },
+    ],
+    more_processes: 9,
+    folders: [
+      { path: shopWeb.root, label: shopWeb.name, project: shopWeb, source: "child", evidence: "observed", pids: [52040, 43000], privacy_area: null, note: null },
+      { path: docs.root, label: docs.name, project: docs, source: "child", evidence: "observed", pids: [52060, 45173], privacy_area: null, note: null },
+      { path: "/Users/dev/code/design-system", label: "design-system", project: null, source: "recent", evidence: "observed", pids: [], privacy_area: null, note: "open in Cursor" },
+    ],
+    ports: cursorPorts,
+    links: cursorLinks,
+    more_links: 0,
+    access: {
+      user: "dev", uid: 501, root: false, mine: true,
+      facts: [
+        fact("user", "standard", "Runs as you (dev): the same file access as your account.", "observed"),
+        fact("sandbox", "unknown", "No sandbox seen right now. Its commands may still be sandboxed when they run; agent settings aren't read.", "unknown"),
+        fact("approvals", "unknown", "No approval flags on its command line; its own settings decide (not read).", "unknown"),
+        network(cursorPorts, 2),
+        unknownPrivacy,
+      ],
+    },
+  };
+
+  const claudePorts = port(3001, "dev_server");
+  const claudeLinks = [...local(5432, 3, "PostgreSQL"), remote("203.0.113.10:443", 3)];
+  const claude: Agent = {
+    id: "agent:51200", product: "claude-code", name: "Claude Code", vendor: "Anthropic", kind: "cli", pid: 51200, process_name: "claude",
+    command: "claude --permission-mode acceptEdits", started_at: started - 5400, parent: "agent:52000", memory_bytes: 520e6, cpu_percent: 3.4,
+    processes: [
+      { pid: 51200, ppid: 52040, name: "claude", command: "claude --permission-mode acceptEdits", role: "agent", cwd: shopApi.root, memory_bytes: 240e6, cpu_percent: 2.2 },
+      { pid: 51230, ppid: 51200, name: "sandbox-exec", command: "sandbox-exec -p … npm test", role: "child", cwd: shopApi.root, memory_bytes: 3e6, cpu_percent: 0 },
+      { pid: 43001, ppid: 51200, name: "node", command: "node server/index.js", role: "child", cwd: shopApi.root, memory_bytes: 96e6, cpu_percent: 0.9 },
+    ],
+    more_processes: 0,
+    folders: [
+      { path: shopApi.root, label: shopApi.name, project: shopApi, source: "agent", evidence: "observed", pids: [51200, 51230, 43001], privacy_area: null, note: null },
+      { path: shopWeb.root, label: shopWeb.name, project: null, source: "recent", evidence: "observed", pids: [], privacy_area: null, note: "Claude Code project" },
+    ],
+    ports: claudePorts,
+    links: claudeLinks,
+    more_links: 0,
+    access: {
+      user: "dev", uid: 501, root: false, mine: true,
+      facts: [
+        fact("user", "standard", "Runs as you (dev): the same file access as your account.", "observed"),
+        fact("sandbox", "restricted", "Its commands run inside sandbox-exec (macOS Seatbelt) right now.", "observed"),
+        fact("approvals", "standard", "Started with --permission-mode acceptEdits: file edits are accepted without asking; commands still ask.", "observed"),
+        network(claudePorts, 1),
+        unknownPrivacy,
+      ],
+    },
+  };
+
+  // A stopped dev server's process is gone from its agent too.
+  const gone = new Set([3000, 3001, 5173].filter((p) => !byPort(p)).map((p) => 40000 + p));
+  const live = (a: Agent): Agent => ({
+    ...a,
+    processes: a.processes.filter((p) => !gone.has(p.pid)),
+    folders: a.folders.map((f) => ({ ...f, pids: f.pids.filter((p) => !gone.has(p)) })),
+  });
+  return {
+    agents: [claude, cursor].map(live),
+    platform: "macos",
+    taken_at_ms: s.taken_at_ms,
+    limits: [
+      "Folders are working directories and the agents' recent-project lists; open files aren't collected.",
+      "Remote hosts are shown by IP address; portwise doesn't look names up.",
+      "Chats, settings, tokens and credentials are never read.",
+      "macOS privacy grants (TCC) can't be read without Full Disk Access, and folders it guards aren't inspected.",
+    ],
+  };
 }

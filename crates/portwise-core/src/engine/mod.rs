@@ -102,6 +102,17 @@ impl Engine {
         &self.scan.table
     }
 
+    /// The AI coding agents in this scan and their footprint, with recent projects from the
+    /// current user's home (see [`agents`](crate::agents)).
+    pub fn agents(&self) -> crate::agents::AgentsReport {
+        let recent = crate::agents::HomeRecent::current();
+        let b = crate::agents::AgentsBuilder::new(&self.scan);
+        match &recent {
+            Some(r) => b.with_recent(r).build(),
+            None => b.build(),
+        }
+    }
+
     fn listeners(&self, port: u16, proto: Option<Protocol>) -> Vec<&PortEntry> {
         self.scan
             .snapshot
