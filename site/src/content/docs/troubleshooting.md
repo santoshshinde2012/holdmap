@@ -1,7 +1,7 @@
 ---
 title: Troubleshooting
 description: Fixes for the common snags, from "command not found" to hidden ports and uninstalling.
-order: 6
+order: 7
 ---
 
 **`command not found: portwise` right after installing.** Open a new terminal, or run

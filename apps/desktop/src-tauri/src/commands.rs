@@ -373,6 +373,42 @@ pub fn open_in_editor(app: AppHandle, port: u16) -> Result<String, String> {
     portwise_core::util::open_in_editor(&dir).map_err(|e| e.to_string())
 }
 
+/// Resolve a folder the Agents view named: it must belong to `agent_id` in the current report,
+/// so the webview never opens an arbitrary path.
+fn agent_folder(app: &AppHandle, agent_id: &str, path: &str) -> Result<std::path::PathBuf, String> {
+    let want = std::path::PathBuf::from(path);
+    if !want.is_absolute() {
+        return Err("Folder path must be absolute".into());
+    }
+    let state = app.state::<AppState>();
+    let guard = state.engine.lock().unwrap_or_else(|e| e.into_inner());
+    let engine = guard.as_ref().ok_or("no scan yet")?;
+    let report = engine.agents();
+    let agent = report
+        .agents
+        .iter()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| format!("No agent `{agent_id}` in the current scan"))?;
+    if !agent.known_folders().any(|p| p == &want) {
+        return Err("That folder isn't part of this agent's footprint".into());
+    }
+    Ok(want)
+}
+
+/// Show an agent's folder in Finder / Explorer (path must appear on that agent).
+#[tauri::command]
+pub fn reveal_agent_folder(app: AppHandle, agent_id: String, path: String) -> Result<(), String> {
+    let dir = agent_folder(&app, &agent_id, &path)?;
+    portwise_core::util::reveal(&dir).map_err(|e| e.to_string())
+}
+
+/// Open an agent's folder in the user's editor; returns the editor's name.
+#[tauri::command]
+pub fn open_agent_folder(app: AppHandle, agent_id: String, path: String) -> Result<String, String> {
+    let dir = agent_folder(&app, &agent_id, &path)?;
+    portwise_core::util::open_in_editor(&dir).map_err(|e| e.to_string())
+}
+
 /// Whether portwise launches at login.
 #[tauri::command]
 pub fn autostart(app: AppHandle, enable: Option<bool>) -> Result<bool, String> {

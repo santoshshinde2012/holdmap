@@ -1,7 +1,7 @@
 ---
 title: Desktop app
 description: The portwise tray and menu-bar app, its keyboard shortcuts and how to open it the first time.
-order: 5
+order: 6
 ---
 
 A tray and menu-bar app with the port list, details, the service graph, the agents map, pins, history with
@@ -33,7 +33,7 @@ The app isn't notarised or code-signed yet, so the OS asks once.
 | `o` · `c` | Open in the browser · copy its URL |
 | `p` | Pin or unpin the port |
 | `g` | Switch between the list and the service graph |
-| `⇧A` | The agents map: each AI coding agent, its folders, ports, connections and access |
+| `⇧A` | Agents, tools and apps: folders, ports they started, connections and access |
 | `h` | Recently stopped, with one-click restart |
 | `d` · `m` · `e` · `t` | Filter: dev servers · mine · exposed · TCP/UDP |
 | `⌘R` | Rescan now |
@@ -43,13 +43,16 @@ The app isn't notarised or code-signed yet, so the OS asks once.
 
 ## Agents map
 
-**Agents** (`⇧A`) shows each AI coding agent that is running (Claude Code, Codex, Cursor, Copilot,
-Gemini CLI, Windsurf, Aider, Cline and others). It lists the folders it works in, the ports it
-serves, the services and hosts it connects to, and what access it has: the account it runs as,
-sandbox and approval flags, network listeners, and macOS-protected folders. Recent projects come
-from folder names only. Chats, settings and tokens are never read. Remote hosts show as IP
-addresses, and anything portwise can't see is marked unknown. Click a port to open its details.
-`↑` `↓` switch agents. `portwise agents` prints the same in a terminal.
+**Agents** (`⇧A`) shows each AI coding agent and developer tool that is running (Claude Code,
+Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider, Docker Desktop, OrbStack and others). Cards
+skim memory, CPU, process count, stoppable ports and parent; expand for folders (with source
+labels), ports and apps it started, child processes as tools & apps, connections, and access: the
+account it runs as, sandbox and approval flags, network listeners, and macOS-protected folders.
+Each fact is marked seen, inferred or unknown. From a card you can reveal a folder, open it in your
+editor, or stop the unprotected ports that agent started. Recent projects come from folder names
+only. Chats, settings and tokens are never read. Remote hosts show as IP addresses. Click a port to
+open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
+`portwise agents` and `portwise agents AGENT --stop-ports` do the same in a terminal.
 
 ## From the details pane
 

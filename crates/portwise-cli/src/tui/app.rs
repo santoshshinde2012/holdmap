@@ -48,17 +48,26 @@ pub enum ProtoFilter {
     Udp,
 }
 
-/// Top-level tab: the port table or the service graph.
+/// Top-level tab: the port table, the service graph or the agents map.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Ports,
     Graph,
+    Agents,
 }
 
 pub enum Modal {
     None,
-    Confirm { plan: ActionPlan, headline: String },
-    Explain { scroll: u16 },
+    Confirm {
+        plan: Box<ActionPlan>,
+        headline: String,
+        /// Extra ports to stop after `plan` (Agents "stop its ports").
+        more_ports: Vec<u16>,
+        force: bool,
+    },
+    Explain {
+        scroll: u16,
+    },
     Help,
 }
 
@@ -91,6 +100,10 @@ pub struct App {
     pub modal: Modal,
     pub tab: Tab,
     pub graph: GraphView,
+    /// Agents report for the Agents tab (rebuilt with each scan while the tab is open).
+    pub agents: Option<portwise_core::agents::AgentsReport>,
+    /// Selected agent index in `agents.agents`.
+    pub agent_idx: usize,
     pub toast: Option<Toast>,
     pub busy: Option<String>,
     pub stop_log: Vec<String>,
@@ -125,6 +138,8 @@ impl App {
             modal: Modal::None,
             tab: Tab::Ports,
             graph: GraphView::new(),
+            agents: None,
+            agent_idx: 0,
             toast: None,
             busy: None,
             stop_log: Vec::new(),
@@ -173,6 +188,7 @@ impl App {
                             self.explain_cache.clear();
                             self.rebuild();
                             self.rebuild_graph();
+                            self.rebuild_agents();
                         }
                         Err(e) => self.error = Some(e),
                     }
@@ -296,6 +312,83 @@ impl App {
         }
     }
 
+    /// Rebuild the agents report from the current scan.
+    pub fn rebuild_agents(&mut self) {
+        let Some(engine) = &self.engine else {
+            self.agents = None;
+            return;
+        };
+        let report = engine.agents();
+        let n = report.agents.len();
+        if n == 0 {
+            self.agent_idx = 0;
+        } else if self.agent_idx >= n {
+            self.agent_idx = n - 1;
+        }
+        self.agents = Some(report);
+    }
+
+    /// Selected agent, when the Agents tab has one.
+    pub fn selected_agent(&self) -> Option<&portwise_core::agents::Agent> {
+        self.agents
+            .as_ref()
+            .and_then(|r| r.agents.get(self.agent_idx))
+    }
+
+    fn move_agent(&mut self, delta: isize) {
+        let n = self.agents.as_ref().map(|r| r.agents.len()).unwrap_or(0);
+        if n == 0 {
+            return;
+        }
+        let i = self.agent_idx as isize + delta;
+        self.agent_idx = i.rem_euclid(n as isize) as usize;
+    }
+
+    /// Plan stopping the selected agent's unprotected ports (first stoppable port's plan,
+    /// with a headline covering all of them — same pattern as the desktop "Stop all").
+    fn request_stop_agent_ports(&mut self, force: bool) {
+        let Some(agent) = self.selected_agent().cloned() else {
+            return;
+        };
+        let ports: Vec<u16> = agent.stoppable_ports().map(|p| p.port).collect();
+        if ports.is_empty() {
+            self.toast = Some(Toast {
+                text: format!("{} has no stoppable ports", agent.name),
+                ok: false,
+                at: Instant::now(),
+            });
+            return;
+        }
+        let Some(engine) = self.engine.clone() else {
+            return;
+        };
+        let opts = StopOptions {
+            force,
+            ..Default::default()
+        };
+        let plan = engine.plan(&Target::Port(ports[0]), &opts);
+        let headline = if ports.len() == 1 {
+            format!("Stop :{} started by {}", ports[0], agent.name)
+        } else {
+            format!(
+                "Stop {} ports started by {}: {}",
+                ports.len(),
+                agent.name,
+                ports
+                    .iter()
+                    .map(|p| format!(":{p}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        self.modal = Modal::Confirm {
+            headline,
+            plan: Box::new(plan),
+            more_ports: ports.into_iter().skip(1).collect(),
+            force,
+        };
+    }
+
     /// Switch tabs, carrying the selection across (entry ↔ node).
     pub fn toggle_tab(&mut self) {
         match self.tab {
@@ -306,7 +399,10 @@ impl App {
                 self.tab = Tab::Graph;
             }
             Tab::Graph => {
-                self.sync_from_graph();
+                self.rebuild_agents();
+                self.tab = Tab::Agents;
+            }
+            Tab::Agents => {
                 self.tab = Tab::Ports;
             }
         }
@@ -347,7 +443,9 @@ impl App {
         let plan = engine.plan(&Target::Cluster(name), &StopOptions::default());
         self.modal = Modal::Confirm {
             headline: plan.summary.clone(),
-            plan,
+            plan: Box::new(plan),
+            more_ports: Vec::new(),
+            force: false,
         };
     }
 
@@ -422,13 +520,21 @@ impl App {
             .clone()
             .unwrap_or_else(|| engine.plan(&Target::Port(entry.port), &opts));
         self.modal = Modal::Confirm {
-            plan,
+            plan: Box::new(plan),
             headline: ex.headline.clone(),
+            more_ports: Vec::new(),
+            force,
         };
     }
 
     fn confirm_stop(&mut self) {
-        let Modal::Confirm { plan, .. } = std::mem::replace(&mut self.modal, Modal::None) else {
+        let Modal::Confirm {
+            plan,
+            more_ports,
+            force,
+            ..
+        } = std::mem::replace(&mut self.modal, Modal::None)
+        else {
             return;
         };
         if plan.is_blocked() {
@@ -439,12 +545,33 @@ impl App {
         let tx = self.tx.clone();
         let engine = self.engine.clone();
         std::thread::spawn(move || {
-            let report = execute(&plan, &mut |l| {
+            let mut report = execute(&plan, &mut |l| {
                 let _ = tx.send(Msg::StopLine(l.to_string()));
             });
-            if let Some(e) = engine {
-                // Remember what was stopped so `portwise restart` / history can bring it back.
-                crate::state::record(&e, &plan, &report);
+            if let Some(e) = &engine {
+                crate::state::record(e, &plan, &report);
+            }
+            // Agents "stop its ports": continue with the rest after the first frees.
+            if report.freed {
+                let opts = StopOptions {
+                    force,
+                    ..Default::default()
+                };
+                for port in more_ports {
+                    let _ = tx.send(Msg::StopLine(format!("→ :{port}")));
+                    let Some(e) = &engine else { break };
+                    let next = e.plan(&Target::Port(port), &opts);
+                    if next.is_blocked() {
+                        continue;
+                    }
+                    report = execute(&next, &mut |l| {
+                        let _ = tx.send(Msg::StopLine(l.to_string()));
+                    });
+                    crate::state::record(e, &next, &report);
+                    if !report.freed {
+                        break;
+                    }
+                }
             }
             let _ = tx.send(Msg::Stopped(Box::new(report)));
         });
@@ -554,6 +681,21 @@ impl App {
             return;
         }
         if self.tab == Tab::Graph && self.on_graph_key(k) {
+            return;
+        }
+        if self.tab == Tab::Agents {
+            match k.code {
+                KeyCode::Down | KeyCode::Char('j') => self.move_agent(1),
+                KeyCode::Up | KeyCode::Char('k') => self.move_agent(-1),
+                KeyCode::Char('x') => self.request_stop_agent_ports(false),
+                KeyCode::Char('X') => self.request_stop_agent_ports(true),
+                KeyCode::Char('q') => self.quit = true,
+                KeyCode::Esc => self.quit = true,
+                KeyCode::Char('?') => self.modal = Modal::Help,
+                KeyCode::Char('r') => self.start_scan(),
+                KeyCode::Char(' ') => self.paused = !self.paused,
+                _ => {}
+            }
             return;
         }
         match k.code {

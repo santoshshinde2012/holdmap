@@ -57,6 +57,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     };
     if app.tab == Tab::Graph {
         super::graph_ui::draw_graph(f, app, list_area, detail_area);
+    } else if app.tab == Tab::Agents {
+        draw_agents(f, app, list_area, detail_area);
     } else {
         draw_table(f, app, list_area);
         draw_details(f, app, detail_area);
@@ -90,6 +92,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         Span::raw(" "),
         chip("Ports", app.tab == Tab::Ports),
         chip("Graph", app.tab == Tab::Graph),
+        chip("Agents", app.tab == Tab::Agents),
         Span::styled(" ⇥  ", theme::muted()),
     ];
     let mut stats: Vec<Span> = Vec::new();
@@ -209,6 +212,247 @@ fn draw_search(f: &mut Frame, app: &App, area: Rect) {
         ])
     };
     f.render_widget(Paragraph::new(line), area);
+}
+
+fn draw_agents(f: &mut Frame, app: &App, list_area: Rect, detail_area: Rect) {
+    let n = app.agents.as_ref().map(|r| r.agents.len()).unwrap_or(0);
+    let list_block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(theme::muted())
+        .title(Line::from(vec![
+            Span::styled(" Agents ", theme::heading()),
+            Span::styled(format!("{n} "), theme::muted()),
+        ]));
+    let detail_block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(theme::muted())
+        .title(Span::styled(" Footprint ", theme::heading()));
+
+    let Some(report) = &app.agents else {
+        f.render_widget(
+            Paragraph::new(Span::styled("Looking for agents…", theme::muted())).block(list_block),
+            list_area,
+        );
+        f.render_widget(Paragraph::new("").block(detail_block), detail_area);
+        return;
+    };
+    if report.agents.is_empty() {
+        f.render_widget(
+            Paragraph::new(Text::from(vec![
+                Line::from(Span::styled(
+                    "No agents or developer tools running",
+                    theme::heading(),
+                )),
+                Line::from(Span::styled(
+                    "Start Claude Code, Cursor, Docker Desktop…",
+                    theme::muted(),
+                )),
+            ]))
+            .block(list_block)
+            .wrap(Wrap { trim: true }),
+            list_area,
+        );
+        f.render_widget(Paragraph::new("").block(detail_block), detail_area);
+        return;
+    }
+
+    let rows: Vec<Row> = report
+        .agents
+        .iter()
+        .enumerate()
+        .map(|(i, a)| {
+            let stoppable = a.stoppable_ports().count();
+            let sel = i == app.agent_idx;
+            let style = if sel {
+                Style::new().bg(Color::Indexed(237)).fg(ACCENT).bold()
+            } else {
+                Style::default()
+            };
+            let mem = portwise_core::util::human_bytes(a.memory_bytes);
+            Row::new(vec![
+                Cell::from(a.name.clone()),
+                Cell::from(a.kind.label()),
+                Cell::from(mem),
+                Cell::from(format!(
+                    "{}f {}p{}{}",
+                    a.folders
+                        .iter()
+                        .filter(|f| f.source != portwise_core::agents::FolderSource::Recent)
+                        .count(),
+                    a.ports.len(),
+                    if stoppable > 0 {
+                        format!("/{stoppable}s")
+                    } else {
+                        String::new()
+                    },
+                    if a.access.root
+                        || a.access
+                            .facts
+                            .iter()
+                            .any(|f| { f.level == portwise_core::agents::AccessLevel::Elevated })
+                    {
+                        " !"
+                    } else {
+                        ""
+                    }
+                )),
+            ])
+            .style(style)
+        })
+        .collect();
+    let widths = [
+        Constraint::Percentage(36),
+        Constraint::Percentage(22),
+        Constraint::Percentage(18),
+        Constraint::Percentage(24),
+    ];
+    let table = Table::new(rows, widths)
+        .header(
+            Row::new(["Name", "Kind", "Memory", "Footprint"])
+                .style(theme::muted())
+                .bottom_margin(0),
+        )
+        .block(list_block)
+        .row_highlight_style(Style::new().fg(ACCENT));
+    f.render_widget(table, list_area);
+
+    let Some(a) = app.selected_agent() else {
+        f.render_widget(Paragraph::new("").block(detail_block), detail_area);
+        return;
+    };
+    let stoppable_n = a.stoppable_ports().count();
+    let mut meta = format!(
+        "{} · {} · pid {} · {} · {:.1}% CPU",
+        a.kind.label(),
+        a.vendor,
+        a.pid,
+        portwise_core::util::human_bytes(a.memory_bytes),
+        a.cpu_percent
+    );
+    if stoppable_n > 0 {
+        meta.push_str(&format!(" · {stoppable_n} stoppable (x)"));
+    }
+    let mut lines = vec![
+        Line::from(Span::styled(a.name.clone(), theme::heading())),
+        Line::from(Span::styled(meta, theme::muted())),
+        Line::from(""),
+    ];
+    if let Some(p) = &a.parent {
+        if let Some(host) = report.agents.iter().find(|x| &x.id == p) {
+            lines.push(Line::from(Span::styled(
+                format!("Started from {} (pid {})", host.name, host.pid),
+                theme::muted(),
+            )));
+            lines.push(Line::from(""));
+        }
+    }
+    for f in &a.access.facts {
+        let topic = match f.topic {
+            portwise_core::agents::AccessTopic::User => "account",
+            portwise_core::agents::AccessTopic::Sandbox => "sandbox",
+            portwise_core::agents::AccessTopic::Approvals => "approvals",
+            portwise_core::agents::AccessTopic::Network => "network",
+            portwise_core::agents::AccessTopic::Privacy => "privacy",
+        };
+        let mark = match f.level {
+            portwise_core::agents::AccessLevel::Elevated => "!",
+            portwise_core::agents::AccessLevel::Restricted => "▾",
+            portwise_core::agents::AccessLevel::Unknown => "?",
+            portwise_core::agents::AccessLevel::Standard => "·",
+        };
+        lines.push(Line::from(vec![
+            Span::styled(format!("{mark} {topic:<9}"), theme::muted()),
+            Span::raw(f.summary.clone()),
+        ]));
+    }
+    if !a.folders.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled("Folders", theme::heading())));
+        for folder in a.folders.iter().take(8) {
+            let src = match folder.source {
+                portwise_core::agents::FolderSource::Agent => "working dir",
+                portwise_core::agents::FolderSource::Child => "child cwd",
+                portwise_core::agents::FolderSource::Recent => "recent",
+            };
+            lines.push(Line::from(format!(
+                "  {}  {}  ({src})",
+                folder.label,
+                folder.path.display()
+            )));
+        }
+    }
+    if !a.ports.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled("Ports", theme::heading())));
+        for p in &a.ports {
+            let role = match p.role {
+                portwise_core::agents::PortRole::DevServer => "dev · stoppable",
+                portwise_core::agents::PortRole::Service => "svc · stoppable",
+                portwise_core::agents::PortRole::Agent => "own",
+            };
+            lines.push(Line::from(format!(
+                "  :{}  {}  {}",
+                p.port,
+                role,
+                p.project
+                    .as_deref()
+                    .or(p.framework.as_deref())
+                    .unwrap_or(&p.label)
+            )));
+        }
+    }
+    if !a.links.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled("Talks to", theme::heading())));
+        for l in a.links.iter().take(8) {
+            lines.push(Line::from(format!(
+                "  {}  ×{}{}",
+                l.label,
+                l.connections,
+                l.service
+                    .as_ref()
+                    .map(|s| format!(" · {s}"))
+                    .unwrap_or_default()
+            )));
+        }
+    }
+    let children: Vec<_> = a
+        .processes
+        .iter()
+        .filter(|p| p.role == portwise_core::agents::ProcessRole::Child)
+        .take(6)
+        .collect();
+    if !children.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "Tools & apps it started",
+            theme::heading(),
+        )));
+        for p in children {
+            lines.push(Line::from(format!(
+                "  {} ({})  {}",
+                p.name,
+                p.pid,
+                if p.command.is_empty() {
+                    String::new()
+                } else {
+                    p.command.chars().take(48).collect()
+                }
+            )));
+        }
+    }
+    for note in &report.limits {
+        lines.push(Line::from(Span::styled(
+            format!("note: {note}"),
+            theme::muted(),
+        )));
+    }
+    f.render_widget(
+        Paragraph::new(Text::from(lines))
+            .block(detail_block)
+            .wrap(Wrap { trim: false }),
+        detail_area,
+    );
 }
 
 fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
@@ -566,9 +810,16 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
         ]
     } else if app.tab == Tab::Graph {
         &[
-            &[("↑↓", "move"), ("Tab", "ports")],
+            &[("↑↓", "move"), ("Tab", "agents")],
             &[("x", "stop"), ("C", "stop cluster"), ("o", "open")],
             &[("h", "external"), ("a", "all")],
+            &[("?", "help"), ("q", "quit")],
+        ]
+    } else if app.tab == Tab::Agents {
+        &[
+            &[("↑↓", "move"), ("Tab", "ports")],
+            &[("x", "stop its ports"), ("X", "force")],
+            &[("r", "refresh"), ("space", "pause")],
             &[("?", "help"), ("q", "quit")],
         ]
     } else {
@@ -611,7 +862,7 @@ fn centered(area: Rect, w: u16, h: u16) -> Rect {
 }
 
 fn draw_confirm(f: &mut Frame, app: &App) {
-    let Modal::Confirm { plan, headline } = &app.modal else {
+    let Modal::Confirm { plan, headline, .. } = &app.modal else {
         return;
     };
     let blocked = plan.is_blocked();

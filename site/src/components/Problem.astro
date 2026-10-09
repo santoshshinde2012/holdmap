@@ -5,10 +5,11 @@ import Icon from "./Icon.astro";
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">The problem</span>
-      <h2 class="h2" id="problem-title">Port 3000 is taken, again. <span class="soft">A PID and kill -9 don't fix it.</span></h2>
+      <h2 class="h2" id="problem-title">Port 3000 is taken, again. <span class="soft">But ports aren't the whole story.</span></h2>
       <p class="lede">
-        Kill the child and the watcher respawns it, and you still don't know which project it was.
-        portwise tells you what's really there and stops it properly.
+        You're running Claude Code in one terminal, Cursor in another, Docker on the side, and three
+        agents started their own servers. A PID and <code>kill -9</code> don't tell you who owns what —
+        or how to stop only the right thing.
       </p>
     </div>
     <div class="pair">
@@ -23,31 +24,33 @@ node    43000  dev   23u  IPv6  TCP *:hbci (LISTEN)
 <span class="p">$</span> kill -9 43000
 <span class="p">$</span> PORT=3000 npm run dev
 <span class="r">Error: listen EADDRINUSE: address already in use :::3000</span>
-<span class="d"># …the parent respawned it. Which project was that?</span></pre>
+<span class="d"># …the parent respawned it. Which agent started that?</span></pre>
         </div>
         <ul class="notes">
-          <li><Icon name="X" size={16} /> No idea which project or branch</li>
+          <li><Icon name="X" size={16} /> No idea which project, agent or tool</li>
           <li><Icon name="X" size={16} /> <code>kill -9</code> skips cleanup</li>
-          <li><Icon name="X" size={16} /> The watcher brings it back</li>
+          <li><Icon name="X" size={16} /> No view of what each agent can reach</li>
         </ul>
       </div>
       <div class="side">
         <div class="term-window">
           <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-title">With portwise</span><span class="pad" aria-hidden="true"></span></div>
-<pre class="term" tabindex="0"><span class="p">$</span> PORT=3000 npm run dev
-<span class="r">Error: listen EADDRINUSE: address already in use :::3000</span>
-<span class="v">portwise:</span> Port 3000 is held by a <span class="b">Next.js dev server</span>
-  (node, PID 43000) in <span class="b">~/code/shop-web</span> (branch <span class="v">feat/checkout</span>).
-  <span class="d">→</span> portwise stop 3000 <span class="d">frees it</span>
-<span class="p">$</span> portwise stop 3000 --yes
-  <span class="d">· sent SIGTERM to npm (42999), node (43000)</span>
-<span class="g">✔</span> <span class="b">:3000 is free (stopped 2 processes)</span> <span class="d">in 412 ms</span>
+<pre class="term" tabindex="0"><span class="p">$</span> portwise agents
+<span class="v">Claude Code</span>  pid 51200 · 214 MB · 3% CPU · 1 stoppable
+  folders   shop-api  ~/code/shop-api
+  ports     :3001  shop-api (Vite)  · stoppable
+  children  vite (shop-api)
+  access    sandbox unknown · network :3001 only
+<span class="v">Docker Desktop</span>  pid 1290 · tool · 2 ports
+<span class="p">$</span> portwise agents claude --stop-ports --yes
+  <span class="d">· sent SIGTERM to npm (51199), node (51201)</span>
+<span class="g">✔</span> <span class="b">:3001 is free</span>
 <span class="p">$</span> PORT=3000 npm run dev  <span class="g">✓ Ready in 1.4s</span></pre>
         </div>
         <ul class="notes good">
-          <li><Icon name="Check" size={16} /> Names the project and branch</li>
-          <li><Icon name="Check" size={16} /> Stops the whole tree, gracefully</li>
-          <li><Icon name="Check" size={16} /> Checks the port is really free</li>
+          <li><Icon name="Check" size={16} /> Names the agent, footprint and access</li>
+          <li><Icon name="Check" size={16} /> Stops only what that agent started</li>
+          <li><Icon name="Check" size={16} /> Every fact marked seen, inferred or unknown</li>
         </ul>
       </div>
     </div>

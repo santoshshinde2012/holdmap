@@ -5,7 +5,7 @@
 <h1 align="center">portwise</h1>
 
 <p align="center">
-  <b>See which ports are in use, why they're busy, and stop the right thing safely.</b><br/>
+  <b>See which ports, agents and tools are running — and stop the right thing safely.</b><br/>
   CLI · TUI · desktop and tray app · MCP server, all on one Rust core.
 </p>
 
@@ -45,10 +45,11 @@ portwise tells you what's really there and stops it properly.
   means for your safety.
 - **The service graph.** Which local services talk to which, grouped into clusters (Compose,
   Kubernetes, workspaces). Stop a whole stack in dependency order.
-- **Your AI coding agents.** Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider and
-  more: the folders each one works in, the ports and dev servers it started, the services and
-  hosts it talks to, and what the OS says about its access (account, sandbox, approval flags,
-  network exposure), each fact marked seen, inferred or unknown.
+- **Your agents, tools and apps.** Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf,
+  Aider, Docker Desktop, OrbStack and more: the folders each one works in, the ports and apps it
+  started, the services and hosts it talks to, and what the OS says about its access (account,
+  sandbox, approval flags, network exposure), each fact marked seen, inferred or unknown. Reveal a
+  folder, open it in your editor, or stop only what that agent started.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
   server for AI coding assistants. macOS, Linux and Windows. No telemetry.
 
@@ -132,7 +133,7 @@ port = 5432               # no command: started elsewhere, up just waits for it
 
 | Purpose | Commands |
 |---|---|
-| Look | `portwise list`, `portwise inspect`, `portwise explain`, `portwise graph`, `portwise agents`, `portwise watch`, `portwise ssh HOST` (read-only, nothing to install remotely) |
+| Look | `portwise list`, `portwise inspect`, `portwise explain`, `portwise graph`, `portwise agents`, `portwise agents AGENT --stop-ports`, `portwise watch`, `portwise ssh HOST` (read-only, nothing to install remotely) |
 | Act | `portwise stop`, `portwise kill`, `portwise restart`, `portwise run`, `portwise open` |
 | Ports | `portwise free-port --near 3000`, `portwise wait 5432 --timeout 30s` |
 | Projects | `portwise up`, `portwise down`, `portwise status`, `portwise init` |
@@ -237,6 +238,7 @@ flowchart TB
     REG["StopStrategy registry<br/>process tree · container<br/>systemd · pm2 · brew"]
     EXEC["Executor<br/>signal → verify freed"]
     TOPO["Topology<br/>service graph<br/>clusters · stop order"]
+    AGT["Agents<br/>AI agents & tools · folders<br/>access · ports · links"]
     HTTP["HTTP probe<br/>GET / → status, title"]
     STACK["Project config<br/>.portwise.toml"]
   end
@@ -267,6 +269,8 @@ flowchart TB
   ENG -->|"safe to touch?"| POL
   ENG -->|"how to stop"| REG
   ENG --> TOPO
+  ENG --> AGT
+  AGT -.->|"same catalog"| POL
   REG --> EXEC
 
   PROV -->|"read"| SOCK
@@ -281,7 +285,7 @@ flowchart TB
   classDef os fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#052e16
   classDef state fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#3b2203
   class HOOK,CLI,TUI,DESK,MCP iface
-  class SCAN,PROV,POL,REG,EXEC,TOPO,HTTP,STACK core
+  class SCAN,PROV,POL,REG,EXEC,TOPO,AGT,HTTP,STACK core
   class ENG engine
   class SOCK,SIG,CTR os
   class PINS,HIST state

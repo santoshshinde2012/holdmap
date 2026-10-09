@@ -21,7 +21,7 @@
   import Toasts, { type Toast } from "./components/Toasts.svelte";
   import HistoryPanel from "./components/HistoryPanel.svelte";
   import * as api from "./lib/api";
-  import { step } from "./lib/agents";
+  import { step, stoppableEntries } from "./lib/agents";
   import type { AgentsReport, ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortDetails, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
   import { linksLabel, nodeForEntry, sectionsByCluster } from "./lib/graph";
   import type { Command } from "./lib/palette";
@@ -29,7 +29,7 @@
 
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
   type View = "list" | "graph" | "agents";
-  interface Confirm { entry: PortEntry | null; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; restart?: boolean }
+  interface Confirm { entry: PortEntry | null; /** More ports to stop after `entry` (Agents "Stop all"). */ queue?: PortEntry[]; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; restart?: boolean }
 
   const store = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
   // Live data is replaced wholesale on every poll, so it is raw state run through `share`:
@@ -252,6 +252,7 @@
       if (view === "graph") loadTopology();
       else graph = null;
       if (view === "agents") loadAgents();
+      else if (!agentsReport) loadAgents(); // badge count without opening the tab
     }
   }
 
@@ -331,6 +332,51 @@
       confirm = { entry: null, cluster: null, plan, force: false, allowProtected: false, phase: "confirm", log: [], report: null };
     } catch (e) {
       toast("error", "Couldn't plan stopping the dev servers", String(e));
+    }
+  }
+
+  /** Stop every unprotected port an agent started (dev servers and services), asking once. */
+  async function requestStopAgentPorts(agentId: string) {
+    const a = agentsReport?.agents.find((x) => x.id === agentId);
+    if (!a) return;
+    const list = stoppableEntries(a, snapshot?.entries ?? []);
+    if (!list.length) {
+      toast("info", `${a.name} has no stoppable ports`, "Its own IDE / agent listeners stay protected.");
+      return;
+    }
+    if (list.length === 1) return requestStop(list[0], false);
+    try {
+      const plan = await api.plan(stopTarget(list[0]), false, false);
+      confirm = {
+        entry: list[0],
+        queue: list.slice(1),
+        cluster: null,
+        plan: { ...plan, summary: `Stop ${list.length} ports ${a.name} started: ${list.map((e) => `:${e.port}`).join(", ")}` },
+        force: false,
+        allowProtected: false,
+        phase: "confirm",
+        log: [],
+        report: null,
+      };
+    } catch (e) {
+      toast("error", `Couldn't plan stopping ${a.name}'s ports`, String(e));
+    }
+  }
+
+  async function revealAgentFolder(agentId: string, path: string) {
+    try {
+      await api.revealAgentFolder(agentId, path);
+    } catch (e) {
+      toast("error", "Couldn't reveal the folder", String(e));
+    }
+  }
+
+  async function openAgentFolder(agentId: string, path: string) {
+    try {
+      const editor = await api.openAgentFolder(agentId, path);
+      toast("ok", `Opened in ${editor}`);
+    } catch (e) {
+      toast("error", "Couldn't open the folder in an editor", String(e));
     }
   }
 
@@ -488,9 +534,12 @@
     if (!confirm || confirm.phase !== "confirm" || confirm.plan.blocked) return;
     const c = confirm;
     c.phase = "running";
+    const queue = c.queue ?? [];
     const target = c.entry ? stopTarget(c.entry) : c.cluster ? `cluster:${c.cluster.name}` : "dev:all";
     const key = c.entry?.id ?? target;
-    const what = c.entry ? title(c.entry) : c.cluster ? `cluster ${c.cluster.name}` : "All dev servers";
+    const what = queue.length && c.entry
+      ? `${queue.length + 1} ports`
+      : c.entry ? title(c.entry) : c.cluster ? `cluster ${c.cluster.name}` : "All dev servers";
     busy[key] = true;
     // Keep keyboard flow: after a successful stop, the selection moves to the neighbouring row.
     const idx = c.entry ? ordered.findIndex((e) => e.id === c.entry!.id) : -1;
@@ -499,12 +548,27 @@
       const r = await api.stop(target, c.force, c.allowProtected);
       c.report = r;
       if (!c.log.length) c.log = r.log;
-      if (r.freed) {
+      // Agents "Stop all": continue with the rest after the first port frees.
+      if (r.freed && queue.length) {
+        for (const next of queue) {
+          c.log = [...c.log, `→ :${next.port}`];
+          const nr = await api.stop(stopTarget(next), c.force, c.allowProtected);
+          c.log = [...c.log, ...nr.log];
+          c.report = nr;
+          if (!nr.freed) {
+            c.phase = "failed";
+            toast("error", `Stopped some ports; :${next.port} is still busy`, nr.log.at(-1));
+            return;
+          }
+        }
+      }
+      if (c.report?.freed) {
         c.phase = "done";
         if (c.entry && selectedId === c.entry.id) selectedId = neighbour;
         if (!c.entry) { selectedId = null; selectedNode = null; }
+        if (view === "agents") loadAgents();
         const restart = restartCommand(c);
-        if (c.restart && c.entry) {
+        if (c.restart && c.entry && !queue.length) {
           const port = c.entry.port;
           try {
             const s = await api.restartStopped(port);
@@ -518,8 +582,10 @@
         }
         setTimeout(() => {
           if (confirm === c) confirm = null;
-          toast("ok", c.entry ? `Port ${c.entry.port} is free` : c.cluster ? `Cluster ${c.cluster.name} stopped` : "Dev servers stopped", `${what} stopped in ${seconds(r.elapsed_ms)}${r.escalated ? " (needed SIGKILL)" : ""}`,
-            restart && c.entry ? { label: "Copy restart command", run: () => copy(restart, "Restart command") } : { label: "Restart…", run: openHistory });
+          toast("ok",
+            queue.length ? `${what} are free` : c.entry ? `Port ${c.entry.port} is free` : c.cluster ? `Cluster ${c.cluster.name} stopped` : "Dev servers stopped",
+            `${what} stopped in ${seconds(r.elapsed_ms)}${r.escalated ? " (needed SIGKILL)" : ""}`,
+            restart && c.entry && !queue.length ? { label: "Copy restart command", run: () => copy(restart, "Restart command") } : { label: "Restart…", run: openHistory });
         }, 900);
       } else {
         c.phase = "failed";
@@ -649,7 +715,7 @@
       { id: "sort-n", group: "View", icon: "clock", title: "Sort: newest first", run: () => (sort = "newest") },
       { id: "help", group: "View", icon: "keyboard", title: "Keyboard shortcuts", shortcut: ["?"], run: () => (showHelp = true) },
       { id: "view", group: "View", icon: view === "graph" ? "list" : "graph", title: view === "graph" ? "Show the list" : "Show the service graph", shortcut: ["G"], keywords: "mesh topology network dependencies", run: () => (view = view === "graph" ? "list" : "graph") },
-      { id: "agents", group: "View", icon: view === "agents" ? "list" : "bot", title: view === "agents" ? "Show the list" : "Show the AI coding agents", shortcut: ["⇧", "A"], keywords: "ai coding agents claude codex cursor copilot gemini windsurf aider access folders", run: () => (view = view === "agents" ? "list" : "agents") },
+      { id: "agents", group: "View", icon: view === "agents" ? "list" : "bot", title: view === "agents" ? "Show the list" : "Show agents, tools and apps", shortcut: ["⇧", "A"], keywords: "ai coding agents tools apps docker claude codex cursor copilot gemini windsurf aider access folders stop", run: () => (view = view === "agents" ? "list" : "agents") },
       { id: "sort-c", group: "View", icon: "layers", title: "Group by cluster (compose, workspace, supervisor…)", run: () => (sort = "cluster") },
       { id: "settings", group: "Settings", icon: "sliders", title: "Open settings", shortcut: [mod, ","], keywords: "preferences options config interval hotkey", run: () => openSettings() },
       { id: "pin-new", group: "Actions", icon: "star", title: selected ? `Pin :${selected.port} with a label…` : "Pin a port…", shortcut: ["⇧", "P"], keywords: "favourite label watch", run: () => openPin(selected) },
@@ -850,18 +916,23 @@
   </header>
 
   <div class="toolbar" role="toolbar" aria-label="View and filters">
-    <SegmentedControl label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: "List (G)" }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, countLabel: linksLabel(graph?.stats.edges ?? 0), title: graph?.stats.edges ? `Service graph · ${linksLabel(graph.stats.edges)} between services (G)` : "Service graph (G)" }, { value: "agents", label: "Agents", icon: "bot", count: agentsReport?.agents.length || null, countLabel: agentsReport ? `${agentsReport.agents.length} agents` : undefined, title: "AI coding agents: their folders, access, ports and connections (⇧A)" }]} />
-    <span class="divider" aria-hidden="true"></span>
-    <SegmentedControl label="Socket states" value={filters.all ? "all" : "listen"} options={[{ value: "listen", label: "Listening" }, { value: "all", label: "All sockets", title: "Include established, TIME_WAIT… (A)" }]} onchange={(v) => { filters.all = v === "all"; refresh(); }} />
-    <SegmentedControl label="Protocol" bind:value={filters.proto} options={[{ value: "any", label: "Any" }, { value: "tcp", label: "TCP" }, { value: "udp", label: "UDP" }]} />
-    <span class="divider" aria-hidden="true"></span>
-    <FilterChip label="Dev servers" dot="var(--tone-green)" count={stats.dev} bind:pressed={filters.dev} title="Only dev servers" kbd="D" />
-    <FilterChip label="Mine" icon="lock" count={stats.mine} bind:pressed={filters.mine} title="Only my processes" kbd="M" />
-    <FilterChip label="Exposed" icon="globe" count={stats.exposed} tone={stats.exposed > 0 ? "warn" : "accent"} bind:pressed={filters.exposed} title="Reachable from the network" kbd="E" />
-    {#if filtersActive}<Button size="sm" variant="ghost" icon="x" onclick={clearFilters}>Clear</Button>{/if}
-
-    <div class="spacer"></div>
-    <Select size="sm" prefix="Sort" label="Sort by" labelHidden bind:value={sort} width="150px" options={[{ value: "group", label: "Grouped", description: "By kind: dev, containers, databases…" }, { value: "cluster", label: "Cluster", description: "Compose project, workspace, supervisor" }, { value: "port", label: "Port" }, { value: "newest", label: "Newest" }, { value: "memory", label: "Memory" }]} />
+    <SegmentedControl label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: "List (G)" }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, countLabel: linksLabel(graph?.stats.edges ?? 0), title: graph?.stats.edges ? `Service graph · ${linksLabel(graph.stats.edges)} between services (G)` : "Service graph (G)" }, { value: "agents", label: "Agents", icon: "bot", count: agentsReport?.agents.length || null, countLabel: agentsReport ? `${agentsReport.agents.length} agents and tools` : undefined, title: "Agents, tools and apps: folders, access, ports they started and connections (⇧A)" }]} />
+    {#if view !== "agents"}
+      <span class="divider" aria-hidden="true"></span>
+      <SegmentedControl label="Socket states" value={filters.all ? "all" : "listen"} options={[{ value: "listen", label: "Listening" }, { value: "all", label: "All sockets", title: "Include established, TIME_WAIT… (A)" }]} onchange={(v) => { filters.all = v === "all"; refresh(); }} />
+      <SegmentedControl label="Protocol" bind:value={filters.proto} options={[{ value: "any", label: "Any" }, { value: "tcp", label: "TCP" }, { value: "udp", label: "UDP" }]} />
+      <span class="divider" aria-hidden="true"></span>
+      <FilterChip label="Dev servers" dot="var(--tone-green)" count={stats.dev} bind:pressed={filters.dev} title="Only dev servers" kbd="D" />
+      <FilterChip label="Mine" icon="lock" count={stats.mine} bind:pressed={filters.mine} title="Only my processes" kbd="M" />
+      <FilterChip label="Exposed" icon="globe" count={stats.exposed} tone={stats.exposed > 0 ? "warn" : "accent"} bind:pressed={filters.exposed} title="Reachable from the network" kbd="E" />
+      {#if filtersActive}<Button size="sm" variant="ghost" icon="x" onclick={clearFilters}>Clear</Button>{/if}
+      <div class="spacer"></div>
+      <Select size="sm" prefix="Sort" label="Sort by" labelHidden bind:value={sort} width="150px" options={[{ value: "group", label: "Grouped", description: "By kind: dev, containers, databases…" }, { value: "cluster", label: "Cluster", description: "Compose project, workspace, supervisor" }, { value: "port", label: "Port" }, { value: "newest", label: "Newest" }, { value: "memory", label: "Memory" }]} />
+    {:else}
+      <span class="divider" aria-hidden="true"></span>
+      <span class="agents-hint">Folders, tools and ports each agent started · access marked seen / inferred / unknown</span>
+      <div class="spacer"></div>
+    {/if}
   </div>
 
   <main class="content" class:narrow class:wide={view === "agents"} style="--pane-w: {paneWidth}px">
@@ -877,7 +948,9 @@
       <div class="graph-wrap agents-wrap">
         {#if AgentsView}
           <AgentsView report={agentsReport} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced}
-            onselectagent={(id) => (selectedAgent = id)} onentry={openEntry} />
+            onselectagent={(id) => (selectedAgent = id)} onentry={openEntry}
+            onreveal={revealAgentFolder} oneditor={openAgentFolder}
+            onstop={(e) => requestStop(e, false)} onstopall={requestStopAgentPorts} />
         {:else}
           <div class="graph-loading" aria-busy="true">Loading agents…</div>
         {/if}
@@ -1015,6 +1088,7 @@
   .toolbar::-webkit-scrollbar { display: none; }
   .divider { width: 1px; height: 18px; background: var(--border-strong); margin: 0 var(--sp-1); flex: none; }
   .spacer { flex: 1; min-width: var(--sp-2); }
+  .agents-hint { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); white-space: normal; max-width: 42rem; }
 
   .content { display: grid; grid-template-columns: minmax(0, 1fr) var(--pane-w, 440px); min-height: 0; }
   .content.narrow, .content.wide { grid-template-columns: 1fr; }

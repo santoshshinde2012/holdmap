@@ -19,7 +19,7 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`portwise wait`](#portwise-wait) | Wait until a port is accepting connections (or free, with --free) |
 | [`portwise run`](#portwise-run) | Free a port (safely) and run a command on it, with PORT set |
 | [`portwise graph`](#portwise-graph) (alias `mesh`) | Show which services talk to which (dependencies, clusters) as a tree, JSON, DOT or Mermaid |
-| [`portwise agents`](#portwise-agents) | Show the AI coding agents running here: their folders, access, ports and connections |
+| [`portwise agents`](#portwise-agents) | Show AI coding agents and developer tools: folders, access, ports and connections |
 | [`portwise watch`](#portwise-watch) | Stream port events: new listeners, closed listeners, conflicts |
 | [`portwise pin`](#portwise-pin) | Pin a port (favourite): shown first and watched even when free |
 | [`portwise unpin`](#portwise-unpin) | Remove a pin |
@@ -40,12 +40,13 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 ## portwise
 
 ```text
-portwise shows every listening port with its owning process, project and framework, explains in
-plain English why a port is busy (dev-server tree, Docker container, systemd/pm2/brew service, OS
-feature, TIME_WAIT, another user) and stops the correct thing gracefully, verifying the port is free
-afterwards.
+portwise shows every listening port with its owning process, project and framework, maps AI coding
+agents and developer tools (Claude Code, Cursor, Docker Desktop…) to the folders and ports they
+hold, explains in plain English why a port is busy (dev-server tree, Docker container,
+systemd/pm2/brew service, OS feature, TIME_WAIT, another user) and stops the correct thing
+gracefully, verifying the port is free afterwards.
 
-Run without arguments in a terminal to open the interactive TUI.
+Run without arguments in a terminal to open the interactive TUI (Tab cycles Ports → Graph → Agents).
 
 Usage: portwise [OPTIONS] [COMMAND]
 
@@ -60,7 +61,7 @@ Commands:
   run          Free a port (safely) and run a command on it, with PORT set
   graph        Show which services talk to which (dependencies, clusters) as a tree, JSON, DOT or
                Mermaid [alias: mesh]
-  agents       Show the AI coding agents running here: their folders, access, ports and connections
+  agents       Show AI coding agents and developer tools: folders, access, ports and connections
   watch        Stream port events: new listeners, closed listeners, conflicts
   pin          Pin a port (favourite): shown first and watched even when free
   unpin        Remove a pin
@@ -108,7 +109,8 @@ EXAMPLES:
   portwise free-port --near 3000
   portwise wait 5432 --timeout 30s
   portwise graph                Which services depend on which
-  portwise agents               AI coding agents: folders, access, ports
+  portwise agents               Agents & tools: folders, access, ports
+  portwise agents --stop-ports  Stop the ports they started
   portwise stop --cluster shop  Stop a whole stack, dependents first
   portwise up                   Start the services in .portwise.toml
   eval "$(portwise init zsh)"   Explain port-in-use errors in your shell
@@ -337,7 +339,7 @@ Options:
 ## portwise agents
 
 ```text
-Show the AI coding agents running here: their folders, access, ports and connections
+Show AI coding agents and developer tools: folders, access, ports and connections
 
 Usage: portwise agents [OPTIONS] [AGENT]
 
@@ -346,6 +348,10 @@ Arguments:
 
 Options:
   -w, --wide           List every process of each agent, with its command line (secrets hidden)
+      --stop-ports     Stop the unprotected ports each matching agent started (dev servers and
+                       services)
+      --dry-run        Show the stop plan only; don't send any signal
+      --yes            Don't ask for confirmation before stopping
       --json           Machine-readable JSON output
       --color <COLOR>  When to use colours [env: PORTWISE_COLOR=] [default: auto] [possible values:
                        auto, always, never]

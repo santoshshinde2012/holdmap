@@ -2,11 +2,13 @@
   // An agent in the footprint graph: monogram in the agent's colour, name, kind and pid, and the
   // access headline (sandboxed, your account, root…).
   import { Handle, Position, type NodeProps, type Node } from "@xyflow/svelte";
-  import { accessHeadline, counts, countsLine, monogram, type FootFlowData } from "../../lib/agents";
+  import { accessHeadline, counts, countsLine, monogram, resourcesLine, type FootFlowData } from "../../lib/agents";
 
   let { data }: NodeProps<Node<FootFlowData>> = $props();
   const a = $derived(data.node.agent!);
   const head = $derived(accessHeadline(a));
+  const c = $derived(counts(a));
+  const res = $derived(resourcesLine(a));
 </script>
 
 <div
@@ -16,14 +18,14 @@
   class:sel={data.selected}
   style="--agent: {data.color}"
   role="button"
-  aria-label="{a.name}, {data.node.sub}. {head.text}. {countsLine(counts(a))}"
+  aria-label="{a.name}, {data.node.sub}. {head.text}. {countsLine(c)}. {res}"
 >
   <Handle type="target" position={Position.Left} isConnectable={false} />
   <span class="mono-tile" aria-hidden="true">{monogram(a.name)}</span>
   <div class="body">
-    <span class="label">{a.name}</span>
+    <span class="label">{a.name}{#if c.stoppable > 0}<em class="stop-n">{c.stoppable}</em>{/if}</span>
     <span class="sub">{data.node.sub}</span>
-    <span class="acc lv-{head.level}"><i aria-hidden="true"></i>{head.text}</span>
+    <span class="acc lv-{head.level}"><i aria-hidden="true"></i>{head.text} · {res.split(" · ").slice(0, 2).join(" · ")}</span>
   </div>
   <Handle type="source" position={Position.Right} isConnectable={false} />
 </div>
@@ -46,7 +48,8 @@
     font-family: var(--font); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-semibold); letter-spacing: var(--ls-body);
   }
   .body { min-width: 0; display: grid; gap: 1px; }
-  .label { font-weight: var(--fw-semibold); font-size: var(--fs-body); line-height: var(--lh-body); letter-spacing: var(--ls-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .label { font-weight: var(--fw-semibold); font-size: var(--fs-body); line-height: var(--lh-body); letter-spacing: var(--ls-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+  .stop-n { font-style: normal; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); padding: 0 6px; border-radius: 999px; }
   .sub, .acc { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .acc { display: inline-flex; align-items: center; gap: 5px; color: var(--text-2); }
   .acc i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }

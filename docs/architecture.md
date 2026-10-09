@@ -26,7 +26,7 @@ flowchart TB
     REG["StopStrategy registry<br/>process tree · container<br/>systemd · pm2 · brew"]
     EXEC["Executor<br/>signal → verify freed"]
     TOPO["Topology<br/>service graph<br/>clusters · stop order"]
-    AGT["Agents<br/>AI coding agents · folders<br/>access · ports · links"]
+    AGT["Agents<br/>AI agents & tools · folders<br/>access · ports · links"]
     HTTP["HTTP probe<br/>GET / → status, title"]
     STACK["Project config<br/>.portwise.toml"]
   end
@@ -184,9 +184,11 @@ flowchart LR
 `agents::AgentsBuilder` turns the same `Scan` into an `AgentsReport`:
 
 * **Who.** `agents::catalog` names each agent product: bundle, process name, install path or
-  entry script. `ProtectionPolicy` uses the same catalog, so what the view calls an agent is what
-  portwise refuses to stop. An editor or desktop app with many helpers is one agent. A terminal
-  agent started inside it is its own agent, linked by a parent edge.
+  entry script. Kinds cover terminal agents, AI editors, desktop apps, extensions, hosts and
+  developer tools (Docker Desktop, OrbStack…). `ProtectionPolicy` uses the same catalog for
+  Cli/Extension/Host names, so what the view calls an agent is what portwise refuses to stop. An
+  editor, desktop app or tool with many helpers is one agent. A terminal agent started inside it
+  is its own agent, linked by a parent edge.
 * **Where.** Folders are the members' working directories, with project details from the scan,
   plus recent projects from a `RecentProjects` source. It reads only directory names under
   `~/.claude/projects` and the window folder URIs in the editors' `storage.json`. It never opens

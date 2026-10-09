@@ -177,7 +177,11 @@ fn finds_each_agent_once_with_its_own_processes() {
 fn folders_are_working_directories_with_their_projects() {
     let d = tempfile::tempdir().unwrap();
     let scan = machine(d.path());
-    let r = AgentsBuilder::new(&scan).with_home(None).build();
+    // Home = fixture root so project detection never walks into a polluted /tmp (e.g. a stray
+    // package.json from another tool) and mis-labels the project-less `docs` folder.
+    let r = AgentsBuilder::new(&scan)
+        .with_home(Some(d.path().to_path_buf()))
+        .build();
     let cursor = find(&r, "cursor");
     assert_eq!(cursor.folders.len(), 1, "/ and app bundles are skipped");
     let f = &cursor.folders[0];

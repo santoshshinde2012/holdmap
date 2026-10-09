@@ -389,6 +389,31 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT): AgentsReport {
     },
   };
 
+  const dockerPorts = [...port(5432, "service"), ...port(6379, "service")];
+  const docker: Agent = {
+    id: "agent:48000", product: "docker-desktop", name: "Docker Desktop", vendor: "Docker", kind: "tool", pid: 48000, process_name: "Docker Desktop",
+    command: "/Applications/Docker.app/Contents/MacOS/Docker Desktop", started_at: started - 172800, parent: null, memory_bytes: 1.1e9, cpu_percent: 2.0,
+    processes: [
+      { pid: 48000, ppid: 1, name: "Docker Desktop", command: "/Applications/Docker.app/Contents/MacOS/Docker Desktop", role: "agent", cwd: "/", memory_bytes: 180e6, cpu_percent: 0.4 },
+      { pid: 48020, ppid: 48000, name: "com.docker.backend", command: "com.docker.backend", role: "helper", cwd: "/", memory_bytes: 420e6, cpu_percent: 1.1 },
+    ],
+    more_processes: 4,
+    folders: [],
+    ports: dockerPorts,
+    links: [],
+    more_links: 0,
+    access: {
+      user: "dev", uid: 501, root: false, mine: true,
+      facts: [
+        fact("user", "standard", "Runs as you (dev): the same file access as your account.", "observed"),
+        fact("sandbox", "unknown", "No sandbox seen right now. Its commands may still be sandboxed when they run; agent settings aren't read.", "unknown"),
+        fact("approvals", "unknown", "No approval flags on its command line; its own settings decide (not read).", "unknown"),
+        network(dockerPorts, 0),
+        unknownPrivacy,
+      ],
+    },
+  };
+
   // A stopped dev server's process is gone from its agent too.
   const gone = new Set([3000, 3001, 5173].filter((p) => !byPort(p)).map((p) => 40000 + p));
   const live = (a: Agent): Agent => ({
@@ -397,7 +422,7 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT): AgentsReport {
     folders: a.folders.map((f) => ({ ...f, pids: f.pids.filter((p) => !gone.has(p)) })),
   });
   return {
-    agents: [claude, cursor].map(live),
+    agents: [claude, cursor, docker].map(live),
     platform: "macos",
     taken_at_ms: s.taken_at_ms,
     limits: [

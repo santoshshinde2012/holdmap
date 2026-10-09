@@ -279,7 +279,7 @@ export type PortEvent =
 
 // ---- agents (crates/portwise-core/src/agents/model.rs) ----
 
-export type AgentKind = "cli" | "ide" | "desktop" | "extension" | "host";
+export type AgentKind = "cli" | "ide" | "desktop" | "extension" | "host" | "tool";
 export type Evidence = "observed" | "inferred" | "unknown";
 export type ProcessRole = "agent" | "helper" | "child";
 export type FolderSource = "agent" | "child" | "recent";

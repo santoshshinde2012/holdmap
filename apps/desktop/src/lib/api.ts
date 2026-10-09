@@ -93,6 +93,18 @@ export async function openInEditor(port: number): Promise<string> {
   return call("open_in_editor", { port });
 }
 
+/** Show an agent's folder in Finder / Explorer (path must belong to that agent). */
+export async function revealAgentFolder(agentId: string, path: string): Promise<void> {
+  if (!isTauri) return;
+  return call("reveal_agent_folder", { agentId, path });
+}
+
+/** Open an agent's folder in the user's editor; resolves to its name. */
+export async function openAgentFolder(agentId: string, path: string): Promise<string> {
+  if (!isTauri) return "VS Code";
+  return call("open_agent_folder", { agentId, path });
+}
+
 /** Start again what portwise just stopped on `port` (the second half of "Restart"). */
 export async function restartStopped(port: number): Promise<{ pid: number; command: string; log: string }> {
   if (!isTauri) return { pid: 4243, command: "npm run dev", log: "/tmp/portwise.log" };

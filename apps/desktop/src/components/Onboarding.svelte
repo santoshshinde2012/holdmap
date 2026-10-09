@@ -9,10 +9,10 @@
   <div class="art" aria-hidden="true"><Icon name="sparkles" size={18} /></div>
   <div class="body">
     <strong>Welcome to portwise</strong>
-    <p>Every port in use, who owns it, and a safe way to stop it.</p>
+    <p>Every port, agent and tool on your machine — with a safe way to stop what they started.</p>
     <ul>
       <li><kbd>{mod}</kbd><kbd>K</kbd> command palette</li>
-      <li><kbd>/</kbd> search — try <code>:3000</code> or a project name</li>
+      <li><kbd>⇧</kbd><kbd>A</kbd> agents, tools and the ports they started</li>
       <li><kbd>⌫</kbd> stop the selected port (always asks first)</li>
     </ul>
   </div>
@@ -27,5 +27,4 @@
   p { margin: 2px 0 var(--sp-2); color: var(--text-2); }
   ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); color: var(--text-2); font-size: var(--fs-body); line-height: var(--lh-body); }
   li { display: inline-flex; align-items: center; gap: 4px; }
-  code { background: var(--surface); padding: 0 4px; border-radius: 4px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
 </style>

@@ -6,6 +6,33 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
+## [Unreleased]
+
+### Added
+
+- **Control from the Agents surface.** Reveal a folder, open it in your editor, or stop the
+  unprotected ports an agent started (desktop cards, `portwise agents --stop-ports`, MCP
+  `stop_agent_ports`). Paths are verified against the current agents report before opening.
+- **Developer tools in the catalog.** Docker Desktop, OrbStack and Podman Desktop appear beside
+  AI coding agents, with the same folders / ports / access footprint.
+- **TUI Agents tab.** Cycle Ports → Graph → Agents with Tab; browse each agent's footprint.
+- **Site and docs** reframe the problem around agents, tools and apps — not only ports. Marketing
+  pages, SEO copy, Interfaces, Features (agents screenshot), Footer and a new
+  [Agents guide](https://santoshshinde2012.github.io/portwise/docs/agents/) cover control, richer
+  skim and developer tools.
+
+### Changed
+
+- Agents empty states, onboarding, shortcuts and MCP copy talk about tools and apps as well as
+  coding agents. Desktop hides port filters while the Agents tab is open and prefetches the badge
+  count.
+- **Richer agent skim surfaces:** memory, CPU, process count, stoppable count and parent on cards /
+  graph nodes / CLI / TUI / MCP text; child processes grouped as “tools & apps it started”; folder
+  source labels (working dir / child cwd / recent); TUI `x` stops an agent’s ports; demo includes
+  Docker Desktop.
+- Product copy (CLI `--help`, desktop store metadata, README architecture, site CLI demo) aligns
+  with agents and tools; removed a duplicate desktop `icon.svg`.
+
 ## [0.2.0] - 2026-10-09
 
 ### Added

@@ -220,6 +220,21 @@ pub fn approvals(product: &str, root: &ProcessInfo) -> AccessFact {
                 return auto(f);
             }
         }
+        "cursor-agent" | "cline" | "goose" | "opencode" | "amp" | "crush" | "qwen" => {
+            if let Some(f) = has_flag(
+                args,
+                &[
+                    "--yolo",
+                    "-y",
+                    "--yes",
+                    "--force",
+                    "--auto-approve",
+                    "--dangerously-skip-permissions",
+                ],
+            ) {
+                return auto(f);
+            }
+        }
         _ => {}
     }
     fact(

@@ -13,9 +13,10 @@ export const securityUrl = `${repoUrl}/blob/main/SECURITY.md`;
 export const contributingUrl = `${repoUrl}/blob/main/CONTRIBUTING.md`;
 export const issuesUrl = `${repoUrl}/issues`;
 
-export const tagline = "See which ports are in use, why they're busy, and stop the right thing safely.";
+export const tagline =
+  "See which ports, agents and tools are running — and stop the right thing safely.";
 export const description =
-  "portwise shows what's listening on every port, explains why it's busy and stops the right thing safely. A CLI, TUI, desktop app and MCP server on one Rust core. macOS, Linux and Windows.";
+  "portwise maps your agents, tools and apps to the ports they hold, explains why a port is busy, and stops only what it should. A CLI, TUI, desktop app and MCP server on one Rust core. macOS, Linux and Windows.";
 
 /** Stars are only shown once the number says something. */
 const STARS_SHOWN_FROM = 25;
