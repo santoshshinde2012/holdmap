@@ -1,14 +1,17 @@
-//! `portwise agents`: the AI coding agents running here and their footprint: folders, access,
-//! ports and the services they talk to.
+//! `portwise agents`: the agents, tools and apps running here and their footprint: folders,
+//! access, ports and the services they talk to. With `--stop-ports`, stop the unprotected
+//! tools and apps they started (never the agent's own protected listeners).
 
 use crate::style::{self, paint, S};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use portwise_core::agents::{
     AccessLevel, Agent, AgentsReport, Evidence, FolderSource, LinkKind, PortRole,
 };
 use portwise_core::engine::tilde;
 use portwise_core::util::{count, human_bytes};
-use portwise_core::{Engine, Exposure, ScanOptions};
+use portwise_core::{
+    execute, Engine, Exposure, ScanOptions, StopOptions, Target,
+};
 
 #[derive(clap::Args, Debug, Default)]
 pub struct AgentsArgs {
@@ -17,6 +20,15 @@ pub struct AgentsArgs {
     /// List every process of each agent, with its command line (secrets hidden).
     #[arg(short, long)]
     pub wide: bool,
+    /// Stop the unprotected ports each matching agent started (dev servers and services).
+    #[arg(long)]
+    pub stop_ports: bool,
+    /// Show the stop plan only; don't send any signal.
+    #[arg(long, requires = "stop_ports")]
+    pub dry_run: bool,
+    /// Don't ask for confirmation before stopping.
+    #[arg(long, requires = "stop_ports")]
+    pub yes: bool,
     /// Machine-readable JSON output.
     #[arg(long)]
     pub json: bool,
@@ -41,6 +53,9 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
     if let Some(q) = &a.agent {
         report.agents.retain(|x| matches(x, q));
     }
+    if a.stop_ports {
+        return stop_ports(&e, &report, a);
+    }
     if a.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
@@ -51,6 +66,95 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
     } else {
         crate::exit::OK
     })
+}
+
+/// Stop every unprotected port the matching agents started.
+fn stop_ports(e: &Engine, report: &AgentsReport, a: &AgentsArgs) -> Result<u8> {
+    if a.json && !a.yes && !a.dry_run {
+        bail!("--json needs --yes (or --dry-run): JSON mode never prompts");
+    }
+    let ports: Vec<(String, u16)> = report
+        .agents
+        .iter()
+        .flat_map(|ag| {
+            ag.stoppable_ports()
+                .map(move |p| (ag.name.clone(), p.port))
+        })
+        .collect();
+    if ports.is_empty() {
+        if a.json {
+            println!("{}", serde_json::json!({"stopped": [], "plans": []}));
+        } else {
+            println!(
+                "{}",
+                style::dim("No stoppable ports: matching agents haven't started a freeable service.")
+            );
+        }
+        return Ok(crate::exit::BUSY);
+    }
+    let opts = StopOptions::default();
+    let mut plans = Vec::new();
+    for (_, port) in &ports {
+        plans.push(e.plan(&Target::Port(*port), &opts));
+    }
+    if a.dry_run {
+        if a.json {
+            crate::commands::print_json(&plans)?;
+        } else {
+            for (i, plan) in plans.iter().enumerate() {
+                let (name, port) = &ports[i];
+                println!("{} :{port} ({name})", paint("plan", S::Cyan));
+                print!("{}", crate::render::plan_text(plan));
+            }
+            println!("{}", style::dim("Dry run: nothing was changed."));
+        }
+        return Ok(crate::exit::OK);
+    }
+    let blocked = plans.iter().filter(|p| p.blocked.is_some()).count();
+    let actionable: Vec<_> = plans
+        .iter()
+        .zip(ports.iter())
+        .filter(|(p, _)| p.blocked.is_none())
+        .collect();
+    if actionable.is_empty() {
+        bail!(
+            "every stoppable port is blocked by the safety policy ({} protected)",
+            blocked
+        );
+    }
+    if !a.yes {
+        let list = actionable
+            .iter()
+            .map(|(_, (name, port))| format!(":{port} ({name})"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if !crate::commands::confirm(&format!("Stop {list}?"))? {
+            bail!("cancelled");
+        }
+    }
+    let mut reports = Vec::new();
+    let mut code = crate::exit::OK;
+    for (plan, (name, port)) in &actionable {
+        if !a.json {
+            println!("{} :{port} ({name})", paint("stop", S::Cyan));
+        }
+        let report = execute(plan, &mut |l| {
+            if !a.json {
+                println!("  {} {}", style::dim("·"), style::dim(l));
+            }
+        });
+        if !report.freed {
+            code = crate::exit::BUSY;
+        }
+        if !report.success {
+            code = code.max(crate::exit::ERROR);
+        }
+        reports.push(report);
+    }
+    if a.json {
+        crate::commands::print_json(&reports)?;
+    }
+    Ok(code)
 }
 
 fn level_mark(l: AccessLevel) -> String {
@@ -66,7 +170,7 @@ fn level_mark(l: AccessLevel) -> String {
 pub fn render(r: &AgentsReport, wide: bool) -> String {
     let mut out = String::new();
     if r.agents.is_empty() {
-        out.push_str(&style::dim("No AI coding agents running.\n"));
+        out.push_str(&style::dim("No agents or developer tools running.\n"));
         return out;
     }
     let label = |s: &str| style::dim(format!("  {s:<10}"));
@@ -336,6 +440,6 @@ mod tests {
         assert!(text.contains("? No sandbox seen right now."));
         assert!(text.contains("note: Chats are never read."));
         let none = render(&AgentsReport::default(), false);
-        assert!(none.contains("No AI coding agents running."));
+        assert!(none.contains("No agents or developer tools running."));
     }
 }

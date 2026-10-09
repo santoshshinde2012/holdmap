@@ -1,10 +1,10 @@
 <script lang="ts">
   // One agent in the rail: monogram, access headline and footprint counts, expanding to the full
-  // access picture, folders, ports and process tree. Figures come from the OS; anything not
-  // observed is labelled as such.
+  // access picture, folders (reveal / open in editor), ports (open details or stop) and process
+  // tree. Figures come from the OS; anything not observed is labelled as such.
   import Icon from "../Icon.svelte";
   import { humanBytes, humanDuration, tildify } from "../../lib/format";
-  import { EVIDENCE_LABEL, KIND_LABEL, LEVEL_LABEL, TOPIC_LABEL, accessFacts, accessHeadline, counts, countsLine, monogram } from "../../lib/agents";
+  import { EVIDENCE_LABEL, KIND_LABEL, LEVEL_LABEL, TOPIC_LABEL, accessFacts, accessHeadline, counts, countsLine, monogram, stoppableEntries } from "../../lib/agents";
   import type { Agent, AgentProcess, AgentsReport, PortEntry } from "../../lib/types";
 
   let {
@@ -15,17 +15,25 @@
     color,
     onselect,
     onentry,
+    onreveal,
+    oneditor,
+    onstop,
+    onstopall,
     now = Date.now(),
   }: {
     agent: Agent;
     report: AgentsReport;
-    /** Live ports, so a card's port can open the details pane. */
+    /** Live ports, so a card's port can open the details pane or be stopped. */
     entries: PortEntry[];
     selected: boolean;
     /** The agent's colour in the graph. */
     color: string;
     onselect: () => void;
     onentry: (e: PortEntry) => void;
+    onreveal: (path: string) => void;
+    oneditor: (path: string) => void;
+    onstop: (e: PortEntry) => void;
+    onstopall: () => void;
     now?: number;
   } = $props();
 
@@ -39,6 +47,7 @@
   const up = $derived(agent.started_at ? humanDuration(now / 1000 - agent.started_at) : null);
   const meta = $derived([KIND_LABEL[agent.kind], agent.vendor !== "unknown" ? agent.vendor : null, `pid ${agent.pid}`, up ? `up ${up}` : null].filter(Boolean).join(" · "));
   const entry = (id: string | null) => entries.find((e) => e.id === id) ?? null;
+  const stoppable = $derived(stoppableEntries(agent, entries));
 
   function role(p: AgentProcess): string {
     return p.role === "helper" ? "helper" : p.role === "child" ? "started by it" : "agent";
@@ -48,13 +57,6 @@
 {#snippet rowBody(icon: string, label: string, sub: string)}
   <span class="ic"><Icon name={icon} size={13} /></span>
   <span class="row-main"><span class="row-label">{label}</span><span class="row-sub mono">{sub}</span></span>
-{/snippet}
-{#snippet row(e: PortEntry | null, icon: string, label: string, sub: string)}
-  {#if e}
-    <button class="row-btn" onclick={() => onentry(e)} title="Open :{e.port} in the details pane">{@render rowBody(icon, label, sub)}</button>
-  {:else}
-    <span class="row-btn">{@render rowBody(icon, label, sub)}</span>
-  {/if}
 {/snippet}
 
 <article class="card" bind:this={el} class:on={selected} style="--agent: {color}" aria-label={agent.name}>
@@ -78,6 +80,7 @@
               <span class="lv">{LEVEL_LABEL[f.level]}</span>
               <span class="sum">{f.summary}</span>
               {#if f.evidence === "inferred"}<span class="ev">{EVIDENCE_LABEL[f.evidence]}</span>{/if}
+              {#if f.evidence === "unknown"}<span class="ev muted">{EVIDENCE_LABEL[f.evidence]}</span>{/if}
             </dd>
           </div>
         {/each}
@@ -87,24 +90,45 @@
         <h3>Folders</h3>
         <ul class="rows">
           {#each agent.folders as f}
-            <li class="row-btn">
-              <span class="ic"><Icon name="folder" size={13} /></span>
-              <span class="row-main">
-                <span class="row-label">{f.label}{#if f.evidence !== "observed"}<em> · {EVIDENCE_LABEL[f.evidence]}</em>{/if}</span>
-                <span class="row-sub">{tildify(f.path)}{f.project?.git_branch ? ` · ⎇ ${f.project.git_branch}` : ""}{f.source === "recent" ? " · recent" : ""}{f.privacy_area ? ` · ${f.privacy_area}` : ""}</span>
-                {#if f.note}<span class="row-note">{f.note}</span>{/if}
-              </span>
+            <li class="folder">
+              <div class="row-btn static">
+                <span class="ic"><Icon name="folder" size={13} /></span>
+                <span class="row-main">
+                  <span class="row-label">{f.label}{#if f.evidence !== "observed"}<em> · {EVIDENCE_LABEL[f.evidence]}</em>{/if}</span>
+                  <span class="row-sub">{tildify(f.path)}{f.project?.git_branch ? ` · ⎇ ${f.project.git_branch}` : ""}{f.source === "recent" ? " · recent" : ""}{f.privacy_area ? ` · ${f.privacy_area}` : ""}</span>
+                  {#if f.note}<span class="row-note">{f.note}</span>{/if}
+                </span>
+              </div>
+              <div class="acts" role="group" aria-label="Open {f.label}">
+                <button type="button" class="act" title="Reveal in file manager" onclick={() => onreveal(f.path)}><Icon name="folder" size={12} />Reveal</button>
+                <button type="button" class="act" title="Open in editor" onclick={() => oneditor(f.path)}><Icon name="code" size={12} />Editor</button>
+              </div>
             </li>
           {/each}
         </ul>
       {/if}
 
       {#if agent.ports.length}
-        <h3>Ports it serves</h3>
+        <div class="ports-head">
+          <h3>Ports it serves</h3>
+          {#if stoppable.length > 1}
+            <button type="button" class="act stop-all" title="Stop every unprotected port this agent started" onclick={onstopall}>
+              <Icon name="stop" size={12} />Stop all ({stoppable.length})
+            </button>
+          {/if}
+        </div>
         <ul class="rows">
           {#each agent.ports as p}
-            <li>
-              {@render row(entry(p.entry_id), "server", p.project ?? p.framework ?? p.process ?? p.label, `:${p.port} · ${p.role === "dev_server" ? "dev server" : p.role === "agent" ? "agent's own port" : "service"}${p.exposure === "all_interfaces" ? " · reachable from the network" : ""}`)}
+            {@const e = entry(p.entry_id)}
+            <li class="port-row">
+              {#if e}
+                <button class="row-btn" onclick={() => onentry(e)} title="Open :{e.port} in the details pane">{@render rowBody("server", p.project ?? p.framework ?? p.process ?? p.label, `:${p.port} · ${p.role === "dev_server" ? "dev server" : p.role === "agent" ? "agent's own port" : "service"}${p.exposure === "all_interfaces" ? " · reachable from the network" : ""}`)}</button>
+              {:else}
+                <span class="row-btn static">{@render rowBody("server", p.project ?? p.framework ?? p.process ?? p.label, `:${p.port} · ${p.role === "dev_server" ? "dev server" : p.role === "agent" ? "agent's own port" : "service"}`)}</span>
+              {/if}
+              {#if e && !e.protected && (p.role === "dev_server" || p.role === "service")}
+                <button type="button" class="act stop" title="Stop :{e.port}" onclick={() => onstop(e)}><Icon name="stop" size={12} />Stop</button>
+              {/if}
             </li>
           {/each}
         </ul>
@@ -114,8 +138,13 @@
         <h3>Talks to</h3>
         <ul class="rows">
           {#each agent.links as l}
+            {@const e = entry(l.entry_id)}
             <li>
-              {@render row(entry(l.entry_id), l.kind === "remote" ? "globe" : "plug", l.label, `${l.kind === "remote" ? l.address : `:${l.port}`} · ×${l.connections}${l.service ? ` · ${l.service}` : ""}`)}
+              {#if e}
+                <button class="row-btn" onclick={() => onentry(e)} title="Open :{e.port} in the details pane">{@render rowBody(l.kind === "remote" ? "globe" : "plug", l.label, `${l.kind === "remote" ? l.address : `:${l.port}`} · ×${l.connections}${l.service ? ` · ${l.service}` : ""}`)}</button>
+              {:else}
+                <span class="row-btn static">{@render rowBody(l.kind === "remote" ? "globe" : "plug", l.label, `${l.kind === "remote" ? l.address : `:${l.port}`} · ×${l.connections}${l.service ? ` · ${l.service}` : ""}`)}</span>
+              {/if}
             </li>
           {/each}
           {#if agent.more_links}<li class="more">+{agent.more_links} more connections not listed</li>{/if}
@@ -158,6 +187,8 @@
   .nums { grid-area: nums; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
   .body { padding: 2px 12px 12px; display: grid; gap: 6px; border-top: 1px solid var(--border); }
   h3 { margin: 8px 0 0; font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
+  .ports-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 8px; }
+  .ports-head h3 { margin: 0; }
   .facts { margin: 8px 0 0; display: grid; gap: 7px; }
   .fact { display: grid; grid-template-columns: 76px 1fr; gap: 8px; align-items: baseline; }
   dt { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
@@ -168,10 +199,20 @@
   .fact.lv-unknown .lv { color: var(--muted); }
   .sum, .ev { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-2); }
   .ev { color: var(--warn); }
+  .ev.muted { color: var(--muted); }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .folder, .port-row { display: grid; gap: 2px; }
   .row-btn { width: 100%; display: flex; gap: 8px; align-items: flex-start; padding: 4px 6px; margin: 0 -6px; border: 0; border-radius: 8px; background: transparent; text-align: left; color: var(--text); font: inherit; }
   button.row-btn { cursor: pointer; }
   button.row-btn:hover { background: var(--surface-2); }
+  .row-btn.static { cursor: default; }
+  .acts { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 0 2px 28px; }
+  .act { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); cursor: pointer; }
+  .act:hover { color: var(--text); border-color: var(--border-strong, var(--border)); }
+  .act.stop, .act.stop-all { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 28%, var(--border)); }
+  .act.stop:hover, .act.stop-all:hover { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); }
+  .port-row { grid-template-columns: 1fr auto; align-items: start; gap: 4px; }
+  .port-row .act.stop { margin-top: 4px; }
   .ic { margin-top: 2px; color: var(--muted); display: inline-flex; }
   .row-main { min-width: 0; display: grid; }
   .row-label { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

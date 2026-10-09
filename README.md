@@ -5,7 +5,7 @@
 <h1 align="center">portwise</h1>
 
 <p align="center">
-  <b>See which ports are in use, why they're busy, and stop the right thing safely.</b><br/>
+  <b>See which ports, agents and tools are running — and stop the right thing safely.</b><br/>
   CLI · TUI · desktop and tray app · MCP server, all on one Rust core.
 </p>
 
@@ -45,10 +45,11 @@ portwise tells you what's really there and stops it properly.
   means for your safety.
 - **The service graph.** Which local services talk to which, grouped into clusters (Compose,
   Kubernetes, workspaces). Stop a whole stack in dependency order.
-- **Your AI coding agents.** Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider and
-  more: the folders each one works in, the ports and dev servers it started, the services and
-  hosts it talks to, and what the OS says about its access (account, sandbox, approval flags,
-  network exposure), each fact marked seen, inferred or unknown.
+- **Your agents, tools and apps.** Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf,
+  Aider, Docker Desktop, OrbStack and more: the folders each one works in, the ports and apps it
+  started, the services and hosts it talks to, and what the OS says about its access (account,
+  sandbox, approval flags, network exposure), each fact marked seen, inferred or unknown. Reveal a
+  folder, open it in your editor, or stop only what that agent started.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
   server for AI coding assistants. macOS, Linux and Windows. No telemetry.
 
@@ -132,7 +133,7 @@ port = 5432               # no command: started elsewhere, up just waits for it
 
 | Purpose | Commands |
 |---|---|
-| Look | `portwise list`, `portwise inspect`, `portwise explain`, `portwise graph`, `portwise agents`, `portwise watch`, `portwise ssh HOST` (read-only, nothing to install remotely) |
+| Look | `portwise list`, `portwise inspect`, `portwise explain`, `portwise graph`, `portwise agents`, `portwise agents AGENT --stop-ports`, `portwise watch`, `portwise ssh HOST` (read-only, nothing to install remotely) |
 | Act | `portwise stop`, `portwise kill`, `portwise restart`, `portwise run`, `portwise open` |
 | Ports | `portwise free-port --near 3000`, `portwise wait 5432 --timeout 30s` |
 | Projects | `portwise up`, `portwise down`, `portwise status`, `portwise init` |

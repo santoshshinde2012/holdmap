@@ -42,7 +42,8 @@ If the client can't find `portwise`, use the full path, for example `/Users/you/
 | `find_free_port` | A free TCP port, optionally the first one at or after `near`. |
 | `wait_for_port` | Waits until a port accepts connections, or until it's free. |
 | `get_topology` | Which local services talk to which, grouped into clusters. |
-| `list_agents` | The AI coding agents running here: their folders, ports, connections and access level. Read-only. |
+| `list_agents` | Agents and developer tools running here: folders, ports, connections and access (seen / inferred / unknown). Read-only. |
+| `stop_agent_ports` | Stops the unprotected ports matching agents started. Prefer `dry_run: true` first. |
 | `plan_cluster_stop` | A dry-run, dependency-ordered plan for stopping a cluster. Never executes. |
 | `stop_port` | Stops the owner of a port safely and verifies it's free. |
 

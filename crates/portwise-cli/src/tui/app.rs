@@ -48,11 +48,12 @@ pub enum ProtoFilter {
     Udp,
 }
 
-/// Top-level tab: the port table or the service graph.
+/// Top-level tab: the port table, the service graph or the agents map.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Ports,
     Graph,
+    Agents,
 }
 
 pub enum Modal {
@@ -91,6 +92,10 @@ pub struct App {
     pub modal: Modal,
     pub tab: Tab,
     pub graph: GraphView,
+    /// Agents report for the Agents tab (rebuilt with each scan while the tab is open).
+    pub agents: Option<portwise_core::agents::AgentsReport>,
+    /// Selected agent index in `agents.agents`.
+    pub agent_idx: usize,
     pub toast: Option<Toast>,
     pub busy: Option<String>,
     pub stop_log: Vec<String>,
@@ -125,6 +130,8 @@ impl App {
             modal: Modal::None,
             tab: Tab::Ports,
             graph: GraphView::new(),
+            agents: None,
+            agent_idx: 0,
             toast: None,
             busy: None,
             stop_log: Vec::new(),
@@ -173,6 +180,7 @@ impl App {
                             self.explain_cache.clear();
                             self.rebuild();
                             self.rebuild_graph();
+                            self.rebuild_agents();
                         }
                         Err(e) => self.error = Some(e),
                     }
@@ -296,6 +304,38 @@ impl App {
         }
     }
 
+    /// Rebuild the agents report from the current scan.
+    pub fn rebuild_agents(&mut self) {
+        let Some(engine) = &self.engine else {
+            self.agents = None;
+            return;
+        };
+        let report = engine.agents();
+        let n = report.agents.len();
+        if n == 0 {
+            self.agent_idx = 0;
+        } else if self.agent_idx >= n {
+            self.agent_idx = n - 1;
+        }
+        self.agents = Some(report);
+    }
+
+    /// Selected agent, when the Agents tab has one.
+    pub fn selected_agent(&self) -> Option<&portwise_core::agents::Agent> {
+        self.agents
+            .as_ref()
+            .and_then(|r| r.agents.get(self.agent_idx))
+    }
+
+    fn move_agent(&mut self, delta: isize) {
+        let n = self.agents.as_ref().map(|r| r.agents.len()).unwrap_or(0);
+        if n == 0 {
+            return;
+        }
+        let i = self.agent_idx as isize + delta;
+        self.agent_idx = i.rem_euclid(n as isize) as usize;
+    }
+
     /// Switch tabs, carrying the selection across (entry ↔ node).
     pub fn toggle_tab(&mut self) {
         match self.tab {
@@ -306,7 +346,10 @@ impl App {
                 self.tab = Tab::Graph;
             }
             Tab::Graph => {
-                self.sync_from_graph();
+                self.rebuild_agents();
+                self.tab = Tab::Agents;
+            }
+            Tab::Agents => {
                 self.tab = Tab::Ports;
             }
         }
@@ -554,6 +597,19 @@ impl App {
             return;
         }
         if self.tab == Tab::Graph && self.on_graph_key(k) {
+            return;
+        }
+        if self.tab == Tab::Agents {
+            match k.code {
+                KeyCode::Down | KeyCode::Char('j') => self.move_agent(1),
+                KeyCode::Up | KeyCode::Char('k') => self.move_agent(-1),
+                KeyCode::Char('q') => self.quit = true,
+                KeyCode::Esc => self.quit = true,
+                KeyCode::Char('?') => self.modal = Modal::Help,
+                KeyCode::Char('r') => self.start_scan(),
+                KeyCode::Char(' ') => self.paused = !self.paused,
+                _ => {}
+            }
             return;
         }
         match k.code {

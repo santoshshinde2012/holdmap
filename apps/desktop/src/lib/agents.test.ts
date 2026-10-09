@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MOCK_SNAPSHOT, mockAgents } from "./mock";
 import {
   AGENT_W, FOOT_W, accessFacts, accessHeadline, agentColor, column, columnX, counts, countsLine, edgeGeometry, footprintGraph, guessHome,
-  layoutFootprint, monogram, neighbours, shortLabel, signature, sizeOf, step, tildePath, toFootFlow,
+  layoutFootprint, monogram, neighbours, shortLabel, signature, sizeOf, step, stoppableEntries, stoppablePorts, tildePath, toFootFlow,
 } from "./agents";
 import type { AgentsReport } from "./types";
 
@@ -151,5 +151,12 @@ describe("cards", () => {
     expect(claude.processes.some((p) => p.pid === 43001)).toBe(false);
     const cursor = r.agents.find((a) => a.product === "cursor")!;
     expect(cursor.links.some((l) => l.port === 3001)).toBe(false);
+  });
+
+  it("stoppable ports skip the agent's own listeners", () => {
+    const r = report();
+    const claude = r.agents.find((a) => a.product === "claude-code")!;
+    expect(stoppablePorts(claude).every((p) => p.role !== "agent")).toBe(true);
+    expect(stoppableEntries(claude, MOCK_SNAPSHOT.entries).every((e) => !e.protected)).toBe(true);
   });
 });

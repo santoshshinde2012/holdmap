@@ -21,6 +21,8 @@ pub enum AgentKind {
     Extension,
     /// A host that runs agent sessions for something else (a remote agent daemon).
     Host,
+    /// A developer tool or runtime app that sits beside agents (Docker Desktop, OrbStack…).
+    Tool,
 }
 
 impl AgentKind {
@@ -32,7 +34,16 @@ impl AgentKind {
             AgentKind::Desktop => "desktop app",
             AgentKind::Extension => "editor extension",
             AgentKind::Host => "agent host",
+            AgentKind::Tool => "developer tool",
         }
+    }
+
+    /// True when many helper processes of the same product should fold into one agent.
+    pub fn folds_helpers(self) -> bool {
+        matches!(
+            self,
+            AgentKind::Ide | AgentKind::Desktop | AgentKind::Host | AgentKind::Tool
+        )
     }
 }
 
@@ -190,6 +201,25 @@ pub const CATALOG: &[AgentProduct] = &[
         paths: &["/exec-daemon/"],
         ..product("agent-host", "Agent host", "unknown", AgentKind::Host)
     },
+    // Developer tools and runtimes that share the machine with coding agents.
+    AgentProduct {
+        bundles: &["Docker.app", "Docker Desktop.app"],
+        names: &["docker desktop", "com.docker.backend", "com.docker.vpnkit"],
+        name_prefixes: &["com.docker.", "docker desktop"],
+        ..product("docker-desktop", "Docker Desktop", "Docker", AgentKind::Tool)
+    },
+    AgentProduct {
+        bundles: &["OrbStack.app"],
+        names: &["orbstack", "orb"],
+        name_prefixes: &["orbstack"],
+        ..product("orbstack", "OrbStack", "OrbStack", AgentKind::Tool)
+    },
+    AgentProduct {
+        bundles: &["Podman Desktop.app"],
+        names: &["podman-desktop", "podman desktop"],
+        name_prefixes: &["podman desktop"],
+        ..product("podman-desktop", "Podman Desktop", "Red Hat", AgentKind::Tool)
+    },
 ];
 
 /// Look a product up by id.
@@ -208,7 +238,12 @@ pub(crate) fn norm(name: &str) -> String {
 pub fn is_agent_name(name: &str) -> bool {
     CATALOG
         .iter()
-        .filter(|p| !matches!(p.kind, AgentKind::Ide | AgentKind::Desktop))
+        .filter(|p| {
+            !matches!(
+                p.kind,
+                AgentKind::Ide | AgentKind::Desktop | AgentKind::Tool
+            )
+        })
         .any(|p| p.names.contains(&name))
 }
 
@@ -221,7 +256,12 @@ pub fn is_agent_entry(base: &str) -> bool {
         .trim_end_matches(".cjs");
     CATALOG
         .iter()
-        .filter(|p| !matches!(p.kind, AgentKind::Ide | AgentKind::Desktop))
+        .filter(|p| {
+            !matches!(
+                p.kind,
+                AgentKind::Ide | AgentKind::Desktop | AgentKind::Tool
+            )
+        })
         .any(|p| p.entries.contains(&base) || p.names.contains(&base))
 }
 
@@ -425,7 +465,31 @@ mod tests {
             !is_agent_name("cursor"),
             "editors are classified as editors"
         );
+        assert!(
+            !is_agent_name("orbstack"),
+            "developer tools aren't protected as agents"
+        );
         assert!(is_agent_entry("codex.js"));
         assert!(!is_agent_entry("server.js"));
+    }
+
+    #[test]
+    fn identifies_developer_tools_by_bundle() {
+        let docker = with_exe(
+            proc(
+                1,
+                0,
+                "Docker Desktop",
+                &["/Applications/Docker.app/Contents/MacOS/Docker Desktop"],
+            ),
+            "/Applications/Docker.app/Contents/MacOS/Docker Desktop",
+        );
+        assert_eq!(identify(&docker).map(|x| x.id), Some("docker-desktop"));
+        assert_eq!(identify(&docker).map(|x| x.kind), Some(AgentKind::Tool));
+        let orb = with_exe(
+            proc(2, 0, "OrbStack", &["/Applications/OrbStack.app/Contents/MacOS/OrbStack"]),
+            "/Applications/OrbStack.app/Contents/MacOS/OrbStack",
+        );
+        assert_eq!(identify(&orb).map(|x| x.id), Some("orbstack"));
     }
 }

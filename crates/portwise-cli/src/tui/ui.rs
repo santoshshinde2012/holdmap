@@ -57,6 +57,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     };
     if app.tab == Tab::Graph {
         super::graph_ui::draw_graph(f, app, list_area, detail_area);
+    } else if app.tab == Tab::Agents {
+        draw_agents(f, app, list_area, detail_area);
     } else {
         draw_table(f, app, list_area);
         draw_details(f, app, detail_area);
@@ -90,6 +92,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         Span::raw(" "),
         chip("Ports", app.tab == Tab::Ports),
         chip("Graph", app.tab == Tab::Graph),
+        chip("Agents", app.tab == Tab::Agents),
         Span::styled(" ⇥  ", theme::muted()),
     ];
     let mut stats: Vec<Span> = Vec::new();
@@ -209,6 +212,175 @@ fn draw_search(f: &mut Frame, app: &App, area: Rect) {
         ])
     };
     f.render_widget(Paragraph::new(line), area);
+}
+
+fn draw_agents(f: &mut Frame, app: &App, list_area: Rect, detail_area: Rect) {
+    let n = app.agents.as_ref().map(|r| r.agents.len()).unwrap_or(0);
+    let list_block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(theme::muted())
+        .title(Line::from(vec![
+            Span::styled(" Agents ", theme::heading()),
+            Span::styled(format!("{n} "), theme::muted()),
+        ]));
+    let detail_block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(theme::muted())
+        .title(Span::styled(" Footprint ", theme::heading()));
+
+    let Some(report) = &app.agents else {
+        f.render_widget(
+            Paragraph::new(Span::styled("Looking for agents…", theme::muted())).block(list_block),
+            list_area,
+        );
+        f.render_widget(Paragraph::new("").block(detail_block), detail_area);
+        return;
+    };
+    if report.agents.is_empty() {
+        f.render_widget(
+            Paragraph::new(Text::from(vec![
+                Line::from(Span::styled(
+                    "No agents or developer tools running",
+                    theme::heading(),
+                )),
+                Line::from(Span::styled(
+                    "Start Claude Code, Cursor, Docker Desktop…",
+                    theme::muted(),
+                )),
+            ]))
+            .block(list_block)
+            .wrap(Wrap { trim: true }),
+            list_area,
+        );
+        f.render_widget(Paragraph::new("").block(detail_block), detail_area);
+        return;
+    }
+
+    let rows: Vec<Row> = report
+        .agents
+        .iter()
+        .enumerate()
+        .map(|(i, a)| {
+            let stoppable = a.stoppable_ports().count();
+            let sel = i == app.agent_idx;
+            let style = if sel {
+                Style::new().bg(Color::Indexed(237)).fg(ACCENT).bold()
+            } else {
+                Style::default()
+            };
+            Row::new(vec![
+                Cell::from(a.name.clone()),
+                Cell::from(a.kind.label()),
+                Cell::from(format!("{}", a.pid)),
+                Cell::from(format!(
+                    "{}f {}p {}l",
+                    a.folders.iter().filter(|f| f.source != portwise_core::agents::FolderSource::Recent).count(),
+                    a.ports.len(),
+                    a.links.len() + a.more_links
+                )),
+                Cell::from(if stoppable > 0 {
+                    format!("{stoppable} stoppable")
+                } else {
+                    "—".into()
+                }),
+            ])
+            .style(style)
+        })
+        .collect();
+    let widths = [
+        Constraint::Percentage(32),
+        Constraint::Percentage(18),
+        Constraint::Length(8),
+        Constraint::Percentage(22),
+        Constraint::Percentage(18),
+    ];
+    let table = Table::new(rows, widths)
+        .header(
+            Row::new(["Name", "Kind", "PID", "Footprint", "Control"])
+                .style(theme::muted())
+                .bottom_margin(0),
+        )
+        .block(list_block)
+        .row_highlight_style(Style::new().fg(ACCENT));
+    f.render_widget(table, list_area);
+
+    let Some(a) = app.selected_agent() else {
+        f.render_widget(Paragraph::new("").block(detail_block), detail_area);
+        return;
+    };
+    let mut lines = vec![
+        Line::from(Span::styled(a.name.clone(), theme::heading())),
+        Line::from(Span::styled(
+            format!(
+                "{} · {} · pid {}",
+                a.kind.label(),
+                a.vendor,
+                a.pid
+            ),
+            theme::muted(),
+        )),
+        Line::from(""),
+    ];
+    for f in &a.access.facts {
+        let topic = match f.topic {
+            portwise_core::agents::AccessTopic::User => "account",
+            portwise_core::agents::AccessTopic::Sandbox => "sandbox",
+            portwise_core::agents::AccessTopic::Approvals => "approvals",
+            portwise_core::agents::AccessTopic::Network => "network",
+            portwise_core::agents::AccessTopic::Privacy => "privacy",
+        };
+        lines.push(Line::from(vec![
+            Span::styled(format!("{topic:<10}"), theme::muted()),
+            Span::raw(f.summary.clone()),
+        ]));
+    }
+    if !a.folders.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled("Folders", theme::heading())));
+        for folder in a.folders.iter().take(8) {
+            lines.push(Line::from(format!(
+                "  {}  {}",
+                folder.label,
+                folder.path.display()
+            )));
+        }
+    }
+    if !a.ports.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled("Ports", theme::heading())));
+        for p in &a.ports {
+            let role = match p.role {
+                portwise_core::agents::PortRole::DevServer => "dev",
+                portwise_core::agents::PortRole::Service => "svc",
+                portwise_core::agents::PortRole::Agent => "own",
+            };
+            lines.push(Line::from(format!(
+                "  :{}  {}  {}",
+                p.port,
+                role,
+                p.project.as_deref().or(p.framework.as_deref()).unwrap_or(&p.label)
+            )));
+        }
+    }
+    if !a.links.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled("Talks to", theme::heading())));
+        for l in a.links.iter().take(8) {
+            lines.push(Line::from(format!(
+                "  {}  ×{}",
+                l.label, l.connections
+            )));
+        }
+    }
+    for note in &report.limits {
+        lines.push(Line::from(Span::styled(format!("note: {note}"), theme::muted())));
+    }
+    f.render_widget(
+        Paragraph::new(Text::from(lines))
+            .block(detail_block)
+            .wrap(Wrap { trim: false }),
+        detail_area,
+    );
 }
 
 fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
@@ -566,9 +738,15 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
         ]
     } else if app.tab == Tab::Graph {
         &[
-            &[("↑↓", "move"), ("Tab", "ports")],
+            &[("↑↓", "move"), ("Tab", "agents")],
             &[("x", "stop"), ("C", "stop cluster"), ("o", "open")],
             &[("h", "external"), ("a", "all")],
+            &[("?", "help"), ("q", "quit")],
+        ]
+    } else if app.tab == Tab::Agents {
+        &[
+            &[("↑↓", "move"), ("Tab", "ports")],
+            &[("r", "refresh"), ("space", "pause")],
             &[("?", "help"), ("q", "quit")],
         ]
     } else {

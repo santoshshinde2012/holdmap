@@ -25,6 +25,10 @@
     reduced,
     onselectagent,
     onentry,
+    onreveal,
+    oneditor,
+    onstop,
+    onstopall,
   }: {
     /** null while the first report loads. */
     report: AgentsReport | null;
@@ -36,6 +40,10 @@
     reduced: boolean;
     onselectagent: (id: string | null) => void;
     onentry: (e: PortEntry) => void;
+    onreveal: (agentId: string, path: string) => void;
+    oneditor: (agentId: string, path: string) => void;
+    onstop: (e: PortEntry) => void;
+    onstopall: (agentId: string) => void;
   } = $props();
 
   const store = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -116,18 +124,25 @@
   {:else if report.agents.length === 0}
     <div class="empty">
       <Icon name="bot" size={28} />
-      <p>No AI coding agents running</p>
-      <span>Start Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider or another agent: its folders, ports, connections and access show up here.</span>
+      <p>No agents or developer tools running</p>
+      <span>Start Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider, Docker Desktop or another tool: its folders, the ports and apps it started, connections and access show up here.</span>
     </div>
   {:else}
     <aside class="rail" aria-label="Agents">
       <header class="rail-head">
         <h2>Agents <span class="n">{report.agents.length}</span></h2>
-        <span class="hint">↑↓ to switch · Enter on a map node to open it</span>
+        <span class="hint">↑↓ to switch · Reveal / Editor / Stop on a card · Enter on a map node</span>
       </header>
       <div class="cards">
         {#each report.agents as a (a.id)}
-          <AgentCard agent={a} {report} {entries} color={graph ? agentColor(graph, a.id) : "var(--accent)"} selected={a.id === selectedAgent} onselect={() => { picked = null; onselectagent(a.id === selectedAgent ? null : a.id); }} {onentry} now={report.taken_at_ms || Date.now()} />
+          <AgentCard agent={a} {report} {entries} color={graph ? agentColor(graph, a.id) : "var(--accent)"} selected={a.id === selectedAgent}
+            onselect={() => { picked = null; onselectagent(a.id === selectedAgent ? null : a.id); }}
+            {onentry}
+            onreveal={(path) => onreveal(a.id, path)}
+            oneditor={(path) => oneditor(a.id, path)}
+            onstop={onstop}
+            onstopall={() => onstopall(a.id)}
+            now={report.taken_at_ms || Date.now()} />
         {/each}
       </div>
       <details class="limits">

@@ -79,10 +79,20 @@ const widths = (w: number) => [w, w * 2, w * 3];
           <Picture src={shots.graph[t as "dark"]} formats={["avif"]} fallbackFormat="webp" widths={widths(shots.graph.w)} sizes={`(max-width: 1000px) calc(100vw - 80px), ${shots.graph.w}px`} alt={shots.graph.alt} loading="lazy" pictureAttributes={{ class: `only-${t}` }} />
         ))}</div>
       </li>
+      <li class="card span-2">
+        <div class="copy">
+          <h3>Agents, tools and apps</h3>
+          <p>Claude Code, Cursor, Copilot, Docker Desktop and more: the folders they work in, the ports they started, what they talk to, and their access — each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor, or stop only what that agent started.</p>
+        </div>
+        <pre class="snippet term" tabindex="0" aria-label="Example agents command"><span class="p">$</span> portwise agents claude --stop-ports --dry-run
+<span class="c">plan</span> :3001 (Claude Code)
+  Stop the Vite tree holding :3001
+<span class="d">Dry run: nothing was changed.</span></pre>
+      </li>
       <li class="card">
         <div class="copy">
           <h3>MCP for AI agents</h3>
-          <p>Claude, Cursor and VS Code can list ports, find a free one, wait for a server and stop their own dev servers. Never protected ones.</p>
+          <p>Claude, Cursor and VS Code can list ports, see which agents run where, find a free one and stop their own servers. Never protected ones.</p>
         </div>
         <pre class="snippet term" tabindex="0" aria-label="Example MCP tool call"><span class="d">{"// tool call"}</span>
 {"{"} <span class="c">"tool"</span>: <span class="g">"find_free_port"</span>,

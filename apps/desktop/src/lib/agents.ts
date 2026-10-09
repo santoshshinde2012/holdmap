@@ -4,7 +4,7 @@
 // nodes and edges with self-computed edge geometry, and the summaries the agent cards show.
 // No DOM or Svelte imports, so all of it is unit-tested.
 
-import type { AccessFact, AccessLevel, AccessTopic, Agent, AgentKind, AgentsReport, Evidence } from "./types";
+import type { AccessFact, AccessLevel, AccessTopic, Agent, AgentKind, AgentPort, AgentsReport, Evidence, PortEntry } from "./types";
 
 export type FootKind = "agent" | "folder" | "port" | "service" | "remote" | "more" | "header";
 export type FootEdgeKind = "parent" | "folder" | "recent" | "runs" | "uses" | "remote";
@@ -48,6 +48,7 @@ export const KIND_LABEL: Record<AgentKind, string> = {
   desktop: "Desktop app",
   extension: "Editor extension",
   host: "Agent host",
+  tool: "Developer tool",
 };
 
 export const TOPIC_LABEL: Record<AccessTopic, string> = {
@@ -464,4 +465,15 @@ export function step(ids: string[], current: string | null, delta: number): stri
   const i = current ? ids.indexOf(current) : -1;
   if (i < 0) return delta > 0 ? ids[0] : ids[ids.length - 1];
   return ids[(i + delta + ids.length) % ids.length];
+}
+
+/** Ports the agent started (dev servers and services), not its own IDE / auth listeners. */
+export function stoppablePorts(a: Agent): AgentPort[] {
+  return a.ports.filter((p) => p.role === "dev_server" || p.role === "service");
+}
+
+/** Live port entries matching an agent's stoppable ports, in report order. */
+export function stoppableEntries(a: Agent, entries: PortEntry[]): PortEntry[] {
+  const byId = new Map(entries.map((e) => [e.id, e]));
+  return stoppablePorts(a).map((p) => byId.get(p.entry_id)).filter((e): e is PortEntry => !!e && !e.protected);
 }

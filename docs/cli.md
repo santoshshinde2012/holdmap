@@ -108,7 +108,8 @@ EXAMPLES:
   portwise free-port --near 3000
   portwise wait 5432 --timeout 30s
   portwise graph                Which services depend on which
-  portwise agents               AI coding agents: folders, access, ports
+  portwise agents               Agents & tools: folders, access, ports
+  portwise agents --stop-ports  Stop the ports they started
   portwise stop --cluster shop  Stop a whole stack, dependents first
   portwise up                   Start the services in .portwise.toml
   eval "$(portwise init zsh)"   Explain port-in-use errors in your shell
@@ -346,6 +347,10 @@ Arguments:
 
 Options:
   -w, --wide           List every process of each agent, with its command line (secrets hidden)
+      --stop-ports     Stop the unprotected ports each matching agent started (dev servers and
+                       services)
+      --dry-run        Show the stop plan only; don't send any signal
+      --yes            Don't ask for confirmation before stopping
       --json           Machine-readable JSON output
       --color <COLOR>  When to use colours [env: PORTWISE_COLOR=] [default: auto] [possible values:
                        auto, always, never]

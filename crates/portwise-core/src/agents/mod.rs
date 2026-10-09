@@ -123,10 +123,7 @@ impl<'a> AgentsBuilder<'a> {
         let mut ordered = roots.clone();
         ordered.sort_by_key(|(pid, _)| (is_helper(*pid), *pid));
         for (pid, prod) in &ordered {
-            if !matches!(
-                prod.kind,
-                AgentKind::Ide | AgentKind::Desktop | AgentKind::Host
-            ) {
+            if !prod.kind.folds_helpers() {
                 continue;
             }
             let key = (prod.id, t.get(*pid).and_then(|p| p.uid));

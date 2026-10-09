@@ -11,6 +11,7 @@ const tries: { act: string; label: string; keys: string[] }[] = [
   { act: "inspect", label: "Inspect :3000", keys: [] },
   { act: "palette", label: "Command palette", keys: ["⌘", "K"] },
   { act: "graph", label: "Service graph", keys: ["G"] },
+  { act: "agents", label: "Agents map", keys: ["⇧", "A"] },
   { act: "stop", label: "Stop :3000", keys: ["⌫"] },
   { act: "help", label: "Shortcuts", keys: ["?"] },
 ];
@@ -164,11 +165,11 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
       try { frame!.contentWindow!.localStorage.setItem("pw.theme", t); } catch { /* ignore */ }
     });
 
-    const key = (k: string, mod = false) => {
+    const key = (k: string, mod = false, shift = false) => {
       const doc = frame?.contentDocument;
       if (!doc) return;
       frame!.contentWindow!.focus();
-      doc.body.dispatchEvent(new KeyboardEvent("keydown", { key: k, metaKey: mod && isMac, ctrlKey: mod && !isMac, bubbles: true, cancelable: true }));
+      doc.body.dispatchEvent(new KeyboardEvent("keydown", { key: k, metaKey: mod && isMac, ctrlKey: mod && !isMac, shiftKey: shift, bubbles: true, cancelable: true }));
     };
     const select = (port: number) => {
       const doc = frame?.contentDocument;
@@ -192,6 +193,7 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
         case "inspect": toList(); setTimeout(() => select(3000), 120); break;
         case "palette": key("k", true); break;
         case "graph": key("g"); break;
+        case "agents": key("A", false, true); break;
         case "stop": toList(); setTimeout(() => { if (select(3000)) setTimeout(() => key("Backspace"), 250); }, 120); break;
         case "help": key("?"); break;
         case "reset":

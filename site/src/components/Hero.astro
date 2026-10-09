@@ -11,11 +11,11 @@ const primary = Object.fromEntries(downloads.filter((d) => d.primary).map((d) =>
     <div class="copy">
       <h1 id="hero-title">
         <span class="line">See who's on <span class="port"><i aria-hidden="true"></i>:3000</span>.</span>
-        <span class="line">Stop it safely.</span>
+        <span class="line">And which agent started it.</span>
       </h1>
       <p class="sub">
-        portwise names the project, branch and process behind every port, then stops the whole
-        <span class="nw">dev-server</span> tree, and nothing it shouldn't.
+        portwise maps your agents, tools and apps to the ports they hold — with access marked
+        seen, inferred or unknown — then stops only what it should.
       </p>
       <div class="cta">
         <a class="btn btn-primary" href="#install" data-download data-urls={JSON.stringify(primary)}>

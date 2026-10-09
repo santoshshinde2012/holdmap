@@ -155,12 +155,23 @@ fn tools() -> Value {
         },
         {
             "name": "list_agents",
-            "title": "AI coding agents on this machine",
-            "description": "Running AI coding agents (Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider…) with the folders they work in, the ports and dev servers they started, the local services and remote hosts (by IP) they're connected to, and access facts (account, sandbox and approval flags, network exposure) marked observed, inferred or unknown. Command lines have secrets hidden; chats, settings and credentials are never read.",
+            "title": "Agents, tools and apps on this machine",
+            "description": "Running AI coding agents and developer tools (Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider, Docker Desktop, OrbStack…) with the folders they work in, the ports and apps they started, the local services and remote hosts (by IP) they're connected to, and access facts (account, sandbox and approval flags, network exposure) marked observed, inferred or unknown. Command lines have secrets hidden; chats, settings and credentials are never read.",
             "inputSchema": {"type": "object", "properties": {
                 "agent": {"type": "string", "description": "Only agents matching this product id, name or PID, e.g. 'claude'"}
             }},
             "annotations": {"readOnlyHint": true, "openWorldHint": false}
+        },
+        {
+            "name": "stop_agent_ports",
+            "title": "Stop ports an agent started",
+            "description": "Safely stop the unprotected ports (dev servers and services) started by matching agents — never the agent's own IDE/auth listeners or other protected processes. Destructive: show the user the plan (dry_run=true) and get their OK first. Prefer naming a specific agent.",
+            "inputSchema": {"type": "object", "properties": {
+                "agent": {"type": "string", "description": "Product id, name or PID, e.g. 'claude' or '51200'"},
+                "dry_run": {"type": "boolean", "default": true, "description": "Only return the plans (default true)"},
+                "force": {"type": "boolean", "default": false, "description": "SIGKILL immediately"}
+            }, "required": ["agent"]},
+            "annotations": {"readOnlyHint": false, "destructiveHint": true, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "plan_cluster_stop",
@@ -293,11 +304,96 @@ fn call_tool(name: &str, args: &Value) -> Result<(String, Value), ToolError> {
                 })
                 .collect();
             let text = if lines.is_empty() {
-                "No AI coding agents running.".to_string()
+                "No agents or developer tools running.".to_string()
             } else {
                 lines.join("\n")
             };
             Ok((text, serde_json::to_value(&report).unwrap_or_default()))
+        }
+        "stop_agent_ports" => {
+            let q = args["agent"]
+                .as_str()
+                .map(|q| q.trim().to_ascii_lowercase())
+                .filter(|q| !q.is_empty())
+                .ok_or_else(|| ToolError::Failed("`agent` is required".into()))?;
+            let e = engine()?;
+            let mut report = e.agents();
+            report.agents.retain(|a| {
+                a.pid.to_string() == q
+                    || a.product.contains(&q)
+                    || a.name.to_ascii_lowercase().contains(&q)
+            });
+            if report.agents.is_empty() {
+                return Err(ToolError::Failed(format!(
+                    "No agent matching `{q}` is running."
+                )));
+            }
+            let opts = StopOptions {
+                force: args["force"].as_bool().unwrap_or(false),
+                ..Default::default()
+            };
+            let dry = args["dry_run"].as_bool().unwrap_or(true);
+            let mut plans = Vec::new();
+            let mut texts = Vec::new();
+            let mut reports = Vec::new();
+            for ag in &report.agents {
+                for p in ag.stoppable_ports() {
+                    let plan = e.plan(&Target::Port(p.port), &opts);
+                    if let Some(b) = &plan.blocked {
+                        texts.push(format!(":{0} ({1}): refused — {2}", p.port, ag.name, b.message));
+                        plans.push(plan);
+                        continue;
+                    }
+                    if plan.risk == Risk::High || plan.risk == Risk::Medium {
+                        texts.push(format!(
+                            ":{} ({}): refused by agent safety policy (risk: {:?}). Ask the user to run `portwise agents {} --stop-ports` themselves.",
+                            p.port, ag.name, plan.risk, q
+                        ));
+                        plans.push(plan);
+                        continue;
+                    }
+                    if dry {
+                        texts.push(format!(
+                            ":{} ({}): plan — {}",
+                            p.port, ag.name, plan.summary
+                        ));
+                        plans.push(plan);
+                        continue;
+                    }
+                    let stop = execute(&plan, &mut |_| {});
+                    let _ = portwise_core::store::Store::open_default().record(
+                        &portwise_core::history::entries_from_plan(&e.scan, &plan, &stop),
+                    );
+                    texts.push(if stop.freed {
+                        format!(":{} ({}): free ({} ms).", p.port, ag.name, stop.elapsed_ms)
+                    } else {
+                        format!(
+                            ":{} ({}): failed — {}",
+                            p.port,
+                            ag.name,
+                            stop.error.clone().unwrap_or_default()
+                        )
+                    });
+                    plans.push(plan);
+                    reports.push(stop);
+                }
+            }
+            if texts.is_empty() {
+                return Ok((
+                    format!(
+                        "{} has no stoppable ports (only its own protected listeners, if any).",
+                        report.agents[0].name
+                    ),
+                    json!({"agents": report.agents.iter().map(|a| &a.id).collect::<Vec<_>>(), "plans": [], "reports": []}),
+                ));
+            }
+            if !dry && reports.iter().any(|r| !r.freed) {
+                return Err(ToolError::Failed(texts.join("\n")));
+            }
+            Ok((
+                texts.join("\n"),
+                json!({"plans": plans, "reports": reports}),
+            ))
         }
         "plan_cluster_stop" => {
             let c = args["cluster"]
@@ -495,7 +591,7 @@ mod tests {
     fn lists_tools_with_annotations() {
         let r = call(json!({"jsonrpc":"2.0","id":3,"method":"tools/list"}));
         let tools = r["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 8);
+        assert_eq!(tools.len(), 9);
         let stop = tools.iter().find(|t| t["name"] == "stop_port").unwrap();
         assert_eq!(stop["annotations"]["destructiveHint"], true);
     }
@@ -633,6 +729,12 @@ mod tests {
         assert!(r["result"]["content"][0]["text"]
             .as_str()
             .unwrap()
-            .starts_with("No AI coding agents running."));
+            .starts_with("No agents or developer tools running."));
+        let tools = call(json!({"jsonrpc":"2.0","id":12,"method":"tools/list"}));
+        assert!(tools["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["name"] == "stop_agent_ports"));
     }
 }

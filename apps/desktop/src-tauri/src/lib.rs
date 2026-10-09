@@ -63,6 +63,8 @@ pub fn run() {
             commands::open_port,
             commands::reveal_project,
             commands::open_in_editor,
+            commands::reveal_agent_folder,
+            commands::open_agent_folder,
             commands::autostart,
             commands::set_pin,
             commands::unpin,

@@ -277,3 +277,19 @@ impl AgentAccess {
         self.facts.iter().find(|f| f.topic == topic)
     }
 }
+
+impl Agent {
+    /// Listening ports this agent started that are safe candidates to stop: its own IDE /
+    /// auth callbacks stay listed as [`PortRole::Agent`] and are skipped; only the tools and
+    /// apps it launched ([`PortRole::DevServer`] / [`PortRole::Service`]) are returned.
+    pub fn stoppable_ports(&self) -> impl Iterator<Item = &AgentPort> {
+        self.ports.iter().filter(|p| {
+            matches!(p.role, PortRole::DevServer | PortRole::Service)
+        })
+    }
+
+    /// Absolute folder paths this agent is known to work in (working dirs and recent projects).
+    pub fn known_folders(&self) -> impl Iterator<Item = &PathBuf> {
+        self.folders.iter().map(|f| &f.path)
+    }
+}
