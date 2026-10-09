@@ -120,15 +120,17 @@ export function toHtml(line: string): string {
 
 /** A short static session for the Interfaces section (real output formats, sample data). */
 export const cliSession: string[] = [
+  "<v>$</v> portwise agents",
+  "<v>Claude Code</v>  pid 51200 · 214 MB · 3% CPU · 1 stoppable",
+  "  folders   shop-api  ~/code/shop-api",
+  "  ports     <c>:3001</c>  shop-api (Vite)  · stoppable",
+  "  access    sandbox unknown · network :3001 only",
+  "",
   "<v>$</v> portwise explain 3000",
   held,
   "  <v>→</v> Gracefully stop npm run dev (2 processes) and verify port 3000 is free.",
   "",
-  "<v>$</v> portwise wait 5432 --timeout 30s",
-  "<g>✔</g> Port 5432 is accepting connections after 840 ms",
-  "",
   "<v>$</v> portwise free-port --near 3000",
   "3002",
 ];
-
 export const plain = (line: string) => line.replace(/<\/?[bdcgryv]>/g, "");

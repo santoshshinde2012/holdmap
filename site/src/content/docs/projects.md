@@ -1,7 +1,7 @@
 ---
 title: Project stacks
 description: Describe a project's services once in .portwise.toml and start them in dependency order with portwise up.
-order: 2
+order: 3
 ---
 
 A `.portwise.toml` at the root of a project names its services, their ports and how to start them.

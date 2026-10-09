@@ -36,17 +36,19 @@ node    43000  dev   23u  IPv6  TCP *:hbci (LISTEN)
         <div class="term-window">
           <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-title">With portwise</span><span class="pad" aria-hidden="true"></span></div>
 <pre class="term" tabindex="0"><span class="p">$</span> portwise agents
-<span class="v">Claude Code</span>  pid 51200 · terminal agent · you
+<span class="v">Claude Code</span>  pid 51200 · 214 MB · 3% CPU · 1 stoppable
   folders   shop-api  ~/code/shop-api
   ports     :3001  shop-api (Vite)  · stoppable
+  children  vite (shop-api)
   access    sandbox unknown · network :3001 only
+<span class="v">Docker Desktop</span>  pid 1290 · tool · 2 ports
 <span class="p">$</span> portwise agents claude --stop-ports --yes
   <span class="d">· sent SIGTERM to npm (51199), node (51201)</span>
 <span class="g">✔</span> <span class="b">:3001 is free</span>
 <span class="p">$</span> PORT=3000 npm run dev  <span class="g">✓ Ready in 1.4s</span></pre>
         </div>
         <ul class="notes good">
-          <li><Icon name="Check" size={16} /> Names the agent, folder and access</li>
+          <li><Icon name="Check" size={16} /> Names the agent, footprint and access</li>
           <li><Icon name="Check" size={16} /> Stops only what that agent started</li>
           <li><Icon name="Check" size={16} /> Every fact marked seen, inferred or unknown</li>
         </ul>

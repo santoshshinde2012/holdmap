@@ -1,7 +1,7 @@
 ---
 title: Shell hook
 description: Make "address already in use" errors explain themselves with a one-line shell integration.
-order: 3
+order: 4
 ---
 
 Add one line to your shell's startup file. When a command that starts a server fails because its

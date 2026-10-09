@@ -2,14 +2,13 @@
 import Icon from "./Icon.astro";
 import { url } from "../lib/site";
 const cards = [
-  { icon: "Rocket", title: "Getting started", text: "Install, then your first minute: list, explain, stop.", href: url("docs/") },
+  { icon: "Rocket", title: "Getting started", text: "Install, then list, explain, stop — and see your agents.", href: url("docs/") },
+  { icon: "Bot", title: "Agents, tools and apps", text: "Folders, ports, access and stop what they started.", href: url("docs/agents/") },
   { icon: "Layers", title: "Project stacks", text: "Start a project's services in order with <code>.portwise.toml</code>.", href: url("docs/projects/") },
-  { icon: "Terminal", title: "Shell hook", text: "Make “address already in use” explain itself.", href: url("docs/shell-hook/") },
-  { icon: "Bot", title: "MCP for AI agents", text: "Set up Claude, Cursor or VS Code in one snippet.", href: url("docs/mcp/") },
+  { icon: "Wrench", title: "MCP for AI agents", text: "Set up Claude, Cursor or VS Code in one snippet.", href: url("docs/mcp/") },
   { icon: "LifeBuoy", title: "Troubleshooting", text: "PATH, hidden ports, first open, uninstalling.", href: url("docs/troubleshooting/") },
   { icon: "BookOpen", title: "CLI reference", text: "Every command and flag, generated from <code>--help</code>.", href: url("docs/cli/") },
-];
----
+];---
 <section class="section" aria-labelledby="guide-title">
   <div class="wrap">
     <div class="section-head head-row">

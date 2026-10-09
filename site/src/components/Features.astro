@@ -13,6 +13,7 @@ import paletteDark from "../assets/ui/ui-palette-dark.png";
 import paletteLight from "../assets/ui/ui-palette-light.png";
 import graphDark from "../assets/ui/ui-graph-dark.png";
 import graphLight from "../assets/ui/ui-graph-light.png";
+import agentsShot from "../../../docs/screenshots/desktop-agents-dark.png";
 
 // Real crops of the desktop app (captured from the live demo at 3x), shown at a fixed CSS width.
 type Shot = { dark: ImageMetadata; light: ImageMetadata; w: number; alt: string };
@@ -29,7 +30,7 @@ const widths = (w: number) => [w, w * 2, w * 3];
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">Features</span>
-      <h2 class="h2" id="features-title">Knows what's behind every port. <span class="soft">Stops only what it should.</span></h2>
+      <h2 class="h2" id="features-title">Agents, tools and every port. <span class="soft">Stops only what it should.</span></h2>
     </div>
 
     <ul class="bento" role="list">
@@ -79,25 +80,32 @@ const widths = (w: number) => [w, w * 2, w * 3];
           <Picture src={shots.graph[t as "dark"]} formats={["avif"]} fallbackFormat="webp" widths={widths(shots.graph.w)} sizes={`(max-width: 1000px) calc(100vw - 80px), ${shots.graph.w}px`} alt={shots.graph.alt} loading="lazy" pictureAttributes={{ class: `only-${t}` }} />
         ))}</div>
       </li>
-      <li class="card span-2">
+      <li class="card span-3 split agents">
         <div class="copy">
           <h3>Agents, tools and apps</h3>
-          <p>Claude Code, Cursor, Copilot, Docker Desktop and more: the folders they work in, the ports they started, what they talk to, and their access — each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor, or stop only what that agent started.</p>
-        </div>
-        <pre class="snippet term" tabindex="0" aria-label="Example agents command"><span class="p">$</span> portwise agents claude --stop-ports --dry-run
-<span class="c">plan</span> :3001 (Claude Code)
-  Stop the Vite tree holding :3001
+          <p>Claude Code, Cursor, Copilot, Docker Desktop and more: folders, ports they started, memory and CPU, stoppable count, parent process, children as tools &amp; apps, and access — each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor, or stop only what that agent started.</p>
+          <pre class="snippet term inline" tabindex="0" aria-label="Example agents command"><span class="p">$</span> portwise agents
+<span class="v">Claude Code</span>  pid 51200 · 214 MB · 3% CPU · 1 stoppable
+  folders   shop-api  ~/code/shop-api
+  ports     :3001  shop-api (Vite)
+  access    sandbox unknown · network :3001 only
+<span class="p">$</span> portwise agents claude --stop-ports --dry-run
 <span class="d">Dry run: nothing was changed.</span></pre>
+        </div>
+        <div class="visual agents-shot">
+          <Picture src={agentsShot} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280, 1920]} sizes={`(max-width: 1000px) calc(100vw - 80px), 720px`} alt="The agents map: Claude Code and Cursor with folders, ports, connections and access" loading="lazy" />
+        </div>
       </li>
       <li class="card">
         <div class="copy">
           <h3>MCP for AI agents</h3>
-          <p>Claude, Cursor and VS Code can list ports, see which agents run where, find a free one and stop their own servers. Never protected ones.</p>
+          <p>Claude, Cursor and VS Code can list ports, see which agents and tools run where, stop the ports an agent started, find a free one and stop their own servers. Never protected ones.</p>
         </div>
         <pre class="snippet term" tabindex="0" aria-label="Example MCP tool call"><span class="d">{"// tool call"}</span>
-{"{"} <span class="c">"tool"</span>: <span class="g">"find_free_port"</span>,
-  <span class="c">"near"</span>: <span class="y">3000</span> {"}"}
-<span class="d">→</span> {"{"} <span class="c">"port"</span>: <span class="y">3002</span> {"}"}</pre>
+{"{"} <span class="c">"tool"</span>: <span class="g">"list_agents"</span> {"}"}
+<span class="d">→</span> Claude Code · Cursor · Docker Desktop
+{"{"} <span class="c">"tool"</span>: <span class="g">"stop_agent_ports"</span>,
+  <span class="c">"agent"</span>: <span class="y">"claude"</span> {"}"}</pre>
       </li>
       <li class="card">
         <div class="copy">
@@ -144,14 +152,17 @@ const widths = (w: number) => [w, w * 2, w * 3];
   .split .copy { padding: 32px; }
   .graph { margin: 0; padding: 32px 32px 32px 0; min-height: 0; }
   .graph :global(img) { width: 720px; border-radius: var(--r-md); border: 1px solid var(--border); }
+  .agents-shot { margin: 0; padding: 32px 32px 32px 0; min-height: 0; }
+  .agents-shot :global(img) { width: 720px; border-radius: var(--r-md); border: 1px solid var(--border); }
+  .snippet.inline { margin: 20px 0 0; }
 
   .snippet { margin: auto 16px 16px; padding: 16px; border-radius: var(--r-md); white-space: pre; overflow-x: auto; border: 1px solid var(--term-line-strong); }
-  .card:has(.snippet) .copy { padding-bottom: 24px; }
+  .card:has(.snippet:not(.inline)) .copy { padding-bottom: 24px; }
 
   @media (max-width: 1100px) {
     .split { grid-template-columns: minmax(0, 1fr); }
-    .graph { padding: 0 32px 32px; }
-    .graph :global(img) { width: 100%; }
+    .graph, .agents-shot { padding: 0 32px 32px; }
+    .graph :global(img), .agents-shot :global(img) { width: 100%; }
   }
   @media (max-width: 1000px) {
     .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -164,6 +175,6 @@ const widths = (w: number) => [w, w * 2, w * 3];
     .visual { min-height: 240px; margin-top: 24px; }
     .bleed :global(img) { left: 24px; }
     .stage { padding: 0 24px 24px; }
-    .graph { padding: 0 24px 24px; }
+    .graph, .agents-shot { padding: 0 24px 24px; }
   }
 </style>

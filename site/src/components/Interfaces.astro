@@ -39,11 +39,11 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
     <div class="panel" role="tabpanel" id="if-cli" aria-labelledby="if-tab-cli">
       <div class="text">
         <h3>A scriptable CLI</h3>
-        <p>Look, act, wait and free ports from any shell or script. Plain-English answers for people, <code>--json</code> for tools, and exit codes that mean something.</p>
+        <p>Look, act, wait and free ports from any shell or script — and see which agents and tools started them. Plain-English answers for people, <code>--json</code> for tools, and exit codes that mean something.</p>
         <ul class="ticks">
+          <li><code>portwise agents</code> maps agents, tools and apps to their footprint</li>
+          <li><code>portwise agents claude --stop-ports</code> stops only what that agent started</li>
           <li><code>portwise explain 3000</code> says who holds it and what to do</li>
-          <li><code>portwise wait 5432 --timeout 30s</code> for CI and scripts</li>
-          <li><code>portwise free-port --near 3000</code> picks the next free one</li>
         </ul>
         <a class="link-arrow" href={url("docs/cli/")}>CLI reference <Icon name="ArrowRight" size={16} /></a>
       </div>
@@ -56,10 +56,10 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
     <div class="panel" role="tabpanel" id="if-tui" aria-labelledby="if-tab-tui" hidden>
       <div class="text">
         <h3>A TUI that stays out of the way</h3>
-        <p>Run <code>portwise</code> with no arguments. Arrow through ports, filter as you type, read the details pane and stop with a confirm, all from the keyboard.</p>
+        <p>Run <code>portwise</code> with no arguments. Arrow through ports, filter as you type, browse the Agents tab, and stop with a confirm — all from the keyboard.</p>
         <ul class="ticks">
           <li>Same details as the desktop app: tree, memory, connections</li>
-          <li>Service graph and Agents tab (Tab cycles Ports → Graph → Agents)</li>
+          <li>Tab cycles Ports → Graph → Agents; <kbd>x</kbd> stops an agent’s ports</li>
           <li>Works over SSH sessions and in tmux</li>
         </ul>
       </div>
@@ -71,9 +71,9 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
         <h3>A desktop and tray app</h3>
         <p>The port list, details, the service graph, the agents map, pins, history with one-click restart and remote hosts over SSH. <kbd>⌘</kbd><kbd>⌥</kbd><kbd>P</kbd> brings it up from any app.</p>
         <ul class="ticks">
-          <li>Agents map on <kbd>⇧</kbd><kbd>A</kbd>: folders, access, stop what they started</li>
+          <li>Agents map on <kbd>⇧</kbd><kbd>A</kbd>: mem, CPU, folders, access, stop what they started</li>
           <li>Command palette on <kbd>⌘</kbd><kbd>K</kbd> / <kbd>Ctrl</kbd><kbd>K</kbd></li>
-          <li>Open in browser, editor or Finder; copy the URL or a <code>curl</code></li>
+          <li>Reveal a folder, open it in your editor, or stop that agent’s ports</li>
         </ul>
         <a class="link-arrow" href={url("#demo")}>Try it live <Icon name="ArrowRight" size={16} /></a>
       </div>
@@ -94,11 +94,11 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
         <a class="link-arrow" href={url("docs/mcp/")}>Set up Claude, Cursor or VS Code <Icon name="ArrowRight" size={16} /></a>
       </div>
       <figure class="visual chat" aria-label="An AI agent using portwise tools">
-        <div class="msg user">The dev server won't start, port 3000 is taken.</div>
-        <div class="tool"><Icon name="Wrench" size={14} /> explain_port <span>{"{ port: 3000 }"}</span></div>
-        <div class="msg agent">It's an old <b>Next.js</b> server from <b>shop-web</b> on <code>feat/checkout</code>, started 2 hours ago. It's yours and safe to stop.</div>
-        <div class="tool"><Icon name="Wrench" size={14} /> stop_port <span>{"{ port: 3000 }"}</span></div>
-        <div class="msg agent"><span class="ok">✔</span> Stopped 2 processes; port 3000 is free. Starting your server now.</div>
+        <div class="msg user">Which agent started the server on 3001?</div>
+        <div class="tool"><Icon name="Wrench" size={14} /> list_agents <span>{"{}"}</span></div>
+        <div class="msg agent"><b>Claude Code</b> holds <code>:3001</code> (Vite · shop-api), 214&nbsp;MB, 1 stoppable port. Access: sandbox unknown.</div>
+        <div class="tool"><Icon name="Wrench" size={14} /> stop_agent_ports <span>{"{ agent: \"claude\", dry_run: true }"}</span></div>
+        <div class="msg agent"><span class="ok">✔</span> Plan: stop the Vite tree on :3001. Nothing changed (dry run).</div>
       </figure>
     </div>
   </div>

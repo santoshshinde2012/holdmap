@@ -1,7 +1,7 @@
 ---
 title: MCP for AI agents
-description: Let Claude, Cursor or VS Code list ports, find a free one, wait for servers and stop their own dev servers safely.
-order: 4
+description: Let Claude, Cursor or VS Code list ports and agents, find a free port, wait for servers and stop their own (or an agent's) dev servers safely.
+order: 5
 ---
 
 `portwise mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio, so
@@ -42,8 +42,8 @@ If the client can't find `portwise`, use the full path, for example `/Users/you/
 | `find_free_port` | A free TCP port, optionally the first one at or after `near`. |
 | `wait_for_port` | Waits until a port accepts connections, or until it's free. |
 | `get_topology` | Which local services talk to which, grouped into clusters. |
-| `list_agents` | Agents and developer tools running here: folders, ports, connections and access (seen / inferred / unknown). Read-only. |
-| `stop_agent_ports` | Stops the unprotected ports matching agents started. Prefer `dry_run: true` first. |
+| `list_agents` | Agents and developer tools running here: memory, CPU, folders, ports, children, connections and access (seen / inferred / unknown). Read-only. |
+| `stop_agent_ports` | Stops the unprotected ports matching agents started. Defaults to `dry_run: true`. |
 | `plan_cluster_stop` | A dry-run, dependency-ordered plan for stopping a cluster. Never executes. |
 | `stop_port` | Stops the owner of a port safely and verifies it's free. |
 

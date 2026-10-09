@@ -16,7 +16,10 @@ by [release-please](https://github.com/googleapis/release-please) from
 - **Developer tools in the catalog.** Docker Desktop, OrbStack and Podman Desktop appear beside
   AI coding agents, with the same folders / ports / access footprint.
 - **TUI Agents tab.** Cycle Ports → Graph → Agents with Tab; browse each agent's footprint.
-- **Site and docs** reframe the problem around agents, tools and apps — not only ports.
+- **Site and docs** reframe the problem around agents, tools and apps — not only ports. Marketing
+  pages, SEO copy, Interfaces, Features (agents screenshot), Footer and a new
+  [Agents guide](https://santoshshinde2012.github.io/portwise/docs/agents/) cover control, richer
+  skim and developer tools.
 
 ### Changed
 
