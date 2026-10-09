@@ -306,7 +306,7 @@ mod tests {
     #[test]
     fn config_round_trip_and_pins() {
         let tmp = tempfile::tempdir().unwrap();
-        let s = Store::new(tmp.path().join("pw"));
+        let s = Store::new(tmp.path().join("hm"));
         assert_eq!(s.config(), Config::default());
         let (c, pinned) = s
             .update_config(|c| c.toggle_pin(3000, Some("web".into())))
@@ -321,14 +321,14 @@ mod tests {
         assert!(!pinned);
         assert!(!s.config().is_pinned(3000));
         // Corrupt config falls back to defaults instead of failing.
-        fs::write(tmp.path().join("pw/config.json"), "{nope").unwrap();
+        fs::write(tmp.path().join("hm/config.json"), "{nope").unwrap();
         assert_eq!(s.config(), Config::default());
     }
 
     #[test]
     fn history_is_private_and_keeps_the_real_command() {
         let tmp = tempfile::tempdir().unwrap();
-        let s = Store::new(tmp.path().join("pw"));
+        let s = Store::new(tmp.path().join("hm"));
         let mut e = h(3000, 7);
         e.command = vec!["node".into(), "server.js".into(), "--token=abc".into()];
         s.record(&[e]).unwrap();
@@ -342,8 +342,8 @@ mod tests {
                     .mode()
                     & 0o777
             };
-            assert_eq!(mode("pw/history.jsonl"), 0o600);
-            assert_eq!(mode("pw"), 0o700);
+            assert_eq!(mode("hm/history.jsonl"), 0o600);
+            assert_eq!(mode("hm"), 0o700);
         }
         let got = s.entry(7, 3000).unwrap();
         assert_eq!(

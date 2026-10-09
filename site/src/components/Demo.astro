@@ -163,7 +163,7 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
       const t = (e as CustomEvent<string>).detail;
       if (!doc) return;
       doc.documentElement.dataset.theme = t;
-      try { frame!.contentWindow!.localStorage.setItem("pw.theme", t); } catch { /* ignore */ }
+      try { frame!.contentWindow!.localStorage.setItem("holdmap.theme", t); } catch { /* ignore */ }
     });
 
     const key = (k: string, mod = false, shift = false) => {

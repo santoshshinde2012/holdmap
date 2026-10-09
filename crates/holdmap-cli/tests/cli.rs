@@ -8,7 +8,7 @@ use std::time::Duration;
 /// The binary with colour off, no Docker and a throwaway state directory, so tests that stop
 /// processes never write to the developer's real history. Tests that check state pass their own
 /// `HOLDMAP_HOME` (the later `env` wins).
-fn pw() -> Command {
+fn hm() -> Command {
     static HOME: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
     let home = HOME.get_or_init(|| tempfile::tempdir().unwrap());
     let mut c = Command::cargo_bin("holdmap").unwrap();
@@ -28,7 +28,7 @@ fn free_port() -> u16 {
 
 #[test]
 fn help_mentions_examples_and_exit_codes() {
-    pw().arg("--help")
+    hm().arg("--help")
         .assert()
         .success()
         .stdout(predicate::str::contains("EXAMPLES"))
@@ -39,7 +39,7 @@ fn help_mentions_examples_and_exit_codes() {
 fn list_json_is_valid_and_contains_our_listener() {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = l.local_addr().unwrap().port();
-    let out = pw().args(["list", "--json"]).output().unwrap();
+    let out = hm().args(["list", "--json"]).output().unwrap();
     assert!(out.status.success());
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     let entries = v["entries"].as_array().unwrap();
@@ -54,7 +54,7 @@ fn list_json_is_valid_and_contains_our_listener() {
 #[test]
 fn list_plain_table_has_header() {
     let _l = TcpListener::bind("127.0.0.1:0").unwrap();
-    pw().args(["list"])
+    hm().args(["list"])
         .assert()
         .success()
         .stdout(predicate::str::contains("PORT"));
@@ -63,7 +63,7 @@ fn list_plain_table_has_header() {
 #[test]
 fn explain_free_port_succeeds() {
     let port = free_port();
-    pw().args(["explain", &port.to_string()])
+    hm().args(["explain", &port.to_string()])
         .assert()
         .success()
         .stdout(predicate::str::contains("is free"));
@@ -73,7 +73,7 @@ fn explain_free_port_succeeds() {
 fn explain_busy_port_names_the_owner() {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = l.local_addr().unwrap().port();
-    let out = pw()
+    let out = hm()
         .args(["explain", &port.to_string(), "--json"])
         .output()
         .unwrap();
@@ -90,7 +90,7 @@ fn stop_refuses_to_kill_itself_or_its_parent() {
     // The listener belongs to the test process, which is holdmap's parent: must be blocked.
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = l.local_addr().unwrap().port();
-    pw().args(["stop", &port.to_string(), "--yes"])
+    hm().args(["stop", &port.to_string(), "--yes"])
         .assert()
         .code(3);
     // …and we're still alive with the socket open.
@@ -100,7 +100,7 @@ fn stop_refuses_to_kill_itself_or_its_parent() {
 #[test]
 fn stop_dry_run_on_free_port_reports_nothing_to_do() {
     let port = free_port();
-    pw().args(["stop", &port.to_string(), "--dry-run"])
+    hm().args(["stop", &port.to_string(), "--dry-run"])
         .assert()
         .code(1)
         .stdout(predicate::str::contains("free").or(predicate::str::contains("Nothing")));
@@ -108,7 +108,7 @@ fn stop_dry_run_on_free_port_reports_nothing_to_do() {
 
 #[test]
 fn free_port_returns_bindable_ports() {
-    let out = pw()
+    let out = hm()
         .args(["free-port", "--count", "3", "--json"])
         .output()
         .unwrap();
@@ -125,7 +125,7 @@ fn free_port_returns_bindable_ports() {
 fn free_port_near_skips_busy() {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = l.local_addr().unwrap().port();
-    let out = pw()
+    let out = hm()
         .args(["free-port", "--near", &port.to_string()])
         .output()
         .unwrap();
@@ -136,7 +136,7 @@ fn free_port_near_skips_busy() {
 #[test]
 fn wait_times_out_with_exit_1() {
     let port = free_port();
-    pw().args(["wait", &port.to_string(), "--timeout", "300ms", "--quiet"])
+    hm().args(["wait", &port.to_string(), "--timeout", "300ms", "--quiet"])
         .timeout(Duration::from_secs(10))
         .assert()
         .code(1);
@@ -146,7 +146,7 @@ fn wait_times_out_with_exit_1() {
 fn wait_succeeds_when_listening() {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = l.local_addr().unwrap().port();
-    pw().args(["wait", &port.to_string(), "--timeout", "3s"])
+    hm().args(["wait", &port.to_string(), "--timeout", "3s"])
         .assert()
         .success();
 }
@@ -154,20 +154,20 @@ fn wait_succeeds_when_listening() {
 #[test]
 fn wait_free_succeeds_on_free_port() {
     let port = free_port();
-    pw().args(["wait", &port.to_string(), "--free", "--timeout", "1s", "-q"])
+    hm().args(["wait", &port.to_string(), "--free", "--timeout", "1s", "-q"])
         .assert()
         .success();
 }
 
 #[test]
 fn bad_target_is_a_usage_error() {
-    pw().args(["explain", "not-a-port"]).assert().failure();
+    hm().args(["explain", "not-a-port"]).assert().failure();
 }
 
 #[test]
 fn stop_and_kill_reject_out_of_range_ports() {
     for (cmd, port) in [("stop", "0"), ("stop", "99999"), ("kill", ":0")] {
-        pw().args([cmd, port, "--dry-run"])
+        hm().args([cmd, port, "--dry-run"])
             .assert()
             .code(2)
             .stderr(predicate::str::contains("not a valid port (1–65535)"));
@@ -176,7 +176,7 @@ fn stop_and_kill_reject_out_of_range_ports() {
 
 #[test]
 fn tui_without_a_terminal_is_a_clean_error_not_a_panic() {
-    pw().arg("tui")
+    hm().arg("tui")
         .write_stdin("")
         .timeout(Duration::from_secs(10))
         .assert()
@@ -187,11 +187,11 @@ fn tui_without_a_terminal_is_a_clean_error_not_a_panic() {
 
 #[test]
 fn completions_and_man_render() {
-    pw().args(["completions", "zsh"])
+    hm().args(["completions", "zsh"])
         .assert()
         .success()
         .stdout(predicate::str::contains("holdmap"));
-    pw().arg("man")
+    hm().arg("man")
         .assert()
         .success()
         .stdout(predicate::str::contains(".TH"));
@@ -229,7 +229,7 @@ mod linux {
             eprintln!("python3 not available; skipping");
             return;
         };
-        pw().args(["stop", &port.to_string(), "--yes"])
+        hm().args(["stop", &port.to_string(), "--yes"])
             .timeout(Duration::from_secs(20))
             .assert()
             .success()
@@ -244,7 +244,7 @@ mod linux {
         let Some(mut child) = python_listener(port, true) else {
             return;
         };
-        pw().args([
+        hm().args([
             "stop",
             &port.to_string(),
             "--yes",
@@ -263,7 +263,7 @@ mod linux {
     struct Cleanup(u16, std::path::PathBuf);
     impl Drop for Cleanup {
         fn drop(&mut self) {
-            let _ = pw()
+            let _ = hm()
                 .env("HOLDMAP_HOME", &self.1)
                 .args(["stop", &self.0.to_string(), "--yes", "--force"])
                 .timeout(Duration::from_secs(10))
@@ -286,7 +286,7 @@ mod linux {
         let _guard = Cleanup(port, state.path().to_path_buf());
         let file = dir.path().to_str().unwrap();
         let run = |args: &[&str]| {
-            let out = pw()
+            let out = hm()
                 .env("HOLDMAP_HOME", state.path())
                 .current_dir(dir.path())
                 .args(args)
@@ -358,7 +358,7 @@ mod linux {
             ),
         )
         .unwrap();
-        pw().env("HOLDMAP_HOME", dir.path())
+        hm().env("HOLDMAP_HOME", dir.path())
             .current_dir(dir.path())
             .args(["up", "--dry-run"])
             .timeout(Duration::from_secs(20))
@@ -382,7 +382,7 @@ mod linux {
             format!("[services.api]\nport = {port}\ncommand = \"true\"\n"),
         )
         .unwrap();
-        pw().env("HOLDMAP_HOME", dir.path())
+        hm().env("HOLDMAP_HOME", dir.path())
             .current_dir(dir.path())
             .args(["up"])
             .timeout(Duration::from_secs(20))
@@ -414,7 +414,7 @@ mod linux {
             }
             std::thread::sleep(Duration::from_millis(100));
         }
-        let out = pw()
+        let out = hm()
             .args(["stop", "--all-dev", "--dry-run", "--json"])
             .timeout(Duration::from_secs(20))
             .output()
@@ -431,7 +431,7 @@ mod linux {
         let Some(mut child) = python_listener(port, false) else {
             return;
         };
-        pw().args([
+        hm().args([
             "run",
             "-p",
             &port.to_string(),
@@ -455,19 +455,19 @@ fn home() -> tempfile::TempDir {
 
 #[test]
 fn graph_exports_json_dot_and_mermaid() {
-    let out = pw().args(["graph", "--all", "--json"]).output().unwrap();
+    let out = hm().args(["graph", "--all", "--json"]).output().unwrap();
     assert!(out.status.success());
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert!(v["nodes"].is_array() && v["edges"].is_array() && v["clusters"].is_array());
-    pw().args(["graph", "--all", "--dot"])
+    hm().args(["graph", "--all", "--dot"])
         .assert()
         .success()
         .stdout(predicate::str::starts_with("digraph holdmap {"));
-    pw().args(["mesh", "--all", "--format", "mermaid"])
+    hm().args(["mesh", "--all", "--format", "mermaid"])
         .assert()
         .success()
         .stdout(predicate::str::starts_with("flowchart LR"));
-    pw().args(["graph", "--cluster", "definitely-not-a-cluster"])
+    hm().args(["graph", "--cluster", "definitely-not-a-cluster"])
         .assert()
         .code(2)
         .stderr(predicate::str::contains("no cluster named"));
@@ -499,7 +499,7 @@ fn graph_shows_a_live_connection_between_two_processes() {
         &mut line,
     )
     .unwrap();
-    let out = pw().args(["graph", "--all", "--json"]).output().unwrap();
+    let out = hm().args(["graph", "--all", "--json"]).output().unwrap();
     let _ = client.kill();
     let _ = client.wait();
     let g: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
@@ -516,12 +516,12 @@ fn graph_shows_a_live_connection_between_two_processes() {
 #[test]
 fn pins_round_trip_in_an_isolated_home() {
     let h = home();
-    pw().env("HOLDMAP_HOME", h.path())
+    hm().env("HOLDMAP_HOME", h.path())
         .args(["pin", "3999", "--label", "demo"])
         .assert()
         .success()
         .stdout(predicate::str::contains("Pinned :3999"));
-    let out = pw()
+    let out = hm()
         .env("HOLDMAP_HOME", h.path())
         .args(["pins", "--json"])
         .output()
@@ -529,22 +529,22 @@ fn pins_round_trip_in_an_isolated_home() {
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(v[0]["port"], 3999);
     assert_eq!(v[0]["label"], "demo");
-    pw().env("HOLDMAP_HOME", h.path())
+    hm().env("HOLDMAP_HOME", h.path())
         .args(["pin", "3999"])
         .assert()
         .success()
         .stdout(predicate::str::contains(":3999 is already pinned"));
-    pw().env("HOLDMAP_HOME", h.path())
+    hm().env("HOLDMAP_HOME", h.path())
         .args(["unpin", "3999"])
         .assert()
         .success()
         .stdout(predicate::str::contains("Unpinned :3999"));
-    pw().env("HOLDMAP_HOME", h.path())
+    hm().env("HOLDMAP_HOME", h.path())
         .args(["unpin", "3999"])
         .assert()
         .code(1)
         .stdout(predicate::str::contains(":3999 isn't pinned"));
-    pw().env("HOLDMAP_HOME", h.path())
+    hm().env("HOLDMAP_HOME", h.path())
         .args(["pins", "--json"])
         .assert()
         .success()
@@ -554,18 +554,18 @@ fn pins_round_trip_in_an_isolated_home() {
 #[test]
 fn history_restart_and_open() {
     let h = home();
-    pw().env("HOLDMAP_HOME", h.path())
+    hm().env("HOLDMAP_HOME", h.path())
         .args(["history", "--json"])
         .assert()
         .success()
         .stdout(predicate::str::contains("[]"));
     let port = free_port();
-    pw().env("HOLDMAP_HOME", h.path())
+    hm().env("HOLDMAP_HOME", h.path())
         .args(["restart", &port.to_string()])
         .assert()
         .code(2)
         .stderr(predicate::str::contains("no record"));
-    pw().args(["open", "--print", "3000"])
+    hm().args(["open", "--print", "3000"])
         .assert()
         .success()
         .stdout("http://localhost:3000\n");
@@ -573,7 +573,7 @@ fn history_restart_and_open() {
 
 #[test]
 fn stop_unknown_cluster_is_nothing_to_stop() {
-    pw().args(["stop", "--cluster", "nope", "--dry-run"])
+    hm().args(["stop", "--cluster", "nope", "--dry-run"])
         .assert()
         .code(1)
         .stdout(predicate::str::contains("No cluster named"));
@@ -587,7 +587,7 @@ fn ssh_agentless_local_lists_ports() {
     }
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = l.local_addr().unwrap().port();
-    let out = pw()
+    let out = hm()
         .args(["ssh", "local", "list", "--json"])
         .output()
         .unwrap();
@@ -607,7 +607,7 @@ fn ssh_agentless_local_lists_ports() {
 
 #[test]
 fn watch_runs_for_a_bounded_number_of_polls() {
-    pw().args(["watch", "--json", "--polls", "2", "--interval", "50ms"])
+    hm().args(["watch", "--json", "--polls", "2", "--interval", "50ms"])
         .assert()
         .success();
 }
@@ -616,7 +616,7 @@ fn watch_runs_for_a_bounded_number_of_polls() {
 fn hint_explains_a_busy_port_and_stays_quiet_otherwise() {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = l.local_addr().unwrap().port();
-    pw().args([
+    hm().args([
         "hint",
         "--exit-code",
         "1",
@@ -627,7 +627,7 @@ fn hint_explains_a_busy_port_and_stays_quiet_otherwise() {
     .success()
     .stderr(predicate::str::contains(format!("holdmap stop {port}")));
     // A client command, or a server whose port is free, prints nothing.
-    pw().args([
+    hm().args([
         "hint",
         "--exit-code",
         "1",
@@ -638,7 +638,7 @@ fn hint_explains_a_busy_port_and_stays_quiet_otherwise() {
     .success()
     .stderr(predicate::str::is_empty());
     let free = free_port();
-    pw().args([
+    hm().args([
         "hint",
         "--exit-code",
         "1",
@@ -658,7 +658,7 @@ fn init_prints_shell_hooks() {
         ("fish", "fish_postexec"),
         ("pwsh", "LASTEXITCODE"),
     ] {
-        pw().args(["init", shell])
+        hm().args(["init", shell])
             .assert()
             .success()
             .stdout(predicate::str::contains(needle))
@@ -674,7 +674,7 @@ fn project_file_errors_are_reported_with_the_path() {
         "[services.web]\nport = 3000\nhealth = \"nope\"\n",
     )
     .unwrap();
-    pw().current_dir(dir.path())
+    hm().current_dir(dir.path())
         .env("HOLDMAP_HOME", dir.path())
         .args(["status"])
         .assert()
@@ -685,7 +685,7 @@ fn project_file_errors_are_reported_with_the_path() {
 #[test]
 fn init_project_writes_a_valid_file() {
     let dir = home();
-    pw().current_dir(dir.path())
+    hm().current_dir(dir.path())
         .env("HOLDMAP_HOME", dir.path())
         .args(["init"])
         .assert()
@@ -693,7 +693,7 @@ fn init_project_writes_a_valid_file() {
     let text = std::fs::read_to_string(dir.path().join(".holdmap.toml")).unwrap();
     assert!(text.contains("name ="), "{text}");
     // A second run refuses to overwrite.
-    pw().current_dir(dir.path())
+    hm().current_dir(dir.path())
         .env("HOLDMAP_HOME", dir.path())
         .args(["init"])
         .assert()

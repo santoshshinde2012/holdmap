@@ -15,6 +15,7 @@
   import { FIT_PADDING } from "../lib/flow";
   import { agentColor, footprintGraph, layoutFootprint, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Positions } from "../lib/agents";
   import type { AgentsReport, PortEntry } from "../lib/types";
+  import { prefGet, prefSet } from "../lib/prefs";
 
   let {
     report,
@@ -46,10 +47,8 @@
     onstopall: (agentId: string) => void;
   } = $props();
 
-  const store = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
-  const save = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
-  let recent = $state(store("pw.agents.recent") !== "0");
-  $effect(() => save("pw.agents.recent", recent ? "1" : "0"));
+  let recent = $state(prefGet("agents.recent") !== "0");
+  $effect(() => prefSet("agents.recent", recent ? "1" : "0"));
   let hover = $state<string | null>(null);
   /** A folder / host picked on the map (agents and ports select through the app). */
   let picked = $state<string | null>(null);

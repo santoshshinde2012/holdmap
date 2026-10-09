@@ -3,6 +3,7 @@ import "./fonts.css";
 import "./app.css";
 import App from "./App.svelte";
 import Gallery from "./dev/Gallery.svelte";
+import { prefGet } from "./lib/prefs";
 
 const target = document.getElementById("app")!;
 
@@ -17,7 +18,7 @@ declare global {
 
 function gallery(): Mounted {
   document.documentElement.dataset.theme =
-    localStorage.getItem("pw.theme") === "dark" ? "dark" : "light";
+    prefGet("theme") === "dark" ? "dark" : "light";
   return mount(Gallery, { target });
 }
 

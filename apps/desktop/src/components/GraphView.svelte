@@ -13,6 +13,7 @@
   import Icon from "./Icon.svelte";
   import type { Graph, GraphNode } from "../lib/types";
   import { FIT_PADDING, layout, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Positions } from "../lib/graph";
+  import { prefGet, prefSet } from "../lib/prefs";
 
   let {
     graph,
@@ -34,15 +35,13 @@
     onstopcluster: (name: string) => void;
   } = $props();
 
-  const store = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
-  const save = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
-  let mode = $state<LayoutMode>((store("pw.layout") as LayoutMode) ?? "layered");
-  let animate = $state(store("pw.animate") !== "0");
-  let external = $state(store("pw.external") !== "0");
+  let mode = $state<LayoutMode>((prefGet("layout") as LayoutMode) ?? "layered");
+  let animate = $state(prefGet("animate") !== "0");
+  let external = $state(prefGet("external") !== "0");
   let hover = $state<string | null>(null);
-  $effect(() => save("pw.layout", mode));
-  $effect(() => save("pw.animate", animate ? "1" : "0"));
-  $effect(() => save("pw.external", external ? "1" : "0"));
+  $effect(() => prefSet("layout", mode));
+  $effect(() => prefSet("animate", animate ? "1" : "0"));
+  $effect(() => prefSet("external", external ? "1" : "0"));
 
   setContext("graph-actions", { stopCluster: (name: string) => onstopcluster(name) });
 

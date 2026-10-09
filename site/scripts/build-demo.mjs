@@ -29,10 +29,10 @@ const boot = `<script>
 (function () {
   var q = new URLSearchParams(location.search), t = q.get("theme");
   try {
-    localStorage.setItem("pw.onboarded", "1");
-    localStorage.setItem("pw.view", "list");
-    localStorage.setItem("pw.sort", "group");
-    if (t === "light" || t === "dark") localStorage.setItem("pw.theme", t);
+    localStorage.setItem("holdmap.onboarded", "1");
+    localStorage.setItem("holdmap.view", "list");
+    localStorage.setItem("holdmap.sort", "group");
+    if (t === "light" || t === "dark") localStorage.setItem("holdmap.theme", t);
   } catch (e) {}
   var open = window.open;
   window.open = function (u) { return /^https?:\\/\\/localhost/.test(String(u)) ? null : open.apply(window, arguments); };
