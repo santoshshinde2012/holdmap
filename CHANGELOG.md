@@ -12,6 +12,7 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 - Desktop/demo UI preferences use `holdmap.*` localStorage keys (legacy `pw.*` migrated once).
 - Docs list the real env vars and exact `PORTWISE_*` aliases; CLI adopts those aliases at startup.
+- README/docs screenshots, site UI crops, Open Graph image and hero media show holdmap branding.
 
 ## [0.3.0] - 2026-10-09
 
