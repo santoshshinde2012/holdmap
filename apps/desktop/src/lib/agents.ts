@@ -131,7 +131,8 @@ export function footprintGraph(r: AgentsReport, opts: GraphOptions = {}): FootGr
   const base = { entryId: null, path: null, evidence: "observed" as Evidence, tone: null as Tone, agent: null };
 
   for (const a of r.agents) {
-    node({ ...base, id: a.id, kind: "agent", label: a.name, sub: `${KIND_LABEL[a.kind]} · pid ${a.pid}`, agent: a }, a.id);
+    const mem = a.memory_bytes >= 1 << 30 ? `${(a.memory_bytes / (1 << 30)).toFixed(1)} GB` : `${Math.round(a.memory_bytes / (1 << 20))} MB`;
+    node({ ...base, id: a.id, kind: "agent", label: a.name, sub: `${KIND_LABEL[a.kind]} · pid ${a.pid} · ${mem}`, agent: a }, a.id);
   }
   // Ports first, so a dev server that another agent uses stays a "port" node.
   for (const a of r.agents) {
@@ -416,6 +417,8 @@ export interface Counts {
   ports: number;
   links: number;
   processes: number;
+  /** Unprotected ports the agent started (dev servers / services). */
+  stoppable: number;
 }
 
 export function counts(a: Agent): Counts {
@@ -424,6 +427,7 @@ export function counts(a: Agent): Counts {
     ports: a.ports.length,
     links: a.links.length + a.more_links,
     processes: a.processes.length + a.more_processes,
+    stoppable: stoppablePorts(a).length,
   };
 }
 
@@ -443,13 +447,38 @@ export function accessHeadline(a: Agent): { level: AccessLevel; text: string } {
   return { level: "standard", text: a.access.mine ? "Your account's access" : `Runs as ${a.access.user ?? "another user"}` };
 }
 
-/** Agents started from `id`. */
-export const startedFrom = (r: AgentsReport, id: string) => r.agents.filter((a) => a.parent === id);
-
-/** "1 folder · 2 ports · 3 links". */
+/** "1 folder · 2 ports · 3 links · 1 stoppable". */
 export function countsLine(c: Counts): string {
   const p = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
-  return [p(c.folders, "folder"), p(c.ports, "port"), p(c.links, "link")].join(" · ");
+  const parts = [p(c.folders, "folder"), p(c.ports, "port"), p(c.links, "link")];
+  if (c.stoppable > 0) parts.push(p(c.stoppable, "stoppable", "stoppable"));
+  return parts.join(" · ");
+}
+
+/** Compact resource line for skim surfaces: "520 MB · 3.4% · 15 processes". */
+export function resourcesLine(a: Agent): string {
+  const procs = a.processes.length + a.more_processes;
+  const cpu = a.cpu_percent > 0 ? `${a.cpu_percent < 10 ? a.cpu_percent.toFixed(1) : Math.round(a.cpu_percent)}%` : null;
+  // Match CLI human_bytes style roughly for the card (KB/MB/GB).
+  const mem = a.memory_bytes >= 1 << 30
+    ? `${(a.memory_bytes / (1 << 30)).toFixed(a.memory_bytes >= 10 << 30 ? 0 : 1)} GB`
+    : a.memory_bytes >= 1 << 20
+      ? `${Math.round(a.memory_bytes / (1 << 20))} MB`
+      : a.memory_bytes >= 1 << 10
+        ? `${Math.round(a.memory_bytes / (1 << 10))} KB`
+        : `${a.memory_bytes} B`;
+  return [mem, cpu, procs ? `${procs} process${procs === 1 ? "" : "es"}` : null].filter(Boolean).join(" · ");
+}
+
+/** Parent agent display name, when this one was started from another. */
+export function parentName(r: AgentsReport, a: Agent): string | null {
+  if (!a.parent) return null;
+  return r.agents.find((x) => x.id === a.parent)?.name ?? null;
+}
+
+/** Folder source label for cards (matches CLI wording). */
+export function folderSourceLabel(source: Agent["folders"][number]["source"]): string {
+  return source === "agent" ? "working dir" : source === "child" ? "child cwd" : "recent";
 }
 
 /** Monogram for an agent tile: "Claude Code" → "CC", "Cursor" → "Cu". */

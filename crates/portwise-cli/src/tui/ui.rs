@@ -268,35 +268,44 @@ fn draw_agents(f: &mut Frame, app: &App, list_area: Rect, detail_area: Rect) {
             } else {
                 Style::default()
             };
+            let mem = portwise_core::util::human_bytes(a.memory_bytes);
             Row::new(vec![
                 Cell::from(a.name.clone()),
                 Cell::from(a.kind.label()),
-                Cell::from(format!("{}", a.pid)),
+                Cell::from(mem),
                 Cell::from(format!(
-                    "{}f {}p {}l",
-                    a.folders.iter().filter(|f| f.source != portwise_core::agents::FolderSource::Recent).count(),
+                    "{}f {}p{}{}",
+                    a.folders
+                        .iter()
+                        .filter(|f| f.source != portwise_core::agents::FolderSource::Recent)
+                        .count(),
                     a.ports.len(),
-                    a.links.len() + a.more_links
+                    if stoppable > 0 {
+                        format!("/{stoppable}s")
+                    } else {
+                        String::new()
+                    },
+                    if a.access.root || a.access.facts.iter().any(|f| {
+                        f.level == portwise_core::agents::AccessLevel::Elevated
+                    }) {
+                        " !"
+                    } else {
+                        ""
+                    }
                 )),
-                Cell::from(if stoppable > 0 {
-                    format!("{stoppable} stoppable")
-                } else {
-                    "—".into()
-                }),
             ])
             .style(style)
         })
         .collect();
     let widths = [
-        Constraint::Percentage(32),
-        Constraint::Percentage(18),
-        Constraint::Length(8),
+        Constraint::Percentage(36),
         Constraint::Percentage(22),
         Constraint::Percentage(18),
+        Constraint::Percentage(24),
     ];
     let table = Table::new(rows, widths)
         .header(
-            Row::new(["Name", "Kind", "PID", "Footprint", "Control"])
+            Row::new(["Name", "Kind", "Memory", "Footprint"])
                 .style(theme::muted())
                 .bottom_margin(0),
         )
@@ -308,19 +317,32 @@ fn draw_agents(f: &mut Frame, app: &App, list_area: Rect, detail_area: Rect) {
         f.render_widget(Paragraph::new("").block(detail_block), detail_area);
         return;
     };
+    let stoppable_n = a.stoppable_ports().count();
+    let mut meta = format!(
+        "{} · {} · pid {} · {} · {:.1}% CPU",
+        a.kind.label(),
+        a.vendor,
+        a.pid,
+        portwise_core::util::human_bytes(a.memory_bytes),
+        a.cpu_percent
+    );
+    if stoppable_n > 0 {
+        meta.push_str(&format!(" · {stoppable_n} stoppable (x)"));
+    }
     let mut lines = vec![
         Line::from(Span::styled(a.name.clone(), theme::heading())),
-        Line::from(Span::styled(
-            format!(
-                "{} · {} · pid {}",
-                a.kind.label(),
-                a.vendor,
-                a.pid
-            ),
-            theme::muted(),
-        )),
+        Line::from(Span::styled(meta, theme::muted())),
         Line::from(""),
     ];
+    if let Some(p) = &a.parent {
+        if let Some(host) = report.agents.iter().find(|x| &x.id == p) {
+            lines.push(Line::from(Span::styled(
+                format!("Started from {} (pid {})", host.name, host.pid),
+                theme::muted(),
+            )));
+            lines.push(Line::from(""));
+        }
+    }
     for f in &a.access.facts {
         let topic = match f.topic {
             portwise_core::agents::AccessTopic::User => "account",
@@ -329,8 +351,14 @@ fn draw_agents(f: &mut Frame, app: &App, list_area: Rect, detail_area: Rect) {
             portwise_core::agents::AccessTopic::Network => "network",
             portwise_core::agents::AccessTopic::Privacy => "privacy",
         };
+        let mark = match f.level {
+            portwise_core::agents::AccessLevel::Elevated => "!",
+            portwise_core::agents::AccessLevel::Restricted => "▾",
+            portwise_core::agents::AccessLevel::Unknown => "?",
+            portwise_core::agents::AccessLevel::Standard => "·",
+        };
         lines.push(Line::from(vec![
-            Span::styled(format!("{topic:<10}"), theme::muted()),
+            Span::styled(format!("{mark} {topic:<9}"), theme::muted()),
             Span::raw(f.summary.clone()),
         ]));
     }
@@ -338,8 +366,13 @@ fn draw_agents(f: &mut Frame, app: &App, list_area: Rect, detail_area: Rect) {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled("Folders", theme::heading())));
         for folder in a.folders.iter().take(8) {
+            let src = match folder.source {
+                portwise_core::agents::FolderSource::Agent => "working dir",
+                portwise_core::agents::FolderSource::Child => "child cwd",
+                portwise_core::agents::FolderSource::Recent => "recent",
+            };
             lines.push(Line::from(format!(
-                "  {}  {}",
+                "  {}  {}  ({src})",
                 folder.label,
                 folder.path.display()
             )));
@@ -350,8 +383,8 @@ fn draw_agents(f: &mut Frame, app: &App, list_area: Rect, detail_area: Rect) {
         lines.push(Line::from(Span::styled("Ports", theme::heading())));
         for p in &a.ports {
             let role = match p.role {
-                portwise_core::agents::PortRole::DevServer => "dev",
-                portwise_core::agents::PortRole::Service => "svc",
+                portwise_core::agents::PortRole::DevServer => "dev · stoppable",
+                portwise_core::agents::PortRole::Service => "svc · stoppable",
                 portwise_core::agents::PortRole::Agent => "own",
             };
             lines.push(Line::from(format!(
@@ -367,8 +400,38 @@ fn draw_agents(f: &mut Frame, app: &App, list_area: Rect, detail_area: Rect) {
         lines.push(Line::from(Span::styled("Talks to", theme::heading())));
         for l in a.links.iter().take(8) {
             lines.push(Line::from(format!(
-                "  {}  ×{}",
-                l.label, l.connections
+                "  {}  ×{}{}",
+                l.label,
+                l.connections,
+                l.service
+                    .as_ref()
+                    .map(|s| format!(" · {s}"))
+                    .unwrap_or_default()
+            )));
+        }
+    }
+    let children: Vec<_> = a
+        .processes
+        .iter()
+        .filter(|p| p.role == portwise_core::agents::ProcessRole::Child)
+        .take(6)
+        .collect();
+    if !children.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "Tools & apps it started",
+            theme::heading(),
+        )));
+        for p in children {
+            lines.push(Line::from(format!(
+                "  {} ({})  {}",
+                p.name,
+                p.pid,
+                if p.command.is_empty() {
+                    String::new()
+                } else {
+                    p.command.chars().take(48).collect()
+                }
             )));
         }
     }
@@ -746,6 +809,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     } else if app.tab == Tab::Agents {
         &[
             &[("↑↓", "move"), ("Tab", "ports")],
+            &[("x", "stop its ports"), ("X", "force")],
             &[("r", "refresh"), ("space", "pause")],
             &[("?", "help"), ("q", "quit")],
         ]
@@ -789,7 +853,7 @@ fn centered(area: Rect, w: u16, h: u16) -> Rect {
 }
 
 fn draw_confirm(f: &mut Frame, app: &App) {
-    let Modal::Confirm { plan, headline } = &app.modal else {
+    let Modal::Confirm { plan, headline, .. } = &app.modal else {
         return;
     };
     let blocked = plan.is_blocked();

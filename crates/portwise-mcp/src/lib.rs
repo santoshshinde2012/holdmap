@@ -285,21 +285,55 @@ fn call_tool(name: &str, args: &Value) -> Result<(String, Value), ToolError> {
                 .iter()
                 .map(|a| {
                     let folders: Vec<&str> = a.folders.iter().map(|f| f.label.as_str()).collect();
+                    let stoppable = a.stoppable_ports().count();
+                    let access = a
+                        .access
+                        .facts
+                        .iter()
+                        .find(|f| {
+                            matches!(
+                                f.level,
+                                portwise_core::agents::AccessLevel::Elevated
+                                    | portwise_core::agents::AccessLevel::Restricted
+                            )
+                        })
+                        .map(|f| f.summary.as_str())
+                        .unwrap_or("standard access");
+                    let parent = a.parent.as_ref().and_then(|p| {
+                        report
+                            .agents
+                            .iter()
+                            .find(|x| &x.id == p)
+                            .map(|x| format!("; started from {}", x.name))
+                    });
                     format!(
-                        "{} (pid {}): {}; {}; {}",
+                        "{} (pid {}, {}): {}; {}; {}; {}; {}; {}{}",
                         a.name,
                         a.pid,
+                        a.kind.label(),
                         if folders.is_empty() {
                             "no folders visible".to_string()
                         } else {
                             format!("works in {}", folders.join(", "))
                         },
                         portwise_core::util::count(a.ports.len(), "port", "ports"),
+                        if stoppable > 0 {
+                            portwise_core::util::count(
+                                stoppable,
+                                "stoppable port",
+                                "stoppable ports",
+                            )
+                        } else {
+                            "no stoppable ports".into()
+                        },
                         portwise_core::util::count(
-                            a.links.len(),
+                            a.links.len() + a.more_links,
                             "connection target",
                             "connection targets"
                         ),
+                        portwise_core::util::human_bytes(a.memory_bytes),
+                        access,
+                        parent.unwrap_or_default(),
                     )
                 })
                 .collect();

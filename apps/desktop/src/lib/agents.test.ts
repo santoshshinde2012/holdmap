@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { MOCK_SNAPSHOT, mockAgents } from "./mock";
 import {
-  AGENT_W, FOOT_W, accessFacts, accessHeadline, agentColor, column, columnX, counts, countsLine, edgeGeometry, footprintGraph, guessHome,
-  layoutFootprint, monogram, neighbours, shortLabel, signature, sizeOf, step, stoppableEntries, stoppablePorts, tildePath, toFootFlow,
+  AGENT_W, FOOT_W, accessFacts, accessHeadline, agentColor, column, columnX, counts, countsLine, edgeGeometry, footprintGraph, folderSourceLabel, guessHome,
+  layoutFootprint, monogram, neighbours, parentName, resourcesLine, shortLabel, signature, sizeOf, step, stoppableEntries, stoppablePorts, tildePath, toFootFlow,
 } from "./agents";
 import type { AgentsReport } from "./types";
 
@@ -12,7 +12,7 @@ describe("footprint graph", () => {
   it("has one node per agent, folder, port, service and remote host, shared nodes once", () => {
     const g = footprintGraph(report());
     const kinds = (k: string) => g.nodes.filter((n) => n.kind === k).map((n) => n.label);
-    expect(kinds("agent")).toEqual(["Claude Code", "Cursor"]);
+    expect(kinds("agent")).toEqual(["Claude Code", "Cursor", "Docker Desktop"]);
     // shop-web: Cursor works there, Claude lists it as recent — one node, two owners, observed.
     const web = g.nodes.find((n) => n.id === "folder:/Users/dev/code/shop-web")!;
     expect(web.owners).toEqual(["agent:51200", "agent:52000"]);
@@ -119,8 +119,9 @@ describe("flow conversion", () => {
 describe("cards", () => {
   it("summarise counts and the access headline", () => {
     const [claude, cursor] = report().agents;
-    expect(countsLine(counts(claude))).toBe("1 folder · 1 port · 2 links");
+    expect(countsLine(counts(claude))).toBe("1 folder · 1 port · 2 links · 1 stoppable");
     expect(counts(cursor).processes).toBe(15);
+    expect(counts(cursor).stoppable).toBe(2);
     expect(accessHeadline(claude)).toEqual({ level: "restricted", text: "Sandboxed or limited" });
     expect(accessHeadline(cursor)).toEqual({ level: "standard", text: "Your account's access" });
     const root = { ...cursor, access: { ...cursor.access, root: true } };
@@ -141,6 +142,10 @@ describe("cards", () => {
     expect(step(["a", "b", "c"], "c", 1)).toBe("a");
     expect(step(["a", "b", "c"], "a", -1)).toBe("c");
     expect(step([], "a", 1)).toBe(null);
+    expect(folderSourceLabel("child")).toBe("child cwd");
+    expect(parentName(report(), report().agents[0])).toBe("Cursor");
+    expect(resourcesLine(report().agents[0])).toMatch(/MB · .*process/);
+    expect(report().agents.some((a) => a.kind === "tool" && a.product === "docker-desktop")).toBe(true);
   });
 
   it("the demo agents follow ports the demo stopped", () => {

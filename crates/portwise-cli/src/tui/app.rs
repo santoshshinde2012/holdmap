@@ -58,7 +58,13 @@ pub enum Tab {
 
 pub enum Modal {
     None,
-    Confirm { plan: ActionPlan, headline: String },
+    Confirm {
+        plan: ActionPlan,
+        headline: String,
+        /// Extra ports to stop after `plan` (Agents "stop its ports").
+        more_ports: Vec<u16>,
+        force: bool,
+    },
     Explain { scroll: u16 },
     Help,
 }
@@ -336,6 +342,51 @@ impl App {
         self.agent_idx = i.rem_euclid(n as isize) as usize;
     }
 
+    /// Plan stopping the selected agent's unprotected ports (first stoppable port's plan,
+    /// with a headline covering all of them — same pattern as the desktop "Stop all").
+    fn request_stop_agent_ports(&mut self, force: bool) {
+        let Some(agent) = self.selected_agent().cloned() else {
+            return;
+        };
+        let ports: Vec<u16> = agent.stoppable_ports().map(|p| p.port).collect();
+        if ports.is_empty() {
+            self.toast = Some(Toast {
+                text: format!("{} has no stoppable ports", agent.name),
+                ok: false,
+                at: Instant::now(),
+            });
+            return;
+        }
+        let Some(engine) = self.engine.clone() else {
+            return;
+        };
+        let opts = StopOptions {
+            force,
+            ..Default::default()
+        };
+        let plan = engine.plan(&Target::Port(ports[0]), &opts);
+        let headline = if ports.len() == 1 {
+            format!("Stop :{} started by {}", ports[0], agent.name)
+        } else {
+            format!(
+                "Stop {} ports started by {}: {}",
+                ports.len(),
+                agent.name,
+                ports
+                    .iter()
+                    .map(|p| format!(":{p}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        self.modal = Modal::Confirm {
+            headline,
+            plan,
+            more_ports: ports.into_iter().skip(1).collect(),
+            force,
+        };
+    }
+
     /// Switch tabs, carrying the selection across (entry ↔ node).
     pub fn toggle_tab(&mut self) {
         match self.tab {
@@ -391,6 +442,8 @@ impl App {
         self.modal = Modal::Confirm {
             headline: plan.summary.clone(),
             plan,
+            more_ports: Vec::new(),
+            force: false,
         };
     }
 
@@ -467,11 +520,19 @@ impl App {
         self.modal = Modal::Confirm {
             plan,
             headline: ex.headline.clone(),
+            more_ports: Vec::new(),
+            force,
         };
     }
 
     fn confirm_stop(&mut self) {
-        let Modal::Confirm { plan, .. } = std::mem::replace(&mut self.modal, Modal::None) else {
+        let Modal::Confirm {
+            plan,
+            more_ports,
+            force,
+            ..
+        } = std::mem::replace(&mut self.modal, Modal::None)
+        else {
             return;
         };
         if plan.is_blocked() {
@@ -482,12 +543,33 @@ impl App {
         let tx = self.tx.clone();
         let engine = self.engine.clone();
         std::thread::spawn(move || {
-            let report = execute(&plan, &mut |l| {
+            let mut report = execute(&plan, &mut |l| {
                 let _ = tx.send(Msg::StopLine(l.to_string()));
             });
-            if let Some(e) = engine {
-                // Remember what was stopped so `portwise restart` / history can bring it back.
-                crate::state::record(&e, &plan, &report);
+            if let Some(e) = &engine {
+                crate::state::record(e, &plan, &report);
+            }
+            // Agents "stop its ports": continue with the rest after the first frees.
+            if report.freed {
+                let opts = StopOptions {
+                    force,
+                    ..Default::default()
+                };
+                for port in more_ports {
+                    let _ = tx.send(Msg::StopLine(format!("→ :{port}")));
+                    let Some(e) = &engine else { break };
+                    let next = e.plan(&Target::Port(port), &opts);
+                    if next.is_blocked() {
+                        continue;
+                    }
+                    report = execute(&next, &mut |l| {
+                        let _ = tx.send(Msg::StopLine(l.to_string()));
+                    });
+                    crate::state::record(e, &next, &report);
+                    if !report.freed {
+                        break;
+                    }
+                }
             }
             let _ = tx.send(Msg::Stopped(Box::new(report)));
         });
@@ -603,6 +685,8 @@ impl App {
             match k.code {
                 KeyCode::Down | KeyCode::Char('j') => self.move_agent(1),
                 KeyCode::Up | KeyCode::Char('k') => self.move_agent(-1),
+                KeyCode::Char('x') => self.request_stop_agent_ports(false),
+                KeyCode::Char('X') => self.request_stop_agent_ports(true),
                 KeyCode::Char('q') => self.quit = true,
                 KeyCode::Esc => self.quit = true,
                 KeyCode::Char('?') => self.modal = Modal::Help,

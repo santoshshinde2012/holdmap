@@ -4,7 +4,7 @@
   // tree. Figures come from the OS; anything not observed is labelled as such.
   import Icon from "../Icon.svelte";
   import { humanBytes, humanDuration, tildify } from "../../lib/format";
-  import { EVIDENCE_LABEL, KIND_LABEL, LEVEL_LABEL, TOPIC_LABEL, accessFacts, accessHeadline, counts, countsLine, monogram, stoppableEntries } from "../../lib/agents";
+  import { EVIDENCE_LABEL, KIND_LABEL, LEVEL_LABEL, TOPIC_LABEL, accessFacts, accessHeadline, counts, countsLine, folderSourceLabel, monogram, parentName, resourcesLine, stoppableEntries } from "../../lib/agents";
   import type { Agent, AgentProcess, AgentsReport, PortEntry } from "../../lib/types";
 
   let {
@@ -43,14 +43,16 @@
   const head = $derived(accessHeadline(agent));
   const c = $derived(counts(agent));
   const facts = $derived(accessFacts(agent));
-  const parent = $derived(report.agents.find((a) => a.id === agent.parent) ?? null);
+  const parent = $derived(parentName(report, agent));
   const up = $derived(agent.started_at ? humanDuration(now / 1000 - agent.started_at) : null);
   const meta = $derived([KIND_LABEL[agent.kind], agent.vendor !== "unknown" ? agent.vendor : null, `pid ${agent.pid}`, up ? `up ${up}` : null].filter(Boolean).join(" · "));
+  const resources = $derived(resourcesLine(agent));
   const entry = (id: string | null) => entries.find((e) => e.id === id) ?? null;
   const stoppable = $derived(stoppableEntries(agent, entries));
+  const children = $derived(agent.processes.filter((p) => p.role === "child"));
 
   function role(p: AgentProcess): string {
-    return p.role === "helper" ? "helper" : p.role === "child" ? "started by it" : "agent";
+    return p.role === "helper" ? "helper" : p.role === "child" ? "tool / app it started" : "agent";
   }
 </script>
 
@@ -67,7 +69,11 @@
       <span class="meta">{meta}</span>
     </span>
     <span class="acc lv-{head.level}"><i aria-hidden="true"></i>{head.text}</span>
-    <span class="nums">{countsLine(c)}</span>
+    <span class="nums">
+      <span>{countsLine(c)}</span>
+      <span class="res mono">{resources}</span>
+      {#if parent}<span class="from-line">from {parent}</span>{/if}
+    </span>
   </button>
 
   {#if selected}
@@ -95,7 +101,7 @@
                 <span class="ic"><Icon name="folder" size={13} /></span>
                 <span class="row-main">
                   <span class="row-label">{f.label}{#if f.evidence !== "observed"}<em> · {EVIDENCE_LABEL[f.evidence]}</em>{/if}</span>
-                  <span class="row-sub">{tildify(f.path)}{f.project?.git_branch ? ` · ⎇ ${f.project.git_branch}` : ""}{f.source === "recent" ? " · recent" : ""}{f.privacy_area ? ` · ${f.privacy_area}` : ""}</span>
+                  <span class="row-sub">{tildify(f.path)} · {folderSourceLabel(f.source)}{f.project?.git_branch ? ` · ⎇ ${f.project.git_branch}` : ""}{f.privacy_area ? ` · ${f.privacy_area}` : ""}{f.pids.length ? ` · ${f.pids.length} proc` : ""}</span>
                   {#if f.note}<span class="row-note">{f.note}</span>{/if}
                 </span>
               </div>
@@ -153,8 +159,21 @@
 
       <h3>Processes</h3>
       <code class="cmd" title={agent.command}>{agent.command}</code>
+      {#if children.length}
+        <p class="group-label">Tools &amp; apps it started ({children.length})</p>
+        <ul class="procs">
+          {#each children as p}
+            <li>
+              <span class="pname">{p.name} <span class="mono pid">{p.pid}</span></span>
+              <span class="prole" title={p.command}>{p.command || role(p)}{#if p.cwd} · {tildify(p.cwd)}{/if}</span>
+              <span class="pfig mono">{p.cpu_percent.toFixed(p.cpu_percent < 10 ? 1 : 0)}% · {humanBytes(p.memory_bytes)}</span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+      <p class="group-label">Agent &amp; helpers</p>
       <ul class="procs">
-        {#each agent.processes as p}
+        {#each agent.processes.filter((p) => p.role !== "child") as p}
           <li>
             <span class="pname">{p.name} <span class="mono pid">{p.pid}</span></span>
             <span class="prole">{role(p)}{#if p.cwd} · {tildify(p.cwd)}{/if}</span>
@@ -163,7 +182,7 @@
         {/each}
         {#if agent.more_processes}<li class="more">+{agent.more_processes} more processes</li>{/if}
       </ul>
-      {#if parent}<p class="from">Started from <b>{parent.name}</b> (pid {parent.pid}).</p>{/if}
+      {#if parent}<p class="from">Started from <b>{parent}</b>.</p>{/if}
     </div>
   {/if}
 </article>
@@ -184,7 +203,10 @@
   .lv-elevated i { background: var(--danger); }
   .acc.lv-elevated { color: var(--danger); }
   .lv-unknown i { background: var(--muted); }
-  .nums { grid-area: nums; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .nums { grid-area: nums; display: grid; gap: 1px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .res { color: var(--text-2); }
+  .from-line { color: var(--text-2); }
+  .group-label { margin: 6px 0 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .body { padding: 2px 12px 12px; display: grid; gap: 6px; border-top: 1px solid var(--border); }
   h3 { margin: 8px 0 0; font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
   .ports-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 8px; }

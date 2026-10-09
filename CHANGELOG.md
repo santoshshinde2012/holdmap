@@ -23,6 +23,10 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Agents empty states, onboarding, shortcuts and MCP copy talk about tools and apps as well as
   coding agents. Desktop hides port filters while the Agents tab is open and prefetches the badge
   count.
+- **Richer agent skim surfaces:** memory, CPU, process count, stoppable count and parent on cards /
+  graph nodes / CLI / TUI / MCP text; child processes grouped as “tools & apps it started”; folder
+  source labels (working dir / child cwd / recent); TUI `x` stops an agent’s ports; demo includes
+  Docker Desktop.
 
 ## [0.2.0] - 2026-10-09
 

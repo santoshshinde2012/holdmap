@@ -195,6 +195,13 @@ pub fn render(r: &AgentsReport, wide: bool) -> String {
             count(procs, "process", "processes"),
             human_bytes(a.memory_bytes),
         ]);
+        if a.cpu_percent > 0.05 {
+            meta.push(format!("{:.1}% CPU", a.cpu_percent));
+        }
+        let stoppable = a.stoppable_ports().count();
+        if stoppable > 0 {
+            meta.push(count(stoppable, "stoppable port", "stoppable ports"));
+        }
         out.push_str(&format!(
             "{}  {}\n",
             paint(&a.name, S::Bold),
@@ -441,5 +448,35 @@ mod tests {
         assert!(text.contains("note: Chats are never read."));
         let none = render(&AgentsReport::default(), false);
         assert!(none.contains("No agents or developer tools running."));
+    }
+
+    #[test]
+    fn meta_mentions_stoppable_ports_and_cpu() {
+        style::init(style::ColorChoice::Never);
+        let mut a = agent(42, "claude-code", "Claude Code");
+        a.cpu_percent = 3.4;
+        a.ports.push(portwise_core::agents::AgentPort {
+            entry_id: "tcp:3001".into(),
+            port: 3001,
+            protocol: portwise_core::Protocol::Tcp,
+            exposure: Exposure::Loopback,
+            pid: Some(42),
+            process: Some("node".into()),
+            label: "shop-api".into(),
+            role: PortRole::DevServer,
+            project: Some("shop-api".into()),
+            framework: None,
+        });
+        let text = render(
+            &AgentsReport {
+                agents: vec![a],
+                platform: "linux".into(),
+                taken_at_ms: 0,
+                limits: vec![],
+            },
+            false,
+        );
+        assert!(text.contains("3.4% CPU"));
+        assert!(text.contains("1 stoppable port"));
     }
 }
