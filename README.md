@@ -30,7 +30,8 @@
 </p>
 
 `EADDRINUSE: address already in use :::3000`? Most tools hand you a PID and a `kill -9`.
-portwise tells you what's really there and stops it properly.
+portwise tells you what's really there — which agent or tool started it — and stops only what
+it should.
 
 ## Features
 
@@ -46,10 +47,11 @@ portwise tells you what's really there and stops it properly.
 - **The service graph.** Which local services talk to which, grouped into clusters (Compose,
   Kubernetes, workspaces). Stop a whole stack in dependency order.
 - **Your agents, tools and apps.** Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf,
-  Aider, Docker Desktop, OrbStack and more: the folders each one works in, the ports and apps it
-  started, the services and hosts it talks to, and what the OS says about its access (account,
-  sandbox, approval flags, network exposure), each fact marked seen, inferred or unknown. Reveal a
-  folder, open it in your editor, or stop only what that agent started.
+  Aider, Docker Desktop, OrbStack and more: memory, CPU, stoppable ports, parent process, the
+  folders each one works in, the ports and apps it started (children grouped as tools & apps),
+  the services and hosts it talks to, and access (account, sandbox, approval flags, network
+  exposure), each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor,
+  or stop only what that agent started. Chats, settings and tokens are never read.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
   server for AI coding assistants. macOS, Linux and Windows. No telemetry.
 
@@ -102,12 +104,14 @@ Every release has SHA-256 checksums and build provenance (`gh attestation verify
 
 ```sh
 portwise list                 # every listening port, grouped by kind
+portwise agents               # AI agents and tools: folders, ports, access
+portwise agents claude --stop-ports --dry-run   # plan stopping what that agent started
 portwise inspect 3000         # owner, process tree, connections, bind risk and the stop plan
 portwise list --sort memory   # heaviest apps first
 portwise stop 3000 --dry-run  # show exactly what stop would do
 portwise stop 3000            # stop it gracefully, then check the port is free
 portwise run -p 3000 -- npm run dev   # free 3000 safely, then start your server on it
-portwise                      # the interactive TUI
+portwise                      # the interactive TUI (Tab → Agents)
 ```
 
 <img src="docs/screenshots/cli-explain-dark.png" width="720" alt="portwise explain 3000: who holds the port, why, and the recommended plan" />
@@ -151,9 +155,10 @@ When a command fails with "port in use", it prints who holds the port and how to
 
 A tray and menu-bar app with the port list, details, the service graph (`G`), the agents map
 (`⇧A`), pins, history with one-click restart, remote hosts over SSH and a command palette (`⌘K` /
-`Ctrl+K`). `⌘⌥P` (`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. From the
-details pane you can open the port in a browser, restart a dev server,
-open its folder in your editor (`PORTWISE_EDITOR`, else Cursor, VS Code, Zed…) or Finder, and copy
+`Ctrl+K`). `⌘⌥P` (`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. On the
+Agents map, expand a card to reveal a folder, open it in your editor, or stop the unprotected
+ports that agent started. From a port’s details pane you can open it in a browser, restart a
+dev server, open its folder (`PORTWISE_EDITOR`, else Cursor, VS Code, Zed…) or Finder, and copy
 its URL, a `curl` or the kill command.
 
 **First open.** The app isn't notarised yet, so the OS asks once:
@@ -179,7 +184,8 @@ its URL, a `curl` or the kill command.
 ## MCP server
 
 `portwise mcp` lets AI coding assistants list ports, explain them, find a free port, wait for a
-server, read the service graph, see which coding agents run where and stop their own dev servers
+server, read the service graph, list agents and developer tools (`list_agents`), stop the ports
+an agent started (`stop_agent_ports`, dry-run by default), and stop their own dev servers
 (never protected processes).
 For Claude Desktop or Cursor (`~/.cursor/mcp.json`):
 
@@ -206,9 +212,10 @@ portwise stops processes, so one set of rules in `portwise-core` applies to ever
 - **No surprises:** a PID-reuse guard, `--dry-run` for every plan, and a check that the port is
   really free afterwards.
 - **Private:** passwords and tokens in command lines (`--password=…`, `API_TOKEN=…`,
-  `postgres://user:…@`) are hidden in every output, JSON and MCP result included. History and
-  logs are readable only by you. No telemetry: portwise only talks to localhost, to hosts you
-  `ssh` to, and (desktop) GitHub Releases for updates.
+  `postgres://user:…@`) are hidden in every output, JSON and MCP result included. Agent chats,
+  settings and credentials are never read. History and logs are readable only by you. No
+  telemetry: portwise only talks to localhost, to hosts you `ssh` to, and (desktop) GitHub
+  Releases for updates.
 - **Locked down:** the desktop webview can only listen to events and drag the window; it names
   ports, never commands, paths or URLs. A `.portwise.toml` that another user owns or anyone can
   write is refused.
@@ -315,6 +322,7 @@ Modules, traits and data flow: [docs/architecture.md](docs/architecture.md).
 ## Learn more
 
 - [Website and guide](https://santoshshinde2012.github.io/portwise/): the live demo and short how-tos.
+- [Agents, tools and apps](https://santoshshinde2012.github.io/portwise/docs/agents/): folders, access and stopping what an agent started.
 - [CLI reference](docs/cli.md): every command and flag.
 - [Architecture](docs/architecture.md): how the core, CLI, TUI, desktop app and MCP server fit together.
 - [Changelog](CHANGELOG.md) and [security policy](SECURITY.md).
