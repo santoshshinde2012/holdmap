@@ -1,6 +1,6 @@
 ---
 title: Desktop app
-description: The portwise tray and menu-bar app, its keyboard shortcuts and how to open it the first time.
+description: The holdmap tray and menu-bar app, its keyboard shortcuts and how to open it the first time.
 order: 6
 ---
 
@@ -14,7 +14,7 @@ The app isn't notarised or code-signed yet, so the OS asks once.
 
 - **macOS:** open it once, then go to **System Settings › Privacy & Security › Open Anyway**
   (macOS 14 and earlier: right-click the app, then **Open**). Or run
-  `xattr -dr com.apple.quarantine /Applications/portwise.app`.
+  `xattr -dr com.apple.quarantine /Applications/holdmap.app`.
 - **Windows:** in "Windows protected your PC", click **More info**, then **Run anyway**.
 - **Linux:** `chmod +x` the AppImage, or install the .deb or .rpm.
 
@@ -52,10 +52,10 @@ Each fact is marked seen, inferred or unknown. From a card you can reveal a fold
 editor, or stop the unprotected ports that agent started. Recent projects come from folder names
 only. Chats, settings and tokens are never read. Remote hosts show as IP addresses. Click a port to
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
-`portwise agents` and `portwise agents AGENT --stop-ports` do the same in a terminal.
+`holdmap agents` and `holdmap agents AGENT --stop-ports` do the same in a terminal.
 
 ## From the details pane
 
 Open the port in a browser, restart a dev server, open its folder in your editor
-(`PORTWISE_EDITOR`, else Cursor, VS Code, Zed…) or the file manager, and copy its URL, a `curl` or
+(`HOLDMAP_EDITOR`, else Cursor, VS Code, Zed…) or the file manager, and copy its URL, a `curl` or
 the kill command.

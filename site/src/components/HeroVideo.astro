@@ -36,7 +36,7 @@ async function poster(desk: ImageMetadata, mob: ImageMetadata) {
 const posters = { dark: await poster(deskDark, mobDark), light: await poster(deskLight, mobLight) };
 const sizes = `${MOBILE} calc(100vw - 72px), (max-width: 1023px) calc(78vw - 52px), 640px`;
 const files = { base: url("hero/") };
-const alt = "A 21-second tour of the portwise desktop app: searching for shop, opening port 3000 (shop-web, Next.js, branch feat/checkout, 1.1 GB), opening the command palette, previewing the stop plan and freeing the port.";
+const alt = "A 21-second tour of the holdmap desktop app: searching for shop, opening port 3000 (shop-web, Next.js, branch feat/checkout, 1.1 GB), opening the command palette, previewing the stop plan and freeing the port.";
 ---
 <figure class="hero-video" data-hero-video data-base={files.base} data-cuts={JSON.stringify(cuts)} data-mobile={MOBILE}>
   <div class="device">
@@ -201,7 +201,7 @@ const alt = "A 21-second tour of the portwise desktop app: searching for shop, o
       load(small.matches === loaded.includes("mobile") ? video.currentTime : cuts[cut()].starts[Math.max(0, i)]);
       if (was) video.play().catch(() => {});
     };
-    window.addEventListener("portwise:theme", swap);
+    window.addEventListener("holdmap:theme", swap);
     small.addEventListener("change", swap);
   }
 </script>

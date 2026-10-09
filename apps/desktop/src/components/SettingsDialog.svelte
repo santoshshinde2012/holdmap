@@ -77,15 +77,15 @@
     <div class="panel" role="tabpanel" id="set-panel" aria-labelledby="set-tab-{section}">
       {#if section === "general"}
         <SettingsGroup title="Startup">
-          <SettingRow label="Launch at login" description="Start portwise in the menu bar when you log in. The window stays hidden until you need it.">
+          <SettingRow label="Launch at login" description="Start holdmap in the menu bar when you log in. The window stays hidden until you need it.">
             {#snippet children({ labelId, descId })}
-              <Switch labelledby={labelId} describedby={descId} checked={model.autostart} busy={busy.autostart} onchange={(v) => save("autostart", () => actions.setAutostart(v), v ? "portwise will start at login" : "Launch at login off")} />
+              <Switch labelledby={labelId} describedby={descId} checked={model.autostart} busy={busy.autostart} onchange={(v) => save("autostart", () => actions.setAutostart(v), v ? "holdmap will start at login" : "Launch at login off")} />
             {/snippet}
           </SettingRow>
         </SettingsGroup>
         {#if errors.autostart}<div class="err"><Callout tone="danger" size="sm">{errors.autostart}</Callout></div>{/if}
-        <SettingsGroup title="Global shortcut" description="Bring portwise to the front from any app.">
-          <SettingRow label="Show portwise" description={model.shortcut ? `Currently ${model.shortcut}.` : "No global shortcut is active."}>
+        <SettingsGroup title="Global shortcut" description="Bring holdmap to the front from any app.">
+          <SettingRow label="Show holdmap" description={model.shortcut ? `Currently ${model.shortcut}.` : "No global shortcut is active."}>
             {#snippet children()}
               <Select labelHidden label="Global shortcut" width="190px" value={model.config.hotkey ?? "alt-p"} options={model.hotkeys.map((h) => ({ value: h.id, label: h.label }))} onchange={(v) => save("hotkey", () => actions.setHotkey(v))} />
             {/snippet}
@@ -110,7 +110,7 @@
         </SettingsGroup>
         <p class="tip"><Kbd keys={["⇧", "L"]} size="sm" /> cycles the theme from anywhere.</p>
       {:else if section === "notifications"}
-        <SettingsGroup title="Desktop notifications" description="portwise watches in the background and tells you when something changes.">
+        <SettingsGroup title="Desktop notifications" description="holdmap watches in the background and tells you when something changes.">
           <SettingRow label="Notify me" description="New listeners, port conflicts, and pinned ports that stop.">
             {#snippet children({ labelId, descId })}
               <Switch labelledby={labelId} describedby={descId} checked={model.config.notify} busy={busy.notify} onchange={(v) => save("notify", () => actions.setNotify(v, model.config.notify_dev_only), v ? "Notifications on" : "Notifications off")} />
@@ -147,7 +147,7 @@
           </SettingRow>
         </SettingsGroup>
       {:else}
-        <SettingsGroup title="portwise">
+        <SettingsGroup title="holdmap">
           <SettingRow label="Version" description={`Desktop app on ${model.platform}`}>{#snippet children()}<span class="mono ver">{model.version}</span>{/snippet}</SettingRow>
           {#if model.configDir}
             <SettingRow label="Settings folder" description="Pins, preferences and history live here." stack>
@@ -155,7 +155,7 @@
             </SettingRow>
           {/if}
         </SettingsGroup>
-        <p class="tip">Everything stays on this machine. portwise has no telemetry.</p>
+        <p class="tip">Everything stays on this machine. holdmap has no telemetry.</p>
       {/if}
     </div>
   </div>

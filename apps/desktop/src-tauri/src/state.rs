@@ -1,7 +1,7 @@
 //! Shared app state and the scan helper every command goes through.
 
-use portwise_core::store::Store;
-use portwise_core::{Engine, ScanOptions, Snapshot};
+use holdmap_core::store::Store;
+use holdmap_core::{Engine, ScanOptions, Snapshot};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -17,7 +17,7 @@ pub struct AppState {
     pub tray_ok: AtomicBool,
     /// Whether the updater plugin is registered (release builds with an update key).
     pub updater: AtomicBool,
-    /// Config, pins and stop history (`$PORTWISE_HOME` or the platform config dir).
+    /// Config, pins and stop history (`$HOLDMAP_HOME` or the platform config dir).
     pub store: Store,
 }
 

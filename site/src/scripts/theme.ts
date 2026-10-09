@@ -1,5 +1,5 @@
 // Theme toggle (dark first) and the mobile menu. The initial theme is applied inline in <head>.
-const KEY = "portwise-site-theme";
+const KEY = "holdmap-site-theme";
 const root = document.documentElement;
 
 function apply(theme: "dark" | "light") {
@@ -8,7 +8,7 @@ function apply(theme: "dark" | "light") {
   for (const b of document.querySelectorAll<HTMLButtonElement>("[data-theme-toggle]")) {
     b.setAttribute("aria-label", theme === "light" ? "Switch to dark theme" : "Switch to light theme");
   }
-  window.dispatchEvent(new CustomEvent("portwise:theme", { detail: theme }));
+  window.dispatchEvent(new CustomEvent("holdmap:theme", { detail: theme }));
 }
 
 apply(root.dataset.theme === "light" ? "light" : "dark");

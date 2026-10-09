@@ -31,7 +31,7 @@ describe("details pane logic", () => {
   });
   it("lists CLI equivalents without duplicates", () => {
     const c = cliCommands(entry(3000), mockExplain(3000));
-    expect(c.map((x) => x.cmd)).toContain("portwise stop 3000 --dry-run");
+    expect(c.map((x) => x.cmd)).toContain("holdmap stop 3000 --dry-run");
     expect(new Set(c.map((x) => x.cmd)).size).toBe(c.length);
     expect(cliCommands(entry(631), null).some((x) => x.cmd.includes("stop"))).toBe(false);
   });

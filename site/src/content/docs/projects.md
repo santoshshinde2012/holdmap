@@ -1,21 +1,21 @@
 ---
 title: Project stacks
-description: Describe a project's services once in .portwise.toml and start them in dependency order with portwise up.
+description: Describe a project's services once in .holdmap.toml and start them in dependency order with holdmap up.
 order: 3
 ---
 
-A `.portwise.toml` at the root of a project names its services, their ports and how to start them.
-Then `portwise up` starts them in dependency order, `portwise status` shows them and `portwise down`
+A `.holdmap.toml` at the root of a project names its services, their ports and how to start them.
+Then `holdmap up` starts them in dependency order, `holdmap status` shows them and `holdmap down`
 stops them, dependents first.
 
 ## Write one
 
-`portwise init` writes a starter file from the dev servers running under the current folder.
+`holdmap init` writes a starter file from the dev servers running under the current folder.
 Add `--print` to see it first. A typical file:
 
 ```toml
 name = "shop"            # optional; defaults to the folder name
-protect = [5432]         # ports portwise must never stop
+protect = [5432]         # ports holdmap must never stop
 
 [services.api]
 port = 4000
@@ -47,26 +47,26 @@ port = 5432              # no command: started elsewhere (docker compose), only 
 ## Run it
 
 ```sh
-portwise up        # dependencies first; waits until each port accepts connections
-portwise status    # running, stopped or held by something else, with HTTP status
-portwise down      # dependents first, through the usual safety checks
+holdmap up        # dependencies first; waits until each port accepts connections
+holdmap status    # running, stopped or held by something else, with HTTP status
+holdmap down      # dependents first, through the usual safety checks
 ```
 
 ```text
-→ shop ~/code/shop/.portwise.toml
+→ shop ~/code/shop/.holdmap.toml
   ✔ db :5432 already running (PostgreSQL · container shop-db-1)
-  ✔ api :4000 up after 0.8 s PID 51210 · log ~/.config/portwise/logs/shop-api.log
-  ✔ web :3000 up after 1.4 s PID 51244 · log ~/.config/portwise/logs/shop-web.log
+  ✔ api :4000 up after 0.8 s PID 51210 · log ~/.config/holdmap/logs/shop-api.log
+  ✔ web :3000 up after 1.4 s PID 51244 · log ~/.config/holdmap/logs/shop-web.log
 ✔ shop is up
 ```
 
 If a port is held by something that isn't part of the stack, `up` stops and tells you who it is.
-`portwise up --replace` stops it first (with the normal plan and confirmation); ports listed in
+`holdmap up --replace` stops it first (with the normal plan and confirmation); ports listed in
 `protect` are never touched. `down` leaves services without a `command` (such as a database
 container) alone unless you pass `--all`, and `--dry-run` shows what `up` or `down` would do.
 
 ## Safety
 
-The file runs commands through your shell, so portwise only trusts one that you (or root) own and
-that other users can't write to. A `.portwise.toml` dropped into a shared folder such as `/tmp` is
+The file runs commands through your shell, so holdmap only trusts one that you (or root) own and
+that other users can't write to. A `.holdmap.toml` dropped into a shared folder such as `/tmp` is
 refused.

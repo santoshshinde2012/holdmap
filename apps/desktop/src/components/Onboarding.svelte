@@ -8,7 +8,7 @@
 <div class="onb" role="note" aria-label="Getting started" out:slide={{ duration: reduced ? 0 : 180 }}>
   <div class="art" aria-hidden="true"><Icon name="sparkles" size={18} /></div>
   <div class="body">
-    <strong>Welcome to portwise</strong>
+    <strong>Welcome to holdmap</strong>
     <p>Every port, agent and tool on your machine — with a safe way to stop what they started.</p>
     <ul>
       <li><kbd>{mod}</kbd><kbd>K</kbd> command palette</li>

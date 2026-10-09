@@ -1,10 +1,10 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 
-// Served from GitHub Pages at https://santoshshinde2012.github.io/portwise/.
+// Served from GitHub Pages at https://santoshshinde2012.github.io/holdmap/.
 export default defineConfig({
   site: "https://santoshshinde2012.github.io",
-  base: "/portwise",
+  base: "/holdmap",
   trailingSlash: "always",
   build: { format: "directory", inlineStylesheets: "always" },
   compressHTML: true,

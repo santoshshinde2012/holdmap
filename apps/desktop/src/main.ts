@@ -11,7 +11,7 @@ type Mounted = ReturnType<typeof mount>;
 /** Why the last remount happened, shown once in the header so a blank screen isn't silent. */
 declare global {
   interface Window {
-    __portwiseRecovered?: string;
+    __holdmapRecovered?: string;
   }
 }
 
@@ -40,19 +40,19 @@ let remounting = false;
 function recover(why: string): void {
   if (remounting || location.hash === "#ui-gallery") return;
   remounting = true;
-  console.error("[portwise] recovering UI after", why);
-  window.__portwiseRecovered = why;
+  console.error("[holdmap] recovering UI after", why);
+  window.__holdmapRecovered = why;
   try {
     unmount(current);
   } catch (e) {
-    console.error("[portwise] unmount during recover failed", e);
+    console.error("[holdmap] unmount during recover failed", e);
   }
   target.replaceChildren();
   try {
     current = app();
   } catch (e) {
-    console.error("[portwise] remount failed", e);
-    target.textContent = "portwise hit a problem and couldn't recover. Press ⌘R or quit and reopen.";
+    console.error("[holdmap] remount failed", e);
+    target.textContent = "holdmap hit a problem and couldn't recover. Press ⌘R or quit and reopen.";
   }
   setTimeout(() => {
     remounting = false;

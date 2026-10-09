@@ -1,7 +1,7 @@
 name: Pages
 
 # Builds the website (site/) with the live demo (apps/desktop in browser mode) and deploys it to
-# https://santoshshinde2012.github.io/portwise/. Pull requests only build and check.
+# https://santoshshinde2012.github.io/holdmap/. Pull requests only build and check.
 on:
   push:
     branches: [main]

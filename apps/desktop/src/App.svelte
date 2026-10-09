@@ -435,7 +435,7 @@
   }
 
   async function toggleAutostart() {
-    try { autostartOn = await api.autostart(!autostartOn); toast("info", autostartOn ? "portwise starts at login" : "Launch at login off"); }
+    try { autostartOn = await api.autostart(!autostartOn); toast("info", autostartOn ? "holdmap starts at login" : "Launch at login off"); }
     catch (e) { toast("error", "Couldn't change launch at login", String(e)); }
   }
 
@@ -685,7 +685,7 @@
     }
     const dev = (snapshot?.entries ?? []).filter((e) => e.is_dev && e.is_mine && !e.protected && !e.container && e.process);
     if (dev.length > 1) cmds.push({ id: "stop-dev", group: "Actions", icon: "stop", danger: true, title: "Stop all dev servers", subtitle: `${dev.length} running · asks first`, keywords: "kill every dev server all", run: requestStopAllDev });
-    if (update) cmds.push({ id: "update", group: "Actions", icon: "sparkles", title: `Install portwise ${update} and restart`, keywords: "update upgrade new version", run: installUpdate });
+    if (update) cmds.push({ id: "update", group: "Actions", icon: "sparkles", title: `Install holdmap ${update} and restart`, keywords: "update upgrade new version", run: installUpdate });
     if (selected) cmds.push({ id: "pin", group: "Actions", icon: "star", title: pins.has(selected.port) ? `Unpin :${selected.port}` : `Pin :${selected.port}`, shortcut: ["P"], run: () => selected && togglePin(selected) });
     for (const e of (snapshot?.entries ?? []).slice(0, 60)) {
       const boost = (selected?.id === e.id ? 12 : 0) + (e.is_dev ? 3 : 0);
@@ -784,10 +784,10 @@
   }
 
   onMount(() => {
-    if (typeof window !== "undefined" && window.__portwiseRecovered) {
-      const why = window.__portwiseRecovered;
-      delete window.__portwiseRecovered;
-      toast("info", "portwise recovered from a UI glitch", why);
+    if (typeof window !== "undefined" && window.__holdmapRecovered) {
+      const why = window.__holdmapRecovered;
+      delete window.__holdmapRecovered;
+      toast("info", "holdmap recovered from a UI glitch", why);
     }
     refresh();
     api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, configDir: i.config_dir ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; });
@@ -816,7 +816,7 @@
       api.onEvent("stop-all-dev", () => { if (!confirm) requestStopAllDev(); }),
       api.onEvent<{ version: string; notes: string | null }>("update-available", (u) => {
         update = u.version;
-        toast("info", `portwise ${u.version} is available`, "Install it from here or the command palette; the app restarts.", { label: "Install and restart", run: installUpdate });
+        toast("info", `holdmap ${u.version} is available`, "Install it from here or the command palette; the app restarts.", { label: "Install and restart", run: installUpdate });
       }),
       api.onEvent<PortEvent[]>("port-events", (evs) => {
         for (const ev of evs) {
@@ -880,7 +880,7 @@
   <header class="titlebar" data-tauri-drag-region>
     <div class="brand" data-tauri-drag-region>
       <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width="22" height="22" />
-      <span class="name">portwise</span>
+      <span class="name">holdmap</span>
     </div>
 
     <div class="search">
@@ -980,7 +980,7 @@
         {#if freePort && freePort.status === "free"}
           <EmptyState tone="ok" icon="check" title="Port {freePort.port} is free">
             <p>Nothing is listening on it — start your server there:</p>
-            <Button icon="copy" onclick={() => copy(`portwise run -p ${freePort?.port} -- npm run dev`, "Command")}><code>portwise run -p {freePort.port} -- npm run dev</code></Button>
+            <Button icon="copy" onclick={() => copy(`holdmap run -p ${freePort?.port} -- npm run dev`, "Command")}><code>holdmap run -p {freePort.port} -- npm run dev</code></Button>
             <Button variant="ghost" icon="star" onclick={() => openPin(null)}>Pin :{freePort.port} and watch it</Button>
           </EmptyState>
         {:else if freePort}

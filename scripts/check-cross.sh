@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 rustup target add x86_64-pc-windows-gnu aarch64-apple-darwin >/dev/null
-CRATES=(-p portwise-core -p portwise -p portwise-mcp)
+CRATES=(-p holdmap-core -p holdmap -p holdmap-mcp)
 
 echo "==> Windows (x86_64-pc-windows-gnu)"
 cargo clippy --target x86_64-pc-windows-gnu "${CRATES[@]}" --all-targets -- -D warnings

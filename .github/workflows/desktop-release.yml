@@ -178,7 +178,7 @@ jobs:
           uploadUpdaterJson: ${{ needs.plan.outputs.updater == 'true' }}
           updaterJsonPreferNsis: true
           uploadWorkflowArtifacts: ${{ needs.plan.outputs.tag == '' }}
-          workflowArtifactNamePattern: portwise-desktop-${{ matrix.name }}-[bundle] # [name] is the product name, the same for every bundle
+          workflowArtifactNamePattern: holdmap-desktop-${{ matrix.name }}-[bundle] # [name] is the product name, the same for every bundle
 
       # An unsealed bundle (only the linker's signature on the binary) is what macOS reports as
       # "damaged" once the download is quarantined, so check the app inside each .dmg.
@@ -215,7 +215,7 @@ jobs:
             files+=("$d"/dmg/*.dmg "$d"/msi/*.msi "$d"/nsis/*.exe "$d"/deb/*.deb "$d"/rpm/*.rpm "$d"/appimage/*.AppImage)
           done
           [ ${#files[@]} -gt 0 ] || { echo "::error::no installers were built"; exit 1; }
-          sum="portwise-desktop-${{ matrix.name }}.sha256"
+          sum="holdmap-desktop-${{ matrix.name }}.sha256"
           if command -v sha256sum >/dev/null; then sha256sum "${files[@]}"; else shasum -a 256 "${files[@]}"; fi \
             | sed -E 's#^([0-9a-f]+) [ *](.*/)?#\1  #' > "$sum" # bare names; Windows marks binary files with '*'
           cat "$sum"
@@ -283,7 +283,7 @@ jobs:
                     *aarch64.dmg) sum=macos-arm64 ;; *.dmg) sum=macos-x64 ;;
                     *.msi|*.exe) sum=windows-x64 ;; *) sum=linux-x64 ;;
                   esac
-                  echo "| [$f]($base/$f) | [portwise-desktop-$sum.sha256]($base/portwise-desktop-$sum.sha256) |"
+                  echo "| [$f]($base/$f) | [holdmap-desktop-$sum.sha256]($base/holdmap-desktop-$sum.sha256) |"
                 done
             # shellcheck disable=SC2016 # literal backticks for markdown
             printf '\nThe installers have build-provenance attestations too (`gh attestation verify <file> --repo %s`).\n' "$GITHUB_REPOSITORY"

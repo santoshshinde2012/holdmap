@@ -1,8 +1,8 @@
 {
-  "name": "portwise-site",
+  "name": "holdmap-site",
   "private": true,
   "version": "0.0.0",
-  "description": "portwise website: landing page, live demo and guide (https://santoshshinde2012.github.io/portwise/)",
+  "description": "holdmap website: landing page, live demo and guide (https://santoshshinde2012.github.io/holdmap/)",
   "type": "module",
   "license": "MIT OR Apache-2.0",
   "scripts": {

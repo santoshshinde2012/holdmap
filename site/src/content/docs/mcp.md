@@ -4,7 +4,7 @@ description: Let Claude, Cursor or VS Code list ports and agents, find a free po
 order: 5
 ---
 
-`portwise mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio, so
+`holdmap mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio, so
 coding assistants can see what's on your ports and clean up after themselves without guessing
 with `lsof` and `kill -9`.
 
@@ -15,7 +15,7 @@ with `lsof` and `kill -9`.
 ```json
 {
   "mcpServers": {
-    "portwise": { "command": "portwise", "args": ["mcp"] }
+    "holdmap": { "command": "holdmap", "args": ["mcp"] }
   }
 }
 ```
@@ -25,13 +25,13 @@ with `lsof` and `kill -9`.
 ```json
 {
   "servers": {
-    "portwise": { "type": "stdio", "command": "portwise", "args": ["mcp"] }
+    "holdmap": { "type": "stdio", "command": "holdmap", "args": ["mcp"] }
   }
 }
 ```
 
-If the client can't find `portwise`, use the full path, for example `/Users/you/.local/bin/portwise`
-(`command -v portwise` prints it).
+If the client can't find `holdmap`, use the full path, for example `/Users/you/.local/bin/holdmap`
+(`command -v holdmap` prints it).
 
 ## Tools
 
@@ -50,7 +50,7 @@ If the client can't find `portwise`, use the full path, for example `/Users/you/
 ## Guard rails
 
 - `stop_port` only stops your own dev servers by default; anything else needs `allow_non_dev`.
-- Protected processes (the OS, shells, terminals, IDEs, AI-assistant hosts, portwise itself) are
+- Protected processes (the OS, shells, terminals, IDEs, AI-assistant hosts, holdmap itself) are
   **always** refused over MCP, whatever the arguments.
 - Clients are told to show you the plan (`dry_run: true`) and get your OK before stopping anything.
 - Passwords and tokens in command lines are redacted in every result.

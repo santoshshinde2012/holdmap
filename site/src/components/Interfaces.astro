@@ -15,7 +15,7 @@ const tabs = [
 ];
 const mcpJson = `{
   "mcpServers": {
-    "portwise": { "command": "portwise", "args": ["mcp"] }
+    "holdmap": { "command": "holdmap", "args": ["mcp"] }
   }
 }`;
 const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
@@ -41,29 +41,29 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
         <h3>A scriptable CLI</h3>
         <p>Look, act, wait and free ports from any shell or script — and see which agents and tools started them. Plain-English answers for people, <code>--json</code> for tools, and exit codes that mean something.</p>
         <ul class="ticks">
-          <li><code>portwise agents</code> maps agents, tools and apps to their footprint</li>
-          <li><code>portwise agents claude --stop-ports</code> stops only what that agent started</li>
-          <li><code>portwise explain 3000</code> says who holds it and what to do</li>
+          <li><code>holdmap agents</code> maps agents, tools and apps to their footprint</li>
+          <li><code>holdmap agents claude --stop-ports</code> stops only what that agent started</li>
+          <li><code>holdmap explain 3000</code> says who holds it and what to do</li>
         </ul>
         <a class="link-arrow" href={url("docs/cli/")}>CLI reference <Icon name="ArrowRight" size={16} /></a>
       </div>
       <figure class="visual term-window">
         <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-title">~/code/shop-web</span></div>
-        <pre class="term cli-term" aria-label="portwise agents, explain and free-port in a terminal"><code set:html={cliSession.map(toHtml).join("\n")} /></pre>
+        <pre class="term cli-term" aria-label="holdmap agents, explain and free-port in a terminal"><code set:html={cliSession.map(toHtml).join("\n")} /></pre>
       </figure>
     </div>
 
     <div class="panel" role="tabpanel" id="if-tui" aria-labelledby="if-tab-tui" hidden>
       <div class="text">
         <h3>A TUI that stays out of the way</h3>
-        <p>Run <code>portwise</code> with no arguments. Arrow through ports, filter as you type, browse the Agents tab, and stop with a confirm — all from the keyboard.</p>
+        <p>Run <code>holdmap</code> with no arguments. Arrow through ports, filter as you type, browse the Agents tab, and stop with a confirm — all from the keyboard.</p>
         <ul class="ticks">
           <li>Same details as the desktop app: tree, memory, connections</li>
           <li>Tab cycles Ports → Graph → Agents; <kbd>x</kbd> stops an agent’s ports</li>
           <li>Works over SSH sessions and in tmux</li>
         </ul>
       </div>
-      <figure class="visual window tui"><Picture src={tuiShot} formats={["avif"]} fallbackFormat="webp" widths={[640, 1374]} sizes={sizes} alt="The portwise TUI: a port table with the details pane for the selected port" loading="lazy" /></figure>
+      <figure class="visual window tui"><Picture src={tuiShot} formats={["avif"]} fallbackFormat="webp" widths={[640, 1374]} sizes={sizes} alt="The holdmap TUI: a port table with the details pane for the selected port" loading="lazy" /></figure>
     </div>
 
     <div class="panel" role="tabpanel" id="if-desktop" aria-labelledby="if-tab-desktop" hidden>
@@ -86,14 +86,14 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
     <div class="panel" role="tabpanel" id="if-mcp" aria-labelledby="if-tab-mcp" hidden>
       <div class="text">
         <h3>An MCP server for AI agents</h3>
-        <p><code>portwise mcp</code> gives coding assistants nine tools: list, explain, find a free port, wait, read the graph, see which agents and tools run where, stop the ports an agent started, plan a cluster stop (dry run only) and stop their own dev servers. Protected processes are always refused.</p>
+        <p><code>holdmap mcp</code> gives coding assistants nine tools: list, explain, find a free port, wait, read the graph, see which agents and tools run where, stop the ports an agent started, plan a cluster stop (dry run only) and stop their own dev servers. Protected processes are always refused.</p>
         <div class="code term-window">
           <div class="code-bar"><span>~/.cursor/mcp.json</span><button type="button" class="copy" data-copy={mcpJson} aria-label="Copy the MCP configuration"><Icon name="Copy" size={14} class="i-copy" /><Icon name="Check" size={14} class="i-done" /></button></div>
           <pre><code>{mcpJson}</code></pre>
         </div>
         <a class="link-arrow" href={url("docs/mcp/")}>Set up Claude, Cursor or VS Code <Icon name="ArrowRight" size={16} /></a>
       </div>
-      <figure class="visual chat" aria-label="An AI agent using portwise tools">
+      <figure class="visual chat" aria-label="An AI agent using holdmap tools">
         <div class="msg user">Which agent started the server on 3001?</div>
         <div class="tool"><Icon name="Wrench" size={14} /> list_agents <span>{"{}"}</span></div>
         <div class="msg agent"><b>Claude Code</b> holds <code>:3001</code> (Vite · shop-api), 214&nbsp;MB, 1 stoppable port. Access: sandbox unknown.</div>

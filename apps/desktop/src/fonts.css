@@ -1,5 +1,5 @@
 /* Bundled typefaces (shipped with the app, no network). Subset to Latin + Latin Extended, general
- * punctuation and the UI symbols portwise uses (arrows, ⌘ ⌥ ⇧ ⌫ ↵, ✓, box drawing), all OpenType
+ * punctuation and the UI symbols holdmap uses (arrows, ⌘ ⌥ ⇧ ⌫ ↵, ✓, box drawing), all OpenType
  * features and the variable axes kept. Licences: assets/fonts/*-LICENSE.txt / *-OFL.txt (SIL OFL 1.1). */
 @font-face {
   font-family: "Inter Variable";

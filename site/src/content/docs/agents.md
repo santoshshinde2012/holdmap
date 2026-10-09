@@ -4,7 +4,7 @@ description: See which AI agents and developer tools are running, what they can 
 order: 2
 ---
 
-portwise finds the **AI coding agents** and **developer tools** on your machine and shows, for
+holdmap finds the **AI coding agents** and **developer tools** on your machine and shows, for
 each one, the folders it works in, the ports and apps it started, the services and hosts it talks
 to, and what the OS says about its access. Every fact is marked seen, inferred or unknown. Chats,
 settings and tokens are never read.
@@ -15,11 +15,11 @@ Cline, Goose, Docker Desktop, OrbStack, Podman Desktop and others.
 ## From the CLI
 
 ```sh
-portwise agents                         # every agent and tool, with its footprint
-portwise agents claude                  # filter by product name or PID
-portwise agents claude --stop-ports --dry-run   # plan only
-portwise agents claude --stop-ports --yes       # stop unprotected ports that agent started
-portwise agents --json                  # machine-readable report
+holdmap agents                         # every agent and tool, with its footprint
+holdmap agents claude                  # filter by product name or PID
+holdmap agents claude --stop-ports --dry-run   # plan only
+holdmap agents claude --stop-ports --yes       # stop unprotected ports that agent started
+holdmap agents --json                  # machine-readable report
 ```
 
 Each entry shows memory, CPU, process count, how many ports are stoppable, the parent process,
@@ -50,4 +50,4 @@ processes are never stopped unless you pass `--allow-protected` on the CLI; MCP 
 
 - [Desktop app](../desktop/): shortcuts and the Agents map.
 - [MCP for AI agents](../mcp/): `list_agents` and `stop_agent_ports`.
-- [CLI reference](../cli/): every flag for `portwise agents`.
+- [CLI reference](../cli/): every flag for `holdmap agents`.

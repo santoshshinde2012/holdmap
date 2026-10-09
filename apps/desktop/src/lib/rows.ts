@@ -34,7 +34,7 @@ export function rowBadges(e: PortEntry, links = 0): RowBadge[] {
   const out: RowBadge[] = [];
   if (e.exposure === "all_interfaces")
     out.push({ id: "exposed", label: "Exposed", tone: "amber", icon: "globe", tip: `Bound to ${e.addresses.join(", ")}: reachable from your network` });
-  if (e.protected) out.push({ id: "protected", label: "Protected", tone: "neutral", icon: "lock", tip: "Protected: portwise won't stop this without an explicit override" });
+  if (e.protected) out.push({ id: "protected", label: "Protected", tone: "neutral", icon: "lock", tip: "Protected: holdmap won't stop this without an explicit override" });
   if (e.container) out.push({ id: "container", label: cap(e.container.runtime), tone: "blue", icon: "box", tip: `Container ${e.container.name} (${e.container.image})` });
   if (!e.is_mine && e.user) out.push({ id: "user", label: e.user, tone: "neutral", icon: "user", tip: `Owned by ${e.user}` });
   if (links > 0) out.push({ id: "links", label: String(links), tone: "quiet", icon: "graph", tip: `${links} connected service${links === 1 ? "" : "s"} — see the graph view` });

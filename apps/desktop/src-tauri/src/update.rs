@@ -65,7 +65,7 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
     let Some(update) = update else {
-        return Err("portwise is up to date".into());
+        return Err("holdmap is up to date".into());
     };
     update
         .download_and_install(|_, _| {}, || {})

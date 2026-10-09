@@ -1,6 +1,6 @@
-# portwise architecture
+# holdmap architecture
 
-portwise is one Rust library (`portwise-core`) with four thin front-ends. Every decision about
+holdmap is one Rust library (`holdmap-core`) with four thin front-ends. Every decision about
 *who owns a port, whether it's safe to touch, and how to stop it* lives in the core; the
 front-ends only render and confirm what it returns.
 
@@ -11,14 +11,14 @@ front-ends only render and confirm what it returns.
 flowchart TB
   subgraph IF["Interfaces"]
     direction LR
-    HOOK("Shell hook<br/>portwise init")
+    HOOK("Shell hook<br/>holdmap init")
     CLI("CLI<br/>clap")
     TUI("TUI<br/>ratatui")
     DESK("Desktop app + tray<br/>Tauri v2 · Svelte 5")
     MCP("MCP server<br/>JSON-RPC · stdio")
   end
 
-  subgraph CORE["portwise-core"]
+  subgraph CORE["holdmap-core"]
     ENG{{"Engine<br/>explain · plan · stop"}}
     SCAN["Scanner<br/>sockets → PIDs → projects"]
     PROV["Platform providers<br/>Linux · macOS · Windows"]
@@ -28,7 +28,7 @@ flowchart TB
     TOPO["Topology<br/>service graph<br/>clusters · stop order"]
     AGT["Agents<br/>AI agents & tools · folders<br/>access · ports · links"]
     HTTP["HTTP probe<br/>GET / → status, title"]
-    STACK["Project config<br/>.portwise.toml"]
+    STACK["Project config<br/>.holdmap.toml"]
   end
 
   subgraph OS["Operating system"]
@@ -186,7 +186,7 @@ flowchart LR
 * **Who.** `agents::catalog` names each agent product: bundle, process name, install path or
   entry script. Kinds cover terminal agents, AI editors, desktop apps, extensions, hosts and
   developer tools (Docker Desktop, OrbStack…). `ProtectionPolicy` uses the same catalog for
-  Cli/Extension/Host names, so what the view calls an agent is what portwise refuses to stop. An
+  Cli/Extension/Host names, so what the view calls an agent is what holdmap refuses to stop. An
   editor, desktop app or tool with many helpers is one agent. A terminal agent started inside it
   is its own agent, linked by a parent edge.
 * **Where.** Folders are the members' working directories, with project details from the scan,
@@ -214,7 +214,7 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  subgraph Rust["src-tauri (portwise-desktop)"]
+  subgraph Rust["src-tauri (holdmap-desktop)"]
     LIB["lib.rs: builder, plugins<br/>(notification, autostart, global-shortcut)"]
     CMD["commands.rs<br/>scan · topology · agents · explain · plan · stop · pins · history · restart · autostart<br/>preferences · hotkeys · remote_scan"]
     ST["state.rs<br/>AppState (config, last snapshot)"]
@@ -244,7 +244,7 @@ flowchart TB
   API -- "Tauri IPC" --> CMD
 ```
 
-`commands.rs` only converts arguments and calls the core. All behaviour lives in `portwise-core`,
+`commands.rs` only converts arguments and calls the core. All behaviour lives in `holdmap-core`,
 and all view logic (layout, filtering, ordering) lives in pure TypeScript modules that vitest
 covers.
 
@@ -280,7 +280,7 @@ doesn't move between refreshes.
 - `Engine` and `Scanner` take trait objects, so tests inject static providers and fixture tables.
   Only `Scanner::system()` (used by `Engine::new`) touches the real OS.
 - Project and shell features stay out of the engine: `stack` parses and validates
-  `.portwise.toml` and answers "is this listener ours?" (pure data, no I/O beyond reading the
+  `.holdmap.toml` and answers "is this listener ours?" (pure data, no I/O beyond reading the
   file), `hint` reads a command line for the ports it would bind, and `http` probes a port with a
   bounded `GET /`. The CLI composes them with the engine's normal plan → confirm → execute path,
   so `down`, `up --replace` and `stop --all-dev` get the same protection checks as `stop`.

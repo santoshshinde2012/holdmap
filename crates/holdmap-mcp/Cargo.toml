@@ -1,0 +1,23 @@
+[package]
+name = "holdmap-mcp"
+description = "Model Context Protocol (stdio) server exposing holdmap to AI coding agents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+holdmap-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.dist]
+dist = false

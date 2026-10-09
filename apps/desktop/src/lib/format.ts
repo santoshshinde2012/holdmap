@@ -189,7 +189,7 @@ export function matches(e: PortEntry, f: Filters): boolean {
 }
 
 /** True if the user may explicitly override this block ("stop anyway"). Hard protections
- *  (portwise's own process tree, core OS processes) are never overridable. */
+ *  (holdmap's own process tree, core OS processes) are never overridable. */
 export function canOverride(plan: Pick<ActionPlan, "blocked">): boolean {
   return plan.blocked?.kind === "protected" && plan.blocked.overridable === true;
 }

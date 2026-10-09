@@ -9,8 +9,8 @@ import { description as siteDescription, siteUrl } from "../lib/site";
 interface Props { title?: string; description?: string; ogType?: "website" | "article"; noindex?: boolean }
 const { title, description = siteDescription, ogType = "website", noindex = false } = Astro.props;
 const fullTitle = title
-  ? `${title} · portwise`
-  : "portwise: see who's on every port — and which agent started it";
+  ? `${title} · holdmap`
+  : "holdmap: see who's on every port — and which agent started it";
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const og = `${siteUrl}og.png`;
@@ -27,7 +27,7 @@ const og = `${siteUrl}og.png`;
       // Apply the saved theme before first paint (dark unless the visitor chose light).
       // Also note the visitor's OS so install commands and downloads start on the right one.
       (function (d) {
-        try { if (localStorage.getItem("portwise-site-theme") === "light") d.dataset.theme = "light"; } catch (e) {}
+        try { if (localStorage.getItem("holdmap-site-theme") === "light") d.dataset.theme = "light"; } catch (e) {}
         var p = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "").toLowerCase();
         d.dataset.os = p.indexOf("win") > -1 ? "windows" : p.indexOf("mac") > -1 || /iphone|ipad/.test(p) ? "macos" : /linux|x11|cros|android/.test(p) ? "linux" : "macos";
       })(document.documentElement);
@@ -41,14 +41,14 @@ const og = `${siteUrl}og.png`;
     <link rel="apple-touch-icon" href={`${base}/apple-touch-icon.png`} />
     <link rel="sitemap" href={`${base}/sitemap.xml`} />
     <meta property="og:type" content={ogType} />
-    <meta property="og:site_name" content="portwise" />
+    <meta property="og:site_name" content="holdmap" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <meta property="og:image" content={og} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="portwise: see who's on every port and which agent started it. The desktop app with ports, projects and the agents map." />
+    <meta property="og:image:alt" content="holdmap: see who's on every port and which agent started it. The desktop app with ports, projects and the agents map." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />

@@ -1,0 +1,45 @@
+[package]
+name = "holdmap"
+description = "See which ports, agents and tools are running — and stop the right thing safely: CLI + TUI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+default-run = "holdmap"
+
+[[bin]]
+name = "holdmap"
+path = "src/main.rs"
+
+[dependencies]
+holdmap-core.workspace = true
+holdmap-mcp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+humantime.workspace = true
+clap = { version = "4.6", features = ["derive", "wrap_help", "env"] }
+clap_complete = "4.6"
+clap_mangen = "0.3"
+ratatui = "0.30"
+unicode-width = "0.2"
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+assert_cmd = "2.2"
+predicates = "3.1"
+tempfile.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.dist]
+dist = true

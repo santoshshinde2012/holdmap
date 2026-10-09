@@ -1,5 +1,5 @@
 // Scripted CLI sessions for the terminal player. The output mirrors the real CLI's layout and
-// colours (see crates/portwise-cli), with the same sample machine as the desktop demo.
+// colours (see crates/holdmap-cli), with the same sample machine as the desktop demo.
 // Markup is a tiny subset: <b> bold, <d> dim, <c> port cyan, <g> green, <r> red, <y> amber, <v> violet.
 
 export type Chapter = { id: string; label: string; cmd: string; caption: string; out: string[] };
@@ -37,12 +37,12 @@ const held = "<r>●</r> <b>Port 3000 is held by a Next.js dev server (node, PID
 
 export const chapters: Chapter[] = [
   {
-    id: "list", label: "list", cmd: "portwise list",
+    id: "list", label: "list", cmd: "holdmap list",
     caption: "Every listening port with its process, project, branch and framework.",
     out: list,
   },
   {
-    id: "agents", label: "agents", cmd: "portwise agents",
+    id: "agents", label: "agents", cmd: "holdmap agents",
     caption: "AI agents and developer tools: folders, ports, memory, CPU and access.",
     out: [
       "<v>Claude Code</v>  pid 51200 · 214 MB · 3% CPU · 1 stoppable",
@@ -57,7 +57,7 @@ export const chapters: Chapter[] = [
     ],
   },
   {
-    id: "inspect", label: "inspect", cmd: "portwise inspect 3000",
+    id: "inspect", label: "inspect", cmd: "holdmap inspect 3000",
     caption: "Everything about one port: owner, tree, memory, connections and bind risk.",
     out: [
       kv("Port", "<c>3000</c> / TCP"),
@@ -81,7 +81,7 @@ export const chapters: Chapter[] = [
     ],
   },
   {
-    id: "stop", label: "stop", cmd: "portwise stop 3000",
+    id: "stop", label: "stop", cmd: "holdmap stop 3000",
     caption: "Stops the whole dev-server tree gracefully, then checks the port is really free.",
     out: [
       held,
@@ -94,7 +94,7 @@ export const chapters: Chapter[] = [
     ],
   },
   {
-    id: "run", label: "run", cmd: "portwise run -p 3000 -- npm run dev",
+    id: "run", label: "run", cmd: "holdmap run -p 3000 -- npm run dev",
     caption: "Frees the port safely, then starts your server on it with PORT set.",
     out: [
       held,
@@ -109,15 +109,15 @@ export const chapters: Chapter[] = [
     ],
   },
   {
-    id: "up", label: "up", cmd: "portwise up",
-    caption: "Starts a project's services from .portwise.toml, dependencies first.",
+    id: "up", label: "up", cmd: "holdmap up",
+    caption: "Starts a project's services from .holdmap.toml, dependencies first.",
     out: [
-      "<v>→</v> <b>shop</b> <d>~/code/shop/.portwise.toml</d>",
+      "<v>→</v> <b>shop</b> <d>~/code/shop/.holdmap.toml</d>",
       "  <g>✔</g> <b>db</b> <c>:5432</c> <d>already running (PostgreSQL · container shop-db-1)</d>",
-      "  <g>✔</g> <b>api</b> <c>:4000</c> up after 0.8 s <d>PID 51210 · log ~/.config/portwise/logs/shop-api.log</d>",
-      "  <g>✔</g> <b>web</b> <c>:3000</c> up after 1.4 s <d>PID 51244 · log ~/.config/portwise/logs/shop-web.log</d>",
+      "  <g>✔</g> <b>api</b> <c>:4000</c> up after 0.8 s <d>PID 51210 · log ~/.config/holdmap/logs/shop-api.log</d>",
+      "  <g>✔</g> <b>web</b> <c>:3000</c> up after 1.4 s <d>PID 51244 · log ~/.config/holdmap/logs/shop-web.log</d>",
       "<g>✔</g> <b>shop is up</b>",
-      "<d>`portwise status` shows the services, `portwise down` stops them.</d>",
+      "<d>`holdmap status` shows the services, `holdmap down` stops them.</d>",
     ],
   },
 ];
@@ -135,16 +135,16 @@ export function toHtml(line: string): string {
 
 /** A short static session for the Interfaces section (real output formats, sample data). */
 export const cliSession: string[] = [
-  "<v>$</v> portwise agents",
+  "<v>$</v> holdmap agents",
   "<v>Claude Code</v>  pid 51200 · 214 MB · 3% CPU · 1 stoppable",
   "  folders   shop-api  ~/code/shop-api",
   "  ports     <c>:3001</c>  shop-api (Vite)  · stoppable",
   "  access    sandbox unknown · network :3001 only",
   "",
-  "<v>$</v> portwise explain 3000",
+  "<v>$</v> holdmap explain 3000",
   held,
   "  <v>→</v> Gracefully stop npm run dev (2 processes) and verify port 3000 is free.",
   "",
-  "<v>$</v> portwise free-port --near 3000",
+  "<v>$</v> holdmap free-port --near 3000",
   "3002",
 ];

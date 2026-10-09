@@ -32,7 +32,7 @@ export interface StopState {
 }
 
 export function stopState(entry: PortEntry, plan: ActionPlan | null): StopState {
-  if (!entry.process && !entry.container) return { stoppable: false, overridable: false, reason: entry.pid === null ? "The owner is hidden — run portwise with admin rights" : "Nothing to stop" };
+  if (!entry.process && !entry.container) return { stoppable: false, overridable: false, reason: entry.pid === null ? "The owner is hidden — run holdmap with admin rights" : "Nothing to stop" };
   const b = plan?.blocked;
   if (!b) return { stoppable: true, overridable: false, reason: null };
   const reason = b.kind === "needs_elevation" ? "Needs administrator rights" : b.kind === "os_service" ? "Operating-system feature — turn it off in Settings" : b.kind === "protected" ? "Protected process" : "Nothing to stop";
@@ -41,14 +41,14 @@ export function stopState(entry: PortEntry, plan: ActionPlan | null): StopState 
 
 export interface CliCommand { label: string; cmd: string }
 
-/** Terminal equivalents: the explanation's own commands first, then portwise's. */
+/** Terminal equivalents: the explanation's own commands first, then holdmap's. */
 export function cliCommands(entry: PortEntry, explanation: Explanation | null): CliCommand[] {
   const out: CliCommand[] = (explanation?.commands ?? []).map((cmd) => ({ label: "Suggested", cmd }));
   const p = entry.port;
   const add = (label: string, cmd: string) => { if (!out.some((c) => c.cmd === cmd)) out.push({ label, cmd }); };
-  add("Explain", `portwise explain ${p}`);
-  if (entry.process || entry.container) add("Preview the stop", `portwise stop ${p} --dry-run`);
-  add("Watch this port", `portwise wait ${p} --free`);
+  add("Explain", `holdmap explain ${p}`);
+  if (entry.process || entry.container) add("Preview the stop", `holdmap stop ${p} --dry-run`);
+  add("Watch this port", `holdmap wait ${p} --free`);
   return out;
 }
 
@@ -94,7 +94,7 @@ export function projectFolder(entry: PortEntry): string | null {
 }
 
 /** Restart (stop, then run the same command in the same folder) only makes sense for a
- * process of yours that portwise can stop and start again: not a container or a supervisor. */
+ * process of yours that holdmap can stop and start again: not a container or a supervisor. */
 export function canRestart(entry: PortEntry, plan: ActionPlan | null): boolean {
   if (!entry.process || entry.container || !entry.is_mine || entry.protected) return false;
   if (!plan || plan.blocked) return false;

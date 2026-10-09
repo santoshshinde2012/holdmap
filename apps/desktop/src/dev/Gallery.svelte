@@ -20,7 +20,7 @@
   <header><h1>Type &amp; controls</h1><p>Nine semantic text roles; one consistent set of inputs (32 px default, 28 px compact, 36 px large).</p></header>
   <section class="type" aria-label="Type scale">
     <h2>Type scale · Inter Variable + JetBrains Mono</h2>
-    {#each [["display", "24 / 30 · 600", "3000"], ["title", "16 / 22 · 600", "Stop shop-web?"], ["heading", "14 / 20 · 600", "Global shortcut"], ["body", "13 / 20 · 400", "Port 3000 is held by Next.js (node, PID 43000)."], ["body-sm", "12 / 17 · 400", "Start portwise in the menu bar when you log in."], ["caption", "11 / 15 · 400", "Updated 2 s ago · 393 MB"], ["label", "11 / 15 · 500 · +6%", "DEV SERVERS"], ["mono", "12 / 18 · 400", "portwise stop 3000 --dry-run"], ["mono-sm", "11 / 16 · 400", "node · PID 43000 · 0O 1lI"]] as [r, spec, sample] (r)}
+    {#each [["display", "24 / 30 · 600", "3000"], ["title", "16 / 22 · 600", "Stop shop-web?"], ["heading", "14 / 20 · 600", "Global shortcut"], ["body", "13 / 20 · 400", "Port 3000 is held by Next.js (node, PID 43000)."], ["body-sm", "12 / 17 · 400", "Start holdmap in the menu bar when you log in."], ["caption", "11 / 15 · 400", "Updated 2 s ago · 393 MB"], ["label", "11 / 15 · 500 · +6%", "DEV SERVERS"], ["mono", "12 / 18 · 400", "holdmap stop 3000 --dry-run"], ["mono-sm", "11 / 16 · 400", "node · PID 43000 · 0O 1lI"]] as [r, spec, sample] (r)}
       <div class="spec"><span class="rn">{r}</span><span class="rs">{spec}</span><span class="sample t-{r}">{sample}</span></div>
     {/each}
   </section>

@@ -10,9 +10,9 @@ const tabs: { key: Os | "source"; label: string }[] = [
 ];
 const cmdFor = (k: string) => (k === "windows" ? install.ps : k === "source" ? install.cargo : install.sh);
 const firstOpen: Record<string, string> = {
-  macos: "The app isn't notarised yet. Open it once, then go to <b>System Settings › Privacy &amp; Security › Open Anyway</b> (macOS 14 and earlier: right-click the app, then <b>Open</b>). Or run <code>xattr -dr com.apple.quarantine /Applications/portwise.app</code>.",
+  macos: "The app isn't notarised yet. Open it once, then go to <b>System Settings › Privacy &amp; Security › Open Anyway</b> (macOS 14 and earlier: right-click the app, then <b>Open</b>). Or run <code>xattr -dr com.apple.quarantine /Applications/holdmap.app</code>.",
   windows: "The installer isn't code-signed yet. In “Windows protected your PC”, click <b>More info</b>, then <b>Run anyway</b>.",
-  linux: "Make the AppImage executable (<code>chmod +x portwise_*.AppImage</code>) or install the .deb / .rpm with your package manager.",
+  linux: "Make the AppImage executable (<code>chmod +x holdmap_*.AppImage</code>) or install the .deb / .rpm with your package manager.",
 };
 ---
 <section id="install" class="section" aria-labelledby="install-title">
@@ -40,8 +40,8 @@ const firstOpen: Record<string, string> = {
           </div>
           <p class="hint">
             {t.key === "source"
-              ? <Fragment>Needs Rust 1.95 or newer. The desktop app builds with <code>npm run tauri build</code> in <code>apps/desktop</code>; see <a href="https://github.com/santoshshinde2012/portwise/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</Fragment>
-              : <Fragment>Installs to <code>{t.key === "windows" ? "%USERPROFILE%\\.local\\bin" : "~/.local/bin"}</code> and adds it to your <code>PATH</code> if needed. Then run <code>portwise</code>.</Fragment>}
+              ? <Fragment>Needs Rust 1.95 or newer. The desktop app builds with <code>npm run tauri build</code> in <code>apps/desktop</code>; see <a href="https://github.com/santoshshinde2012/holdmap/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</Fragment>
+              : <Fragment>Installs to <code>{t.key === "windows" ? "%USERPROFILE%\\.local\\bin" : "~/.local/bin"}</code> and adds it to your <code>PATH</code> if needed. Then run <code>holdmap</code>.</Fragment>}
           </p>
         </div>
         {t.key !== "source" && (
@@ -84,11 +84,11 @@ const firstOpen: Record<string, string> = {
         <h3>Verify what you downloaded</h3>
         <p>Every release ships SHA-256 checksums and GitHub build provenance.</p>
 <pre class="term" tabindex="0"><code><span class="d"># the checksum file sits next to the download</span>
-shasum -a 256 -c portwise-desktop-macos-arm64.sha256
+shasum -a 256 -c holdmap-desktop-macos-arm64.sha256
 <span class="d"># Windows (PowerShell): compare with the .sha256 file</span>
-Get-FileHash portwise_{version}_x64-setup.exe
+Get-FileHash holdmap_{version}_x64-setup.exe
 <span class="d"># where it was built, and from which commit</span>
-gh attestation verify portwise_{version}_aarch64.dmg \
+gh attestation verify holdmap_{version}_aarch64.dmg \
   --repo {REPO}</code></pre>
         <p class="small">Homebrew is coming soon. Updating? Run the installer again; the desktop app checks GitHub Releases for updates. Trouble? See <a href={url("docs/troubleshooting/")}>troubleshooting</a>.</p>
       </div>

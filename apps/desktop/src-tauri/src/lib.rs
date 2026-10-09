@@ -1,7 +1,7 @@
-//! portwise desktop: a Tauri v2 shell around `portwise-core` with a tray menu.
+//! holdmap desktop: a Tauri v2 shell around `holdmap-core` with a tray menu.
 //!
 //! All the real work (scanning, explaining, planning, topology, stopping, history) happens in
-//! `portwise-core`; this crate only adapts it to the Svelte UI:
+//! `holdmap-core`; this crate only adapts it to the Svelte UI:
 //!
 //! - [`commands`]: async Tauri commands (thin adapters, no business logic)
 //! - [`tray`]: the tray / menu-bar icon listing running dev servers
@@ -26,7 +26,7 @@ pub fn run() {
     // Project lookups read files in the user's folders; on macOS the first read under
     // ~/Documents waits for the privacy prompt. Keep scans live: wait only a few ms for them
     // and fill project fields in on a later scan.
-    portwise_core::project::set_scan_budget(std::time::Duration::from_millis(15));
+    holdmap_core::project::set_scan_budget(std::time::Duration::from_millis(15));
     let context = tauri::generate_context!();
     let updater = update::configured(&context);
     let mut builder = tauri::Builder::default().plugin(tauri_plugin_notification::init());
@@ -79,7 +79,7 @@ pub fn run() {
             let tray_ok = match tray::setup_tray(&handle) {
                 Ok(()) => true,
                 Err(e) => {
-                    eprintln!("portwise: tray unavailable ({e}); closing the window quits");
+                    eprintln!("holdmap: tray unavailable ({e}); closing the window quits");
                     false
                 }
             };
@@ -101,7 +101,7 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // With a tray, closing the window keeps portwise running in the menu bar.
+            // With a tray, closing the window keeps holdmap running in the menu bar.
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window
                     .app_handle()
@@ -115,7 +115,7 @@ pub fn run() {
             }
         })
         .run(context)
-        .expect("error while running portwise");
+        .expect("error while running holdmap");
 }
 
 #[cfg(test)]

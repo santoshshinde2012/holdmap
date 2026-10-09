@@ -15,7 +15,7 @@ import Icon from "./Icon.astro";
     <div class="pair">
       <div class="side">
         <div class="term-window">
-          <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-title">Without portwise</span><span class="pad" aria-hidden="true"></span></div>
+          <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-title">Without holdmap</span><span class="pad" aria-hidden="true"></span></div>
 <pre class="term" tabindex="0"><span class="p">$</span> PORT=3000 npm run dev
 <span class="r">Error: listen EADDRINUSE: address already in use :::3000</span>
 <span class="p">$</span> lsof -i :3000
@@ -34,15 +34,15 @@ node    43000  dev   23u  IPv6  TCP *:hbci (LISTEN)
       </div>
       <div class="side">
         <div class="term-window">
-          <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-title">With portwise</span><span class="pad" aria-hidden="true"></span></div>
-<pre class="term" tabindex="0"><span class="p">$</span> portwise agents
+          <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-title">With holdmap</span><span class="pad" aria-hidden="true"></span></div>
+<pre class="term" tabindex="0"><span class="p">$</span> holdmap agents
 <span class="v">Claude Code</span>  pid 51200 · 214 MB · 3% CPU · 1 stoppable
   folders   shop-api  ~/code/shop-api
   ports     :3001  shop-api (Vite)  · stoppable
   children  vite (shop-api)
   access    sandbox unknown · network :3001 only
 <span class="v">Docker Desktop</span>  pid 1290 · tool · 2 ports
-<span class="p">$</span> portwise agents claude --stop-ports --yes
+<span class="p">$</span> holdmap agents claude --stop-ports --yes
   <span class="d">· sent SIGTERM to npm (51199), node (51201)</span>
 <span class="g">✔</span> <span class="b">:3001 is free</span>
 <span class="p">$</span> PORT=3000 npm run dev  <span class="g">✓ Ready in 1.4s</span></pre>
