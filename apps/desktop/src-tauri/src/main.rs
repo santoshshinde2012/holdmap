@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    portwise_desktop_lib::run()
+    holdmap_desktop_lib::run()
 }

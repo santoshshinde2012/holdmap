@@ -26,7 +26,7 @@
 
 <Dialog title="Recently stopped" description="Bring a service back in the directory it ran from." icon="history" size="lg" {onclose} initialFocus="self">
   {#if !items.length}
-    <div class="empty"><Icon name="history" size={22} /><b>Nothing yet</b><span>Services you stop with portwise show up here so you can restart them with one click.</span></div>
+    <div class="empty"><Icon name="history" size={22} /><b>Nothing yet</b><span>Services you stop with holdmap show up here so you can restart them with one click.</span></div>
   {:else}
     <ul>
       {#each items as h (key(h))}

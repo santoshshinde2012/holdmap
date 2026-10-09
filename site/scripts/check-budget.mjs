@@ -10,7 +10,7 @@ const kb = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(2)} MB` : `${
 const files = (d) => readdirSync(d).map((f) => join(d, f)).filter((f) => statSync(f).isFile());
 
 const index = readFileSync(join(dist, "index.html"), "utf8");
-const scripts = [...index.matchAll(/<script[^>]+src="\/portwise\/(_astro\/[^"]+\.js)"/g)].map((m) => join(dist, m[1]));
+const scripts = [...index.matchAll(/<script[^>]+src="\/holdmap\/(_astro\/[^"]+\.js)"/g)].map((m) => join(dist, m[1]));
 const astro = files(join(dist, "_astro"));
 const images = astro.filter((f) => /\.(avif|webp|png|jpe?g)$/.test(f));
 const fonts = astro.filter((f) => f.endsWith(".woff2"));

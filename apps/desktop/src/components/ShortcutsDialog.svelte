@@ -10,7 +10,7 @@
   ]);
 </script>
 
-<Dialog title="Keyboard shortcuts" description="Everything in portwise works without a mouse." icon="keyboard" size="lg" {onclose} initialFocus="self">
+<Dialog title="Keyboard shortcuts" description="Everything in holdmap works without a mouse." icon="keyboard" size="lg" {onclose} initialFocus="self">
   <div class="grid">
     {#each groups as [name, items]}
       <section>

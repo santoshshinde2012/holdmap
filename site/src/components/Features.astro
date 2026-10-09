@@ -84,12 +84,12 @@ const widths = (w: number) => [w, w * 2, w * 3];
         <div class="copy">
           <h3>Agents, tools and apps</h3>
           <p>Claude Code, Cursor, Copilot, Docker Desktop and more: folders, ports they started, memory and CPU, stoppable count, parent process, children as tools &amp; apps, and access — each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor, or stop only what that agent started.</p>
-          <pre class="snippet term inline" tabindex="0" aria-label="Example agents command"><span class="p">$</span> portwise agents
+          <pre class="snippet term inline" tabindex="0" aria-label="Example agents command"><span class="p">$</span> holdmap agents
 <span class="v">Claude Code</span>  pid 51200 · 214 MB · 3% CPU · 1 stoppable
   folders   shop-api  ~/code/shop-api
   ports     :3001  shop-api (Vite)
   access    sandbox unknown · network :3001 only
-<span class="p">$</span> portwise agents claude --stop-ports --dry-run
+<span class="p">$</span> holdmap agents claude --stop-ports --dry-run
 <span class="d">Dry run: nothing was changed.</span></pre>
         </div>
         <div class="visual agents-shot">
@@ -112,16 +112,16 @@ const widths = (w: number) => [w, w * 2, w * 3];
           <h3>Scriptable to the core</h3>
           <p>Every read command speaks <code>--json</code>, every action has <code>--dry-run</code>, and exit codes mean something.</p>
         </div>
-        <pre class="snippet term" tabindex="0" aria-label="Example CLI command"><span class="p">$</span> portwise list --json \
+        <pre class="snippet term" tabindex="0" aria-label="Example CLI command"><span class="p">$</span> holdmap list --json \
     | jq '.[0].project'
 <span class="g">"shop-web"</span></pre>
       </li>
       <li class="card">
         <div class="copy">
           <h3>A TUI, over SSH too</h3>
-          <p>Run <code>portwise</code> for a fast terminal UI. <code>portwise ssh devbox</code> reads another machine without installing anything there.</p>
+          <p>Run <code>holdmap</code> for a fast terminal UI. <code>holdmap ssh devbox</code> reads another machine without installing anything there.</p>
         </div>
-        <pre class="snippet term" tabindex="0" aria-label="Example SSH command"><span class="p">$</span> portwise ssh devbox
+        <pre class="snippet term" tabindex="0" aria-label="Example SSH command"><span class="p">$</span> holdmap ssh devbox
 <span class="d">connected · 14 ports · linux</span></pre>
       </li>
     </ul>

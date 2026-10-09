@@ -29,7 +29,7 @@ h1 span { color: #8b8b93; }
 </style></head><body>
 <div class="shot"><img src="data:image/png;base64,${shot}"></div>
 <div class="copy">
-  <div class="brand">${icon.replace(/ width="1024" height="1024"/, "")}portwise</div>
+  <div class="brand">${icon.replace(/ width="1024" height="1024"/, "")}holdmap</div>
   <h1>Know what's on every port.<br><span>Free it safely.</span></h1>
 </div>
 </body></html>`;

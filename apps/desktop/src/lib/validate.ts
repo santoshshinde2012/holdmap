@@ -1,5 +1,5 @@
 // Form validation shared by the desktop forms. Messages are user-facing and say how to fix it.
-// `validateHost` mirrors `portwise_core::remote::validate_host` (the backend re-checks).
+// `validateHost` mirrors `holdmap_core::remote::validate_host` (the backend re-checks).
 
 export function validatePort(input: string | number | null | undefined): string | null {
   const s = String(input ?? "").trim();

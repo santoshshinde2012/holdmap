@@ -3,8 +3,8 @@
 //! and keeps the tray menu fresh.
 
 use crate::state::AppState;
-use portwise_core::events::{PortEvent, Watcher};
-use portwise_core::store::Config;
+use holdmap_core::events::{PortEvent, Watcher};
+use holdmap_core::store::Config;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
@@ -89,8 +89,8 @@ pub fn spawn(app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use portwise_core::store::Pin;
-    use portwise_core::PortEntry;
+    use holdmap_core::store::Pin;
+    use holdmap_core::PortEntry;
 
     fn entry(port: u16, dev: bool) -> Box<PortEntry> {
         Box::new(

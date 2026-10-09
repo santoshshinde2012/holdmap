@@ -71,7 +71,7 @@
   {:else if result}
     <div class="out">
       <div class="rhead"><Icon name="server" size={14} /><b>{result.host}</b><span>{listening.length} listening · scanned in {result.snap.scan_ms} ms</span>
-        <span class="cli"><CopyValue value="portwise ssh {result.host}" mono what="Command" {oncopy} /></span></div>
+        <span class="cli"><CopyValue value="holdmap ssh {result.host}" mono what="Command" {oncopy} /></span></div>
       {#if listening.length}
         <div class="tbl" role="table" aria-label="Ports on {result.host}">
           <div class="tr th" role="row"><span role="columnheader">Port</span><span role="columnheader">Process</span><span role="columnheader">User</span><span role="columnheader">Address</span></div>

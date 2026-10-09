@@ -1,4 +1,4 @@
-// Mirrors the serde types in crates/portwise-core/src/{model,engine}.rs.
+// Mirrors the serde types in crates/holdmap-core/src/{model,engine}.rs.
 
 export type Protocol = "tcp" | "udp";
 export type Exposure = "loopback" | "all_interfaces" | "specific";
@@ -133,17 +133,17 @@ export interface ActionPlan {
   risk: Risk;
 }
 
-/** Who is connected to a listening port (portwise_core::details::Connections). */
+/** Who is connected to a listening port (holdmap_core::details::Connections). */
 export interface Peer { address: string; connections: number; local: boolean; process: string | null; pid: number | null }
 export interface Connections { total: number; established: number; by_state: Record<string, number>; peers: Peer[]; more_peers: number }
 export interface TreeProcess { pid: number; name: string; command: string; depth: number; memory_bytes: number; cpu_percent: number }
 export interface ProcessTree { ancestors: TreeProcess[]; process: TreeProcess; children: TreeProcess[]; more_children: number }
 export type RiskLevel = "low" | "medium" | "high";
 export interface BindRisk { level: RiskLevel; title: string; explanation: string; fix: string | null }
-/** The lazily loaded extras for one listener (portwise_core::details::PortDetails). */
+/** The lazily loaded extras for one listener (holdmap_core::details::PortDetails). */
 export interface PortDetails { id: string; port: number; started_at: number | null; uptime_secs: number | null; connections: Connections; tree: ProcessTree | null; bind_risk: BindRisk }
 
-/** What an HTTP server on a local port answered (portwise_core::http::HttpInfo). */
+/** What an HTTP server on a local port answered (holdmap_core::http::HttpInfo). */
 export interface HttpInfo {
   port: number;
   status: number;
@@ -187,7 +187,7 @@ export interface AppInfo {
   config_dir?: string;
 }
 
-// ---- topology (crates/portwise-core/src/topology/model.rs) ----
+// ---- topology (crates/holdmap-core/src/topology/model.rs) ----
 
 export type NodeKind = "service" | "container" | "hidden" | "client" | "external";
 export type EdgeKind = "local" | "outbound" | "inbound";
@@ -277,7 +277,7 @@ export type PortEvent =
   | { event: "closed"; entry: PortEntry }
   | { event: "conflict"; port: number; protocol: Protocol; entries: PortEntry[] };
 
-// ---- agents (crates/portwise-core/src/agents/model.rs) ----
+// ---- agents (crates/holdmap-core/src/agents/model.rs) ----
 
 export type AgentKind = "cli" | "ide" | "desktop" | "extension" | "host" | "tool";
 export type Evidence = "observed" | "inferred" | "unknown";

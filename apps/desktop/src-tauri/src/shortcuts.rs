@@ -1,4 +1,4 @@
-//! OS integration: the global "show portwise" shortcut and launch-at-login.
+//! OS integration: the global "show holdmap" shortcut and launch-at-login.
 
 use std::sync::Mutex;
 use tauri::AppHandle;
@@ -51,7 +51,7 @@ fn shortcut(preset: &str) -> Option<tauri_plugin_global_shortcut::Shortcut> {
 #[cfg(desktop)]
 pub fn setup(app: &tauri::App, preset: &str) {
     use tauri_plugin_global_shortcut::ShortcutState;
-    // Only portwise's own shortcut is ever registered, so any press shows the window.
+    // Only holdmap's own shortcut is ever registered, so any press shows the window.
     let plugin = tauri_plugin_global_shortcut::Builder::new()
         .with_handler(move |app, _sc, ev| {
             if ev.state() == ShortcutState::Pressed {
@@ -60,11 +60,11 @@ pub fn setup(app: &tauri::App, preset: &str) {
         })
         .build();
     if let Err(e) = app.handle().plugin(plugin) {
-        eprintln!("portwise: global shortcut unavailable ({e})");
+        eprintln!("holdmap: global shortcut unavailable ({e})");
         return;
     }
     if let Err(e) = apply(app.handle(), preset) {
-        eprintln!("portwise: {e}");
+        eprintln!("holdmap: {e}");
     }
 }
 

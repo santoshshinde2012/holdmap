@@ -6,7 +6,7 @@
 // Frames land in .hero-frames/<variant>-<theme>/; scripts/encode-hero.sh turns them into the videos.
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 const { chromium } = await import(process.env.PLAYWRIGHT ?? "playwright");
-const [, , variant = "desktop", theme = "dark", fpsArg = "60", base = "http://127.0.0.1:4330/portwise/"] = process.argv;
+const [, , variant = "desktop", theme = "dark", fpsArg = "60", base = "http://127.0.0.1:4330/holdmap/"] = process.argv;
 const FPS = +fpsArg, M = variant === "mobile";
 const VW = M ? 400 : 1152, VH = M ? 560 : 720, DPR = M ? 3 : 2;
 const dir = `.hero-frames/${variant}-${theme}`;

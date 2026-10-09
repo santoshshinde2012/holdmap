@@ -16,7 +16,7 @@ const starLabel = stars ? new Intl.NumberFormat("en", { notation: "compact" }).f
   <div class="wrap nav-inner">
     <a class="brand" href={url()}>
       <Logo size={24} id="pw-logo-nav" />
-      <span>portwise</span>
+      <span>holdmap</span>
     </a>
     <nav class="links" id="nav-links" aria-label="Main">
       <ul>
@@ -30,7 +30,7 @@ const starLabel = stars ? new Intl.NumberFormat("en", { notation: "compact" }).f
         <Icon name="Sun" size={16} class="i-sun" />
         <Icon name="Moon" size={16} class="i-moon" />
       </button>
-      <a class="gh" href={repoUrl} aria-label={starLabel ? `Star portwise on GitHub (${stars} stars)` : "Star portwise on GitHub"}>
+      <a class="gh" href={repoUrl} aria-label={starLabel ? `Star holdmap on GitHub (${stars} stars)` : "Star holdmap on GitHub"}>
         <Icon name="github" size={16} />
         <span class="gh-label">GitHub</span>
         {starLabel && <span class="gh-count">{starLabel}</span>}

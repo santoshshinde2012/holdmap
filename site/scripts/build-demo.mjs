@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 const site = join(dirname(fileURLToPath(import.meta.url)), "..");
 const desktop = join(site, "..", "apps", "desktop");
 const out = join(site, "public", "demo");
-const base = "/portwise/demo/";
+const base = "/holdmap/demo/";
 
 if (!existsSync(join(desktop, "node_modules"))) {
   console.error("apps/desktop has no node_modules: run `npm ci` in apps/desktop first.");
@@ -39,7 +39,7 @@ const boot = `<script>
   if (window.top === window) addEventListener("DOMContentLoaded", function () {
     var a = document.createElement("a");
     a.href = "../";
-    a.textContent = "← portwise · sample data";
+    a.textContent = "← holdmap · sample data";
     a.setAttribute("style", "position:fixed;left:12px;bottom:12px;z-index:9999;padding:6px 10px;border-radius:8px;font:500 12px/1.2 system-ui,sans-serif;background:#5048e5;color:#fff;text-decoration:none;box-shadow:0 4px 16px rgb(0 0 0/.25)");
     document.body.append(a);
   });
@@ -49,8 +49,8 @@ const boot = `<script>
 const indexPath = join(out, "index.html");
 let html = readFileSync(indexPath, "utf8");
 html = html
-  .replace("<title>portwise</title>", "<title>portwise live demo (sample data)</title>")
-  .replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta name="robots" content="noindex" />\n    <meta name="description" content="The portwise desktop app running in your browser with sample data." />`)
+  .replace("<title>holdmap</title>", "<title>holdmap live demo (sample data)</title>")
+  .replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta name="robots" content="noindex" />\n    <meta name="description" content="The holdmap desktop app running in your browser with sample data." />`)
   .replace("</head>", `${boot}\n  </head>`);
 writeFileSync(indexPath, html);
 console.log(`demo → ${out}`);

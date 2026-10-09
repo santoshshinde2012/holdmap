@@ -99,16 +99,16 @@
     <div class="result" in:fade={{ duration: reduced ? 0 : 150 }} role="status">
       <div class="big-check"><Icon name="check" size={26} /></div>
       <h2>{heading}</h2>
-      <p>{subject} stopped in {seconds(report.elapsed_ms)}{report.escalated ? " — it ignored SIGTERM, so portwise used SIGKILL" : ""}.</p>
+      <p>{subject} stopped in {seconds(report.elapsed_ms)}{report.escalated ? " — it ignored SIGTERM, so holdmap used SIGKILL" : ""}.</p>
     </div>
   {:else}
     <p class="summary selectable"><RichText text={blocked ? blocked.message : plan.summary} /></p>
-    {#if restart && !blocked}<p class="summary restart-note">Then portwise starts the same command again in {entry?.project?.root ?? entry?.process?.cwd ?? "its folder"}.</p>{/if}
+    {#if restart && !blocked}<p class="summary restart-note">Then holdmap starts the same command again in {entry?.project?.root ?? entry?.process?.cwd ?? "its folder"}.</p>{/if}
 
     {#if blocked && overridable}
       <div class="override">
         <Callout tone="danger" icon="shield" title="This process is protected">It looks like part of your editor, terminal or an agent session. Stopping it can close windows or lose unsaved work.</Callout>
-        <Checkbox tone="danger" bind:checked={understood} label="I understand — stop it anyway" description="portwise will plan the stop without protection and show you the steps first." />
+        <Checkbox tone="danger" bind:checked={understood} label="I understand — stop it anyway" description="holdmap will plan the stop without protection and show you the steps first." />
       </div>
     {/if}
 
@@ -156,7 +156,7 @@
     {#if phase === "done"}
       <Button variant="secondary" onclick={oncancel} data-primary>Done</Button>
     {:else if blocked}
-      <span class="hint">{overridable ? "Nothing is sent yet." : "portwise won't stop this for you."}</span>
+      <span class="hint">{overridable ? "Nothing is sent yet." : "holdmap won't stop this for you."}</span>
       {#if overridable}
         <Button variant="secondary" kbd="Esc" onclick={oncancel}>Cancel</Button>
         <Button variant="danger" icon="stop" disabled={!understood} onclick={onoverride} data-primary={understood || undefined}>Review stop</Button>

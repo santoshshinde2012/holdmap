@@ -64,7 +64,7 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
       <span class="eyebrow">In your terminal</span>
       <h3 class="cli-title">Same answers, one command away.</h3>
       <p class="cli-text">
-        <code>portwise agents</code> maps agents and tools; every read command takes
+        <code>holdmap agents</code> maps agents and tools; every read command takes
         <code>--json</code>, every action has <code>--dry-run</code>, and exit codes tell scripts what
         happened.
       </p>
@@ -145,7 +145,7 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
     function load() {
       if (frame || viewport.clientWidth < 600) return;
       frame = document.createElement("iframe");
-      frame.title = "portwise live demo: the desktop app with sample data";
+      frame.title = "holdmap live demo: the desktop app with sample data";
       frame.src = `${root!.dataset.src}?theme=${theme()}`;
       frame.addEventListener("load", () => {
         setTimeout(() => { poster.setAttribute("data-hidden", ""); buttons.forEach((b) => (b.disabled = false)); }, 500);
@@ -158,7 +158,7 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
       if (entries[0].isIntersecting) { load(); io.disconnect(); }
     }, { rootMargin: "300px 0px" }).observe(root);
 
-    window.addEventListener("portwise:theme", (e) => {
+    window.addEventListener("holdmap:theme", (e) => {
       const doc = frame?.contentDocument;
       const t = (e as CustomEvent<string>).detail;
       if (!doc) return;

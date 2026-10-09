@@ -12,7 +12,7 @@ const first = chapters[0];
     <div class="chapters" role="tablist" aria-label="CLI sessions" aria-orientation="vertical">
       {chapters.map((c, i) => (
         <button type="button" role="tab" aria-selected={i === 0 ? "true" : "false"} tabindex={i === 0 ? 0 : -1} aria-controls="player-screen" data-chapter={c.id}>
-          <span class="cmd">portwise {c.label}</span>
+          <span class="cmd">holdmap {c.label}</span>
           <span class="cap">{c.caption}</span>
         </button>
       ))}

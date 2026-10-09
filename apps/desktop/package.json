@@ -1,16 +1,16 @@
 {
-  "name": "portwise-desktop",
+  "name": "holdmap-desktop",
   "private": true,
   "version": "0.2.0",
-  "description": "portwise desktop and tray app",
+  "description": "holdmap desktop and tray app",
   "type": "module",
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/santoshshinde2012/portwise.git",
+    "url": "git+https://github.com/santoshshinde2012/holdmap.git",
     "directory": "apps/desktop"
   },
-  "homepage": "https://github.com/santoshshinde2012/portwise",
+  "homepage": "https://github.com/santoshshinde2012/holdmap",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

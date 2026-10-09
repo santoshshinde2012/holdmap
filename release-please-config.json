@@ -22,16 +22,16 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "package-name": "portwise",
+      "package-name": "holdmap",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.package.version" },
-        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies['portwise-core'].version" },
-        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies['portwise-mcp'].version" },
+        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies['holdmap-core'].version" },
+        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies['holdmap-mcp'].version" },
         {
           "type": "toml",
           "path": "Cargo.lock",
-          "jsonpath": "$.package[?(@.name.value == 'portwise' || @.name.value == 'portwise-core' || @.name.value == 'portwise-mcp' || @.name.value == 'portwise-desktop')].version"
+          "jsonpath": "$.package[?(@.name.value == 'holdmap' || @.name.value == 'holdmap-core' || @.name.value == 'holdmap-mcp' || @.name.value == 'holdmap-desktop')].version"
         },
         { "type": "json", "path": "apps/desktop/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "apps/desktop/package-lock.json", "jsonpath": "$.version" },

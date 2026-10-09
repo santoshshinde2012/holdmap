@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Start a handful of realistic dev servers for trying portwise (and for screenshots).
+# Start a handful of realistic dev servers for trying holdmap (and for screenshots).
 # Usage: scripts/demo-servers.sh [start|stop]
 set -euo pipefail
-DEMO="${PORTWISE_DEMO_DIR:-${TMPDIR:-/tmp}/portwise-demo}"
+DEMO="${HOLDMAP_DEMO_DIR:-${TMPDIR:-/tmp}/holdmap-demo}"
 PIDS="$DEMO/pids"   # one "name pid" line per server we started; only ever appended to
 
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
@@ -89,7 +89,7 @@ PY
   # 5. A UDP service (statsd-like) on 8125
   launch statsd "$DEMO" python3 -c 'import socket,time; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(("127.0.0.1",8125)); time.sleep(10**9)'
 
-  # 6. acme-shop: a pnpm monorepo stack with live connections, for `portwise graph`:
+  # 6. acme-shop: a pnpm monorepo stack with live connections, for `holdmap graph`:
   #    concurrently → { web :3100 (Next.js), worker }   web → api :4000 (FastAPI) → db :5432, cache :6379
   #    worker → api, cache;  api → one external host.  (docs-site's vite proxy → orders-api :8080)
   acme

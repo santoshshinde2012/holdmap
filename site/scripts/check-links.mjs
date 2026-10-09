@@ -5,7 +5,7 @@ import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
-const BASE = "/portwise/";
+const BASE = "/holdmap/";
 const ORIGIN = "https://santoshshinde2012.github.io";
 
 const pages = [];
@@ -23,7 +23,7 @@ const idsOf = (file) => {
   return ids.get(file);
 };
 
-/** dist file for a site path like /portwise/docs/ or /portwise/_astro/x.css */
+/** dist file for a site path like /holdmap/docs/ or /holdmap/_astro/x.css */
 function fileFor(pathname) {
   let p = decodeURIComponent(pathname.slice(BASE.length));
   if (p === "" || p.endsWith("/")) p += "index.html";
@@ -63,7 +63,7 @@ if (process.argv.includes("--external")) {
   for (const href of external) {
     if (skip.test(href)) continue;
     try {
-      const r = await fetch(href, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(15000), headers: { "user-agent": "portwise-site-linkcheck" } });
+      const r = await fetch(href, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(15000), headers: { "user-agent": "holdmap-site-linkcheck" } });
       if (r.status >= 400 && r.status !== 429) problems.push(`external ${r.status}: ${href}`);
     } catch (e) {
       problems.push(`external error: ${href} (${e.message})`);

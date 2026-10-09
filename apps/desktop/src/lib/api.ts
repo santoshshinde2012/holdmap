@@ -13,7 +13,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function appInfo(): Promise<AppInfo> {
-  if (!isTauri) return { version: pkgVersion, platform: "browser", tray: false, shortcut: mockShortcut, config_dir: "~/.config/portwise" };
+  if (!isTauri) return { version: pkgVersion, platform: "browser", tray: false, shortcut: mockShortcut, config_dir: "~/.config/holdmap" };
   return call("app_info");
 }
 
@@ -105,9 +105,9 @@ export async function openAgentFolder(agentId: string, path: string): Promise<st
   return call("open_agent_folder", { agentId, path });
 }
 
-/** Start again what portwise just stopped on `port` (the second half of "Restart"). */
+/** Start again what holdmap just stopped on `port` (the second half of "Restart"). */
 export async function restartStopped(port: number): Promise<{ pid: number; command: string; log: string }> {
-  if (!isTauri) return { pid: 4243, command: "npm run dev", log: "/tmp/portwise.log" };
+  if (!isTauri) return { pid: 4243, command: "npm run dev", log: "/tmp/holdmap.log" };
   return call("restart_stopped", { port });
 }
 
@@ -177,7 +177,7 @@ export async function clearHistory(): Promise<void> {
 }
 
 export async function restart(entry: HistoryEntry): Promise<{ pid: number; command: string; log: string }> {
-  if (!isTauri) return { pid: 4242, command: entry.command.join(" "), log: "/tmp/portwise.log" };
+  if (!isTauri) return { pid: 4242, command: entry.command.join(" "), log: "/tmp/holdmap.log" };
   // Name the entry only: the backend reads the command from its own history file.
   return call("restart", { atMs: entry.at_ms, port: entry.port });
 }

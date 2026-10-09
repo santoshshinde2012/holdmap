@@ -1,13 +1,13 @@
 //! Tray / menu-bar icon with the running dev servers.
 
 use crate::state::AppState;
-use portwise_core::{PortEntry, Snapshot};
+use holdmap_core::{PortEntry, Snapshot};
 use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 
-const TRAY_ID: &str = "portwise-tray";
+const TRAY_ID: &str = "holdmap-tray";
 
 fn tray_label(e: &PortEntry) -> String {
     let what = match (&e.framework, &e.project) {
@@ -43,7 +43,7 @@ fn item(id: impl Into<String>, label: impl Into<String>, enabled: bool) -> TrayI
 }
 
 fn tray_items(snapshot: Option<&Snapshot>) -> Vec<TrayItem> {
-    let mut out = vec![item("show", "Open portwise", true), TrayItem::Separator];
+    let mut out = vec![item("show", "Open holdmap", true), TrayItem::Separator];
     let dev: Vec<&PortEntry> = snapshot
         .map(|s| {
             s.entries
@@ -81,13 +81,13 @@ fn tray_items(snapshot: Option<&Snapshot>) -> Vec<TrayItem> {
         let exposed = s
             .entries
             .iter()
-            .filter(|e| e.exposure != portwise_core::model::Exposure::Loopback)
+            .filter(|e| e.exposure != holdmap_core::model::Exposure::Loopback)
             .count();
         out.push(item(
             "summary",
             format!(
                 "{} in use · {exposed} network-exposed",
-                portwise_core::util::count(s.entries.len(), "port", "ports")
+                holdmap_core::util::count(s.entries.len(), "port", "ports")
             ),
             false,
         ));
@@ -95,7 +95,7 @@ fn tray_items(snapshot: Option<&Snapshot>) -> Vec<TrayItem> {
     out.push(item("refresh", "Refresh", true));
     out.push(TrayItem::Item {
         id: "quit".into(),
-        label: "Quit portwise".into(),
+        label: "Quit holdmap".into(),
         enabled: true,
         accel: Some("CmdOrCtrl+Q"),
     });
@@ -105,7 +105,7 @@ fn tray_items(snapshot: Option<&Snapshot>) -> Vec<TrayItem> {
 fn tray_tooltip(snapshot: &Snapshot) -> String {
     let dev = snapshot.entries.iter().filter(|e| e.is_dev).count();
     format!(
-        "portwise — {} ports in use, {dev} dev servers",
+        "holdmap — {} ports in use, {dev} dev servers",
         snapshot.entries.len()
     )
 }
@@ -174,7 +174,7 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
-        .tooltip("portwise")
+        .tooltip("holdmap")
         .menu(&build_tray_menu(app, &tray_items(None))?)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {

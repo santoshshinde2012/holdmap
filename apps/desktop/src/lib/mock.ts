@@ -165,7 +165,7 @@ export function mockExplain(port: number): Explanation {
       ...(e.container ? [`Published by ${e.container.runtime} container ${e.container.name} (${e.container.image}).`] : []),
     ],
     recommendation: plan.blocked ? plan.blocked.message : plan.summary,
-    commands: [`portwise stop ${port}`, ...(p ? [`kill -TERM ${p.pid}`] : [])],
+    commands: [`holdmap stop ${port}`, ...(p ? [`kill -TERM ${p.pid}`] : [])],
     entries: [e],
     plan,
   };
@@ -220,7 +220,7 @@ export function mockPlan(target: string, force: boolean, allowProtected = false)
   const port = parseInt(target, 10);
   const e = MOCK_SNAPSHOT.entries.find((x) => x.port === port)!;
   if (!e?.process) {
-    return { target: `:${port}`, owners: [{ kind: "hidden", uid: 0, user: "root" }], summary: "", steps: [], blocked: { kind: "needs_elevation", message: `The owner of port ${port} belongs to user root; run \`sudo portwise stop ${port}\`.` }, warnings: [], risk: "high" };
+    return { target: `:${port}`, owners: [{ kind: "hidden", uid: 0, user: "root" }], summary: "", steps: [], blocked: { kind: "needs_elevation", message: `The owner of port ${port} belongs to user root; run \`sudo holdmap stop ${port}\`.` }, warnings: [], risk: "high" };
   }
   if (e.protected && e.framework?.category !== "system" && !allowProtected) {
     return { target: `:${port}`, owners: [{ kind: "protected", pid: e.process.pid, name: e.process.name, reason: "IDE host" }], summary: "", steps: [], blocked: { kind: "protected", message: `${e.process.name} (PID ${e.process.pid}) is part of ${e.framework?.name ?? "an app"} — stopping it can close your editor windows.`, overridable: true }, warnings: [], risk: "high" };
@@ -314,7 +314,7 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT): AgentsReport {
   };
   const remote = (address: string, connections: number): AgentLink => ({ id: `remote:${address}`, kind: "remote", label: address, address, port: 443, connections, entry_id: null, process: null, pid: null, service: "HTTPS" });
   const fact = (topic: AccessFact["topic"], level: AccessFact["level"], summary: string, evidence: AccessFact["evidence"]): AccessFact => ({ topic, level, summary, evidence });
-  const unknownPrivacy = fact("privacy", "unknown", "macOS privacy grants (Full Disk Access, Files and Folders) can't be read without Full Disk Access; portwise doesn't ask for it.", "unknown");
+  const unknownPrivacy = fact("privacy", "unknown", "macOS privacy grants (Full Disk Access, Files and Folders) can't be read without Full Disk Access; holdmap doesn't ask for it.", "unknown");
   const network = (ports: AgentPort[], remotes: number) => {
     const list = ports.map((p) => `:${p.port}`).join(", ");
     const tail = remotes ? ` Talks to ${remotes} remote host${remotes === 1 ? "" : "s"}.` : "";
@@ -427,7 +427,7 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT): AgentsReport {
     taken_at_ms: s.taken_at_ms,
     limits: [
       "Folders are working directories and the agents' recent-project lists; open files aren't collected.",
-      "Remote hosts are shown by IP address; portwise doesn't look names up.",
+      "Remote hosts are shown by IP address; holdmap doesn't look names up.",
       "Chats, settings, tokens and credentials are never read.",
       "macOS privacy grants (TCC) can't be read without Full Disk Access, and folders it guards aren't inspected.",
     ],

@@ -2,7 +2,7 @@
 // the iframe loads, the "Try" buttons drive the real app, and a simulated stop removes :3000.
 //   PLAYWRIGHT=/path/to/node_modules/playwright/index.mjs [CHROME=/path/to/chrome] node scripts/check-demo.mjs [base-url]
 const { chromium } = await import(process.env.PLAYWRIGHT ?? "playwright");
-const base = process.argv[2] ?? "http://127.0.0.1:4321/portwise/";
+const base = process.argv[2] ?? "http://127.0.0.1:4321/holdmap/";
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });

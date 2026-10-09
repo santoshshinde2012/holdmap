@@ -2,7 +2,7 @@
 members = ["cargo:."]
 
 # Config for 'dist' (https://axodotdev.github.io/cargo-dist/book/reference/config.html).
-# Only the `portwise` CLI ships through dist; the desktop app ships through tauri-action
+# Only the `holdmap` CLI ships through dist; the desktop app ships through tauri-action
 # (.github/workflows/desktop-release.yml). After editing this file, run `dist generate`.
 [dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
@@ -43,7 +43,7 @@ checksum = "sha256"
 github-attestations = true
 # A CycloneDX SBOM per package, uploaded with the release.
 cargo-cyclonedx = true
-# Embed the dependency tree in the binaries so `cargo audit bin portwise` works on them.
+# Embed the dependency tree in the binaries so `cargo audit bin holdmap` works on them.
 cargo-auditable = true
 
 # Actions used by the generated release workflow, pinned to commit SHAs (Dependabot can't update

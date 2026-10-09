@@ -1,13 +1,13 @@
-//! Tauri commands: thin adapters from the Svelte UI onto `portwise-core`. No business logic
+//! Tauri commands: thin adapters from the Svelte UI onto `holdmap-core`. No business logic
 //! lives here — scanning, planning, topology and history are all core abstractions.
 
 use crate::state::{scan_now, AppState};
 use crate::tray::refresh_tray;
-use portwise_core::agents::AgentsReport;
-use portwise_core::history::{self, HistoryEntry};
-use portwise_core::store::Config;
-use portwise_core::topology::Graph;
-use portwise_core::{
+use holdmap_core::agents::AgentsReport;
+use holdmap_core::history::{self, HistoryEntry};
+use holdmap_core::store::Config;
+use holdmap_core::topology::Graph;
+use holdmap_core::{
     execute, ActionPlan, Engine, Explanation, Snapshot, StopOptions, StopReport, Target,
 };
 use serde::Serialize;
@@ -130,9 +130,9 @@ pub async fn topology(app: AppHandle, all: bool) -> Result<Graph, String> {
 /// Ask a local port what it serves over HTTP (status, page title, server), with a short
 /// `GET /`. `None` when it doesn't answer HTTP.
 #[tauri::command]
-pub async fn http_info(port: u16) -> Result<Option<portwise_core::http::HttpInfo>, String> {
+pub async fn http_info(port: u16) -> Result<Option<holdmap_core::http::HttpInfo>, String> {
     blocking(move || {
-        Ok(portwise_core::http::probe(
+        Ok(holdmap_core::http::probe(
             port,
             "/",
             std::time::Duration::from_millis(1200),
@@ -201,9 +201,9 @@ pub async fn stop(
 #[tauri::command]
 pub async fn free_port(near: u16) -> Result<Option<u16>, String> {
     blocking(move || {
-        Ok((near.max(1)..=u16::MAX).take(2000).find(|p| {
-            portwise_core::probe::probe_tcp(*p) == portwise_core::probe::ProbeResult::Free
-        }))
+        Ok((near.max(1)..=u16::MAX)
+            .take(2000)
+            .find(|p| holdmap_core::probe::probe_tcp(*p) == holdmap_core::probe::ProbeResult::Free))
     })
     .await
 }
@@ -271,10 +271,10 @@ pub async fn restart(app: AppHandle, at_ms: u64, port: u16) -> Result<Restarted,
             .state::<AppState>()
             .store
             .entry(at_ms, port)
-            .ok_or_else(|| format!("portwise has no record of stopping :{port} then"))?;
+            .ok_or_else(|| format!("holdmap has no record of stopping :{port} then"))?;
         if !entry.restartable() {
             return Err(format!(
-                "portwise didn't record a command for :{} — start it the usual way",
+                "holdmap didn't record a command for :{} — start it the usual way",
                 entry.port
             ));
         }
@@ -298,10 +298,10 @@ pub async fn restart_stopped(app: AppHandle, port: u16) -> Result<Restarted, Str
         let store = &app.state::<AppState>().store;
         let entry = store
             .last_for_port(port)
-            .filter(|e| portwise_core::util::now_ms().saturating_sub(e.at_ms) < 120_000)
+            .filter(|e| holdmap_core::util::now_ms().saturating_sub(e.at_ms) < 120_000)
             .filter(HistoryEntry::restartable)
             .ok_or_else(|| {
-                format!("portwise didn't record a command for :{port} — start it the usual way")
+                format!("holdmap didn't record a command for :{port} — start it the usual way")
             })?;
         let (pid, log) = history::restart(&entry, &store.logs_dir()).map_err(|e| e.to_string())?;
         Ok(Restarted {
@@ -316,10 +316,10 @@ pub async fn restart_stopped(app: AppHandle, port: u16) -> Result<Restarted, Str
 /// Connections, process tree, uptime and bind risk for the listeners on `port`. Loaded
 /// lazily for the selected port only, from a scan that includes connected sockets.
 #[tauri::command]
-pub async fn port_details(port: u16) -> Result<Vec<portwise_core::details::PortDetails>, String> {
+pub async fn port_details(port: u16) -> Result<Vec<holdmap_core::details::PortDetails>, String> {
     blocking(move || {
         let engine = scan_now(true, false)?;
-        Ok(portwise_core::details::for_port(&engine.scan, port))
+        Ok(holdmap_core::details::for_port(&engine.scan, port))
     })
     .await
 }
@@ -356,21 +356,21 @@ pub fn open_port(port: u16) -> Result<(), String> {
     if port == 0 {
         return Err("Port must be between 1 and 65535".into());
     }
-    portwise_core::util::open_url(&format!("http://localhost:{port}")).map_err(|e| e.to_string())
+    holdmap_core::util::open_url(&format!("http://localhost:{port}")).map_err(|e| e.to_string())
 }
 
 /// Show the project folder of the service on `port` in Finder / Explorer.
 #[tauri::command]
 pub fn reveal_project(app: AppHandle, port: u16) -> Result<(), String> {
     let dir = folder_for(&app, port)?;
-    portwise_core::util::reveal(&dir).map_err(|e| e.to_string())
+    holdmap_core::util::reveal(&dir).map_err(|e| e.to_string())
 }
 
 /// Open the project folder of the service on `port` in the user's editor; returns its name.
 #[tauri::command]
 pub fn open_in_editor(app: AppHandle, port: u16) -> Result<String, String> {
     let dir = folder_for(&app, port)?;
-    portwise_core::util::open_in_editor(&dir).map_err(|e| e.to_string())
+    holdmap_core::util::open_in_editor(&dir).map_err(|e| e.to_string())
 }
 
 /// Resolve a folder the Agents view named: it must belong to `agent_id` in the current report,
@@ -399,17 +399,17 @@ fn agent_folder(app: &AppHandle, agent_id: &str, path: &str) -> Result<std::path
 #[tauri::command]
 pub fn reveal_agent_folder(app: AppHandle, agent_id: String, path: String) -> Result<(), String> {
     let dir = agent_folder(&app, &agent_id, &path)?;
-    portwise_core::util::reveal(&dir).map_err(|e| e.to_string())
+    holdmap_core::util::reveal(&dir).map_err(|e| e.to_string())
 }
 
 /// Open an agent's folder in the user's editor; returns the editor's name.
 #[tauri::command]
 pub fn open_agent_folder(app: AppHandle, agent_id: String, path: String) -> Result<String, String> {
     let dir = agent_folder(&app, &agent_id, &path)?;
-    portwise_core::util::open_in_editor(&dir).map_err(|e| e.to_string())
+    holdmap_core::util::open_in_editor(&dir).map_err(|e| e.to_string())
 }
 
-/// Whether portwise launches at login.
+/// Whether holdmap launches at login.
 #[tauri::command]
 pub fn autostart(app: AppHandle, enable: Option<bool>) -> Result<bool, String> {
     crate::shortcuts::autostart(&app, enable)
@@ -512,7 +512,7 @@ pub fn set_hotkey(
 /// machine through `sh`, which is handy without an SSH server.
 #[tauri::command]
 pub async fn remote_scan(app: AppHandle, host: String) -> Result<Snapshot, String> {
-    use portwise_core::remote::{scan_remote, validate_host, LocalShell, RemoteRunner, SshRunner};
+    use holdmap_core::remote::{scan_remote, validate_host, LocalShell, RemoteRunner, SshRunner};
     let host = host.trim().to_string();
     validate_host(&host)?;
     blocking(move || {
