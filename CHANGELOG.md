@@ -30,6 +30,8 @@ by [release-please](https://github.com/googleapis/release-please) from
   graph nodes / CLI / TUI / MCP text; child processes grouped as “tools & apps it started”; folder
   source labels (working dir / child cwd / recent); TUI `x` stops an agent’s ports; demo includes
   Docker Desktop.
+- Product copy (CLI `--help`, desktop store metadata, README architecture, site CLI demo) aligns
+  with agents and tools; removed a duplicate desktop `icon.svg`.
 
 ## [0.2.0] - 2026-10-09
 

@@ -1,6 +1,6 @@
 [package]
 name = "portwise"
-description = "See which ports are in use, why, and stop the right thing safely: CLI + TUI"
+description = "See which ports, agents and tools are running — and stop the right thing safely: CLI + TUI"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

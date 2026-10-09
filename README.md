@@ -238,6 +238,7 @@ flowchart TB
     REG["StopStrategy registry<br/>process tree · container<br/>systemd · pm2 · brew"]
     EXEC["Executor<br/>signal → verify freed"]
     TOPO["Topology<br/>service graph<br/>clusters · stop order"]
+    AGT["Agents<br/>AI agents & tools · folders<br/>access · ports · links"]
     HTTP["HTTP probe<br/>GET / → status, title"]
     STACK["Project config<br/>.portwise.toml"]
   end
@@ -268,6 +269,8 @@ flowchart TB
   ENG -->|"safe to touch?"| POL
   ENG -->|"how to stop"| REG
   ENG --> TOPO
+  ENG --> AGT
+  AGT -.->|"same catalog"| POL
   REG --> EXEC
 
   PROV -->|"read"| SOCK
@@ -282,7 +285,7 @@ flowchart TB
   classDef os fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#052e16
   classDef state fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#3b2203
   class HOOK,CLI,TUI,DESK,MCP iface
-  class SCAN,PROV,POL,REG,EXEC,TOPO,HTTP,STACK core
+  class SCAN,PROV,POL,REG,EXEC,TOPO,AGT,HTTP,STACK core
   class ENG engine
   class SOCK,SIG,CTR os
   class PINS,HIST state

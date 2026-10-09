@@ -1,7 +1,7 @@
 <script lang="ts">
-  // The agents map: every AI coding agent running here, with its folders, the ports it serves,
-  // the services and hosts it talks to and how much access it has. A rail of cards on the left
-  // (the "picture" of each agent) and a column graph of their shared footprint on the right.
+  // The agents map: every AI coding agent and developer tool running here, with its folders,
+  // the ports it serves, the services and hosts it talks to and how much access it has. A rail
+  // of cards on the left and a column graph of their shared footprint on the right.
   import { SvelteFlow, Background, Controls, Panel, type NodeTypes, type EdgeTypes } from "@xyflow/svelte";
   import "@xyflow/svelte/dist/style.css";
   import AgentCard from "./agents/AgentCard.svelte";

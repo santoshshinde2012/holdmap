@@ -2,7 +2,8 @@
 //! # portwise-core
 //!
 //! The engine behind every portwise surface: it lists which ports are in use and by whom,
-//! explains *why* a port is busy in plain English, and stops the right thing safely.
+//! maps AI coding agents and developer tools to their folders and ports, explains *why* a
+//! port is busy in plain English, and stops the right thing safely.
 //!
 //! ```no_run
 //! use portwise_core::{execute, Engine, ScanOptions, StopOptions, Target};

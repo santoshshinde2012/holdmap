@@ -1,6 +1,6 @@
 ---
 import Logo from "./Logo.astro";
-import { changelogUrl, contributingUrl, issuesUrl, licenseUrl, releasesUrl, repoUrl, securityUrl, url, version } from "../lib/site";
+import { changelogUrl, contributingUrl, issuesUrl, licenseUrl, releasesUrl, repoUrl, securityUrl, tagline, url, version } from "../lib/site";
 
 const cols: { title: string; links: [string, string][] }[] = [
   { title: "Product", links: [["Features", url("#features")], ["Live demo", url("#demo")], ["Install", url("#install")], ["Releases", releasesUrl]] },
@@ -13,7 +13,7 @@ const cols: { title: string; links: [string, string][] }[] = [
     <div class="top">
       <div class="about">
         <a class="brand" href={url()}><Logo size={20} id="pw-logo-footer" /><span>portwise</span></a>
-        <p>See which ports, agents and tools are running — and stop the right thing safely.</p>
+        <p>{tagline}</p>
         <p class="ver">Latest: <a href={`${repoUrl}/releases/tag/v${version}`}>v{version}</a></p>
       </div>
       {cols.map((c) => (

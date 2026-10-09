@@ -1,8 +1,8 @@
-//! AI coding agents on this machine and their footprint.
+//! AI coding agents and developer tools on this machine, and their footprint.
 //!
 //! Built from one [`Scan`] like the [topology](crate::topology): each process is matched against
-//! the [`catalog`]; the topmost process of a product is an agent, and everything started under
-//! it (helpers, shells, dev servers, MCP servers) belongs to it, up to the next agent. From
+//! the [`catalog`]; the topmost process of a product is an agent (or tool), and everything started
+//! under it (helpers, shells, dev servers, MCP servers) belongs to it, up to the next agent. From
 //! that the [`AgentsBuilder`] derives:
 //!
 //! * **folders**: working directories of the agent and its processes, plus recent projects

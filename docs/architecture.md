@@ -26,7 +26,7 @@ flowchart TB
     REG["StopStrategy registry<br/>process tree · container<br/>systemd · pm2 · brew"]
     EXEC["Executor<br/>signal → verify freed"]
     TOPO["Topology<br/>service graph<br/>clusters · stop order"]
-    AGT["Agents<br/>AI coding agents · folders<br/>access · ports · links"]
+    AGT["Agents<br/>AI agents & tools · folders<br/>access · ports · links"]
     HTTP["HTTP probe<br/>GET / → status, title"]
     STACK["Project config<br/>.portwise.toml"]
   end

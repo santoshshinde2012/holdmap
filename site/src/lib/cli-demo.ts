@@ -28,18 +28,33 @@ const list = [
 
 const kv = (k: string, v: string) => `<d>${pad(k, 13, true)}</d>  ${v}`;
 
-export const plan = [
+const plan = [
   "<b>Plan for :3000</b> <d>(<g>low risk</g>)</d>",
   "  1. Send SIGTERM to 2 processes: npm (42999), node (43000); SIGKILL any still running after 5s",
   "  2. Verify TCP port 3000 is free (wait up to 3s)",
 ];
-export const held = "<r>●</r> <b>Port 3000 is held by a Next.js dev server (node, PID 43000) in ~/code/shop-web (branch feat/checkout), running for 2h 3m.</b>";
+const held = "<r>●</r> <b>Port 3000 is held by a Next.js dev server (node, PID 43000) in ~/code/shop-web (branch feat/checkout), running for 2h 3m.</b>";
 
 export const chapters: Chapter[] = [
   {
     id: "list", label: "list", cmd: "portwise list",
     caption: "Every listening port with its process, project, branch and framework.",
     out: list,
+  },
+  {
+    id: "agents", label: "agents", cmd: "portwise agents",
+    caption: "AI agents and developer tools: folders, ports, memory, CPU and access.",
+    out: [
+      "<v>Claude Code</v>  pid 51200 · 214 MB · 3% CPU · 1 stoppable",
+      "  folders   shop-api  ~/code/shop-api",
+      "  ports     <c>:3001</c>  shop-api (Vite)  · stoppable",
+      "  children  vite (shop-api)",
+      "  access    sandbox unknown · network :3001 only",
+      "<v>Docker Desktop</v>  pid 1290 · tool · 2 ports",
+      "  ports     <c>:5432</c>  PostgreSQL · container shop-db-1",
+      "",
+      "<d>2 agents · 1 tool · 3 ports · 18 ms</d>",
+    ],
   },
   {
     id: "inspect", label: "inspect", cmd: "portwise inspect 3000",
@@ -133,4 +148,3 @@ export const cliSession: string[] = [
   "<v>$</v> portwise free-port --near 3000",
   "3002",
 ];
-export const plain = (line: string) => line.replace(/<\/?[bdcgryv]>/g, "");
