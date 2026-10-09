@@ -48,6 +48,6 @@ processes are never stopped unless you pass `--allow-protected` on the CLI; MCP 
 
 ## Related
 
-- [Desktop app](desktop/): shortcuts and the Agents map.
-- [MCP for AI agents](mcp/): `list_agents` and `stop_agent_ports`.
-- [CLI reference](cli/): every flag for `portwise agents`.
+- [Desktop app](../desktop/): shortcuts and the Agents map.
+- [MCP for AI agents](../mcp/): `list_agents` and `stop_agent_ports`.
+- [CLI reference](../cli/): every flag for `portwise agents`.

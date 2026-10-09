@@ -59,13 +59,15 @@ pub enum Tab {
 pub enum Modal {
     None,
     Confirm {
-        plan: ActionPlan,
+        plan: Box<ActionPlan>,
         headline: String,
         /// Extra ports to stop after `plan` (Agents "stop its ports").
         more_ports: Vec<u16>,
         force: bool,
     },
-    Explain { scroll: u16 },
+    Explain {
+        scroll: u16,
+    },
     Help,
 }
 
@@ -381,7 +383,7 @@ impl App {
         };
         self.modal = Modal::Confirm {
             headline,
-            plan,
+            plan: Box::new(plan),
             more_ports: ports.into_iter().skip(1).collect(),
             force,
         };
@@ -441,7 +443,7 @@ impl App {
         let plan = engine.plan(&Target::Cluster(name), &StopOptions::default());
         self.modal = Modal::Confirm {
             headline: plan.summary.clone(),
-            plan,
+            plan: Box::new(plan),
             more_ports: Vec::new(),
             force: false,
         };
@@ -518,7 +520,7 @@ impl App {
             .clone()
             .unwrap_or_else(|| engine.plan(&Target::Port(entry.port), &opts));
         self.modal = Modal::Confirm {
-            plan,
+            plan: Box::new(plan),
             headline: ex.headline.clone(),
             more_ports: Vec::new(),
             force,

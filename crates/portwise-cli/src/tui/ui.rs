@@ -285,9 +285,12 @@ fn draw_agents(f: &mut Frame, app: &App, list_area: Rect, detail_area: Rect) {
                     } else {
                         String::new()
                     },
-                    if a.access.root || a.access.facts.iter().any(|f| {
-                        f.level == portwise_core::agents::AccessLevel::Elevated
-                    }) {
+                    if a.access.root
+                        || a.access
+                            .facts
+                            .iter()
+                            .any(|f| { f.level == portwise_core::agents::AccessLevel::Elevated })
+                    {
                         " !"
                     } else {
                         ""
@@ -391,7 +394,10 @@ fn draw_agents(f: &mut Frame, app: &App, list_area: Rect, detail_area: Rect) {
                 "  :{}  {}  {}",
                 p.port,
                 role,
-                p.project.as_deref().or(p.framework.as_deref()).unwrap_or(&p.label)
+                p.project
+                    .as_deref()
+                    .or(p.framework.as_deref())
+                    .unwrap_or(&p.label)
             )));
         }
     }
@@ -436,7 +442,10 @@ fn draw_agents(f: &mut Frame, app: &App, list_area: Rect, detail_area: Rect) {
         }
     }
     for note in &report.limits {
-        lines.push(Line::from(Span::styled(format!("note: {note}"), theme::muted())));
+        lines.push(Line::from(Span::styled(
+            format!("note: {note}"),
+            theme::muted(),
+        )));
     }
     f.render_widget(
         Paragraph::new(Text::from(lines))

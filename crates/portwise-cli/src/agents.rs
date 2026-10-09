@@ -9,9 +9,7 @@ use portwise_core::agents::{
 };
 use portwise_core::engine::tilde;
 use portwise_core::util::{count, human_bytes};
-use portwise_core::{
-    execute, Engine, Exposure, ScanOptions, StopOptions, Target,
-};
+use portwise_core::{execute, Engine, Exposure, ScanOptions, StopOptions, Target};
 
 #[derive(clap::Args, Debug, Default)]
 pub struct AgentsArgs {
@@ -76,10 +74,7 @@ fn stop_ports(e: &Engine, report: &AgentsReport, a: &AgentsArgs) -> Result<u8> {
     let ports: Vec<(String, u16)> = report
         .agents
         .iter()
-        .flat_map(|ag| {
-            ag.stoppable_ports()
-                .map(move |p| (ag.name.clone(), p.port))
-        })
+        .flat_map(|ag| ag.stoppable_ports().map(move |p| (ag.name.clone(), p.port)))
         .collect();
     if ports.is_empty() {
         if a.json {
@@ -87,7 +82,9 @@ fn stop_ports(e: &Engine, report: &AgentsReport, a: &AgentsArgs) -> Result<u8> {
         } else {
             println!(
                 "{}",
-                style::dim("No stoppable ports: matching agents haven't started a freeable service.")
+                style::dim(
+                    "No stoppable ports: matching agents haven't started a freeable service."
+                )
             );
         }
         return Ok(crate::exit::BUSY);

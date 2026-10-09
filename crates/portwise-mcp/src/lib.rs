@@ -374,7 +374,10 @@ fn call_tool(name: &str, args: &Value) -> Result<(String, Value), ToolError> {
                 for p in ag.stoppable_ports() {
                     let plan = e.plan(&Target::Port(p.port), &opts);
                     if let Some(b) = &plan.blocked {
-                        texts.push(format!(":{0} ({1}): refused — {2}", p.port, ag.name, b.message));
+                        texts.push(format!(
+                            ":{0} ({1}): refused — {2}",
+                            p.port, ag.name, b.message
+                        ));
                         plans.push(plan);
                         continue;
                     }

@@ -283,9 +283,9 @@ impl Agent {
     /// auth callbacks stay listed as [`PortRole::Agent`] and are skipped; only the tools and
     /// apps it launched ([`PortRole::DevServer`] / [`PortRole::Service`]) are returned.
     pub fn stoppable_ports(&self) -> impl Iterator<Item = &AgentPort> {
-        self.ports.iter().filter(|p| {
-            matches!(p.role, PortRole::DevServer | PortRole::Service)
-        })
+        self.ports
+            .iter()
+            .filter(|p| matches!(p.role, PortRole::DevServer | PortRole::Service))
     }
 
     /// Absolute folder paths this agent is known to work in (working dirs and recent projects).

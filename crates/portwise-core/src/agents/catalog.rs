@@ -206,7 +206,12 @@ pub const CATALOG: &[AgentProduct] = &[
         bundles: &["Docker.app", "Docker Desktop.app"],
         names: &["docker desktop", "com.docker.backend", "com.docker.vpnkit"],
         name_prefixes: &["com.docker.", "docker desktop"],
-        ..product("docker-desktop", "Docker Desktop", "Docker", AgentKind::Tool)
+        ..product(
+            "docker-desktop",
+            "Docker Desktop",
+            "Docker",
+            AgentKind::Tool,
+        )
     },
     AgentProduct {
         bundles: &["OrbStack.app"],
@@ -218,7 +223,12 @@ pub const CATALOG: &[AgentProduct] = &[
         bundles: &["Podman Desktop.app"],
         names: &["podman-desktop", "podman desktop"],
         name_prefixes: &["podman desktop"],
-        ..product("podman-desktop", "Podman Desktop", "Red Hat", AgentKind::Tool)
+        ..product(
+            "podman-desktop",
+            "Podman Desktop",
+            "Red Hat",
+            AgentKind::Tool,
+        )
     },
 ];
 
@@ -487,7 +497,12 @@ mod tests {
         assert_eq!(identify(&docker).map(|x| x.id), Some("docker-desktop"));
         assert_eq!(identify(&docker).map(|x| x.kind), Some(AgentKind::Tool));
         let orb = with_exe(
-            proc(2, 0, "OrbStack", &["/Applications/OrbStack.app/Contents/MacOS/OrbStack"]),
+            proc(
+                2,
+                0,
+                "OrbStack",
+                &["/Applications/OrbStack.app/Contents/MacOS/OrbStack"],
+            ),
             "/Applications/OrbStack.app/Contents/MacOS/OrbStack",
         );
         assert_eq!(identify(&orb).map(|x| x.id), Some("orbstack"));

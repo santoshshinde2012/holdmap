@@ -51,7 +51,7 @@ account it runs as, sandbox and approval flags, network listeners, and macOS-pro
 Each fact is marked seen, inferred or unknown. From a card you can reveal a folder, open it in your
 editor, or stop the unprotected ports that agent started. Recent projects come from folder names
 only. Chats, settings and tokens are never read. Remote hosts show as IP addresses. Click a port to
-open its details. `↑` `↓` switch agents. See [Agents, tools and apps](agents/) for the full guide.
+open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
 `portwise agents` and `portwise agents AGENT --stop-ports` do the same in a terminal.
 
 ## From the details pane
