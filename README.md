@@ -85,13 +85,13 @@ you: open a new terminal, or run the `source` line it prints.
 <!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
      suffix isn't read as part of the version). -->
 <!-- x-release-please-start-version -->
-[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.2.0_aarch64.dmg
-[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.2.0_x64.dmg
-[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.2.0_x64_en-US.msi
-[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.2.0_x64-setup.exe
-[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.2.0_amd64.AppImage
-[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.2.0_amd64.deb
-[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.2.0%2D1.x86_64.rpm
+[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.3.0_aarch64.dmg
+[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.3.0_x64.dmg
+[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.3.0_x64_en-US.msi
+[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.3.0_x64-setup.exe
+[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.3.0_amd64.AppImage
+[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.3.0_amd64.deb
+[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.3.0%2D1.x86_64.rpm
 <!-- x-release-please-end -->
 
 **Homebrew:** coming soon.

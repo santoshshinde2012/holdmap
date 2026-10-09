@@ -8,6 +8,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-09
+
 ### Changed
 
 - **Renamed from portwise to holdmap.** The product maps agents, tools and apps — not only ports.
@@ -15,6 +17,7 @@ by [release-please](https://github.com/googleapis/release-please) from
   (`HOLDMAP_*`), MCP server name, desktop bundle id (`dev.holdmap.app`) and site base path all
   use the new name. Legacy `$PORTWISE_HOME` / `$PORTWISE_*` env vars, a leftover `portwise`
   config directory (migrated once), and `.portwise.toml` project files are still accepted.
+  Installers and release artifacts are now named `holdmap-*`.
 
 ### Added
 
@@ -28,6 +31,8 @@ by [release-please](https://github.com/googleapis/release-please) from
   pages, SEO copy, Interfaces, Features (agents screenshot), Footer and a new
   [Agents guide](https://santoshshinde2012.github.io/holdmap/docs/agents/) cover control, richer
   skim and developer tools.
+
+### Changed
 
 - Agents empty states, onboarding, shortcuts and MCP copy talk about tools and apps as well as
   coding agents. Desktop hides port filters while the Agents tab is open and prefetches the badge
@@ -273,6 +278,8 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
+[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/santoshshinde2012/holdmap/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/santoshshinde2012/holdmap/compare/v0.1.7...v0.1.8
