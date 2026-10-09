@@ -1,7 +1,7 @@
 //! End-to-end tests against the real OS: spawn real listeners (TCP, UDP, process trees, a
 //! SIGTERM-ignoring server), then assert that holdmap lists, explains and stops them correctly.
 //!
-//! Helper processes are this same test binary re-executed with `PW_HELPER` set (see
+//! Helper processes are this same test binary re-executed with `HOLDMAP_HELPER` set (see
 //! `helper_process`), so no external tools are needed.
 #![cfg(target_os = "linux")]
 
@@ -14,7 +14,7 @@ use std::time::Duration;
 /// Entry point for helper processes. A no-op during normal test runs.
 #[test]
 fn helper_process() {
-    let Ok(mode) = std::env::var("PW_HELPER") else {
+    let Ok(mode) = std::env::var("HOLDMAP_HELPER") else {
         return;
     };
     // Never outlive the test that spawned us, even if it panics or is interrupted.
@@ -98,7 +98,7 @@ fn spawn_raw_in(mode: &str, cwd: Option<&std::path::Path>) -> Child {
         "--nocapture",
         "--test-threads=1",
     ])
-    .env("PW_HELPER", mode)
+    .env("HOLDMAP_HELPER", mode)
     .stdout(Stdio::piped())
     .stderr(Stdio::null())
     .spawn()

@@ -8,6 +8,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Changed
+
+- Desktop/demo UI preferences use `holdmap.*` localStorage keys (legacy `pw.*` migrated once).
+- Docs list the real env vars and exact `PORTWISE_*` aliases; CLI adopts those aliases at startup.
+
 ## [0.3.0] - 2026-10-09
 
 ### Changed
@@ -15,9 +20,10 @@ by [release-please](https://github.com/googleapis/release-please) from
 - **Renamed from portwise to holdmap.** The product maps agents, tools and apps — not only ports.
   Binary, crates, config dir (`~/.config/holdmap`), project file (`.holdmap.toml`), env vars
   (`HOLDMAP_*`), MCP server name, desktop bundle id (`dev.holdmap.app`) and site base path all
-  use the new name. Legacy `$PORTWISE_HOME` / `$PORTWISE_*` env vars, a leftover `portwise`
-  config directory (migrated once), and `.portwise.toml` project files are still accepted.
-  Installers and release artifacts are now named `holdmap-*`.
+  use the new name. Legacy env aliases (`PORTWISE_HOME`, `PORTWISE_TRACE`, `PORTWISE_EDITOR`,
+  `PORTWISE_COLOR`), a leftover `portwise` config directory (migrated once), and
+  `.portwise.toml` project files are still accepted. Installers and release artifacts are named
+  `holdmap-*`.
 
 ### Added
 

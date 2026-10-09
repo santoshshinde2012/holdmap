@@ -100,9 +100,19 @@ you: open a new terminal, or run the `source` line it prints.
 
 Every release has SHA-256 checksums and build provenance (`gh attestation verify FILE --repo santoshshinde2012/holdmap`).
 
-> **Renamed from portwise.** The binary is now `holdmap`. Config moves from `~/.config/portwise`
-> (or the macOS/Windows equivalent) to `holdmap` on first run; `.portwise.toml` and
-> `$PORTWISE_HOME` / `$PORTWISE_*` still work.
+> **Renamed from portwise.** The binary is now `holdmap` — remove any old `portwise` on your
+> `PATH`. Config moves from a leftover `portwise` directory to `holdmap` on first run.
+> `.portwise.toml` still works. Legacy env aliases: `PORTWISE_HOME`, `PORTWISE_TRACE`,
+> `PORTWISE_EDITOR`, `PORTWISE_COLOR`.
+
+## Environment
+
+| Variable | Purpose |
+|---|---|
+| `HOLDMAP_HOME` | Config/history directory (overrides the platform default) |
+| `HOLDMAP_COLOR` | `auto` / `always` / `never` (also via `--color`) |
+| `HOLDMAP_TRACE` | Diagnostics topics, e.g. `scan` or `all` |
+| `HOLDMAP_EDITOR` | Editor binary for “open folder” (else Cursor / VS Code / Zed…) |
 
 ## Quick start
 
@@ -312,7 +322,8 @@ Modules, traits and data flow: [docs/architecture.md](docs/architecture.md).
 
 - **`command not found: holdmap`** right after installing: open a new terminal, or run
   `source ~/.config/holdmap/env.sh`.
-- **Upgrading from v0.1.0:** remove the old copy with `rm ~/.cargo/bin/holdmap`.
+- **Upgrading from v0.1.0 or from portwise:** remove old binaries
+  (`rm ~/.cargo/bin/holdmap ~/.local/bin/portwise ~/.cargo/bin/portwise` as needed).
   `command -v holdmap` shows which one runs.
 - **`Permission denied` on a shell rc file:** an old `sudo` left it owned by root. Run
   `sudo chown "$USER" ~/.bash_profile` and install again. Never run the installer with `sudo`.

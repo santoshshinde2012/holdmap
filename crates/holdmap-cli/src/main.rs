@@ -354,7 +354,21 @@ fn write_man_pages(dir: &std::path::Path) -> anyhow::Result<u8> {
     Ok(exit::OK)
 }
 
+/// Copy a legacy `PORTWISE_*` env var into `HOLDMAP_*` when the new name is unset.
+fn adopt_legacy_env(new: &str, old: &str) {
+    if std::env::var_os(new).is_none() {
+        if let Some(v) = std::env::var_os(old).filter(|v| !v.is_empty()) {
+            // SAFETY: single-threaded before any other threads; only sets our own env keys.
+            unsafe { std::env::set_var(new, v) };
+        }
+    }
+}
+
 fn main() -> ExitCode {
+    adopt_legacy_env("HOLDMAP_HOME", "PORTWISE_HOME");
+    adopt_legacy_env("HOLDMAP_COLOR", "PORTWISE_COLOR");
+    adopt_legacy_env("HOLDMAP_TRACE", "PORTWISE_TRACE");
+    adopt_legacy_env("HOLDMAP_EDITOR", "PORTWISE_EDITOR");
     // Behave like a well-mannered Unix filter: `holdmap list --json | head` must not print
     // "Broken pipe" errors.
     #[cfg(unix)]

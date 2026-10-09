@@ -26,12 +26,12 @@
   import { linksLabel, nodeForEntry, sectionsByCluster } from "./lib/graph";
   import type { Command } from "./lib/palette";
   import { GROUPS, groupOf, matches, seconds, stopTarget, title, url, canOpen, type Filters, type Group } from "./lib/format";
+  import { prefGet, prefSet } from "./lib/prefs";
 
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
   type View = "list" | "graph" | "agents";
   interface Confirm { entry: PortEntry | null; /** More ports to stop after `entry` (Agents "Stop all"). */ queue?: PortEntry[]; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; restart?: boolean }
 
-  const store = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
   // Live data is replaced wholesale on every poll, so it is raw state run through `share`:
   // unchanged entries keep their identity and nothing downstream re-renders or re-fetches.
   let snapshot = $state.raw<Snapshot | null>(null);
@@ -40,7 +40,7 @@
   /** Only a refresh the user asked for spins the button; background scans stay quiet. */
   let manualRefresh = $state(false);
   let filters = $state<Filters>({ query: "", all: false, proto: "any", dev: false, mine: false, exposed: false });
-  let sort = $state<Sort>((store("pw.sort") as Sort) ?? "group");
+  let sort = $state<Sort>((prefGet("sort") as Sort) ?? "group");
   let selectedId = $state<string | null>(null);
   // Details are stale-while-revalidate: the last value stays on screen while each scan
   // refreshes it in the background, and the skeleton only shows on a port's first load.
@@ -64,10 +64,10 @@
   let toasts = $state<Toast[]>([]);
   let showHelp = $state(false);
   let showPalette = $state(false);
-  let onboarded = $state(store("pw.onboarded") === "1");
-  let theme = $state<Theme>((store("pw.theme") as Theme) ?? "system");
-  let density = $state<Density>(parseDensity(store("pw.density")));
-  let collapsed = $state<Set<string>>(parseCollapsed(store("pw.collapsed")));
+  let onboarded = $state(prefGet("onboarded") === "1");
+  let theme = $state<Theme>((prefGet("theme") as Theme) ?? "system");
+  let density = $state<Density>(parseDensity(prefGet("density")));
+  let collapsed = $state<Set<string>>(parseCollapsed(prefGet("collapsed")));
   const usageHist = new UsageHistory(24);
   /** Memory samples for the details pane's trend line (one per scan, like CPU). */
   const memHist = new UsageHistory(24, (e) => e.app_memory_bytes || e.process?.memory_bytes);
@@ -85,7 +85,7 @@
   let listEl = $state<HTMLDivElement | undefined>();
   let now = $state(Date.now());
   let toastSeq = 0;
-  let view = $state<View>((store("pw.view") as View) ?? "list");
+  let view = $state<View>((prefGet("view") as View) ?? "list");
   /** GraphView (and @xyflow) loads only when the Graph tab is opened — keeps the first paint light. */
   let GraphView = $state<typeof import("./components/GraphView.svelte").default | null>(null);
   let graph = $state.raw<Graph | null>(null);
@@ -109,8 +109,8 @@
   let info = $state<{ version: string; platform: string; configDir: string | null }>({ version: "", platform: "", configDir: null });
   let detailTab = $state<DetailTab>("overview");
   const PANE_DEFAULT = 460;
-  let paneWidth = $state(Math.min(680, Math.max(340, Number(store("pw.pane")) || PANE_DEFAULT)));
-  $effect(() => { try { localStorage.setItem("pw.view", view); } catch { /* ignore */ } });
+  let paneWidth = $state(Math.min(680, Math.max(340, Number(prefGet("pane")) || PANE_DEFAULT)));
+  $effect(() => { prefSet("view", view); });
   $effect(() => {
     if (view !== "graph") return;
     // untrack: loadTopology reads `graph` before its await; tracking it re-ran this effect on
@@ -142,11 +142,11 @@
   const resolvedTheme = $derived(theme === "system" ? (systemDark ? "dark" : "light") : theme);
   $effect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
-    try { localStorage.setItem("pw.theme", theme); } catch { /* private mode */ }
+    prefSet("theme", theme);
   });
-  $effect(() => { try { localStorage.setItem("pw.sort", sort); } catch { /* ignore */ } });
-  $effect(() => { try { localStorage.setItem("pw.density", density); } catch { /* ignore */ } });
-  $effect(() => { try { localStorage.setItem("pw.collapsed", JSON.stringify([...collapsed])); } catch { /* ignore */ } });
+  $effect(() => { prefSet("sort", sort); });
+  $effect(() => { prefSet("density", density); });
+  $effect(() => { prefSet("collapsed", JSON.stringify([...collapsed])); });
 
   const visible = $derived.by(() => {
     const list = (snapshot?.entries ?? []).filter((e) => matches(e, filters));
@@ -673,7 +673,7 @@
   function cycleTheme() { theme = theme === "system" ? "light" : theme === "light" ? "dark" : "system"; }
   function dismissOnboarding() {
     onboarded = true;
-    try { localStorage.setItem("pw.onboarded", "1"); } catch { /* ignore */ }
+    prefSet("onboarded", "1")
     listEl?.focus(); // the banner's button disappears; keep keyboard focus in the list, not on <body>
   }
 
@@ -867,7 +867,7 @@
     }, ms);
     return () => clearInterval(t);
   });
-  $effect(() => { try { localStorage.setItem("pw.pane", String(paneWidth)); } catch { /* ignore */ } });
+  $effect(() => { prefSet("pane", String(paneWidth)); });
 
   const ago = $derived(dataAge(now, snapshot?.taken_at_ms ?? null, refreshing ? scanStarted : null));
   const fresh = $derived(freshness(ago, scanMs / 1000));
