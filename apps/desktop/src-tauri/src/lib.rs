@@ -13,6 +13,7 @@
 
 mod commands;
 mod confirmation;
+mod power;
 mod shortcuts;
 mod state;
 mod tray;
@@ -44,6 +45,7 @@ pub fn run() {
     }
     builder
         .manage(AppState::default())
+        .manage(power::PowerState::default())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::scan,
@@ -74,6 +76,8 @@ pub fn run() {
             commands::set_hotkey,
             commands::hotkeys,
             commands::remote_scan,
+            power::shutdown_preview,
+            power::shutdown_machine,
             update::install_update,
         ])
         .setup(move |app| {

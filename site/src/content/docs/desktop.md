@@ -1,6 +1,6 @@
 ---
 title: Desktop app
-description: The holdmap tray and menu-bar app, its keyboard shortcuts and how to open it the first time.
+description: Explore the holdmap desktop app, agent visibility, keyboard shortcuts and confirmed local computer shutdown.
 order: 6
 ---
 
@@ -8,7 +8,27 @@ A tray and menu-bar app with the port list, details, the service graph, the agen
 one-click restart, remote hosts over SSH and a command palette. It runs on the same core as the
 CLI, so the plans and protections are identical. [Try it in the browser](../../#demo).
 
+## Shut down this computer
+
+Version 0.4.0 adds **Settings → Power → Shut down this computer**. Check the computer
+name, save your work and acknowledge that all apps, agents and local services will stop.
+The confirmation expires after 60 seconds; it does not schedule shutdown. Cancel or Escape
+closes the review before submission. After submission, follow any OS permission prompts;
+closing the dialog does not cancel the request. If the OS cancels later, quit holdmap
+completely and reopen it before trying again.
+
+macOS uses System Events and may ask for Automation permission. Windows requests shutdown
+without forced termination. Linux requires systemd 248 or newer with explicit inhibitor
+checks. OS policy or permissions may refuse the action. The browser demo only simulates
+shutdown and cannot power off a computer. Version 0.3.0 binaries predate this feature.
+
 ## First open
+
+**Linux desktop 0.3.0:** published AppImage, Debian and RPM downloads predate the GLib
+security fixes. Use version **0.4.0 or newer**, or build the desktop from current source.
+This Linux GTK dependency issue does not affect the CLI, TUI or
+MCP server, or the macOS and Windows desktop builds. See the
+[security policy](https://github.com/santoshshinde2012/holdmap/blob/main/SECURITY.md#linux-glib-dependency-backports).
 
 The app isn't notarised or code-signed yet, so the OS asks once.
 
@@ -54,10 +74,10 @@ only. Chats, settings and tokens are never read. Remote hosts show as IP address
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
 `holdmap agents` and `holdmap agents AGENT --stop-ports` do the same in a terminal.
 
-Current development builds also let you search by agent, child tool, folder, exact PID or
+Version 0.4.0 also lets you search by agent, child tool, folder, exact PID or
 `port:3000`. Likely MCP server children appear even without a listening socket; expanded cards
 show their evidence, resource use and redacted commands. Omitted counts and collection warnings
-show where visibility is incomplete. These additions follow the downloadable v0.3.0 release;
+show where visibility is incomplete. Version 0.3.0 predates these additions;
 the browser demo runs the current UI with sample data.
 
 ## From the details pane

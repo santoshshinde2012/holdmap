@@ -1,16 +1,102 @@
 # holdmap architecture
 
+## Local computer power
+
+The desktop Power flow has separate presentation, IPC, confirmation policy and OS adapter
+responsibilities. `ShutdownDialog.svelte` handles accessible confirmation and expiry;
+`api.ts` selects native IPC or a harmless browser simulation; `power.rs` owns local-window
+authorization, one-use handles, monotonic expiry, concurrency and bounded command execution.
+Injected executors test policy without shutting down the test computer. No CLI or MCP
+shutdown endpoint is exposed. Accepted or uncertain outcomes latch retries until a complete
+app restart; confirmation expiry does not schedule an OS shutdown.
+
+![Local computer shutdown authority boundaries](diagrams/local-computer-power.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
+flowchart LR
+  accTitle: Local computer shutdown authority boundaries
+  accDescr: An accessible desktop confirmation passes a one-use handle through trusted IPC to the native power policy and operating-system adapter. Browser users receive simulation only.
+  UI["Power settings<br/>Save-work acknowledgement"] --> API["API adapter<br/>Native or browser"]
+  API --> GATE["Trusted main webview<br/>Local origin validation"]
+  GATE --> POLICY["Power policy<br/>60-second, one-use confirmation<br/>Concurrency and retry guard"]
+  POLICY --> OS["OS adapter<br/>Fixed executable and arguments<br/>Permissions and inhibitors"]
+  API --> DEMO["Browser simulation<br/>No operating-system access"]
+  TEST["Injected executor tests<br/>No actual shutdown"] -.-> POLICY
+  classDef presentation fill:#dbeafe,stroke:#2563eb,color:#172554;
+  classDef adapter fill:#ccfbf1,stroke:#0f766e,color:#134e4a;
+  classDef authority fill:#fef3c7,stroke:#b45309,color:#78350f;
+  classDef domain fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
+  classDef evidence fill:#e2e8f0,stroke:#475569,color:#0f172a;
+  class UI presentation;
+  class API,OS adapter;
+  class GATE authority;
+  class POLICY domain;
+  class DEMO,TEST evidence;
+```
+
+</details>
+
 holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop app and MCP
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
 coordinate collection and confirmation, and present the returned types.
 
-This guide describes current source. Child-tool metadata, MCP discovery, cache and security improvements
-are [Unreleased](../CHANGELOG.md#unreleased); the downloadable 0.3.0 release predates those
-additions.
+This guide describes version 0.4.0 and current source. Child-tool metadata, MCP discovery,
+local desktop shutdown, cache and security improvements are included in
+[0.4.0](../CHANGELOG.md#040---2026-10-10); version 0.3.0 predates those additions.
 
 ## 1. Layers
 
+![Holdmap components and authority boundaries](diagrams/application-layers.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
 ```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
 flowchart TB
   accTitle: Holdmap components and authority boundaries
   accDescr: Native interfaces call the shared core through application adapters. The public website uses a sample-data API. Collection, visibility, planning and execution have separate responsibilities.
@@ -57,10 +143,10 @@ flowchart TB
   EXEC -->|authorized actions| OS
   CLI_APP & NATIVE --> STORE
 
-  style INTERFACES fill:transparent,stroke:#94A3B8,stroke-width:1px
-  style ADAPTERS fill:transparent,stroke:#94A3B8,stroke-width:1px
-  style DOMAIN fill:transparent,stroke:#94A3B8,stroke-width:1px
-  style HOST fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style INTERFACES fill:#ffffff,stroke:#94A3B8,stroke-width:1px
+  style ADAPTERS fill:#ffffff,stroke:#94A3B8,stroke-width:1px
+  style DOMAIN fill:#ffffff,stroke:#94A3B8,stroke-width:1px
+  style HOST fill:#ffffff,stroke:#94A3B8,stroke-width:1px
 
   classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
   classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
@@ -72,6 +158,18 @@ flowchart TB
   class PLAN,EXEC safety
   class SCAN,OS,STORE data
   class SITE,MOCK web
+```
+
+</details>
+
+The previews use an explicit white SVG background so they remain readable in light and dark
+viewers. Each preview retains its Mermaid source below it. Regenerate the previews with
+[`scripts/render-mermaid.py`](../scripts/render-mermaid.py) and Mermaid CLI 12.0.0:
+
+```sh
+# Requires Node.js 22.13+ and a Chromium installation usable by Puppeteer.
+npm exec --yes --package=@mermaid-js/mermaid-cli@12.0.0 -- python3 scripts/render-mermaid.py
+# Add --puppeteer-config /path/to/puppeteer.json for a custom Chromium executable.
 ```
 
 All component diagrams use the same palette: blue for interfaces and adapters, violet for
@@ -97,7 +195,33 @@ original version and license remain unchanged.
 The core is built from small traits so each piece can be swapped (real OS, recorded fixture, or a
 fake in a test) without touching the others (dependency inversion).
 
+![Collection, planning and execution contracts](diagrams/scan-plan-execute.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
 ```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
 flowchart TB
   accTitle: Collection, planning and execution contracts
   accDescr: System and fixture providers feed a scanner. The Engine applies injected protection and strategy interfaces. Execution checks the retained plan and verifies its result.
@@ -119,8 +243,8 @@ flowchart TB
   PLAN --> X["Executor<br/>Identity + current protection checks"]
   X --> V["StopReport<br/>Verified port state + outcome"]
 
-  style PROVIDERS fill:transparent,stroke:#94A3B8,stroke-width:1px
-  style POLICIES fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style PROVIDERS fill:#ffffff,stroke:#94A3B8,stroke-width:1px
+  style POLICIES fill:#ffffff,stroke:#94A3B8,stroke-width:1px
 
   classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
   classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
@@ -129,6 +253,8 @@ flowchart TB
   class E,REG domain
   class POL,PLAN,X safety
 ```
+
+</details>
 
 `StrategyRegistry` asks each `StopStrategy` in priority order whether it applies to an owner and
 takes the first that does:
@@ -154,7 +280,33 @@ and the UIs don't change (open/closed).
 
 ### Stop sequence
 
+![Preview, authorization and guarded execution](diagrams/stop-sequence.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
 ```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
 sequenceDiagram
   accTitle: Preview, authorization and guarded execution
   accDescr: Blocked plans return without actions. Desktop and MCP consume one-use preview handles and reject changed effects. The executor verifies current identity and protection before authorized actions.
@@ -215,6 +367,8 @@ sequenceDiagram
   end
 ```
 
+</details>
+
 Planning does not signal processes. Desktop and MCP preview handles retain the original plan.
 An executing request must match its preview's target/options and a fresh plan's semantic effects;
 changed identities or actions require another preview. `ActionPlan::same_effects` compares effect
@@ -237,7 +391,33 @@ plans cannot execute. OS identity binding still has platform limits described in
 
 ## 3. Topology / mesh
 
+![Service topology and dependency-aware stop planning](diagrams/service-topology.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
 ```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
 flowchart LR
   accTitle: Service topology and dependency-aware stop planning
   accDescr: A consistent scan and cluster registry build service nodes and connection edges. The graph supports exports, interface views and dependency-aware stop plans.
@@ -262,6 +442,8 @@ flowchart LR
   class EXP,UI surface
 ```
 
+</details>
+
 * **Nodes** are services, not PIDs: a listener is folded up to its service root (the launcher
   tree), so `npm run dev → node → esbuild` is one node with all its ports.
 * **Edges** come from ESTABLISHED sockets where both ends are local; traffic weight is the
@@ -276,7 +458,33 @@ flowchart LR
 
 `agents::AgentsBuilder` turns the same `Scan` into an `AgentsReport`:
 
+![Agent visibility, evidence and guarded controls](diagrams/agent-visibility.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
 ```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
 flowchart TB
   accTitle: Agent visibility, evidence and guarded controls
   accDescr: Agent detection and account-aware ownership assign observed processes. Separate modules build folders, network, tool and access evidence. Reports drive interface views and separately validated actions.
@@ -307,7 +515,7 @@ flowchart TB
   REPORT -->|known folders| FOLDER
   REPORT -->|stoppable listener candidates| STOP
 
-  style EVIDENCE fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style EVIDENCE fill:#ffffff,stroke:#94A3B8,stroke-width:1px
 
   classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
   classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
@@ -318,6 +526,8 @@ flowchart TB
   class VIEWS surface
   class FOLDER,STOP safety
 ```
+
+</details>
 
 * **Who.** `agents::catalog` names each agent product: bundle, process name, install path or
   entry script. Kinds cover terminal agents, AI editors, desktop apps, extensions, hosts and
@@ -387,7 +597,33 @@ agent-service stop controls without signalling the agent root merely because it 
 
 ## 4. Project detection
 
+![Extensible project detection](diagrams/project-detection.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
 ```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
 flowchart LR
   accTitle: Extensible project detection
   accDescr: Working directories feed independent manifest, workspace and Git detectors. Their project details support framework classification.
@@ -404,9 +640,37 @@ flowchart LR
   class PD,MR,WM,FW domain
 ```
 
+</details>
+
 ## 5. Desktop app
 
+![Desktop UI and native backend components](diagrams/desktop-components.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
 ```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
 flowchart TB
   accTitle: Desktop UI and native backend components
   accDescr: Svelte feature views compose a shared UI kit and pure view models. The API boundary calls validated Tauri commands, which own freshness and confirmation state.
@@ -442,8 +706,8 @@ flowchart TB
   end
   API -- "Tauri IPC" --> CMD
 
-  style Rust fill:transparent,stroke:#94A3B8,stroke-width:1px
-  style UI fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style Rust fill:#ffffff,stroke:#94A3B8,stroke-width:1px
+  style UI fill:#ffffff,stroke:#94A3B8,stroke-width:1px
 
   classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
   classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
@@ -454,6 +718,8 @@ flowchart TB
   class CF safety
   class ST data
 ```
+
+</details>
 
 `commands.rs` validates action targets, schedules blocking work and calls the core. Native
 state owns freshness and preference handling. View logic such as layout, filtering and ordering

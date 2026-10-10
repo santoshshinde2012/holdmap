@@ -112,6 +112,15 @@ async function boundedClip(page, locator, { height, padding = 0 } = {}) {
 }
 
 const captures = [
+  ...["dark", "light"].map((theme) => ({ name: `desktop-shutdown-${theme}.png`, theme, async prepare(page) {
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("tab", { name: "Power", exact: true }).click();
+    await page.getByRole("button", { name: "Simulate shutdown…", exact: true }).click();
+    const dialog = page.getByRole("alertdialog", { name: "Simulate computer shutdown?" });
+    await expect(dialog).toContainText("Demo computer");
+    await expect(dialog.getByRole("button", { name: "Simulate shutdown", exact: true })).toBeDisabled();
+    return dialog;
+  } })),
   { name: "desktop-overview-dark.png", theme: "dark", async prepare(page) { await selectPort(page); } },
   { name: "desktop-overview-light.png", theme: "light", async prepare(page) { await selectPort(page); } },
   { name: "desktop-graph-dark.png", theme: "dark", async prepare(page) {

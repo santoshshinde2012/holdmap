@@ -8,7 +8,20 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Security
+
+- Desktop release publishing uses the verified installer manifest for builds without a signed
+  updater. Configured updater archives and signatures receive platform checksum and build
+  provenance coverage. Matching signed updater assets retain their IDs so retry uploads
+  preserve existing updater URLs.
+
+## [0.4.0] - 2026-10-10
+
 ### Added
+
+- Desktop Power settings with local computer identification, an explicit save-work
+  acknowledgement, expiring one-use shutdown confirmations and a browser-only simulation.
+  Native adapters preserve OS permissions and inhibitors without forced termination.
 
 - Agent tool visibility across desktop, CLI and MCP: likely MCP server processes, development
   servers, shells and commands, including processes without listening ports. Tool identities
@@ -30,8 +43,8 @@ by [release-please](https://github.com/googleapis/release-please) from
   keeps website dependencies up to date through Dependabot.
 - MCP stop tools now preview by default and require the session-local `confirmation_id` from
   that preview for execution. IDs expire after five minutes, are one-use and bind the original
-  target/options and effects. This intentional Unreleased protocol change requires clients to
-  preview before executing; sessions retain at most 32 pending previews.
+  target/options and effects. This breaking MCP protocol change requires clients upgrading
+  from 0.3.0 to preview before executing; sessions retain at most 32 pending previews.
 - Security gates now audit both npm lockfiles at all severities, scan full history/current
   source with Gitleaks, run CodeQL for JavaScript/TypeScript, Rust, Python and Actions, and
   recheck dependency advisories daily. Workflow actions use immutable commit pins.
@@ -102,7 +115,7 @@ by [release-please](https://github.com/googleapis/release-please) from
 ### Documentation
 
 - README and architecture diagrams describe the shared native/browser UI, adapter responsibilities,
-  concrete SOLID interfaces and the current-source versus released feature boundary.
+  concrete SOLID interfaces and feature availability by version.
 - Desktop, CLI/TUI and website screenshots have repeatable capture tooling; README images,
   website crops, hero posters and the social card are refreshed from current source.
 
@@ -377,7 +390,8 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
-[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/santoshshinde2012/holdmap/compare/v0.1.8...v0.1.9

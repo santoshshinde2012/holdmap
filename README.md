@@ -33,10 +33,10 @@
 holdmap tells you what's really there — which agent or tool started it — and stops only what
 it should.
 
-The README and screenshots describe the current source. Child-tool metadata and search, MCP
-resources/prompts, freshness improvements and security hardening are [Unreleased](CHANGELOG.md#unreleased); build
-this checkout to use them. The download links below remain for **0.3.0**. Desktop screenshots
-use the shared browser UI with sample data.
+Version **0.4.0** includes expanded child-tool visibility and search, MCP resources/prompts and
+stop confirmations, local desktop shutdown, freshness improvements and security hardening.
+See the [0.4.0 changes](CHANGELOG.md#040---2026-10-10). Desktop screenshots use the shared
+browser UI with sample data.
 
 ## Features
 
@@ -61,6 +61,11 @@ use the shared browser UI with sample data.
   server for AI coding assistants. macOS, Linux and Windows. No telemetry.
 
 ## Install
+
+**Linux desktop 0.3.0 downloads predate the GLib security fixes.** Use version **0.4.0 or newer**,
+or build the desktop from current source. CLI, TUI, MCP and macOS/Windows
+desktop are unaffected by this Linux dependency issue. See the
+[security policy](SECURITY.md#linux-glib-dependency-backports).
 
 **macOS and Linux**
 
@@ -90,13 +95,13 @@ you: open a new terminal, or run the `source` line it prints.
 <!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
      suffix isn't read as part of the version). -->
 <!-- x-release-please-start-version -->
-[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.3.0_aarch64.dmg
-[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.3.0_x64.dmg
-[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.3.0_x64_en-US.msi
-[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.3.0_x64-setup.exe
-[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.3.0_amd64.AppImage
-[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.3.0_amd64.deb
-[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.3.0%2D1.x86_64.rpm
+[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.4.0_aarch64.dmg
+[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.4.0_x64.dmg
+[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.4.0_x64_en-US.msi
+[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.4.0_x64-setup.exe
+[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.4.0_amd64.AppImage
+[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.4.0_amd64.deb
+[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.4.0%2D1.x86_64.rpm
 <!-- x-release-please-end -->
 
 **Homebrew:** coming soon.
@@ -167,7 +172,7 @@ Every read command takes `--json`. Exit codes: `0` ok, `1` busy / not found / ti
 error, `3` blocked by the safety policy, `4` needs elevation. All flags are in the
 **[CLI reference](docs/cli.md)**.
 
-**Agent visibility in current source.** `holdmap agents` includes child MCP candidates even when
+**Agent visibility in 0.4.0.** `holdmap agents` includes child MCP candidates even when
 no port listens, resource totals for all owned processes, and counts for omitted display rows.
 Search by product, vendor, exact owned PID (`pid:1234`), working folder or tool name:
 `holdmap agents claude` or `holdmap agents filesystem`. `--wide` shows listed processes and
@@ -180,13 +185,27 @@ When a command fails with "port in use", it prints who holds the port and how to
 
 ## Desktop app
 
+Version 0.4.0 includes **Settings → Power → Shut down this computer**. Review the local
+computer, save work, and explicitly acknowledge that all apps, agents and local services
+will stop. Confirmation expires after 60 seconds; this is not a scheduled shutdown.
+Operating-system permissions and inhibitors still apply. The browser demo only simulates
+the action. Version 0.3.0 binaries predate this feature.
+
+<details>
+<summary>Shutdown confirmation in dark and light themes</summary>
+
+![Dark shutdown confirmation](docs/screenshots/desktop-shutdown-dark.png)
+![Light shutdown confirmation](docs/screenshots/desktop-shutdown-light.png)
+
+</details>
+
 A tray and menu-bar app with the port list, details, the service graph (`G`), the agents map
 (`⇧A`), pins, history with one-click restart, remote hosts over SSH and a command palette (`⌘K` /
 `Ctrl+K`). `⌘⌥P` (`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. On the
 Agents map, expand a card to reveal a folder, open it in your editor, or stop the unprotected
 ports that agent started. From a port’s details pane you can open it in a browser, restart a
 dev server, open its folder (`HOLDMAP_EDITOR`, else Cursor, VS Code, Zed…) or Finder, and copy
-its URL, a `curl` or the kill command. Current source also adds agent search, expanded child-tool
+its URL, a `curl` or the kill command. Version 0.4.0 also adds agent search, expanded child-tool
 details, inferred MCP nodes and explicit omission counts. Native reports refresh independently
 of the window's poll; the browser [live demo](https://santoshshinde2012.github.io/holdmap/#demo)
 uses the same UI with sample data.
@@ -234,7 +253,7 @@ For Claude Desktop or Cursor (`~/.cursor/mcp.json`):
 VS Code (`.vscode/mcp.json`) uses `"servers"` with `"type": "stdio"`. If the client can't find
 `holdmap`, use the full path, for example `/Users/you/.local/bin/holdmap`.
 
-Current source also exposes a bundled `holdmap://guide` resource and three workflow prompts:
+Version 0.4.0 also exposes a bundled `holdmap://guide` resource and three workflow prompts:
 
 | Prompt | Purpose |
 |---|---|
@@ -251,8 +270,8 @@ target/options and fresh matching effects. The session keeps at most 32 previews
 Frames are capped at 1 MiB and legacy batches at 64 messages, with oversized input rejected before
 dispatch. `list_ports` reports collection warnings even
 for empty results. See the [MCP guide](site/src/content/docs/mcp.md) and
-[Unreleased changes](CHANGELOG.md#unreleased) for availability; these discovery additions are
-not in the downloadable 0.3.0 release.
+[0.4.0 changes](CHANGELOG.md#040---2026-10-10). Clients upgrading from 0.3.0 must adopt
+the preview and confirmation flow before executing stops.
 
 ## Safety model
 
@@ -291,7 +310,33 @@ holdmap stops processes, so one set of rules in `holdmap-core` applies to every 
 backend and MCP adapter coordinate requests and present its types. The website builds the same
 Svelte UI in browser mode, using sample data through the UI's API boundary.
 
+![Holdmap system architecture](docs/diagrams/system-architecture.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
 ```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
 flowchart TB
   accTitle: Holdmap system architecture
   accDescr: The CLI, MCP server and desktop share a Rust core. A separate website demo uses sample data. Only the native executor performs reviewed OS actions.
@@ -329,10 +374,10 @@ flowchart TB
   EXEC -->|authorized actions| OS
   CLI & DESKTOP --> STORE
 
-  style CLIENTS fill:transparent,stroke:#94A3B8,stroke-width:1px
-  style CORE fill:transparent,stroke:#94A3B8,stroke-width:1px
-  style LOCAL fill:transparent,stroke:#94A3B8,stroke-width:1px
-  style PUBLIC fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style CLIENTS fill:#ffffff,stroke:#94A3B8,stroke-width:1px
+  style CORE fill:#ffffff,stroke:#94A3B8,stroke-width:1px
+  style LOCAL fill:#ffffff,stroke:#94A3B8,stroke-width:1px
+  style PUBLIC fill:#ffffff,stroke:#94A3B8,stroke-width:1px
 
   classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
   classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
@@ -345,6 +390,8 @@ flowchart TB
   class SCAN,OS,STORE data
   class SITE,DEMO web
 ```
+
+</details>
 
 Blue groups interfaces, violet shows domain logic, amber marks action safeguards, teal marks
 collection and state, and slate identifies the public website. Labels and boundaries carry the
@@ -361,7 +408,7 @@ compare fresh effects before execution, and pass the original plan to the shared
 protection checks. Persistence, credential redaction and terminal-safe rendering have separate
 boundaries. CI combines all-severity npm audits, cargo-deny, full-history/source Gitleaks scans
 and CodeQL for JavaScript/TypeScript, Rust, Python and Actions; daily dependency checks and
-immutable action pins keep those gates reviewable. The current-source Linux GTK dependency uses an
+immutable action pins keep those gates reviewable. The current-source Linux GTK dependency uses
 [audited GLib source fixes](vendor/README.md), verified by source hashes and optimized regressions.
 
 The folder layout keeps each surface's code and tooling together:
@@ -401,6 +448,7 @@ dependencies and temporary captures are regenerated; Git history holds earlier v
 ## Learn more
 
 - [Website and guide](https://santoshshinde2012.github.io/holdmap/): the live demo and short how-tos.
+- [Website maintenance](site/README.md): SEO checks, deployment and current website snapshots.
 - [Agents, tools and apps](https://santoshshinde2012.github.io/holdmap/docs/agents/): folders, access and stopping what an agent started.
 - [CLI reference](docs/cli.md): every command and flag.
 - [Architecture](docs/architecture.md): how the core, CLI, TUI, desktop app and MCP server fit together.
@@ -419,7 +467,7 @@ scripts/check-all.sh                                  # complete workspace and n
 ```
 
 The full check script builds the UI before native checks and covers formatting, clippy,
-Rust/native tests, browser tests, docs, website links/budgets and dependency audits.
+Rust/native tests, browser tests, docs, website links/budgets, SEO and dependency audits.
 
 ## License
 

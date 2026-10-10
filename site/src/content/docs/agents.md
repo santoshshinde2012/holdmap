@@ -12,9 +12,9 @@ settings and tokens are never read.
 Recognized products include Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider,
 Cline, Goose, Docker Desktop, OrbStack, Podman Desktop and others.
 
-Child-tool classifications, expanded metadata and desktop agent search described here are
-development changes following v0.3.0. Build the current source to use them; the live demo uses
-the current interface with sample data.
+Version 0.4.0 includes the child-tool classifications, expanded metadata and desktop agent
+search described here. Upgrade from 0.3.0 or build current source to use them; the live demo
+uses the current interface with sample data.
 
 ## From the CLI
 
@@ -55,7 +55,8 @@ Unknown is labelled on cards so you never mistake a guess for a measurement.
 
 Stopping from the Agents surface only targets unprotected ports the agent started (dev servers and
 services). The agent’s own IDE and auth listeners (`PortRole::Agent`) are skipped. Protected
-processes are never stopped unless you pass `--allow-protected` on the CLI; MCP always refuses them.
+processes with hard protection are never stopped. The CLI's `--allow-protected` flag can authorize
+soft-protected targets only; MCP refuses all protected targets.
 
 ## Related
 

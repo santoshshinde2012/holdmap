@@ -1,6 +1,6 @@
 ---
 import Icon from "./Icon.astro";
-import { downloads, install, checksumUrl, latestUrl, REPO, url, version, type Os } from "../lib/site";
+import { downloads, install, checksumUrl, latestUrl, REPO, securityUrl, url, version, type Os } from "../lib/site";
 
 const tabs: { key: Os | "source"; label: string }[] = [
   { key: "macos", label: "macOS" },
@@ -22,6 +22,10 @@ const firstOpen: Record<string, string> = {
       <h2 class="h2" id="install-title">Up and running in a minute. <span class="soft">One command, or a normal download.</span></h2>
       <p class="lede">The installer sets up the CLI, TUI and MCP server. The desktop app is a separate download. Latest release: <a href={latestUrl}>v{version}</a>.</p>
     </div>
+
+    {version === "0.3.0" && (
+      <p class="release-note" role="note"><Icon name="Info" size={18} /><span><strong>Linux desktop v0.3.0 predates the GLib security fixes.</strong> Use version 0.4.0 or newer, or build the desktop from current source. The CLI, TUI, MCP server and macOS/Windows desktop are unaffected by this Linux dependency issue. <a href={`${securityUrl}#linux-glib-dependency-backports`}>Security details</a>.</span></p>
+    )}
 
     <div class="box">
     <div class="tabs" role="tablist" aria-label="Platform" data-tabs data-tabs-os>
@@ -98,6 +102,10 @@ gh attestation verify holdmap_{version}_aarch64.dmg \
 
 <style>
   .lede a { color: var(--text-2); }
+  .release-note { display: flex; align-items: flex-start; gap: 12px; margin: 0 0 24px; padding: 16px; border: 1px solid var(--border-strong); border-radius: var(--r-md); color: var(--text-2); background: var(--surface-2); font-size: var(--fs-ui); line-height: 22px; }
+  .release-note :global(svg) { flex: none; margin-top: 2px; }
+  .release-note strong { color: var(--text); }
+  .release-note a { color: var(--text-2); }
   .box { border-radius: var(--r-lg); border: 1px solid var(--border); background: var(--surface); overflow: hidden; }
   .tabs { display: flex; gap: 24px; padding: 0 32px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
   .tabs button {

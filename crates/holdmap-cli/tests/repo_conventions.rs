@@ -61,7 +61,7 @@ fn is_pascal(s: &str) -> bool {
 }
 
 fn is_screenshot_name(stem: &str) -> bool {
-    ["desktop-", "cli-", "tui-"]
+    ["desktop-", "cli-", "tui-", "site-"]
         .iter()
         .any(|p| stem.starts_with(p))
         && (stem.ends_with("-light") || stem.ends_with("-dark"))
@@ -136,7 +136,7 @@ fn naming_problem(path: &str) -> Option<String> {
         }
         "md" if dirs == ["docs"] && !is_kebab(stem) => Some("files under docs/ are kebab-case"),
         "png" if dirs == ["docs", "screenshots"] && !is_screenshot_name(stem) => Some(
-            "screenshots are <surface>-<view>-<theme>.png (surface: desktop|cli|tui, theme: light|dark)",
+            "screenshots are <surface>-<view>-<theme>.png (surface: desktop|cli|tui|site, theme: light|dark)",
         ),
         "yml" | "yaml" | "sh" if !is_kebab(stem) => Some("workflows and scripts are kebab-case"),
         _ => None,
@@ -184,6 +184,7 @@ fn naming_rules_catch_common_mistakes() {
     assert!(naming_problem("site/src/pages/docs/[...slug].astro").is_none());
     assert!(naming_problem("site/scripts/checkLinks.mjs").is_some());
     assert!(naming_problem("docs/screenshots/desktop-graph-dark.png").is_none());
+    assert!(naming_problem("docs/screenshots/site-guide-dark.png").is_none());
     assert!(naming_problem("apps/desktop/src-tauri/icons/Square44x44Logo.png").is_none());
 }
 

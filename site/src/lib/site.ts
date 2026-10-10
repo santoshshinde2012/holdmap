@@ -16,7 +16,7 @@ export const issuesUrl = `${repoUrl}/issues`;
 export const tagline =
   "See which ports, agents and tools are running — and stop the right thing safely.";
 export const description =
-  "holdmap maps your agents, tools and apps to the ports they hold, explains why a port is busy, and stops only what it should. A CLI, TUI, desktop app and MCP server on one Rust core. macOS, Linux and Windows.";
+  "See which processes hold your ports and what AI agents start. Inspect developer tools and stop port owners with a CLI, TUI, desktop app or MCP server.";
 
 /** Stars are only shown once the number says something. */
 const STARS_SHOWN_FROM = 25;
@@ -43,7 +43,8 @@ const [release, repo] = await Promise.all([github<Release>("/releases/latest"), 
 export const version = release?.tag_name?.replace(/^v/, "") || fileVersion;
 export const stars = repo?.stargazers_count && repo.stargazers_count >= STARS_SHOWN_FROM ? repo.stargazers_count : null;
 
-const dl = (file: string) => `${repoUrl}/releases/latest/download/${file}`;
+// Keep the chosen release label, filenames and checksums together while a new release builds.
+const dl = (file: string) => `${repoUrl}/releases/download/v${version}/${file}`;
 
 export const install = {
   sh: `curl -LsSf ${dl("holdmap-installer.sh")} | sh`,

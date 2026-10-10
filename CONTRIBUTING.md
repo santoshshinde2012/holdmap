@@ -78,12 +78,12 @@ cargo test --workspace --locked
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap
 cargo build --locked -p holdmap-desktop
 scripts/check-cross.sh                       # type-checks the macOS and Windows backends from Linux
-(cd site && npm run check && npm run build && npm test)  # website: types, links, size budget
+(cd site && npm run check && npm run build && npm test)  # website: types, links, size budget and SEO
 scripts/check-versions.sh
 scripts/check-secrets.sh                     # full Git history and tracked/new source; needs a full clone
 python3 scripts/test-release-security.py    # isolated release input regressions; never publishes
 actionlint
-python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK resolution
+python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK/Linux test resolution
 cargo deny --all-features check
 (cd apps/desktop && npm audit)
 (cd site && npm audit)
@@ -146,16 +146,21 @@ tools.
 
 ## Ground rules
 
-- All logic lives in `holdmap-core`. The CLI, TUI, desktop app and MCP server only render its
-  types and never signal processes themselves.
-- Every destructive path goes through `ActionPlan` and `execute`, so dry runs, confirmations and
+- Process collection, ownership, protection and stop policy live in `holdmap-core`. The CLI,
+  TUI, desktop and MCP adapters validate requests, coordinate confirmations and render core
+  types; they never signal processes themselves.
+- Process stops go through `ActionPlan` and `execute`, so dry runs, confirmations and
   the PID-reuse guard stay consistent.
+- Local desktop shutdown uses the separate native Power policy and fixed OS adapters in
+  `apps/desktop/src-tauri/src/power.rs`. Preserve trusted-window authorization, one-use
+  confirmation, expiry and concurrency guards. Test with injected executors; automated tests
+  must never shut down the machine.
 - Desktop and MCP execution bind to a one-use preview and refuse changed effects. Fresh
   process protection checks apply immediately before execution as well as during planning.
 - Use the shared credential redactor for display and serialization, and sanitize untrusted
   terminal text. Private/config writes must reject links before truncating a file.
-- Platform code stays behind `cfg` in `crates/holdmap-core/src/sys/`; parsers are pure and tested
-  with fixtures.
+- Process platform code stays behind `cfg` in `crates/holdmap-core/src/sys/`; desktop OS
+  integrations stay in native adapter modules. Parsers are pure and tested with fixtures.
 - New protected processes go in `crates/holdmap-core/src/safety.rs`. If you're unsure, protect it.
 - User-facing changes update the README (and screenshots if the UI changes) in the same pull
   request, plus an entry under `## [Unreleased]` in `CHANGELOG.md`.
@@ -173,7 +178,7 @@ Each ecosystem uses its own idiom. `cargo test` enforces these rules
 | Astro components and layouts (`site/`) | PascalCase | `Hero.astro`, `Docs.astro` |
 | TypeScript modules and tests | kebab-case, tests as `<module>.test.ts` | `rows.ts`, `rows.test.ts` |
 | Assets, scripts, workflows, files in `docs/` | kebab-case | `inter-variable.woff2`, `demo-servers.sh`, `architecture.md` |
-| Screenshots | `<surface>-<view>-<theme>.png` | `desktop-graph-dark.png` |
+| Screenshots | `<surface>-<view>-<theme>.png` (surface: `desktop`, `cli`, `tui`, `site`) | `desktop-graph-dark.png`, `site-guide-dark.png` |
 | Root documents | conventional UPPERCASE | `README.md`, `CHANGELOG.md`, `LICENSE-MIT` |
 
 Names fixed by tools (`Cargo.toml`, `package.json`, `src-tauri/`, the Tauri icon set) are left
