@@ -72,17 +72,23 @@ out of scope.
 - Releases use immutable action SHAs and scoped tokens, SHA-256 checksums and build provenance
   (`gh attestation verify <file> -R santoshshinde2012/holdmap`).
 
-## Linux GLib dependency backport (Unreleased)
+## Linux GLib dependency backports (Unreleased)
 
 The desktop GTK3 bindings require GLib 0.18. The published 0.18.5 contains
 [RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429.html): optimized string-variant
-iteration can crash. The current source uses a [verified local backport](vendor/README.md) of
-upstream's two-line fix, retaining the truthful 0.18.5 version and license. Existing releases
-and older lockfiles retain the original dependency until rebuilt with this fix.
+iteration can crash. Its safe boxed-inline slice conversion also allocates only one element
+before copying the whole slice, causing a heap overflow as documented in [upstream issue
+#2040](https://github.com/gtk-rs/gtk-rs-core/issues/2040). The current source uses
+[verified local backports](vendor/README.md) of both upstream fixes, retaining the truthful
+0.18.5 version and license. A separate local `g_malloc0` initialization fix gives `Value`
+copy callbacks the zero-filled destination required by GObject; the original allocation can
+crash even with one element. Existing releases and older lockfiles retain the original
+dependency until rebuilt with these fixes.
 
 Cargo-deny now checks transitive unsoundness advisories explicitly. Registry scanning does not
-cover local path packages; CI therefore also verifies every vendored file, the exact backport,
-lockfile and GTK resolution, and runs an optimized Linux regression against the actual GLib
+cover local path packages; CI therefore also verifies every vendored file, both exact backports,
+the local initialization change, lockfile and GTK resolution, and runs optimized Linux
+regressions against the actual GLib
 dependency. No advisory is ignored. A clean dependency scan alone does not establish that a
 local patch is safe, and the original advisory is not a false positive.
 

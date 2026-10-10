@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the audited GLib backport, its unchanged source snapshot and Cargo resolution.
+"""Verify the audited GLib fixes, their unchanged source snapshot and Cargo resolution.
 
 This check is offline except for Cargo's normal locked metadata resolution. It never builds
 GTK or launches the app. Requires Python 3.11+ and Cargo; run from any working directory.
@@ -14,10 +14,32 @@ import sys
 import tomllib
 
 
-PROVENANCE_SHA256 = "50ab665117cc237fb24f6e93daa6046bbe35dfe20b84dcdad31afc2c7e22b670"
+PROVENANCE_SHA256 = "9ab0bd1224628b76f8c7079e857392f2c9e14989bd418e448d408070ae62f1a0"
 ARCHIVE_SHA256 = "233daaf6e83ae6a12a52055f568f9d7cf4671dabb78ff9560ab6da230ce00ee5"
 UPSTREAM_COMMIT = "42b9caf98e03ded086362d9653ca58fe94dc8658"
-FIX_COMMIT = "b5a4071e439bef2b5eea76c3aa25e5ae84839e34"
+FIX_COMMITS = [
+    "b5a4071e439bef2b5eea76c3aa25e5ae84839e34",
+    "f54ceb387a2b6d6830753c1522cba7c858fb1aed",
+]
+PATCHES = {
+    "src/variant_iter.rs": [
+        (
+            b"let p: *mut libc::c_char = std::ptr::null_mut();",
+            b"let mut p: *mut libc::c_char = std::ptr::null_mut();",
+        ),
+        (b"                &p,", b"                &mut p,"),
+    ],
+    "src/boxed_inline.rs": [
+        (
+            b"let v_ptr = $crate::ffi::g_malloc(std::mem::size_of::<$ffi_name>()) as *mut $ffi_name;",
+            b"let v_ptr = $crate::ffi::g_malloc(std::mem::size_of::<$ffi_name>() * std::cmp::max(t.len(), 1)) as *mut $ffi_name;",
+        ),
+        (
+            b"let v_ptr = $crate::ffi::g_malloc(std::mem::size_of::<$ffi_name>() * std::cmp::max(t.len(), 1)) as *mut $ffi_name;",
+            b"let v_ptr = $crate::ffi::g_malloc0(std::mem::size_of::<$ffi_name>() * std::cmp::max(t.len(), 1)) as *mut $ffi_name;",
+        ),
+    ],
+}
 
 
 def require(condition, message):
@@ -36,8 +58,8 @@ def verify(root):
     require(digest(provenance_bytes) == PROVENANCE_SHA256, "GLib provenance manifest changed; review the source snapshot and verifier together")
     provenance = json.loads(provenance_bytes)
     require(provenance["package"] == "glib" and provenance["version"] == "0.18.5", "GLib must keep its truthful 0.18.5 version")
-    require(provenance["archive_sha256"] == ARCHIVE_SHA256 and provenance["upstream_commit"] == UPSTREAM_COMMIT and provenance["fix_commit"] == FIX_COMMIT, "unexpected upstream source or security fix")
-    require(list(provenance["patched_files"]) == ["src/variant_iter.rs"], "only the audited iterator source may change")
+    require(provenance["archive_sha256"] == ARCHIVE_SHA256 and provenance["upstream_commit"] == UPSTREAM_COMMIT and provenance["fix_commits"] == FIX_COMMITS, "unexpected upstream source or security fixes")
+    require(provenance["patched_files"].keys() == PATCHES.keys(), "only the two audited GLib source files may change")
     upstream = provenance["upstream_files"]
     patched = provenance["patched_files"]
     files = {}
@@ -50,12 +72,12 @@ def verify(root):
     require(files.keys() == upstream.keys(), "vendored GLib file set changed; build/cache files must stay outside the source snapshot")
     for name, expected in upstream.items():
         require(digest(files[name].read_bytes()) == patched.get(name, expected), f"vendored GLib content changed: {name!r}")
-    iterator = files["src/variant_iter.rs"].read_bytes()
-    mutable = b"let mut p: *mut libc::c_char = std::ptr::null_mut();"
-    out_argument = b"                &mut p,"
-    require(iterator.count(mutable) == 1 and iterator.count(out_argument) == 1, "GLib iterator must pass a mutable output pointer")
-    original = iterator.replace(mutable, b"let p: *mut libc::c_char = std::ptr::null_mut();").replace(out_argument, b"                &p,")
-    require(digest(original) == upstream["src/variant_iter.rs"], "GLib backport must be exactly the two upstream line changes")
+    for name, replacements in PATCHES.items():
+        original = files[name].read_bytes()
+        for before, after in reversed(replacements):
+            require(original.count(after) == 1, f"GLib source must contain the exact audited fix: {name!r}")
+            original = original.replace(after, before, 1)
+        require(digest(original) == upstream[name], f"GLib backport must contain only the audited upstream and local line changes: {name!r}")
 
     manifest = tomllib.loads((root / "Cargo.toml").read_text())
     require(manifest["patch"]["crates-io"]["glib"] == {"path": "vendor/glib"}, "Cargo must use the audited local GLib override")
@@ -95,7 +117,7 @@ def main():
     except (OSError, ValueError, KeyError, StopIteration, subprocess.TimeoutExpired) as error:
         print(f"GLib backport verification failed: {str(error)!r}", file=sys.stderr)
         return 1
-    print("GLib 0.18.5 upstream snapshot, exact security backport, lockfile and GTK resolution verified.")
+    print("GLib 0.18.5 upstream snapshot, both security backports, local initialization fix, lockfile and GTK resolution verified.")
     return 0
 
 
