@@ -46,8 +46,10 @@ unsafe fn checked_slice_copy(dest: *mut SliceProbeFFI, src: *const SliceProbeFFI
 glib::wrapper! {
     pub struct SliceProbe(BoxedInline<SliceProbeFFI>);
     match fn {
-        init => |ptr| std::ptr::write(ptr, SliceProbeFFI { words: [0; 8] }),
-        copy_into => |dest, src| checked_slice_copy(dest, src),
+        // The wrapper provides aligned storage for one initialized inline value.
+        init => |ptr| unsafe { std::ptr::write(ptr, SliceProbeFFI { words: [0; 8] }) },
+        // The wrapper supplies a live source and destination; the helper checks bounds.
+        copy_into => |dest, src| unsafe { checked_slice_copy(dest, src) },
         clear => |_ptr| (),
     }
 }
