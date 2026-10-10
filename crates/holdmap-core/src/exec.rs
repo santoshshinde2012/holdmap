@@ -52,6 +52,15 @@ impl Run<'_> {
                 if sys::is_alive(pr.pid, pr.start_token) {
                     self.ok = false;
                     self.log(format!("skipped {} ({}): current identity or protection does not authorize signalling", pr.name, pr.pid));
+                } else if fresh.get(pr.pid).is_some_and(|current| {
+                    pr.start_token != 0
+                        && current.start_token != 0
+                        && current.start_token != pr.start_token
+                }) {
+                    self.log(format!(
+                        "skipped PID {}: it now belongs to a different process (PID reuse guard)",
+                        pr.pid
+                    ));
                 } else {
                     self.log(format!(
                         "{} ({}) had already exited or changed identity",
