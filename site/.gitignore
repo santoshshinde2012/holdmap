@@ -3,3 +3,4 @@ dist/
 .astro/
 public/demo/
 .hero-frames/
+test-results/

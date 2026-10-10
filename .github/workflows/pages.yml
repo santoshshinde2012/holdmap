@@ -80,6 +80,14 @@ jobs:
       - name: Embedded demo end-to-end check
         working-directory: site
         run: npm run test:demo
+      - name: Embedded demo failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: website-browser-failures
+          path: site/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Record the published revision
         working-directory: site
         run: |
