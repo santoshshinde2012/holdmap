@@ -10,6 +10,10 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- Terminal Agents list with independent search, stable identity-based selection, responsive
+  details, keyboard and mouse scrolling, explicit collection limits and stale-scan warnings.
+  CLI agent output starts with a compact overview; filtered queries expand details.
+
 - Desktop scheduling for local shutdown, individual ports and an agent's reviewed services,
   with presets, custom delays, local date/time selection, countdowns and confirmed cancellation.
   A native queue keeps schedules active in the tray while the app runs; quitting clears them.
@@ -17,6 +21,11 @@ by [release-please](https://github.com/googleapis/release-please) from
   after missed deadlines or significant clock changes. Browser schedules are simulations.
 
 ### Security
+
+- CLI and TUI agent service stops share retained, protocol-specific reviewed plans. All targets
+  require fresh identity, ownership and protection checks before any effect. Confirmation
+  displays every service, Enter cancels, and failures halt remaining steps without retries.
+  Stop-history errors preserve completed-effect status. Agent sessions remain protected.
 
 - Desktop release publishing uses the verified installer manifest for builds without a signed
   updater. Configured updater archives and signatures receive platform checksum and build

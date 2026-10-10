@@ -1,5 +1,6 @@
 //! TUI rendering.
 
+use super::agents_view::{safe_text, wrap_lines};
 use super::app::{App, Modal, ProtoFilter, Tab};
 use super::theme;
 use crate::render::{address_label, what_label};
@@ -55,10 +56,10 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             Layout::vertical([Constraint::Percentage(55), Constraint::Percentage(45)]).areas(body);
         (l, d)
     };
-    if app.tab == Tab::Graph {
+    if app.tab == Tab::Agents {
+        super::agents_ui::draw(f, app, body);
+    } else if app.tab == Tab::Graph {
         super::graph_ui::draw_graph(f, app, list_area, detail_area);
-    } else if app.tab == Tab::Agents {
-        draw_agents(f, app, list_area, detail_area);
     } else {
         draw_table(f, app, list_area);
         draw_details(f, app, detail_area);
@@ -67,7 +68,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     match &app.modal {
         Modal::Confirm { .. } => draw_confirm(f, app),
         Modal::Explain { .. } => draw_explain(f, app),
-        Modal::Help => draw_help(f),
+        Modal::Help => draw_help(f, app.tab),
         Modal::None => {}
     }
 }
@@ -84,6 +85,10 @@ fn chip(label: &str, on: bool) -> Span<'static> {
 }
 
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
+    if app.tab == Tab::Agents {
+        super::agents_ui::draw_header(f, app, area);
+        return;
+    }
     let mut spans = vec![
         Span::styled(
             " ◉ holdmap ",
@@ -177,6 +182,10 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_search(f: &mut Frame, app: &App, area: Rect) {
+    if app.tab == Tab::Agents {
+        super::agents_ui::draw_search(f, app, area);
+        return;
+    }
     let line = if app.searching {
         Line::from(vec![
             Span::styled(" / ", theme::title()),
@@ -212,247 +221,6 @@ fn draw_search(f: &mut Frame, app: &App, area: Rect) {
         ])
     };
     f.render_widget(Paragraph::new(line), area);
-}
-
-fn draw_agents(f: &mut Frame, app: &App, list_area: Rect, detail_area: Rect) {
-    let n = app.agents.as_ref().map(|r| r.agents.len()).unwrap_or(0);
-    let list_block = Block::bordered()
-        .border_type(BorderType::Rounded)
-        .border_style(theme::muted())
-        .title(Line::from(vec![
-            Span::styled(" Agents ", theme::heading()),
-            Span::styled(format!("{n} "), theme::muted()),
-        ]));
-    let detail_block = Block::bordered()
-        .border_type(BorderType::Rounded)
-        .border_style(theme::muted())
-        .title(Span::styled(" Footprint ", theme::heading()));
-
-    let Some(report) = &app.agents else {
-        f.render_widget(
-            Paragraph::new(Span::styled("Looking for agents…", theme::muted())).block(list_block),
-            list_area,
-        );
-        f.render_widget(Paragraph::new("").block(detail_block), detail_area);
-        return;
-    };
-    if report.agents.is_empty() {
-        f.render_widget(
-            Paragraph::new(Text::from(vec![
-                Line::from(Span::styled(
-                    "No agents or developer tools running",
-                    theme::heading(),
-                )),
-                Line::from(Span::styled(
-                    "Start Claude Code, Cursor, Docker Desktop…",
-                    theme::muted(),
-                )),
-            ]))
-            .block(list_block)
-            .wrap(Wrap { trim: true }),
-            list_area,
-        );
-        f.render_widget(Paragraph::new("").block(detail_block), detail_area);
-        return;
-    }
-
-    let rows: Vec<Row> = report
-        .agents
-        .iter()
-        .enumerate()
-        .map(|(i, a)| {
-            let stoppable = a.stoppable_ports().count();
-            let sel = i == app.agent_idx;
-            let style = if sel {
-                Style::new().bg(Color::Indexed(237)).fg(ACCENT).bold()
-            } else {
-                Style::default()
-            };
-            let mem = holdmap_core::util::human_bytes(a.memory_bytes);
-            Row::new(vec![
-                Cell::from(a.name.clone()),
-                Cell::from(a.kind.label()),
-                Cell::from(mem),
-                Cell::from(format!(
-                    "{}f {}p{}{}",
-                    a.folders
-                        .iter()
-                        .filter(|f| f.source != holdmap_core::agents::FolderSource::Recent)
-                        .count(),
-                    a.ports.len(),
-                    if stoppable > 0 {
-                        format!("/{stoppable}s")
-                    } else {
-                        String::new()
-                    },
-                    if a.access.root
-                        || a.access
-                            .facts
-                            .iter()
-                            .any(|f| { f.level == holdmap_core::agents::AccessLevel::Elevated })
-                    {
-                        " !"
-                    } else {
-                        ""
-                    }
-                )),
-            ])
-            .style(style)
-        })
-        .collect();
-    let widths = [
-        Constraint::Percentage(36),
-        Constraint::Percentage(22),
-        Constraint::Percentage(18),
-        Constraint::Percentage(24),
-    ];
-    let table = Table::new(rows, widths)
-        .header(
-            Row::new(["Name", "Kind", "Memory", "Footprint"])
-                .style(theme::muted())
-                .bottom_margin(0),
-        )
-        .block(list_block)
-        .row_highlight_style(Style::new().fg(ACCENT));
-    f.render_widget(table, list_area);
-
-    let Some(a) = app.selected_agent() else {
-        f.render_widget(Paragraph::new("").block(detail_block), detail_area);
-        return;
-    };
-    let stoppable_n = a.stoppable_ports().count();
-    let mut meta = format!(
-        "{} · {} · pid {} · {} · {:.1}% CPU",
-        a.kind.label(),
-        a.vendor,
-        a.pid,
-        holdmap_core::util::human_bytes(a.memory_bytes),
-        a.cpu_percent
-    );
-    if stoppable_n > 0 {
-        meta.push_str(&format!(" · {stoppable_n} stoppable (x)"));
-    }
-    let mut lines = vec![
-        Line::from(Span::styled(a.name.clone(), theme::heading())),
-        Line::from(Span::styled(meta, theme::muted())),
-        Line::from(""),
-    ];
-    if let Some(p) = &a.parent {
-        if let Some(host) = report.agents.iter().find(|x| &x.id == p) {
-            lines.push(Line::from(Span::styled(
-                format!("Started from {} (pid {})", host.name, host.pid),
-                theme::muted(),
-            )));
-            lines.push(Line::from(""));
-        }
-    }
-    for f in &a.access.facts {
-        let topic = match f.topic {
-            holdmap_core::agents::AccessTopic::User => "account",
-            holdmap_core::agents::AccessTopic::Sandbox => "sandbox",
-            holdmap_core::agents::AccessTopic::Approvals => "approvals",
-            holdmap_core::agents::AccessTopic::Network => "network",
-            holdmap_core::agents::AccessTopic::Privacy => "privacy",
-        };
-        let mark = match f.level {
-            holdmap_core::agents::AccessLevel::Elevated => "!",
-            holdmap_core::agents::AccessLevel::Restricted => "▾",
-            holdmap_core::agents::AccessLevel::Unknown => "?",
-            holdmap_core::agents::AccessLevel::Standard => "·",
-        };
-        lines.push(Line::from(vec![
-            Span::styled(format!("{mark} {topic:<9}"), theme::muted()),
-            Span::raw(f.summary.clone()),
-        ]));
-    }
-    if !a.folders.is_empty() {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled("Folders", theme::heading())));
-        for folder in a.folders.iter().take(8) {
-            let src = match folder.source {
-                holdmap_core::agents::FolderSource::Agent => "working dir",
-                holdmap_core::agents::FolderSource::Child => "child cwd",
-                holdmap_core::agents::FolderSource::Recent => "recent",
-            };
-            lines.push(Line::from(format!(
-                "  {}  {}  ({src})",
-                folder.label,
-                folder.path.display()
-            )));
-        }
-    }
-    if !a.ports.is_empty() {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled("Ports", theme::heading())));
-        for p in &a.ports {
-            let role = match p.role {
-                holdmap_core::agents::PortRole::DevServer => "dev · stoppable",
-                holdmap_core::agents::PortRole::Service => "svc · stoppable",
-                holdmap_core::agents::PortRole::Agent => "own",
-            };
-            lines.push(Line::from(format!(
-                "  :{}  {}  {}",
-                p.port,
-                role,
-                p.project
-                    .as_deref()
-                    .or(p.framework.as_deref())
-                    .unwrap_or(&p.label)
-            )));
-        }
-    }
-    if !a.links.is_empty() {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled("Talks to", theme::heading())));
-        for l in a.links.iter().take(8) {
-            lines.push(Line::from(format!(
-                "  {}  ×{}{}",
-                l.label,
-                l.connections,
-                l.service
-                    .as_ref()
-                    .map(|s| format!(" · {s}"))
-                    .unwrap_or_default()
-            )));
-        }
-    }
-    let children: Vec<_> = a
-        .processes
-        .iter()
-        .filter(|p| p.role == holdmap_core::agents::ProcessRole::Child)
-        .take(6)
-        .collect();
-    if !children.is_empty() {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "Tools & apps it started",
-            theme::heading(),
-        )));
-        for p in children {
-            lines.push(Line::from(format!(
-                "  {} ({})  {}",
-                p.name,
-                p.pid,
-                if p.command.is_empty() {
-                    String::new()
-                } else {
-                    p.command.chars().take(48).collect()
-                }
-            )));
-        }
-    }
-    for note in &report.limits {
-        lines.push(Line::from(Span::styled(
-            format!("note: {note}"),
-            theme::muted(),
-        )));
-    }
-    f.render_widget(
-        Paragraph::new(Text::from(lines))
-            .block(detail_block)
-            .wrap(Wrap { trim: false }),
-        detail_area,
-    );
 }
 
 fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
@@ -625,19 +393,19 @@ fn plan_lines(plan: &ActionPlan) -> Vec<Line<'static>> {
         };
         out.push(Line::from(vec![
             Span::styled(format!("{label}: "), Style::new().fg(color).bold()),
-            Span::raw(b.message.clone()),
+            Span::raw(safe_text(&b.message)),
         ]));
         return out;
     }
     for (i, s) in plan.steps.iter().enumerate() {
         out.push(Line::from(vec![
             Span::styled(format!(" {}. ", i + 1), Style::new().fg(ACCENT)),
-            Span::raw(s.describe()),
+            Span::raw(safe_text(&s.describe())),
         ]));
     }
     for w in &plan.warnings {
         out.push(Line::from(Span::styled(
-            format!(" ! {w}"),
+            format!(" ! {}", safe_text(w)),
             Style::new().fg(Color::Yellow),
         )));
     }
@@ -798,9 +566,13 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
             Style::new().fg(Color::Red).bold()
         };
         f.render_widget(
-            Paragraph::new(Span::styled(format!(" {}", t.text), style)),
+            Paragraph::new(Span::styled(format!(" {}", safe_text(&t.text)), style)),
             area,
         );
+        return;
+    }
+    if app.tab == Tab::Agents {
+        super::agents_ui::draw_footer(f, app, area);
         return;
     }
     let groups: &[&[(&str, &str)]] = if app.searching {
@@ -813,13 +585,6 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
             &[("↑↓", "move"), ("Tab", "agents")],
             &[("x", "stop"), ("C", "stop cluster"), ("o", "open")],
             &[("h", "external"), ("a", "all")],
-            &[("?", "help"), ("q", "quit")],
-        ]
-    } else if app.tab == Tab::Agents {
-        &[
-            &[("↑↓", "move"), ("Tab", "ports")],
-            &[("x", "stop its ports"), ("X", "force")],
-            &[("r", "refresh"), ("space", "pause")],
             &[("?", "help"), ("q", "quit")],
         ]
     } else {
@@ -861,64 +626,122 @@ fn centered(area: Rect, w: u16, h: u16) -> Rect {
     r
 }
 
-fn draw_confirm(f: &mut Frame, app: &App) {
-    let Modal::Confirm { plan, headline, .. } = &app.modal else {
+fn draw_confirm(f: &mut Frame, app: &mut App) {
+    let Modal::Confirm {
+        plan,
+        headline,
+        agent_stops,
+        scroll,
+        max_scroll,
+        ..
+    } = &mut app.modal
+    else {
         return;
     };
     let blocked = plan.is_blocked();
     let title = if blocked {
         " Can't stop this safely "
+    } else if agent_stops.is_some() {
+        " Review service stops "
     } else if plan
         .steps
         .iter()
-        .any(|s| matches!(s, Step::SignalProcesses { force: true, .. }))
+        .any(|step| matches!(step, Step::SignalProcesses { force: true, .. }))
     {
         " Force kill? "
     } else if plan.target.starts_with("cluster ") {
         " Stop cluster? "
     } else {
-        " Stop? "
+        " Review stop "
     };
     let color = if blocked { Color::Yellow } else { Color::Red };
     let mut lines = vec![
-        Line::from(Span::styled(headline.clone(), theme::heading())),
+        Line::from(Span::styled(safe_text(headline), theme::heading())),
         Line::raw(""),
     ];
-    lines.extend(plan_lines(plan));
-    lines.push(Line::raw(""));
-    if blocked {
-        lines.push(Line::from(vec![
-            key("Enter"),
-            Span::styled(" close", theme::muted()),
-        ]));
+    if let Some(stops) = agent_stops {
+        lines.push(Line::from(Span::styled(
+            "The agent session and its own ports stay running.",
+            theme::title(),
+        )));
+        lines.push(Line::from(Span::styled(
+            "Every service below is checked again before any stop starts.",
+            theme::muted(),
+        )));
+        for reviewed in stops.plans() {
+            lines.push(Line::raw(""));
+            lines.push(Line::from(Span::styled(
+                format!("{} · {}", reviewed.target(), safe_text(&reviewed.name)),
+                theme::heading(),
+            )));
+            lines.extend(plan_lines(&reviewed.plan));
+        }
     } else {
-        let risk = match plan.risk {
-            Risk::Low => Span::styled("low risk", Style::new().fg(Color::Green)),
-            Risk::Medium => Span::styled("medium risk", Style::new().fg(Color::Yellow)),
-            Risk::High => Span::styled("HIGH RISK", Style::new().fg(Color::Red).bold()),
-        };
-        lines.push(Line::from(vec![
-            Span::styled(" y ", Style::new().fg(Color::White).bg(Color::Red).bold()),
-            Span::raw(" stop   "),
-            key("n"),
-            Span::styled(" cancel     ", theme::muted()),
-            risk,
-        ]));
+        lines.extend(plan_lines(plan));
     }
-    let height = (lines.len() as u16 + 6).clamp(18, f.area().height.saturating_sub(2));
+    let available_height = if f.area().height >= 10 {
+        f.area().height - 2
+    } else {
+        f.area().height
+    };
+    let height = (lines.len() as u16)
+        .saturating_add(6)
+        .max(12)
+        .min(available_height);
     let area = centered(f.area(), 92, height);
     f.render_widget(Clear, area);
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(color))
         .title(Span::styled(title, Style::new().fg(color).bold()))
-        .padding(Padding::uniform(1));
-    f.render_widget(
-        Paragraph::new(lines)
-            .block(block)
-            .wrap(Wrap { trim: false }),
-        area,
-    );
+        .padding(Padding::horizontal(if area.width > 10 { 1 } else { 0 }));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    let risk = match plan.risk {
+        Risk::Low => Span::styled("low risk", Style::new().fg(Color::Green)),
+        Risk::Medium => Span::styled("medium risk", Style::new().fg(Color::Yellow)),
+        Risk::High => Span::styled("HIGH RISK", Style::new().fg(Color::Red).bold()),
+    };
+    let mut footer = vec![Line::from(vec![
+        key("Enter/n"),
+        Span::styled(if blocked { " close" } else { " cancel" }, theme::muted()),
+    ])];
+    if !blocked {
+        footer[0].spans.extend([
+            Span::raw("  "),
+            Span::styled(" y ", Style::new().fg(Color::White).bg(Color::Red).bold()),
+            Span::raw(" stop"),
+        ]);
+    }
+    footer.push(Line::from(vec![
+        risk,
+        Span::styled(" · PgUp/PgDn scroll review", theme::muted()),
+    ]));
+    let footer = wrap_lines(footer, inner.width);
+    let footer_height = (footer.len() as u16).min(inner.height);
+    let [body, actions] =
+        Layout::vertical([Constraint::Min(0), Constraint::Length(footer_height)]).areas(inner);
+    let lines = wrap_lines(lines, body.width.saturating_sub(1));
+    *max_scroll = lines
+        .len()
+        .saturating_sub(usize::from(body.height))
+        .min(usize::from(u16::MAX)) as u16;
+    *scroll = (*scroll).min(*max_scroll);
+    let line_count = lines.len();
+    f.render_widget(Paragraph::new(lines).scroll((*scroll, 0)), body);
+    if *max_scroll > 0 && body.width > 1 {
+        let mut scrollbar = ScrollbarState::new(line_count)
+            .position(usize::from(*scroll))
+            .viewport_content_length(usize::from(body.height));
+        f.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(None)
+                .end_symbol(None),
+            body,
+            &mut scrollbar,
+        );
+    }
+    f.render_widget(Paragraph::new(footer), actions);
 }
 
 fn draw_explain(f: &mut Frame, app: &mut App) {
@@ -985,7 +808,11 @@ fn draw_explain(f: &mut Frame, app: &mut App) {
     );
 }
 
-fn draw_help(f: &mut Frame) {
+fn draw_help(f: &mut Frame, tab: Tab) {
+    if tab == Tab::Agents {
+        super::agents_ui::draw_help(f);
+        return;
+    }
     let area = centered(f.area(), 84, 27);
     f.render_widget(Clear, area);
     let rows = [
@@ -997,7 +824,10 @@ fn draw_help(f: &mut Frame) {
             "Stop gracefully (SIGTERM → SIGKILL) with confirmation",
         ),
         ("X", "Force kill (SIGKILL) with confirmation"),
-        ("Tab / v", "Switch Ports ↔ Graph (selection follows)"),
+        (
+            "Tab / v",
+            "Switch Ports → Graph → Agents (selection follows)",
+        ),
         (
             "C",
             "Stop the selected service's cluster in dependency order",
@@ -1068,5 +898,73 @@ mod tests {
     fn section_rule_never_overflows_a_tiny_panel() {
         let l = section("Container", 4);
         assert_eq!(l.width(), "CONTAINER ".len());
+    }
+
+    #[test]
+    fn confirmation_preserves_cancel_and_risk_on_short_terminals_and_scrolls_full_review() {
+        use super::super::app::{App, Modal};
+        use holdmap_core::{ActionPlan, Protocol, Risk, Step, StopOptions, Target};
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+        for (width, height) in [(80, 24), (40, 10), (32, 8)] {
+            let mut app = App::empty(false);
+            app.modal = Modal::Confirm {
+                plan: Box::new(ActionPlan {
+                    target: "3000".into(),
+                    owners: Vec::new(),
+                    summary: "Review".into(),
+                    steps: (3000..3030)
+                        .map(|port| Step::VerifyFree {
+                            port,
+                            protocol: Protocol::Tcp,
+                            timeout_ms: 5000,
+                        })
+                        .collect(),
+                    blocked: None,
+                    warnings: vec!["Unique final warning\x1b\u{202e}".into()],
+                    risk: Risk::High,
+                    allow_protected: false,
+                }),
+                headline: "Service\x1b[31m\u{202e}".into(),
+                agent_stops: None,
+                scroll: 0,
+                max_scroll: 0,
+                reviewed_target: Some((Target::Port(3000), StopOptions::default())),
+            };
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
+            let visible = terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect::<String>();
+            assert!(visible.contains("cancel"), "{width}x{height}: {visible}");
+            assert!(visible.contains("HIGH RISK"), "{width}x{height}: {visible}");
+            assert!(!visible.contains('\x1b'));
+            assert!(!visible.contains('\u{202e}'));
+            let Modal::Confirm {
+                scroll, max_scroll, ..
+            } = &mut app.modal
+            else {
+                unreachable!()
+            };
+            assert!(*max_scroll > 0);
+            *scroll = *max_scroll;
+            terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
+            let visible = terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect::<String>();
+            assert!(
+                visible.contains("Unique final warning"),
+                "{width}x{height}: {visible}"
+            );
+            assert!(visible.contains("cancel"));
+        }
     }
 }

@@ -128,14 +128,15 @@ Every release has SHA-256 checksums and build provenance (`gh attestation verify
 
 ```sh
 holdmap list                 # every listening port, grouped by kind
-holdmap agents               # AI agents and tools: folders, ports, access
+holdmap agents               # compact overview of running agents and tools
+holdmap agents codex         # detailed tools, folders, ports and access
 holdmap agents claude --stop-ports --dry-run   # plan stopping what that agent started
 holdmap inspect 3000         # owner, process tree, connections, bind risk and the stop plan
 holdmap list --sort memory   # heaviest apps first
 holdmap stop 3000 --dry-run  # show exactly what stop would do
 holdmap stop 3000            # stop it gracefully, then check the port is free
 holdmap run -p 3000 -- npm run dev   # free 3000 safely, then start your server on it
-holdmap                      # the interactive TUI (Tab → Agents)
+holdmap                      # interactive TUI (Shift+Tab opens Agents)
 ```
 
 <img src="docs/screenshots/cli-explain-dark.png" width="720" alt="holdmap explain: fixture listener ownership and the recommended plan" />
@@ -179,6 +180,26 @@ Search by product, vendor, exact owned PID (`pid:1234`), working folder or tool 
 redacted commands; `--json` preserves evidence, timestamps and collection limits. Command text
 is not searched. Recent folders belong to the current account's history and are attached only
 to confirmed matching accounts; they do not prove current work by that running instance.
+
+**Terminal agents in current source / Unreleased.** Start `holdmap` and press **Shift+Tab**
+to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its
+tools, folders, connections and access. Wide terminals show the list beside the details;
+small terminals stack them. **p** pauses refreshes, **r** refreshes, and **?** shows help.
+**x** opens every service-stop plan, including its TCP/UDP protocol; **Enter**, **n** or
+**Esc** cancels and only **y** confirms. The agent session remains protected. Failed or
+changed targets require a new review; completed stops and history-write errors stay visible.
+`holdmap agents` now gives a compact overview; a query expands matching footprints and
+`--wide` adds redacted process commands. Version 0.4.0 downloads predate these terminal changes.
+
+<details>
+<summary>Current terminal agent overview, small-screen details and service review</summary>
+
+![CLI agent details with inferred child-tool evidence](docs/screenshots/cli-agents-dark.png)
+![Terminal agent list and selected details](docs/screenshots/tui-agents-dark.png)
+![Terminal agents in an 80-column window](docs/screenshots/tui-agents-narrow-dark.png)
+![Terminal service review keeps explicit confirmation and cancellation visible](docs/screenshots/tui-agent-stop-confirm-dark.png)
+
+</details>
 
 **Shell hook.** Add `eval "$(holdmap init zsh)"` to `~/.zshrc` (also `bash`, `fish`, `powershell`).
 When a command fails with "port in use", it prints who holds the port and how to free it.

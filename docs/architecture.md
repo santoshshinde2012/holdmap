@@ -60,6 +60,71 @@ flowchart LR
 
 </details>
 
+## Terminal agent presentation (current source)
+
+The terminal Agents view uses one background scan and one cached `AgentsReport`; render and
+navigation never collect processes or read project history. `tui/agents_view.rs` holds pure
+filter, count, safe-text and wrapping helpers, `tui/agents_state.rs` owns stable selection,
+search and review requests, and `tui/agents_ui.rs` renders the responsive list/details panes.
+`app.rs` coordinates keyboard events, worker messages and refresh sequencing. A refresh queued
+behind an in-flight scan discards its older response, including after a completed stop.
+
+CLI and TUI share `agent_actions.rs` for reviewed service stops. Each protocol-qualified plan
+retains the agent identity and exact listener/process identities. One fresh snapshot must
+validate the entire batch before the first effect; execution consumes the original plans and
+halts after a failure or history-write error. Injected execution and recording functions test
+policy without stopping processes. Presentation cannot broaden that authorization. Terminal
+metadata is printable, commands stay redacted, and confirmation keeps cancellation visible.
+
+![Terminal agent visibility and reviewed service actions](diagrams/terminal-agents.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 210
+---
+flowchart LR
+  accTitle: Terminal agent visibility and reviewed service actions
+  accDescr: A background collector supplies one agent snapshot to compact CLI reports and a responsive terminal list and details view. Shared reviews retain exact protocol and process identity. Fresh batch checks precede execution and private history recording, with no automatic retries.
+  SCAN["Background collector<br/>Engine + agent snapshot"] --> REPORT["CLI overview and details<br/>Redacted, printable metadata"]
+  SCAN --> STATE["Terminal view state<br/>Search + stable identity selection"]
+  STATE --> UI["Responsive presentation<br/>Agent list + scrollable details"]
+  REPORT & UI --> REVIEW["Shared service review<br/>Exact TCP / UDP plans<br/>Agent root stays protected"]
+  REVIEW --> CHECK["Fresh whole-batch validation<br/>Identity, ownership and policy"]
+  CHECK --> EXEC["Retained plan executor<br/>Verify result; halt on failure"]
+  EXEC --> HISTORY["Checked private history<br/>Completed effects + errors"]
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  class REPORT,UI surface
+  class STATE,SCAN domain
+  class REVIEW,CHECK,EXEC safety
+  class HISTORY data
+```
+
+</details>
+
 ## Scheduled local actions (current source)
 
 The scheduler is a desktop application service with separate queue/timing policy, stop
@@ -953,7 +1018,7 @@ branch; editing source does not itself publish a site.
 | Directory | Contents |
 |---|---|
 | `crates/holdmap-core` | Collection providers, models, attribution, planning, execution and persistence |
-| `crates/holdmap-cli` | CLI, TUI, generated-document checks and stdio MCP integration tests |
+| `crates/holdmap-cli` | CLI rendering, shared reviewed agent actions, TUI view/state helpers, generated-document checks and stdio MCP integration tests |
 | `crates/holdmap-mcp` | Protocol adapter, contracts, live tools and pure discovery modules |
 | `apps/desktop/src` | Shared Svelte UI, styles and TypeScript view logic |
 | `apps/desktop/src-tauri` | Native commands, state/cache, watcher, tray and OS integration |

@@ -142,7 +142,9 @@ there, then run `scripts/capture-terminal-screenshots.py` with that Python. It c
 terminal output against local fixtures, filters the TUI to those fixtures and masks the account
 name. Ports, PIDs, resource readings and plans remain actual. It terminates only fixtures it
 started and keeps app state in a temporary directory; its dependencies are optional maintainer
-tools.
+tools. Agent captures use an exact owned PID, verify inferred stdio MCP evidence and separate
+TCP/UDP plans, and cancel every stop review. Listener and process liveness checks confirm that
+capture did not stop an agent or service. Recent-project history is excluded from these fixtures.
 
 ## Ground rules
 

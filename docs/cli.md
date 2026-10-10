@@ -347,8 +347,7 @@ Arguments:
   [AGENT]  Only agents matching a product, name, vendor, folder, tool name, or exact agent/child PID
 
 Options:
-  -w, --wide           Show listed processes and their command lines (secrets hidden; large lists
-                       are capped)
+  -w, --wide           Show full agent details, including processes and redacted command lines
       --stop-ports     Stop the unprotected ports each matching agent started (dev servers and
                        services)
       --dry-run        Show the stop plan only; don't send any signal

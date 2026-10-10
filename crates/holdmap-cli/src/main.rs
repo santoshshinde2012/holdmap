@@ -1,5 +1,6 @@
 //! holdmap — see which ports, agents and tools are running, and stop the right thing safely.
 
+mod agent_actions;
 mod agents;
 mod commands;
 mod graph;

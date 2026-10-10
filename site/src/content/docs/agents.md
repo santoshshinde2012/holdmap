@@ -1,6 +1,6 @@
 ---
 title: Agents, tools and apps
-description: See which AI agents and developer tools are running, what they can reach, and stop only the ports they started.
+description: Inspect AI agents in the desktop or terminal, search tools and services, and review safe stops with clear ownership and access evidence.
 order: 2
 ---
 
@@ -19,8 +19,9 @@ uses the current interface with sample data.
 ## From the CLI
 
 ```sh
-holdmap agents                         # every agent and tool, with its footprint
-holdmap agents claude                  # filter by product name or PID
+holdmap agents                         # compact overview (current source)
+holdmap agents claude                  # matching agents with detailed footprints
+holdmap agents codex --wide             # include redacted process commands
 holdmap agents claude --stop-ports --dry-run   # plan only
 holdmap agents claude --stop-ports --yes       # stop unprotected ports that agent started
 holdmap agents --json                  # machine-readable report
@@ -42,8 +43,26 @@ matching known account, and do not establish current work by a particular runnin
   before anything opens.
   Search by agent, folder, tool, exact PID (`pid:51200`) or explicit port (`port:3001`). A port
   search includes both the listener owner and agents connected to it.
-- **TUI:** Tab cycles Ports → Graph → Agents. Select an agent and press `x` (or `X`) to stop its
-  unprotected ports.
+- **TUI:** start `holdmap`, then press **Shift+Tab** to open Agents directly. **Tab** cycles
+  Ports → Graph → Agents. Use **↑/↓** to select an agent, **/** to search, and **PgUp/PgDn** to
+  scroll its details. Wide windows show both panes side by side; small windows stack them.
+  Mouse-wheel scrolling follows the hovered pane. **p** pauses, **r** refreshes and **?** opens
+  help. Selection follows the same agent across refreshes. Failed scans clearly mark cached data.
+- **Review a service stop:** press **x** to review every affected service and its exact TCP/UDP
+  protocol. Scroll the full plan with **PgUp/PgDn**. **Enter**, **n** or **Esc** cancels; only
+  **y** confirms. The batch is freshly checked before any action. Changed targets require a new
+  review; failures stop remaining plans and show what completed. Agent sessions stay running.
+
+The compact CLI overview and updated terminal navigation are **current source / Unreleased**;
+version 0.4.0 downloads predate these changes. Build current source to use them. `--json` retains
+its structured report format. No terminal shell attachment or private conversation content is
+needed to inspect the observed processes.
+
+These current-source terminal captures use isolated local fixtures:
+
+![Terminal Agents list beside selected tools, services and access details](../../../../docs/screenshots/tui-agents-dark.png)
+
+![An 80-column terminal keeps agent identity visible while tool details scroll](../../../../docs/screenshots/tui-agents-narrow-dark.png)
 
 ## Access and evidence
 
