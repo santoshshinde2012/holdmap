@@ -2,8 +2,9 @@
 // the iframe loads, the "Try" buttons drive the real app, and a simulated stop removes :3000.
 //   [CHROME=/path/to/chrome] node scripts/check-demo.mjs [base-url]
 // Reuses the locked desktop browser-test dependency; install both projects before running.
-// Diagnostics: HOLDMAP_DEMO_PLATFORM=Linux HOLDMAP_DEMO_CPU_RATE=6 reproduces a slower
-// Linux platform on a local Chromium. Failures save PNG/JSON/trace.zip in test-results/demo/.
+// Diagnostics: HOLDMAP_DEMO_PLATFORM=Linux HOLDMAP_DEMO_CPU_RATE=6 emulates a Linux
+// navigator and slower CPU locally. HOLDMAP_DEMO_MEASURE_VIEWPORT=1 logs outer clipping;
+// HOLDMAP_DEMO_TRACE=0 measures without tracing. Failures save PNG/JSON/trace.zip by default.
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
@@ -13,6 +14,7 @@ const { previewSite } = await import("./preview.mjs");
 const preview = process.argv[2] ? null : await previewSite();
 const base = process.argv[2] ?? preview.url;
 const artifacts = fileURLToPath(new URL("../test-results/demo/", import.meta.url));
+const traceEnabled = process.env.HOLDMAP_DEMO_TRACE !== "0";
 
 let browser;
 const results = [];
@@ -27,7 +29,7 @@ try {
     const session = await page.context().newCDPSession(page);
     await session.send("Emulation.setCPUThrottlingRate", { rate: Number(process.env.HOLDMAP_DEMO_CPU_RATE) });
   }
-  await page.context().tracing.start({ screenshots: true, snapshots: true });
+  if (traceEnabled) await page.context().tracing.start({ screenshots: true, snapshots: true });
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -37,18 +39,27 @@ try {
       const stem = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/, "");
       await mkdir(artifacts, { recursive: true });
       try {
-        await page.screenshot({ path: `${artifacts}${stem}.png`, fullPage: true });
+        await page.screenshot({ path: `${artifacts}${stem}.png` });
         await writeFile(`${artifacts}${stem}.json`, JSON.stringify(await page.evaluate(() => {
           const frame = document.querySelector("#demo iframe");
+          const viewport = frame?.parentElement;
           const doc = frame?.contentDocument;
           const target = doc?.querySelector("[role=alertdialog] [data-primary]");
           const bounds = (element) => element ? { ...element.getBoundingClientRect().toJSON() } : null;
           const rect = target?.getBoundingClientRect();
+          const frameRect = frame?.getBoundingClientRect();
+          const parentTarget = rect && frameRect ? {
+            x: frameRect.x + (rect.x + rect.width / 2) * frameRect.width / frame.clientWidth,
+            y: frameRect.y + (rect.y + rect.height / 2) * frameRect.height / frame.clientHeight,
+          } : null;
           return {
-            platform: navigator.platform, url: location.href, scrollY,
+            platform: navigator.platform, url: location.href, scrollY, browserViewport: { width: innerWidth, height: innerHeight },
+            viewport: bounds(viewport), viewportScroll: viewport ? { top: viewport.scrollTop, left: viewport.scrollLeft, height: viewport.clientHeight, scrollHeight: viewport.scrollHeight, width: viewport.clientWidth, scrollWidth: viewport.scrollWidth } : null,
             frame: bounds(frame), dialog: bounds(doc?.querySelector("[role=alertdialog]")), target: bounds(target),
             targetText: target?.textContent, disabled: target?.disabled,
             hit: rect ? doc.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)?.outerHTML : null,
+            parentTarget, outsideBrowserViewport: parentTarget ? parentTarget.x < 0 || parentTarget.x > innerWidth || parentTarget.y < 0 || parentTarget.y > innerHeight : null,
+            parentHit: parentTarget ? document.elementFromPoint(parentTarget.x, parentTarget.y)?.outerHTML.slice(0, 2000) ?? null : null,
             activeElement: doc?.activeElement?.outerHTML,
           };
         }), null, 2));
@@ -62,10 +73,23 @@ try {
   await page.locator("#demo").scrollIntoViewIfNeeded();
   const frame = page.frameLocator("#demo iframe");
   const try_ = (label) => page.locator(".try", { hasText: label }).click();
+  const measureViewport = async (label) => {
+    if (!process.env.HOLDMAP_DEMO_MEASURE_VIEWPORT) return;
+    const state = await page.locator("#demo [data-viewport]").evaluate((viewport) => {
+      const iframe = viewport.querySelector("iframe"), target = iframe?.contentDocument?.querySelector("[role=alertdialog] [data-primary]");
+      const clip = viewport.getBoundingClientRect(), frame = iframe?.getBoundingClientRect(), button = target?.getBoundingClientRect();
+      const center = frame && button ? { x: frame.x + (button.x + button.width / 2) * frame.width / iframe.clientWidth, y: frame.y + (button.y + button.height / 2) * frame.height / iframe.clientHeight } : null;
+      return { top: viewport.scrollTop, left: viewport.scrollLeft, browserViewport: { width: innerWidth, height: innerHeight }, clip: clip.toJSON(), frame: frame?.toJSON(), center,
+        clippedByContainer: center ? center.x < clip.left || center.x > clip.right || center.y < clip.top || center.y > clip.bottom : null,
+        outsideBrowserViewport: center ? center.x < 0 || center.x > innerWidth || center.y < 0 || center.y > innerHeight : null };
+    });
+    console.log(`VIEWPORT ${label}: ${JSON.stringify(state)}`);
+  };
 
   await check("iframe loads the app with sample ports", async () => {
     await frame.locator('[id^="row-tcp:3000:"]').waitFor({ timeout: 15000 });
     await page.locator(".try:not([disabled])").first().waitFor({ timeout: 5000 });
+    await measureViewport("loaded");
   });
   await check("Inspect :3000 selects the port and shows its details", async () => {
     await try_("Inspect :3000");
@@ -98,13 +122,20 @@ try {
     await frame.getByRole("button", { name: /^MCP server Filesystem MCP,.*Opens its agent card$/ }).click();
     await frame.getByText("MCP server · inferred · no listening port", { exact: true }).waitFor();
     await search.press("Escape");
+    await measureViewport("after-agents");
   });
   await check("Stop :3000 asks first, then frees the port (simulated)", async () => {
     await try_("Stop :3000");
     const dialog = frame.locator('[role="alertdialog"]');
     await dialog.waitFor({ timeout: 5000 });
+    await measureViewport("stop-dialog");
+    // The iframe is scaled: scrolling a child already inside its own viewport can leave the
+    // modal below the parent browser window. Bring the actual demo canvas into view first.
+    await page.locator("#demo [data-viewport]").scrollIntoViewIfNeeded();
+    await measureViewport("stop-dialog-in-view");
     await dialog.locator("[data-primary]").click();
     await frame.locator('[id^="row-tcp:3000:"]').waitFor({ state: "detached", timeout: 10000 });
+    await measureViewport("after-stop");
   });
   await check("Reset brings :3000 back", async () => {
     await try_("Reset");
@@ -112,10 +143,12 @@ try {
   });
   await check("No console errors", async () => { if (errors.length) throw new Error(errors.join(" | ")); });
 
-  if (results.some(([status]) => status === "FAIL")) {
-    await mkdir(artifacts, { recursive: true });
-    await page.context().tracing.stop({ path: `${artifacts}trace.zip` });
-  } else await page.context().tracing.stop();
+  if (traceEnabled) {
+    if (results.some(([status]) => status === "FAIL")) {
+      await mkdir(artifacts, { recursive: true });
+      await page.context().tracing.stop({ path: `${artifacts}trace.zip` });
+    } else await page.context().tracing.stop();
+  }
 
 } finally {
   try { await browser?.close(); } finally { await preview?.close(); }
