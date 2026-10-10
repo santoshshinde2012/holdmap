@@ -17,7 +17,7 @@ on:
       - "apps/desktop/**"
       - "docs/**"
       - ".github/workflows/pages.yml"
-  # Rebuild after each release so the version and download links follow the latest release.
+  # Rebuild after a publishing release, not a pull request's release-plan check.
   workflow_run:
     workflows: [Release]
     types: [completed]
@@ -37,7 +37,7 @@ concurrency:
 jobs:
   build:
     name: build + check
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

@@ -53,6 +53,7 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Account descriptions and ownership now use the same UID-first match as recent history.
 - Agent memory formatting retains fractional gigabytes without overflowing its size threshold.
 - The website demo can return from Agents to List before inspecting or planning a simulated stop.
+- Website release-triggered deployment ignores pull requests that only plan release artifacts.
 
 ### Documentation
 
