@@ -30,13 +30,16 @@ unsafe fn checked_slice_copy(dest: *mut SliceProbeFFI, src: *const SliceProbeFFI
         if base.get() == 0 {
             base.set(dest as usize);
         }
-        let available = malloc_usable_size(base.get() as *mut std::ffi::c_void);
+        // The first callback records the base returned by GLib's malloc allocator.
+        let available = unsafe { malloc_usable_size(base.get() as *mut std::ffi::c_void) };
         let end = (dest as usize - base.get()) + std::mem::size_of::<SliceProbeFFI>();
         assert!(
             end <= available,
             "boxed-inline slice copy exceeds allocation: end={end}, allocation={available}"
         );
-        std::ptr::copy_nonoverlapping(src, dest, 1);
+        // The wrapper supplies a live source; the bounds assertion above verifies the
+        // destination allocation before this non-overlapping element copy.
+        unsafe { std::ptr::copy_nonoverlapping(src, dest, 1) };
     });
 }
 
