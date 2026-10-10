@@ -172,10 +172,12 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: apps/desktop
-          # With a tag the release already exists (dist created it), so tauri-action only uploads.
-          tagName: ${{ needs.plan.outputs.tag }}
+          # Without a signed updater, publish only the explicit installer manifest below.
+          # The pinned action otherwise uploads unsigned .app.tar.gz even with JSON disabled.
+          tagName: ${{ needs.plan.outputs.updater == 'true' && needs.plan.outputs.tag || '' }}
           args: ${{ matrix.args }} ${{ env.EXTRA_ARGS }}
           uploadUpdaterJson: ${{ needs.plan.outputs.updater == 'true' }}
+          uploadUpdaterSignatures: ${{ needs.plan.outputs.updater == 'true' }}
           updaterJsonPreferNsis: true
           uploadWorkflowArtifacts: ${{ needs.plan.outputs.tag == '' }}
           workflowArtifactNamePattern: holdmap-desktop-${{ matrix.name }}-[bundle] # [name] is the product name, the same for every bundle
@@ -201,46 +203,46 @@ jobs:
             hdiutil detach "$mnt" >/dev/null
           done
 
-      # tauri-action uploads as it builds; a flaky GitHub upload once dropped the Windows NSIS
-      # mid-transfer ("other side closed") and skipped Collect/checksums. Always collect from
-      # disk and re-upload with retries so a network blip can't leave a release incomplete.
-      - name: Collect the installers
+      # Signed updater uploads can fail mid-transfer. Stage the complete action manifest under
+      # its published names, including updater archives/signatures, and re-upload with retries.
+      - name: Collect the desktop release assets
         id: files
         if: always() && steps.tauri.outcome != 'skipped'
         shell: bash
+        env:
+          TAURI_ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
+          RELEASE_MATRIX: ${{ matrix.name }}
+          RELEASE_VERSION: ${{ steps.tauri.outputs.appVersion }}
+          RELEASE_UPDATER: ${{ needs.plan.outputs.updater }}
         run: |
-          shopt -s nullglob # (no globstar: macOS runners ship bash 3.2)
-          files=()
-          for d in target/release/bundle target/*/release/bundle; do
-            files+=("$d"/dmg/*.dmg "$d"/msi/*.msi "$d"/nsis/*.exe "$d"/deb/*.deb "$d"/rpm/*.rpm "$d"/appimage/*.AppImage)
-          done
-          [ ${#files[@]} -gt 0 ] || { echo "::error::no installers were built"; exit 1; }
-          sum="holdmap-desktop-${{ matrix.name }}.sha256"
-          if command -v sha256sum >/dev/null; then sha256sum "${files[@]}"; else shasum -a 256 "${files[@]}"; fi \
-            | sed -E 's#^([0-9a-f]+) [ *](.*/)?#\1  #' > "$sum" # bare names; Windows marks binary files with '*'
-          cat "$sum"
-          printf '%s\n' "${files[@]}" > "${sum}.paths"
-          { echo "sum=$sum"; echo "paths<<__P__"; printf '%s\n' "${files[@]}"; echo "__P__"; } >> "$GITHUB_OUTPUT"
-      - name: Upload installers to the release
+          node scripts/collect-desktop-release-assets.mjs
+      - name: Upload desktop assets to the release
         if: env.TAG != '' && steps.files.outcome == 'success'
         shell: bash
+        env:
+          RELEASE_UPDATER: ${{ needs.plan.outputs.updater }}
+          RELEASE_ASSET_MANIFEST: ${{ steps.files.outputs.sum }}.json
         run: |
           set -euo pipefail
+          if [ "$RELEASE_UPDATER" = true ]; then
+            node scripts/upload-desktop-release-assets.mjs
+            exit 0
+          fi
           # bash 3.2 on macOS has no mapfile; read paths line-by-line
           files=()
           while IFS= read -r line || [ -n "$line" ]; do
             [ -n "$line" ] && files+=("$line")
           done < "${{ steps.files.outputs.sum }}.paths"
-          [ ${#files[@]} -gt 0 ] || { echo "::error::no installer paths to upload"; exit 1; }
+          [ ${#files[@]} -gt 0 ] || { echo "::error::no desktop asset paths to upload"; exit 1; }
           for attempt in 1 2 3 4 5; do
             if gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"; then
-              echo "uploaded ${#files[@]} installers (attempt $attempt)"
+              echo "uploaded ${#files[@]} desktop assets (attempt $attempt)"
               exit 0
             fi
             echo "::warning::upload attempt $attempt failed; retrying..."
             sleep $((attempt * 10))
           done
-          echo "::error::could not upload installers after 5 attempts"
+          echo "::error::could not upload desktop assets after 5 attempts"
           exit 1
       - name: Build provenance
         if: env.TAG != '' && steps.files.outcome == 'success'
