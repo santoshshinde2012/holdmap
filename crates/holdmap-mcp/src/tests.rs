@@ -420,7 +420,7 @@ fn discovery_schemas_are_closed_and_describe_real_result_fields() {
 }
 
 #[test]
-fn stop_schema_accepts_existing_plan_and_execution_reports() {
+fn stop_schema_requires_confirmation_in_preview_and_accepts_execution_reports() {
     let schema = &catalog::definition("stop_port").unwrap()["outputSchema"];
     let plan = holdmap_core::ActionPlan {
         target: ":3000".into(),
@@ -430,8 +430,13 @@ fn stop_schema_accepts_existing_plan_and_execution_reports() {
         blocked: None,
         warnings: vec![],
         risk: holdmap_core::Risk::Low,
+        allow_protected: false,
     };
-    validation::validate(&serde_json::to_value(plan).unwrap(), schema).unwrap();
+    let mut preview = serde_json::to_value(plan).unwrap();
+    assert!(validation::validate(&preview, schema).is_err());
+    preview["confirmation_id"] = json!("session-1");
+    preview["confirmation_expires_in_s"] = json!(300);
+    validation::validate(&preview, schema).unwrap();
     validation::validate(
         &serde_json::to_value(holdmap_core::StopReport::default()).unwrap(),
         schema,
@@ -745,6 +750,7 @@ fn agent_stop_schema_accepts_plans_reports_and_empty_results() {
         blocked: None,
         warnings: vec![],
         risk: holdmap_core::Risk::Low,
+        allow_protected: false,
     };
     validation::validate(
         &json!({"plans": [plan], "reports": [holdmap_core::StopReport::default()]}),
@@ -776,4 +782,153 @@ fn every_agent_kind_is_in_the_output_contract_and_summary() {
         assert!(text.contains(kind.label()));
         validation::validate(&data, schema).unwrap();
     }
+}
+
+#[test]
+fn oversized_frames_are_rejected_before_dispatch_and_next_frame_is_read() {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let address = listener.local_addr().unwrap();
+    let destructive = json!({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {
+            "name": "stop_port", "arguments": {"port": address.port()},
+            "_meta": {"padding": "x".repeat(MAX_FRAME_BYTES)}
+        }
+    });
+    let input = format!("{destructive}\n{{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}}\n");
+    let mut output = Vec::new();
+    // Tiny buffers make the oversized frame cross many read boundaries.
+    serve(
+        std::io::BufReader::with_capacity(17, input.as_bytes()),
+        &mut output,
+    )
+    .unwrap();
+    let replies: Vec<Value> = String::from_utf8(output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(replies.len(), 2);
+    assert_eq!(replies[0]["error"]["code"], -32600);
+    assert!(replies[0].get("id").is_none());
+    assert!(replies[0].get("result").is_none());
+    assert!(replies[0]["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("no requests"));
+    assert_eq!(replies[1]["id"], 2);
+    assert_eq!(replies[1]["result"], json!({}));
+    std::net::TcpStream::connect(address).unwrap();
+}
+
+#[test]
+fn oversized_legacy_batch_is_rejected_as_a_whole_before_negotiation_changes() {
+    let mut requests = vec![json!({
+        "jsonrpc": "2.0", "id": 2, "method": "initialize",
+        "params": {"protocolVersion": "2025-11-25"}
+    })];
+    requests.extend((0..MAX_BATCH_MESSAGES).map(|index| {
+        json!({
+            "jsonrpc": "2.0", "id": index + 3, "method": "ping"
+        })
+    }));
+    let input = format!(
+        "{}\n{}\nnot-json\n",
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}),
+        Value::Array(requests)
+    );
+    let mut output = Vec::new();
+    serve(input.as_bytes(), &mut output).unwrap();
+    let replies: Vec<Value> = String::from_utf8(output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(replies.len(), 3);
+    assert_eq!(replies[1]["error"]["code"], -32600);
+    assert_eq!(replies[1].get("id"), Some(&Value::Null));
+    assert!(replies[1].get("result").is_none());
+    // The first item must not initialize a newer version before the batch is rejected.
+    assert_eq!(replies[2]["error"]["code"], -32700);
+    assert_eq!(replies[2].get("id"), Some(&Value::Null));
+}
+
+#[test]
+fn frame_reader_handles_limits_utf8_and_final_frame_without_newline() {
+    let at_limit = vec![b' '; MAX_FRAME_BYTES];
+    let mut reader = std::io::BufReader::with_capacity(19, at_limit.as_slice());
+    assert!(
+        matches!(read_frame(&mut reader).unwrap(), Some(Frame::Message(frame)) if frame.len() == MAX_FRAME_BYTES)
+    );
+    assert!(read_frame(&mut reader).unwrap().is_none());
+
+    let mut input = vec![b'x'; MAX_FRAME_BYTES + 1];
+    input.extend_from_slice(b"\n\xff\n{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"ping\"}");
+    let mut output = Vec::new();
+    serve(&input[..], &mut output).unwrap();
+    let replies: Vec<Value> = String::from_utf8(output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(replies[0]["error"]["code"], -32600);
+    assert_eq!(replies[1]["error"]["code"], -32700);
+    assert_eq!(replies[2]["id"], 3);
+    assert_eq!(replies[2]["result"], json!({}));
+}
+
+#[test]
+fn malformed_wire_controls_preserve_confirmation_and_reinitialize_invalidates_it() {
+    use crate::confirmation::{Observation, Request};
+    use holdmap_core::{ActionPlan, Owner, ProcRef, Risk, Step};
+    let request = Request::Port {
+        port: 3000,
+        force: false,
+        allow_non_dev: false,
+    };
+    let fixture = Observation {
+        request: request.clone(),
+        agents: vec![],
+        plans: vec![ActionPlan {
+            target: ":3000".into(),
+            summary: "Synthetic reviewed stop".into(),
+            owners: vec![Owner::Process {
+                pid: 100,
+                name: "node".into(),
+            }],
+            steps: vec![Step::SignalProcesses {
+                processes: vec![ProcRef {
+                    pid: 100,
+                    name: "node".into(),
+                    start_token: 10,
+                    command: "node fixture.js".into(),
+                }],
+                force: false,
+                timeout_ms: 5000,
+            }],
+            blocked: None,
+            warnings: vec![],
+            risk: Risk::Low,
+            allow_protected: false,
+        }],
+    };
+    for invalid in [
+        json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"stop_port","arguments":{"port":3000,"dry_run":false}},"dry_run":true}),
+        json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"stop_port","arguments":{"port":3000,"dry_run":false},"force":true}}),
+        json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"stop_port","arguments":{"port":3000,"dry_run":false},"_meta":{"progressToken":false}}}),
+        json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"stop_port","arguments":{"port":3000,"dry_run":false,"force":"false"}}}),
+    ] {
+        let mut session = Session::default();
+        let id = session.confirmations.issue(fixture.clone()).unwrap();
+        let mut invalid = invalid;
+        invalid["params"]["arguments"]["confirmation_id"] = json!(id);
+        let result = session.handle(invalid).unwrap();
+        assert!(result["error"].is_object() || result["result"]["isError"] == true);
+        // No live scan or executor is needed: consuming a cached fixture would fail this check.
+        assert!(session.confirmations.take(&id, &request).is_ok());
+    }
+    let mut session = Session::default();
+    let id = session.confirmations.issue(fixture).unwrap();
+    session.handle(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}})).unwrap();
+    assert!(session.confirmations.take(&id, &request).is_err());
 }

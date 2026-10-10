@@ -1,5 +1,6 @@
 //! Shared app state and the scan helper every command goes through.
 
+use crate::confirmation::Confirmations;
 use holdmap_core::store::Store;
 use holdmap_core::{Engine, ScanOptions, Snapshot};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -8,6 +9,7 @@ use std::time::{Duration, Instant};
 
 pub struct AppState {
     pub engine: Mutex<Option<Engine>>,
+    pub confirmations: Mutex<Confirmations>,
     /// Held for the length of a scan, so the UI poll, the watcher and the tray never scan at
     /// the same time (they wait and share the result instead).
     scan_lock: Mutex<()>,
@@ -32,6 +34,7 @@ impl Default for AppState {
     fn default() -> Self {
         AppState {
             engine: Mutex::new(None),
+            confirmations: Mutex::new(Confirmations::default()),
             scan_lock: Mutex::new(()),
             last_scan: Mutex::new(None),
             docker: AtomicBool::new(true),
@@ -84,8 +87,8 @@ impl AppState {
                 return Ok(read(engine));
             }
         }
-        // Collect under the scan lock alone: synchronous folder actions may keep reading the
-        // previous engine while a slow OS/container query runs on this background thread.
+        // Collect under the scan lock alone so other readers need not wait on the engine
+        // mutex while a slow OS/container query runs on this background thread.
         // A failed refresh returns the error and leaves the previous cache due for a retry.
         let fresh = collect(all, docker)?;
         let at = Instant::now();
@@ -319,5 +322,27 @@ mod tests {
             )
             .unwrap();
         assert_eq!(retried.taken_at_ms, 2);
+    }
+
+    #[test]
+    fn folder_authorization_requests_refresh_even_a_recent_scan() {
+        let state = AppState::default();
+        seed(
+            &state,
+            fixture_engine("codex", 1, vec![]),
+            Duration::ZERO,
+            false,
+            true,
+        );
+        let current = state
+            .read_engine(
+                None,
+                Duration::ZERO,
+                |_, _| Ok(fixture_engine("claude", 2, vec![])),
+                report,
+            )
+            .unwrap();
+        assert_eq!(current.agents[0].product, "claude-code");
+        assert_eq!(current.taken_at_ms, 2);
     }
 }

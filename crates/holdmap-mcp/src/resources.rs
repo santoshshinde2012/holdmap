@@ -24,7 +24,7 @@ Read tools take fresh observations. They do not read conversations, credentials 
 | Inspect running agents, developer tools and child tools | `list_agents` with optional `agent` |
 | Preview an agent's unprotected services before an authorized stop | `stop_agent_ports` with a specific `agent` (defaults to `dry_run: true`) |
 | Review a cluster stop order | `plan_cluster_stop` with `cluster` |
-| Review or execute an authorized single-port stop | `stop_port` with `port` and `dry_run` |
+| Review or execute an authorized single-port stop | `stop_port` with `port` (defaults to `dry_run: true`), then `confirmation_id` for execution |
 
 ## Diagnose a port conflict
 
@@ -33,14 +33,19 @@ Read tools take fresh observations. They do not read conversations, credentials 
 2. If the application can use another port, prefer `find_free_port` to disrupting a listener.
 3. If stopping is requested, inspect `get_topology` with `all: true` for dependents and call
    `stop_port` with `dry_run: true`. Show the plan and obtain the user's authorization before
-   executing the stop. The default topology view is filtered to development services and peers.
-4. A stop plan is a point-in-time observation. Execution rechecks ownership; report a refusal or
+   executing the stop. Execution needs `dry_run: false`, the returned `confirmation_id` and identical
+   `port`, `force` and `allow_non_dev` options in the same session within five minutes.
+   The default topology view is filtered to development services and peers.
+4. A stop plan is a point-in-time observation. Execution compares fresh owners, services and effects
+   against every retained plan before acting. Changes require a new preview; report a refusal or
    failure instead of retrying with force or broader permissions automatically.
 
 To stop services an agent started, use `stop_agent_ports` with a specific filter or exact PID.
 It defaults to `dry_run: true`. Show these plans, inspect `get_topology` with `all: true` and
-obtain authorization before setting `dry_run: false`. Each port follows the core safety policy;
-protected and other users' processes and medium/high-risk plans remain refused.
+obtain authorization before setting `dry_run: false` with the returned `confirmation_id` and the
+same `agent` and `force` options. Every selected agent and every port plan must still match before
+any stop executes. A partially refused preview issues no handle. Each port follows the core safety
+policy; protected and other users' processes and medium/high-risk plans remain refused.
 
 ## Prepare a development server
 
@@ -82,6 +87,20 @@ processes, other users' processes and high-risk owners remain refused. `force` i
 for that policy. `plan_cluster_stop` never executes; it returns a reviewable plan for the user to
 act on through the CLI. Tool arguments must match their published types, ranges and enums;
 send booleans as JSON booleans, not strings.
+
+## Confirmation lifetime and limits
+
+Confirmation IDs are one-use session-local handles, not authentication credentials or evidence of
+user approval. The client is responsible for obtaining authorization. They expire after five
+minutes. The server retains at most 32 pending previews; a newer preview may evict the oldest.
+A preview is limited to 128 ports or selected agents and 1 MiB of retained data. Use a narrower
+filter if refused. A restart or reinitialization invalidates pending handles.
+
+Malformed wire/schema inputs do not consume a handle. Once a valid execution attempt presents
+one, it is consumed before checking options or taking a fresh observation. Mismatched options,
+changed owners, collection failures and execution failures therefore require a new preview.
+No cancellation or rollback is promised after execution begins; bulk execution stops on its first
+failure. Requests are limited to 1 MiB, and legacy batches to 64 messages.
 
 ## Discover workflows
 

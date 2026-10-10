@@ -56,7 +56,9 @@ impl HttpInfo {
 /// Probe `http://localhost:{port}{path}`. Returns `None` when nothing answers within `timeout` or
 /// the answer isn't HTTP (a database, a TLS-only server, a raw TCP protocol).
 pub fn probe(port: u16, path: &str, timeout: Duration) -> Option<HttpInfo> {
-    let path = if path.starts_with('/') { path } else { "/" };
+    if !is_safe_path(path) {
+        return None;
+    }
     let started = Instant::now();
     let mut stream = [
         SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
@@ -95,6 +97,16 @@ pub fn probe(port: u16, path: &str, timeout: Duration) -> Option<HttpInfo> {
     let mut info = parse_response(port, &buf)?;
     info.elapsed_ms = first.unwrap_or_else(|| started.elapsed()).as_millis() as u64;
     Some(info)
+}
+
+/// An HTTP origin-form path, without bytes that can introduce headers or another request.
+pub fn is_safe_path(path: &str) -> bool {
+    path.starts_with('/')
+        && !path.starts_with("//")
+        && path.len() <= 2048
+        && path
+            .bytes()
+            .all(|byte| byte.is_ascii_graphic() && byte != b'#')
 }
 
 fn contains_ci(hay: &[u8], needle: &[u8]) -> bool {
@@ -217,6 +229,26 @@ mod tests {
         assert!(parse_response(1, b"SSH-2.0-OpenSSH_9.6\r\n").is_none());
         assert!(parse_response(1, b"-ERR unknown command\r\n").is_none());
         assert!(parse_response(1, b"HTTP/1.1 abc\r\n\r\n").is_none());
+    }
+
+    #[test]
+    fn security_probe_rejects_injected_request_targets_before_connecting() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        for path in [
+            "/ HTTP/1.1\r\nHost: other\r\n\r\nPOST /write",
+            "/health\nInjected: value",
+            "/health path",
+            "//other-host/path",
+        ] {
+            assert!(probe(port, path, Duration::from_millis(10)).is_none());
+            assert_eq!(
+                listener.accept().unwrap_err().kind(),
+                std::io::ErrorKind::WouldBlock,
+                "invalid path {path:?} must not even open a connection"
+            );
+        }
     }
 
     #[test]

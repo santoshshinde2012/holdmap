@@ -80,6 +80,10 @@ const ROOT_DOCS: &[&str] = &[
 
 /// Returns why `path` breaks the naming rules, or `None` when it is fine.
 fn naming_problem(path: &str) -> Option<String> {
+    // Imported GLib filenames are part of its verified upstream snapshot.
+    if path.starts_with("vendor/glib/") {
+        return None;
+    }
     let parts: Vec<&str> = path.split('/').collect();
     let name = *parts.last().unwrap();
     let dirs = &parts[..parts.len() - 1];
@@ -296,10 +300,11 @@ fn markdown_links_resolve() {
     };
     let root = repo_root();
     let mut problems = Vec::new();
-    // Website pages (site/) link by URL, not by file; the site's own link check covers them.
+    // Website pages link by URL. The immutable GLib README contains rustdoc links;
+    // its upstream bytes are checked by verify-vendored-glib.py instead.
     for doc in files
         .iter()
-        .filter(|f| f.ends_with(".md") && !f.starts_with("site/"))
+        .filter(|f| f.ends_with(".md") && !f.starts_with("site/") && !f.starts_with("vendor/glib/"))
     {
         let text = std::fs::read_to_string(root.join(doc)).unwrap();
         let dir = root.join(doc).parent().unwrap().to_path_buf();

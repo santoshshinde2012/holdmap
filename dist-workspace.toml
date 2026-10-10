@@ -3,10 +3,13 @@ members = ["cargo:."]
 
 # Config for 'dist' (https://axodotdev.github.io/cargo-dist/book/reference/config.html).
 # Only the `holdmap` CLI ships through dist; the desktop app ships through tauri-action
-# (.github/workflows/desktop-release.yml). After editing this file, run `dist generate`.
+# (.github/workflows/desktop-release.yml). See CONTRIBUTING.md before updating release CI.
 [dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
 cargo-dist-version = "0.33.0"
+# release.yml is maintained explicitly to validate tags and restrict publishing permissions.
+# Keep dist's metadata checks, but do not regenerate or require a byte-identical CI template.
+allow-dirty = ["ci"]
 # CI backends to support
 ci = "github"
 # The installers to generate for each app. The npm package is built and attached to the release;
@@ -46,8 +49,8 @@ cargo-cyclonedx = true
 # Embed the dependency tree in the binaries so `cargo audit bin holdmap` works on them.
 cargo-auditable = true
 
-# Actions used by the generated release workflow, pinned to commit SHAs (Dependabot can't update
-# release.yml, so bump these with `dist generate` when upgrading dist).
+# Actions used by the release workflow, pinned to commit SHAs. Keep these in sync with
+# release.yml: Dependabot workflow updates do not change cargo-dist's config pins.
 [dist.github-action-commits]
 "actions/checkout" = "3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
 "actions/upload-artifact" = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" # v7.0.1

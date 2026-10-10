@@ -1,15 +1,14 @@
-//! Tauri commands: thin adapters from the Svelte UI onto `holdmap-core`. No business logic
-//! lives here — scanning, planning, topology and history are all core abstractions.
+//! Tauri adapters from the Svelte UI onto `holdmap-core`, with native confirmation and folder
+//! authorization boundaries. Scanning, planning, topology and history are core abstractions.
 
+use crate::confirmation::{validate_fresh, Preview};
 use crate::state::{scan_now, AppState};
 use crate::tray::refresh_tray;
 use holdmap_core::agents::AgentsReport;
 use holdmap_core::history::{self, HistoryEntry};
 use holdmap_core::store::Config;
 use holdmap_core::topology::Graph;
-use holdmap_core::{
-    execute, ActionPlan, Engine, Explanation, Snapshot, StopOptions, StopReport, Target,
-};
+use holdmap_core::{execute, Engine, Explanation, Snapshot, StopOptions, StopReport, Target};
 use serde::Serialize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -46,6 +45,24 @@ fn stop_options(force: bool, allow_protected: bool) -> StopOptions {
         allow_protected,
         ..StopOptions::default()
     }
+}
+
+/// Desktop rows distinguish TCP and UDP listeners. A protocol suffix must never fall
+/// through to a process-name target (a process can itself be named `5353/udp`).
+fn stop_request(target: &str, force: bool, allow_protected: bool) -> (Target, StopOptions) {
+    let mut opts = stop_options(force, allow_protected);
+    if let Some((port, protocol)) = target.trim().split_once('/') {
+        let protocol = match protocol {
+            "tcp" => Some(holdmap_core::Protocol::Tcp),
+            "udp" => Some(holdmap_core::Protocol::Udp),
+            _ => None,
+        };
+        if let (Ok(port), Some(protocol)) = (port.parse::<u16>(), protocol) {
+            opts.protocol = Some(protocol);
+            return (Target::Port(port), opts);
+        }
+    }
+    (Target::parse(target), opts)
 }
 
 async fn blocking<T: Send + 'static>(
@@ -151,33 +168,42 @@ pub async fn plan(
     target: String,
     force: bool,
     allow_protected: bool,
-) -> Result<ActionPlan, String> {
-    let opts = stop_options(force, allow_protected);
-    with_engine(&app, move |e| e.plan(&Target::parse(&target), &opts)).await
+) -> Result<Preview, String> {
+    let (parsed, opts) = stop_request(&target, force, allow_protected);
+    let plan = with_engine(&app, move |e| e.plan(&parsed, &opts)).await?;
+    Ok(app
+        .state::<AppState>()
+        .confirmations
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .preview(target, force, allow_protected, plan))
 }
 
-/// Re-scan, re-plan and execute a stop. The plan is rebuilt from a fresh scan so a PID that was
-/// reused since the UI last refreshed can never be signalled; `execute` re-checks protection.
-/// What was stopped is recorded in the history so it can be restarted.
+/// Consume the reviewed plan, then verify a fresh scan still has exactly those effects.
+/// A changed target requires a new confirmation; execution also re-checks PID identity and
+/// protection. What was stopped is recorded in the history so it can be restarted.
 #[tauri::command]
 pub async fn stop(
     app: AppHandle,
     target: String,
     force: bool,
     allow_protected: bool,
+    confirmation_id: String,
 ) -> Result<StopReport, String> {
     let docker = app.state::<AppState>().docker();
     let emitter = app.clone();
     blocking(move || {
+        let confirmed = emitter
+            .state::<AppState>()
+            .confirmations
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take(&confirmation_id, &target, force, allow_protected)?;
         let engine = scan_now(false, docker)?;
-        let plan = engine.plan(
-            &Target::parse(&target),
-            &stop_options(force, allow_protected),
-        );
-        if let Some(b) = &plan.blocked {
-            return Err(b.message.clone());
-        }
-        let report = execute(&plan, &mut |line| {
+        let (parsed, opts) = stop_request(&target, force, allow_protected);
+        let plan = engine.plan(&parsed, &opts);
+        validate_fresh(&confirmed, &plan)?;
+        let report = execute(&confirmed, &mut |line| {
             let _ = emitter.emit(
                 "stop-progress",
                 Progress {
@@ -186,7 +212,7 @@ pub async fn stop(
                 },
             );
         });
-        let entries = history::entries_from_plan(&engine.scan, &plan, &report);
+        let entries = history::entries_from_plan(&engine.scan, &confirmed, &report);
         let _ = emitter.state::<AppState>().store.record(&entries);
         Ok(report)
     })
@@ -322,23 +348,17 @@ pub async fn port_details(port: u16) -> Result<Vec<holdmap_core::details::PortDe
 
 /// The folder the service on `port` runs in: its project root, else the process's directory.
 /// Looked up from the latest scan; the webview only ever names a port.
-fn folder_for(app: &AppHandle, port: u16) -> Result<std::path::PathBuf, String> {
-    let state = app.state::<AppState>();
-    let guard = state.engine.lock().unwrap_or_else(|e| e.into_inner());
-    let e = guard
-        .as_ref()
-        .and_then(|e| {
-            e.snapshot()
-                .entries
-                .iter()
-                .find(|x| {
-                    x.port == port
-                        && x.state.is_listening()
-                        && (x.project.is_some()
-                            || x.process.as_ref().is_some_and(|p| p.cwd.is_some()))
-                })
-                .cloned()
+fn folder_for(engine: &Engine, port: u16) -> Result<std::path::PathBuf, String> {
+    let e = engine
+        .snapshot()
+        .entries
+        .iter()
+        .find(|x| {
+            x.port == port
+                && x.state.is_listening()
+                && (x.project.is_some() || x.process.as_ref().is_some_and(|p| p.cwd.is_some()))
         })
+        .cloned()
         .ok_or_else(|| format!("No project folder is known for :{port}"))?;
     e.project
         .map(|p| p.root)
@@ -357,29 +377,39 @@ pub fn open_port(port: u16) -> Result<(), String> {
 
 /// Show the project folder of the service on `port` in Finder / Explorer.
 #[tauri::command]
-pub fn reveal_project(app: AppHandle, port: u16) -> Result<(), String> {
-    let dir = folder_for(&app, port)?;
-    holdmap_core::util::reveal(&dir).map_err(|e| e.to_string())
+pub async fn reveal_project(app: AppHandle, port: u16) -> Result<(), String> {
+    blocking(move || {
+        let dir = app
+            .state::<AppState>()
+            .with_engine(Duration::ZERO, |e| folder_for(e, port))??;
+        holdmap_core::util::reveal(&dir).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// Open the project folder of the service on `port` in the user's editor; returns its name.
 #[tauri::command]
-pub fn open_in_editor(app: AppHandle, port: u16) -> Result<String, String> {
-    let dir = folder_for(&app, port)?;
-    holdmap_core::util::open_in_editor(&dir).map_err(|e| e.to_string())
+pub async fn open_in_editor(app: AppHandle, port: u16) -> Result<String, String> {
+    blocking(move || {
+        let dir = app
+            .state::<AppState>()
+            .with_engine(Duration::ZERO, |e| folder_for(e, port))??;
+        holdmap_core::util::open_in_editor(&dir).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// Resolve a folder the Agents view named: it must belong to `agent_id` in the current report,
 /// so the webview never opens an arbitrary path.
-fn agent_folder(app: &AppHandle, agent_id: &str, path: &str) -> Result<std::path::PathBuf, String> {
+fn agent_folder(
+    report: &AgentsReport,
+    agent_id: &str,
+    path: &str,
+) -> Result<std::path::PathBuf, String> {
     let want = std::path::PathBuf::from(path);
     if !want.is_absolute() {
         return Err("Folder path must be absolute".into());
     }
-    let state = app.state::<AppState>();
-    let guard = state.engine.lock().unwrap_or_else(|e| e.into_inner());
-    let engine = guard.as_ref().ok_or("no scan yet")?;
-    let report = engine.agents();
     let agent = report
         .agents
         .iter()
@@ -393,16 +423,34 @@ fn agent_folder(app: &AppHandle, agent_id: &str, path: &str) -> Result<std::path
 
 /// Show an agent's folder in Finder / Explorer (path must appear on that agent).
 #[tauri::command]
-pub fn reveal_agent_folder(app: AppHandle, agent_id: String, path: String) -> Result<(), String> {
-    let dir = agent_folder(&app, &agent_id, &path)?;
-    holdmap_core::util::reveal(&dir).map_err(|e| e.to_string())
+pub async fn reveal_agent_folder(
+    app: AppHandle,
+    agent_id: String,
+    path: String,
+) -> Result<(), String> {
+    blocking(move || {
+        let dir = app.state::<AppState>().with_engine(Duration::ZERO, |e| {
+            agent_folder(&e.agents(), &agent_id, &path)
+        })??;
+        holdmap_core::util::reveal(&dir).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// Open an agent's folder in the user's editor; returns the editor's name.
 #[tauri::command]
-pub fn open_agent_folder(app: AppHandle, agent_id: String, path: String) -> Result<String, String> {
-    let dir = agent_folder(&app, &agent_id, &path)?;
-    holdmap_core::util::open_in_editor(&dir).map_err(|e| e.to_string())
+pub async fn open_agent_folder(
+    app: AppHandle,
+    agent_id: String,
+    path: String,
+) -> Result<String, String> {
+    blocking(move || {
+        let dir = app.state::<AppState>().with_engine(Duration::ZERO, |e| {
+            agent_folder(&e.agents(), &agent_id, &path)
+        })??;
+        holdmap_core::util::open_in_editor(&dir).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// Whether holdmap launches at login.
@@ -525,4 +573,73 @@ pub async fn remote_scan(app: AppHandle, host: String) -> Result<Snapshot, Strin
         Ok(scan.snapshot)
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use holdmap_core::agents::AgentsBuilder;
+    use holdmap_core::{ProcessInfo, ProcessTable, Protocol, Scan};
+
+    fn folders(path: &str) -> AgentsReport {
+        let process = ProcessInfo {
+            pid: 100,
+            ppid: None,
+            name: "codex".into(),
+            exe: None,
+            cmdline: vec!["codex".into()],
+            cwd: Some(path.into()),
+            uid: Some(1000),
+            user: Some("fixture".into()),
+            start_time: 1,
+            start_token: 1,
+            memory_bytes: 0,
+            cpu_percent: 0.0,
+        };
+        let scan = Scan {
+            snapshot: Snapshot {
+                entries: vec![],
+                hidden_sockets: 0,
+                platform: "fixture".into(),
+                taken_at_ms: 1,
+                scan_ms: 0,
+                docker_available: false,
+                warnings: vec![],
+            },
+            table: ProcessTable::from_processes([(100, process)].into(), 999),
+            published: vec![],
+            raw: vec![],
+        };
+        AgentsBuilder::new(&scan)
+            .with_home(None)
+            .with_project_detection(false)
+            .build()
+    }
+
+    #[test]
+    fn folder_authorization_requires_current_agent_and_exact_known_path() {
+        let original = folders("/tmp/holdmap-fixture-project");
+        let id = &original.agents[0].id;
+        assert!(agent_folder(&original, id, "/tmp/holdmap-fixture-project").is_ok());
+        assert!(agent_folder(&original, id, "relative/project").is_err());
+        assert!(agent_folder(&original, id, "/tmp/holdmap-fixture-project-other").is_err());
+        assert!(agent_folder(&original, "agent:unknown", "/tmp/holdmap-fixture-project").is_err());
+        let current = folders("/tmp/holdmap-fixture-new-project");
+        assert!(agent_folder(&current, id, "/tmp/holdmap-fixture-project").is_err());
+    }
+
+    #[test]
+    fn protocol_row_targets_cannot_be_interpreted_as_process_names() {
+        for (target, protocol) in [("5353/udp", Protocol::Udp), ("3000/tcp", Protocol::Tcp)] {
+            let (parsed, opts) = stop_request(target, true, false);
+            assert!(matches!(parsed, Target::Port(_)));
+            assert_eq!(opts.protocol, Some(protocol));
+            assert!(opts.force);
+            assert!(!opts.allow_protected);
+        }
+        let (parsed, opts) = stop_request("pid:100", false, true);
+        assert_eq!(parsed, Target::Pid(100));
+        assert_eq!(opts.protocol, None);
+        assert!(opts.allow_protected);
+    }
 }

@@ -2,7 +2,7 @@
 
 use serde_json::{json, Value};
 
-pub(super) const INSTRUCTIONS: &str = "Inspect local state before acting: list_ports finds occupied ports; explain_port explains a conflict; get_topology with all=true shows dependents and cluster names before a stop. Prefer find_free_port to stopping an unrelated process, and use wait_for_port after starting a service. list_agents shows observed process ownership, likely child tools and access evidence, not chats or confirmed MCP invocations; inspect limits and omitted counts. Read holdmap://guide for workflows, or use the diagnose_port, inspect_agents and prepare_dev_server prompts. stop_agent_ports previews only unprotected services started by a specific matching agent by default. Before stop_port or executing stop_agent_ports, show its dry_run plan and get the user's OK. Only the user's own dev servers/containers are stopped by default; protected and other users' processes are always refused.";
+pub(super) const INSTRUCTIONS: &str = "Inspect local state before acting: list_ports finds occupied ports; explain_port explains a conflict; get_topology with all=true shows dependents and cluster names before a stop. Prefer find_free_port to stopping an unrelated process, and use wait_for_port after starting a service. list_agents shows observed process ownership, likely child tools and access evidence, not chats or confirmed MCP invocations; inspect limits and omitted counts. Read holdmap://guide for workflows, or use the diagnose_port, inspect_agents and prepare_dev_server prompts. Both stop_port and stop_agent_ports default to dry_run=true. Show all returned plans and obtain the user's authorization before executing. Execution requires dry_run=false and the preview's one-use confirmation_id in this session within 5 minutes, with identical target/options. Every selected agent and stop effect is rechecked before any plan executes; changes require a new preview. Only the user's own dev servers/containers are stopped by default; protected and other users' processes are always refused. Requests must fit within 1 MiB; legacy batches are limited to 64 messages and are rejected as a whole when larger.";
 
 pub(super) fn list() -> Value {
     let mut tools = json!([
@@ -64,10 +64,11 @@ pub(super) fn list() -> Value {
         {
             "name": "stop_agent_ports",
             "title": "Stop ports an agent started",
-            "description": "Plan or safely stop the unprotected development servers and services started by a specific matching agent or developer tool; its own IDE, auth and protected listeners remain refused. Defaults to dry_run=true. Before executing with dry_run=false, inspect get_topology with all=true, show the plan and get the user's OK. Only low-risk plans execute; protected or other users' processes and medium/high-risk plans are refused. Prefer an exact PID or a specific agent filter.",
+            "description": "Preview the unprotected services started by specific matching agents or developer tools (dry_run=true by default). Show every plan and get the user's authorization. Execute with dry_run=false and the returned session-local, one-use confirmation_id within 5 minutes, preserving agent/force options. All selected agents and plans must still match before any stop; changes require a new preview. A partially refused preview issues no handle. Only low-risk plans execute; protected and other users' processes are refused. Prefer an exact PID or specific agent filter.",
             "inputSchema": {"type": "object", "properties": {
                 "agent": {"type": "string", "minLength": 1, "description": "Match product, name, vendor, folder, tool name or exact root/owned-child PID; use a specific match"},
                 "dry_run": {"type": "boolean", "default": true, "description": "Only return plans; set false only after user authorization"},
+                "confirmation_id": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Required with dry_run=false: one-use handle returned by a matching preview in this stdio session; expires after 5 minutes"},
                 "force": {"type": "boolean", "default": false, "description": "SIGKILL immediately"}
             }, "required": ["agent"]},
             "annotations": {"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false}
@@ -82,10 +83,11 @@ pub(super) fn list() -> Value {
         {
             "name": "stop_port",
             "title": "Stop whatever holds a port",
-            "description": "Safely stop the owner of a port (graceful tree stop, container stop or supervisor command) and verify the port is free. Destructive: show the user the plan (dry_run=true) and get their OK first. By default only stops the user's own dev servers/containers; protected processes (system, IDE, terminal, the agent's own session) and other users' processes are always refused, with no override.",
+            "description": "Preview a port owner's stop plan (dry_run=true by default), show it and obtain the user's authorization. To execute, send dry_run=false and the returned session-local, one-use confirmation_id within 5 minutes with identical port/force/allow_non_dev options. Current owners and effects must still match the preview; any change requires a fresh preview. Stops the retained plan and verifies the port is free. Only the user's own permitted processes/containers can be stopped; protected, high-risk and other users' processes remain refused, with no override.",
             "inputSchema": {"type": "object", "properties": {
                 "port": {"type": "integer", "minimum": 1, "maximum": 65535},
-                "dry_run": {"type": "boolean", "default": false, "description": "Only return the plan"},
+                "dry_run": {"type": "boolean", "default": true, "description": "Only return the plan; false requires a matching confirmation_id after user authorization"},
+                "confirmation_id": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Required with dry_run=false: one-use handle from this session's preview; expires after 5 minutes"},
                 "force": {"type": "boolean", "default": false, "description": "SIGKILL immediately"},
                 "allow_non_dev": {"type": "boolean", "default": false, "description": "Allow stopping a non-dev process of the user"}
             }, "required": ["port"]},
@@ -97,6 +99,14 @@ pub(super) fn list() -> Value {
         .expect("static tool catalog is an array")
     {
         tool["inputSchema"]["additionalProperties"] = json!(false);
+        if matches!(
+            tool["name"].as_str(),
+            Some("stop_port" | "stop_agent_ports")
+        ) {
+            tool["inputSchema"]["if"] =
+                json!({"required": ["dry_run"], "properties": {"dry_run": {"enum": [false]}}});
+            tool["inputSchema"]["then"] = json!({"required": ["confirmation_id"]});
+        }
         tool["outputSchema"] = output_schema(tool["name"].as_str().expect("static tool name"));
     }
     tools
@@ -137,10 +147,18 @@ fn plan_schema() -> Value {
             "owners": {"type": "array", "items": {"type": "object"}},
             "steps": {"type": "array", "items": {"type": "object"}},
             "blocked": {"type": ["object", "null"]}, "warnings": strings(),
-            "risk": {"type": "string", "enum": ["low", "medium", "high"]}
+            "risk": {"type": "string", "enum": ["low", "medium", "high"]},
+            "allow_protected": {"type": "boolean", "enum": [false], "description": "Explicit protected-process authorization; always false for MCP plans"}
         }),
         &[
-            "target", "summary", "owners", "steps", "blocked", "warnings", "risk",
+            "target",
+            "summary",
+            "owners",
+            "steps",
+            "blocked",
+            "warnings",
+            "risk",
+            "allow_protected",
         ],
     )
 }
@@ -165,6 +183,18 @@ fn stop_report_schema() -> Value {
             "error",
         ],
     )
+}
+
+fn preview_schema() -> Value {
+    let mut schema = plan_schema();
+    schema["properties"]["confirmation_id"] =
+        json!({"type": "string", "minLength": 1, "maxLength": 128});
+    schema["properties"]["confirmation_expires_in_s"] = json!({"type": "integer", "enum": [300]});
+    schema["required"]
+        .as_array_mut()
+        .unwrap()
+        .extend([json!("confirmation_id"), json!("confirmation_expires_in_s")]);
+    schema
 }
 
 fn agents_schema() -> Value {
@@ -315,12 +345,15 @@ fn output_schema(name: &str) -> Value {
             ],
         ),
         "stop_agent_ports" => object(
-            json!({"agents": strings(), "plans": array(plan_schema()), "reports": array(stop_report_schema())}),
+            json!({
+                "agents": strings(), "plans": array(plan_schema()), "reports": array(stop_report_schema()),
+                "confirmation_id": {"type": "string", "minLength": 1, "maxLength": 128},
+                "confirmation_expires_in_s": {"type": "integer", "enum": [300]}
+            }),
             &["plans", "reports"],
         ),
         "stop_port" => {
-            // Dry-run ActionPlan or executed StopReport, both unchanged.
-            json!({"type": "object", "anyOf": [plan_schema(), stop_report_schema()]})
+            json!({"type": "object", "anyOf": [preview_schema(), stop_report_schema()]})
         }
         _ => unreachable!("every published tool has an output contract"),
     }

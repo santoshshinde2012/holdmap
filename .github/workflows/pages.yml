@@ -59,9 +59,9 @@ jobs:
       - name: Install (site)
         working-directory: site
         run: npm ci
-      - name: npm audit (high and critical)
+      - name: npm audit (all severities)
         working-directory: site
-        run: npm audit --audit-level=high
+        run: npm audit
       - name: Type check
         working-directory: site
         run: npm run check

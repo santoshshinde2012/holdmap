@@ -117,13 +117,17 @@ export interface ProcRef {
 export type Step =
   | { action: "signal_processes"; processes: ProcRef[]; force: boolean; timeout_ms: number }
   | { action: "stop_container"; id: string; name: string; runtime: string; endpoint: string; timeout_s: number }
-  | { action: "run_command"; program: string; args: string[]; reason: string }
+  | { action: "run_command"; program: string; args: string[]; reason: string; guard?: ProcRef | null }
   | { action: "verify_free"; port: number; protocol: Protocol; timeout_ms: number };
 
 export type BlockKind = "protected" | "needs_elevation" | "os_service" | "nothing_to_stop";
 export type Risk = "low" | "medium" | "high";
 
 export interface ActionPlan {
+  /** Native-only, expiring one-use handle for the exact reviewed plan. */
+  confirmation_id?: string;
+  /** Explicit authorization to stop soft-protected processes (older reports default false). */
+  allow_protected?: boolean;
   target: string;
   owners: Owner[];
   summary: string;

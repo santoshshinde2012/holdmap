@@ -59,7 +59,7 @@ pub fn what_label(e: &PortEntry) -> String {
     if e.protected {
         s.push_str(" [protected]");
     }
-    s
+    holdmap_core::util::printable(&s).into_owned()
 }
 
 pub fn list_table(entries: &[&PortEntry], wide: bool, all_states: bool) -> String {
@@ -288,7 +288,7 @@ pub fn explanation(ex: &Explanation, show_plan: bool) -> String {
             out.push_str(&format!("  {} {c}\n", dim("$")));
         }
     }
-    out
+    style::terminal_text(&out)
 }
 
 pub fn plan_text(plan: &ActionPlan) -> String {
@@ -307,7 +307,7 @@ pub fn plan_text(plan: &ActionPlan) -> String {
         for w in &plan.warnings {
             out.push_str(&format!("  {} {}\n", style::warn_mark(), dim(w)));
         }
-        return out;
+        return style::terminal_text(&out);
     }
     let risk = match plan.risk {
         Risk::Low => paint("low risk", S::Green),
@@ -332,12 +332,12 @@ pub fn plan_text(plan: &ActionPlan) -> String {
             paint(w, S::Yellow)
         ));
     }
-    out
+    style::terminal_text(&out)
 }
 
 pub fn report_line(r: &StopReport) -> String {
     let n = r.signalled.len();
-    if r.success {
+    let text = if r.success {
         let what = if n > 0 {
             format!(
                 " (stopped {n} process{}{})",
@@ -360,7 +360,8 @@ pub fn report_line(r: &StopReport) -> String {
             paint(format!("Could not free {}", r.target), S::BoldRed),
             r.error.clone().unwrap_or_default()
         )
-    }
+    };
+    style::terminal_text(&text)
 }
 
 pub fn inspect_entry(e: &PortEntry) -> String {
@@ -388,17 +389,29 @@ pub fn inspect_entry(e: &PortEntry) -> String {
                 p.pid.to_string()
             },
         ));
-        rows.push(("Process".into(), p.name.clone()));
+        rows.push((
+            "Process".into(),
+            holdmap_core::util::printable(&p.name).into_owned(),
+        ));
         if let Some(ppid) = p.ppid {
             rows.push(("Parent PID".into(), ppid.to_string()));
         }
-        rows.push(("User".into(), e.user.clone().unwrap_or_else(|| "?".into())));
+        rows.push((
+            "User".into(),
+            holdmap_core::util::printable(e.user.as_deref().unwrap_or("?")).into_owned(),
+        ));
         rows.push(("Command".into(), p.command()));
         if let Some(exe) = &p.exe {
-            rows.push(("Executable".into(), exe.display().to_string()));
+            rows.push((
+                "Executable".into(),
+                holdmap_core::util::printable(&exe.display().to_string()).into_owned(),
+            ));
         }
         if let Some(cwd) = &p.cwd {
-            rows.push(("Working dir".into(), tilde(cwd)));
+            rows.push((
+                "Working dir".into(),
+                holdmap_core::util::printable(&tilde(cwd)).into_owned(),
+            ));
         }
         rows.push((
             "Uptime".into(),
@@ -428,7 +441,7 @@ pub fn inspect_entry(e: &PortEntry) -> String {
     if let Some(pr) = &e.project {
         rows.push((
             "Project".into(),
-            format!(
+            holdmap_core::util::printable(&format!(
                 "{} ({}, {}){}",
                 pr.name,
                 tilde(&pr.root),
@@ -437,7 +450,8 @@ pub fn inspect_entry(e: &PortEntry) -> String {
                     .as_ref()
                     .map(|b| format!(" · branch {b}"))
                     .unwrap_or_default()
-            ),
+            ))
+            .into_owned(),
         ));
     }
     if let Some(f) = &e.framework {
@@ -446,11 +460,23 @@ pub fn inspect_entry(e: &PortEntry) -> String {
     if let Some(c) = &e.container {
         rows.push((
             "Container".into(),
-            format!("{} · {} · {}", c.name, c.image, &c.id[..c.id.len().min(12)]),
+            holdmap_core::util::printable(&format!(
+                "{} · {} · {}",
+                c.name,
+                c.image,
+                &c.id[..c.id.len().min(12)]
+            ))
+            .into_owned(),
         ));
-        rows.push(("Runtime".into(), c.runtime.clone()));
+        rows.push((
+            "Runtime".into(),
+            holdmap_core::util::printable(&c.runtime).into_owned(),
+        ));
         if let (Some(p), Some(s)) = (&c.compose_project, &c.compose_service) {
-            rows.push(("Compose".into(), format!("{p} / {s}")));
+            rows.push((
+                "Compose".into(),
+                holdmap_core::util::printable(&format!("{p} / {s}")).into_owned(),
+            ));
         }
         rows.push(("Container port".into(), c.private_port.to_string()));
     }
@@ -467,7 +493,9 @@ pub fn inspect_entry(e: &PortEntry) -> String {
         },
     ));
     let kw = rows.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
-    rows.iter()
+    let text: String = rows
+        .iter()
         .map(|(k, v)| format!("  {}  {v}\n", dim(format!("{k:>kw$}"))))
-        .collect()
+        .collect();
+    style::terminal_text(&text)
 }

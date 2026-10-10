@@ -13,6 +13,7 @@ import Tabs from "./Tabs.svelte";
 import Checkbox from "./Checkbox.svelte";
 import ConfirmDialog from "../ConfirmDialog.svelte";
 import PinDialog from "../PinDialog.svelte";
+import RichText from "./RichText.svelte";
 import { MOCK_SNAPSHOT, mockPlan } from "../../lib/mock";
 
 beforeAll(() => {
@@ -23,6 +24,16 @@ beforeAll(() => {
 });
 afterEach(cleanup);
 const flush = () => new Promise((r) => setTimeout(r, 0));
+
+describe("untrusted process and server prose", () => {
+  it("renders markup literally in text and inline command spans", () => {
+    const prose = 'Server <img src=x onerror="window.compromised=true"> says `<svg onload="window.compromised=true">`';
+    const { container } = render(RichText, { text: prose });
+    expect(container.textContent).toBe(prose.replaceAll("`", ""));
+    expect(container.querySelector("img,svg,script")).toBeNull();
+    expect(container.querySelector("code")?.textContent).toContain("<svg onload=");
+  });
+});
 
 describe("TextField", () => {
   it("links label, hint and error, and marks invalid", () => {

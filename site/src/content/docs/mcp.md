@@ -37,9 +37,11 @@ After connecting, the server advertises its tools, a guide resource and three wo
 Prompt and resource menus depend on the client; clients exposing tools alone can use the same
 workflows below. Holdmap observes the machine where the server runs.
 
-The bundled guide and prompts are development changes following v0.3.0. Released v0.3.0
-servers expose the nine tools below; use those directly until the next release, or build the
-development source to use the additional discovery capabilities.
+This page describes the **current source / Unreleased** MCP interface. The bundled guide,
+prompts, schemas and mandatory stop confirmations are changes following v0.3.0. Downloadable
+v0.3.0 servers expose the nine tools below with the previous stop protocol; they do not return
+`confirmation_id`. Build the current source to use the safer preview-to-execution flow below,
+or follow your installed version's discovered schemas until the next release.
 
 ## Tools
 
@@ -51,9 +53,9 @@ development source to use the additional discovery capabilities.
 | `wait_for_port` | Waits until a port accepts connections, or until it's free. |
 | `get_topology` | Which local services talk to which, grouped into clusters. |
 | `list_agents` | Running AI coding agents, child tools and likely MCP servers, folders, ports, connections, CPU, memory and access facts. Filter by agent, owned PID, folder or tool name. Read-only. |
-| `stop_agent_ports` | Plan or stop the unprotected ports started by matching agents; skips their IDE/auth listeners. Defaults to `dry_run: true`. |
+| `stop_agent_ports` | Preview the unprotected ports started by matching agents; execute the retained plans with a one-use `confirmation_id`. Defaults to `dry_run: true`. |
 | `plan_cluster_stop` | A dry-run, dependency-ordered plan for stopping a cluster. Never executes. |
-| `stop_port` | Stops the owner of a port safely and verifies it's free. |
+| `stop_port` | Preview a port owner's stop plan; execute with a matching one-use `confirmation_id` and verify the port is free. Defaults to `dry_run: true`. |
 
 Tools publish input and output schemas. Results include a structured JSON object and a readable
 summary with the same JSON for older clients. Invalid argument types, ranges, enum values or
@@ -95,12 +97,53 @@ the agent's account matches; they do not establish current work by a particular 
 Before considering a stop, request `get_topology` with `all: true` to include system and
 application services. Its default view is filtered to development services and their peers.
 
+## Preview and execute a stop (Unreleased)
+
+Both stop tools default to `dry_run: true`. A permitted preview returns a `confirmation_id`
+and `confirmation_expires_in_s: 300`. Show all returned plans and obtain authorization for
+those effects before executing. Keep the same stdio session and send the same target and options:
+
+```json
+{"name":"stop_port","arguments":{"port":3000,"dry_run":true}}
+```
+
+After reviewing the result, use the actual handle it returned:
+
+```json
+{"name":"stop_port","arguments":{"port":3000,"dry_run":false,"confirmation_id":"<returned handle>"}}
+```
+
+If the preview included `force` or `allow_non_dev`, preserve their values. For
+`stop_agent_ports`, preserve `agent` and `force`, and review every per-port plan. A refused
+bulk plan issues no handle. Before any stop, the server rechecks the entire selected agent set
+and every plan's owners, services and effects. Changes require a new preview; the server
+executes the retained plans after a successful check.
+
+Handles are one-use, expire after five minutes and belong to one server session. They are
+not authentication credentials or proof of user approval. Restarting or reinitializing the
+server invalidates them. At most 32 previews are retained, so new previews can evict older ones.
+Each preview is limited to 128 ports or selected agents and 1 MiB of retained data; use a
+narrower filter for larger selections.
+
+Malformed wire or schema inputs leave a handle available. A valid execution attempt consumes
+it before checking options and collecting fresh state. Missing, expired, replayed, mismatched
+or stale handles cause no stop. Collection or execution failures require a new preview.
+Bulk execution stops on its first failure; it does not roll back a completed stop.
+
+Stdio requests are limited to 1 MiB; legacy batches to 64 messages. Oversized frames and batches
+are rejected before dispatching any of their requests.
+
 ## Guard rails
 
 - `stop_port` only stops your own dev servers by default; anything else needs `allow_non_dev`.
+- Process and supervisor stops require verified current-account ownership. Unknown and foreign
+  accounts are refused even when `allow_non_dev` is enabled; unpinned systemd socket stops use
+  the CLI instead. Agent bulk plans preserve each listener's TCP/UDP protocol.
 - Protected processes (the OS, shells, terminals, IDEs, AI-assistant hosts, holdmap itself) are
   **always** refused over MCP, whatever the arguments.
 - `stop_agent_ports` targets started services, skips protected listeners and defaults to a dry
-  run. Inspect its per-port plans before setting `dry_run: false`.
-- Clients are told to show you the plan (`dry_run: true`) and get your OK before stopping anything.
-- Passwords and tokens in command lines are redacted in every result.
+  run. Inspect all per-port plans and use their matching `confirmation_id` with `dry_run: false`.
+- Clients are told to show every plan and obtain your authorization. The server binds execution to
+  the preview with `confirmation_id`; the client remains responsible for user approval.
+- Recognized credential flags, headers and URL fields are redacted in command displays. Redaction
+  is heuristic and cannot identify every arbitrary positional secret.

@@ -7,6 +7,8 @@ all-features = false
 [advisories]
 # RustSec advisories fail the build; unmaintained crates only when we depend on them directly.
 unmaintained = "workspace"
+# Include transitive Rust soundness advisories, including the Linux GTK dependency chain.
+unsound = "all"
 ignore = []
 
 [licenses]

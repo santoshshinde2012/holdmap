@@ -113,7 +113,7 @@ pub fn run(a: &GraphArgs, docker: bool) -> Result<u8> {
     } else {
         exporter(format).expect("validated by clap").export(&g)
     };
-    print!("{text}");
+    print!("{}", style::terminal_text(&text));
     if !text.ends_with('\n') {
         println!();
     }

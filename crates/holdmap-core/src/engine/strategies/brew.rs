@@ -28,15 +28,24 @@ fn brew_formula(p: &ProcessInfo) -> Option<String> {
 
 /// `/opt/homebrew/Cellar/postgresql@16/16.2/bin/postgres` → `postgresql@16`.
 pub fn formula_from_exe(exe: &str) -> Option<String> {
-    Some(
-        exe.split("/Cellar/")
-            .nth(1)
-            .or_else(|| exe.split("/opt/homebrew/opt/").nth(1))
-            .or_else(|| exe.split("/usr/local/opt/").nth(1))?
-            .split('/')
-            .next()?
-            .to_string(),
-    )
+    let formula = exe
+        .split("/Cellar/")
+        .nth(1)
+        .or_else(|| exe.split("/opt/homebrew/opt/").nth(1))
+        .or_else(|| exe.split("/usr/local/opt/").nth(1))?
+        .split('/')
+        .next()?;
+    if formula.len() > 128
+        || !formula.as_bytes().first()?.is_ascii_alphanumeric()
+        || !formula
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"+._-@".contains(&byte))
+        || formula.matches('@').count() > 1
+        || formula.ends_with('@')
+    {
+        return None;
+    }
+    Some(formula.to_string())
 }
 
 impl StopStrategy for BrewServiceStrategy {
@@ -44,7 +53,7 @@ impl StopStrategy for BrewServiceStrategy {
         "brew-service"
     }
 
-    fn resolve(&self, _ctx: &ResolveCtx, e: &PortEntry, details: &[String]) -> Option<Resolution> {
+    fn resolve(&self, ctx: &ResolveCtx, e: &PortEntry, details: &[String]) -> Option<Resolution> {
         if !cfg!(target_os = "macos") {
             return None;
         }
@@ -67,6 +76,7 @@ impl StopStrategy for BrewServiceStrategy {
             program: "brew".into(),
             args: vec!["services".into(), "stop".into(), formula],
             reason: "stop the Homebrew service".into(),
+            guard: ctx.proc_ref(p.pid),
         });
         Some(r)
     }
@@ -87,5 +97,26 @@ mod tests {
             Some("redis")
         );
         assert_eq!(formula_from_exe("/usr/bin/node"), None);
+    }
+
+    #[test]
+    fn security_homebrew_formula_cannot_be_an_option_or_multiple_targets() {
+        for formula in [
+            "--all",
+            "--file=fixture",
+            "a b",
+            "a*",
+            "a;fixture",
+            "postgresql@",
+            "a@1@2",
+        ] {
+            assert!(
+                formula_from_exe(&format!("/opt/homebrew/Cellar/{formula}/1/bin/node")).is_none()
+            );
+        }
+        assert_eq!(
+            formula_from_exe("/opt/homebrew/Cellar/postgresql@16/1/bin/postgres").as_deref(),
+            Some("postgresql@16")
+        );
     }
 }

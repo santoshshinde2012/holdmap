@@ -141,6 +141,15 @@ const captures = [
     await expect(plan.getByRole("list", { name: "Plan", exact: true })).toBeVisible();
     await expect(plan.getByRole("button", { name: "Stop :3000", exact: true })).toBeVisible();
   } },
+  ...["dark", "light"].map((theme) => ({ name: `desktop-agent-stop-confirm-${theme}.png`, theme, async prepare(page) {
+    await openAgents(page);
+    await heading(page, "Cursor").click();
+    await card(page, "Cursor").getByRole("button", { name: "Stop all (2)", exact: true }).click();
+    const plan = page.getByRole("alertdialog");
+    await expect(plan.getByRole("list", { name: "Plan", exact: true }).getByRole("listitem")).toHaveCount(4);
+    await expect(plan).toContainText("43000");
+    await expect(plan).toContainText("45173");
+  } })),
   { name: "desktop-command-palette-light.png", theme: "light", async prepare(page) {
     await selectPort(page);
     await page.getByRole("button", { name: /^Commands/ }).click();
@@ -204,11 +213,14 @@ for (const theme of ["dark", "light"]) {
 }
 
 try {
+  const requested = new Set(process.argv.slice(2));
+  assert([...requested].every((name) => captures.some((capture) => capture.name === name)), "Unknown screenshot name");
   await mkdir(output, { recursive: true });
   await buildPreview();
   const baseURL = await startPreview();
   browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
   for (const capture of captures) {
+    if (requested.size && !requested.has(capture.name)) continue;
     const context = await browser.newContext({ viewport: capture.viewport ?? viewport, deviceScaleFactor: capture.deviceScaleFactor ?? 2, colorScheme: capture.theme, reducedMotion: "reduce", locale: "en-US", timezoneId: "UTC" });
     try {
       await context.addInitScript(({ theme, pane }) => {

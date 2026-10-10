@@ -1,5 +1,6 @@
 [workspace]
 resolver = "2"
+exclude = ["vendor/glib"]
 members = [
   "crates/holdmap-core",
   "crates/holdmap-cli",
@@ -48,3 +49,7 @@ opt-level = 3
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
+
+# GTK3 requires GLib0.18; retain its API with the verified upstream soundness backport.
+[patch.crates-io]
+glib = { path = "vendor/glib" }

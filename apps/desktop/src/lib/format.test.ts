@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeStep, groupOf, httpSummary, humanBytes, humanDuration, matches, type Filters } from "./format";
+import { describeStep, groupOf, httpSummary, humanBytes, humanDuration, matches, stopTarget, type Filters } from "./format";
 import { MOCK_SNAPSHOT, mockDevServers, mockHttp, mockPlan } from "./mock";
 
 const base: Filters = { query: "", all: false, proto: "any", dev: false, mine: false, exposed: false };
@@ -35,6 +35,11 @@ describe("grouping", () => {
 });
 
 describe("formatting", () => {
+  it("keeps row stop targets specific to their transport even when the port number matches", () => {
+    const tcp = byPort(3000);
+    expect(stopTarget(tcp)).toBe("3000/tcp");
+    expect(stopTarget({ ...tcp, protocol: "udp" })).toBe("3000/udp");
+  });
   it("formats durations and sizes", () => {
     expect(humanDuration(42)).toBe("42s");
     expect(humanDuration(3 * 3600 + 120)).toBe("3h 2m");

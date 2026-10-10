@@ -34,7 +34,7 @@ holdmap tells you what's really there — which agent or tool started it — and
 it should.
 
 The README and screenshots describe the current source. Child-tool metadata and search, MCP
-resources/prompts and freshness improvements are [Unreleased](CHANGELOG.md#unreleased); build
+resources/prompts, freshness improvements and security hardening are [Unreleased](CHANGELOG.md#unreleased); build
 this checkout to use them. The download links below remain for **0.3.0**. Desktop screenshots
 use the shared browser UI with sample data.
 
@@ -210,6 +210,8 @@ uses the same UI with sample data.
 | ![The holdmap TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) | ![The agents view: coding agents and developer tools with resource use, folders, ports and access, dark theme](docs/screenshots/desktop-agents-dark.png) |
 | **Agents in light theme** | **Child tools and MCP evidence** |
 | ![The current-source agents map in light theme](docs/screenshots/desktop-agents-light.png) | ![Expanded child-tool details show an inferred Filesystem MCP process with no listening port](docs/screenshots/desktop-agent-tools-dark.png) |
+| **Agent bulk stop, dark theme** | **Agent bulk stop, light theme** |
+| ![A bulk stop previews all four steps for the agent's two ports, dark theme](docs/screenshots/desktop-agent-stop-confirm-dark.png) | ![A bulk stop previews all four steps for the agent's two ports, light theme](docs/screenshots/desktop-agent-stop-confirm-light.png) |
 
 </details>
 
@@ -243,7 +245,11 @@ Current source also exposes a bundled `holdmap://guide` resource and three workf
 Retrieving a prompt performs no actions. The guide and templates help clients interpret results;
 MCP identities remain inferred from process metadata and do not prove tool calls or transport.
 Tool input/output schemas preserve structured data, and malformed arguments are rejected before
-acting, including incorrectly typed stop controls. `list_ports` reports collection warnings even
+acting, including incorrectly typed stop controls. Both stop tools preview by default; execution
+requires the one-use `confirmation_id` returned by a preview in the same session, with unchanged
+target/options and fresh matching effects. The session keeps at most 32 previews for five minutes.
+Frames are capped at 1 MiB and legacy batches at 64 messages, with oversized input rejected before
+dispatch. `list_ports` reports collection warnings even
 for empty results. See the [MCP guide](site/src/content/docs/mcp.md) and
 [Unreleased changes](CHANGELOG.md#unreleased) for availability; these discovery additions are
 not in the downloadable 0.3.0 release.
@@ -255,20 +261,29 @@ holdmap stops processes, so one set of rules in `holdmap-core` applies to every 
 - **Graceful first:** SIGTERM (`taskkill` on Windows), then a force kill after `--timeout` (5 s).
 - **The right target:** the dev-server tree root (`npm`, `nodemon`, `uvicorn --reload`…) so nothing
   respawns; containers through their runtime, services through their supervisor.
-- **Protected processes:** core OS processes, holdmap and its ancestors are never signalled.
-  Shells, terminals, IDEs and AI-assistant hosts are protected by default; the CLI can explicitly
-  allow soft protection with `--allow-protected`. The MCP server always refuses protected owners.
-- **No surprises:** a PID-reuse guard, `--dry-run` for every plan, and a check that the port is
-  really free afterwards.
-- **Private:** passwords and tokens in command lines (`--password=…`, `API_TOKEN=…`,
-  `postgres://user:…@`) are hidden in every output, JSON and MCP result included. Agent chats,
-  settings and credentials are never read. History and logs are readable only by you. No
-  telemetry: holdmap only talks to localhost, to hosts you `ssh` to, and (desktop) GitHub
-  Releases for updates.
+- **Protected processes:** policy blocks core OS processes, holdmap and its ancestors. Shells,
+  terminals, IDEs and AI-assistant hosts are protected by default; the CLI's `--allow-protected`
+  or the desktop's explicit review can authorize soft protection. The executor rechecks identity
+  and current protection before signalling and escalation. MCP has no protected-owner override.
+- **Reviewed effects:** desktop stops retain the original plan behind a one-use handle, limited
+  to 128 pending previews for five minutes, and reject changes found by a fresh semantic check.
+  Agent bulk dialogs show every queued plan. MCP uses the same effect comparison with its own
+  session previews. Plans support `--dry-run`, and execution checks whether ports are free.
+- **Credential handling:** recognized secrets in command lines, errors and exported results are
+  conservatively redacted, including headers and nested JSON values. Human terminal output
+  neutralizes untrusted control sequences. Agent visibility uses process/socket metadata and
+  bounded project-history fields, rather than inspecting chats or credential stores. Redaction
+  is heuristic; arbitrary positional secrets may be missed.
+- **State privacy:** restart history retains raw commands. Unix history/config/log files use
+  `0600`, state directories `0700`, with ownership and link checks. Windows uses inherited
+  account/profile-directory ACLs and does not impose an account-exclusive DACL; keep a custom
+  `HOLDMAP_HOME` private. No telemetry is implemented.
 - **Locked down:** desktop actions identify ports, history entries or known agent folders.
-  The backend checks those targets and chooses the command or URL; opening an agent folder
-  requires a path in that agent's reported folders. A `.holdmap.toml` that another user owns
-  or anyone can write is refused.
+  The backend checks targets, constructs localhost URLs and resolves folders through a fresh
+  scan. The webview has a strict CSP and local-only capabilities. Stack files are checked and
+  read through one handle; Unix permits current-account/root ownership and rejects group/world
+  writes, while Windows relies on checkout ACLs. State and CLI output writes reject link
+  redirection. See [SECURITY.md](SECURITY.md) for OS limits and reporting.
 
 ## Architecture
 
@@ -282,7 +297,7 @@ flowchart TB
   MCP["MCP transport and validated tools"] --> ENGINE
   MCP --> CONTEXT["Pure guide resource and workflow prompts"]
   UI["Shared Svelte UI"] --> API["api.ts"]
-  API --> NATIVE["Tauri commands and AppState freshness cache"]
+  API --> NATIVE["Tauri commands, freshness and confirmation caches"]
   NATIVE --> ENGINE
   SITE["Astro website and guides"] --> DEMO["Browser demo build"]
   DEMO --> UI
@@ -301,6 +316,14 @@ let the normal builders use system implementations or fixtures. Defaults are cho
 composition points. [Architecture details](docs/architecture.md) explain these contracts and
 their regression coverage.
 
+Action authority stays at the adapters and executor: desktop and MCP retain immutable previews,
+compare fresh effects before execution, and pass the original plan to the shared identity and
+protection checks. Persistence, credential redaction and terminal-safe rendering have separate
+boundaries. CI combines all-severity npm audits, cargo-deny, full-history/source Gitleaks scans
+and CodeQL for JavaScript/TypeScript, Rust, Python and Actions; daily dependency checks and
+immutable action pins keep those gates reviewable. The current-source Linux GTK dependency uses an
+[audited GLib backport](vendor/README.md), verified by source hashes and an optimized regression.
+
 The folder layout keeps each surface's code and tooling together:
 
 ```text
@@ -313,6 +336,7 @@ apps/desktop/e2e/         Browser tests using sample data
 site/                     Astro website, guides and demo build
 docs/                    Architecture, generated CLI reference and published screenshots
 scripts/                  Workspace checks, docs generation and development helpers
+vendor/                   Audited third-party security backport and upstream provenance
 ```
 
 Source assets and published screenshots are kept with their consumers. Build output,

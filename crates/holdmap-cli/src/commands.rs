@@ -186,7 +186,9 @@ pub fn inspect(a: &PortArgs, docker: bool) -> Result<u8> {
             exit::BUSY
         });
     }
-    let mut out = std::io::stdout().lock();
+    // Inspect combines styled labels with metadata such as executable paths and process
+    // ancestry. Sanitize the complete human render before any of it reaches a terminal.
+    let mut out = Vec::new();
     let row = |k: &str| dim(format!("{k:>11}"));
     for (i, entry) in ex.entries.iter().enumerate() {
         writeln!(
@@ -322,6 +324,9 @@ pub fn inspect(a: &PortArgs, docker: bool) -> Result<u8> {
         )?;
         write!(out, "{}", render::list_table(&others, false, true))?;
     }
+    std::io::stdout()
+        .lock()
+        .write_all(style::terminal_text(&String::from_utf8(out)?).as_bytes())?;
     Ok(if ex.status == PortStatus::Free {
         exit::OK
     } else {
@@ -331,7 +336,9 @@ pub fn inspect(a: &PortArgs, docker: bool) -> Result<u8> {
 
 pub(crate) fn confirm(question: &str) -> Result<bool> {
     if !std::io::stdin().is_terminal() {
-        bail!("refusing to act without confirmation in a non-interactive session; pass --yes (or --dry-run to preview)");
+        bail!(
+            "refusing to act without confirmation in a non-interactive session; pass --yes (or --dry-run to preview)"
+        );
     }
     eprint!("{} {} ", paint("?", S::BoldCyan), bold(question));
     eprint!("{} ", dim("[y/N]"));
@@ -640,7 +647,10 @@ pub fn run(a: &RunArgs, docker: bool) -> Result<u8> {
                 eprintln!("{} using port {n} instead of {port}", style::arrow());
                 port = n;
             } else {
-                eprintln!("{} port {port} is still busy; not starting the command (use --fallback to pick another port)", style::err_mark());
+                eprintln!(
+                    "{} port {port} is still busy; not starting the command (use --fallback to pick another port)",
+                    style::err_mark()
+                );
                 return Ok(block_code(&plan).max(exit::BUSY));
             }
         }
@@ -648,22 +658,23 @@ pub fn run(a: &RunArgs, docker: bool) -> Result<u8> {
     eprintln!(
         "{} {} {}",
         style::arrow(),
-        bold(a.command.join(" ")),
+        bold(holdmap_core::redact::args(&a.command).join(" ")),
         dim(format!("({}={port})", a.env))
     );
     let mut cmd = std::process::Command::new(&a.command[0]);
     cmd.args(&a.command[1..]).env(&a.env, port.to_string());
+    let displayed_program = holdmap_core::redact::arg(&a.command[0]);
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
         let err = cmd.exec(); // only returns on failure
-        Err(anyhow::Error::new(err).context(format!("failed to run `{}`", a.command[0])))
+        Err(anyhow::Error::new(err).context(format!("failed to run `{displayed_program}`")))
     }
     #[cfg(not(unix))]
     {
         let status = cmd
             .status()
-            .with_context(|| format!("failed to run `{}`", a.command[0]))?;
+            .with_context(|| format!("failed to run `{displayed_program}`"))?;
         Ok(status
             .code()
             .map(|c| c.clamp(0, 255) as u8)

@@ -7,7 +7,9 @@
 use crate::render;
 use crate::style::{self, dim};
 use anyhow::{bail, Result};
-use holdmap_core::remote::{scan_remote, LocalShell, RemoteRunner, SshRunner};
+use holdmap_core::remote::{
+    scan_remote, ssh_destination, validate_host, LocalShell, RemoteRunner, SshRunner,
+};
 use holdmap_core::topology::{exporter, GraphExporter, TreeExporter};
 use holdmap_core::{Engine, Filter};
 use std::io::IsTerminal;
@@ -37,6 +39,7 @@ fn runner(host: &str) -> Box<dyn RemoteRunner> {
 }
 
 pub fn run(a: &SshArgs) -> Result<u8> {
+    validate_host(&a.host).map_err(anyhow::Error::msg)?;
     let r = runner(&a.host);
     // `holdmap ssh host list --json`: flags after the subcommand land in `command`.
     let json = a.json || a.command.iter().any(|x| x == "--json");
@@ -65,9 +68,17 @@ pub fn run(a: &SshArgs) -> Result<u8> {
             // A remote TTY only when we have one: `-t` without a terminal makes ssh warn, and it
             // turns "\n" into "\r\n", which would corrupt piped or --json output.
             let tty = !json && std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
-            let status = std::process::Command::new("ssh")
-                .args(if tty { &["-t"][..] } else { &[] })
-                .args(["-o", "ConnectTimeout=10", &a.host, "holdmap"])
+            let (port, destination) = ssh_destination(&a.host);
+            let mut ssh = std::process::Command::new("ssh");
+            ssh.args(if tty { &["-t"][..] } else { &[] })
+                .args(["-o", "ConnectTimeout=10"]);
+            if let Some(port) = port {
+                ssh.args(["-p", &port.to_string()]);
+            }
+            let status = ssh
+                .arg("--")
+                .arg(destination)
+                .arg("holdmap")
                 .args(&quoted)
                 .status()?;
             return Ok(status.code().map(|c| c.clamp(0, 255) as u8).unwrap_or(2));
@@ -96,7 +107,10 @@ pub fn run(a: &SshArgs) -> Result<u8> {
                     r.describe()
                 ))
             );
-            print!("{}", TreeExporter::default().export(&g));
+            print!(
+                "{}",
+                style::terminal_text(&TreeExporter::default().export(&g))
+            );
         }
         return Ok(crate::exit::OK);
     }

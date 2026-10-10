@@ -1,5 +1,5 @@
-# CodeQL for the desktop frontend (TypeScript/Svelte) and the workflows themselves. Rust is
-# covered by clippy, cargo-deny and the tests; CodeQL's Rust support would add a full build.
+# Static security analysis for Rust, TypeScript, Python tooling and GitHub Actions.
+# Rust supports build-mode none, including the shared core, CLI, MCP and native adapter.
 name: CodeQL
 
 on:
@@ -21,13 +21,14 @@ jobs:
   analyze:
     name: analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: read
       security-events: write
     strategy:
       fail-fast: false
       matrix:
-        language: [javascript-typescript, actions]
+        language: [javascript-typescript, rust, python, actions]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

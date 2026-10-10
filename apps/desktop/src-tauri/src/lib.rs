@@ -3,7 +3,8 @@
 //! All the real work (scanning, explaining, planning, topology, stopping, history) happens in
 //! `holdmap-core`; this crate only adapts it to the Svelte UI:
 //!
-//! - [`commands`]: async Tauri commands (thin adapters, no business logic)
+//! - [`commands`]: async Tauri adapters with target and folder authorization checks
+//! - [`confirmation`]: bounded one-use handles for the exact reviewed stop plans
 //! - [`tray`]: the tray / menu-bar icon listing running dev servers
 //! - [`watch`]: background re-scan → `port-events` + desktop notifications
 //! - [`shortcuts`]: global show-window shortcut and launch at login
@@ -11,6 +12,7 @@
 //! - [`update`]: optional self-update (release builds signed with an update key)
 
 mod commands;
+mod confirmation;
 mod shortcuts;
 mod state;
 mod tray;
@@ -144,6 +146,11 @@ mod security_tests {
             ]
         );
         assert_eq!(cap["windows"], serde_json::json!(["main"]));
+        assert_eq!(cap["local"], true);
+        assert!(
+            cap["remote"].is_null(),
+            "remote pages must have no native permissions"
+        );
     }
 
     #[test]
@@ -162,6 +169,13 @@ mod security_tests {
             assert!(csp.contains(d), "CSP lacks {d}");
         }
         assert!(!csp.contains("unsafe-eval"));
+        assert_eq!(
+            csp.split(';')
+                .map(str::trim)
+                .find(|d| d.starts_with("connect-src")),
+            Some("connect-src ipc: http://ipc.localhost"),
+            "webview network connections must remain limited to native IPC"
+        );
         assert!(!csp
             .split(';')
             .any(|d| d.trim().starts_with("script-src") && d.contains("unsafe-inline")));

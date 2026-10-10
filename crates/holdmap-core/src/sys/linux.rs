@@ -207,6 +207,9 @@ pub fn parse_cgroup_unit(content: &str) -> Option<CgroupUnit> {
             .rev()
             .find(|seg| seg.ends_with(".service") && !seg.starts_with("user@"));
         if let Some(unit) = unit {
+            if !crate::util::exact_systemd_unit(unit, ".service") {
+                return None;
+            }
             return Some(CgroupUnit {
                 unit: unit.to_string(),
                 user,
@@ -405,4 +408,22 @@ mod tests {
             Err(SignalError::IdentityChanged)
         );
     }
+}
+#[test]
+fn security_cgroup_unit_never_becomes_a_glob_or_option_target() {
+    for unit in [
+        "*.service",
+        "--all.service",
+        "foo?.service",
+        "foo[1].service",
+        ".service",
+    ] {
+        assert!(parse_cgroup_unit(&format!("0::/system.slice/{unit}")).is_none());
+    }
+    assert_eq!(
+        parse_cgroup_unit(r"0::/system.slice/fixture\x20name.service")
+            .unwrap()
+            .unit,
+        r"fixture\x20name.service"
+    );
 }

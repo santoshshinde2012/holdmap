@@ -42,7 +42,7 @@ export async function plan(target: string, force: boolean, allowProtected = fals
   return call("plan", { target, force, allowProtected });
 }
 
-export async function stop(target: string, force: boolean, allowProtected = false): Promise<StopReport> {
+export async function stop(target: string, force: boolean, allowProtected = false, confirmationId?: string): Promise<StopReport> {
   if (!isTauri) {
     await delay(700);
     // Browser preview: remember the stop so the "Recently stopped" panel has something to show.
@@ -53,7 +53,8 @@ export async function stop(target: string, force: boolean, allowProtected = fals
     }
     return report;
   }
-  return call("stop", { target, force, allowProtected });
+  if (!confirmationId) throw new Error("Review a stop plan before confirming.");
+  return call("stop", { target, force, allowProtected, confirmationId });
 }
 
 export async function freePort(near: number): Promise<number | null> {

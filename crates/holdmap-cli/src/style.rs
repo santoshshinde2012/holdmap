@@ -72,12 +72,54 @@ impl S {
 }
 
 pub fn paint(s: impl AsRef<str>, style: S) -> String {
-    let s = s.as_ref();
+    let s = terminal_text(s.as_ref());
     if !enabled() || style == S::Plain || s.is_empty() {
-        s.to_string()
+        s
     } else {
         format!("\x1b[{}m{s}\x1b[0m", style.code())
     }
+}
+
+/// Protect a composed human-readable render while retaining its line breaks and the
+/// small set of SGR styles Holdmap emits. Other terminal controls are rendered inert.
+/// Individual fields should use core `printable` first so embedded newlines cannot add rows.
+pub fn terminal_text(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while !rest.is_empty() {
+        if let Some(after_escape) = rest.strip_prefix("\x1b[") {
+            if let Some(end) = after_escape.bytes().take(5).position(|byte| byte == b'm') {
+                if matches!(
+                    &after_escape[..end],
+                    "0" | "1"
+                        | "2"
+                        | "32"
+                        | "33"
+                        | "34"
+                        | "35"
+                        | "36"
+                        | "1;31"
+                        | "1;32"
+                        | "1;33"
+                        | "1;36"
+                ) {
+                    let length = end + 3;
+                    out.push_str(&rest[..length]);
+                    rest = &rest[length..];
+                    continue;
+                }
+            }
+        }
+        let ch = rest.chars().next().expect("nonempty text");
+        match ch {
+            '\n' => out.push(ch),
+            '\r' | '\t' => out.push(' '),
+            ch if ch.is_control() => out.push('\u{FFFD}'),
+            ch => out.push(ch),
+        }
+        rest = &rest[ch.len_utf8()..];
+    }
+    out
 }
 
 pub fn bold(s: impl AsRef<str>) -> String {
@@ -151,7 +193,7 @@ pub struct Cell(pub String, pub S);
 
 impl Cell {
     pub fn new(s: impl Into<String>, st: S) -> Self {
-        Cell(s.into(), st)
+        Cell(holdmap_core::util::printable(&s.into()).into_owned(), st)
     }
 }
 
@@ -278,5 +320,27 @@ mod tests {
             assert!(width(l) <= 30, "{l}");
         }
         assert!(t.contains('…'));
+    }
+
+    #[test]
+    fn terminal_text_allows_only_application_styles_and_line_breaks() {
+        let text = "\x1b[1mTitle\x1b[0m\npath\x1b]52;c;cGF5bG9hZA==\x07\x1b[2J\u{9b}3J\rhidden";
+        let safe = terminal_text(text);
+        assert!(safe.starts_with("\x1b[1mTitle\x1b[0m\npath"));
+        assert!(!safe.contains("\x1b]52"));
+        assert!(!safe.contains("\x1b[2J"));
+        assert!(!safe.contains('\u{9b}'));
+        assert!(!safe.contains('\r'));
+        assert!(!safe.contains('\x07'));
+        assert_eq!(terminal_text("\x1b[8mhidden"), "�[8mhidden");
+    }
+
+    #[test]
+    fn table_metadata_cannot_inject_terminal_commands_or_rows() {
+        let rows = [vec![Cell::new("name\nforged\x1b[2J", S::Plain)]];
+        let text = table(&[col("NAME")], &rows, 80);
+        assert_eq!(text.lines().count(), 2);
+        assert!(text.contains("name forged�[2J"));
+        assert!(!text.contains('\x1b'));
     }
 }

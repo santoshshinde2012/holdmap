@@ -87,5 +87,6 @@ pub fn blocked_plan(
         }),
         warnings: vec![],
         risk: Risk::Low,
+        allow_protected: false,
     }
 }
