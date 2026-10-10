@@ -62,6 +62,11 @@ use the shared browser UI with sample data.
 
 ## Install
 
+**Linux desktop 0.3.0 downloads predate the GLib security fixes.** Build the desktop from
+current source until a patched release is published. CLI, TUI, MCP and macOS/Windows
+desktop are unaffected by this Linux dependency issue. See the
+[security policy](SECURITY.md#linux-glib-dependency-backports-unreleased).
+
 **macOS and Linux**
 
 ```sh

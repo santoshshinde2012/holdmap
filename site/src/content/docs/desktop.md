@@ -22,7 +22,13 @@ without forced termination. Linux requires systemd 248 or newer with explicit in
 checks. OS policy or permissions may refuse the action. The browser demo only simulates
 shutdown and cannot power off a computer. Downloadable 0.3.0 binaries predate this feature.
 
-## First launch permissions
+## First open
+
+**Linux desktop 0.3.0:** published AppImage, Debian and RPM downloads predate the GLib
+security fixes in current source. Build the desktop from current source until a patched
+release is published. This Linux GTK dependency issue does not affect the CLI, TUI or
+MCP server, or the macOS and Windows desktop builds. See the
+[security policy](https://github.com/santoshshinde2012/holdmap/blob/main/SECURITY.md#linux-glib-dependency-backports-unreleased).
 
 The app isn't notarised or code-signed yet, so the OS asks once.
 
