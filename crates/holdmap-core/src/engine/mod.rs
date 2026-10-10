@@ -472,6 +472,7 @@ impl Engine {
             blocked,
             warnings: rs.iter().flat_map(|r| r.warnings.clone()).collect(),
             risk: rs.iter().map(|r| r.risk).max().unwrap_or(Risk::Low),
+            allow_protected: opts.allow_protected,
         }
     }
 }

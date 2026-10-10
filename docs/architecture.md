@@ -4,7 +4,7 @@ holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop ap
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
 coordinate collection and confirmation, and present the returned types.
 
-This guide describes current source. Child-tool metadata, MCP discovery and cache improvements
+This guide describes current source. Child-tool metadata, MCP discovery, cache and security improvements
 are [Unreleased](../CHANGELOG.md#unreleased); the downloadable 0.3.0 release predates those
 additions.
 
@@ -16,7 +16,7 @@ flowchart TB
   MCP["MCP transport and validated tools"] --> ENGINE
   MCP --> CONTEXT["Pure guide resource and workflow prompts"]
   UI["Shared Svelte UI"] --> API["api.ts"]
-  API --> NATIVE["Tauri commands and AppState freshness cache"]
+  API --> NATIVE["Tauri commands, freshness and confirmation caches"]
   NATIVE --> ENGINE
   SITE["Astro website and guides"] --> DEMO["Browser demo build"]
   DEMO --> UI
@@ -33,6 +33,12 @@ The website builds the same desktop UI for browser mode; `api.ts` selects native
 data. The native cache belongs to the desktop adapter. Core engines operate on a consistent
 `Scan`, which other adapters collect directly. Local configuration, pins and stop history use
 `store`; project stacks and bounded HTTP probes have separate modules.
+
+The Linux GTK3 binding family currently requires GLib 0.18. A narrow
+[local source backport](../vendor/README.md) preserves that API while fixing upstream iterator
+unsoundness. It is excluded from the first-party workspace. Whole-snapshot hash verification,
+locked Cargo resolution and an optimized Linux regression check the override; registry advisory
+scans alone do not inspect local path packages. The original version and license remain unchanged.
 
 ## 2. Scan → plan → execute
 
@@ -94,15 +100,18 @@ sequenceDiagram
   E-->>F: ActionPlan (steps, warnings, blocked?)
   F->>U: show plan, confirm
   U->>F: yes
-  opt Native or MCP execution
+  opt Desktop or MCP confirmed execution
+    F->>F: consume one-use handle and bind request options
     F->>S: collect fresh machine state
     S-->>F: Scan
     F->>E: rebuild engine and plan
     E-->>F: current ActionPlan
+    F->>F: compare same_effects with retained preview
+    Note over F: Reject changed owners or effects
   end
-  F->>X: execute(plan)
+  F->>X: execute(original plan)
   loop each step
-    X->>OS: re-check start token (PID reuse guard, pidfd on Linux)
+    X->>OS: re-check start token and current protection
     X->>OS: SIGTERM / container stop / systemctl stop
     X->>OS: wait grace, then SIGKILL if allowed
   end
@@ -111,11 +120,25 @@ sequenceDiagram
   F->>F: Store::record (history, for restart)
 ```
 
-Planning does not signal processes. Native and MCP stop handlers collect a fresh scan and build
-the execution plan again, rather than executing a previously displayed plan. An executing MCP
-request must be within the user's authorized scope; protected owners remain refused. The
-executor checks process identity immediately before signalling and verifies the target ports
-afterwards. A blocked or elevation-required plan remains a report, not an executable promise.
+Planning does not signal processes. Desktop and MCP preview handles retain the original plan.
+An executing request must match its preview's target/options and a fresh plan's semantic effects;
+changed identities or actions require another preview. `ActionPlan::same_effects` compares effect
+identity and authorization while ignoring display text and resource metrics. Desktop agent bulk
+confirmation shows every queued plan; MCP validates the entire captured bulk before acting.
+The executor receives the original plan rather than substituting fresh effects.
+
+`ActionPlan::allow_protected` carries an explicit soft-protection override, defaulting to false
+when deserializing older plans. Core execution rechecks process start tokens and hard/soft
+protection before the initial signal and escalation. Ordinary supervisor commands carry an
+optional `RunCommand.guard` to pin their owner; named systemd socket units use logical unit
+identity and check the associated service's protection instead of signalling its PID 1 manager.
+MCP exposes no protected-owner override. Its adapter independently checks current-account
+ownership for every pinned process effect, because supervisor strategy priority and a low-risk
+label do not establish account ownership. Unknown or foreign owners and unpinned systemd socket
+plans are refused. Agent bulk targets retain each matched listener's TCP/UDP protocol. Execution
+verifies target ports afterwards; blocked
+plans cannot execute. OS identity binding still has platform limits described in
+[SECURITY.md](../SECURITY.md).
 
 ## 3. Topology / mesh
 
@@ -208,8 +231,8 @@ product, vendor, exact owned PID, folder paths and tool names. Raw command text 
 Desktop filtering also searches visible ports, services and hosts, with exact PID queries and
 explicit `port:3000` queries; its layout and rendering remain pure presentation logic.
 
-`known_folders()` supplies folder actions, and the native backend rejects paths outside that
-agent's reported folders. `stoppable_ports()` identifies development/service port candidates;
+`known_folders()` supplies folder actions, and the native backend forces a fresh scan before
+checking exact path membership in the current agent report. `stoppable_ports()` identifies development/service port candidates;
 normal core planning still decides which can be stopped. CLI, TUI, desktop and MCP preserve the
 agent-service stop controls without signalling the agent root merely because it is visible.
 
@@ -233,11 +256,13 @@ flowchart TB
     LIB["lib.rs: builder, plugins<br/>(notification, autostart, global-shortcut)"]
     CMD["commands.rs<br/>scan · topology · agents · explain · plan · stop · pins · history · restart · autostart<br/>preferences · hotkeys · remote_scan"]
     ST["state.rs<br/>AppState (config, last snapshot)"]
+    CF["confirmation.rs<br/>one-use reviewed plans"]
     TR["tray.rs<br/>menu + top ports"]
     W["watch.rs<br/>scan interval (default 4 s) / 2.5× hidden → events → notifications + tray"]
     SC["shortcuts.rs<br/>presets, re-registered at runtime"]
     LIB --> CMD & TR & W & SC
     CMD & TR & W --> ST
+    CMD --> CF
   end
   subgraph UI["Svelte 5 front-end"]
     APP["App.svelte<br/>list ⇄ graph (G) ⇄ agents (⇧A), palette, keys"]
@@ -268,9 +293,21 @@ lives in pure TypeScript modules covered by Vitest.
 Agent, topology and explanation commands require a scan no older than one second, even when
 called before a UI poll. Derived reads retain the cached socket view, and failed refreshes
 return an error while leaving the previous cache eligible for a retry. Collection holds the
-scan lock without holding the engine mutex, so synchronous folder readers can use the previous
-engine during a slow OS/container query. Folder actions validate against that cached report;
-stop actions collect and replan independently.
+scan lock without holding the engine mutex. Folder actions run off-thread and force a fresh
+scan rather than authorizing paths from an old cache. Openers construct localhost URLs or
+resolve port/agent folders in the backend; the webview cannot supply an arbitrary command or URL.
+
+`confirmation.rs` owns a separate in-memory cache of immutable plans: at most 128 pending
+previews, each valid for five minutes and consumed once. The native stop command requires the
+preview's handle and exact target/force/soft-protection authorization, builds a fresh plan,
+rejects different effects, then executes the retained original. TCP and UDP row targets keep
+their protocol, and all plans in an agent bulk action appear in the confirmation dialog.
+These handles bind reviewed effects; they are not authentication credentials.
+
+The main webview's local-only capability permits event listen/unlisten and window dragging.
+Native commands enforce their own target checks, and the CSP limits script loading and network
+connections to the app and native IPC. Svelte renders untrusted process, agent and HTTP prose as
+escaped text, including inline command spans. The browser demo has no native IPC access.
 
 ### Desktop UI
 
@@ -308,7 +345,7 @@ The SOLID boundaries are concrete responsibilities and substitutable interfaces:
 | Dependency inversion | Core orchestration accepts provider and classifier traits; composition points choose the production implementations. |
 
 - `scan` gathers, `engine` decides, `exec` acts, `topology` relates and `store` persists. The
-  desktop backend is split into `commands`, `state`, `tray`, `watch` and `shortcuts`.
+  desktop backend is split into `commands`, `confirmation`, `state`, `tray`, `watch` and `shortcuts`.
 - Behaviour is extended through registries: `StrategyRegistry`, `ClusterRegistry`,
   `ManifestRegistry`, `WorkspaceMarker`s and the `exporter(name)` factory.
 - `Engine` and `Scanner` take trait objects, so tests inject static providers and fixture tables.
@@ -322,6 +359,31 @@ The SOLID boundaries are concrete responsibilities and substitutable interfaces:
   so `down`, `up --replace` and `stop --all-dev` get the same protection checks as `stop`.
 - `docs/cli.md`, the man pages and the shell completions are all generated from the clap
   definitions; `cargo test` fails when `docs/cli.md` is stale.
+
+### Files, credentials and untrusted output
+
+Persistence checks files before consuming or truncating them. Unix Store reads require a
+private account-owned directory, owned regular single-link files and no group/world writes;
+atomic writes use exclusive temporary files and directory-descriptor-relative operations.
+Private files/directories use `0600`/`0700`. Windows rejects final reparse points and extra
+hard links, while inheriting filesystem ACLs from the chosen directory; it does not install or
+verify an account-exclusive DACL. Custom state locations must remain account-controlled.
+Restart commands come from this validated history, rather than a command supplied by the UI.
+
+Project stack validation opens, checks and reads the same file handle. Unix permits current
+account or root ownership and rejects group/world writes; Windows trusts the checkout's ACLs.
+Project-file creation is exclusive, and forced CLI exports check for link redirection before
+truncating a file. Explicit stack commands retain the user's shell authority. HTTP health paths
+reject request/header injection; subprocess capture limits output to 4 MiB per stream and
+respects a deadline even when descendants retain inherited pipes.
+
+The shared redactor recognizes credential flags, assignments, URL userinfo, encoded query
+keys, headers and nested JSON values with parsing limits. Raw arguments remain available for
+authorized execution; displayed commands and errors use redacted forms. Arbitrary positional
+secrets may not be recognizable. Human terminal renderers neutralize external OSC/CSI/C1
+controls and row-breaking fields while preserving Holdmap's own styling and layout. JSON
+results retain their structured metadata. These boundaries have synthetic regression fixtures;
+they do not establish an absence of every possible leak or filesystem race.
 
 ## 8. MCP adapter
 
@@ -341,6 +403,24 @@ Tool metadata drives input validation so a client cannot turn an invalid `dry_ru
 an executing stop. The core remains responsible for ownership, stop plans, protected processes,
 execution and PID reuse checks. Output schemas describe structured results; compatibility
 handling keeps text JSON available to older clients.
+
+Both stop tools default to previews. Execution requires a session-local one-use
+`confirmation_id`, bound to the preview's target/options/filter, a matching agent selection
+for bulk stops, and fresh matching effects for every captured plan. The session retains at
+most 32 previews for five minutes; expired, reused or changed requests require a new preview.
+A dry run in another session does not authorize execution. All bulk plans are validated before
+any are executed, and the core receives the captured original plans. A captured preview is
+bounded to 128 ports or agents and 1 MiB of serialized metadata.
+
+Valid execution attempts consume the handle before option/fresh-state checks; a mismatch or
+collection/execution failure requires a new preview. Malformed envelopes or tool arguments do
+not consume it. Restarting or reinitializing the session invalidates pending previews. Bulk
+execution stops at the first failed plan, without rolling back earlier actions. Handles bind
+effects rather than authenticate a user or prove consent; the client obtains authorization.
+
+The transport bounds each newline-delimited frame to 1 MiB excluding the newline. Legacy
+protocol batches are limited to 64 messages. Oversized frames are fully drained and oversized
+batches are rejected as a whole before dispatch, preserving the next frame's boundary.
 
 The resource and prompt layers perform no scans, probes, file reads or mutations. Clients
 supporting those MCP capabilities can discover tool-selection guidance and the `diagnose_port`,
@@ -393,4 +473,13 @@ types, pure view logic and production UI flows. Site checks build the shared dem
 guides, links and asset budgets; site `npm run test:demo` launches a preview and checks the
 embedded app's navigation, agent tools and simulated stop flow. `scripts/check-all.sh` combines
 these with formatting, clippy, rustdoc, a native desktop build, workflow validation and dependency
-audits.
+audits at all npm severities for both lockfiles, plus cargo-deny.
+
+Security regressions cover changed confirmation owners, PID reuse, newly protected processes,
+preview expiry/replay/options, bulk previews, linked files, credential forms, terminal controls
+and bounded MCP input. Gitleaks scans full Git history and current source, including new source
+files while excluding ignored build caches. CI uses immutable action SHAs and least-privilege
+tokens; CodeQL covers JavaScript/TypeScript, Rust, Python and Actions. Dependabot vulnerability
+alerts/security updates are enabled, and a daily dependency workflow checks new advisories
+without waiting for a source change. These gates supplement review and the platform limits in
+[SECURITY.md](../SECURITY.md).

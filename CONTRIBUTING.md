@@ -41,6 +41,7 @@ The repository root is the Rust workspace; each surface keeps its source and too
 | `site/` | Astro website, Markdown guides, site assets and build tools |
 | `docs/` | Architecture, generated CLI reference and screenshots used by the README/site |
 | `scripts/` | Workspace checks, CLI documentation generation and development helpers |
+| `vendor/` | Audited third-party source backport, unchanged upstream snapshot and provenance |
 | `.github/` | CI, release, dependency updates and website deployment |
 
 Keep source assets and their licences with the surface that uses them. Commit generated
@@ -54,7 +55,8 @@ versions; keep temporary captures, release downloads and backup copies outside t
 Run `scripts/check-all.sh` before opening a pull request. It installs dependencies from the
 lockfiles and checks the Rust workspace, native desktop, browser UI, website and supply chain.
 Install [actionlint](https://github.com/rhysd/actionlint#installation) and
-[cargo-deny](https://embarkstudios.github.io/cargo-deny/cli/index.html) first, then install
+[cargo-deny](https://embarkstudios.github.io/cargo-deny/cli/index.html),
+[Gitleaks](https://github.com/gitleaks/gitleaks#installing) and Python 3.11+ first, then install
 Chromium once with `(cd apps/desktop && npm ci && npx playwright install chromium)`.
 On Linux, use `npx playwright install --with-deps chromium` for its system dependencies.
 The browser suite starts and stops its own preview server; failure traces and screenshots go
@@ -78,10 +80,13 @@ cargo build --locked -p holdmap-desktop
 scripts/check-cross.sh                       # type-checks the macOS and Windows backends from Linux
 (cd site && npm run check && npm run build && npm test)  # website: types, links, size budget
 scripts/check-versions.sh
+scripts/check-secrets.sh                     # full Git history and tracked/new source; needs a full clone
+python3 scripts/test-release-security.py    # isolated release input regressions; never publishes
 actionlint
+python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK resolution
 cargo deny --all-features check
-(cd apps/desktop && npm audit --audit-level=high)
-(cd site && npm audit --audit-level=high)
+(cd apps/desktop && npm audit)
+(cd site && npm audit)
 ```
 
 `cargo test` also checks the docs: `docs/cli.md` must match the clap definitions, the README must
@@ -96,13 +101,38 @@ read tools and malformed stop rejection against isolated local listeners.
 
 CI runs Rust and native desktop tests/builds on Linux, macOS and Windows. Chromium browser
 tests run on Linux and gate native builds. Dependency checks include both npm lockfiles and
-the full Cargo workspace; Dependabot maintains desktop, website, Rust and workflow updates.
+the full Cargo workspace, and fail on known advisories at every severity. Gitleaks checks the
+full fetched Git history and current source with redacted findings. CodeQL checks Rust,
+JavaScript/TypeScript, Python and GitHub Actions. A daily workflow checks newly published
+dependency advisories; Dependabot maintains desktop, website, Rust and workflow updates.
+Repository administrators should enable Dependabot alerts and security updates in GitHub's
+security settings; those settings are separate from the committed update configuration.
+
+## Vendored security fixes
+
+The Linux desktop currently uses a narrow [GLib 0.18.5 security backport](vendor/README.md).
+Its upstream snapshot, version and license are preserved; only the two audited iterator lines
+change. Run `python3 scripts/verify-vendored-glib.py` after dependency changes. It requires
+Python 3.11+ and Cargo, and resolves locked metadata without compiling GTK. CI also runs the
+actual resolved dependency with optimization on Linux:
+
+```sh
+cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
+```
+
+Cargo-deny's `unsound = "all"` includes transitive registry dependencies, but local path
+packages need the source verifier and runtime regression. Do not add advisory ignores or
+relabel the backport as a fixed upstream version. Keep `vendor/glib/` outside the first-party
+workspace and preserve upstream filenames. Remove the override and its verification together
+when the GTK binding family supports a compatible fixed upstream release.
 
 ## Published screenshots
 
 Refresh the desktop screenshots, website crops and hero posters from the production browser
 build with `node apps/desktop/scripts/capture-screenshots.mjs`. It uses sample data, its own
 temporary build and preview server, and the same Chromium installation as the browser tests.
+Pass screenshot filenames after the command to refresh only those flows, for example
+`node apps/desktop/scripts/capture-screenshots.mjs desktop-agent-stop-confirm-dark.png`.
 Refresh the website social card with `(cd site && node scripts/og.mjs)` after updating the overview.
 
 For CLI/TUI screenshots on macOS or Linux, build `cargo build -p holdmap`, create a virtual
@@ -119,6 +149,10 @@ tools.
   types and never signal processes themselves.
 - Every destructive path goes through `ActionPlan` and `execute`, so dry runs, confirmations and
   the PID-reuse guard stay consistent.
+- Desktop and MCP execution bind to a one-use preview and refuse changed effects. Fresh
+  process protection checks apply immediately before execution as well as during planning.
+- Use the shared credential redactor for display and serialization, and sanitize untrusted
+  terminal text. Private/config writes must reject links before truncating a file.
 - Platform code stays behind `cfg` in `crates/holdmap-core/src/sys/`; parsers are pure and tested
   with fixtures.
 - New protected processes go in `crates/holdmap-core/src/safety.rs`. If you're unsure, protect it.
@@ -172,12 +206,21 @@ Versions follow [SemVer](https://semver.org/). One `vX.Y.Z` tag releases everyth
 
 Check a change to the release setup locally with `dist plan`,
 `dist build --artifacts=local --target x86_64-unknown-linux-gnu` and `actionlint`.
+Run `python3 scripts/test-release-security.py` as well. It uses a stub executable to check
+valid releases and reject shell payloads in legal Git refs, without creating a release.
+
+`release.yml` is derived from cargo-dist 0.33.0 and maintained explicitly: it validates
+`vX.Y.Z` tags, passes tags as quoted environment values and grants repository writes only to
+publishing jobs. `allow-dirty = ["ci"]` preserves this workflow while dist still checks its other
+generated metadata. When upgrading dist or changing its config, review the new upstream CI
+template against these controls and update the workflow deliberately; `dist generate` does
+not regenerate CI with this setting. Keep action pins in the config and workflow in sync.
 
 **Repository setup** (once; everything optional is skipped when absent):
 
 | What | Needed for |
 |---|---|
-| Secret `HOMEBREW_TAP_TOKEN` (fine-grained, contents: write on `santoshshinde2012/homebrew-tap`), then in `dist-workspace.toml` add `"homebrew"` to `installers`, set `tap` and `publish-jobs = ["homebrew"]`, and run `dist generate` | Homebrew (`brew install santoshshinde2012/tap/holdmap`); off until then, so release notes don't advertise it |
+| Secret `HOMEBREW_TAP_TOKEN` (fine-grained, contents: write on `santoshshinde2012/homebrew-tap`), then in `dist-workspace.toml` add `"homebrew"` to `installers`, set `tap` and `publish-jobs = ["homebrew"]`, run `dist generate` and review/add the upstream Homebrew publishing job | Homebrew (`brew install santoshshinde2012/tap/holdmap`); off until then, so release notes don't advertise it |
 | Secret `RELEASE_PLEASE_TOKEN` (fine-grained, contents and pull requests: write) | The release PR; the workflow skips with a notice until it exists |
 | Secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | Signed, notarised macOS app (optional) |
 | Secrets `WINDOWS_CERTIFICATE` (base64 `.pfx`), `WINDOWS_CERTIFICATE_PASSWORD` | Signed Windows installers (optional) |

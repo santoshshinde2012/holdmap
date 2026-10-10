@@ -12,18 +12,18 @@ pub fn parse_list_sockets(text: &str, port: u16) -> Option<(String, Option<Strin
     text.lines().find_map(|l| {
         let f: Vec<&str> = l.split_whitespace().collect();
         let listen = *f.first()?;
-        (listen.ends_with(&suffix) || listen == port.to_string()).then(|| {
-            let unit = f
-                .iter()
-                .find(|x| x.ends_with(".socket"))
-                .map(|s| s.to_string())
-                .unwrap_or_default();
-            let service = f
-                .iter()
-                .find(|x| x.ends_with(".service"))
-                .map(|s| s.to_string());
-            (unit, service)
-        })
+        if !(listen.ends_with(&suffix) || listen == port.to_string()) {
+            return None;
+        }
+        let unit = f.iter().find(|x| x.ends_with(".socket")).copied()?;
+        if !crate::util::exact_systemd_unit(unit, ".socket") {
+            return None;
+        }
+        let service = f.iter().find(|x| x.ends_with(".service")).copied();
+        if service.is_some_and(|service| !crate::util::exact_systemd_unit(service, ".service")) {
+            return None;
+        }
+        Some((unit.to_string(), service.map(str::to_string)))
     })
 }
 
@@ -107,7 +107,7 @@ mod linux {
             );
             r.recommendation = format!("Stop the socket unit (and its service): `{cmd}`.");
             r.commands.push(cmd);
-            if unit.contains('<') {
+            if !crate::util::exact_systemd_unit(&unit, ".socket") {
                 return Some(r.block(
                     BlockKind::NothingToStop,
                     "Couldn't determine the socket unit; see `systemctl list-sockets`.",
@@ -121,6 +121,7 @@ mod linux {
                     program: "systemctl".into(),
                     args,
                     reason: "stop the socket-activated unit".into(),
+                    guard: None,
                 });
             } else {
                 r = r.block(
@@ -131,6 +132,9 @@ mod linux {
             return Some(r);
         }
         let cg = sys::linux::cgroup_unit(p.pid)?;
+        if !crate::util::exact_systemd_unit(&cg.unit, ".service") {
+            return None;
+        }
         // Our own unit (e.g. the terminal or agent service holdmap runs in) is not a supervisor
         // of the dev servers started from it.
         if sys::linux::cgroup_unit(t.self_pid()).as_ref() == Some(&cg) {
@@ -141,11 +145,12 @@ mod linux {
         if !(main == p.pid || (anc.contains(&main) && !t.is_self_or_ancestor(main))) {
             return None;
         }
+        let guard = ctx.proc_ref(main)?;
         let mut r = Resolution::new(
             Owner::Supervised {
                 supervisor: Supervisor::SystemdService { unit: cg.unit.clone(), user: cg.user },
-                pid: p.pid,
-                name: p.name.clone(),
+                pid: main,
+                name: guard.name.clone(),
             },
             format!(
                 "Port {port} is held by {} (PID {}), run by the systemd {}service {}. Killing it would let systemd restart it (Restart=), so stop the unit instead.",
@@ -176,6 +181,7 @@ mod linux {
                 program: "systemctl".into(),
                 args,
                 reason: "stop the systemd unit".into(),
+                guard: Some(guard),
             });
         } else {
             r = r.block(
@@ -187,5 +193,31 @@ mod linux {
             );
         }
         Some(r)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn security_systemd_socket_discovery_requires_exact_unit_names() {
+        for text in [
+            "[::]:3000 *.socket fixture.service",
+            "[::]:3000 --all.socket fixture.service",
+            "[::]:3000 fixture.socket *.service",
+            "[::]:3000 fixture.service",
+            "[::]:3000 .socket fixture.service",
+        ] {
+            assert!(parse_list_sockets(text, 3000).is_none(), "{text}");
+        }
+        assert_eq!(
+            parse_list_sockets("[::]:3000 fixture.socket fixture.service", 3000),
+            Some(("fixture.socket".into(), Some("fixture.service".into())))
+        );
+        assert!(crate::util::exact_systemd_unit(
+            r"fixture\x20name.service",
+            ".service"
+        ));
     }
 }

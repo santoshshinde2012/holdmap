@@ -1,0 +1,2 @@
+# Preserve the exact audited upstream bytes on every platform, including its license EOF.
+vendor/glib/** -text whitespace=-blank-at-eof

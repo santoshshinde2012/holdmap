@@ -72,7 +72,7 @@ fn query_secrets(s: &str) -> Option<String> {
     let parts: Vec<String> = s[q + 1..]
         .split('&')
         .map(|kv| match kv.split_once('=') {
-            Some((k, v)) if sensitive(k) && !v.is_empty() && v != MASK => {
+            Some((k, v)) if sensitive(&decode_key(k)) && !v.is_empty() && v != MASK => {
                 changed = true;
                 format!("{k}={MASK}")
             }
@@ -82,8 +82,56 @@ fn query_secrets(s: &str) -> Option<String> {
     changed.then(|| format!("{}?{}", &s[..q], parts.join("&")))
 }
 
+fn decode_key(key: &str) -> String {
+    let bytes = key.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(a), Some(b)) = (
+                (bytes[i + 1] as char).to_digit(16),
+                (bytes[i + 2] as char).to_digit(16),
+            ) {
+                decoded.push((a * 16 + b) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        decoded.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
+}
+
+fn secret_header(value: &str) -> Option<String> {
+    let (key, data) = value.split_once(':')?;
+    if !sensitive(key) || key.contains(['/', '=', ' ']) || data.trim().is_empty() {
+        return None;
+    }
+    let start = key.len() + 1 + data.len() - data.trim_start().len();
+    let lower = value[start..].to_ascii_lowercase();
+    let scheme = ["bearer ", "basic "]
+        .iter()
+        .find(|scheme| lower.starts_with(**scheme));
+    let end = start + scheme.map_or(0, |scheme| scheme.len());
+    Some(format!("{}{MASK}", &value[..end]))
+}
+
 /// Redact one argument on its own (`--password=x`, `TOKEN=x`, URLs).
 pub fn arg(a: &str) -> String {
+    redact_arg(a, 0)
+}
+
+fn redact_arg(a: &str, depth: usize) -> String {
+    if depth >= 32 {
+        return MASK.into();
+    }
+    if let Some(json) = json_secrets(a, depth + 1) {
+        return json;
+    }
+    if let Some(header) = secret_header(a) {
+        return header;
+    }
     if let Some((k, v)) = a.split_once('=') {
         let key_like = !k.is_empty()
             && !k.contains(['/', ':', '?', ' '])
@@ -94,7 +142,7 @@ pub fn arg(a: &str) -> String {
             return format!("{k}={MASK}");
         }
         if key_like && !v.is_empty() {
-            let inner = arg(v);
+            let inner = redact_arg(v, depth + 1);
             if inner != v {
                 return format!("{k}={inner}");
             }
@@ -110,6 +158,67 @@ pub fn arg(a: &str) -> String {
     out
 }
 
+fn json_secrets(input: &str, depth: usize) -> Option<String> {
+    let trimmed = input.trim();
+    let (text, quote) = if trimmed.len() >= 2
+        && ((trimmed.starts_with('\'') && trimmed.ends_with('\''))
+            || (trimmed.starts_with('"') && trimmed.ends_with('"')))
+    {
+        (&trimmed[1..trimmed.len() - 1], &trimmed[..1])
+    } else {
+        (trimmed, "")
+    };
+    if !text.starts_with(['{', '[']) {
+        return None;
+    }
+    // Display strings are untrusted. Bound parsing/allocation and fail closed for oversized
+    // JSON-shaped values rather than attempting to inspect a potentially huge config.
+    if text.len() > 64 * 1024 {
+        return Some(MASK.into());
+    }
+    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(text) else {
+        return Some(MASK.into());
+    };
+    fn visit(value: &mut serde_json::Value, depth: usize) -> bool {
+        if depth >= 32 {
+            *value = serde_json::Value::String(MASK.into());
+            return true;
+        }
+        match value {
+            serde_json::Value::Object(entries) => {
+                let mut changed = false;
+                for (key, value) in entries {
+                    if sensitive(key) {
+                        *value = serde_json::Value::String(MASK.into());
+                        changed = true;
+                    } else {
+                        changed |= visit(value, depth + 1);
+                    }
+                }
+                changed
+            }
+            serde_json::Value::Array(values) => {
+                let mut changed = false;
+                for value in values {
+                    changed |= visit(value, depth + 1);
+                }
+                changed
+            }
+            serde_json::Value::String(text) => {
+                let redacted = redact_arg(text, depth + 1);
+                if *text != redacted {
+                    *text = redacted;
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+    visit(&mut value, depth).then(|| format!("{quote}{value}{quote}"))
+}
+
 /// A flag that takes the secret as the next argument: `--password x`, `-p x` for mysql-likes.
 fn takes_secret_value(a: &str) -> bool {
     a.starts_with('-') && !a.contains('=') && a.len() > 2 && sensitive(a)
@@ -120,10 +229,21 @@ pub fn args(cmd: &[String]) -> Vec<String> {
     let mut out = Vec::with_capacity(cmd.len());
     let mut hide_next = false;
     let mut bearer = false;
+    let mut pending_header = false;
     for a in cmd {
-        if hide_next && !a.starts_with('-') {
+        if hide_next {
             out.push(MASK.to_string());
             hide_next = false;
+            continue;
+        }
+        if pending_header {
+            pending_header = false;
+            if a.eq_ignore_ascii_case("basic") || a.eq_ignore_ascii_case("bearer") {
+                out.push(a.clone());
+                hide_next = true;
+            } else {
+                out.push(MASK.to_string());
+            }
             continue;
         }
         if bearer {
@@ -132,6 +252,11 @@ pub fn args(cmd: &[String]) -> Vec<String> {
             continue;
         }
         hide_next = takes_secret_value(a);
+        let redacted = arg(a);
+        if redacted != *a {
+            out.push(crate::util::printable(&redacted).into_owned());
+            continue;
+        }
         let lower = a.to_ascii_lowercase();
         // `-H "Authorization: Bearer abc"` (one argument) or `Bearer abc` split in two.
         let header = lower.contains("authorization")
@@ -145,16 +270,90 @@ pub fn args(cmd: &[String]) -> Vec<String> {
             out.push(format!("{}{MASK}", &a[..cut]));
             continue;
         }
-        bearer = lower == "bearer" || lower == "authorization: bearer";
-        out.push(crate::util::printable(&arg(a)).into_owned());
+        bearer = lower == "bearer"
+            || lower == "basic"
+            || lower == "authorization: bearer"
+            || lower == "authorization: basic";
+        pending_header = a.strip_suffix(':').is_some_and(sensitive);
+        out.push(crate::util::printable(&redacted).into_owned());
     }
-    out
+    out.into_iter()
+        .map(|value| crate::util::printable(&value).into_owned())
+        .collect()
 }
 
-/// Redact a command line given as one string (split on whitespace, spacing kept).
+/// Redact a command string, preserving spacing and keeping quoted multiword values together.
 pub fn line(s: &str) -> String {
-    let words: Vec<String> = s.split(' ').map(str::to_string).collect();
-    args(&words).join(" ")
+    let mut spans = Vec::new();
+    let mut start = None;
+    let mut quote = None;
+    let mut escaped = false;
+    for (i, character) in s.char_indices() {
+        if start.is_none() && !character.is_whitespace() {
+            start = Some(i);
+        }
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if character == '\\' && quote != Some('\'') {
+            escaped = true;
+        } else if Some(character) == quote {
+            quote = None;
+        } else if quote.is_none() && matches!(character, '\'' | '"') {
+            quote = Some(character);
+        } else if quote.is_none() && character.is_whitespace() {
+            if let Some(start) = start.take() {
+                spans.push((start, i));
+            }
+        }
+    }
+    if let Some(start) = start {
+        spans.push((start, s.len()));
+    }
+    let words: Vec<String> = spans
+        .iter()
+        .map(|(start, end)| s[*start..*end].to_string())
+        .collect();
+    let redacted = args(&words);
+    let mut out = String::new();
+    let mut cursor = 0;
+    for ((start, end), word) in spans.iter().zip(redacted) {
+        out.push_str(&s[cursor..*start]);
+        out.push_str(&word);
+        cursor = *end;
+    }
+    out.push_str(&s[cursor..]);
+    crate::util::printable(&out).into_owned()
+}
+
+/// Serialize an optional shell command for display while keeping the in-memory command raw.
+pub fn serialize_optional_line<S: serde::Serializer>(
+    value: &Option<String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serde::Serialize::serialize(&value.as_deref().map(line), serializer)
+}
+
+/// Serialize environment values without exporting credential keys or credential-bearing URLs.
+pub fn serialize_env<S: serde::Serializer>(
+    values: &std::collections::BTreeMap<String, String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let redacted: std::collections::BTreeMap<_, _> = values
+        .iter()
+        .map(|(key, value)| {
+            (
+                key,
+                if sensitive(key) {
+                    MASK.to_string()
+                } else {
+                    arg(value)
+                },
+            )
+        })
+        .collect();
+    serde::Serialize::serialize(&redacted, serializer)
 }
 
 /// Serde helper: serialize a command line redacted.
@@ -193,10 +392,10 @@ mod tests {
             args(&v(&["app", "--client-secret=s"])),
             v(&["app", "--client-secret=••••"])
         );
-        // A flag with no value isn't followed by a secret.
+        // Without a command-specific parser, a dash-prefixed value may itself be a secret.
         assert_eq!(
             args(&v(&["app", "--token", "--json"])),
-            v(&["app", "--token", "--json"])
+            v(&["app", "--token", "••••"])
         );
     }
 
@@ -234,6 +433,81 @@ mod tests {
             line("curl -H Authorization: Bearer abc"),
             "curl -H Authorization: Bearer ••••"
         );
+    }
+
+    #[test]
+    fn security_headers_and_whitespace_credentials_never_export_values() {
+        for command in [
+            v(&[
+                "curl",
+                "-H",
+                "Cookie: session=fixture-secret; other=another-secret",
+            ]),
+            v(&["curl", "-H", "X-Api-Key: fixture-secret"]),
+            v(&["curl", "-H", "Authorization:", "Basic", "fixture-secret"]),
+            v(&["server", "--password", "-fixture-secret"]),
+            v(&["server", "--password", "secret phrase"]),
+        ] {
+            let output = args(&command).join(" ");
+            assert!(!output.contains("fixture-secret"), "{output}");
+            assert!(!output.contains("another-secret"), "{output}");
+            assert!(!output.contains("secret phrase"), "{output}");
+        }
+        for command in [
+            "server\t--password\tfixture-secret",
+            "server --password 'secret phrase' --port 3000",
+            "server --password=\"secret phrase\" --port 3000",
+        ] {
+            let output = line(command);
+            assert!(!output.contains("fixture-secret"), "{output}");
+            assert!(
+                !output.contains("secret") && !output.contains("phrase"),
+                "{output}"
+            );
+            assert!(output.contains(MASK), "{output}");
+        }
+    }
+
+    #[test]
+    fn security_inline_mcp_json_redacts_nested_values_and_encoded_query_keys() {
+        let json = r#"{"mcpServers":{"fixture":{"env":{"API_KEY":"security-fixture-secret","MODE":"dev"},"headers":{"Authorization":"Bearer security-fixture"},"args":["--url=https://u:fixture-password@host"]}}}"#;
+        for input in [
+            json.to_string(),
+            format!("--mcp-config={json}"),
+            format!("agent --mcp-config '{json}'"),
+        ] {
+            let result = line(&input);
+            for secret in [
+                "security-fixture-secret",
+                "Bearer security-fixture",
+                "fixture-password",
+            ] {
+                assert!(!result.contains(secret), "{result}");
+            }
+            assert!(result.contains("dev"));
+        }
+        assert!(
+            !arg("https://localhost/?%61pi_key=fixture-secret&port=3000")
+                .contains("fixture-secret")
+        );
+        assert_eq!(
+            arg(r#"{"port":3000,"name":"fixture"}"#),
+            r#"{"port":3000,"name":"fixture"}"#
+        );
+    }
+
+    #[test]
+    fn security_redaction_bounds_nested_wrappers_and_json_string_reentry() {
+        let wrapped = format!("{}fixture-secret", "a=".repeat(20_000));
+        let output = arg(&wrapped);
+        assert!(output.len() < 256 && output.contains(MASK));
+        assert!(!output.contains("fixture-secret"));
+        let json = serde_json::json!({"nested": wrapped}).to_string();
+        let output = arg(&json);
+        assert!(output.len() < 512 && output.contains(MASK));
+        assert!(!output.contains("fixture-secret"));
+        let deep = format!("{}0{}", "[".repeat(100), "]".repeat(100));
+        assert!(arg(&deep).contains(MASK));
     }
 
     #[test]

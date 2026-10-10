@@ -37,7 +37,7 @@ const PROMPTS: &[Prompt] = &[
             required: true,
             kind: ArgumentKind::Port,
         }],
-        workflow: "Diagnose the port in the request data using explain_port. Report its owner, status, recommendation and any visibility limitations. If a service owns the port, use get_topology with all=true to inspect its dependencies and dependents before suggesting a stop. Prefer find_free_port when the user's project can use another port; a returned candidate is not reserved. If the user wants a stop, call stop_port with dry_run=true first and show the returned plan or refusal. Execute only after the user authorizes that specific stop and the existing Holdmap policy permits it; a returned explanation or plan is not permission to execute. Use wait_for_port with until_free=true after an authorized stop to verify the port became free.",
+        workflow: "Diagnose the port in the request data using explain_port. Report its owner, status, recommendation and any visibility limitations. If a service owns the port, use get_topology with all=true to inspect its dependencies and dependents before suggesting a stop. Prefer find_free_port when the user's project can use another port; a returned candidate is not reserved. If the user wants a stop, call stop_port with dry_run=true first and show the returned plan or refusal. Execute with dry_run=false and the returned confirmation_id, preserving target/options in the same session within five minutes, only after the user authorizes that specific stop and the existing Holdmap policy permits it. Changes or refusals require a new preview; a returned explanation or plan is not permission to execute. Use wait_for_port with until_free=true after an authorized stop to verify the port became free.",
     },
     Prompt {
         name: "prepare_dev_server",
@@ -48,7 +48,7 @@ const PROMPTS: &[Prompt] = &[
             required: false,
             kind: ArgumentKind::Port,
         }],
-        workflow: "Prepare a development server using the user's project context. Call find_free_port, passing near only if supplied in the request data. Report the returned port as a candidate, not a reservation; another process may acquire it before launch. Holdmap itself does not launch services. If launching is already part of the user's authorized request and the client has suitable shell tools, use the project's established launch command with the candidate port; retain that authorization without asking again. If launch is outside the request or suitable tools are unavailable, provide candidate-port configuration guidance and wait for the user to launch. After either authorized client launch or user launch, call wait_for_port for the candidate to check that it accepts connections. A listening TCP port establishes connection readiness, not application health. If launch fails because the port is occupied, call explain_port and prefer another find_free_port candidate. If the user instead requests a stop, inspect get_topology with all=true, obtain stop_port with dry_run=true, show the plan or refusal, and execute only with the user's authorization and the existing Holdmap policy.",
+        workflow: "Prepare a development server using the user's project context. Call find_free_port, passing near only if supplied in the request data. Report the returned port as a candidate, not a reservation; another process may acquire it before launch. Holdmap itself does not launch services. If launching is already part of the user's authorized request and the client has suitable shell tools, use the project's established launch command with the candidate port; retain that authorization without asking again. If launch is outside the request or suitable tools are unavailable, provide candidate-port configuration guidance and wait for the user to launch. After either authorized client launch or user launch, call wait_for_port for the candidate to check that it accepts connections. A listening TCP port establishes connection readiness, not application health. If launch fails because the port is occupied, call explain_port and prefer another find_free_port candidate. If the user instead requests a stop, inspect get_topology with all=true, obtain stop_port with dry_run=true, show the plan or refusal, and execute with dry_run=false and the returned confirmation_id using identical target/options in the same session within five minutes, only with the user's authorization and the existing Holdmap policy. Changed owners or options require a new preview.",
     },
     Prompt {
         name: "inspect_agents",
@@ -256,7 +256,10 @@ mod tests {
             let referenced = prompt
                 .workflow
                 .split(|character: char| !character.is_ascii_alphanumeric() && character != '_')
-                .filter(|word| word.contains('_') && !matches!(*word, "dry_run" | "until_free"));
+                .filter(|word| {
+                    word.contains('_')
+                        && !matches!(*word, "dry_run" | "until_free" | "confirmation_id")
+                });
             for tool in referenced {
                 assert!(
                     crate::catalog::definition(tool).is_some(),
@@ -279,6 +282,8 @@ mod tests {
         assert!(text(&diagnose).contains("get_topology with all=true"));
         assert!(text(&diagnose).contains("dry_run=true"));
         assert!(text(&diagnose).contains("user authorizes"));
+        assert!(text(&diagnose).contains("returned confirmation_id"));
+        assert!(text(&diagnose).contains("new preview"));
         let prepare =
             get(&json!({"name": "prepare_dev_server", "arguments": {"near": "3000"}})).unwrap();
         assert!(text(&prepare).contains("get_topology with all=true"));

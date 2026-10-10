@@ -7,8 +7,10 @@
 //! Protected and other users' processes remain refused, with no agent override.
 
 mod catalog;
+mod confirmation;
 mod prompts;
 mod resources;
+mod stops;
 mod tools;
 mod validation;
 
@@ -20,28 +22,89 @@ use std::io::{self, BufRead, Write};
 use tools::ToolError;
 
 const SUPPORTED_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
+// Bound allocations from a client before parsing or dispatching any request. The oldest
+// supported protocols permit batches, so their work also needs a separate per-frame bound.
+const MAX_FRAME_BYTES: usize = 1024 * 1024;
+const MAX_BATCH_MESSAGES: usize = 64;
+
+enum Frame {
+    Message(Vec<u8>),
+    TooLarge,
+}
+
+/// Read and, when necessary, discard one newline-delimited frame without retaining more
+/// than the limit. An oversized frame cannot become a second, valid request after truncation.
+fn read_frame<R: BufRead>(input: &mut R) -> io::Result<Option<Frame>> {
+    let mut message = Vec::new();
+    let mut too_large = false;
+    loop {
+        let available = input.fill_buf()?;
+        if available.is_empty() {
+            return Ok(if too_large {
+                Some(Frame::TooLarge)
+            } else if message.is_empty() {
+                None
+            } else {
+                Some(Frame::Message(message))
+            });
+        }
+        let newline = available.iter().position(|byte| *byte == b'\n');
+        let length = newline.unwrap_or(available.len());
+        if !too_large {
+            if length > MAX_FRAME_BYTES.saturating_sub(message.len()) {
+                message.clear();
+                too_large = true;
+            } else {
+                message.extend_from_slice(&available[..length]);
+            }
+        }
+        input.consume(length + usize::from(newline.is_some()));
+        if newline.is_some() {
+            return Ok(Some(if too_large {
+                Frame::TooLarge
+            } else {
+                Frame::Message(message)
+            }));
+        }
+    }
+}
 
 struct Session {
     version: &'static str,
+    confirmations: confirmation::Confirmations,
 }
 
 impl Default for Session {
     fn default() -> Self {
         Self {
             version: SUPPORTED_VERSIONS[0],
+            confirmations: confirmation::Confirmations::default(),
         }
     }
 }
 
 /// Run the server until stdin closes, retaining the negotiated protocol version.
-pub fn serve<R: BufRead, W: Write>(input: R, mut output: W) -> io::Result<()> {
+///
+/// Frames are limited to 1 MiB and legacy batches to 64 messages. Oversized frames are
+/// discarded completely, receive an error, and cannot dispatch tools or desynchronize stdin.
+pub fn serve<R: BufRead, W: Write>(mut input: R, mut output: W) -> io::Result<()> {
     let mut session = Session::default();
-    for line in input.lines() {
-        let line = line?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        let response = match serde_json::from_str::<Value>(&line) {
+    while let Some(frame) = read_frame(&mut input)? {
+        let response = match frame {
+            Frame::TooLarge => Some(session.compatible(error(
+                Value::Null,
+                -32600,
+                "MCP frame exceeds 1 MiB; no requests from this frame were executed",
+            ))),
+            Frame::Message(line) if line.iter().all(u8::is_ascii_whitespace) => continue,
+            Frame::Message(line) => match serde_json::from_slice::<Value>(&line) {
+            Ok(Value::Array(batch)) if batch.len() > MAX_BATCH_MESSAGES => {
+                Some(session.compatible(error(
+                    Value::Null,
+                    -32600,
+                    "MCP batches are limited to 64 messages; no requests from this batch were executed",
+                )))
+            }
             Ok(Value::Array(batch)) if session.version < "2025-06-18" && !batch.is_empty() => {
                 let responses: Vec<Value> = batch
                     .into_iter()
@@ -57,6 +120,7 @@ pub fn serve<R: BufRead, W: Write>(input: R, mut output: W) -> io::Result<()> {
             Err(e) => {
                 Some(session.compatible(error(Value::Null, -32700, &format!("parse error: {e}"))))
             }
+            },
         };
         if let Some(response) = response {
             writeln!(output, "{}", serde_json::to_string(&response)?)?;
@@ -77,7 +141,8 @@ fn ok(id: Value, result: Value) -> Value {
 /// Handle one standalone JSON-RPC message using the latest supported version.
 ///
 /// Returns `None` for valid notifications. Use [`serve`] to retain version negotiation
-/// across a stdio session, including compatibility with older clients.
+/// across a stdio session, including compatibility with older clients and stop confirmation
+/// handles. Standalone calls do not retain previews for later execution.
 pub fn handle(message: Value) -> Option<Value> {
     Session::default().handle(message)
 }
@@ -117,7 +182,7 @@ impl Session {
             "initialize" => self.initialize(id, &params),
             "ping" => ok(id, json!({})),
             "tools/list" => ok(id, json!({"tools": catalog::list()})),
-            "tools/call" => call(id, &params),
+            "tools/call" => call(id, &params, &mut self.confirmations),
             "resources/list" => ok(id, resources::list()),
             "resources/templates/list" => ok(id, json!({"resourceTemplates": []})),
             "resources/read" => match params["uri"].as_str().filter(|uri| !uri.is_empty()) {
@@ -141,6 +206,7 @@ impl Session {
         let Some(requested) = params["protocolVersion"].as_str() else {
             return error(id, -32602, "initialize requires a string protocolVersion");
         };
+        self.confirmations.clear();
         self.version = SUPPORTED_VERSIONS
             .iter()
             .copied()
@@ -193,7 +259,7 @@ impl Session {
     }
 }
 
-fn call(id: Value, params: &Value) -> Value {
+fn call(id: Value, params: &Value, confirmations: &mut confirmation::Confirmations) -> Value {
     for key in params.as_object().expect("validated request params").keys() {
         if key == "task" {
             return error(
@@ -235,7 +301,7 @@ fn call(id: Value, params: &Value) -> Value {
         .get("arguments")
         .cloned()
         .unwrap_or_else(|| json!({}));
-    match tools::call(name, &args) {
+    match tools::call(name, &args, confirmations) {
         Ok((summary, data)) => ok(
             id,
             json!({

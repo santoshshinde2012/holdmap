@@ -56,6 +56,9 @@ pub fn validate_host(input: &str) -> Result<(), String> {
         if v6.parse::<std::net::Ipv6Addr>().is_err() {
             return Err("That isn't a valid IPv6 address".into());
         }
+        if !tail.is_empty() && !tail.starts_with(':') {
+            return Err("Only an optional “:port” may follow a bracketed IPv6 address".into());
+        }
         (v6, tail.strip_prefix(':'))
     } else {
         match rest.rsplit_once(':') {
@@ -378,6 +381,8 @@ mod tests {
             "us er@h",
             "[::1",
             "[nope]",
+            "[::1]ignored",
+            "[::1];fixture",
             "u@",
             "$(id)",
         ] {

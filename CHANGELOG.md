@@ -28,6 +28,13 @@ by [release-please](https://github.com/googleapis/release-please) from
   separate responsibilities.
 - CI checks both npm dependency trees, runs native desktop tests on all three platforms and
   keeps website dependencies up to date through Dependabot.
+- MCP stop tools now preview by default and require the session-local `confirmation_id` from
+  that preview for execution. IDs expire after five minutes, are one-use and bind the original
+  target/options and effects. This intentional Unreleased protocol change requires clients to
+  preview before executing; sessions retain at most 32 pending previews.
+- Security gates now audit both npm lockfiles at all severities, scan full history/current
+  source with Gitleaks, run CodeQL for JavaScript/TypeScript, Rust, Python and Actions, and
+  recheck dependency advisories daily. Workflow actions use immutable commit pins.
 
 ### Fixed
 
@@ -54,6 +61,41 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Agent memory formatting retains fractional gigabytes without overflowing its size threshold.
 - The website demo can return from Agents to List before inspecting or planning a simulated stop.
 - Website release-triggered deployment ignores pull requests that only plan release artifacts.
+
+### Security
+
+- The Linux GTK3 dependency uses a verified GLib 0.18.5 backport of upstream's two-line
+  `VariantStrIter` soundness fix (RUSTSEC-2024-0429). The original version and license remain;
+  source/lockfile verification and an optimized Linux regression cover the local override.
+  Cargo-deny now checks transitive soundness advisories, with no advisory ignores.
+
+- Desktop stops retain the exact reviewed plan behind a one-use confirmation handle, with a
+  five-minute lifetime and 128-preview bound. A fresh semantic check rejects changed owners,
+  protocols or effects before execution. Agent bulk dialogs display every queued plan.
+- MCP executing stops compare fresh effects with retained original plans; agent bulk stops
+  validate all plans and the matching agent selection before any action. Agent port plans retain
+  their TCP/UDP protocol, and pinned process effects require verified current-account ownership.
+  Unknown, foreign or protected owners and unpinned systemd socket plans are refused.
+- The shared executor rechecks process identity and hard/soft protection before first signal
+  and escalation, retains explicit soft authorization, and guards supervisor owner identity.
+- Supervisor targets cannot broaden an individual stop: PM2 requires a verified unique numeric
+  app ID, Homebrew formula names reject option injection and systemd units reject glob patterns.
+- Native folder actions force a fresh authorization scan; TCP/UDP row targets cannot fall
+  through to process-name dispatch. Local-only capabilities and CSP remain narrowly scoped.
+- State and CLI output operations reject symlink/reparse/hard-link redirection where applicable
+  before reads or truncation. Unix state uses checked ownership and `0600`/`0700`; Windows
+  privacy relies on inherited account/profile-directory ACLs, without a blanket owner-only claim.
+  Stack files are checked and read through the same handle.
+- Credential redaction covers authorization/cookie headers, quoted and whitespace-bearing
+  values, encoded query keys and nested JSON. Human CLI output neutralizes external terminal
+  controls and row injection while JSON metadata stays structured.
+- MCP rejects frames larger than 1 MiB and legacy batches larger than 64 messages before
+  dispatch; an oversized frame is drained completely so the next request remains separate.
+- HTTP health paths reject request/header injection. Command output is capped at 4 MiB per
+  stream with inherited-pipe deadlines, and SSH destinations/arguments use validated, quoted
+  command boundaries.
+- Release tags are validated as literal versions before planning; release planning and build
+  jobs use read-only permissions, with publishing authority scoped to publication jobs.
 
 ### Documentation
 

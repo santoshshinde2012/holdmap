@@ -16,7 +16,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -D warnings
+# Each workspace/platform clippy command denies first-party warnings. Avoid a global
+# rustc warning override on the byte-preserved upstream GLib dependency.
 
 jobs:
   lint:
@@ -92,6 +93,8 @@ jobs:
         with:
           command: check
           arguments: --all-features
+      - name: Verify vendored GLib backport and dependency resolution
+        run: python3 scripts/verify-vendored-glib.py
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
@@ -99,12 +102,14 @@ jobs:
           cache-dependency-path: |
             apps/desktop/package-lock.json
             site/package-lock.json
-      - name: npm audit desktop (high and critical)
+      - name: npm audit desktop (all severities)
         working-directory: apps/desktop
-        run: npm audit --audit-level=high
-      - name: npm audit website (high and critical)
+        run: npm audit
+      - name: npm audit website (all severities)
         working-directory: site
-        run: npm audit --audit-level=high
+        run: npm audit
+      - name: Release security regressions
+        run: python3 scripts/test-release-security.py
       - name: actionlint
         env:
           ACTIONLINT_VERSION: 1.7.12
@@ -115,6 +120,28 @@ jobs:
           echo "$ACTIONLINT_SHA256  $f" | sha256sum -c -
           tar xzf "$f" actionlint
           ./actionlint -color
+
+  secrets:
+    name: source and history secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install verified Gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          tool_dir=$(mktemp -d)
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive" -o "$tool_dir/$archive"
+          echo "$GITLEAKS_SHA256  $tool_dir/$archive" | sha256sum -c -
+          tar xzf "$tool_dir/$archive" -C "$tool_dir" gitleaks
+          echo "$tool_dir" >> "$GITHUB_PATH"
+      - run: scripts/check-secrets.sh
 
   frontend:
     name: desktop frontend
@@ -184,3 +211,6 @@ jobs:
         working-directory: apps/desktop
       - name: Native desktop tests
         run: cargo test -p holdmap-desktop --locked
+      - name: Optimized Linux GLib security regression
+        if: runner.os == 'Linux'
+        run: cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security

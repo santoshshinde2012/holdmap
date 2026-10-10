@@ -89,7 +89,11 @@ fn stop_ports(e: &Engine, report: &AgentsReport, a: &AgentsArgs) -> Result<u8> {
         } else {
             for (i, plan) in plans.iter().enumerate() {
                 let (name, port) = &ports[i];
-                println!("{} :{port} ({name})", paint("plan", S::Cyan));
+                println!(
+                    "{} :{port} ({})",
+                    paint("plan", S::Cyan),
+                    holdmap_core::util::printable(name)
+                );
                 print!("{}", crate::render::plan_text(plan));
             }
             println!("{}", style::dim("Dry run: nothing was changed."));
@@ -122,7 +126,11 @@ fn stop_ports(e: &Engine, report: &AgentsReport, a: &AgentsArgs) -> Result<u8> {
     let mut code = crate::exit::OK;
     for (plan, (name, port)) in &actionable {
         if !a.json {
-            println!("{} :{port} ({name})", paint("stop", S::Cyan));
+            println!(
+                "{} :{port} ({})",
+                paint("stop", S::Cyan),
+                holdmap_core::util::printable(name)
+            );
         }
         let report = execute(plan, &mut |l| {
             if !a.json {
@@ -242,7 +250,7 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
                 format!(
                     "{}{branch}  {}  {}",
                     paint(&f.label, S::Bold),
-                    tilde(&f.path),
+                    holdmap_core::util::printable(&tilde(&f.path)),
                     style::dim(tags.join(" · "))
                 ),
             );
@@ -416,7 +424,7 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
     for l in &r.limits {
         out.push_str(&style::dim(format!("note: {l}\n")));
     }
-    out
+    style::terminal_text(&out)
 }
 
 #[cfg(test)]

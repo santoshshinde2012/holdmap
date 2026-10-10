@@ -28,6 +28,10 @@ tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-updater = "2"
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# Exercise the same GTK dependency used by Tauri, including our reviewed soundness backport.
+glib = "0.18"
+
 [lints]
 workspace = true
 

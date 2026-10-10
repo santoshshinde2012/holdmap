@@ -342,13 +342,35 @@ fn parse_range(s: &str) -> Result<(u16, u16), String> {
 
 /// Write `holdmap.1` plus one `holdmap-<command>.1` page per subcommand into `dir`.
 fn write_man_pages(dir: &std::path::Path) -> anyhow::Result<u8> {
+    fn generate(cmd: clap::Command, dir: &std::path::Path) -> std::io::Result<()> {
+        for child in cmd.get_subcommands().filter(|child| !child.is_hide_set()) {
+            generate(child.clone(), dir)?;
+        }
+        let man = clap_mangen::Man::new(cmd);
+        let path = dir.join(man.get_filename());
+        let mut file = holdmap_core::util::create_private(&path)?;
+        man.render(&mut file)?;
+        std::io::Write::flush(&mut file)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            // Generated manuals contain public documentation, and installers expect
+            // them to be readable. Set permissions on the checked descriptor only.
+            file.set_permissions(std::fs::Permissions::from_mode(0o644))?;
+        }
+        Ok(())
+    }
     std::fs::create_dir_all(dir)?;
-    let cmd = Cli::command();
-    clap_mangen::generate_to(cmd, dir)?;
+    let mut cmd = Cli::command().disable_help_subcommand(true);
+    cmd.build();
+    generate(cmd, dir)?;
     for entry in std::fs::read_dir(dir)? {
         let path = entry?.path();
         if path.extension().is_some_and(|e| e == "1") {
-            println!("{}", path.display());
+            println!(
+                "{}",
+                holdmap_core::util::printable(&path.display().to_string())
+            );
         }
     }
     Ok(exit::OK)
@@ -457,9 +479,17 @@ fn main() -> ExitCode {
             {
                 return ExitCode::from(exit::OK);
             }
-            eprintln!("{} {}", style::paint("error:", style::S::BoldRed), e);
+            eprintln!(
+                "{} {}",
+                style::paint("error:", style::S::BoldRed),
+                holdmap_core::util::printable(&e.to_string())
+            );
             for cause in e.chain().skip(1) {
-                eprintln!("  {} {cause}", style::dim("caused by:"));
+                eprintln!(
+                    "  {} {}",
+                    style::dim("caused by:"),
+                    holdmap_core::util::printable(&cause.to_string())
+                );
             }
             ExitCode::from(exit::ERROR)
         }

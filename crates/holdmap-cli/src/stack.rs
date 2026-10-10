@@ -13,6 +13,7 @@ use holdmap_core::stack::{self, ServiceState, ServiceStatus, Stack};
 use holdmap_core::store::Store;
 use holdmap_core::util::{local_url, shell_command, spawn_detached};
 use holdmap_core::*;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -303,9 +304,10 @@ fn up_one(stack: &Stack, s: &stack::Service, a: &UpArgs, docker: bool) -> Result
         );
         return Ok(UpStep::Failed(exit::BUSY));
     };
+    let displayed_command = holdmap_core::redact::line(cmd);
     if a.dry_run {
         println!(
-            "  {} {} {} {} `{cmd}` {}",
+            "  {} {} {} {} `{displayed_command}` {}",
             dim("·"),
             bold(&s.name),
             paint(format!(":{port}"), S::BoldCyan),
@@ -328,7 +330,7 @@ fn up_one(stack: &Stack, s: &stack::Service, a: &UpArgs, docker: bool) -> Result
         .env("PORT", port.to_string())
         .envs(&s.env);
     let mut child = spawn_detached(&mut command, &log)
-        .with_context(|| format!("failed to start `{cmd}` for {}", s.name))?;
+        .with_context(|| format!("failed to start `{displayed_command}` for {}", s.name))?;
     let t0 = Instant::now();
     let timeout = Duration::from_secs(s.ready_timeout_s);
     let interactive = std::io::IsTerminal::is_terminal(&std::io::stderr());
@@ -715,7 +717,22 @@ pub fn init_project(force: bool, print: bool, docker: bool) -> Result<u8> {
         print!("{text}");
         return Ok(exit::OK);
     }
-    std::fs::write(&path, &text).with_context(|| format!("can't write {}", tilde(&path)))?;
+    let mut file = if force {
+        // A project checkout must not redirect an authorized config overwrite to an
+        // unrelated file through a symlink or hard link.
+        holdmap_core::util::create_private(&path)
+    } else {
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        options.open(&path)
+    }
+    .with_context(|| format!("can't write {}", tilde(&path)))?;
+    file.write_all(text.as_bytes())?;
     if services.is_empty() {
         println!(
             "{} wrote {} with an example service (no dev servers are running under this directory).",

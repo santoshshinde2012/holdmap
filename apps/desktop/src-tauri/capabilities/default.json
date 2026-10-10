@@ -1,7 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Least privilege for the main window: listen to backend events and drag the window. Everything else goes through holdmap's own commands, which take ports (never paths, URLs or command lines) from the webview.",
+  "description": "The local main window may listen to backend events and drag itself. Holdmap's native commands validate targets, bind stops to reviewed plans, and resolve folders from a fresh scan; they accept no arbitrary URL or command line.",
+  "local": true,
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",

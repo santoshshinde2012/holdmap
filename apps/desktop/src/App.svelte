@@ -31,7 +31,7 @@
 
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
   type View = "list" | "graph" | "agents";
-  interface Confirm { entry: PortEntry | null; /** More ports to stop after `entry` (Agents "Stop all"). */ queue?: PortEntry[]; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; restart?: boolean }
+  interface Confirm { entry: PortEntry | null; /** Reviewed plans for more ports after `entry` (Agents "Stop all"). */ queue?: { entry: PortEntry; plan: ActionPlan }[]; agentName?: string; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; restart?: boolean }
 
   // Live data is replaced wholesale on every poll, so it is raw state run through `share`:
   // unchanged entries keep their identity and nothing downstream re-renders or re-fetches.
@@ -362,12 +362,22 @@
     }
     if (list.length === 1) return requestStop(list[0], false);
     try {
-      const plan = await api.plan(stopTarget(list[0]), false, false);
+      const plans = await Promise.all(list.map((entry) => api.plan(stopTarget(entry), false, false)));
+      const plan = plans[0];
       confirm = {
         entry: list[0],
-        queue: list.slice(1),
+        agentName: a.name,
+        queue: list.slice(1).map((entry, index) => ({ entry, plan: plans[index + 1] })),
         cluster: null,
-        plan: { ...plan, summary: `Stop ${list.length} ports ${a.name} started: ${list.map((e) => `:${e.port}`).join(", ")}` },
+        plan: {
+          ...plan,
+          summary: `Stop ${list.length} ports ${a.name} started: ${list.map((e) => `:${e.port}`).join(", ")}`,
+          owners: plans.flatMap((p) => p.owners),
+          steps: plans.flatMap((p) => p.steps),
+          warnings: [...new Set(plans.flatMap((p) => p.warnings))],
+          blocked: plans.find((p) => p.blocked)?.blocked ?? null,
+          risk: plans.some((p) => p.risk === "high") ? "high" : plans.some((p) => p.risk === "medium") ? "medium" : "low",
+        },
         force: false,
         allowProtected: false,
         phase: "confirm",
@@ -561,19 +571,19 @@
     const idx = c.entry ? ordered.findIndex((e) => e.id === c.entry!.id) : -1;
     const neighbour = idx >= 0 ? (ordered[idx + 1] ?? ordered[idx - 1])?.id ?? null : null;
     try {
-      const r = await api.stop(target, c.force, c.allowProtected);
+      const r = await api.stop(target, c.force, c.allowProtected, c.plan.confirmation_id);
       c.report = r;
       if (!c.log.length) c.log = r.log;
       // Agents "Stop all": continue with the rest after the first port frees.
       if (r.freed && queue.length) {
         for (const next of queue) {
-          c.log = [...c.log, `→ :${next.port}`];
-          const nr = await api.stop(stopTarget(next), c.force, c.allowProtected);
+          c.log = [...c.log, `→ :${next.entry.port}`];
+          const nr = await api.stop(stopTarget(next.entry), c.force, c.allowProtected, next.plan.confirmation_id);
           c.log = [...c.log, ...nr.log];
           c.report = nr;
           if (!nr.freed) {
             c.phase = "failed";
-            toast("error", `Stopped some ports; :${next.port} is still busy`, nr.log.at(-1));
+            toast("error", `Stopped some ports; :${next.entry.port} is still busy`, nr.log.at(-1));
             return;
           }
         }
@@ -1095,7 +1105,7 @@
   </Dialog>
 {/if}
 {#if confirm}
-  <ConfirmDialog entry={confirm.entry} cluster={confirm.cluster} plan={confirm.plan} restart={!!confirm.restart} phase={confirm.phase} log={confirm.log} report={confirm.report}
+  <ConfirmDialog entry={confirm.entry} cluster={confirm.cluster} plan={confirm.plan} portCount={(confirm.queue?.length ?? 0) + 1} agentName={confirm.agentName} restart={!!confirm.restart} phase={confirm.phase} log={confirm.log} report={confirm.report}
     onconfirm={runStop} oncancel={closeConfirm} onoverride={() => confirm?.entry && requestStop(confirm.entry, confirm.force, true)} />
 {/if}
 {#if showPalette}<CommandPalette {commands} onclose={() => { showPalette = false; }} />{/if}

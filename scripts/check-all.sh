@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-for tool in cargo node npm python3 actionlint; do
+for tool in cargo node npm python3 actionlint gitleaks; do
   command -v "$tool" >/dev/null || { echo "Missing prerequisite: $tool (see CONTRIBUTING.md)" >&2; exit 1; }
 done
 cargo deny --version >/dev/null
@@ -16,6 +16,9 @@ node --input-type=module -e '
 '
 
 scripts/check-versions.sh
+scripts/check-secrets.sh
+python3 scripts/test-release-security.py
+python3 scripts/verify-vendored-glib.py
 actionlint
 git diff --check
 
@@ -26,7 +29,7 @@ git diff --check
   npm run check
   npm test
   npm run test:e2e
-  npm audit --audit-level=high
+  npm audit
 )
 (
   cd site
@@ -35,12 +38,15 @@ git diff --check
   HOLDMAP_SITE_OFFLINE=1 npm run build
   npm test
   npm run test:demo
-  npm audit --audit-level=high
+  npm audit
 )
 
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
+if [[ "$(uname -s)" == Linux ]]; then
+  cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
+fi
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap
 cargo build --locked -p holdmap-desktop
 cargo deny --all-features check

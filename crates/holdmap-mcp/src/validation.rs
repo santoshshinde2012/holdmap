@@ -58,6 +58,13 @@ fn at(value: &Value, schema: &Value, path: &str) -> Result<(), String> {
         }
     }
     if let Some(text) = value.as_str() {
+        if let Some(maximum) = schema["maxLength"].as_u64() {
+            if (text.chars().count() as u64) > maximum {
+                return Err(format!(
+                    "`{path}` must contain at most {maximum} character(s)"
+                ));
+            }
+        }
         if let Some(minimum) = schema["minLength"].as_u64() {
             if (text.chars().count() as u64) < minimum {
                 return Err(format!(
@@ -91,6 +98,16 @@ fn at(value: &Value, schema: &Value, path: &str) -> Result<(), String> {
     if let (Some(values), Some(items)) = (value.as_array(), schema.get("items")) {
         for (index, value) in values.iter().enumerate() {
             at(value, items, &format!("{path}[{index}]"))?;
+        }
+    }
+    if let Some(condition) = schema.get("if") {
+        let branch = if at(value, condition, path).is_ok() {
+            "then"
+        } else {
+            "else"
+        };
+        if let Some(schema) = schema.get(branch) {
+            at(value, schema, path)?;
         }
     }
     Ok(())

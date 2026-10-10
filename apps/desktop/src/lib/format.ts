@@ -121,7 +121,7 @@ export function isForce(plan: ActionPlan): boolean {
 }
 
 export function stopTarget(e: PortEntry): string {
-  return e.protocol === "udp" ? `${e.port}/udp` : String(e.port);
+  return `${e.port}/${e.protocol}`;
 }
 
 export function url(e: PortEntry): string {

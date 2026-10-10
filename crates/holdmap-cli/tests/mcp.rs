@@ -372,6 +372,19 @@ fn cli_mcp_negotiates_every_supported_version_without_mixed_error_results() {
             assert_eq!(tool.get("outputSchema").is_some(), version >= "2025-06-18");
             assert_eq!(tool.get("title").is_some(), version >= "2025-06-18");
             assert_eq!(tool.get("annotations").is_some(), version >= "2025-03-26");
+            if matches!(
+                tool["name"].as_str(),
+                Some("stop_port" | "stop_agent_ports")
+            ) {
+                assert_eq!(
+                    tool["inputSchema"]["properties"]["dry_run"]["default"],
+                    true
+                );
+                assert_eq!(
+                    tool["inputSchema"]["then"]["required"],
+                    json!(["confirmation_id"])
+                );
+            }
         }
         let free = client.request(
             "tools/call",
@@ -429,6 +442,25 @@ fn cli_mcp_rejects_malformed_and_misplaced_stop_controls_before_acting() {
         assert_eq!(response["result"]["isError"], true);
         assert!(tool_text(&response).contains(flag));
         assert!(tool_text(&response).contains("must be boolean"));
+        assert_listener_alive(&listener);
+    }
+    // Validly typed execution requests still need a matching preview from this session.
+    // Neither missing nor invented handles can reach collection/execution or stop the fixture.
+    for arguments in [
+        json!({"port":port,"dry_run":false}),
+        json!({"port":port,"dry_run":false,"confirmation_id":"unknown-session-1"}),
+        json!({"agent":"fixture-agent","dry_run":false}),
+        json!({"agent":"fixture-agent","dry_run":false,"confirmation_id":"unknown-session-1"}),
+    ] {
+        let name = if arguments.get("port").is_some() {
+            "stop_port"
+        } else {
+            "stop_agent_ports"
+        };
+        let response = client.request("tools/call", json!({"name":name,"arguments":arguments}));
+        assert_eq!(response["result"]["isError"], true);
+        let text = tool_text(&response);
+        assert!(text.contains("confirmation_id") || text.contains("confirmation"));
         assert_listener_alive(&listener);
     }
     // Agent-scoped stops share strict pre-execution validation and default to a preview.

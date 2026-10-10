@@ -130,10 +130,12 @@ pub struct Service {
     /// The TCP port it listens on.
     pub port: Option<u16>,
     /// Shell command that starts it; `None` for services started elsewhere.
+    #[serde(serialize_with = "crate::redact::serialize_optional_line")]
     pub command: Option<String>,
     /// Absolute working directory.
     pub cwd: PathBuf,
     /// Extra environment variables (`PORT` is added automatically).
+    #[serde(serialize_with = "crate::redact::serialize_env")]
     pub env: BTreeMap<String, String>,
     /// Services that must be up first.
     pub depends_on: Vec<String>,
@@ -163,6 +165,53 @@ pub fn find(start: &Path) -> Option<PathBuf> {
 /// `.holdmap.toml` dropped into a shared parent directory (`/tmp`, a shared checkout) from
 /// running someone else's commands as you.
 pub fn check_trusted(path: &Path) -> Result<(), StackError> {
+    let file = open_stack_file(path)?;
+    check_trusted_open(path, &file)
+}
+
+fn open_stack_file(path: &Path) -> Result<std::fs::File, StackError> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(not(unix))]
+    if std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(StackError::Unsafe {
+            path: path.to_path_buf(),
+            message: "stack files must not be symbolic links".into(),
+        });
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    let file = options.open(path).map_err(|source| StackError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    #[cfg(windows)]
+    crate::util::check_windows_private_file(&file).map_err(|source| StackError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    Ok(file)
+}
+
+fn check_trusted_open(path: &Path, file: &std::fs::File) -> Result<(), StackError> {
+    let m = file.metadata().map_err(|source| StackError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if !m.is_file() {
+        return Err(StackError::Unsafe {
+            path: path.to_path_buf(),
+            message: "stack files must be regular files".into(),
+        });
+    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
@@ -170,10 +219,6 @@ pub fn check_trusted(path: &Path) -> Result<(), StackError> {
             path: path.to_path_buf(),
             message,
         };
-        let m = std::fs::metadata(path).map_err(|source| StackError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
         // SAFETY: geteuid has no preconditions and can't fail.
         let me = unsafe { libc::geteuid() };
         if m.uid() != me && m.uid() != 0 {
@@ -182,9 +227,9 @@ pub fn check_trusted(path: &Path) -> Result<(), StackError> {
                 m.uid()
             )));
         }
-        if m.mode() & 0o002 != 0 {
+        if m.mode() & 0o022 != 0 {
             return Err(unsafe_(
-                "anyone can write to it; run `chmod o-w` on it first".into(),
+                "another account can write to it; run `chmod go-w` (including `chmod o-w`) on it first".into(),
             ));
         }
     }
@@ -195,11 +240,15 @@ pub fn check_trusted(path: &Path) -> Result<(), StackError> {
 
 /// Read and validate a stack file (refusing one that isn't [`check_trusted`]).
 pub fn load(path: &Path) -> Result<Stack, StackError> {
-    check_trusted(path)?;
-    let text = std::fs::read_to_string(path).map_err(|source| StackError::Io {
-        path: path.to_path_buf(),
-        source,
-    })?;
+    use std::io::Read;
+    let mut file = open_stack_file(path)?;
+    check_trusted_open(path, &file)?;
+    let mut text = String::new();
+    file.read_to_string(&mut text)
+        .map_err(|source| StackError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
     let root = path
         .parent()
         .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()))
@@ -250,7 +299,7 @@ pub fn parse(text: &str, root: &Path, file: &Path) -> Result<Stack, StackError> 
             )));
         }
         if let Some(h) = &s.health {
-            if !h.starts_with('/') {
+            if !crate::http::is_safe_path(h) {
                 return Err(invalid(format!(
                     "service `{name}`: health must be a path like `/health`"
                 )));
@@ -592,6 +641,19 @@ port = 5432
         .unwrap()
     }
 
+    #[test]
+    fn security_stack_exports_redact_commands_and_environment_without_changing_launch_data() {
+        let stack = parse("[services.web]\nport=3000\ncommand=\"node app.js --password 'fixture secret'\"\nenv={API_TOKEN=\"fixture-token\",DATABASE_URL=\"postgres://u:fixture-password@localhost/db\",MODE=\"dev\"}\n", Path::new("/tmp/fixture"), Path::new("/tmp/fixture/.holdmap.toml")).unwrap();
+        let service = &stack.services[0];
+        assert!(service.command.as_ref().unwrap().contains("fixture secret"));
+        assert_eq!(service.env["API_TOKEN"], "fixture-token");
+        let json = serde_json::to_string(&stack).unwrap();
+        for secret in ["fixture secret", "fixture-token", "fixture-password"] {
+            assert!(!json.contains(secret), "{json}");
+        }
+        assert!(json.contains("dev"));
+    }
+
     fn names(v: &[&Service]) -> Vec<String> {
         v.iter().map(|s| s.name.clone()).collect()
     }
@@ -678,6 +740,21 @@ port = 5432
         let err = load(&f).unwrap_err();
         assert!(matches!(err, StackError::Unsafe { .. }), "{err}");
         assert!(err.to_string().contains("chmod o-w"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_stack_rejects_group_writable_and_symlinked_commands() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(FILE_NAME);
+        std::fs::write(&file, "[services.web]\nport=3000\ncommand='echo fixture'\n").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o660)).unwrap();
+        assert!(matches!(load(&file), Err(StackError::Unsafe { .. })));
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+        let link = dir.path().join("linked.toml");
+        symlink(&file, &link).unwrap();
+        assert!(load(&link).is_err());
     }
 
     #[test]

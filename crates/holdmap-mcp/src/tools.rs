@@ -4,8 +4,8 @@ use holdmap_core::agents::{AgentsReport, Evidence, FolderSource};
 use holdmap_core::topology::GraphExporter;
 use holdmap_core::util::{count, human_bytes};
 use holdmap_core::{
-    ephemeral_port, execute, port_busy, probe_tcp, tcp_accepting, Engine, Filter, ProbeResult,
-    Protocol, Risk, ScanOptions, Snapshot, StopOptions, Target,
+    ephemeral_port, port_busy, probe_tcp, tcp_accepting, Engine, Filter, ProbeResult, Protocol,
+    ScanOptions, Snapshot, StopOptions, Target,
 };
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
@@ -15,7 +15,7 @@ pub(super) enum ToolError {
     Failed(String),
 }
 
-fn port_arg(args: &Value, key: &str) -> Result<u16, ToolError> {
+pub(super) fn port_arg(args: &Value, key: &str) -> Result<u16, ToolError> {
     args[key]
         .as_f64()
         .filter(|p| p.fract() == 0.0 && (1.0..=65535.0).contains(p))
@@ -23,7 +23,7 @@ fn port_arg(args: &Value, key: &str) -> Result<u16, ToolError> {
         .ok_or_else(|| ToolError::Failed(format!("`{key}` must be an integer between 1 and 65535")))
 }
 
-fn engine() -> Result<Engine, ToolError> {
+pub(super) fn engine() -> Result<Engine, ToolError> {
     Engine::new(&ScanOptions::default()).map_err(|e| ToolError::Failed(format!("scan failed: {e}")))
 }
 
@@ -178,9 +178,15 @@ pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, 
     (text, serde_json::to_value(&report).unwrap_or_default())
 }
 
-pub(super) fn call(name: &str, args: &Value) -> Result<(String, Value), ToolError> {
-    let definition = super::catalog::definition(name).ok_or(ToolError::Unknown)?;
-    super::validation::validate(args, &definition["inputSchema"]).map_err(ToolError::Failed)?;
+pub(super) fn call(
+    name: &str,
+    args: &Value,
+    confirmations: &mut crate::confirmation::Confirmations,
+) -> Result<(String, Value), ToolError> {
+    if matches!(name, "stop_port" | "stop_agent_ports") {
+        return crate::stops::call(name, args, confirmations);
+    }
+    validate_args(name, args)?;
     match name {
         "list_ports" => Ok(ports_result(engine()?.snapshot(), args)),
         "get_topology" => {
@@ -200,90 +206,6 @@ pub(super) fn call(name: &str, args: &Value) -> Result<(String, Value), ToolErro
             Ok((text, serde_json::to_value(&g).unwrap_or_default()))
         }
         "list_agents" => Ok(agents_result(engine()?.agents(), args)),
-        "stop_agent_ports" => {
-            let q = args["agent"]
-                .as_str()
-                .map(|q| q.trim().to_ascii_lowercase())
-                .filter(|q| !q.is_empty())
-                .ok_or_else(|| ToolError::Failed("`agent` is required".into()))?;
-            let e = engine()?;
-            let mut report = e.agents();
-            report.agents.retain(|agent| agent.matches(&q));
-            if report.agents.is_empty() {
-                return Err(ToolError::Failed(format!(
-                    "No agent matching `{q}` is running."
-                )));
-            }
-            let opts = StopOptions {
-                force: args["force"].as_bool().unwrap_or(false),
-                ..Default::default()
-            };
-            let dry = args["dry_run"].as_bool().unwrap_or(true);
-            let mut plans = Vec::new();
-            let mut texts = Vec::new();
-            let mut reports = Vec::new();
-            for ag in &report.agents {
-                for p in ag.stoppable_ports() {
-                    let plan = e.plan(&Target::Port(p.port), &opts);
-                    if let Some(b) = &plan.blocked {
-                        texts.push(format!(
-                            ":{0} ({1}): refused — {2}",
-                            p.port, ag.name, b.message
-                        ));
-                        plans.push(plan);
-                        continue;
-                    }
-                    if plan.risk == Risk::High || plan.risk == Risk::Medium {
-                        texts.push(format!(
-                            ":{} ({}): refused by agent safety policy (risk: {:?}). Ask the user to run `holdmap agents {} --stop-ports` themselves.",
-                            p.port, ag.name, plan.risk, q
-                        ));
-                        plans.push(plan);
-                        continue;
-                    }
-                    if dry {
-                        texts.push(format!(
-                            ":{} ({}): plan — {}",
-                            p.port, ag.name, plan.summary
-                        ));
-                        plans.push(plan);
-                        continue;
-                    }
-                    let stop = execute(&plan, &mut |_| {});
-                    let _ = holdmap_core::store::Store::open_default().record(
-                        &holdmap_core::history::entries_from_plan(&e.scan, &plan, &stop),
-                    );
-                    texts.push(if stop.freed {
-                        format!(":{} ({}): free ({} ms).", p.port, ag.name, stop.elapsed_ms)
-                    } else {
-                        format!(
-                            ":{} ({}): failed — {}",
-                            p.port,
-                            ag.name,
-                            stop.error.clone().unwrap_or_default()
-                        )
-                    });
-                    plans.push(plan);
-                    reports.push(stop);
-                }
-            }
-            if texts.is_empty() {
-                return Ok((
-                    format!(
-                        "{} has no stoppable ports (only its own protected listeners, if any).",
-                        report.agents[0].name
-                    ),
-                    json!({"agents": report.agents.iter().map(|a| &a.id).collect::<Vec<_>>(), "plans": [], "reports": []}),
-                ));
-            }
-            if !dry && reports.iter().any(|r| !r.freed) {
-                return Err(ToolError::Failed(texts.join("\n")));
-            }
-            Ok((
-                texts.join("\n"),
-                json!({"plans": plans, "reports": reports}),
-            ))
-        }
         "plan_cluster_stop" => {
             let c = args["cluster"]
                 .as_str()
@@ -396,52 +318,11 @@ pub(super) fn call(name: &str, args: &Value) -> Result<(String, Value), ToolErro
                 std::thread::sleep(Duration::from_millis(200));
             }
         }
-        "stop_port" => {
-            let port = port_arg(args, "port")?;
-            let opts = StopOptions {
-                force: args["force"].as_bool().unwrap_or(false),
-                ..Default::default()
-            };
-            let e = engine()?;
-            let plan = e.plan(&Target::Port(port), &opts);
-            if let Some(b) = &plan.blocked {
-                return Err(ToolError::Failed(format!("Refused: {}", b.message)));
-            }
-            let allow_non_dev = args["allow_non_dev"].as_bool().unwrap_or(false);
-            if plan.risk == Risk::High || (plan.risk == Risk::Medium && !allow_non_dev) {
-                return Err(ToolError::Failed(format!(
-                    "Refused by agent safety policy (risk: {:?}). {} Ask the user to run `holdmap stop {port}` themselves{}.",
-                    plan.risk,
-                    plan.warnings.join(" "),
-                    if plan.risk == Risk::Medium { ", or retry with allow_non_dev=true if they asked you to" } else { "" }
-                )));
-            }
-            if args["dry_run"].as_bool().unwrap_or(false) {
-                let steps: Vec<String> = plan.steps.iter().map(|s| s.describe()).collect();
-                return Ok((
-                    format!("Plan (dry run): {}\n- {}", plan.summary, steps.join("\n- ")),
-                    serde_json::to_value(&plan).unwrap_or_default(),
-                ));
-            }
-            let report = execute(&plan, &mut |_| {});
-            // Like the CLI and the app: what an agent stopped shows up in `holdmap history`
-            // and can be brought back with `holdmap restart`. Best effort.
-            let _ = holdmap_core::store::Store::open_default().record(
-                &holdmap_core::history::entries_from_plan(&e.scan, &plan, &report),
-            );
-            if report.success {
-                Ok((
-                    format!("Port {port} is free (took {} ms).", report.elapsed_ms),
-                    serde_json::to_value(&report).unwrap_or_default(),
-                ))
-            } else {
-                Err(ToolError::Failed(format!(
-                    "Stop failed: {}\n{}",
-                    report.error.unwrap_or_default(),
-                    report.log.join("\n")
-                )))
-            }
-        }
         _ => Err(ToolError::Unknown),
     }
+}
+
+pub(super) fn validate_args(name: &str, args: &Value) -> Result<(), ToolError> {
+    let definition = super::catalog::definition(name).ok_or(ToolError::Unknown)?;
+    super::validation::validate(args, &definition["inputSchema"]).map_err(ToolError::Failed)
 }

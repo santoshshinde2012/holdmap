@@ -40,6 +40,31 @@ pub enum Supervisor {
     },
 }
 
+impl Supervisor {
+    pub(crate) fn socket_command_matches(&self, program: &str, args: &[String]) -> bool {
+        let Self::SystemdSocket {
+            unit,
+            user,
+            service,
+        } = self
+        else {
+            return false;
+        };
+        if !crate::util::exact_systemd_unit(unit, ".socket")
+            || service
+                .as_deref()
+                .is_some_and(|service| !crate::util::exact_systemd_unit(service, ".service"))
+        {
+            return false;
+        }
+        let mut expected: Vec<String> = if *user { vec!["--user".into()] } else { vec![] };
+        expected.push("stop".into());
+        expected.push(unit.clone());
+        expected.extend(service.iter().cloned());
+        program == "systemctl" && args == expected
+    }
+}
+
 /// The *effective* owner of a port: what you actually have to stop.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -162,6 +187,10 @@ pub enum Step {
         args: Vec<String>,
         /// Why this command is needed.
         reason: String,
+        /// Captured owner identity for an ordinary supervisor stop. Named systemd socket
+        /// units use their logical unit identity instead of signalling their shared manager.
+        #[serde(default)]
+        guard: Option<ProcRef>,
     },
     /// Confirm the port is actually free afterwards.
     VerifyFree {
@@ -280,12 +309,174 @@ pub struct ActionPlan {
     pub warnings: Vec<String>,
     /// Overall risk.
     pub risk: Risk,
+    /// Explicit authorization to stop soft-protected processes. Old serialized plans default
+    /// to no override; hard protections always apply.
+    #[serde(default)]
+    pub allow_protected: bool,
 }
 
 impl ActionPlan {
     /// True when the plan can't run without an override (or at all).
     pub fn is_blocked(&self) -> bool {
         self.blocked.is_some()
+    }
+
+    /// Whether a fresh plan has the same authorized effects as this preview. Display text,
+    /// metrics and warnings do not grant authority. Missing process start tokens fail closed.
+    pub fn same_effects(&self, other: &Self) -> bool {
+        !self.is_blocked()
+            && !other.is_blocked()
+            && self.target == other.target
+            && self.allow_protected == other.allow_protected
+            && !self.steps.is_empty()
+            && self.steps.iter().all(|step| match step {
+                Step::RunCommand { program, args, guard: None, .. } => self.owners.iter().any(|owner| matches!(owner, Owner::Supervised { supervisor, .. } if supervisor.socket_command_matches(program, args))),
+                _ => true,
+            })
+            && self.owners.len() == other.owners.len()
+            && self
+                .owners
+                .iter()
+                .zip(&other.owners)
+                .all(|(a, b)| same_owner(a, b))
+            && self.steps.len() == other.steps.len()
+            && self
+                .steps
+                .iter()
+                .zip(&other.steps)
+                .all(|(a, b)| same_step(a, b))
+    }
+}
+
+fn same_owner(a: &Owner, b: &Owner) -> bool {
+    match (a, b) {
+        (Owner::Process { pid: a, .. }, Owner::Process { pid: b, .. })
+        | (Owner::Protected { pid: a, .. }, Owner::Protected { pid: b, .. }) => a == b,
+        (
+            Owner::ProcessTree {
+                root_pid: ar,
+                pids: ap,
+                ..
+            },
+            Owner::ProcessTree {
+                root_pid: br,
+                pids: bp,
+                ..
+            },
+        ) => ar == br && ap == bp,
+        (
+            Owner::Container {
+                container: a,
+                forwarder_pid: ap,
+            },
+            Owner::Container {
+                container: b,
+                forwarder_pid: bp,
+            },
+        ) => a.id == b.id && a.runtime == b.runtime && a.private_port == b.private_port && ap == bp,
+        (
+            Owner::Supervised {
+                supervisor: a,
+                pid: ap,
+                ..
+            },
+            Owner::Supervised {
+                supervisor: b,
+                pid: bp,
+                ..
+            },
+        ) => a == b && ap == bp,
+        (
+            Owner::OsService {
+                service: a,
+                pid: ap,
+            },
+            Owner::OsService {
+                service: b,
+                pid: bp,
+            },
+        ) => a == b && ap == bp,
+        // Invisible/free/reserved owners cannot authorize an execution.
+        _ => false,
+    }
+}
+
+fn same_step(a: &Step, b: &Step) -> bool {
+    match (a, b) {
+        (
+            Step::SignalProcesses {
+                processes: a,
+                force: af,
+                timeout_ms: at,
+            },
+            Step::SignalProcesses {
+                processes: b,
+                force: bf,
+                timeout_ms: bt,
+            },
+        ) => {
+            !a.is_empty()
+                && af == bf
+                && at == bt
+                && a.len() == b.len()
+                && a.iter().zip(b).all(|(a, b)| {
+                    a.start_token != 0 && a.pid == b.pid && a.start_token == b.start_token
+                })
+        }
+        (
+            Step::StopContainer {
+                id: a,
+                runtime: ar,
+                endpoint: ae,
+                timeout_s: at,
+                ..
+            },
+            Step::StopContainer {
+                id: b,
+                runtime: br,
+                endpoint: be,
+                timeout_s: bt,
+                ..
+            },
+        ) => !a.is_empty() && a == b && ar == br && ae == be && at == bt,
+        (
+            Step::RunCommand {
+                program: a,
+                args: aa,
+                guard: ag,
+                ..
+            },
+            Step::RunCommand {
+                program: b,
+                args: ba,
+                guard: bg,
+                ..
+            },
+        ) => {
+            !a.is_empty()
+                && a == b
+                && aa == ba
+                && match (ag, bg) {
+                    (Some(a), Some(b)) => {
+                        a.start_token != 0 && a.pid == b.pid && a.start_token == b.start_token
+                    }
+                    (None, None) => true,
+                    _ => false,
+                }
+        }
+        (
+            Step::VerifyFree {
+                port: a,
+                protocol: ap,
+                timeout_ms: at,
+            },
+            Step::VerifyFree {
+                port: b,
+                protocol: bp,
+                timeout_ms: bt,
+            },
+        ) => a == b && ap == bp && at == bt,
+        _ => false,
     }
 }
 
@@ -430,4 +621,172 @@ pub struct StopReport {
     pub log: Vec<String>,
     /// The first error, if any step failed.
     pub error: Option<String>,
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    fn plan() -> ActionPlan {
+        ActionPlan {
+            target: ":3000".into(),
+            owners: vec![Owner::Process {
+                pid: 42,
+                name: "node".into(),
+            }],
+            summary: "preview".into(),
+            steps: vec![
+                Step::SignalProcesses {
+                    processes: vec![ProcRef {
+                        pid: 42,
+                        name: "node".into(),
+                        start_token: 1000,
+                        command: "node server.js".into(),
+                    }],
+                    force: false,
+                    timeout_ms: 5000,
+                },
+                Step::VerifyFree {
+                    port: 3000,
+                    protocol: Protocol::Tcp,
+                    timeout_ms: 3000,
+                },
+            ],
+            blocked: None,
+            warnings: vec![],
+            risk: Risk::Low,
+            allow_protected: false,
+        }
+    }
+
+    #[test]
+    fn security_confirmation_compares_identity_and_authorized_effects() {
+        let original = plan();
+        let mut display = original.clone();
+        display.summary = "different label".into();
+        display.warnings = vec!["diagnostic".into()];
+        if let Owner::Process { name, .. } = &mut display.owners[0] {
+            *name = "different display name".into();
+        }
+        if let Step::SignalProcesses { processes, .. } = &mut display.steps[0] {
+            processes[0].name = "renamed".into();
+            processes[0].command = "different display text".into();
+        }
+        assert!(original.same_effects(&display));
+        let mut changed = original.clone();
+        changed.allow_protected = true;
+        assert!(!original.same_effects(&changed));
+        changed = original.clone();
+        if let Owner::Process { pid, .. } = &mut changed.owners[0] {
+            *pid += 1;
+        }
+        assert!(!original.same_effects(&changed));
+        for token in [0, 1001] {
+            changed = original.clone();
+            if let Step::SignalProcesses { processes, .. } = &mut changed.steps[0] {
+                processes[0].start_token = token;
+            }
+            assert!(!original.same_effects(&changed));
+        }
+        changed = original.clone();
+        if let Step::SignalProcesses { force, .. } = &mut changed.steps[0] {
+            *force = true;
+        }
+        assert!(!original.same_effects(&changed));
+        changed = original.clone();
+        if let Step::VerifyFree { protocol, .. } = &mut changed.steps[1] {
+            *protocol = Protocol::Udp;
+        }
+        assert!(!original.same_effects(&changed));
+        changed = original.clone();
+        changed.target = "pid:42".into();
+        assert!(!original.same_effects(&changed));
+        let mut old_json = serde_json::to_value(&original).unwrap();
+        old_json.as_object_mut().unwrap().remove("allow_protected");
+        assert!(
+            !serde_json::from_value::<ActionPlan>(old_json)
+                .unwrap()
+                .allow_protected
+        );
+    }
+
+    #[test]
+    fn security_supervisor_preview_pins_processes_or_exact_socket_units() {
+        let mut original = plan();
+        let Step::SignalProcesses { processes, .. } = &original.steps[0] else {
+            unreachable!();
+        };
+        let guard = processes[0].clone();
+        original.owners = vec![Owner::Supervised {
+            supervisor: Supervisor::Pm2 {
+                name: "app".into(),
+                id: "1".into(),
+            },
+            pid: guard.pid,
+            name: guard.name.clone(),
+        }];
+        original.steps[0] = Step::RunCommand {
+            program: "pm2".into(),
+            args: vec!["stop".into(), "1".into()],
+            reason: "stop app".into(),
+            guard: Some(guard),
+        };
+        assert!(original.same_effects(&original));
+        let mut reused = original.clone();
+        if let Step::RunCommand {
+            guard: Some(guard), ..
+        } = &mut reused.steps[0]
+        {
+            guard.start_token += 1;
+        }
+        assert!(!original.same_effects(&reused));
+        if let Step::RunCommand { guard, .. } = &mut reused.steps[0] {
+            *guard = None;
+        }
+        assert!(
+            !reused.same_effects(&reused),
+            "old ordinary service plans lack pinned identity"
+        );
+        let mut socket = original;
+        socket.owners = vec![Owner::Supervised {
+            supervisor: Supervisor::SystemdSocket {
+                unit: "fixture.socket".into(),
+                user: false,
+                service: Some("fixture.service".into()),
+            },
+            pid: 1,
+            name: "systemd".into(),
+        }];
+        socket.steps[0] = Step::RunCommand {
+            program: "systemctl".into(),
+            args: vec![
+                "stop".into(),
+                "fixture.socket".into(),
+                "fixture.service".into(),
+            ],
+            reason: "stop unit".into(),
+            guard: None,
+        };
+        assert!(socket.same_effects(&socket));
+        if let Step::RunCommand { args, .. } = &mut socket.steps[0] {
+            args[1] = "different.socket".into();
+        }
+        assert!(!socket.same_effects(&socket));
+        for (unit, service) in [
+            ("*.socket", "fixture.service"),
+            ("--all.socket", "fixture.service"),
+            ("fixture.socket", "*.service"),
+            (".socket", "fixture.service"),
+        ] {
+            let supervisor = Supervisor::SystemdSocket {
+                unit: unit.into(),
+                user: false,
+                service: Some(service.into()),
+            };
+            assert!(!supervisor.socket_command_matches(
+                "systemctl",
+                &["stop".into(), unit.into(), service.into()]
+            ));
+        }
+    }
 }

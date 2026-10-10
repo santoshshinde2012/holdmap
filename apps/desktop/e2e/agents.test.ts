@@ -79,7 +79,13 @@ test("agent folder actions and stop-all planning preserve the current listeners"
   await expect(app.getByText("Opened in VS Code", { exact: true })).toBeVisible();
   await cursor.getByRole("button", { name: "Stop all (2)", exact: true }).click();
   const plan = app.getByRole("alertdialog");
+  await expect(plan.getByRole("heading", { name: "Stop Cursor's 2 ports?", exact: true })).toBeVisible();
+  await expect(plan.getByRole("button", { name: /^Stop 2 ports/ })).toBeVisible();
   await expect(plan).toContainText("Stop 2 ports Cursor started: :3000, :5173");
+  await expect(plan.getByRole("list", { name: "Plan", exact: true }).getByRole("listitem")).toHaveCount(4);
+  await expect(plan).toContainText("43000");
+  await expect(plan).toContainText("45173");
+  await expect(plan).toContainText("port 5173 is free");
   await plan.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(plan).toHaveCount(0);
   await expect(cursor).toContainText("2 stoppable");

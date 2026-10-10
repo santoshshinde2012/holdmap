@@ -6,7 +6,7 @@
 use crate::history::HistoryEntry;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 
 /// A pinned ("favourite") port, shown first and watched even while it's free.
@@ -195,9 +195,13 @@ impl Store {
 
     /// Load the config; a missing or unreadable file yields defaults.
     pub fn config(&self) -> Config {
-        fs::read_to_string(self.config_path())
+        self.read_file("config.json")
             .ok()
-            .and_then(|t| serde_json::from_str(&t).ok())
+            .and_then(|f| {
+                let mut text = String::new();
+                f.take(1024 * 1024).read_to_string(&mut text).ok()?;
+                serde_json::from_str(&text).ok()
+            })
             .unwrap_or_default()
     }
 
@@ -217,14 +221,92 @@ impl Store {
 
     fn write_atomic(&self, path: &Path, bytes: &[u8]) -> io::Result<()> {
         crate::util::create_private_dir(&self.dir)?;
-        let tmp = path.with_extension("tmp");
+        #[cfg(unix)]
         {
-            // Owner-only: the history keeps the real command lines of stopped services.
-            let mut f = crate::util::create_private(&tmp)?;
-            f.write_all(bytes)?;
-            f.sync_all()?;
+            use std::os::fd::{AsRawFd, FromRawFd};
+            let dir = self.open_dir()?;
+            let name = path.file_name().and_then(|n| n.to_str()).ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidInput, "invalid state filename")
+            })?;
+            let dest = std::ffi::CString::new(name).map_err(io::Error::other)?;
+            let (tmp, mut file) = loop {
+                let tmp = std::ffi::CString::new(format!(
+                    ".{name}.{}.{}.tmp",
+                    std::process::id(),
+                    next_temp_id()
+                ))
+                .map_err(io::Error::other)?;
+                // SAFETY: the directory handle and NUL-terminated name are valid. Exclusive
+                // creation prevents a pre-existing link from being opened or truncated.
+                let fd = unsafe {
+                    libc::openat(
+                        dir.as_raw_fd(),
+                        tmp.as_ptr(),
+                        libc::O_WRONLY
+                            | libc::O_CREAT
+                            | libc::O_EXCL
+                            | libc::O_NOFOLLOW
+                            | libc::O_CLOEXEC,
+                        0o600,
+                    )
+                };
+                if fd >= 0 {
+                    // SAFETY: openat returned a new owned descriptor.
+                    break (tmp, unsafe { fs::File::from_raw_fd(fd) });
+                }
+                let error = io::Error::last_os_error();
+                if error.kind() != io::ErrorKind::AlreadyExists {
+                    return Err(error);
+                }
+            };
+            let result = (|| {
+                file.write_all(bytes)?;
+                file.sync_all()?;
+                // SAFETY: both names and the held directory descriptor are valid. Relative
+                // operations remain attached to that directory if a parent path changes.
+                if unsafe {
+                    libc::renameat(
+                        dir.as_raw_fd(),
+                        tmp.as_ptr(),
+                        dir.as_raw_fd(),
+                        dest.as_ptr(),
+                    )
+                } != 0
+                {
+                    return Err(io::Error::last_os_error());
+                }
+                Ok(())
+            })();
+            if result.is_err() {
+                // SAFETY: remove only the exclusive temporary file in the held directory.
+                unsafe { libc::unlinkat(dir.as_raw_fd(), tmp.as_ptr(), 0) };
+            }
+            result
         }
-        fs::rename(tmp, path)
+        #[cfg(not(unix))]
+        {
+            // Windows ACLs are inherited from the account-controlled directory.
+            let tmp = self.dir.join(format!(
+                ".{}.{}.{}.tmp",
+                path.file_name().unwrap_or_default().to_string_lossy(),
+                std::process::id(),
+                next_temp_id()
+            ));
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&tmp)?;
+            let result = (|| {
+                file.write_all(bytes)?;
+                file.sync_all()?;
+                drop(file);
+                fs::rename(&tmp, path)
+            })();
+            if result.is_err() {
+                let _ = fs::remove_file(&tmp);
+            }
+            result
+        }
     }
 
     /// Append stopped ports to the history, trimming it to `history_limit`.
@@ -247,7 +329,7 @@ impl Store {
 
     /// Most recent first.
     pub fn history(&self, limit: usize) -> Vec<HistoryEntry> {
-        let Ok(f) = fs::File::open(self.history_path()) else {
+        let Ok(f) = self.read_file("history.jsonl") else {
             return Vec::new();
         };
         let mut v: Vec<HistoryEntry> = io::BufReader::new(f)
@@ -258,6 +340,85 @@ impl Store {
         v.reverse();
         v.truncate(limit);
         v
+    }
+
+    #[cfg(unix)]
+    fn open_dir(&self) -> io::Result<fs::File> {
+        use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+        let dir = fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+            .open(&self.dir)?;
+        let meta = dir.metadata()?;
+        // SAFETY: geteuid has no preconditions.
+        if meta.uid() != unsafe { libc::geteuid() } || meta.mode() & 0o077 != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "state directory must be private and owned by the current account",
+            ));
+        }
+        Ok(dir)
+    }
+
+    fn read_file(&self, name: &str) -> io::Result<fs::File> {
+        #[cfg(unix)]
+        {
+            use std::os::fd::{AsRawFd, FromRawFd};
+            use std::os::unix::fs::MetadataExt;
+            let dir = self.open_dir()?;
+            let name = std::ffi::CString::new(name).map_err(io::Error::other)?;
+            // SAFETY: directory and name are valid; returned descriptor is independently owned.
+            let fd = unsafe {
+                libc::openat(
+                    dir.as_raw_fd(),
+                    name.as_ptr(),
+                    libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+                )
+            };
+            if fd < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            // SAFETY: openat returned a new descriptor, now owned by File.
+            let file = unsafe { fs::File::from_raw_fd(fd) };
+            crate::util::check_owned_file(&file)?;
+            if file.metadata()?.mode() & 0o022 != 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "state files must not be writable by other accounts",
+                ));
+            }
+            Ok(file)
+        }
+        #[cfg(not(unix))]
+        {
+            self.check_dir()?;
+            crate::util::open_private_read(&self.dir.join(name))
+        }
+    }
+
+    #[cfg(not(unix))]
+    fn check_dir(&self) -> io::Result<()> {
+        let meta = fs::symlink_metadata(&self.dir)?;
+        if !meta.is_dir() || meta.file_type().is_symlink() {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "state directory must not be a link",
+            ));
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            if meta.file_attributes()
+                & windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT
+                != 0
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "state directory must not be a reparse point",
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// The most recent history entry for `port`.
@@ -277,11 +438,33 @@ impl Store {
 
     /// Forget the stop history.
     pub fn clear_history(&self) -> io::Result<()> {
-        match fs::remove_file(self.history_path()) {
+        let result = (|| {
+            #[cfg(unix)]
+            {
+                use std::os::fd::AsRawFd;
+                let dir = self.open_dir()?;
+                // SAFETY: the checked directory is held open; unlink only its named entry.
+                if unsafe { libc::unlinkat(dir.as_raw_fd(), c"history.jsonl".as_ptr(), 0) } != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                Ok(())
+            }
+            #[cfg(not(unix))]
+            {
+                self.check_dir()?;
+                fs::remove_file(self.history_path())
+            }
+        })();
+        match result {
             Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
             _ => Ok(()),
         }
     }
+}
+
+fn next_temp_id() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 #[cfg(test)]
@@ -301,6 +484,75 @@ mod tests {
             framework: None,
             pid: 1,
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_history_rejects_replaceable_files_and_shared_directories() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::new(dir.path().join("state"));
+        store.record(&[h(3000, 7)]).unwrap();
+        let history = store.history_path();
+        fs::set_permissions(&history, fs::Permissions::from_mode(0o660)).unwrap();
+        assert!(
+            store.entry(7, 3000).is_none(),
+            "other-account writable restart commands must not load"
+        );
+        fs::set_permissions(&history, fs::Permissions::from_mode(0o600)).unwrap();
+        let target = dir.path().join("target");
+        fs::rename(&history, &target).unwrap();
+        symlink(&target, &history).unwrap();
+        assert!(store.history(10).is_empty());
+        fs::remove_file(&history).unwrap();
+        fs::hard_link(&target, &history).unwrap();
+        assert!(store.history(10).is_empty());
+        fs::remove_file(&target).unwrap();
+        assert!(store.entry(7, 3000).is_some());
+        fs::set_permissions(store.dir(), fs::Permissions::from_mode(0o770)).unwrap();
+        assert!(store.history(10).is_empty());
+        store.save_config(&Config::default()).unwrap();
+        assert_eq!(
+            fs::metadata(store.dir()).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_atomic_save_does_not_follow_predictable_temp_links() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::new(dir.path().join("state"));
+        crate::util::create_private_dir(store.dir()).unwrap();
+        let target = dir.path().join("target");
+        fs::write(&target, "fixture must survive").unwrap();
+        symlink(&target, store.dir().join("config.tmp")).unwrap();
+        let mut config = Config::default();
+        config.set_pin(3000, None);
+        store.save_config(&config).unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "fixture must survive");
+        assert!(store.config().is_pinned(3000));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_clear_history_refuses_a_redirected_state_directory() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("unrelated");
+        crate::util::create_private_dir(&target).unwrap();
+        fs::write(target.join("history.jsonl"), "fixture must survive").unwrap();
+        let redirect = dir.path().join("state");
+        symlink(&target, &redirect).unwrap();
+        assert!(Store::new(redirect).clear_history().is_err());
+        assert_eq!(
+            fs::read_to_string(target.join("history.jsonl")).unwrap(),
+            "fixture must survive"
+        );
+        Store::new(dir.path().join("missing"))
+            .clear_history()
+            .unwrap();
     }
 
     #[test]

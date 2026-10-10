@@ -28,6 +28,8 @@
     onoverride,
     cluster = null,
     restart = false,
+    portCount = 1,
+    agentName = null,
   }: {
     /** The port being stopped; null when stopping a whole cluster. */
     entry: PortEntry | null;
@@ -42,6 +44,9 @@
     onoverride: () => void;
     /** Stop, then start the same command again (the details pane's Restart). */
     restart?: boolean;
+    /** Number of reviewed ports in an agent bulk action; single-port dialogs keep their labels. */
+    portCount?: number;
+    agentName?: string | null;
   } = $props();
 
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -58,13 +63,14 @@
   const freed = $derived(phase === "done" || log.some((l) => /is free/.test(l)));
   /** Neither a port nor a cluster: a bulk stop ("all dev servers"). */
   const bulk = $derived(!entry && !cluster);
+  const multiple = $derived(!!entry && !cluster && Number.isSafeInteger(portCount) && portCount > 1);
   const verb = $derived(restart ? "Restart" : cluster ? "Stop cluster" : force ? "Force kill" : entry?.container ? "Stop container" : "Stop");
   /** The confirm button names its target ("Stop :3000"), so the click is unambiguous on its own. */
-  const confirmLabel = $derived(entry ? `${verb} :${entry.port}` : bulk ? "Stop all" : verb);
+  const confirmLabel = $derived(multiple ? `Stop ${portCount} ports` : entry ? `${verb} :${entry.port}` : bulk ? "Stop all" : verb);
   const order = $derived(cluster ? orderFromSummary(plan.summary) : []);
-  const subject = $derived(cluster ? cluster.name : entry ? title(entry) : plan.target);
-  const heading = $derived(phase === "done" ? (cluster ? `Cluster ${cluster.name} stopped` : bulk ? "Dev servers stopped" : `Port ${entry?.port} is free`) : blocked ? (bulk ? `Nothing to stop` : `Can't stop ${cluster ? cluster.name : `:${entry?.port}`} safely`) : `${verb} ${subject}?`);
-  const sub = $derived(cluster ? `${CLUSTER_LABEL[cluster.kind]}${cluster.detail ? ` · ${cluster.detail}` : ""} · ${cluster.nodes.length} services` : entry ? `:${entry.port} · ${entry.process ? `${entry.process.name} · PID ${entry.process.pid}` : entry.container?.name ?? ""}` : bulk ? stepCount(plan) : "");
+  const subject = $derived(multiple ? `${agentName ? `${agentName}'s ` : ""}${portCount} ports` : cluster ? cluster.name : entry ? title(entry) : plan.target);
+  const heading = $derived(phase === "done" ? (multiple ? `${portCount} ports are free` : cluster ? `Cluster ${cluster.name} stopped` : bulk ? "Dev servers stopped" : `Port ${entry?.port} is free`) : blocked ? (multiple ? `Can't stop ${subject} safely` : bulk ? `Nothing to stop` : `Can't stop ${cluster ? cluster.name : `:${entry?.port}`} safely`) : `${verb} ${subject}?`);
+  const sub = $derived(multiple ? "Every port's steps appear below" : cluster ? `${CLUSTER_LABEL[cluster.kind]}${cluster.detail ? ` · ${cluster.detail}` : ""} · ${cluster.nodes.length} services` : entry ? `:${entry.port} · ${entry.process ? `${entry.process.name} · PID ${entry.process.pid}` : entry.container?.name ?? ""}` : bulk ? stepCount(plan) : "");
 
   function stepCount(p: ActionPlan): string {
     const s = p.steps.find((x) => x.action === "signal_processes");
