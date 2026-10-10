@@ -36,9 +36,16 @@ files are retained so the imported package can be verified exactly.
 This includes upstream's `Cargo.toml.orig` metadata; it is part of the published crate.
 Git attributes preserve the snapshot's original bytes on Windows as well as Unix.
 
+The Linux regression's direct GLib dependency names this audited source with
+`path = "../../../vendor/glib"` in the desktop manifest. The desktop crate has
+`publish = false`, so it needs no registry fallback. GTK continues to use the root
+`[patch.crates-io]` override; the verifier requires both dependency edges to select the same
+local GLib 0.18.5 package. This declaration makes the test source explicit without changing
+the version, lockfile or advisory policy.
+
 Run `python3 scripts/verify-vendored-glib.py` from the repository to verify the complete source
 snapshot, reverse both upstream patches and the local initialization change to prove they
-contain only the audited changes, and check that Cargo.lock and GTK's resolved dependency
+contain only the audited changes, and check that Cargo.lock, GTK and the Linux regression
 select this local copy. The verifier requires Python
 3.11+ and Cargo; locked metadata resolution can fetch dependencies but does not build GTK.
 On Linux, run the iterator and boxed-inline slice regressions against the actual resolved
@@ -51,9 +58,10 @@ G_DEBUG=fatal-warnings MALLOC_PERTURB_=165 cargo test -p holdmap-desktop --locke
 `cargo-deny` checks transitive unsoundness advisories with `unsound = "all"`. It does not scan
 local path packages against registry advisories, so a clean result alone does not verify these
 source changes. The source verifier and optimized runtime regressions are required checks; no
-advisory is ignored. Dependabot may continue reporting the registry version in older branches
-or released lockfiles. Track remediation through the changed source and resolution, rather
-than describing the original advisory as a false positive.
+advisory is ignored. Dependabot may continue reporting the default branch's registry
+declaration until this change is merged and its dependency graph refreshes. The original
+registry crate and older released lockfiles remain affected. Track remediation through the
+changed source and resolution, rather than describing the original advisory as a false positive.
 
 When the desktop binding family can use a compatible fixed upstream release, remove the path
 patch, this snapshot and its provenance checks together. Until then, changes to this directory

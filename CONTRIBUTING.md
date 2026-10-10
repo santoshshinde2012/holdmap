@@ -78,12 +78,12 @@ cargo test --workspace --locked
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap
 cargo build --locked -p holdmap-desktop
 scripts/check-cross.sh                       # type-checks the macOS and Windows backends from Linux
-(cd site && npm run check && npm run build && npm test)  # website: types, links, size budget
+(cd site && npm run check && npm run build && npm test)  # website: types, links, size budget and SEO
 scripts/check-versions.sh
 scripts/check-secrets.sh                     # full Git history and tracked/new source; needs a full clone
 python3 scripts/test-release-security.py    # isolated release input regressions; never publishes
 actionlint
-python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK resolution
+python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK/Linux test resolution
 cargo deny --all-features check
 (cd apps/desktop && npm audit)
 (cd site && npm audit)
