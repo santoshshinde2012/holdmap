@@ -13,6 +13,16 @@ as they're ready, with credit unless you'd rather stay anonymous.
 
 ## Scope
 
+Local machine shutdown in current desktop source is also in scope. It requires a trusted
+main webview and a one-use confirmation that expires after 60 seconds. The backend uses
+fixed OS commands without shell interpolation, force flags, elevation or remote targets.
+Linux requires systemd support for explicit inhibitor checks (248 or newer). macOS may
+request Automation permission. Windows uses the OS system directory and a zero timeout
+without the force flag. Unsaved work can still be lost; users must save before confirming.
+An accepted or uncertain request prevents further shutdown requests until the app fully
+quits and reopens. Closing the dialog does not cancel an accepted OS request. The public
+browser demo has no native shutdown capability.
+
 Anything that breaks the [safety model](README.md#safety-model) is in scope: holdmap signalling a
 process it shouldn't (a protected process, another user's process, the wrong process after PID
 reuse, or anything outside the confirmed plan), the MCP server stopping something it must refuse,

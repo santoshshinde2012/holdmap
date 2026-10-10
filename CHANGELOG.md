@@ -10,6 +10,10 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- Desktop Power settings with local computer identification, an explicit save-work
+  acknowledgement, expiring one-use shutdown confirmations and a browser-only simulation.
+  Native adapters preserve OS permissions and inhibitors without forced termination.
+
 - Agent tool visibility across desktop, CLI and MCP: likely MCP server processes, development
   servers, shells and commands, including processes without listening ports. Tool identities
   carry evidence and commands remain redacted.

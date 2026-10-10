@@ -180,6 +180,20 @@ When a command fails with "port in use", it prints who holds the port and how to
 
 ## Desktop app
 
+Current source includes **Settings → Power → Shut down this computer**. Review the local
+computer, save work, and explicitly acknowledge that all apps, agents and local services
+will stop. Confirmation expires after 60 seconds; this is not a scheduled shutdown.
+Operating-system permissions and inhibitors still apply. The browser demo only simulates
+the action. Downloadable 0.3.0 binaries predate this feature.
+
+<details>
+<summary>Shutdown confirmation in dark and light themes</summary>
+
+![Dark shutdown confirmation](docs/screenshots/desktop-shutdown-dark.png)
+![Light shutdown confirmation](docs/screenshots/desktop-shutdown-light.png)
+
+</details>
+
 A tray and menu-bar app with the port list, details, the service graph (`G`), the agents map
 (`⇧A`), pins, history with one-click restart, remote hosts over SSH and a command palette (`⌘K` /
 `Ctrl+K`). `⌘⌥P` (`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. On the

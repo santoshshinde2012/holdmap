@@ -24,6 +24,9 @@ export interface SettingsModel {
   version: string;
   platform: string;
   configDir: string | null;
+  /** Whether this desktop supports shutdown, or the browser can simulate its confirmation. */
+  powerAvailable: boolean;
+  powerDemo: boolean;
 }
 
 export interface SettingsActions {
@@ -36,6 +39,8 @@ export interface SettingsActions {
   setHistoryLimit(n: number): Promise<void>;
   clearHistory(): Promise<void>;
   copy(text: string, what: string): void;
+  /** Opens a separate preview and acknowledgement; never shuts down immediately. */
+  shutdown(): void;
 }
 
 export const SETTINGS_SECTIONS = [
@@ -43,6 +48,7 @@ export const SETTINGS_SECTIONS = [
   { id: "appearance", label: "Appearance", icon: "sun" },
   { id: "notifications", label: "Notifications", icon: "bell" },
   { id: "scanning", label: "Scanning & data", icon: "radar" },
+  { id: "power", label: "Power", icon: "monitor" },
   { id: "about", label: "About", icon: "info" },
 ] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["id"];

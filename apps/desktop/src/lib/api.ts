@@ -1,5 +1,6 @@
 import type { ActionPlan, AgentsReport, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
 import { version as pkgVersion } from "../../package.json";
+import type { ShutdownPreview } from "./power";
 import { MOCK_SNAPSHOT, mockAgents, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
 /** True inside the Tauri webview; false in a plain browser (`npm run dev`), where mocks are used. */
@@ -11,6 +12,29 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 }
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+let demoPowerSequence = 0;
+const demoPowerPreviews = new Map<string, number>();
+
+/** Review shutdown of the local desktop host. Browser mode only simulates this flow. */
+export async function shutdownPreview(): Promise<ShutdownPreview> {
+  if (isTauri) return call("shutdown_preview");
+  demoPowerPreviews.clear();
+  const confirmation_id = `demo-power-${++demoPowerSequence}`;
+  demoPowerPreviews.set(confirmation_id, Date.now() + 60_000);
+  return { confirmation_id, platform: "browser", hostname: "Demo computer", expires_in_secs: 60 };
+}
+
+export async function shutdownMachine(confirmationId: string): Promise<{ requested: boolean }> {
+  if (!confirmationId?.trim()) throw new Error("Review shutdown before confirming.");
+  if (isTauri) return call("shutdown_machine", { confirmationId });
+  const expires = demoPowerPreviews.get(confirmationId);
+  demoPowerPreviews.delete(confirmationId);
+  if (!expires || Date.now() >= expires) throw new Error("Shutdown confirmation expired or was already used. Review again.");
+  // Sample mode never imports or invokes a native power command.
+  await delay(250);
+  return { requested: true };
+}
 
 export async function appInfo(): Promise<AppInfo> {
   if (!isTauri) return { version: pkgVersion, platform: "browser", tray: false, shortcut: mockShortcut, config_dir: "~/.config/holdmap" };
