@@ -6,6 +6,9 @@ node_modules/
 apps/desktop/dist/
 apps/desktop/.svelte-kit/
 *.log
+# Optional Python maintainer tooling
+__pycache__/
+*.py[cod]
 # Tauri
 apps/desktop/src-tauri/gen/schemas/
 # OS / editors

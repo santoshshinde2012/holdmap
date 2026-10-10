@@ -50,6 +50,16 @@ by [release-please](https://github.com/googleapis/release-please) from
   agent discovery.
 - Current-account recent-project history is attached only to agents with a matching known
   account; other users' working directories still appear from live process metadata.
+- Account descriptions and ownership now use the same UID-first match as recent history.
+- Agent memory formatting retains fractional gigabytes without overflowing its size threshold.
+- The website demo can return from Agents to List before inspecting or planning a simulated stop.
+
+### Documentation
+
+- README and architecture diagrams describe the shared native/browser UI, adapter responsibilities,
+  concrete SOLID interfaces and the current-source versus released feature boundary.
+- Desktop, CLI/TUI and website screenshots have repeatable capture tooling; README images,
+  website crops, hero posters and the social card are refreshed from current source.
 
 ## [0.3.0] - 2026-10-09
 

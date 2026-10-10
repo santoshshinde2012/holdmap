@@ -332,7 +332,7 @@ impl<'a> AgentsBuilder<'a> {
             .iter()
             .filter_map(|a| t.get(*a))
             .collect();
-        let mine = t.is_mine(root.pid);
+        let mine = current_account;
         let facts = vec![
             access::user(root, mine),
             access::sandbox(product.id, root, &ancestors, &procs),

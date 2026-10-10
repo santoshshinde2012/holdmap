@@ -23,6 +23,11 @@ test("Graph selection opens the corresponding listener and survives layout chang
   await graph.click();
   await expect(graph).toHaveAttribute("aria-checked", "true");
   const service = app.getByRole("button", { name: "shop-api on ports 3001", exact: true });
+  await expect(service).toBeVisible();
+  const wrappedUsage = await app.locator(".node .usage > span").evaluateAll((spans) => spans
+    .map((span) => ({ text: span.textContent, height: parseFloat(getComputedStyle(span).height), lineHeight: parseFloat(getComputedStyle(span).lineHeight) }))
+    .filter((span) => span.height > span.lineHeight + 1));
+  expect(wrappedUsage, "Graph resources should retain their units on one line").toEqual([]);
   await service.click();
   const details = app.getByRole("complementary", { name: "Port details", exact: true });
   await expect(details.getByRole("heading", { name: /^shop-api/ })).toBeVisible();

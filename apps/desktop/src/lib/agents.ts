@@ -529,7 +529,7 @@ export function resourcesLine(a: Agent): string {
   const cpu = a.cpu_percent > 0 ? `${a.cpu_percent < 10 ? a.cpu_percent.toFixed(1) : Math.round(a.cpu_percent)}%` : null;
   // Match CLI human_bytes style roughly for the card (KB/MB/GB).
   const mem = a.memory_bytes >= 1 << 30
-    ? `${(a.memory_bytes / (1 << 30)).toFixed(a.memory_bytes >= 10 << 30 ? 0 : 1)} GB`
+    ? `${(a.memory_bytes / (1 << 30)).toFixed(a.memory_bytes >= 10 * (1 << 30) ? 0 : 1)} GB`
     : a.memory_bytes >= 1 << 20
       ? `${Math.round(a.memory_bytes / (1 << 20))} MB`
       : a.memory_bytes >= 1 << 10

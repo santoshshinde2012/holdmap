@@ -98,6 +98,21 @@ CI runs Rust and native desktop tests/builds on Linux, macOS and Windows. Chromi
 tests run on Linux and gate native builds. Dependency checks include both npm lockfiles and
 the full Cargo workspace; Dependabot maintains desktop, website, Rust and workflow updates.
 
+## Published screenshots
+
+Refresh the desktop screenshots, website crops and hero posters from the production browser
+build with `node apps/desktop/scripts/capture-screenshots.mjs`. It uses sample data, its own
+temporary build and preview server, and the same Chromium installation as the browser tests.
+Refresh the website social card with `(cd site && node scripts/og.mjs)` after updating the overview.
+
+For CLI/TUI screenshots on macOS or Linux, build `cargo build -p holdmap`, create a virtual
+environment outside the repository, install `scripts/requirements-terminal-screenshots.txt`
+there, then run `scripts/capture-terminal-screenshots.py` with that Python. It captures actual
+terminal output against local fixtures, filters the TUI to those fixtures and masks the account
+name. Ports, PIDs, resource readings and plans remain actual. It terminates only fixtures it
+started and keeps app state in a temporary directory; its dependencies are optional maintainer
+tools.
+
 ## Ground rules
 
 - All logic lives in `holdmap-core`. The CLI, TUI, desktop app and MCP server only render its

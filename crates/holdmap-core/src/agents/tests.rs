@@ -553,6 +553,21 @@ fn recent_history_is_queried_only_for_confirmed_current_account_roots() {
         for (pid, _, _, expected) in roots {
             let agent = report.agents.iter().find(|agent| agent.pid == pid).unwrap();
             assert_eq!(
+                agent.access.mine, expected,
+                "account access must use the same UID-first identity as history for PID {pid} on {platform}"
+            );
+            let user_fact = agent
+                .access
+                .facts
+                .iter()
+                .find(|fact| fact.topic == AccessTopic::User)
+                .unwrap();
+            assert_eq!(
+                user_fact.summary.starts_with("Runs as you ("),
+                expected,
+                "the account description must agree with access.mine for PID {pid} on {platform}"
+            );
+            assert_eq!(
                 agent
                     .folders
                     .iter()

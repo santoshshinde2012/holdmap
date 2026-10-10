@@ -133,7 +133,7 @@ holdmap run -p 3000 -- npm run dev   # free 3000 safely, then start your server 
 holdmap                      # the interactive TUI (Tab → Agents)
 ```
 
-<img src="docs/screenshots/cli-explain-dark.png" width="720" alt="holdmap explain 3000: who holds the port, why, and the recommended plan" />
+<img src="docs/screenshots/cli-explain-dark.png" width="720" alt="holdmap explain: fixture listener ownership and the recommended plan" />
 
 **Project stacks.** Describe a project's services once in `.holdmap.toml` (`holdmap init` writes
 one from what's running) and start them in dependency order with `holdmap up`:

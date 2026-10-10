@@ -169,6 +169,13 @@ describe("flow conversion", () => {
 });
 
 describe("cards", () => {
+  it("keeps decimal GB precision below ten GB without overflowing the threshold", () => {
+    const a = report().agents[1];
+    expect(resourcesLine({ ...a, memory_bytes: 2.25 * 2 ** 30 })).toMatch(/^2\.3 GB ·/);
+    expect(resourcesLine({ ...a, memory_bytes: 9.5 * 2 ** 30 })).toMatch(/^9\.5 GB ·/);
+    expect(resourcesLine({ ...a, memory_bytes: 10.25 * 2 ** 30 })).toMatch(/^10 GB ·/);
+  });
+
   it("summarise counts and the access headline", () => {
     const [claude, cursor] = report().agents;
     expect(countsLine(counts(claude))).toBe("1 folder · 1 port · 2 links · 1 stoppable");

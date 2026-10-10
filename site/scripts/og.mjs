@@ -1,12 +1,13 @@
 // Regenerate public/og.png (1200×630) for Open Graph and Twitter cards. Not part of the build;
-// run it when the brand or screenshots change, with any Playwright install and a Chromium:
-//   PLAYWRIGHT=/path/to/node_modules/playwright/index.mjs CHROME=/path/to/chrome node scripts/og.mjs
+// run it when the brand or screenshots change, after installing the desktop dependencies and Chromium:
+//   node scripts/og.mjs
+// PLAYWRIGHT and CHROME optionally select a different browser installation.
 // The card is plain HTML below, rendered with the site's fonts and a real app screenshot.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const { chromium } = await import(process.env.PLAYWRIGHT ?? "playwright");
+const { chromium } = await import(process.env.PLAYWRIGHT ?? new URL("../../apps/desktop/node_modules/playwright/index.mjs", import.meta.url).href);
 const site = join(dirname(fileURLToPath(import.meta.url)), "..");
 const b64 = (p) => readFileSync(join(site, p)).toString("base64");
 const inter = b64("src/assets/fonts/inter-site.woff2");
@@ -30,14 +31,17 @@ h1 span { color: #8b8b93; }
 <div class="shot"><img src="data:image/png;base64,${shot}"></div>
 <div class="copy">
   <div class="brand">${icon.replace(/ width="1024" height="1024"/, "")}holdmap</div>
-  <h1>Know what's on every port.<br><span>Free it safely.</span></h1>
+  <h1>See what your agents run.<br><span>Stop the right thing safely.</span></h1>
 </div>
 </body></html>`;
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined });
-const page = await browser.newPage({ viewport: { width: 1200, height: 630 } });
-await page.setContent(html, { waitUntil: "load" });
-await page.evaluate(() => document.fonts.ready);
-await page.screenshot({ path: join(site, "public/og.png") });
-await browser.close();
+try {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 630 } });
+  await page.setContent(html, { waitUntil: "load" });
+  await page.evaluate(() => document.fonts.ready);
+  await page.screenshot({ path: join(site, "public/og.png") });
+} finally {
+  await browser.close();
+}
 console.log("wrote public/og.png");
