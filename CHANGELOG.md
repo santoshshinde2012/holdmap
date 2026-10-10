@@ -8,6 +8,12 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Security
+
+- Desktop release publishing uses the verified installer manifest for builds without a signed
+  updater. Configured updater archives and signatures receive platform checksum and build
+  provenance coverage.
+
 ## [0.4.0] - 2026-10-10
 
 ### Added
