@@ -184,5 +184,97 @@ class DesktopReleaseAssetTests(unittest.TestCase):
         self.assertEqual(list((root / "outside").iterdir()), [])
 
 
+class SignedDesktopUploadTests(unittest.TestCase):
+    def setUp(self):
+        sandbox = tempfile.TemporaryDirectory(prefix="holdmap-signed-upload-test-")
+        self.addCleanup(sandbox.cleanup)
+        self.root = Path(sandbox.name)
+        self.state = self.root / "github.json"
+        self.manifest = self.root / "assets.json"
+        assets = []
+        published = []
+        for identifier, suffix in [(701, ".dmg"), (702, ".app.tar.gz"), (703, ".app.tar.gz.sig")]:
+            name = "holdmap_0.4.0_aarch64" + suffix
+            path = self.root / name
+            path.write_bytes(name.encode())
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            assets.append({"name": name, "path": str(path), "digest": digest})
+            published.append({"name": name, "id": identifier, "digest": "sha256:" + digest})
+        self.manifest.write_text(json.dumps(assets))
+        self.initial = {"assets": published, "uploads": [], "next_id": 900,
+                        "latest_json": {"platforms": {"darwin-aarch64": {
+                            "url": "https://api.github.com/repos/example/holdmap/releases/assets/702"}}}}
+        self.state.write_text(json.dumps(self.initial))
+        stub = self.root / "gh"
+        stub.write_text('''#!/usr/bin/env python3
+import hashlib, json, os, sys
+from pathlib import Path
+path = Path(os.environ["HOLDMAP_TEST_GITHUB"])
+state = json.loads(path.read_text())
+args = sys.argv[1:]
+if args[0] == "api":
+    print(json.dumps([state["assets"]] if args[-1].endswith("/assets?per_page=100") else {"id": 42}))
+elif args[:2] == ["release", "upload"]:
+    if "--clobber" in args:
+        sys.exit("asset replacement is forbidden")
+    payload = Path(args[3])
+    if any(asset["name"] == payload.name for asset in state["assets"]):
+        sys.exit("existing asset cannot be replaced")
+    state["assets"].append({"name": payload.name, "id": state["next_id"],
+                            "digest": "sha256:" + hashlib.sha256(payload.read_bytes()).hexdigest()})
+    state["next_id"] += 1
+    state["uploads"].append(payload.name)
+    fail = state.pop("fail_after_upload", False)
+    path.write_text(json.dumps(state))
+    if fail:
+        sys.exit("transfer response lost after acceptance")
+else:
+    sys.exit("unexpected GitHub operation")
+''')
+        stub.chmod(0o700)
+
+    def upload(self):
+        environment = os.environ.copy()
+        environment.update({"PATH": str(self.root) + os.pathsep + environment["PATH"],
+                            "GITHUB_REPOSITORY": "example/holdmap", "TAG": "v0.4.0",
+                            "RELEASE_ASSET_MANIFEST": str(self.manifest), "HOLDMAP_TEST_GITHUB": str(self.state)})
+        return subprocess.run(["node", str(ROOT / "scripts/upload-desktop-release-assets.mjs")],
+                              env=environment, capture_output=True, text=True, check=False)
+
+    def test_matching_uploads_preserve_latest_json_asset_ids_on_repeated_runs(self):
+        for _ in range(2):
+            result = self.upload()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        state = json.loads(self.state.read_text())
+        self.assertEqual(state["assets"], self.initial["assets"])
+        self.assertEqual(state["latest_json"], self.initial["latest_json"])
+        self.assertEqual(state["uploads"], [])
+        referenced = int(state["latest_json"]["platforms"]["darwin-aarch64"]["url"].rsplit("/", 1)[1])
+        self.assertTrue(any(asset["id"] == referenced for asset in state["assets"]))
+
+    def test_missing_asset_recovers_an_accepted_upload_without_replacing_ids(self):
+        state = json.loads(self.state.read_text())
+        state["assets"] = state["assets"][:2]
+        state["fail_after_upload"] = True
+        self.state.write_text(json.dumps(state))
+        result = self.upload()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        final = json.loads(self.state.read_text())
+        self.assertEqual(final["assets"][:2], self.initial["assets"][:2])
+        self.assertEqual(final["latest_json"], self.initial["latest_json"])
+        self.assertEqual(final["uploads"], ["holdmap_0.4.0_aarch64.app.tar.gz.sig"])
+
+    def test_mismatched_or_unknown_digest_fails_before_any_upload(self):
+        for digest in [None, "sha256:" + "0" * 64]:
+            with self.subTest(digest=digest):
+                state = json.loads(json.dumps(self.initial))
+                state["assets"] = state["assets"][1:]
+                state["assets"][0]["digest"] = digest
+                self.state.write_text(json.dumps(state))
+                result = self.upload()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(json.loads(self.state.read_text())["uploads"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

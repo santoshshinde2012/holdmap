@@ -66,5 +66,6 @@ const sum = `holdmap-desktop-${matrix}.sha256`;
 const paths = [...published.values()].map(({ path }) => path).join("\n") + "\n";
 await writeFile(sum, [...published].map(([name, { digest }]) => `${digest}  ${name}`).join("\n") + "\n");
 await writeFile(`${sum}.paths`, paths);
+await writeFile(`${sum}.json`, JSON.stringify([...published].map(([name, asset]) => ({ name, ...asset }))) + "\n");
 if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `sum=${sum}\npaths<<__P__\n${paths}__P__\n`);
 console.log(`Collected ${published.size} desktop release assets with matching published names`);
