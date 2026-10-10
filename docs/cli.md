@@ -344,10 +344,11 @@ Show AI coding agents and developer tools: folders, access, ports and connection
 Usage: holdmap agents [OPTIONS] [AGENT]
 
 Arguments:
-  [AGENT]  Only agents matching this (product such as `claude` or `cursor`, name, or PID)
+  [AGENT]  Only agents matching a product, name, vendor, folder, tool name, or exact agent/child PID
 
 Options:
-  -w, --wide           List every process of each agent, with its command line (secrets hidden)
+  -w, --wide           Show listed processes and their command lines (secrets hidden; large lists
+                       are capped)
       --stop-ports     Stop the unprotected ports each matching agent started (dev servers and
                        services)
       --dry-run        Show the stop plan only; don't send any signal

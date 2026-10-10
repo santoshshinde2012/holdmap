@@ -13,12 +13,13 @@
   import AutoMiniMap from "./graph/AutoMiniMap.svelte";
   import Icon from "./Icon.svelte";
   import { FIT_PADDING } from "../lib/flow";
-  import { agentColor, footprintGraph, layoutFootprint, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Positions } from "../lib/agents";
+  import { agentColor, filterAgents, footprintGraph, layoutFootprint, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Positions } from "../lib/agents";
   import type { AgentsReport, PortEntry } from "../lib/types";
   import { prefGet, prefSet } from "../lib/prefs";
 
   let {
     report,
+    query = "",
     entries,
     selectedAgent,
     selectedEntry = null,
@@ -33,6 +34,7 @@
   }: {
     /** null while the first report loads. */
     report: AgentsReport | null;
+    query?: string;
     entries: PortEntry[];
     selectedAgent: string | null;
     /** The port open in the details pane, highlighted when it's on the map. */
@@ -56,7 +58,9 @@
   const nodeTypes: NodeTypes = { agent: AgentNode, foot: FootNode, header: HeaderNode } as unknown as NodeTypes;
   const edgeTypes: EdgeTypes = { foot: FootEdge } as unknown as EdgeTypes;
 
-  const graph = $derived(report ? footprintGraph(report, { recent }) : null);
+  const visibleAgents = $derived(report ? filterAgents(report.agents, query) : []);
+  const agentIds = $derived(report?.agents.map((a) => a.id) ?? []);
+  const graph = $derived(report ? footprintGraph({ ...report, agents: visibleAgents }, { recent }) : null);
   const sig = $derived(graph ? signature(graph) : "");
   // Re-layout only when the structure changes, so refreshes don't make nodes jump.
   const cache: { sig: string; pos: Positions } = { sig: "", pos: new Map() };
@@ -69,10 +73,10 @@
     return cache.pos;
   });
   const entryNode = $derived(selectedEntry && graph?.nodes.some((n) => n.id === `port:${selectedEntry}`) ? `port:${selectedEntry}` : null);
-  const chosen = $derived(picked ?? entryNode ?? selectedAgent);
+  const chosen = $derived([picked, entryNode, selectedAgent].find((id) => id && graph?.nodes.some((n) => n.id === id)) ?? null);
   const flow = $derived.by(() => {
     if (!graph) return { nodes: [] as FootFlowNode[], edges: [] as FootFlowEdge[] };
-    return toFootFlow(graph, positions, { focus: hover ?? chosen, selectedId: chosen });
+    return toFootFlow(graph, positions, { focus: graph.nodes.some((n) => n.id === hover) ? hover : chosen, selectedId: chosen, agentIds });
   });
   let nodes = $state.raw<FootFlowNode[]>([]);
   let edges = $state.raw<FootFlowEdge[]>([]);
@@ -85,6 +89,7 @@
       onselectagent(n.id);
       return;
     }
+    if (n.kind === "tool") { picked = n.id; onselectagent(n.owners[0] ?? null); return; }
     const e = n.entryId ? entries.find((x) => x.id === n.entryId) : undefined;
     if (e) { picked = null; onentry(e); return; }
     picked = picked === n.id ? null : n.id;
@@ -101,14 +106,16 @@
   }
 
   const stats = $derived(report ? {
-    agents: report.agents.length,
+    agents: visibleAgents.length,
     folders: graph?.nodes.filter((n) => n.kind === "folder").length ?? 0,
     ports: graph?.nodes.filter((n) => n.kind === "port" || n.kind === "service").length ?? 0,
-    hosts: report.agents.reduce((s, a) => s + a.links.filter((l) => l.kind === "remote").length + a.more_links, 0),
+    hosts: visibleAgents.reduce((s, a) => s + a.links.filter((l) => l.kind === "remote").length, 0),
+    omittedLinks: visibleAgents.reduce((s, a) => s + a.more_links, 0),
   } : null);
   const legend: [string, string, string][] = [
     ["agent", "Agent", "bot"],
     ["folder", "Folder", "folder"],
+    ["tool", "MCP server", "plug"],
     ["port", "Port it serves", "server"],
     ["service", "Service it uses", "plug"],
     ["remote", "Remote host", "globe"],
@@ -125,23 +132,26 @@
       <Icon name="bot" size={28} />
       <p>No agents or developer tools running</p>
       <span>Start Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider, Docker Desktop or another tool: its folders, the ports and apps it started, connections and access show up here.</span>
+      {#if report.limits.length}
+        <details class="limits" open>
+          <summary><Icon name="info" size={12} />What this can and can't see</summary>
+          <ul>{#each report.limits as l}<li>{l}</li>{/each}</ul>
+        </details>
+      {/if}
     </div>
   {:else}
     <aside class="rail" aria-label="Agents">
       <header class="rail-head">
-        <h2>Agents <span class="n">{report.agents.length}</span></h2>
+        <h2>Agents <span class="n">{visibleAgents.length}{#if visibleAgents.length !== report.agents.length}{" / "}{report.agents.length}{/if}</span></h2>
         <span class="hint">↑↓ to switch · Reveal / Editor / Stop on a card · Enter on a map node</span>
       </header>
-      <div class="cards">
-        {#each report.agents as a (a.id)}
-          <AgentCard agent={a} {report} {entries} color={graph ? agentColor(graph, a.id) : "var(--accent)"} selected={a.id === selectedAgent}
-            onselect={() => { picked = null; onselectagent(a.id === selectedAgent ? null : a.id); }}
-            {onentry}
-            onreveal={(path) => onreveal(a.id, path)}
-            oneditor={(path) => oneditor(a.id, path)}
-            onstop={onstop}
-            onstopall={() => onstopall(a.id)}
-            now={report.taken_at_ms || Date.now()} />
+      <div class="cards" id="agent-list">
+        {#each visibleAgents as a (a.id)}
+          <AgentCard agent={a} {report} {entries} color={graph ? agentColor(graph, a.id, agentIds) : "var(--accent)"} selected={a.id === selectedAgent} onselect={() => { picked = null; onselectagent(a.id === selectedAgent ? null : a.id); }} onnavigate={(id) => { picked = null; onselectagent(id); }}
+            {onentry} onreveal={(path) => onreveal(a.id, path)} oneditor={(path) => oneditor(a.id, path)}
+            {onstop} onstopall={() => onstopall(a.id)} now={report.taken_at_ms || Date.now()} />
+        {:else}
+          <div class="no-matches"><Icon name="search" size={20} /><p>No agents match this search</p><span>Search by name, tool, folder, port or process ID.</span></div>
         {/each}
       </div>
       <details class="limits">
@@ -150,6 +160,7 @@
       </details>
     </aside>
     <div class="map">
+      {#if visibleAgents.length}
       <SvelteFlow
         bind:nodes
         bind:edges
@@ -185,6 +196,7 @@
               <span><b>{stats.folders}</b> {stats.folders === 1 ? "folder" : "folders"}</span>
               <span class="opt"><b>{stats.ports}</b> ports &amp; services</span>
               <span class="opt">{plural(stats.hosts, "remote link")}</span>
+              {#if stats.omittedLinks}<span class="opt">+{stats.omittedLinks} unlisted links</span>{/if}
             </div>
           {/if}
           <div class="legend" aria-hidden="true">
@@ -193,6 +205,7 @@
           </div>
         </Panel>
       </SvelteFlow>
+      {/if}
     </div>
   {/if}
 </div>
@@ -227,10 +240,15 @@
   .lg-folder :global(svg) { color: var(--tone-amber); }
   .lg-port :global(svg) { color: var(--tone-green); }
   .lg-service :global(svg) { color: var(--tone-violet); }
+  .lg-tool :global(svg) { color: var(--tone-violet); }
   .lg-remote :global(svg) { color: var(--tone-blue); }
   .empty { grid-column: 1 / -1; height: 100%; display: grid; place-content: center; justify-items: center; gap: 6px; color: var(--muted); text-align: center; }
   .empty p { margin: 6px 0 0; color: var(--text); font-weight: var(--fw-semibold); }
   .empty span { font-size: var(--fs-body); line-height: var(--lh-body); max-width: 380px; }
+  .empty .limits { margin-top: 12px; max-width: 460px; text-align: left; }
+  .no-matches { padding: 20px 4px; display: grid; gap: 6px; justify-items: center; text-align: center; color: var(--muted); }
+  .no-matches p { margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text); }
+  .no-matches span { font-size: var(--fs-caption); line-height: var(--lh-caption); }
   @container (max-width: 1100px) { .stats .opt { display: none; } }
   @container (max-width: 860px) {
     .agents { grid-template-columns: 1fr; grid-template-rows: minmax(0, 42%) 1fr; }

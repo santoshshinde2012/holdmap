@@ -1,0 +1,3 @@
+# Optional maintainer tooling only; install in an isolated venv.
+pyte==0.8.2
+Pillow>=11,<13

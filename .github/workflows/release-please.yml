@@ -22,11 +22,10 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      # Until v0.1.0 is tagged by hand there's no release to count commits from, and
-      # release-please would propose a release of the whole history. It also needs
+      # Release PRs need an existing version tag to count commits from and
       # RELEASE_PLEASE_TOKEN: the repo doesn't let the default token open pull requests (and
       # workflows wouldn't run on a PR opened by it anyway).
-      - name: Wait for the first release tag and the token
+      - name: Check release tag and token prerequisites
         id: gate
         env:
           GH_TOKEN: ${{ github.token }}

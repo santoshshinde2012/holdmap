@@ -63,11 +63,7 @@ async fn with_engine<T: Send + 'static>(
     let app = app.clone();
     blocking(move || {
         let state = app.state::<AppState>();
-        if state.engine.lock().unwrap().is_none() {
-            state.snapshot(false, FRESH)?;
-        }
-        let guard = state.engine.lock().unwrap();
-        Ok(f(guard.as_ref().ok_or("no scan yet")?))
+        state.with_engine(FRESH, f)
     })
     .await
 }
@@ -108,13 +104,13 @@ pub async fn scan(
     Ok(snapshot)
 }
 
-/// The AI coding agents in the most recent scan: their folders, ports, connections and access.
+/// AI coding agents in a scan no older than one second: folders, ports, connections and access.
 #[tauri::command]
 pub async fn agents(app: AppHandle) -> Result<AgentsReport, String> {
     with_engine(&app, |e| e.agents()).await
 }
 
-/// The service graph of the most recent scan. Dev services (and their peers) unless `all`.
+/// Service graph from a scan no older than one second. Dev services (and peers) unless `all`.
 #[tauri::command]
 pub async fn topology(app: AppHandle, all: bool) -> Result<Graph, String> {
     with_engine(&app, move |e| {
@@ -141,7 +137,7 @@ pub async fn http_info(port: u16) -> Result<Option<holdmap_core::http::HttpInfo>
     .await
 }
 
-/// Explain why `port` is busy, using the most recent scan (or a new one).
+/// Explain why `port` is busy, using a scan no older than one second.
 #[tauri::command]
 pub async fn explain(app: AppHandle, port: u16) -> Result<Explanation, String> {
     with_engine(&app, move |e| e.explain(port, &StopOptions::default())).await

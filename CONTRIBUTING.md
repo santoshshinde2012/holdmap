@@ -5,16 +5,17 @@ before features. Report security problems privately as described in [SECURITY.md
 
 ## Setup
 
-You need Rust stable (pinned by `rust-toolchain.toml`, minimum 1.95) and, for the desktop app,
-Node.js 20 or newer. Linux desktop builds also need
+You need Rust stable (selected by `rust-toolchain.toml`, minimum 1.95) and Node.js 22.12 or newer for the
+desktop app and website, matching CI. Linux desktop builds also need
 `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev`.
+If you use nvm, run `nvm use` from the repository root to select the version in `.nvmrc`.
 
 ```sh
 git clone https://github.com/santoshshinde2012/holdmap && cd holdmap
 cargo build && cargo test
 scripts/demo-servers.sh start      # realistic listeners to try things on (`stop` to clean up)
 cargo run -p holdmap -- list --dev
-cd apps/desktop && npm install && npm run tauri dev   # or `npm run dev` for the UI with mock data
+cd apps/desktop && npm ci && npm run tauri dev   # or `npm run dev` for the UI with mock data
 ```
 
 [docs/architecture.md](docs/architecture.md) explains how the crates and the desktop app fit
@@ -24,18 +25,63 @@ The website (`site/`, Astro, Node.js 22) embeds the desktop UI as its live demo,
 `(cd apps/desktop && npm ci) && cd site && npm ci && npm run build && npm run preview`. Guide pages
 are Markdown in `site/src/content/docs/`; the CLI reference page is `docs/cli.md` itself.
 
+## Repository layout
+
+The repository root is the Rust workspace; each surface keeps its source and tooling together.
+
+| Path | Purpose |
+|---|---|
+| `crates/holdmap-core/` | Shared port scanning, ownership, safety policy and stop execution |
+| `crates/holdmap-cli/` | CLI and TUI, with integration tests |
+| `crates/holdmap-mcp/` | MCP adapter over the shared core |
+| `apps/desktop/src/` | Svelte and TypeScript desktop UI, including browser demo data |
+| `apps/desktop/e2e/` | Browser tests against the built desktop UI in demo mode |
+| `apps/desktop/src-tauri/` | Native desktop integration, Tauri configuration and icons |
+| `apps/desktop/assets/` | Desktop brand assets |
+| `site/` | Astro website, Markdown guides, site assets and build tools |
+| `docs/` | Architecture, generated CLI reference and screenshots used by the README/site |
+| `scripts/` | Workspace checks, CLI documentation generation and development helpers |
+| `.github/` | CI, release, dependency updates and website deployment |
+
+Keep source assets and their licences with the surface that uses them. Commit generated
+`docs/cli.md`, published screenshots and website media because they are consumed directly.
+Build output (`target/`, `dist/`, `site/public/demo/`), dependencies (`node_modules/`) and
+recording frames (`site/.hero-frames/`) are ignored and regenerated. Use Git history for earlier
+versions; keep temporary captures, release downloads and backup copies outside the repository.
+
 ## Checks
 
-Run these before opening a pull request; CI runs them on Linux, macOS and Windows.
+Run `scripts/check-all.sh` before opening a pull request. It installs dependencies from the
+lockfiles and checks the Rust workspace, native desktop, browser UI, website and supply chain.
+Install [actionlint](https://github.com/rhysd/actionlint#installation) and
+[cargo-deny](https://embarkstudios.github.io/cargo-deny/cli/index.html) first, then install
+Chromium once with `(cd apps/desktop && npm ci && npx playwright install chromium)`.
+On Linux, use `npx playwright install --with-deps chromium` for its system dependencies.
+The browser suite starts and stops its own preview server; failure traces and screenshots go
+in the ignored `apps/desktop/test-results/` directory. For an existing Chrome installation,
+set `HOLDMAP_E2E_CHROMIUM_EXECUTABLE` to its executable path.
+
+After building the website, `(cd site && npm run test:demo)` starts a temporary preview server
+and exercises the embedded demo. Pass a different preview or public URL after `--`.
+It covers port details, the graph, searchable MCP candidates, simulated stop confirmation
+and reset, and reports browser errors. It uses the desktop's locked Playwright dependency.
+
+To run individual checks:
 
 ```sh
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p holdmap-core -p holdmap-mcp -p holdmap
+(cd apps/desktop && npm run check && npm test && npm run test:e2e) # builds the UI before native checks
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap
+cargo build --locked -p holdmap-desktop
 scripts/check-cross.sh                       # type-checks the macOS and Windows backends from Linux
-(cd apps/desktop && npm run check && npm test && npm run build)
 (cd site && npm run check && npm run build && npm test)  # website: types, links, size budget
+scripts/check-versions.sh
+actionlint
+cargo deny --all-features check
+(cd apps/desktop && npm audit --audit-level=high)
+(cd site && npm audit --audit-level=high)
 ```
 
 `cargo test` also checks the docs: `docs/cli.md` must match the clap definitions, the README must
@@ -43,7 +89,29 @@ mention every command and only real flags, Markdown links and images must resolv
 screenshot must be used. After changing a command or flag, regenerate the reference with
 `scripts/gen-docs.sh` (or `HOLDMAP_BLESS=1 cargo test -p holdmap cli_reference`) and commit it.
 The desktop tests include a typography lint (use the `--fs-*`/`--fw-*` tokens from `app.css`, not
-raw values) and a WCAG AA contrast lint for both themes.
+raw values) and a WCAG AA contrast lint for both themes. Browser tests cover agent visibility,
+search, navigation and port details using deterministic demo data. The CLI integration tests
+launch the actual MCP server, negotiate every supported protocol version and verify discovery,
+read tools and malformed stop rejection against isolated local listeners.
+
+CI runs Rust and native desktop tests/builds on Linux, macOS and Windows. Chromium browser
+tests run on Linux and gate native builds. Dependency checks include both npm lockfiles and
+the full Cargo workspace; Dependabot maintains desktop, website, Rust and workflow updates.
+
+## Published screenshots
+
+Refresh the desktop screenshots, website crops and hero posters from the production browser
+build with `node apps/desktop/scripts/capture-screenshots.mjs`. It uses sample data, its own
+temporary build and preview server, and the same Chromium installation as the browser tests.
+Refresh the website social card with `(cd site && node scripts/og.mjs)` after updating the overview.
+
+For CLI/TUI screenshots on macOS or Linux, build `cargo build -p holdmap`, create a virtual
+environment outside the repository, install `scripts/requirements-terminal-screenshots.txt`
+there, then run `scripts/capture-terminal-screenshots.py` with that Python. It captures actual
+terminal output against local fixtures, filters the TUI to those fixtures and masks the account
+name. Ports, PIDs, resource readings and plans remain actual. It terminates only fixtures it
+started and keeps app state in a temporary directory; its dependencies are optional maintainer
+tools.
 
 ## Ground rules
 
@@ -116,15 +184,17 @@ Check a change to the release setup locally with `dist plan`,
 | `npm run tauri signer generate`, then secrets `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` and variable `TAURI_UPDATER_PUBKEY` | In-app updates with signed `latest.json` (optional; keep the private key backed up) |
 | `"npm"` in `publish-jobs` in `dist-workspace.toml`, `dist generate`, secret `NPM_TOKEN` | Publishing the npm package (optional) |
 
-**First release (v0.1.0).** There is no earlier tag, so release-please waits for this one:
+**Release steps.** Merging the release PR prepares the version; publishing starts when a
+maintainer pushes its tag.
 
-1. In `CHANGELOG.md`, change `## [0.1.0] - Unreleased` to today's date and point the `[0.1.0]`
-   link at `releases/tag/v0.1.0`. Commit (`chore: release 0.1.0`) and push; wait for CI.
-2. Tag and push: `git tag -s v0.1.0 -m "holdmap 0.1.0" && git push origin v0.1.0`.
-3. Watch `Release`, then `Desktop release`, in the Actions tab. Check the release page, then
-   the shell installer.
-
-**Later releases.** Merge the release PR, then tag its merge commit `vX.Y.Z` as in step 2.
+1. Review the release PR's version changes and changelog, then merge it after CI passes.
+2. Fetch `main` and check out the release PR's merge commit. Run `scripts/check-versions.sh`
+   and confirm that `version.txt` matches the intended `X.Y.Z`.
+3. Tag that commit and push the tag: `git tag -s vX.Y.Z -m "holdmap X.Y.Z" && git push origin vX.Y.Z`
+   (replace `X.Y.Z` with the release version).
+4. Watch `Release`, then `Desktop release`, in the Actions tab. Check the published release's
+   CLI and desktop downloads, checksums and installer, then confirm the `Pages` workflow
+   updates the website.
 
 ## Licence
 

@@ -1,90 +1,38 @@
 # holdmap architecture
 
-holdmap is one Rust library (`holdmap-core`) with four thin front-ends. Every decision about
-*who owns a port, whether it's safe to touch, and how to stop it* lives in the core; the
-front-ends only render and confirm what it returns.
+holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop app and MCP
+server. The core determines ownership, protection and stop plans. Adapters validate requests,
+coordinate collection and confirmation, and present the returned types.
+
+This guide describes current source. Child-tool metadata, MCP discovery and cache improvements
+are [Unreleased](../CHANGELOG.md#unreleased); the downloadable 0.3.0 release predates those
+additions.
 
 ## 1. Layers
 
 ```mermaid
-%%{init: {"flowchart": {"wrappingWidth": 260, "nodeSpacing": 40, "rankSpacing": 50}}}%%
 flowchart TB
-  subgraph IF["Interfaces"]
-    direction LR
-    HOOK("Shell hook<br/>holdmap init")
-    CLI("CLI<br/>clap")
-    TUI("TUI<br/>ratatui")
-    DESK("Desktop app + tray<br/>Tauri v2 · Svelte 5")
-    MCP("MCP server<br/>JSON-RPC · stdio")
-  end
-
-  subgraph CORE["holdmap-core"]
-    ENG{{"Engine<br/>explain · plan · stop"}}
-    SCAN["Scanner<br/>sockets → PIDs → projects"]
-    PROV["Platform providers<br/>Linux · macOS · Windows"]
-    POL["ProtectionPolicy<br/>never touch the OS,<br/>shells, IDEs, agents"]
-    REG["StopStrategy registry<br/>process tree · container<br/>systemd · pm2 · brew"]
-    EXEC["Executor<br/>signal → verify freed"]
-    TOPO["Topology<br/>service graph<br/>clusters · stop order"]
-    AGT["Agents<br/>AI agents & tools · folders<br/>access · ports · links"]
-    HTTP["HTTP probe<br/>GET / → status, title"]
-    STACK["Project config<br/>.holdmap.toml"]
-  end
-
-  subgraph OS["Operating system"]
-    direction LR
-    SOCK[["Sockets & processes"]]
-    SIG[["Signals<br/>SIGTERM → SIGKILL"]]
-    CTR[["Containers<br/>Docker · Podman<br/>OrbStack · Colima"]]
-  end
-
-  subgraph ST["Local state"]
-    direction LR
-    PINS[("Pins & settings")]
-    HIST[("Stop history")]
-  end
-
-  HOOK -->|"port taken?"| CLI
-
-  IF ==>|"scan · explain · stop"| ENG
-  IF -.->|"HTTP status"| HTTP
-  IF --> ST
-  CLI -->|"up · down"| STACK
-  STACK --> ENG
-
-  ENG --> SCAN
-  SCAN --> PROV
-  ENG -->|"safe to touch?"| POL
-  ENG -->|"how to stop"| REG
-  ENG --> TOPO
-  ENG --> AGT
-  AGT -.->|"same catalog"| POL
-  REG --> EXEC
-
-  PROV -->|"read"| SOCK
-  SCAN -->|"published ports"| CTR
-  EXEC -->|"send"| SIG
-  EXEC -->|"stop"| CTR
-  HTTP -.->|"localhost"| SOCK
-
-  classDef iface fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#0b1b3a
-  classDef core fill:#ede9fe,stroke:#7c3aed,stroke-width:1.5px,color:#1e1035
-  classDef engine fill:#7c3aed,stroke:#5b21b6,stroke-width:2px,color:#ffffff
-  classDef os fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#052e16
-  classDef state fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#3b2203
-  class HOOK,CLI,TUI,DESK,MCP iface
-  class SCAN,PROV,POL,REG,EXEC,TOPO,AGT,HTTP,STACK core
-  class ENG engine
-  class SOCK,SIG,CTR os
-  class PINS,HIST state
-  style IF fill:transparent,stroke:#60a5fa,stroke-dasharray:4 3
-  style CORE fill:transparent,stroke:#a78bfa,stroke-dasharray:4 3
-  style OS fill:transparent,stroke:#4ade80,stroke-dasharray:4 3
-  style ST fill:transparent,stroke:#f59e0b,stroke-dasharray:4 3
+  CLI["CLI, TUI and shell hook"] --> ENGINE["holdmap-core Engine"]
+  MCP["MCP transport and validated tools"] --> ENGINE
+  MCP --> CONTEXT["Pure guide resource and workflow prompts"]
+  UI["Shared Svelte UI"] --> API["api.ts"]
+  API --> NATIVE["Tauri commands and AppState freshness cache"]
+  NATIVE --> ENGINE
+  SITE["Astro website and guides"] --> DEMO["Browser demo build"]
+  DEMO --> UI
+  API -. "browser mode" .-> MOCK["Sample data"]
+  ENGINE --> SCAN["Scanner and injected providers"]
+  SCAN --> OS["OS sockets, processes and container runtimes"]
+  ENGINE --> AGENTS["AgentsBuilder: ownership, folders, network, tools and access"]
+  ENGINE --> GRAPH["Topology and cluster registries"]
+  ENGINE --> PLAN["ProtectionPolicy and StopStrategy registry"]
+  PLAN --> EXEC["Executor: identity checks, graceful stop and verification"]
 ```
 
-Solid arrows are calls; the thick one is the API every interface shares, and dotted arrows are the
-optional HTTP probe.
+The website builds the same desktop UI for browser mode; `api.ts` selects native IPC or sample
+data. The native cache belongs to the desktop adapter. Core engines operate on a consistent
+`Scan`, which other adapters collect directly. Local configuration, pins and stop history use
+`store`; project stacks and bounded HTTP probes have separate modules.
 
 ## 2. Scan → plan → execute
 
@@ -99,7 +47,7 @@ flowchart LR
   S["Scanner"] --> SNAP["Scan<br/>(Snapshot + ProcessTable)"]
   SNAP --> E["Engine"]
   POL["ProtectionPolicy<br/>DefaultProtectionPolicy"] --> E
-  REG["StrategyRegistry<br/>Vec&lt;Box&lt;dyn StopStrategy&gt;&gt;"] --> E
+  REG["StrategyRegistry<br/>Vec&lt;Arc&lt;dyn StopStrategy&gt;&gt;"] --> E
   E --> PLAN["ActionPlan<br/>steps + warnings + blocked"]
   PLAN --> X["exec::execute"]
   X --> V["verify port freed"]
@@ -133,15 +81,25 @@ and the UIs don't change (open/closed).
 sequenceDiagram
   participant U as User / MCP client
   participant F as Front-end
+  participant S as Scanner
   participant E as Engine
   participant X as exec
   participant OS
   U->>F: stop :3000
+  F->>S: collect machine state
+  S-->>F: Scan
+  F->>E: Engine::from_scan(scan)
   F->>E: plan(Target::Port(3000))
-  E->>E: Scanner.scan() → owner → ProtectionPolicy → StopStrategy
+  E->>E: owner → ProtectionPolicy → StopStrategy
   E-->>F: ActionPlan (steps, warnings, blocked?)
   F->>U: show plan, confirm
   U->>F: yes
+  opt Native or MCP execution
+    F->>S: collect fresh machine state
+    S-->>F: Scan
+    F->>E: rebuild engine and plan
+    E-->>F: current ActionPlan
+  end
   F->>X: execute(plan)
   loop each step
     X->>OS: re-check start token (PID reuse guard, pidfd on Linux)
@@ -153,11 +111,17 @@ sequenceDiagram
   F->>F: Store::record (history, for restart)
 ```
 
+Planning does not signal processes. Native and MCP stop handlers collect a fresh scan and build
+the execution plan again, rather than executing a previously displayed plan. An executing MCP
+request must be within the user's authorized scope; protected owners remain refused. The
+executor checks process identity immediately before signalling and verifies the target ports
+afterwards. A blocked or elevation-required plan remains a report, not an executable promise.
+
 ## 3. Topology / mesh
 
 ```mermaid
 flowchart LR
-  SNAP["Scan<br/>(all states)"] --> TB["TopologyBuilder"]
+  SNAP["Scan<br/>raw sockets + process table"] --> TB["TopologyBuilder"]
   TB -->|"listeners → service roots"| N["nodes"]
   TB -->|"ESTABLISHED pairs → edges"| ED["edges (+ external, collapsed)"]
   TB --> TUN["tunnel::detect<br/>kubectl · ssh -L · cloudflared · ngrok"]
@@ -185,18 +149,69 @@ flowchart LR
 
 * **Who.** `agents::catalog` names each agent product: bundle, process name, install path or
   entry script. Kinds cover terminal agents, AI editors, desktop apps, extensions, hosts and
-  developer tools (Docker Desktop, OrbStack…). `ProtectionPolicy` uses the same catalog for
-  Cli/Extension/Host names, so what the view calls an agent is what holdmap refuses to stop. An
-  editor, desktop app or tool with many helpers is one agent. A terminal agent started inside it
-  is its own agent, linked by a parent edge.
+  developer tools (Docker Desktop, OrbStack…). Parsed executable and runtime signatures avoid
+  treating a product name in an ordinary argument as an agent. Editors, desktop apps and tools
+  fold their helpers into one root; a terminal agent started inside one remains its own agent,
+  linked by a parent edge. `ProtectionPolicy` shares the catalog for session recognition. Tool
+  products retain their existing OS-service policy rather than acquiring AI-session protection.
 * **Where.** Folders are the members' working directories, with project details from the scan,
   plus recent projects from a `RecentProjects` source. It reads only directory names under
   `~/.claude/projects` and the window folder URIs in the editors' `storage.json`. It never opens
   chats, settings or tokens.
 * **Reach.** Listening ports held by the agent or its children, and ESTABLISHED links grouped by
-  local service or remote `ip:port` (no DNS).
+  local service or remote `ip:port` (no DNS). Local listener attribution matches both the address
+  and port; a listener bound to a specific interface can be reachable beyond loopback. An IPv6
+  wildcard can be a fallback for a possible dual-stack IPv4 listener; `IPV6_V6ONLY` is not
+  observed, so that fallback is an attribution hint.
+* **Tools.** Child processes are classified separately as likely MCP servers, development
+  servers, shells or commands. MCP candidates are visible even without a listening socket.
+  These are process-derived hints, with evidence labels; running a server does not establish
+  which tools an agent called.
 * **Access.** Each fact (account, sandbox, approvals, network, privacy) carries `observed`,
   `inferred` or `unknown`. Folders inside macOS privacy-protected areas are listed but not read.
+
+Agent detection, process ownership, network attribution and tool classification have separate
+modules. `AgentsBuilder` composes an `AgentDetector`, a `ToolClassifier` and a `RecentProjects`
+source; the defaults use the shared product catalog and observed process metadata. Its project
+cache can also be supplied explicitly, so tests use isolated caches while production shares the
+normal cache. Tests can replace these boundaries without scanning the host or reading real
+agent state.
+
+| Agent module | Responsibility |
+|---|---|
+| `builder.rs` | Compose dependencies, collect a report and apply display limits |
+| `catalog.rs` | Product signatures, conservative runtime parsing and `AgentDetector` |
+| `ownership.rs` | Assign descendants to their nearest root and merge matching helper accounts |
+| `footprint.rs` | Working folders, project metadata, privacy boundaries and recent-folder deduplication |
+| `network.rs` | Owned listeners and address-aware local or remote connections |
+| `tools.rs` | `ToolClassifier` and process-derived MCP, dev-server, shell or command metadata |
+| `access.rs` | Account, sandbox, approval and exposure facts with evidence |
+| `recent.rs` | Bounded, allowlisted current-account project history |
+| `model.rs` | Serializable report types, shared search and folder/port control candidates |
+
+Recent-project sources describe the current Holdmap account's history. The builder attaches
+that history only when the root matches the current account: compare numeric UIDs when both
+are known, otherwise require a matching nonempty user name. Other or unknown accounts do not
+query the history provider. History is not proof of work by a specific running instance.
+Working folders from live process metadata remain visible for every account.
+
+Re-parented editor helpers merge only when their account identity matches: numeric UID when
+available, otherwise user name. Roots with no known account identity remain separate. The
+protection policy uses the same catalog and parsed runtime entry as discovery, so runtime
+flags do not make a recognized agent lose its session protection.
+
+Reports keep all owned process IDs for lookup while bounding the displayed process, tool,
+folder and link lists. Children take priority over helpers in the process display. Omitted
+counts and collection warnings make partial visibility explicit. Resource and remote-host
+totals are computed before clipping. `Agent::matches` owns query semantics for CLI and MCP:
+product, vendor, exact owned PID, folder paths and tool names. Raw command text is excluded.
+Desktop filtering also searches visible ports, services and hosts, with exact PID queries and
+explicit `port:3000` queries; its layout and rendering remain pure presentation logic.
+
+`known_folders()` supplies folder actions, and the native backend rejects paths outside that
+agent's reported folders. `stoppable_ports()` identifies development/service port candidates;
+normal core planning still decides which can be stopped. CLI, TUI, desktop and MCP preserve the
+agent-service stop controls without signalling the agent root merely because it is visible.
 
 ## 4. Project detection
 
@@ -229,13 +244,14 @@ flowchart TB
     GV["GraphView.svelte<br/>@xyflow/svelte"]
     AV["AgentsView.svelte<br/>agent cards + footprint map<br/>(lib/agents.ts: column layout)"]
     NODES["components/graph/<br/>ServiceNode · ClusterNode · TrafficEdge · FitOnChange"]
+    AGNODES["components/agents/<br/>AgentNode · FootNode · AgentTools"]
     LG["lib/graph.ts<br/>dagre layered · force · toFlow · related · sections"]
     OTHER["detail/DetailPane · Settings · Pin · Remote · Confirm · History"]
     LIST["components/list/<br/>PortRow · GroupHeader · StatusDot · RowBadges · Sparkline<br/>(view model: lib/rows.ts)"]
     KIT["components/ui/<br/>UI kit (see below)"]
-    API["lib/api.ts (invoke) · lib/mock.ts (browser dev)"]
+    API["lib/api.ts: native IPC or lib/mock.ts browser data"]
     APP --> GV --> NODES
-    APP --> AV --> NODES
+    APP --> AV --> AGNODES
     GV --> LG
     APP --> OTHER --> KIT
     APP --> LIST --> KIT
@@ -244,9 +260,17 @@ flowchart TB
   API -- "Tauri IPC" --> CMD
 ```
 
-`commands.rs` only converts arguments and calls the core. All behaviour lives in `holdmap-core`,
-and all view logic (layout, filtering, ordering) lives in pure TypeScript modules that vitest
-covers.
+`commands.rs` validates action targets, schedules blocking work and calls the core. Native
+state owns freshness and preference handling. View logic such as layout, filtering and ordering
+lives in pure TypeScript modules covered by Vitest.
+
+`AppState` serializes scans and shares a cache keyed by socket view and Docker collection.
+Agent, topology and explanation commands require a scan no older than one second, even when
+called before a UI poll. Derived reads retain the cached socket view, and failed refreshes
+return an error while leaving the previous cache eligible for a retry. Collection holds the
+scan lock without holding the engine mutex, so synchronous folder readers can use the previous
+engine during a slow OS/container query. Folder actions validate against that cached report;
+stop actions collect and replan independently.
 
 ### Desktop UI
 
@@ -273,12 +297,24 @@ doesn't move between refreshes.
 
 ## 7. Design notes
 
+The SOLID boundaries are concrete responsibilities and substitutable interfaces:
+
+| Principle | Boundary |
+|---|---|
+| Single responsibility | Scanning, ownership, network attribution, tool classification, planning and execution live in separate modules; adapters handle protocol, cache or presentation concerns. |
+| Open/closed | Catalog entries, strategy registries and injected detectors/classifiers extend behavior through established boundaries. |
+| Liskov substitution | System and fixture providers satisfy the same collection contracts; detector and classifier test doubles feed the normal report builder in regression tests. |
+| Interface segregation | Socket, process, container, recent-project, agent-detection and tool-classification interfaces each expose their own small contract. |
+| Dependency inversion | Core orchestration accepts provider and classifier traits; composition points choose the production implementations. |
+
 - `scan` gathers, `engine` decides, `exec` acts, `topology` relates and `store` persists. The
   desktop backend is split into `commands`, `state`, `tray`, `watch` and `shortcuts`.
 - Behaviour is extended through registries: `StrategyRegistry`, `ClusterRegistry`,
   `ManifestRegistry`, `WorkspaceMarker`s and the `exporter(name)` factory.
 - `Engine` and `Scanner` take trait objects, so tests inject static providers and fixture tables.
-  Only `Scanner::system()` (used by `Engine::new`) touches the real OS.
+  `Scanner::system()` (used by `Engine::new`) selects the production socket, process and
+  container providers. Execution, HTTP probes, project detection and recent-project sources
+  have their own OS and filesystem boundaries.
 - Project and shell features stay out of the engine: `stack` parses and validates
   `.holdmap.toml` and answers "is this listener ours?" (pure data, no I/O beyond reading the
   file), `hint` reads a command line for the ports it would bind, and `http` probes a port with a
@@ -286,3 +322,75 @@ doesn't move between refreshes.
   so `down`, `up --replace` and `stop --all-dev` get the same protection checks as `stop`.
 - `docs/cli.md`, the man pages and the shell completions are all generated from the clap
   definitions; `cargo test` fails when `docs/cli.md` is stale.
+
+## 8. MCP adapter
+
+`holdmap mcp` exposes the core through newline-delimited JSON-RPC on stdio. The adapter keeps
+protocol concerns separate from scanning, ownership and execution:
+
+| Module | Responsibility |
+|---|---|
+| `lib.rs` | Transport, version negotiation, request routing and protocol results |
+| `catalog.rs` | Tool names, descriptions, input/output contracts and client instructions |
+| `validation.rs` | Check arguments against the published input contracts before live work |
+| `tools.rs` | Convert validated arguments, call the core and summarize returned types |
+| `resources.rs` | Serve the compiled-in agent guide through an exact resource URI |
+| `prompts.rs` | Discover and render workflow templates with validated string arguments |
+
+Tool metadata drives input validation so a client cannot turn an invalid `dry_run` string into
+an executing stop. The core remains responsible for ownership, stop plans, protected processes,
+execution and PID reuse checks. Output schemas describe structured results; compatibility
+handling keeps text JSON available to older clients.
+
+The resource and prompt layers perform no scans, probes, file reads or mutations. Clients
+supporting those MCP capabilities can discover tool-selection guidance and the `diagnose_port`,
+`prepare_dev_server` and `inspect_agents` workflows. A retrieved prompt is context for the client,
+not an executing workflow. Clients exposing tools alone can use the same nine tools directly:
+`list_ports`, `explain_port`, `find_free_port`, `wait_for_port`, `get_topology`, `list_agents`,
+`stop_agent_ports`, `plan_cluster_stop` and `stop_port`. `stop_agent_ports` uses the shared agent
+matcher and previews by default. Tools preserve collection warnings alongside returned data;
+`wait_for_port` waits for TCP readiness, not application health. No live subscriptions are
+advertised.
+
+## 9. Website and repository layout
+
+The Astro site lives in `site/`. Its guides use Markdown content under `site/src/content/docs`,
+the CLI reference comes from `docs/cli.md`, and screenshots come from `docs/screenshots`.
+`site/scripts/build-demo.mjs` builds `apps/desktop` into the ignored `site/public/demo` output.
+The browser selects `lib/mock.ts` rather than Tauri, so demo actions affect sample state and
+never scan or stop host processes. Pages validates pull-request builds and deploys the main
+branch; editing source does not itself publish a site.
+
+| Directory | Contents |
+|---|---|
+| `crates/holdmap-core` | Collection providers, models, attribution, planning, execution and persistence |
+| `crates/holdmap-cli` | CLI, TUI, generated-document checks and stdio MCP integration tests |
+| `crates/holdmap-mcp` | Protocol adapter, contracts, live tools and pure discovery modules |
+| `apps/desktop/src` | Shared Svelte UI, styles and TypeScript view logic |
+| `apps/desktop/src-tauri` | Native commands, state/cache, watcher, tray and OS integration |
+| `apps/desktop/e2e` | Browser regressions using deterministic sample data |
+| `site` | Public website, guides and browser-demo build |
+| `docs` | Architecture, generated CLI reference and published screenshots |
+| `scripts` | Workspace checks, documentation generation and development helpers |
+
+Build output, dependencies and temporary captures are ignored and regenerated. Published assets
+stay with their consumers; superseded source versions belong in Git history.
+
+## 10. Verification
+
+The CLI integration suite starts the built `holdmap mcp` binary as an actual stdio client.
+It checks discovery, rendered prompts, typed read results, version compatibility and rejected
+stop controls with isolated state and local listeners. Desktop browser tests exercise the
+production UI using deterministic demo data; native cache and core ownership/protection
+regressions use fixtures. CI runs the Rust and native tests on Linux, macOS and Windows, and
+the browser suite on Linux. `scripts/check-all.sh` reproduces the full checks on a developer's
+host with its native desktop dependencies installed.
+
+Use Rust 1.95+ and Node.js 22.12+ (`nvm use`), with the native dependencies listed in
+[CONTRIBUTING.md](../CONTRIBUTING.md). `cargo test --locked` checks the core, CLI/TUI and MCP
+default workspace members. Desktop `npm run check`, `npm test` and `npm run test:e2e` check
+types, pure view logic and production UI flows. Site checks build the shared demo and verify
+guides, links and asset budgets; site `npm run test:demo` launches a preview and checks the
+embedded app's navigation, agent tools and simulated stop flow. `scripts/check-all.sh` combines
+these with formatting, clippy, rustdoc, a native desktop build, workflow validation and dependency
+audits.

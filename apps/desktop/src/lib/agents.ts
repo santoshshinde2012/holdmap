@@ -4,10 +4,10 @@
 // nodes and edges with self-computed edge geometry, and the summaries the agent cards show.
 // No DOM or Svelte imports, so all of it is unit-tested.
 
-import type { AccessFact, AccessLevel, AccessTopic, Agent, AgentKind, AgentPort, AgentsReport, Evidence, PortEntry } from "./types";
+import type { AccessFact, AccessLevel, AccessTopic, Agent, AgentKind, AgentPort, PortEntry, AgentProcess, AgentToolKind, AgentsReport, Evidence } from "./types";
 
-export type FootKind = "agent" | "folder" | "port" | "service" | "remote" | "more" | "header";
-export type FootEdgeKind = "parent" | "folder" | "recent" | "runs" | "uses" | "remote";
+export type FootKind = "agent" | "folder" | "tool" | "port" | "service" | "remote" | "more" | "omitted" | "header";
+export type FootEdgeKind = "parent" | "folder" | "recent" | "tool" | "runs" | "uses" | "remote" | "omitted";
 export type Tone = "warn" | "muted" | null;
 
 export interface FootNode {
@@ -23,6 +23,7 @@ export interface FootNode {
   path: string | null;
   evidence: Evidence;
   tone: Tone;
+  warning?: string;
   /** The agent itself, for agent nodes. */
   agent: Agent | null;
 }
@@ -71,6 +72,55 @@ export const EVIDENCE_LABEL: Record<Evidence, string> = {
   inferred: "inferred",
   unknown: "unknown",
 };
+
+export const TOOL_LABEL: Record<AgentToolKind, string> = { mcp_server: "MCP server", dev_server: "Dev server", shell: "Shell", command: "Command" };
+
+/** Search only identity and footprint metadata; command lines may contain credentials. */
+export function agentMatches(a: Agent, query: string): boolean {
+  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return true;
+  const pids = new Set([a.pid, ...(a.process_ids ?? []), ...a.processes.map((p) => p.pid)]);
+  const text = [a.id, a.name, a.product, a.vendor, a.kind, a.process_name, String(a.pid),
+    ...(a.process_ids ?? a.processes.map((p) => p.pid)).map(String),
+    ...a.processes.map((p) => p.name),
+    ...a.folders.flatMap((f) => [f.path, f.label, f.project?.name ?? ""]),
+    ...(a.tools ?? []).flatMap((t) => [t.name, TOOL_LABEL[t.kind], String(t.pid), t.cwd ?? "", ...t.ports.map((p) => `:${p} port:${p}`)]),
+    ...a.ports.flatMap((p) => [`:${p.port} port:${p.port}`, p.project ?? "", p.framework ?? "", p.process ?? ""]),
+    ...a.links.flatMap((l) => [l.address, `:${l.port} port:${l.port}`, l.service ?? "", l.process ?? ""]),
+  ].join(" ").toLocaleLowerCase();
+  return terms.every((term) => {
+    const pid = /^(?:pid:)?(\d+)$/.exec(term);
+    return pid ? pids.has(Number(pid[1])) : text.includes(term);
+  });
+}
+
+/** Keep report order so searching and keyboard navigation choose the same agents. */
+export const filterAgents = (agents: Agent[], query: string): Agent[] => agents.filter((a) => agentMatches(a, query));
+
+/** Nested agent sessions remain discoverable even while the report is filtered. */
+export const startedFrom = (report: AgentsReport, parentId: string): Agent[] => report.agents.filter((agent) => agent.parent === parentId);
+
+/** Indent the displayed process tree without inventing missing parents or following cycles. */
+export function processRows(a: Agent): { process: AgentProcess; depth: number }[] {
+  const byPid = new Map(a.processes.map((p) => [p.pid, p]));
+  const children = new Map<number, AgentProcess[]>();
+  for (const p of a.processes) if (p.ppid !== null && p.ppid !== p.pid && byPid.has(p.ppid)) {
+    const list = children.get(p.ppid) ?? [];
+    list.push(p);
+    children.set(p.ppid, list);
+  }
+  const out: { process: AgentProcess; depth: number }[] = [];
+  const seen = new Set<number>();
+  function visit(p: AgentProcess, depth: number) {
+    if (seen.has(p.pid)) return;
+    seen.add(p.pid);
+    out.push({ process: p, depth: Math.min(depth, 8) });
+    for (const child of children.get(p.pid) ?? []) visit(child, depth + 1);
+  }
+  for (const p of a.processes) if (p.pid === a.pid || p.ppid === null || !byPid.has(p.ppid)) visit(p, 0);
+  for (const p of a.processes) visit(p, 0);
+  return out;
+}
 
 /** Per-agent accent, cycled: edges and badges share it so each agent's footprint reads as a group. */
 export const AGENT_COLORS = ["var(--accent)", "var(--tone-amber)", "var(--tone-green)", "var(--tone-violet)", "var(--tone-blue)"];
@@ -125,7 +175,7 @@ export function footprintGraph(r: AgentsReport, opts: GraphOptions = {}): FootGr
     return created;
   };
   const edge = (e: Omit<FootEdge, "id">) => {
-    const id = `${e.from}->${e.to}`;
+    const id = `${e.from}->${e.to}:${e.kind}`;
     if (!edges.has(id)) edges.set(id, { ...e, id });
   };
   const base = { entryId: null, path: null, evidence: "observed" as Evidence, tone: null as Tone, agent: null };
@@ -138,12 +188,20 @@ export function footprintGraph(r: AgentsReport, opts: GraphOptions = {}): FootGr
   for (const a of r.agents) {
     for (const p of a.ports) {
       const id = `port:${p.entry_id}`;
-      node({ ...base, id, kind: "port", label: p.project ?? p.framework ?? p.process ?? shortLabel(p.label), sub: `:${p.port}${p.framework && p.project ? ` · ${p.framework}` : ""}`, entryId: p.entry_id, tone: p.exposure === "all_interfaces" ? "warn" : null }, a.id);
+      node({ ...base, id, kind: "port", label: p.project ?? p.framework ?? p.process ?? shortLabel(p.label), sub: `:${p.port}${p.framework && p.project ? ` · ${p.framework}` : ""}`, entryId: p.entry_id, tone: p.exposure !== "loopback" ? "warn" : null, warning: p.exposure === "specific" ? "Bound to a specific interface" : p.exposure === "all_interfaces" ? "Reachable from the network" : undefined }, a.id);
       edge({ from: a.id, to: id, kind: "runs", label: null, inferred: false, connections: 0 });
     }
   }
   for (const a of r.agents) {
     if (a.parent && ids.has(a.parent)) edge({ from: a.parent, to: a.id, kind: "parent", label: "started", inferred: false, connections: 0 });
+    for (const t of a.tools ?? []) {
+      // MCP can use stdio and have no listening socket, so it needs its own node.
+      // Shells and commands stay in the card; dev servers already have port nodes.
+      if (t.kind !== "mcp_server") continue;
+      const id = `tool:${t.pid}`;
+      node({ ...base, id, kind: "tool", label: t.name, sub: `MCP · pid ${t.pid}${t.ports.length ? ` · :${t.ports.join(", :")}` : " · no listener"}`, evidence: t.evidence }, a.id);
+      edge({ from: a.id, to: id, kind: "tool", label: null, inferred: t.evidence !== "observed", connections: 0 });
+    }
     for (const f of a.folders) {
       if (f.source === "recent" && !recent) continue;
       const id = `folder:${f.path}`;
@@ -163,12 +221,16 @@ export function footprintGraph(r: AgentsReport, opts: GraphOptions = {}): FootGr
       edge({ from: a.id, to: id, kind: "remote", label: `×${l.connections}`, inferred: false, connections: l.connections });
     }
     const rest = remotes.slice(remoteLimit);
-    const hidden = rest.length + a.more_links;
-    if (hidden > 0) {
+    if (rest.length > 0) {
       const id = `more:${a.id}`;
       const conns = rest.reduce((n, l) => n + l.connections, 0);
-      node({ ...base, id, kind: "more", label: `+${hidden} more`, sub: conns ? `${conns} connection${conns === 1 ? "" : "s"}` : "not listed", tone: "muted" }, a.id);
+      node({ ...base, id, kind: "more", label: `+${rest.length} more remote links`, sub: `${conns} connection${conns === 1 ? "" : "s"}`, tone: "muted" }, a.id);
       edge({ from: a.id, to: id, kind: "remote", label: null, inferred: false, connections: conns });
+    }
+    if (a.more_links > 0) {
+      const id = `omitted:${a.id}`;
+      node({ ...base, id, kind: "omitted", label: `+${a.more_links} unlisted links`, sub: "Local or remote", tone: "muted" }, a.id);
+      edge({ from: a.id, to: id, kind: "omitted", label: null, inferred: false, connections: 0 });
     }
   }
   return { nodes: [...nodes.values()], edges: [...edges.values()] };
@@ -189,10 +251,10 @@ export type Positions = Map<string, Point>;
 
 /** Which column a node sits in: folders, agents, ports & services, remote hosts. */
 export function column(kind: FootKind): number {
-  return kind === "folder" ? 0 : kind === "agent" ? 1 : kind === "port" || kind === "service" ? 2 : 3;
+  return kind === "folder" ? 0 : kind === "agent" ? 1 : kind === "port" || kind === "service" || kind === "tool" || kind === "omitted" ? 2 : 3;
 }
 
-export const COLUMN_TITLES = ["Folders", "Agents", "Ports & services", "Remote hosts"];
+export const COLUMN_TITLES = ["Folders", "Agents", "Tools, ports & services", "Remote hosts"];
 
 export const sizeOf = (kind: FootKind) => (kind === "agent" ? { w: AGENT_W, h: AGENT_H } : kind === "header" ? { w: FOOT_W, h: 20 } : { w: FOOT_W, h: FOOT_H });
 
@@ -363,11 +425,13 @@ export function edgeGeometry(a: Point & { w: number; h: number }, b: Point & { w
 export interface FootFlowOptions {
   focus?: string | null;
   selectedId?: string | null;
+  /** Full report order keeps agent colours stable when search hides other agents. */
+  agentIds?: readonly string[];
 }
 
 /** The agent's colour, by its position in the report. */
-export function agentColor(g: FootGraph, agentId: string): string {
-  const i = g.nodes.filter((n) => n.kind === "agent").findIndex((n) => n.id === agentId);
+export function agentColor(g: FootGraph, agentId: string, agentIds?: readonly string[]): string {
+  const i = (agentIds ?? g.nodes.filter((n) => n.kind === "agent").map((n) => n.id)).indexOf(agentId);
   return AGENT_COLORS[(i < 0 ? 0 : i) % AGENT_COLORS.length];
 }
 
@@ -391,7 +455,7 @@ export function toFootFlow(g: FootGraph, pos: Positions, opts: FootFlowOptions =
       width: w,
       height: h,
       draggable: false,
-      data: { node: n, color: agentColor(g, n.kind === "agent" ? n.id : n.owners[0]), ownerColors: n.owners.map((o) => agentColor(g, o)), dim: !!rel && !rel.nodes.has(n.id), hl: !!rel && rel.nodes.has(n.id) && n.id !== opts.focus, selected: opts.selectedId === n.id },
+      data: { node: n, color: agentColor(g, n.kind === "agent" ? n.id : n.owners[0], opts.agentIds), ownerColors: n.owners.map((o) => agentColor(g, o, opts.agentIds)), dim: !!rel && !rel.nodes.has(n.id), hl: !!rel && rel.nodes.has(n.id) && n.id !== opts.focus, selected: opts.selectedId === n.id },
     });
   }
   const edges: FootFlowEdge[] = [];
@@ -400,7 +464,7 @@ export function toFootFlow(g: FootGraph, pos: Positions, opts: FootFlowOptions =
     const na = byId.get(e.from), nb = byId.get(e.to);
     if (!a || !b || !na || !nb) continue;
     const geometry = edgeGeometry({ ...a, ...sizeOf(na.kind) }, { ...b, ...sizeOf(nb.kind) });
-    edges.push({ id: e.id, source: e.from, target: e.to, type: "foot", data: { edge: e, geometry, color: agentColor(g, e.kind === "parent" ? e.to : e.from), dim: !!rel && !rel.edges.has(e.id), hl: !!rel && rel.edges.has(e.id) } });
+    edges.push({ id: e.id, source: e.from, target: e.to, type: "foot", data: { edge: e, geometry, color: agentColor(g, e.kind === "parent" ? e.to : e.from, opts.agentIds), dim: !!rel && !rel.edges.has(e.id), hl: !!rel && rel.edges.has(e.id) } });
   }
   return { nodes, edges };
 }
@@ -419,14 +483,16 @@ export interface Counts {
   processes: number;
   /** Unprotected ports the agent started (dev servers / services). */
   stoppable: number;
+  tools: number;
 }
 
 export function counts(a: Agent): Counts {
   return {
-    folders: a.folders.filter((f) => f.source !== "recent").length,
+    folders: a.folders.filter((f) => f.source !== "recent").length + (a.more_folders ?? 0),
     ports: a.ports.length,
     links: a.links.length + a.more_links,
-    processes: a.processes.length + a.more_processes,
+    processes: a.process_ids?.length || a.processes.length + a.more_processes,
+    tools: (a.tools?.length ?? 0) + (a.more_tools ?? 0),
     stoppable: stoppablePorts(a).length,
   };
 }
@@ -443,7 +509,9 @@ export function accessHeadline(a: Agent): { level: AccessLevel; text: string } {
   const elevated = facts.filter((f) => f.level === "elevated");
   if (a.access.root) return { level: "elevated", text: "Runs as root" };
   if (elevated.length) return { level: "elevated", text: `${elevated.map((f) => TOPIC_LABEL[f.topic]).join(" & ")}: wider than usual` };
-  if (facts.some((f) => f.level === "restricted")) return { level: "restricted", text: "Sandboxed or limited" };
+  const restricted = facts.find((f) => f.level === "restricted");
+  if (restricted) return { level: "restricted", text: restricted.summary };
+  if (facts.every((f) => f.level === "unknown")) return { level: "unknown", text: "Access not reported" };
   return { level: "standard", text: a.access.mine ? "Your account's access" : `Runs as ${a.access.user ?? "another user"}` };
 }
 
@@ -457,11 +525,11 @@ export function countsLine(c: Counts): string {
 
 /** Compact resource line for skim surfaces: "520 MB · 3.4% · 15 processes". */
 export function resourcesLine(a: Agent): string {
-  const procs = a.processes.length + a.more_processes;
+  const procs = counts(a).processes;
   const cpu = a.cpu_percent > 0 ? `${a.cpu_percent < 10 ? a.cpu_percent.toFixed(1) : Math.round(a.cpu_percent)}%` : null;
   // Match CLI human_bytes style roughly for the card (KB/MB/GB).
   const mem = a.memory_bytes >= 1 << 30
-    ? `${(a.memory_bytes / (1 << 30)).toFixed(a.memory_bytes >= 10 << 30 ? 0 : 1)} GB`
+    ? `${(a.memory_bytes / (1 << 30)).toFixed(a.memory_bytes >= 10 * (1 << 30) ? 0 : 1)} GB`
     : a.memory_bytes >= 1 << 20
       ? `${Math.round(a.memory_bytes / (1 << 20))} MB`
       : a.memory_bytes >= 1 << 10

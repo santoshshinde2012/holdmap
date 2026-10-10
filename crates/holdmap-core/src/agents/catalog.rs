@@ -1,11 +1,28 @@
 //! Which AI coding agents holdmap recognises, and how to tell them apart from a process.
 //!
 //! The catalog is data: one [`AgentProduct`] per product with the process names, app bundles and
-//! install paths that identify it. The safety policy uses the same list ([`is_agent_name`]), so
+//! install paths that identify it. The safety policy uses the same detector ([`identify`]), so
 //! the agents view and the "don't stop the user's agent" protection always agree.
 
 use crate::model::ProcessInfo;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
+
+/// Identifies agent products from existing process metadata.
+pub trait AgentDetector: Send + Sync + Debug {
+    /// The recognised product, if this process belongs to one.
+    fn identify(&self, process: &ProcessInfo) -> Option<&'static AgentProduct>;
+}
+
+/// Detection using the catalog shared with the process protection policy.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct CatalogDetector;
+
+impl AgentDetector for CatalogDetector {
+    fn identify(&self, process: &ProcessInfo) -> Option<&'static AgentProduct> {
+        identify(process)
+    }
+}
 
 /// What sort of thing the agent is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -243,6 +260,133 @@ pub(crate) fn norm(name: &str) -> String {
     n.strip_suffix(".exe").map(str::to_owned).unwrap_or(n)
 }
 
+/// Normalised executable basename, allowing Windows paths on every platform.
+pub(crate) fn basename(path: &str) -> String {
+    norm(path.rsplit(['/', '\\']).next().unwrap_or(path))
+}
+
+/// A runtime's script/module entrypoint, never an arbitrary file or prompt argument.
+pub(crate) fn runtime_entry(p: &ProcessInfo) -> Option<&str> {
+    let name = norm(&p.name);
+    let program = p.cmdline.first().map(|a| basename(a)).unwrap_or_default();
+    let is_python = |n: &str| {
+        n == "py"
+            || n == "python"
+            || n.strip_prefix("python")
+                .is_some_and(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit() || c == '.'))
+    };
+    let python = is_python(&name) || is_python(&program);
+    let javascript = ["node", "nodejs", "bun", "deno"].contains(&name.as_str())
+        || ["node", "nodejs", "bun", "deno"].contains(&program.as_str());
+    if !python && !javascript {
+        return None;
+    }
+    let mut args = p.cmdline.iter().skip(1);
+    while let Some(arg) = args.next() {
+        if python && arg == "-m" {
+            return args.next().map(String::as_str);
+        }
+        let (option, inline) = arg
+            .split_once('=')
+            .map_or((arg.as_str(), None), |(name, value)| (name, Some(value)));
+        if [
+            "-c",
+            "-e",
+            "--eval",
+            "-p",
+            "--print",
+            "--check",
+            "--test",
+            "--help",
+            "--version",
+        ]
+        .contains(&option)
+            || (python && arg.starts_with("-c"))
+        {
+            return None;
+        }
+        if arg == "--" {
+            return args.next().map(String::as_str);
+        }
+        if arg.starts_with('-') {
+            let value_option = if python {
+                ["-W", "-X"].contains(&option)
+            } else {
+                [
+                    "-r",
+                    "--require",
+                    "--loader",
+                    "--experimental-loader",
+                    "--import",
+                    "--inspect-port",
+                    "--conditions",
+                    "-C",
+                    "--max-old-space-size",
+                    "--max-semi-space-size",
+                    "--stack-size",
+                    "--input-type",
+                    "--icu-data-dir",
+                    "--openssl-config",
+                    "--redirect-warnings",
+                    "--report-directory",
+                    "--report-filename",
+                    "--trace-event-categories",
+                    "--trace-event-file-pattern",
+                    "--heapsnapshot-signal",
+                    "--diagnostic-dir",
+                    "--title",
+                    "--disable-warning",
+                ]
+                .contains(&option)
+            };
+            if value_option {
+                if inline.is_none() {
+                    args.next()?;
+                }
+                continue;
+            }
+            // Python accepts compact forms such as -Wignore and -Xdev.
+            if python && ((arg.starts_with("-W") || arg.starts_with("-X")) && arg.len() > 2) {
+                continue;
+            }
+            let boolean_option = if python {
+                [
+                    "-B", "-E", "-I", "-O", "-OO", "-P", "-q", "-s", "-S", "-u", "-v", "-vv",
+                ]
+                .contains(&option)
+            } else {
+                [
+                    "--no-warnings",
+                    "--trace-warnings",
+                    "--trace-uncaught",
+                    "--enable-source-maps",
+                    "--experimental-strip-types",
+                    "--experimental-transform-types",
+                    "--preserve-symlinks",
+                    "--preserve-symlinks-main",
+                    "--use-strict",
+                    "--watch",
+                    "--watch-preserve-output",
+                    "--inspect",
+                    "--inspect-brk",
+                ]
+                .contains(&option)
+            };
+            if boolean_option {
+                continue;
+            }
+            // An unrecognised flag might consume the next argument. Prefer unknown to
+            // treating option data (possibly private) as an executable entrypoint.
+            return None;
+        }
+        if matches!(program.as_str(), "bun" | "deno") && arg == "run" {
+            continue;
+        }
+        return Some(arg);
+    }
+    None
+}
+
 /// True when `name` (already normalised) is the process name of a terminal agent, an agent
 /// extension or an agent host. Editors and desktop apps are recognised separately.
 pub fn is_agent_name(name: &str) -> bool {
@@ -276,8 +420,8 @@ pub fn is_agent_entry(base: &str) -> bool {
 }
 
 /// Which product `p` belongs to, if any. Checks the most specific signal first: the app bundle
-/// of the executable, then the process name, then install paths and script entry points in the
-/// first few arguments.
+/// of the executable, then the process name, then install paths and the runtime's actual
+/// script or module entrypoint.
 pub fn identify(p: &ProcessInfo) -> Option<&'static AgentProduct> {
     let exe = p
         .exe
@@ -305,29 +449,22 @@ pub fn identify(p: &ProcessInfo) -> Option<&'static AgentProduct> {
     }) {
         return Some(hit);
     }
-    let args: Vec<String> = p
-        .cmdline
-        .iter()
-        .take(3)
-        .map(|a| a.replace('\\', "/"))
-        .collect();
+    let entry = runtime_entry(p).map(|a| a.replace('\\', "/"));
     if let Some(hit) = CATALOG.iter().find(|x| {
-        x.paths
-            .iter()
-            .any(|frag| exe.contains(frag) || args.iter().any(|a| a.contains(frag)))
+        x.paths.iter().any(|frag| {
+            exe.contains(frag)
+                || argv0.contains(frag)
+                || entry.as_ref().is_some_and(|a| a.contains(frag))
+        })
     }) {
         return Some(hit);
     }
     // `node /usr/local/bin/claude`, `python -m aider`: a runtime running an agent's entry point.
-    for (i, a) in args.iter().enumerate() {
-        let script = if i == 0 || a.contains('/') {
-            a.rsplit('/').next().map(norm)
-        } else if i > 0 && args[i - 1] == "-m" {
-            Some(norm(a))
-        } else {
-            None
-        };
-        let Some(script) = script else { continue };
+    for (i, a) in std::iter::once(argv0.as_str())
+        .chain(entry.as_deref())
+        .enumerate()
+    {
+        let script = basename(a);
         let script = script
             .trim_end_matches(".js")
             .trim_end_matches(".mjs")
@@ -453,6 +590,97 @@ mod tests {
             ],
         );
         assert_eq!(identify(&copilot).map(|x| x.id), Some("copilot"));
+    }
+
+    #[test]
+    fn file_arguments_and_prompt_text_never_become_agent_entrypoints() {
+        for p in [
+            proc(1, 0, "cp", &["cp", "/tmp/claude", "/tmp/backup"]),
+            proc(1, 0, "cat", &["cat", "/cache/@openai/codex/config.json"]),
+            proc(1, 0, "node", &["node", "app.js", "/usr/local/bin/claude"]),
+            proc(1, 0, "node", &["node", "-e", "/usr/local/bin/claude"]),
+            proc(1, 0, "python3", &["python3", "-c", "/tmp/aider"]),
+            proc(
+                1,
+                0,
+                "node",
+                &["node", "--require", "/tmp/codex.js", "server.js"],
+            ),
+            proc(
+                1,
+                0,
+                "node",
+                &["node", "--conditions", "codex", "worker.js"],
+            ),
+            proc(
+                1,
+                0,
+                "node",
+                &["node", "--unhandled-option", "codex", "worker.js"],
+            ),
+            proc(
+                1,
+                0,
+                "node",
+                &[
+                    "node",
+                    "--conditions",
+                    "/opt/@openai/codex/data",
+                    "worker.js",
+                ],
+            ),
+            proc(1, 0, "python3", &["python3", "-X", "aider", "worker.py"]),
+        ] {
+            assert_eq!(identify(&p), None, "{:?}", p.cmdline);
+        }
+        let p = proc(
+            1,
+            0,
+            "node",
+            &[
+                "node",
+                "--no-warnings",
+                "--require",
+                "bootstrap.js",
+                "/opt/@openai/codex/bin/codex.js",
+            ],
+        );
+        assert_eq!(identify(&p).map(|p| p.id), Some("codex"));
+        let p = proc(1, 0, "python3.12", &["python3.12", "-m", "aider"]);
+        assert_eq!(identify(&p).map(|p| p.id), Some("aider"));
+        for p in [
+            proc(
+                1,
+                0,
+                "node",
+                &["node", "--conditions", "development", "/tmp/codex.js"],
+            ),
+            proc(
+                1,
+                0,
+                "node",
+                &[
+                    "node",
+                    "--conditions=development",
+                    "--max-old-space-size=4096",
+                    "/tmp/codex.js",
+                ],
+            ),
+            proc(
+                1,
+                0,
+                "python3",
+                &["python3", "-X", "dev", "-W", "ignore", "-m", "aider"],
+            ),
+            proc(
+                1,
+                0,
+                "python3",
+                &["python3", "-Xdev", "-Wignore", "-m", "aider"],
+            ),
+        ] {
+            assert!(identify(&p).is_some(), "{:?}", p.cmdline);
+        }
     }
 
     #[test]

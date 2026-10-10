@@ -25,7 +25,7 @@
   <div class="body">
     <span class="label">{a.name}{#if c.stoppable > 0}<em class="stop-n">{c.stoppable}</em>{/if}</span>
     <span class="sub">{data.node.sub}</span>
-    <span class="acc lv-{head.level}"><i aria-hidden="true"></i>{head.text} · {res.split(" · ").slice(0, 2).join(" · ")}</span>
+    <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.text} · {res.split(" · ").slice(0, 2).join(" · ")}</span>
   </div>
   <Handle type="source" position={Position.Right} isConnectable={false} />
 </div>

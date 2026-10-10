@@ -135,7 +135,7 @@ export async function topology(all: boolean): Promise<Graph> {
 
 /** The AI coding agents of the latest scan and their footprint. */
 export async function agents(): Promise<AgentsReport> {
-  if (!isTauri) return mockAgents();
+  if (!isTauri) return mockAgents({ ...MOCK_SNAPSHOT, taken_at_ms: Date.now() });
   return call("agents");
 }
 

@@ -87,6 +87,7 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
       <div class="text">
         <h3>An MCP server for AI agents</h3>
         <p><code>holdmap mcp</code> gives coding assistants nine tools: list, explain, find a free port, wait, read the graph, see which agents and tools run where, stop the ports an agent started, plan a cluster stop (dry run only) and stop their own dev servers. Protected processes are always refused.</p>
+        <p>Development builds also publish a guide and workflow prompts. Results label inferred tools, incomplete collection and redacted commands.</p>
         <div class="code term-window">
           <div class="code-bar"><span>~/.cursor/mcp.json</span><button type="button" class="copy" data-copy={mcpJson} aria-label="Copy the MCP configuration"><Icon name="Copy" size={14} class="i-copy" /><Icon name="Check" size={14} class="i-done" /></button></div>
           <pre><code>{mcpJson}</code></pre>
