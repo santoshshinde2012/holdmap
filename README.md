@@ -401,6 +401,7 @@ dependencies and temporary captures are regenerated; Git history holds earlier v
 ## Learn more
 
 - [Website and guide](https://santoshshinde2012.github.io/holdmap/): the live demo and short how-tos.
+- [Website maintenance](site/README.md): SEO checks, deployment and current website snapshots.
 - [Agents, tools and apps](https://santoshshinde2012.github.io/holdmap/docs/agents/): folders, access and stopping what an agent started.
 - [CLI reference](docs/cli.md): every command and flag.
 - [Architecture](docs/architecture.md): how the core, CLI, TUI, desktop app and MCP server fit together.
@@ -419,7 +420,7 @@ scripts/check-all.sh                                  # complete workspace and n
 ```
 
 The full check script builds the UI before native checks and covers formatting, clippy,
-Rust/native tests, browser tests, docs, website links/budgets and dependency audits.
+Rust/native tests, browser tests, docs, website links/budgets, SEO and dependency audits.
 
 ## License
 

@@ -16,8 +16,9 @@
     "check": "astro check",
     "check:links": "node scripts/check-links.mjs",
     "check:budget": "node scripts/check-budget.mjs",
+    "check:seo": "node scripts/check-seo.mjs",
     "test:demo": "node scripts/check-demo.mjs",
-    "test": "npm run check:links && npm run check:budget"
+    "test": "npm run check:links && npm run check:budget && npm run check:seo"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",

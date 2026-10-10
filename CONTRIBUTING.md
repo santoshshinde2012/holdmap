@@ -173,7 +173,7 @@ Each ecosystem uses its own idiom. `cargo test` enforces these rules
 | Astro components and layouts (`site/`) | PascalCase | `Hero.astro`, `Docs.astro` |
 | TypeScript modules and tests | kebab-case, tests as `<module>.test.ts` | `rows.ts`, `rows.test.ts` |
 | Assets, scripts, workflows, files in `docs/` | kebab-case | `inter-variable.woff2`, `demo-servers.sh`, `architecture.md` |
-| Screenshots | `<surface>-<view>-<theme>.png` | `desktop-graph-dark.png` |
+| Screenshots | `<surface>-<view>-<theme>.png` (surface: `desktop`, `cli`, `tui`, `site`) | `desktop-graph-dark.png`, `site-guide-dark.png` |
 | Root documents | conventional UPPERCASE | `README.md`, `CHANGELOG.md`, `LICENSE-MIT` |
 
 Names fixed by tools (`Cargo.toml`, `package.json`, `src-tauri/`, the Tauri icon set) are left
