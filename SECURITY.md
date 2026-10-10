@@ -13,7 +13,7 @@ as they're ready, with credit unless you'd rather stay anonymous.
 
 ## Scope
 
-Local machine shutdown in current desktop source is also in scope. It requires a trusted
+Local machine shutdown in desktop version 0.4.0 is also in scope. It requires a trusted
 main webview and a one-use confirmation that expires after 60 seconds. The backend uses
 fixed OS commands without shell interpolation, force flags, elevation or remote targets.
 Linux requires systemd support for explicit inhibitor checks (248 or newer). macOS may
@@ -82,18 +82,21 @@ out of scope.
 - Releases use immutable action SHAs and scoped tokens, SHA-256 checksums and build provenance
   (`gh attestation verify <file> -R santoshshinde2012/holdmap`).
 
-## Linux GLib dependency backports (Unreleased)
+<a id="linux-glib-dependency-backports-unreleased"></a>
+
+## Linux GLib dependency backports
 
 The desktop GTK3 bindings require GLib 0.18. The published 0.18.5 contains
 [RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429.html): optimized string-variant
 iteration can crash. Its safe boxed-inline slice conversion also allocates only one element
 before copying the whole slice, causing a heap overflow as documented in [upstream issue
-#2040](https://github.com/gtk-rs/gtk-rs-core/issues/2040). The current source uses
+#2040](https://github.com/gtk-rs/gtk-rs-core/issues/2040). Version 0.4.0 and current source use
 [verified local backports](vendor/README.md) of both upstream fixes, retaining the truthful
 0.18.5 version and license. A separate local `g_malloc0` initialization fix gives `Value`
 copy callbacks the zero-filled destination required by GObject; the original allocation can
-crash even with one element. Existing releases and older lockfiles retain the original
-dependency until rebuilt with these fixes.
+crash even with one element. Linux desktop version 0.3.0 and older lockfiles retain the original
+dependency; use version 0.4.0 or newer, or rebuild from source with these fixes. The CLI, TUI,
+MCP server and macOS/Windows desktop do not use this Linux GTK dependency.
 
 Cargo-deny now checks transitive unsoundness advisories explicitly. Registry scanning does not
 cover local path packages; CI therefore also verifies every vendored file, both exact backports,
@@ -118,5 +121,5 @@ redaction is heuristic and may miss arbitrary positional secrets. Windows privac
 filesystem ACLs, including any custom state directory. Process visibility depends on OS
 permissions, and macOS retains a check-to-signal race; Linux pidfds and Windows process
 handles bind signalling more directly to process identity. Review plans and avoid sharing raw
-history/logs without inspecting them. Security hardening described here is in current
-[Unreleased source](CHANGELOG.md#unreleased), not the downloadable 0.3.0 release.
+history/logs without inspecting them. Version 0.4.0 includes the security hardening described
+here; see the [0.4.0 changes](CHANGELOG.md#040---2026-10-10). Version 0.3.0 predates these fixes.

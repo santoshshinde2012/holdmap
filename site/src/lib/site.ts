@@ -43,7 +43,8 @@ const [release, repo] = await Promise.all([github<Release>("/releases/latest"), 
 export const version = release?.tag_name?.replace(/^v/, "") || fileVersion;
 export const stars = repo?.stargazers_count && repo.stargazers_count >= STARS_SHOWN_FROM ? repo.stargazers_count : null;
 
-const dl = (file: string) => `${repoUrl}/releases/latest/download/${file}`;
+// Keep the chosen release label, filenames and checksums together while a new release builds.
+const dl = (file: string) => `${repoUrl}/releases/download/v${version}/${file}`;
 
 export const install = {
   sh: `curl -LsSf ${dl("holdmap-installer.sh")} | sh`,

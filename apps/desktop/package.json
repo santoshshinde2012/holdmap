@@ -1,7 +1,7 @@
 {
   "name": "holdmap-desktop",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "holdmap desktop and tray app",
   "type": "module",
   "license": "MIT OR Apache-2.0",

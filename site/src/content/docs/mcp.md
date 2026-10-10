@@ -37,11 +37,12 @@ After connecting, the server advertises its tools, a guide resource and three wo
 Prompt and resource menus depend on the client; clients exposing tools alone can use the same
 workflows below. Holdmap observes the machine where the server runs.
 
-This page describes the **current source / Unreleased** MCP interface. The bundled guide,
-prompts, schemas and mandatory stop confirmations are changes following v0.3.0. Downloadable
-v0.3.0 servers expose the nine tools below with the previous stop protocol; they do not return
-`confirmation_id`. Build the current source to use the safer preview-to-execution flow below,
-or follow your installed version's discovered schemas until the next release.
+This page describes the **version 0.4.0** MCP interface, including the bundled guide, prompts,
+schemas and mandatory stop confirmations. **Upgrading from 0.3.0 changes the stop protocol:**
+clients must preview first and pass the returned `confirmation_id` to execute. Version 0.3.0
+servers expose the nine tools below with the previous protocol and do not return that handle.
+Upgrade to 0.4.0 or build current source to use the flow below; always follow your installed
+version's discovered schemas.
 
 ## Tools
 
@@ -97,7 +98,7 @@ the agent's account matches; they do not establish current work by a particular 
 Before considering a stop, request `get_topology` with `all: true` to include system and
 application services. Its default view is filtered to development services and their peers.
 
-## Preview and execute a stop (Unreleased)
+## Preview and execute a stop
 
 Both stop tools default to `dry_run: true`. A permitted preview returns a `confirmation_id`
 and `confirmation_expires_in_s: 300`. Show all returned plans and obtain authorization for

@@ -3,7 +3,7 @@
 <!-- Generated from the clap definitions in crates/holdmap-cli. Do not edit by hand:
      HOLDMAP_BLESS=1 cargo test -p holdmap cli_reference -->
 
-This page is the `--help` output of every command of holdmap 0.3.0. `cargo test` checks it
+This page is the `--help` output of every command of holdmap 0.4.0. `cargo test` checks it
 against the code, so it never drifts. For an overview see the [README](../README.md).
 
 Global options (accepted by every command): `--color <auto|always|never>` (env `HOLDMAP_COLOR`; `NO_COLOR` and `CLICOLOR_FORCE` are honoured too) and `--no-docker`.

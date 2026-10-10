@@ -24,7 +24,7 @@ const firstOpen: Record<string, string> = {
     </div>
 
     {version === "0.3.0" && (
-      <p class="release-note" role="note"><Icon name="Info" size={18} /><span><strong>Linux desktop v0.3.0 predates the GLib security fixes.</strong> Build the desktop from current source until a patched release is available. The CLI, TUI, MCP server and macOS/Windows desktop are unaffected by this Linux dependency issue. <a href={`${securityUrl}#linux-glib-dependency-backports-unreleased`}>Security details</a>.</span></p>
+      <p class="release-note" role="note"><Icon name="Info" size={18} /><span><strong>Linux desktop v0.3.0 predates the GLib security fixes.</strong> Use version 0.4.0 or newer, or build the desktop from current source. The CLI, TUI, MCP server and macOS/Windows desktop are unaffected by this Linux dependency issue. <a href={`${securityUrl}#linux-glib-dependency-backports`}>Security details</a>.</span></p>
     )}
 
     <div class="box">

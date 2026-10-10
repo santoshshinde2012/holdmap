@@ -36,9 +36,9 @@ holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop ap
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
 coordinate collection and confirmation, and present the returned types.
 
-This guide describes current source. Child-tool metadata, MCP discovery, cache and security improvements
-are [Unreleased](../CHANGELOG.md#unreleased); the downloadable 0.3.0 release predates those
-additions.
+This guide describes version 0.4.0 and current source. Child-tool metadata, MCP discovery,
+local desktop shutdown, cache and security improvements are included in
+[0.4.0](../CHANGELOG.md#040---2026-10-10); version 0.3.0 predates those additions.
 
 ## 1. Layers
 
