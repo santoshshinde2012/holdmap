@@ -293,22 +293,62 @@ Svelte UI in browser mode, using sample data through the UI's API boundary.
 
 ```mermaid
 flowchart TB
-  CLI["CLI and TUI"] --> ENGINE["holdmap-core Engine"]
-  MCP["MCP transport and validated tools"] --> ENGINE
-  MCP --> CONTEXT["Pure guide resource and workflow prompts"]
-  UI["Shared Svelte UI"] --> API["api.ts"]
-  API --> NATIVE["Tauri commands, freshness and confirmation caches"]
-  NATIVE --> ENGINE
-  SITE["Astro website and guides"] --> DEMO["Browser demo build"]
-  DEMO --> UI
-  API -. "browser mode" .-> MOCK["Sample data"]
-  ENGINE --> SCAN["Scanner and injected providers"]
-  SCAN --> OS["OS sockets, processes and container runtimes"]
-  ENGINE --> AGENTS["AgentsBuilder: ownership, folders, network, tools and access"]
-  ENGINE --> GRAPH["Topology and cluster registries"]
-  ENGINE --> PLAN["ProtectionPolicy and StopStrategy registry"]
-  PLAN --> EXEC["Executor: identity checks, graceful stop and verification"]
+  accTitle: Holdmap system architecture
+  accDescr: The CLI, MCP server and desktop share a Rust core. A separate website demo uses sample data. Only the native executor performs reviewed OS actions.
+
+  subgraph CLIENTS["Application interfaces"]
+    CLI["CLI / TUI<br/>Commands + terminal views"]
+    MCP["MCP server<br/>Validated tools + preview handles"]
+    DESKTOP["Desktop app<br/>Svelte UI + Tauri commands"]
+  end
+
+  subgraph CORE["holdmap-core · shared domain"]
+    SCAN["Scanner<br/>Injected collection providers"]
+    ENGINE["Engine<br/>Ownership + protection policy"]
+    AGENTS["Agent visibility<br/>Folders, tools, network + evidence"]
+    GRAPH["Topology<br/>Services, clusters + dependencies"]
+    PLAN["ActionPlan<br/>Reviewed effects + safeguards"]
+    EXEC["Executor<br/>Fresh identity checks + verification"]
+    ENGINE --> SCAN & AGENTS & GRAPH & PLAN
+    PLAN --> EXEC
+  end
+
+  subgraph LOCAL["Operating system + local state"]
+    OS["macOS / Linux / Windows<br/>Sockets, processes + supervisors"]
+    STORE[("Private state<br/>Config, pins + restart history")]
+  end
+
+  subgraph PUBLIC["Public website · browser only"]
+    SITE["Astro site<br/>Guides + installation"]
+    DEMO["Shared Svelte demo<br/>Sample data API"]
+    SITE --> DEMO
+  end
+
+  CLI & MCP & DESKTOP --> ENGINE
+  SCAN -->|reads metadata| OS
+  EXEC -->|authorized actions| OS
+  CLI & DESKTOP --> STORE
+
+  style CLIENTS fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style CORE fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style LOCAL fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style PUBLIC fill:transparent,stroke:#94A3B8,stroke-width:1px
+
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  classDef web fill:#F1F5F9,stroke:#64748B,color:#0F172A,stroke-width:1.5px
+  class CLI,MCP,DESKTOP surface
+  class ENGINE,AGENTS,GRAPH domain
+  class PLAN,EXEC safety
+  class SCAN,OS,STORE data
+  class SITE,DEMO web
 ```
+
+Blue groups interfaces, violet shows domain logic, amber marks action safeguards, teal marks
+collection and state, and slate identifies the public website. Labels and boundaries carry the
+same meaning independently of color. The browser demo uses sample data and has no native OS access.
 
 SOLID is expressed through specific boundaries: collectors have separate responsibilities;
 registries extend owner and project detection; narrow provider, detector and classifier traits
@@ -321,8 +361,8 @@ compare fresh effects before execution, and pass the original plan to the shared
 protection checks. Persistence, credential redaction and terminal-safe rendering have separate
 boundaries. CI combines all-severity npm audits, cargo-deny, full-history/source Gitleaks scans
 and CodeQL for JavaScript/TypeScript, Rust, Python and Actions; daily dependency checks and
-immutable action pins keep those gates reviewable. The current-source Linux GTK dependency uses an
-[audited GLib backport](vendor/README.md), verified by source hashes and an optimized regression.
+immutable action pins keep those gates reviewable. The current-source Linux GTK dependency uses
+[audited GLib source fixes](vendor/README.md), verified by source hashes and optimized regressions.
 
 The folder layout keeps each surface's code and tooling together:
 
@@ -361,6 +401,7 @@ dependencies and temporary captures are regenerated; Git history holds earlier v
 ## Learn more
 
 - [Website and guide](https://santoshshinde2012.github.io/holdmap/): the live demo and short how-tos.
+- [Website maintenance](site/README.md): SEO checks, deployment and current website snapshots.
 - [Agents, tools and apps](https://santoshshinde2012.github.io/holdmap/docs/agents/): folders, access and stopping what an agent started.
 - [CLI reference](docs/cli.md): every command and flag.
 - [Architecture](docs/architecture.md): how the core, CLI, TUI, desktop app and MCP server fit together.
@@ -379,7 +420,7 @@ scripts/check-all.sh                                  # complete workspace and n
 ```
 
 The full check script builds the UI before native checks and covers formatting, clippy,
-Rust/native tests, browser tests, docs, website links/budgets and dependency audits.
+Rust/native tests, browser tests, docs, website links/budgets, SEO and dependency audits.
 
 ## License
 

@@ -78,12 +78,12 @@ cargo test --workspace --locked
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap
 cargo build --locked -p holdmap-desktop
 scripts/check-cross.sh                       # type-checks the macOS and Windows backends from Linux
-(cd site && npm run check && npm run build && npm test)  # website: types, links, size budget
+(cd site && npm run check && npm run build && npm test)  # website: types, links, size budget and SEO
 scripts/check-versions.sh
 scripts/check-secrets.sh                     # full Git history and tracked/new source; needs a full clone
 python3 scripts/test-release-security.py    # isolated release input regressions; never publishes
 actionlint
-python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK resolution
+python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK/Linux test resolution
 cargo deny --all-features check
 (cd apps/desktop && npm audit)
 (cd site && npm audit)
@@ -110,18 +110,19 @@ security settings; those settings are separate from the committed update configu
 
 ## Vendored security fixes
 
-The Linux desktop currently uses a narrow [GLib 0.18.5 security backport](vendor/README.md).
-Its upstream snapshot, version and license are preserved; only the two audited iterator lines
-change. Run `python3 scripts/verify-vendored-glib.py` after dependency changes. It requires
+The Linux desktop currently uses narrow [GLib 0.18.5 security backports](vendor/README.md).
+Its upstream snapshot, version and license are preserved; only the audited iterator and
+boxed-inline allocation fixes plus a separate local zero-initialization fix change source
+files. Run `python3 scripts/verify-vendored-glib.py` after dependency changes. It requires
 Python 3.11+ and Cargo, and resolves locked metadata without compiling GTK. CI also runs the
 actual resolved dependency with optimization on Linux:
 
 ```sh
-cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
+G_DEBUG=fatal-warnings MALLOC_PERTURB_=165 cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
 ```
 
 Cargo-deny's `unsound = "all"` includes transitive registry dependencies, but local path
-packages need the source verifier and runtime regression. Do not add advisory ignores or
+packages need the source verifier and runtime regressions. Do not add advisory ignores or
 relabel the backport as a fixed upstream version. Keep `vendor/glib/` outside the first-party
 workspace and preserve upstream filenames. Remove the override and its verification together
 when the GTK binding family supports a compatible fixed upstream release.
@@ -172,7 +173,7 @@ Each ecosystem uses its own idiom. `cargo test` enforces these rules
 | Astro components and layouts (`site/`) | PascalCase | `Hero.astro`, `Docs.astro` |
 | TypeScript modules and tests | kebab-case, tests as `<module>.test.ts` | `rows.ts`, `rows.test.ts` |
 | Assets, scripts, workflows, files in `docs/` | kebab-case | `inter-variable.woff2`, `demo-servers.sh`, `architecture.md` |
-| Screenshots | `<surface>-<view>-<theme>.png` | `desktop-graph-dark.png` |
+| Screenshots | `<surface>-<view>-<theme>.png` (surface: `desktop`, `cli`, `tui`, `site`) | `desktop-graph-dark.png`, `site-guide-dark.png` |
 | Root documents | conventional UPPERCASE | `README.md`, `CHANGELOG.md`, `LICENSE-MIT` |
 
 Names fixed by tools (`Cargo.toml`, `package.json`, `src-tauri/`, the Tauri icon set) are left

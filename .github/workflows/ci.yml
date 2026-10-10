@@ -214,3 +214,6 @@ jobs:
       - name: Optimized Linux GLib security regression
         if: runner.os == 'Linux'
         run: cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
+        env:
+          G_DEBUG: fatal-warnings
+          MALLOC_PERTURB_: 165

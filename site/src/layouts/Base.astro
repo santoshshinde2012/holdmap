@@ -4,16 +4,53 @@ import interUrl from "../assets/fonts/inter-site.woff2?url";
 import monoUrl from "../assets/fonts/jetbrains-mono-site.woff2?url";
 import Nav from "../components/Nav.astro";
 import Footer from "../components/Footer.astro";
-import { description as siteDescription, siteUrl } from "../lib/site";
+import { description as siteDescription, repoUrl, siteUrl } from "../lib/site";
+import { serializeJsonLd } from "../lib/seo.mjs";
 
-interface Props { title?: string; description?: string; ogType?: "website" | "article"; noindex?: boolean }
-const { title, description = siteDescription, ogType = "website", noindex = false } = Astro.props;
+interface Props {
+  title?: string; description?: string; ogType?: "website" | "article"; noindex?: boolean;
+  breadcrumbs?: { name: string; href: string }[];
+}
+const { title, description = siteDescription, ogType = "website", noindex = false, breadcrumbs = [] } = Astro.props;
 const fullTitle = title
   ? `${title} · holdmap`
-  : "holdmap: see who's on every port — and which agent started it";
+  : "holdmap — Port manager and AI agent visibility";
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const og = `${siteUrl}og.png`;
+const imageAlt = "holdmap: see what your agents run and stop the right thing safely. The desktop app shows ports, projects and processes.";
+const home = canonical === siteUrl;
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage", "@id": `${canonical}#webpage`, url: canonical,
+      name: fullTitle, description, inLanguage: "en",
+      isPartOf: { "@id": `${siteUrl}#website` }, about: { "@id": `${siteUrl}#software` },
+      ...(breadcrumbs.length ? { breadcrumb: { "@id": `${canonical}#breadcrumbs` } } : {}),
+    },
+    ...(home ? [
+      {
+        "@type": "WebSite", "@id": `${siteUrl}#website`, url: siteUrl,
+        name: "holdmap", description: siteDescription, inLanguage: "en",
+      },
+      {
+        "@type": "SoftwareApplication", "@id": `${siteUrl}#software`, name: "holdmap",
+        url: siteUrl, description: siteDescription, applicationCategory: "DeveloperApplication",
+        operatingSystem: ["macOS", "Linux", "Windows"], isAccessibleForFree: true,
+        sameAs: repoUrl,
+        license: [`${repoUrl}/blob/main/LICENSE-MIT`, `${repoUrl}/blob/main/LICENSE-APACHE`],
+      },
+    ] : []),
+    ...(breadcrumbs.length ? [{
+      "@type": "BreadcrumbList", "@id": `${canonical}#breadcrumbs`,
+      itemListElement: breadcrumbs.map((crumb, index) => ({
+        "@type": "ListItem", position: index + 1, name: crumb.name,
+        item: new URL(crumb.href, siteUrl).href,
+      })),
+    }] : []),
+  ],
+};
 ---
 <!doctype html>
 <html lang="en" data-theme="dark">
@@ -22,7 +59,8 @@ const og = `${siteUrl}og.png`;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
-    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+    <meta name="robots" content={noindex ? "noindex" : "max-image-preview:large"} />
+    {!noindex && <link rel="canonical" href={canonical} />}
     <script is:inline>
       // Apply the saved theme before first paint (dark unless the visitor chose light).
       // Also note the visitor's OS so install commands and downloads start on the right one.
@@ -39,20 +77,23 @@ const og = `${siteUrl}og.png`;
     <link rel="icon" href={`${base}/favicon.ico`} sizes="48x48" />
     <link rel="icon" href={`${base}/favicon.svg`} type="image/svg+xml" />
     <link rel="apple-touch-icon" href={`${base}/apple-touch-icon.png`} />
-    <link rel="sitemap" href={`${base}/sitemap.xml`} />
+    <link rel="sitemap" href={`${siteUrl}sitemap.xml`} />
     <meta property="og:type" content={ogType} />
     <meta property="og:site_name" content="holdmap" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <meta property="og:image" content={og} />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="holdmap: see who's on every port and which agent started it. The desktop app with ports, projects and the agents map." />
+    <meta property="og:image:alt" content={imageAlt} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={og} />
+    <meta name="twitter:image:alt" content={imageAlt} />
+    {!noindex && <script type="application/ld+json" set:html={serializeJsonLd(structuredData)} />}
     <slot name="head" />
   </head>
   <body>

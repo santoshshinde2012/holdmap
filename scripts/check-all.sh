@@ -45,7 +45,8 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 if [[ "$(uname -s)" == Linux ]]; then
-  cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
+  G_DEBUG=fatal-warnings MALLOC_PERTURB_=165 \
+    cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
 fi
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap
 cargo build --locked -p holdmap-desktop

@@ -2,6 +2,7 @@
 import Base from "./Base.astro";
 import Icon from "../components/Icon.astro";
 import type { DocLink, Heading } from "../lib/docs";
+import { url } from "../lib/site";
 
 interface Props {
   title: string; description: string; html: string; headings: Heading[];
@@ -12,8 +13,13 @@ const i = nav.findIndex((n) => n.id === current);
 const prev = i > 0 ? nav[i - 1] : null;
 const next = i < nav.length - 1 ? nav[i + 1] : null;
 const toc = headings.filter((h) => h.depth === 2);
+const breadcrumbs = [
+  { name: "holdmap", href: url() },
+  { name: "Guide", href: url("docs/") },
+  ...(current === "index" ? [] : [{ name: title, href: nav[i].href }]),
+];
 ---
-<Base title={title} description={description} ogType="article">
+<Base title={title} description={description} ogType="article" breadcrumbs={breadcrumbs}>
   <div class="wrap docs">
     <aside class="side" aria-label="Guide">
       <details class="mobile-nav">
@@ -28,7 +34,13 @@ const toc = headings.filter((h) => h.depth === 2);
 
     <article class="content">
       <header>
-        <p class="crumb">Docs</p>
+        <nav class="crumb" aria-label="Breadcrumb">
+          <ol>{breadcrumbs.map((crumb, index) => <li>
+            {index === breadcrumbs.length - 1
+              ? <span aria-current="page">{crumb.name}</span>
+              : <a href={crumb.href}>{crumb.name}</a>}
+          </li>)}</ol>
+        </nav>
         <h1>{title}</h1>
         <p class="desc">{description}</p>
         {note && <p class="note"><Icon name="Info" size={16} /> <span set:html={note} /></p>}
@@ -64,6 +76,10 @@ const toc = headings.filter((h) => h.depth === 2);
   .toc a:hover { color: var(--text); border-color: var(--text-2); }
   .mobile-nav { display: none; }
   .crumb { margin: 0; font: 500 var(--fs-xs)/16px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .crumb ol { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+  .crumb li + li::before { content: "/"; margin-right: 8px; color: var(--muted); }
+  .crumb a { color: inherit; text-decoration: none; }
+  .crumb a:hover { color: var(--text); text-decoration: underline; }
   h1 { margin: 16px 0 12px; font-size: var(--fs-h2); font-weight: 600; letter-spacing: -0.028em; line-height: 1.15; }
   .desc { margin: 0; max-width: 640px; color: var(--muted); font-size: var(--fs-lg); line-height: 28px; }
   .note { display: flex; gap: 8px; align-items: flex-start; margin: 20px 0 0; padding: 12px 16px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--surface); font-size: var(--fs-ui); color: var(--muted); }
