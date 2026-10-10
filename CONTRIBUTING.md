@@ -146,16 +146,21 @@ tools.
 
 ## Ground rules
 
-- All logic lives in `holdmap-core`. The CLI, TUI, desktop app and MCP server only render its
-  types and never signal processes themselves.
-- Every destructive path goes through `ActionPlan` and `execute`, so dry runs, confirmations and
+- Process collection, ownership, protection and stop policy live in `holdmap-core`. The CLI,
+  TUI, desktop and MCP adapters validate requests, coordinate confirmations and render core
+  types; they never signal processes themselves.
+- Process stops go through `ActionPlan` and `execute`, so dry runs, confirmations and
   the PID-reuse guard stay consistent.
+- Local desktop shutdown uses the separate native Power policy and fixed OS adapters in
+  `apps/desktop/src-tauri/src/power.rs`. Preserve trusted-window authorization, one-use
+  confirmation, expiry and concurrency guards. Test with injected executors; automated tests
+  must never shut down the machine.
 - Desktop and MCP execution bind to a one-use preview and refuse changed effects. Fresh
   process protection checks apply immediately before execution as well as during planning.
 - Use the shared credential redactor for display and serialization, and sanitize untrusted
   terminal text. Private/config writes must reject links before truncating a file.
-- Platform code stays behind `cfg` in `crates/holdmap-core/src/sys/`; parsers are pure and tested
-  with fixtures.
+- Process platform code stays behind `cfg` in `crates/holdmap-core/src/sys/`; desktop OS
+  integrations stay in native adapter modules. Parsers are pure and tested with fixtures.
 - New protected processes go in `crates/holdmap-core/src/safety.rs`. If you're unsure, protect it.
 - User-facing changes update the README (and screenshots if the UI changes) in the same pull
   request, plus an entry under `## [Unreleased]` in `CHANGELOG.md`.
