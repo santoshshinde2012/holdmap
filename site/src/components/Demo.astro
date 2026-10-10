@@ -183,7 +183,9 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
     };
     const toList = () => {
       const doc = frame?.contentDocument;
-      if (doc && !doc.getElementById("port-list")) key("g");
+      if (!doc || doc.getElementById("port-list")) return;
+      const options = doc.querySelectorAll<HTMLButtonElement>('[role="radiogroup"][aria-label="View"] [role="radio"]');
+      Array.from(options).find((option) => option.textContent?.trim() === "List")?.click();
     };
 
     document.querySelector(".tries")?.addEventListener("click", (e) => {

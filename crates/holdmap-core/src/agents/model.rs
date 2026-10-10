@@ -10,7 +10,7 @@ use std::path::PathBuf;
 /// Everything holdmap could see about the agents on this machine.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct AgentsReport {
-    /// Running agents, most active first.
+    /// Running agents, ordered by display name then PID.
     pub agents: Vec<Agent>,
     /// Platform name (`linux`, `macos`, `windows`).
     pub platform: String,
@@ -59,12 +59,24 @@ pub struct Agent {
     pub memory_bytes: u64,
     /// CPU (percent of one core) of the agent and everything under it.
     pub cpu_percent: f32,
-    /// Its processes: the agent, its helpers and what it started, agent first.
+    /// Its processes: the agent, what it started, then its product helpers.
     pub processes: Vec<AgentProcess>,
     /// Processes not listed.
     pub more_processes: usize,
+    /// Every owned PID, including processes omitted from the display list.
+    #[serde(default)]
+    pub process_ids: Vec<u32>,
+    /// Running child tools, including likely MCP servers without a listening port.
+    #[serde(default)]
+    pub tools: Vec<AgentTool>,
+    /// Tools not listed.
+    #[serde(default)]
+    pub more_tools: usize,
     /// Folders it works in.
     pub folders: Vec<AgentFolder>,
+    /// Observed working folders not listed.
+    #[serde(default)]
+    pub more_folders: usize,
     /// Listening sockets held by the agent or anything it started.
     pub ports: Vec<AgentPort>,
     /// Live connections from the agent's processes, grouped by what they reach.
@@ -106,6 +118,95 @@ pub struct AgentProcess {
     pub memory_bytes: u64,
     /// CPU percent of one core.
     pub cpu_percent: f32,
+}
+
+/// What a running child process appears to do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolKind {
+    /// A likely Model Context Protocol server, inferred from its executable or package.
+    McpServer,
+    /// A process holding a recognised development server listener.
+    DevServer,
+    /// A command shell.
+    Shell,
+    /// Another command started under the agent.
+    Command,
+}
+
+impl ToolKind {
+    /// Short human label.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::McpServer => "MCP server",
+            Self::DevServer => "dev server",
+            Self::Shell => "shell",
+            Self::Command => "command",
+        }
+    }
+}
+
+/// A running tool process owned by an agent; this does not establish any tool invocation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentTool {
+    /// Process ID.
+    pub pid: u32,
+    /// Parent process ID.
+    pub ppid: Option<u32>,
+    /// Executable name or recognised MCP package identifier.
+    pub name: String,
+    /// The process's apparent purpose.
+    pub kind: ToolKind,
+    /// Command line, secrets hidden.
+    pub command: String,
+    /// Working directory, when visible.
+    pub cwd: Option<PathBuf>,
+    /// How the purpose was established; MCP signatures are inferred.
+    pub evidence: Evidence,
+    /// Listening port numbers held by this process.
+    pub ports: Vec<u16>,
+    /// Resident memory.
+    pub memory_bytes: u64,
+    /// CPU percent of one core.
+    pub cpu_percent: f32,
+}
+
+impl Agent {
+    /// Match identity, owned PID, folder or displayed tool name without searching commands.
+    pub fn matches(&self, query: &str) -> bool {
+        let query = query.trim().to_lowercase();
+        if query.is_empty() {
+            return true;
+        }
+        let pid = query.strip_prefix("pid:").unwrap_or(&query).parse::<u32>();
+        if let Ok(pid) = pid {
+            return pid == self.pid
+                || self.process_ids.contains(&pid)
+                || self.processes.iter().any(|p| p.pid == pid)
+                || self.tools.iter().any(|tool| tool.pid == pid);
+        }
+        [
+            &self.id,
+            &self.product,
+            &self.name,
+            &self.vendor,
+            &self.process_name,
+        ]
+        .into_iter()
+        .any(|value| value.to_lowercase().contains(&query))
+            || self.folders.iter().any(|folder| {
+                folder.label.to_lowercase().contains(&query)
+                    || folder
+                        .path
+                        .to_string_lossy()
+                        .to_lowercase()
+                        .contains(&query)
+            })
+            || self
+                .tools
+                .iter()
+                .any(|tool| tool.name.to_lowercase().contains(&query))
+    }
 }
 
 /// Where a folder came from.

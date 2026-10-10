@@ -160,7 +160,7 @@ impl Scanner {
         let started = Instant::now();
         let mut warnings = Vec::new();
         // Sockets, processes and containers are independent: collect them in parallel.
-        let ((raw, t_sockets), (table, t_procs), containers) = std::thread::scope(|s| {
+        let ((raw, t_sockets), process_result, containers) = std::thread::scope(|s| {
             let containers = opts.docker.then(|| {
                 s.spawn(|| {
                     let t = Instant::now();
@@ -173,12 +173,15 @@ impl Scanner {
             });
             let t = Instant::now();
             let raw = (self.sockets.sockets(), t.elapsed());
-            (
-                raw,
-                table.join().unwrap_or_default(),
-                containers.map(|h| h.join()),
-            )
+            (raw, table.join(), containers.map(|h| h.join()))
         });
+        let (table, t_procs) = match process_result {
+            Ok(result) => result,
+            Err(_) => {
+                warnings.push("process metadata collection failed; agent and process attribution is incomplete".to_string());
+                (ProcessTable::default(), std::time::Duration::ZERO)
+            }
+        };
         let t_containers = match &containers {
             Some(Ok((_, t))) => Some(*t),
             _ => None,
@@ -722,6 +725,40 @@ fn token_matches(tok: &str, e: &PortEntry) -> bool {
 mod tests {
     use super::*;
     use crate::process::tests::{proc, table};
+
+    struct FailingProcesses;
+    impl ProcessProvider for FailingProcesses {
+        fn processes(&self) -> ProcessTable {
+            panic!("fixture process provider failed");
+        }
+    }
+
+    #[test]
+    fn a_process_provider_panic_marks_attribution_incomplete() {
+        let scanner = Scanner::new(
+            Arc::new(StaticSockets(vec![])),
+            Arc::new(FailingProcesses),
+            Arc::new(StaticContainers(vec![])),
+        );
+        let scan = scanner
+            .scan(&ScanOptions {
+                all_states: false,
+                docker: false,
+            })
+            .unwrap();
+        assert!(scan.table.is_empty());
+        assert!(scan
+            .snapshot
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("process metadata collection failed")));
+        let agents = crate::agents::AgentsBuilder::new(&scan).build();
+        assert!(agents.agents.is_empty());
+        assert!(agents
+            .limits
+            .iter()
+            .any(|limit| limit.contains("process metadata collection failed")));
+    }
 
     #[test]
     fn a_hanging_project_read_does_not_delay_the_scan() {

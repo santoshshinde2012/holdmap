@@ -272,8 +272,12 @@ pub fn is_interactive_shell(p: &ProcessInfo) -> bool {
 pub fn session_kind(p: &ProcessInfo) -> Option<SessionKind> {
     let n = norm(&p.name);
     // AI coding agents that run your commands: stopping them (or their host) loses the session.
-    if crate::agents::catalog::is_agent_name(&n) {
-        return Some(SessionKind::Agent);
+    if let Some(product) = crate::agents::catalog::identify(p) {
+        match product.kind {
+            crate::agents::AgentKind::Ide => return Some(SessionKind::Editor),
+            crate::agents::AgentKind::Tool => {} // Runtime apps keep their existing OS-service rules.
+            _ => return Some(SessionKind::Agent),
+        }
     }
     if EDITORS.contains(&n.as_str()) {
         return Some(SessionKind::Editor);
@@ -281,20 +285,18 @@ pub fn session_kind(p: &ProcessInfo) -> Option<SessionKind> {
     if TERMINALS.contains(&n.as_str()) {
         return Some(SessionKind::Terminal);
     }
-    for a in p.cmdline.iter().take(3) {
+    // Only executable metadata and the parsed runtime entry identify a host. Option values
+    // and arguments to an ordinary project command can contain agent/editor paths as data.
+    let executable = p.exe.as_ref().map(|path| path.to_string_lossy());
+    for a in executable
+        .as_deref()
+        .into_iter()
+        .chain(p.cmdline.first().map(String::as_str))
+        .chain(crate::agents::catalog::runtime_entry(p))
+    {
         for comp in a.split(['/', '\\']) {
             if let Some((_, k)) = HOST_MARKERS.iter().find(|(m, _)| comp == *m) {
                 return Some(*k);
-            }
-        }
-        // `node /usr/local/bin/claude`, `node …/codex/bin/codex.js`: an agent entry point.
-        if let Some(base) = a
-            .rsplit(['/', '\\'])
-            .next()
-            .filter(|_| a.contains(['/', '\\']))
-        {
-            if crate::agents::catalog::is_agent_entry(&norm(base)) {
-                return Some(SessionKind::Agent);
             }
         }
     }
@@ -515,6 +517,77 @@ mod tests {
             Protection::None,
             "a project folder named claude is fine"
         );
+    }
+
+    #[test]
+    fn protection_uses_the_same_runtime_entry_as_agent_discovery() {
+        let cases = [
+            (
+                10,
+                "node",
+                vec![
+                    "node",
+                    "--conditions",
+                    "development",
+                    "/usr/local/bin/codex",
+                ],
+                Some(SessionKind::Agent),
+            ),
+            (
+                11,
+                "python3",
+                vec!["python3", "-X", "dev", "-W", "default", "-m", "aider"],
+                Some(SessionKind::Agent),
+            ),
+            (
+                12,
+                "node",
+                vec![
+                    "node",
+                    "--conditions",
+                    "development",
+                    "/home/dev/.vscode-server/bin/abc/out/server-main.js",
+                ],
+                Some(SessionKind::Editor),
+            ),
+            (
+                13,
+                "node",
+                vec!["node", "worker.js", "/home/dev/.vscode-server/input"],
+                None,
+            ),
+            (
+                14,
+                "cp",
+                vec!["cp", "/usr/local/bin/claude", "/tmp/backup"],
+                None,
+            ),
+            (
+                15,
+                "node",
+                vec!["node", "--conditions", "codex", "worker.js"],
+                None,
+            ),
+            (16, "orb", vec!["orb"], None),
+        ];
+        let t = table(
+            cases
+                .iter()
+                .map(|(pid, name, args, _)| proc(*pid, 1, name, args))
+                .collect(),
+            300,
+        );
+        for (pid, _, _, expected) in cases {
+            let p = t.get(pid).unwrap();
+            assert_eq!(session_kind(p), expected, "PID {pid}");
+            match expected {
+                Some(_) => assert!(
+                    matches!(protection(p, &t), Protection::Soft(_)),
+                    "PID {pid}"
+                ),
+                None => assert_eq!(protection(p, &t), Protection::None, "PID {pid}"),
+            }
+        }
     }
 
     #[test]

@@ -287,6 +287,7 @@ export type PortRole = "agent" | "dev_server" | "service";
 export type LinkKind = "local" | "remote";
 export type AccessLevel = "restricted" | "standard" | "elevated" | "unknown";
 export type AccessTopic = "user" | "sandbox" | "approvals" | "network" | "privacy";
+export type AgentToolKind = "mcp_server" | "dev_server" | "shell" | "command";
 
 export interface AgentProcess { pid: number; ppid: number | null; name: string; command: string; role: ProcessRole; cwd: string | null; memory_bytes: number; cpu_percent: number }
 export interface AgentFolder { path: string; label: string; project: ProjectInfo | null; source: FolderSource; evidence: Evidence; pids: number[]; privacy_area: string | null; note: string | null }
@@ -294,6 +295,7 @@ export interface AgentPort { entry_id: string; port: number; protocol: Protocol;
 export interface AgentLink { id: string; kind: LinkKind; label: string; address: string; port: number; connections: number; entry_id: string | null; process: string | null; pid: number | null; service: string | null }
 export interface AccessFact { topic: AccessTopic; level: AccessLevel; summary: string; evidence: Evidence }
 export interface AgentAccess { user: string | null; uid: number | null; root: boolean; mine: boolean; facts: AccessFact[] }
+export interface AgentTool { pid: number; ppid: number | null; name: string; kind: AgentToolKind; command: string; cwd: string | null; evidence: Evidence; ports: number[]; memory_bytes: number; cpu_percent: number }
 
 export interface Agent {
   id: string;
@@ -309,8 +311,13 @@ export interface Agent {
   memory_bytes: number;
   cpu_percent: number;
   processes: AgentProcess[];
+  /** Every owned process ID, including processes omitted from the display list. */
+  process_ids: number[];
   more_processes: number;
   folders: AgentFolder[];
+  more_folders: number;
+  tools: AgentTool[];
+  more_tools: number;
   ports: AgentPort[];
   links: AgentLink[];
   more_links: number;

@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 const host = process.env.TAURI_DEV_HOST;
@@ -23,5 +23,9 @@ export default defineConfig({
   },
   // Component tests mount real Svelte 5 components in jsdom (client build, not SSR).
   resolve: process.env.VITEST ? { conditions: ["browser"] } : undefined,
-  test: { environment: "node", include: ["src/**/*.test.ts"] },
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.ts"],
+    exclude: [...configDefaults.exclude, "e2e/**"],
+  },
 });

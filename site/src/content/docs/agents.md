@@ -12,6 +12,10 @@ settings and tokens are never read.
 Recognized products include Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider,
 Cline, Goose, Docker Desktop, OrbStack, Podman Desktop and others.
 
+Child-tool classifications, expanded metadata and desktop agent search described here are
+development changes following v0.3.0. Build the current source to use them; the live demo uses
+the current interface with sample data.
+
 ## From the CLI
 
 ```sh
@@ -26,11 +30,18 @@ Each entry shows memory, CPU, process count, how many ports are stoppable, the p
 child processes grouped as tools & apps it started, folder source labels (working dir / child cwd /
 recent), ports with roles, connections, and access facts.
 
+Child tools include likely MCP servers even when they have no listening port. The report
+includes evidence and omitted counts; an executable signature does not establish which tools
+an agent called. Recent folders are current-account history, attached only to agents with a
+matching known account, and do not establish current work by a particular running instance.
+
 ## Desktop and TUI
 
 - **Desktop:** `⇧A` opens the Agents map. Expand a card to reveal a folder, open it in your editor,
   or stop the unprotected ports that agent started. Paths are verified against the current report
   before anything opens.
+  Search by agent, folder, tool, exact PID (`pid:51200`) or explicit port (`port:3001`). A port
+  search includes both the listener owner and agents connected to it.
 - **TUI:** Tab cycles Ports → Graph → Agents. Select an agent and press `x` (or `X`) to stop its
   unprotected ports.
 

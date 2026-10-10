@@ -21,6 +21,9 @@ fn fact(topic: AccessTopic, level: AccessLevel, summary: String, evidence: Evide
 /// Value of `--name value` / `--name=value` (any of `names`).
 fn flag_value<'a>(args: &'a [String], names: &[&str]) -> Option<&'a str> {
     for (i, a) in args.iter().enumerate() {
+        if a == "--" {
+            break;
+        }
         for n in names {
             if a == n {
                 return args.get(i + 1).map(String::as_str);
@@ -35,6 +38,7 @@ fn flag_value<'a>(args: &'a [String], names: &[&str]) -> Option<&'a str> {
 
 fn has_flag(args: &[String], names: &[&str]) -> Option<String> {
     args.iter()
+        .take_while(|a| a.as_str() != "--")
         .find(|a| names.contains(&a.as_str()))
         .map(|a| a.to_string())
 }
@@ -128,12 +132,13 @@ pub fn sandbox(
     }
     if let Some(w) = members.iter().find_map(|p| sandbox_wrapper(p)) {
         return observed(
-            format!("Its commands run inside {w} right now."),
+            format!("A current child command runs inside {w}."),
             AccessLevel::Restricted,
         );
     }
     let requested = match product {
         "codex" => flag_value(args, &["--sandbox", "-s"])
+            .filter(|v| matches!(*v, "read-only" | "workspace-write"))
             .map(|v| format!("--sandbox {v}"))
             .or_else(|| has_flag(args, &["--full-auto"])),
         "gemini" => has_flag(args, &["--sandbox", "-s"]),
@@ -264,13 +269,13 @@ pub fn network(ports: &[AgentPort], remote_hosts: usize) -> AccessFact {
     };
     let exposed: Vec<&AgentPort> = ports
         .iter()
-        .filter(|p| p.exposure == Exposure::AllInterfaces)
+        .filter(|p| p.exposure != Exposure::Loopback)
         .collect();
     let (level, text) = if !exposed.is_empty() {
         (
             AccessLevel::Elevated,
             format!(
-                "Listens on {} on all interfaces: reachable from your network.",
+                "Listens on {} beyond loopback: potentially reachable from your network.",
                 list(&exposed)
             ),
         )
@@ -471,5 +476,39 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn prompt_arguments_after_separator_do_not_set_access_policy() {
+        let p = proc(
+            1,
+            0,
+            "codex",
+            &["codex", "--", "--yolo", "--sandbox", "workspace-write"],
+        );
+        assert_eq!(approvals("codex", &p).evidence, Evidence::Unknown);
+        assert_eq!(sandbox("codex", &p, &[], &[]).evidence, Evidence::Unknown);
+        let p = proc(1, 0, "codex", &["codex", "--sandbox", "invalid-mode"]);
+        assert_eq!(sandbox("codex", &p, &[], &[]).evidence, Evidence::Unknown);
+    }
+
+    #[test]
+    fn a_specific_network_interface_is_not_described_as_machine_only() {
+        let port = AgentPort {
+            entry_id: "tcp:4000".into(),
+            port: 4000,
+            protocol: crate::model::Protocol::Tcp,
+            exposure: Exposure::Specific,
+            pid: Some(1),
+            process: None,
+            label: "service".into(),
+            role: super::super::PortRole::Service,
+            project: None,
+            framework: None,
+        };
+        let fact = network(&[port], 0);
+        assert_eq!(fact.level, AccessLevel::Elevated);
+        assert!(fact.summary.contains("beyond loopback"));
+        assert!(!fact.summary.contains("machine only"));
     }
 }

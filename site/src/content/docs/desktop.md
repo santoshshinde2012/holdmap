@@ -54,6 +54,12 @@ only. Chats, settings and tokens are never read. Remote hosts show as IP address
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
 `holdmap agents` and `holdmap agents AGENT --stop-ports` do the same in a terminal.
 
+Current development builds also let you search by agent, child tool, folder, exact PID or
+`port:3000`. Likely MCP server children appear even without a listening socket; expanded cards
+show their evidence, resource use and redacted commands. Omitted counts and collection warnings
+show where visibility is incomplete. These additions follow the downloadable v0.3.0 release;
+the browser demo runs the current UI with sample data.
+
 ## From the details pane
 
 Open the port in a browser, restart a dev server, open its folder in your editor

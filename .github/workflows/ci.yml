@@ -22,6 +22,7 @@ jobs:
   lint:
     name: fmt + clippy + docs
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -53,6 +54,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,6 +82,7 @@ jobs:
   supply-chain:
     name: supply chain (cargo-deny, npm audit, actionlint)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,8 +92,18 @@ jobs:
         with:
           command: check
           arguments: --all-features
-      - name: npm audit (high and critical)
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            apps/desktop/package-lock.json
+            site/package-lock.json
+      - name: npm audit desktop (high and critical)
         working-directory: apps/desktop
+        run: npm audit --audit-level=high
+      - name: npm audit website (high and critical)
+        working-directory: site
         run: npm audit --audit-level=high
       - name: actionlint
         env:
@@ -106,6 +119,7 @@ jobs:
   frontend:
     name: desktop frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/desktop
@@ -121,7 +135,20 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
-      - run: npm run build
+      - name: Install browser for end-to-end tests
+        run: npx playwright install --with-deps chromium
+      # test:e2e builds the production UI before starting its managed preview server.
+      - run: npm run test:e2e
+      - name: Browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-browser-failures
+          path: |
+            apps/desktop/playwright-report/
+            apps/desktop/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
   desktop:
     name: desktop build (${{ matrix.os }})
@@ -131,6 +158,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -154,3 +182,5 @@ jobs:
       - name: Build the app (no installers)
         run: npx tauri build --no-bundle
         working-directory: apps/desktop
+      - name: Native desktop tests
+        run: cargo test -p holdmap-desktop --locked

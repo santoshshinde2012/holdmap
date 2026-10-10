@@ -21,7 +21,8 @@
   import Toasts, { type Toast } from "./components/Toasts.svelte";
   import HistoryPanel from "./components/HistoryPanel.svelte";
   import * as api from "./lib/api";
-  import { step, stoppableEntries } from "./lib/agents";
+  import { agentMatches, filterAgents, step, stoppableEntries } from "./lib/agents";
+  import { createAgentReportLoader } from "./lib/agents-live";
   import type { AgentsReport, ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortDetails, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
   import { linksLabel, nodeForEntry, sectionsByCluster } from "./lib/graph";
   import type { Command } from "./lib/palette";
@@ -93,6 +94,10 @@
   let AgentsView = $state<typeof import("./components/AgentsView.svelte").default | null>(null);
   let agentsReport = $state.raw<AgentsReport | null>(null);
   let selectedAgent = $state<string | null>(null);
+  let agentQuery = $state("");
+  let agentsRefreshing = $state(false);
+  let agentsStarted = $state(0);
+  const visibleAgentIds = $derived(filterAgents(agentsReport?.agents ?? [], agentQuery).map((a) => a.id));
   let graphAll = $state(false);
   let selectedNode = $state<string | null>(null);
   let config = $state<Config | null>(null);
@@ -111,6 +116,11 @@
   const PANE_DEFAULT = 460;
   let paneWidth = $state(Math.min(680, Math.max(340, Number(prefGet("pane")) || PANE_DEFAULT)));
   $effect(() => { prefSet("view", view); });
+  $effect(() => {
+    void view;
+    // A view change must not reopen the drawer for a listener selected in another view.
+    drawerOpen = false;
+  });
   $effect(() => {
     if (view !== "graph") return;
     // untrack: loadTopology reads `graph` before its await; tracking it re-ran this effect on
@@ -267,13 +277,19 @@
     return out;
   }
 
+  const pullAgents = createAgentReportLoader(api.agents, () => agentsReport, (report) => {
+    agentsReport = share(agentsReport, report);
+    if (selectedAgent && !agentsReport.agents.some((a) => a.id === selectedAgent)) selectedAgent = null;
+  });
   async function loadAgents() {
+    if (agentsRefreshing) return;
+    agentsRefreshing = true;
+    agentsStarted = Date.now();
     try {
-      agentsReport = share(agentsReport, await api.agents());
-      if (selectedAgent && !agentsReport.agents.some((a) => a.id === selectedAgent)) selectedAgent = null;
+      await pullAgents();
     } catch (e) {
       if (view === "agents") toast("error", "Couldn't look up the agents", String(e));
-    }
+    } finally { agentsRefreshing = false; }
   }
   /** Open a port from the agents map in the details drawer, making sure the list can show it. */
   function openEntry(e: PortEntry) {
@@ -286,7 +302,7 @@
     drawerOpen = true;
   }
   function selectAgent(delta: number) {
-    selectedAgent = step((agentsReport?.agents ?? []).map((a) => a.id), selectedAgent, delta);
+    selectedAgent = step(visibleAgentIds, selectedAgent, delta);
   }
 
   async function loadTopology() {
@@ -729,14 +745,14 @@
   });
 
   function onKey(e: KeyboardEvent) {
-    const typing = document.activeElement === search;
+    const typing = document.activeElement instanceof HTMLElement && !!document.activeElement.closest("input, textarea, [contenteditable=true], [role=combobox]");
     const modKey = e.metaKey || e.ctrlKey;
     if (modalOpen) return; // overlays handle (and stop) their own keys
     if (modKey && e.key.toLowerCase() === "k") { showPalette = true; e.preventDefault(); return; }
     if (modKey && e.key === ",") { openSettings(); e.preventDefault(); return; }
     if (!typing && (e.key === "/" || (modKey && e.key.toLowerCase() === "f"))) { search?.focus(); search?.select(); e.preventDefault(); return; }
     if (modKey && e.key.toLowerCase() === "r") { refresh(true); e.preventDefault(); return; }
-    const move = view === "graph" && !typing ? selectGraph : view === "agents" && !typing ? selectAgent : select;
+    const move = view === "graph" && !typing ? selectGraph : view === "agents" ? selectAgent : select;
     if (view === "list" && !typing && !modKey && (e.key === "ArrowLeft" || e.key === "ArrowRight") && selectedId) {
       // Tree-style: ← collapses the selected row's section, → expands it.
       const sec = sectionOf(selectedId);
@@ -749,12 +765,17 @@
     if (e.key === "ArrowUp" || e.key === "ArrowLeft" && view === "graph" && !typing || (!typing && e.key === "k")) { move(-1); e.preventDefault(); return; }
     if (e.key === "Escape") {
       if (typing) search?.blur();
+      else if (view === "agents" && agentQuery) agentQuery = "";
+      else if (view === "agents") selectedAgent = null;
       else if (filtersActive) clearFilters();
       else selectedId = null;
       e.preventDefault();
       return;
     }
-    if (e.key === "Enter" && view === "agents" && !typing) return; // buttons and map nodes handle it
+    if (e.key === "Enter" && view === "agents") {
+      if (typing) { if (!selectedAgent || !visibleAgentIds.includes(selectedAgent)) selectAgent(1); search?.blur(); }
+      return; // buttons and map nodes handle it outside search
+    }
     if (e.key === "Enter") { if (typing) { if (!selected) select(1); search?.blur(); } else if (selected) drawerOpen = true; return; }
     if (typing || modKey || e.altKey) return;
     // Only plain keys below; the list (or the page) has focus.
@@ -869,7 +890,7 @@
   });
   $effect(() => { prefSet("pane", String(paneWidth)); });
 
-  const ago = $derived(dataAge(now, snapshot?.taken_at_ms ?? null, refreshing ? scanStarted : null));
+  const ago = $derived(dataAge(now, view === "agents" ? agentsReport?.taken_at_ms ?? null : snapshot?.taken_at_ms ?? null, view === "agents" ? agentsRefreshing ? agentsStarted : null : refreshing ? scanStarted : null));
   const fresh = $derived(freshness(ago, scanMs / 1000));
   const themeIcon = $derived(THEME_ICON[theme]);
 </script>
@@ -884,6 +905,23 @@
     </div>
 
     <div class="search">
+      {#if view === "agents"}
+      <TextField
+        bind:input={search}
+        bind:value={agentQuery}
+        type="search"
+        variant="filled"
+        icon="search"
+        label="Search agents"
+        labelHidden
+        placeholder="Search agents, tools, folders, PIDs…"
+        clearable
+        kbdHint="/"
+        spellcheck="false"
+        autocomplete="off"
+        aria-controls="agent-list"
+      />
+      {:else}
       <TextField
         bind:input={search}
         bind:value={filters.query}
@@ -899,11 +937,12 @@
         autocomplete="off"
         aria-controls="port-list"
       />
+      {/if}
     </div>
 
     <div class="tools">
       <span class="live" class:stale={fresh.stale} aria-live="off">
-        <span class="pulse" class:on={refreshing}></span>{fresh.text}
+        <span class="pulse" class:on={view === "agents" ? agentsRefreshing : refreshing}></span>{fresh.text}
       </span>
       <Button size="sm" icon="command" kbd={modK} class="cmdk" onclick={() => (showPalette = true)} aria-keyshortcuts="Meta+K Control+K" tip={{ text: "Command palette", kbd: modK }}>Commands</Button>
       <span class="tsep" aria-hidden="true"></span>
@@ -932,6 +971,7 @@
       <span class="divider" aria-hidden="true"></span>
       <span class="agents-hint">Folders, tools and ports each agent started · access marked seen / inferred / unknown</span>
       <div class="spacer"></div>
+      {#if agentQuery}<Button size="sm" variant="ghost" icon="x" onclick={() => (agentQuery = "")}>Clear search</Button>{/if}
     {/if}
   </div>
 
@@ -947,8 +987,8 @@
     {:else if view === "agents"}
       <div class="graph-wrap agents-wrap">
         {#if AgentsView}
-          <AgentsView report={agentsReport} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced}
-            onselectagent={(id) => (selectedAgent = id)} onentry={openEntry}
+          <AgentsView report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced}
+            onselectagent={(id) => { const a = agentsReport?.agents.find((a) => a.id === id); if (a && !agentMatches(a, agentQuery)) agentQuery = ""; selectedAgent = id; }} onentry={openEntry}
             onreveal={revealAgentFolder} oneditor={openAgentFolder}
             onstop={(e) => requestStop(e, false)} onstopall={requestStopAgentPorts} />
         {:else}

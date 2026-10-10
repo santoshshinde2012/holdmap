@@ -8,11 +8,48 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- Agent tool visibility across desktop, CLI and MCP: likely MCP server processes, development
+  servers, shells and commands, including processes without listening ports. Tool identities
+  carry evidence and commands remain redacted.
+- Agent search by name, owned process PID, folder and tool, with CPU, memory and process totals
+  on desktop cards and explicit omitted counts in reports.
+- MCP discovery includes a bundled agent guide and prompts for port diagnosis, development
+  server preparation and agent inspection. Tools publish structured output contracts.
+- Repeatable browser and CLI/MCP integration suites, with CI coverage and a full local
+  validation command at `scripts/check-all.sh`.
+
 ### Changed
 
-- Desktop/demo UI preferences use `holdmap.*` localStorage keys (legacy `pw.*` migrated once).
-- Docs list the real env vars and exact `PORTWISE_*` aliases; CLI adopts those aliases at startup.
-- README/docs screenshots, site UI crops, Open Graph image and hero media show holdmap branding.
+- Agent discovery composes small detector and classifier interfaces; process ownership and
+  network attribution have separate modules. CLI and MCP share the core query predicate.
+- MCP routing, tool metadata, argument validation, live handlers and discovery content have
+  separate responsibilities.
+- CI checks both npm dependency trees, runs native desktop tests on all three platforms and
+  keeps website dependencies up to date through Dependabot.
+
+### Fixed
+
+- Agent identification no longer treats an ordinary command's file arguments as agent entry
+  points. Process displays prioritize children over large groups of helpers.
+- Agent network reports distinguish specific-interface binds, match local listeners by address
+  and port, count remote hosts before clipping, and surface collection warnings.
+- Desktop agent reports preserve refresh order, distinguish unknown access from standard
+  access, and retain different relationships to the same graph node.
+- Changing desktop views dismisses a previous port-details drawer while retaining the
+  listener selection for List and Graph.
+- MCP rejects malformed tool arguments before execution, including string values for stop
+  flags, and formats discovery and results for the negotiated protocol version.
+- MCP port results expose scan warnings, collection time and platform, including partial scans
+  that return no listening ports.
+- Native agent, topology and explanation commands refresh expired scans and invalidate the
+  cache when Docker collection changes. Failed refreshes return an error instead of stale data.
+- Agent helper ownership distinguishes Windows user accounts and keeps roots with unknown
+  account identity separate. Process protection uses the same runtime entry detection as
+  agent discovery.
+- Current-account recent-project history is attached only to agents with a matching known
+  account; other users' working directories still appear from live process metadata.
 
 ## [0.3.0] - 2026-10-09
 

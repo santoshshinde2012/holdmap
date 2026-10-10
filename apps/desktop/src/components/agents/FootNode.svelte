@@ -4,13 +4,15 @@
   import { Handle, Position, type NodeProps, type Node } from "@xyflow/svelte";
   import Icon from "../Icon.svelte";
   import type { FootFlowData } from "../../lib/agents";
+  import { EVIDENCE_LABEL } from "../../lib/agents";
 
   let { data }: NodeProps<Node<FootFlowData>> = $props();
   const n = $derived(data.node);
-  const ICON = { folder: "folder", port: "server", service: "plug", remote: "globe", more: "more", agent: "bot", header: "" } as const;
-  const WHAT = { folder: "Folder", port: "Port", service: "Service", remote: "Remote host", more: "More connections", agent: "Agent", header: "" } as const;
+  const ICON = { folder: "folder", tool: "plug", port: "server", service: "plug", remote: "globe", more: "more", omitted: "more", agent: "bot", header: "" } as const;
+  const WHAT = { folder: "Folder", tool: "MCP server", port: "Port", service: "Service", remote: "Remote host", more: "More remote links", omitted: "Unlisted links", agent: "Agent", header: "" } as const;
   const opens = $derived(!!n.entryId);
-  const title = $derived(n.path ?? undefined);
+  const interactive = $derived(opens || n.kind === "tool");
+  const title = $derived(n.path ?? n.warning ?? undefined);
 </script>
 
 <div
@@ -21,22 +23,22 @@
   class:dim={data.dim}
   class:hl={data.hl}
   class:sel={data.selected}
-  class:opens
+  class:opens={interactive}
   style="--agent: {data.color}"
-  role={opens ? "button" : "group"}
-  aria-label="{WHAT[n.kind]} {n.label}, {n.sub}{n.evidence !== 'observed' ? ', inferred' : ''}{opens ? '. Opens details' : ''}"
+  role={interactive ? "button" : "group"}
+  aria-label="{WHAT[n.kind]} {n.label}, {n.sub}{n.evidence !== 'observed' ? `, ${EVIDENCE_LABEL[n.evidence]}` : ''}{n.warning ? `, ${n.warning}` : ''}{opens ? '. Opens details' : n.kind === 'tool' ? '. Opens its agent card' : ''}"
   {title}
 >
   <Handle type="target" position={Position.Left} isConnectable={false} />
   <span class="ic" aria-hidden="true"><Icon name={ICON[n.kind]} size={15} /></span>
   <div class="body">
     <span class="label">{n.label}</span>
-    <span class="sub" class:mono={n.kind === "port" || n.kind === "service"}>{n.sub}{#if n.evidence !== "observed"}<em> · inferred</em>{/if}</span>
+    <span class="sub" class:mono={n.kind === "port" || n.kind === "service"}>{n.sub}{#if n.evidence !== "observed"}<em> · {EVIDENCE_LABEL[n.evidence]}</em>{/if}</span>
   </div>
   {#if n.owners.length > 1}
     <span class="dots" aria-hidden="true">{#each data.ownerColors.slice(0, 4) as c}<i style="background: {c}"></i>{/each}</span>
   {/if}
-  {#if n.tone === "warn"}<span class="exp" title="Reachable from the network"><Icon name="globe" size={12} /></span>{/if}
+  {#if n.tone === "warn"}<span class="exp" title={n.warning}><Icon name="globe" size={12} /></span>{/if}
   <Handle type="source" position={Position.Right} isConnectable={false} />
 </div>
 
@@ -59,6 +61,7 @@
   .k-folder .ic { color: var(--tone-amber); background: color-mix(in srgb, var(--tone-amber) 12%, var(--surface)); }
   .k-port .ic { color: var(--tone-green); background: color-mix(in srgb, var(--tone-green) 12%, var(--surface)); }
   .k-service .ic { color: var(--tone-violet); background: color-mix(in srgb, var(--tone-violet) 12%, var(--surface)); }
+  .k-tool .ic { color: var(--tone-violet); background: color-mix(in srgb, var(--tone-violet) 12%, var(--surface)); }
   .k-remote .ic, .k-more .ic { color: var(--tone-blue); background: color-mix(in srgb, var(--tone-blue) 12%, var(--surface)); }
   .muted .ic { opacity: 0.75; }
   .body { flex: 1; min-width: 0; display: grid; gap: 1px; }

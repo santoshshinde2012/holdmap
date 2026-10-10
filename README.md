@@ -33,6 +33,11 @@
 holdmap tells you what's really there — which agent or tool started it — and stops only what
 it should.
 
+The README and screenshots describe the current source. Child-tool metadata and search, MCP
+resources/prompts and freshness improvements are [Unreleased](CHANGELOG.md#unreleased); build
+this checkout to use them. The download links below remain for **0.3.0**. Desktop screenshots
+use the shared browser UI with sample data.
+
 ## Features
 
 - **Who owns the port.** Process, user, command, folder, plus the project, git branch and
@@ -51,7 +56,7 @@ it should.
   folders each one works in, the ports and apps it started (children grouped as tools & apps),
   the services and hosts it talks to, and access (account, sandbox, approval flags, network
   exposure), each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor,
-  or stop only what that agent started. Chats, settings and tokens are never read.
+  or stop only the services that agent started, through the normal safety policy.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
   server for AI coding assistants. macOS, Linux and Windows. No telemetry.
 
@@ -151,8 +156,8 @@ port = 5432               # no command: started elsewhere, up just waits for it
 
 | Purpose | Commands |
 |---|---|
-| Look | `holdmap list`, `holdmap inspect`, `holdmap explain`, `holdmap graph`, `holdmap agents`, `holdmap agents AGENT --stop-ports`, `holdmap watch`, `holdmap ssh HOST` (read-only, nothing to install remotely) |
-| Act | `holdmap stop`, `holdmap kill`, `holdmap restart`, `holdmap run`, `holdmap open` |
+| Look | `holdmap list`, `holdmap inspect`, `holdmap explain`, `holdmap graph`, `holdmap agents`, `holdmap watch`, `holdmap ssh HOST` (read-only, nothing to install remotely) |
+| Act | `holdmap stop`, `holdmap kill`, `holdmap restart`, `holdmap run`, `holdmap open`, `holdmap agents AGENT --stop-ports` |
 | Ports | `holdmap free-port --near 3000`, `holdmap wait 5432 --timeout 30s` |
 | Projects | `holdmap up`, `holdmap down`, `holdmap status`, `holdmap init` |
 | Remember | `holdmap pin`, `holdmap unpin`, `holdmap pins`, `holdmap history` |
@@ -161,6 +166,14 @@ port = 5432               # no command: started elsewhere, up just waits for it
 Every read command takes `--json`. Exit codes: `0` ok, `1` busy / not found / timed out, `2`
 error, `3` blocked by the safety policy, `4` needs elevation. All flags are in the
 **[CLI reference](docs/cli.md)**.
+
+**Agent visibility in current source.** `holdmap agents` includes child MCP candidates even when
+no port listens, resource totals for all owned processes, and counts for omitted display rows.
+Search by product, vendor, exact owned PID (`pid:1234`), working folder or tool name:
+`holdmap agents claude` or `holdmap agents filesystem`. `--wide` shows listed processes and
+redacted commands; `--json` preserves evidence, timestamps and collection limits. Command text
+is not searched. Recent folders belong to the current account's history and are attached only
+to confirmed matching accounts; they do not prove current work by that running instance.
 
 **Shell hook.** Add `eval "$(holdmap init zsh)"` to `~/.zshrc` (also `bash`, `fish`, `powershell`).
 When a command fails with "port in use", it prints who holds the port and how to free it.
@@ -173,7 +186,10 @@ A tray and menu-bar app with the port list, details, the service graph (`G`), th
 Agents map, expand a card to reveal a folder, open it in your editor, or stop the unprotected
 ports that agent started. From a port’s details pane you can open it in a browser, restart a
 dev server, open its folder (`HOLDMAP_EDITOR`, else Cursor, VS Code, Zed…) or Finder, and copy
-its URL, a `curl` or the kill command.
+its URL, a `curl` or the kill command. Current source also adds agent search, expanded child-tool
+details, inferred MCP nodes and explicit omission counts. Native reports refresh independently
+of the window's poll; the browser [live demo](https://santoshshinde2012.github.io/holdmap/#demo)
+uses the same UI with sample data.
 
 **First open.** The app isn't notarised yet, so the OS asks once:
 
@@ -191,7 +207,9 @@ its URL, a `curl` or the kill command.
 | **Command palette** | **Settings** |
 | ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) | ![Settings: startup and the global shortcut, dark theme](docs/screenshots/desktop-settings-dark.png) |
 | **TUI** | **Agents** |
-| ![The holdmap TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) | ![The agents view: Claude Code and Cursor with their folders, ports, connections and access, dark theme](docs/screenshots/desktop-agents-dark.png) |
+| ![The holdmap TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) | ![The agents view: coding agents and developer tools with resource use, folders, ports and access, dark theme](docs/screenshots/desktop-agents-dark.png) |
+| **Agents in light theme** | **Child tools and MCP evidence** |
+| ![The current-source agents map in light theme](docs/screenshots/desktop-agents-light.png) | ![Expanded child-tool details show an inferred Filesystem MCP process with no listening port](docs/screenshots/desktop-agent-tools-dark.png) |
 
 </details>
 
@@ -214,6 +232,22 @@ For Claude Desktop or Cursor (`~/.cursor/mcp.json`):
 VS Code (`.vscode/mcp.json`) uses `"servers"` with `"type": "stdio"`. If the client can't find
 `holdmap`, use the full path, for example `/Users/you/.local/bin/holdmap`.
 
+Current source also exposes a bundled `holdmap://guide` resource and three workflow prompts:
+
+| Prompt | Purpose |
+|---|---|
+| `diagnose_port` | Explain ownership, inspect topology with `all: true`, then choose another port or preview an authorized stop. |
+| `prepare_dev_server` | Find a candidate port and check TCP readiness after the project's authorized launch. |
+| `inspect_agents` | Summarize child tools, resource use, folders and access with their evidence and collection limits. |
+
+Retrieving a prompt performs no actions. The guide and templates help clients interpret results;
+MCP identities remain inferred from process metadata and do not prove tool calls or transport.
+Tool input/output schemas preserve structured data, and malformed arguments are rejected before
+acting, including incorrectly typed stop controls. `list_ports` reports collection warnings even
+for empty results. See the [MCP guide](site/src/content/docs/mcp.md) and
+[Unreleased changes](CHANGELOG.md#unreleased) for availability; these discovery additions are
+not in the downloadable 0.3.0 release.
+
 ## Safety model
 
 holdmap stops processes, so one set of rules in `holdmap-core` applies to every surface:
@@ -221,8 +255,9 @@ holdmap stops processes, so one set of rules in `holdmap-core` applies to every 
 - **Graceful first:** SIGTERM (`taskkill` on Windows), then a force kill after `--timeout` (5 s).
 - **The right target:** the dev-server tree root (`npm`, `nodemon`, `uvicorn --reload`…) so nothing
   respawns; containers through their runtime, services through their supervisor.
-- **Protected processes:** the OS, shells, terminals, IDEs, AI-assistant hosts and holdmap itself
-  are refused unless you pass `--allow-protected` (the MCP server always refuses).
+- **Protected processes:** core OS processes, holdmap and its ancestors are never signalled.
+  Shells, terminals, IDEs and AI-assistant hosts are protected by default; the CLI can explicitly
+  allow soft protection with `--allow-protected`. The MCP server always refuses protected owners.
 - **No surprises:** a PID-reuse guard, `--dry-run` for every plan, and a check that the port is
   really free afterwards.
 - **Private:** passwords and tokens in command lines (`--password=…`, `API_TOKEN=…`,
@@ -230,93 +265,58 @@ holdmap stops processes, so one set of rules in `holdmap-core` applies to every 
   settings and credentials are never read. History and logs are readable only by you. No
   telemetry: holdmap only talks to localhost, to hosts you `ssh` to, and (desktop) GitHub
   Releases for updates.
-- **Locked down:** the desktop webview can only listen to events and drag the window; it names
-  ports, never commands, paths or URLs. A `.holdmap.toml` that another user owns or anyone can
-  write is refused.
+- **Locked down:** desktop actions identify ports, history entries or known agent folders.
+  The backend checks those targets and chooses the command or URL; opening an agent folder
+  requires a path in that agent's reported folders. A `.holdmap.toml` that another user owns
+  or anyone can write is refused.
 
 ## Architecture
 
-One Rust core makes every decision about who owns a port, whether it is safe to touch and how to
-stop it; the CLI, TUI, desktop app and MCP server only render and confirm what it returns.
+`holdmap-core` owns collection, attribution, protection and stop planning. The CLI/TUI, native
+backend and MCP adapter coordinate requests and present its types. The website builds the same
+Svelte UI in browser mode, using sample data through the UI's API boundary.
 
 ```mermaid
-%%{init: {"flowchart": {"wrappingWidth": 260, "nodeSpacing": 40, "rankSpacing": 50}}}%%
 flowchart TB
-  subgraph IF["Interfaces"]
-    direction LR
-    HOOK("Shell hook<br/>holdmap init")
-    CLI("CLI<br/>clap")
-    TUI("TUI<br/>ratatui")
-    DESK("Desktop app + tray<br/>Tauri v2 · Svelte 5")
-    MCP("MCP server<br/>JSON-RPC · stdio")
-  end
-
-  subgraph CORE["holdmap-core"]
-    ENG{{"Engine<br/>explain · plan · stop"}}
-    SCAN["Scanner<br/>sockets → PIDs → projects"]
-    PROV["Platform providers<br/>Linux · macOS · Windows"]
-    POL["ProtectionPolicy<br/>never touch the OS,<br/>shells, IDEs, agents"]
-    REG["StopStrategy registry<br/>process tree · container<br/>systemd · pm2 · brew"]
-    EXEC["Executor<br/>signal → verify freed"]
-    TOPO["Topology<br/>service graph<br/>clusters · stop order"]
-    AGT["Agents<br/>AI agents & tools · folders<br/>access · ports · links"]
-    HTTP["HTTP probe<br/>GET / → status, title"]
-    STACK["Project config<br/>.holdmap.toml"]
-  end
-
-  subgraph OS["Operating system"]
-    direction LR
-    SOCK[["Sockets & processes"]]
-    SIG[["Signals<br/>SIGTERM → SIGKILL"]]
-    CTR[["Containers<br/>Docker · Podman<br/>OrbStack · Colima"]]
-  end
-
-  subgraph ST["Local state"]
-    direction LR
-    PINS[("Pins & settings")]
-    HIST[("Stop history")]
-  end
-
-  HOOK -->|"port taken?"| CLI
-
-  IF ==>|"scan · explain · stop"| ENG
-  IF -.->|"HTTP status"| HTTP
-  IF --> ST
-  CLI -->|"up · down"| STACK
-  STACK --> ENG
-
-  ENG --> SCAN
-  SCAN --> PROV
-  ENG -->|"safe to touch?"| POL
-  ENG -->|"how to stop"| REG
-  ENG --> TOPO
-  ENG --> AGT
-  AGT -.->|"same catalog"| POL
-  REG --> EXEC
-
-  PROV -->|"read"| SOCK
-  SCAN -->|"published ports"| CTR
-  EXEC -->|"send"| SIG
-  EXEC -->|"stop"| CTR
-  HTTP -.->|"localhost"| SOCK
-
-  classDef iface fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#0b1b3a
-  classDef core fill:#ede9fe,stroke:#7c3aed,stroke-width:1.5px,color:#1e1035
-  classDef engine fill:#7c3aed,stroke:#5b21b6,stroke-width:2px,color:#ffffff
-  classDef os fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#052e16
-  classDef state fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#3b2203
-  class HOOK,CLI,TUI,DESK,MCP iface
-  class SCAN,PROV,POL,REG,EXEC,TOPO,AGT,HTTP,STACK core
-  class ENG engine
-  class SOCK,SIG,CTR os
-  class PINS,HIST state
-  style IF fill:transparent,stroke:#60a5fa,stroke-dasharray:4 3
-  style CORE fill:transparent,stroke:#a78bfa,stroke-dasharray:4 3
-  style OS fill:transparent,stroke:#4ade80,stroke-dasharray:4 3
-  style ST fill:transparent,stroke:#f59e0b,stroke-dasharray:4 3
+  CLI["CLI and TUI"] --> ENGINE["holdmap-core Engine"]
+  MCP["MCP transport and validated tools"] --> ENGINE
+  MCP --> CONTEXT["Pure guide resource and workflow prompts"]
+  UI["Shared Svelte UI"] --> API["api.ts"]
+  API --> NATIVE["Tauri commands and AppState freshness cache"]
+  NATIVE --> ENGINE
+  SITE["Astro website and guides"] --> DEMO["Browser demo build"]
+  DEMO --> UI
+  API -. "browser mode" .-> MOCK["Sample data"]
+  ENGINE --> SCAN["Scanner and injected providers"]
+  SCAN --> OS["OS sockets, processes and container runtimes"]
+  ENGINE --> AGENTS["AgentsBuilder: ownership, folders, network, tools and access"]
+  ENGINE --> GRAPH["Topology and cluster registries"]
+  ENGINE --> PLAN["ProtectionPolicy and StopStrategy registry"]
+  PLAN --> EXEC["Executor: identity checks, graceful stop and verification"]
 ```
 
-Modules, traits and data flow: [docs/architecture.md](docs/architecture.md).
+SOLID is expressed through specific boundaries: collectors have separate responsibilities;
+registries extend owner and project detection; narrow provider, detector and classifier traits
+let the normal builders use system implementations or fixtures. Defaults are chosen at the
+composition points. [Architecture details](docs/architecture.md) explain these contracts and
+their regression coverage.
+
+The folder layout keeps each surface's code and tooling together:
+
+```text
+crates/holdmap-core/       Scanning, agents, topology, planning and execution
+crates/holdmap-cli/        CLI, TUI and integration tests
+crates/holdmap-mcp/        Protocol, schemas, tools, resources and prompts
+apps/desktop/src/         Shared Svelte UI and pure TypeScript view logic
+apps/desktop/src-tauri/   Native commands, cache, watcher and tray
+apps/desktop/e2e/         Browser tests using sample data
+site/                     Astro website, guides and demo build
+docs/                    Architecture, generated CLI reference and published screenshots
+scripts/                  Workspace checks, docs generation and development helpers
+```
+
+Source assets and published screenshots are kept with their consumers. Build output,
+dependencies and temporary captures are regenerated; Git history holds earlier versions.
 
 ## Troubleshooting
 
@@ -344,8 +344,18 @@ Modules, traits and data flow: [docs/architecture.md](docs/architecture.md).
 
 ## Contributing
 
-Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, checks and
-conventions, including building the desktop app.
+Use Rust 1.95+ and Node.js 22.12+ (`nvm use`). [CONTRIBUTING.md](CONTRIBUTING.md) covers native
+system dependencies, Chromium, actionlint and cargo-deny setup. Useful checks are:
+
+```sh
+cargo test --locked                                  # core, CLI/TUI and MCP
+(cd apps/desktop && npm ci && npm run check && npm test && npm run test:e2e)
+(cd site && npm ci && npm run check && HOLDMAP_SITE_OFFLINE=1 npm run build && npm test && npm run test:demo)
+scripts/check-all.sh                                  # complete workspace and native checks
+```
+
+The full check script builds the UI before native checks and covers formatting, clippy,
+Rust/native tests, browser tests, docs, website links/budgets and dependency audits.
 
 ## License
 

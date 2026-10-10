@@ -4,18 +4,16 @@
 
 use crate::style::{self, paint, S};
 use anyhow::{bail, Context, Result};
-use holdmap_core::agents::{
-    AccessLevel, Agent, AgentsReport, Evidence, FolderSource, LinkKind, PortRole,
-};
+use holdmap_core::agents::{AccessLevel, AgentsReport, Evidence, FolderSource, LinkKind, PortRole};
 use holdmap_core::engine::tilde;
 use holdmap_core::util::{count, human_bytes};
 use holdmap_core::{execute, Engine, Exposure, ScanOptions, StopOptions, Target};
 
 #[derive(clap::Args, Debug, Default)]
 pub struct AgentsArgs {
-    /// Only agents matching this (product such as `claude` or `cursor`, name, or PID).
+    /// Only agents matching a product, name, vendor, folder, tool name, or exact agent/child PID.
     pub agent: Option<String>,
-    /// List every process of each agent, with its command line (secrets hidden).
+    /// Show listed processes and their command lines (secrets hidden; large lists are capped).
     #[arg(short, long)]
     pub wide: bool,
     /// Stop the unprotected ports each matching agent started (dev servers and services).
@@ -32,15 +30,6 @@ pub struct AgentsArgs {
     pub json: bool,
 }
 
-/// Whether `a` matches the user's filter.
-pub fn matches(a: &Agent, q: &str) -> bool {
-    let q = q.trim().to_ascii_lowercase();
-    q.is_empty()
-        || a.pid.to_string() == q
-        || a.product.contains(&q)
-        || a.name.to_ascii_lowercase().contains(&q)
-}
-
 pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
     let e = Engine::new(&ScanOptions {
         all_states: false,
@@ -49,7 +38,7 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
     .context("failed to scan processes and sockets")?;
     let mut report = e.agents();
     if let Some(q) = &a.agent {
-        report.agents.retain(|x| matches(x, q));
+        report.agents.retain(|x| x.matches(q));
     }
     if a.stop_ports {
         return stop_ports(&e, &report, a);
@@ -57,7 +46,7 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
     if a.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
-        print!("{}", render(&report, a.wide));
+        print!("{}", render(&report, a.wide, a.agent.as_deref()));
     }
     Ok(if report.agents.is_empty() {
         crate::exit::BUSY
@@ -164,10 +153,17 @@ fn level_mark(l: AccessLevel) -> String {
 }
 
 /// The human report.
-pub fn render(r: &AgentsReport, wide: bool) -> String {
+pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
     let mut out = String::new();
     if r.agents.is_empty() {
-        out.push_str(&style::dim("No agents or developer tools running.\n"));
+        let message = match query.filter(|q| !q.trim().is_empty()) {
+            Some(q) => format!("No agents or developer tools match {q:?}.\n"),
+            None => "No agents or developer tools running.\n".to_string(),
+        };
+        out.push_str(&style::dim(message));
+        for limit in &r.limits {
+            out.push_str(&style::dim(format!("note: {limit}\n")));
+        }
         return out;
     }
     let label = |s: &str| style::dim(format!("  {s:<10}"));
@@ -191,10 +187,8 @@ pub fn render(r: &AgentsReport, wide: bool) -> String {
             who,
             count(procs, "process", "processes"),
             human_bytes(a.memory_bytes),
+            format!("{:.1}% CPU", a.cpu_percent),
         ]);
-        if a.cpu_percent > 0.05 {
-            meta.push(format!("{:.1}% CPU", a.cpu_percent));
-        }
         let stoppable = a.stoppable_ports().count();
         if stoppable > 0 {
             meta.push(count(stoppable, "stoppable port", "stoppable ports"));
@@ -251,6 +245,57 @@ pub fn render(r: &AgentsReport, wide: bool) -> String {
                     tilde(&f.path),
                     style::dim(tags.join(" · "))
                 ),
+            );
+        }
+        if a.more_folders > 0 {
+            row(
+                &mut out,
+                "folders",
+                style::dim(format!(
+                    "+{} not listed",
+                    count(a.more_folders, "folder", "folders")
+                )),
+            );
+        }
+
+        let mut first = true;
+        let mut row = |out: &mut String, text: String| {
+            let head = if first { label("tools") } else { pad.clone() };
+            first = false;
+            out.push_str(&format!("{head}{text}\n"));
+        };
+        for tool in &a.tools {
+            let evidence = match tool.evidence {
+                Evidence::Observed => "observed",
+                Evidence::Inferred => "inferred",
+                Evidence::Unknown => "unknown",
+            };
+            let ports = if tool.ports.is_empty() {
+                "no listening ports".to_string()
+            } else {
+                tool.ports
+                    .iter()
+                    .map(|p| format!(":{p}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            row(
+                &mut out,
+                format!(
+                    "{} (pid {})  {}",
+                    paint(&tool.name, S::Bold),
+                    tool.pid,
+                    style::dim(format!("{} · {evidence} · {ports}", tool.kind.label())),
+                ),
+            );
+        }
+        if a.more_tools > 0 {
+            row(
+                &mut out,
+                style::dim(format!(
+                    "+{} not listed",
+                    count(a.more_tools, "tool", "tools")
+                )),
             );
         }
 
@@ -316,7 +361,10 @@ pub fn render(r: &AgentsReport, wide: bool) -> String {
             row(
                 &mut out,
                 "talks to",
-                style::dim(format!("+{} more", a.more_links)),
+                style::dim(format!(
+                    "+{} not listed",
+                    count(a.more_links, "connection target", "connection targets")
+                )),
             );
         }
 
@@ -351,7 +399,10 @@ pub fn render(r: &AgentsReport, wide: bool) -> String {
             if a.more_processes > 0 {
                 out.push_str(&format!(
                     "{pad}{}\n",
-                    style::dim(format!("+{} more", a.more_processes))
+                    style::dim(format!(
+                        "+{} not listed",
+                        count(a.more_processes, "process", "processes")
+                    ))
                 ));
             }
         }
@@ -371,7 +422,9 @@ pub fn render(r: &AgentsReport, wide: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use holdmap_core::agents::{AccessFact, AccessTopic, AgentAccess, AgentFolder, AgentKind};
+    use holdmap_core::agents::{
+        AccessFact, AccessTopic, Agent, AgentAccess, AgentFolder, AgentKind, AgentTool, ToolKind,
+    };
 
     fn agent(pid: u32, product: &str, name: &str) -> Agent {
         Agent {
@@ -389,6 +442,9 @@ mod tests {
             cpu_percent: 0.0,
             processes: vec![],
             more_processes: 0,
+            process_ids: vec![pid],
+            tools: vec![],
+            more_tools: 0,
             folders: vec![AgentFolder {
                 path: "/srv/shop-web".into(),
                 label: "shop-web".into(),
@@ -399,6 +455,7 @@ mod tests {
                 privacy_area: None,
                 note: None,
             }],
+            more_folders: 0,
             ports: vec![],
             links: vec![],
             more_links: 0,
@@ -418,15 +475,6 @@ mod tests {
     }
 
     #[test]
-    fn filters_by_product_name_or_pid() {
-        let a = agent(42, "claude-code", "Claude Code");
-        assert!(matches(&a, "claude"));
-        assert!(matches(&a, "Claude Code"));
-        assert!(matches(&a, "42"));
-        assert!(!matches(&a, "cursor"));
-    }
-
-    #[test]
     fn renders_each_agent_with_its_footprint() {
         style::init(style::ColorChoice::Never);
         let mut child = agent(7, "codex", "Codex CLI");
@@ -437,13 +485,13 @@ mod tests {
             taken_at_ms: 0,
             limits: vec!["Chats are never read.".into()],
         };
-        let text = render(&r, false);
+        let text = render(&r, false, None);
         assert!(text.contains("Claude Code  pid 42 · terminal agent · Vendor · you (dev)"));
         assert!(text.contains("folders   shop-web  /srv/shop-web  working dir"));
         assert!(text.contains("started from Claude Code (pid 42)"));
         assert!(text.contains("? No sandbox seen right now."));
         assert!(text.contains("note: Chats are never read."));
-        let none = render(&AgentsReport::default(), false);
+        let none = render(&AgentsReport::default(), false, None);
         assert!(none.contains("No agents or developer tools running."));
     }
 
@@ -472,8 +520,79 @@ mod tests {
                 limits: vec![],
             },
             false,
+            None,
         );
         assert!(text.contains("3.4% CPU"));
         assert!(text.contains("1 stoppable port"));
+    }
+
+    #[test]
+    fn renders_stdio_tools_resources_and_omitted_items() {
+        style::init(style::ColorChoice::Never);
+        let mut a = agent(42, "claude-code", "Claude Code");
+        a.cpu_percent = 25.5;
+        a.tools = vec![
+            AgentTool {
+                pid: 43,
+                ppid: Some(42),
+                name: "filesystem-mcp".into(),
+                kind: ToolKind::McpServer,
+                command: "node filesystem-mcp --token=[redacted]".into(),
+                cwd: Some("/srv/shop-web".into()),
+                evidence: Evidence::Inferred,
+                ports: vec![],
+                memory_bytes: 1024,
+                cpu_percent: 1.0,
+            },
+            AgentTool {
+                pid: 44,
+                ppid: Some(42),
+                name: "Vite".into(),
+                kind: ToolKind::DevServer,
+                command: "node vite".into(),
+                cwd: Some("/srv/shop-web".into()),
+                evidence: Evidence::Observed,
+                ports: vec![5173],
+                memory_bytes: 1024,
+                cpu_percent: 1.0,
+            },
+        ];
+        a.more_tools = 2;
+        a.more_folders = 3;
+        a.more_processes = 4;
+        a.more_links = 5;
+        let r = AgentsReport {
+            agents: vec![a],
+            ..AgentsReport::default()
+        };
+        let text = render(&r, true, None);
+        assert!(text.contains("25.5% CPU"));
+        assert!(
+            text.contains("filesystem-mcp (pid 43)  MCP server · inferred · no listening ports")
+        );
+        assert!(text.contains("Vite (pid 44)  dev server · observed · :5173"));
+        for omission in [
+            "+2 tools not listed",
+            "+3 folders not listed",
+            "+4 processes not listed",
+            "+5 connection targets not listed",
+        ] {
+            assert!(text.contains(omission), "missing {omission}: {text}");
+        }
+    }
+
+    #[test]
+    fn empty_reports_preserve_collection_limits_and_filter_context() {
+        style::init(style::ColorChoice::Never);
+        let report = AgentsReport {
+            limits: vec!["The process table could not be collected.".into()],
+            ..AgentsReport::default()
+        };
+        let text = render(&report, false, None);
+        assert!(text.starts_with("No agents or developer tools running."));
+        assert!(text.contains("note: The process table could not be collected."));
+        let filtered = render(&report, false, Some("shop-web"));
+        assert!(filtered.starts_with("No agents or developer tools match \"shop-web\"."));
+        assert!(filtered.contains("note: The process table could not be collected."));
     }
 }

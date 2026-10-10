@@ -3,8 +3,9 @@
   // access picture, folders (reveal / open in editor), ports (open details or stop) and process
   // tree. Figures come from the OS; anything not observed is labelled as such.
   import Icon from "../Icon.svelte";
+  import AgentTools from "./AgentTools.svelte";
   import { humanBytes, humanDuration, tildify } from "../../lib/format";
-  import { EVIDENCE_LABEL, KIND_LABEL, LEVEL_LABEL, TOPIC_LABEL, accessFacts, accessHeadline, counts, countsLine, folderSourceLabel, monogram, parentName, resourcesLine, stoppableEntries } from "../../lib/agents";
+  import { EVIDENCE_LABEL, KIND_LABEL, LEVEL_LABEL, TOPIC_LABEL, accessFacts, accessHeadline, counts, countsLine, folderSourceLabel, stoppableEntries, monogram, processRows, startedFrom } from "../../lib/agents";
   import type { Agent, AgentProcess, AgentsReport, PortEntry } from "../../lib/types";
 
   let {
@@ -19,6 +20,7 @@
     oneditor,
     onstop,
     onstopall,
+    onnavigate,
     now = Date.now(),
   }: {
     agent: Agent;
@@ -34,6 +36,7 @@
     oneditor: (path: string) => void;
     onstop: (e: PortEntry) => void;
     onstopall: () => void;
+    onnavigate?: (id: string) => void;
     now?: number;
   } = $props();
 
@@ -43,13 +46,14 @@
   const head = $derived(accessHeadline(agent));
   const c = $derived(counts(agent));
   const facts = $derived(accessFacts(agent));
-  const parent = $derived(parentName(report, agent));
+  const parent = $derived(report.agents.find((a) => a.id === agent.parent) ?? null);
+  const childAgents = $derived(startedFrom(report, agent.id));
+  const tree = $derived(processRows(agent));
   const up = $derived(agent.started_at ? humanDuration(now / 1000 - agent.started_at) : null);
   const meta = $derived([KIND_LABEL[agent.kind], agent.vendor !== "unknown" ? agent.vendor : null, `pid ${agent.pid}`, up ? `up ${up}` : null].filter(Boolean).join(" · "));
-  const resources = $derived(resourcesLine(agent));
   const entry = (id: string | null) => entries.find((e) => e.id === id) ?? null;
   const stoppable = $derived(stoppableEntries(agent, entries));
-  const children = $derived(agent.processes.filter((p) => p.role === "child"));
+  const children = $derived(tree.filter(({ process }) => process.role === "child").map(({ process }) => process));
 
   function role(p: AgentProcess): string {
     return p.role === "helper" ? "helper" : p.role === "child" ? "tool / app it started" : "agent";
@@ -68,13 +72,17 @@
       <span class="name">{agent.name}</span>
       <span class="meta">{meta}</span>
     </span>
-    <span class="acc lv-{head.level}"><i aria-hidden="true"></i>{head.text}</span>
-    <span class="nums">
-      <span>{countsLine(c)}</span>
-      <span class="res mono">{resources}</span>
-      {#if parent}<span class="from-line">from {parent}</span>{/if}
-    </span>
+    <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.text}</span>
+    <span class="nums">{countsLine(c)} · {c.processes} {c.processes === 1 ? "process" : "processes"} · {c.tools} {c.tools === 1 ? "tool" : "tools"}</span>
+    <span class="resources mono">{agent.cpu_percent.toFixed(agent.cpu_percent < 10 ? 1 : 0)}% CPU · {humanBytes(agent.memory_bytes)} total memory</span>
   </button>
+
+  {#if parent || childAgents.length}
+    <div class="relations">
+      {#if parent}<span>Started from {#if onnavigate}<button onclick={() => onnavigate?.(parent.id)}>{parent.name} <span class="mono">{parent.pid}</span></button>{:else}{parent.name} (pid {parent.pid}){/if}</span>{/if}
+      {#if childAgents.length}<span>Started {#each childAgents as child, i}{#if i}, {/if}{#if onnavigate}<button onclick={() => onnavigate?.(child.id)}>{child.name} <span class="mono">{child.pid}</span></button>{:else}{child.name} (pid {child.pid}){/if}{/each}</span>{/if}
+    </div>
+  {/if}
 
   {#if selected}
     <div class="body">
@@ -92,7 +100,7 @@
         {/each}
       </dl>
 
-      {#if agent.folders.length}
+      {#if agent.folders.length || agent.more_folders}
         <h3>Folders</h3>
         <ul class="rows">
           {#each agent.folders as f}
@@ -111,6 +119,7 @@
               </div>
             </li>
           {/each}
+          {#if agent.more_folders}<li class="more">+{agent.more_folders} folders not listed</li>{/if}
         </ul>
       {/if}
 
@@ -128,7 +137,7 @@
             {@const e = entry(p.entry_id)}
             <li class="port-row">
               {#if e}
-                <button class="row-btn" onclick={() => onentry(e)} title="Open :{e.port} in the details pane">{@render rowBody("server", p.project ?? p.framework ?? p.process ?? p.label, `:${p.port} · ${p.role === "dev_server" ? "dev server" : p.role === "agent" ? "agent's own port" : "service"}${p.exposure === "all_interfaces" ? " · reachable from the network" : ""}`)}</button>
+                <button class="row-btn" onclick={() => onentry(e)} title="Open :{e.port} in the details pane">{@render rowBody("server", p.project ?? p.framework ?? p.process ?? p.label, `:${p.port} · ${p.role === "dev_server" ? "dev server" : p.role === "agent" ? "agent's own port" : "service"}${p.exposure === "all_interfaces" ? " · reachable from the network" : p.exposure === "specific" ? " · bound to a specific interface" : ""}`)}</button>
               {:else}
                 <span class="row-btn static">{@render rowBody("server", p.project ?? p.framework ?? p.process ?? p.label, `:${p.port} · ${p.role === "dev_server" ? "dev server" : p.role === "agent" ? "agent's own port" : "service"}`)}</span>
               {/if}
@@ -140,7 +149,7 @@
         </ul>
       {/if}
 
-      {#if agent.links.length}
+      {#if agent.links.length || agent.more_links}
         <h3>Talks to</h3>
         <ul class="rows">
           {#each agent.links as l}
@@ -153,11 +162,13 @@
               {/if}
             </li>
           {/each}
-          {#if agent.more_links}<li class="more">+{agent.more_links} more connections not listed</li>{/if}
+          {#if agent.more_links}<li class="more">+{agent.more_links} links not listed</li>{/if}
         </ul>
       {/if}
 
-      <h3>Processes</h3>
+      <AgentTools tools={agent.tools ?? []} more={agent.more_tools ?? 0} />
+
+      <h3>Processes · {c.processes}</h3>
       <code class="cmd" title={agent.command}>{agent.command}</code>
       {#if children.length}
         <p class="group-label">Tools &amp; apps it started ({children.length})</p>
@@ -173,8 +184,8 @@
       {/if}
       <p class="group-label">Agent &amp; helpers</p>
       <ul class="procs">
-        {#each agent.processes.filter((p) => p.role !== "child") as p}
-          <li>
+        {#each tree.filter(({ process }) => process.role !== "child") as { process: p, depth } (p.pid)}
+          <li style="padding-left: {depth * 10}px" title={p.command}>
             <span class="pname">{p.name} <span class="mono pid">{p.pid}</span></span>
             <span class="prole">{role(p)}{#if p.cwd} · {tildify(p.cwd)}{/if}</span>
             <span class="pfig mono">{p.cpu_percent.toFixed(p.cpu_percent < 10 ? 1 : 0)}% · {humanBytes(p.memory_bytes)}</span>
@@ -182,7 +193,6 @@
         {/each}
         {#if agent.more_processes}<li class="more">+{agent.more_processes} more processes</li>{/if}
       </ul>
-      {#if parent}<p class="from">Started from <b>{parent}</b>.</p>{/if}
     </div>
   {/if}
 </article>
@@ -191,7 +201,7 @@
   .card { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: hidden; }
   .card.on { border-color: var(--agent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent) 16%, transparent); }
   .head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 14px; }
-  .head { width: 100%; display: grid; grid-template-columns: auto 1fr; grid-template-areas: "tile who" "tile acc" "nums nums"; gap: 2px 10px; padding: 10px 12px; border: 0; background: transparent; text-align: left; cursor: pointer; color: var(--text); }
+  .head { width: 100%; display: grid; grid-template-columns: auto 1fr; grid-template-areas: "tile who" "tile acc" "nums nums" "resources resources"; gap: 2px 10px; padding: 10px 12px; border: 0; background: transparent; text-align: left; cursor: pointer; color: var(--text); }
   .tile { grid-area: tile; width: 36px; height: 36px; margin-top: 2px; display: grid; place-items: center; border-radius: 10px; background: color-mix(in srgb, var(--agent) 16%, var(--surface)); color: var(--agent); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-semibold); letter-spacing: var(--ls-body); }
   .who { grid-area: who; min-width: 0; display: grid; }
   .name { font-weight: var(--fw-semibold); font-size: var(--fs-body); line-height: var(--lh-body); letter-spacing: var(--ls-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -203,9 +213,10 @@
   .lv-elevated i { background: var(--danger); }
   .acc.lv-elevated { color: var(--danger); }
   .lv-unknown i { background: var(--muted); }
-  .nums { grid-area: nums; display: grid; gap: 1px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
-  .res { color: var(--text-2); }
-  .from-line { color: var(--text-2); }
+  .nums { grid-area: nums; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .resources { grid-area: resources; font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--text-2); }
+  .relations { padding: 0 12px 8px; display: grid; gap: 2px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
+  .relations button { padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-2); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .group-label { margin: 6px 0 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .body { padding: 2px 12px 12px; display: grid; gap: 6px; border-top: 1px solid var(--border); }
   h3 { margin: 8px 0 0; font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
@@ -248,6 +259,4 @@
   .pname { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); }
   .prole, .more { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .pfig { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
-  .from { margin: 4px 0 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-2); }
-  .from b { font-weight: var(--fw-semibold); color: var(--text); }
 </style>

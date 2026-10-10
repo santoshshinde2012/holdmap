@@ -27,7 +27,8 @@ pub struct RecentFolder {
     pub note: String,
 }
 
-/// A source of recent projects per product (injected so tests stay off the real home folder).
+/// The current account's recent projects per product (injected so tests stay off the real
+/// home folder). Builders attach these only to agents with confirmed matching accounts.
 pub trait RecentProjects: Send + Sync + Debug {
     /// Recent or open project folders of `product`, newest first. `known` holds paths seen on
     /// the machine (working directories, project roots), used to resolve ambiguous names.

@@ -22,6 +22,11 @@ on:
     workflows: [Release]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      deploy_from_branch:
+        description: Publish this branch to the public site (requires an allowed environment branch)
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -34,6 +39,7 @@ jobs:
     name: build + check
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -68,6 +74,23 @@ jobs:
       - name: Links and size budget
         working-directory: site
         run: npm test
+      - name: Install browser for the embedded demo check
+        working-directory: apps/desktop
+        run: npx playwright install --with-deps chromium
+      - name: Embedded demo end-to-end check
+        working-directory: site
+        run: npm run test:demo
+      - name: Record the published revision
+        working-directory: site
+        run: |
+          node --input-type=module <<'JS'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync('dist/build-info.json', JSON.stringify({
+            revision: process.env.GITHUB_SHA,
+            repository: process.env.GITHUB_REPOSITORY,
+            run_id: process.env.GITHUB_RUN_ID,
+          }) + '\n');
+          JS
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         if: github.event_name != 'pull_request'
         with:
@@ -76,8 +99,9 @@ jobs:
   deploy:
     name: deploy
     needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.deploy_from_branch))
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       pages: write
       id-token: write
