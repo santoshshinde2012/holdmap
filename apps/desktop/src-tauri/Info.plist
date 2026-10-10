@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>holdmap asks System Events to shut down this computer only after you review and confirm the shutdown action.</string>
   <key>NSDocumentsFolderUsageDescription</key>
   <string>holdmap reads project files (package.json, Cargo.toml, .git) in your Documents folder to show which project and branch a port belongs to. It never changes them.</string>
   <key>NSDesktopFolderUsageDescription</key>

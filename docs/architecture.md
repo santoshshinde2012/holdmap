@@ -1,5 +1,37 @@
 # holdmap architecture
 
+## Local computer power
+
+The desktop Power flow has separate presentation, IPC, confirmation policy and OS adapter
+responsibilities. `ShutdownDialog.svelte` handles accessible confirmation and expiry;
+`api.ts` selects native IPC or a harmless browser simulation; `power.rs` owns local-window
+authorization, one-use handles, monotonic expiry, concurrency and bounded command execution.
+Injected executors test policy without shutting down the test computer. No CLI or MCP
+shutdown endpoint is exposed. Accepted or uncertain outcomes latch retries until a complete
+app restart; confirmation expiry does not schedule an OS shutdown.
+
+```mermaid
+flowchart LR
+  accTitle: Local computer shutdown authority boundaries
+  accDescr: An accessible desktop confirmation passes a one-use handle through trusted IPC to the native power policy and operating-system adapter. Browser users receive simulation only.
+  UI["Power settings<br/>Save-work acknowledgement"] --> API["API adapter<br/>Native or browser"]
+  API --> GATE["Trusted main webview<br/>Local origin validation"]
+  GATE --> POLICY["Power policy<br/>60-second, one-use confirmation<br/>Concurrency and retry guard"]
+  POLICY --> OS["OS adapter<br/>Fixed executable and arguments<br/>Permissions and inhibitors"]
+  API --> DEMO["Browser simulation<br/>No operating-system access"]
+  TEST["Injected executor tests<br/>No actual shutdown"] -.-> POLICY
+  classDef presentation fill:#dbeafe,stroke:#2563eb,color:#172554;
+  classDef adapter fill:#ccfbf1,stroke:#0f766e,color:#134e4a;
+  classDef authority fill:#fef3c7,stroke:#b45309,color:#78350f;
+  classDef domain fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
+  classDef evidence fill:#e2e8f0,stroke:#475569,color:#0f172a;
+  class UI presentation;
+  class API,OS adapter;
+  class GATE authority;
+  class POLICY domain;
+  class DEMO,TEST evidence;
+```
+
 holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop app and MCP
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
 coordinate collection and confirmation, and present the returned types.

@@ -8,6 +8,8 @@
   import { DETAILS_CACHE_MAX, LruMap, STAMP_CACHE_MAX } from "./lib/cache";
   import DetailPane from "./components/detail/DetailPane.svelte";
   import SettingsDialog from "./components/SettingsDialog.svelte";
+  import ShutdownDialog from "./components/ShutdownDialog.svelte";
+  import type { ShutdownPreview } from "./lib/power";
   import PinDialog from "./components/PinDialog.svelte";
   import RemoteDialog from "./components/RemoteDialog.svelte";
   import { Button, Dialog, FilterChip, IconButton, Kbd, SegmentedControl, Select, Splitter, TextField } from "./components/ui";
@@ -107,6 +109,13 @@
   let autostartOn = $state(false);
   let shortcut = $state<string | null>(null);
   let showSettings = $state(false);
+  let showShutdown = $state(false);
+  let shutdownPreview = $state.raw<ShutdownPreview | null>(null);
+  let shutdownLoading = $state(false);
+  let shutdownBusy = $state(false);
+  let shutdownRequested = $state(false);
+  let shutdownError = $state<string | null>(null);
+  let shutdownSequence = 0;
   let settingsSection = $state<SettingsSection>("general");
   let pinDialog = $state<{ port: number | null; label: string; pinned: boolean } | null>(null);
   let showRemote = $state(false);
@@ -196,7 +205,7 @@
   // The agents map has no side pane: a port picked there opens in the drawer, as on narrow windows.
   const showDrawer = $derived((narrow || view === "agents") && drawerOpen && !!selected);
   /** Any overlay that owns the keyboard (they stop key events themselves; this is a backstop). */
-  const modalOpen = $derived(!!confirm || showHelp || showHistory || showPalette || showSettings || showRemote || !!pinDialog || showDrawer);
+  const modalOpen = $derived(!!confirm || showHelp || showHistory || showPalette || showSettings || showShutdown || showRemote || !!pinDialog || showDrawer);
   const scanMs = $derived(Math.min(60, Math.max(1, config?.scan_interval_secs ?? 3)) * 1000);
 
   /** When the scan in flight started: the header stays "Live" while one is merely running. */
@@ -427,7 +436,7 @@
   }
   const portHolder = (port: number) => { const e = snapshot?.entries.find((x) => x.port === port); return e ? `${title(e)}${e.process ? ` (PID ${e.process.pid})` : ""}` : null; };
 
-  const settingsModel = $derived<SettingsModel | null>(config ? { theme, density, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir } : null);
+  const settingsModel = $derived<SettingsModel | null>(config ? { theme, density, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri } : null);
   const settingsActions: SettingsActions = {
     setTheme: (t) => { theme = t; },
     setDensity: (d) => { density = d; },
@@ -438,8 +447,54 @@
     setHistoryLimit: async (n) => { config = await api.setPreferences({ historyLimit: n }); },
     clearHistory: async () => { await api.clearHistory(); historyItems = []; },
     copy: (t, w) => copy(t, w),
+    shutdown: openShutdown,
   };
   function openSettings(section: SettingsSection = "general") { settingsSection = section; showSettings = true; }
+
+  async function openShutdown() {
+    if (shutdownBusy || shutdownLoading) return;
+    showSettings = false;
+    showShutdown = true;
+    shutdownPreview = null;
+    shutdownError = null;
+    shutdownRequested = false;
+    shutdownLoading = true;
+    const sequence = ++shutdownSequence;
+    try {
+      const preview = await api.shutdownPreview();
+      if (showShutdown && sequence === shutdownSequence) shutdownPreview = preview;
+    } catch (e) {
+      if (showShutdown && sequence === shutdownSequence) shutdownError = String(e);
+    } finally {
+      if (sequence === shutdownSequence) shutdownLoading = false;
+    }
+  }
+
+  function closeShutdown() {
+    if (shutdownBusy) return;
+    showShutdown = false;
+    shutdownSequence++;
+    shutdownLoading = false;
+    shutdownPreview = null;
+    // Restore a visible trigger rather than the Settings button just removed from the DOM.
+    openSettings("power");
+  }
+
+  async function confirmShutdown() {
+    if (!shutdownPreview || shutdownBusy || shutdownLoading || shutdownRequested) return;
+    shutdownBusy = true;
+    shutdownError = null;
+    try {
+      const result = await api.shutdownMachine(shutdownPreview.confirmation_id);
+      if (!result.requested) throw new Error("The operating system did not accept the shutdown request.");
+      shutdownRequested = true;
+    } catch (e) {
+      shutdownError = String(e);
+      shutdownPreview = null; // Native handles are consumed on every attempt; re-review to retry.
+    } finally {
+      shutdownBusy = false;
+    }
+  }
 
   async function openHistory() {
     try { historyItems = await api.history(50); showHistory = true; } catch (e) { toast("error", "Couldn't read history", String(e)); }
@@ -1112,6 +1167,7 @@
 {#if showHistory}<HistoryPanel items={historyItems} onrestart={restartEntry} oncopy={copy} onclose={() => (showHistory = false)} onclear={async () => { await api.clearHistory(); historyItems = []; }} />{/if}
 {#if showHelp}<ShortcutsDialog {mod} onclose={() => (showHelp = false)} />{/if}
 {#if showSettings && settingsModel}<SettingsDialog model={settingsModel} actions={settingsActions} bind:section={settingsSection} onclose={() => (showSettings = false)} />{/if}
+{#if showShutdown}<ShutdownDialog preview={shutdownPreview} loading={shutdownLoading} busy={shutdownBusy} requested={shutdownRequested} error={shutdownError} demo={!api.isTauri} onconfirm={confirmShutdown} onclose={closeShutdown} onretry={openShutdown} />{/if}
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
 {#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />

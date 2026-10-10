@@ -1,6 +1,6 @@
 ---
 title: Desktop app
-description: The holdmap tray and menu-bar app, its keyboard shortcuts and how to open it the first time.
+description: Explore the holdmap desktop app, agent visibility, keyboard shortcuts and confirmed local computer shutdown.
 order: 6
 ---
 
@@ -8,7 +8,27 @@ A tray and menu-bar app with the port list, details, the service graph, the agen
 one-click restart, remote hosts over SSH and a command palette. It runs on the same core as the
 CLI, so the plans and protections are identical. [Try it in the browser](../../#demo).
 
+## Shut down this computer
+
+Current source adds **Settings → Power → Shut down this computer**. Check the computer
+name, save your work and acknowledge that all apps, agents and local services will stop.
+The confirmation expires after 60 seconds; it does not schedule shutdown. Cancel or Escape
+closes the review before submission. After submission, follow any OS permission prompts;
+closing the dialog does not cancel the request. If the OS cancels later, quit holdmap
+completely and reopen it before trying again.
+
+macOS uses System Events and may ask for Automation permission. Windows requests shutdown
+without forced termination. Linux requires systemd 248 or newer with explicit inhibitor
+checks. OS policy or permissions may refuse the action. The browser demo only simulates
+shutdown and cannot power off a computer. Downloadable 0.3.0 binaries predate this feature.
+
 ## First open
+
+**Linux desktop 0.3.0:** published AppImage, Debian and RPM downloads predate the GLib
+security fixes in current source. Build the desktop from current source until a patched
+release is published. This Linux GTK dependency issue does not affect the CLI, TUI or
+MCP server, or the macOS and Windows desktop builds. See the
+[security policy](https://github.com/santoshshinde2012/holdmap/blob/main/SECURITY.md#linux-glib-dependency-backports-unreleased).
 
 The app isn't notarised or code-signed yet, so the OS asks once.
 

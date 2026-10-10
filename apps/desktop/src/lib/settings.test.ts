@@ -7,7 +7,7 @@ describe("settings", () => {
     expect(cadenceText(4)).toBe("Every 4 s while the window is open, every 10 s in the background.");
     expect(cadenceText(10)).toMatch(/every 25 s/);
     expect(cadenceText(0)).toMatch(/^Every 1 s/);
-    expect(SETTINGS_SECTIONS.map((s) => s.id)).toEqual(["general", "appearance", "notifications", "scanning", "about"]);
+    expect(SETTINGS_SECTIONS.map((s) => s.id)).toEqual(["general", "appearance", "notifications", "scanning", "power", "about"]);
   });
 
   it("gives every theme its own icon that exists and isn't a device/server glyph", () => {

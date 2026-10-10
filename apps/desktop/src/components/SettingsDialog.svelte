@@ -64,7 +64,7 @@
   let density = $state<Density>(untrack(() => model.density));
 </script>
 
-<Dialog title="Settings" description="Startup, appearance, notifications and scanning for this computer." icon="sliders" size="xl" {onclose} initialFocus="[role=tab][aria-selected=true]">
+<Dialog title="Settings" description="Startup, appearance, notifications, scanning and power for this computer." icon="sliders" size="xl" {onclose} initialFocus="[role=tab][aria-selected=true]">
   <div class="layout">
     <div class="nav" role="tablist" aria-orientation="vertical" aria-label="Settings sections" tabindex="-1" onkeydown={navKey}>
       {#each SETTINGS_SECTIONS as s, i (s.id)}
@@ -146,6 +146,20 @@
             {/snippet}
           </SettingRow>
         </SettingsGroup>
+      {:else if section === "power"}
+        <SettingsGroup title="This computer" description="Power controls always apply to the computer running the desktop app, including while viewing remote hosts.">
+          <div class="power-card">
+            <Callout tone="warn" title="Save your work first">Shutting down closes all apps, agents and local services on this computer. Unsaved work can be lost.</Callout>
+            {#if model.powerDemo}
+              <p class="power-note">Browser demo: the confirmation is simulated. This website cannot shut down your computer.</p>
+            {:else if !model.powerAvailable}
+              <p class="power-note">Shutdown is available in the desktop app on supported operating systems.</p>
+            {:else}
+              <p class="power-note">You'll review the local computer and confirm separately. Your operating system may require permission.</p>
+            {/if}
+            <Button variant="danger-outline" disabled={!model.powerAvailable} onclick={actions.shutdown}>{model.powerDemo ? "Simulate shutdown…" : "Shut down this computer…"}</Button>
+          </div>
+        </SettingsGroup>
       {:else}
         <SettingsGroup title="holdmap">
           <SettingRow label="Version" description={`Desktop app on ${model.platform}`}>{#snippet children()}<span class="mono ver">{model.version}</span>{/snippet}</SettingRow>
@@ -162,7 +176,7 @@
 
   {#snippet footer()}
     <span class="status {status?.kind ?? ''}" aria-live="polite">
-      {#if status?.kind === "saving"}<span class="dotspin"></span>{status.text}{:else if status?.kind === "saved"}<Icon name="check" size={13} />{status.text}{:else if status}<Icon name="alert" size={13} />{status.text}{:else}Changes are saved automatically.{/if}
+      {#if status?.kind === "saving"}<span class="dotspin"></span>{status.text}{:else if status?.kind === "saved"}<Icon name="check" size={13} />{status.text}{:else if status}<Icon name="alert" size={13} />{status.text}{:else if section === "power"}Shutdown requires a separate confirmation.{:else}Changes are saved automatically.{/if}
     </span>
     <Button variant="secondary" onclick={onclose}>Done</Button>
   {/snippet}
@@ -184,6 +198,8 @@
   .tip { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); margin: var(--sp-4) 0 0; }
   .ver { font-size: var(--fs-body); line-height: var(--lh-body); }
   .path { width: 100%; padding: 6px 10px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--border); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
+  .power-card { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); padding: var(--sp-4); }
+  .power-note { margin: 0; color: var(--text-2); font-size: var(--fs-body); line-height: var(--lh-body); }
   .status { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
   .status.saved { color: var(--ok); }
   .status.error { color: var(--danger); }
