@@ -155,11 +155,18 @@
             {:else if !model.powerAvailable}
               <p class="power-note">Shutdown is available in the desktop app on supported operating systems.</p>
             {:else}
-              <p class="power-note">You'll review the local computer and confirm separately. Your operating system may require permission.</p>
+              <p class="power-note">Shut down now or choose a delay, such as one hour. You'll review the local computer and confirm separately. Your operating system may require permission.</p>
             {/if}
             <Button variant="danger-outline" disabled={!model.powerAvailable} onclick={actions.shutdown}>{model.powerDemo ? "Simulate shutdown…" : "Shut down this computer…"}</Button>
           </div>
         </SettingsGroup>
+        {#if actions.viewSchedules}
+          <SettingsGroup title="Scheduled actions" description="Manage shutdowns and stops for local ports or agent services.">
+            <SettingRow label={model.scheduledCount ? `${model.scheduledCount} active ${model.scheduledCount === 1 ? "schedule" : "schedules"}` : "No active schedules"} description={model.powerDemo ? "Browser schedules are simulations while this page stays open." : "Keep Holdmap running and this computer awake. Quitting clears schedules."}>
+              {#snippet children()}<Button size="sm" icon="clock" onclick={actions.viewSchedules}>View scheduled actions</Button>{/snippet}
+            </SettingRow>
+          </SettingsGroup>
+        {/if}
       {:else}
         <SettingsGroup title="holdmap">
           <SettingRow label="Version" description={`Desktop app on ${model.platform}`}>{#snippet children()}<span class="mono ver">{model.version}</span>{/snippet}</SettingRow>

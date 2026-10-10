@@ -199,6 +199,26 @@ the action. Version 0.3.0 binaries predate this feature.
 
 </details>
 
+**Current source / Unreleased:** choose **Now**, **In 1 hour**, a custom delay, or **At a time**
+when reviewing a local shutdown, port stop, or an agent's service stop. **Scheduled actions**
+shows each deadline, countdown, reviewed port and cancellation result. Schedules run while
+Holdmap stays open, including in the tray; quitting clears them. Keep the computer awake.
+Missed deadlines or clock changes require a fresh review. Agent schedules stop only the
+reviewed services and ports, preserving the agent session. Version 0.4.0 downloads do not
+include scheduling yet; build current source to use it.
+
+<details>
+<summary>Scheduled shutdown, agent services and cancellation in dark and light themes</summary>
+
+![Dark scheduled shutdown](docs/screenshots/desktop-shutdown-schedule-dark.png)
+![Light scheduled shutdown](docs/screenshots/desktop-shutdown-schedule-light.png)
+![Dark scheduled agent services](docs/screenshots/desktop-agent-schedule-dark.png)
+![Light scheduled agent services](docs/screenshots/desktop-agent-schedule-light.png)
+![Dark scheduled action manager](docs/screenshots/desktop-schedules-dark.png)
+![Light scheduled action manager](docs/screenshots/desktop-schedules-light.png)
+
+</details>
+
 A tray and menu-bar app with the port list, details, the service graph (`G`), the agents map
 (`⇧A`), pins, history with one-click restart, remote hosts over SSH and a command palette (`⌘K` /
 `Ctrl+K`). `⌘⌥P` (`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. On the

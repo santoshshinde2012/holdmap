@@ -9,6 +9,8 @@
   import DetailPane from "./components/detail/DetailPane.svelte";
   import SettingsDialog from "./components/SettingsDialog.svelte";
   import ShutdownDialog from "./components/ShutdownDialog.svelte";
+  import SchedulesDialog from "./components/SchedulesDialog.svelte";
+  import { scheduleCountdown, scheduleDeadline, type ScheduledAction, type ScheduledStopRequest } from "./lib/schedules";
   import type { ShutdownPreview } from "./lib/power";
   import PinDialog from "./components/PinDialog.svelte";
   import RemoteDialog from "./components/RemoteDialog.svelte";
@@ -33,7 +35,7 @@
 
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
   type View = "list" | "graph" | "agents";
-  interface Confirm { entry: PortEntry | null; /** Reviewed plans for more ports after `entry` (Agents "Stop all"). */ queue?: { entry: PortEntry; plan: ActionPlan }[]; agentName?: string; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; restart?: boolean }
+  interface Confirm { entry: PortEntry | null; /** Reviewed plans for more ports after `entry` (Agents "Stop all"). */ queue?: { entry: PortEntry; plan: ActionPlan }[]; agentName?: string; agentId?: string; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; restart?: boolean; scheduled?: ScheduledAction; schedulingBusy?: boolean; schedulingError?: string }
 
   // Live data is replaced wholesale on every poll, so it is raw state run through `share`:
   // unchanged entries keep their identity and nothing downstream re-renders or re-fetches.
@@ -116,6 +118,15 @@
   let shutdownRequested = $state(false);
   let shutdownError = $state<string | null>(null);
   let shutdownSequence = 0;
+  let shutdownScheduled = $state.raw<ScheduledAction | null>(null);
+  let schedules = $state.raw<ScheduledAction[]>([]);
+  let showSchedules = $state(false);
+  let schedulesLoading = $state(false);
+  let schedulesError = $state<string | null>(null);
+  let schedulesSequence = 0;
+  let schedulesTrigger = $state<HTMLButtonElement | undefined>();
+  const activeSchedules = $derived(schedules.filter((s) => ["pending", "checking", "running"].includes(s.status)));
+  const nextSchedule = $derived([...activeSchedules].sort((a, b) => a.due_at_ms - b.due_at_ms)[0] ?? null);
   let settingsSection = $state<SettingsSection>("general");
   let pinDialog = $state<{ port: number | null; label: string; pinned: boolean } | null>(null);
   let showRemote = $state(false);
@@ -205,7 +216,7 @@
   // The agents map has no side pane: a port picked there opens in the drawer, as on narrow windows.
   const showDrawer = $derived((narrow || view === "agents") && drawerOpen && !!selected);
   /** Any overlay that owns the keyboard (they stop key events themselves; this is a backstop). */
-  const modalOpen = $derived(!!confirm || showHelp || showHistory || showPalette || showSettings || showShutdown || showRemote || !!pinDialog || showDrawer);
+  const modalOpen = $derived(!!confirm || showHelp || showHistory || showPalette || showSettings || showShutdown || showSchedules || showRemote || !!pinDialog || showDrawer);
   const scanMs = $derived(Math.min(60, Math.max(1, config?.scan_interval_secs ?? 3)) * 1000);
 
   /** When the scan in flight started: the header stays "Live" while one is merely running. */
@@ -369,13 +380,14 @@
       toast("info", `${a.name} has no stoppable ports`, "Its own IDE / agent listeners stay protected.");
       return;
     }
-    if (list.length === 1) return requestStop(list[0], false);
+    if (list.length === 1) return requestStop(list[0], false, false, agentId);
     try {
       const plans = await Promise.all(list.map((entry) => api.plan(stopTarget(entry), false, false)));
       const plan = plans[0];
       confirm = {
         entry: list[0],
         agentName: a.name,
+        agentId,
         queue: list.slice(1).map((entry, index) => ({ entry, plan: plans[index + 1] })),
         cluster: null,
         plan: {
@@ -436,7 +448,7 @@
   }
   const portHolder = (port: number) => { const e = snapshot?.entries.find((x) => x.port === port); return e ? `${title(e)}${e.process ? ` (PID ${e.process.pid})` : ""}` : null; };
 
-  const settingsModel = $derived<SettingsModel | null>(config ? { theme, density, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri } : null);
+  const settingsModel = $derived<SettingsModel | null>(config ? { theme, density, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length } : null);
   const settingsActions: SettingsActions = {
     setTheme: (t) => { theme = t; },
     setDensity: (d) => { density = d; },
@@ -448,6 +460,7 @@
     clearHistory: async () => { await api.clearHistory(); historyItems = []; },
     copy: (t, w) => copy(t, w),
     shutdown: openShutdown,
+    viewSchedules: openSchedules,
   };
   function openSettings(section: SettingsSection = "general") { settingsSection = section; showSettings = true; }
 
@@ -458,6 +471,7 @@
     shutdownPreview = null;
     shutdownError = null;
     shutdownRequested = false;
+    shutdownScheduled = null;
     shutdownLoading = true;
     const sequence = ++shutdownSequence;
     try {
@@ -481,7 +495,7 @@
   }
 
   async function confirmShutdown() {
-    if (!shutdownPreview || shutdownBusy || shutdownLoading || shutdownRequested) return;
+    if (!shutdownPreview || shutdownBusy || shutdownLoading || shutdownRequested || shutdownScheduled) return;
     shutdownBusy = true;
     shutdownError = null;
     try {
@@ -494,6 +508,83 @@
     } finally {
       shutdownBusy = false;
     }
+  }
+
+  async function scheduleShutdown(delaySecs: number) {
+    if (!shutdownPreview || shutdownBusy || shutdownLoading || shutdownRequested || shutdownScheduled) return;
+    shutdownBusy = true;
+    shutdownError = null;
+    try {
+      shutdownScheduled = await api.scheduleShutdown(shutdownPreview.confirmation_id, delaySecs);
+      await loadSchedules();
+    } catch (e) {
+      shutdownError = String(e);
+      shutdownPreview = null;
+    } finally {
+      shutdownBusy = false;
+    }
+  }
+
+  function acceptSchedules(items: ScheduledAction[], notify = false) {
+    if (notify) {
+      for (const item of items) {
+        const previous = schedules.find((s) => s.id === item.id);
+        if (!previous || previous.status === item.status) continue;
+        if (item.status === "needs_review" || item.status === "failed") {
+          toast("error", `${item.label}: ${item.status === "needs_review" ? "review required" : "action failed"}`, item.message ?? undefined, { label: "View schedules", run: openSchedules });
+        } else if (item.status === "completed") {
+          toast("ok", api.isTauri ? `${item.label}: complete` : "Scheduled simulation complete", item.message ?? undefined);
+          refresh();
+          if (view === "agents") loadAgents();
+        }
+      }
+    }
+    schedules = items;
+  }
+
+  async function loadSchedules(visible = false) {
+    const sequence = ++schedulesSequence;
+    if (visible) schedulesLoading = true;
+    try {
+      const items = await api.listSchedules();
+      if (sequence === schedulesSequence) {
+        acceptSchedules(items, true);
+        schedulesError = null;
+      }
+    } catch (e) {
+      if (sequence === schedulesSequence) schedulesError = String(e);
+    } finally {
+      if (sequence === schedulesSequence) schedulesLoading = false;
+    }
+  }
+
+  function openSchedules() {
+    if (shutdownBusy || confirm?.schedulingBusy || confirm?.phase === "running") return;
+    showSettings = false;
+    showShutdown = false;
+    showPalette = false;
+    showRemote = false;
+    showHistory = false;
+    showHelp = false;
+    pinDialog = null;
+    drawerOpen = false;
+    shutdownSequence++;
+    shutdownLoading = false;
+    shutdownPreview = null;
+    confirm = null;
+    showSchedules = true;
+    loadSchedules(true);
+  }
+
+  async function cancelSchedule(id: string) {
+    const cancelled = await api.cancelSchedule(id);
+    acceptSchedules(schedules.map((s) => s.id === id ? cancelled : s));
+    await loadSchedules();
+  }
+
+  function closeSchedules() {
+    showSchedules = false;
+    requestAnimationFrame(() => schedulesTrigger?.focus());
   }
 
   async function openHistory() {
@@ -595,10 +686,10 @@
     setTimeout(() => (toasts = toasts.filter((t) => t.id !== id)), kind === "error" ? 9000 : action ? 8000 : 3200);
   }
 
-  async function requestStop(entry: PortEntry, force: boolean, allowProtected = false) {
+  async function requestStop(entry: PortEntry, force: boolean, allowProtected = false, agentId?: string) {
     try {
       const plan = await api.plan(stopTarget(entry), force, allowProtected);
-      confirm = { entry, cluster: null, plan, force, allowProtected, phase: "confirm", log: [], report: null };
+      confirm = { entry, cluster: null, plan, force, allowProtected, phase: "confirm", log: [], report: null, agentId, agentName: agentId ? agentsReport?.agents.find((a) => a.id === agentId)?.name : undefined };
     } catch (e) {
       toast("error", `Couldn't plan stopping :${entry.port}`, String(e));
     }
@@ -612,7 +703,7 @@
   }
 
   async function runStop() {
-    if (!confirm || confirm.phase !== "confirm" || confirm.plan.blocked) return;
+    if (!confirm || confirm.phase !== "confirm" || confirm.plan.blocked || confirm.schedulingBusy || confirm.scheduled || confirm.schedulingError) return;
     const c = confirm;
     c.phase = "running";
     const queue = c.queue ?? [];
@@ -682,7 +773,30 @@
   }
 
   function closeConfirm() {
-    if (confirm && confirm.phase !== "running") confirm = null;
+    if (confirm && confirm.phase !== "running" && !confirm.schedulingBusy) confirm = null;
+  }
+
+  async function scheduleStop(delaySecs: number) {
+    const c = confirm;
+    if (!c?.entry || c.phase !== "confirm" || c.plan.blocked || c.force || c.allowProtected || c.restart || c.scheduled || c.schedulingBusy || c.schedulingError) return;
+    c.schedulingBusy = true;
+    try {
+      const reviewed = [{ entry: c.entry, plan: c.plan }, ...(c.queue ?? [])];
+      const requests: ScheduledStopRequest[] = reviewed.map(({ entry, plan }) => ({ target: stopTarget(entry), confirmation_id: plan.confirmation_id ?? "", force: false, allow_protected: false }));
+      c.scheduled = await api.scheduleStops(requests, delaySecs, c.agentId);
+      await loadSchedules();
+    } catch (e) {
+      c.schedulingError = String(e);
+    } finally {
+      c.schedulingBusy = false;
+    }
+  }
+
+  function reviewScheduledStop() {
+    const c = confirm;
+    if (!c || c.schedulingBusy) return;
+    if (c.agentId && c.queue?.length) requestStopAgentPorts(c.agentId);
+    else if (c.entry) requestStop(c.entry, false, false, c.agentId);
   }
 
   function selectEntry(e: PortEntry, openDrawer = true) {
@@ -780,6 +894,7 @@
     if (q) cmds.unshift({ id: "check", group: "Ports", icon: "search", title: `Check port ${q}`, subtitle: "who's using it?", keywords: `${q} why explain`, run: () => { filters.query = String(q); } });
     cmds.push(
       { id: "refresh", group: "Actions", icon: "refresh", title: "Refresh now", shortcut: ["R"], run: () => refresh(true) },
+      { id: "schedules", group: "Actions", icon: "clock", title: "Scheduled actions", subtitle: `${activeSchedules.length} active · review or cancel`, keywords: "schedule timer countdown shutdown stop port agent", run: openSchedules },
       { id: "free", group: "Actions", icon: "sparkles", title: "Find a free port near 3000", keywords: "available unused", run: () => findFree(3000) },
       { id: "free8", group: "Actions", icon: "sparkles", title: "Find a free port near 8000", keywords: "available unused", run: () => findFree(8000) },
       { id: "dev", group: "Filters", icon: "filter", title: filters.dev ? "Show all processes" : "Only dev servers", shortcut: ["D"], run: () => (filters.dev = !filters.dev) },
@@ -876,6 +991,7 @@
       toast("info", "holdmap recovered from a UI glitch", why);
     }
     refresh();
+    loadSchedules();
     api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, configDir: i.config_dir ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; });
     api.hotkeys().then((h) => (hotkeyList = h)).catch(() => {});
     api.getConfig().then((c) => (config = c)).catch(() => {});
@@ -890,8 +1006,10 @@
     mq.addEventListener("change", onMq);
     nq.addEventListener("change", onNq);
     const clock = setInterval(() => (now = Date.now()), 1000);
+    const schedulePoll = setInterval(() => { if (showSchedules || activeSchedules.length) loadSchedules(); }, 5000);
     const unlisten: Promise<() => void>[] = [
       api.onEvent<{ target: string; line: string }>("stop-progress", (p) => { if (confirm) confirm.log = [...confirm.log, p.line]; }),
+      api.onEvent<ScheduledAction[]>("schedules-changed", (items) => { schedulesSequence++; schedulesLoading = false; schedulesError = null; acceptSchedules(items, true); }),
       api.onEvent<number>("focus-port", async (port) => {
         await refresh();
         clearFilters();
@@ -927,11 +1045,13 @@
         return;
       }
       if (!confirm && Date.now() - (snapshot?.taken_at_ms ?? 0) > 1000) refresh();
+      loadSchedules();
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     return () => {
       clearInterval(clock);
+      clearInterval(schedulePoll);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
       mq.removeEventListener("change", onMq);
@@ -962,7 +1082,7 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="app" class:mac={isMac}>
+<div class="app" class:mac={isMac} class:scheduled={!!nextSchedule}>
   <header class="titlebar" data-tauri-drag-region>
     <div class="brand" data-tauri-drag-region>
       <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width="22" height="22" />
@@ -1013,6 +1133,7 @@
       <span class="tsep" aria-hidden="true"></span>
       <IconButton icon="refresh" label="Refresh" kbd="R" onclick={() => refresh(true)} class={manualRefresh ? "spinning" : ""} />
       <IconButton icon="history" label="Recently stopped" kbd="H" onclick={openHistory} />
+      <IconButton icon="clock" label={`Scheduled actions${activeSchedules.length ? ` (${activeSchedules.length} active)` : ""}`} onclick={openSchedules} bind:el={schedulesTrigger} />
       <IconButton icon="server" label="Remote host…" onclick={() => (showRemote = true)} />
       <IconButton icon={themeIcon} label="Theme: {THEME_LABEL[theme]}" kbd={["⇧", "L"]} onclick={cycleTheme} />
       <IconButton icon="sliders" label="Settings" kbd={[mod, ","]} onclick={() => openSettings()} />
@@ -1040,6 +1161,17 @@
     {/if}
   </div>
 
+  {#if nextSchedule}
+    <div class="schedule-banner" role="region" aria-label="Active scheduled actions">
+      <Icon name="clock" size={16} />
+      <div class="schedule-summary">
+        <strong>{activeSchedules.length} scheduled {activeSchedules.length === 1 ? "action" : "actions"}{!api.isTauri ? " · demo" : ""}</strong>
+        <span>{nextSchedule.label} · {nextSchedule.status === "running" ? "Running" : nextSchedule.status === "checking" ? "Checking the reviewed target" : scheduleCountdown(nextSchedule.due_at_ms, now)} · <time datetime={new Date(nextSchedule.due_at_ms).toISOString()}>{scheduleDeadline(nextSchedule.due_at_ms)}</time></span>
+      </div>
+      <Button size="sm" variant="secondary" onclick={openSchedules}>View / cancel</Button>
+    </div>
+  {/if}
+
   <main class="content" class:narrow class:wide={view === "agents"} style="--pane-w: {paneWidth}px">
     {#if view === "graph"}
       <div class="graph-wrap">
@@ -1055,7 +1187,7 @@
           <AgentsView report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced}
             onselectagent={(id) => { const a = agentsReport?.agents.find((a) => a.id === id); if (a && !agentMatches(a, agentQuery)) agentQuery = ""; selectedAgent = id; }} onentry={openEntry}
             onreveal={revealAgentFolder} oneditor={openAgentFolder}
-            onstop={(e) => requestStop(e, false)} onstopall={requestStopAgentPorts} />
+            onstop={(e, agentId) => requestStop(e, false, false, agentId)} onstopall={requestStopAgentPorts} />
         {:else}
           <div class="graph-loading" aria-busy="true">Loading agents…</div>
         {/if}
@@ -1161,19 +1293,26 @@
 {/if}
 {#if confirm}
   <ConfirmDialog entry={confirm.entry} cluster={confirm.cluster} plan={confirm.plan} portCount={(confirm.queue?.length ?? 0) + 1} agentName={confirm.agentName} restart={!!confirm.restart} phase={confirm.phase} log={confirm.log} report={confirm.report}
+    onschedule={confirm.entry && !confirm.force && !confirm.allowProtected && !confirm.restart ? scheduleStop : undefined} schedulingBusy={!!confirm.schedulingBusy} schedulingError={confirm.schedulingError ?? null} scheduled={confirm.scheduled ?? null} onviewschedules={openSchedules} onreview={reviewScheduledStop} demo={!api.isTauri}
     onconfirm={runStop} oncancel={closeConfirm} onoverride={() => confirm?.entry && requestStop(confirm.entry, confirm.force, true)} />
 {/if}
 {#if showPalette}<CommandPalette {commands} onclose={() => { showPalette = false; }} />{/if}
 {#if showHistory}<HistoryPanel items={historyItems} onrestart={restartEntry} oncopy={copy} onclose={() => (showHistory = false)} onclear={async () => { await api.clearHistory(); historyItems = []; }} />{/if}
 {#if showHelp}<ShortcutsDialog {mod} onclose={() => (showHelp = false)} />{/if}
 {#if showSettings && settingsModel}<SettingsDialog model={settingsModel} actions={settingsActions} bind:section={settingsSection} onclose={() => (showSettings = false)} />{/if}
-{#if showShutdown}<ShutdownDialog preview={shutdownPreview} loading={shutdownLoading} busy={shutdownBusy} requested={shutdownRequested} error={shutdownError} demo={!api.isTauri} onconfirm={confirmShutdown} onclose={closeShutdown} onretry={openShutdown} />{/if}
+{#if showShutdown}<ShutdownDialog preview={shutdownPreview} loading={shutdownLoading} busy={shutdownBusy} requested={shutdownRequested} error={shutdownError} demo={!api.isTauri} onconfirm={confirmShutdown} onclose={closeShutdown} onretry={openShutdown} onschedule={scheduleShutdown} scheduled={shutdownScheduled} onviewschedules={openSchedules} />{/if}
+{#if showSchedules}<SchedulesDialog {schedules} loading={schedulesLoading} error={schedulesError} demo={!api.isTauri} onclose={closeSchedules} onrefresh={() => loadSchedules(true)} oncancel={cancelSchedule} />{/if}
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
 {#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />
 
 <style>
   .app { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100vh; }
+  .app.scheduled { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+  .schedule-banner { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-5); background: var(--accent-soft); border-bottom: 1px solid var(--border); color: var(--accent); }
+  .schedule-summary { display: grid; gap: 3px; flex: 1; min-width: 0; font-size: var(--fs-body-sm); }
+  .schedule-summary span { color: var(--text-2); overflow-wrap: anywhere; }
+  @media (max-width: 560px) { .schedule-banner { padding: var(--sp-2) var(--sp-3); gap: var(--sp-2); } }
   .titlebar { display: flex; align-items: center; gap: var(--sp-4); height: 52px; padding: 0 var(--sp-3) 0 var(--sp-4); background: var(--surface); border-bottom: 1px solid var(--border); }
   .app.mac .titlebar { padding-left: 84px; }
   .brand { display: flex; align-items: center; gap: var(--sp-2); flex: none; }

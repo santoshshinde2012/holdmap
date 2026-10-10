@@ -112,6 +112,37 @@ async function boundedClip(page, locator, { height, padding = 0 } = {}) {
 }
 
 const captures = [
+  ...["dark", "light"].map((theme) => ({ name: `desktop-shutdown-schedule-${theme}.png`, theme, async prepare(page) {
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("tab", { name: "Power", exact: true }).click();
+    await page.getByRole("button", { name: "Simulate shutdown…", exact: true }).click();
+    const dialog = page.getByRole("alertdialog", { name: "Simulate computer shutdown?" });
+    await dialog.getByRole("combobox", { name: "When", exact: true }).click();
+    await page.getByRole("option", { name: "In 1 hour", exact: true }).click();
+    await dialog.getByRole("checkbox").check();
+    return dialog;
+  } })),
+  ...["dark", "light"].map((theme) => ({ name: `desktop-schedules-${theme}.png`, theme, async prepare(page) {
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("tab", { name: "Power", exact: true }).click();
+    await page.getByRole("button", { name: "Simulate shutdown…", exact: true }).click();
+    const dialog = page.getByRole("alertdialog", { name: "Simulate computer shutdown?" });
+    await dialog.getByRole("combobox", { name: "When", exact: true }).click();
+    await page.getByRole("option", { name: "In 1 hour", exact: true }).click();
+    await dialog.getByRole("checkbox").check();
+    await dialog.getByRole("button", { name: "Schedule simulation", exact: true }).click();
+    await dialog.getByRole("button", { name: /View scheduled actions/ }).click();
+    return page.getByRole("dialog", { name: "Scheduled actions", exact: true });
+  } })),
+  ...["dark", "light"].map((theme) => ({ name: `desktop-agent-schedule-${theme}.png`, theme, async prepare(page) {
+    await openAgents(page);
+    await heading(page, "Cursor").click();
+    await card(page, "Cursor").getByRole("button", { name: "Stop all (2)", exact: true }).click();
+    const dialog = page.getByRole("alertdialog");
+    await dialog.getByRole("combobox", { name: "When", exact: true }).click();
+    await page.getByRole("option", { name: "In 1 hour", exact: true }).click();
+    return dialog;
+  } })),
   ...["dark", "light"].map((theme) => ({ name: `desktop-shutdown-${theme}.png`, theme, async prepare(page) {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("tab", { name: "Power", exact: true }).click();

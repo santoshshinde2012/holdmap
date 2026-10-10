@@ -33,7 +33,7 @@ pub struct ShutdownRequested {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct CommandSpec {
+pub(crate) struct CommandSpec {
     executable: PathBuf,
     args: &'static [&'static str],
 }
@@ -50,9 +50,10 @@ struct Confirmations {
     pending: VecDeque<Pending>,
     in_flight: bool,
     requested: bool,
+    scheduled_id: Option<String>,
 }
 
-enum RequestFailure {
+pub(crate) enum RequestFailure {
     Refused(String),
     OutcomeUnknown,
 }
@@ -71,7 +72,7 @@ impl PowerState {
         now: Instant,
     ) -> Result<ShutdownPreview, String> {
         let mut state = self.confirmations.lock().unwrap_or_else(|e| e.into_inner());
-        if state.in_flight || state.requested {
+        if state.in_flight || state.requested || state.scheduled_id.is_some() {
             return Err("A shutdown request is already in progress.".into());
         }
         state
@@ -107,7 +108,7 @@ impl PowerState {
     ) -> Result<ShutdownRequested, String> {
         let command = {
             let mut state = self.confirmations.lock().unwrap_or_else(|e| e.into_inner());
-            if state.in_flight || state.requested {
+            if state.in_flight || state.requested || state.scheduled_id.is_some() {
                 return Err("A shutdown request is already in progress.".into());
             }
             state
@@ -124,7 +125,14 @@ impl PowerState {
             state.in_flight = true;
             pending.command
         };
-        let result = execute(&command);
+        self.finish_request(execute(&command))
+    }
+
+    /// Immediate and scheduled requests share the same accepted/unknown retry latch.
+    fn finish_request(
+        &self,
+        result: Result<(), RequestFailure>,
+    ) -> Result<ShutdownRequested, String> {
         let mut state = self.confirmations.lock().unwrap_or_else(|e| e.into_inner());
         state.in_flight = false;
         match result {
@@ -143,6 +151,66 @@ impl PowerState {
     }
 }
 
+/// A fixed, locally reviewed command retained by the native scheduler only.
+#[derive(Clone)]
+pub(crate) struct ScheduledShutdown {
+    id: String,
+    command: CommandSpec,
+}
+
+impl PowerState {
+    pub(crate) fn reserve(&self, id: &str, now: Instant) -> Result<ScheduledShutdown, String> {
+        let mut state = self.confirmations.lock().unwrap_or_else(|e| e.into_inner());
+        if state.in_flight || state.requested || state.scheduled_id.is_some() {
+            return Err("A shutdown request or schedule is already in progress.".into());
+        }
+        state
+            .pending
+            .retain(|p| now.saturating_duration_since(p.at) < LIFETIME);
+        let index = state
+            .pending
+            .iter()
+            .position(|p| p.id == id)
+            .ok_or(REVIEW_AGAIN)?;
+        let pending = state.pending.remove(index).ok_or(REVIEW_AGAIN)?;
+        state.pending.clear();
+        state.scheduled_id = Some(pending.id.clone());
+        Ok(ScheduledShutdown {
+            id: pending.id,
+            command: pending.command,
+        })
+    }
+
+    pub(crate) fn release(&self, reserved: &ScheduledShutdown) {
+        let mut state = self.confirmations.lock().unwrap_or_else(|e| e.into_inner());
+        if state.scheduled_id.as_deref() == Some(&reserved.id) {
+            state.scheduled_id = None;
+        }
+    }
+
+    pub(crate) fn request_reserved(
+        &self,
+        reserved: &ScheduledShutdown,
+        execute: impl FnOnce(&CommandSpec) -> Result<(), RequestFailure>,
+    ) -> Result<ShutdownRequested, String> {
+        {
+            let mut state = self.confirmations.lock().unwrap_or_else(|e| e.into_inner());
+            if state.in_flight
+                || state.requested
+                || state.scheduled_id.as_deref() != Some(&reserved.id)
+            {
+                return Err(
+                    "The shutdown schedule is no longer authorized. Review shutdown again.".into(),
+                );
+            }
+            state.scheduled_id = None;
+            state.pending.clear();
+            state.in_flight = true;
+        }
+        self.finish_request(execute(&reserved.command))
+    }
+}
+
 fn trusted_origin(label: &str, url: &tauri::Url, dev_url: Option<&tauri::Url>) -> bool {
     if label != "main" || !url.username().is_empty() || url.password().is_some() {
         return false;
@@ -154,7 +222,7 @@ fn trusted_origin(label: &str, url: &tauri::Url, dev_url: Option<&tauri::Url>) -
     packaged || dev_url.is_some_and(|dev| dev.origin() == url.origin())
 }
 
-fn authorize(window: &WebviewWindow) -> Result<(), String> {
+pub(crate) fn authorize(window: &WebviewWindow) -> Result<(), String> {
     let url = window
         .url()
         .map_err(|_| "Couldn't verify the local app window.")?;
@@ -290,7 +358,7 @@ fn system_process(spec: &CommandSpec) -> Command {
     command
 }
 
-fn execute_system(spec: &CommandSpec) -> Result<(), RequestFailure> {
+pub(crate) fn execute_system(spec: &CommandSpec) -> Result<(), RequestFailure> {
     let mut child = system_process(spec).stderr(Stdio::piped()).spawn().map_err(|error| {
         RequestFailure::Refused(match error.kind() {
             std::io::ErrorKind::PermissionDenied => "The operating system denied permission to shut down. Check your system permissions and review shutdown again.".into(),
@@ -492,6 +560,130 @@ mod tests {
             .is_err());
         finish_tx.send(()).unwrap();
         assert!(worker.join().unwrap().unwrap().requested);
+    }
+
+    #[test]
+    fn scheduled_shutdown_consumes_preview_excludes_immediate_and_releases_on_cancel() {
+        let state = PowerState::default();
+        let now = Instant::now();
+        let first = preview(&state, now);
+        let second = preview(&state, now);
+        let reserved = state.reserve(&first.confirmation_id, now).unwrap();
+        assert!(state.reserve(&first.confirmation_id, now).is_err());
+        assert!(state.reserve(&second.confirmation_id, now).is_err());
+        assert!(state
+            .request(&second.confirmation_id, now, |_| panic!(
+                "immediate raced schedule"
+            ))
+            .is_err());
+        assert!(state
+            .preview(fixture(), "fixture", "local".into(), now)
+            .is_err());
+        state.release(&reserved);
+        assert!(state
+            .request_reserved(&reserved, |_| panic!("cancelled schedule executed"))
+            .is_err());
+        assert!(state.reserve(&first.confirmation_id, now).is_err());
+        let fresh = preview(&state, now);
+        assert!(state
+            .request(&fresh.confirmation_id, now, |_| Ok(()))
+            .is_ok());
+    }
+
+    #[test]
+    fn retained_shutdown_survives_preview_expiry_and_preserves_retry_latch() {
+        let state = PowerState::default();
+        let now = Instant::now();
+        let first = preview(&state, now);
+        let reserved = state.reserve(&first.confirmation_id, now).unwrap();
+        assert!(state
+            .request_reserved(&reserved, |spec| {
+                assert_eq!(spec, &fixture());
+                Ok(())
+            })
+            .is_ok());
+        assert!(state
+            .request_reserved(&reserved, |_| panic!("schedule replay executed"))
+            .is_err());
+        state.release(&reserved);
+        assert!(state
+            .preview(
+                fixture(),
+                "fixture",
+                "local".into(),
+                now + Duration::from_secs(3600)
+            )
+            .is_err());
+
+        let state = PowerState::default();
+        let first = preview(&state, now);
+        let reserved = state.reserve(&first.confirmation_id, now).unwrap();
+        assert!(state
+            .request_reserved(&reserved, |_| Err(RequestFailure::OutcomeUnknown))
+            .is_err());
+        assert!(state
+            .preview(fixture(), "fixture", "local".into(), now)
+            .is_err());
+        assert!(state
+            .request_reserved(&reserved, |_| panic!("unknown outcome retried"))
+            .is_err());
+    }
+
+    #[test]
+    fn expired_or_refused_schedule_requires_fresh_power_review() {
+        let state = PowerState::default();
+        let now = Instant::now();
+        let first = preview(&state, now);
+        assert!(state
+            .reserve(&first.confirmation_id, now + LIFETIME)
+            .is_err());
+        let fresh = preview(&state, now);
+        let reserved = state.reserve(&fresh.confirmation_id, now).unwrap();
+        assert_eq!(
+            state
+                .request_reserved(&reserved, |_| Err(RequestFailure::Refused(
+                    "fixture denied".into()
+                )))
+                .unwrap_err(),
+            "fixture denied"
+        );
+        assert!(state
+            .request_reserved(&reserved, |_| panic!("refused schedule replayed"))
+            .is_err());
+        assert!(state
+            .preview(fixture(), "fixture", "local".into(), now)
+            .is_ok());
+    }
+
+    #[test]
+    fn simultaneous_immediate_and_scheduled_authorization_have_one_winner() {
+        let state = std::sync::Arc::new(PowerState::default());
+        let now = Instant::now();
+        let immediate = preview(&state, now).confirmation_id;
+        let scheduled = preview(&state, now).confirmation_id;
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+        let immediate_state = state.clone();
+        let immediate_barrier = barrier.clone();
+        let request = std::thread::spawn(move || {
+            immediate_barrier.wait();
+            immediate_state.request(&immediate, now, |_| Ok(()))
+        });
+        let scheduled_state = state.clone();
+        let scheduled_barrier = barrier.clone();
+        let reserve = std::thread::spawn(move || {
+            scheduled_barrier.wait();
+            scheduled_state.reserve(&scheduled, now)
+        });
+        barrier.wait();
+        let immediate_won = request.join().unwrap().is_ok();
+        let reserved = reserve.join().unwrap();
+        assert_ne!(immediate_won, reserved.is_ok());
+        if let Ok(reserved) = reserved {
+            state.release(&reserved);
+            assert!(state
+                .request_reserved(&reserved, |_| panic!("cancelled race winner executed"))
+                .is_err());
+        }
     }
 
     #[test]

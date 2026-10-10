@@ -1,6 +1,7 @@
 import type { ActionPlan, AgentsReport, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
 import { version as pkgVersion } from "../../package.json";
 import type { ShutdownPreview } from "./power";
+import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
 import { MOCK_SNAPSHOT, mockAgents, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
 /** True inside the Tauri webview; false in a plain browser (`npm run dev`), where mocks are used. */
@@ -15,6 +16,21 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let demoPowerSequence = 0;
 const demoPowerPreviews = new Map<string, number>();
+const demoStopPreviews = new Map<string, { expires: number; target: string; force: boolean; allowProtected: boolean; blocked: boolean }>();
+let demoStopSequence = 0;
+const demoSchedules = new DemoSchedules();
+let demoScheduleTimer: ReturnType<typeof setInterval> | null = null;
+
+function watchDemoSchedules() {
+  if (demoScheduleTimer) return;
+  demoScheduleTimer = setInterval(() => {
+    demoSchedules.tick();
+    if (!activeScheduleCount(demoSchedules.list())) {
+      clearInterval(demoScheduleTimer!);
+      demoScheduleTimer = null;
+    }
+  }, 1000);
+}
 
 /** Review shutdown of the local desktop host. Browser mode only simulates this flow. */
 export async function shutdownPreview(): Promise<ShutdownPreview> {
@@ -34,6 +50,48 @@ export async function shutdownMachine(confirmationId: string): Promise<{ request
   // Sample mode never imports or invokes a native power command.
   await delay(250);
   return { requested: true };
+}
+
+/** Schedules are owned by the local desktop session; browser mode only simulates them. */
+export async function scheduleShutdown(confirmationId: string, delaySecs: number): Promise<ScheduledAction> {
+  validateScheduleDelay(delaySecs);
+  if (!confirmationId?.trim()) throw new Error("Review shutdown before scheduling.");
+  if (isTauri) return call("schedule_shutdown", { confirmationId, delaySecs });
+  const expires = demoPowerPreviews.get(confirmationId);
+  if (!expires || Date.now() >= expires) throw new Error("Shutdown confirmation expired or was already used. Review again.");
+  const action = demoSchedules.create("shutdown", "Shut down Demo computer", [], delaySecs);
+  demoPowerPreviews.delete(confirmationId);
+  watchDemoSchedules();
+  return action;
+}
+
+export async function scheduleStops(requests: ScheduledStopRequest[], delaySecs: number, agentId?: string): Promise<ScheduledAction> {
+  validateScheduleDelay(delaySecs);
+  validateScheduledStops(requests);
+  if (isTauri) return call("schedule_stops", { requests, delaySecs, agentId: agentId ?? null });
+  for (const request of requests) {
+    const preview = demoStopPreviews.get(request.confirmation_id);
+    if (!preview || Date.now() >= preview.expires || preview.target !== request.target || preview.force !== request.force || preview.allowProtected !== request.allow_protected || preview.blocked) {
+      throw new Error("A reviewed stop plan expired, changed or was already used. Review every port again.");
+    }
+  }
+  const targets = requests.map((request) => request.target);
+  const action = demoSchedules.create(agentId ? "agent" : "port", agentId ? `Stop agent services (${targets.length} ${targets.length === 1 ? "port" : "ports"})` : `Stop :${targets[0]}`, targets, delaySecs);
+  for (const request of requests) demoStopPreviews.delete(request.confirmation_id);
+  watchDemoSchedules();
+  return action;
+}
+
+export async function listSchedules(): Promise<ScheduledAction[]> {
+  if (isTauri) return call("list_schedules");
+  demoSchedules.tick();
+  return demoSchedules.list();
+}
+
+export async function cancelSchedule(id: string): Promise<ScheduledAction> {
+  if (!id?.trim()) throw new Error("Choose a scheduled action to cancel.");
+  if (isTauri) return call("cancel_schedule", { id });
+  return demoSchedules.cancel(id);
 }
 
 export async function appInfo(): Promise<AppInfo> {
@@ -62,12 +120,27 @@ export async function http(port: number): Promise<HttpInfo | null> {
 }
 
 export async function plan(target: string, force: boolean, allowProtected = false): Promise<ActionPlan> {
-  if (!isTauri) return mockPlan(target, force, allowProtected);
+  if (!isTauri) {
+    const reviewed = mockPlan(target, force, allowProtected);
+    const confirmation_id = `demo-stop-${++demoStopSequence}`;
+    for (const [id, preview] of demoStopPreviews) if (Date.now() >= preview.expires) demoStopPreviews.delete(id);
+    // A bounded, short-lived preview registry is independent of the simulated action list.
+    if (demoStopPreviews.size >= 256) demoStopPreviews.delete(demoStopPreviews.keys().next().value!);
+    demoStopPreviews.set(confirmation_id, { expires: Date.now() + 300_000, target, force, allowProtected, blocked: !!reviewed.blocked });
+    return { ...reviewed, confirmation_id };
+  }
   return call("plan", { target, force, allowProtected });
 }
 
 export async function stop(target: string, force: boolean, allowProtected = false, confirmationId?: string): Promise<StopReport> {
   if (!isTauri) {
+    if (confirmationId) {
+      const reviewed = demoStopPreviews.get(confirmationId);
+      if (!reviewed || Date.now() >= reviewed.expires || reviewed.target !== target || reviewed.force !== force || reviewed.allowProtected !== allowProtected || reviewed.blocked) {
+        throw new Error("The reviewed stop plan expired, changed or was already used. Review again.");
+      }
+      demoStopPreviews.delete(confirmationId);
+    }
     await delay(700);
     // Browser preview: remember the stop so the "Recently stopped" panel has something to show.
     const e = MOCK_SNAPSHOT.entries.find((x) => x.port === parseInt(target, 10));
@@ -143,7 +216,7 @@ export async function installUpdate(): Promise<void> {
 }
 
 export async function onEvent<T>(name: string, cb: (payload: T) => void): Promise<() => void> {
-  if (!isTauri) return () => {};
+  if (!isTauri) return name === "schedules-changed" ? demoSchedules.subscribe((actions) => cb(actions as T)) : () => {};
   const { listen } = await import("@tauri-apps/api/event");
   return listen<T>(name, (e) => cb(e.payload));
 }

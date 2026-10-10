@@ -49,7 +49,11 @@ fn stop_options(force: bool, allow_protected: bool) -> StopOptions {
 
 /// Desktop rows distinguish TCP and UDP listeners. A protocol suffix must never fall
 /// through to a process-name target (a process can itself be named `5353/udp`).
-fn stop_request(target: &str, force: bool, allow_protected: bool) -> (Target, StopOptions) {
+pub(crate) fn stop_request(
+    target: &str,
+    force: bool,
+    allow_protected: bool,
+) -> (Target, StopOptions) {
     let mut opts = stop_options(force, allow_protected);
     if let Some((port, protocol)) = target.trim().split_once('/') {
         let protocol = match protocol {

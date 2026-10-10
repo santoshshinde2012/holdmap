@@ -8,6 +8,14 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- Desktop scheduling for local shutdown, individual ports and an agent's reviewed services,
+  with presets, custom delays, local date/time selection, countdowns and confirmed cancellation.
+  A native queue keeps schedules active in the tray while the app runs; quitting clears them.
+  Delayed actions retain reviewed identities, reject changed targets and require fresh review
+  after missed deadlines or significant clock changes. Browser schedules are simulations.
+
 ### Security
 
 - Desktop release publishing uses the verified installer manifest for builds without a signed

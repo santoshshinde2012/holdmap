@@ -60,6 +60,79 @@ flowchart LR
 
 </details>
 
+## Scheduled local actions (current source)
+
+The scheduler is a desktop application service with separate queue/timing policy, stop
+validation, IPC adapters and a worker. The native queue owns original reviewed plans and
+fixed Power authorizations; the Svelte timing and manager components only present and request
+changes. Clocks and executors are injected in tests. The public browser API reports simulated
+statuses without operating-system access. CLI and MCP process operations remain immediate.
+
+![Scheduled local actions and retained authorization](diagrams/scheduled-actions.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
+flowchart LR
+  accTitle: Scheduled local actions and retained authorization
+  accDescr: The local desktop consumes reviewed handles into a bounded native queue. Cancellation remains available before atomic dispatch. Clock and target checks precede retained stop plans or a fixed local shutdown request. Browser mode simulates status only.
+  UI["Desktop timing controls<br/>Delay or local date/time"] --> CLAIM["Trusted IPC adapter<br/>Consume one-use preview"]
+  CLAIM --> Q["Native session queue<br/>32 active · 64 finished<br/>Reviewed intent + deadline"]
+  Q --> CANCEL["Cancel before dispatch<br/>Release power reservation"]
+  Q --> CLOCK["Independent worker<br/>Wall + monotonic clocks<br/>Missed time requires review"]
+  CLOCK --> VERIFY["Fresh authorization<br/>Exact plans + process identities<br/>Agent ownership + protection"]
+  VERIFY --> GATE["Atomic dispatch gate<br/>Cancellation ends here"]
+  GATE --> STOP["Core executor<br/>Retained stop plan<br/>History + verified result"]
+  GATE --> POWER["Power adapter<br/>Fixed local OS request<br/>Permission + inhibitor checks"]
+  UI -.-> DEMO["Browser simulation<br/>No OS or process access"]
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  classDef web fill:#F1F5F9,stroke:#64748B,color:#0F172A,stroke-width:1.5px
+  class UI,CLAIM surface
+  class Q,CLOCK domain
+  class VERIFY,GATE,POWER safety
+  class STOP,CANCEL data
+  class DEMO web
+```
+
+</details>
+
+- Creation consumes expiring preview handles, validates the entire batch, and pins agent root
+  identity and reviewed protocol-specific listeners. Delayed force/protection overrides and
+  unguarded supervisor commands and network container runtimes are refused. Process and
+  supervisor effects require current-account ownership at creation and dispatch.
+- The worker validates clock continuity and every fresh plan before dispatching the retained
+  effects. Cancellation can win during checking, until the atomic transition to running.
+- Only one shutdown reservation can exist. Cancellation or preflight refusal releases it;
+  accepted or uncertain OS requests preserve the Power retry latch.
+- Delays are one minute through 24 hours, with 32 active jobs and 64 terminal records. The
+  in-memory queue is cleared on full app quit. Missed times over 60 seconds or clock divergence
+  over 30 seconds require review. Jobs never retry automatically.
+
 holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop app and MCP
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
 coordinate collection and confirmation, and present the returned types.

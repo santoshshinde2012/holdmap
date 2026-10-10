@@ -5,6 +5,7 @@
 //!
 //! - [`commands`]: async Tauri adapters with target and folder authorization checks
 //! - [`confirmation`]: bounded one-use handles for the exact reviewed stop plans
+//! - [`scheduler`]: native timing, retained authority, and cancellation for delayed actions
 //! - [`tray`]: the tray / menu-bar icon listing running dev servers
 //! - [`watch`]: background re-scan → `port-events` + desktop notifications
 //! - [`shortcuts`]: global show-window shortcut and launch at login
@@ -14,6 +15,7 @@
 mod commands;
 mod confirmation;
 mod power;
+mod scheduler;
 mod shortcuts;
 mod state;
 mod tray;
@@ -46,6 +48,7 @@ pub fn run() {
     builder
         .manage(AppState::default())
         .manage(power::PowerState::default())
+        .manage(scheduler::SchedulerState::default())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::scan,
@@ -78,6 +81,10 @@ pub fn run() {
             commands::remote_scan,
             power::shutdown_preview,
             power::shutdown_machine,
+            scheduler::schedule_shutdown,
+            scheduler::schedule_stops,
+            scheduler::list_schedules,
+            scheduler::cancel_schedule,
             update::install_update,
         ])
         .setup(move |app| {
@@ -103,6 +110,7 @@ pub fn run() {
                 }
             }
             update::spawn_check(handle.clone());
+            scheduler::spawn(handle.clone());
             watch::spawn(handle);
             Ok(())
         })

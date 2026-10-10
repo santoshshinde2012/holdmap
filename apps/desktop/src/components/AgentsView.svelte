@@ -45,7 +45,7 @@
     onentry: (e: PortEntry) => void;
     onreveal: (agentId: string, path: string) => void;
     oneditor: (agentId: string, path: string) => void;
-    onstop: (e: PortEntry) => void;
+    onstop: (e: PortEntry, agentId: string) => void;
     onstopall: (agentId: string) => void;
   } = $props();
 
@@ -149,7 +149,7 @@
         {#each visibleAgents as a (a.id)}
           <AgentCard agent={a} {report} {entries} color={graph ? agentColor(graph, a.id, agentIds) : "var(--accent)"} selected={a.id === selectedAgent} onselect={() => { picked = null; onselectagent(a.id === selectedAgent ? null : a.id); }} onnavigate={(id) => { picked = null; onselectagent(id); }}
             {onentry} onreveal={(path) => onreveal(a.id, path)} oneditor={(path) => oneditor(a.id, path)}
-            {onstop} onstopall={() => onstopall(a.id)} now={report.taken_at_ms || Date.now()} />
+            onstop={(entry) => onstop(entry, a.id)} onstopall={() => onstopall(a.id)} now={report.taken_at_ms || Date.now()} />
         {:else}
           <div class="no-matches"><Icon name="search" size={20} /><p>No agents match this search</p><span>Search by name, tool, folder, port or process ID.</span></div>
         {/each}
