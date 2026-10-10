@@ -310,7 +310,33 @@ holdmap stops processes, so one set of rules in `holdmap-core` applies to every 
 backend and MCP adapter coordinate requests and present its types. The website builds the same
 Svelte UI in browser mode, using sample data through the UI's API boundary.
 
+![Holdmap system architecture](docs/diagrams/system-architecture.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
 ```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
 flowchart TB
   accTitle: Holdmap system architecture
   accDescr: The CLI, MCP server and desktop share a Rust core. A separate website demo uses sample data. Only the native executor performs reviewed OS actions.
@@ -348,10 +374,10 @@ flowchart TB
   EXEC -->|authorized actions| OS
   CLI & DESKTOP --> STORE
 
-  style CLIENTS fill:transparent,stroke:#94A3B8,stroke-width:1px
-  style CORE fill:transparent,stroke:#94A3B8,stroke-width:1px
-  style LOCAL fill:transparent,stroke:#94A3B8,stroke-width:1px
-  style PUBLIC fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style CLIENTS fill:#ffffff,stroke:#94A3B8,stroke-width:1px
+  style CORE fill:#ffffff,stroke:#94A3B8,stroke-width:1px
+  style LOCAL fill:#ffffff,stroke:#94A3B8,stroke-width:1px
+  style PUBLIC fill:#ffffff,stroke:#94A3B8,stroke-width:1px
 
   classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
   classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
@@ -364,6 +390,8 @@ flowchart TB
   class SCAN,OS,STORE data
   class SITE,DEMO web
 ```
+
+</details>
 
 Blue groups interfaces, violet shows domain logic, amber marks action safeguards, teal marks
 collection and state, and slate identifies the public website. Labels and boundaries carry the
