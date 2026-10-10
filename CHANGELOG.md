@@ -64,9 +64,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Security
 
-- The Linux GTK3 dependency uses a verified GLib 0.18.5 backport of upstream's two-line
-  `VariantStrIter` soundness fix (RUSTSEC-2024-0429). The original version and license remain;
-  source/lockfile verification and an optimized Linux regression cover the local override.
+- The Linux GTK3 dependency uses verified GLib 0.18.5 backports of upstream's
+  `VariantStrIter` soundness fix (RUSTSEC-2024-0429) and boxed-inline slice allocation fix
+  (upstream issue #2040), plus a separate local zero-initialization fix for `Value` slice
+  copies. The original version and license remain; source/lockfile verification and optimized
+  Linux regressions cover the local override.
   Cargo-deny now checks transitive soundness advisories, with no advisory ignores.
 
 - Desktop stops retain the exact reviewed plan behind a one-use confirmation handle, with a

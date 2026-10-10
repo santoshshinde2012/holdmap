@@ -110,18 +110,19 @@ security settings; those settings are separate from the committed update configu
 
 ## Vendored security fixes
 
-The Linux desktop currently uses a narrow [GLib 0.18.5 security backport](vendor/README.md).
-Its upstream snapshot, version and license are preserved; only the two audited iterator lines
-change. Run `python3 scripts/verify-vendored-glib.py` after dependency changes. It requires
+The Linux desktop currently uses narrow [GLib 0.18.5 security backports](vendor/README.md).
+Its upstream snapshot, version and license are preserved; only the audited iterator and
+boxed-inline allocation fixes plus a separate local zero-initialization fix change source
+files. Run `python3 scripts/verify-vendored-glib.py` after dependency changes. It requires
 Python 3.11+ and Cargo, and resolves locked metadata without compiling GTK. CI also runs the
 actual resolved dependency with optimization on Linux:
 
 ```sh
-cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
+G_DEBUG=fatal-warnings MALLOC_PERTURB_=165 cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
 ```
 
 Cargo-deny's `unsound = "all"` includes transitive registry dependencies, but local path
-packages need the source verifier and runtime regression. Do not add advisory ignores or
+packages need the source verifier and runtime regressions. Do not add advisory ignores or
 relabel the backport as a fixed upstream version. Keep `vendor/glib/` outside the first-party
 workspace and preserve upstream filenames. Remove the override and its verification together
 when the GTK binding family supports a compatible fixed upstream release.

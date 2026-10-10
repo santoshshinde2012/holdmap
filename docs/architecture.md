@@ -12,22 +12,72 @@ additions.
 
 ```mermaid
 flowchart TB
-  CLI["CLI, TUI and shell hook"] --> ENGINE["holdmap-core Engine"]
-  MCP["MCP transport and validated tools"] --> ENGINE
-  MCP --> CONTEXT["Pure guide resource and workflow prompts"]
-  UI["Shared Svelte UI"] --> API["api.ts"]
-  API --> NATIVE["Tauri commands, freshness and confirmation caches"]
-  NATIVE --> ENGINE
-  SITE["Astro website and guides"] --> DEMO["Browser demo build"]
-  DEMO --> UI
-  API -. "browser mode" .-> MOCK["Sample data"]
-  ENGINE --> SCAN["Scanner and injected providers"]
-  SCAN --> OS["OS sockets, processes and container runtimes"]
-  ENGINE --> AGENTS["AgentsBuilder: ownership, folders, network, tools and access"]
-  ENGINE --> GRAPH["Topology and cluster registries"]
-  ENGINE --> PLAN["ProtectionPolicy and StopStrategy registry"]
-  PLAN --> EXEC["Executor: identity checks, graceful stop and verification"]
+  accTitle: Holdmap components and authority boundaries
+  accDescr: Native interfaces call the shared core through application adapters. The public website uses a sample-data API. Collection, visibility, planning and execution have separate responsibilities.
+
+  subgraph INTERFACES["Presentation"]
+    CLI["CLI / TUI<br/>Commands + shell hook"]
+    MCP["MCP client<br/>JSON-RPC over stdio"]
+    UI["Shared Svelte UI<br/>Desktop + browser views"]
+    SITE["Astro website<br/>Guides + embedded demo"]
+  end
+
+  subgraph ADAPTERS["Application adapters"]
+    CLI_APP["CLI orchestration<br/>Plan, confirmation + rendering"]
+    MCP_APP["MCP server<br/>Schemas, tools + session previews"]
+    NATIVE["Tauri backend<br/>Commands, fresh scans + previews"]
+    API["api.ts<br/>Native IPC or sample data"]
+    CONTEXT["MCP discovery<br/>Guide resource + prompts"]
+    MOCK["Browser API<br/>Deterministic sample data"]
+  end
+
+  subgraph DOMAIN["holdmap-core · domain + policies"]
+    SCAN["Scanner<br/>Socket, process + container providers"]
+    ENGINE["Engine<br/>Consistent Scan + ownership"]
+    AGENTS["AgentsBuilder<br/>Folders, network, tools + access evidence"]
+    GRAPH["TopologyBuilder<br/>Clusters + service relationships"]
+    PLAN["ProtectionPolicy + StopStrategy<br/>Original reviewed ActionPlan"]
+    EXEC["Executor<br/>Identity, protection + effect verification"]
+    ENGINE --> SCAN & AGENTS & GRAPH & PLAN
+    PLAN --> EXEC
+  end
+
+  subgraph HOST["Host resources"]
+    OS["Operating system + runtimes<br/>Sockets, processes + service managers"]
+    STORE[("Private local state<br/>Config, pins + restart history")]
+  end
+
+  CLI --> CLI_APP
+  MCP --> MCP_APP --> CONTEXT
+  SITE --> UI --> API
+  API -->|native mode| NATIVE
+  API -.->|browser mode| MOCK
+  CLI_APP & MCP_APP & NATIVE --> ENGINE
+  SCAN -->|reads metadata| OS
+  EXEC -->|authorized actions| OS
+  CLI_APP & NATIVE --> STORE
+
+  style INTERFACES fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style ADAPTERS fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style DOMAIN fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style HOST fill:transparent,stroke:#94A3B8,stroke-width:1px
+
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  classDef web fill:#F1F5F9,stroke:#64748B,color:#0F172A,stroke-width:1.5px
+  class CLI,MCP,UI,CLI_APP,MCP_APP,NATIVE,API surface
+  class ENGINE,AGENTS,GRAPH,CONTEXT domain
+  class PLAN,EXEC safety
+  class SCAN,OS,STORE data
+  class SITE,MOCK web
 ```
+
+All component diagrams use the same palette: blue for interfaces and adapters, violet for
+domain logic, amber for action safeguards, teal for collection and state, and slate for
+browser-only website components. Named boundaries and arrow labels make the meaning readable
+without relying on color.
 
 The website builds the same desktop UI for browser mode; `api.ts` selects native IPC or sample
 data. The native cache belongs to the desktop adapter. Core engines operate on a consistent
@@ -36,9 +86,11 @@ data. The native cache belongs to the desktop adapter. Core engines operate on a
 
 The Linux GTK3 binding family currently requires GLib 0.18. A narrow
 [local source backport](../vendor/README.md) preserves that API while fixing upstream iterator
-unsoundness. It is excluded from the first-party workspace. Whole-snapshot hash verification,
-locked Cargo resolution and an optimized Linux regression check the override; registry advisory
-scans alone do not inspect local path packages. The original version and license remain unchanged.
+unsoundness and boxed-inline slice allocation, plus a documented local zero-initialization
+fix for `Value` copies. It is excluded from the first-party workspace.
+Whole-snapshot hash verification, locked Cargo resolution and optimized Linux regressions
+check the override; registry advisory scans alone do not inspect local path packages. The
+original version and license remain unchanged.
 
 ## 2. Scan → plan → execute
 
@@ -46,17 +98,36 @@ The core is built from small traits so each piece can be swapped (real OS, recor
 fake in a test) without touching the others (dependency inversion).
 
 ```mermaid
-flowchart LR
-  SP["SocketProvider<br/>SystemSockets · StaticSockets"] --> S
-  PP["ProcessProvider<br/>SystemProcesses · StaticProcesses"] --> S
-  CP["ContainerProvider<br/>DockerContainers · StaticContainers"] --> S
-  S["Scanner"] --> SNAP["Scan<br/>(Snapshot + ProcessTable)"]
+flowchart TB
+  accTitle: Collection, planning and execution contracts
+  accDescr: System and fixture providers feed a scanner. The Engine applies injected protection and strategy interfaces. Execution checks the retained plan and verifies its result.
+
+  subgraph PROVIDERS["Substitutable collection interfaces"]
+    SP["SocketProvider<br/>SystemSockets / StaticSockets"]
+    PP["ProcessProvider<br/>SystemProcesses / StaticProcesses"]
+    CP["ContainerProvider<br/>DockerContainers / StaticContainers"]
+  end
+  subgraph POLICIES["Injected decision interfaces"]
+    POL["ProtectionPolicy<br/>DefaultProtectionPolicy"]
+    REG["StrategyRegistry<br/>Ordered StopStrategy implementations"]
+  end
+  SP & PP & CP --> S["Scanner"]
+  S --> SNAP["Scan<br/>Snapshot + ProcessTable"]
   SNAP --> E["Engine"]
-  POL["ProtectionPolicy<br/>DefaultProtectionPolicy"] --> E
-  REG["StrategyRegistry<br/>Vec&lt;Arc&lt;dyn StopStrategy&gt;&gt;"] --> E
-  E --> PLAN["ActionPlan<br/>steps + warnings + blocked"]
-  PLAN --> X["exec::execute"]
-  X --> V["verify port freed"]
+  POL & REG --> E
+  E --> PLAN["ActionPlan<br/>Effects, guards + blocked status"]
+  PLAN --> X["Executor<br/>Identity + current protection checks"]
+  X --> V["StopReport<br/>Verified port state + outcome"]
+
+  style PROVIDERS fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style POLICIES fill:transparent,stroke:#94A3B8,stroke-width:1px
+
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  class SP,PP,CP,S,SNAP,V data
+  class E,REG domain
+  class POL,PLAN,X safety
 ```
 
 `StrategyRegistry` asks each `StopStrategy` in priority order whether it applies to an owner and
@@ -85,39 +156,63 @@ and the UIs don't change (open/closed).
 
 ```mermaid
 sequenceDiagram
-  participant U as User / MCP client
-  participant F as Front-end
-  participant S as Scanner
-  participant E as Engine
-  participant X as exec
-  participant OS
-  U->>F: stop :3000
-  F->>S: collect machine state
-  S-->>F: Scan
-  F->>E: Engine::from_scan(scan)
-  F->>E: plan(Target::Port(3000))
-  E->>E: owner → ProtectionPolicy → StopStrategy
-  E-->>F: ActionPlan (steps, warnings, blocked?)
-  F->>U: show plan, confirm
-  U->>F: yes
-  opt Desktop or MCP confirmed execution
-    F->>F: consume one-use handle and bind request options
-    F->>S: collect fresh machine state
-    S-->>F: Scan
-    F->>E: rebuild engine and plan
-    E-->>F: current ActionPlan
-    F->>F: compare same_effects with retained preview
-    Note over F: Reject changed owners or effects
+  accTitle: Preview, authorization and guarded execution
+  accDescr: Blocked plans return without actions. Desktop and MCP consume one-use preview handles and reject changed effects. The executor verifies current identity and protection before authorized actions.
+  autonumber
+  box rgba(37, 99, 235, 0.10) Interfaces
+    actor U as User / MCP client
+    participant F as Application adapter
   end
-  F->>X: execute(original plan)
-  loop each step
-    X->>OS: re-check start token and current protection
-    X->>OS: SIGTERM / container stop / systemctl stop
-    X->>OS: wait grace, then SIGKILL if allowed
+  box rgba(15, 118, 110, 0.10) Collection
+    participant S as Scanner
   end
-  X->>OS: is the port free?
-  X-->>F: StopReport
-  F->>F: Store::record (history, for restart)
+  box rgba(124, 58, 237, 0.10) Domain
+    participant E as Engine
+  end
+  box rgba(217, 119, 6, 0.10) Action safeguards
+    participant X as Executor
+  end
+  box rgba(15, 118, 110, 0.10) Host resources
+    participant OS as Operating system
+  end
+
+  U->>F: Preview stop :3000
+  F->>S: Collect machine state
+  S-->>F: Consistent Scan
+  F->>E: Build Engine and plan target
+  E->>E: Ownership, ProtectionPolicy, StopStrategy
+  E-->>F: Original ActionPlan
+  alt Plan is blocked
+    F-->>U: Refusal with reason, no actions
+  else Plan is allowed
+    F-->>U: Show effects and request confirmation
+    U->>F: Confirm target and options
+    opt Desktop or MCP retained preview
+      F->>F: Consume one-use handle, bind target and options
+      F->>S: Collect fresh machine state
+      S-->>F: Fresh Scan
+      F->>E: Rebuild current plan
+      E-->>F: Current ActionPlan
+      F->>F: Compare same_effects with original preview
+    end
+    alt Preview expired or effects changed
+      F-->>U: Require another preview, no actions
+    else Confirmation remains valid
+      F->>X: Execute original reviewed plan
+      loop Each authorized effect
+        X->>OS: Recheck start token and current protection
+        Note over X,OS: Refuse invalid identity or protection, never substitute a new owner
+        X->>OS: Graceful signal or exact supervisor command
+        opt Grace expires and escalation is allowed
+          X->>OS: Recheck identity and protection, then escalate
+        end
+      end
+      X->>OS: Verify target port state
+      X-->>F: StopReport
+      F->>F: Record outcome in validated history
+      F-->>U: Show outcome
+    end
+  end
 ```
 
 Planning does not signal processes. Desktop and MCP preview handles retain the original plan.
@@ -144,6 +239,8 @@ plans cannot execute. OS identity binding still has platform limits described in
 
 ```mermaid
 flowchart LR
+  accTitle: Service topology and dependency-aware stop planning
+  accDescr: A consistent scan and cluster registry build service nodes and connection edges. The graph supports exports, interface views and dependency-aware stop plans.
   SNAP["Scan<br/>raw sockets + process table"] --> TB["TopologyBuilder"]
   TB -->|"listeners → service roots"| N["nodes"]
   TB -->|"ESTABLISHED pairs → edges"| ED["edges (+ external, collapsed)"]
@@ -154,6 +251,15 @@ flowchart LR
   G --> ORD["stop_order<br/>(dependents first, cycle-safe)"]
   ORD --> PC["Engine::plan_cluster → ActionPlan"]
   G --> UI["TUI graph tab · desktop GraphView · MCP get_topology"]
+
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  class SNAP,N,ED,TUN,G data
+  class TB,CR domain
+  class ORD,PC safety
+  class EXP,UI surface
 ```
 
 * **Nodes** are services, not PIDs: a listener is folded up to its service root (the launcher
@@ -169,6 +275,49 @@ flowchart LR
 ### Agents
 
 `agents::AgentsBuilder` turns the same `Scan` into an `AgentsReport`:
+
+```mermaid
+flowchart TB
+  accTitle: Agent visibility, evidence and guarded controls
+  accDescr: Agent detection and account-aware ownership assign observed processes. Separate modules build folders, network, tool and access evidence. Reports drive interface views and separately validated actions.
+
+  SCAN["Consistent Scan<br/>Processes, sockets + project metadata"]
+  DETECT["AgentDetector + catalog<br/>Product signatures + runtime entry"]
+  OWN["Account-aware ownership<br/>Nearest root + helper merging"]
+  RECENT["RecentProjects provider<br/>Bounded current-account folder history"]
+
+  subgraph EVIDENCE["Independent visibility modules"]
+    FOOT["Footprint<br/>Working folders + projects"]
+    NET["Network<br/>Owned listeners + local / remote links"]
+    TOOLS["ToolClassifier<br/>MCP, dev servers, shells + commands"]
+    ACCESS["Access facts<br/>Observed, inferred or unknown"]
+  end
+
+  REPORT["AgentsReport<br/>Bounded display + explicit omitted counts"]
+  VIEWS["CLI / TUI / Desktop / MCP<br/>Search, activity + footprint views"]
+  FOLDER["Native folder opener<br/>Fresh scan + exact path membership"]
+  STOP["Core stop planning<br/>Protocol scope + normal protection"]
+
+  SCAN --> DETECT --> OWN
+  SCAN --> OWN
+  OWN --> FOOT & NET & TOOLS & ACCESS
+  RECENT -->|only matching account| FOOT
+  FOOT & NET & TOOLS & ACCESS --> REPORT
+  REPORT --> VIEWS
+  REPORT -->|known folders| FOLDER
+  REPORT -->|stoppable listener candidates| STOP
+
+  style EVIDENCE fill:transparent,stroke:#94A3B8,stroke-width:1px
+
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  class SCAN,RECENT,REPORT data
+  class DETECT,OWN,FOOT,NET,TOOLS,ACCESS domain
+  class VIEWS surface
+  class FOLDER,STOP safety
+```
 
 * **Who.** `agents::catalog` names each agent product: bundle, process name, install path or
   entry script. Kinds cover terminal agents, AI editors, desktop apps, extensions, hosts and
@@ -240,39 +389,48 @@ agent-service stop controls without signalling the agent root merely because it 
 
 ```mermaid
 flowchart LR
+  accTitle: Extensible project detection
+  accDescr: Working directories feed independent manifest, workspace and Git detectors. Their project details support framework classification.
   CWD["process cwd"] --> PD["ProjectDetector"]
-  PD --> MR["ManifestRegistry<br/>Node · Cargo · PyProject · GoMod · Composer · Django manage.py · Generic (Gemfile, pom.xml, mix.exs, deno.json …)"]
-  PD --> WM["WorkspaceMarker[]<br/>pnpm · turbo · nx · lerna · npm workspaces · cargo workspace · go.work · compose file"]
+  PD --> MR["ManifestRegistry<br/>Node, Rust, Python, Go + PHP<br/>Generic project manifests"]
+  PD --> WM["WorkspaceMarker interfaces<br/>Package workspaces, build tools<br/>Compose + go.work"]
   PD --> GIT["git root + branch"]
   MR & WM & GIT --> PDT["ProjectDetails"]
   PDT --> FW["detect_framework<br/>(signature table)"]
+
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  class CWD,GIT,PDT data
+  class PD,MR,WM,FW domain
 ```
 
 ## 5. Desktop app
 
 ```mermaid
 flowchart TB
+  accTitle: Desktop UI and native backend components
+  accDescr: Svelte feature views compose a shared UI kit and pure view models. The API boundary calls validated Tauri commands, which own freshness and confirmation state.
   subgraph Rust["src-tauri (holdmap-desktop)"]
-    LIB["lib.rs: builder, plugins<br/>(notification, autostart, global-shortcut)"]
-    CMD["commands.rs<br/>scan · topology · agents · explain · plan · stop · pins · history · restart · autostart<br/>preferences · hotkeys · remote_scan"]
+    LIB["lib.rs · Composition root<br/>Plugins + command registration"]
+    CMD["commands.rs · Native operations<br/>Validated reads, plans, stops + openers"]
     ST["state.rs<br/>AppState (config, last snapshot)"]
     CF["confirmation.rs<br/>one-use reviewed plans"]
     TR["tray.rs<br/>menu + top ports"]
-    W["watch.rs<br/>scan interval (default 4 s) / 2.5× hidden → events → notifications + tray"]
+    W["watch.rs · Background scans<br/>Events, notifications + tray refresh"]
     SC["shortcuts.rs<br/>presets, re-registered at runtime"]
     LIB --> CMD & TR & W & SC
     CMD & TR & W --> ST
     CMD --> CF
   end
   subgraph UI["Svelte 5 front-end"]
-    APP["App.svelte<br/>list ⇄ graph (G) ⇄ agents (⇧A), palette, keys"]
+    APP["App.svelte · Presentation root<br/>List, graph, agents + keyboard navigation"]
     GV["GraphView.svelte<br/>@xyflow/svelte"]
     AV["AgentsView.svelte<br/>agent cards + footprint map<br/>(lib/agents.ts: column layout)"]
     NODES["components/graph/<br/>ServiceNode · ClusterNode · TrafficEdge · FitOnChange"]
     AGNODES["components/agents/<br/>AgentNode · FootNode · AgentTools"]
     LG["lib/graph.ts<br/>dagre layered · force · toFlow · related · sections"]
-    OTHER["detail/DetailPane · Settings · Pin · Remote · Confirm · History"]
-    LIST["components/list/<br/>PortRow · GroupHeader · StatusDot · RowBadges · Sparkline<br/>(view model: lib/rows.ts)"]
+    OTHER["Feature panels + dialogs<br/>Detail, settings, history + confirmation"]
+    LIST["components/list/<br/>Rows, groups, badges + sparklines<br/>Pure view model: lib/rows.ts"]
     KIT["components/ui/<br/>UI kit (see below)"]
     API["lib/api.ts: native IPC or lib/mock.ts browser data"]
     APP --> GV --> NODES
@@ -283,6 +441,18 @@ flowchart TB
     APP --> API
   end
   API -- "Tauri IPC" --> CMD
+
+  style Rust fill:transparent,stroke:#94A3B8,stroke-width:1px
+  style UI fill:transparent,stroke:#94A3B8,stroke-width:1px
+
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  class LIB,CMD,TR,W,SC,APP,GV,AV,NODES,AGNODES,OTHER,LIST,KIT,API surface
+  class LG domain
+  class CF safety
+  class ST data
 ```
 
 `commands.rs` validates action targets, schedules blocking work and calls the core. Native

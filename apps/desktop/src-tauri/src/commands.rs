@@ -618,14 +618,28 @@ mod tests {
 
     #[test]
     fn folder_authorization_requires_current_agent_and_exact_known_path() {
-        let original = folders("/tmp/holdmap-fixture-project");
+        let root = std::env::current_dir().unwrap();
+        let project = root
+            .join("holdmap-fixture-project")
+            .to_string_lossy()
+            .into_owned();
+        let other = root
+            .join("holdmap-fixture-project-other")
+            .to_string_lossy()
+            .into_owned();
+        let new_project = root
+            .join("holdmap-fixture-new-project")
+            .to_string_lossy()
+            .into_owned();
+        assert!(std::path::Path::new(&project).is_absolute());
+        let original = folders(&project);
         let id = &original.agents[0].id;
-        assert!(agent_folder(&original, id, "/tmp/holdmap-fixture-project").is_ok());
+        assert!(agent_folder(&original, id, &project).is_ok());
         assert!(agent_folder(&original, id, "relative/project").is_err());
-        assert!(agent_folder(&original, id, "/tmp/holdmap-fixture-project-other").is_err());
-        assert!(agent_folder(&original, "agent:unknown", "/tmp/holdmap-fixture-project").is_err());
-        let current = folders("/tmp/holdmap-fixture-new-project");
-        assert!(agent_folder(&current, id, "/tmp/holdmap-fixture-project").is_err());
+        assert!(agent_folder(&original, id, &other).is_err());
+        assert!(agent_folder(&original, "agent:unknown", &project).is_err());
+        let current = folders(&new_project);
+        assert!(agent_folder(&current, id, &project).is_err());
     }
 
     #[test]

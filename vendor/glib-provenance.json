@@ -4,7 +4,10 @@
   "archive_url": "https://static.crates.io/crates/glib/glib-0.18.5.crate",
   "archive_sha256": "233daaf6e83ae6a12a52055f568f9d7cf4671dabb78ff9560ab6da230ce00ee5",
   "upstream_commit": "42b9caf98e03ded086362d9653ca58fe94dc8658",
-  "fix_commit": "b5a4071e439bef2b5eea76c3aa25e5ae84839e34",
+  "fix_commits": [
+    "b5a4071e439bef2b5eea76c3aa25e5ae84839e34",
+    "f54ceb387a2b6d6830753c1522cba7c858fb1aed"
+  ],
   "advisory": "RUSTSEC-2024-0429",
   "upstream_files": {
     ".cargo_vcs_info.json": "b301b45387ec3b66f1eace44a21991aaeac83e3140dab4faa0f6b9f7f0ec445b",
@@ -130,6 +133,14 @@
     "tests/value.rs": "c796ea2b30559e9c8ab6ebbb6c59c575d365a27b461c20f9ca0b1989dbe01d79"
   },
   "patched_files": {
-    "src/variant_iter.rs": "a0f5ee8acb8faa089bcdfbc9a57372609fce7654026ccef7d9a224d05a654ccc"
+    "src/variant_iter.rs": "a0f5ee8acb8faa089bcdfbc9a57372609fce7654026ccef7d9a224d05a654ccc",
+    "src/boxed_inline.rs": "d8e59a275661b7484a0c6a73bf463a7c066cbb20b8dd8c51266be3cfdf757c45"
+  },
+  "local_hardening": {
+    "src/boxed_inline.rs": {
+      "change": "Use g_malloc0 for the corrected full-slice allocation.",
+      "reason": "GValue copy callbacks require zero-filled destinations before g_value_init.",
+      "reference": "https://raw.githubusercontent.com/GNOME/glib/main/gobject/gvalue.c"
+    }
   }
 }
