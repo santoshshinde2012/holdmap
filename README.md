@@ -361,7 +361,7 @@ compare fresh effects before execution, and pass the original plan to the shared
 protection checks. Persistence, credential redaction and terminal-safe rendering have separate
 boundaries. CI combines all-severity npm audits, cargo-deny, full-history/source Gitleaks scans
 and CodeQL for JavaScript/TypeScript, Rust, Python and Actions; daily dependency checks and
-immutable action pins keep those gates reviewable. The current-source Linux GTK dependency uses an
+immutable action pins keep those gates reviewable. The current-source Linux GTK dependency uses
 [audited GLib source fixes](vendor/README.md), verified by source hashes and optimized regressions.
 
 The folder layout keeps each surface's code and tooling together:

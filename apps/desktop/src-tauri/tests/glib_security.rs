@@ -48,8 +48,12 @@ glib::wrapper! {
     match fn {
         // The wrapper provides aligned storage for one initialized inline value.
         init => |ptr| unsafe { std::ptr::write(ptr, SliceProbeFFI { words: [0; 8] }) },
-        // The wrapper supplies a live source and destination; the helper checks bounds.
-        copy_into => |dest, src| unsafe { checked_slice_copy(dest, src) },
+        // The macro expands this expression in both unsafe functions and unsafe blocks.
+        // Keep the required explicit block and scope the redundant-block lint to it.
+        copy_into => |dest, src| {
+            #[allow(unused_unsafe)]
+            unsafe { checked_slice_copy(dest, src) }
+        },
         clear => |_ptr| (),
     }
 }
