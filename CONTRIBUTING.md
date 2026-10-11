@@ -141,6 +141,14 @@ when the GTK binding family supports a compatible fixed upstream release.
 
 ## Published screenshots
 
+The canonical logo is `apps/desktop/assets/icon.svg`; its `holdmap-mark` group contains the
+glyph separately from the app tile. After editing it, run
+`node apps/desktop/scripts/generate-brand-assets.mjs` to refresh web, README and native icons.
+The generator uses the desktop's locked Playwright/Tauri dependencies, verifies dimensions
+and ICO frames, and derives a transparent monochrome macOS template tray icon from that glyph.
+Windows/Linux retain the color tray icon. Refresh screenshots, hero recordings and the social
+card afterward so published media uses the same mark.
+
 Refresh the desktop screenshots, website crops and hero posters from the production browser
 build with `node apps/desktop/scripts/capture-screenshots.mjs`. It uses sample data, its own
 temporary build and preview server, and the same Chromium installation as the browser tests.

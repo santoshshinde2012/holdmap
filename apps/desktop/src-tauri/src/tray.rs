@@ -171,9 +171,14 @@ pub fn show_main(app: &AppHandle) {
 }
 
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
+    #[cfg(target_os = "macos")]
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png"))?;
+    #[cfg(not(target_os = "macos"))]
     let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
-    TrayIconBuilder::with_id(TRAY_ID)
-        .icon(icon)
+    let builder = TrayIconBuilder::with_id(TRAY_ID).icon(icon);
+    #[cfg(target_os = "macos")]
+    let builder = builder.icon_as_template(true);
+    builder
         .tooltip("holdmap")
         .menu(&build_tray_menu(app, &tray_items(None))?)
         .show_menu_on_left_click(false)

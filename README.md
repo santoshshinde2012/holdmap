@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="apps/desktop/assets/icon.png" width="88" alt="holdmap logo" />
+  <img src="apps/desktop/assets/icon.png" width="88" alt="holdmap routed H logo" />
 </p>
 
 <h1 align="center">holdmap</h1>
@@ -37,6 +37,11 @@ Version **0.4.0** includes expanded child-tool visibility and search, MCP resour
 stop confirmations, local desktop shutdown, freshness improvements and security hardening.
 See the [0.4.0 changes](CHANGELOG.md#040---2026-10-10). Desktop screenshots use the shared
 browser UI with sample data.
+
+The new routed H logo connects Holdmap's initial with its process and agent maps.
+The [vector master and regeneration guide](apps/desktop/assets/README.md) keep app,
+tray and website icons consistent. Updated branding is available in current source;
+the 0.4.0 installers retain their original icons.
 
 ## Features
 
