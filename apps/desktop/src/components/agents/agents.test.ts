@@ -13,6 +13,35 @@ const actions = { onreveal() {}, oneditor() {}, onstop() {}, onstopall() {} };
 const props = (agent: Agent, selected = false) => ({ agent, selected, report: mockAgents(), entries: MOCK_SNAPSHOT.entries, color: "var(--accent)", onselect() {}, onentry() {}, ...actions });
 
 describe("agent visibility", () => {
+  it("opens the shared folder chooser from the card name/path while preserving quick actions", async () => {
+    const a = mockAgents().agents[1], folder = a.folders[0];
+    const onfolder = vi.fn(), onreveal = vi.fn(), oneditor = vi.fn();
+    const { getByRole } = render(AgentCard, { ...props(a, true), onfolder, onreveal, oneditor });
+    await fireEvent.click(getByRole("button", { name: `Folder actions for ${folder.path}` }));
+    expect(onfolder).toHaveBeenCalledExactlyOnceWith(folder.path);
+    await fireEvent.click(getByRole("group", { name: `Open ${folder.label}` }).querySelector("button[title='Open in file manager']")!);
+    expect(onreveal).toHaveBeenCalledExactlyOnceWith(folder.path);
+    await fireEvent.click(getByRole("group", { name: `Open ${folder.label}` }).querySelector("button[title='Open in editor']")!);
+    expect(oneditor).toHaveBeenCalledExactlyOnceWith(folder.path);
+  });
+
+  it("prevents repeated card quick actions while a folder is opening", async () => {
+    const a = mockAgents().agents[1], folder = a.folders[0];
+    let resolve!: () => void;
+    const onreveal = vi.fn(() => new Promise<void>((done) => (resolve = done)));
+    const oneditor = vi.fn();
+    const { getByRole } = render(AgentCard, { ...props(a, true), onreveal, oneditor });
+    const group = getByRole("group", { name: `Open ${folder.label}` });
+    const reveal = group.querySelector("button[title='Open in file manager']")!;
+    const editor = group.querySelector("button[title='Open in editor']")!;
+    await fireEvent.click(reveal);
+    await fireEvent.click(reveal);
+    await fireEvent.click(editor);
+    expect(onreveal).toHaveBeenCalledOnce();
+    expect(oneditor).not.toHaveBeenCalled();
+    resolve();
+  });
+
   it("shows whole-agent resources and all owned process totals before expansion", () => {
     const a = mockAgents().agents[1];
     const { container } = render(AgentCard, props(a));

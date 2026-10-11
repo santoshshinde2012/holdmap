@@ -484,17 +484,21 @@ pub fn open_url(url: &str) -> std::io::Result<()> {
     spawn_quiet(cmd)
 }
 
-/// Show a directory in the file manager (Finder / Explorer / the desktop's handler).
-pub fn reveal(path: &std::path::Path) -> std::io::Result<()> {
-    if !path.is_absolute() || !path.exists() {
+fn validate_directory(path: &std::path::Path) -> std::io::Result<()> {
+    if !path.is_absolute() || !path.is_dir() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            format!("{} doesn't exist", path.display()),
+            format!("{} isn't an existing folder", path.display()),
         ));
     }
+    Ok(())
+}
+
+fn file_manager_command(path: &std::path::Path) -> std::io::Result<std::process::Command> {
+    validate_directory(path)?;
     let cmd = if cfg!(target_os = "macos") {
         let mut c = std::process::Command::new("open");
-        c.arg("-R").arg(path);
+        c.args(["-a", "Finder"]).arg(path);
         c
     } else if cfg!(windows) {
         let mut c = std::process::Command::new("explorer");
@@ -505,7 +509,13 @@ pub fn reveal(path: &std::path::Path) -> std::io::Result<()> {
         c.arg(path);
         c
     };
-    spawn_quiet(cmd)
+    Ok(cmd)
+}
+
+/// Open an existing directory in Finder / Explorer / the desktop's file manager.
+/// The directory is passed as one argument; files and relative paths are rejected.
+pub fn reveal(path: &std::path::Path) -> std::io::Result<()> {
+    spawn_quiet(file_manager_command(path)?)
 }
 
 /// Editors holdmap knows how to open a folder in, in order of preference: (command, macOS app).
@@ -519,33 +529,43 @@ const EDITORS: [(&str, &str); 5] = [
 
 /// Open a project folder in the user's editor: `$HOLDMAP_EDITOR`, then the first known
 /// editor installed (Cursor, VS Code, Zed, Sublime, IntelliJ). Returns the editor's name.
-/// The folder is passed as a single argument; nothing goes through a shell.
+/// An explicit editor that cannot be found returns an error instead of selecting another app.
+/// The folder is passed as a single argument; no shell command is assembled here.
 pub fn open_in_editor(dir: &std::path::Path) -> std::io::Result<String> {
-    if !dir.is_absolute() || !dir.is_dir() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            format!("{} isn't a folder", dir.display()),
-        ));
-    }
     let custom = std::env::var("HOLDMAP_EDITOR")
         .or_else(|_| std::env::var("PORTWISE_EDITOR"))
         .ok()
         .filter(|s| !s.trim().is_empty());
-    if let Some(bin) = custom.as_deref().and_then(|e| which(e.trim())) {
+    let (cmd, name) = editor_command(dir, custom.as_deref())?;
+    spawn_quiet(cmd)?;
+    Ok(name)
+}
+
+fn editor_command(
+    dir: &std::path::Path,
+    custom: Option<&str>,
+) -> std::io::Result<(std::process::Command, String)> {
+    validate_directory(dir)?;
+    if let Some(editor) = custom.map(str::trim).filter(|s| !s.is_empty()) {
+        let bin = which(editor).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Configured editor `{editor}` was not found. Set HOLDMAP_EDITOR to an installed editor executable."),
+            )
+        })?;
         let mut c = std::process::Command::new(&bin);
         c.arg(dir);
-        spawn_quiet(c)?;
-        return Ok(bin
+        let name = bin
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default());
+            .unwrap_or_default();
+        return Ok((c, name));
     }
     for (bin, app) in EDITORS {
         if let Some(path) = which(bin) {
             let mut c = std::process::Command::new(path);
             c.arg(dir);
-            spawn_quiet(c)?;
-            return Ok(app.to_string());
+            return Ok((c, app.to_string()));
         }
         // GUI apps on macOS start without the shell's PATH: look for the app bundle.
         if cfg!(target_os = "macos") {
@@ -554,12 +574,11 @@ pub fn open_in_editor(dir: &std::path::Path) -> std::io::Result<String> {
                 home_dir().join("Applications"),
             ]
             .iter()
-            .any(|d| d.join(format!("{app}.app")).exists());
+            .any(|d| d.join(format!("{app}.app")).is_dir());
             if installed {
                 let mut c = std::process::Command::new("open");
                 c.args(["-a", app]).arg(dir);
-                spawn_quiet(c)?;
-                return Ok(app.to_string());
+                return Ok((c, app.to_string()));
             }
         }
     }
@@ -941,4 +960,91 @@ fn security_private_file_rejects_hardlink_before_truncating() {
         std::fs::read_to_string(&target).unwrap(),
         "fixture must survive"
     );
+}
+
+#[cfg(test)]
+mod folder_tests {
+    use super::{editor_command, file_manager_command, open_in_editor, reveal};
+    use std::ffi::OsStr;
+    use std::path::Path;
+
+    #[test]
+    fn folder_actions_reject_files_missing_paths_and_relative_paths_before_launch() {
+        let fixture = tempfile::tempdir().unwrap();
+        let file = fixture.path().join("source.rs");
+        std::fs::write(&file, "fixture").unwrap();
+        let missing = fixture.path().join("removed-project");
+        for path in [
+            file.as_path(),
+            missing.as_path(),
+            Path::new("relative/project"),
+        ] {
+            assert!(reveal(path).is_err());
+            assert!(open_in_editor(path).is_err());
+        }
+    }
+
+    #[test]
+    fn file_manager_opens_directory_contents_and_keeps_the_path_one_argument() {
+        let fixture = tempfile::tempdir().unwrap();
+        let path = fixture.path().join("project space & literal-name");
+        std::fs::create_dir(&path).unwrap();
+        // Inspect the launch plan only; tests never launch Finder, Explorer or an editor.
+        let cmd = file_manager_command(&path).unwrap();
+        let args = cmd.get_args().collect::<Vec<_>>();
+        assert_eq!(args.last(), Some(&path.as_os_str()));
+        if cfg!(target_os = "macos") {
+            assert_eq!(cmd.get_program(), OsStr::new("open"));
+            assert_eq!(
+                args,
+                [OsStr::new("-a"), OsStr::new("Finder"), path.as_os_str()]
+            );
+        } else {
+            assert_eq!(args, [path.as_os_str()]);
+            assert_eq!(
+                cmd.get_program(),
+                OsStr::new(if cfg!(windows) {
+                    "explorer"
+                } else {
+                    "xdg-open"
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn configured_editor_takes_priority_and_receives_one_folder_argument() {
+        let fixture = tempfile::tempdir().unwrap();
+        let editor = fixture.path().join("preferred editor");
+        std::fs::write(&editor, "not executed").unwrap();
+        let path = fixture.path().join("code project & literal-name");
+        std::fs::create_dir(&path).unwrap();
+        let (cmd, name) = editor_command(&path, editor.to_str()).unwrap();
+        assert_eq!(cmd.get_program(), editor.as_os_str());
+        assert_eq!(cmd.get_args().collect::<Vec<_>>(), [path.as_os_str()]);
+        assert_eq!(name, "preferred editor");
+    }
+
+    #[test]
+    fn unavailable_configured_editor_does_not_fall_back_to_a_different_app() {
+        let fixture = tempfile::tempdir().unwrap();
+        let missing = fixture.path().join("missing-editor");
+        let error = editor_command(fixture.path(), missing.to_str()).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
+        assert!(error.to_string().contains("Configured editor"));
+        assert!(error.to_string().contains("HOLDMAP_EDITOR"));
+    }
+
+    #[test]
+    fn editor_preference_is_an_executable_not_a_shell_command() {
+        let fixture = tempfile::tempdir().unwrap();
+        for preference in [
+            "./editor",
+            "../editor",
+            "code --wait",
+            "cursor & other-command",
+        ] {
+            assert!(editor_command(fixture.path(), Some(preference)).is_err());
+        }
+    }
 }

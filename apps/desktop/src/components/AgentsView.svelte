@@ -14,12 +14,15 @@
   import Icon from "./Icon.svelte";
   import SegmentedControl from "./ui/SegmentedControl.svelte";
   import AgentFlowView from "./agents/flow/AgentFlowView.svelte";
+  import FolderActions from "./FolderActions.svelte";
   import type { AgentFlowProps } from "../lib/agent-flow/model";
   import { FIT_PADDING } from "../lib/flow";
   import { agentColor, filterAgents, footprintGraph, layoutFootprint, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Positions } from "../lib/agents";
   import type { AgentsReport, PortEntry } from "../lib/types";
   import { prefGet, prefSet } from "../lib/prefs";
   import { untrack } from "svelte";
+  import { currentFolderOwner, preferredFolderOwner, resolveFolderTarget, type FolderTarget } from "../lib/folders";
+  import { isComposingKey } from "../lib/keyboard";
 
   let {
     report,
@@ -35,6 +38,7 @@
     oneditor,
     onstop,
     onstopall,
+    platform,
     ...flowProps
   }: {
     /** null while the first report loads. */
@@ -48,10 +52,12 @@
     reduced: boolean;
     onselectagent: (id: string | null) => void;
     onentry: (e: PortEntry) => void;
-    onreveal: (agentId: string, path: string) => void;
-    oneditor: (agentId: string, path: string) => void;
+    onreveal: (agentId: string, path: string) => void | Promise<void | boolean>;
+    oneditor: (agentId: string, path: string) => void | Promise<void | boolean>;
     onstop: (e: PortEntry, agentId: string) => void;
     onstopall: (agentId: string) => void;
+    /** Local computer platform; remote-view paths still use the native local action boundary. */
+    platform?: string;
   } & AgentFlowProps = $props();
 
   let section = $state<"overview" | "flow">("overview");
@@ -62,6 +68,16 @@
   let hover = $state<string | null>(null);
   /** A folder / host picked on the map (agents and ports select through the app). */
   let picked = $state<string | null>(null);
+  let folderTarget = $state.raw<FolderTarget | null>(null);
+  let folderOwnerName = $state("");
+  const folderOwner = $derived(currentFolderOwner(report, folderTarget));
+
+  function openFolder(path: string, preferredAgentId = selectedAgent) {
+    const target = resolveFolderTarget(report, path, preferredAgentId);
+    if (!target) return;
+    folderOwnerName = currentFolderOwner(report, target)?.name ?? "Agent";
+    folderTarget = target;
+  }
 
   const nodeTypes: NodeTypes = { agent: AgentNode, foot: FootNode, header: HeaderNode } as unknown as NodeTypes;
   const edgeTypes: EdgeTypes = { foot: FootEdge } as unknown as EdgeTypes;
@@ -98,6 +114,7 @@
       return;
     }
     if (n.kind === "tool") { picked = n.id; onselectagent(n.owners[0] ?? null); return; }
+    if (n.kind === "folder" && n.path) { picked = n.id; openFolder(n.path, preferredFolderOwner(n.owners, selectedAgent)); return; }
     const e = n.entryId ? entries.find((x) => x.id === n.entryId) : undefined;
     if (e) { picked = null; onentry(e); return; }
     picked = picked === n.id ? null : n.id;
@@ -105,6 +122,7 @@
   const byId = (id: string | null | undefined) => (id ? graph?.nodes.find((n) => n.id === id) : undefined);
   // Enter / Space on a focused map node does what a click does.
   function onkeydown(ev: KeyboardEvent) {
+    if (isComposingKey(ev) || ev.repeat || ev.altKey || ev.ctrlKey || ev.metaKey) return;
     if (ev.key !== "Enter" && ev.key !== " ") return;
     const el = (ev.target as HTMLElement | null)?.closest?.(".svelte-flow__node") as HTMLElement | null;
     if (!el) return;
@@ -162,6 +180,7 @@
         {#each visibleAgents as a (a.id)}
           <AgentCard agent={a} {report} {entries} color={graph ? agentColor(graph, a.id, agentIds) : "var(--accent)"} selected={a.id === selectedAgent} onselect={() => { picked = null; onselectagent(a.id === selectedAgent ? null : a.id); }} onnavigate={(id) => { picked = null; onselectagent(id); }}
             {onentry} onreveal={(path) => onreveal(a.id, path)} oneditor={(path) => oneditor(a.id, path)}
+            onfolder={(path) => openFolder(path, a.id)}
             onstop={(entry) => onstop(entry, a.id)} onstopall={() => onstopall(a.id)} now={report.taken_at_ms || Date.now()} />
         {:else}
           <div class="no-matches"><Icon name="search" size={20} /><p>No agents match this search</p><span>Search by name, tool, folder, port or process ID.</span></div>
@@ -224,6 +243,10 @@
 </div>
   {/if}
 </div>
+
+{#if folderTarget}
+  <FolderActions target={folderTarget} ownerName={folderOwnerName} available={!!folderOwner} {platform} demo={flowProps.demo ?? false} {onreveal} {oneditor} onclose={() => (folderTarget = null)} />
+{/if}
 
 <style>
   .agents-root { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }

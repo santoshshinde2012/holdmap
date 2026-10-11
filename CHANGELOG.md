@@ -10,6 +10,9 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- Current-source desktop folder actions from the Agents map and card paths, with mouse and
+  Enter/Space activation, a full path, platform file-manager/editor choices, clipboard copy
+  and focus restoration. Browser openers are explicitly labelled simulations.
 - Calls diagnosis filters for failed records and missing completion, individual metadata search,
   chronological or longest-reported-duration ordering and retained reported parent context.
 - A persisted desktop single-key shortcut setting, with modifier and arrow navigation preserved.
@@ -40,6 +43,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Fixed
 
+- File-manager actions open an existing folder's contents, including in Finder on macOS,
+  and reject files or missing directories before launching an application.
+- A missing explicitly configured `HOLDMAP_EDITOR` (or legacy `PORTWISE_EDITOR`) now returns
+  an error instead of silently choosing another editor. Folder openers retain the chosen owner
+  and exact path through UI polling and native fresh-scan validation.
 - The website's macOS download button opens the Apple silicon and Intel choices instead
   of selecting an architecture from OS detection alone. Native Apple silicon guidance
   makes clear that Rosetta is unnecessary for that build.

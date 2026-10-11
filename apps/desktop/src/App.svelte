@@ -455,20 +455,32 @@
     }
   }
 
-  async function revealAgentFolder(agentId: string, path: string) {
+  async function revealAgentFolder(agentId: string, path: string): Promise<boolean> {
+    if (!api.isTauri) {
+      toast("info", "File manager preview", "The desktop app opens this folder in your file manager.");
+      return true;
+    }
     try {
       await api.revealAgentFolder(agentId, path);
+      return true;
     } catch (e) {
-      toast("error", "Couldn't reveal the folder", String(e));
+      toast("error", "Couldn't open the folder", String(e));
+      return false;
     }
   }
 
-  async function openAgentFolder(agentId: string, path: string) {
+  async function openAgentFolder(agentId: string, path: string): Promise<boolean> {
+    if (!api.isTauri) {
+      toast("info", "Editor preview", "The desktop app opens this folder in your preferred editor.");
+      return true;
+    }
     try {
       const editor = await api.openAgentFolder(agentId, path);
-      toast("ok", `Opened in ${editor}`);
+      toast("ok", `Opened in ${editor}`, path);
+      return true;
     } catch (e) {
       toast("error", "Couldn't open the folder in an editor", String(e));
+      return false;
     }
   }
 
@@ -1242,7 +1254,7 @@
     {:else if view === "agents"}
       <div class="graph-wrap agents-wrap">
         {#if AgentsView}
-          <AgentsView report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced}
+          <AgentsView report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
             onselectagent={(id) => { const a = agentsReport?.agents.find((a) => a.id === id); if (a && !agentMatches(a, agentQuery)) agentQuery = ""; selectedAgent = id; }} onentry={openEntry}
             onreveal={revealAgentFolder} oneditor={openAgentFolder}
             onstop={(e, agentId) => requestStop(e, false, false, agentId)} onstopall={requestStopAgentPorts}
