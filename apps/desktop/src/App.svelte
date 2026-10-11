@@ -343,22 +343,15 @@
     return () => { clearInterval(timer); loader.invalidate(); };
   });
 
-  async function startRecording() {
-    await api.startActivity();
+  async function mutateRecording(action: () => Promise<unknown>) {
+    await action();
     // An explicit action refreshes the status even when following the view is paused.
     activityLoader.invalidate();
     if (view === "agents" && agentFlowMode === "calls") await activityLoader.request();
   }
-  async function stopRecording() {
-    await api.stopActivity();
-    activityLoader.invalidate();
-    if (view === "agents" && agentFlowMode === "calls") await activityLoader.request();
-  }
-  async function clearRecordedActivity() {
-    await api.clearActivity();
-    activityLoader.invalidate();
-    if (view === "agents" && agentFlowMode === "calls") await activityLoader.request();
-  }
+  const startRecording = () => mutateRecording(api.startActivity);
+  const stopRecording = () => mutateRecording(api.stopActivity);
+  const clearRecordedActivity = () => mutateRecording(api.clearActivity);
 
   /** Open a port from the agents map in the details drawer, making sure the list can show it. */
   function openEntry(e: PortEntry) {

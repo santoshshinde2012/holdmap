@@ -1,0 +1,238 @@
+//! Shared metadata invariants, sanitization, correlation identities and bounded projection.
+
+use crate::{
+    ActivityError, ActivityKind, ActivitySpan, ActivityStatus, Provider, Source, COLLECTOR_LIMITS,
+};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::io::Write;
+
+const MAX_ID_BYTES: usize = 256;
+const MAX_NAME_BYTES: usize = 96;
+pub(super) const MAX_DURATION_MS: u64 = 31 * 24 * 60 * 60 * 1_000;
+const MAX_TIMESTAMP_MS: u64 = 253_402_300_799_999;
+
+/// Domain-separated, deterministic correlation pseudonym. No raw identifier is retained.
+/// This permits correlation; it is not a claim that low-entropy identifiers are anonymized.
+pub fn pseudonymize_id(namespace: &str, raw: &str) -> Result<String, ActivityError> {
+    if namespace.len() > 64 || !valid_raw_id(raw) {
+        return Err(ActivityError::InvalidMetadata);
+    }
+    let mut digest = Sha256::new();
+    digest.update(b"holdmap-activity-v1\0");
+    digest.update(namespace.as_bytes());
+    digest.update([0]);
+    digest.update(raw.as_bytes());
+    Ok(format!("hm1_{:x}", digest.finalize()))
+}
+
+fn valid_raw_id(raw: &str) -> bool {
+    !raw.is_empty() && raw.len() <= MAX_ID_BYTES && !raw.chars().any(unsafe_character)
+}
+
+fn unsafe_character(character: char) -> bool {
+    character.is_control()
+        || matches!(character, '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+}
+
+pub(super) fn safe_name(value: Option<&str>, fallback: &str) -> String {
+    let Some(value) = value else {
+        return fallback.into();
+    };
+    if matches!(
+        value,
+        "Tool (name redacted)" | "Agent (name redacted)" | "Activity (name redacted)"
+    ) {
+        return value.to_owned();
+    }
+    let lowered = value.to_ascii_lowercase();
+    if value.is_empty()
+        || value.len() > MAX_NAME_BYTES
+        || value
+            .chars()
+            .any(|c| !c.is_ascii_alphanumeric() && !matches!(c, ' ' | '_' | '-' | '.' | ':'))
+        || lowered.starts_with("sk-")
+        || lowered.starts_with("xox")
+        || lowered.starts_with("ghp_")
+        || lowered.starts_with("gho_")
+        || lowered.starts_with("github_pat_")
+        || lowered.starts_with("akia")
+        || lowered.starts_with("bearer ")
+        || (lowered.starts_with("eyj") && value.len() > 24)
+        || (value.contains(' ')
+            && !matches!(
+                value,
+                "Tool execution"
+                    | "Permission wait"
+                    | "Agent turn"
+                    | "Agent session"
+                    | "Model request"
+                    | "Tool (name redacted)"
+                    | "Agent (name redacted)"
+                    | "Activity (name redacted)"
+            ))
+        || value
+            .split(|character: char| !character.is_ascii_alphanumeric())
+            .any(|word| word.len() > 32)
+    {
+        return format!("{fallback} (name redacted)");
+    }
+    value.to_owned()
+}
+
+pub(super) fn text(value: &Value) -> Option<&str> {
+    value.as_str().filter(|value| valid_raw_id(value))
+}
+
+pub(super) fn integer(value: &Value) -> Option<u64> {
+    value.as_u64().or_else(|| {
+        value
+            .as_str()
+            .filter(|value| {
+                !value.is_empty() && value.len() <= 20 && value.bytes().all(|b| b.is_ascii_digit())
+            })?
+            .parse()
+            .ok()
+    })
+}
+
+pub(super) fn boolean(value: &Value) -> Option<bool> {
+    value.as_bool().or_else(|| match value.as_str()? {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    })
+}
+
+pub(super) fn optional_id(value: Option<&Value>, domain: &str) -> Option<String> {
+    pseudonymize_id(domain, text(value?)?).ok()
+}
+
+pub(super) fn id_parts(domain: &str, parts: &[&str]) -> Result<String, ActivityError> {
+    // Length framing avoids collisions between tuples containing separators.
+    let joined: String = parts
+        .iter()
+        .map(|part| format!("{}:{part}", part.len()))
+        .collect();
+    let mut digest = Sha256::new();
+    digest.update(b"holdmap-activity-v1\0");
+    digest.update(domain.as_bytes());
+    digest.update([0]);
+    digest.update(joined.as_bytes());
+    Ok(format!("hm1_{:x}", digest.finalize()))
+}
+
+pub(super) fn provider_label(provider: Provider) -> &'static str {
+    match provider {
+        Provider::Codex => "codex",
+        Provider::Claude => "claude",
+        Provider::OpenTelemetry => "opentelemetry",
+        Provider::Holdmap => "holdmap",
+    }
+}
+
+pub(crate) struct Batch {
+    pub spans: Vec<ActivitySpan>,
+    pub dropped: u64,
+}
+
+pub(crate) fn normalized(value: &Value) -> Result<Batch, ActivityError> {
+    let records = value.as_array().ok_or(ActivityError::InvalidMetadata)?;
+    if records.len() > COLLECTOR_LIMITS.max_records_per_request {
+        return Err(ActivityError::LimitExceeded);
+    }
+    let mut batch = Batch {
+        spans: Vec::new(),
+        dropped: 0,
+    };
+    for record in records {
+        match serde_json::from_value(record.clone())
+            .map_err(|_| ActivityError::InvalidMetadata)
+            .and_then(validate_span)
+        {
+            Ok(span) => batch.spans.push(span),
+            Err(_) => batch.dropped += 1,
+        }
+    }
+    Ok(batch)
+}
+
+fn hashed_id(id: &str) -> bool {
+    id.len() == 68
+        && id.starts_with("hm1_")
+        && id[4..]
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+pub(super) fn validate_span(mut span: ActivitySpan) -> Result<ActivitySpan, ActivityError> {
+    if !hashed_id(&span.id)
+        || (!span.trace_id.is_empty() && !hashed_id(&span.trace_id))
+        || [
+            &span.parent_id,
+            &span.session_id,
+            &span.agent_id,
+            &span.parent_agent_id,
+        ]
+        .iter()
+        .any(|id| id.as_deref().is_some_and(|id| !hashed_id(id)))
+        || span.parent_id.as_ref() == Some(&span.id)
+        || (span.parent_id.is_some() && span.trace_id.is_empty())
+        || (span.source == Source::Hook
+            && !matches!(span.provider, Provider::Codex | Provider::Claude))
+        || (span.kind == ActivityKind::Handoff
+            && (span.agent_id.is_none() || span.parent_agent_id.is_none()))
+        || span.start_at_ms.is_some_and(|time| time > MAX_TIMESTAMP_MS)
+        || span.end_at_ms.is_some_and(|time| time > MAX_TIMESTAMP_MS)
+        || span
+            .duration_ms
+            .is_some_and(|duration| duration > MAX_DURATION_MS)
+        || matches!((span.start_at_ms, span.end_at_ms), (Some(start), Some(end)) if start > end)
+        || span.pid == Some(0)
+        || span
+            .process_started_at
+            .is_some_and(|time| time > MAX_TIMESTAMP_MS)
+    {
+        return Err(ActivityError::InvalidMetadata);
+    }
+    if span.end_at_ms.is_none()
+        && matches!(
+            span.status,
+            ActivityStatus::Ok | ActivityStatus::Error | ActivityStatus::Cancelled
+        )
+    {
+        return Err(ActivityError::InvalidMetadata);
+    }
+    if span.end_at_ms.is_some()
+        && matches!(
+            span.status,
+            ActivityStatus::Requested | ActivityStatus::Running
+        )
+    {
+        return Err(ActivityError::InvalidMetadata);
+    }
+    span.name = safe_name(Some(&span.name), "Activity");
+    Ok(span)
+}
+
+struct CountingWriter(usize);
+
+impl Write for CountingWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0 = self
+            .0
+            .checked_add(bytes.len())
+            .filter(|size| *size <= COLLECTOR_LIMITS.max_body_bytes)
+            .ok_or_else(|| std::io::Error::other("limit"))?;
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+pub(super) fn json_size(value: &Value) -> Result<usize, ActivityError> {
+    let mut writer = CountingWriter(0);
+    serde_json::to_writer(&mut writer, value).map_err(|_| ActivityError::LimitExceeded)?;
+    Ok(writer.0)
+}

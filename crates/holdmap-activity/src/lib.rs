@@ -5,8 +5,10 @@
 //! bearer credentials. [`client`] sends metadata only to an explicitly supplied loopback
 //! endpoint, and [`integrations`] generates configuration without writing agent settings.
 
+mod credentials;
 mod dto;
 mod normalize;
+mod protocol;
 mod server;
 mod store;
 

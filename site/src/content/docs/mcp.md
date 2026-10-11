@@ -91,9 +91,12 @@ For clients exposing tools alone, ask for tasks such as:
 - “Show the agents working in shop-web, including child tools and collection limits.”
 
 A free port is a candidate, not a reservation. TCP readiness does not establish application
-health. Likely MCP servers are inferred from process metadata; Holdmap does not trace tool
-calls or verify their transport. Recent folders are current-account history, attached only when
-the agent's account matches; they do not establish current work by a particular agent instance.
+health. Likely MCP servers are inferred from process metadata. Passive inspection does not
+record individual tool calls or verify their transport. Optional
+[instrumented Agent Flow recording](../agents/#set-up-optional-recording) is available in
+**current source / Unreleased** and receives metadata from integrations you configure.
+Recent folders are current-account history, attached only when the agent's account matches;
+they do not establish current work by a particular agent instance.
 
 Before considering a stop, request `get_topology` with `all: true` to include system and
 application services. Its default view is filtered to development services and their peers.

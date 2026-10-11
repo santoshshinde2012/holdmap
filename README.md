@@ -495,8 +495,10 @@ same meaning independently of color. The browser demo uses sample data and has n
 SOLID is expressed through specific boundaries: collectors have separate responsibilities;
 registries extend owner and project detection; narrow provider, detector and classifier traits
 let the normal builders use system implementations or fixtures. Defaults are chosen at the
-composition points. [Architecture details](docs/architecture.md) explain these contracts and
-their regression coverage.
+composition points. Activity source adapters share one metadata validator; HTTP routes,
+credentials and request limits have one policy. Recording controls, graph presentation and
+MCP delivery have separate owners. [Architecture details](docs/architecture.md) explain these
+contracts and their regression coverage.
 
 Action authority stays at the adapters and executor: desktop and MCP retain immutable previews,
 compare fresh effects before execution, and pass the original plan to the shared identity and
@@ -556,7 +558,7 @@ Use Rust 1.95+ and Node.js 22.12+ (`nvm use`). [CONTRIBUTING.md](CONTRIBUTING.md
 system dependencies, Chromium, actionlint and cargo-deny setup. Useful checks are:
 
 ```sh
-cargo test --locked                                  # core, CLI/TUI and MCP
+cargo test --locked                                  # core, CLI/TUI, MCP and activity
 (cd apps/desktop && npm ci && npm run check && npm test && npm run test:e2e)
 (cd site && npm ci && npm run check && HOLDMAP_SITE_OFFLINE=1 npm run build && npm test && npm run test:demo)
 scripts/check-all.sh                                  # complete workspace and native checks

@@ -173,11 +173,18 @@ remote collector, replayed execution or automatic stop is provided.
 ## Design and validation
 
 `holdmap-core::agents::flow` is a pure projection from one consistent scan and agent report.
-`holdmap-activity` separates contracts, provider normalization, memory storage, transport,
-client and setup generation. `holdmap-mcp::observer` is a narrow injectable observation
-interface with a no-op default. CLI and native commands compose those services; Svelte graph
-building, layout, polling and presentation remain separate. This applies SOLID through concrete
-responsibilities and dependency boundaries without introducing abstractions for every field.
+`holdmap-activity` separates contracts, source adapters, metadata policy, memory storage,
+transport, client and setup generation. Hook and OTLP adapters share validation and sanitization;
+typed routes have exhaustive dispatch and one credential/request-limit policy. Configuration
+generation validates credentials without constructing an HTTP client.
+
+`holdmap-mcp::observer` is a narrow injectable observation interface with a no-op default.
+The CLI's `activity/mcp.rs` adapts observer events and owns bounded asynchronous delivery;
+activity commands handle CLI arguments, hooks and rendering. Native recording commands share
+one authorized, serialized session boundary. Svelte `RecordingControls` owns recording/setup
+actions and `AgentFlowView` owns graph/run selection; graph building, layout and polling remain
+separate. Unknown recording status is shown explicitly. These boundaries apply SOLID through
+concrete responsibilities without adding an interface for every function.
 
 Tests exercise actual loopback HTTP, slow/partial requests, hostile framing and payloads,
 parallel same-name hooks, reversed completion, the Codex exporter fixture, MCP protocol output,

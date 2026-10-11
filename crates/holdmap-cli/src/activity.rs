@@ -1,19 +1,16 @@
-//! Activity command orchestration and opt-in MCP metadata adaptation.
+//! Activity commands, hook forwarding and snapshot presentation.
 //!
 //! Hook observation is advisory: no stdout, approval decisions or blocking exit codes.
-//! MCP observation queues bounded metadata and never changes JSON-RPC output.
+
+mod mcp;
 
 use anyhow::{bail, Result};
 use clap::{Args, Subcommand, ValueEnum};
 use holdmap_activity::client::LocalClient;
 use holdmap_activity::{
-    ActivityCollector, ActivityKind, ActivitySnapshot, ActivitySpan, ActivityStatus,
-    CollectorCredentials, Provider, Source,
+    ActivityCollector, ActivitySnapshot, ActivityStatus, CollectorCredentials, Provider,
 };
-use std::cell::Cell;
-use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 const MAX_HOOK_INPUT: u64 = 1024 * 1024;
@@ -233,125 +230,6 @@ fn render(snapshot: &ActivitySnapshot) -> String {
     output
 }
 
-struct McpObserver {
-    session_id: String,
-    pending: HashMap<u64, ActivitySpan>,
-    sender: Option<mpsc::SyncSender<ActivitySpan>>,
-    worker: Option<std::thread::JoinHandle<()>>,
-    warned: Cell<bool>,
-}
-
-impl McpObserver {
-    fn new(client: LocalClient) -> Result<Self> {
-        let mut entropy = [0; 32];
-        getrandom::fill(&mut entropy)
-            .map_err(|_| anyhow::anyhow!("Couldn't prepare activity correlation."))?;
-        let raw_session: String = entropy.iter().map(|byte| format!("{byte:02x}")).collect();
-        let session_id = holdmap_activity::pseudonymize_id("mcp-session", &raw_session)?;
-        let (sender, receiver) = mpsc::sync_channel::<ActivitySpan>(32);
-        let worker = std::thread::Builder::new()
-            .name("holdmap-mcp-activity".into())
-            .spawn(move || {
-                let mut warned = false;
-                while let Ok(span) = receiver.recv() {
-                    let mut batch = vec![span];
-                    batch.extend(receiver.try_iter().take(31));
-                    if client.record(&batch).is_err() && !warned {
-                        warned = true;
-                        eprintln!("holdmap: MCP activity metadata was not recorded.");
-                    }
-                }
-            })?;
-        Ok(Self {
-            session_id,
-            pending: HashMap::new(),
-            sender: Some(sender),
-            worker: Some(worker),
-            warned: Cell::new(false),
-        })
-    }
-
-    fn send(&self, span: ActivitySpan) {
-        if let Some(sender) = &self.sender {
-            if sender.try_send(span).is_err() && !self.warned.replace(true) {
-                eprintln!("holdmap: MCP activity queue is full; metadata was dropped.");
-            }
-        }
-    }
-}
-
-impl holdmap_mcp::ToolCallObserver for McpObserver {
-    fn started(&mut self, event: &holdmap_mcp::ToolCallStarted) {
-        let Ok(id) = holdmap_activity::pseudonymize_id(
-            "mcp-call",
-            &format!("{}:{}", self.session_id, event.call_id),
-        ) else {
-            return;
-        };
-        let span = ActivitySpan {
-            id,
-            trace_id: String::new(),
-            parent_id: None,
-            session_id: Some(self.session_id.clone()),
-            agent_id: None,
-            parent_agent_id: None,
-            provider: Provider::Holdmap,
-            source: Source::Mcp,
-            kind: ActivityKind::Tool,
-            name: event.tool_name.clone(),
-            start_at_ms: Some(event.started_at_ms),
-            end_at_ms: None,
-            duration_ms: None,
-            status: ActivityStatus::Running,
-            input_bytes: Some(event.input_bytes),
-            output_bytes: None,
-            pid: None,
-            process_started_at: None,
-        };
-        self.send(span.clone());
-        self.pending.insert(event.call_id, span);
-    }
-
-    fn completed(&mut self, event: &holdmap_mcp::ToolCallCompleted) {
-        let Some(mut span) = self.pending.remove(&event.call_id) else {
-            return;
-        };
-        span.end_at_ms = Some(event.finished_at_ms);
-        span.duration_ms = Some(event.duration_ms);
-        span.output_bytes = Some(event.output_bytes);
-        span.status = match event.outcome {
-            holdmap_mcp::ToolCallOutcome::Success => ActivityStatus::Ok,
-            holdmap_mcp::ToolCallOutcome::ToolError
-            | holdmap_mcp::ToolCallOutcome::ProtocolError => ActivityStatus::Error,
-        };
-        self.send(span);
-    }
-}
-
-impl Drop for McpObserver {
-    fn drop(&mut self) {
-        self.sender.take();
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
-        }
-    }
-}
-
 pub fn mcp(record_activity: bool) -> Result<u8> {
-    let stdin = std::io::stdin();
-    let stdout = std::io::stdout();
-    if record_activity {
-        match client_from_environment().and_then(McpObserver::new) {
-            Ok(mut observer) => {
-                holdmap_mcp::serve_with_observer(stdin.lock(), stdout.lock(), &mut observer)?
-            }
-            Err(_) => {
-                eprintln!("holdmap: activity setup is unavailable; MCP tools remain available.");
-                holdmap_mcp::serve(stdin.lock(), stdout.lock())?;
-            }
-        }
-    } else {
-        holdmap_mcp::serve(stdin.lock(), stdout.lock())?;
-    }
-    Ok(crate::exit::OK)
+    mcp::run(record_activity)
 }

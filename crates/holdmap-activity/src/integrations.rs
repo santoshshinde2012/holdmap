@@ -3,7 +3,7 @@
 //! Examples are returned to the caller only; this module never edits agent settings,
 //! launches an agent, reads credentials from disk or enables telemetry automatically.
 
-use crate::{client::LocalClient, CollectorCredentials, Provider};
+use crate::{credentials::validate_credentials, protocol::Route, CollectorCredentials, Provider};
 
 /// A fixed, non-sensitive setup error.
 #[derive(Debug, Clone, Copy)]
@@ -27,7 +27,7 @@ pub fn setup(
     credentials: &CollectorCredentials,
     windows: bool,
 ) -> Result<String, SetupError> {
-    LocalClient::from_credentials(credentials).map_err(|_| SetupError)?;
+    validate_credentials(&credentials.endpoint, &credentials.token).map_err(|_| SetupError)?;
     match provider {
         Provider::Codex => Ok(format!(
             "# Merge into your user-level Codex config.toml, then restart Codex.\n\
@@ -37,13 +37,13 @@ pub fn setup(
              # Review existing telemetry settings before replacing an exporter.\n\
              [otel]\n\
              log_user_prompt = false\n\
-             exporter = {{ otlp-http = {{ endpoint = \"{}/v1/logs\", protocol = \"json\", headers = {{ Authorization = \"Bearer {}\" }} }} }}\n",
+             exporter = {{ otlp-http = {{ endpoint = \"{}{}\", protocol = \"json\", headers = {{ Authorization = \"Bearer {}\" }} }} }}\n",
             if windows {
                 "$env:OTEL_BLRP_MAX_EXPORT_BATCH_SIZE = '32'\n# Remove-Item Env:OTEL_EXPORTER_OTLP_COMPRESSION, Env:OTEL_EXPORTER_OTLP_LOGS_COMPRESSION -ErrorAction SilentlyContinue"
             } else {
                 "export OTEL_BLRP_MAX_EXPORT_BATCH_SIZE=32\n# unset OTEL_EXPORTER_OTLP_COMPRESSION OTEL_EXPORTER_OTLP_LOGS_COMPRESSION"
             },
-            credentials.endpoint, credentials.token
+            credentials.endpoint, Route::Logs.path(), credentials.token
         )),
         Provider::Claude => {
             let variables = [
@@ -57,7 +57,7 @@ pub fn setup(
                 ("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", "32".to_owned()),
                 (
                     "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
-                    format!("{}/v1/traces", credentials.endpoint),
+                    format!("{}{}", credentials.endpoint, Route::Traces.path()),
                 ),
                 (
                     "OTEL_EXPORTER_OTLP_TRACES_HEADERS",

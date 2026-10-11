@@ -1,6 +1,6 @@
 use crate::{
-    normalize, now_ms, store::ActivityStore, ActivityError, CollectorCredentials, Provider,
-    COLLECTOR_LIMITS,
+    credentials::decode_token, normalize, now_ms, protocol::Route, store::ActivityStore,
+    ActivityError, CollectorCredentials, Provider, COLLECTOR_LIMITS,
 };
 use serde_json::{json, Value};
 use std::io::{Read, Write};
@@ -165,7 +165,7 @@ impl RateLimit {
 }
 
 struct Request {
-    path: String,
+    route: Route,
     body: Value,
 }
 
@@ -237,19 +237,7 @@ fn read_request(
         return Err(405);
     }
     let path = parsed.path.ok_or(400_u16)?;
-    if path.contains(['?', '#'])
-        || !matches!(
-            path,
-            "/v1/logs"
-                | "/v1/traces"
-                | "/v1/hooks/codex"
-                | "/v1/hooks/claude"
-                | "/v1/activity"
-                | "/v1/snapshot"
-        )
-    {
-        return Err(404);
-    }
+    let route = Route::from_path(path).ok_or(404_u16)?;
     let mut host = None;
     let mut authorization = None;
     let mut length = None;
@@ -314,7 +302,6 @@ fn read_request(
     if length == 0 || length > COLLECTOR_LIMITS.max_body_bytes {
         return Err(413);
     }
-    let path = path.to_owned();
     let mut body = buffer[header_end..].to_vec();
     if body.len() > length {
         return Err(400);
@@ -334,23 +321,7 @@ fn read_request(
         body.extend_from_slice(&chunk[..count]);
     }
     let body = serde_json::from_slice(&body).map_err(|_| 400_u16)?;
-    Ok(Request { path, body })
-}
-
-fn decode_token(value: &str) -> Option<[u8; 32]> {
-    if value.len() != 64 {
-        return None;
-    }
-    let mut decoded = [0; 32];
-    for (index, pair) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
-        let digit = |value: u8| match value {
-            b'0'..=b'9' => Some(value - b'0'),
-            b'a'..=b'f' => Some(value - b'a' + 10),
-            _ => None,
-        };
-        decoded[index] = digit(pair[0])? * 16 + digit(pair[1])?;
-    }
-    Some(decoded)
+    Ok(Request { route, body })
 }
 
 fn handle(
@@ -386,45 +357,37 @@ fn handle(
             return;
         }
     };
-    if request.path == "/v1/snapshot" {
-        if request
-            .body
-            .as_object()
-            .is_none_or(|value| !value.is_empty())
-        {
-            respond(
-                stream,
-                400,
-                &json!({"code":3,"message":"Invalid request"}),
-                deadline,
-            );
+    let batch = match request.route {
+        Route::Logs => normalize::otlp(&request.body, false, now_ms()),
+        Route::Traces => normalize::otlp(&request.body, true, now_ms()),
+        Route::Activity => normalize::normalized(&request.body),
+        Route::CodexHook => normalize::normalize_hook(Provider::Codex, &request.body, now_ms())
+            .map(|spans| normalize::Batch { spans, dropped: 0 }),
+        Route::ClaudeHook => normalize::normalize_hook(Provider::Claude, &request.body, now_ms())
+            .map(|spans| normalize::Batch { spans, dropped: 0 }),
+        Route::Snapshot => {
+            if request
+                .body
+                .as_object()
+                .is_none_or(|value| !value.is_empty())
+            {
+                respond(
+                    stream,
+                    400,
+                    &json!({"code":3,"message":"Invalid request"}),
+                    deadline,
+                );
+                return;
+            }
+            let snapshot = store
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .snapshot();
+            if let Ok(snapshot) = serde_json::to_value(snapshot) {
+                respond(stream, 200, &snapshot, deadline);
+            }
             return;
         }
-        let snapshot = store
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .snapshot();
-        if let Ok(snapshot) = serde_json::to_value(snapshot) {
-            respond(stream, 200, &snapshot, deadline);
-        }
-        return;
-    }
-    let traces = request.path == "/v1/traces";
-    let otlp = matches!(request.path.as_str(), "/v1/traces" | "/v1/logs");
-    let batch = match request.path.as_str() {
-        "/v1/traces" | "/v1/logs" => normalize::otlp(&request.body, traces, now_ms()),
-        "/v1/activity" => normalize::normalized(&request.body),
-        "/v1/hooks/codex" | "/v1/hooks/claude" => normalize::normalize_hook(
-            if request.path.ends_with("claude") {
-                Provider::Claude
-            } else {
-                Provider::Codex
-            },
-            &request.body,
-            now_ms(),
-        )
-        .map(|spans| normalize::Batch { spans, dropped: 0 }),
-        _ => unreachable!(),
     };
     let batch = match batch {
         Ok(batch) => batch,
@@ -447,15 +410,12 @@ fn handle(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .ingest(batch.spans, batch.dropped);
-    let response = if otlp && dropped > 0 {
-        let key = if traces {
-            "rejectedSpans"
+    let response = if let Some(key) = request.route.rejected_record_field() {
+        if dropped > 0 {
+            json!({"partialSuccess": {key: dropped.to_string(), "errorMessage":"Unsupported or invalid records were rejected"}})
         } else {
-            "rejectedLogRecords"
-        };
-        json!({"partialSuccess": {key: dropped.to_string(), "errorMessage":"Unsupported or invalid records were rejected"}})
-    } else if otlp {
-        json!({})
+            json!({})
+        }
     } else {
         json!({"accepted":accepted,"dropped":dropped})
     };

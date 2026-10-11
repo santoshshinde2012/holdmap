@@ -44,100 +44,91 @@ impl Session {
     }
 }
 
-#[tauri::command]
-pub async fn activity_status(window: WebviewWindow) -> Result<CollectorStatus, String> {
-    crate::local_window::authorize(&window, "Agent activity")?;
+/// Keep authorization, blocking work and session serialization on one IPC boundary.
+async fn with_session<T: Send + 'static>(
+    window: WebviewWindow,
+    action: &str,
+    join_error: &'static str,
+    operation: impl FnOnce(&mut Session) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    crate::local_window::authorize(&window, action)?;
     let app = window.app_handle().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        Ok(app
-            .state::<ActivityState>()
+        let state = app.state::<ActivityState>();
+        let mut session = state
             .session
             .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .collector
-            .status())
+            .unwrap_or_else(|error| error.into_inner());
+        operation(&mut session)
     })
     .await
-    .map_err(|_| "Couldn't read recording status.")?
+    .map_err(|_| join_error.to_owned())?
+}
+
+#[tauri::command]
+pub async fn activity_status(window: WebviewWindow) -> Result<CollectorStatus, String> {
+    with_session(
+        window,
+        "Agent activity",
+        "Couldn't read recording status.",
+        |session| Ok(session.collector.status()),
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn activity_snapshot(window: WebviewWindow) -> Result<ActivitySnapshot, String> {
-    crate::local_window::authorize(&window, "Agent activity")?;
-    let app = window.app_handle().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        Ok(app
-            .state::<ActivityState>()
-            .session
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .collector
-            .snapshot())
-    })
+    with_session(
+        window,
+        "Agent activity",
+        "Couldn't read recorded activity.",
+        |session| Ok(session.collector.snapshot()),
+    )
     .await
-    .map_err(|_| "Couldn't read recorded activity.")?
 }
 
 #[tauri::command]
 pub async fn start_activity(window: WebviewWindow) -> Result<CollectorCredentials, String> {
-    crate::local_window::authorize(&window, "Agent activity")?;
-    let app = window.app_handle().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        app.state::<ActivityState>()
-            .session
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .start()
-    })
+    with_session(
+        window,
+        "Agent activity",
+        "Couldn't start local recording.",
+        Session::start,
+    )
     .await
-    .map_err(|_| "Couldn't start local recording.")?
 }
 
 #[tauri::command]
 pub async fn stop_activity(window: WebviewWindow) -> Result<CollectorStatus, String> {
-    crate::local_window::authorize(&window, "Agent activity")?;
-    let app = window.app_handle().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        app.state::<ActivityState>()
-            .session
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .stop()
-    })
+    with_session(
+        window,
+        "Agent activity",
+        "Couldn't stop local recording.",
+        Session::stop,
+    )
     .await
-    .map_err(|_| "Couldn't stop local recording.")?
 }
 
 #[tauri::command]
 pub async fn clear_activity(window: WebviewWindow) -> Result<(), String> {
-    crate::local_window::authorize(&window, "Agent activity")?;
-    let app = window.app_handle().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        app.state::<ActivityState>()
-            .session
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .collector
-            .clear()
-            .map_err(|error| error.to_string())
-    })
+    with_session(
+        window,
+        "Agent activity",
+        "Couldn't clear recorded activity.",
+        |session| session.collector.clear().map_err(|error| error.to_string()),
+    )
     .await
-    .map_err(|_| "Couldn't clear recorded activity.")?
 }
 
 #[tauri::command]
 pub async fn activity_setup(window: WebviewWindow, provider: Provider) -> Result<String, String> {
-    crate::local_window::authorize(&window, "Agent activity setup")?;
-    let app = window.app_handle().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        app.state::<ActivityState>()
-            .session
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .setup(provider)
-    })
+    with_session(
+        window,
+        "Agent activity setup",
+        "Couldn't prepare recording setup.",
+        move |session| session.setup(provider),
+    )
     .await
-    .map_err(|_| "Couldn't prepare recording setup.")?
 }
 
 #[cfg(test)]

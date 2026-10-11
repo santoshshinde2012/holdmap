@@ -13,9 +13,19 @@ recording compose the same client. `ToolCallObserver` is injected into MCP with 
 so protocol handling and optional recording have separate responsibilities. It receives only
 catalog names, timing, outcomes and serialized sizes. Recording failure never disables tools.
 
+Hook and OTLP adapters parse their source formats independently, then apply the same metadata
+invariants and name policy. One typed route contract covers accepted paths and exhaustive
+dispatch; client and setup generation share credential validation without constructing a
+transport just to generate text. Request bounds come from the collector's limits contract.
+Native recording commands use one authorized, serialized session boundary. The CLI MCP
+adapter owns its bounded delivery queue and worker lifetime separately from activity commands.
+
 The browser adapter supplies labelled examples. Pure TypeScript builds reported parent edges,
 layout and timeline models; an invalidatable loader prevents stale requests from changing a
 later view. Components present evidence and setup without authority to stop a reported PID.
+`RecordingControls` owns recording actions, setup copying and confirmation; `AgentFlowView`
+owns graph and run selection. Injected callbacks connect these components to the application.
+An unavailable recording status remains unknown until a successful refresh supplies it.
 A source-provided parent defines an edge; socket presence, elapsed time and common session
 membership cannot define tool causality. Provider setup remains reviewable text that the user
 applies explicitly. No source settings or private conversations are read automatically.
@@ -49,7 +59,7 @@ config:
 ---
 flowchart TB
   accTitle: Agent visibility and optional local metadata flow
-  accDescr: Observed OS relationships and opt-in provider metadata follow separate read-only paths into the desktop flow view. A loopback authentication and bounded parsing gate projects metadata into session memory. Reported trace parents produce call edges, while missing evidence remains unknown. The public browser uses labelled examples and no recording source grants action authority.
+  accDescr: Observed OS relationships and opt-in provider metadata follow separate read-only paths into the desktop flow view. Authenticated typed routes dispatch source adapters, which share metadata validation before bounded session storage. Recording controls use trusted serialized native sessions independently of graph presentation. Reported trace parents produce call edges, while missing evidence remains unknown. The public browser uses labelled examples and no recording source grants action authority.
   subgraph OBSERVED["Observed relationships · no recording required"]
     OS["OS scan<br/>Processes, listeners + sockets"]
     PROJECT["Core flow projection<br/>Exact holders + process identity<br/>Seen / inferred / unknown"]
@@ -61,18 +71,21 @@ flowchart TB
     MCP["Holdmap MCP observer<br/>Fixed tool names + envelope sizes"]
   end
   subgraph ACTIVITY["holdmap-activity · no persistence or forwarding"]
-    GATE["Session authentication<br/>127.0.0.1 + bearer token<br/>Origin / framing / deadline checks"]
-    NORMAL["Pure normalization<br/>Allowlist + pseudonymize<br/>Discard content fields"]
+    GATE["Authenticated typed routes<br/>127.0.0.1 + bearer token<br/>Origin / framing / deadline checks"]
+    ADAPTER["Pure source adapters<br/>Hooks / OTLP / normalized records<br/>Discard content fields"]
+    NORMAL["Shared metadata policy<br/>Identity + lifecycle invariants<br/>Bounded names + pseudonyms"]
     MEMORY[("Bounded memory store<br/>1,000 spans + dropped counts<br/>Identity and outcome merge policy")]
-    GATE --> NORMAL --> MEMORY
+    GATE --> ADAPTER --> NORMAL --> MEMORY
   end
   AGENT & HOOK & MCP --> GATE
   subgraph VIEW["Desktop presentation · read-only evidence"]
-    API["Trusted local IPC<br/>Opt-in, snapshot, stop + clear"]
+    API["Trusted local IPC<br/>One serialized session boundary<br/>Opt-in, snapshot, stop + clear"]
+    CONTROLS["Recording controls<br/>Setup + clear confirmation<br/>Unknown status explicit"]
     CONNECTIONS["Connections graph<br/>Observed OS relationships"]
     CALLS["Calls graph + timeline<br/>Reported parents, parallel calls<br/>Missing / unknown explicit"]
     INSPECT["Accessible inspector<br/>Status, duration + serialized sizes"]
     API --> CALLS
+    CONTROLS -->|"explicit user actions"| API
     CONNECTIONS & CALLS --> INSPECT
   end
   PROJECT --> CONNECTIONS
@@ -88,9 +101,9 @@ flowchart TB
   classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
   classDef web fill:#F1F5F9,stroke:#64748B,color:#0F172A,stroke-width:1.5px
   class OS,AGENT,HOOK,MCP,MEMORY data
-  class PROJECT,NORMAL domain
+  class PROJECT,ADAPTER,NORMAL domain
   class GATE,API safety
-  class CONNECTIONS,CALLS,INSPECT surface
+  class CONTROLS,CONNECTIONS,CALLS,INSPECT surface
   class DEMO web
 ```
 
@@ -987,8 +1000,9 @@ escaped text, including inline command spans. The browser demo has no native IPC
 
 ### Desktop UI
 
-- **UI kit.** `apps/desktop/src/components/ui/` is the only place that styles controls (fields,
-  selects, switches, buttons, dialogs, tabs…); feature components compose it. Open the app with
+- **UI kit.** `apps/desktop/src/components/ui/` provides shared controls (fields, selects,
+  switches, buttons, dialogs and tabs); feature components compose them and use the shared
+  design tokens for local controls. Open the app with
   `#ui-gallery` to see every control in both themes.
 - **Pure view logic.** `lib/rows.ts` (badges, status, sparklines), `lib/detail.ts` (details pane)
   and `lib/settings.ts` (the Settings contract) are pure and unit-tested, so components depend on
@@ -1014,11 +1028,11 @@ The SOLID boundaries are concrete responsibilities and substitutable interfaces:
 
 | Principle | Boundary |
 |---|---|
-| Single responsibility | Scanning, ownership, network attribution, tool classification, planning and execution live in separate modules; adapters handle protocol, cache or presentation concerns. |
+| Single responsibility | Scanning, ownership, planning and execution stay separate. Hook/OTLP parsing is separate from shared metadata validation; MCP delivery and recording controls have their own modules. |
 | Open/closed | Catalog entries, strategy registries and injected detectors/classifiers extend behavior through established boundaries. |
-| Liskov substitution | System and fixture providers satisfy the same collection contracts; detector and classifier test doubles feed the normal report builder in regression tests. |
-| Interface segregation | Socket, process, container, recent-project, agent-detection and tool-classification interfaces each expose their own small contract. |
-| Dependency inversion | Core orchestration accepts provider and classifier traits; composition points choose the production implementations. |
+| Liskov substitution | System and fixture providers satisfy the same collection contracts. No-op and recording MCP observers preserve protocol output, including when recording fails. |
+| Interface segregation | Socket, process, container, recent-project, detector and classifier interfaces each expose a small contract. MCP observation receives metadata only; recording UI receives action callbacks. |
+| Dependency inversion | Core orchestration accepts provider and classifier traits; MCP accepts an observer and recording UI accepts callbacks. Composition points choose implementations. Setup generation depends on credential policy rather than HTTP transport. |
 
 - `scan` gathers, `engine` decides, `exec` acts, `topology` relates and `store` persists. The
   desktop backend is split into `commands`, `confirmation`, `state`, `tray`, `watch` and `shortcuts`.
@@ -1122,6 +1136,7 @@ branch; editing source does not itself publish a site.
 | `crates/holdmap-core` | Collection providers, models, attribution, planning, execution and persistence |
 | `crates/holdmap-cli` | CLI rendering, shared reviewed agent actions, TUI view/state helpers, generated-document checks and stdio MCP integration tests |
 | `crates/holdmap-mcp` | Protocol adapter, contracts, live tools and pure discovery modules |
+| `crates/holdmap-activity` | Pure source adapters, shared metadata and credential policy, local collector, bounded client and setup generation |
 | `apps/desktop/src` | Shared Svelte UI, styles and TypeScript view logic |
 | `apps/desktop/src-tauri` | Native commands, state/cache, watcher, tray and OS integration |
 | `apps/desktop/e2e` | Browser regressions using deterministic sample data |
@@ -1143,7 +1158,7 @@ the browser suite on Linux. `scripts/check-all.sh` reproduces the full checks on
 host with its native desktop dependencies installed.
 
 Use Rust 1.95+ and Node.js 22.12+ (`nvm use`), with the native dependencies listed in
-[CONTRIBUTING.md](../CONTRIBUTING.md). `cargo test --locked` checks the core, CLI/TUI and MCP
+[CONTRIBUTING.md](../CONTRIBUTING.md). `cargo test --locked` checks core, CLI/TUI, MCP and activity
 default workspace members. Desktop `npm run check`, `npm test` and `npm run test:e2e` check
 types, pure view logic and production UI flows. Site checks build the shared demo and verify
 guides, links and asset budgets; site `npm run test:demo` launches a preview and checks the
