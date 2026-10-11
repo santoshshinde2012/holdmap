@@ -59,6 +59,9 @@ const firstOpen: Record<string, string> = {
                 </a>
               ))}
             </div>
+            {t.key === "macos" && (
+              <p class="hint">Apple silicon (<code>aarch64</code>) runs natively without Rosetta. Choose Intel (<code>x64</code>) for Intel Macs.</p>
+            )}
             <p class="hint first-open"><Icon name="Info" size={16} /> <span set:html={firstOpen[t.key]} /></p>
           </div>
         )}

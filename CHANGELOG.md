@@ -40,6 +40,9 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Fixed
 
+- The website's macOS download button opens the Apple silicon and Intel choices instead
+  of selecting an architecture from OS detection alone. Native Apple silicon guidance
+  makes clear that Rosetta is unnecessary for that build.
 - Terminal graph search filters and navigates the displayed graph, retaining selected node
   identity across refreshes. Mouse input and bracketed paste use paired terminal mode cleanup;
   recognized paste is bounded search text and never an action or confirmation.
