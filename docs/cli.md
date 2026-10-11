@@ -3,8 +3,9 @@
 <!-- Generated from the clap definitions in crates/holdmap-cli. Do not edit by hand:
      HOLDMAP_BLESS=1 cargo test -p holdmap cli_reference -->
 
-This page is the `--help` output of every command of holdmap 0.4.0. `cargo test` checks it
-against the code, so it never drifts. For an overview see the [README](../README.md).
+This page is the `--help` output of every command and nested subcommand in the current
+source (package version 0.4.0). `cargo test` checks it against the code. Released downloads
+may predate commands or options shown here; see the [README](../README.md) for release availability.
 
 Global options (accepted by every command): `--color <auto|always|never>` (env `HOLDMAP_COLOR`; `NO_COLOR` and `CLICOLOR_FORCE` are honoured too) and `--no-docker`.
 
@@ -21,6 +22,10 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`holdmap graph`](#holdmap-graph) (alias `mesh`) | Show which services talk to which (dependencies, clusters) as a tree, JSON, DOT or Mermaid |
 | [`holdmap agents`](#holdmap-agents) | Show AI coding agents and developer tools: folders, access, ports and connections |
 | [`holdmap activity`](#holdmap-activity) | Record and inspect opt-in local agent activity metadata |
+| [`holdmap activity serve`](#holdmap-activity-serve) | Start an authenticated loopback recorder; metadata stays in memory until this exits |
+| [`holdmap activity snapshot`](#holdmap-activity-snapshot) | Read metadata from the recorder named by HOLDMAP_ACTIVITY_ENDPOINT and TOKEN |
+| [`holdmap activity setup`](#holdmap-activity-setup) | Print a reviewable exporter example; never edit agent configuration automatically |
+| [`holdmap activity hook`](#holdmap-activity-hook) | Project one Codex/Claude hook from stdin to metadata and forward it locally |
 | [`holdmap watch`](#holdmap-watch) | Stream port events: new listeners, closed listeners, conflicts |
 | [`holdmap pin`](#holdmap-pin) | Pin a port (favourite): shown first and watched even when free |
 | [`holdmap unpin`](#holdmap-unpin) | Remove a pin |
@@ -382,6 +387,68 @@ Options:
                        auto, always, never]
       --no-docker      Don't query Docker/Podman/OrbStack/Colima
   -h, --help           Print help
+```
+
+## holdmap activity serve
+
+```text
+Start an authenticated loopback recorder; metadata stays in memory until this exits
+
+Usage: holdmap activity serve [OPTIONS]
+
+Options:
+      --json                 Print endpoint and secret token as JSON for explicit integration setup
+      --duration <DURATION>  Stop automatically after this duration (1 second to 24 hours)
+      --color <COLOR>        When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible
+                             values: auto, always, never]
+      --no-docker            Don't query Docker/Podman/OrbStack/Colima
+  -h, --help                 Print help
+```
+
+## holdmap activity snapshot
+
+```text
+Read metadata from the recorder named by HOLDMAP_ACTIVITY_ENDPOINT and TOKEN
+
+Usage: holdmap activity snapshot [OPTIONS]
+
+Options:
+      --json           Machine-readable normalized metadata
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap activity setup
+
+```text
+Print a reviewable exporter example; never edit agent configuration automatically
+
+Usage: holdmap activity setup [OPTIONS] --provider <PROVIDER>
+
+Options:
+      --provider <PROVIDER>  [possible values: codex, claude]
+      --windows              Generate PowerShell environment assignments instead of shell exports
+      --color <COLOR>        When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible
+                             values: auto, always, never]
+      --no-docker            Don't query Docker/Podman/OrbStack/Colima
+  -h, --help                 Print help
+```
+
+## holdmap activity hook
+
+```text
+Project one Codex/Claude hook from stdin to metadata and forward it locally
+
+Usage: holdmap activity hook [OPTIONS] --provider <PROVIDER>
+
+Options:
+      --provider <PROVIDER>  [possible values: codex, claude]
+      --color <COLOR>        When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible
+                             values: auto, always, never]
+      --no-docker            Don't query Docker/Podman/OrbStack/Colima
+  -h, --help                 Print help
 ```
 
 ## holdmap watch

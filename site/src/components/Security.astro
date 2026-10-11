@@ -4,8 +4,8 @@ import { securityUrl } from "../lib/site";
 const items = [
   { icon: "HardDrive", title: "Local only", text: "Talks to localhost, to hosts you ssh to, and (desktop) GitHub Releases for updates. Nothing else." },
   { icon: "EyeOff", title: "No analytics", text: "No analytics, no accounts, no tracking. This site doesn't track you either." },
-  { icon: "KeyRound", title: "Secrets stay secret", text: "Passwords and tokens in command lines are redacted. Agent chats and settings are never scanned. Optional local recording excludes content fields before retention." },
-  { icon: "ShieldCheck", title: "Protected by default", text: "The OS, shells, IDEs and AI agents are refused unless you pass <code>--allow-protected</code>. MCP always refuses." },
+  { icon: "KeyRound", title: "Credential redaction", text: "Recognized credential fields in command lines are redacted; redaction is heuristic. Passive scans do not inspect agent chats or settings. Optional local recording excludes content fields before retention." },
+  { icon: "ShieldCheck", title: "Protected by default", text: "Hard protection cannot be overridden. Soft-protected processes require an explicit <code>--allow-protected</code> override. MCP refuses all protected targets." },
 ];
 ---
 <section class="section" aria-labelledby="sec-title">

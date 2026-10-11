@@ -558,7 +558,7 @@ Use Rust 1.95+ and Node.js 22.12+ (`nvm use`). [CONTRIBUTING.md](CONTRIBUTING.md
 system dependencies, Chromium, actionlint and cargo-deny setup. Useful checks are:
 
 ```sh
-cargo test --locked                                  # core, CLI/TUI and MCP
+cargo test --locked                                  # core, CLI/TUI, MCP and activity
 (cd apps/desktop && npm ci && npm run check && npm test && npm run test:e2e)
 (cd site && npm ci && npm run check && HOLDMAP_SITE_OFFLINE=1 npm run build && npm test && npm run test:demo)
 scripts/check-all.sh                                  # complete workspace and native checks

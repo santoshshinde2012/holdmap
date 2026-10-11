@@ -1000,8 +1000,9 @@ escaped text, including inline command spans. The browser demo has no native IPC
 
 ### Desktop UI
 
-- **UI kit.** `apps/desktop/src/components/ui/` is the only place that styles controls (fields,
-  selects, switches, buttons, dialogs, tabs…); feature components compose it. Open the app with
+- **UI kit.** `apps/desktop/src/components/ui/` provides shared controls (fields, selects,
+  switches, buttons, dialogs and tabs); feature components compose them and use the shared
+  design tokens for local controls. Open the app with
   `#ui-gallery` to see every control in both themes.
 - **Pure view logic.** `lib/rows.ts` (badges, status, sparklines), `lib/detail.ts` (details pane)
   and `lib/settings.ts` (the Settings contract) are pure and unit-tested, so components depend on
@@ -1135,6 +1136,7 @@ branch; editing source does not itself publish a site.
 | `crates/holdmap-core` | Collection providers, models, attribution, planning, execution and persistence |
 | `crates/holdmap-cli` | CLI rendering, shared reviewed agent actions, TUI view/state helpers, generated-document checks and stdio MCP integration tests |
 | `crates/holdmap-mcp` | Protocol adapter, contracts, live tools and pure discovery modules |
+| `crates/holdmap-activity` | Pure source adapters, shared metadata and credential policy, local collector, bounded client and setup generation |
 | `apps/desktop/src` | Shared Svelte UI, styles and TypeScript view logic |
 | `apps/desktop/src-tauri` | Native commands, state/cache, watcher, tray and OS integration |
 | `apps/desktop/e2e` | Browser regressions using deterministic sample data |
@@ -1156,7 +1158,7 @@ the browser suite on Linux. `scripts/check-all.sh` reproduces the full checks on
 host with its native desktop dependencies installed.
 
 Use Rust 1.95+ and Node.js 22.12+ (`nvm use`), with the native dependencies listed in
-[CONTRIBUTING.md](../CONTRIBUTING.md). `cargo test --locked` checks the core, CLI/TUI and MCP
+[CONTRIBUTING.md](../CONTRIBUTING.md). `cargo test --locked` checks core, CLI/TUI, MCP and activity
 default workspace members. Desktop `npm run check`, `npm test` and `npm run test:e2e` check
 types, pure view logic and production UI flows. Site checks build the shared demo and verify
 guides, links and asset budgets; site `npm run test:demo` launches a preview and checks the

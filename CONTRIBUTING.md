@@ -34,6 +34,7 @@ The repository root is the Rust workspace; each surface keeps its source and too
 | `crates/holdmap-core/` | Shared port scanning, ownership, safety policy and stop execution |
 | `crates/holdmap-cli/` | CLI and TUI, with integration tests |
 | `crates/holdmap-mcp/` | MCP adapter over the shared core |
+| `crates/holdmap-activity/` | Optional local recording, source adapters, metadata policy and bounded transport |
 | `apps/desktop/src/` | Svelte and TypeScript desktop UI, including browser demo data |
 | `apps/desktop/e2e/` | Browser tests against the built desktop UI in demo mode |
 | `apps/desktop/src-tauri/` | Native desktop integration, Tauri configuration and icons |
@@ -75,7 +76,7 @@ cargo fmt --all --check
 (cd apps/desktop && npm run check && npm test && npm run test:e2e) # builds the UI before native checks
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap-activity -p holdmap
 cargo build --locked -p holdmap-desktop
 scripts/check-cross.sh                       # type-checks the macOS and Windows backends from Linux
 (cd site && npm run check && npm run build && npm test)  # website: types, links, size budget and SEO
@@ -93,6 +94,8 @@ cargo deny --all-features check
 mention every command and only real flags, Markdown links and images must resolve, and every
 screenshot must be used. After changing a command or flag, regenerate the reference with
 `scripts/gen-docs.sh` (or `HOLDMAP_BLESS=1 cargo test -p holdmap cli_reference`) and commit it.
+The generated reference includes nested commands such as `activity serve` and distinguishes
+current-source capabilities from published downloads.
 The desktop tests include a typography lint (use the `--fs-*`/`--fw-*` tokens from `app.css`, not
 raw values) and a WCAG AA contrast lint for both themes. Browser tests cover agent visibility,
 search, navigation and port details using deterministic demo data. The CLI integration tests

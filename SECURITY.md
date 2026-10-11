@@ -76,9 +76,10 @@ out of scope.
   64 messages. Oversized input is rejected before dispatch, and an oversized frame is drained
   completely so it cannot become a later valid request. HTTP probe paths reject request/header
   injection; captured command output is bounded to 4 MiB per stream with a deadline.
-- No product analytics are implemented. Optional agent recording accepts explicitly configured
-  local metadata through a token-authenticated loopback endpoint and retains at most 1,000 spans
-  in memory. Prompts, tool inputs/results and unrelated fields are discarded before retention;
+- No product analytics are implemented. Optional agent recording (current source / Unreleased)
+  accepts explicitly configured local metadata through a token-authenticated loopback endpoint
+  and retains at most 1,000 spans in memory. Prompts, tool inputs/results and unrelated fields
+  are discarded before retention;
   identifiers are pseudonymized. Source labels are sanitized, not guaranteed secret-free.
   Status/snapshot/errors exclude the token, and recording has no process-action authority.
   See [agent flow bounds and privacy](docs/agent-flow.md#privacy-security-and-bounds).
@@ -127,8 +128,9 @@ redaction is heuristic and may miss arbitrary positional secrets. Windows privac
 filesystem ACLs, including any custom state directory. Process visibility depends on OS
 permissions, and macOS retains a check-to-signal race; Linux pidfds and Windows process
 handles bind signalling more directly to process identity. Review plans and avoid sharing raw
-history/logs without inspecting them. Version 0.4.0 includes the security hardening described
-here; see the [0.4.0 changes](CHANGELOG.md#040---2026-10-10). Version 0.3.0 predates these fixes.
+history/logs without inspecting them. Version 0.4.0 includes the security changes listed in the
+[0.4.0 release entry](CHANGELOG.md#040---2026-10-10). Features marked current source / Unreleased
+require a source build until a release includes them. Version 0.3.0 predates those release fixes.
 
 ## Scheduled desktop actions (current source)
 
