@@ -3,6 +3,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { imageMarkupProblems } from "./image-markup.mjs";
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 const BASE = "/holdmap/";
@@ -39,10 +40,11 @@ let checked = 0;
 for (const page of pages) {
   const html = readFileSync(page, "utf8");
   const rel = "/" + relative(dist, page).replace(/index\.html$/, "");
+  problems.push(...imageMarkupProblems(html).map((problem) => `${rel}: ${problem}`));
   const pageUrl = new URL(BASE.slice(0, -1) + rel, ORIGIN);
   const refs = [];
   for (const m of html.matchAll(/\s(?:href|src|data-src)="([^"]+)"/g)) refs.push(m[1]);
-  for (const m of html.matchAll(/\ssrcset="([^"]+)"/g)) refs.push(...m[1].split(",").map((s) => s.trim().split(/\s+/)[0]));
+  for (const m of html.matchAll(/\s(?:srcset|data-srcset)="([^"]+)"/g)) refs.push(...m[1].split(",").map((s) => s.trim().split(/\s+/)[0]));
   for (const ref of refs) {
     if (/^(mailto:|data:|javascript:)/.test(ref)) continue;
     let u;

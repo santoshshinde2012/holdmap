@@ -1131,6 +1131,15 @@ The browser selects `lib/mock.ts` rather than Tauri, so demo actions affect samp
 never scan or stop host processes. Pages validates pull-request builds and deploys the main
 branch; editing source does not itself publish a site.
 
+Guide routes render Markdown through Astro's content component and pass it into the shared
+documentation layout. This resolves optimized image assets while preserving headings and alt
+text. The CLI reference keeps its repository-link HTML adapter through the layout's fallback.
+Build checks reject unresolved image placeholders, missing sources and missing alt attributes;
+browser checks load guide screenshots at desktop and mobile widths and check for overflow.
+The current guide captures show the rendered images at
+[desktop width](screenshots/site-guide-images-light.png) and
+[mobile width](screenshots/site-guide-images-mobile-light.png).
+
 | Directory | Contents |
 |---|---|
 | `crates/holdmap-core` | Collection providers, models, attribution, planning, execution and persistence |

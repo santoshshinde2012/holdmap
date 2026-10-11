@@ -5,7 +5,7 @@ import type { DocLink, Heading } from "../lib/docs";
 import { url } from "../lib/site";
 
 interface Props {
-  title: string; description: string; html: string; headings: Heading[];
+  title: string; description: string; html?: string; headings: Heading[];
   nav: DocLink[]; current: string; edit: string; note?: string;
 }
 const { title, description, html, headings, nav, current, edit, note } = Astro.props;
@@ -45,7 +45,9 @@ const breadcrumbs = [
         <p class="desc">{description}</p>
         {note && <p class="note"><Icon name="Info" size={16} /> <span set:html={note} /></p>}
       </header>
-      <div class="prose" set:html={html} />
+      <div class="prose">
+        <slot><Fragment set:html={html ?? ""} /></slot>
+      </div>
       <footer class="doc-foot">
         <a class="edit" href={edit}><Icon name="Pencil" size={16} /> Edit this page on GitHub</a>
         <nav class="pager" aria-label="Previous and next page">
@@ -121,7 +123,8 @@ const breadcrumbs = [
   .prose :global(li) { margin: 8px 0; }
   .prose :global(a) { color: var(--accent-text); text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--accent-text) 40%, transparent); }
   .prose :global(strong) { color: var(--text); }
-  .prose :global(:not(pre) > code) { font-size: 0.875em; padding: 0.125em 0.375em; border-radius: var(--r-xs); background: var(--surface-2); color: var(--text); border: 1px solid var(--border); white-space: nowrap; }
+  .prose :global(img) { display: block; max-width: 100%; height: auto; margin-inline: auto; border: 1px solid var(--border); border-radius: var(--r-md); }
+  .prose :global(:not(pre) > code) { font-size: 0.875em; padding: 0.125em 0.375em; border-radius: var(--r-xs); background: var(--surface-2); color: var(--text); border: 1px solid var(--border); white-space: normal; overflow-wrap: anywhere; }
   .prose :global(pre) { margin: 24px 0; padding: 16px 20px; border-radius: var(--r-md); font-size: var(--fs-sm); line-height: 22px; overflow-x: auto; border: 1px solid var(--border); font-variant-ligatures: none; }
   .prose :global(pre:not(.astro-code)) { background: var(--term-bg); color: var(--term-text); }
   .prose :global(.astro-code), .prose :global(.astro-code span) { color: var(--shiki-dark) !important; }

@@ -14,7 +14,7 @@
     "build": "npm run build:demo && astro build",
     "preview": "astro preview",
     "check": "astro check",
-    "check:links": "node scripts/check-links.mjs",
+    "check:links": "node --test scripts/image-markup.test.mjs && node scripts/check-links.mjs",
     "check:budget": "node scripts/check-budget.mjs",
     "check:seo": "node scripts/check-seo.mjs",
     "test:demo": "node scripts/check-demo.mjs",

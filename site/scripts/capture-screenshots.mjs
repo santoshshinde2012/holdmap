@@ -16,6 +16,8 @@ const captures = [
   { name: "site-guide-dark.png", route: "docs/agents/", theme: "dark", width: 1440 },
   { name: "site-guide-light.png", route: "docs/agents/", theme: "light", width: 1440 },
   { name: "site-guide-mobile-light.png", route: "docs/agents/", theme: "light", width: 390 },
+  { name: "site-guide-images-light.png", route: "docs/agents/", theme: "light", width: 1440, focusImage: 2 },
+  { name: "site-guide-images-mobile-light.png", route: "docs/agents/", theme: "light", width: 390, focusImage: 2 },
 ];
 try {
   browser = await chromium.launch({ executablePath: process.env.CHROME || undefined });
@@ -48,6 +50,13 @@ try {
         await page.waitForFunction(() => {
           const video = document.querySelector("[data-hero-video] video");
           return video.paused && !video.seeking && video.readyState >= 2;
+        });
+      }
+      if (capture.focusImage !== undefined) {
+        const image = page.locator(".prose img").nth(capture.focusImage);
+        await image.scrollIntoViewIfNeeded();
+        await image.evaluate((element) => {
+          window.scrollTo(0, window.scrollY + element.getBoundingClientRect().top - 110);
         });
       }
       await page.evaluate(async () => {
