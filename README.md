@@ -95,6 +95,11 @@ you: open a new terminal, or run the `source` line it prints.
 | Windows | [.msi][msi] or [setup .exe][nsis] |
 | Linux | [.AppImage][appimage], [.deb][deb] or [.rpm][rpm] |
 
+On a Mac with Apple silicon (M1 or newer), choose the **Apple silicon** download.
+It runs natively and does not require Rosetta. Choose **Intel** for an Intel Mac;
+Apple menu → **About This Mac** shows either a chip name or an Intel processor.
+See [Apple's guidance on native apps and Rosetta](https://support.apple.com/en-gb/102527).
+
 <!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
      suffix isn't read as part of the version). -->
 <!-- x-release-please-start-version -->

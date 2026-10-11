@@ -33,14 +33,14 @@ try {
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
-  const check = async (name, fn) => {
+  const check = async (name, fn, diagnosticPage = page) => {
     try { await fn(); results.push(["PASS", name]); } catch (e) {
       results.push(["FAIL", `${name}: ${e.stack ?? e.message ?? String(e)}`]);
       const stem = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/, "");
       await mkdir(artifacts, { recursive: true });
       try {
-        await page.screenshot({ path: `${artifacts}${stem}.png` });
-        await writeFile(`${artifacts}${stem}.json`, JSON.stringify(await page.evaluate(() => {
+        await diagnosticPage.screenshot({ path: `${artifacts}${stem}.png` });
+        await writeFile(`${artifacts}${stem}.json`, JSON.stringify(await diagnosticPage.evaluate(() => {
           const frame = document.querySelector("#demo iframe");
           const viewport = frame?.parentElement;
           const doc = frame?.contentDocument;
@@ -214,6 +214,63 @@ try {
   };
   await check("Public guide screenshots load with descriptive alt text", () => checkGuideImages({ width: 1440, height: 900 }));
   await check("Public guide screenshots fit the mobile viewport", () => checkGuideImages({ width: 390, height: 900 }));
+
+  // Both Mac browser profiles advertise Intel. That string cannot select CPU architecture.
+  const downloadProfiles = [
+    { name: "Apple silicon-style Safari offers both native macOS downloads at narrow width", os: "macos", platform: "MacIntel", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15", viewport: { width: 375, height: 900 } },
+    { name: "Intel-style Chrome offers both native macOS downloads", os: "macos", platform: "MacIntel", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36" },
+    { name: "Windows keeps its direct installer download", os: "windows", platform: "Win32", userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36", suffix: "_x64-setup.exe" },
+    { name: "Linux keeps its direct AppImage download", os: "linux", platform: "Linux x86_64", userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36", suffix: "_amd64.AppImage" },
+  ];
+  for (const profile of downloadProfiles) {
+    const context = await browser.newContext({ userAgent: profile.userAgent, viewport: profile.viewport ?? { width: 1440, height: 900 } });
+    const downloadPage = await context.newPage();
+    const profileErrors = [];
+    downloadPage.on("pageerror", (error) => profileErrors.push(String(error)));
+    downloadPage.on("console", (message) => message.type() === "error" && profileErrors.push(message.text()));
+    await downloadPage.addInitScript((platform) => {
+      Object.defineProperty(navigator, "platform", { value: platform });
+      Object.defineProperty(navigator, "userAgentData", { value: undefined });
+    }, profile.platform);
+    try {
+      await check(profile.name, async () => {
+        await downloadPage.goto(guideBase.href, { waitUntil: "domcontentloaded" });
+        await downloadPage.waitForFunction((os) => document.documentElement.dataset.os === os, profile.os);
+        const download = downloadPage.locator("[data-download]");
+        const panel = downloadPage.locator(`#in-${profile.os}`);
+        await panel.waitFor({ state: "visible", timeout: 5000 });
+        if (profile.os === "macos") {
+          await downloadPage.getByRole("link", { name: "Choose a macOS download", exact: true }).waitFor();
+          if (await download.getAttribute("href") !== "#install") throw new Error("macOS must offer an architecture choice instead of guessing its CPU");
+          await downloadPage.getByRole("tab", { name: "Linux", exact: true }).click();
+          await panel.waitFor({ state: "hidden" });
+          await download.click();
+          if (new URL(downloadPage.url()).hash !== "#install") throw new Error("macOS download must reach the install choices");
+          await panel.waitFor({ state: "visible", timeout: 5000 });
+          const silicon = panel.getByRole("link", { name: /^Apple silicon/ });
+          const intel = panel.getByRole("link", { name: /^Intel/ });
+          const [siliconUrl, intelUrl] = await Promise.all([silicon.getAttribute("href"), intel.getAttribute("href")]);
+          if (!siliconUrl?.endsWith("_aarch64.dmg") || !intelUrl?.endsWith("_x64.dmg") || siliconUrl === intelUrl) throw new Error("macOS choices must link to distinct ARM64 and Intel installers");
+          for (const choice of [silicon, intel]) {
+            await choice.scrollIntoViewIfNeeded();
+            const fits = await choice.evaluate((link) => {
+              const bounds = link.getBoundingClientRect();
+              return bounds.width > 0 && bounds.left >= -1 && bounds.right <= innerWidth + 1;
+            });
+            if (!fits) throw new Error("Both macOS architecture choices must fit the browser viewport");
+          }
+          await panel.getByText(/Apple silicon.*runs natively without Rosetta/).waitFor();
+          await panel.getByText(/Choose Intel.*for Intel Macs/).waitFor();
+        } else {
+          await downloadPage.waitForFunction((suffix) => document.querySelector("[data-download]")?.getAttribute("href")?.endsWith(suffix), profile.suffix, { timeout: 5000 });
+          if (await download.getAttribute("href") !== await panel.locator(".dl-btn.primary").getAttribute("href")) throw new Error(`${profile.os} must retain its direct primary download`);
+        }
+        if (profileErrors.length) throw new Error(profileErrors.join(" | "));
+      }, downloadPage);
+    } finally {
+      await context.close();
+    }
+  }
   await check("No console errors", async () => { if (errors.length) throw new Error(errors.join(" | ")); });
 
   if (traceEnabled) {

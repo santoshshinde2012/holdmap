@@ -4,7 +4,8 @@ import HeroVideo from "./HeroVideo.astro";
 import HeroChapters from "./HeroChapters.astro";
 import { downloads, install, repoUrl, version } from "../lib/site";
 
-const primary = Object.fromEntries(downloads.filter((d) => d.primary).map((d) => [d.os, d.url]));
+// A browser's macOS platform does not identify its CPU; offer both native builds.
+const primary = Object.fromEntries(downloads.filter((d) => d.primary && d.os !== "macos").map((d) => [d.os, d.url]));
 ---
 <section class="hero" aria-labelledby="hero-title">
   <div class="wrap grid">
@@ -21,7 +22,7 @@ const primary = Object.fromEntries(downloads.filter((d) => d.primary).map((d) =>
         <a class="btn btn-primary" href="#install" data-download data-urls={JSON.stringify(primary)}>
           <Icon name="Download" size={16} />
           <span class="dl dl-any">Download the app</span>
-          <span class="dl dl-macos">Download for macOS</span>
+          <span class="dl dl-macos">Choose a macOS download</span>
           <span class="dl dl-windows">Download for Windows</span>
           <span class="dl dl-linux">Download for Linux</span>
         </a>
@@ -106,13 +107,18 @@ const primary = Object.fromEntries(downloads.filter((d) => d.primary).map((d) =>
   }
 </style>
 <script>
-  // Point the download button at the visitor's OS (the default link scrolls to all downloads),
-  // and copy the matching installer (PowerShell on Windows).
+  // macOS keeps the architecture choice at #install; other platforms have a primary download.
+  // Copy the matching CLI installer (PowerShell on Windows).
   const os = document.documentElement.dataset.os as "macos" | "windows" | "linux" | undefined;
   const dl = document.querySelector<HTMLAnchorElement>("[data-download]");
   if (dl && os) {
     const urls = JSON.parse(dl.dataset.urls ?? "{}") as Record<string, string>;
     if (urls[os]) dl.href = urls[os];
+    if (os === "macos") {
+      dl.addEventListener("click", () => {
+        document.querySelector<HTMLButtonElement>("#in-tab-macos")?.click();
+      });
+    }
   }
   const copy = document.querySelector<HTMLButtonElement>(".copy-install");
   if (copy && os === "windows") copy.dataset.copy = copy.dataset.copyPs;
