@@ -34,6 +34,10 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Changed
 
+- A routed H identity replaces the original socket icon across the current-source desktop,
+  website, favicons, native app icons and refreshed screenshots/videos. One vector master
+  generates platform assets, including a monochrome macOS menu-bar template. Website
+  tour chapters use the timings measured from the new recordings.
 - Current-source Power settings separate **Shut down now** from **Schedule shutdown**;
   scheduled reviews start at one hour and exclude immediate execution. Local port details
   similarly offer separate **Stop** and **Schedule stop** actions. Browser labels identify

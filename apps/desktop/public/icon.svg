@@ -1,21 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#22d3ee"/>
-      <stop offset="0.55" stop-color="#6366f1"/>
-      <stop offset="1" stop-color="#7c3aed"/>
-    </linearGradient>
-    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff" stop-opacity=".28"/>
-      <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+    <linearGradient id="holdmap-route" x1="368" y1="420" x2="700" y2="592" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#12d5ee"/>
+      <stop offset="0.5" stop-color="#5f78ff"/>
+      <stop offset="1" stop-color="#8037fa"/>
     </linearGradient>
   </defs>
-  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
-  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#shine)"/>
-  <!-- socket: a rounded port with two pins, and a radar ring -->
-  <circle cx="512" cy="512" r="300" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="28"/>
-  <rect x="332" y="372" width="360" height="280" rx="72" fill="#0b1020" fill-opacity=".9"/>
-  <rect x="412" y="452" width="56" height="120" rx="20" fill="#22d3ee"/>
-  <rect x="556" y="452" width="56" height="120" rx="20" fill="#22d3ee"/>
-  <circle cx="752" cy="292" r="64" fill="#34d399" stroke="#fff" stroke-width="20"/>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="#151078"/>
+  <g id="holdmap-mark">
+    <path d="M304 432H470Q530 432 530 492V552Q530 592 570 592H700" fill="none" stroke="#fafcff" stroke-width="116" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="236" y="204" width="132" height="540" rx="66" fill="#fafcff"/>
+    <rect x="636" y="284" width="132" height="532" rx="66" fill="#fafcff"/>
+    <path d="M368 420H474Q530 420 530 480V548Q530 592 574 592H700" fill="none" stroke="url(#holdmap-route)" stroke-width="58" stroke-linecap="butt" stroke-linejoin="round"/>
+    <circle cx="700" cy="592" r="52" fill="#8037fa"/>
+  </g>
 </svg>
