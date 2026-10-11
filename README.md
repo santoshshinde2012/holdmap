@@ -17,7 +17,7 @@
 
 <p align="center">
   <a href="https://github.com/santoshshinde2012/holdmap/actions/workflows/ci.yml"><img src="https://github.com/santoshshinde2012/holdmap/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
-  <a href="https://github.com/santoshshinde2012/holdmap/releases/latest"><img src="https://img.shields.io/github/v/release/santoshshinde2012/holdmap" alt="Latest release" /></a>
+  <a href="https://github.com/santoshshinde2012/holdmap/releases/latest"><img src="docs/badges/version.svg" alt="Holdmap version; open the latest release" /></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License: MIT OR Apache-2.0" /></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platforms: macOS, Linux, Windows" />
 </p>
