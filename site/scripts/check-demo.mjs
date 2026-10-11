@@ -165,6 +165,36 @@ try {
     await try_("Reset");
     await frame.locator('[id^="row-tcp:3000:"]').waitFor({ timeout: 15000 });
   });
+
+  const guideBase = new URL("./", page.url());
+  const checkGuideImages = async (viewport) => {
+    await page.setViewportSize(viewport);
+    for (const [route, count] of [["agents", 4], ["desktop", 2]]) {
+      await page.goto(new URL(`docs/${route}/`, guideBase).href, { waitUntil: "domcontentloaded" });
+      const images = page.locator(".prose img");
+      if (await images.count() !== count) throw new Error(`${route}: expected ${count} guide screenshots`);
+      for (let i = 0; i < count; i++) {
+        const image = images.nth(i);
+        const alt = await image.getAttribute("alt");
+        if (!alt?.trim()) throw new Error(`${route}: screenshot ${i + 1} needs descriptive alt text`);
+        if (await image.getAttribute("__astro_image_") !== null) throw new Error(`${route}: unresolved image placeholder`);
+        await image.scrollIntoViewIfNeeded();
+        await page.waitForFunction((index) => {
+          const image = document.querySelectorAll(".prose img")[index];
+          return image.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
+        }, i, { timeout: 10000 });
+        const fits = await image.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          return bounds.width > 0 && bounds.width <= element.closest(".prose").getBoundingClientRect().width + 1;
+        });
+        if (!fits) throw new Error(`${route}: screenshot ${i + 1} exceeds its content column`);
+      }
+      const overflows = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+      if (overflows) throw new Error(`${route}: guide overflows the ${viewport.width}px viewport`);
+    }
+  };
+  await check("Public guide screenshots load with descriptive alt text", () => checkGuideImages({ width: 1440, height: 900 }));
+  await check("Public guide screenshots fit the mobile viewport", () => checkGuideImages({ width: 390, height: 900 }));
   await check("No console errors", async () => { if (errors.length) throw new Error(errors.join(" | ")); });
 
   if (traceEnabled) {

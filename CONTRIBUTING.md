@@ -96,6 +96,9 @@ screenshot must be used. After changing a command or flag, regenerate the refere
 `scripts/gen-docs.sh` (or `HOLDMAP_BLESS=1 cargo test -p holdmap cli_reference`) and commit it.
 The generated reference includes nested commands such as `activity serve` and distinguishes
 current-source capabilities from published downloads.
+Website checks reject unresolved Markdown image placeholders and missing image sources or
+alt attributes; decorative images may use `alt=""`. Public browser checks load guide screenshots
+at desktop and mobile widths, as well as exercising the app demo.
 The desktop tests include a typography lint (use the `--fs-*`/`--fw-*` tokens from `app.css`, not
 raw values) and a WCAG AA contrast lint for both themes. Browser tests cover agent visibility,
 search, navigation and port details using deterministic demo data. The CLI integration tests
