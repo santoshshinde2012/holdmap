@@ -33,7 +33,8 @@
   import { linksLabel, nodeForEntry, sectionsByCluster } from "./lib/graph";
   import type { Command } from "./lib/palette";
   import { GROUPS, groupOf, matches, seconds, stopTarget, title, url, canOpen, type Filters, type Group } from "./lib/format";
-  import { prefGet, prefSet } from "./lib/prefs";
+  import { prefGet, prefGetBoolean, prefSet } from "./lib/prefs";
+  import { shortcutContext } from "./lib/keyboard";
 
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
   type View = "list" | "graph" | "agents";
@@ -74,6 +75,7 @@
   let onboarded = $state(prefGet("onboarded") === "1");
   let theme = $state<Theme>((prefGet("theme") as Theme) ?? "system");
   let density = $state<Density>(parseDensity(prefGet("density")));
+  let singleKeyShortcuts = $state(prefGetBoolean("singleKeyShortcuts", true));
   let collapsed = $state<Set<string>>(parseCollapsed(prefGet("collapsed")));
   const usageHist = new UsageHistory(24);
   /** Memory samples for the details pane's trend line (one per scan, like CPU). */
@@ -186,6 +188,7 @@
   });
   $effect(() => { prefSet("sort", sort); });
   $effect(() => { prefSet("density", density); });
+  $effect(() => { prefSet("singleKeyShortcuts", singleKeyShortcuts ? "1" : "0"); });
   $effect(() => { prefSet("collapsed", JSON.stringify([...collapsed])); });
 
   const visible = $derived.by(() => {
@@ -490,10 +493,11 @@
   }
   const portHolder = (port: number) => { const e = snapshot?.entries.find((x) => x.port === port); return e ? `${title(e)}${e.process ? ` (PID ${e.process.pid})` : ""}` : null; };
 
-  const settingsModel = $derived<SettingsModel | null>(config ? { theme, density, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length } : null);
+  const settingsModel = $derived<SettingsModel | null>(config ? { theme, density, singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length } : null);
   const settingsActions: SettingsActions = {
     setTheme: (t) => { theme = t; },
     setDensity: (d) => { density = d; },
+    setSingleKeyShortcuts: (on) => { singleKeyShortcuts = on; },
     setAutostart: async (on) => { autostartOn = await api.autostart(on); },
     setHotkey: async (id) => { shortcut = await api.setHotkey(id); config = await api.getConfig(); },
     setNotify: async (on, devOnly) => { config = await api.setNotify(on, devOnly); },
@@ -916,26 +920,28 @@
 
   const commands = $derived.by((): Command[] => {
     const cmds: Command[] = [];
-    const q = queryPort;
+    const portView = view !== "agents";
+    const s = portView ? selected : null;
+    const q = portView ? queryPort : null;
     for (const c of graph?.clusters ?? []) {
       cmds.push({ id: `stopc-${c.id}`, group: "Actions", icon: "stop", danger: true, title: `Stop cluster ${c.name}`, subtitle: `${c.nodes.length} services · dependency order · asks first`, keywords: `cluster ${c.kind} ${c.name}`, run: () => requestClusterStop(c.name) });
     }
     const dev = (snapshot?.entries ?? []).filter((e) => e.is_dev && e.is_mine && !e.protected && !e.container && e.process);
     if (dev.length > 1) cmds.push({ id: "stop-dev", group: "Actions", icon: "stop", danger: true, title: "Stop all dev servers", subtitle: `${dev.length} running · asks first`, keywords: "kill every dev server all", run: requestStopAllDev });
     if (update) cmds.push({ id: "update", group: "Actions", icon: "sparkles", title: `Install holdmap ${update} and restart`, keywords: "update upgrade new version", run: installUpdate });
-    if (selected) cmds.push({ id: "pin", group: "Actions", icon: "star", title: pins.has(selected.port) ? `Unpin :${selected.port}` : `Pin :${selected.port}`, shortcut: ["P"], run: () => selected && togglePin(selected) });
+    if (s) cmds.push({ id: "pin", group: "Actions", icon: "star", title: pins.has(s.port) ? `Unpin :${s.port}` : `Pin :${s.port}`, shortcut: ["P"], run: () => togglePin(s) });
     for (const e of (snapshot?.entries ?? []).slice(0, 60)) {
-      const boost = (selected?.id === e.id ? 12 : 0) + (e.is_dev ? 3 : 0);
+      const boost = (s?.id === e.id ? 12 : 0) + (e.is_dev ? 3 : 0);
       const sub = `${e.framework?.name ?? e.process?.name ?? ""}${e.project ? ` · ${e.project.name}` : ""}`;
-      cmds.push({ id: `go-${e.id}`, group: "Ports", icon: "hash", title: `:${e.port}  ${title(e)}`, subtitle: sub, boost, keywords: `${e.port} ${e.label} ${e.process?.name ?? ""}`, run: () => { clearFilters(); selectEntry(e); } });
+      cmds.push({ id: `go-${e.id}`, group: "Ports", icon: "hash", title: `:${e.port}  ${title(e)}`, subtitle: sub, boost, keywords: `${e.port} ${e.label} ${e.process?.name ?? ""}`, run: () => { view = "list"; clearFilters(); selectEntry(e); } });
       if ((e.process || e.container) && !e.protected && e.is_mine)
-        cmds.push({ id: `stop-${e.id}`, group: "Actions", icon: "stop", danger: true, title: `Stop :${e.port}  ${title(e)}`, subtitle: selected?.id === e.id ? "selected · asks first" : "asks first", boost, keywords: `kill ${e.port} ${e.label}`, run: () => requestStop(e, false) });
+        cmds.push({ id: `stop-${e.id}`, group: "Actions", icon: "stop", danger: true, title: `Stop :${e.port}  ${title(e)}`, subtitle: s?.id === e.id ? "selected · asks first" : "asks first", boost, keywords: `kill ${e.port} ${e.label}`, run: () => requestStop(e, false) });
       if (canOpen(e))
         cmds.push({ id: `open-${e.id}`, group: "Actions", icon: "external", title: `Open :${e.port} in browser`, subtitle: title(e), boost, keywords: `browser ${e.port}`, run: () => open(e) });
     }
     if (q) cmds.unshift({ id: "check", group: "Ports", icon: "search", title: `Check port ${q}`, subtitle: "who's using it?", keywords: `${q} why explain`, run: () => { filters.query = String(q); } });
     cmds.push(
-      { id: "refresh", group: "Actions", icon: "refresh", title: "Refresh now", shortcut: ["R"], run: () => refresh(true) },
+      { id: "refresh", group: "Actions", icon: "refresh", title: "Refresh now", shortcut: [mod, "R"], run: () => refresh(true) },
       { id: "schedules", group: "Actions", icon: "clock", title: "Scheduled actions", subtitle: `${activeSchedules.length} active · review or cancel`, keywords: "schedule timer countdown shutdown stop port agent", run: openSchedules },
       { id: "free", group: "Actions", icon: "sparkles", title: "Find a free port near 3000", keywords: "available unused", run: () => findFree(3000) },
       { id: "free8", group: "Actions", icon: "sparkles", title: "Find a free port near 8000", keywords: "available unused", run: () => findFree(8000) },
@@ -956,41 +962,42 @@
       { id: "agents", group: "View", icon: view === "agents" ? "list" : "bot", title: view === "agents" ? "Show the list" : "Show agents, tools and apps", shortcut: ["⇧", "A"], keywords: "ai coding agents tools apps docker claude codex cursor copilot gemini windsurf aider access folders stop", run: () => (view = view === "agents" ? "list" : "agents") },
       { id: "sort-c", group: "View", icon: "layers", title: "Group by cluster (compose, workspace, supervisor…)", run: () => (sort = "cluster") },
       { id: "settings", group: "Settings", icon: "sliders", title: "Open settings", shortcut: [mod, ","], keywords: "preferences options config interval hotkey", run: () => openSettings() },
-      { id: "pin-new", group: "Actions", icon: "star", title: selected ? `Pin :${selected.port} with a label…` : "Pin a port…", shortcut: ["⇧", "P"], keywords: "favourite label watch", run: () => openPin(selected) },
+      { id: "pin-new", group: "Actions", icon: "star", title: s ? `Pin :${s.port} with a label…` : "Pin a port…", shortcut: s ? ["⇧", "P"] : undefined, keywords: "favourite label watch", run: () => openPin(s) },
       { id: "remote", group: "Actions", icon: "server", title: "Inspect a remote host over SSH…", keywords: "ssh remote server machine", run: () => (showRemote = true) },
       { id: "history", group: "Actions", icon: "history", title: "Recently stopped — restart", shortcut: ["H"], keywords: "history restart undo", run: openHistory },
       { id: "notify", group: "Settings", icon: "bell", title: config?.notify ? "Turn notifications off" : "Turn notifications on", keywords: "alert conflict new listener", run: toggleNotify },
       { id: "density", group: "Settings", icon: "list", title: density === "compact" ? "Comfortable rows" : "Compact rows", keywords: "density dense rows height compact comfortable", run: () => { density = density === "compact" ? "comfortable" : "compact"; } },
       { id: "autostart", group: "Settings", icon: "sparkles", title: autostartOn ? "Don't launch at login" : "Launch at login", keywords: "startup boot login", run: toggleAutostart },
     );
-    return cmds;
+    return cmds.filter((command) => portView || (command.group !== "Filters" && !command.id.startsWith("sort-")))
+      .map((command) => !singleKeyShortcuts && command.shortcut && !command.shortcut.includes(mod) && !command.shortcut.includes("Esc") ? { ...command, shortcut: undefined } : command);
   });
 
   function onKey(e: KeyboardEvent) {
-    if (e.defaultPrevented) return;
-    const focused = document.activeElement;
-    const typing = focused instanceof HTMLElement && !!focused.closest("input, textarea, [contenteditable=true], [role=combobox]");
-    const control = focused instanceof HTMLElement && !!focused.closest("select, button, [role=radiogroup], [role=radio], [role=tablist], [role=separator]");
+    const context = shortcutContext(e, document.activeElement);
+    if (context.blocked || modalOpen) return; // overlays handle their own keys
+    const typing = context.editing;
+    const control = context.control;
     const flowView = view === "agents" && agentFlowMode !== "overview";
-    const modKey = e.metaKey || e.ctrlKey;
-    if (modalOpen) return; // overlays handle (and stop) their own keys
-    if (modKey && e.key.toLowerCase() === "k") { showPalette = true; e.preventDefault(); return; }
-    if (modKey && e.key === ",") { openSettings(); e.preventDefault(); return; }
-    if (!typing && (e.key === "/" || (modKey && e.key.toLowerCase() === "f"))) { search?.focus(); search?.select(); e.preventDefault(); return; }
-    if (modKey && e.key.toLowerCase() === "r") { refresh(true); e.preventDefault(); return; }
+    if (context.command && e.key.toLowerCase() === "k") { showPalette = true; e.preventDefault(); return; }
+    if (context.command && e.key === ",") { openSettings(); e.preventDefault(); return; }
+    if ((context.command && e.key.toLowerCase() === "f") || (!typing && !control && context.character && singleKeyShortcuts && e.key === "/")) { search?.focus(); search?.select(); e.preventDefault(); return; }
+    if (context.command && e.key.toLowerCase() === "r") { refresh(true); e.preventDefault(); return; }
     if (control) return; // native/select/button controls retain their own keyboard behavior
+    const inSearch = document.activeElement === search || e.target === search;
+    if (typing && !inSearch) return;
     const move = view === "graph" && !typing ? selectGraph : view === "agents" ? selectAgent : select;
-    if (view === "list" && !typing && !modKey && (e.key === "ArrowLeft" || e.key === "ArrowRight") && selectedId) {
+    if (view === "list" && !typing && context.navigation && (e.key === "ArrowLeft" || e.key === "ArrowRight") && selectedId) {
       // Tree-style: ← collapses the selected row's section, → expands it.
       const sec = sectionOf(selectedId);
       if (sec?.title) setCollapsed(sec.id, e.key === "ArrowLeft");
       e.preventDefault(); return;
     }
-    if (view === "list" && !typing && (e.key === "Home" || e.key === "End") && ordered.length) { selectEntry(ordered[e.key === "Home" ? 0 : ordered.length - 1], false); e.preventDefault(); return; }
-    if (view === "list" && !typing && (e.key === "PageDown" || e.key === "PageUp")) { select(e.key === "PageDown" ? 10 : -10); e.preventDefault(); return; }
-    if (!typing && !control && !flowView && (e.key === "ArrowDown" || e.key === "ArrowRight" && view === "graph" || e.key === "j")) { move(1); e.preventDefault(); return; }
-    if (!typing && !control && !flowView && (e.key === "ArrowUp" || e.key === "ArrowLeft" && view === "graph" || e.key === "k")) { move(-1); e.preventDefault(); return; }
-    if (e.key === "Escape") {
+    if (view === "list" && !typing && context.navigation && (e.key === "Home" || e.key === "End") && ordered.length) { selectEntry(ordered[e.key === "Home" ? 0 : ordered.length - 1], false); e.preventDefault(); return; }
+    if (view === "list" && !typing && context.navigation && (e.key === "PageDown" || e.key === "PageUp")) { select(e.key === "PageDown" ? 10 : -10); e.preventDefault(); return; }
+    if (!typing && !flowView && ((context.navigation && (e.key === "ArrowDown" || e.key === "ArrowRight" && view === "graph")) || (context.character && singleKeyShortcuts && e.key === "j"))) { move(1); e.preventDefault(); return; }
+    if (!typing && !flowView && ((context.navigation && (e.key === "ArrowUp" || e.key === "ArrowLeft" && view === "graph")) || (context.character && singleKeyShortcuts && e.key === "k"))) { move(-1); e.preventDefault(); return; }
+    if (context.navigation && e.key === "Escape") {
       if (typing) search?.blur();
       else if (view === "agents" && agentQuery) agentQuery = "";
       else if (view === "agents") selectedAgent = null;
@@ -999,31 +1006,34 @@
       e.preventDefault();
       return;
     }
-    if (e.key === "Enter" && view === "agents") {
+    if (context.navigation && e.key === "Enter" && view === "agents") {
       if (typing) { if (!selectedAgent || !visibleAgentIds.includes(selectedAgent)) selectAgent(1); search?.blur(); }
       return; // buttons and map nodes handle it outside search
     }
-    if (e.key === "Enter") { if (typing) { if (!selected) select(1); search?.blur(); } else if (selected) drawerOpen = true; return; }
-    if (typing || control || modKey || e.altKey) return;
+    if (context.navigation && e.key === "Enter") { if (typing) { if (!selected) select(1); search?.blur(); } else if (selected) drawerOpen = true; return; }
+    if (typing || !context.character) return;
     // Only plain keys below; the list (or the page) has focus.
-    if (e.target instanceof HTMLElement && e.target.closest("input, textarea, [role=combobox], [role=tablist], [role=separator]")) return;
     // Agent metadata must never reuse a listener selection from another view.
     const s = view === "list" || view === "graph" ? selected : null;
+    if (e.key === "Backspace" || e.key === "Delete") {
+      if (s && (s.process || s.container)) { requestStop(s, e.shiftKey); e.preventDefault(); }
+      return;
+    }
+    if (!singleKeyShortcuts) return;
     switch (e.key) {
-      case "Backspace": case "Delete": if (s && (s.process || s.container)) requestStop(s, e.shiftKey); break;
-      case "o": if (s && canOpen(s)) open(s); break;
-      case "c": if (s) copy(url(s), "URL"); break;
+      case "o": if (s && canOpen(s)) open(s); else return; break;
+      case "c": if (s) copy(url(s), "URL"); else return; break;
       case "r": refresh(true); break;
-      case "a": filters.all = !filters.all; refresh(); break;
-      case "t": filters.proto = filters.proto === "any" ? "tcp" : filters.proto === "tcp" ? "udp" : "any"; break;
-      case "d": filters.dev = !filters.dev; break;
-      case "m": filters.mine = !filters.mine; break;
-      case "e": filters.exposed = !filters.exposed; break;
+      case "a": if (view === "agents") return; filters.all = !filters.all; refresh(); break;
+      case "t": if (view === "agents") return; filters.proto = filters.proto === "any" ? "tcp" : filters.proto === "tcp" ? "udp" : "any"; break;
+      case "d": if (view === "agents") return; filters.dev = !filters.dev; break;
+      case "m": if (view === "agents") return; filters.mine = !filters.mine; break;
+      case "e": if (view === "agents") return; filters.exposed = !filters.exposed; break;
       case "L": cycleTheme(); break;
       case "g": view = view === "graph" ? "list" : "graph"; break;
       case "A": view = view === "agents" ? "list" : "agents"; break;
       case "h": openHistory(); break;
-      case "p": if (s) togglePin(s); break;
+      case "p": if (s) togglePin(s); else return; break;
       case "P": if (s) openPin(s); else return; break;
       case "s": { const n = view === "graph" ? selectedGraphNode : null; const c = n?.cluster ? graph?.clusters.find((x) => x.id === n.cluster) : null; if (c) requestClusterStop(c.name); else return; break; }
       case "?": showHelp = true; break;
@@ -1149,7 +1159,7 @@
         labelHidden
         placeholder="Search agents, tools, folders, PIDs…"
         clearable
-        kbdHint="/"
+        kbdHint={singleKeyShortcuts ? "/" : undefined}
         spellcheck="false"
         autocomplete="off"
         aria-controls="agent-list"
@@ -1165,7 +1175,7 @@
         labelHidden
         placeholder="Search ports, projects, processes…"
         clearable
-        kbdHint="/"
+        kbdHint={singleKeyShortcuts ? "/" : undefined}
         spellcheck="false"
         autocomplete="off"
         aria-controls="port-list"
@@ -1179,25 +1189,25 @@
       </span>
       <Button size="sm" icon="command" kbd={modK} class="cmdk" onclick={() => (showPalette = true)} aria-keyshortcuts="Meta+K Control+K" tip={{ text: "Command palette", kbd: modK }}>Commands</Button>
       <span class="tsep" aria-hidden="true"></span>
-      <IconButton icon="refresh" label="Refresh" kbd="R" onclick={() => refresh(true)} class={manualRefresh ? "spinning" : ""} />
-      <IconButton icon="history" label="Recently stopped" kbd="H" onclick={openHistory} />
+      <IconButton icon="refresh" label="Refresh" kbd={singleKeyShortcuts ? "R" : undefined} onclick={() => refresh(true)} class={manualRefresh ? "spinning" : ""} />
+      <IconButton icon="history" label="Recently stopped" kbd={singleKeyShortcuts ? "H" : undefined} onclick={openHistory} />
       <IconButton icon="clock" label={`Scheduled actions${activeSchedules.length ? ` (${activeSchedules.length} active)` : ""}`} onclick={openSchedules} bind:el={schedulesTrigger} />
       <IconButton icon="server" label="Remote host…" onclick={() => (showRemote = true)} />
-      <IconButton icon={themeIcon} label="Theme: {THEME_LABEL[theme]}" kbd={["⇧", "L"]} onclick={cycleTheme} />
+      <IconButton icon={themeIcon} label="Theme: {THEME_LABEL[theme]}" kbd={singleKeyShortcuts ? ["⇧", "L"] : undefined} onclick={cycleTheme} />
       <IconButton icon="sliders" label="Settings" kbd={[mod, ","]} onclick={() => openSettings()} />
     </div>
   </header>
 
   <div class="toolbar" role="toolbar" aria-label="View and filters">
-    <SegmentedControl label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: "List (G)" }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, countLabel: linksLabel(graph?.stats.edges ?? 0), title: graph?.stats.edges ? `Service graph · ${linksLabel(graph.stats.edges)} between services (G)` : "Service graph (G)" }, { value: "agents", label: "Agents", icon: "bot", count: agentsReport?.agents.length || null, countLabel: agentsReport ? `${agentsReport.agents.length} agents and tools` : undefined, title: "Agents, tools and apps: folders, access, ports they started and connections (⇧A)" }]} />
+    <SegmentedControl label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: `List${singleKeyShortcuts ? " (G)" : ""}` }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, countLabel: linksLabel(graph?.stats.edges ?? 0), title: `Service graph${graph?.stats.edges ? ` · ${linksLabel(graph.stats.edges)} between services` : ""}${singleKeyShortcuts ? " (G)" : ""}` }, { value: "agents", label: "Agents", icon: "bot", count: agentsReport?.agents.length || null, countLabel: agentsReport ? `${agentsReport.agents.length} agents and tools` : undefined, title: `Agents, tools and apps: folders, access, ports they started and connections${singleKeyShortcuts ? " (⇧A)" : ""}` }]} />
     {#if view !== "agents"}
       <span class="divider" aria-hidden="true"></span>
-      <SegmentedControl label="Socket states" value={filters.all ? "all" : "listen"} options={[{ value: "listen", label: "Listening" }, { value: "all", label: "All sockets", title: "Include established, TIME_WAIT… (A)" }]} onchange={(v) => { filters.all = v === "all"; refresh(); }} />
+      <SegmentedControl label="Socket states" value={filters.all ? "all" : "listen"} options={[{ value: "listen", label: "Listening" }, { value: "all", label: "All sockets", title: `Include established, TIME_WAIT…${singleKeyShortcuts ? " (A)" : ""}` }]} onchange={(v) => { filters.all = v === "all"; refresh(); }} />
       <SegmentedControl label="Protocol" bind:value={filters.proto} options={[{ value: "any", label: "Any" }, { value: "tcp", label: "TCP" }, { value: "udp", label: "UDP" }]} />
       <span class="divider" aria-hidden="true"></span>
-      <FilterChip label="Dev servers" dot="var(--tone-green)" count={stats.dev} bind:pressed={filters.dev} title="Only dev servers" kbd="D" />
-      <FilterChip label="Mine" icon="lock" count={stats.mine} bind:pressed={filters.mine} title="Only my processes" kbd="M" />
-      <FilterChip label="Exposed" icon="globe" count={stats.exposed} tone={stats.exposed > 0 ? "warn" : "accent"} bind:pressed={filters.exposed} title="Reachable from the network" kbd="E" />
+      <FilterChip label="Dev servers" dot="var(--tone-green)" count={stats.dev} bind:pressed={filters.dev} title="Only dev servers" kbd={singleKeyShortcuts ? "D" : undefined} />
+      <FilterChip label="Mine" icon="lock" count={stats.mine} bind:pressed={filters.mine} title="Only my processes" kbd={singleKeyShortcuts ? "M" : undefined} />
+      <FilterChip label="Exposed" icon="globe" count={stats.exposed} tone={stats.exposed > 0 ? "warn" : "accent"} bind:pressed={filters.exposed} title="Reachable from the network" kbd={singleKeyShortcuts ? "E" : undefined} />
       {#if filtersActive}<Button size="sm" variant="ghost" icon="x" onclick={clearFilters}>Clear</Button>{/if}
       <div class="spacer"></div>
       <Select size="sm" prefix="Sort" label="Sort by" labelHidden bind:value={sort} width="150px" options={[{ value: "group", label: "Grouped", description: "By kind: dev, containers, databases…" }, { value: "cluster", label: "Cluster", description: "Compose project, workspace, supervisor" }, { value: "port", label: "Port" }, { value: "newest", label: "Newest" }, { value: "memory", label: "Memory" }]} />
@@ -1240,7 +1250,7 @@
             paused={flowPaused} onpausechange={(paused) => { flowPaused = paused; }} onflowmodechange={(mode) => { agentFlowMode = mode; }}
             onrefreshflow={() => { void flowLoader.request(); }} onrefreshactivity={() => { void activityLoader.request(); }}
             onstartrecording={startRecording} onstoprecording={stopRecording} onclearactivity={clearRecordedActivity}
-            onactivitysetup={api.activitySetup} />
+            onactivitysetup={api.activitySetup} onclearquery={() => { agentQuery = ""; }} />
         {:else}
           <div class="graph-loading" aria-busy="true">Loading agents…</div>
         {/if}
@@ -1332,7 +1342,7 @@
     {#if snapshot}
       <span><b>{stats.total}</b> ports</span><span class="g"><b>{stats.dev}</b> dev</span>{#if stats.exposed}<span class="w"><b>{stats.exposed}</b> exposed</span>{/if}
       <span class="sp"></span>
-      <span class="hints">{#if view === "agents" && agentFlowMode !== "overview"}<span><Kbd keys="Tab" size="sm" />flow controls</span>{:else}<span><Kbd keys={["↑", "↓"]} size="sm" />move</span>{#if view !== "agents"}<span><Kbd keys="⌫" size="sm" />stop</span>{/if}{/if}<span><Kbd keys="G" size="sm" />graph</span><span><Kbd keys={["⇧", "A"]} size="sm" />agents</span><span><Kbd keys={[mod, "K"]} size="sm" />commands</span><span><Kbd keys="?" size="sm" />shortcuts</span>{#if shortcut}<span class="gs"><Kbd keys={shortcut} size="sm" />from anywhere</span>{/if}</span>
+      <span class="hints">{#if view === "agents" && agentFlowMode !== "overview"}<span><Kbd keys="Tab" size="sm" />flow controls</span>{:else}<span><Kbd keys={["↑", "↓"]} size="sm" />move</span>{#if view !== "agents"}<span><Kbd keys="⌫" size="sm" />stop</span>{/if}{/if}{#if singleKeyShortcuts}<span><Kbd keys="G" size="sm" />graph</span><span><Kbd keys={["⇧", "A"]} size="sm" />agents</span>{/if}<span><Kbd keys={[mod, "K"]} size="sm" />commands</span>{#if singleKeyShortcuts}<span><Kbd keys="?" size="sm" />shortcuts</span>{/if}{#if shortcut}<span class="gs"><Kbd keys={shortcut} size="sm" />from anywhere</span>{/if}</span>
     {/if}
   </footer>
 </div>
@@ -1351,7 +1361,7 @@
 {/if}
 {#if showPalette}<CommandPalette {commands} onclose={() => { showPalette = false; }} />{/if}
 {#if showHistory}<HistoryPanel items={historyItems} onrestart={restartEntry} oncopy={copy} onclose={() => (showHistory = false)} onclear={async () => { await api.clearHistory(); historyItems = []; }} />{/if}
-{#if showHelp}<ShortcutsDialog {mod} onclose={() => (showHelp = false)} />{/if}
+{#if showHelp}<ShortcutsDialog {mod} {singleKeyShortcuts} onclose={() => (showHelp = false)} />{/if}
 {#if showSettings && settingsModel}<SettingsDialog model={settingsModel} actions={settingsActions} bind:section={settingsSection} onclose={() => (showSettings = false)} />{/if}
 {#if showShutdown}<ShutdownDialog preview={shutdownPreview} loading={shutdownLoading} busy={shutdownBusy} requested={shutdownRequested} error={shutdownError} demo={!api.isTauri} onconfirm={confirmShutdown} onclose={closeShutdown} onretry={openShutdown} onschedule={scheduleShutdown} scheduled={shutdownScheduled} onviewschedules={openSchedules} />{/if}
 {#if showSchedules}<SchedulesDialog {schedules} loading={schedulesLoading} error={schedulesError} demo={!api.isTauri} onclose={closeSchedules} onrefresh={() => loadSchedules(true)} oncancel={cancelSchedule} />{/if}

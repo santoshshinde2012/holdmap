@@ -92,6 +92,13 @@
           </SettingRow>
         </SettingsGroup>
         {#if errors.hotkey}<div class="err"><Callout tone="danger" size="sm" title="Shortcut unavailable">{errors.hotkey}</Callout></div>{/if}
+        <SettingsGroup title="Keyboard navigation">
+          <SettingRow label="Single-key shortcuts" description="Use letters, / and ? for quick actions when you aren't typing. Turn off for speech input. Arrow keys and Cmd/Ctrl shortcuts stay available.">
+            {#snippet children({ labelId, descId })}
+              <Switch labelledby={labelId} describedby={descId} checked={model.singleKeyShortcuts} busy={busy.singleKeyShortcuts} onchange={(v) => save("singleKeyShortcuts", () => actions.setSingleKeyShortcuts(v), v ? "Single-key shortcuts on" : "Single-key shortcuts off")} />
+            {/snippet}
+          </SettingRow>
+        </SettingsGroup>
       {:else if section === "appearance"}
         <SettingsGroup title="Display">
           <SettingRow label="Appearance" description="System follows your OS light/dark setting.">
@@ -108,7 +115,7 @@
             {#snippet children()}<span class="ro">System</span>{/snippet}
           </SettingRow>
         </SettingsGroup>
-        <p class="tip"><Kbd keys={["⇧", "L"]} size="sm" /> cycles the theme from anywhere.</p>
+        {#if model.singleKeyShortcuts}<p class="tip"><Kbd keys={["⇧", "L"]} size="sm" /> cycles the theme while you aren't typing.</p>{/if}
       {:else if section === "notifications"}
         <SettingsGroup title="Desktop notifications" description="holdmap watches in the background and tells you when something changes.">
           <SettingRow label="Notify me" description="New listeners, port conflicts, and pinned ports that stop.">

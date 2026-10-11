@@ -66,7 +66,7 @@ const widths = (w: number) => [w, w * 2, w * 3];
       <li class="card">
         <div class="copy">
           <h3>Everything from the keyboard</h3>
-          <p>A command palette for every port and action, with shortcuts that match the CLI.</p>
+          <p>A searchable command palette and predictable arrow navigation. Current source lets you disable single-key shortcuts while keeping modifier shortcuts available.</p>
         </div>
         <div class="visual bleed short">{["dark", "light"].map((t) => (
           <Picture src={shots.palette[t as "dark"]} formats={["avif"]} fallbackFormat="webp" widths={widths(shots.palette.w)} sizes={`${shots.palette.w}px`} alt={shots.palette.alt} loading="lazy" style={`width:${shots.palette.w}px`} pictureAttributes={{ class: `only-${t}` }} />
@@ -101,7 +101,7 @@ const widths = (w: number) => [w, w * 2, w * 3];
       <li class="card span-3 split agent-flow">
         <div class="copy">
           <h3>See agent connections and recorded calls</h3>
-          <p><strong>Connections</strong> maps observed processes, listeners and live sockets. <strong>Calls</strong> shows tool and agent activity reported by integrations you configure, with a graph, timeline and clear source evidence. Optional recording keeps sanitized metadata in memory on this computer; payload fields are excluded.</p>
+          <p><strong>Connections</strong> maps observed processes, listeners and live sockets. <strong>Calls</strong> shows tool and agent activity reported by integrations you configure. Find failures or missing completion, sort by reported duration, and inspect the reported parent context. Optional recording keeps sanitized metadata in memory on this computer; payload fields are excluded.</p>
           <p class="source-note">Current source / Unreleased. Socket relationships do not reveal messages. Session grouping does not imply communication; parent links come from supplied trace context.</p>
           <a class="link-arrow" href={url("docs/agents/#desktop-flow-connections-and-calls")}>Agent Flow and recording <Icon name="ArrowRight" size={16} /></a>
         </div>

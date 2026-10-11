@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, openAgents, test } from "./fixtures";
 
 test("List search and details navigate process and network sections", async ({ app }) => {
   const search = app.getByLabel("Search ports", { exact: true });
@@ -37,6 +37,82 @@ test("Graph selection opens the corresponding listener and survives layout chang
   await expect(service).toBeVisible();
   await app.getByRole("radio", { name: "List", exact: true }).click();
   await expect(app.getByRole("option", { name: /^Port 3001 tcp,/ })).toHaveAttribute("aria-selected", "true");
+});
+
+test("Agents and Flow shortcuts leave hidden Ports filters unchanged", async ({ app }) => {
+  await openAgents(app);
+  const sendFilterKeys = async () => {
+    await app.locator("body").click({ position: { x: 2, y: 2 } });
+    for (const key of ["a", "t", "d", "m", "e", "p", "o", "c", "Delete"]) await app.keyboard.press(key);
+  };
+  await sendFilterKeys();
+  await app.getByRole("radio", { name: "Flow", exact: true }).click();
+  await sendFilterKeys();
+  await expect(app.getByRole("dialog")).toHaveCount(0);
+  await app.keyboard.press("Control+k");
+  const palette = app.getByRole("dialog", { name: "Command palette", exact: true });
+  await palette.getByRole("combobox", { name: "Search commands" }).fill("Only dev servers");
+  await expect(palette.getByRole("option", { name: "Only dev servers" })).toHaveCount(0);
+  await app.keyboard.press("Escape");
+  await app.getByRole("radio", { name: "List", exact: true }).click();
+  const filters = app.getByRole("toolbar", { name: "View and filters" });
+  for (const name of ["Dev servers", "Mine", "Exposed"]) await expect(filters.getByRole("button", { name: new RegExp(`^${name}`) })).toHaveAttribute("aria-pressed", "false");
+  await expect(app.getByRole("radio", { name: "Listening", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(app.getByRole("radio", { name: "Any", exact: true })).toHaveAttribute("aria-checked", "true");
+});
+
+test("Single-key shortcuts can be disabled and stay off after reload", async ({ app }) => {
+  const list = app.getByRole("listbox", { name: "Ports in use" });
+  const dev = app.getByRole("toolbar", { name: "View and filters" }).getByRole("button", { name: /^Dev servers/ });
+  await list.focus();
+  await app.keyboard.press("d");
+  await expect(dev).toHaveAttribute("aria-pressed", "true");
+  await app.keyboard.press("d");
+  await app.keyboard.press("Control+,");
+  const settings = app.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.getByRole("switch", { name: "Single-key shortcuts" }).click();
+  await expect(settings.getByRole("switch", { name: "Single-key shortcuts" })).toHaveAttribute("aria-checked", "false");
+  await settings.getByRole("button", { name: "Done", exact: true }).click();
+  await app.reload();
+  await expect(list.getByRole("option").first()).toBeVisible();
+  await list.focus();
+  for (const key of ["d", "/", "?"]) await app.keyboard.press(key);
+  await expect(dev).toHaveAttribute("aria-pressed", "false");
+  await expect(app.getByRole("dialog")).toHaveCount(0);
+  await expect(app.getByLabel("Search ports", { exact: true })).not.toBeFocused();
+  await app.keyboard.press("ArrowDown");
+  await expect(list.getByRole("option").first()).toHaveAttribute("aria-selected", "true");
+  await app.keyboard.press("Control+f");
+  await expect(app.getByLabel("Search ports", { exact: true })).toBeFocused();
+  await app.keyboard.press("Control+k");
+  await expect(app.getByRole("dialog", { name: "Command palette", exact: true }).getByRole("combobox", { name: "Search commands" })).toBeFocused();
+});
+
+test("IME, inherited editors and modified navigation do not trigger app actions", async ({ app }) => {
+  const list = app.getByRole("listbox", { name: "Ports in use" });
+  await list.focus();
+  await app.keyboard.press("ArrowDown");
+  const selectedId = await list.getAttribute("aria-activedescendant");
+  for (const key of ["Alt+ArrowDown", "Control+Home", "Shift+ArrowDown"]) await app.keyboard.press(key);
+  await expect(list).toHaveAttribute("aria-activedescendant", selectedId!);
+  await list.dispatchEvent("keydown", { key: "d", isComposing: true });
+  await list.dispatchEvent("keydown", { key: "d", keyCode: 229 });
+  await app.evaluate(() => {
+    const editor = document.createElement("div");
+    editor.contentEditable = "true";
+    const child = document.createElement("span");
+    child.tabIndex = 0;
+    editor.append(child);
+    document.body.append(editor);
+    child.focus();
+    child.dispatchEvent(new KeyboardEvent("keydown", { key: "d", bubbles: true }));
+    editor.remove();
+  });
+  await expect(app.getByRole("toolbar", { name: "View and filters" }).getByRole("button", { name: /^Dev servers/ })).toHaveAttribute("aria-pressed", "false");
+  const search = app.getByLabel("Search ports", { exact: true });
+  await search.fill("3000");
+  await search.dispatchEvent("keydown", { key: "Escape", isComposing: true });
+  await expect(search).toHaveValue("3000");
 });
 
 test.describe("compact windows", () => {

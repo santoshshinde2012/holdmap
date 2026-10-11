@@ -1,6 +1,7 @@
 //! Agent navigation and reviewed service-stop requests, independent of terminal layout.
 
 use super::app::{App, Modal, Toast};
+use super::input::append_search_text;
 use crate::agent_actions::ReviewedAgentStops;
 use holdmap_core::agents::Agent;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
@@ -97,7 +98,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                self.agent_query.push(c)
+                append_search_text(&mut self.agent_query, c.encode_utf8(&mut [0; 4]))
             }
             _ => {}
         }

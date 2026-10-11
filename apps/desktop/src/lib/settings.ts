@@ -16,6 +16,8 @@ export interface SettingsModel {
   theme: Theme;
   /** Port list row height: comfortable (44px) or compact (36px). */
   density: Density;
+  /** Character shortcuts can be disabled independently of Cmd/Ctrl and arrow navigation. */
+  singleKeyShortcuts: boolean;
   config: Config;
   autostart: boolean;
   /** Label of the active global shortcut, or null when off / unavailable. */
@@ -34,6 +36,7 @@ export interface SettingsModel {
 export interface SettingsActions {
   setTheme(t: Theme): void;
   setDensity(d: Density): void;
+  setSingleKeyShortcuts(on: boolean): void;
   setAutostart(on: boolean): Promise<void>;
   setHotkey(id: string): Promise<void>;
   setNotify(on: boolean, devOnly: boolean): Promise<void>;

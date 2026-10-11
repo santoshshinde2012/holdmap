@@ -17,7 +17,8 @@ terminates only the child process groups this script created. App state lives in
 a temp directory. Screenshots retain the actual ports, PIDs, timings, memory and plans.
 
 The TUI is captured only after filtering to the unique fixture path or exact owned
-agent PID. ANSI output
+agent PID. The Graph capture verifies every matching node and connection belongs
+to the four fixture listeners before publishing the filtered frame. ANSI output
 is held in memory, not saved as an unfiltered transcript. For published images,
 the current account name is replaced with `devuser`, truncated/padded to its
 original width; all other terminal cells and styles are retained. The renderer uses a fixed dark
@@ -428,6 +429,77 @@ def verify_owned_alive(owned: dict[str, int]) -> None:
             raise RuntimeError("The owned UDP listener changed after a cancelled review")
 
 
+def verify_graph_fixture(binary: Path, base: Path, env: dict[str, str],
+                         children: list[subprocess.Popen], ports: list[int]) -> None:
+    """Verify the Graph search and selected-node neighbourhood cannot reveal other processes."""
+    result = subprocess.run(
+        [str(binary), "--no-docker", "graph", "--all", "--json"],
+        cwd=base, env=env, capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("The Graph fixture inspection failed; no transcript was saved")
+    graph = json.loads(result.stdout)
+    clusters = {cluster["id"]: cluster["name"] for cluster in graph["clusters"]}
+    query = base.name.lower()
+    matches = []
+    for node in graph["nodes"]:
+        fields = [node.get(key) for key in ("label", "subtitle", "project", "project_root")]
+        fields.extend([node.get("framework", {}).get("name") if node.get("framework") else None,
+                       node.get("container", {}).get("name") if node.get("container") else None,
+                       clusters.get(node.get("cluster"))])
+        if any(query in value.lower() for value in fields if isinstance(value, str)):
+            matches.append(node)
+    owned_pids = {child.pid for child in children[:4]}
+    if len(matches) != 4 or {node.get("root_pid") for node in matches} != owned_pids:
+        raise RuntimeError("The Graph search did not isolate exactly four owned fixture services")
+    expected = {(port, "udp" if index == 3 else "tcp") for index, port in enumerate(ports)}
+    listeners = {(listener["port"], listener["protocol"])
+                 for node in matches for listener in node["ports"]}
+    if listeners != expected or any(not set(node["pids"]).issubset(owned_pids) for node in matches):
+        raise RuntimeError("The Graph capture includes a listener or process outside its fixtures")
+    if any(not node.get("project_root")
+           or not Path(node["project_root"]).resolve().is_relative_to(base.resolve())
+           for node in matches):
+        raise RuntimeError("The Graph capture includes unrelated project metadata")
+    owned_ids = {node["id"] for node in matches}
+    if any((edge["from"] in owned_ids or edge["to"] in owned_ids)
+           and not {edge["from"], edge["to"]}.issubset(owned_ids) for edge in graph["edges"]):
+        raise RuntimeError("The Graph fixture neighbourhood includes an unrelated process")
+
+
+def capture_graph_view(binary: Path, base: Path, env: dict[str, str],
+                       children: list[subprocess.Popen], ports: list[int],
+                       terminals: list[Terminal]) -> CaptureScreen:
+    # Give the project-less UDP fixture its own metadata only after the original
+    # CLI/Ports captures. Graph search deliberately never inspects process commands.
+    (base / "statsd" / "pyproject.toml").write_text('[project]\nname = "statsd"\n')
+    verify_graph_fixture(binary, base, env, children, ports)
+    terminal = Terminal([str(binary), "--no-docker", "tui"], base, env, 180, 36)
+    terminals.append(terminal)
+    terminal.wait_for(lambda text: "◉ holdmap" in text, "the Graph capture initial frame")
+    terminal.write("\t/" + base.name + "\r")
+
+    def owned_frame(text: str) -> bool:
+        lines = text.splitlines()
+        return (base.name in lines[1] and "Esc to clear" in lines[1]
+                and "4 services" in lines[0] and "Graph · 4 of" in text
+                and all(f":{port}" in text for port in ports)
+                and all(name in text for name in ("shop-web", "docs-site", "orders-api", "statsd")))
+
+    terminal.wait_for(owned_frame, "the four owned services in the Graph search")
+    terminal.write("p")
+    terminal.wait_for(lambda text: owned_frame(text) and "paused" in text,
+                      "the paused, isolated Graph search")
+    verify_graph_fixture(binary, base, env, children, ports)
+    for _ in range(4):
+        terminal.pump()
+    screen = copy.deepcopy(terminal.screen)
+    terminal.write("q")
+    if terminal.finish() != 0:
+        raise RuntimeError("The Graph TUI did not exit cleanly")
+    return screen
+
+
 def capture_agent_views(binary: Path, base: Path, env: dict[str, str], children: list[subprocess.Popen],
                         terminals: list[Terminal]) -> tuple[dict[str, object], dict[str, int]]:
     owned = create_agent_fixture(base, children)
@@ -645,11 +717,13 @@ def capture(binary: Path, output: Path, font: Path) -> None:
             tui.write("q")
             if tui.finish() != 0:
                 raise RuntimeError("The TUI did not exit cleanly")
-            for screen in [cli_screen, tui_screen]:
+            graph_screen = capture_graph_view(binary, base, env, children, ports, terminals)
+            for screen in [cli_screen, tui_screen, graph_screen]:
                 mask_account(screen)
             output.mkdir(parents=True, exist_ok=True)
             render(cli_screen, output / "cli-explain-dark.png", font, 16, crop=True)
             render(tui_screen, output / "tui-list-dark.png", font, 14)
+            render(graph_screen, output / "tui-graph-dark.png", font, 14)
             # Start agent listeners after the original four-row captures are complete.
             agent_screens, owned = capture_agent_views(binary, base, env, children, terminals)
             if hashlib.sha256(binary.read_bytes()).hexdigest() != binary_digest:
@@ -658,6 +732,7 @@ def capture(binary: Path, output: Path, font: Path) -> None:
                 mask_account(screen)
                 render(screen, output / name, font, 14, crop=name == "cli-agents-dark.png")
             print(f"Captured real CLI/TUI output: fixture ports {', '.join(map(str, ports))}")
+            print("Verified Graph search: four owned fixture listeners and no unrelated neighbourhood processes")
             print(f"Verified owned agent {owned['root']}: {owned['port']}/tcp + {owned['port']}/udp, "
                   "inferred stdio MCP, Enter/n cancellation, all four fixture processes alive")
             print(f"Captured CLI binary SHA-256: {binary_digest}")

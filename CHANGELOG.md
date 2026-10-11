@@ -10,6 +10,10 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- Calls diagnosis filters for failed records and missing completion, individual metadata search,
+  chronological or longest-reported-duration ordering and retained reported parent context.
+- A persisted desktop single-key shortcut setting, with modifier and arrow navigation preserved.
+
 - Agent Flow separates observed process/socket relationships from opt-in local reported calls.
   Parallel tools, model calls, delegated agents, failures and missing data have a graph, timeline
   and inspector. Codex/Claude adapters and an optional MCP observer retain bounded metadata in
@@ -35,6 +39,15 @@ by [release-please](https://github.com/googleapis/release-please) from
   the homepage links local shutdown and scheduling guidance.
 
 ### Fixed
+
+- Terminal graph search filters and navigates the displayed graph, retaining selected node
+  identity across refreshes. Mouse input and bracketed paste use paired terminal mode cleanup;
+  recognized paste is bounded search text and never an action or confirmation.
+- Desktop shortcuts respect composition, editable content and native controls. Port filters and
+  stale selected-port palette commands no longer affect hidden port views while inspecting agents.
+  Palette search has an accessible name and maintains a valid active result during live updates.
+- Public website snapshot capture waits for visible images, so offscreen lazy images cannot
+  stall mobile guide captures.
 
 - Public guide screenshots render through Astro's content component with responsive sizing
   and descriptive alt text. Website checks reject unresolved image placeholders and verify

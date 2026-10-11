@@ -6,22 +6,29 @@
   import FlowInspector from "./FlowInspector.svelte";
   import ActivityTimeline from "./ActivityTimeline.svelte";
   import RecordingControls from "./RecordingControls.svelte";
-  import { activityRuns, callGraph, graphWindow, observedGraph, nodeDescription } from "../../../lib/agent-flow/build";
+  import { activityMatches, activityRuns, graphWindow, observedGraph, nodeDescription } from "../../../lib/agent-flow/build";
+  import { activityContext, activityRows, type ActivityFilter, type ActivityOrder } from "../../../lib/agent-flow/triage";
   import type { AgentFlowProps } from "../../../lib/agent-flow/model";
 
   let { query = "", dark, reduced, flowReport = null, activity = null, recording = null, flowLoading = false, activityLoading = false,
     flowError = null, activityError = null, demo = false, paused = false, onpausechange, onflowmodechange, onrefreshflow, onrefreshactivity,
-    onstartrecording, onstoprecording, onclearactivity, onactivitysetup,
+    onstartrecording, onstoprecording, onclearactivity, onactivitysetup, onclearquery,
   }: AgentFlowProps & { query?: string; dark: boolean; reduced: boolean } = $props();
 
   let mode = $state<"connections" | "calls">("connections");
   let chosen = $state<string | null>(null);
   let runId = $state<string | null>(null);
+  let filter = $state<ActivityFilter>("all");
+  let order = $state<ActivityOrder>("time");
   let recordingControls = $state<{ openSetup(): void; setupVisible(): boolean }>();
 
-  const runs = $derived(activityRuns(activity?.spans ?? [], query));
-  const run = $derived(runs.find((r) => r.id === runId) ?? null);
-  const windowed = $derived(mode === "calls" ? graphWindow(callGraph(run), chosen) : { graph: observedGraph(flowReport, query), omitted: 0 });
+  const allRuns = $derived(activityRuns(activity?.spans ?? []));
+  // Search narrows the picker while retaining the current run and its inspected record.
+  const runs = $derived(allRuns.filter((r) => r.id === runId || r.spans.some((s) => activityMatches(s, query))));
+  const run = $derived(allRuns.find((r) => r.id === runId) ?? null);
+  const rows = $derived(activityRows(run, query, filter, order));
+  const context = $derived(activityContext(run, rows, chosen));
+  const windowed = $derived(mode === "calls" ? graphWindow(context, chosen) : { graph: observedGraph(flowReport, query), omitted: 0 });
   const graph = $derived(windowed.graph);
   const loading = $derived(mode === "connections" ? flowLoading : activityLoading);
   const error = $derived(mode === "connections" ? flowError : activityError);
@@ -29,10 +36,11 @@
   const calls = $derived((activity?.spans ?? []).filter((s) => s.kind === "tool").length);
   const selected = $derived(chosen && (graph.nodes.some((n) => n.id === chosen) || graph.edges.some((e) => e.id === chosen)) ? chosen : null);
   const runName = (r: typeof runs[number]) => `${r.spans.find((s) => s.kind === "agent")?.name ?? r.spans[0]?.name ?? r.label} · ${r.label.toLowerCase()} · ${r.calls} tool ${r.calls === 1 ? "call" : "calls"}`;
-  $effect(() => { if (!runs.some((r) => r.id === runId)) runId = runs[0]?.id ?? null; });
+  $effect(() => { if (!allRuns.some((r) => r.id === runId)) runId = runs[0]?.id ?? null; });
   $effect(() => { const next = mode; untrack(() => onflowmodechange?.(next)); });
 
   function change(next: "connections" | "calls") { mode = next; chosen = null; }
+  function resetView() { filter = "all"; order = "time"; onclearquery?.(); }
 </script>
 
 <section class="flow-view" class:reduced aria-label="Agent flow">
@@ -62,13 +70,23 @@
       {#if run?.errors}<span class="failed-count">{run.errors} failed {run.errors === 1 ? "span" : "spans"}</span>{/if}
     </div>
   {/if}
-  {#if windowed.omitted}<p class="window-note">Showing {graph.nodes.length} of {run?.spans.length} spans in the graph. All records remain in the timeline; select one to show it and its reported parents.</p>{/if}
-  {#if graph.nodes.length}
+  {#if mode === "calls" && run}
+    <div class="activity-controls" role="group" aria-label="Recorded activity controls">
+      <SegmentedControl value={filter} options={[{ value: "all", label: "All" }, { value: "failed", label: "Failed" }, { value: "incomplete", label: "No completion" }]} label="Activity filter" onchange={(next) => filter = next} />
+      <label for="agent-flow-order">Order</label><select id="agent-flow-order" bind:value={order}><option value="time">Chronological</option><option value="duration">Longest reported duration</option></select>
+      <span class="shown-count">{rows.length} of {run.spans.length} records shown</span>
+      <button type="button" onclick={resetView}>Reset activity view</button>
+      <p>No completion means no end was received. A finished span may still have an unknown status. The graph keeps inspected records and reported parents for context.</p>
+    </div>
+  {/if}
+  {#if windowed.omitted}<p class="window-note">Showing {graph.nodes.length} of {context.nodes.length} context spans in the graph. All matching records remain in the timeline; select one to show it and its reported parents.</p>{/if}
+  {#if graph.nodes.length || (mode === "calls" && run)}
     <div class="workspace">
-      <FlowCanvas {graph} calls={mode === "calls"} chosen={selected} {dark} {reduced} onselect={(id) => chosen = id} />
+      {#if graph.nodes.length}<FlowCanvas {graph} calls={mode === "calls"} chosen={selected} {dark} {reduced} onselect={(id) => chosen = id} />
+      {:else}<div class="empty"><Icon name="activity" size={28} /><h3>No activity matches this view</h3><p>Reset the filters or clear your search to see this recorded run.</p></div>{/if}
       <aside class="companion" aria-label={mode === "calls" ? "Recorded activity details" : "Connection details"}>
         <FlowInspector {graph} chosen={selected} onclose={() => chosen = null} />
-        {#if mode === "calls" && run}<ActivityTimeline {run} chosen={selected} onselect={(id) => chosen = id} />
+        {#if mode === "calls" && run}<ActivityTimeline {run} {rows} chosen={selected} onselect={(id) => chosen = id} />
         {:else}
           <section class="participants" aria-label="Flow participants"><h3>Participants <span>{graph.nodes.length}</span></h3><ul>{#each graph.nodes as n (n.id)}<li><button type="button" class:chosen={selected === n.id} aria-label={nodeDescription(n)} onclick={() => chosen = n.id}><strong>{n.label}</strong><span>{n.sub}</span><small>{n.kind} · {n.evidence}</small></button></li>{/each}</ul></section>
           <section class="relationships" aria-label="Flow relationships"><h3>Relationships <span>{graph.edges.length}</span></h3><ul>{#each graph.edges as e (e.id)}<li><button type="button" class:chosen={selected === e.id} onclick={() => chosen = e.id}><strong>{graph.nodes.find((n) => n.id === e.from)?.label} {e.kind === "tcp" ? "↔" : "→"} {graph.nodes.find((n) => n.id === e.to)?.label}</strong><span>{e.label} · {e.evidence}</span></button></li>{/each}</ul></section>
@@ -80,7 +98,8 @@
       <Icon name={mode === "calls" ? "activity" : "link"} size={28} />
       <h3>{loading ? "Loading flow…" : query.trim() ? "No flow matches this search" : mode === "calls" ? "No recorded activity yet" : "No observed connections yet"}</h3>
       <p>{query.trim() ? "Search by agent or tool name, process ID, address or port. Clear your search to see all available data." : mode === "calls" ? "Start recording and connect an integration to see reported calls. Running agents alone do not provide call telemetry." : "Start an agent or tool. Its observed process tree, listeners and live socket relationships appear after a scan."}</p>
-      {#if mode === "calls" && !recordingControls?.setupVisible()}<button type="button" onclick={() => recordingControls?.openSetup()}>Set up recording</button>{/if}
+      {#if query.trim() && onclearquery}<button type="button" onclick={onclearquery}>Clear search</button>
+      {:else if mode === "calls" && !query.trim() && !recordingControls?.setupVisible()}<button type="button" onclick={() => recordingControls?.openSetup()}>Set up recording</button>{/if}
     </div>
   {/if}
   {#if limits.length || (flowReport && mode === "connections" && (flowReport.omitted_nodes || flowReport.omitted_edges))}
@@ -90,7 +109,7 @@
 
 <style>
   .flow-view { min-height: 0; height: 100%; display: flex; flex-direction: column; color: var(--text); container-type: inline-size; background: var(--bg); }
-  .toolbar, .run-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .toolbar, .run-picker, .activity-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
   .toolbar { justify-content: space-between; }
   .toolbar-actions { display: flex; align-items: center; gap: 6px; }
   button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 28px; padding: 4px 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; color: var(--text-2); cursor: pointer; font: inherit; font-size: var(--fs-caption); }
@@ -100,7 +119,8 @@
   .totals, .paused { font-size: var(--fs-caption); color: var(--muted); white-space: nowrap; }
   .load-error { margin: 0; padding: 8px 14px; background: var(--surface-2); color: var(--warn); border-bottom: 1px solid var(--border); font-size: var(--fs-caption); }
   .window-note { margin: 0; padding: 8px 14px; color: var(--muted); background: var(--surface); border-bottom: 1px solid var(--border); font-size: var(--fs-caption); }
-  .run-picker label { font-size: var(--fs-caption); font-weight: var(--fw-semibold); } .run-picker select { max-width: min(650px, 80%); min-width: 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); font: inherit; font-size: var(--fs-caption); } .run-picker span { color: var(--muted); font-size: var(--fs-caption); }
+  .run-picker label, .activity-controls label { font-size: var(--fs-caption); font-weight: var(--fw-semibold); } .run-picker select, .activity-controls select { max-width: min(650px, 80%); min-width: 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); font: inherit; font-size: var(--fs-caption); } .run-picker span, .shown-count { color: var(--muted); font-size: var(--fs-caption); }
+  .activity-controls p { flex-basis: 100%; margin: 0; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-body); }
   .workspace { flex: 1; min-height: 180px; display: grid; grid-template-columns: minmax(0, 1fr) 330px; }
   .failed-count { color: var(--danger) !important; }
   .companion { overflow: auto; min-height: 0; border-left: 1px solid var(--border); background: var(--surface); }

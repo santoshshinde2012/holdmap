@@ -6,6 +6,7 @@
   import Icon from "../Icon.svelte";
   import Kbd from "./Kbd.svelte";
   import Field, { fieldId } from "./Field.svelte";
+  import { isComposingKey } from "../../lib/keyboard";
 
   let {
     value = $bindable(""),
@@ -70,6 +71,7 @@
     input?.focus();
   }
   function key(e: KeyboardEvent & { currentTarget: EventTarget & HTMLInputElement }) {
+    if (isComposingKey(e)) return;
     if (e.key === "Escape" && clearable && value) { clear(); e.preventDefault(); e.stopPropagation(); return; }
     onkeydown?.(e);
   }

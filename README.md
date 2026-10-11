@@ -195,6 +195,10 @@ small terminals stack them. **p** pauses refreshes, **r** refreshes, and **?** s
 changed targets require a new review; completed stops and history-write errors stay visible.
 `holdmap agents` now gives a compact overview; a query expands matching footprints and
 `--wide` adds redacted process commands. Version 0.4.0 downloads predate these terminal changes.
+The service graph now searches its visible services and keeps selection attached to the same
+node across refreshes. In terminals that support bracketed paste, pasted text is accepted only
+inside search; pasted action keys cannot open or confirm a stop. Mouse-wheel scrolling is enabled
+while the TUI runs, and terminal input modes are restored on exit.
 
 <details>
 <summary>Current terminal agent overview, small-screen details and service review</summary>
@@ -204,6 +208,8 @@ changed targets require a new review; completed stops and history-write errors s
 ![Terminal agents in an 80-column window](docs/screenshots/tui-agents-narrow-dark.png)
 ![Terminal service review keeps explicit confirmation and cancellation visible](docs/screenshots/tui-agent-stop-confirm-dark.png)
 
+![Terminal graph search keeps the selected service and observed connection evidence visible](docs/screenshots/tui-graph-dark.png)
+
 </details>
 
 **Agent flow in current source / Unreleased.** Open **Agents → Flow**. **Connections** shows
@@ -212,6 +218,16 @@ reported tool/model work and agent handoffs after you enable local recording. On
 trace parents create call edges; an ordered list of session events does not prove communication.
 Parallel calls remain separate. Unknown results, missing parents, dropped data and exporter
 limitations stay visible. Selecting a call shows status, duration and available serialized sizes.
+Use **All**, **Failed** or **No completion** to narrow the timeline, and sort by time or longest
+reported duration. Search matches individual records; the graph retains their reported parents
+and the inspected record. A finished call with an unknown outcome stays distinct from a call
+without completion data.
+
+The current desktop also has **Settings → General → Single-key shortcuts**. Turn it off to use
+speech input or reserve letter keys; arrow navigation and modifier shortcuts remain available.
+Port filters and selected-port commands apply to the port views, and native controls keep their
+own keyboard behavior. The command palette names its search and keeps its active result valid
+as live commands change.
 
 Recording is off by default, local-only and memory-only. Start it in the local desktop, review
 **Setup**, then explicitly configure a supported agent. Pause freezes the view; **Stop recording**

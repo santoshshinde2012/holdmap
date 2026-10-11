@@ -7,6 +7,8 @@ mod agents_view;
 mod app;
 mod graph;
 mod graph_ui;
+mod input;
+mod terminal_modes;
 mod theme;
 mod ui;
 
@@ -20,7 +22,9 @@ pub fn run(docker: bool) -> Result<u8> {
     if !(std::io::stdin().is_terminal() && std::io::stdout().is_terminal()) {
         bail!("the TUI needs an interactive terminal; use `holdmap list` for scripts and pipes");
     }
+    let _restore = terminal_modes::RestoreTerminal;
     let mut terminal = ratatui::try_init()?;
+    let _input_modes = terminal_modes::InputModes::enable(std::io::stdout())?;
     let mut app = App::new(docker);
     let result = (|| -> Result<()> {
         while !app.quit {
@@ -30,13 +34,13 @@ pub fn run(docker: bool) -> Result<u8> {
                 match event::read()? {
                     Event::Key(k) if k.kind == KeyEventKind::Press => app.on_key(k),
                     Event::Mouse(m) => app.on_mouse(m),
+                    Event::Paste(text) => app.on_paste(&text),
                     _ => {}
                 }
             }
         }
         Ok(())
     })();
-    ratatui::restore();
     result?;
     Ok(crate::exit::OK)
 }

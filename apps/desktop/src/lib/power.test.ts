@@ -96,8 +96,18 @@ describe("shutdown confirmation", () => {
 });
 
 describe("Power settings", () => {
-  const model: SettingsModel = { theme: "light", density: "comfortable", config: { pins: [], notify: false, notify_dev_only: true, history_limit: 200, scan_interval_secs: 4, hotkey: "off", recent_hosts: [] }, autostart: false, shortcut: null, hotkeys: [], version: "0.3.0", platform: "browser", configDir: null, powerAvailable: true, powerDemo: true };
-  const actions = (): SettingsActions => ({ setTheme: vi.fn(), setDensity: vi.fn(), setAutostart: vi.fn(async () => {}), setHotkey: vi.fn(async () => {}), setNotify: vi.fn(async () => {}), setScanInterval: vi.fn(async () => {}), setHistoryLimit: vi.fn(async () => {}), clearHistory: vi.fn(async () => {}), copy: vi.fn(), shutdown: vi.fn() });
+  const model: SettingsModel = { theme: "light", density: "comfortable", singleKeyShortcuts: true, config: { pins: [], notify: false, notify_dev_only: true, history_limit: 200, scan_interval_secs: 4, hotkey: "off", recent_hosts: [] }, autostart: false, shortcut: null, hotkeys: [], version: "0.3.0", platform: "browser", configDir: null, powerAvailable: true, powerDemo: true };
+  const actions = (): SettingsActions => ({ setTheme: vi.fn(), setDensity: vi.fn(), setSingleKeyShortcuts: vi.fn(), setAutostart: vi.fn(async () => {}), setHotkey: vi.fn(async () => {}), setNotify: vi.fn(async () => {}), setScanInterval: vi.fn(async () => {}), setHistoryLimit: vi.fn(async () => {}), clearHistory: vi.fn(async () => {}), copy: vi.fn(), shutdown: vi.fn() });
+  it("offers an independently labelled switch for character shortcuts", async () => {
+    const a = actions();
+    render(SettingsDialog, { model, actions: a, section: "general", onclose: vi.fn() });
+    const toggle = screen.getByRole("switch", { name: "Single-key shortcuts" });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText(/Arrow keys and Cmd\/Ctrl shortcuts stay available/)).toBeTruthy();
+    await fireEvent.click(toggle);
+    expect(a.setSingleKeyShortcuts).toHaveBeenCalledWith(false);
+    expect(screen.getByText("Single-key shortcuts off")).toBeTruthy();
+  });
   it("opens only a simulated review in the browser and explains the local scope", async () => {
     const a = actions();
     render(SettingsDialog, { model, actions: a, section: "power", onclose: vi.fn() });

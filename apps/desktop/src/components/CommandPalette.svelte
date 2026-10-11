@@ -3,29 +3,37 @@
   import Dialog from "./ui/Dialog.svelte";
   import Kbd from "./ui/Kbd.svelte";
   import { groupResults, rank, type Command } from "../lib/palette";
+  import { isComposingKey } from "../lib/keyboard";
 
   let { commands, onclose }: { commands: Command[]; onclose: () => void } = $props();
 
   let query = $state("");
-  let active = $state(0);
+  let activeId = $state<string | null>(null);
   let listEl: HTMLDivElement | undefined = $state();
 
   const results = $derived(rank(query, commands, 50));
   const groups = $derived(groupResults(query, results));
   const flat = $derived(groups.flatMap((g) => g.items));
+  // Keep the highlighted command stable across scans. A removed result falls back to the first.
+  const active = $derived(Math.max(0, flat.findIndex((command) => command.id === activeId)));
 
-  $effect(() => { void query; active = 0; });
+  $effect(() => { void query; activeId = null; });
+  $effect(() => {
+    if (activeId && !flat.some((command) => command.id === activeId)) activeId = flat[0]?.id ?? null;
+  });
 
   function run(c: Command) {
     onclose();
     queueMicrotask(c.run);
   }
+  function choose(index: number) { activeId = flat[Math.max(0, Math.min(flat.length - 1, index))]?.id ?? null; }
   function key(e: KeyboardEvent) {
-    if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "n")) { active = Math.min(flat.length - 1, active + 1); scroll(); e.preventDefault(); }
-    else if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "p")) { active = Math.max(0, active - 1); scroll(); e.preventDefault(); }
-    else if (e.key === "Home" && e.ctrlKey) { active = 0; scroll(); e.preventDefault(); }
-    else if (e.key === "End" && e.ctrlKey) { active = flat.length - 1; scroll(); e.preventDefault(); }
-    else if (e.key === "Enter") { const c = flat[active]; if (c) run(c); e.preventDefault(); }
+    if (isComposingKey(e) || e.altKey || e.metaKey || e.shiftKey || e.getModifierState("AltGraph")) return;
+    if ((!e.ctrlKey && e.key === "ArrowDown") || (e.ctrlKey && e.key === "n")) { choose(active + 1); scroll(); e.preventDefault(); }
+    else if ((!e.ctrlKey && e.key === "ArrowUp") || (e.ctrlKey && e.key === "p")) { choose(active - 1); scroll(); e.preventDefault(); }
+    else if (e.key === "Home" && e.ctrlKey) { choose(0); scroll(); e.preventDefault(); }
+    else if (e.key === "End" && e.ctrlKey) { choose(flat.length - 1); scroll(); e.preventDefault(); }
+    else if (e.key === "Enter" && !e.ctrlKey) { const c = flat[active]; if (c) run(c); e.preventDefault(); }
   }
   function scroll() {
     requestAnimationFrame(() => listEl?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" }));
@@ -41,6 +49,7 @@
       spellcheck="false"
       autocomplete="off"
       role="combobox"
+      aria-label="Search commands"
       aria-expanded="true"
       aria-controls="palette-list"
       aria-autocomplete="list"
@@ -67,7 +76,7 @@
           aria-selected={i === active}
           tabindex="-1"
           data-i={i}
-          onpointermove={() => (active = i)}
+          onpointermove={() => choose(i)}
           onpointerdown={(e) => e.preventDefault()}
           onclick={() => run(c)}
           onkeydown={() => {}}
@@ -79,7 +88,7 @@
       {/each}
     {/each}
   </div>
-  <div class="foot"><span><Kbd keys={["↑", "↓"]} size="sm" />navigate</span><span><Kbd keys="↵" size="sm" />run</span><span><Kbd keys="Esc" size="sm" />close</span><span class="n">{flat.length} result{flat.length === 1 ? "" : "s"}</span></div>
+  <div class="foot"><span><Kbd keys={["↑", "↓"]} size="sm" />navigate</span><span><Kbd keys="↵" size="sm" />run</span><span><Kbd keys="Esc" size="sm" />close</span><span class="n" role="status" aria-live="polite" aria-atomic="true">{flat.length} result{flat.length === 1 ? "" : "s"}</span></div>
 </Dialog>
 
 <style>
