@@ -270,10 +270,15 @@ jobs:
       TAG: ${{ needs.plan.outputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.tag }}
+          persist-credentials: false
       - name: Restore the release notes from dist-manifest.json
         run: |
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern dist-manifest.json --dir "$RUNNER_TEMP"
-          jq -r '.announcement_github_body // ""' "$RUNNER_TEMP/dist-manifest.json" > "$RUNNER_TEMP/notes.md"
+          jq -r '.announcement_github_body // ""' "$RUNNER_TEMP/dist-manifest.json" |
+            python3 scripts/prepare-release-notes.py --tag "$TAG" --repo "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/notes.md"
           title=$(jq -r '.announcement_title // empty' "$RUNNER_TEMP/dist-manifest.json")
           [ -s "$RUNNER_TEMP/notes.md" ] || { echo "::warning::dist-manifest.json has no release notes"; exit 0; }
           base="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"

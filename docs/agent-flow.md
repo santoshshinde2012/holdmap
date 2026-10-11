@@ -1,7 +1,7 @@
 # Agent flow and local recording
 
-Current source / Unreleased adds **Agents → Flow** in the desktop and shared browser demo.
-Version 0.4.0 downloads predate this view. Build current source to use native recording.
+Version 0.5.0 adds **Agents → Flow** in the desktop and shared browser demo.
+Version 0.4.0 downloads predate this view; use 0.5.0 or newer for native recording.
 
 ## Read the flow
 

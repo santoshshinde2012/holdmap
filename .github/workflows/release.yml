@@ -174,6 +174,10 @@ jobs:
       - plan
       - build-local-artifacts
     runs-on: "ubuntu-22.04"
+    permissions:
+      "attestations": "write"
+      "contents": "read"
+      "id-token": "write"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/global-dist-manifest.json
@@ -228,13 +232,19 @@ jobs:
             echo "paths<<EOF" >> "$GITHUB_OUTPUT"
             find . -name '*.cdx.xml' | tee -a "$GITHUB_OUTPUT"
             echo "EOF" >> "$GITHUB_OUTPUT"
+      - name: Attest global artifacts
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: |
+            ${{ steps.cargo-dist.outputs.paths }}
+            ${{ steps.cargo-cyclonedx.outputs.paths }}
       - name: "Upload artifacts"
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: artifacts-build-global
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
-            ${{ steps.cargo-cyclonedx.output.paths }}
+            ${{ steps.cargo-cyclonedx.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
   # Determines if we should publish/announce
   host:
@@ -301,8 +311,9 @@ jobs:
           ANNOUNCEMENT_BODY: "${{ fromJson(steps.host.outputs.manifest).announcement_github_body }}"
           RELEASE_COMMIT: "${{ github.sha }}"
         run: |
-          # Write and read notes from a file to avoid quoting breaking things
-          echo "$ANNOUNCEMENT_BODY" > $RUNNER_TEMP/notes.txt
+          # Keep generated notes, correcting the npm registry claim while publishing is off.
+          printf '%s' "$ANNOUNCEMENT_BODY" |
+            python3 scripts/prepare-release-notes.py --tag "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/notes.txt"
 
           gh release create "$RELEASE_TAG" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
 

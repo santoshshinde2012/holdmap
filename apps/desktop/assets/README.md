@@ -38,5 +38,5 @@ brief was:
 > accents. No words, robot face, radar ring, separate status badge, tiny ornament, 3D
 > rendering, outside shadow or watermark.
 
-The existing 0.4.0 release installers predate this identity; the next desktop release
-will include the generated native icons.
+Version 0.5.0 includes the generated native icons. Version 0.4.0 installers retain
+the original socket identity.

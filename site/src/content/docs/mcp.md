@@ -37,11 +37,12 @@ After connecting, the server advertises its tools, a guide resource and three wo
 Prompt and resource menus depend on the client; clients exposing tools alone can use the same
 workflows below. Holdmap observes the machine where the server runs.
 
-This page describes the **version 0.4.0** MCP interface, including the bundled guide, prompts,
-schemas and mandatory stop confirmations. **Upgrading from 0.3.0 changes the stop protocol:**
+This page describes the MCP interface in **0.5.0**, including the guide, prompts,
+schemas and mandatory stop confirmations introduced in 0.4.0.
+**Upgrading from 0.3.0 changes the stop protocol:**
 clients must preview first and pass the returned `confirmation_id` to execute. Version 0.3.0
 servers expose the nine tools below with the previous protocol and do not return that handle.
-Upgrade to 0.4.0 or build current source to use the flow below; always follow your installed
+Use 0.4.0 or newer for the confirmation flow below; always follow your installed
 version's discovered schemas.
 
 ## Tools
@@ -94,7 +95,7 @@ A free port is a candidate, not a reservation. TCP readiness does not establish 
 health. Likely MCP servers are inferred from process metadata. Passive inspection does not
 record individual tool calls or verify their transport. Optional
 [instrumented Agent Flow recording](../agents/#set-up-optional-recording) is available in
-**current source / Unreleased** and receives metadata from integrations you configure.
+**0.5.0** and receives metadata from integrations you configure.
 Recent folders are current-account history, attached only when the agent's account matches;
 they do not establish current work by a particular agent instance.
 

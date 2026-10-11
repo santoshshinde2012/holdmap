@@ -10,9 +10,8 @@ CLI, so the plans and protections are identical. [Try it in the browser](../../#
 
 ## Shut down this computer
 
-Version 0.4.0 adds **Settings → Power → Shut down this computer**. Current source labels
-this immediate entry **Shut down now…**, separately from **Schedule shutdown…**; its review
-has no timing controls. Check the computer
+Open **Settings → Power → Shut down now…**, separately from **Schedule shutdown…**; its review
+has no timing controls. Local shutdown was introduced in 0.4.0. Check the computer
 name, save your work and acknowledge that all apps, agents and local services will stop.
 The confirmation expires after 60 seconds; it does not schedule shutdown. Cancel or Escape
 closes the review before submission. After submission, follow any OS permission prompts;
@@ -26,9 +25,8 @@ shutdown and cannot power off a computer. Version 0.3.0 binaries predate this fe
 
 ## Schedule shutdown or a service stop
 
-**Current source / Unreleased:** scheduling is available in the current desktop source and
-browser demo. Version 0.4.0 downloads include immediate shutdown and stop confirmations,
-but do not include scheduling yet.
+**Version 0.5.0** adds scheduling to the desktop and browser demo. Version 0.4.0 downloads
+include immediate shutdown and stop confirmations, but predate scheduling.
 
 1. For this computer, open **Settings → Power → Schedule shutdown…**. The review is titled
    **Schedule computer shutdown?**. For a local port, use **Schedule stop…** in its details
@@ -76,13 +74,18 @@ This Linux GTK dependency issue does not affect the CLI, TUI or
 MCP server, or the macOS and Windows desktop builds. See the
 [security policy](https://github.com/santoshshinde2012/holdmap/blob/main/SECURITY.md#linux-glib-dependency-backports).
 
-The app isn't notarised or code-signed yet, so the OS asks once.
+The macOS app is ad-hoc signed and sealed, but is not Developer-ID signed or notarised.
+Windows installers are unsigned unless signing credentials are configured. On first launch:
 
 - **macOS:** open it once, then go to **System Settings › Privacy & Security › Open Anyway**
   (macOS 14 and earlier: right-click the app, then **Open**). Or run
   `xattr -dr com.apple.quarantine /Applications/holdmap.app`.
 - **Windows:** in "Windows protected your PC", click **More info**, then **Run anyway**.
 - **Linux:** `chmod +x` the AppImage, or install the .deb or .rpm.
+
+To update an existing 0.4.0 desktop installation, download the matching 0.5.0 installer
+from [Install](../../#install). Version 0.4.0 has no configured signed updater. Update the CLI
+by running its installer again.
 
 ## Keyboard
 
@@ -107,7 +110,7 @@ The app isn't notarised or code-signed yet, so the OS asks once.
 | `⌘,` | Settings |
 | `?` | Every shortcut |
 
-In current source / Unreleased, **Settings → General → Single-key shortcuts** lets you disable
+In 0.5.0, **Settings → General → Single-key shortcuts** lets you disable
 letter and symbol shortcuts, including `/` and `j`/`k`. Arrow navigation and `⌘`/`Ctrl` shortcuts
 remain available. This is useful with speech input or when you want to reserve letter keys.
 Shortcuts respect text composition and native controls; port filters apply only in port views.
@@ -134,7 +137,7 @@ the browser demo runs the current UI with sample data.
 
 ## From the details pane
 
-In current source, **Open** and **Restart** stay beside **More actions**, which offers folder
+In 0.5.0, **Open** and **Restart** stay beside **More actions**, which offers folder
 opening and copy commands. **Stop…** and **Schedule stop…** have a separate footer labelled
 with the selected port; stopping a port keeps the computer running. Tabs wrap and content
 remains readable in a 340-pixel pane.
