@@ -13,6 +13,8 @@
   import Button from "./ui/Button.svelte";
   import Checkbox from "./ui/Checkbox.svelte";
   import Callout from "./ui/Callout.svelte";
+  import ActionTiming from "./ActionTiming.svelte";
+  import { resolveScheduleDelay, scheduleDeadline, type ScheduledAction } from "../lib/schedules";
   import type { ActionPlan, Cluster, PortEntry, StopReport } from "../lib/types";
   import { CLUSTER_LABEL, orderFromSummary } from "../lib/graph";
   import { canOverride, describeStep, isForce, seconds, title } from "../lib/format";
@@ -30,6 +32,13 @@
     restart = false,
     portCount = 1,
     agentName = null,
+    onschedule,
+    schedulingBusy = false,
+    schedulingError = null,
+    scheduled = null,
+    onviewschedules,
+    onreview,
+    demo = false,
   }: {
     /** The port being stopped; null when stopping a whole cluster. */
     entry: PortEntry | null;
@@ -47,14 +56,31 @@
     /** Number of reviewed ports in an agent bulk action; single-port dialogs keep their labels. */
     portCount?: number;
     agentName?: string | null;
+    onschedule?: (delaySecs: number) => void;
+    schedulingBusy?: boolean;
+    schedulingError?: string | null;
+    scheduled?: ScheduledAction | null;
+    onviewschedules?: () => void;
+    onreview?: () => void;
+    demo?: boolean;
   } = $props();
 
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   let understood = $state(false);
+  let delaySecs = $state(0);
+  let atMs = $state<number | null>(null);
+  let timingError = $state<string | null>(null);
+  let timingValid = $state(true);
+  let scheduleSubmitted = $state(false);
+  $effect(() => { void plan.confirmation_id; scheduleSubmitted = false; });
+  $effect(() => { void delaySecs; void atMs; timingError = null; });
   const force = $derived(isForce(plan));
   const blocked = $derived(plan.blocked);
   const overridable = $derived(!!blocked && canOverride(plan));
   const running = $derived(phase === "running");
+  const busy = $derived(running || schedulingBusy);
+  const canSchedule = $derived(!!onschedule && !!entry && !cluster && !restart && !force && !plan.allow_protected && !blocked);
+  const scheduling = $derived(canSchedule && (atMs !== null || delaySecs !== 0));
   const grace = $derived.by(() => {
     const s = plan.steps.find((x) => x.action === "signal_processes");
     return s && s.action === "signal_processes" && !s.force ? s.timeout_ms : 0;
@@ -69,7 +95,7 @@
   const confirmLabel = $derived(multiple ? `Stop ${portCount} ports` : entry ? `${verb} :${entry.port}` : bulk ? "Stop all" : verb);
   const order = $derived(cluster ? orderFromSummary(plan.summary) : []);
   const subject = $derived(multiple ? `${agentName ? `${agentName}'s ` : ""}${portCount} ports` : cluster ? cluster.name : entry ? title(entry) : plan.target);
-  const heading = $derived(phase === "done" ? (multiple ? `${portCount} ports are free` : cluster ? `Cluster ${cluster.name} stopped` : bulk ? "Dev servers stopped" : `Port ${entry?.port} is free`) : blocked ? (multiple ? `Can't stop ${subject} safely` : bulk ? `Nothing to stop` : `Can't stop ${cluster ? cluster.name : `:${entry?.port}`} safely`) : `${verb} ${subject}?`);
+  const heading = $derived(scheduled ? "Stop scheduled" : phase === "done" ? (multiple ? `${portCount} ports are free` : cluster ? `Cluster ${cluster.name} stopped` : bulk ? "Dev servers stopped" : `Port ${entry?.port} is free`) : blocked ? (multiple ? `Can't stop ${subject} safely` : bulk ? `Nothing to stop` : `Can't stop ${cluster ? cluster.name : `:${entry?.port}`} safely`) : `${verb} ${subject}?`);
   const sub = $derived(multiple ? "Every port's steps appear below" : cluster ? `${CLUSTER_LABEL[cluster.kind]}${cluster.detail ? ` · ${cluster.detail}` : ""} · ${cluster.nodes.length} services` : entry ? `:${entry.port} · ${entry.process ? `${entry.process.name} · PID ${entry.process.pid}` : entry.container?.name ?? ""}` : bulk ? stepCount(plan) : "");
 
   function stepCount(p: ActionPlan): string {
@@ -85,9 +111,19 @@
     if (i < last) return freed || log.length > 1 ? "done" : "active";
     return freed ? "done" : log.length > 0 ? "active" : "pending";
   }
+  function confirm() {
+    if (busy || !timingValid || schedulingError || timingError || scheduleSubmitted || scheduled) return;
+    if (scheduling) {
+      try {
+        const resolved = resolveScheduleDelay(delaySecs, atMs);
+        scheduleSubmitted = true;
+        onschedule?.(resolved);
+      } catch (failure) { timingError = String(failure); }
+    } else onconfirm();
+  }
 </script>
 
-<Dialog role="alertdialog" size="md" label={heading} dismissable={!running} onclose={oncancel} initialFocus="[data-primary]">
+<Dialog role="alertdialog" size="md" label={heading} dismissable={!busy} onclose={oncancel} initialFocus="[data-primary]">
   {#snippet header()}
     {#if phase !== "done"}
       <header class="top">
@@ -101,7 +137,9 @@
     {/if}
   {/snippet}
 
-  {#if phase === "done" && report}
+  {#if scheduled}
+    <div role="status"><Callout tone="ok" title={demo ? "Simulation scheduled" : "Stop scheduled"}>Scheduled for {scheduleDeadline(scheduled.due_at_ms)}. {demo ? "Your agents and ports will not be changed." : "Only the reviewed services will be stopped. Their identities will be checked again. Keep Holdmap running and this computer awake."}</Callout></div>
+  {:else if phase === "done" && report}
     <div class="result" in:fade={{ duration: reduced ? 0 : 150 }} role="status">
       <div class="big-check"><Icon name="check" size={26} /></div>
       <h2>{heading}</h2>
@@ -135,6 +173,7 @@
           </li>
         {/each}
       </ol>
+      {#if canSchedule && phase === "confirm"}<ActionTiming bind:delaySecs bind:atMs bind:valid={timingValid} {demo} disabled={busy || scheduleSubmitted || !!schedulingError} />{/if}
       {#if running && grace && !freed}
         <div class="grace" aria-hidden="true">
           <div class="bar"><div class="fill" class:esc={escalated} style="--dur: {grace}ms"></div></div>
@@ -147,6 +186,8 @@
           <Callout tone={plan.risk === "high" ? "danger" : "warn"} size="sm">{plan.risk === "high" ? "High risk: this isn't one of your dev servers." : "This isn't a dev server — make sure nothing needs it."}</Callout>
         {/if}
         {#if phase === "failed" && report}<Callout tone="danger" size="sm">{report.error ?? `Port still busy: ${report.ports_still_busy.join(", ")}`}</Callout>{/if}
+        {#if schedulingError}<Callout tone="danger" title="Could not schedule the stop">{schedulingError}</Callout>{/if}
+        {#if timingError}<Callout tone="danger" title="Choose a new scheduled time">{timingError}</Callout>{/if}
       </div>
     {/if}
 
@@ -159,7 +200,10 @@
   {/if}
 
   {#snippet footer()}
-    {#if phase === "done"}
+    {#if scheduled}
+      <Button variant="secondary" onclick={oncancel} data-primary>Done</Button>
+      {#if onviewschedules}<Button variant="primary" icon="clock" onclick={onviewschedules}>View scheduled actions</Button>{/if}
+    {:else if phase === "done"}
       <Button variant="secondary" onclick={oncancel} data-primary>Done</Button>
     {:else if blocked}
       <span class="hint">{overridable ? "Nothing is sent yet." : "holdmap won't stop this for you."}</span>
@@ -172,9 +216,10 @@
     {:else if phase === "failed"}
       <Button variant="primary" onclick={oncancel} data-primary>Close</Button>
     {:else}
-      <span class="hint">Nothing is sent until you confirm.</span>
-      <Button variant="secondary" kbd="Esc" onclick={oncancel} disabled={running}>Cancel</Button>
-      <Button variant="danger" icon="stop" kbd="↵" loading={running} loadingText="Stopping…" onclick={onconfirm} data-primary>{confirmLabel}</Button>
+      <span class="hint">{scheduling ? "Nothing stops until the scheduled time." : "Nothing is sent until you confirm."}</span>
+      <Button variant="secondary" kbd="Esc" onclick={oncancel} disabled={busy}>Cancel</Button>
+      {#if schedulingError && onreview}<Button variant="secondary" onclick={onreview}>Review again</Button>{/if}
+      <Button variant="danger" icon={scheduling ? "clock" : "stop"} kbd="↵" loading={busy} loadingText={schedulingBusy ? "Scheduling…" : "Stopping…"} disabled={!timingValid || !!timingError || !!schedulingError || scheduleSubmitted} onclick={confirm} data-primary>{scheduling ? demo ? "Schedule simulation" : multiple ? `Schedule ${portCount} ports` : `Schedule stop :${entry?.port}` : confirmLabel}</Button>
     {/if}
   {/snippet}
 </Dialog>

@@ -6,16 +6,19 @@ use crate::style::{self, paint, S};
 use anyhow::{bail, Context, Result};
 use holdmap_core::agents::{AccessLevel, AgentsReport, Evidence, FolderSource, LinkKind, PortRole};
 use holdmap_core::engine::tilde;
-use holdmap_core::util::{count, human_bytes};
-use holdmap_core::{execute, Engine, Exposure, ScanOptions, StopOptions, Target};
+use holdmap_core::util::{count, human_bytes, printable};
+use holdmap_core::{execute, Engine, Exposure, ScanOptions};
 
 #[derive(clap::Args, Debug, Default)]
 pub struct AgentsArgs {
     /// Only agents matching a product, name, vendor, folder, tool name, or exact agent/child PID.
     pub agent: Option<String>,
-    /// Show listed processes and their command lines (secrets hidden; large lists are capped).
+    /// Show full agent details, including processes and redacted command lines.
     #[arg(short, long)]
     pub wide: bool,
+    /// Show observed process, listener and TCP relationships; no call or payload inference.
+    #[arg(long, conflicts_with_all = ["stop_ports", "wide"])]
+    pub flow: bool,
     /// Stop the unprotected ports each matching agent started (dev servers and services).
     #[arg(long)]
     pub stop_ports: bool,
@@ -41,7 +44,20 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
         report.agents.retain(|x| x.matches(q));
     }
     if a.stop_ports {
-        return stop_ports(&e, &report, a);
+        return stop_ports(&e, &report, a, docker);
+    }
+    if a.flow {
+        let flow = holdmap_core::agents::flow::flow(&e.scan, &report);
+        if a.json {
+            println!("{}", serde_json::to_string_pretty(&flow)?);
+        } else {
+            print!("{}", crate::agent_flow::render(&flow));
+        }
+        return Ok(if flow.nodes.is_empty() {
+            crate::exit::BUSY
+        } else {
+            crate::exit::OK
+        });
     }
     if a.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -56,99 +72,120 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
 }
 
 /// Stop every unprotected port the matching agents started.
-fn stop_ports(e: &Engine, report: &AgentsReport, a: &AgentsArgs) -> Result<u8> {
+fn stop_ports(e: &Engine, report: &AgentsReport, a: &AgentsArgs, docker: bool) -> Result<u8> {
     if a.json && !a.yes && !a.dry_run {
         bail!("--json needs --yes (or --dry-run): JSON mode never prompts");
     }
-    let ports: Vec<(String, u16)> = report
+    if report
         .agents
         .iter()
-        .flat_map(|ag| ag.stoppable_ports().map(move |p| (ag.name.clone(), p.port)))
-        .collect();
-    if ports.is_empty() {
+        .all(|ag| ag.stoppable_ports().next().is_none())
+    {
         if a.json {
             println!("{}", serde_json::json!({"stopped": [], "plans": []}));
         } else {
             println!(
                 "{}",
                 style::dim(
-                    "No stoppable ports: matching agents haven't started a freeable service."
+                    "No stoppable services. Agent sessions and their own listeners stay running."
                 )
             );
         }
         return Ok(crate::exit::BUSY);
     }
-    let opts = StopOptions::default();
-    let mut plans = Vec::new();
-    for (_, port) in &ports {
-        plans.push(e.plan(&Target::Port(*port), &opts));
-    }
+    let review = crate::agent_actions::ReviewedAgentStops::preview(e, &report.agents)?;
     if a.dry_run {
         if a.json {
-            crate::commands::print_json(&plans)?;
+            crate::commands::print_json(
+                &review.plans().iter().map(|p| &p.plan).collect::<Vec<_>>(),
+            )?;
         } else {
-            for (i, plan) in plans.iter().enumerate() {
-                let (name, port) = &ports[i];
+            for reviewed in review.plans() {
                 println!(
-                    "{} :{port} ({})",
+                    "{} {} ({})",
                     paint("plan", S::Cyan),
-                    holdmap_core::util::printable(name)
+                    reviewed.target(),
+                    holdmap_core::util::printable(&reviewed.name)
                 );
-                print!("{}", crate::render::plan_text(plan));
+                print!("{}", crate::render::plan_text(&reviewed.plan));
             }
             println!("{}", style::dim("Dry run: nothing was changed."));
         }
         return Ok(crate::exit::OK);
     }
-    let blocked = plans.iter().filter(|p| p.blocked.is_some()).count();
-    let actionable: Vec<_> = plans
-        .iter()
-        .zip(ports.iter())
-        .filter(|(p, _)| p.blocked.is_none())
-        .collect();
-    if actionable.is_empty() {
-        bail!(
-            "every stoppable port is blocked by the safety policy ({} protected)",
-            blocked
-        );
+    if !a.json {
+        for reviewed in review.plans() {
+            println!(
+                "{} {} ({})",
+                paint("plan", S::Cyan),
+                reviewed.target(),
+                holdmap_core::util::printable(&reviewed.name)
+            );
+            print!("{}", crate::render::plan_text(&reviewed.plan));
+        }
+        println!("{}", style::dim("Agent sessions will stay running."));
     }
     if !a.yes {
-        let list = actionable
+        let list = review
+            .plans()
             .iter()
-            .map(|(_, (name, port))| format!(":{port} ({name})"))
+            .map(|p| {
+                format!(
+                    "{} ({})",
+                    p.target(),
+                    holdmap_core::util::printable(&p.name)
+                )
+            })
             .collect::<Vec<_>>()
             .join(", ");
         if !crate::commands::confirm(&format!("Stop {list}?"))? {
             bail!("cancelled");
         }
     }
-    let mut reports = Vec::new();
-    let mut code = crate::exit::OK;
-    for (plan, (name, port)) in &actionable {
-        if !a.json {
-            println!(
-                "{} :{port} ({})",
-                paint("stop", S::Cyan),
-                holdmap_core::util::printable(name)
-            );
-        }
-        let report = execute(plan, &mut |l| {
+    let fresh = Engine::new(&ScanOptions {
+        all_states: false,
+        docker,
+    })
+    .context("failed to refresh service ownership; nothing was stopped")?;
+    let outcome = review.execute_with(
+        &fresh,
+        |reviewed| {
+            let mut report = execute(&reviewed.plan, &mut |l| {
+                if !a.json {
+                    println!("  {} {}", style::dim("·"), style::dim(l));
+                }
+            });
+            report.target = reviewed.target();
             if !a.json {
-                println!("  {} {}", style::dim("·"), style::dim(l));
+                println!("{}", crate::render::report_line(&report));
             }
-        });
-        if !report.freed {
-            code = crate::exit::BUSY;
-        }
-        if !report.success {
-            code = code.max(crate::exit::ERROR);
-        }
-        reports.push(report);
+            report
+        },
+        |plan, report| {
+            crate::state::record_checked(&fresh, plan, report).map_err(|e| e.to_string())
+        },
+    )?;
+    for error in &outcome.history_errors {
+        eprintln!("{}", style::terminal_text(error));
     }
     if a.json {
-        crate::commands::print_json(&reports)?;
+        crate::commands::print_json(&outcome.reports)?;
+        if outcome.remaining > 0 {
+            eprintln!(
+                "{} remaining service(s) were not attempted after a failed stop.",
+                outcome.remaining
+            );
+        }
+    } else if outcome.remaining > 0 {
+        println!("{}", style::dim(format!("{} remaining service(s) were not attempted. Refresh and review before trying again.", outcome.remaining)));
     }
-    Ok(code)
+    Ok(if outcome.succeeded() {
+        crate::exit::OK
+    } else if !outcome.history_errors.is_empty() || outcome.reports.iter().any(|r| !r.success) {
+        crate::exit::ERROR
+    } else {
+        crate::exit::BUSY
+    })
 }
 
 fn level_mark(l: AccessLevel) -> String {
@@ -158,6 +195,116 @@ fn level_mark(l: AccessLevel) -> String {
         AccessLevel::Elevated => paint("!", S::BoldYellow),
         AccessLevel::Unknown => paint("?", S::Dim),
     }
+}
+
+fn render_overview(r: &AgentsReport) -> String {
+    let mut out = format!(
+        "{}\n\n",
+        paint(
+            count(
+                r.agents.len(),
+                "running agent or tool",
+                "running agents and tools"
+            ),
+            S::Bold
+        )
+    );
+    for a in &r.agents {
+        let mut meta = vec![
+            format!("pid {}", a.pid),
+            a.kind.label().to_string(),
+            human_bytes(a.memory_bytes),
+            format!("{:.1}% CPU", a.cpu_percent),
+        ];
+        if a.access.root {
+            meta.push("root account".into());
+        } else if !a.access.mine {
+            meta.push(a.access.user.as_deref().unwrap_or("unknown account").into());
+        }
+        out.push_str(&format!(
+            "{}  {}\n",
+            paint(printable(&a.name), S::Bold),
+            style::dim(printable(&meta.join(" · ")))
+        ));
+        let folder = a
+            .folders
+            .iter()
+            .find(|f| f.source != FolderSource::Recent)
+            .or_else(|| a.folders.first());
+        let folder = folder.map_or_else(
+            || "working folder not visible".into(),
+            |f| {
+                let source = match (f.source, f.evidence) {
+                    (FolderSource::Recent, _) => "recent project; not current activity",
+                    (_, Evidence::Inferred) => "inferred folder",
+                    (FolderSource::Agent, _) => "working dir",
+                    _ => "child working dir",
+                };
+                let more = a.folders.len().saturating_sub(1) + a.more_folders;
+                format!(
+                    "{} ({source}){}",
+                    style::one_line(&printable(&f.label), 44),
+                    if more > 0 {
+                        format!(" +{more} folders")
+                    } else {
+                        String::new()
+                    }
+                )
+            },
+        );
+        let mut targets: Vec<_> = a.stoppable_ports().map(|p| (p.port, p.protocol)).collect();
+        targets.sort();
+        targets.dedup();
+        let services = if targets.is_empty() {
+            "no stoppable services".to_string()
+        } else {
+            let listed = targets
+                .iter()
+                .take(4)
+                .map(|(port, protocol)| format!("{port}/{protocol}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let more = targets.len().saturating_sub(4);
+            format!(
+                "{}: {listed}{}",
+                count(targets.len(), "service", "services"),
+                if more > 0 {
+                    format!(" +{more} more")
+                } else {
+                    String::new()
+                }
+            )
+        };
+        let tools = a.tools.len() + a.more_tools;
+        out.push_str(&format!(
+            "  {folder}\n  {services} · {}",
+            count(tools, "child tool", "child tools")
+        ));
+        let exposed = a
+            .ports
+            .iter()
+            .filter(|p| p.exposure == Exposure::AllInterfaces)
+            .count();
+        if exposed > 0 {
+            out.push_str(&format!(
+                " · {}",
+                paint(
+                    count(
+                        exposed,
+                        "network-exposed listener",
+                        "network-exposed listeners"
+                    ),
+                    S::Yellow
+                )
+            ));
+        }
+        out.push_str("\n\n");
+    }
+    out.push_str(&style::dim("Details: holdmap agents <PID> · Processes: holdmap agents --wide\nStop services: holdmap agents <PID> --stop-ports --dry-run\nAgent sessions stay running; chats and tool invocations are never read.\n"));
+    for limit in &r.limits {
+        out.push_str(&style::dim(format!("note: {}\n", printable(limit))));
+    }
+    style::terminal_text(&out)
 }
 
 /// The human report.
@@ -170,9 +317,19 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
         };
         out.push_str(&style::dim(message));
         for limit in &r.limits {
-            out.push_str(&style::dim(format!("note: {limit}\n")));
+            out.push_str(&style::dim(format!("note: {}\n", printable(limit))));
         }
-        return out;
+        out.push_str(&style::dim(
+            if query.is_some_and(|q| !q.trim().is_empty()) {
+                "Run holdmap agents to show every running agent and tool.\n"
+            } else {
+                "Start an agent or editor, then run holdmap agents again.\n"
+            },
+        ));
+        return style::terminal_text(&out);
+    }
+    if !wide && query.is_none_or(|q| q.trim().is_empty()) {
+        return render_overview(r);
     }
     let label = |s: &str| style::dim(format!("  {s:<10}"));
     let pad = " ".repeat(12);
@@ -203,15 +360,19 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
         }
         out.push_str(&format!(
             "{}  {}\n",
-            paint(&a.name, S::Bold),
-            style::dim(meta.join(" · "))
+            paint(printable(&a.name), S::Bold),
+            style::dim(printable(&meta.join(" · ")))
         ));
         if let Some(p) = &a.parent {
             if let Some(host) = r.agents.iter().find(|x| &x.id == p) {
                 out.push_str(&format!(
                     "{}{}\n",
                     label("from"),
-                    style::dim(format!("started from {} (pid {})", host.name, host.pid))
+                    style::dim(format!(
+                        "started from {} (pid {})",
+                        printable(&host.name),
+                        host.pid
+                    ))
                 ));
             }
         }
@@ -242,16 +403,16 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
                 .project
                 .as_ref()
                 .and_then(|p| p.git_branch.as_ref())
-                .map(|b| format!(" {}", paint(format!("({b})"), S::Magenta)))
+                .map(|b| format!(" {}", paint(format!("({})", printable(b)), S::Magenta)))
                 .unwrap_or_default();
             row(
                 &mut out,
                 "folders",
                 format!(
                     "{}{branch}  {}  {}",
-                    paint(&f.label, S::Bold),
+                    paint(printable(&f.label), S::Bold),
                     holdmap_core::util::printable(&tilde(&f.path)),
-                    style::dim(tags.join(" · "))
+                    style::dim(printable(&tags.join(" · ")))
                 ),
             );
         }
@@ -291,7 +452,7 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
                 &mut out,
                 format!(
                     "{} (pid {})  {}",
-                    paint(&tool.name, S::Bold),
+                    paint(printable(&tool.name), S::Bold),
                     tool.pid,
                     style::dim(format!("{} · {evidence} · {ports}", tool.kind.label())),
                 ),
@@ -329,8 +490,8 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
                 "ports",
                 format!(
                     "{} {}  {}  {}",
-                    paint(format!(":{}", p.port), S::BoldCyan),
-                    p.label,
+                    paint(format!("{}/{}", p.port, p.protocol), S::BoldCyan),
+                    printable(&p.label),
                     exposure,
                     style::dim(role)
                 ),
@@ -347,15 +508,15 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
             let what = match l.kind {
                 LinkKind::Local => format!(
                     "{} {}",
-                    l.label,
+                    printable(&l.label),
                     style::dim(format!(":{} on this machine", l.port))
                 ),
                 LinkKind::Remote => format!(
                     "{}{}",
-                    l.address,
+                    printable(&l.address),
                     l.service
                         .as_ref()
-                        .map(|s| style::dim(format!(" {s}")))
+                        .map(|s| style::dim(format!(" {}", printable(s))))
                         .unwrap_or_default()
                 ),
             };
@@ -381,9 +542,9 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
             let head = if first { label("access") } else { pad.clone() };
             first = false;
             let summary = if f.evidence == Evidence::Unknown {
-                style::dim(&f.summary)
+                style::dim(printable(&f.summary))
             } else {
-                f.summary.clone()
+                printable(&f.summary).into_owned()
             };
             out.push_str(&format!("{head}{} {summary}\n", level_mark(f.level)));
         }
@@ -400,8 +561,11 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
                 out.push_str(&format!(
                     "{head}{} {}  {}\n",
                     paint(format!("{:>7}", p.pid), S::Cyan),
-                    p.name,
-                    style::dim(style::one_line(&p.command, 90))
+                    printable(&p.name),
+                    style::dim(style::one_line(
+                        &printable(&holdmap_core::redact::line(&p.command)),
+                        90
+                    ))
                 ));
             }
             if a.more_processes > 0 {
@@ -422,8 +586,9 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
         "narrower than your account · ! wider · ? unknown"
     )));
     for l in &r.limits {
-        out.push_str(&style::dim(format!("note: {l}\n")));
+        out.push_str(&style::dim(format!("note: {}\n", printable(l))));
     }
+    out.push_str(&style::dim("Stop services: holdmap agents <PID> --stop-ports --dry-run\nAgent sessions stay running.\n"));
     style::terminal_text(&out)
 }
 
@@ -493,7 +658,7 @@ mod tests {
             taken_at_ms: 0,
             limits: vec!["Chats are never read.".into()],
         };
-        let text = render(&r, false, None);
+        let text = render(&r, false, Some("claude-code"));
         assert!(text.contains("Claude Code  pid 42 · terminal agent · Vendor · you (dev)"));
         assert!(text.contains("folders   shop-web  /srv/shop-web  working dir"));
         assert!(text.contains("started from Claude Code (pid 42)"));
@@ -531,7 +696,7 @@ mod tests {
             None,
         );
         assert!(text.contains("3.4% CPU"));
-        assert!(text.contains("1 stoppable port"));
+        assert!(text.contains("1 service: 3001/TCP"));
     }
 
     #[test]
@@ -602,5 +767,48 @@ mod tests {
         let filtered = render(&report, false, Some("shop-web"));
         assert!(filtered.starts_with("No agents or developer tools match \"shop-web\"."));
         assert!(filtered.contains("note: The process table could not be collected."));
+    }
+
+    #[test]
+    fn overview_is_compact_and_keeps_recent_projects_distinct_from_activity() {
+        style::init(style::ColorChoice::Never);
+        let mut a = agent(42, "claude-code", "Claude Code");
+        a.folders[0].source = FolderSource::Recent;
+        a.command = "claude --token=[redacted]".into();
+        let report = AgentsReport {
+            agents: vec![a],
+            limits: vec!["Process and socket metadata only.".into()],
+            ..AgentsReport::default()
+        };
+        let compact = render(&report, false, None);
+        assert!(compact.contains("1 running agent or tool"));
+        assert!(compact.contains("shop-web (recent project; not current activity)"));
+        assert!(compact.contains("no stoppable services · 0 child tools"));
+        assert!(compact.contains("Details: holdmap agents <PID>"));
+        assert!(compact.contains("note: Process and socket metadata only."));
+        assert!(!compact.contains("--token"));
+        assert!(!compact.contains("No sandbox seen right now."));
+        assert!(render(&report, false, Some("42")).contains("No sandbox seen right now."));
+    }
+
+    #[test]
+    fn human_reports_neutralize_terminal_control_sequences() {
+        style::init(style::ColorChoice::Never);
+        let mut a = agent(
+            42,
+            "claude-code",
+            "Claude Code\x1b]52;c;injected\x07\nforged row",
+        );
+        a.folders[0].label = "project\x1b[2J".into();
+        let report = AgentsReport {
+            agents: vec![a],
+            ..AgentsReport::default()
+        };
+        for (wide, query) in [(false, None), (true, None), (false, Some("42"))] {
+            let text = render(&report, wide, query);
+            assert!(!text.contains('\x1b'));
+            assert!(!text.contains('\x07'));
+            assert!(!text.contains("\nforged row"));
+        }
     }
 }

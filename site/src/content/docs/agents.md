@@ -1,13 +1,14 @@
 ---
 title: Agents, tools and apps
-description: See which AI agents and developer tools are running, what they can reach, and stop only the ports they started.
+description: Inspect AI agents, observe process connections, record instrumented tool calls locally, and review safe service stops with clear evidence.
 order: 2
 ---
 
 holdmap finds the **AI coding agents** and **developer tools** on your machine and shows, for
 each one, the folders it works in, the ports and apps it started, the services and hosts it talks
-to, and what the OS says about its access. Every fact is marked seen, inferred or unknown. Chats,
-settings and tokens are never read.
+to, and what the OS says about its access. Every process fact is marked seen, inferred or unknown.
+The process scan does not read chats, settings or tokens. Optional recording accepts a separate,
+strictly limited metadata projection from integrations you configure.
 
 Recognized products include Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider,
 Cline, Goose, Docker Desktop, OrbStack, Podman Desktop and others.
@@ -19,8 +20,9 @@ uses the current interface with sample data.
 ## From the CLI
 
 ```sh
-holdmap agents                         # every agent and tool, with its footprint
-holdmap agents claude                  # filter by product name or PID
+holdmap agents                         # compact overview (current source)
+holdmap agents claude                  # matching agents with detailed footprints
+holdmap agents codex --wide             # include redacted process commands
 holdmap agents claude --stop-ports --dry-run   # plan only
 holdmap agents claude --stop-ports --yes       # stop unprotected ports that agent started
 holdmap agents --json                  # machine-readable report
@@ -42,8 +44,87 @@ matching known account, and do not establish current work by a particular runnin
   before anything opens.
   Search by agent, folder, tool, exact PID (`pid:51200`) or explicit port (`port:3001`). A port
   search includes both the listener owner and agents connected to it.
-- **TUI:** Tab cycles Ports → Graph → Agents. Select an agent and press `x` (or `X`) to stop its
-  unprotected ports.
+- **TUI:** start `holdmap`, then press **Shift+Tab** to open Agents directly. **Tab** cycles
+  Ports → Graph → Agents. Use **↑/↓** to select an agent, **/** to search, and **PgUp/PgDn** to
+  scroll its details. Wide windows show both panes side by side; small windows stack them.
+  Mouse-wheel scrolling follows the hovered pane. **p** pauses, **r** refreshes and **?** opens
+  help. Selection follows the same agent across refreshes. Failed scans clearly mark cached data.
+- **Review a service stop:** press **x** to review every affected service and its exact TCP/UDP
+  protocol. Scroll the full plan with **PgUp/PgDn**. **Enter**, **n** or **Esc** cancels; only
+  **y** confirms. The batch is freshly checked before any action. Changed targets require a new
+  review; failures stop remaining plans and show what completed. Agent sessions stay running.
+
+The compact CLI overview and updated terminal navigation are **current source / Unreleased**;
+version 0.4.0 downloads predate these changes. Build current source to use them. `--json` retains
+its structured report format. No terminal shell attachment or private conversation content is
+needed to inspect the observed processes.
+
+These current-source terminal captures use isolated local fixtures:
+
+![Terminal Agents list beside selected tools, services and access details](../../../../docs/screenshots/tui-agents-dark.png)
+
+![An 80-column terminal keeps agent identity visible while tool details scroll](../../../../docs/screenshots/tui-agents-narrow-dark.png)
+
+## Desktop Flow: connections and calls
+
+In **Agents**, choose **Flow**. The two data sources answer different questions:
+
+| View | What it shows | What it cannot establish |
+| --- | --- | --- |
+| **Connections** | Observed parent processes, listener ownership and live TCP socket relationships, including the source process IDs. Tool roles may be inferred. | Individual tool invocations, messages, data direction or transferred bytes. |
+| **Calls** | Tool, model, agent, handoff and execution-step metadata supplied by a configured integration, with status, timing and reported parent spans. | Uninstrumented activity, private message content or verified OS process ownership. |
+
+The graph has zoom, fit and a minimap. Participants, relationships and the activity timeline
+provide keyboard-accessible ways to inspect the same evidence. **Pause view** stops automatic
+updates; **Refresh** still fetches an explicit update. It does not stop recording or an agent.
+The selected run and record remain stable during refreshes. Small windows stack the readable
+timeline below the graph.
+
+Connections and Calls are **current source / Unreleased**. The 0.4.0 downloads predate Flow;
+build current source to use it. These captures use clearly labelled browser example metadata:
+
+![Connections shows observed process parenting, listeners and live socket relationships](../../assets/agent-flow/connections-dark.webp)
+
+![Calls shows a reported multi-agent trace with parallel tools and an activity timeline](../../assets/agent-flow/calls-dark.webp)
+
+### Set up optional recording
+
+1. Open **Flow → Calls → Start recording** in the local desktop app.
+2. Open **Setup**, copy the Codex or Claude Code settings, merge them into your existing
+   configuration, and restart that agent. Settings are never edited automatically.
+3. Run a task in the configured agent, then inspect the received metadata in Calls.
+
+The copied configuration contains a private local bearer token. The collector binds to loopback,
+requires that token, rejects browser-origin requests and retains metadata in memory on this
+computer. **Stop recording** ends collection and keeps the current snapshot. **Clear records**
+removes it from memory; closing Holdmap also discards it. Recording does not survive a full quit.
+
+The default setup uses Codex telemetry logs and Claude Code telemetry traces; Claude Code
+tracing is a beta capability. Standard OpenTelemetry JSON traces and explicit hook or MCP
+integrations can also supply metadata. Choose one recording integration per provider to avoid
+duplicate counts. Recording requires instrumentation and only includes subsequently reported
+activity; a running agent alone does not expose its internal calls.
+
+Payload, prompt, tool-argument, result, error-message, URL and path fields are excluded by
+the metadata projection. Source labels are sanitized and may be redacted. Sanitization cannot
+prove that a custom integration has not embedded sensitive information in a valid identifier.
+Reported process IDs are labelled unverified and never authorize stop or file actions.
+
+### Read the evidence correctly
+
+- A **Requested** hook record may arrive before permission or execution. An absent completion
+  stays incomplete; stopping recording marks pending requests unknown.
+- Completed telemetry spans usually arrive after export. A tool wrapper with **Status unknown**
+  stays unknown even when a separate execution step reports a failure.
+- A **Recorded trace** draws parent links only from the parent span IDs the integration supplied.
+  A **Recorded session** groups hook or log events without inventing a call hierarchy. Event order
+  and session membership are not proof that two tools communicated.
+- **Serialized input/output** sizes are optional reported payload sizes. They describe neither
+  network traffic nor the contents of a message. Unknown differs from a reported zero-byte size.
+- At most **1,000 spans** are retained. Large runs show up to **128 spans** in the graph, with an
+  explicit count; all retained records stay available in the timeline. Selecting a later record
+  shows it and its reported parent context. Sampling, export delays, collector limits and missing
+  instrumentation can leave the view incomplete.
 
 ## Access and evidence
 

@@ -27,6 +27,8 @@ export interface SettingsModel {
   /** Whether this desktop supports shutdown, or the browser can simulate its confirmation. */
   powerAvailable: boolean;
   powerDemo: boolean;
+  /** Pending or executing actions in this local desktop session. */
+  scheduledCount?: number;
 }
 
 export interface SettingsActions {
@@ -41,6 +43,7 @@ export interface SettingsActions {
   copy(text: string, what: string): void;
   /** Opens a separate preview and acknowledgement; never shuts down immediately. */
   shutdown(): void;
+  viewSchedules?(): void;
 }
 
 export const SETTINGS_SECTIONS = [

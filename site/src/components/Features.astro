@@ -14,6 +14,8 @@ import paletteLight from "../assets/ui/ui-palette-light.png";
 import graphDark from "../assets/ui/ui-graph-dark.png";
 import graphLight from "../assets/ui/ui-graph-light.png";
 import agentsShot from "../../../docs/screenshots/desktop-agents-dark.png";
+import agentFlowDark from "../../../docs/screenshots/desktop-agent-flow-dark.png";
+import agentFlowLight from "../../../docs/screenshots/desktop-agent-flow-light.png";
 
 // Real crops of the desktop app (captured from the live demo at 3x), shown at a fixed CSS width.
 type Shot = { dark: ImageMetadata; light: ImageMetadata; w: number; alt: string };
@@ -96,6 +98,17 @@ const widths = (w: number) => [w, w * 2, w * 3];
           <Picture src={agentsShot} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280, 1920]} sizes={`(max-width: 1000px) calc(100vw - 80px), 720px`} alt="The agents map: Claude Code and Cursor with folders, ports, connections and access" loading="lazy" />
         </div>
       </li>
+      <li class="card span-3 split agent-flow">
+        <div class="copy">
+          <h3>See agent connections and recorded calls</h3>
+          <p><strong>Connections</strong> maps observed processes, listeners and live sockets. <strong>Calls</strong> shows tool and agent activity reported by integrations you configure, with a graph, timeline and clear source evidence. Optional recording keeps sanitized metadata in memory on this computer; payload fields are excluded.</p>
+          <p class="source-note">Current source / Unreleased. Socket relationships do not reveal messages. Session grouping does not imply communication; parent links come from supplied trace context.</p>
+          <a class="link-arrow" href={url("docs/agents/#desktop-flow-connections-and-calls")}>Agent Flow and recording <Icon name="ArrowRight" size={16} /></a>
+        </div>
+        <div class="visual agents-shot">{["dark", "light"].map((t) => (
+          <Picture src={t === "dark" ? agentFlowDark : agentFlowLight} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280, 1920]} sizes={`(max-width: 1000px) calc(100vw - 80px), 720px`} alt="Example recorded agent trace with parallel tools, an explicit handoff and a timeline; the failed execution step is labelled" loading="lazy" pictureAttributes={{ class: `only-${t}` }} />
+        ))}</div>
+      </li>
       <li class="card">
         <div class="copy">
           <h3>MCP for AI agents</h3>
@@ -137,6 +150,7 @@ const widths = (w: number) => [w, w * 2, w * 3];
   h3 { margin: 0 0 8px; font-size: var(--fs-lg); line-height: 28px; font-weight: 600; letter-spacing: -0.012em; }
   p { margin: 0; max-width: 520px; color: var(--muted); font-size: var(--fs-md); line-height: 24px; }
   .copy .link-arrow { margin-top: 20px; }
+  .source-note { margin-top: 12px; font-size: var(--fs-sm); line-height: 20px; }
 
   .visual { position: relative; flex: 1; min-height: 320px; margin-top: 32px; overflow: hidden; }
   .visual.short { min-height: 264px; }

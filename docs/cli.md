@@ -20,6 +20,7 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`holdmap run`](#holdmap-run) | Free a port (safely) and run a command on it, with PORT set |
 | [`holdmap graph`](#holdmap-graph) (alias `mesh`) | Show which services talk to which (dependencies, clusters) as a tree, JSON, DOT or Mermaid |
 | [`holdmap agents`](#holdmap-agents) | Show AI coding agents and developer tools: folders, access, ports and connections |
+| [`holdmap activity`](#holdmap-activity) | Record and inspect opt-in local agent activity metadata |
 | [`holdmap watch`](#holdmap-watch) | Stream port events: new listeners, closed listeners, conflicts |
 | [`holdmap pin`](#holdmap-pin) | Pin a port (favourite): shown first and watched even when free |
 | [`holdmap unpin`](#holdmap-unpin) | Remove a pin |
@@ -62,6 +63,7 @@ Commands:
   graph        Show which services talk to which (dependencies, clusters) as a tree, JSON, DOT or
                Mermaid [alias: mesh]
   agents       Show AI coding agents and developer tools: folders, access, ports and connections
+  activity     Record and inspect opt-in local agent activity metadata
   watch        Stream port events: new listeners, closed listeners, conflicts
   pin          Pin a port (favourite): shown first and watched even when free
   unpin        Remove a pin
@@ -347,13 +349,35 @@ Arguments:
   [AGENT]  Only agents matching a product, name, vendor, folder, tool name, or exact agent/child PID
 
 Options:
-  -w, --wide           Show listed processes and their command lines (secrets hidden; large lists
-                       are capped)
+  -w, --wide           Show full agent details, including processes and redacted command lines
+      --flow           Show observed process, listener and TCP relationships; no call or payload
+                       inference
       --stop-ports     Stop the unprotected ports each matching agent started (dev servers and
                        services)
       --dry-run        Show the stop plan only; don't send any signal
       --yes            Don't ask for confirmation before stopping
       --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap activity
+
+```text
+Record and inspect opt-in local agent activity metadata
+
+Usage: holdmap activity [OPTIONS] <COMMAND>
+
+Commands:
+  serve     Start an authenticated loopback recorder; metadata stays in memory until this exits
+  snapshot  Read metadata from the recorder named by HOLDMAP_ACTIVITY_ENDPOINT and TOKEN
+  setup     Print a reviewable exporter example; never edit agent configuration automatically
+  hook      Project one Codex/Claude hook from stdin to metadata and forward it locally
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
       --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
                        auto, always, never]
       --no-docker      Don't query Docker/Podman/OrbStack/Colima
@@ -608,10 +632,12 @@ Run the MCP (Model Context Protocol) server on stdio for AI coding assistants
 Usage: holdmap mcp [OPTIONS]
 
 Options:
-      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
-                       auto, always, never]
-      --no-docker      Don't query Docker/Podman/OrbStack/Colima
-  -h, --help           Print help
+      --record-activity  Send tool-call metadata to the explicitly configured local activity
+                         recorder
+      --color <COLOR>    When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                         auto, always, never]
+      --no-docker        Don't query Docker/Podman/OrbStack/Colima
+  -h, --help             Print help
 ```
 
 ## holdmap completions

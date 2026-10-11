@@ -180,8 +180,15 @@ pub fn history_cmd(a: &HistoryArgs) -> Result<u8> {
 
 /// Record a successful stop in the history (best effort: never fails the stop).
 pub fn record(e: &Engine, plan: &ActionPlan, report: &StopReport) {
+    let _ = record_checked(e, plan, report);
+}
+
+/// Record executed effects without hiding a storage failure from interactive surfaces.
+pub(crate) fn record_checked(e: &Engine, plan: &ActionPlan, report: &StopReport) -> Result<()> {
     let entries = history::entries_from_plan(&e.scan, plan, report);
-    let _ = store().record(&entries);
+    store()
+        .record(&entries)
+        .context("Could not save service-stop history")
 }
 
 fn start(entry: &HistoryEntry, timeout: Duration) -> Result<u8> {

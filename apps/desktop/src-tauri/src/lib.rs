@@ -5,15 +5,19 @@
 //!
 //! - [`commands`]: async Tauri adapters with target and folder authorization checks
 //! - [`confirmation`]: bounded one-use handles for the exact reviewed stop plans
+//! - [`scheduler`]: native timing, retained authority, and cancellation for delayed actions
 //! - [`tray`]: the tray / menu-bar icon listing running dev servers
 //! - [`watch`]: background re-scan → `port-events` + desktop notifications
 //! - [`shortcuts`]: global show-window shortcut and launch at login
 //! - [`state`]: shared state (last engine, config store)
 //! - [`update`]: optional self-update (release builds signed with an update key)
 
+mod activity;
 mod commands;
 mod confirmation;
+mod local_window;
 mod power;
+mod scheduler;
 mod shortcuts;
 mod state;
 mod tray;
@@ -45,12 +49,21 @@ pub fn run() {
     }
     builder
         .manage(AppState::default())
+        .manage(activity::ActivityState::default())
         .manage(power::PowerState::default())
+        .manage(scheduler::SchedulerState::default())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::scan,
             commands::topology,
             commands::agents,
+            commands::agent_flow,
+            activity::activity_status,
+            activity::activity_snapshot,
+            activity::start_activity,
+            activity::stop_activity,
+            activity::clear_activity,
+            activity::activity_setup,
             commands::explain,
             commands::http_info,
             commands::plan,
@@ -78,6 +91,10 @@ pub fn run() {
             commands::remote_scan,
             power::shutdown_preview,
             power::shutdown_machine,
+            scheduler::schedule_shutdown,
+            scheduler::schedule_stops,
+            scheduler::list_schedules,
+            scheduler::cancel_schedule,
             update::install_update,
         ])
         .setup(move |app| {
@@ -103,6 +120,7 @@ pub fn run() {
                 }
             }
             update::spawn_check(handle.clone());
+            scheduler::spawn(handle.clone());
             watch::spawn(handle);
             Ok(())
         })

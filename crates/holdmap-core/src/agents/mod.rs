@@ -18,6 +18,7 @@
 pub mod access;
 mod builder;
 pub mod catalog;
+pub mod flow;
 mod footprint;
 mod model;
 mod network;
@@ -27,6 +28,9 @@ pub mod tools;
 
 pub use builder::AgentsBuilder;
 pub use catalog::{identify, AgentDetector, AgentKind, AgentProduct, CatalogDetector, CATALOG};
+pub use flow::{
+    flow, AgentFlowEdge, AgentFlowEdgeKind, AgentFlowNode, AgentFlowNodeKind, AgentFlowReport,
+};
 pub use model::*;
 pub use recent::{HomeRecent, NoRecent, RecentProjects};
 pub use tools::{DefaultToolClassifier, ToolClassification, ToolClassifier};

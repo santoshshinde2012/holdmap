@@ -76,7 +76,13 @@ out of scope.
   64 messages. Oversized input is rejected before dispatch, and an oversized frame is drained
   completely so it cannot become a later valid request. HTTP probe paths reject request/header
   injection; captured command output is bounded to 4 MiB per stream with a deadline.
-- No telemetry is implemented. Holdmap's own network operations are localhost probes, SSH to
+- No product analytics are implemented. Optional agent recording accepts explicitly configured
+  local metadata through a token-authenticated loopback endpoint and retains at most 1,000 spans
+  in memory. Prompts, tool inputs/results and unrelated fields are discarded before retention;
+  identifiers are pseudonymized. Source labels are sanitized, not guaranteed secret-free.
+  Status/snapshot/errors exclude the token, and recording has no process-action authority.
+  See [agent flow bounds and privacy](docs/agent-flow.md#privacy-security-and-bounds).
+  Holdmap's other network operations are localhost probes, SSH to
   named hosts, and desktop update checks against GitHub Releases. Project commands and SSH
   configuration retain the user's own authority.
 - Releases use immutable action SHAs and scoped tokens, SHA-256 checksums and build provenance
@@ -123,3 +129,25 @@ permissions, and macOS retains a check-to-signal race; Linux pidfds and Windows 
 handles bind signalling more directly to process identity. Review plans and avoid sharing raw
 history/logs without inspecting them. Version 0.4.0 includes the security hardening described
 here; see the [0.4.0 changes](CHANGELOG.md#040---2026-10-10). Version 0.3.0 predates these fixes.
+
+## Scheduled desktop actions (current source)
+
+Scheduling uses the trusted local main window and keeps authorization in the native process.
+Creating a schedule consumes a short-lived, one-use review handle and retains the exact stop
+plan or fixed local OS shutdown command. Schedules are bounded, held in memory, and dropped
+when Holdmap quits. They do not accept remote hosts, arbitrary commands, force-stop options,
+or protected-process overrides. Agent schedules bind the agent root's start token and product
+as well as its reviewed service listeners; they do not authorize termination of the agent root.
+
+Before dispatch, a fresh scan validates every retained stop plan, current-account process
+ownership and agent ownership before any batch effect. Container schedules accept only local
+Unix sockets or local named pipes; network Docker endpoints are refused. The core executor also rechecks identity and protection at each effect.
+Batch execution cannot be transactional: a later OS refusal can leave earlier services stopped;
+the result reports failures without retrying. Cancellation wins while a job is pending or being
+checked; an atomic transition to running ends cancellation before the first effect.
+
+A native worker checks deadlines independently of the webview and scan cadence. Missed times
+beyond 60 seconds or clock divergence beyond 30 seconds require a new review. It does not
+restore schedules after restart or wake a sleeping computer. Shutdown reservations prevent
+competing immediate or scheduled power requests; accepted or uncertain OS outcomes retain
+Power's retry latch. Tests inject clocks and executors and never request a real shutdown.

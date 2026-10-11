@@ -1,5 +1,107 @@
 # holdmap architecture
 
+## Agent communication visibility (current source)
+
+The read-only Connections projection uses one consistent scan and `AgentsReport`. It retains
+exact socket holders and process start tokens; it marks missing and ambiguous ownership rather
+than choosing a guessed peer. Limits bound OS graph output to 256 nodes and 512 edges.
+
+The separate Calls pipeline requires explicit local opt-in. `holdmap-activity` owns strict
+metadata contracts, pure provider normalization, bounded storage, loopback HTTP and a bounded
+client. Native commands share the trusted-main-window policy with Power; CLI hooks and MCP
+recording compose the same client. `ToolCallObserver` is injected into MCP with a no-op default,
+so protocol handling and optional recording have separate responsibilities. It receives only
+catalog names, timing, outcomes and serialized sizes. Recording failure never disables tools.
+
+The browser adapter supplies labelled examples. Pure TypeScript builds reported parent edges,
+layout and timeline models; an invalidatable loader prevents stale requests from changing a
+later view. Components present evidence and setup without authority to stop a reported PID.
+A source-provided parent defines an edge; socket presence, elapsed time and common session
+membership cannot define tool causality. Provider setup remains reviewable text that the user
+applies explicitly. No source settings or private conversations are read automatically.
+
+![Agent visibility and optional local metadata flow](diagrams/agent-communication-flow.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 190
+---
+flowchart TB
+  accTitle: Agent visibility and optional local metadata flow
+  accDescr: Observed OS relationships and opt-in provider metadata follow separate read-only paths into the desktop flow view. A loopback authentication and bounded parsing gate projects metadata into session memory. Reported trace parents produce call edges, while missing evidence remains unknown. The public browser uses labelled examples and no recording source grants action authority.
+  subgraph OBSERVED["Observed relationships · no recording required"]
+    OS["OS scan<br/>Processes, listeners + sockets"]
+    PROJECT["Core flow projection<br/>Exact holders + process identity<br/>Seen / inferred / unknown"]
+    OS --> PROJECT
+  end
+  subgraph PRODUCERS["Explicitly configured local producers"]
+    AGENT["Codex / Claude / OTLP<br/>Reported events + trace parents"]
+    HOOK["Advisory lifecycle hooks<br/>Normalize before sending"]
+    MCP["Holdmap MCP observer<br/>Fixed tool names + envelope sizes"]
+  end
+  subgraph ACTIVITY["holdmap-activity · no persistence or forwarding"]
+    GATE["Session authentication<br/>127.0.0.1 + bearer token<br/>Origin / framing / deadline checks"]
+    NORMAL["Pure normalization<br/>Allowlist + pseudonymize<br/>Discard content fields"]
+    MEMORY[("Bounded memory store<br/>1,000 spans + dropped counts<br/>Identity and outcome merge policy")]
+    GATE --> NORMAL --> MEMORY
+  end
+  AGENT & HOOK & MCP --> GATE
+  subgraph VIEW["Desktop presentation · read-only evidence"]
+    API["Trusted local IPC<br/>Opt-in, snapshot, stop + clear"]
+    CONNECTIONS["Connections graph<br/>Observed OS relationships"]
+    CALLS["Calls graph + timeline<br/>Reported parents, parallel calls<br/>Missing / unknown explicit"]
+    INSPECT["Accessible inspector<br/>Status, duration + serialized sizes"]
+    API --> CALLS
+    CONNECTIONS & CALLS --> INSPECT
+  end
+  PROJECT --> CONNECTIONS
+  MEMORY --> API
+  DEMO["Public browser demo<br/>Labelled examples<br/>No native collector or actions"] -.-> CONNECTIONS & CALLS
+  style OBSERVED fill:#ffffff,stroke:#94A3B8
+  style PRODUCERS fill:#ffffff,stroke:#94A3B8
+  style ACTIVITY fill:#ffffff,stroke:#94A3B8
+  style VIEW fill:#ffffff,stroke:#94A3B8
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  classDef web fill:#F1F5F9,stroke:#64748B,color:#0F172A,stroke-width:1.5px
+  class OS,AGENT,HOOK,MCP,MEMORY data
+  class PROJECT,NORMAL domain
+  class GATE,API safety
+  class CONNECTIONS,CALLS,INSPECT surface
+  class DEMO web
+```
+
+</details>
+
+Adapters depend on narrow contracts; domain projections do not depend on presentation or
+transport. Tests substitute scans, clocks, MCP observers and executors without redefining
+production policy. Provider wire fixtures, hostile HTTP tests, out-of-order updates, full CLI
+roundtrips and keyboard regressions verify the composition. [Agent flow](agent-flow.md) records
+primary research, exporter setup, source coverage and privacy limits.
+
 ## Local computer power
 
 The desktop Power flow has separate presentation, IPC, confirmation policy and OS adapter
@@ -59,6 +161,144 @@ flowchart LR
 ```
 
 </details>
+
+## Terminal agent presentation (current source)
+
+The terminal Agents view uses one background scan and one cached `AgentsReport`; render and
+navigation never collect processes or read project history. `tui/agents_view.rs` holds pure
+filter, count, safe-text and wrapping helpers, `tui/agents_state.rs` owns stable selection,
+search and review requests, and `tui/agents_ui.rs` renders the responsive list/details panes.
+`app.rs` coordinates keyboard events, worker messages and refresh sequencing. A refresh queued
+behind an in-flight scan discards its older response, including after a completed stop.
+
+CLI and TUI share `agent_actions.rs` for reviewed service stops. Each protocol-qualified plan
+retains the agent identity and exact listener/process identities. One fresh snapshot must
+validate the entire batch before the first effect; execution consumes the original plans and
+halts after a failure or history-write error. Injected execution and recording functions test
+policy without stopping processes. Presentation cannot broaden that authorization. Terminal
+metadata is printable, commands stay redacted, and confirmation keeps cancellation visible.
+
+![Terminal agent visibility and reviewed service actions](diagrams/terminal-agents.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 210
+---
+flowchart LR
+  accTitle: Terminal agent visibility and reviewed service actions
+  accDescr: A background collector supplies one agent snapshot to compact CLI reports and a responsive terminal list and details view. Shared reviews retain exact protocol and process identity. Fresh batch checks precede execution and private history recording, with no automatic retries.
+  SCAN["Background collector<br/>Engine + agent snapshot"] --> REPORT["CLI overview and details<br/>Redacted, printable metadata"]
+  SCAN --> STATE["Terminal view state<br/>Search + stable identity selection"]
+  STATE --> UI["Responsive presentation<br/>Agent list + scrollable details"]
+  REPORT & UI --> REVIEW["Shared service review<br/>Exact TCP / UDP plans<br/>Agent root stays protected"]
+  REVIEW --> CHECK["Fresh whole-batch validation<br/>Identity, ownership and policy"]
+  CHECK --> EXEC["Retained plan executor<br/>Verify result; halt on failure"]
+  EXEC --> HISTORY["Checked private history<br/>Completed effects + errors"]
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  class REPORT,UI surface
+  class STATE,SCAN domain
+  class REVIEW,CHECK,EXEC safety
+  class HISTORY data
+```
+
+</details>
+
+## Scheduled local actions (current source)
+
+The scheduler is a desktop application service with separate queue/timing policy, stop
+validation, IPC adapters and a worker. The native queue owns original reviewed plans and
+fixed Power authorizations; the Svelte timing and manager components only present and request
+changes. Clocks and executors are injected in tests. The public browser API reports simulated
+statuses without operating-system access. CLI and MCP process operations remain immediate.
+
+![Scheduled local actions and retained authorization](diagrams/scheduled-actions.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
+flowchart LR
+  accTitle: Scheduled local actions and retained authorization
+  accDescr: The local desktop consumes reviewed handles into a bounded native queue. Cancellation remains available before atomic dispatch. Clock and target checks precede retained stop plans or a fixed local shutdown request. Browser mode simulates status only.
+  UI["Desktop timing controls<br/>Delay or local date/time"] --> CLAIM["Trusted IPC adapter<br/>Consume one-use preview"]
+  CLAIM --> Q["Native session queue<br/>32 active · 64 finished<br/>Reviewed intent + deadline"]
+  Q --> CANCEL["Cancel before dispatch<br/>Release power reservation"]
+  Q --> CLOCK["Independent worker<br/>Wall + monotonic clocks<br/>Missed time requires review"]
+  CLOCK --> VERIFY["Fresh authorization<br/>Exact plans + process identities<br/>Agent ownership + protection"]
+  VERIFY --> GATE["Atomic dispatch gate<br/>Cancellation ends here"]
+  GATE --> STOP["Core executor<br/>Retained stop plan<br/>History + verified result"]
+  GATE --> POWER["Power adapter<br/>Fixed local OS request<br/>Permission + inhibitor checks"]
+  UI -.-> DEMO["Browser simulation<br/>No OS or process access"]
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  classDef web fill:#F1F5F9,stroke:#64748B,color:#0F172A,stroke-width:1.5px
+  class UI,CLAIM surface
+  class Q,CLOCK domain
+  class VERIFY,GATE,POWER safety
+  class STOP,CANCEL data
+  class DEMO web
+```
+
+</details>
+
+- Creation consumes expiring preview handles, validates the entire batch, and pins agent root
+  identity and reviewed protocol-specific listeners. Delayed force/protection overrides and
+  unguarded supervisor commands and network container runtimes are refused. Process and
+  supervisor effects require current-account ownership at creation and dispatch.
+- The worker validates clock continuity and every fresh plan before dispatching the retained
+  effects. Cancellation can win during checking, until the atomic transition to running.
+- Only one shutdown reservation can exist. Cancellation or preflight refusal releases it;
+  accepted or uncertain OS requests preserve the Power retry latch.
+- Delays are one minute through 24 hours, with 32 active jobs and 64 terminal records. The
+  in-memory queue is cleared on full app quit. Missed times over 60 seconds or clock divergence
+  over 30 seconds require review. Jobs never retry automatically.
 
 holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop app and MCP
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
@@ -880,7 +1120,7 @@ branch; editing source does not itself publish a site.
 | Directory | Contents |
 |---|---|
 | `crates/holdmap-core` | Collection providers, models, attribution, planning, execution and persistence |
-| `crates/holdmap-cli` | CLI, TUI, generated-document checks and stdio MCP integration tests |
+| `crates/holdmap-cli` | CLI rendering, shared reviewed agent actions, TUI view/state helpers, generated-document checks and stdio MCP integration tests |
 | `crates/holdmap-mcp` | Protocol adapter, contracts, live tools and pure discovery modules |
 | `apps/desktop/src` | Shared Svelte UI, styles and TypeScript view logic |
 | `apps/desktop/src-tauri` | Native commands, state/cache, watcher, tray and OS integration |

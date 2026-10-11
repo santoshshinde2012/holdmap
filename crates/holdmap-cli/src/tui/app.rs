@@ -1,6 +1,7 @@
 //! TUI state and key handling. Scans and stops run on background threads so the UI never blocks.
 
 use super::graph::GraphView;
+use crate::agent_actions::{AgentStopOutcome, ReviewedAgentStops};
 use holdmap_core::*;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use ratatui::widgets::TableState;
@@ -61,9 +62,11 @@ pub enum Modal {
     Confirm {
         plan: Box<ActionPlan>,
         headline: String,
-        /// Extra ports to stop after `plan` (Agents "stop its ports").
-        more_ports: Vec<u16>,
-        force: bool,
+        /// Combined text is displayed; each original reviewed plan retains authority.
+        agent_stops: Option<Box<ReviewedAgentStops>>,
+        reviewed_target: Option<(Target, StopOptions)>,
+        scroll: u16,
+        max_scroll: u16,
     },
     Explain {
         scroll: u16,
@@ -72,9 +75,10 @@ pub enum Modal {
 }
 
 pub enum Msg {
-    Scanned(Box<Result<Engine, String>>),
+    Scanned(Box<Result<(Engine, holdmap_core::agents::AgentsReport), String>>),
     StopLine(String),
     Stopped(Box<StopReport>),
+    AgentStopped(Box<Result<AgentStopOutcome, String>>),
 }
 
 pub struct Toast {
@@ -100,16 +104,23 @@ pub struct App {
     pub modal: Modal,
     pub tab: Tab,
     pub graph: GraphView,
-    /// Agents report for the Agents tab (rebuilt with each scan while the tab is open).
+    /// Agent attribution collected on the worker alongside the current engine snapshot.
     pub agents: Option<holdmap_core::agents::AgentsReport>,
     /// Selected agent index in `agents.agents`.
     pub agent_idx: usize,
+    pub agent_query: String,
+    pub agent_searching: bool,
+    pub agent_state: TableState,
+    pub agent_scroll: u16,
+    pub agent_detail_area: ratatui::layout::Rect,
+    pub agent_detail_max_scroll: u16,
     pub toast: Option<Toast>,
     pub busy: Option<String>,
     pub stop_log: Vec<String>,
     pub quit: bool,
     pub last_scan: Option<Instant>,
     pub scanning: bool,
+    scan_again: bool,
     pub paused: bool,
     explain_cache: HashMap<String, Arc<Explanation>>,
     tx: Sender<Msg>,
@@ -120,8 +131,15 @@ pub struct App {
 
 impl App {
     pub fn new(docker: bool) -> App {
+        let mut app = Self::empty(docker);
+        app.start_scan();
+        app
+    }
+
+    /// Construction is separate from collection so state and rendering tests need no OS scan.
+    pub(super) fn empty(docker: bool) -> App {
         let (tx, rx) = channel();
-        let mut app = App {
+        App {
             docker,
             engine: None,
             error: None,
@@ -140,21 +158,26 @@ impl App {
             graph: GraphView::new(),
             agents: None,
             agent_idx: 0,
+            agent_query: String::new(),
+            agent_searching: false,
+            agent_state: TableState::default(),
+            agent_scroll: 0,
+            agent_detail_area: Default::default(),
+            agent_detail_max_scroll: 0,
             toast: None,
             busy: None,
             stop_log: Vec::new(),
             quit: false,
             last_scan: None,
             scanning: false,
+            scan_again: false,
             paused: false,
             explain_cache: HashMap::new(),
             tx,
             rx,
             spinner: 0,
             table_area: Default::default(),
-        };
-        app.start_scan();
-        app
+        }
     }
 
     fn start_scan(&mut self) {
@@ -168,7 +191,14 @@ impl App {
             docker: self.docker,
         };
         std::thread::spawn(move || {
-            let r = Engine::new(&opts).map_err(|e| e.to_string());
+            let r = Engine::new(&opts)
+                .map(|engine| {
+                    // Attribution can read bounded, allowlisted metadata. Keep that work on
+                    // the collector thread and give every view one consistent scan.
+                    let agents = engine.agents();
+                    (engine, agents)
+                })
+                .map_err(|e| e.to_string());
             let _ = tx.send(Msg::Scanned(Box::new(r)));
         });
     }
@@ -181,23 +211,35 @@ impl App {
                 Msg::Scanned(r) => {
                     self.scanning = false;
                     self.last_scan = Some(Instant::now());
+                    if self.scan_again {
+                        // An options change or explicit refresh requested a newer scan.
+                        // Discard this old response instead of briefly changing ownership.
+                        self.scan_again = false;
+                        self.start_scan();
+                        continue;
+                    }
                     match *r {
-                        Ok(e) => {
+                        Ok((e, agents)) => {
                             self.error = None;
                             self.engine = Some(Arc::new(e));
                             self.explain_cache.clear();
                             self.rebuild();
                             self.rebuild_graph();
-                            self.rebuild_agents();
+                            self.set_agents_report(agents);
                         }
                         Err(e) => self.error = Some(e),
                     }
                 }
-                Msg::StopLine(l) => self.stop_log.push(l),
+                Msg::StopLine(l) => {
+                    if self.stop_log.len() >= 256 {
+                        self.stop_log.remove(0);
+                    }
+                    self.stop_log.push(l);
+                }
                 Msg::Stopped(r) => {
                     self.busy = None;
                     let n = r.signalled.len();
-                    let text = if r.success {
+                    let text = if r.success && r.freed {
                         format!(
                             "✔ {} is free{} in {} ms",
                             r.target,
@@ -208,19 +250,63 @@ impl App {
                             },
                             r.elapsed_ms
                         )
+                    } else if r.freed {
+                        format!(
+                            "{} is free; {}",
+                            r.target,
+                            r.error
+                                .clone()
+                                .unwrap_or_else(|| "the stop did not complete cleanly".into())
+                        )
                     } else {
                         format!(
                             "✖ Could not free {}: {}",
                             r.target,
-                            r.error.clone().unwrap_or_default()
+                            r.error.clone().unwrap_or_else(|| format!(
+                                "ports still busy: {:?}",
+                                r.ports_still_busy
+                            ))
                         )
                     };
                     self.toast = Some(Toast {
                         text,
-                        ok: r.success,
+                        ok: r.success && r.freed,
                         at: Instant::now(),
                     });
-                    self.start_scan();
+                    self.start_scan_force();
+                }
+                Msg::AgentStopped(result) => {
+                    self.busy = None;
+                    let (text, ok) = match *result {
+                        Ok(outcome) if outcome.succeeded() => (
+                            format!(
+                                "Stopped {} reviewed services; agent session stays running",
+                                outcome.reports.len()
+                            ),
+                            true,
+                        ),
+                        Ok(outcome) => {
+                            let completed = outcome
+                                .reports
+                                .iter()
+                                .filter(|r| r.success && r.freed)
+                                .count();
+                            let detail = outcome
+                                .history_errors
+                                .first()
+                                .cloned()
+                                .or_else(|| outcome.reports.last().and_then(|r| r.error.clone()))
+                                .unwrap_or_else(|| "a reviewed port is still busy".into());
+                            (format!("{completed} services stopped; {} left unattempted: {detail}. Review again; no retry.", outcome.remaining), false)
+                        }
+                        Err(error) => (format!("No service was stopped: {error}"), false),
+                    };
+                    self.toast = Some(Toast {
+                        text,
+                        ok,
+                        at: Instant::now(),
+                    });
+                    self.start_scan_force();
                 }
             }
         }
@@ -312,85 +398,10 @@ impl App {
         }
     }
 
-    /// Rebuild the agents report from the current scan.
-    pub fn rebuild_agents(&mut self) {
-        let Some(engine) = &self.engine else {
-            self.agents = None;
-            return;
-        };
-        let report = engine.agents();
-        let n = report.agents.len();
-        if n == 0 {
-            self.agent_idx = 0;
-        } else if self.agent_idx >= n {
-            self.agent_idx = n - 1;
-        }
-        self.agents = Some(report);
-    }
-
-    /// Selected agent, when the Agents tab has one.
-    pub fn selected_agent(&self) -> Option<&holdmap_core::agents::Agent> {
-        self.agents
-            .as_ref()
-            .and_then(|r| r.agents.get(self.agent_idx))
-    }
-
-    fn move_agent(&mut self, delta: isize) {
-        let n = self.agents.as_ref().map(|r| r.agents.len()).unwrap_or(0);
-        if n == 0 {
-            return;
-        }
-        let i = self.agent_idx as isize + delta;
-        self.agent_idx = i.rem_euclid(n as isize) as usize;
-    }
-
-    /// Plan stopping the selected agent's unprotected ports (first stoppable port's plan,
-    /// with a headline covering all of them — same pattern as the desktop "Stop all").
-    fn request_stop_agent_ports(&mut self, force: bool) {
-        let Some(agent) = self.selected_agent().cloned() else {
-            return;
-        };
-        let ports: Vec<u16> = agent.stoppable_ports().map(|p| p.port).collect();
-        if ports.is_empty() {
-            self.toast = Some(Toast {
-                text: format!("{} has no stoppable ports", agent.name),
-                ok: false,
-                at: Instant::now(),
-            });
-            return;
-        }
-        let Some(engine) = self.engine.clone() else {
-            return;
-        };
-        let opts = StopOptions {
-            force,
-            ..Default::default()
-        };
-        let plan = engine.plan(&Target::Port(ports[0]), &opts);
-        let headline = if ports.len() == 1 {
-            format!("Stop :{} started by {}", ports[0], agent.name)
-        } else {
-            format!(
-                "Stop {} ports started by {}: {}",
-                ports.len(),
-                agent.name,
-                ports
-                    .iter()
-                    .map(|p| format!(":{p}"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
-        self.modal = Modal::Confirm {
-            headline,
-            plan: Box::new(plan),
-            more_ports: ports.into_iter().skip(1).collect(),
-            force,
-        };
-    }
-
     /// Switch tabs, carrying the selection across (entry ↔ node).
     pub fn toggle_tab(&mut self) {
+        self.searching = false;
+        self.agent_searching = false;
         match self.tab {
             Tab::Ports => {
                 if let Some(id) = self.selected().map(|e| e.id.clone()) {
@@ -408,15 +419,31 @@ impl App {
         }
     }
 
+    fn previous_tab(&mut self) {
+        self.searching = false;
+        self.agent_searching = false;
+        match self.tab {
+            Tab::Ports => {
+                self.rebuild_agents();
+                self.tab = Tab::Agents;
+            }
+            Tab::Agents => self.tab = Tab::Graph,
+            Tab::Graph => {
+                self.sync_from_graph();
+                self.tab = Tab::Ports;
+            }
+        }
+    }
+
     /// Point the port table at the selected graph node's first port.
-    fn sync_from_graph(&mut self) {
+    fn sync_from_graph(&mut self) -> bool {
         let Some(entry) = self
             .graph
             .selected_node()
             .and_then(|n| n.ports.first())
             .map(|p| p.entry_id.clone())
         else {
-            return;
+            return false;
         };
         if !self.rows.iter().any(|r| r.id == entry) && !self.query.is_empty() {
             self.query.clear();
@@ -424,11 +451,17 @@ impl App {
         }
         if let Some(i) = self.rows.iter().position(|r| r.id == entry) {
             self.state.select(Some(i));
+            true
+        } else {
+            false
         }
     }
 
     /// Ask to stop every service in the selected node's cluster, in dependency order.
     fn request_cluster_stop(&mut self) {
+        if self.busy.is_some() {
+            return;
+        }
         let Some(name) = self.graph.selected_cluster().map(str::to_string) else {
             self.toast = Some(Toast {
                 text: "This service isn't part of a cluster".into(),
@@ -440,12 +473,16 @@ impl App {
         let Some(engine) = self.engine.clone() else {
             return;
         };
-        let plan = engine.plan(&Target::Cluster(name), &StopOptions::default());
+        let target = Target::Cluster(name);
+        let options = StopOptions::default();
+        let plan = engine.plan(&target, &options);
         self.modal = Modal::Confirm {
             headline: plan.summary.clone(),
             plan: Box::new(plan),
-            more_ports: Vec::new(),
-            force: false,
+            agent_stops: None,
+            reviewed_target: Some((target, options)),
+            scroll: 0,
+            max_scroll: 0,
         };
     }
 
@@ -466,8 +503,14 @@ impl App {
             | KeyCode::Char('o')
             | KeyCode::Char('c') => {
                 // Act on the node's port through the regular port actions.
-                self.sync_from_graph();
-                return false;
+                if self.sync_from_graph() {
+                    return false;
+                }
+                self.toast = Some(Toast {
+                    text: "This graph node has no visible local listener. Choose its port in Ports and adjust filters to act on it.".into(),
+                    ok: false,
+                    at: Instant::now(),
+                });
             }
             _ => return false,
         }
@@ -503,6 +546,9 @@ impl App {
     }
 
     fn request_stop(&mut self, force: bool) {
+        if self.busy.is_some() {
+            return;
+        }
         let Some(entry) = self.selected().cloned() else {
             return;
         };
@@ -522,16 +568,21 @@ impl App {
         self.modal = Modal::Confirm {
             plan: Box::new(plan),
             headline: ex.headline.clone(),
-            more_ports: Vec::new(),
-            force,
+            agent_stops: None,
+            reviewed_target: Some((Target::Port(entry.port), opts)),
+            scroll: 0,
+            max_scroll: 0,
         };
     }
 
     fn confirm_stop(&mut self) {
+        if self.busy.is_some() {
+            return;
+        }
         let Modal::Confirm {
             plan,
-            more_ports,
-            force,
+            agent_stops,
+            reviewed_target,
             ..
         } = std::mem::replace(&mut self.modal, Modal::None)
         else {
@@ -543,36 +594,85 @@ impl App {
         self.busy = Some(format!("Stopping {}…", plan.target));
         self.stop_log.clear();
         let tx = self.tx.clone();
-        let engine = self.engine.clone();
+        let docker = self.docker;
         std::thread::spawn(move || {
-            let mut report = execute(&plan, &mut |l| {
-                let _ = tx.send(Msg::StopLine(l.to_string()));
-            });
-            if let Some(e) = &engine {
-                crate::state::record(e, &plan, &report);
+            let fresh = Engine::new(&ScanOptions {
+                all_states: false,
+                docker,
+            })
+            .map_err(|e| e.to_string());
+            if let Some(reviewed) = agent_stops {
+                let outcome = fresh.and_then(|engine| {
+                    reviewed
+                        .execute_with(
+                            &engine,
+                            |reviewed| {
+                                let _ = tx.send(Msg::StopLine(format!(
+                                    "→ {} ({})",
+                                    reviewed.target(),
+                                    reviewed.name
+                                )));
+                                execute(&reviewed.plan, &mut |line| {
+                                    let _ = tx.send(Msg::StopLine(line.into()));
+                                })
+                            },
+                            |plan, report| {
+                                crate::state::record_checked(&engine, plan, report)
+                                    .map_err(|e| e.to_string())
+                            },
+                        )
+                        .map_err(|e| e.to_string())
+                });
+                let _ = tx.send(Msg::AgentStopped(Box::new(outcome)));
+                return;
             }
-            // Agents "stop its ports": continue with the rest after the first frees.
-            if report.freed {
-                let opts = StopOptions {
-                    force,
-                    ..Default::default()
-                };
-                for port in more_ports {
-                    let _ = tx.send(Msg::StopLine(format!("→ :{port}")));
-                    let Some(e) = &engine else { break };
-                    let next = e.plan(&Target::Port(port), &opts);
-                    if next.is_blocked() {
-                        continue;
-                    }
-                    report = execute(&next, &mut |l| {
-                        let _ = tx.send(Msg::StopLine(l.to_string()));
-                    });
-                    crate::state::record(e, &next, &report);
-                    if !report.freed {
-                        break;
+            let mut report = match fresh {
+                Ok(engine) => {
+                    let Some((target, options)) = reviewed_target else {
+                        let _ = tx.send(Msg::Stopped(Box::new(StopReport {
+                            target: plan.target.clone(),
+                            error: Some(
+                                "The reviewed target is missing. No action was taken.".into(),
+                            ),
+                            ..Default::default()
+                        })));
+                        return;
+                    };
+                    let current = engine.plan(&target, &options);
+                    if current.is_blocked()
+                        || current.risk > plan.risk
+                        || !plan.same_effects(&current)
+                    {
+                        StopReport { target: plan.target.clone(), error: Some("The target changed since review. Refresh and review the plan again. No action was taken.".into()), ..Default::default() }
+                    } else {
+                        let mut result = execute(&plan, &mut |line| {
+                            let _ = tx.send(Msg::StopLine(line.into()));
+                        });
+                        if let Err(error) = crate::state::record_checked(&engine, &plan, &result) {
+                            result.success = false;
+                            result.error = Some(format!(
+                                "{} Stop history could not be saved: {error}",
+                                result.error.unwrap_or_default()
+                            ));
+                        }
+                        result
                     }
                 }
-            }
+                Err(error) => StopReport {
+                    target: plan.target.clone(),
+                    success: false,
+                    freed: false,
+                    signalled: vec![],
+                    ports_still_busy: vec![],
+                    elapsed_ms: 0,
+                    error: Some(format!(
+                        "Could not check the reviewed target: {error}. No action was taken."
+                    )),
+                    ..Default::default()
+                },
+            };
+            // A refused preflight is reported through the same read-only status channel.
+            report.target = plan.target.clone();
             let _ = tx.send(Msg::Stopped(Box::new(report)));
         });
     }
@@ -609,6 +709,34 @@ impl App {
     }
 
     pub fn on_mouse(&mut self, m: MouseEvent) {
+        match &mut self.modal {
+            Modal::Confirm {
+                scroll, max_scroll, ..
+            } => {
+                match m.kind {
+                    MouseEventKind::ScrollDown => {
+                        *scroll = scroll.saturating_add(3).min(*max_scroll)
+                    }
+                    MouseEventKind::ScrollUp => *scroll = scroll.saturating_sub(3),
+                    _ => {}
+                }
+                return;
+            }
+            Modal::Explain { scroll } => {
+                match m.kind {
+                    MouseEventKind::ScrollDown => *scroll = scroll.saturating_add(3),
+                    MouseEventKind::ScrollUp => *scroll = scroll.saturating_sub(3),
+                    _ => {}
+                }
+                return;
+            }
+            Modal::Help => return,
+            Modal::None => {}
+        }
+        if self.tab == Tab::Agents {
+            self.on_agent_mouse(m);
+            return;
+        }
         let graph = self.tab == Tab::Graph;
         match m.kind {
             MouseEventKind::ScrollDown if graph => self.graph.move_by(1),
@@ -619,20 +747,44 @@ impl App {
         }
     }
 
+    fn request_quit(&mut self) {
+        if self.busy.is_some() {
+            self.toast = Some(Toast {
+                text: "A reviewed stop is finishing. Wait for its result, then press q to quit."
+                    .into(),
+                ok: false,
+                at: Instant::now(),
+            });
+        } else {
+            self.quit = true;
+        }
+    }
+
     pub fn on_key(&mut self, k: KeyEvent) {
         if k.modifiers.contains(KeyModifiers::CONTROL) && matches!(k.code, KeyCode::Char('c')) {
-            self.quit = true;
+            self.request_quit();
             return;
         }
         match &mut self.modal {
-            Modal::Confirm { plan, .. } => {
+            Modal::Confirm {
+                plan,
+                scroll,
+                max_scroll,
+                ..
+            } => {
                 match k.code {
-                    KeyCode::Char('y') | KeyCode::Enter if !plan.is_blocked() => {
-                        self.confirm_stop()
-                    }
+                    KeyCode::Char('y') if !plan.is_blocked() => self.confirm_stop(),
                     KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
                         self.modal = Modal::None
                     }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        *scroll = scroll.saturating_add(1).min(*max_scroll)
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => *scroll = scroll.saturating_sub(1),
+                    KeyCode::PageDown => *scroll = scroll.saturating_add(8).min(*max_scroll),
+                    KeyCode::PageUp => *scroll = scroll.saturating_sub(8),
+                    KeyCode::Home => *scroll = 0,
+                    KeyCode::End => *scroll = *max_scroll,
                     _ => {}
                 }
                 return;
@@ -655,6 +807,10 @@ impl App {
             }
             Modal::None => {}
         }
+        if self.tab == Tab::Agents && self.agent_searching {
+            self.search_agents(k);
+            return;
+        }
         if self.searching {
             match k.code {
                 KeyCode::Esc => {
@@ -676,7 +832,11 @@ impl App {
             self.rebuild();
             return;
         }
-        if matches!(k.code, KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('v')) {
+        if matches!(k.code, KeyCode::BackTab) {
+            self.previous_tab();
+            return;
+        }
+        if matches!(k.code, KeyCode::Tab | KeyCode::Char('v')) {
             self.toggle_tab();
             return;
         }
@@ -687,25 +847,51 @@ impl App {
             match k.code {
                 KeyCode::Down | KeyCode::Char('j') => self.move_agent(1),
                 KeyCode::Up | KeyCode::Char('k') => self.move_agent(-1),
-                KeyCode::Char('x') => self.request_stop_agent_ports(false),
-                KeyCode::Char('X') => self.request_stop_agent_ports(true),
-                KeyCode::Char('q') => self.quit = true,
-                KeyCode::Esc => self.quit = true,
-                KeyCode::Char('?') => self.modal = Modal::Help,
-                KeyCode::Char('r') => self.start_scan(),
-                KeyCode::Char(' ') => self.paused = !self.paused,
+                KeyCode::Home | KeyCode::Char('g') => self.move_agent(-10_000),
+                KeyCode::End | KeyCode::Char('G') => self.move_agent(10_000),
+                KeyCode::PageDown => self.scroll_agent(8),
+                KeyCode::PageUp => self.scroll_agent(-8),
+                KeyCode::Char('d') if k.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.scroll_agent(8)
+                }
+                KeyCode::Char('u') if k.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.scroll_agent(-8)
+                }
+                KeyCode::Char('/') => self.agent_searching = true,
+                KeyCode::Char('x') => self.request_stop_agent_ports(),
+                KeyCode::Char('X') => {
+                    self.toast = Some(Toast {
+                        text: "Use x to review this agent's services with their normal stop plan."
+                            .into(),
+                        ok: false,
+                        at: Instant::now(),
+                    })
+                }
+                KeyCode::Char('q') => self.request_quit(),
+                KeyCode::Esc => {
+                    if !self.agent_query.is_empty() {
+                        self.agent_query.clear();
+                        self.agent_scroll = 0;
+                        self.rebuild_agents();
+                    } else {
+                        self.tab = Tab::Ports;
+                    }
+                }
+                KeyCode::Char('?') | KeyCode::F(1) => self.modal = Modal::Help,
+                KeyCode::Char('r') | KeyCode::F(5) => self.start_scan_force(),
+                KeyCode::Char(' ') | KeyCode::Char('p') => self.paused = !self.paused,
                 _ => {}
             }
             return;
         }
         match k.code {
-            KeyCode::Char('q') => self.quit = true,
+            KeyCode::Char('q') => self.request_quit(),
             KeyCode::Esc => {
                 if !self.query.is_empty() {
                     self.query.clear();
                     self.rebuild();
                 } else {
-                    self.quit = true;
+                    self.request_quit();
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => self.move_by(1),
@@ -754,10 +940,8 @@ impl App {
             KeyCode::Char('r') | KeyCode::F(5) => self.start_scan_force(),
             KeyCode::Char('x') | KeyCode::Delete | KeyCode::Backspace => self.request_stop(false),
             KeyCode::Char('X') => self.request_stop(true),
-            KeyCode::Char('e') | KeyCode::Enter => {
-                if self.selected().is_some() {
-                    self.modal = Modal::Explain { scroll: 0 };
-                }
+            KeyCode::Char('e') | KeyCode::Enter if self.selected().is_some() => {
+                self.modal = Modal::Explain { scroll: 0 };
             }
             KeyCode::Char('o') => self.open_selected(),
             KeyCode::Char('c') => self.copy_selected(),
@@ -767,8 +951,11 @@ impl App {
     }
 
     fn start_scan_force(&mut self) {
-        self.scanning = false;
-        self.start_scan();
+        if self.scanning {
+            self.scan_again = true;
+        } else {
+            self.start_scan();
+        }
     }
 }
 
@@ -818,5 +1005,279 @@ mod tests {
             s = s.next();
         }
         assert_eq!(s, Sort::Port);
+    }
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+
+    /// Background-message tests must never collect the host or execute a stop.
+    fn quiet_app() -> App {
+        let mut app = App::empty(false);
+        app.paused = true;
+        app.scanning = true;
+        app
+    }
+
+    fn report(success: bool, freed: bool, error: Option<&str>) -> StopReport {
+        StopReport {
+            target: "3000/tcp".into(),
+            success,
+            freed,
+            error: error.map(str::to_owned),
+            ..Default::default()
+        }
+    }
+
+    fn deliver(app: &mut App, message: Msg) {
+        app.tx.send(message).unwrap();
+        app.tick();
+        assert!(app.scanning, "existing collector stays active");
+        assert!(
+            app.scan_again,
+            "a fresh read-only scan is queued after status delivery"
+        );
+        assert!(matches!(app.modal, Modal::None));
+        assert!(app.rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn refresh_during_a_scan_queues_one_followup_without_starting_parallel_collection() {
+        for tab in [Tab::Ports, Tab::Graph, Tab::Agents] {
+            let mut app = quiet_app();
+            app.tab = tab;
+            for key in [KeyCode::F(5), KeyCode::Char('r'), KeyCode::F(5)] {
+                app.on_key(KeyEvent::new(key, KeyModifiers::NONE));
+                assert!(app.scanning);
+                assert!(app.scan_again);
+                assert!(app.last_scan.is_none());
+                assert!(app.engine.is_none());
+                assert!(app.rx.try_recv().is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn progress_logs_keep_only_the_latest_bounded_lines() {
+        let mut app = quiet_app();
+        for line in 0..300 {
+            app.tx
+                .send(Msg::StopLine(format!("progress {line}")))
+                .unwrap();
+        }
+        app.tick();
+        assert_eq!(app.stop_log.len(), 256);
+        assert_eq!(app.stop_log.first().unwrap(), "progress 44");
+        assert_eq!(app.stop_log.last().unwrap(), "progress 299");
+        assert!(app.scanning);
+        assert!(!app.scan_again);
+        assert!(app.toast.is_none());
+    }
+
+    #[test]
+    fn a_freed_port_with_history_failure_is_reported_truthfully_without_success() {
+        let mut app = quiet_app();
+        app.busy = Some("Stopping 3000/tcp…".into());
+        deliver(
+            &mut app,
+            Msg::Stopped(Box::new(report(
+                false,
+                true,
+                Some("history could not be saved"),
+            ))),
+        );
+        let toast = app.toast.as_ref().unwrap();
+        assert!(!toast.ok);
+        assert!(toast.text.contains("3000/tcp is free;"));
+        assert!(toast.text.contains("history could not be saved"));
+        assert!(!toast.text.contains("Could not free"));
+        assert!(app.busy.is_none());
+    }
+
+    #[test]
+    fn a_success_flag_does_not_report_success_if_the_port_remains_busy() {
+        let mut app = quiet_app();
+        let mut report = report(true, false, None);
+        report.ports_still_busy = vec![3000];
+        deliver(&mut app, Msg::Stopped(Box::new(report)));
+        let toast = app.toast.as_ref().unwrap();
+        assert!(!toast.ok);
+        assert!(toast.text.contains("Could not free 3000/tcp"));
+        assert!(toast.text.contains("ports still busy: [3000]"));
+    }
+
+    #[test]
+    fn a_partial_agent_stop_counts_completed_and_unattempted_services_without_retrying() {
+        let mut app = quiet_app();
+        app.busy = Some("Stopping agent services…".into());
+        deliver(
+            &mut app,
+            Msg::AgentStopped(Box::new(Ok(AgentStopOutcome {
+                reports: vec![
+                    report(true, true, None),
+                    report(false, false, Some("service still busy")),
+                ],
+                remaining: 2,
+                history_errors: Vec::new(),
+            }))),
+        );
+        let toast = app.toast.as_ref().unwrap();
+        assert!(!toast.ok);
+        assert!(toast.text.starts_with("1 service"));
+        assert!(toast.text.contains("2 left unattempted:"));
+        assert!(toast.text.contains("service still busy"));
+        assert!(toast.text.contains("Review again; no retry"));
+        assert!(app.busy.is_none());
+        let text = toast.text.clone();
+        app.tick();
+        assert_eq!(app.toast.as_ref().unwrap().text, text);
+        assert!(app.busy.is_none());
+        assert!(app.scan_again);
+        assert!(matches!(app.modal, Modal::None));
+        assert!(app.rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn agent_status_rejects_incomplete_or_history_failed_results() {
+        for outcome in [
+            AgentStopOutcome {
+                reports: vec![report(true, false, None)],
+                remaining: 0,
+                history_errors: Vec::new(),
+            },
+            AgentStopOutcome {
+                reports: vec![report(true, true, None)],
+                remaining: 0,
+                history_errors: vec!["history write refused".into()],
+            },
+            AgentStopOutcome {
+                reports: Vec::new(),
+                remaining: 0,
+                history_errors: Vec::new(),
+            },
+        ] {
+            let mut app = quiet_app();
+            deliver(&mut app, Msg::AgentStopped(Box::new(Ok(outcome))));
+            let toast = app.toast.as_ref().unwrap();
+            assert!(!toast.ok);
+            assert!(!toast.text.contains("agent session stays running"));
+            assert!(toast.text.contains("Review again; no retry"));
+        }
+    }
+
+    #[test]
+    fn an_agent_preflight_refusal_clears_busy_without_claiming_any_effect_or_retry() {
+        let mut app = quiet_app();
+        app.busy = Some("Checking reviewed services…".into());
+        deliver(
+            &mut app,
+            Msg::AgentStopped(Box::new(Err("ownership changed since review".into()))),
+        );
+        let toast = app.toast.as_ref().unwrap();
+        assert!(!toast.ok);
+        assert!(toast.text.starts_with("No service was stopped:"));
+        assert!(toast.text.contains("ownership changed since review"));
+        assert!(app.busy.is_none());
+    }
+
+    #[test]
+    fn all_verified_agent_services_report_completion_and_session_preservation() {
+        let mut app = quiet_app();
+        deliver(
+            &mut app,
+            Msg::AgentStopped(Box::new(Ok(AgentStopOutcome {
+                reports: vec![report(true, true, None), report(true, true, None)],
+                remaining: 0,
+                history_errors: Vec::new(),
+            }))),
+        );
+        let toast = app.toast.as_ref().unwrap();
+        assert!(toast.ok);
+        assert!(toast.text.contains("Stopped 2 reviewed services"));
+        assert!(toast.text.contains("agent session stays running"));
+    }
+
+    #[test]
+    fn quit_keys_wait_for_an_active_reviewed_stop_and_work_after_its_result() {
+        for key in [
+            KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE),
+            KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+        ] {
+            let mut app = quiet_app();
+            app.busy = Some("Stopping reviewed services…".into());
+            app.on_key(key);
+            assert!(!app.quit);
+            assert!(app.busy.is_some());
+            assert!(app
+                .toast
+                .as_ref()
+                .unwrap()
+                .text
+                .contains("Wait for its result"));
+            deliver(&mut app, Msg::Stopped(Box::new(report(true, true, None))));
+            assert!(app.busy.is_none());
+            app.on_key(key);
+            assert!(app.quit);
+        }
+    }
+
+    #[test]
+    fn a_graph_node_without_a_visible_listener_cannot_act_on_the_old_port_selection() {
+        use super::super::graph::tests::node;
+        use holdmap_core::topology::{Graph, EXTERNAL_ID};
+
+        for selected_node in [
+            node(EXTERNAL_ID, None, None),
+            node("filtered-service", Some(5000), None),
+        ] {
+            let mut app = quiet_app();
+            app.tab = Tab::Graph;
+            app.rows = vec![PortEntry {
+                id: "tcp:3000".into(),
+                port: 3000,
+                protocol: Protocol::Tcp,
+                state: SocketState::Listen,
+                addresses: vec!["127.0.0.1".into()],
+                families: Vec::new(),
+                remote: None,
+                exposure: Exposure::Loopback,
+                pid: None,
+                pids: Vec::new(),
+                uid: None,
+                user: None,
+                process: None,
+                project: None,
+                framework: None,
+                container: None,
+                label: "Previous port selection".into(),
+                is_dev: true,
+                is_mine: true,
+                protected: false,
+                tunnel: None,
+                app_memory_bytes: 0,
+                helper_count: 0,
+            }];
+            app.state.select(Some(0));
+            app.graph.set_graph(Graph {
+                nodes: vec![selected_node],
+                ..Default::default()
+            });
+            assert!(!app.sync_from_graph());
+            for key in [
+                KeyCode::Char('x'),
+                KeyCode::Char('X'),
+                KeyCode::Char('e'),
+                KeyCode::Enter,
+            ] {
+                app.on_key(KeyEvent::new(key, KeyModifiers::NONE));
+                assert_eq!(app.selected().unwrap().id, "tcp:3000");
+                assert!(matches!(app.modal, Modal::None));
+                assert!(app.busy.is_none());
+                let toast = app.toast.as_ref().unwrap();
+                assert!(!toast.ok);
+                assert!(toast.text.contains("no visible local listener"));
+            }
+        }
     }
 }

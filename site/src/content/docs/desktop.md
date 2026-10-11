@@ -1,6 +1,6 @@
 ---
 title: Desktop app
-description: Explore the holdmap desktop app, agent visibility, keyboard shortcuts and confirmed local computer shutdown.
+description: Explore the holdmap desktop app, agent visibility, keyboard shortcuts and confirmed local computer shutdown and scheduled actions.
 order: 6
 ---
 
@@ -21,6 +21,44 @@ macOS uses System Events and may ask for Automation permission. Windows requests
 without forced termination. Linux requires systemd 248 or newer with explicit inhibitor
 checks. OS policy or permissions may refuse the action. The browser demo only simulates
 shutdown and cannot power off a computer. Version 0.3.0 binaries predate this feature.
+
+## Schedule shutdown or a service stop
+
+**Current source / Unreleased:** scheduling is available in the current desktop source and
+browser demo. Version 0.4.0 downloads include immediate shutdown and stop confirmations,
+but do not include scheduling yet.
+
+1. For this computer, open **Settings → Power** and review shutdown. For a port, choose
+   **Stop**. For an agent's services, open its card and choose **Stop all** or a service's **Stop**.
+2. Choose **In 1 hour**, another preset, **Custom delay**, or **At a time**. Delays range from
+   one minute to 24 hours. The preview shows the local date, time and timezone.
+3. Read the reviewed effects. For shutdown, acknowledge that all apps and unsaved work are
+   affected, then choose **Schedule shutdown**. For services, choose **Schedule stop**.
+4. Open the clock control, the active schedule banner, or **Settings → Power → View scheduled
+   actions** to check the countdown and cancel. Cancellation succeeds only before execution
+   starts; the UI waits for the backend's acknowledgement.
+
+Keep Holdmap running, including in its tray, and keep this computer awake. Completely quitting
+Holdmap or restarting the computer clears every schedule; the app does not wake the machine.
+A deadline missed by more than one minute, or a wall/monotonic clock discrepancy greater than
+30 seconds, requires a fresh review. Jobs run once and never retry automatically.
+
+The backend retains the reviewed services and process identities. If a process restarts, a port
+changes owner, agent ownership changes, or current protections block the action, Holdmap
+refuses the scheduled stop instead of targeting a replacement. An agent schedule stops its
+reviewed services and ports; it leaves the agent application running. Stop plans retain normal
+grace periods and any escalation displayed during review. Force-stop requests and protected
+process overrides cannot be scheduled.
+
+Power controls always target the local desktop computer, including when viewing remote hosts.
+Scheduling does not expose an SSH, CLI or MCP shutdown endpoint. Browser schedules simulate
+status changes only; they cannot shut down a machine or stop a process.
+
+These current UI screenshots show the browser simulation:
+
+![Schedule a shutdown one hour from now, with a separate acknowledgement](../../../../docs/screenshots/desktop-shutdown-schedule-light.png)
+
+![Review the countdown and cancel a scheduled action](../../../../docs/screenshots/desktop-schedules-light.png)
 
 ## First open
 

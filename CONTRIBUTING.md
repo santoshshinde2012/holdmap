@@ -132,6 +132,8 @@ when the GTK binding family supports a compatible fixed upstream release.
 Refresh the desktop screenshots, website crops and hero posters from the production browser
 build with `node apps/desktop/scripts/capture-screenshots.mjs`. It uses sample data, its own
 temporary build and preview server, and the same Chromium installation as the browser tests.
+The Flow captures also regenerate two optimized website guide derivatives using the site's
+`sharp` dependency; install both desktop and website npm dependencies before capturing.
 Pass screenshot filenames after the command to refresh only those flows, for example
 `node apps/desktop/scripts/capture-screenshots.mjs desktop-agent-stop-confirm-dark.png`.
 Refresh the website social card with `(cd site && node scripts/og.mjs)` after updating the overview.
@@ -142,7 +144,9 @@ there, then run `scripts/capture-terminal-screenshots.py` with that Python. It c
 terminal output against local fixtures, filters the TUI to those fixtures and masks the account
 name. Ports, PIDs, resource readings and plans remain actual. It terminates only fixtures it
 started and keeps app state in a temporary directory; its dependencies are optional maintainer
-tools.
+tools. Agent captures use an exact owned PID, verify inferred stdio MCP evidence and separate
+TCP/UDP plans, and cancel every stop review. Listener and process liveness checks confirm that
+capture did not stop an agent or service. Recent-project history is excluded from these fixtures.
 
 ## Ground rules
 
@@ -164,6 +168,13 @@ tools.
 - New protected processes go in `crates/holdmap-core/src/safety.rs`. If you're unsure, protect it.
 - User-facing changes update the README (and screenshots if the UI changes) in the same pull
   request, plus an entry under `## [Unreleased]` in `CHANGELOG.md`.
+
+- Agent communication projection lives in `agents/flow.rs`; recording contracts, pure provider
+  normalization, bounded storage and HTTP transport live separately in `holdmap-activity`.
+  MCP observers receive catalog names and serialized sizes, never raw request/result values.
+  Preserve fail-open agent hooks/MCP, explicit opt-in, loopback authentication, absolute I/O
+  deadlines and metadata-only snapshots. Test adapters against provider wire fixtures.
+  Keep evidence honest: sockets and chronological events never establish a tool call or handoff.
 
 ## Naming conventions
 

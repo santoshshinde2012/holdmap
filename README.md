@@ -58,7 +58,10 @@ browser UI with sample data.
   exposure), each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor,
   or stop only the services that agent started, through the normal safety policy.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
-  server for AI coding assistants. macOS, Linux and Windows. No telemetry.
+  server for AI coding assistants. macOS, Linux and Windows. No product analytics.
+- **Agent flow (current source).** Follow observed process/socket relationships, or opt in to
+  local recording of reported tools, model calls and delegated agents. Inspect parallel work,
+  failures, duration and reported serialized sizes without storing prompts or tool arguments.
 
 ## Install
 
@@ -122,20 +125,23 @@ Every release has SHA-256 checksums and build provenance (`gh attestation verify
 | `HOLDMAP_HOME` | Config/history directory (overrides the platform default) |
 | `HOLDMAP_COLOR` | `auto` / `always` / `never` (also via `--color`) |
 | `HOLDMAP_TRACE` | Diagnostics topics, e.g. `scan` or `all` |
+| `HOLDMAP_ACTIVITY_ENDPOINT` | Active local collector URL for CLI hooks, snapshots and MCP recording |
+| `HOLDMAP_ACTIVITY_TOKEN` | Temporary bearer token printed by `activity serve`; keep private |
 | `HOLDMAP_EDITOR` | Editor binary for “open folder” (else Cursor / VS Code / Zed…) |
 
 ## Quick start
 
 ```sh
 holdmap list                 # every listening port, grouped by kind
-holdmap agents               # AI agents and tools: folders, ports, access
+holdmap agents               # compact overview of running agents and tools
+holdmap agents codex         # detailed tools, folders, ports and access
 holdmap agents claude --stop-ports --dry-run   # plan stopping what that agent started
 holdmap inspect 3000         # owner, process tree, connections, bind risk and the stop plan
 holdmap list --sort memory   # heaviest apps first
 holdmap stop 3000 --dry-run  # show exactly what stop would do
 holdmap stop 3000            # stop it gracefully, then check the port is free
 holdmap run -p 3000 -- npm run dev   # free 3000 safely, then start your server on it
-holdmap                      # the interactive TUI (Tab → Agents)
+holdmap                      # interactive TUI (Shift+Tab opens Agents)
 ```
 
 <img src="docs/screenshots/cli-explain-dark.png" width="720" alt="holdmap explain: fixture listener ownership and the recommended plan" />
@@ -166,7 +172,7 @@ port = 5432               # no command: started elsewhere, up just waits for it
 | Ports | `holdmap free-port --near 3000`, `holdmap wait 5432 --timeout 30s` |
 | Projects | `holdmap up`, `holdmap down`, `holdmap status`, `holdmap init` |
 | Remember | `holdmap pin`, `holdmap unpin`, `holdmap pins`, `holdmap history` |
-| Integrate | `holdmap tui`, `holdmap mcp`, `holdmap completions zsh`, `holdmap man` |
+| Integrate | `holdmap activity serve`, `holdmap activity setup`, `holdmap activity snapshot`, `holdmap activity hook`, `holdmap tui`, `holdmap mcp`, `holdmap completions zsh`, `holdmap man` |
 
 Every read command takes `--json`. Exit codes: `0` ok, `1` busy / not found / timed out, `2`
 error, `3` blocked by the safety policy, `4` needs elevation. All flags are in the
@@ -179,6 +185,60 @@ Search by product, vendor, exact owned PID (`pid:1234`), working folder or tool 
 redacted commands; `--json` preserves evidence, timestamps and collection limits. Command text
 is not searched. Recent folders belong to the current account's history and are attached only
 to confirmed matching accounts; they do not prove current work by that running instance.
+
+**Terminal agents in current source / Unreleased.** Start `holdmap` and press **Shift+Tab**
+to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its
+tools, folders, connections and access. Wide terminals show the list beside the details;
+small terminals stack them. **p** pauses refreshes, **r** refreshes, and **?** shows help.
+**x** opens every service-stop plan, including its TCP/UDP protocol; **Enter**, **n** or
+**Esc** cancels and only **y** confirms. The agent session remains protected. Failed or
+changed targets require a new review; completed stops and history-write errors stay visible.
+`holdmap agents` now gives a compact overview; a query expands matching footprints and
+`--wide` adds redacted process commands. Version 0.4.0 downloads predate these terminal changes.
+
+<details>
+<summary>Current terminal agent overview, small-screen details and service review</summary>
+
+![CLI agent details with inferred child-tool evidence](docs/screenshots/cli-agents-dark.png)
+![Terminal agent list and selected details](docs/screenshots/tui-agents-dark.png)
+![Terminal agents in an 80-column window](docs/screenshots/tui-agents-narrow-dark.png)
+![Terminal service review keeps explicit confirmation and cancellation visible](docs/screenshots/tui-agent-stop-confirm-dark.png)
+
+</details>
+
+**Agent flow in current source / Unreleased.** Open **Agents → Flow**. **Connections** shows
+observed processes, listeners and sockets, with evidence for each relationship. **Calls** shows
+reported tool/model work and agent handoffs after you enable local recording. Only reported
+trace parents create call edges; an ordered list of session events does not prove communication.
+Parallel calls remain separate. Unknown results, missing parents, dropped data and exporter
+limitations stay visible. Selecting a call shows status, duration and available serialized sizes.
+
+Recording is off by default, local-only and memory-only. Start it in the local desktop, review
+**Setup**, then explicitly configure a supported agent. Pause freezes the view; **Stop recording**
+closes the collector, and **Clear** removes retained metadata. A new recording session creates
+a fresh token and an OS-assigned loopback endpoint; reconfigure producers after every start. Full app quit loses the recording. The website demonstrates these views
+with labelled sample data. [Agent flow guide](docs/agent-flow.md) explains provider coverage,
+privacy, metadata contracts and the CLI alternative:
+
+```sh
+holdmap agents --flow --json          # observed relationships; no recording required
+holdmap activity serve              # opt in; prints temporary local credentials
+holdmap activity setup --provider codex   # use the credentials via the environment
+holdmap activity snapshot --json    # retained metadata from that collector
+holdmap mcp --record-activity        # optional recording of this server's known tools
+```
+
+<details>
+<summary>Observed connections, reported calls and a narrow-screen inspector</summary>
+
+![Observed agent connections in dark theme](docs/screenshots/desktop-agent-connections-dark.png)
+![Observed agent connections in light theme](docs/screenshots/desktop-agent-connections-light.png)
+![Reported tools, a delegated agent and a failed execution in dark theme](docs/screenshots/desktop-agent-flow-dark.png)
+![Reported tools, a delegated agent and a failed execution in light theme](docs/screenshots/desktop-agent-flow-light.png)
+![Narrow dark flow with a readable inspector](docs/screenshots/desktop-agent-flow-narrow-dark.png)
+![Narrow light flow with a readable inspector](docs/screenshots/desktop-agent-flow-narrow-light.png)
+
+</details>
 
 **Shell hook.** Add `eval "$(holdmap init zsh)"` to `~/.zshrc` (also `bash`, `fish`, `powershell`).
 When a command fails with "port in use", it prints who holds the port and how to free it.
@@ -196,6 +256,26 @@ the action. Version 0.3.0 binaries predate this feature.
 
 ![Dark shutdown confirmation](docs/screenshots/desktop-shutdown-dark.png)
 ![Light shutdown confirmation](docs/screenshots/desktop-shutdown-light.png)
+
+</details>
+
+**Current source / Unreleased:** choose **Now**, **In 1 hour**, a custom delay, or **At a time**
+when reviewing a local shutdown, port stop, or an agent's service stop. **Scheduled actions**
+shows each deadline, countdown, reviewed port and cancellation result. Schedules run while
+Holdmap stays open, including in the tray; quitting clears them. Keep the computer awake.
+Missed deadlines or clock changes require a fresh review. Agent schedules stop only the
+reviewed services and ports, preserving the agent session. Version 0.4.0 downloads do not
+include scheduling yet; build current source to use it.
+
+<details>
+<summary>Scheduled shutdown, agent services and cancellation in dark and light themes</summary>
+
+![Dark scheduled shutdown](docs/screenshots/desktop-shutdown-schedule-dark.png)
+![Light scheduled shutdown](docs/screenshots/desktop-shutdown-schedule-light.png)
+![Dark scheduled agent services](docs/screenshots/desktop-agent-schedule-dark.png)
+![Light scheduled agent services](docs/screenshots/desktop-agent-schedule-light.png)
+![Dark scheduled action manager](docs/screenshots/desktop-schedules-dark.png)
+![Light scheduled action manager](docs/screenshots/desktop-schedules-light.png)
 
 </details>
 
@@ -291,12 +371,15 @@ holdmap stops processes, so one set of rules in `holdmap-core` applies to every 
 - **Credential handling:** recognized secrets in command lines, errors and exported results are
   conservatively redacted, including headers and nested JSON values. Human terminal output
   neutralizes untrusted control sequences. Agent visibility uses process/socket metadata and
-  bounded project-history fields, rather than inspecting chats or credential stores. Redaction
+  bounded project-history fields. Optional recording discards prompt, argument and result
+  fields after accepting explicitly configured local exporter requests; it does not inspect chats
+  or credential stores. Redaction
   is heuristic; arbitrary positional secrets may be missed.
 - **State privacy:** restart history retains raw commands. Unix history/config/log files use
   `0600`, state directories `0700`, with ownership and link checks. Windows uses inherited
   account/profile-directory ACLs and does not impose an account-exclusive DACL; keep a custom
-  `HOLDMAP_HOME` private. No telemetry is implemented.
+  `HOLDMAP_HOME` private. Product analytics are absent. Optional agent recording accepts local
+  allowlisted metadata into a bounded in-memory store; it never persists trace payloads.
 - **Locked down:** desktop actions identify ports, history entries or known agent folders.
   The backend checks targets, constructs localhost URLs and resolves folders through a fresh
   scan. The webview has a strict CSP and local-only capabilities. Stack files are checked and
@@ -358,6 +441,13 @@ flowchart TB
     PLAN --> EXEC
   end
 
+  subgraph RECORDING["holdmap-activity · optional local recording"]
+    INPUT["Provider adapters<br/>Hooks, OTLP JSON + MCP observer"]
+    COLLECTOR["Authenticated loopback collector<br/>Bounded parsing + normalization"]
+    ACTIVITY[("In-memory metadata<br/>Reported identities + outcomes")]
+    INPUT --> COLLECTOR --> ACTIVITY
+  end
+
   subgraph LOCAL["Operating system + local state"]
     OS["macOS / Linux / Windows<br/>Sockets, processes + supervisors"]
     STORE[("Private state<br/>Config, pins + restart history")]
@@ -373,9 +463,13 @@ flowchart TB
   SCAN -->|reads metadata| OS
   EXEC -->|authorized actions| OS
   CLI & DESKTOP --> STORE
+  CLI & DESKTOP -->|explicit recording session| COLLECTOR
+  MCP -.->|optional observer| INPUT
+  ACTIVITY -->|read-only flow| DESKTOP
 
   style CLIENTS fill:#ffffff,stroke:#94A3B8,stroke-width:1px
   style CORE fill:#ffffff,stroke:#94A3B8,stroke-width:1px
+  style RECORDING fill:#ffffff,stroke:#94A3B8,stroke-width:1px
   style LOCAL fill:#ffffff,stroke:#94A3B8,stroke-width:1px
   style PUBLIC fill:#ffffff,stroke:#94A3B8,stroke-width:1px
 
@@ -387,7 +481,8 @@ flowchart TB
   class CLI,MCP,DESKTOP surface
   class ENGINE,AGENTS,GRAPH domain
   class PLAN,EXEC safety
-  class SCAN,OS,STORE data
+  class SCAN,OS,STORE,INPUT,ACTIVITY data
+  class COLLECTOR safety
   class SITE,DEMO web
 ```
 
@@ -416,7 +511,8 @@ The folder layout keeps each surface's code and tooling together:
 ```text
 crates/holdmap-core/       Scanning, agents, topology, planning and execution
 crates/holdmap-cli/        CLI, TUI and integration tests
-crates/holdmap-mcp/        Protocol, schemas, tools, resources and prompts
+crates/holdmap-mcp/        Protocol, schemas, tools, resources, prompts and observer contract
+crates/holdmap-activity/   Metadata contracts, provider adapters, bounded local collector and client
 apps/desktop/src/         Shared Svelte UI and pure TypeScript view logic
 apps/desktop/src-tauri/   Native commands, cache, watcher and tray
 apps/desktop/e2e/         Browser tests using sample data

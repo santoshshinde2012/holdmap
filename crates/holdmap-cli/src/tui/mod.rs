@@ -1,6 +1,9 @@
 //! Interactive terminal UI (ratatui): keyboard-first list with search, filters, sorting, a details
 //! pane with the plain-English explanation, and stop/kill with a confirmation dialog.
 
+mod agents_state;
+mod agents_ui;
+mod agents_view;
 mod app;
 mod graph;
 mod graph_ui;

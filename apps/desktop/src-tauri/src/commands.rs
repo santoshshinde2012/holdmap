@@ -49,7 +49,11 @@ fn stop_options(force: bool, allow_protected: bool) -> StopOptions {
 
 /// Desktop rows distinguish TCP and UDP listeners. A protocol suffix must never fall
 /// through to a process-name target (a process can itself be named `5353/udp`).
-fn stop_request(target: &str, force: bool, allow_protected: bool) -> (Target, StopOptions) {
+pub(crate) fn stop_request(
+    target: &str,
+    force: bool,
+    allow_protected: bool,
+) -> (Target, StopOptions) {
     let mut opts = stop_options(force, allow_protected);
     if let Some((port, protocol)) = target.trim().split_once('/') {
         let protocol = match protocol {
@@ -125,6 +129,18 @@ pub async fn scan(
 #[tauri::command]
 pub async fn agents(app: AppHandle) -> Result<AgentsReport, String> {
     with_engine(&app, |e| e.agents()).await
+}
+
+/// Read-only process and socket relationships from one consistent local scan.
+#[tauri::command]
+pub async fn agent_flow(
+    app: AppHandle,
+) -> Result<holdmap_core::agents::flow::AgentFlowReport, String> {
+    with_engine(&app, |engine| {
+        let agents = engine.agents();
+        holdmap_core::agents::flow::flow(&engine.scan, &agents)
+    })
+    .await
 }
 
 /// Service graph from a scan no older than one second. Dev services (and peers) unless `all`.
