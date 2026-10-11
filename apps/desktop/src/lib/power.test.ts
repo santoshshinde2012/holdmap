@@ -97,7 +97,7 @@ describe("shutdown confirmation", () => {
 
 describe("Power settings", () => {
   const model: SettingsModel = { theme: "light", density: "comfortable", singleKeyShortcuts: true, config: { pins: [], notify: false, notify_dev_only: true, history_limit: 200, scan_interval_secs: 4, hotkey: "off", recent_hosts: [] }, autostart: false, shortcut: null, hotkeys: [], version: "0.3.0", platform: "browser", configDir: null, powerAvailable: true, powerDemo: true };
-  const actions = (): SettingsActions => ({ setTheme: vi.fn(), setDensity: vi.fn(), setSingleKeyShortcuts: vi.fn(), setAutostart: vi.fn(async () => {}), setHotkey: vi.fn(async () => {}), setNotify: vi.fn(async () => {}), setScanInterval: vi.fn(async () => {}), setHistoryLimit: vi.fn(async () => {}), clearHistory: vi.fn(async () => {}), copy: vi.fn(), shutdown: vi.fn() });
+  const actions = (): SettingsActions => ({ setTheme: vi.fn(), setDensity: vi.fn(), setSingleKeyShortcuts: vi.fn(), setAutostart: vi.fn(async () => {}), setHotkey: vi.fn(async () => {}), setNotify: vi.fn(async () => {}), setScanInterval: vi.fn(async () => {}), setHistoryLimit: vi.fn(async () => {}), clearHistory: vi.fn(async () => {}), copy: vi.fn(), shutdown: vi.fn(), scheduleShutdown: vi.fn() });
   it("offers an independently labelled switch for character shortcuts", async () => {
     const a = actions();
     render(SettingsDialog, { model, actions: a, section: "general", onclose: vi.fn() });
@@ -108,16 +108,31 @@ describe("Power settings", () => {
     expect(a.setSingleKeyShortcuts).toHaveBeenCalledWith(false);
     expect(screen.getByText("Single-key shortcuts off")).toBeTruthy();
   });
-  it("opens only a simulated review in the browser and explains the local scope", async () => {
+  it("offers separate simulated immediate and scheduled reviews and explains their local scope", async () => {
     const a = actions();
     render(SettingsDialog, { model, actions: a, section: "power", onclose: vi.fn() });
     expect(screen.getByText(/including while viewing remote hosts/)).toBeTruthy();
     expect(screen.getByText(/This website cannot shut down your computer/)).toBeTruthy();
-    await fireEvent.click(screen.getByRole("button", { name: "Simulate shutdown…" }));
+    expect(screen.getByText(/Scheduled simulations require this page to stay open/)).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Simulate shutdown now…" }));
+    expect(a.shutdown).toHaveBeenCalledOnce();
+    expect(a.scheduleShutdown).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole("button", { name: "Schedule simulation…" }));
+    expect(a.scheduleShutdown).toHaveBeenCalledOnce();
     expect(a.shutdown).toHaveBeenCalledOnce();
   });
-  it("disables unsupported desktop shutdown", () => {
+  it("labels native reviews separately and requires Holdmap to stay running for schedules", async () => {
+    const a = actions();
+    render(SettingsDialog, { model: { ...model, powerDemo: false }, actions: a, section: "power", onclose: vi.fn() });
+    expect(screen.getByText(/Keep Holdmap running, including in the tray/)).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Schedule shutdown…" }));
+    expect(a.scheduleShutdown).toHaveBeenCalledOnce();
+    expect(a.shutdown).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Shut down now…" })).toBeTruthy();
+  });
+  it("disables both unsupported desktop reviews", () => {
     render(SettingsDialog, { model: { ...model, powerAvailable: false, powerDemo: false }, actions: actions(), section: "power", onclose: vi.fn() });
-    expect((screen.getByRole("button", { name: "Shut down this computer…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Shut down now…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Schedule shutdown…" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

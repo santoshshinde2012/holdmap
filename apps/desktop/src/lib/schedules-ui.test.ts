@@ -28,6 +28,103 @@ function localDateTime(ms: number) {
 }
 
 describe("shutdown schedule confirmation", () => {
+  it("keeps the immediate review free of schedule controls even when a scheduling callback exists", async () => {
+    const props = powerProps();
+    render(ShutdownDialog, { ...props, intent: "now" });
+    expect(screen.queryByRole("combobox", { name: "When" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Schedule shutdown" })).toBeNull();
+    expect(screen.queryByText(/A schedule is created only when/)).toBeNull();
+    await fireEvent.click(screen.getByRole("checkbox"));
+    await fireEvent.click(screen.getByRole("button", { name: "Shut down this computer" }));
+    expect(props.onconfirm).toHaveBeenCalledOnce();
+    expect(props.onschedule).not.toHaveBeenCalled();
+  });
+
+  it("defaults the dedicated schedule review to one hour, excludes Now and requires acknowledgement", async () => {
+    const props = powerProps();
+    render(ShutdownDialog, { ...props, intent: "schedule" });
+    await tick();
+    expect(screen.getByRole("alertdialog", { name: "Schedule computer shutdown?" })).toBeTruthy();
+    expect(document.activeElement?.textContent?.trim()).toBe("Cancel");
+    expect(screen.getByRole("combobox", { name: "When" }).textContent).toContain("In 1 hour");
+    await fireEvent.click(screen.getByRole("combobox", { name: "When" }));
+    expect(screen.queryByRole("option", { name: "Now" })).toBeNull();
+    await fireEvent.click(screen.getByRole("option", { name: "In 1 hour" }));
+    const submit = screen.getByRole("button", { name: "Schedule shutdown" }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Shut down this computer" })).toBeNull();
+    expect(screen.getByText(/Keep Holdmap running, including in the tray/)).toBeTruthy();
+    await fireEvent.click(screen.getByRole("checkbox"));
+    await fireEvent.click(submit); await fireEvent.click(submit);
+    expect(props.onschedule).toHaveBeenCalledExactlyOnceWith(3600);
+    expect(props.onconfirm).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the dedicated schedule review has no scheduling callback", async () => {
+    const props = powerProps();
+    render(ShutdownDialog, { ...props, intent: "schedule", onschedule: undefined });
+    const submit = screen.getByRole("button", { name: "Schedule shutdown" }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    expect(screen.getByText("Scheduling unavailable")).toBeTruthy();
+    expect((screen.getByRole("checkbox") as HTMLInputElement).disabled).toBe(true);
+    await fireEvent.click(submit);
+    expect(props.onconfirm).not.toHaveBeenCalled();
+    expect(props.onschedule).not.toHaveBeenCalled();
+  });
+
+  it("labels a dedicated browser schedule as a simulation", async () => {
+    const props = powerProps();
+    render(ShutdownDialog, { ...props, intent: "schedule", demo: true });
+    expect(screen.getByRole("alertdialog", { name: "Schedule shutdown simulation?" })).toBeTruthy();
+    expect(screen.getByText(/No operating-system shutdown will be requested/)).toBeTruthy();
+    expect(screen.getByText(/Simulation runs while this demo page stays open/)).toBeTruthy();
+    await fireEvent.click(screen.getByRole("checkbox"));
+    await fireEvent.click(screen.getByRole("button", { name: "Schedule simulation" }));
+    expect(props.onschedule).toHaveBeenCalledExactlyOnceWith(3600);
+    expect(props.onconfirm).not.toHaveBeenCalled();
+  });
+
+  it("does not reuse a valid acknowledgement after changing to an invalid scheduled delay", async () => {
+    const props = powerProps();
+    render(ShutdownDialog, { ...props, intent: "schedule" });
+    await fireEvent.click(screen.getByRole("checkbox"));
+    await timing("Custom delay…");
+    await fireEvent.input(screen.getByRole("spinbutton", { name: "Delay in minutes" }), { target: { value: "0" } });
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
+    const submit = screen.getByRole("button", { name: "Schedule shutdown" }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    await fireEvent.click(submit);
+    expect(props.onschedule).not.toHaveBeenCalled();
+    expect(props.onconfirm).not.toHaveBeenCalled();
+    await fireEvent.input(screen.getByRole("spinbutton", { name: "Delay in minutes" }), { target: { value: "15" } });
+    expect(submit.disabled).toBe(true);
+    await fireEvent.click(screen.getByRole("checkbox"));
+    await fireEvent.click(submit);
+    expect(props.onschedule).toHaveBeenCalledExactlyOnceWith(900);
+    expect(props.onconfirm).not.toHaveBeenCalled();
+  });
+
+  it("requires a fresh review after schedule errors or expiry and preserves the one-hour selection", async () => {
+    vi.useFakeTimers();
+    const props = { ...powerProps(), intent: "schedule" as const };
+    const { rerender } = render(ShutdownDialog, props);
+    await fireEvent.click(screen.getByRole("checkbox"));
+    await fireEvent.click(screen.getByRole("button", { name: "Schedule shutdown" }));
+    await rerender({ ...props, error: "A shutdown is already scheduled." });
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByRole("button", { name: "Schedule shutdown" }) as HTMLButtonElement).disabled).toBe(true);
+    await rerender({ ...props, preview: { ...props.preview, confirmation_id: "fresh-schedule-token", expires_in_secs: 1 } });
+    expect(screen.getByRole("combobox", { name: "When" }).textContent).toContain("In 1 hour");
+    await fireEvent.click(screen.getByRole("checkbox"));
+    await vi.advanceTimersByTimeAsync(1001);
+    expect(screen.getByText("Confirmation expired")).toBeTruthy();
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByRole("button", { name: "Schedule shutdown" }) as HTMLButtonElement).disabled).toBe(true);
+    await fireEvent.click(screen.getByRole("button", { name: "Schedule shutdown" }));
+    expect(props.onschedule).toHaveBeenCalledOnce();
+    expect(props.onconfirm).not.toHaveBeenCalled();
+  });
+
   it("defaults to now, resets acknowledgement after a timing change, and submits the selected delay once", async () => {
     const props = powerProps();
     render(ShutdownDialog, props);

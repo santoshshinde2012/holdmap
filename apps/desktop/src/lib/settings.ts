@@ -46,6 +46,8 @@ export interface SettingsActions {
   copy(text: string, what: string): void;
   /** Opens a separate preview and acknowledgement; never shuts down immediately. */
   shutdown(): void;
+  /** Opens the scheduled shutdown preview, with a future time and separate acknowledgement. */
+  scheduleShutdown?(): void;
   viewSchedules?(): void;
 }
 

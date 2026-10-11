@@ -8,6 +8,8 @@
   import Icon from "../Icon.svelte";
   import Field, { fieldId } from "./Field.svelte";
   import { nextIndex, typeahead } from "../../lib/roving";
+  import { placePopover } from "../../lib/popover";
+  import { isComposingKey } from "../../lib/keyboard";
 
   let {
     value = $bindable(),
@@ -44,7 +46,7 @@
   let active = $state(0);
   let trigger: HTMLButtonElement | undefined = $state();
   let list: HTMLDivElement | undefined = $state();
-  let pos = $state({ top: 0, left: 0, width: 0, up: false });
+  let pos = $state({ top: 0, left: 0, width: 180, maxHeight: 320, up: false });
   let typed = "";
   let typedAt = 0;
 
@@ -55,16 +57,17 @@
   function place() {
     if (!trigger) return;
     const r = trigger.getBoundingClientRect();
-    const h = Math.min(320, options.length * 34 + 10);
-    const up = r.bottom + h + 8 > innerHeight && r.top > h + 8;
-    pos = { top: up ? r.top - h - 4 : r.bottom + 4, left: Math.min(r.left, innerWidth - Math.max(r.width, 180) - 8), width: r.width, up };
+    pos = placePopover(r, { width: innerWidth, height: innerHeight }, {
+      width: options.some((o) => o.description) ? 280 : 180,
+      height: list ? list.scrollHeight + 2 : Math.min(320, options.length * 34 + 10),
+    });
   }
   function show() {
     if (disabled) return;
     active = Math.max(0, options.findIndex((o) => o.value === value));
     place();
     open = true;
-    requestAnimationFrame(() => list?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" }));
+    requestAnimationFrame(() => { place(); list?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" }); });
   }
   function close(refocus = true) { open = false; if (refocus) trigger?.focus(); }
   function pick(i: number) {
@@ -76,6 +79,7 @@
     if (changed) onchange?.(o.value);
   }
   function key(e: KeyboardEvent) {
+    if (isComposingKey(e) || e.altKey || e.ctrlKey || e.metaKey) return;
     if (!open) {
       if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) { show(); e.preventDefault(); }
       return;
@@ -137,7 +141,7 @@
         role="listbox"
         aria-label={label ?? prefix}
         tabindex="-1"
-        style="top: {pos.top}px; left: {pos.left}px; min-width: {Math.max(pos.width, 180)}px"
+        style="top: {pos.top}px; left: {pos.left}px; width: {pos.width}px; max-height: {pos.maxHeight}px"
       >
         {#each options as o, i}
           <div
@@ -175,7 +179,7 @@
   .prefix { color: var(--muted); }
   .val { flex: 1; min-width: 0; color: var(--text); font-weight: var(--fw-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .val.ph { color: var(--faint); font-weight: var(--fw-regular); }
-  .pop { position: fixed; z-index: 200; max-height: 320px; overflow-y: auto; padding: 4px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); outline: none; animation: pop var(--dur-1) var(--ease); }
+  .pop { position: fixed; z-index: 200; box-sizing: border-box; overflow-y: auto; padding: 4px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); outline: none; animation: pop var(--dur-1) var(--ease); }
   .pop.up { animation-name: popup; }
   @keyframes pop { from { opacity: 0; transform: translateY(-3px); } }
   @keyframes popup { from { opacity: 0; transform: translateY(3px); } }
@@ -183,7 +187,7 @@
   .opt.active { background: var(--row-selected); }
   .opt.disabled { opacity: 0.45; }
   .oi { color: var(--muted); display: inline-grid; }
-  .ot { flex: 1; display: grid; min-width: 0; }
+  .ot { flex: 1; display: grid; min-width: 0; overflow-wrap: anywhere; }
   .od { color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .check { color: var(--accent); display: inline-grid; }
 </style>

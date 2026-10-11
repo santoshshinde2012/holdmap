@@ -18,7 +18,6 @@
   import { dependencies, dependents, nodeForEntry } from "../../lib/graph";
   import { canOpen, url } from "../../lib/format";
   import { canRestart, curlCommand, detailTabs, killCommand, killHelpersCommand, projectFolder, resolveTab, stopState, type DetailTab } from "../../lib/detail";
-  import { tooltip } from "../../lib/tooltip";
 
   let {
     entry,
@@ -29,6 +28,7 @@
     drawer = false,
     tab = $bindable("overview"),
     onstop,
+    onschedule,
     onkill,
     onopen,
     oncopy,
@@ -57,6 +57,8 @@
     drawer?: boolean;
     tab?: DetailTab;
     onstop: () => void;
+    /** Review a local, non-forced port stop for a later time. */
+    onschedule?: () => void;
     onkill: () => void;
     onopen: () => void;
     oncopy: (text: string, what: string) => void;
@@ -89,6 +91,9 @@
   const tabs = $derived(entry ? detailTabs(entry, explanation, { deps: deps.length, users: users.length, cluster: !!cluster }) : []);
   const active = $derived(resolveTab(tab, tabs));
   const stop = $derived(entry ? stopState(entry, explanation?.plan ?? null) : null);
+  const stopReady = $derived(!!explanation?.plan && !explanation.plan.blocked && explanation.plan.steps.length > 0 && !!stop?.stoppable);
+  const schedulable = $derived(!!onschedule && stopReady && !!entry && !entry.protected && !entry.remote && !explanation?.plan?.allow_protected && !explanation?.plan?.steps.some((s) => s.action === "signal_processes" && s.force));
+  const stopReason = $derived(stop?.reason ?? (!explanation?.plan ? (loading ? "Checking stop permissions…" : "Stop plan unavailable. Refresh to try again.") : !stopReady ? "Nothing to stop" : null));
   const base = $derived(drawer ? "dd" : "dp");
   const restartable = $derived(!!entry && !!onrestart && canRestart(entry, explanation?.plan ?? null));
   const fileManager = $derived(platform === "macos" ? "Finder" : platform === "windows" ? "Explorer" : "Files");
@@ -101,13 +106,13 @@
     if (web) out.push({ id: "curl", label: "Copy curl command", icon: "terminal", run: () => oncopy(curlCommand(e), "curl command") });
     const dir = projectFolder(e);
     if (dir && oneditor) out.push({ id: "editor", label: "Open folder in editor", icon: "code", run: oneditor });
-    if (dir && onreveal) out.push({ id: "reveal", label: `Reveal in ${fileManager}`, icon: "folder", run: onreveal });
+    if (dir && onreveal) out.push({ id: "reveal", label: `Open folder in ${fileManager}`, icon: "folder", run: onreveal });
     if (dir) out.push({ id: "path", label: "Copy folder path", icon: "copy", run: () => oncopy(dir, "Path") });
     const kill = killCommand(e, platform);
-    if (kill) out.push({ id: "kill", label: e.container ? "Copy docker stop command" : "Copy kill command", icon: "copy", run: () => oncopy(kill, "Command") });
+    if (kill && stopReady && !e.protected) out.push({ id: "kill", label: e.container ? "Copy docker stop command" : "Copy kill command", icon: "copy", run: () => oncopy(kill, "Command") });
     const helpers = killHelpersCommand(e, platform);
     if (helpers) out.push({ id: "helpers", label: `Copy quit-helpers command (${e.helper_count} helper${e.helper_count === 1 ? "" : "s"})`, icon: "zap", run: () => oncopy(helpers, "Quit-helpers command") });
-    if (stop?.stoppable && e.process && !e.container) out.push({ id: "force", label: "Force kill…", icon: "zap", hint: "⇧⌫", run: onkill });
+    if (stopReady && !busy && !loading && e.process && !e.container) out.push({ id: "force", label: "Force kill…", icon: "zap", hint: "⇧⌫", run: onkill });
     return out;
   });
   let scroller: HTMLDivElement | undefined = $state();
@@ -121,10 +126,10 @@
     <AtAGlance {entries} onselect={onselectentry} {mod} />
   {:else}
     <DetailHeader {entry} {pinned} {onpin} {oncopy} {onclose} />
-    <Tabs {tabs} bind:value={tab} {base} label="Details sections" />
+    <Tabs {tabs} value={active} onchange={(value) => tab = value} {base} label="Details sections" layout="wrap" />
     {#key entryId + active}
       <div class="body" in:fade={{ duration: reduced ? 0 : 120 }}>
-        <ScrollArea bind:el={scroller}>
+        <ScrollArea bind:el={scroller} padded={false}>
           <div role="tabpanel" id={panelId(base, active)} aria-labelledby={tabId(base, active)} class="panel">
             {#if active === "overview"}<OverviewPanel {entry} {explanation} {http} {loading} {node} {details} {cpuTrend} {memTrend} />
             {:else if active === "connections" && node && graph}<ConnectionsPanel {graph} {node} {cluster} {deps} {users} {onstopcluster} {onselectnode} />
@@ -135,34 +140,46 @@
         </ScrollArea>
       </div>
     {/key}
-    <footer class="actions">
-      {#if canOpen(entry)}<Button icon="external" kbd="O" onclick={onopen}>Open</Button>{/if}
-      {#if restartable}<Button variant="ghost" icon="refresh" onclick={onrestart} disabled={busy} tip={{ text: "Stop it, then run the same command again in the same folder" }}>Restart</Button>{/if}
-      {#if menu.length}<ActionMenu items={menu} />{/if}
-      <span class="sp"></span>
-      {#if stop && (entry.process || entry.container)}
-        {#if stop.stoppable}
-          <Button variant="danger" icon="stop" kbd="⌫" loading={busy} loadingText="Stopping…" onclick={onstop}>{entry.container ? "Stop container" : "Stop"}</Button>
-        {:else if stop.overridable}
-          <span class="why" use:tooltip={stop.reason}><Icon name="shield" size={13} />Protected</span>
-          <Button variant="danger-outline" icon="stop" onclick={onstop} disabled={busy}>Stop…</Button>
-        {:else}
-          <span class="why"><Icon name={stop.reason?.startsWith("Needs") ? "lock" : "shield"} size={13} />{stop.reason}</span>
-        {/if}
-      {:else if stop?.reason}
-        <span class="why"><Icon name="lock" size={13} />{stop.reason}</span>
+    <footer class="actions" aria-label="Port actions">
+      {#if canOpen(entry) || restartable || menu.length}
+        <div class="utilities">
+          {#if canOpen(entry)}<Button icon="external" kbd="O" onclick={onopen}>Open</Button>{/if}
+          {#if restartable}<Button variant="ghost" icon="refresh" onclick={onrestart} disabled={busy || loading} tip={{ text: "Stop it, then run the same command again in the same folder" }}>Restart</Button>{/if}
+          {#if menu.length}<div class="more"><ActionMenu items={menu} /></div>{/if}
+        </div>
       {/if}
+      <div class="stop-actions" role="group" aria-label="Stop this port">
+        <div class="action-heading"><span>Port :{entry.port} / {entry.protocol.toUpperCase()}</span>{#if entry.protected || stop?.overridable}<span class="protected"><Icon name="shield" size={12} />Protected</span>{/if}</div>
+        {#if stopReason}<p class="why"><Icon name={stop?.overridable || entry.protected ? "shield" : "lock"} size={13} /><span>{stopReason}{#if stop?.overridable} — review an explicit override to stop it.{/if}</span></p>{/if}
+        <div class="stop-buttons" class:paired={schedulable}>
+          <Button full variant={stop?.overridable ? "danger-outline" : "danger"} icon="stop" kbd={entry.container ? undefined : "⌫"} loading={busy} loadingText="Stopping…" disabled={loading || (!stopReady && !stop?.overridable)} onclick={onstop}>{entry.container ? "Stop container…" : "Stop…"}</Button>
+          {#if schedulable}<Button full icon="clock" disabled={busy || loading} onclick={onschedule}>Schedule stop…</Button>{/if}
+        </div>
+        <p class="scope">Stops the port owner; keeps this computer running.</p>
+      </div>
     </footer>
   {/if}
 </aside>
 
 <style>
-  .pane { display: flex; flex-direction: column; min-height: 0; height: 100%; background: var(--surface); border-left: 1px solid var(--border); min-width: 0; }
+  .pane { display: flex; flex-direction: column; min-height: 0; height: 100%; background: var(--surface); border-left: 1px solid var(--border); min-width: 0; container-type: inline-size; }
   .pane.drawer { border-left: 0; }
-  .body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .panel { outline: none; }
-  .actions { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-5); border-top: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
-  .sp { flex: 1; }
-  .why { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); font-weight: var(--fw-medium); }
+  .body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+  .body :global(.sa), .body :global(.vp), .body :global(.content) { min-width: 0; }
+  .panel { outline: none; min-width: 0; padding: var(--sp-4) var(--sp-4) var(--sp-5); overflow-wrap: anywhere; }
+  .actions { display: grid; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--border); background: var(--surface); flex: none; min-width: 0; }
+  .utilities { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
+  .more { margin-left: auto; }
+  .stop-actions { display: grid; gap: var(--sp-2); min-width: 0; }
+  .action-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-2); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--text-2); }
+  .protected { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+  .stop-buttons { display: grid; gap: var(--sp-2); min-width: 0; }
+  .stop-buttons.paired { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stop-buttons :global(.ui-btn) { min-width: 0; min-height: var(--h-md); height: auto; padding: 7px 8px; white-space: normal; line-height: var(--lh-body-sm); }
+  .stop-buttons :global(.lbl) { overflow: visible; }
+  .why { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
+  .why :global(svg) { flex: none; margin-top: 2px; }
+  .scope { margin: 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
+  @container (max-width: 280px) { .stop-buttons.paired { grid-template-columns: minmax(0, 1fr); } }
 
 </style>

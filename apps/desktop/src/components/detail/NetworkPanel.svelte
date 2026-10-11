@@ -61,12 +61,12 @@
   p { margin: 0; }
   .count { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
   .peers { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
-  .peers li { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 6px 12px; border-top: 1px solid var(--border); min-width: 0; }
+  .peers li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 2px 8px; min-height: 34px; padding: 6px 10px; border-top: 1px solid var(--border); min-width: 0; }
   .peers li:first-child { border-top: 0; }
-  .ic { width: 22px; height: 22px; border-radius: var(--r-sm); display: grid; place-items: center; flex: none; color: var(--muted); background: var(--row-hover); }
+  .ic { width: 22px; height: 22px; border-radius: var(--r-sm); display: grid; place-items: center; grid-row: 1 / 3; color: var(--muted); background: var(--row-hover); }
   .ic.remote { color: var(--tone-amber); background: var(--tone-amber-bg); }
-  .who { font-weight: var(--fw-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  .addr { color: var(--muted); font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
-  .n { margin-left: auto; font-family: var(--mono); font-size: var(--fs-mono-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .who { font-weight: var(--fw-medium); overflow-wrap: anywhere; min-width: 0; }
+  .addr { grid-column: 2; grid-row: 2; color: var(--muted); font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); overflow-wrap: anywhere; min-width: 0; }
+  .n { grid-column: 3; grid-row: 1 / 3; font-family: var(--mono); font-size: var(--fs-mono-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
   .none, .more { color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
 </style>

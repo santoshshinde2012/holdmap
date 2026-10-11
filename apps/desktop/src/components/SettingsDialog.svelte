@@ -162,9 +162,15 @@
             {:else if !model.powerAvailable}
               <p class="power-note">Shutdown is available in the desktop app on supported operating systems.</p>
             {:else}
-              <p class="power-note">Shut down now or choose a delay, such as one hour. You'll review the local computer and confirm separately. Your operating system may require permission.</p>
+              <p class="power-note">You'll review the local computer and confirm separately. Your operating system may require permission.</p>
             {/if}
-            <Button variant="danger-outline" disabled={!model.powerAvailable} onclick={actions.shutdown}>{model.powerDemo ? "Simulate shutdown…" : "Shut down this computer…"}</Button>
+            <div class="power-actions">
+              <Button variant="danger-outline" disabled={!model.powerAvailable} onclick={actions.shutdown}>{model.powerDemo ? "Simulate shutdown now…" : "Shut down now…"}</Button>
+              {#if actions.scheduleShutdown}
+                <Button variant="secondary" icon="clock" disabled={!model.powerAvailable} onclick={actions.scheduleShutdown}>{model.powerDemo ? "Schedule simulation…" : "Schedule shutdown…"}</Button>
+              {/if}
+            </div>
+            {#if actions.scheduleShutdown}<p class="power-note schedule-note">Choose a delay or a time, starting with one hour. {model.powerDemo ? "Scheduled simulations require this page to stay open." : "Keep Holdmap running, including in the tray, and this computer awake. Quitting clears schedules."}</p>{/if}
           </div>
         </SettingsGroup>
         {#if actions.viewSchedules}
@@ -214,6 +220,8 @@
   .path { width: 100%; padding: 6px 10px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--border); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .power-card { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); padding: var(--sp-4); }
   .power-note { margin: 0; color: var(--text-2); font-size: var(--fs-body); line-height: var(--lh-body); }
+  .power-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); max-width: 100%; }
+  .schedule-note { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .status { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
   .status.saved { color: var(--ok); }
   .status.error { color: var(--danger); }

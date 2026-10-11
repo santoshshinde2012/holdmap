@@ -6,6 +6,7 @@
   // Stop confirmation: the exact plan, live progress, success/failure, and the explicit
   // "I understand" checkbox before overriding a soft-protected process.
   import RichText from "./ui/RichText.svelte";
+  import { untrack } from "svelte";
   import { fade } from "svelte/transition";
   import Icon from "./Icon.svelte";
   import FrameworkIcon from "./FrameworkIcon.svelte";
@@ -39,6 +40,7 @@
     onviewschedules,
     onreview,
     demo = false,
+    intent = "combined",
   }: {
     /** The port being stopped; null when stopping a whole cluster. */
     entry: PortEntry | null;
@@ -63,11 +65,13 @@
     onviewschedules?: () => void;
     onreview?: () => void;
     demo?: boolean;
+    /** Separate entry points cannot switch between immediate and scheduled execution. */
+    intent?: "combined" | "now" | "schedule";
   } = $props();
 
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   let understood = $state(false);
-  let delaySecs = $state(0);
+  let delaySecs = $state(untrack(() => intent === "schedule" ? 3600 : 0));
   let atMs = $state<number | null>(null);
   let timingError = $state<string | null>(null);
   let timingValid = $state(true);
@@ -76,11 +80,11 @@
   $effect(() => { void delaySecs; void atMs; timingError = null; });
   const force = $derived(isForce(plan));
   const blocked = $derived(plan.blocked);
-  const overridable = $derived(!!blocked && canOverride(plan));
+  const overridable = $derived(intent !== "schedule" && !!blocked && canOverride(plan));
   const running = $derived(phase === "running");
   const busy = $derived(running || schedulingBusy);
-  const canSchedule = $derived(!!onschedule && !!entry && !cluster && !restart && !force && !plan.allow_protected && !blocked);
-  const scheduling = $derived(canSchedule && (atMs !== null || delaySecs !== 0));
+  const canSchedule = $derived(intent !== "now" && !!onschedule && !!entry && !cluster && !restart && !force && !plan.allow_protected && !blocked);
+  const scheduling = $derived(intent === "schedule" || (canSchedule && (atMs !== null || delaySecs !== 0)));
   const grace = $derived.by(() => {
     const s = plan.steps.find((x) => x.action === "signal_processes");
     return s && s.action === "signal_processes" && !s.force ? s.timeout_ms : 0;
@@ -95,7 +99,7 @@
   const confirmLabel = $derived(multiple ? `Stop ${portCount} ports` : entry ? `${verb} :${entry.port}` : bulk ? "Stop all" : verb);
   const order = $derived(cluster ? orderFromSummary(plan.summary) : []);
   const subject = $derived(multiple ? `${agentName ? `${agentName}'s ` : ""}${portCount} ports` : cluster ? cluster.name : entry ? title(entry) : plan.target);
-  const heading = $derived(scheduled ? "Stop scheduled" : phase === "done" ? (multiple ? `${portCount} ports are free` : cluster ? `Cluster ${cluster.name} stopped` : bulk ? "Dev servers stopped" : `Port ${entry?.port} is free`) : blocked ? (multiple ? `Can't stop ${subject} safely` : bulk ? `Nothing to stop` : `Can't stop ${cluster ? cluster.name : `:${entry?.port}`} safely`) : `${verb} ${subject}?`);
+  const heading = $derived(scheduled ? "Stop scheduled" : phase === "done" ? (multiple ? `${portCount} ports are free` : cluster ? `Cluster ${cluster.name} stopped` : bulk ? "Dev servers stopped" : `Port ${entry?.port} is free`) : blocked ? (multiple ? `Can't stop ${subject} safely` : bulk ? `Nothing to stop` : `Can't stop ${cluster ? cluster.name : `:${entry?.port}`} safely`) : intent === "schedule" ? `Schedule stop :${entry?.port}?` : `${verb} ${subject}?`);
   const sub = $derived(multiple ? "Every port's steps appear below" : cluster ? `${CLUSTER_LABEL[cluster.kind]}${cluster.detail ? ` · ${cluster.detail}` : ""} · ${cluster.nodes.length} services` : entry ? `:${entry.port} · ${entry.process ? `${entry.process.name} · PID ${entry.process.pid}` : entry.container?.name ?? ""}` : bulk ? stepCount(plan) : "");
 
   function stepCount(p: ActionPlan): string {
@@ -112,7 +116,7 @@
     return freed ? "done" : log.length > 0 ? "active" : "pending";
   }
   function confirm() {
-    if (busy || !timingValid || schedulingError || timingError || scheduleSubmitted || scheduled) return;
+    if (phase !== "confirm" || blocked || busy || (intent === "schedule" && !canSchedule) || !timingValid || schedulingError || timingError || scheduleSubmitted || scheduled) return;
     if (scheduling) {
       try {
         const resolved = resolveScheduleDelay(delaySecs, atMs);
@@ -173,7 +177,7 @@
           </li>
         {/each}
       </ol>
-      {#if canSchedule && phase === "confirm"}<ActionTiming bind:delaySecs bind:atMs bind:valid={timingValid} {demo} disabled={busy || scheduleSubmitted || !!schedulingError} />{/if}
+      {#if canSchedule && phase === "confirm"}<ActionTiming allowNow={intent !== "schedule"} initialDelaySecs={intent === "schedule" ? 3600 : 0} bind:delaySecs bind:atMs bind:valid={timingValid} {demo} disabled={busy || scheduleSubmitted || !!schedulingError} />{/if}
       {#if running && grace && !freed}
         <div class="grace" aria-hidden="true">
           <div class="bar"><div class="fill" class:esc={escalated} style="--dur: {grace}ms"></div></div>
@@ -219,7 +223,7 @@
       <span class="hint">{scheduling ? "Nothing stops until the scheduled time." : "Nothing is sent until you confirm."}</span>
       <Button variant="secondary" kbd="Esc" onclick={oncancel} disabled={busy}>Cancel</Button>
       {#if schedulingError && onreview}<Button variant="secondary" onclick={onreview}>Review again</Button>{/if}
-      <Button variant="danger" icon={scheduling ? "clock" : "stop"} kbd="↵" loading={busy} loadingText={schedulingBusy ? "Scheduling…" : "Stopping…"} disabled={!timingValid || !!timingError || !!schedulingError || scheduleSubmitted} onclick={confirm} data-primary>{scheduling ? demo ? "Schedule simulation" : multiple ? `Schedule ${portCount} ports` : `Schedule stop :${entry?.port}` : confirmLabel}</Button>
+      <Button variant="danger" icon={scheduling ? "clock" : "stop"} kbd="↵" loading={busy} loadingText={schedulingBusy ? "Scheduling…" : "Stopping…"} disabled={(intent === "schedule" && !canSchedule) || !timingValid || !!timingError || !!schedulingError || scheduleSubmitted} onclick={confirm} data-primary>{scheduling ? demo ? "Schedule simulation" : multiple ? `Schedule ${portCount} ports` : `Schedule stop :${entry?.port}` : confirmLabel}</Button>
     {/if}
   {/snippet}
 </Dialog>

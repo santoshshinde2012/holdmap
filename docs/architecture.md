@@ -121,7 +121,9 @@ primary research, exporter setup, source coverage and privacy limits.
 ## Local computer power
 
 The desktop Power flow has separate presentation, IPC, confirmation policy and OS adapter
-responsibilities. `ShutdownDialog.svelte` handles accessible confirmation and expiry;
+responsibilities. Current-source Settings callbacks open distinct immediate or scheduled
+reviews. `ShutdownDialog.svelte` handles accessible confirmation, acknowledgement and expiry;
+its explicit intent prevents a scheduled review from falling through to immediate execution.
 `api.ts` selects native IPC or a harmless browser simulation; `power.rs` owns local-window
 authorization, one-use handles, monotonic expiry, concurrency and bounded command execution.
 Injected executors test policy without shutting down the test computer. No CLI or MCP
@@ -257,6 +259,11 @@ validation, IPC adapters and a worker. The native queue owns original reviewed p
 fixed Power authorizations; the Svelte timing and manager components only present and request
 changes. Clocks and executors are injected in tests. The public browser API reports simulated
 statuses without operating-system access. CLI and MCP process operations remain immediate.
+Dedicated shutdown and port scheduling entries initialize `ActionTiming.svelte` to one hour
+and exclude **Now**. Immediate reviews omit timing controls. Timing presentation and delay
+validation stay separate from native authorization and dispatch; a missing scheduling callback
+fails closed. These controls are current source / Unreleased, not version 0.4.0 downloads.
+Schedules require Holdmap to remain open, including in its tray, with the computer awake.
 
 ![Scheduled local actions and retained authorization](diagrams/scheduled-actions.svg)
 
@@ -1027,6 +1034,11 @@ escaped text, including inline command spans. The browser demo has no native IPC
 - **Pure view logic.** `lib/rows.ts` (badges, status, sparklines), `lib/detail.ts` (details pane)
   and `lib/settings.ts` (the Settings contract) are pure and unit-tested, so components depend on
   interfaces rather than on `api.ts`.
+- **Compact details and menus (current source).** Detail panels wrap shared tabs and long
+  content within the pane, while a dedicated action footer distinguishes port stops from
+  computer power controls. The shared Select calls pure `lib/popover.ts` placement logic to
+  fit the viewport; feature panels do not duplicate edge calculations. Both depend on small
+  presentation contracts and injected action callbacks rather than native APIs.
 - **Accessibility.** The list is a `role=listbox` with `aria-activedescendant`, dialogs trap and
   restore focus, and `src/contrast.test.ts` keeps text tokens at WCAG AA in both themes.
 - **Typography.** Inter Variable for UI text and JetBrains Mono Variable for code, PIDs and paths,

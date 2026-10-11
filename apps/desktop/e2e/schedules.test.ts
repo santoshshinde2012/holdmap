@@ -36,17 +36,20 @@ async function chooseTiming(page: Page, dialog: Locator, label: string) {
 async function reviewShutdown(page: Page) {
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("tab", { name: "Power", exact: true }).click();
-  await page.getByRole("button", { name: /Simulate shutdown/ }).click();
-  const dialog = page.getByRole("alertdialog", { name: "Simulate computer shutdown?", exact: true });
+  await page.getByRole("button", { name: "Schedule simulation…", exact: true }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Schedule shutdown simulation?", exact: true });
   await expect(dialog).toBeVisible();
   return dialog;
 }
 
 async function reviewPort(page: Page) {
   await page.getByRole("option", { name: /^Port 3000 tcp,/ }).click();
+  // Finish the explanation debounce before its reviewed-plan-only actions appear.
+  await page.clock.runFor(100);
   const details = page.getByRole("complementary", { name: "Port details", exact: true });
-  await details.getByRole("button", { name: /^Stop(?: ⌫)?$/, exact: false }).click();
+  await details.getByRole("button", { name: "Schedule stop…", exact: true }).click();
   const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toHaveAccessibleName("Schedule stop :3000?");
   await expect(dialog).toContainText("43000");
   return dialog;
 }
@@ -70,6 +73,13 @@ async function scheduleOneMinutePort(page: Page) {
 test("one-hour computer shutdown has a separate acknowledgement, visible countdown and cancellation", async ({ page }) => {
   const review = await reviewShutdown(page);
   await expect(review.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  const when = review.getByRole("combobox", { name: "When", exact: true });
+  await expect(when).toContainText("In 1 hour");
+  await expect(review.getByRole("button", { name: "Simulate shutdown", exact: true })).toHaveCount(0);
+  await when.click();
+  await expect(page.getByRole("listbox", { name: "When", exact: true }).getByRole("option", { name: "Now", exact: true })).toHaveCount(0);
+  await when.press("Escape");
+  await chooseTiming(page, review, "In 30 min");
   await review.getByRole("checkbox").check();
   await chooseTiming(page, review, "In 1 hour");
   await expect(review.getByRole("checkbox")).not.toBeChecked();
@@ -80,6 +90,7 @@ test("one-hour computer shutdown has a separate acknowledgement, visible countdo
   await review.getByRole("checkbox").check();
   await submit.click();
   await expect(review).toContainText("Simulation scheduled");
+  await expect(review).not.toContainText("Simulation complete");
   const manager = await viewSchedules(page, review);
   await expect(manager.getByRole("button", { name: "Done", exact: true })).toBeFocused();
   await expect(manager).toContainText("Shut down Demo computer");
@@ -97,7 +108,12 @@ test("one-hour computer shutdown has a separate acknowledgement, visible countdo
 
 test("a port schedule keeps its reviewed protocol and process, updates countdown, and cancels with keyboard", async ({ page }) => {
   const review = await reviewPort(page);
-  await chooseTiming(page, review, "In 1 hour");
+  const when = review.getByRole("combobox", { name: "When", exact: true });
+  await expect(when).toContainText("In 1 hour");
+  await expect(review.getByRole("button", { name: "Stop :3000", exact: true })).toHaveCount(0);
+  await when.click();
+  await expect(page.getByRole("listbox", { name: "When", exact: true }).getByRole("option", { name: "Now", exact: true })).toHaveCount(0);
+  await when.press("Escape");
   await expect(review.getByRole("list", { name: "Plan", exact: true })).toContainText("43000");
   await expect(review).toContainText("Only the reviewed services are scheduled");
   await review.getByRole("button", { name: /^Schedule simulation/ }).click();
@@ -121,6 +137,30 @@ test("a port schedule keeps its reviewed protocol and process, updates countdown
   await manager.press("Escape");
   await expect(manager).toHaveCount(0);
   await expect(page.getByRole("option", { name: /^Port 3000 tcp,/ })).toBeVisible();
+});
+
+test("an individual agent service retains scheduling without selecting its other port", async ({ page }) => {
+  await openAgents(page);
+  await agentHeading(page, "Cursor").click();
+  const cursor = agentCard(page, "Cursor");
+  await cursor.getByTitle("Stop :3000", { exact: true }).click();
+  const review = page.getByRole("alertdialog");
+  await expect(review.getByRole("combobox", { name: "When", exact: true })).toContainText("Now");
+  await expect(review.getByRole("list", { name: "Plan", exact: true })).toContainText("43000");
+  await expect(review.getByRole("list", { name: "Plan", exact: true })).not.toContainText("45173");
+  await chooseTiming(page, review, "In 1 hour");
+  await review.getByRole("button", { name: /^Schedule simulation/ }).click();
+  const manager = await viewSchedules(page, review);
+  await expect(manager).toContainText("Stop agent services (1 port)");
+  await expect(manager).toContainText("Reviewed ports: :3000/tcp");
+  await expect(manager).not.toContainText(":5173");
+  await manager.getByRole("button", { name: "Cancel Stop agent services (1 port)", exact: true }).click();
+  await manager.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(cursor).toContainText("2 stoppable");
+  await expect(agentHeading(page, "Cursor")).toContainText("52000");
+  await page.getByRole("radio", { name: "List", exact: true }).click();
+  await expect(page.getByRole("option", { name: /^Port 3000 tcp,/ })).toBeVisible();
+  await expect(page.getByRole("option", { name: /^Port 5173 tcp,/ })).toBeVisible();
 });
 
 test("an agent schedule retains both reviewed owned ports and keeps its session running", async ({ page }) => {

@@ -74,11 +74,11 @@
 <style>
   .cnt { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
   .tree { list-style: none; margin: 0; padding: 6px 0; border: 1px solid var(--border); border-radius: var(--r-lg); font-size: var(--fs-body); line-height: var(--lh-body); }
-  .tree li { display: flex; align-items: baseline; gap: 8px; padding: 3px 12px 3px calc(12px + var(--lvl) * 14px); min-width: 0; position: relative; }
-  .tree li:not(:first-child)::before { content: "└"; position: absolute; left: calc(var(--lvl) * 14px - 2px); color: var(--faint); font-family: var(--mono); font-size: var(--fs-mono-sm); }
+  .tree li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 6px; padding: 5px 10px 5px min(calc(12px + var(--lvl) * 12px), 35%); min-width: 0; position: relative; }
+  .tree li:not(:first-child)::before { content: "└"; position: absolute; left: min(calc(var(--lvl) * 12px - 2px), calc(35% - 14px)); color: var(--faint); font-family: var(--mono); font-size: var(--fs-mono-sm); }
   .tree li.up { color: var(--muted); }
   .tree li.self .tn { font-weight: var(--fw-semibold); color: var(--text); }
-  .tn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .tn { overflow-wrap: anywhere; min-width: 0; flex: 1 1 64px; }
   .tp, .tm { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); white-space: nowrap; }
   .tm { margin-left: auto; }
   .here { font-size: var(--fs-label); line-height: var(--lh-label); text-transform: uppercase; letter-spacing: var(--ls-label); font-weight: var(--fw-medium); color: var(--accent); }

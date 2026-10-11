@@ -9,8 +9,9 @@
   // Underlined tab list with automatic activation, roving focus and an animated indicator.
   import Icon from "../Icon.svelte";
   import { nextIndex } from "../../lib/roving";
+  import { isComposingKey } from "../../lib/keyboard";
 
-  let { tabs, value = $bindable(), base, label, onchange }: { tabs: TabItem<T>[]; value: T; base: string; label: string; onchange?: (v: T) => void } = $props();
+  let { tabs, value = $bindable(), base, label, onchange, layout = "scroll" }: { tabs: TabItem<T>[]; value: T; base: string; label: string; onchange?: (v: T) => void; layout?: "scroll" | "wrap" } = $props();
 
   let els: HTMLButtonElement[] = $state([]);
   let ind = $state({ left: 0, width: 0 });
@@ -35,12 +36,13 @@
     if (t.id !== value) { value = t.id; onchange?.(t.id); }
   }
   function key(e: KeyboardEvent) {
+    if (isComposingKey(e) || e.altKey || e.ctrlKey || e.metaKey) return;
     const n = nextIndex(idx, e.key, tabs.length);
     if (n !== null) { go(n); e.preventDefault(); }
   }
 </script>
 
-<div class="tabs" role="tablist" aria-label={label} tabindex="-1" onkeydown={key}>
+<div class="tabs" class:wrap={layout === "wrap"} role="tablist" aria-label={label} tabindex="-1" onkeydown={key}>
   {#each tabs as t, i (t.id)}
     <button
       bind:this={els[i]}
@@ -62,6 +64,10 @@
 <style>
   .tabs { position: relative; display: flex; gap: 0; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--border); padding: 0 var(--sp-3); outline: none; }
   .tabs::-webkit-scrollbar { display: none; }
+  .tabs.wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(110px, 100%), 1fr)); gap: var(--sp-1); overflow-x: visible; padding: var(--sp-2) var(--sp-3); }
+  .wrap button { min-width: 0; min-height: 36px; height: auto; justify-content: center; gap: 4px; padding: 6px 4px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); border: 1px solid transparent; border-radius: var(--r-sm); white-space: normal; }
+  .wrap button.on { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+  .wrap .ind { display: none; }
   button { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 9px; flex: none; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); white-space: nowrap; cursor: pointer; border-radius: var(--r-sm) var(--r-sm) 0 0; transition: color var(--dur-1); }
   button:hover { color: var(--text); }
   button.on { color: var(--text); }

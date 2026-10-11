@@ -38,7 +38,7 @@
 
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
   type View = "list" | "graph" | "agents";
-  interface Confirm { entry: PortEntry | null; /** Reviewed plans for more ports after `entry` (Agents "Stop all"). */ queue?: { entry: PortEntry; plan: ActionPlan }[]; agentName?: string; agentId?: string; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; restart?: boolean; scheduled?: ScheduledAction; schedulingBusy?: boolean; schedulingError?: string }
+  interface Confirm { entry: PortEntry | null; /** Reviewed plans for more ports after `entry` (Agents "Stop all"). */ queue?: { entry: PortEntry; plan: ActionPlan }[]; agentName?: string; agentId?: string; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; restart?: boolean; timingIntent?: "combined" | "now" | "schedule"; scheduled?: ScheduledAction; schedulingBusy?: boolean; schedulingError?: string }
 
   // Live data is replaced wholesale on every poll, so it is raw state run through `share`:
   // unchanged entries keep their identity and nothing downstream re-renders or re-fetches.
@@ -124,6 +124,7 @@
   let shortcut = $state<string | null>(null);
   let showSettings = $state(false);
   let showShutdown = $state(false);
+  let shutdownIntent = $state<"now" | "schedule">("now");
   let shutdownPreview = $state.raw<ShutdownPreview | null>(null);
   let shutdownLoading = $state(false);
   let shutdownBusy = $state(false);
@@ -425,7 +426,7 @@
       toast("info", `${a.name} has no stoppable ports`, "Its own IDE / agent listeners stay protected.");
       return;
     }
-    if (list.length === 1) return requestStop(list[0], false, false, agentId);
+    if (list.length === 1) return requestStop(list[0], false, false, { agentId });
     try {
       const plans = await Promise.all(list.map((entry) => api.plan(stopTarget(entry), false, false)));
       const plan = plans[0];
@@ -517,13 +518,15 @@
     setHistoryLimit: async (n) => { config = await api.setPreferences({ historyLimit: n }); },
     clearHistory: async () => { await api.clearHistory(); historyItems = []; },
     copy: (t, w) => copy(t, w),
-    shutdown: openShutdown,
+    shutdown: () => openShutdown("now"),
+    scheduleShutdown: () => openShutdown("schedule"),
     viewSchedules: openSchedules,
   };
   function openSettings(section: SettingsSection = "general") { settingsSection = section; showSettings = true; }
 
-  async function openShutdown() {
+  async function openShutdown(intent: "now" | "schedule" = "now") {
     if (shutdownBusy || shutdownLoading) return;
+    shutdownIntent = intent;
     showSettings = false;
     showShutdown = true;
     shutdownPreview = null;
@@ -553,7 +556,7 @@
   }
 
   async function confirmShutdown() {
-    if (!shutdownPreview || shutdownBusy || shutdownLoading || shutdownRequested || shutdownScheduled) return;
+    if (shutdownIntent !== "now" || !shutdownPreview || shutdownBusy || shutdownLoading || shutdownRequested || shutdownScheduled) return;
     shutdownBusy = true;
     shutdownError = null;
     try {
@@ -569,7 +572,7 @@
   }
 
   async function scheduleShutdown(delaySecs: number) {
-    if (!shutdownPreview || shutdownBusy || shutdownLoading || shutdownRequested || shutdownScheduled) return;
+    if (shutdownIntent !== "schedule" || !shutdownPreview || shutdownBusy || shutdownLoading || shutdownRequested || shutdownScheduled) return;
     shutdownBusy = true;
     shutdownError = null;
     try {
@@ -744,13 +747,18 @@
     setTimeout(() => (toasts = toasts.filter((t) => t.id !== id)), kind === "error" ? 9000 : action ? 8000 : 3200);
   }
 
-  async function requestStop(entry: PortEntry, force: boolean, allowProtected = false, agentId?: string) {
+  async function requestStop(entry: PortEntry, force: boolean, allowProtected = false, options: { agentId?: string; intent?: "combined" | "now" | "schedule" } = {}) {
+    const { agentId, intent: timingIntent = agentId ? "combined" : "now" } = options;
     try {
       const plan = await api.plan(stopTarget(entry), force, allowProtected);
-      confirm = { entry, cluster: null, plan, force, allowProtected, phase: "confirm", log: [], report: null, agentId, agentName: agentId ? agentsReport?.agents.find((a) => a.id === agentId)?.name : undefined };
+      confirm = { entry, cluster: null, plan, force, allowProtected, timingIntent, phase: "confirm", log: [], report: null, agentId, agentName: agentId ? agentsReport?.agents.find((a) => a.id === agentId)?.name : undefined };
     } catch (e) {
       toast("error", `Couldn't plan stopping :${entry.port}`, String(e));
     }
+  }
+
+  function requestScheduledStop(entry: PortEntry) {
+    return requestStop(entry, false, false, { intent: "schedule" });
   }
 
   function restartCommand(c: Confirm): string | null {
@@ -761,7 +769,7 @@
   }
 
   async function runStop() {
-    if (!confirm || confirm.phase !== "confirm" || confirm.plan.blocked || confirm.schedulingBusy || confirm.scheduled || confirm.schedulingError) return;
+    if (!confirm || confirm.timingIntent === "schedule" || confirm.phase !== "confirm" || confirm.plan.blocked || confirm.schedulingBusy || confirm.scheduled || confirm.schedulingError) return;
     const c = confirm;
     c.phase = "running";
     const queue = c.queue ?? [];
@@ -836,7 +844,7 @@
 
   async function scheduleStop(delaySecs: number) {
     const c = confirm;
-    if (!c?.entry || c.phase !== "confirm" || c.plan.blocked || c.force || c.allowProtected || c.restart || c.scheduled || c.schedulingBusy || c.schedulingError) return;
+    if (!c?.entry || c.timingIntent === "now" || c.phase !== "confirm" || c.plan.blocked || c.force || c.allowProtected || c.restart || c.scheduled || c.schedulingBusy || c.schedulingError) return;
     c.schedulingBusy = true;
     try {
       const reviewed = [{ entry: c.entry, plan: c.plan }, ...(c.queue ?? [])];
@@ -854,7 +862,7 @@
     const c = confirm;
     if (!c || c.schedulingBusy) return;
     if (c.agentId && c.queue?.length) requestStopAgentPorts(c.agentId);
-    else if (c.entry) requestStop(c.entry, false, false, c.agentId);
+    else if (c.entry) requestStop(c.entry, false, false, { agentId: c.agentId, intent: c.timingIntent });
   }
 
   function selectEntry(e: PortEntry, openDrawer = true) {
@@ -951,6 +959,7 @@
       if (canOpen(e))
         cmds.push({ id: `open-${e.id}`, group: "Actions", icon: "external", title: `Open :${e.port} in browser`, subtitle: title(e), boost, keywords: `browser ${e.port}`, run: () => open(e) });
     }
+    if (settingsModel?.powerAvailable) cmds.push({ id: "schedule-shutdown", group: "Actions", icon: "clock", title: api.isTauri ? "Schedule computer shutdown…" : "Schedule shutdown simulation…", subtitle: "This computer · review first", keywords: "power shutdown schedule timer hour", run: () => openShutdown("schedule") });
     if (q) cmds.unshift({ id: "check", group: "Ports", icon: "search", title: `Check port ${q}`, subtitle: "who's using it?", keywords: `${q} why explain`, run: () => { filters.query = String(q); } });
     cmds.push(
       { id: "refresh", group: "Actions", icon: "refresh", title: "Refresh now", shortcut: [mod, "R"], run: () => refresh(true) },
@@ -1257,7 +1266,7 @@
           <AgentsView report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
             onselectagent={(id) => { const a = agentsReport?.agents.find((a) => a.id === id); if (a && !agentMatches(a, agentQuery)) agentQuery = ""; selectedAgent = id; }} onentry={openEntry}
             onreveal={revealAgentFolder} oneditor={openAgentFolder}
-            onstop={(e, agentId) => requestStop(e, false, false, agentId)} onstopall={requestStopAgentPorts}
+            onstop={(e, agentId) => requestStop(e, false, false, { agentId })} onstopall={requestStopAgentPorts}
             {flowReport} {activity} {recording} {flowLoading} {activityLoading} {flowError} {activityError} demo={!api.isTauri}
             paused={flowPaused} onpausechange={(paused) => { flowPaused = paused; }} onflowmodechange={(mode) => { agentFlowMode = mode; }}
             onrefreshflow={() => { void flowLoader.request(); }} onrefreshactivity={() => { void activityLoader.request(); }}
@@ -1343,7 +1352,7 @@
       <div class="pane-wrap">
         <Splitter bind:width={paneWidth} min={340} max={680} initial={PANE_DEFAULT} />
         <DetailPane entry={selected} {explanation} http={selectedHttp} loading={explaining} busy={selected ? !!busy[selected.id] : false} bind:tab={detailTab} {mod}
-          onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy}
+          onstop={() => selected && requestStop(selected, false)} onschedule={() => selected && requestScheduledStop(selected)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy}
           {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)}
           entries={snapshot?.entries ?? []} onselectentry={(e) => selectEntry(e, false)} details={selectedDetails} {cpuTrend} {memTrend} platform={info.platform} onrestart={() => selected && requestRestart(selected)} onreveal={() => selected && reveal(selected)} oneditor={() => selected && openEditor(selected)} />
       </div>
@@ -1362,20 +1371,20 @@
 {#if showDrawer && selected}
   <Dialog placement="right" bare label="Details for port {selected.port}" onclose={() => (drawerOpen = false)} initialFocus="self">
     <DetailPane drawer entry={selected} {explanation} http={selectedHttp} loading={explaining} busy={!!busy[selected.id]} bind:tab={detailTab} {mod}
-      onstop={() => selected && requestStop(selected, false)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onclose={() => (drawerOpen = false)}
+      onstop={() => selected && requestStop(selected, false)} onschedule={() => selected && requestScheduledStop(selected)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onclose={() => (drawerOpen = false)}
       {graph} pinned={pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} details={selectedDetails} {cpuTrend} {memTrend} platform={info.platform} onrestart={() => selected && requestRestart(selected)} onreveal={() => selected && reveal(selected)} oneditor={() => selected && openEditor(selected)} />
   </Dialog>
 {/if}
 {#if confirm}
-  <ConfirmDialog entry={confirm.entry} cluster={confirm.cluster} plan={confirm.plan} portCount={(confirm.queue?.length ?? 0) + 1} agentName={confirm.agentName} restart={!!confirm.restart} phase={confirm.phase} log={confirm.log} report={confirm.report}
+  <ConfirmDialog intent={confirm.timingIntent ?? "combined"} entry={confirm.entry} cluster={confirm.cluster} plan={confirm.plan} portCount={(confirm.queue?.length ?? 0) + 1} agentName={confirm.agentName} restart={!!confirm.restart} phase={confirm.phase} log={confirm.log} report={confirm.report}
     onschedule={confirm.entry && !confirm.force && !confirm.allowProtected && !confirm.restart ? scheduleStop : undefined} schedulingBusy={!!confirm.schedulingBusy} schedulingError={confirm.schedulingError ?? null} scheduled={confirm.scheduled ?? null} onviewschedules={openSchedules} onreview={reviewScheduledStop} demo={!api.isTauri}
-    onconfirm={runStop} oncancel={closeConfirm} onoverride={() => confirm?.entry && requestStop(confirm.entry, confirm.force, true)} />
+    onconfirm={runStop} oncancel={closeConfirm} onoverride={() => confirm?.entry && requestStop(confirm.entry, confirm.force, true, { agentId: confirm.agentId, intent: "now" })} />
 {/if}
 {#if showPalette}<CommandPalette {commands} onclose={() => { showPalette = false; }} />{/if}
 {#if showHistory}<HistoryPanel items={historyItems} onrestart={restartEntry} oncopy={copy} onclose={() => (showHistory = false)} onclear={async () => { await api.clearHistory(); historyItems = []; }} />{/if}
 {#if showHelp}<ShortcutsDialog {mod} {singleKeyShortcuts} onclose={() => (showHelp = false)} />{/if}
 {#if showSettings && settingsModel}<SettingsDialog model={settingsModel} actions={settingsActions} bind:section={settingsSection} onclose={() => (showSettings = false)} />{/if}
-{#if showShutdown}<ShutdownDialog preview={shutdownPreview} loading={shutdownLoading} busy={shutdownBusy} requested={shutdownRequested} error={shutdownError} demo={!api.isTauri} onconfirm={confirmShutdown} onclose={closeShutdown} onretry={openShutdown} onschedule={scheduleShutdown} scheduled={shutdownScheduled} onviewschedules={openSchedules} />{/if}
+{#if showShutdown}<ShutdownDialog intent={shutdownIntent} preview={shutdownPreview} loading={shutdownLoading} busy={shutdownBusy} requested={shutdownRequested} error={shutdownError} demo={!api.isTauri} onconfirm={confirmShutdown} onclose={closeShutdown} onretry={() => openShutdown(shutdownIntent)} onschedule={scheduleShutdown} scheduled={shutdownScheduled} onviewschedules={openSchedules} />{/if}
 {#if showSchedules}<SchedulesDialog {schedules} loading={schedulesLoading} error={schedulesError} demo={!api.isTauri} onclose={closeSchedules} onrefresh={() => loadSchedules(true)} oncancel={cancelSchedule} />{/if}
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
 {#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
