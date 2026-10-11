@@ -34,6 +34,12 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Changed
 
+- Current-source Power settings separate **Shut down now** from **Schedule shutdown**;
+  scheduled reviews start at one hour and exclude immediate execution. Local port details
+  similarly offer separate **Stop** and **Schedule stop** actions. Browser labels identify
+  simulations, and immediate reviews omit timing controls.
+- Port details wrap tabs and long content at compact widths, with a clear port-scoped action
+  footer. Shared select menus fit the viewport and retain readable option descriptions.
 - Agent recording separates hook/OTLP parsing, shared metadata and credential policy, typed
   HTTP routing, MCP delivery and UI controls. Native commands share authorized session access;
   unknown recording status stays explicit until a successful refresh.

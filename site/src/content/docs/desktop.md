@@ -10,7 +10,9 @@ CLI, so the plans and protections are identical. [Try it in the browser](../../#
 
 ## Shut down this computer
 
-Version 0.4.0 adds **Settings → Power → Shut down this computer**. Check the computer
+Version 0.4.0 adds **Settings → Power → Shut down this computer**. Current source labels
+this immediate entry **Shut down now…**, separately from **Schedule shutdown…**; its review
+has no timing controls. Check the computer
 name, save your work and acknowledge that all apps, agents and local services will stop.
 The confirmation expires after 60 seconds; it does not schedule shutdown. Cancel or Escape
 closes the review before submission. After submission, follow any OS permission prompts;
@@ -28,9 +30,11 @@ shutdown and cannot power off a computer. Version 0.3.0 binaries predate this fe
 browser demo. Version 0.4.0 downloads include immediate shutdown and stop confirmations,
 but do not include scheduling yet.
 
-1. For this computer, open **Settings → Power** and review shutdown. For a port, choose
-   **Stop**. For an agent's services, open its card and choose **Stop all** or a service's **Stop**.
-2. Choose **In 1 hour**, another preset, **Custom delay**, or **At a time**. Delays range from
+1. For this computer, open **Settings → Power → Schedule shutdown…**. The review is titled
+   **Schedule computer shutdown?**. For a local port, use **Schedule stop…** in its details
+   instead of **Stop…**. For an agent's services, open its card and choose **Stop all** or a service's **Stop**.
+2. Dedicated schedule reviews start at **In 1 hour** and exclude **Now**. Choose another preset,
+   **Custom delay**, or **At a time**. Delays range from
    one minute to 24 hours. The preview shows the local date, time and timezone.
 3. Read the reviewed effects. For shutdown, acknowledge that all apps and unsaved work are
    affected, then choose **Schedule shutdown**. For services, choose **Schedule stop**.
@@ -52,9 +56,13 @@ process overrides cannot be scheduled.
 
 Power controls always target the local desktop computer, including when viewing remote hosts.
 Scheduling does not expose an SSH, CLI or MCP shutdown endpoint. Browser schedules simulate
-status changes only; they cannot shut down a machine or stop a process.
+status changes only; they cannot shut down a machine or stop a process. Browser Power entries
+are **Simulate shutdown now…** and **Schedule simulation…**; the scheduled dialog is titled
+**Schedule shutdown simulation?**.
 
 These current UI screenshots show the browser simulation:
+
+![Power settings offer separate immediate and scheduled simulations with clear local scope](../../../../docs/screenshots/desktop-settings-power-light.png)
 
 ![Schedule a shutdown one hour from now, with a separate acknowledgement](../../../../docs/screenshots/desktop-shutdown-schedule-light.png)
 
@@ -126,6 +134,16 @@ the browser demo runs the current UI with sample data.
 
 ## From the details pane
 
-Open the port in a browser, restart a dev server, open its folder in your editor
-(`HOLDMAP_EDITOR`, else Cursor, VS Code, Zed…) or the file manager, and copy its URL, a `curl` or
-the kill command.
+In current source, **Open** and **Restart** stay beside **More actions**, which offers folder
+opening and copy commands. **Stop…** and **Schedule stop…** have a separate footer labelled
+with the selected port; stopping a port keeps the computer running. Tabs wrap and content
+remains readable in a 340-pixel pane.
+The Sort menu keeps its choices and descriptions within the right edge of the window.
+
+Folder opening uses `HOLDMAP_EDITOR`, then legacy `PORTWISE_EDITOR` when unset, or a known
+installed editor. The file manager and URL, `curl` and command-copy actions remain available
+through **More actions**.
+
+![Compact port details wrap tabs and keep separate Stop and Schedule stop controls visible](../../../../docs/screenshots/desktop-detail-compact-light.png)
+
+![The Sort menu remains within the right edge with readable grouping descriptions](../../../../docs/screenshots/desktop-sort-right-edge-light.png)

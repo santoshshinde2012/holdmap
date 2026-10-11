@@ -8,7 +8,7 @@
   import { resolveScheduleDelay, scheduleDeadline, type ScheduledAction } from "../lib/schedules";
   import { shutdownPreviewLifetimeMs, type ShutdownPreview } from "../lib/power";
 
-  let { preview, loading, error, busy, requested, onconfirm, onclose, onretry, demo = false, onschedule, scheduled = null, onviewschedules }: {
+  let { preview, loading, error, busy, requested, onconfirm, onclose, onretry, demo = false, onschedule, scheduled = null, onviewschedules, intent = "combined" }: {
     preview: ShutdownPreview | null;
     loading: boolean;
     error: string | null;
@@ -21,12 +21,14 @@
     onschedule?: (delaySecs: number) => void;
     scheduled?: ScheduledAction | null;
     onviewschedules?: () => void;
+    /** Separate entries keep immediate shutdown and scheduling unambiguous. */
+    intent?: "combined" | "now" | "schedule";
   } = $props();
 
   let understood = $state(false);
   let submitted = $state(false);
   let expired = $state(true);
-  let delaySecs = $state(0);
+  let delaySecs = $state(untrack(() => intent === "schedule" ? 3600 : 0));
   let atMs = $state<number | null>(null);
   let timingError = $state<string | null>(null);
   let timingValid = $state(true);
@@ -44,20 +46,28 @@
     return () => clearTimeout(timer);
   });
   const finished = $derived(requested || !!scheduled);
-  const scheduling = $derived(!!onschedule && (atMs !== null || delaySecs !== 0));
-  const ready = $derived(!!preview && !expired && understood && timingValid && !timingError && !loading && !busy && !finished && !submitted && !error);
+  const scheduling = $derived(intent === "schedule" || (intent !== "now" && !!onschedule && (atMs !== null || delaySecs !== 0)));
+  const ready = $derived(!!preview && !expired && understood && timingValid && !timingError && !loading && !busy && !finished && !submitted && !error && (!scheduling || !!onschedule));
+  const heading = $derived(intent === "schedule" ? demo ? "Schedule shutdown simulation?" : "Schedule computer shutdown?" : demo ? "Simulate computer shutdown?" : "Shut down this computer?");
+  $effect(() => { if (expired || error) understood = false; });
   function confirm() {
     if (!ready) return;
     try {
-      const resolved = scheduling ? resolveScheduleDelay(delaySecs, atMs) : 0;
-      submitted = true;
-      if (resolved && onschedule) onschedule(resolved);
-      else onconfirm();
+      if (scheduling) {
+        // Delay validation and an explicit callback are required; never fall through to now.
+        const resolved = resolveScheduleDelay(delaySecs, atMs);
+        if (!onschedule) return;
+        submitted = true;
+        onschedule(resolved);
+      } else {
+        submitted = true;
+        onconfirm();
+      }
     } catch (failure) { timingError = String(failure); }
   }
 </script>
 
-<Dialog role="alertdialog" title={demo ? "Simulate computer shutdown?" : "Shut down this computer?"} description="This affects the local computer, even when you're viewing a remote host." icon="monitor" iconTone="danger" size="md" dismissable={!busy} {onclose} initialFocus="[data-cancel]">
+<Dialog role="alertdialog" title={heading} description="This affects the local computer, even when you're viewing a remote host." icon="monitor" iconTone="danger" size="md" dismissable={!busy} {onclose} initialFocus="[data-cancel]">
   <div class="content">
     {#if demo}
       <Callout tone="info" title="Browser demo">This is a simulation. No operating-system shutdown will be requested.</Callout>
@@ -75,10 +85,13 @@
         {#if expired}
           <Callout tone="warn" title="Confirmation expired">Review a new preview before continuing. Nothing shuts down automatically.</Callout>
         {:else}
-          <p class="note">Your operating system may ask for permission or cancel the request. This review expires after one minute. A schedule is created only when you confirm it below.</p>
+          <p class="note">Your operating system may ask for permission or cancel the request. This review expires after one minute.{intent !== "now" ? " A schedule is created only when you confirm it below." : ""}</p>
         {/if}
-        {#if onschedule}<ActionTiming bind:delaySecs bind:atMs bind:valid={timingValid} scope="shutdown" {demo} disabled={expired || loading || busy || submitted || !!error} />{/if}
-        <Checkbox tone="danger" bind:checked={understood} disabled={expired || loading || busy || submitted || !!error || !timingValid} label={scheduling ? "I understand this computer will shut down at the scheduled time, and I will save my work before then." : "I saved my work and understand this shuts down all apps, agents and local services on this computer."} />
+        {#if intent !== "now" && (onschedule || intent === "schedule")}
+          <ActionTiming bind:delaySecs bind:atMs bind:valid={timingValid} scope="shutdown" {demo} allowNow={intent !== "schedule"} initialDelaySecs={intent === "schedule" ? 3600 : 0} disabled={expired || loading || busy || submitted || !!error || !onschedule} />
+        {/if}
+        {#if intent === "schedule" && !onschedule}<Callout tone="danger" title="Scheduling unavailable">Close this review and try again in a supported desktop session. Nothing has been requested.</Callout>{/if}
+        <Checkbox tone="danger" bind:checked={understood} disabled={expired || loading || busy || submitted || !!error || !timingValid || (scheduling && !onschedule)} label={scheduling ? "I understand this computer will shut down at the scheduled time, and I will save my work before then." : "I saved my work and understand this shuts down all apps, agents and local services on this computer."} />
       {/if}
       {#if error}<Callout tone="danger" title="Could not confirm the shutdown request">{error}</Callout>{/if}
       {#if timingError}<Callout tone="danger" title="Choose a new scheduled time">{timingError}</Callout>{/if}

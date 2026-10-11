@@ -90,6 +90,31 @@ async function selectPort(page, port = 3000) {
   return details;
 }
 
+async function openPowerSettings(page) {
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("tab", { name: "Power", exact: true }).click();
+  const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+  await expect(settings.getByRole("button", { name: "Simulate shutdown now…", exact: true })).toBeVisible();
+  await expect(settings.getByRole("button", { name: "Schedule simulation…", exact: true })).toBeVisible();
+  return settings;
+}
+
+async function reviewShutdown(page, scheduled = false) {
+  const settings = await openPowerSettings(page);
+  await settings.getByRole("button", { name: scheduled ? "Schedule simulation…" : "Simulate shutdown now…", exact: true }).click();
+  const dialog = page.getByRole("alertdialog", { name: scheduled ? "Schedule shutdown simulation?" : "Simulate computer shutdown?", exact: true });
+  await expect(dialog).toContainText("Demo computer");
+  if (scheduled) {
+    await expect(dialog.getByRole("combobox", { name: "When", exact: true })).toContainText("In 1 hour");
+    await dialog.getByRole("combobox", { name: "When", exact: true }).click();
+    await expect(page.getByRole("option", { name: "Now", exact: true })).toHaveCount(0);
+    await page.getByRole("option", { name: "In 1 hour", exact: true }).click();
+  } else {
+    await expect(dialog.getByRole("combobox", { name: "When", exact: true })).toHaveCount(0);
+  }
+  return dialog;
+}
+
 async function openAgents(page) {
   await page.getByRole("radio", { name: /^Agents/ }).click();
   await expect(page.getByRole("article")).toHaveCount(3);
@@ -147,6 +172,24 @@ async function boundedClip(page, locator, { height, padding = 0 } = {}) {
 }
 
 const captures = [
+  ...["dark", "light"].flatMap((theme) => [
+    { name: `desktop-detail-compact-${theme}.png`, theme, viewport: { width: 1100, height: 900 }, pane: "340", async prepare(page) {
+      const details = await selectPort(page);
+      const box = await details.boundingBox();
+      assert(box && box.width >= 339 && box.width <= 341, "Compact details capture must use the 340 px pane");
+      await expect(details.getByRole("button", { name: "Stop…", exact: true })).toBeVisible();
+      await expect(details.getByRole("button", { name: "Schedule stop…", exact: true })).toBeVisible();
+    } },
+    { name: `desktop-settings-power-${theme}.png`, theme, prepare: openPowerSettings },
+    { name: `desktop-sort-right-edge-${theme}.png`, theme, viewport: { width: 1100, height: 900 }, pane: "340", async prepare(page) {
+      await selectPort(page);
+      await page.getByRole("combobox", { name: "Sort: Grouped", exact: true }).click();
+      const list = page.getByRole("listbox", { name: "Sort by", exact: true });
+      await expect(list.getByRole("option", { name: /^Cluster/ })).toBeVisible();
+      const box = await list.boundingBox();
+      assert(box && box.x >= 8 && box.x + box.width <= page.viewportSize().width - 7, "Sort menu must remain within the right viewport edge");
+    } },
+  ]),
   ...["dark", "light"].map((theme) => ({ name: `desktop-folder-actions-${theme}.png`, theme, prepare: openFolderActions })),
   { name: "desktop-folder-actions-narrow-light.png", theme: "light", viewport: { width: 560, height: 820 }, prepare: openFolderActions },
   ...["dark", "light"].flatMap((theme) => [
@@ -164,22 +207,12 @@ const captures = [
     } },
   ]),
   ...["dark", "light"].map((theme) => ({ name: `desktop-shutdown-schedule-${theme}.png`, theme, async prepare(page) {
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByRole("tab", { name: "Power", exact: true }).click();
-    await page.getByRole("button", { name: "Simulate shutdown…", exact: true }).click();
-    const dialog = page.getByRole("alertdialog", { name: "Simulate computer shutdown?" });
-    await dialog.getByRole("combobox", { name: "When", exact: true }).click();
-    await page.getByRole("option", { name: "In 1 hour", exact: true }).click();
+    const dialog = await reviewShutdown(page, true);
     await dialog.getByRole("checkbox").check();
     return dialog;
   } })),
   ...["dark", "light"].map((theme) => ({ name: `desktop-schedules-${theme}.png`, theme, async prepare(page) {
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByRole("tab", { name: "Power", exact: true }).click();
-    await page.getByRole("button", { name: "Simulate shutdown…", exact: true }).click();
-    const dialog = page.getByRole("alertdialog", { name: "Simulate computer shutdown?" });
-    await dialog.getByRole("combobox", { name: "When", exact: true }).click();
-    await page.getByRole("option", { name: "In 1 hour", exact: true }).click();
+    const dialog = await reviewShutdown(page, true);
     await dialog.getByRole("checkbox").check();
     await dialog.getByRole("button", { name: "Schedule simulation", exact: true }).click();
     await dialog.getByRole("button", { name: /View scheduled actions/ }).click();
@@ -195,11 +228,7 @@ const captures = [
     return dialog;
   } })),
   ...["dark", "light"].map((theme) => ({ name: `desktop-shutdown-${theme}.png`, theme, async prepare(page) {
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByRole("tab", { name: "Power", exact: true }).click();
-    await page.getByRole("button", { name: "Simulate shutdown…", exact: true }).click();
-    const dialog = page.getByRole("alertdialog", { name: "Simulate computer shutdown?" });
-    await expect(dialog).toContainText("Demo computer");
+    const dialog = await reviewShutdown(page);
     await expect(dialog.getByRole("button", { name: "Simulate shutdown", exact: true })).toBeDisabled();
     return dialog;
   } })),
@@ -231,6 +260,7 @@ const captures = [
     const plan = page.getByRole("alertdialog");
     await expect(plan.getByRole("list", { name: "Plan", exact: true })).toBeVisible();
     await expect(plan.getByRole("button", { name: "Stop :3000", exact: true })).toBeVisible();
+    await expect(plan.getByRole("combobox", { name: "When", exact: true })).toHaveCount(0);
   } },
   ...["dark", "light"].map((theme) => ({ name: `desktop-agent-stop-confirm-${theme}.png`, theme, async prepare(page) {
     await openAgents(page);

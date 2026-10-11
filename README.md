@@ -280,8 +280,13 @@ the action. Version 0.3.0 binaries predate this feature.
 
 </details>
 
-**Current source / Unreleased:** choose **Now**, **In 1 hour**, a custom delay, or **At a time**
-when reviewing a local shutdown, port stop, or an agent's service stop. **Scheduled actions**
+**Current source / Unreleased:** Power settings separate **Shut down now…** from **Schedule
+shutdown…**. The scheduled review, **Schedule computer shutdown?**, starts at **In 1 hour**
+and excludes **Now**; immediate shutdown has no timing controls. In the browser, the entries
+are **Simulate shutdown now…** and **Schedule simulation…**, with **Schedule shutdown
+simulation?** clearly identifying the scheduled review. For a local port, **Schedule stop…**
+opens the one-hour review separately from **Stop…**. Choose another preset, a custom delay
+or **At a time** as needed; agent service reviews also support delays. **Scheduled actions**
 shows each deadline, countdown, reviewed port and cancellation result. Schedules run while
 Holdmap stays open, including in the tray; quitting clears them. Keep the computer awake.
 Missed deadlines or clock changes require a fresh review. Agent schedules stop only the
@@ -355,6 +360,12 @@ the chooser; build current source to use it.
 | ![The current-source agents map in light theme](docs/screenshots/desktop-agents-light.png) | ![Expanded child-tool details show an inferred Filesystem MCP process with no listening port](docs/screenshots/desktop-agent-tools-dark.png) |
 | **Agent bulk stop, dark theme** | **Agent bulk stop, light theme** |
 | ![A bulk stop previews all four steps for the agent's two ports, dark theme](docs/screenshots/desktop-agent-stop-confirm-dark.png) | ![A bulk stop previews all four steps for the agent's two ports, light theme](docs/screenshots/desktop-agent-stop-confirm-light.png) |
+| **Compact port details, dark theme** | **Compact port details, light theme** |
+| ![A 340-pixel details pane keeps tabs, activity and separate Stop and Schedule stop actions readable](docs/screenshots/desktop-detail-compact-dark.png) | ![Compact details retain clear port scope and actions in a 1100-pixel window](docs/screenshots/desktop-detail-compact-light.png) |
+| **Separate Power actions, dark theme** | **Separate Power actions, light theme** |
+| ![Power settings distinguish immediate shutdown from scheduled shutdown simulations](docs/screenshots/desktop-settings-power-dark.png) | ![Power settings keep the local scope, save-work warning and open-app schedule requirement visible](docs/screenshots/desktop-settings-power-light.png) |
+| **Sort menu at the right edge, dark theme** | **Sort menu at the right edge, light theme** |
+| ![The Sort menu stays inside the viewport with readable grouping descriptions](docs/screenshots/desktop-sort-right-edge-dark.png) | ![The right-edge Sort menu leaves all choices visible in a compact window](docs/screenshots/desktop-sort-right-edge-light.png) |
 
 </details>
 

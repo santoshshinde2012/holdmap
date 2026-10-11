@@ -57,23 +57,23 @@
 {/if}
 
 <style>
-  .cluster { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: var(--r-lg); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); background: var(--accent-softer); margin-bottom: var(--sp-6); }
+  .cluster { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px; border-radius: var(--r-lg); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); background: var(--accent-softer); margin-bottom: var(--sp-6); min-width: 0; }
   .ct { width: 34px; height: 34px; border-radius: var(--r-md); display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex: none; }
-  .cn { flex: 1; min-width: 0; display: grid; gap: 1px; }
+  .cn { flex: 1 1 120px; min-width: 0; display: grid; gap: 1px; }
   .cn b { font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cn span { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
+  .cn span { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); overflow-wrap: anywhere; }
   .hint { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
   .rel { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
   .rel li + li { border-top: 1px solid var(--border); }
-  .relbtn { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 10px 6px 12px; border: 0; background: transparent; font: inherit; color: var(--text); cursor: pointer; text-align: left; }
+  .relbtn { width: 100%; display: grid; grid-template-columns: 22px minmax(0, 1fr) 13px; align-items: center; gap: 2px 8px; min-height: 40px; padding: 6px 10px; border: 0; background: transparent; font: inherit; color: var(--text); cursor: pointer; text-align: left; }
   .relbtn:hover { background: var(--row-hover); }
   .relbtn:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
-  .relbtn > :global(svg:last-child) { color: var(--faint); }
-  .arrow { width: 22px; height: 22px; border-radius: var(--r-sm); display: grid; place-items: center; flex: none; }
+  .relbtn > :global(svg:last-child) { color: var(--faint); grid-column: 3; grid-row: 1 / 4; }
+  .arrow { width: 22px; height: 22px; border-radius: var(--r-sm); display: grid; place-items: center; grid-column: 1; grid-row: 1 / 4; }
   .arrow.out { color: var(--tone-green); background: var(--tone-green-bg); }
   .arrow.in { color: var(--tone-amber); background: var(--tone-amber-bg); }
-  .rn { font-weight: var(--fw-semibold); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rp { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); }
-  .rt { margin-left: auto; font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); white-space: nowrap; }
+  .rn { grid-column: 2; font-weight: var(--fw-semibold); min-width: 0; overflow-wrap: anywhere; }
+  .rp { grid-column: 2; font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); overflow-wrap: anywhere; }
+  .rt { grid-column: 2; font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); overflow-wrap: anywhere; }
   .none { color: var(--muted); margin: 0; }
 </style>

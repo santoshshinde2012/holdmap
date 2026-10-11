@@ -116,6 +116,24 @@ describe("SegmentedControl and Tabs", () => {
   });
 });
 
+describe("Wrapped details tabs", () => {
+  it("keeps panel relationships and keyboard navigation without intercepting composition or modifier keys", async () => {
+    const onchange = vi.fn();
+    render(Tabs, { base: "wrapped", label: "Details", layout: "wrap", value: "a", tabs: [{ id: "a", label: "Overview" }, { id: "b", label: "Commands" }], onchange });
+    const tabs = screen.getAllByRole("tab");
+    tabs[0].focus();
+    for (const extra of [{ isComposing: true }, { keyCode: 229 }, { altKey: true }, { ctrlKey: true }, { metaKey: true }]) {
+      await fireEvent.keyDown(tabs[0], { key: "End", ...extra });
+    }
+    expect(onchange).not.toHaveBeenCalled();
+    await fireEvent.keyDown(tabs[0], { key: "End" });
+    expect(document.activeElement).toBe(tabs[1]);
+    expect(tabs[1].getAttribute("aria-controls")).toBe("wrapped-panel-b");
+    await fireEvent.keyDown(tabs[1], { key: "Home" });
+    expect(document.activeElement).toBe(tabs[0]);
+  });
+});
+
 describe("Select", () => {
   const options = [{ value: "group", label: "Grouped" }, { value: "port", label: "Port" }, { value: "newest", label: "Newest" }];
   it("opens with the keyboard, moves, and commits with Enter", async () => {
@@ -133,6 +151,19 @@ describe("Select", () => {
     await tick();
     expect(onchange).toHaveBeenCalledWith("port");
     expect(box.getAttribute("aria-expanded")).toBe("false");
+  });
+  it("does not open or commit a choice during composition or modified navigation", async () => {
+    const onchange = vi.fn();
+    render(Select, { label: "Sort by", value: "group", options, onchange });
+    const box = screen.getByRole("combobox");
+    await fireEvent.keyDown(box, { key: "ArrowDown", isComposing: true });
+    await fireEvent.keyDown(box, { key: "ArrowDown", metaKey: true });
+    expect(box.getAttribute("aria-expanded")).toBe("false");
+    await fireEvent.click(box);
+    await fireEvent.keyDown(box, { key: "End", ctrlKey: true });
+    await fireEvent.keyDown(box, { key: "Enter", isComposing: true });
+    expect(onchange).not.toHaveBeenCalled();
+    expect(box.getAttribute("aria-expanded")).toBe("true");
   });
   it("Esc closes without changing the value", async () => {
     const onchange = vi.fn();
@@ -172,6 +203,35 @@ describe("NumberInput", () => {
 describe("Dialogs", () => {
   const entry = (port: number) => MOCK_SNAPSHOT.entries.find((e) => e.port === port)!;
 
+  it("the scheduled entry defaults to one hour and never performs an immediate stop", async () => {
+    const onconfirm = vi.fn(), onschedule = vi.fn();
+    render(ConfirmDialog, { intent: "schedule", entry: entry(3000), plan: mockPlan("3000", false), phase: "confirm", log: [], report: null, onconfirm, onschedule, oncancel: vi.fn(), onoverride: vi.fn() });
+    expect(screen.getByRole("alertdialog", { name: "Schedule stop :3000?" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "When" }).textContent).toContain("In 1 hour");
+    await fireEvent.click(screen.getByRole("combobox", { name: "When" }));
+    expect(screen.queryByRole("option", { name: "Now" })).toBeNull();
+    await fireEvent.keyDown(screen.getByRole("combobox", { name: "When" }), { key: "Escape" });
+    await fireEvent.click(screen.getByRole("button", { name: "Schedule stop :3000" }));
+    expect(onschedule).toHaveBeenCalledWith(3600);
+    expect(onconfirm).not.toHaveBeenCalled();
+  });
+  it("scheduled intent fails closed without a scheduling callback or when a refreshed target is protected", async () => {
+    const onconfirm = vi.fn(), onoverride = vi.fn();
+    const props = { intent: "schedule" as const, entry: entry(3000), plan: mockPlan("3000", false), phase: "confirm" as const, log: [], report: null, onconfirm, oncancel: vi.fn(), onoverride };
+    const { rerender } = render(ConfirmDialog, props);
+    const submit = screen.getByRole("button", { name: "Schedule stop :3000" }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    await fireEvent.click(submit);
+    expect(onconfirm).not.toHaveBeenCalled();
+    await rerender({ ...props, entry: entry(49152), plan: mockPlan("49152", false), onschedule: vi.fn() });
+    expect(screen.queryByRole("button", { name: "Review stop" })).toBeNull();
+    expect(onoverride).not.toHaveBeenCalled();
+  });
+  it("the immediate entry has no timing control", () => {
+    render(ConfirmDialog, { intent: "now", entry: entry(3000), plan: mockPlan("3000", false), phase: "confirm", log: [], report: null, onconfirm: vi.fn(), onschedule: vi.fn(), oncancel: vi.fn(), onoverride: vi.fn() });
+    expect(screen.queryByRole("combobox", { name: "When" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Stop :3000" })).toBeTruthy();
+  });
   it("stop-anyway requires the explicit checkbox", async () => {
     const onoverride = vi.fn();
     render(ConfirmDialog, { entry: entry(49152), plan: mockPlan("49152", false), phase: "confirm", log: [], report: null, onconfirm: vi.fn(), oncancel: vi.fn(), onoverride });

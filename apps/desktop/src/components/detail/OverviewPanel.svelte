@@ -63,15 +63,15 @@
 {/if}
 
 {#if stats.length}
-  <div class="stats">
+  <dl class="stats" aria-label="Port activity">
     {#each stats as s (s.label)}
       <div class="stat" class:wide={s.wide} use:tooltip={s.sub ? { text: s.sub, onlyIfTruncated: false } : null}>
-        <span class="sl"><Icon name={s.icon} size={12} />{s.label}</span>
-        <span class="sv">{s.value}{#if s.trend && s.trend.length > 1}<Sparkline values={s.trend} width={48} height={14} range={s.range} />{/if}</span>
-        {#if s.sub}<span class="ss">{s.sub}</span>{/if}
+        <dt class="sl"><Icon name={s.icon} size={12} />{s.label}</dt>
+        <dd class="sv selectable">{s.value}</dd>
+        {#if s.sub || (s.trend && s.trend.length > 1)}<dd class="sm">{#if s.sub}<span class="ss">{s.sub}</span>{/if}{#if s.trend && s.trend.length > 1}<span class="trend" aria-hidden="true"><Sparkline values={s.trend} width={48} height={14} range={s.range} /></span>{/if}</dd>{/if}
       </div>
     {/each}
-  </div>
+  </dl>
 {/if}
 
 {#if plan && !blocked && plan.steps.length}
@@ -102,7 +102,7 @@
 
 <style>
   .sk { display: grid; gap: 10px; }
-  .summary { display: grid; gap: var(--sp-3); }
+  .summary { display: grid; gap: var(--sp-3); min-width: 0; }
   .headline { margin: 0; font-size: var(--fs-heading); letter-spacing: var(--ls-heading); line-height: var(--lh-heading); color: var(--text); font-weight: var(--fw-regular); text-wrap: pretty; }
   .web { margin: 0; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--text-2); }
   .web :global(svg) { color: var(--ok); flex: none; }
@@ -110,13 +110,16 @@
   .wl { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-medium); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
   .wv { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* One card of facts split by hairlines (not a grid of separate cards): less chrome, same data. */
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); margin: var(--sp-5) 0 var(--sp-6); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
-  .stat { display: grid; align-content: start; gap: 2px; padding: 10px 12px; min-width: 0; box-shadow: -1px 0 0 var(--border), 0 -1px 0 var(--border); }
+  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: var(--sp-4) 0 var(--sp-5); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
+  .stat { display: grid; align-content: start; gap: 4px; padding: 10px 12px; min-width: 0; box-shadow: -1px 0 0 var(--border), 0 -1px 0 var(--border); }
   .stat.wide { grid-column: 1 / -1; box-shadow: 0 -1px 0 var(--border); }
-  .sl { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-label); line-height: var(--lh-label); color: var(--muted); font-weight: var(--fw-medium); text-transform: uppercase; letter-spacing: var(--ls-label); }
-  .sv { display: flex; align-items: center; gap: 8px; font-size: var(--fs-heading); letter-spacing: var(--ls-heading); line-height: var(--lh-heading); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ss { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .plan { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 14px; display: grid; gap: 10px; }
+  .sl { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-label); line-height: var(--lh-label); color: var(--muted); font-weight: var(--fw-medium); text-transform: uppercase; letter-spacing: var(--ls-label); overflow-wrap: anywhere; }
+  .sl :global(svg) { flex: none; }
+  .sv { margin: 0; min-width: 0; font-size: var(--fs-heading); letter-spacing: var(--ls-heading); line-height: var(--lh-heading); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .sm { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px var(--sp-2); min-width: 0; margin: 0; }
+  .ss { min-width: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); overflow-wrap: anywhere; }
+  .trend { display: inline-flex; flex: none; margin-left: auto; }
+  .plan { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 10px 12px; display: grid; gap: 10px; min-width: 0; }
   .chain { list-style: none; margin: 0; padding: 0; display: grid; }
   .chain li { display: flex; gap: 12px; position: relative; padding: 5px 0; min-width: 0; }
   .chain li:not(:last-child)::after { content: ""; position: absolute; left: 5px; top: 20px; bottom: -6px; width: 2px; background: var(--border-strong); border-radius: 2px; }
@@ -124,7 +127,7 @@
   .holder .node { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .pc { min-width: 0; flex: 1; }
   .pl { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .pname { font-weight: var(--fw-semibold); }
+  .pname { font-weight: var(--fw-semibold); min-width: 0; overflow-wrap: anywhere; }
   .pid { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); }
   .holds { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-medium); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 999px; }
   .pcmd { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
@@ -132,6 +135,7 @@
   .chain:empty + .steps, .steps:first-child { border-top: 0; padding-top: 0; }
   .steps:empty { display: none; }
   .steps li { display: flex; gap: 8px; align-items: flex-start; }
+  .steps li > span { min-width: 0; overflow-wrap: anywhere; }
   .steps :global(svg) { color: var(--ok); margin-top: 3px; flex: none; }
   .risk-low { color: var(--ok); background: var(--ok-soft); }
   .risk-medium { color: var(--warn); background: var(--warn-soft); }

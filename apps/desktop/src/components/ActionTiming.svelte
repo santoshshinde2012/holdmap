@@ -4,17 +4,22 @@
   import Field, { fieldId } from "./ui/Field.svelte";
   import { SCHEDULE_PRESETS, scheduleDeadline } from "../lib/schedules";
 
-  let { delaySecs = $bindable(0), atMs = $bindable(null), valid = $bindable(true), disabled = false, scope = "stop", demo = false }: {
+  let { delaySecs = $bindable(0), atMs = $bindable(null), valid = $bindable(true), disabled = false, scope = "stop", demo = false, allowNow = true, initialDelaySecs = 0 }: {
     delaySecs?: number;
     atMs?: number | null;
     valid?: boolean;
     disabled?: boolean;
     scope?: "shutdown" | "stop";
     demo?: boolean;
+    /** A dedicated scheduling flow must never offer an immediate action. */
+    allowNow?: boolean;
+    /** Initial selection only; user edits remain local to this review. */
+    initialDelaySecs?: number;
   } = $props();
 
-  let timing = $state("0");
-  let minutes = $state<number | undefined>(60);
+  const initialDelay = untrack(() => initialDelaySecs || (allowNow ? 0 : 3600));
+  let timing = $state(SCHEDULE_PRESETS.some((preset) => preset.value === initialDelay) ? String(initialDelay) : "custom");
+  let minutes = $state<number | undefined>(initialDelay > 0 ? initialDelay / 60 : 60);
   let now = $state(Date.now());
   function localDateTime(ms: number): string {
     const date = new Date(ms);
@@ -24,7 +29,7 @@
   let atTime = $state(localDateTime(Date.now() + 3_600_000));
   const inputId = fieldId("schedule-minutes");
   const dateId = fieldId("schedule-time");
-  const options = [...SCHEDULE_PRESETS.map((preset) => ({ value: String(preset.value), label: preset.value ? `In ${preset.label}` : "Now" })), { value: "custom", label: "Custom delay…" }, { value: "at", label: "At a time…" }];
+  const options = $derived([...SCHEDULE_PRESETS.filter((preset) => allowNow || preset.value > 0).map((preset) => ({ value: String(preset.value), label: preset.value ? `In ${preset.label}` : "Now" })), { value: "custom", label: "Custom delay…" }, { value: "at", label: "At a time…" }]);
   const selectedAt = $derived(atTime ? new Date(atTime).getTime() : NaN);
   const atValid = $derived(Number.isFinite(selectedAt) && selectedAt - now >= 60_000 && selectedAt - now <= 86_400_000);
   const customValid = $derived(Number.isSafeInteger(minutes) && Number(minutes) >= 1 && Number(minutes) <= 1440);
@@ -33,7 +38,9 @@
     atMs = timing === "at" ? selectedAt : null;
     delaySecs = timing === "at" ? Math.floor((selectedAt - untrack(() => Date.now())) / 1000) : timing === "custom" ? (customValid ? Number(minutes) * 60 : NaN) : Number(timing);
   });
-  $effect(() => { valid = timing === "at" ? atValid : timing !== "custom" || customValid; });
+  $effect(() => {
+    valid = timing === "at" ? atValid : timing === "custom" ? customValid : SCHEDULE_PRESETS.some((preset) => String(preset.value) === timing && (allowNow || preset.value > 0));
+  });
   onMount(() => {
     const timer = setInterval(() => (now = Date.now()), 1000);
     return () => clearInterval(timer);
