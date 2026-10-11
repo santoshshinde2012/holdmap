@@ -10,6 +10,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- Agent Flow separates observed process/socket relationships from opt-in local reported calls.
+  Parallel tools, model calls, delegated agents, failures and missing data have a graph, timeline
+  and inspector. Codex/Claude adapters and an optional MCP observer retain bounded metadata in
+  memory; CLI setup, hook and snapshot commands use a token-authenticated loopback collector.
+
 - Terminal Agents list with independent search, stable identity-based selection, responsive
   details, keyboard and mouse scrolling, explicit collection limits and stale-scan warnings.
   CLI agent output starts with a compact overview; filtered queries expand details.

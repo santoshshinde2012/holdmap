@@ -12,8 +12,10 @@
 //! - [`state`]: shared state (last engine, config store)
 //! - [`update`]: optional self-update (release builds signed with an update key)
 
+mod activity;
 mod commands;
 mod confirmation;
+mod local_window;
 mod power;
 mod scheduler;
 mod shortcuts;
@@ -47,6 +49,7 @@ pub fn run() {
     }
     builder
         .manage(AppState::default())
+        .manage(activity::ActivityState::default())
         .manage(power::PowerState::default())
         .manage(scheduler::SchedulerState::default())
         .invoke_handler(tauri::generate_handler![
@@ -54,6 +57,13 @@ pub fn run() {
             commands::scan,
             commands::topology,
             commands::agents,
+            commands::agent_flow,
+            activity::activity_status,
+            activity::activity_snapshot,
+            activity::start_activity,
+            activity::stop_activity,
+            activity::clear_activity,
+            activity::activity_setup,
             commands::explain,
             commands::http_info,
             commands::plan,

@@ -1,5 +1,107 @@
 # holdmap architecture
 
+## Agent communication visibility (current source)
+
+The read-only Connections projection uses one consistent scan and `AgentsReport`. It retains
+exact socket holders and process start tokens; it marks missing and ambiguous ownership rather
+than choosing a guessed peer. Limits bound OS graph output to 256 nodes and 512 edges.
+
+The separate Calls pipeline requires explicit local opt-in. `holdmap-activity` owns strict
+metadata contracts, pure provider normalization, bounded storage, loopback HTTP and a bounded
+client. Native commands share the trusted-main-window policy with Power; CLI hooks and MCP
+recording compose the same client. `ToolCallObserver` is injected into MCP with a no-op default,
+so protocol handling and optional recording have separate responsibilities. It receives only
+catalog names, timing, outcomes and serialized sizes. Recording failure never disables tools.
+
+The browser adapter supplies labelled examples. Pure TypeScript builds reported parent edges,
+layout and timeline models; an invalidatable loader prevents stale requests from changing a
+later view. Components present evidence and setup without authority to stop a reported PID.
+A source-provided parent defines an edge; socket presence, elapsed time and common session
+membership cannot define tool causality. Provider setup remains reviewable text that the user
+applies explicitly. No source settings or private conversations are read automatically.
+
+![Agent visibility and optional local metadata flow](diagrams/agent-communication-flow.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 190
+---
+flowchart TB
+  accTitle: Agent visibility and optional local metadata flow
+  accDescr: Observed OS relationships and opt-in provider metadata follow separate read-only paths into the desktop flow view. A loopback authentication and bounded parsing gate projects metadata into session memory. Reported trace parents produce call edges, while missing evidence remains unknown. The public browser uses labelled examples and no recording source grants action authority.
+  subgraph OBSERVED["Observed relationships · no recording required"]
+    OS["OS scan<br/>Processes, listeners + sockets"]
+    PROJECT["Core flow projection<br/>Exact holders + process identity<br/>Seen / inferred / unknown"]
+    OS --> PROJECT
+  end
+  subgraph PRODUCERS["Explicitly configured local producers"]
+    AGENT["Codex / Claude / OTLP<br/>Reported events + trace parents"]
+    HOOK["Advisory lifecycle hooks<br/>Normalize before sending"]
+    MCP["Holdmap MCP observer<br/>Fixed tool names + envelope sizes"]
+  end
+  subgraph ACTIVITY["holdmap-activity · no persistence or forwarding"]
+    GATE["Session authentication<br/>127.0.0.1 + bearer token<br/>Origin / framing / deadline checks"]
+    NORMAL["Pure normalization<br/>Allowlist + pseudonymize<br/>Discard content fields"]
+    MEMORY[("Bounded memory store<br/>1,000 spans + dropped counts<br/>Identity and outcome merge policy")]
+    GATE --> NORMAL --> MEMORY
+  end
+  AGENT & HOOK & MCP --> GATE
+  subgraph VIEW["Desktop presentation · read-only evidence"]
+    API["Trusted local IPC<br/>Opt-in, snapshot, stop + clear"]
+    CONNECTIONS["Connections graph<br/>Observed OS relationships"]
+    CALLS["Calls graph + timeline<br/>Reported parents, parallel calls<br/>Missing / unknown explicit"]
+    INSPECT["Accessible inspector<br/>Status, duration + serialized sizes"]
+    API --> CALLS
+    CONNECTIONS & CALLS --> INSPECT
+  end
+  PROJECT --> CONNECTIONS
+  MEMORY --> API
+  DEMO["Public browser demo<br/>Labelled examples<br/>No native collector or actions"] -.-> CONNECTIONS & CALLS
+  style OBSERVED fill:#ffffff,stroke:#94A3B8
+  style PRODUCERS fill:#ffffff,stroke:#94A3B8
+  style ACTIVITY fill:#ffffff,stroke:#94A3B8
+  style VIEW fill:#ffffff,stroke:#94A3B8
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  classDef web fill:#F1F5F9,stroke:#64748B,color:#0F172A,stroke-width:1.5px
+  class OS,AGENT,HOOK,MCP,MEMORY data
+  class PROJECT,NORMAL domain
+  class GATE,API safety
+  class CONNECTIONS,CALLS,INSPECT surface
+  class DEMO web
+```
+
+</details>
+
+Adapters depend on narrow contracts; domain projections do not depend on presentation or
+transport. Tests substitute scans, clocks, MCP observers and executors without redefining
+production policy. Provider wire fixtures, hostile HTTP tests, out-of-order updates, full CLI
+roundtrips and keyboard regressions verify the composition. [Agent flow](agent-flow.md) records
+primary research, exporter setup, source coverage and privacy limits.
+
 ## Local computer power
 
 The desktop Power flow has separate presentation, IPC, confirmation policy and OS adapter

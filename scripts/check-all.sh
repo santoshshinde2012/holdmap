@@ -48,6 +48,6 @@ if [[ "$(uname -s)" == Linux ]]; then
   G_DEBUG=fatal-warnings MALLOC_PERTURB_=165 \
     cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
 fi
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap-activity -p holdmap
 cargo build --locked -p holdmap-desktop
 cargo deny --all-features check

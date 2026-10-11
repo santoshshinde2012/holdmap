@@ -1,3 +1,5 @@
+import type { ActivitySnapshot, AgentFlowReport, RecordingCredentials, RecordingStatus } from "./agent-flow/model";
+import { demoActivity, demoAgentFlow, demoRecordingStatus, startDemoRecording, stopDemoRecording, clearDemoActivity } from "./activity-demo";
 import type { ActionPlan, AgentsReport, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
 import { version as pkgVersion } from "../../package.json";
 import type { ShutdownPreview } from "./power";
@@ -235,6 +237,44 @@ export async function topology(all: boolean): Promise<Graph> {
 export async function agents(): Promise<AgentsReport> {
   if (!isTauri) return mockAgents({ ...MOCK_SNAPSHOT, taken_at_ms: Date.now() });
   return call("agents");
+}
+
+/** OS process/socket relationships. Recorded calls are fetched independently. */
+export async function agentFlow(): Promise<AgentFlowReport> {
+  if (!isTauri) return demoAgentFlow(await agents());
+  return call("agent_flow");
+}
+
+export async function activitySnapshot(): Promise<ActivitySnapshot> {
+  if (!isTauri) return demoActivity();
+  return call("activity_snapshot");
+}
+
+export async function activityStatus(): Promise<RecordingStatus> {
+  if (!isTauri) return demoRecordingStatus();
+  return call("activity_status");
+}
+
+/** Explicit opt-in only; credentials are transient and never persisted in frontend settings. */
+export async function startActivity(): Promise<RecordingCredentials> {
+  if (!isTauri) { startDemoRecording(); return { endpoint: "", token: "" }; }
+  return call("start_activity");
+}
+
+export async function stopActivity(): Promise<RecordingStatus> {
+  if (!isTauri) { stopDemoRecording(); return demoRecordingStatus(); }
+  return call("stop_activity");
+}
+
+export async function clearActivity(): Promise<void> {
+  if (!isTauri) { clearDemoActivity(); return; }
+  return call("clear_activity");
+}
+
+/** Returned only on the user's copy action. Includes an ephemeral recording credential. */
+export async function activitySetup(provider: "codex" | "claude"): Promise<string> {
+  if (!isTauri) return "# Browser demo: no local collector is running.\n# Install the desktop app and start recording under Agents > Flow > Calls.\n";
+  return call("activity_setup", { provider });
 }
 
 let mockConfig: Config = { pins: [{ port: 3000, label: null }], notify: true, notify_dev_only: true, history_limit: 200, scan_interval_secs: 4, hotkey: "alt-p", recent_hosts: ["devbox", "deploy@staging.internal"] };

@@ -27,6 +27,8 @@
   import * as api from "./lib/api";
   import { agentMatches, filterAgents, step, stoppableEntries } from "./lib/agents";
   import { createAgentReportLoader } from "./lib/agents-live";
+  import { createFlowLoader } from "./lib/agent-flow/live";
+  import type { AgentFlowMode, AgentFlowReport, ActivitySnapshot, RecordingStatus } from "./lib/agent-flow/model";
   import type { AgentsReport, ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortDetails, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
   import { linksLabel, nodeForEntry, sectionsByCluster } from "./lib/graph";
   import type { Command } from "./lib/palette";
@@ -101,6 +103,14 @@
   let agentQuery = $state("");
   let agentsRefreshing = $state(false);
   let agentsStarted = $state(0);
+  let agentFlowMode = $state<AgentFlowMode>("overview");
+  let flowPaused = $state(false);
+  let flowReport = $state.raw<AgentFlowReport | null>(null);
+  let activity = $state.raw<ActivitySnapshot | null>(null);
+  let recording = $state.raw<RecordingStatus | null>(null);
+  let flowLoading = $state(false), activityLoading = $state(false);
+  let flowError = $state<string | null>(null), activityError = $state<string | null>(null);
+
   const visibleAgentIds = $derived(filterAgents(agentsReport?.agents ?? [], agentQuery).map((a) => a.id));
   let graphAll = $state(false);
   let selectedNode = $state<string | null>(null);
@@ -311,6 +321,45 @@
       if (view === "agents") toast("error", "Couldn't look up the agents", String(e));
     } finally { agentsRefreshing = false; }
   }
+  const flowLoader = createFlowLoader(api.agentFlow,
+    (value) => { flowReport = share(flowReport, value); },
+    (message) => { flowError = message; },
+    (busy) => { flowLoading = busy; });
+  const activityLoader = createFlowLoader(async () => {
+    const [snapshot, status] = await Promise.all([api.activitySnapshot(), api.activityStatus()]);
+    return { snapshot, status };
+  }, (value) => { activity = share(activity, value.snapshot); recording = share(recording, value.status); },
+  (message) => { activityError = message; }, (busy) => { activityLoading = busy; });
+
+  $effect(() => {
+    const mode = agentFlowMode;
+    const visible = view === "agents" && mode !== "overview" && !flowPaused;
+    const interval = Math.max(1_000, scanMs);
+    untrack(() => { flowLoader.invalidate(); activityLoader.invalidate(); });
+    if (!visible) return;
+    const loader = mode === "connections" ? flowLoader : activityLoader;
+    untrack(() => { void loader.request(); });
+    const timer = setInterval(() => { if (!document.hidden) void loader.request(); }, interval);
+    return () => { clearInterval(timer); loader.invalidate(); };
+  });
+
+  async function startRecording() {
+    await api.startActivity();
+    // An explicit action refreshes the status even when following the view is paused.
+    activityLoader.invalidate();
+    if (view === "agents" && agentFlowMode === "calls") await activityLoader.request();
+  }
+  async function stopRecording() {
+    await api.stopActivity();
+    activityLoader.invalidate();
+    if (view === "agents" && agentFlowMode === "calls") await activityLoader.request();
+  }
+  async function clearRecordedActivity() {
+    await api.clearActivity();
+    activityLoader.invalidate();
+    if (view === "agents" && agentFlowMode === "calls") await activityLoader.request();
+  }
+
   /** Open a port from the agents map in the details drawer, making sure the list can show it. */
   function openEntry(e: PortEntry) {
     if (!ordered.some((x) => x.id === e.id)) {
@@ -925,13 +974,18 @@
   });
 
   function onKey(e: KeyboardEvent) {
-    const typing = document.activeElement instanceof HTMLElement && !!document.activeElement.closest("input, textarea, [contenteditable=true], [role=combobox]");
+    if (e.defaultPrevented) return;
+    const focused = document.activeElement;
+    const typing = focused instanceof HTMLElement && !!focused.closest("input, textarea, [contenteditable=true], [role=combobox]");
+    const control = focused instanceof HTMLElement && !!focused.closest("select, button, [role=radiogroup], [role=radio], [role=tablist], [role=separator]");
+    const flowView = view === "agents" && agentFlowMode !== "overview";
     const modKey = e.metaKey || e.ctrlKey;
     if (modalOpen) return; // overlays handle (and stop) their own keys
     if (modKey && e.key.toLowerCase() === "k") { showPalette = true; e.preventDefault(); return; }
     if (modKey && e.key === ",") { openSettings(); e.preventDefault(); return; }
     if (!typing && (e.key === "/" || (modKey && e.key.toLowerCase() === "f"))) { search?.focus(); search?.select(); e.preventDefault(); return; }
     if (modKey && e.key.toLowerCase() === "r") { refresh(true); e.preventDefault(); return; }
+    if (control) return; // native/select/button controls retain their own keyboard behavior
     const move = view === "graph" && !typing ? selectGraph : view === "agents" ? selectAgent : select;
     if (view === "list" && !typing && !modKey && (e.key === "ArrowLeft" || e.key === "ArrowRight") && selectedId) {
       // Tree-style: ← collapses the selected row's section, → expands it.
@@ -941,8 +995,8 @@
     }
     if (view === "list" && !typing && (e.key === "Home" || e.key === "End") && ordered.length) { selectEntry(ordered[e.key === "Home" ? 0 : ordered.length - 1], false); e.preventDefault(); return; }
     if (view === "list" && !typing && (e.key === "PageDown" || e.key === "PageUp")) { select(e.key === "PageDown" ? 10 : -10); e.preventDefault(); return; }
-    if (e.key === "ArrowDown" || e.key === "ArrowRight" && view === "graph" && !typing || (!typing && e.key === "j")) { move(1); e.preventDefault(); return; }
-    if (e.key === "ArrowUp" || e.key === "ArrowLeft" && view === "graph" && !typing || (!typing && e.key === "k")) { move(-1); e.preventDefault(); return; }
+    if (!typing && !control && !flowView && (e.key === "ArrowDown" || e.key === "ArrowRight" && view === "graph" || e.key === "j")) { move(1); e.preventDefault(); return; }
+    if (!typing && !control && !flowView && (e.key === "ArrowUp" || e.key === "ArrowLeft" && view === "graph" || e.key === "k")) { move(-1); e.preventDefault(); return; }
     if (e.key === "Escape") {
       if (typing) search?.blur();
       else if (view === "agents" && agentQuery) agentQuery = "";
@@ -957,10 +1011,11 @@
       return; // buttons and map nodes handle it outside search
     }
     if (e.key === "Enter") { if (typing) { if (!selected) select(1); search?.blur(); } else if (selected) drawerOpen = true; return; }
-    if (typing || modKey || e.altKey) return;
+    if (typing || control || modKey || e.altKey) return;
     // Only plain keys below; the list (or the page) has focus.
     if (e.target instanceof HTMLElement && e.target.closest("input, textarea, [role=combobox], [role=tablist], [role=separator]")) return;
-    const s = selected;
+    // Agent metadata must never reuse a listener selection from another view.
+    const s = view === "list" || view === "graph" ? selected : null;
     switch (e.key) {
       case "Backspace": case "Delete": if (s && (s.process || s.container)) requestStop(s, e.shiftKey); break;
       case "o": if (s && canOpen(s)) open(s); break;
@@ -976,8 +1031,8 @@
       case "A": view = view === "agents" ? "list" : "agents"; break;
       case "h": openHistory(); break;
       case "p": if (s) togglePin(s); break;
-      case "P": openPin(s); break;
-      case "s": { const n = selectedGraphNode; const c = n?.cluster ? graph?.clusters.find((x) => x.id === n.cluster) : null; if (c) requestClusterStop(c.name); else return; break; }
+      case "P": if (s) openPin(s); else return; break;
+      case "s": { const n = view === "graph" ? selectedGraphNode : null; const c = n?.cluster ? graph?.clusters.find((x) => x.id === n.cluster) : null; if (c) requestClusterStop(c.name); else return; break; }
       case "?": showHelp = true; break;
       default: return;
     }
@@ -1187,7 +1242,12 @@
           <AgentsView report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced}
             onselectagent={(id) => { const a = agentsReport?.agents.find((a) => a.id === id); if (a && !agentMatches(a, agentQuery)) agentQuery = ""; selectedAgent = id; }} onentry={openEntry}
             onreveal={revealAgentFolder} oneditor={openAgentFolder}
-            onstop={(e, agentId) => requestStop(e, false, false, agentId)} onstopall={requestStopAgentPorts} />
+            onstop={(e, agentId) => requestStop(e, false, false, agentId)} onstopall={requestStopAgentPorts}
+            {flowReport} {activity} {recording} {flowLoading} {activityLoading} {flowError} {activityError} demo={!api.isTauri}
+            paused={flowPaused} onpausechange={(paused) => { flowPaused = paused; }} onflowmodechange={(mode) => { agentFlowMode = mode; }}
+            onrefreshflow={() => { void flowLoader.request(); }} onrefreshactivity={() => { void activityLoader.request(); }}
+            onstartrecording={startRecording} onstoprecording={stopRecording} onclearactivity={clearRecordedActivity}
+            onactivitysetup={api.activitySetup} />
         {:else}
           <div class="graph-loading" aria-busy="true">Loading agents…</div>
         {/if}
@@ -1279,7 +1339,7 @@
     {#if snapshot}
       <span><b>{stats.total}</b> ports</span><span class="g"><b>{stats.dev}</b> dev</span>{#if stats.exposed}<span class="w"><b>{stats.exposed}</b> exposed</span>{/if}
       <span class="sp"></span>
-      <span class="hints"><span><Kbd keys={["↑", "↓"]} size="sm" />move</span><span><Kbd keys="⌫" size="sm" />stop</span><span><Kbd keys="G" size="sm" />graph</span><span><Kbd keys={["⇧", "A"]} size="sm" />agents</span><span><Kbd keys={[mod, "K"]} size="sm" />commands</span><span><Kbd keys="?" size="sm" />shortcuts</span>{#if shortcut}<span class="gs"><Kbd keys={shortcut} size="sm" />from anywhere</span>{/if}</span>
+      <span class="hints">{#if view === "agents" && agentFlowMode !== "overview"}<span><Kbd keys="Tab" size="sm" />flow controls</span>{:else}<span><Kbd keys={["↑", "↓"]} size="sm" />move</span>{#if view !== "agents"}<span><Kbd keys="⌫" size="sm" />stop</span>{/if}{/if}<span><Kbd keys="G" size="sm" />graph</span><span><Kbd keys={["⇧", "A"]} size="sm" />agents</span><span><Kbd keys={[mod, "K"]} size="sm" />commands</span><span><Kbd keys="?" size="sm" />shortcuts</span>{#if shortcut}<span class="gs"><Kbd keys={shortcut} size="sm" />from anywhere</span>{/if}</span>
     {/if}
   </footer>
 </div>

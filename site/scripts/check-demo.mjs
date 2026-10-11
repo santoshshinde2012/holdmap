@@ -124,6 +124,30 @@ try {
     await search.press("Escape");
     await measureViewport("after-agents");
   });
+  await check("Agent Flow separates example connections from recorded calls without OS actions", async () => {
+    await frame.getByLabel("Search agents", { exact: true }).fill("");
+    await frame.getByRole("radio", { name: "Flow", exact: true }).click();
+    const flow = frame.getByRole("region", { name: "Agent flow", exact: true });
+    await flow.getByText("Example data", { exact: true }).waitFor();
+    await flow.getByRole("region", { name: "Flow participants", exact: true }).waitFor();
+    await flow.getByText(/Sockets do not reveal messages or data direction/).waitFor();
+    await flow.getByRole("radio", { name: "Calls", exact: true }).click();
+    const run = flow.locator("#agent-flow-run");
+    await run.waitFor();
+    const trace = await run.locator("option").filter({ hasText: "Planning agent" }).getAttribute("value");
+    if (!trace) throw new Error("The example recorded trace is unavailable");
+    await run.selectOption(trace);
+    await flow.getByRole("button", { name: "Fit all relationships in view", exact: true }).click();
+    await flow.locator(".flow-node").nth(9).waitFor();
+    if (await flow.locator(".flow-node").count() !== 10 || await flow.locator(".svelte-flow__edge").count() !== 9) throw new Error("The example trace must contain 10 spans and 9 supplied parent links");
+    await flow.getByText("Event order is not proof of communication.", { exact: true }).waitFor();
+    await flow.getByText("1 failed span", { exact: true }).waitFor();
+    if (!(await flow.getByRole("button", { name: "Start recording", exact: true }).isDisabled())) throw new Error("Browser example must not start a local recorder");
+    const nativeBridge = await flow.evaluate(() => "__TAURI_INTERNALS__" in window);
+    if (nativeBridge) throw new Error("Public example must not have a native OS bridge");
+    if (await flow.locator(".svelte-flow__edge.animated").count()) throw new Error("Parent links must not simulate message traffic");
+    await measureViewport("after-agent-flow");
+  });
   await check("Stop :3000 asks first, then frees the port (simulated)", async () => {
     await try_("Stop :3000");
     const dialog = frame.locator('[role="alertdialog"]');

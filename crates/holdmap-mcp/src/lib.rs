@@ -8,6 +8,7 @@
 
 mod catalog;
 mod confirmation;
+mod observer;
 mod prompts;
 mod resources;
 mod stops;
@@ -17,6 +18,9 @@ mod validation;
 #[cfg(test)]
 mod tests;
 
+pub use observer::{
+    NoopToolCallObserver, ToolCallCompleted, ToolCallObserver, ToolCallOutcome, ToolCallStarted,
+};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 use tools::ToolError;
@@ -72,6 +76,7 @@ fn read_frame<R: BufRead>(input: &mut R) -> io::Result<Option<Frame>> {
 struct Session {
     version: &'static str,
     confirmations: confirmation::Confirmations,
+    next_call_id: u64,
 }
 
 impl Default for Session {
@@ -79,6 +84,7 @@ impl Default for Session {
         Self {
             version: SUPPORTED_VERSIONS[0],
             confirmations: confirmation::Confirmations::default(),
+            next_call_id: 1,
         }
     }
 }
@@ -87,7 +93,20 @@ impl Default for Session {
 ///
 /// Frames are limited to 1 MiB and legacy batches to 64 messages. Oversized frames are
 /// discarded completely, receive an error, and cannot dispatch tools or desynchronize stdin.
-pub fn serve<R: BufRead, W: Write>(mut input: R, mut output: W) -> io::Result<()> {
+pub fn serve<R: BufRead, W: Write>(input: R, output: W) -> io::Result<()> {
+    serve_with_observer(input, output, &mut NoopToolCallObserver)
+}
+
+/// Run the stdio server with an explicitly attached metadata observer.
+///
+/// Protocol output, limits and compatibility match [`serve`]. The observer receives only
+/// this server's known tool calls and never receives their arguments or results. Observation
+/// is optional; the caller owns persistence and associates the session with its own identity.
+pub fn serve_with_observer<R: BufRead, W: Write>(
+    mut input: R,
+    mut output: W,
+    observer: &mut dyn ToolCallObserver,
+) -> io::Result<()> {
     let mut session = Session::default();
     while let Some(frame) = read_frame(&mut input)? {
         let response = match frame {
@@ -108,7 +127,7 @@ pub fn serve<R: BufRead, W: Write>(mut input: R, mut output: W) -> io::Result<()
             Ok(Value::Array(batch)) if session.version < "2025-06-18" && !batch.is_empty() => {
                 let responses: Vec<Value> = batch
                     .into_iter()
-                    .filter_map(|message| session.handle(message))
+                    .filter_map(|message| session.handle_with_observer(message, observer))
                     .collect();
                 if responses.is_empty() {
                     None
@@ -116,7 +135,7 @@ pub fn serve<R: BufRead, W: Write>(mut input: R, mut output: W) -> io::Result<()
                     Some(Value::Array(responses))
                 }
             }
-            Ok(message) => session.handle(message),
+            Ok(message) => session.handle_with_observer(message, observer),
             Err(e) => {
                 Some(session.compatible(error(Value::Null, -32700, &format!("parse error: {e}"))))
             }
@@ -149,6 +168,14 @@ pub fn handle(message: Value) -> Option<Value> {
 
 impl Session {
     fn handle(&mut self, message: Value) -> Option<Value> {
+        self.handle_with_observer(message, &mut NoopToolCallObserver)
+    }
+
+    fn handle_with_observer(
+        &mut self,
+        message: Value,
+        observer: &mut dyn ToolCallObserver,
+    ) -> Option<Value> {
         let valid_id = message
             .get("id")
             .filter(|id| id.is_string() || id.is_number());
@@ -182,7 +209,44 @@ impl Session {
             "initialize" => self.initialize(id, &params),
             "ping" => ok(id, json!({})),
             "tools/list" => ok(id, json!({"tools": catalog::list()})),
-            "tools/call" => call(id, &params, &mut self.confirmations),
+            "tools/call" => {
+                let name = params["name"].as_str().and_then(observer::canonical_name);
+                let call_id = name.and_then(|_| {
+                    let id = self.next_call_id;
+                    self.next_call_id = id.checked_add(1)?;
+                    Some(id)
+                });
+                if let (Some(name), Some(call_id)) = (name, call_id) {
+                    observer.started(&ToolCallStarted {
+                        call_id,
+                        tool_name: name.into(),
+                        started_at_ms: holdmap_core::util::now_ms(),
+                        input_bytes: serde_json::to_vec(&message)
+                            .map_or(0, |bytes| bytes.len() as u64),
+                    });
+                    let began = std::time::Instant::now();
+                    let response = call(id, &params, &mut self.confirmations);
+                    let response = self.compatible(response);
+                    let error_code = response["error"]["code"].as_i64();
+                    observer.completed(&ToolCallCompleted {
+                        call_id,
+                        finished_at_ms: holdmap_core::util::now_ms(),
+                        duration_ms: began.elapsed().as_millis().min(u64::MAX as u128) as u64,
+                        output_bytes: serde_json::to_vec(&response)
+                            .map_or(0, |bytes| bytes.len() as u64),
+                        outcome: if error_code.is_some() {
+                            ToolCallOutcome::ProtocolError
+                        } else if response["result"]["isError"] == true {
+                            ToolCallOutcome::ToolError
+                        } else {
+                            ToolCallOutcome::Success
+                        },
+                        error_code,
+                    });
+                    return Some(response);
+                }
+                call(id, &params, &mut self.confirmations)
+            }
             "resources/list" => ok(id, resources::list()),
             "resources/templates/list" => ok(id, json!({"resourceTemplates": []})),
             "resources/read" => match params["uri"].as_str().filter(|uri| !uri.is_empty()) {

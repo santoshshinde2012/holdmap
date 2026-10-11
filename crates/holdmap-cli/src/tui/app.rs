@@ -940,10 +940,8 @@ impl App {
             KeyCode::Char('r') | KeyCode::F(5) => self.start_scan_force(),
             KeyCode::Char('x') | KeyCode::Delete | KeyCode::Backspace => self.request_stop(false),
             KeyCode::Char('X') => self.request_stop(true),
-            KeyCode::Char('e') | KeyCode::Enter => {
-                if self.selected().is_some() {
-                    self.modal = Modal::Explain { scroll: 0 };
-                }
+            KeyCode::Char('e') | KeyCode::Enter if self.selected().is_some() => {
+                self.modal = Modal::Explain { scroll: 0 };
             }
             KeyCode::Char('o') => self.open_selected(),
             KeyCode::Char('c') => self.copy_selected(),

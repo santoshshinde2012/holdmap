@@ -1,0 +1,202 @@
+{
+  "resourceLogs": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "telemetry.sdk.name",
+            "value": {
+              "stringValue": "opentelemetry"
+            }
+          },
+          {
+            "key": "env",
+            "value": {
+              "stringValue": "test"
+            }
+          },
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "codex-cli"
+            }
+          },
+          {
+            "key": "telemetry.sdk.language",
+            "value": {
+              "stringValue": "rust"
+            }
+          },
+          {
+            "key": "telemetry.sdk.version",
+            "value": {
+              "stringValue": "0.31.0"
+            }
+          },
+          {
+            "key": "host.name",
+            "value": {
+              "stringValue": "fixture-machine"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "fixture-source-8c0f701"
+            }
+          }
+        ],
+        "droppedAttributesCount": 0,
+        "entityRefs": []
+      },
+      "schemaUrl": "",
+      "scopeLogs": [
+        {
+          "logRecords": [
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "codex.tool_result"
+                  }
+                },
+                {
+                  "key": "tool_result_seq",
+                  "value": {
+                    "intValue": "1"
+                  }
+                },
+                {
+                  "key": "tool_name",
+                  "value": {
+                    "stringValue": "exec_command"
+                  }
+                },
+                {
+                  "key": "tool_namespace",
+                  "value": {
+                    "stringValue": "functions"
+                  }
+                },
+                {
+                  "key": "call_id",
+                  "value": {
+                    "stringValue": "call_fixture_1"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "1234"
+                  }
+                },
+                {
+                  "key": "success",
+                  "value": {
+                    "stringValue": "true"
+                  }
+                },
+                {
+                  "key": "output_truncated",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "agent_name",
+                  "value": {
+                    "stringValue": "fixture-agent"
+                  }
+                },
+                {
+                  "key": "arguments",
+                  "value": {
+                    "stringValue": "synthetic-private-arguments"
+                  }
+                },
+                {
+                  "key": "output",
+                  "value": {
+                    "stringValue": "synthetic-private-output"
+                  }
+                },
+                {
+                  "key": "mcp_server",
+                  "value": {
+                    "stringValue": ""
+                  }
+                },
+                {
+                  "key": "mcp_server_origin",
+                  "value": {
+                    "stringValue": ""
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-10-11T12:00:00.123Z"
+                  }
+                },
+                {
+                  "key": "conversation.id",
+                  "value": {
+                    "stringValue": "019a0000-1111-2222-3333-444444444444"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "fixture-source-8c0f701"
+                  }
+                },
+                {
+                  "key": "originator",
+                  "value": {
+                    "stringValue": "fixture"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "fixture-terminal"
+                  }
+                },
+                {
+                  "key": "model",
+                  "value": {
+                    "stringValue": "fixture-model"
+                  }
+                },
+                {
+                  "key": "slug",
+                  "value": {
+                    "stringValue": "fixture-slug"
+                  }
+                }
+              ],
+              "body": null,
+              "droppedAttributesCount": 0,
+              "eventName": "event src/main.rs:39",
+              "flags": 0,
+              "observedTimeUnixNano": "1791708555628568000",
+              "severityNumber": 9,
+              "severityText": "INFO",
+              "spanId": "",
+              "timeUnixNano": "0",
+              "traceId": ""
+            }
+          ],
+          "schemaUrl": "",
+          "scope": {
+            "attributes": [],
+            "droppedAttributesCount": 0,
+            "name": "codex_otel_log_only",
+            "version": ""
+          }
+        }
+      ]
+    }
+  ]
+}

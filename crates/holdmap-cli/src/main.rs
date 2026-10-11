@@ -1,6 +1,8 @@
 //! holdmap — see which ports, agents and tools are running, and stop the right thing safely.
 
+mod activity;
 mod agent_actions;
+mod agent_flow;
 mod agents;
 mod commands;
 mod graph;
@@ -91,6 +93,8 @@ enum Command {
     Graph(graph::GraphArgs),
     /// Show AI coding agents and developer tools: folders, access, ports and connections.
     Agents(agents::AgentsArgs),
+    /// Record and inspect opt-in local agent activity metadata.
+    Activity(activity::ActivityArgs),
     /// Stream port events: new listeners, closed listeners, conflicts.
     Watch(watch::WatchArgs),
     /// Pin a port (favourite): shown first and watched even when free.
@@ -122,7 +126,11 @@ enum Command {
     /// Open the interactive terminal UI.
     Tui,
     /// Run the MCP (Model Context Protocol) server on stdio for AI coding assistants.
-    Mcp,
+    Mcp {
+        /// Send tool-call metadata to the explicitly configured local activity recorder.
+        #[arg(long)]
+        record_activity: bool,
+    },
     /// Explain busy ports a failed command wanted (called by the `holdmap init` shell hook).
     #[command(hide = true)]
     Hint {
@@ -423,6 +431,7 @@ fn main() -> ExitCode {
         Some(Command::Run(a)) => commands::run(&a, docker),
         Some(Command::Graph(a)) => graph::run(&a, docker),
         Some(Command::Agents(a)) => agents::run(&a, docker),
+        Some(Command::Activity(a)) => activity::run(&a),
         Some(Command::Watch(a)) => watch::run(&a, docker),
         Some(Command::Pin(a)) => state::pin(&a, true),
         Some(Command::Unpin(a)) => state::pin(
@@ -449,12 +458,7 @@ fn main() -> ExitCode {
         Some(Command::Hint { command, .. }) => shell::hint(&command, docker),
         Some(Command::Ssh(a)) => remote::run(&a),
         Some(Command::Tui) => tui::run(docker),
-        Some(Command::Mcp) => {
-            let stdin = std::io::stdin();
-            holdmap_mcp::serve(stdin.lock(), std::io::stdout().lock())
-                .map(|_| exit::OK)
-                .map_err(anyhow::Error::from)
-        }
+        Some(Command::Mcp { record_activity }) => activity::mcp(record_activity),
         Some(Command::Completions { shell }) => {
             clap_complete::generate(
                 shell,

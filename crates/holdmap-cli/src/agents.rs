@@ -16,6 +16,9 @@ pub struct AgentsArgs {
     /// Show full agent details, including processes and redacted command lines.
     #[arg(short, long)]
     pub wide: bool,
+    /// Show observed process, listener and TCP relationships; no call or payload inference.
+    #[arg(long, conflicts_with_all = ["stop_ports", "wide"])]
+    pub flow: bool,
     /// Stop the unprotected ports each matching agent started (dev servers and services).
     #[arg(long)]
     pub stop_ports: bool,
@@ -42,6 +45,19 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
     }
     if a.stop_ports {
         return stop_ports(&e, &report, a, docker);
+    }
+    if a.flow {
+        let flow = holdmap_core::agents::flow::flow(&e.scan, &report);
+        if a.json {
+            println!("{}", serde_json::to_string_pretty(&flow)?);
+        } else {
+            print!("{}", crate::agent_flow::render(&flow));
+        }
+        return Ok(if flow.nodes.is_empty() {
+            crate::exit::BUSY
+        } else {
+            crate::exit::OK
+        });
     }
     if a.json {
         println!("{}", serde_json::to_string_pretty(&report)?);

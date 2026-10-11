@@ -12,10 +12,14 @@
   import FitOnChange from "./graph/FitOnChange.svelte";
   import AutoMiniMap from "./graph/AutoMiniMap.svelte";
   import Icon from "./Icon.svelte";
+  import SegmentedControl from "./ui/SegmentedControl.svelte";
+  import AgentFlowView from "./agents/flow/AgentFlowView.svelte";
+  import type { AgentFlowProps } from "../lib/agent-flow/model";
   import { FIT_PADDING } from "../lib/flow";
   import { agentColor, filterAgents, footprintGraph, layoutFootprint, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Positions } from "../lib/agents";
   import type { AgentsReport, PortEntry } from "../lib/types";
   import { prefGet, prefSet } from "../lib/prefs";
+  import { untrack } from "svelte";
 
   let {
     report,
@@ -31,6 +35,7 @@
     oneditor,
     onstop,
     onstopall,
+    ...flowProps
   }: {
     /** null while the first report loads. */
     report: AgentsReport | null;
@@ -47,7 +52,10 @@
     oneditor: (agentId: string, path: string) => void;
     onstop: (e: PortEntry, agentId: string) => void;
     onstopall: (agentId: string) => void;
-  } = $props();
+  } & AgentFlowProps = $props();
+
+  let section = $state<"overview" | "flow">("overview");
+  $effect(() => { if (section === "overview") untrack(() => flowProps.onflowmodechange?.("overview")); });
 
   let recent = $state(prefGet("agents.recent") !== "0");
   $effect(() => prefSet("agents.recent", recent ? "1" : "0"));
@@ -123,8 +131,13 @@
   const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 </script>
 
+<div class="agents-root" class:reduced>
+  <header class="agents-nav"><SegmentedControl value={section} options={[{ value: "overview", label: "Overview", icon: "bot" }, { value: "flow", label: "Flow", icon: "branch" }]} label="Agent view" onchange={(value) => section = value} /><span>{section === "overview" ? "Agents, resources and access" : "Connections and recorded calls"}</span></header>
+  {#if section === "flow"}
+    <div class="flow-body"><AgentFlowView {query} {dark} {reduced} {...flowProps} /></div>
+  {:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="agents" class:reduced {onkeydown}>
+<div class="agents" {onkeydown}>
   {#if !report}
     <div class="empty" aria-busy="true"><Icon name="bot" size={28} /><p>Looking for agents…</p></div>
   {:else if report.agents.length === 0}
@@ -209,9 +222,15 @@
     </div>
   {/if}
 </div>
+  {/if}
+</div>
 
 <style>
-  .agents { position: relative; height: 100%; min-height: 0; display: grid; grid-template-columns: minmax(300px, 340px) 1fr; background: var(--bg); container-type: inline-size; }
+  .agents-root { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
+  .agents-nav { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .agents-nav > span { color: var(--muted); font-size: var(--fs-caption); }
+  .flow-body { flex: 1; min-height: 0; }
+  .agents { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 340px) 1fr; background: var(--bg); container-type: inline-size; }
   .rail { min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg); }
   .rail-head { padding: 12px 14px 8px; display: grid; gap: 2px; }
   h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); font-weight: var(--fw-semibold); }

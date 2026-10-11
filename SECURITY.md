@@ -76,7 +76,13 @@ out of scope.
   64 messages. Oversized input is rejected before dispatch, and an oversized frame is drained
   completely so it cannot become a later valid request. HTTP probe paths reject request/header
   injection; captured command output is bounded to 4 MiB per stream with a deadline.
-- No telemetry is implemented. Holdmap's own network operations are localhost probes, SSH to
+- No product analytics are implemented. Optional agent recording accepts explicitly configured
+  local metadata through a token-authenticated loopback endpoint and retains at most 1,000 spans
+  in memory. Prompts, tool inputs/results and unrelated fields are discarded before retention;
+  identifiers are pseudonymized. Source labels are sanitized, not guaranteed secret-free.
+  Status/snapshot/errors exclude the token, and recording has no process-action authority.
+  See [agent flow bounds and privacy](docs/agent-flow.md#privacy-security-and-bounds).
+  Holdmap's other network operations are localhost probes, SSH to
   named hosts, and desktop update checks against GitHub Releases. Project commands and SSH
   configuration retain the user's own authority.
 - Releases use immutable action SHAs and scoped tokens, SHA-256 checksums and build provenance

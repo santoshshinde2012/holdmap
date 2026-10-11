@@ -7,6 +7,7 @@ import { once } from "node:events";
 import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
+import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -102,6 +103,31 @@ async function openGraph(page) {
   await expect(page.getByRole("button", { name: "Stop cluster shop", exact: true })).toBeVisible();
 }
 
+async function openAgentFlow(page, calls = false) {
+  await openAgents(page);
+  await page.getByRole("radio", { name: "Flow", exact: true }).click();
+  const flow = page.getByRole("region", { name: "Agent flow", exact: true });
+  await expect(flow.getByText("Example data", { exact: true })).toBeVisible();
+  if (calls) {
+    await flow.getByRole("radio", { name: "Calls", exact: true }).click();
+    const run = flow.locator("#agent-flow-run");
+    const trace = await run.locator("option").filter({ hasText: "Planning agent" }).getAttribute("value");
+    assert(trace, "Recorded trace fixture is available");
+    await run.selectOption(trace);
+    await expect(flow.locator(".flow-node")).toHaveCount(10);
+    await expect(flow.locator(".svelte-flow__edge")).toHaveCount(9);
+    await flow.getByRole("region", { name: "Recorded activity timeline" }).getByRole("button").filter({ hasText: "Tool execution" }).click();
+    await expect(flow.getByRole("region", { name: "Selected relationship details" })).toContainText("Failed");
+    await flow.getByRole("button", { name: "Fit all relationships in view", exact: true }).click();
+    await page.evaluate(() => {
+      for (const element of document.querySelectorAll(".workspace, .companion, main")) element.scrollTop = 0;
+      window.scrollTo(0, 0);
+    });
+  } else {
+    await expect(flow.getByRole("region", { name: "Flow participants", exact: true })).toBeVisible();
+  }
+}
+
 // Clip actual DOM bounds; retain all four services when presenting the Compose cluster.
 async function boundedClip(page, locator, { height, padding = 0 } = {}) {
   const box = await locator.boundingBox();
@@ -112,6 +138,11 @@ async function boundedClip(page, locator, { height, padding = 0 } = {}) {
 }
 
 const captures = [
+  ...["dark", "light"].flatMap((theme) => [
+    { name: `desktop-agent-connections-${theme}.png`, theme, prepare: (page) => openAgentFlow(page) },
+    { name: `desktop-agent-flow-${theme}.png`, theme, prepare: (page) => openAgentFlow(page, true) },
+    { name: `desktop-agent-flow-narrow-${theme}.png`, theme, viewport: { width: 820, height: 1200 }, prepare: (page) => openAgentFlow(page, true) },
+  ]),
   ...["dark", "light"].map((theme) => ({ name: `desktop-shutdown-schedule-${theme}.png`, theme, async prepare(page) {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("tab", { name: "Power", exact: true }).click();
@@ -286,6 +317,16 @@ try {
       const { size } = await stat(path);
       assert(size < 1024 * 1024, `${capture.name} exceeds the 1 MB screenshot budget`);
       console.log(`${capture.name}: ${(size / 1024).toFixed(0)} KB`);
+      const guideImage = {
+        "desktop-agent-connections-dark.png": "connections-dark.webp",
+        "desktop-agent-flow-dark.png": "calls-dark.webp",
+      }[capture.name];
+      if (guideImage) {
+        const sharp = createRequire(resolve(desktop, "../../site/package.json"))("sharp");
+        const directory = join(siteAssets, "agent-flow");
+        await mkdir(directory, { recursive: true });
+        await sharp(path).resize({ width: 1920, withoutEnlargement: true }).webp({ quality: 84 }).toFile(join(directory, guideImage));
+      }
     } finally {
       await context.close();
     }

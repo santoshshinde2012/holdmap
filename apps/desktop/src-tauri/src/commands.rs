@@ -131,6 +131,18 @@ pub async fn agents(app: AppHandle) -> Result<AgentsReport, String> {
     with_engine(&app, |e| e.agents()).await
 }
 
+/// Read-only process and socket relationships from one consistent local scan.
+#[tauri::command]
+pub async fn agent_flow(
+    app: AppHandle,
+) -> Result<holdmap_core::agents::flow::AgentFlowReport, String> {
+    with_engine(&app, |engine| {
+        let agents = engine.agents();
+        holdmap_core::agents::flow::flow(&engine.scan, &agents)
+    })
+    .await
+}
+
 /// Service graph from a scan no older than one second. Dev services (and peers) unless `all`.
 #[tauri::command]
 pub async fn topology(app: AppHandle, all: bool) -> Result<Graph, String> {
