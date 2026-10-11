@@ -101,9 +101,9 @@ has stopped.
 The copied configuration contains a private local bearer token. The collector binds to loopback,
 requires that token, rejects browser-origin requests and retains metadata in memory on this
 computer. **Stop recording** ends collection and keeps the current snapshot. **Clear records**
-removes it from memory; fully quitting Holdmap also discards it. Closing the desktop window
-keeps Holdmap and any active recording running in its tray or menu bar. Recording does not
-survive a full quit.
+removes it from memory; fully quitting Holdmap also discards it. When the tray or menu bar is
+available, closing the desktop window keeps Holdmap and any active recording running there.
+Recording does not survive a full quit.
 
 The default setup uses Codex telemetry logs and Claude Code telemetry traces; Claude Code
 tracing is a beta capability. Standard OpenTelemetry JSON traces and explicit hook or MCP
