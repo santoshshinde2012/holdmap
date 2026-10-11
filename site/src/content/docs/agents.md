@@ -94,6 +94,10 @@ build current source to use it. These captures use clearly labelled browser exam
    configuration, and restart that agent. Settings are never edited automatically.
 3. Run a task in the configured agent, then inspect the received metadata in Calls.
 
+Recording status is checked before controls become available. If its status cannot be read,
+the view says so; use **Refresh** to check again. An unavailable status does not mean recording
+has stopped.
+
 The copied configuration contains a private local bearer token. The collector binds to loopback,
 requires that token, rejects browser-origin requests and retains metadata in memory on this
 computer. **Stop recording** ends collection and keeps the current snapshot. **Clear records**

@@ -25,6 +25,12 @@ by [release-please](https://github.com/googleapis/release-please) from
   Delayed actions retain reviewed identities, reject changed targets and require fresh review
   after missed deadlines or significant clock changes. Browser schedules are simulations.
 
+### Changed
+
+- Agent recording separates hook/OTLP parsing, shared metadata and credential policy, typed
+  HTTP routing, MCP delivery and UI controls. Native commands share authorized session access;
+  unknown recording status stays explicit until a successful refresh.
+
 ### Security
 
 - CLI and TUI agent service stops share retained, protocol-specific reviewed plans. All targets

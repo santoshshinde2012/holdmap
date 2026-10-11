@@ -3,13 +3,16 @@
 //! This client accepts only an exact IPv4 loopback endpoint. It does not use DNS, proxies,
 //! redirects or TLS and never includes response bodies or credentials in errors.
 
-use crate::{ActivitySnapshot, ActivitySpan, CollectorCredentials};
+use crate::{
+    credentials::{validate_credentials, CredentialError},
+    protocol::Route,
+    ActivitySnapshot, ActivitySpan, CollectorCredentials, COLLECTOR_LIMITS,
+};
 use std::io::{Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::net::{SocketAddr, TcpStream};
 use std::time::{Duration, Instant};
 
 const TIMEOUT: Duration = Duration::from_millis(750);
-const MAX_REQUEST: usize = 256 * 1024;
 const MAX_RESPONSE: usize = 2 * 1024 * 1024;
 const MAX_HEADER: usize = 8192;
 
@@ -35,21 +38,12 @@ pub struct LocalClient {
 impl LocalClient {
     /// Check an exact `http://127.0.0.1:PORT` endpoint and a 32-byte hexadecimal token.
     pub fn new(endpoint: &str, token: &str) -> Result<Self, ClientError> {
-        let port = endpoint
-            .strip_prefix("http://127.0.0.1:")
-            .filter(|value| !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()))
-            .and_then(|value| value.parse::<u16>().ok())
-            .filter(|port| *port != 0)
-            .ok_or(ClientError("Use the active local recording endpoint."))?;
-        if token.len() != 64
-            || !token
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        {
-            return Err(ClientError("Use the active local recording token."));
-        }
+        let address = validate_credentials(endpoint, token).map_err(|error| match error {
+            CredentialError::Endpoint => ClientError("Use the active local recording endpoint."),
+            CredentialError::Token => ClientError("Use the active local recording token."),
+        })?;
         Ok(Self {
-            address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+            address,
             token: token.to_owned(),
         })
     }
@@ -63,7 +57,7 @@ impl LocalClient {
     pub fn record(&self, spans: &[ActivitySpan]) -> Result<(), ClientError> {
         let body = serde_json::to_vec(spans)
             .map_err(|_| ClientError("Couldn't encode activity metadata."))?;
-        let response = self.post("/v1/activity", &body)?;
+        let response = self.post(Route::Activity, &body)?;
         let result: serde_json::Value = serde_json::from_slice(&response)
             .map_err(|_| ClientError("The recording acknowledgement was invalid."))?;
         if result["accepted"].as_u64() != Some(spans.len() as u64)
@@ -78,18 +72,19 @@ impl LocalClient {
 
     /// Read the current bounded metadata snapshot; credentials are never in that snapshot.
     pub fn snapshot(&self) -> Result<ActivitySnapshot, ClientError> {
-        let body = self.post("/v1/snapshot", b"{}")?;
+        let body = self.post(Route::Snapshot, b"{}")?;
         serde_json::from_slice(&body)
             .map_err(|_| ClientError("The recording snapshot was invalid."))
     }
 
-    fn post(&self, path: &'static str, body: &[u8]) -> Result<Vec<u8>, ClientError> {
-        if body.len() > MAX_REQUEST {
+    fn post(&self, route: Route, body: &[u8]) -> Result<Vec<u8>, ClientError> {
+        if body.len() > COLLECTOR_LIMITS.max_body_bytes {
             return Err(ClientError("Activity metadata exceeded the request limit."));
         }
         let started = Instant::now();
         let mut stream = TcpStream::connect_timeout(&self.address, TIMEOUT)
             .map_err(|_| ClientError("The local recorder is unavailable."))?;
+        let path = route.path();
         let header = format!(
             "POST {path} HTTP/1.1\r\nHost: {}\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
             self.address,

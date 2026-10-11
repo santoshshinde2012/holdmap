@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { onDestroy, untrack } from "svelte";
+  import { untrack } from "svelte";
   import SegmentedControl from "../../ui/SegmentedControl.svelte";
   import Icon from "../../Icon.svelte";
   import FlowCanvas from "./FlowCanvas.svelte";
   import FlowInspector from "./FlowInspector.svelte";
   import ActivityTimeline from "./ActivityTimeline.svelte";
+  import RecordingControls from "./RecordingControls.svelte";
   import { activityRuns, callGraph, graphWindow, observedGraph, nodeDescription } from "../../../lib/agent-flow/build";
-  import { copyGeneratedText } from "../../../lib/generated-clipboard";
   import type { AgentFlowProps } from "../../../lib/agent-flow/model";
 
   let { query = "", dark, reduced, flowReport = null, activity = null, recording = null, flowLoading = false, activityLoading = false,
@@ -17,12 +17,7 @@
   let mode = $state<"connections" | "calls">("connections");
   let chosen = $state<string | null>(null);
   let runId = $state<string | null>(null);
-  let setupOpen = $state(false);
-  let busy = $state(false);
-  let notice = $state("");
-  let clearArmed = $state(false);
-  let alive = true;
-  onDestroy(() => { alive = false; });
+  let recordingControls = $state<{ openSetup(): void; setupVisible(): boolean }>();
 
   const runs = $derived(activityRuns(activity?.spans ?? [], query));
   const run = $derived(runs.find((r) => r.id === runId) ?? null);
@@ -37,24 +32,7 @@
   $effect(() => { if (!runs.some((r) => r.id === runId)) runId = runs[0]?.id ?? null; });
   $effect(() => { const next = mode; untrack(() => onflowmodechange?.(next)); });
 
-  function change(next: "connections" | "calls") { mode = next; chosen = null; notice = ""; clearArmed = false; }
-  async function action(fn: (() => Promise<void>) | undefined, success: string) {
-    if (!fn || busy) return;
-    busy = true; notice = "";
-    try { await fn(); if (alive) notice = success; }
-    catch { if (alive) notice = "That action could not be completed. Try again."; }
-    finally { if (alive) busy = false; }
-  }
-  async function copySetup(provider: "codex" | "claude") {
-    if (!onactivitysetup || busy) return;
-    busy = true; notice = "";
-    try {
-      // Configuration contains a local bearer token; keep it transient and only copy on request.
-      await copyGeneratedText(() => onactivitysetup!(provider), () => alive);
-      if (alive) notice = `${provider === "codex" ? "Codex" : "Claude Code"} recording configuration copied. Merge it into your existing settings and restart that agent.`;
-    } catch { if (alive) notice = "Configuration could not be copied. Check clipboard permissions and try again."; }
-    finally { if (alive) busy = false; }
-  }
+  function change(next: "connections" | "calls") { mode = next; chosen = null; }
 </script>
 
 <section class="flow-view" class:reduced aria-label="Agent flow">
@@ -74,31 +52,10 @@
   </div>
   {#if error}<div class="load-error" role="status">Updates unavailable. {graph.nodes.length ? "Showing the last available data." : "Refresh to try again."}</div>{/if}
   {#if mode === "calls"}
-    <div class="recording-bar">
-      <span class="record-state" class:active={recording?.active}><i aria-hidden="true"></i>{demo ? "Example recording" : recording?.active ? "Recording on this computer" : "Recording off"}</span>
-      {#if recording?.active}
-        <button type="button" disabled={busy || !onstoprecording} onclick={() => action(onstoprecording, "Recording stopped. Captured metadata remains available.")}>Stop recording</button>
-      {:else}
-        <button type="button" disabled={busy || !onstartrecording || demo} onclick={() => action(onstartrecording, "Recording started. Configure an integration to receive activity.")}>Start recording</button>
-      {/if}
-      <button type="button" aria-expanded={setupOpen} onclick={() => setupOpen = !setupOpen}><Icon name="sliders" size={12} />Setup</button>
-      {#if (activity?.spans.length ?? 0) > 0 && onclearactivity && !demo}
-        <button type="button" class="clear" disabled={busy} onclick={() => clearArmed = !clearArmed}>Clear records</button>
-      {/if}
-      {#if (activity?.dropped ?? 0) > 0}<span class="dropped">{activity?.dropped} events dropped</span>{/if}
-    </div>
-    {#if clearArmed}<div class="clear-review"><span>Remove captured activity from memory? Recording stays as it is.</span><button type="button" disabled={busy} onclick={() => { clearArmed = false; void action(onclearactivity, "Captured activity cleared."); }}>Clear captured activity</button><button type="button" onclick={() => clearArmed = false}>Cancel</button></div>{/if}
-    {#if setupOpen}
-      <section class="setup" aria-label="Recording setup">
-        <h3>Connect your agent</h3>
-        <p>Start recording, copy settings for one provider, merge them with your existing configuration, then restart the agent. Only future reported activity appears. Choose one integration per provider to avoid duplicate counts.</p>
-        {#if demo}<p>This preview uses example metadata. Recording is available in the local desktop app.</p>
-        {:else}<div class="setup-actions"><button type="button" disabled={busy || !recording?.active || !onactivitysetup} onclick={() => copySetup("codex")}><Icon name="copy" size={12} />Copy Codex settings</button><button type="button" disabled={busy || !recording?.active || !onactivitysetup} onclick={() => copySetup("claude")}><Icon name="copy" size={12} />Copy Claude Code settings</button></div>{/if}
-        <p class="setup-note">Configuration includes a private local token. Settings are never changed automatically. Claude Code tracing is a beta capability. Completed telemetry spans appear when exported; hooks may report a request without a completion.</p>
-      </section>
-    {/if}
+    <RecordingControls bind:this={recordingControls} {recording} {demo} statusLoading={activityLoading} statusError={Boolean(activityError)}
+      records={activity?.spans.length ?? 0} dropped={activity?.dropped ?? 0}
+      {onstartrecording} {onstoprecording} {onclearactivity} {onactivitysetup} />
   {/if}
-  {#if notice}<p class="notice" role="status">{notice}</p>{/if}
   {#if mode === "calls" && runs.length}
     <div class="run-picker"><label for="agent-flow-run">{run?.kind === "session" ? "Session" : "Run"}</label><select id="agent-flow-run" value={runId ?? ""} onchange={(e) => { runId = e.currentTarget.value; chosen = null; }}>{#each runs as r (r.id)}<option value={r.id}>{runName(r)}</option>{/each}</select>
       {#if run?.kind === "session"}<span>Session grouping · no parent correlation supplied</span>{/if}
@@ -123,7 +80,7 @@
       <Icon name={mode === "calls" ? "activity" : "link"} size={28} />
       <h3>{loading ? "Loading flow…" : query.trim() ? "No flow matches this search" : mode === "calls" ? "No recorded activity yet" : "No observed connections yet"}</h3>
       <p>{query.trim() ? "Search by agent or tool name, process ID, address or port. Clear your search to see all available data." : mode === "calls" ? "Start recording and connect an integration to see reported calls. Running agents alone do not provide call telemetry." : "Start an agent or tool. Its observed process tree, listeners and live socket relationships appear after a scan."}</p>
-      {#if mode === "calls" && !setupOpen}<button type="button" onclick={() => setupOpen = true}>Set up recording</button>{/if}
+      {#if mode === "calls" && !recordingControls?.setupVisible()}<button type="button" onclick={() => recordingControls?.openSetup()}>Set up recording</button>{/if}
     </div>
   {/if}
   {#if limits.length || (flowReport && mode === "connections" && (flowReport.omitted_nodes || flowReport.omitted_edges))}
@@ -133,23 +90,15 @@
 
 <style>
   .flow-view { min-height: 0; height: 100%; display: flex; flex-direction: column; color: var(--text); container-type: inline-size; background: var(--bg); }
-  .toolbar, .recording-bar, .run-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .toolbar, .run-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
   .toolbar { justify-content: space-between; }
   .toolbar-actions { display: flex; align-items: center; gap: 6px; }
   button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 28px; padding: 4px 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; color: var(--text-2); cursor: pointer; font: inherit; font-size: var(--fs-caption); }
   button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-2); } button:disabled { opacity: .5; cursor: not-allowed; } button:focus-visible, select:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
   .source { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
   .source strong { font-size: var(--fs-body-sm); } .source p { margin: 4px 0 0; max-width: 850px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-body); }
-  .totals, .paused, .dropped { font-size: var(--fs-caption); color: var(--muted); white-space: nowrap; } .dropped { color: var(--warn); }
-  .record-state { display: inline-flex; align-items: center; gap: 6px; margin-right: 3px; font-size: var(--fs-caption); color: var(--muted); }
-  .record-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); } .record-state.active i { background: var(--tone-green); } .record-state.active { color: var(--text-2); }
-  .clear { margin-left: auto; }
-  .setup, .clear-review { padding: 12px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
-  .setup h3 { font-size: var(--fs-body-sm); margin: 0; } .setup p { max-width: 900px; margin: 5px 0 10px; color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-body); }
-  .setup p.setup-note { margin-bottom: 0; color: var(--muted); } .setup-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-  .clear-review { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-caption); } .clear-review span { flex: 1; }
-  .load-error, .notice { margin: 0; padding: 8px 14px; background: var(--surface-2); color: var(--warn); border-bottom: 1px solid var(--border); font-size: var(--fs-caption); }
-  .notice { color: var(--text-2); }
+  .totals, .paused { font-size: var(--fs-caption); color: var(--muted); white-space: nowrap; }
+  .load-error { margin: 0; padding: 8px 14px; background: var(--surface-2); color: var(--warn); border-bottom: 1px solid var(--border); font-size: var(--fs-caption); }
   .window-note { margin: 0; padding: 8px 14px; color: var(--muted); background: var(--surface); border-bottom: 1px solid var(--border); font-size: var(--fs-caption); }
   .run-picker label { font-size: var(--fs-caption); font-weight: var(--fw-semibold); } .run-picker select { max-width: min(650px, 80%); min-width: 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); font: inherit; font-size: var(--fs-caption); } .run-picker span { color: var(--muted); font-size: var(--fs-caption); }
   .workspace { flex: 1; min-height: 180px; display: grid; grid-template-columns: minmax(0, 1fr) 330px; }

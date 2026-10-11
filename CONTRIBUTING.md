@@ -175,6 +175,11 @@ capture did not stop an agent or service. Recent-project history is excluded fro
   Preserve fail-open agent hooks/MCP, explicit opt-in, loopback authentication, absolute I/O
   deadlines and metadata-only snapshots. Test adapters against provider wire fixtures.
   Keep evidence honest: sockets and chronological events never establish a tool call or handoff.
+- Source parsing belongs in the activity hook/OTLP adapters; metadata invariants and
+  sanitization remain shared. Add routes through the typed route contract, and reuse the
+  credential policy and collector limits in clients and setup generation. Native recording
+  commands use the shared session boundary; frontend recording actions stay separate from
+  graph projection and selection. Prefer these concrete boundaries over speculative interfaces.
 
 ## Naming conventions
 

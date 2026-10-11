@@ -641,6 +641,63 @@ fn real_loopback_client_roundtrip_and_credentials_never_in_projections() {
 }
 
 #[test]
+fn http_hook_routes_preserve_provider_specific_lifecycle_rules() {
+    let collector = ActivityCollector::new();
+    let credentials = collector.start().unwrap();
+    let start = hook("PreToolUse", "fixture-call").to_string();
+    for route in [protocol::Route::CodexHook, protocol::Route::ClaudeHook] {
+        let (code, body, _) = exchange(
+            &credentials,
+            &request(&credentials, "POST", route.path(), "", &start),
+        );
+        assert_eq!(code, 200);
+        assert_eq!(body, json!({"accepted":1,"dropped":0}));
+    }
+    let failure = hook("PostToolUseFailure", "fixture-call").to_string();
+    let (code, body, _) = exchange(
+        &credentials,
+        &request(
+            &credentials,
+            "POST",
+            protocol::Route::CodexHook.path(),
+            "",
+            &failure,
+        ),
+    );
+    assert_eq!(code, 400);
+    assert_eq!(
+        body,
+        json!({"code":3,"message":"Invalid activity metadata"})
+    );
+    assert_eq!(
+        exchange(
+            &credentials,
+            &request(
+                &credentials,
+                "POST",
+                protocol::Route::ClaudeHook.path(),
+                "",
+                &failure,
+            ),
+        )
+        .0,
+        200
+    );
+    let snapshot = collector.snapshot();
+    assert_eq!(snapshot.received, 3);
+    assert_eq!(snapshot.spans.len(), 2);
+    assert_eq!(snapshot.spans[0].provider, Provider::Codex);
+    assert_eq!(snapshot.spans[0].status, ActivityStatus::Requested);
+    assert_eq!(snapshot.spans[1].provider, Provider::Claude);
+    assert_eq!(snapshot.spans[1].status, ActivityStatus::Error);
+    assert!(snapshot
+        .spans
+        .iter()
+        .all(|span| span.source == Source::Hook));
+    assert_ne!(snapshot.spans[0].id, snapshot.spans[1].id);
+}
+
+#[test]
 fn http_rejects_unauthorized_browser_remote_and_ambiguous_requests() {
     let collector = ActivityCollector::new();
     let credentials = collector.start().unwrap();
