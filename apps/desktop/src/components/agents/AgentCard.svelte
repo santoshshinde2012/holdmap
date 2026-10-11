@@ -18,6 +18,7 @@
     onentry,
     onreveal,
     oneditor,
+    onfolder,
     onstop,
     onstopall,
     onnavigate,
@@ -32,8 +33,10 @@
     color: string;
     onselect: () => void;
     onentry: (e: PortEntry) => void;
-    onreveal: (path: string) => void;
-    oneditor: (path: string) => void;
+    onreveal: (path: string) => void | Promise<void | boolean>;
+    oneditor: (path: string) => void | Promise<void | boolean>;
+    /** Opens the shared chooser; optional for read-only card consumers. */
+    onfolder?: (path: string) => void;
     onstop: (e: PortEntry) => void;
     onstopall: () => void;
     onnavigate?: (id: string) => void;
@@ -41,6 +44,16 @@
   } = $props();
 
   let el = $state<HTMLElement | undefined>();
+  let folderBusy = $state(false);
+  let folderError = $state<string | null>(null);
+  async function quickFolder(kind: "reveal" | "editor", path: string) {
+    if (folderBusy) return;
+    folderBusy = true;
+    folderError = null;
+    try { await (kind === "reveal" ? onreveal : oneditor)(path); }
+    catch (e) { folderError = String(e); }
+    finally { folderBusy = false; }
+  }
   // Keyboard selection (↑/↓) may land on a card scrolled out of the rail.
   $effect(() => { if (selected) el?.scrollIntoView?.({ block: "nearest" }); });
   const head = $derived(accessHeadline(agent));
@@ -105,22 +118,23 @@
         <ul class="rows">
           {#each agent.folders as f}
             <li class="folder">
-              <div class="row-btn static">
+              <button type="button" class="row-btn" aria-label="Folder actions for {f.path}" disabled={!onfolder || folderBusy} onclick={() => onfolder?.(f.path)}>
                 <span class="ic"><Icon name="folder" size={13} /></span>
                 <span class="row-main">
                   <span class="row-label">{f.label}{#if f.evidence !== "observed"}<em> · {EVIDENCE_LABEL[f.evidence]}</em>{/if}</span>
                   <span class="row-sub">{tildify(f.path)} · {folderSourceLabel(f.source)}{f.project?.git_branch ? ` · ⎇ ${f.project.git_branch}` : ""}{f.privacy_area ? ` · ${f.privacy_area}` : ""}{f.pids.length ? ` · ${f.pids.length} proc` : ""}</span>
                   {#if f.note}<span class="row-note">{f.note}</span>{/if}
                 </span>
-              </div>
+              </button>
               <div class="acts" role="group" aria-label="Open {f.label}">
-                <button type="button" class="act" title="Reveal in file manager" onclick={() => onreveal(f.path)}><Icon name="folder" size={12} />Reveal</button>
-                <button type="button" class="act" title="Open in editor" onclick={() => oneditor(f.path)}><Icon name="code" size={12} />Editor</button>
+                <button type="button" class="act" title="Open in file manager" disabled={folderBusy} onclick={() => quickFolder("reveal", f.path)}><Icon name="folder" size={12} />Reveal</button>
+                <button type="button" class="act" title="Open in editor" disabled={folderBusy} onclick={() => quickFolder("editor", f.path)}><Icon name="code" size={12} />Editor</button>
               </div>
             </li>
           {/each}
           {#if agent.more_folders}<li class="more">+{agent.more_folders} folders not listed</li>{/if}
         </ul>
+        {#if folderError}<p class="folder-error" role="alert">{folderError}</p>{/if}
       {/if}
 
       {#if agent.ports.length}
@@ -238,10 +252,14 @@
   .row-btn { width: 100%; display: flex; gap: 8px; align-items: flex-start; padding: 4px 6px; margin: 0 -6px; border: 0; border-radius: 8px; background: transparent; text-align: left; color: var(--text); font: inherit; }
   button.row-btn { cursor: pointer; }
   button.row-btn:hover { background: var(--surface-2); }
+  button.row-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  button.row-btn:disabled { cursor: default; }
   .row-btn.static { cursor: default; }
   .acts { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 0 2px 28px; }
   .act { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); cursor: pointer; }
   .act:hover { color: var(--text); border-color: var(--border-strong, var(--border)); }
+  .act:disabled { opacity: 0.5; cursor: wait; }
+  .folder-error { margin: 0; color: var(--danger); font-size: var(--fs-caption); line-height: var(--lh-caption); overflow-wrap: anywhere; }
   .act.stop, .act.stop-all { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 28%, var(--border)); }
   .act.stop:hover, .act.stop-all:hover { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); }
   .port-row { grid-template-columns: 1fr auto; align-items: start; gap: 4px; }

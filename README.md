@@ -132,7 +132,7 @@ Every release has SHA-256 checksums and build provenance (`gh attestation verify
 | `HOLDMAP_TRACE` | Diagnostics topics, e.g. `scan` or `all` |
 | `HOLDMAP_ACTIVITY_ENDPOINT` | Active local collector URL for CLI hooks, snapshots and MCP recording |
 | `HOLDMAP_ACTIVITY_TOKEN` | Temporary bearer token printed by `activity serve`; keep private |
-| `HOLDMAP_EDITOR` | Editor binary for “open folder” (else Cursor / VS Code / Zed…) |
+| `HOLDMAP_EDITOR` | Editor executable for folder actions; when unset, legacy `PORTWISE_EDITOR`, then an installed editor |
 
 ## Quick start
 
@@ -310,6 +310,29 @@ its URL, a `curl` or the kill command. Version 0.4.0 also adds agent search, exp
 details, inferred MCP nodes and explicit omission counts. Native reports refresh independently
 of the window's poll; the browser [live demo](https://santoshshinde2012.github.io/holdmap/#demo)
 uses the same UI with sample data.
+
+**Folder actions in current source / Unreleased.** Click a folder on the Agents map or its
+name/path in a card; **Enter** or **Space** activates a focused folder. The shared chooser shows
+the full path and offers **Open in Finder** (macOS), **Open in Explorer** (Windows) or
+**Open in file manager**, **Open in editor**, and **Copy path**. **Esc** closes it and returns
+focus to the folder. Clipboard copying preserves the original path.
+
+Editor opening uses `HOLDMAP_EDITOR`, or legacy `PORTWISE_EDITOR` when unset, then a known
+installed editor. Set an executable name or absolute path, without shell arguments. A missing
+explicitly configured editor shows an error instead of opening another app. Native actions
+recheck the chosen agent and exact folder against a fresh scan; stale folders remain copyable
+but cannot be opened. Recent folders remain account history, not proof of current work.
+Browser file-manager/editor actions are labelled simulations. Version 0.4.0 downloads predate
+the chooser; build current source to use it.
+
+<details>
+<summary>Current folder actions with sample data</summary>
+
+![Folder actions show the full path, file-manager, editor and clipboard choices in dark theme](docs/screenshots/desktop-folder-actions-dark.png)
+![Folder actions with clear browser simulation guidance in light theme](docs/screenshots/desktop-folder-actions-light.png)
+![Folder actions retain readable paths and controls in a narrow window](docs/screenshots/desktop-folder-actions-narrow-light.png)
+
+</details>
 
 **First open.** The app isn't notarised yet, so the OS asks once:
 

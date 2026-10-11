@@ -5,10 +5,22 @@ import {
   layoutFootprint, monogram, neighbours, parentName, processRows, resourcesLine, shortLabel, signature, sizeOf, step, stoppableEntries, stoppablePorts, tildePath, toFootFlow,
 } from "./agents";
 import type { AgentsReport } from "./types";
+import { preferredFolderOwner, resolveFolderTarget } from "./folders";
 
 const report = () => mockAgents();
 
 describe("footprint graph", () => {
+  it("opens a filtered shared folder for a visible owner even when a hidden owner is selected", () => {
+    const r = report(), [claude, cursor] = r.agents;
+    const path = "/Users/dev/code/shop-web";
+    const shared = footprintGraph(r).nodes.find((n) => n.path === path)!;
+    expect(resolveFolderTarget(r, path, preferredFolderOwner(shared.owners, cursor.id))?.agentId).toBe(cursor.id);
+    const filtered = footprintGraph({ ...r, agents: filterAgents(r.agents, "claude") }).nodes.find((n) => n.path === path)!;
+    expect(filtered.owners).toEqual([claude.id]);
+    expect(resolveFolderTarget(r, path, preferredFolderOwner(filtered.owners, cursor.id))).toEqual({ agentId: claude.id, path });
+    expect(preferredFolderOwner([], cursor.id)).toBeNull();
+  });
+
   it("has one node per agent, folder, port, service and remote host, shared nodes once", () => {
     const g = footprintGraph(report());
     const kinds = (k: string) => g.nodes.filter((n) => n.kind === k).map((n) => n.label);

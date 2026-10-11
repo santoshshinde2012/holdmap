@@ -124,6 +124,34 @@ try {
     await search.press("Escape");
     await measureViewport("after-agents");
   });
+  await check("Agent folders offer keyboard-accessible choices with honest browser previews", async () => {
+    const folder = frame.getByRole("button", { name: /^Folder shop-web,.*\. Opens folder actions$/ });
+    const mapNode = folder.locator("xpath=ancestor::div[contains(@class, 'svelte-flow__node')][1]");
+    const dialog = frame.getByRole("dialog", { name: "Folder actions", exact: true });
+    await mapNode.focus();
+    await mapNode.press("Enter");
+    await dialog.getByText("/Users/dev/code/shop-web", { exact: true }).waitFor();
+    await dialog.getByText(/Browser demo: opening folders and editors is simulated/).waitFor();
+    if (!(await dialog.getByRole("button", { name: "Close", exact: true }).evaluate((button) => button === document.activeElement))) throw new Error("Folder choices must start focused on Close");
+    if (await dialog.evaluate(() => "__TAURI_INTERNALS__" in window)) throw new Error("Public folder choices must not have a native OS bridge");
+    await dialog.press("Escape");
+    await dialog.waitFor({ state: "detached" });
+    if (!(await mapNode.evaluate((node) => node === document.activeElement))) throw new Error("Closing folder choices must restore map keyboard focus");
+    await folder.click();
+    await dialog.getByRole("button", { name: "Open in editor", exact: true }).click();
+    await frame.getByText("Editor preview", { exact: true }).waitFor();
+    await dialog.waitFor({ state: "detached" });
+    await folder.click();
+    await dialog.getByRole("button", { name: "Open in file manager", exact: true }).click();
+    await frame.getByText("File manager preview", { exact: true }).waitFor();
+    await dialog.waitFor({ state: "detached" });
+    await try_("Inspect :3000");
+    await frame.locator('[id^="row-tcp:3000:"][aria-selected="true"]').waitFor();
+    await frame.locator('[id^="row-tcp:5173:"]').waitFor();
+    await try_("Agents");
+    await frame.getByRole("article", { name: "Cursor", exact: true }).waitFor();
+    await measureViewport("after-folder-choices");
+  });
   await check("Agent Flow separates example connections from recorded calls without OS actions", async () => {
     await frame.getByLabel("Search agents", { exact: true }).fill("");
     await frame.getByRole("radio", { name: "Flow", exact: true }).click();

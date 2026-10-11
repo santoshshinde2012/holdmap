@@ -97,6 +97,15 @@ async function openAgents(page) {
   await expect(page.getByRole("button", { name: /^MCP server Filesystem MCP,/ })).toBeVisible();
 }
 
+async function openFolderActions(page) {
+  await openAgents(page);
+  await page.getByRole("button", { name: /^Folder shop-web,.*\. Opens folder actions$/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Folder actions", exact: true });
+  await expect(dialog).toContainText("/Users/dev/code/shop-web");
+  await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+  await expect(dialog).toContainText("opening folders and editors is simulated");
+}
+
 async function openGraph(page) {
   await page.getByRole("radio", { name: /^Graph/ }).click();
   await expect(page.getByRole("button", { name: "shop-web on ports 3000", exact: true })).toBeVisible();
@@ -138,6 +147,8 @@ async function boundedClip(page, locator, { height, padding = 0 } = {}) {
 }
 
 const captures = [
+  ...["dark", "light"].map((theme) => ({ name: `desktop-folder-actions-${theme}.png`, theme, prepare: openFolderActions })),
+  { name: "desktop-folder-actions-narrow-light.png", theme: "light", viewport: { width: 560, height: 820 }, prepare: openFolderActions },
   ...["dark", "light"].flatMap((theme) => [
     { name: `desktop-agent-connections-${theme}.png`, theme, prepare: (page) => openAgentFlow(page) },
     { name: `desktop-agent-flow-${theme}.png`, theme, prepare: (page) => openAgentFlow(page, true) },

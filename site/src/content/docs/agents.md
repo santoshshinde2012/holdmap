@@ -65,6 +65,28 @@ These current-source terminal captures use isolated local fixtures:
 
 ![An 80-column terminal keeps agent identity visible while tool details scroll](../../../../docs/screenshots/tui-agents-narrow-dark.png)
 
+## Open an agent folder
+
+In current source, click a folder on the map or its name/path in an expanded card.
+**Enter** or **Space** activates a focused folder. **Folder actions** shows the full path and
+offers **Open in Finder** on macOS, **Open in Explorer** on Windows, or **Open in file manager**,
+plus **Open in editor** and **Copy path**. **Esc** or **Close** returns focus to the folder.
+Copying uses the original path, even when a card shortens its display.
+
+The editor preference is `HOLDMAP_EDITOR`; legacy `PORTWISE_EDITOR` is accepted when it is
+unset. Use an installed executable name or absolute path, without shell arguments. Without a
+preference, Holdmap finds a known installed editor. A missing explicit preference shows an
+error instead of silently opening another app.
+
+The chosen agent and exact path are rechecked against the current report and a fresh native
+scan before opening. If that folder disappears, open buttons become unavailable while the
+path remains copyable. Recent folders describe account history; they do not prove that the
+agent is currently working there. Browser file-manager/editor actions are labelled simulations;
+copying uses the displayed sample path.
+
+This chooser is **current source / Unreleased**. Version 0.4.0 downloads predate it;
+build current source to use it. Existing card **Reveal** and **Editor** shortcuts remain available.
+
 ## Desktop Flow: connections and calls
 
 In **Agents**, choose **Flow**. The two data sources answer different questions:

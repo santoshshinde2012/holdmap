@@ -11,7 +11,7 @@
   const ICON = { folder: "folder", tool: "plug", port: "server", service: "plug", remote: "globe", more: "more", omitted: "more", agent: "bot", header: "" } as const;
   const WHAT = { folder: "Folder", tool: "MCP server", port: "Port", service: "Service", remote: "Remote host", more: "More remote links", omitted: "Unlisted links", agent: "Agent", header: "" } as const;
   const opens = $derived(!!n.entryId);
-  const interactive = $derived(opens || n.kind === "tool");
+  const interactive = $derived(opens || n.kind === "tool" || n.kind === "folder");
   const title = $derived(n.path ?? n.warning ?? undefined);
 </script>
 
@@ -26,7 +26,7 @@
   class:opens={interactive}
   style="--agent: {data.color}"
   role={interactive ? "button" : "group"}
-  aria-label="{WHAT[n.kind]} {n.label}, {n.sub}{n.evidence !== 'observed' ? `, ${EVIDENCE_LABEL[n.evidence]}` : ''}{n.warning ? `, ${n.warning}` : ''}{opens ? '. Opens details' : n.kind === 'tool' ? '. Opens its agent card' : ''}"
+  aria-label="{WHAT[n.kind]} {n.label}, {n.sub}{n.evidence !== 'observed' ? `, ${EVIDENCE_LABEL[n.evidence]}` : ''}{n.warning ? `, ${n.warning}` : ''}{opens ? '. Opens details' : n.kind === 'tool' ? '. Opens its agent card' : n.kind === 'folder' ? '. Opens folder actions' : ''}"
   {title}
 >
   <Handle type="target" position={Position.Left} isConnectable={false} />

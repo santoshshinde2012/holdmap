@@ -391,7 +391,7 @@ pub fn open_port(port: u16) -> Result<(), String> {
     holdmap_core::util::open_url(&format!("http://localhost:{port}")).map_err(|e| e.to_string())
 }
 
-/// Show the project folder of the service on `port` in Finder / Explorer.
+/// Open the project folder of the service on `port` in Finder / Explorer.
 #[tauri::command]
 pub async fn reveal_project(app: AppHandle, port: u16) -> Result<(), String> {
     blocking(move || {
@@ -437,7 +437,7 @@ fn agent_folder(
     Ok(want)
 }
 
-/// Show an agent's folder in Finder / Explorer (path must appear on that agent).
+/// Open an agent's folder in Finder / Explorer (path must appear on that agent).
 #[tauri::command]
 pub async fn reveal_agent_folder(
     app: AppHandle,

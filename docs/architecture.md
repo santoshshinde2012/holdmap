@@ -1010,6 +1010,16 @@ escaped text, including inline command spans. The browser demo has no native IPC
 
 ### Desktop UI
 
+- **Folder actions (current source).** Map and card paths share `FolderActions.svelte` rather
+  than separate opener flows. `lib/folders.ts` selects an exact-path owner once and revalidates
+  that same target during polling; the UI never silently switches agents. The dialog handles
+  choices, clipboard feedback and focus through the shared UI kit, while injected callbacks
+  keep native opening in `App.svelte`/`api.ts`. Native commands force a fresh scan before
+  validating owner/path membership, then call the core's directory-validated openers.
+  The configured editor is an executable, never a shell command; a missing explicit
+  `HOLDMAP_EDITOR` or legacy `PORTWISE_EDITOR` fails without choosing a substitute.
+  Browser callbacks report simulations. This separates presentation, ownership policy and OS
+  effects into small contracts that fixture providers can exercise without opening real apps.
 - **UI kit.** `apps/desktop/src/components/ui/` provides shared controls (fields, selects,
   switches, buttons, dialogs and tabs); feature components compose them and use the shared
   design tokens for local controls. Open the app with

@@ -27,5 +27,7 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts"],
     exclude: [...configDefaults.exclude, "e2e/**"],
+    // Bound concurrent jsdom/Svelte transforms so CPU contention cannot starve test timers.
+    maxWorkers: 4,
   },
 });

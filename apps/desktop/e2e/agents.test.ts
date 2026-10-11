@@ -76,7 +76,7 @@ test("agent folder actions and stop-all planning preserve the current listeners"
   await agentHeading(app, "Cursor").click();
   const cursor = agentCard(app, "Cursor");
   await cursor.getByRole("group", { name: "Open shop-web", exact: true }).getByRole("button", { name: "Editor", exact: true }).click();
-  await expect(app.getByText("Opened in VS Code", { exact: true })).toBeVisible();
+  await expect(app.getByText("Editor preview", { exact: true })).toBeVisible();
   await cursor.getByRole("button", { name: "Stop all (2)", exact: true }).click();
   const plan = app.getByRole("alertdialog");
   await expect(plan.getByRole("heading", { name: "Stop Cursor's 2 ports?", exact: true })).toBeVisible();
@@ -92,6 +92,79 @@ test("agent folder actions and stop-all planning preserve the current listeners"
   await app.getByRole("radio", { name: "List", exact: true }).click();
   await expect(app.getByRole("option", { name: /^Port 3000 tcp,/ })).toBeVisible();
   await expect(app.getByRole("option", { name: /^Port 5173 tcp,/ })).toBeVisible();
+});
+
+const shopFolderPath = "/Users/dev/code/shop-web";
+
+test("folder map actions copy the original path and preserve listeners", async ({ app }) => {
+  await app.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await openAgents(app);
+  const folder = app.getByRole("button", { name: /^Folder shop-web,.*\. Opens folder actions$/ });
+  const mapNode = app.locator(".svelte-flow__node").filter({ has: folder });
+  await mapNode.focus();
+  await folder.click();
+  const dialog = app.getByRole("dialog", { name: "Folder actions", exact: true });
+  await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+  await expect(dialog.getByText(shopFolderPath, { exact: true })).toBeVisible();
+  await expect(dialog).toContainText("Browser demo: opening folders and editors is simulated");
+  await dialog.getByRole("button", { name: "Copy path", exact: true }).click();
+  await expect.poll(() => app.evaluate(() => navigator.clipboard.readText())).toBe(shopFolderPath);
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(mapNode).toBeFocused();
+  expect(await app.evaluate(() => "__TAURI_INTERNALS__" in window)).toBe(false);
+  await app.getByRole("radio", { name: "List", exact: true }).click();
+  await expect(app.getByRole("option", { name: /^Port 3000 tcp,/ })).toBeVisible();
+  await expect(app.getByRole("option", { name: /^Port 5173 tcp,/ })).toBeVisible();
+});
+
+test("agent card folders offer editor and file-manager previews without native effects", async ({ app }) => {
+  await openAgents(app);
+  await agentHeading(app, "Cursor").click();
+  const cursor = agentCard(app, "Cursor");
+  const folder = cursor.getByRole("button", { name: `Folder actions for ${shopFolderPath}`, exact: true });
+  const dialog = app.getByRole("dialog", { name: "Folder actions", exact: true });
+  await folder.click();
+  await expect(dialog.getByText(shopFolderPath, { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Open in editor", exact: true }).click();
+  await expect(app.getByText("Editor preview", { exact: true })).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  await expect(folder).toBeFocused();
+  await folder.press("Enter");
+  await dialog.getByRole("button", { name: "Open in file manager", exact: true }).click();
+  await expect(app.getByText("File manager preview", { exact: true })).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  await expect(folder).toBeFocused();
+  expect(await app.evaluate(() => "__TAURI_INTERNALS__" in window)).toBe(false);
+  await expect(cursor).toContainText("2 stoppable");
+  await app.getByRole("radio", { name: "List", exact: true }).click();
+  await expect(app.getByRole("option", { name: /^Port 3000 tcp,/ })).toBeVisible();
+  await expect(app.getByRole("option", { name: /^Port 5173 tcp,/ })).toBeVisible();
+});
+
+test("folder map keyboard actions retain focus and survive background scans", async ({ app }) => {
+  await openAgents(app);
+  const folder = app.getByRole("button", { name: /^Folder shop-web,.*\. Opens folder actions$/ });
+  const mapNode = app.locator(".svelte-flow__node").filter({ has: folder });
+  const dialog = app.getByRole("dialog", { name: "Folder actions", exact: true });
+  await mapNode.focus();
+  for (const key of ["Enter", "Space"]) {
+    await mapNode.press(key);
+    await expect(dialog.getByText(shopFolderPath, { exact: true })).toBeVisible();
+    await dialog.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(mapNode).toBeFocused();
+  }
+  await app.clock.install();
+  await mapNode.press("Enter");
+  await expect(dialog).toBeVisible();
+  const original = await dialog.elementHandle();
+  await app.clock.fastForward(6_000);
+  await app.clock.runFor(500);
+  await expect(dialog.getByText(shopFolderPath, { exact: true })).toBeVisible();
+  expect(await dialog.evaluate((element, previous) => element === previous, original)).toBe(true);
+  await dialog.press("Escape");
+  await expect(mapNode).toBeFocused();
 });
 
 test("typing in agent search does not trigger port actions or filters", async ({ app }) => {
