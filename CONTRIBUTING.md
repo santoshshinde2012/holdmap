@@ -236,12 +236,16 @@ Versions follow [SemVer](https://semver.org/). One `vX.Y.Z` tag releases everyth
   `scripts/check-versions.sh` fails CI if they ever disagree. It was picked over git-cliff because
   it maintains the release PR itself; it doesn't create tags or releases here, so the tag stays a
   deliberate maintainer step.
+  Without `RELEASE_PLEASE_TOKEN`, prepare the same version changes manually, including
+  `version.txt`, `.release-please-manifest.json`, README download links and generated CLI help;
+  run `scripts/check-versions.sh` and the full validation before opening the release PR.
 - Pushing the tag runs `release.yml` ([dist](https://github.com/axodotdev/cargo-dist)): CLI
   archives for six targets (macOS arm64/x64, Linux gnu arm64/x64, Linux musl x64, Windows x64),
   shell and PowerShell installers, an npm package tarball, a
   CycloneDX SBOM, SHA-256 checksums, binaries built with `cargo auditable`, and GitHub build
   provenance (`gh attestation verify <file> -R santoshshinde2012/holdmap`). It creates the GitHub
-  Release.
+  Release. npm registry publication is optional and disabled by default; release notes link
+  the attached package tarball when no registry publishing job is configured.
 - Once the release is published, `release.yml` calls `desktop-release.yml` (tauri-action), which
   adds the `.dmg`, `.msi`, NSIS `.exe`, `.AppImage`, `.deb` and `.rpm`, with checksums and provenance. Run it by hand with an empty tag
   for a dry run that keeps the bundles as workflow artifacts.
@@ -267,7 +271,7 @@ not regenerate CI with this setting. Keep action pins in the config and workflow
 | Secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | Signed, notarised macOS app (optional) |
 | Secrets `WINDOWS_CERTIFICATE` (base64 `.pfx`), `WINDOWS_CERTIFICATE_PASSWORD` | Signed Windows installers (optional) |
 | `npm run tauri signer generate`, then secrets `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` and variable `TAURI_UPDATER_PUBKEY` | In-app updates with signed `latest.json` (optional; keep the private key backed up) |
-| `"npm"` in `publish-jobs` in `dist-workspace.toml`, `dist generate`, secret `NPM_TOKEN` | Publishing the npm package (optional) |
+| `"npm"` in `publish-jobs` in `dist-workspace.toml`, `dist generate`, secret `NPM_TOKEN`; after restoring the publishing job, pass `--npm-registry-published` to both release-note preparation calls | Publishing the npm package (optional) |
 
 **Release steps.** Merging the release PR prepares the version; publishing starts when a
 maintainer pushes its tag.
@@ -275,11 +279,17 @@ maintainer pushes its tag.
 1. Review the release PR's version changes and changelog, then merge it after CI passes.
 2. Fetch `main` and check out the release PR's merge commit. Run `scripts/check-versions.sh`
    and confirm that `version.txt` matches the intended `X.Y.Z`.
-3. Tag that commit and push the tag: `git tag -s vX.Y.Z -m "holdmap X.Y.Z" && git push origin vX.Y.Z`
-   (replace `X.Y.Z` with the release version).
-4. Watch `Release`, then `Desktop release`, in the Actions tab. Check the published release's
-   CLI and desktop downloads, checksums and installer, then confirm the `Pages` workflow
-   updates the website.
+3. Create an annotated tag at that commit: `git tag -a vX.Y.Z -m "holdmap X.Y.Z"`, then
+   `git push origin vX.Y.Z` (replace `X.Y.Z` with the release version). Use `-s` instead of
+   `-a` when the maintainer has a configured signing key. Artifact provenance independently
+   binds the builds to the tagged source and release workflow.
+4. Wait for the complete `Release` run, including its reusable desktop jobs. Check all six
+   CLI archives and seven desktop installers, their checksums and build provenance, then
+   confirm the release-triggered `Pages` deployment uses the tagged commit and new downloads.
+   The initial CLI announcement precedes desktop upload and is not the readiness signal.
+   Without signing credentials, macOS is ad-hoc signed without notarization and Windows is
+   unsigned. Without a configured signed updater, desktop users download the new installer
+   manually; do not advertise automatic updates.
 
 ## Licence
 

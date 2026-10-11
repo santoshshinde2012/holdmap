@@ -33,14 +33,14 @@
 holdmap tells you what's really there — which agent or tool started it — and stops only what
 it should.
 
-Version **0.4.0** includes expanded child-tool visibility and search, MCP resources/prompts and
-stop confirmations, local desktop shutdown, freshness improvements and security hardening.
-See the [0.4.0 changes](CHANGELOG.md#040---2026-10-10). Desktop screenshots use the shared
+Version **0.5.0** adds Agent Flow and opt-in local recording, reviewed scheduling, clickable
+folder actions, terminal agent navigation and the routed H identity.
+See the [0.5.0 changes](CHANGELOG.md#050---2026-10-11). Desktop screenshots use the shared
 browser UI with sample data.
 
 The new routed H logo connects Holdmap's initial with its process and agent maps.
 The [vector master and regeneration guide](apps/desktop/assets/README.md) keep app,
-tray and website icons consistent. Updated branding is available in current source;
+tray and website icons consistent. Version 0.5.0 includes the updated native icons;
 the 0.4.0 installers retain their original icons.
 
 ## Features
@@ -64,7 +64,7 @@ the 0.4.0 installers retain their original icons.
   or stop only the services that agent started, through the normal safety policy.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
   server for AI coding assistants. macOS, Linux and Windows. No product analytics.
-- **Agent flow (current source).** Follow observed process/socket relationships, or opt in to
+- **Agent flow (0.5.0).** Follow observed process/socket relationships, or opt in to
   local recording of reported tools, model calls and delegated agents. Inspect parallel work,
   failures, duration and reported serialized sizes without storing prompts or tool arguments.
 
@@ -108,13 +108,13 @@ See [Apple's guidance on native apps and Rosetta](https://support.apple.com/en-g
 <!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
      suffix isn't read as part of the version). -->
 <!-- x-release-please-start-version -->
-[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.4.0_aarch64.dmg
-[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.4.0_x64.dmg
-[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.4.0_x64_en-US.msi
-[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.4.0_x64-setup.exe
-[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.4.0_amd64.AppImage
-[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.4.0_amd64.deb
-[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.4.0%2D1.x86_64.rpm
+[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.0_aarch64.dmg
+[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.0_x64.dmg
+[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.0_x64_en-US.msi
+[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.0_x64-setup.exe
+[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.0_amd64.AppImage
+[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.0_amd64.deb
+[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.5.0%2D1.x86_64.rpm
 <!-- x-release-please-end -->
 
 **Homebrew:** coming soon.
@@ -196,7 +196,7 @@ redacted commands; `--json` preserves evidence, timestamps and collection limits
 is not searched. Recent folders belong to the current account's history and are attached only
 to confirmed matching accounts; they do not prove current work by that running instance.
 
-**Terminal agents in current source / Unreleased.** Start `holdmap` and press **Shift+Tab**
+**Terminal agents in 0.5.0.** Start `holdmap` and press **Shift+Tab**
 to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its
 tools, folders, connections and access. Wide terminals show the list beside the details;
 small terminals stack them. **p** pauses refreshes, **r** refreshes, and **?** shows help.
@@ -222,7 +222,7 @@ while the TUI runs, and terminal input modes are restored on exit.
 
 </details>
 
-**Agent flow in current source / Unreleased.** Open **Agents → Flow**. **Connections** shows
+**Agent flow in 0.5.0.** Open **Agents → Flow**. **Connections** shows
 observed processes, listeners and sockets, with evidence for each relationship. **Calls** shows
 reported tool/model work and agent handoffs after you enable local recording. Only reported
 trace parents create call edges; an ordered list of session events does not prove communication.
@@ -233,7 +233,7 @@ reported duration. Search matches individual records; the graph retains their re
 and the inspected record. A finished call with an unknown outcome stays distinct from a call
 without completion data.
 
-The current desktop also has **Settings → General → Single-key shortcuts**. Turn it off to use
+Version 0.5.0 also has **Settings → General → Single-key shortcuts**. Turn it off to use
 speech input or reserve letter keys; arrow navigation and modifier shortcuts remain available.
 Port filters and selected-port commands apply to the port views, and native controls keep their
 own keyboard behavior. The command palette names its search and keeps its active result valid
@@ -271,11 +271,11 @@ When a command fails with "port in use", it prints who holds the port and how to
 
 ## Desktop app
 
-Version 0.4.0 includes **Settings → Power → Shut down this computer**. Review the local
+Open **Settings → Power → Shut down now…** to shut down this computer. Review the local
 computer, save work, and explicitly acknowledge that all apps, agents and local services
 will stop. Confirmation expires after 60 seconds; this is not a scheduled shutdown.
 Operating-system permissions and inhibitors still apply. The browser demo only simulates
-the action. Version 0.3.0 binaries predate this feature.
+the action. Local shutdown was introduced in 0.4.0; version 0.3.0 binaries predate it.
 
 <details>
 <summary>Shutdown confirmation in dark and light themes</summary>
@@ -285,7 +285,7 @@ the action. Version 0.3.0 binaries predate this feature.
 
 </details>
 
-**Current source / Unreleased:** Power settings separate **Shut down now…** from **Schedule
+**Scheduling in 0.5.0:** Power settings separate **Shut down now…** from **Schedule
 shutdown…**. The scheduled review, **Schedule computer shutdown?**, starts at **In 1 hour**
 and excludes **Now**; immediate shutdown has no timing controls. In the browser, the entries
 are **Simulate shutdown now…** and **Schedule simulation…**, with **Schedule shutdown
@@ -295,8 +295,8 @@ or **At a time** as needed; agent service reviews also support delays. **Schedul
 shows each deadline, countdown, reviewed port and cancellation result. Schedules run while
 Holdmap stays open, including in the tray; quitting clears them. Keep the computer awake.
 Missed deadlines or clock changes require a fresh review. Agent schedules stop only the
-reviewed services and ports, preserving the agent session. Version 0.4.0 downloads do not
-include scheduling yet; build current source to use it.
+reviewed services and ports, preserving the agent session. Version 0.4.0 downloads predate
+scheduling; use 0.5.0 or newer.
 
 <details>
 <summary>Scheduled shutdown, agent services and cancellation in dark and light themes</summary>
@@ -321,7 +321,7 @@ details, inferred MCP nodes and explicit omission counts. Native reports refresh
 of the window's poll; the browser [live demo](https://santoshshinde2012.github.io/holdmap/#demo)
 uses the same UI with sample data.
 
-**Folder actions in current source / Unreleased.** Click a folder on the Agents map or its
+**Folder actions in 0.5.0.** Click a folder on the Agents map or its
 name/path in a card; **Enter** or **Space** activates a focused folder. The shared chooser shows
 the full path and offers **Open in Finder** (macOS), **Open in Explorer** (Windows) or
 **Open in file manager**, **Open in editor**, and **Copy path**. **Esc** closes it and returns
@@ -333,7 +333,7 @@ explicitly configured editor shows an error instead of opening another app. Nati
 recheck the chosen agent and exact folder against a fresh scan; stale folders remain copyable
 but cannot be opened. Recent folders remain account history, not proof of current work.
 Browser file-manager/editor actions are labelled simulations. Version 0.4.0 downloads predate
-the chooser; build current source to use it.
+the chooser; use 0.5.0 or newer.
 
 <details>
 <summary>Current folder actions with sample data</summary>
@@ -344,12 +344,17 @@ the chooser; build current source to use it.
 
 </details>
 
-**First open.** The app isn't notarised yet, so the OS asks once:
+**First open.** The macOS app is ad-hoc signed and sealed, but is not Developer-ID signed
+or notarised. Windows installers are unsigned unless signing credentials are configured:
 
 - **macOS:** open it once, then go to **System Settings > Privacy & Security > Open Anyway**
   (macOS 14 and earlier: right-click the app, then **Open**). Or run
   `xattr -dr com.apple.quarantine /Applications/holdmap.app`.
 - **Windows:** in "Windows protected your PC", click **More info**, then **Run anyway**.
+
+Update an existing 0.4.0 desktop installation by downloading the matching 0.5.0 installer
+above; version 0.4.0 has no configured signed updater. Run the CLI installer again to update
+the CLI, TUI and MCP server.
 
 <details>
 <summary>More screenshots</summary>
@@ -362,7 +367,7 @@ the chooser; build current source to use it.
 | **TUI** | **Agents** |
 | ![The holdmap TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) | ![The agents view: coding agents and developer tools with resource use, folders, ports and access, dark theme](docs/screenshots/desktop-agents-dark.png) |
 | **Agents in light theme** | **Child tools and MCP evidence** |
-| ![The current-source agents map in light theme](docs/screenshots/desktop-agents-light.png) | ![Expanded child-tool details show an inferred Filesystem MCP process with no listening port](docs/screenshots/desktop-agent-tools-dark.png) |
+| ![The agents map in light theme with sample data](docs/screenshots/desktop-agents-light.png) | ![Expanded child-tool details show an inferred Filesystem MCP process with no listening port](docs/screenshots/desktop-agent-tools-dark.png) |
 | **Agent bulk stop, dark theme** | **Agent bulk stop, light theme** |
 | ![A bulk stop previews all four steps for the agent's two ports, dark theme](docs/screenshots/desktop-agent-stop-confirm-dark.png) | ![A bulk stop previews all four steps for the agent's two ports, light theme](docs/screenshots/desktop-agent-stop-confirm-light.png) |
 | **Compact port details, dark theme** | **Compact port details, light theme** |
@@ -565,7 +570,7 @@ compare fresh effects before execution, and pass the original plan to the shared
 protection checks. Persistence, credential redaction and terminal-safe rendering have separate
 boundaries. CI combines all-severity npm audits, cargo-deny, full-history/source Gitleaks scans
 and CodeQL for JavaScript/TypeScript, Rust, Python and Actions; daily dependency checks and
-immutable action pins keep those gates reviewable. The current-source Linux GTK dependency uses
+immutable action pins keep those gates reviewable. The Linux GTK dependency uses
 [audited GLib source fixes](vendor/README.md), verified by source hashes and optimized regressions.
 
 The folder layout keeps each surface's code and tooling together:

@@ -13,14 +13,14 @@ strictly limited metadata projection from integrations you configure.
 Recognized products include Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider,
 Cline, Goose, Docker Desktop, OrbStack, Podman Desktop and others.
 
-Version 0.4.0 includes the child-tool classifications, expanded metadata and desktop agent
-search described here. Upgrade from 0.3.0 or build current source to use them; the live demo
-uses the current interface with sample data.
+Version 0.5.0 includes Flow, folder actions and the updated CLI and terminal navigation
+described here. Child-tool classifications, expanded metadata and desktop agent search were
+introduced in 0.4.0. The live demo uses the same interface with sample data.
 
 ## From the CLI
 
 ```sh
-holdmap agents                         # compact overview (current source)
+holdmap agents                         # compact overview
 holdmap agents claude                  # matching agents with detailed footprints
 holdmap agents codex --wide             # include redacted process commands
 holdmap agents claude --stop-ports --dry-run   # plan only
@@ -54,12 +54,12 @@ matching known account, and do not establish current work by a particular runnin
   **y** confirms. The batch is freshly checked before any action. Changed targets require a new
   review; failures stop remaining plans and show what completed. Agent sessions stay running.
 
-The compact CLI overview and updated terminal navigation are **current source / Unreleased**;
-version 0.4.0 downloads predate these changes. Build current source to use them. `--json` retains
+The compact CLI overview and updated terminal navigation are included in **0.5.0**;
+version 0.4.0 downloads predate these changes. `--json` retains
 its structured report format. No terminal shell attachment or private conversation content is
 needed to inspect the observed processes.
 
-These current-source terminal captures use isolated local fixtures:
+These terminal captures use isolated local fixtures:
 
 ![Terminal Agents list beside selected tools, services and access details](../../../../docs/screenshots/tui-agents-dark.png)
 
@@ -67,7 +67,7 @@ These current-source terminal captures use isolated local fixtures:
 
 ## Open an agent folder
 
-In current source, click a folder on the map or its name/path in an expanded card.
+In 0.5.0, click a folder on the map or its name/path in an expanded card.
 **Enter** or **Space** activates a focused folder. **Folder actions** shows the full path and
 offers **Open in Finder** on macOS, **Open in Explorer** on Windows, or **Open in file manager**,
 plus **Open in editor** and **Copy path**. **Esc** or **Close** returns focus to the folder.
@@ -84,8 +84,8 @@ path remains copyable. Recent folders describe account history; they do not prov
 agent is currently working there. Browser file-manager/editor actions are labelled simulations;
 copying uses the displayed sample path.
 
-This chooser is **current source / Unreleased**. Version 0.4.0 downloads predate it;
-build current source to use it. Existing card **Reveal** and **Editor** shortcuts remain available.
+This chooser is included in **0.5.0**. Version 0.4.0 downloads predate it.
+Existing card **Reveal** and **Editor** shortcuts remain available.
 
 ## Desktop Flow: connections and calls
 
@@ -109,8 +109,8 @@ matching records, the inspected record and their reported parents; filtering doe
 the recorded run. A finished record with an unknown outcome is not treated as missing completion.
 The shown/total count and **Reset activity view** make active filters easy to see and clear.
 
-Connections and Calls are **current source / Unreleased**. The 0.4.0 downloads predate Flow;
-build current source to use it. These captures use clearly labelled browser example metadata:
+Connections and Calls are included in **0.5.0**. Version 0.4.0 downloads predate Flow.
+These captures use clearly labelled browser example metadata:
 
 ![Connections shows observed process parenting, listeners and live socket relationships](../../assets/agent-flow/connections-dark.webp)
 

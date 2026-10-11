@@ -8,9 +8,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-11
+
 ### Added
 
-- Current-source desktop folder actions from the Agents map and card paths, with mouse and
+- Desktop folder actions from the Agents map and card paths, with mouse and
   Enter/Space activation, a full path, platform file-manager/editor choices, clipboard copy
   and focus restoration. Browser openers are explicitly labelled simulations.
 - Calls diagnosis filters for failed records and missing completion, individual metadata search,
@@ -34,11 +36,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Changed
 
-- A routed H identity replaces the original socket icon across the current-source desktop,
+- A routed H identity replaces the original socket icon across the desktop,
   website, favicons, native app icons and refreshed screenshots/videos. One vector master
   generates platform assets, including a monochrome macOS menu-bar template. Website
   tour chapters use the timings measured from the new recordings.
-- Current-source Power settings separate **Shut down now** from **Schedule shutdown**;
+- Power settings separate **Shut down now** from **Schedule shutdown**;
   scheduled reviews start at one hour and exclude immediate execution. Local port details
   similarly offer separate **Stop** and **Schedule stop** actions. Browser labels identify
   simulations, and immediate reviews omit timing controls.
@@ -47,12 +49,14 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Agent recording separates hook/OTLP parsing, shared metadata and credential policy, typed
   HTTP routing, MCP delivery and UI controls. Native commands share authorized session access;
   unknown recording status stays explicit until a successful refresh.
-- The CLI reference includes nested activity commands and identifies current-source availability.
+- The CLI reference includes nested activity commands and identifies version 0.5.0 availability.
   Public guides clarify opt-in recording, tray/quit behavior and process-protection limits;
   the homepage links local shutdown and scheduling guidance.
 
 ### Fixed
 
+- Release notes use the attached npm package when registry publishing is disabled, and retain
+  that accurate installation guidance after desktop installers are uploaded.
 - File-manager actions open an existing folder's contents, including in Finder on macOS,
   and reject files or missing directories before launching an application.
 - A missing explicitly configured `HOLDMAP_EDITOR` (or legacy `PORTWISE_EDITOR`) now returns
@@ -85,6 +89,8 @@ by [release-please](https://github.com/googleapis/release-please) from
   updater. Configured updater archives and signatures receive platform checksum and build
   provenance coverage. Matching signed updater assets retain their IDs so retry uploads
   preserve existing updater URLs.
+- Global release artifacts, including source and npm archives, installers and SBOMs, receive
+  build-provenance attestations alongside the platform archives and desktop installers.
 
 ## [0.4.0] - 2026-10-10
 

@@ -5,6 +5,7 @@ import hashlib
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -75,6 +76,88 @@ class ReleaseSecurityTests(unittest.TestCase):
                 result = self.run_plan(event, tag, ref_type)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(self.record.exists())
+
+
+class ReleaseNotesTests(unittest.TestCase):
+    before = "## Release Notes\n\nFix literal `$()` and preserve [links](https://example.test/).\n\n"
+    npm = "### Install prebuilt binaries into your npm project\n\n```sh\nnpm install holdmap@0.5.0\n```\n"
+    after = "\n## Download holdmap 0.5.0\n\n| File | Platform |\n| --- | --- |\n| holdmap.zip | Windows |\n"
+
+    def prepare(self, notes, tag="v0.5.0", repository="santoshshinde2012/holdmap", published=False):
+        args = [sys.executable, str(ROOT / "scripts/prepare-release-notes.py"),
+                "--tag", tag, "--repo", repository]
+        if published:
+            args.append("--npm-registry-published")
+        return subprocess.run(args, input=notes.encode("utf-8") if isinstance(notes, str) else notes,
+                              capture_output=True, check=False)
+
+    def test_realistic_dist_block_becomes_pinned_attached_package_download(self):
+        result = self.prepare(self.before + self.npm + self.after)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        replacement = (
+            "### Download the npm package\n\n"
+            "The npm package is attached to this release; it is not published to the npm registry.\n\n"
+            "[Download holdmap-npm-package.tar.gz](https://github.com/santoshshinde2012/holdmap/"
+            "releases/download/v0.5.0/holdmap-npm-package.tar.gz)\n"
+        )
+        self.assertEqual(result.stdout.decode("utf-8"), self.before + replacement + self.after)
+        self.assertNotIn(b"npm install holdmap@", result.stdout)
+
+    def test_notes_without_the_generated_section_remain_byte_identical(self):
+        for notes in [self.before + self.after, "## Notes\r\n\r\nUnicode → ✓\r\n", "No final newline"]:
+            with self.subTest(notes=notes):
+                result = self.prepare(notes)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, notes.encode("utf-8"))
+
+    def test_prerelease_and_crlf_preserve_surrounding_notes(self):
+        notes = (self.before + self.npm + self.after).replace("0.5.0", "0.5.0-rc.1").replace("\n", "\r\n")
+        result = self.prepare(notes, tag="v0.5.0-rc.1", repository="example-org/holdmap.test")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout.startswith(self.before.replace("\n", "\r\n").encode()))
+        self.assertTrue(result.stdout.endswith(self.after.replace("0.5.0", "0.5.0-rc.1").replace("\n", "\r\n").encode()))
+        self.assertIn(b"https://github.com/example-org/holdmap.test/releases/download/v0.5.0-rc.1/holdmap-npm-package.tar.gz", result.stdout)
+        self.assertNotIn(b"\n", result.stdout.replace(b"\r\n", b""))
+
+    def test_malformed_or_hostile_tags_emit_no_notes(self):
+        for tag in ["", "0.5.0", "v0.5", "v0.5.0$(touch${IFS}marker)", "v0.5.0\ncontents=write", "--help"]:
+            with self.subTest(tag=tag):
+                result = self.prepare(self.before + self.npm, tag=tag)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, b"")
+                self.assertIn(b"error:", result.stderr)
+
+    def test_invalid_repositories_cannot_enter_the_download_url(self):
+        for repository in ["", "holdmap", "../holdmap", "example/..", "example/.",
+                           "example/holdmap/extra", "example/holdmap?query=1", "example/holdmap\nnext", "example/$(false)"]:
+            with self.subTest(repository=repository):
+                result = self.prepare(self.npm, repository=repository)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, b"")
+                self.assertIn(b"repository", result.stderr)
+
+    def test_changed_generated_sections_fail_instead_of_retaining_a_false_claim(self):
+        for notes in [self.npm.replace("0.5.0", "0.4.0"), self.npm.replace("```sh", "```bash"),
+                      self.npm.replace("npm install holdmap@0.5.0", "npm install holdmap@0.5.0 --global"),
+                      self.npm + "\n" + self.npm]:
+            with self.subTest(notes=notes):
+                result = self.prepare(notes)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, b"")
+
+    def test_malformed_note_bytes_fail_without_partial_output(self):
+        for notes in [b"invalid UTF-8 \xff", b"invalid NUL \x00"]:
+            with self.subTest(notes=notes):
+                result = self.prepare(notes)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, b"")
+                self.assertIn(b"error:", result.stderr)
+
+    def test_future_registry_publication_requires_an_explicit_opt_in(self):
+        notes = self.before + self.npm + self.after
+        result = self.prepare(notes, published=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, notes.encode("utf-8"))
 
 
 class DesktopReleaseAssetTests(unittest.TestCase):

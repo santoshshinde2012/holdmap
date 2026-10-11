@@ -13,7 +13,7 @@ as they're ready, with credit unless you'd rather stay anonymous.
 
 ## Scope
 
-Local machine shutdown in desktop version 0.4.0 is also in scope. It requires a trusted
+Local machine shutdown, introduced in desktop version 0.4.0, is also in scope. It requires a trusted
 main webview and a one-use confirmation that expires after 60 seconds. The backend uses
 fixed OS commands without shell interpolation, force flags, elevation or remote targets.
 Linux requires systemd support for explicit inhibitor checks (248 or newer). macOS may
@@ -76,7 +76,7 @@ out of scope.
   64 messages. Oversized input is rejected before dispatch, and an oversized frame is drained
   completely so it cannot become a later valid request. HTTP probe paths reject request/header
   injection; captured command output is bounded to 4 MiB per stream with a deadline.
-- No product analytics are implemented. Optional agent recording (current source / Unreleased)
+- No product analytics are implemented. Optional agent recording (version 0.5.0)
   accepts explicitly configured local metadata through a token-authenticated loopback endpoint
   and retains at most 1,000 spans in memory. Prompts, tool inputs/results and unrelated fields
   are discarded before retention;
@@ -97,7 +97,7 @@ The desktop GTK3 bindings require GLib 0.18. The published 0.18.5 contains
 [RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429.html): optimized string-variant
 iteration can crash. Its safe boxed-inline slice conversion also allocates only one element
 before copying the whole slice, causing a heap overflow as documented in [upstream issue
-#2040](https://github.com/gtk-rs/gtk-rs-core/issues/2040). Version 0.4.0 and current source use
+#2040](https://github.com/gtk-rs/gtk-rs-core/issues/2040). Version 0.4.0 and newer use
 [verified local backports](vendor/README.md) of both upstream fixes, retaining the truthful
 0.18.5 version and license. A separate local `g_malloc0` initialization fix gives `Value`
 copy callbacks the zero-filled destination required by GObject; the original allocation can
@@ -128,11 +128,11 @@ redaction is heuristic and may miss arbitrary positional secrets. Windows privac
 filesystem ACLs, including any custom state directory. Process visibility depends on OS
 permissions, and macOS retains a check-to-signal race; Linux pidfds and Windows process
 handles bind signalling more directly to process identity. Review plans and avoid sharing raw
-history/logs without inspecting them. Version 0.4.0 includes the security changes listed in the
-[0.4.0 release entry](CHANGELOG.md#040---2026-10-10). Features marked current source / Unreleased
-require a source build until a release includes them. Version 0.3.0 predates those release fixes.
+history/logs without inspecting them. Version 0.5.0 includes the agent recording and scheduled
+action safeguards listed in the [0.5.0 release entry](CHANGELOG.md#050---2026-10-11), alongside
+the [0.4.0 security fixes](CHANGELOG.md#040---2026-10-10). Version 0.3.0 predates those fixes.
 
-## Scheduled desktop actions (current source)
+## Scheduled desktop actions (version 0.5.0)
 
 Scheduling uses the trusted local main window and keeps authorization in the native process.
 Creating a schedule consumes a short-lived, one-use review handle and retains the exact stop

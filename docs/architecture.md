@@ -1,6 +1,6 @@
 # holdmap architecture
 
-## Agent communication visibility (current source)
+## Agent communication visibility (0.5.0)
 
 The read-only Connections projection uses one consistent scan and `AgentsReport`. It retains
 exact socket holders and process start tokens; it marks missing and ambiguous ownership rather
@@ -121,7 +121,7 @@ primary research, exporter setup, source coverage and privacy limits.
 ## Local computer power
 
 The desktop Power flow has separate presentation, IPC, confirmation policy and OS adapter
-responsibilities. Current-source Settings callbacks open distinct immediate or scheduled
+responsibilities. Settings callbacks open distinct immediate or scheduled
 reviews. `ShutdownDialog.svelte` handles accessible confirmation, acknowledgement and expiry;
 its explicit intent prevents a scheduled review from falling through to immediate execution.
 `api.ts` selects native IPC or a harmless browser simulation; `power.rs` owns local-window
@@ -180,7 +180,7 @@ flowchart LR
 
 </details>
 
-## Terminal agent presentation (current source)
+## Terminal agent presentation (0.5.0)
 
 The terminal Agents view uses one background scan and one cached `AgentsReport`; render and
 navigation never collect processes or read project history. `tui/agents_view.rs` holds pure
@@ -252,7 +252,7 @@ flowchart LR
 
 </details>
 
-## Scheduled local actions (current source)
+## Scheduled local actions (0.5.0)
 
 The scheduler is a desktop application service with separate queue/timing policy, stop
 validation, IPC adapters and a worker. The native queue owns original reviewed plans and
@@ -262,7 +262,7 @@ statuses without operating-system access. CLI and MCP process operations remain 
 Dedicated shutdown and port scheduling entries initialize `ActionTiming.svelte` to one hour
 and exclude **Now**. Immediate reviews omit timing controls. Timing presentation and delay
 validation stay separate from native authorization and dispatch; a missing scheduling callback
-fails closed. These controls are current source / Unreleased, not version 0.4.0 downloads.
+fails closed. These controls are included in 0.5.0; version 0.4.0 downloads predate scheduling.
 Schedules require Holdmap to remain open, including in its tray, with the computer awake.
 
 ![Scheduled local actions and retained authorization](diagrams/scheduled-actions.svg)
@@ -334,9 +334,10 @@ holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop ap
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
 coordinate collection and confirmation, and present the returned types.
 
-This guide describes version 0.4.0 and current source. Child-tool metadata, MCP discovery,
-local desktop shutdown, cache and security improvements are included in
-[0.4.0](../CHANGELOG.md#040---2026-10-10); version 0.3.0 predates those additions.
+This guide describes version 0.5.0 and current source. Agent Flow, scheduling, folder actions
+and terminal agent navigation are included in [0.5.0](../CHANGELOG.md#050---2026-10-11).
+Child-tool metadata, MCP discovery, local desktop shutdown, cache and security improvements
+were introduced in [0.4.0](../CHANGELOG.md#040---2026-10-10); version 0.3.0 predates them.
 
 ## 1. Layers
 
@@ -1017,7 +1018,7 @@ escaped text, including inline command spans. The browser demo has no native IPC
 
 ### Desktop UI
 
-- **Folder actions (current source).** Map and card paths share `FolderActions.svelte` rather
+- **Folder actions (0.5.0).** Map and card paths share `FolderActions.svelte` rather
   than separate opener flows. `lib/folders.ts` selects an exact-path owner once and revalidates
   that same target during polling; the UI never silently switches agents. The dialog handles
   choices, clipboard feedback and focus through the shared UI kit, while injected callbacks
@@ -1034,7 +1035,7 @@ escaped text, including inline command spans. The browser demo has no native IPC
 - **Pure view logic.** `lib/rows.ts` (badges, status, sparklines), `lib/detail.ts` (details pane)
   and `lib/settings.ts` (the Settings contract) are pure and unit-tested, so components depend on
   interfaces rather than on `api.ts`.
-- **Compact details and menus (current source).** Detail panels wrap shared tabs and long
+- **Compact details and menus (0.5.0).** Detail panels wrap shared tabs and long
   content within the pane, while a dedicated action footer distinguishes port stops from
   computer power controls. The shared Select calls pure `lib/popover.ts` placement logic to
   fit the viewport; feature panels do not duplicate edge calculations. Both depend on small
