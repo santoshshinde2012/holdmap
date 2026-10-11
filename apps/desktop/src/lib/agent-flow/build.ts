@@ -1,5 +1,5 @@
 import type { ActivitySpan, AgentFlowReport, VisualGraph, VisualNode } from "./model";
-import { PROVIDER_LABEL, STATUS_LABEL } from "./model";
+import { PROVIDER_LABEL, SOURCE_LABEL, STATUS_LABEL } from "./model";
 
 export interface ActivityRun {
   id: string;
@@ -65,8 +65,13 @@ export function activityRuns(spans: ActivitySpan[], query = ""): ActivityRun[] {
     const time = span.start_at_ms ?? span.end_at_ms;
     if (time != null && (run.first_at_ms == null || time < run.first_at_ms)) run.first_at_ms = time;
   }
-  return [...groups.values()].filter((run) => run.spans.some((s) => metadataMatches(query, [s.name, s.kind, PROVIDER_LABEL[s.provider], STATUS_LABEL[s.status]].join(" "), s.pid)))
+  return [...groups.values()].filter((run) => run.spans.some((s) => activityMatches(s, query)))
     .sort((a, b) => (b.first_at_ms ?? -1) - (a.first_at_ms ?? -1) || a.id.localeCompare(b.id));
+}
+
+/** Search the same visible metadata in the run picker and individual activity rows. */
+export function activityMatches(span: ActivitySpan, query: string): boolean {
+  return metadataMatches(query, [span.name, span.kind, PROVIDER_LABEL[span.provider], SOURCE_LABEL[span.source], STATUS_LABEL[span.status]].join(" "), span.pid);
 }
 
 export const spanNodeId = (span: ActivitySpan) => `span:${span.trace_id || span.session_id || "event"}:${span.id}`;
@@ -96,7 +101,7 @@ export function graphWindow(graph: VisualGraph, chosen: string | null, limit = C
   const present = new Set(graph.nodes.map((n) => n.id));
   const parents = new Map(graph.edges.filter((e) => e.kind === "span_parent").map((e) => [e.to, e.from]));
   const included = new Set<string>();
-  let current = chosen;
+  let current = chosen && present.has(chosen) ? chosen : graph.edges.find((edge) => edge.id === chosen && edge.kind === "span_parent")?.to ?? null;
   while (current && present.has(current) && !included.has(current) && included.size < maximum) {
     included.add(current); current = parents.get(current) ?? null;
   }

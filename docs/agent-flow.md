@@ -33,6 +33,20 @@ freezes view updates; recording continues until **Stop recording**. Refresh rema
 while paused. Navigation discards late responses so another view cannot overwrite the current
 selection or reuse an old port selection for keyboard actions.
 
+In Calls, **All**, **Failed** and **No completion** filter individual records. The metadata search
+also narrows timeline rows, while graph context retains matching records, the inspected record
+and explicitly reported ancestors. **Order** selects chronological or longest reported duration;
+missing durations stay last and are never estimated. A finished record with unknown outcome
+does not match No completion. Shown/total counts and **Reset activity view** explain and clear
+active filters without changing stored metadata. Changing runs clears the old inspected record.
+
+The example below filters the failed execution step while retaining its four reported ancestors.
+The inspector and timeline stay visible in both themes; the example contains no private agent data.
+
+| Dark | Light |
+|---|---|
+| ![Calls failure filter with reported parent context and a selected execution step](screenshots/desktop-agent-triage-dark.png) | ![Calls failure filter in the light theme with the same reported parent context](screenshots/desktop-agent-triage-light.png) |
+
 ## Start a desktop recording
 
 1. Open **Agents → Flow → Calls**, then **Start recording** on the local desktop.
@@ -186,9 +200,38 @@ actions and `AgentFlowView` owns graph/run selection; graph building, layout and
 separate. Unknown recording status is shown explicitly. These boundaries apply SOLID through
 concrete responsibilities without adding an interface for every function.
 
+`agent-flow/triage.ts` owns metadata filtering, reported-duration ordering and parent-context
+projection as pure functions. It does not change the collector snapshot or source outcomes.
+`AgentFlowView` owns the local filter controls and inspected record; `ActivityTimeline` presents
+the resulting rows. The shared keyboard policy remains separate from recording and process
+actions, and an explicit callback clears the application search.
+
 Tests exercise actual loopback HTTP, slow/partial requests, hostile framing and payloads,
 parallel same-name hooks, reversed completion, the Codex exporter fixture, MCP protocol output,
 source-field exclusion, native opt-in lifecycle, stale asynchronous responses, graph evidence,
 keyboard isolation, both themes and narrow layouts. They use owned fixtures or injected effects,
 never real shutdown or stops of user processes. See [architecture](architecture.md) and
 [contributor checks](../CONTRIBUTING.md) for the complete validation workflow.
+
+## Interaction standards and research
+
+The interface follows [WAI-ARIA keyboard conventions](https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/)
+for native controls and composite selection, and the [combobox pattern](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/)
+for command search. Composition keys remain with the input method. A persisted single-key
+shortcut setting provides the disable mechanism described by
+[WCAG 2.2 character-key shortcuts](https://www.w3.org/WAI/WCAG22/Understanding/character-key-shortcuts.html).
+Palette result counts use a polite status region; activity counts avoid announcements on every
+poll, following [status-message guidance](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html).
+
+[W3C Trace Context](https://www.w3.org/TR/trace-context/) and the stable
+[OpenTelemetry span API](https://opentelemetry.io/docs/specs/otel/trace/api/) guide reported parent
+relationships and outcome handling. An unset status is not an error and is not evidence that a
+call remains active. Duration sorting uses only the supplied duration field. GenAI semantic
+conventions remain under development, so this view makes its supported source contracts explicit
+rather than claiming universal agent instrumentation.
+
+Further improvements need distinct source contracts: fixed-category collector/producer health
+would help diagnose absent records without retaining raw errors; explicit
+[OpenTelemetry span links](https://opentelemetry.io/docs/specs/otel/overview/#links-between-spans)
+could represent reported cross-trace work. Neither is inferred from current data or silently
+enabled by this interface.

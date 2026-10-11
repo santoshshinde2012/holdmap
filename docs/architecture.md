@@ -25,6 +25,9 @@ layout and timeline models; an invalidatable loader prevents stale requests from
 later view. Components present evidence and setup without authority to stop a reported PID.
 `RecordingControls` owns recording actions, setup copying and confirmation; `AgentFlowView`
 owns graph and run selection. Injected callbacks connect these components to the application.
+The pure triage projection filters metadata rows, orders reported durations and retains matching
+or inspected records with their explicit ancestors. Controls do not rewrite stored runs or
+infer parent links, and the existing graph window still bounds canvas work.
 An unavailable recording status remains unknown until a successful refresh supplies it.
 A source-provided parent defines an edge; socket presence, elapsed time and common session
 membership cannot define tool causality. Provider setup remains reviewable text that the user
@@ -184,6 +187,12 @@ search and review requests, and `tui/agents_ui.rs` renders the responsive list/d
 `app.rs` coordinates keyboard events, worker messages and refresh sequencing. A refresh queued
 behind an in-flight scan discards its older response, including after a completed stop.
 
+`tui/terminal_modes.rs` owns paired mouse/paste modes and terminal restoration;
+`tui/input.rs` owns printable, bounded search text. Paste events enter only active search and
+never the action-key dispatcher. Graph filtering and navigation use visible node IDs, while
+Ports and Agents retain their independent selection state. Supported terminals send bracketed
+paste as one event; unframed keyboard bytes cannot establish whether the user typed or pasted.
+
 CLI and TUI share `agent_actions.rs` for reviewed service stops. Each protocol-qualified plan
 retains the agent identity and exact listener/process identities. One fresh snapshot must
 validate the entire batch before the first effect; execution consumes the original plans and
@@ -220,9 +229,10 @@ config:
 ---
 flowchart LR
   accTitle: Terminal agent visibility and reviewed service actions
-  accDescr: A background collector supplies one agent snapshot to compact CLI reports and a responsive terminal list and details view. Shared reviews retain exact protocol and process identity. Fresh batch checks precede execution and private history recording, with no automatic retries.
+  accDescr: A background collector supplies one agent snapshot to compact CLI reports and responsive terminal views. A session boundary pairs mouse and bracketed paste modes with restoration; paste routes only to bounded search text. View state keeps stable identity selection. Shared reviews retain exact protocol and process identity. Fresh batch checks precede execution and private history recording, with no automatic retries.
   SCAN["Background collector<br/>Engine + agent snapshot"] --> REPORT["CLI overview and details<br/>Redacted, printable metadata"]
   SCAN --> STATE["Terminal view state<br/>Search + stable identity selection"]
+  INPUT["Terminal session boundary<br/>Mouse + bracketed paste<br/>Paired restoration"] --> ROUTE["Input routing<br/>Paste → bounded search only<br/>Typed keys → current view"] --> STATE
   STATE --> UI["Responsive presentation<br/>Agent list + scrollable details"]
   REPORT & UI --> REVIEW["Shared service review<br/>Exact TCP / UDP plans<br/>Agent root stays protected"]
   REVIEW --> CHECK["Fresh whole-batch validation<br/>Identity, ownership and policy"]
@@ -233,8 +243,8 @@ flowchart LR
   classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
   classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
   class REPORT,UI surface
-  class STATE,SCAN domain
-  class REVIEW,CHECK,EXEC safety
+  class STATE,SCAN,ROUTE domain
+  class INPUT,REVIEW,CHECK,EXEC safety
   class HISTORY data
 ```
 

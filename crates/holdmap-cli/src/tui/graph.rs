@@ -20,6 +20,8 @@ pub enum GraphRow {
 pub struct GraphView {
     pub graph: Graph,
     pub rows: Vec<GraphRow>,
+    /// A view filter; the graph retains neighbouring evidence for the detail pane.
+    pub query: String,
     /// Index into `rows`; always points at a `Node` row when any exist.
     pub selected: usize,
     /// Show the collapsed "external hosts" node.
@@ -59,9 +61,17 @@ impl GraphView {
             .unwrap_or(0);
     }
 
+    pub fn set_query(&mut self, query: String) {
+        self.query = query;
+        let graph = std::mem::take(&mut self.graph);
+        self.set_graph(graph);
+    }
+
     fn flatten(&self) -> Vec<GraphRow> {
         let g = &self.graph;
-        let visible = |n: &&Node| self.show_external || n.id != EXTERNAL_ID;
+        let visible = |n: &&Node| {
+            (self.show_external || n.id != EXTERNAL_ID) && node_matches(g, n, &self.query)
+        };
         let mut rows = Vec::new();
         for c in &g.clusters {
             let members: Vec<&Node> = c
@@ -138,6 +148,13 @@ impl GraphView {
         self.graph.node(self.selected_id()?)
     }
 
+    pub fn visible_node_count(&self) -> usize {
+        self.rows
+            .iter()
+            .filter(|row| matches!(row, GraphRow::Node { .. }))
+            .count()
+    }
+
     /// Select the node that owns this port entry (sync from the Ports tab).
     pub fn select_entry(&mut self, entry_id: &str) {
         if let Some(i) = self
@@ -172,6 +189,42 @@ impl GraphView {
         let cid = self.selected_node()?.cluster.as_deref()?;
         self.graph.cluster(cid).map(|c| c.name.as_str())
     }
+}
+
+/// Search displayed service metadata; never inspect process arguments or commands.
+fn node_matches(graph: &Graph, node: &Node, query: &str) -> bool {
+    let fields = [
+        Some(node.label.as_str()),
+        node.subtitle.as_deref(),
+        node.framework
+            .as_ref()
+            .map(|framework| framework.name.as_str()),
+        node.project.as_deref(),
+        node.project_root.as_ref().and_then(|path| path.to_str()),
+        node.cluster
+            .as_deref()
+            .and_then(|id| graph.cluster(id))
+            .map(|cluster| cluster.name.as_str()),
+        node.container
+            .as_ref()
+            .map(|container| container.name.as_str()),
+    ];
+    query.split_whitespace().all(|term| {
+        let term = term.to_lowercase();
+        if let Some(pid) = term.strip_prefix("pid:") {
+            return pid
+                .parse::<u32>()
+                .is_ok_and(|pid| node.root_pid == Some(pid) || node.pids.contains(&pid));
+        }
+        let port = term.strip_prefix(':').unwrap_or(&term);
+        if let Ok(port) = port.parse::<u16>() {
+            return node.ports.iter().any(|candidate| candidate.port == port);
+        }
+        fields
+            .iter()
+            .flatten()
+            .any(|value| value.to_lowercase().contains(&term))
+    })
 }
 
 #[cfg(test)]
@@ -281,5 +334,58 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>(),
             ["api"]
         );
+    }
+
+    #[test]
+    fn search_filters_visible_nodes_without_losing_neighbour_evidence() {
+        let mut view = GraphView::new();
+        view.set_graph(sample());
+        view.set_query("API".into());
+        assert_eq!(view.selected_id(), Some("api"));
+        assert_eq!(view.rows.len(), 2, "matching cluster header and service");
+        assert_eq!(view.graph.dependencies("api")[0].id, "db");
+        assert_eq!(view.graph.dependents("api")[0].id, "web");
+        view.set_query(String::new());
+        assert_eq!(view.selected_id(), Some("api"));
+        assert_eq!(view.rows.len(), 7, "clearing restores all context");
+        view.set_query("acme".into());
+        assert_eq!(
+            view.rows.len(),
+            4,
+            "cluster search shows its three services"
+        );
+        view.set_query("missing".into());
+        assert!(view.rows.is_empty());
+        assert!(view.selected_node().is_none());
+        view.move_by(10);
+        assert!(view.selected_node().is_none());
+    }
+
+    #[test]
+    fn search_matches_port_pid_and_project_and_keeps_identity_across_refresh() {
+        let mut graph = sample();
+        graph.nodes[1].root_pid = Some(123);
+        graph.nodes[1].project = Some("Acme API".into());
+        graph.nodes[1].project_root = Some("/work/acme/server".into());
+        let mut view = GraphView::new();
+        view.set_graph(graph.clone());
+        for query in [":4000", "4000", "pid:123", "acme api", "/work/acme/server"] {
+            view.set_query(query.into());
+            assert_eq!(view.selected_id(), Some("api"), "{query}");
+            assert_eq!(view.rows.len(), 2);
+        }
+        view.set_query("acme".into());
+        view.move_by(1);
+        assert_eq!(view.selected_id(), Some("db"));
+        graph.clusters[0].nodes.reverse();
+        graph.nodes.reverse();
+        view.set_graph(graph);
+        assert_eq!(
+            view.selected_id(),
+            Some("db"),
+            "selection uses node ID, not index"
+        );
+        view.set_query("pid:nope".into());
+        assert!(view.selected_node().is_none());
     }
 }

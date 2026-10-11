@@ -11,6 +11,7 @@
   import Icon from "../Icon.svelte";
   import { focusTrap } from "../../lib/focus";
   import { fieldId } from "./Field.svelte";
+  import { isComposingKey } from "../../lib/keyboard";
 
   let {
     title,
@@ -61,6 +62,7 @@
   let downOnBackdrop = false;
 
   function key(e: KeyboardEvent) {
+    if (isComposingKey(e)) { e.stopPropagation(); return; }
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();

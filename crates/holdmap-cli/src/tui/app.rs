@@ -1,6 +1,7 @@
 //! TUI state and key handling. Scans and stops run on background threads so the UI never blocks.
 
 use super::graph::GraphView;
+use super::input::append_search_text;
 use crate::agent_actions::{AgentStopOutcome, ReviewedAgentStops};
 use holdmap_core::*;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
@@ -498,6 +499,8 @@ impl App {
             KeyCode::Char('h') => self.graph.toggle_external(),
             KeyCode::Char('x')
             | KeyCode::Char('X')
+            | KeyCode::Delete
+            | KeyCode::Backspace
             | KeyCode::Char('e')
             | KeyCode::Enter
             | KeyCode::Char('o')
@@ -738,6 +741,9 @@ impl App {
             return;
         }
         let graph = self.tab == Tab::Graph;
+        if !self.table_area.contains((m.column, m.row).into()) {
+            return;
+        }
         match m.kind {
             MouseEventKind::ScrollDown if graph => self.graph.move_by(1),
             MouseEventKind::ScrollUp if graph => self.graph.move_by(-1),
@@ -760,7 +766,101 @@ impl App {
         }
     }
 
+    /// Paste is data only. It cannot leave search, open a review, or confirm an action.
+    pub fn on_paste(&mut self, text: &str) {
+        if !matches!(self.modal, Modal::None) {
+            return;
+        }
+        if self.tab == Tab::Agents && self.agent_searching {
+            let previous = self.agent_query.clone();
+            append_search_text(&mut self.agent_query, text);
+            if self.agent_query != previous {
+                self.agent_scroll = 0;
+                *self.agent_state.offset_mut() = 0;
+                self.rebuild_agents();
+            }
+        } else if self.searching && self.tab == Tab::Graph {
+            let mut query = self.graph.query.clone();
+            append_search_text(&mut query, text);
+            self.graph.set_query(query);
+        } else if self.searching && self.tab == Tab::Ports {
+            append_search_text(&mut self.query, text);
+            self.rebuild();
+        }
+    }
+
+    pub fn active_query(&self) -> &str {
+        if self.tab == Tab::Graph {
+            &self.graph.query
+        } else {
+            &self.query
+        }
+    }
+
+    fn search_services(&mut self, k: KeyEvent) {
+        if matches!(
+            k.code,
+            KeyCode::Up
+                | KeyCode::Down
+                | KeyCode::PageUp
+                | KeyCode::PageDown
+                | KeyCode::Home
+                | KeyCode::End
+        ) {
+            let delta = match k.code {
+                KeyCode::Up => -1,
+                KeyCode::Down => 1,
+                KeyCode::PageUp => -10,
+                KeyCode::PageDown => 10,
+                KeyCode::Home => -10_000,
+                _ => 10_000,
+            };
+            if self.tab == Tab::Graph {
+                self.graph.move_by(delta);
+            } else {
+                self.move_by(delta);
+            }
+            return;
+        }
+        let mut query = self.active_query().to_owned();
+        match k.code {
+            KeyCode::Esc => {
+                self.searching = false;
+                query.clear();
+            }
+            KeyCode::Enter => self.searching = false,
+            KeyCode::Backspace => {
+                query.pop();
+            }
+            KeyCode::Char('u') if k.modifiers.contains(KeyModifiers::CONTROL) => query.clear(),
+            KeyCode::Char(ch) => append_search_text(&mut query, ch.encode_utf8(&mut [0; 4])),
+            _ => {}
+        }
+        if self.tab == Tab::Graph {
+            self.graph.set_query(query);
+        } else {
+            self.query = query;
+            self.rebuild();
+        }
+    }
+
     pub fn on_key(&mut self, k: KeyEvent) {
+        // Preserve native terminal shortcuts. Modified characters must not become x/y/q.
+        if k.modifiers.intersects(
+            KeyModifiers::ALT | KeyModifiers::SUPER | KeyModifiers::HYPER | KeyModifiers::META,
+        ) {
+            return;
+        }
+        let supported_control = matches!(k.code, KeyCode::Char('c'))
+            || (matches!(self.modal, Modal::None)
+                && ((matches!(k.code, KeyCode::Char('u'))
+                    && (self.searching || self.agent_searching))
+                    || (self.tab == Tab::Agents
+                        && !self.agent_searching
+                        && matches!(k.code, KeyCode::Char('d' | 'u')))));
+        if k.modifiers.contains(KeyModifiers::CONTROL) && !supported_control {
+            return;
+        }
         if k.modifiers.contains(KeyModifiers::CONTROL) && matches!(k.code, KeyCode::Char('c')) {
             self.request_quit();
             return;
@@ -812,24 +912,7 @@ impl App {
             return;
         }
         if self.searching {
-            match k.code {
-                KeyCode::Esc => {
-                    self.searching = false;
-                    self.query.clear();
-                }
-                KeyCode::Enter => self.searching = false,
-                KeyCode::Backspace => {
-                    self.query.pop();
-                }
-                KeyCode::Down => self.move_by(1),
-                KeyCode::Up => self.move_by(-1),
-                KeyCode::Char('u') if k.modifiers.contains(KeyModifiers::CONTROL) => {
-                    self.query.clear()
-                }
-                KeyCode::Char(c) => self.query.push(c),
-                _ => {}
-            }
-            self.rebuild();
+            self.search_services(k);
             return;
         }
         if matches!(k.code, KeyCode::BackTab) {
@@ -842,6 +925,21 @@ impl App {
         }
         if self.tab == Tab::Graph && self.on_graph_key(k) {
             return;
+        }
+        if self.tab == Tab::Graph {
+            match k.code {
+                KeyCode::Esc => {
+                    if self.graph.query.is_empty() {
+                        self.request_quit();
+                    } else {
+                        self.graph.set_query(String::new());
+                    }
+                    return;
+                }
+                // These controls describe the Ports table, not the visible topology.
+                KeyCode::Char('s' | 'S' | 't' | 'd' | 'm') => return,
+                _ => {}
+            }
         }
         if self.tab == Tab::Agents {
             match k.code {
@@ -1027,6 +1125,34 @@ mod lifecycle_tests {
             freed,
             error: error.map(str::to_owned),
             ..Default::default()
+        }
+    }
+
+    fn entry(port: u16) -> PortEntry {
+        PortEntry {
+            id: format!("tcp:{port}"),
+            port,
+            protocol: Protocol::Tcp,
+            state: SocketState::Listen,
+            addresses: vec!["127.0.0.1".into()],
+            families: Vec::new(),
+            remote: None,
+            exposure: Exposure::Loopback,
+            pid: None,
+            pids: Vec::new(),
+            uid: None,
+            user: None,
+            process: None,
+            project: None,
+            framework: None,
+            container: None,
+            label: "Test listener".into(),
+            is_dev: true,
+            is_mine: true,
+            protected: false,
+            tunnel: None,
+            app_memory_bytes: 0,
+            helper_count: 0,
         }
     }
 
@@ -1233,31 +1359,7 @@ mod lifecycle_tests {
         ] {
             let mut app = quiet_app();
             app.tab = Tab::Graph;
-            app.rows = vec![PortEntry {
-                id: "tcp:3000".into(),
-                port: 3000,
-                protocol: Protocol::Tcp,
-                state: SocketState::Listen,
-                addresses: vec!["127.0.0.1".into()],
-                families: Vec::new(),
-                remote: None,
-                exposure: Exposure::Loopback,
-                pid: None,
-                pids: Vec::new(),
-                uid: None,
-                user: None,
-                process: None,
-                project: None,
-                framework: None,
-                container: None,
-                label: "Previous port selection".into(),
-                is_dev: true,
-                is_mine: true,
-                protected: false,
-                tunnel: None,
-                app_memory_bytes: 0,
-                helper_count: 0,
-            }];
+            app.rows = vec![entry(3000)];
             app.state.select(Some(0));
             app.graph.set_graph(Graph {
                 nodes: vec![selected_node],
@@ -1267,6 +1369,8 @@ mod lifecycle_tests {
             for key in [
                 KeyCode::Char('x'),
                 KeyCode::Char('X'),
+                KeyCode::Delete,
+                KeyCode::Backspace,
                 KeyCode::Char('e'),
                 KeyCode::Enter,
             ] {
@@ -1278,6 +1382,223 @@ mod lifecycle_tests {
                 assert!(!toast.ok);
                 assert!(toast.text.contains("no visible local listener"));
             }
+        }
+    }
+
+    #[test]
+    fn graph_delete_shortcuts_require_a_visible_listener_and_never_use_a_hidden_port() {
+        use super::super::graph::tests::node;
+        use holdmap_core::topology::Graph;
+
+        for key in [KeyCode::Delete, KeyCode::Backspace] {
+            let mut app = quiet_app();
+            app.tab = Tab::Graph;
+            app.rows = vec![entry(3000), entry(5000)];
+            app.state.select(Some(0));
+            app.graph.set_graph(Graph {
+                nodes: vec![node("visible-service", Some(5000), None)],
+                ..Default::default()
+            });
+            app.graph.set_query("unmatched-query".into());
+            app.on_key(KeyEvent::new(key, KeyModifiers::NONE));
+            assert_eq!(app.selected().unwrap().port, 3000);
+            assert!(matches!(app.modal, Modal::None));
+            assert!(app.busy.is_none());
+            assert!(app
+                .toast
+                .as_ref()
+                .unwrap()
+                .text
+                .contains("no visible local listener"));
+
+            app.graph.set_query(String::new());
+            app.on_key(KeyEvent::new(key, KeyModifiers::NONE));
+            assert_eq!(
+                app.selected().unwrap().port,
+                5000,
+                "the action targets the visible graph node"
+            );
+            assert!(
+                matches!(app.modal, Modal::None),
+                "no fixture engine executes a stop"
+            );
+            assert!(app.busy.is_none());
+        }
+    }
+}
+
+#[cfg(test)]
+mod input_tests {
+    use super::super::agents_view::test_agent;
+    use super::super::graph::tests::sample;
+    use super::*;
+
+    fn app(tab: Tab) -> App {
+        let mut app = App::empty(false);
+        app.tab = tab;
+        app.paused = true;
+        app.scanning = true;
+        app.graph.set_graph(sample());
+        app.set_agents_report(holdmap_core::agents::AgentsReport {
+            agents: vec![test_agent(111, "Claude Code"), test_agent(222, "Codex")],
+            ..Default::default()
+        });
+        app
+    }
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn paste_is_only_search_data_on_each_tab_and_cannot_dispatch_actions() {
+        for tab in [Tab::Ports, Tab::Graph, Tab::Agents] {
+            let mut app = app(tab);
+            app.on_paste("x\ny\nq\nv\n");
+            assert!(app.query.is_empty());
+            assert!(app.graph.query.is_empty());
+            assert!(app.agent_query.is_empty());
+            assert!(!app.quit);
+            assert_eq!(app.tab, tab);
+            app.on_key(key(KeyCode::Char('/')));
+            app.on_paste("x\r\ny\nq\nv\u{1b}\u{202e}");
+            let query = match tab {
+                Tab::Ports => &app.query,
+                Tab::Graph => &app.graph.query,
+                Tab::Agents => &app.agent_query,
+            };
+            assert_eq!(query, "x y q v");
+            assert!(app.searching || app.agent_searching);
+            assert!(!app.quit);
+            assert_eq!(app.tab, tab);
+            assert!(matches!(app.modal, Modal::None));
+            assert!(app.busy.is_none());
+            assert!(app.rx.try_recv().is_err());
+            app.on_key(key(KeyCode::Esc));
+            assert!(!app.searching && !app.agent_searching);
+            assert!(
+                app.query.is_empty() && app.graph.query.is_empty() && app.agent_query.is_empty()
+            );
+            assert!(!app.quit);
+        }
+    }
+
+    #[test]
+    fn modal_paste_is_ignored_even_when_search_was_active() {
+        let mut app = app(Tab::Graph);
+        app.searching = true;
+        app.graph.set_query("api".into());
+        app.modal = Modal::Confirm {
+            plan: Box::new(ActionPlan {
+                target: "review-only".into(),
+                owners: Vec::new(),
+                summary: "review".into(),
+                steps: Vec::new(),
+                blocked: None,
+                warnings: Vec::new(),
+                risk: Risk::Low,
+                allow_protected: false,
+            }),
+            headline: "review".into(),
+            agent_stops: None,
+            reviewed_target: None,
+            scroll: 0,
+            max_scroll: 20,
+        };
+        app.on_paste("y\nn\nq\n");
+        assert!(matches!(app.modal, Modal::Confirm { .. }));
+        assert_eq!(app.graph.query, "api");
+        assert!(app.busy.is_none());
+        assert!(app.rx.try_recv().is_err());
+        app.on_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::ALT));
+        assert!(
+            matches!(app.modal, Modal::Confirm { .. }),
+            "Alt+n is not confirmation input"
+        );
+        app.on_key(key(KeyCode::Char('n')));
+        assert!(matches!(app.modal, Modal::None));
+    }
+
+    #[test]
+    fn graph_search_and_navigation_do_not_mutate_hidden_ports_state() {
+        let mut app = app(Tab::Graph);
+        app.query = "ports-filter".into();
+        app.state.select(Some(3));
+        app.on_key(key(KeyCode::Char('/')));
+        app.on_paste("acme");
+        assert_eq!(app.graph.query, "acme");
+        assert_eq!(app.graph.selected_id(), Some("web"));
+        app.on_key(key(KeyCode::Down));
+        assert_eq!(app.graph.selected_id(), Some("api"));
+        app.on_key(key(KeyCode::PageDown));
+        assert_eq!(app.graph.selected_id(), Some("db"));
+        app.on_key(key(KeyCode::Home));
+        assert_eq!(app.graph.selected_id(), Some("web"));
+        app.on_key(key(KeyCode::End));
+        assert_eq!(app.graph.selected_id(), Some("db"));
+        app.on_key(key(KeyCode::Enter));
+        assert!(!app.searching);
+        app.on_key(key(KeyCode::Up));
+        assert_eq!(app.graph.selected_id(), Some("api"));
+        for code in ['s', 'S', 't', 'd', 'm'] {
+            app.on_key(key(KeyCode::Char(code)));
+        }
+        assert_eq!(app.sort, Sort::Port);
+        assert_eq!(app.proto, ProtoFilter::Both);
+        assert!(!app.dev_only && !app.mine_only && !app.reverse);
+        app.on_key(key(KeyCode::Esc));
+        assert!(app.graph.query.is_empty());
+        assert_eq!(app.graph.selected_id(), Some("api"));
+        assert_eq!(app.graph.rows.len(), 7);
+        assert_eq!(app.query, "ports-filter");
+        assert_eq!(app.state.selected(), Some(3));
+        assert!(!app.quit);
+    }
+
+    #[test]
+    fn modified_shortcuts_are_ignored_and_control_u_clears_only_visible_search() {
+        let mut app = app(Tab::Graph);
+        app.query = "ports-filter".into();
+        app.graph.set_query("acme".into());
+        for (code, modifiers) in [
+            (KeyCode::Char('q'), KeyModifiers::CONTROL),
+            (KeyCode::Char('q'), KeyModifiers::ALT),
+            (KeyCode::Char('p'), KeyModifiers::CONTROL),
+            (KeyCode::Char('p'), KeyModifiers::ALT),
+            (KeyCode::Char('v'), KeyModifiers::SUPER),
+            (KeyCode::Tab, KeyModifiers::ALT),
+        ] {
+            app.on_key(KeyEvent::new(code, modifiers));
+            assert!(!app.quit);
+            assert!(app.paused);
+            assert_eq!(app.tab, Tab::Graph);
+        }
+        app.on_key(key(KeyCode::Char('/')));
+        app.on_key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL));
+        assert_eq!(app.graph.query, "acme");
+        app.on_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
+        assert!(app.graph.query.is_empty());
+        assert_eq!(app.query, "ports-filter");
+        assert!(app.searching);
+    }
+
+    #[test]
+    fn typing_and_pasting_share_a_unicode_safe_search_bound_on_all_tabs() {
+        for tab in [Tab::Ports, Tab::Graph, Tab::Agents] {
+            let mut app = app(tab);
+            app.on_key(key(KeyCode::Char('/')));
+            app.on_paste(&"界".repeat(1000));
+            for _ in 0..100 {
+                app.on_key(key(KeyCode::Char('x')));
+            }
+            let query = match tab {
+                Tab::Ports => &app.query,
+                Tab::Graph => &app.graph.query,
+                Tab::Agents => &app.agent_query,
+            };
+            assert_eq!(query.len(), super::super::input::MAX_SEARCH_BYTES);
+            assert!(matches!(app.modal, Modal::None));
+            assert!(!app.quit);
         }
     }
 }

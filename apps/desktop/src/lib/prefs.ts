@@ -35,6 +35,12 @@ export function prefGet(name: string): string | null {
   return old;
 }
 
+/** Read a stored toggle; missing or malformed values use the documented default. */
+export function prefGetBoolean(name: string, fallback: boolean): boolean {
+  const value = prefGet(name);
+  return value === "1" ? true : value === "0" ? false : fallback;
+}
+
 /** Persist `holdmap.<name>` and drop any leftover `pw.<name>`. */
 export function prefSet(name: string, value: string): void {
   rawSet(PREFIX + name, value);

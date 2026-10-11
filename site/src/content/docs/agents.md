@@ -80,6 +80,13 @@ updates; **Refresh** still fetches an explicit update. It does not stop recordin
 The selected run and record remain stable during refreshes. Small windows stack the readable
 timeline below the graph.
 
+Use **All**, **Failed** or **No completion** to find the records you need. Search matches
+individual metadata records, and **Order** switches between chronological order and longest
+reported duration. Records without a duration stay last in duration order. The graph retains
+matching records, the inspected record and their reported parents; filtering does not change
+the recorded run. A finished record with an unknown outcome is not treated as missing completion.
+The shown/total count and **Reset activity view** make active filters easy to see and clear.
+
 Connections and Calls are **current source / Unreleased**. The 0.4.0 downloads predate Flow;
 build current source to use it. These captures use clearly labelled browser example metadata:
 

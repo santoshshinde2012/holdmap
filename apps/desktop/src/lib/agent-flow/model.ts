@@ -93,6 +93,7 @@ export interface AgentFlowProps {
   onstoprecording?: () => Promise<void>;
   onclearactivity?: () => Promise<void>;
   onactivitysetup?: (provider: "codex" | "claude") => Promise<string>;
+  onclearquery?: () => void;
 }
 
 export interface VisualNode {

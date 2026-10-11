@@ -99,6 +99,12 @@ The app isn't notarised or code-signed yet, so the OS asks once.
 | `⌘,` | Settings |
 | `?` | Every shortcut |
 
+In current source / Unreleased, **Settings → General → Single-key shortcuts** lets you disable
+letter and symbol shortcuts, including `/` and `j`/`k`. Arrow navigation and `⌘`/`Ctrl` shortcuts
+remain available. This is useful with speech input or when you want to reserve letter keys.
+Shortcuts respect text composition and native controls; port filters apply only in port views.
+The command palette keeps its active result valid as running services change.
+
 ## Agents map
 
 **Agents** (`⇧A`) shows each AI coding agent and developer tool that is running (Claude Code,

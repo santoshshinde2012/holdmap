@@ -99,6 +99,12 @@ current-source capabilities from published downloads.
 Website checks reject unresolved Markdown image placeholders and missing image sources or
 alt attributes; decorative images may use `alt=""`. Public browser checks load guide screenshots
 at desktop and mobile widths, as well as exercising the app demo.
+Keyboard changes must preserve input-method composition, native control keys and disabled
+single-key shortcuts. Calls diagnosis operates on metadata projections and retains only reported
+parent context; unknown outcomes and missing completion are distinct. Terminal paste tests must
+verify that pasted text cannot reach action or confirmation keys, and mode cleanup must cover
+partial setup, exit and unwinding. [Interaction research](docs/agent-flow.md#interaction-standards-and-research)
+records the primary standards and the limits of their application here.
 The desktop tests include a typography lint (use the `--fs-*`/`--fw-*` tokens from `app.css`, not
 raw values) and a WCAG AA contrast lint for both themes. Browser tests cover agent visibility,
 search, navigation and port details using deterministic demo data. The CLI integration tests

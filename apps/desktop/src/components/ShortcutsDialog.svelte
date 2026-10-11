@@ -1,24 +1,29 @@
 <script lang="ts">
   import Dialog from "./ui/Dialog.svelte";
   import Kbd from "./ui/Kbd.svelte";
-  let { onclose, mod = "Ctrl" }: { onclose: () => void; mod?: string } = $props();
-  const groups = $derived<[string, [string[], string][]][]>([
-    ["Navigate", [[[mod, "K"], "Command palette"], [["/"], "Search"], [["↑", "↓"], "Move selection (or J / K)"], [["←", "→"], "Collapse · expand section"], [["Home", "End"], "First · last port"], [["↵"], "Open details"], [["Esc"], "Clear search · close"]]],
+  let { onclose, mod = "Ctrl", singleKeyShortcuts = true }: { onclose: () => void; mod?: string; singleKeyShortcuts?: boolean } = $props();
+  const allGroups = $derived<[string, [string[], string][]][]>([
+    ["Navigate", [[[mod, "K"], "Command palette"], [[mod, "F"], "Search"], [["/"], "Search"], [["↑", "↓"], singleKeyShortcuts ? "Move selection (or J / K)" : "Move selection"], [["←", "→"], "Collapse · expand section"], [["Home", "End"], "First · last port"], [["↵"], "Open details"], [["Esc"], "Clear search · close"]]],
     ["Act", [[["⌫"], "Stop selected (graceful)"], [["⇧", "⌫"], "Force kill selected"], [["O"], "Open in browser"], [["C"], "Copy URL"], [["P"], "Pin / unpin"], [["⇧", "P"], "Pin with a label…"], [["S"], "Stop the service's cluster"], [["R"], "Refresh now"]]],
     ["Filter", [[["A"], "Listening ↔ all sockets"], [["T"], "Protocol: any → TCP → UDP"], [["D"], "Dev servers only"], [["M"], "Mine only"], [["E"], "Network-exposed only"]]],
     ["View", [[["G"], "List ↔ graph"], [["⇧", "A"], "Agents, tools & apps (reveal · stop)"], [["H"], "Recently stopped"], [[mod, ","], "Settings"], [["⇧", "L"], "Cycle theme"], [["?"], "This help"]]],
   ]);
+  const groups = $derived(allGroups.map(([name, items]): [string, [string[], string][]] => [name, items.filter(([keys]) => singleKeyShortcuts || keys.some((key) => key === mod || ["↑", "↓", "←", "→", "Home", "End", "↵", "Esc", "⌫"].includes(key)))]));
 </script>
 
 <Dialog title="Keyboard shortcuts" description="Everything in holdmap works without a mouse." icon="keyboard" size="lg" {onclose} initialFocus="self">
+  {#if !singleKeyShortcuts}<p class="hint">Single-key shortcuts are off. Enable them in Settings → General. Cmd/Ctrl shortcuts and arrow navigation remain available.</p>{/if}
   <div class="grid">
     {#each groups as [name, items]}
+      {#if items.length}
       <section>
         <h3>{name}</h3>
         {#each items as [keys, label]}<div class="item"><span>{label}</span><Kbd {keys} /></div>{/each}
       </section>
+      {/if}
     {/each}
   </div>
+  <p class="hint">Port filters and selected-port actions apply in List and Graph. Shortcuts stay out of text fields and native controls.</p>
   <p class="hint">Search understands <code>:3000</code>, <code>3000-3999</code>, <code>proto:udp</code>, <code>pid:123</code> and free text like <code>next</code> or a branch name.</p>
 </Dialog>
 

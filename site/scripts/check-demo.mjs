@@ -148,6 +148,25 @@ try {
     if (await flow.locator(".svelte-flow__edge.animated").count()) throw new Error("Parent links must not simulate message traffic");
     await measureViewport("after-agent-flow");
   });
+  await check("Calls diagnosis filters failures with reported parents and resets the view", async () => {
+    const flow = frame.getByRole("region", { name: "Agent flow", exact: true });
+    const timeline = flow.getByRole("region", { name: "Recorded activity timeline", exact: true });
+    await flow.getByRole("radio", { name: "Failed", exact: true }).click();
+    await flow.getByText("1 of 10 records shown", { exact: true }).waitFor();
+    if (await timeline.getByRole("button").count() !== 1 || await flow.locator(".flow-node").count() !== 5 || await flow.locator(".svelte-flow__edge").count() !== 4) throw new Error("Failure diagnosis must retain only the failed record and its reported parents");
+    await timeline.getByRole("button").click();
+    const inspector = flow.getByRole("region", { name: "Selected relationship details", exact: true });
+    await inspector.getByText("Failed", { exact: true }).waitFor();
+    const search = frame.getByLabel("Search agents", { exact: true });
+    await search.fill("no-such-reported-tool");
+    await flow.getByText("0 of 10 records shown", { exact: true }).waitFor();
+    if (await timeline.getByRole("button").count() !== 0) throw new Error("Metadata search must narrow individual records");
+    await flow.getByLabel("Order", { exact: true }).selectOption("duration");
+    await flow.getByRole("button", { name: "Reset activity view", exact: true }).click();
+    await flow.getByText("10 of 10 records shown", { exact: true }).waitFor();
+    if (await search.inputValue() !== "" || await flow.getByLabel("Order", { exact: true }).inputValue() !== "time") throw new Error("Reset must clear search, filter and ordering");
+    await inspector.getByText("Failed", { exact: true }).waitFor();
+  });
   await check("Stop :3000 asks first, then frees the port (simulated)", async () => {
     await try_("Stop :3000");
     const dialog = frame.locator('[role="alertdialog"]');

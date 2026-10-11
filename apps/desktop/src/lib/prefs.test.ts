@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { prefGet, prefSet } from "./prefs";
+import { prefGet, prefGetBoolean, prefSet } from "./prefs";
 
 afterEach(() => {
   localStorage.clear();
@@ -30,5 +30,16 @@ describe("prefs", () => {
     prefSet("onboarded", "1");
     expect(localStorage.getItem("holdmap.onboarded")).toBe("1");
     expect(localStorage.getItem("pw.onboarded")).toBeNull();
+  });
+
+  it("uses a toggle's default and preserves the user's explicit choice", () => {
+    expect(prefGetBoolean("singleKeyShortcuts", true)).toBe(true);
+    prefSet("singleKeyShortcuts", "0");
+    expect(prefGetBoolean("singleKeyShortcuts", true)).toBe(false);
+    prefSet("singleKeyShortcuts", "1");
+    expect(prefGetBoolean("singleKeyShortcuts", false)).toBe(true);
+    prefSet("singleKeyShortcuts", "invalid");
+    expect(prefGetBoolean("singleKeyShortcuts", true)).toBe(true);
+    expect(prefGetBoolean("singleKeyShortcuts", false)).toBe(false);
   });
 });

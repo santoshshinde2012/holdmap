@@ -142,6 +142,15 @@ const captures = [
     { name: `desktop-agent-connections-${theme}.png`, theme, prepare: (page) => openAgentFlow(page) },
     { name: `desktop-agent-flow-${theme}.png`, theme, prepare: (page) => openAgentFlow(page, true) },
     { name: `desktop-agent-flow-narrow-${theme}.png`, theme, viewport: { width: 820, height: 1200 }, prepare: (page) => openAgentFlow(page, true) },
+    { name: `desktop-agent-triage-${theme}.png`, theme, async prepare(page) {
+      await openAgentFlow(page, true);
+      const flow = page.getByRole("region", { name: "Agent flow", exact: true });
+      await flow.getByRole("radio", { name: "Failed", exact: true }).click();
+      await expect(flow.getByText("1 of 10 records shown", { exact: true })).toBeVisible();
+      await expect(flow.getByRole("region", { name: "Recorded activity timeline" }).getByRole("button")).toHaveCount(1);
+      await expect(flow.locator(".flow-node")).toHaveCount(5);
+      await flow.getByRole("button", { name: "Fit all relationships in view", exact: true }).click();
+    } },
   ]),
   ...["dark", "light"].map((theme) => ({ name: `desktop-shutdown-schedule-${theme}.png`, theme, async prepare(page) {
     await page.getByRole("button", { name: "Settings", exact: true }).click();

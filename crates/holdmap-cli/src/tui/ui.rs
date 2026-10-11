@@ -101,7 +101,19 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         Span::styled(" ⇥  ", theme::muted()),
     ];
     let mut stats: Vec<Span> = Vec::new();
-    if let Some(e) = &app.engine {
+    if app.tab == Tab::Graph {
+        stats.push(Span::styled(
+            holdmap_core::util::count(app.graph.visible_node_count(), "service", "services"),
+            theme::heading(),
+        ));
+        stats.push(Span::styled(
+            format!(
+                " · {}",
+                holdmap_core::util::count(app.graph.graph.edges.len(), "total link", "total links")
+            ),
+            theme::muted(),
+        ));
+    } else if let Some(e) = &app.engine {
         let s = e.snapshot();
         let dev = app.rows.iter().filter(|r| r.is_dev).count();
         let exposed = app
@@ -136,40 +148,65 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
             theme::muted(),
         ));
     }
-    let right = Line::from(vec![
-        chip(
-            if app.show_all {
-                "All sockets"
-            } else {
-                "Listening"
-            },
-            true,
-        ),
-        Span::raw(" "),
-        chip(
-            match app.proto {
-                ProtoFilter::Both => "TCP+UDP",
-                ProtoFilter::Tcp => "TCP",
-                ProtoFilter::Udp => "UDP",
-            },
-            app.proto != ProtoFilter::Both,
-        ),
-        Span::raw(" "),
-        chip("Dev", app.dev_only),
-        Span::raw(" "),
-        chip("Mine", app.mine_only),
-        Span::raw(" "),
-        Span::styled(
-            if app.paused {
-                "⏸ paused "
-            } else if app.scanning {
-                "⟳ "
-            } else {
-                "  "
-            },
-            theme::muted(),
-        ),
-    ])
+    let right = if app.tab == Tab::Graph {
+        Line::from(vec![
+            chip(
+                if app.show_all {
+                    "All services"
+                } else {
+                    "Dev + peers"
+                },
+                true,
+            ),
+            Span::raw(" "),
+            chip("External", app.graph.show_external),
+            Span::styled(
+                if app.paused {
+                    " ⏸ paused "
+                } else if app.scanning {
+                    " ⟳ "
+                } else {
+                    " "
+                },
+                theme::muted(),
+            ),
+        ])
+    } else {
+        Line::from(vec![
+            chip(
+                if app.show_all {
+                    "All sockets"
+                } else {
+                    "Listening"
+                },
+                true,
+            ),
+            Span::raw(" "),
+            chip(
+                match app.proto {
+                    ProtoFilter::Both => "TCP+UDP",
+                    ProtoFilter::Tcp => "TCP",
+                    ProtoFilter::Udp => "UDP",
+                },
+                app.proto != ProtoFilter::Both,
+            ),
+            Span::raw(" "),
+            chip("Dev", app.dev_only),
+            Span::raw(" "),
+            chip("Mine", app.mine_only),
+            Span::raw(" "),
+            Span::styled(
+                if app.paused {
+                    "⏸ paused "
+                } else if app.scanning {
+                    "⟳ "
+                } else {
+                    "  "
+                },
+                theme::muted(),
+            ),
+        ])
+    }
     .alignment(Alignment::Right);
     // Stats are listed most-important first; on a narrow terminal the tail is dropped whole
     // rather than cut mid-word under the filter chips.
@@ -186,24 +223,38 @@ fn draw_search(f: &mut Frame, app: &App, area: Rect) {
         super::agents_ui::draw_search(f, app, area);
         return;
     }
+    let query = app.active_query();
     let line = if app.searching {
         Line::from(vec![
             Span::styled(" / ", theme::title()),
-            Span::raw(app.query.clone()),
+            Span::raw(query.to_owned()),
             Span::styled(
                 "▏",
                 Style::new().fg(ACCENT).add_modifier(Modifier::SLOW_BLINK),
             ),
             Span::styled(
-                "   Enter to keep · Esc to clear · try :3000, 3000-3999, proto:udp, vite",
+                if app.tab == Tab::Graph {
+                    "   Enter to keep · Esc to clear · service, project, cluster, :3000, pid:123"
+                } else {
+                    "   Enter to keep · Esc to clear · try :3000, 3000-3999, proto:udp, vite"
+                },
                 theme::muted(),
             ),
         ])
-    } else if !app.query.is_empty() {
+    } else if !query.is_empty() {
         Line::from(vec![
             Span::styled(" filter ", theme::muted()),
-            Span::styled(app.query.clone(), theme::title()),
+            Span::styled(query.to_owned(), theme::title()),
             Span::styled("  (/ to edit, Esc to clear)", theme::muted()),
+        ])
+    } else if app.tab == Tab::Graph {
+        Line::from(vec![
+            Span::styled(" Press ", theme::muted()),
+            Span::styled("/", theme::title()),
+            Span::styled(
+                " to search services · select a service to see its connections",
+                theme::muted(),
+            ),
         ])
     } else {
         Line::from(vec![
@@ -582,7 +633,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
         ]
     } else if app.tab == Tab::Graph {
         &[
-            &[("↑↓", "move"), ("Tab", "agents")],
+            &[("↑↓", "move"), ("/", "search"), ("Tab", "agents")],
             &[("x", "stop"), ("C", "stop cluster"), ("o", "open")],
             &[("h", "external"), ("a", "all")],
             &[("?", "help"), ("q", "quit")],
@@ -815,35 +866,59 @@ fn draw_help(f: &mut Frame, tab: Tab) {
     }
     let area = centered(f.area(), 84, 27);
     f.render_widget(Clear, area);
-    let rows = [
-        ("↑ ↓ / j k", "Move selection (PgUp/PgDn, g/G)"),
-        ("/", "Search: text, :3000, 3000-3999, proto:udp, pid:123"),
-        ("Enter / e", "Explain why the port is busy"),
-        (
-            "x / Del",
-            "Stop gracefully (SIGTERM → SIGKILL) with confirmation",
-        ),
-        ("X", "Force kill (SIGKILL) with confirmation"),
-        (
-            "Tab / v",
-            "Switch Ports → Graph → Agents (selection follows)",
-        ),
-        (
-            "C",
-            "Stop the selected service's cluster in dependency order",
-        ),
-        ("h", "Graph: show/hide external hosts"),
-        ("o", "Open http://localhost:<port> in the browser"),
-        ("c", "Copy URL to clipboard (OSC 52)"),
-        ("s / S", "Cycle sort key / reverse"),
-        ("t", "Protocol: TCP+UDP → TCP → UDP"),
-        ("d", "Only dev servers"),
-        ("m", "Only my processes"),
-        ("a", "Listening only ↔ all sockets"),
-        ("r / F5", "Refresh now (auto every 2 s)"),
-        ("p", "Pause auto-refresh"),
-        ("q / Esc", "Quit"),
-    ];
+    let rows: &[(&str, &str)] = if tab == Tab::Graph {
+        &[
+            ("↑ ↓ / j k", "Move service selection (PgUp/PgDn, g/G)"),
+            ("/", "Search services, projects, clusters, :3000, pid:123"),
+            (
+                "Enter / e",
+                "Explain the selected service's first local port",
+            ),
+            ("x", "Review a graceful stop of the service's local port"),
+            ("X", "Review a force kill of the service's local port"),
+            ("C", "Review stopping its cluster in dependency order"),
+            ("Tab / v", "Next tab: Agents"),
+            ("Shift+Tab", "Previous tab: Ports (selection follows)"),
+            ("h", "Show/hide external hosts"),
+            ("o / c", "Open / copy the selected service's local URL"),
+            ("a", "Dev services and peers ↔ all services"),
+            ("r / F5", "Refresh now (auto every 2 s)"),
+            ("p", "Pause auto-refresh"),
+            ("Ctrl+u", "Clear the current search while editing"),
+            ("paste", "Text only while searching; ignored elsewhere"),
+            ("q / Esc", "Quit (Esc clears an active filter first)"),
+        ]
+    } else {
+        &[
+            ("↑ ↓ / j k", "Move selection (PgUp/PgDn, g/G)"),
+            ("/", "Search: text, :3000, 3000-3999, proto:udp, pid:123"),
+            ("Enter / e", "Explain why the port is busy"),
+            (
+                "x / Del",
+                "Stop gracefully (SIGTERM → SIGKILL) with confirmation",
+            ),
+            ("X", "Force kill (SIGKILL) with confirmation"),
+            (
+                "Tab / v",
+                "Switch Ports → Graph → Agents (selection follows)",
+            ),
+            (
+                "C",
+                "Stop the selected service's cluster in dependency order",
+            ),
+            ("h", "Graph: show/hide external hosts"),
+            ("o", "Open http://localhost:<port> in the browser"),
+            ("c", "Copy URL to clipboard (OSC 52)"),
+            ("s / S", "Cycle sort key / reverse"),
+            ("t", "Protocol: TCP+UDP → TCP → UDP"),
+            ("d", "Only dev servers"),
+            ("m", "Only my processes"),
+            ("a", "Listening only ↔ all sockets"),
+            ("r / F5", "Refresh now (auto every 2 s)"),
+            ("p", "Pause auto-refresh"),
+            ("q / Esc", "Quit"),
+        ]
+    };
     let mut lines: Vec<Line> = rows
         .iter()
         .map(|(k, v)| {
@@ -898,6 +973,35 @@ mod tests {
     fn section_rule_never_overflows_a_tiny_panel() {
         let l = section("Container", 4);
         assert_eq!(l.width(), "CONTAINER ".len());
+    }
+
+    #[test]
+    fn graph_search_renders_visible_filter_and_recoverable_empty_state() {
+        use super::super::app::{App, Tab};
+        use super::super::graph::tests::sample;
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let mut app = App::empty(false);
+        app.tab = Tab::Graph;
+        app.query = "hidden-ports-filter".into();
+        app.graph.set_graph(sample());
+        app.graph.set_query("missing-service".into());
+        let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+        terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
+        let visible = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(visible.contains("missing-service"));
+        assert!(visible.contains("No services match this search. Press Esc to clear it."));
+        assert!(!visible.contains("hidden-ports-filter"));
+        assert!(!visible.contains("TCP+UDP"));
+        assert!(!visible.contains("sorted by"));
+        assert!(app.table_area.width > 0);
     }
 
     #[test]

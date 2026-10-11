@@ -61,7 +61,11 @@ try {
       }
       await page.evaluate(async () => {
         await document.fonts.ready;
-        await Promise.all([...document.images].filter((image) => image.getBoundingClientRect().height && image.getBoundingClientRect().top < innerHeight).map((image) => image.decode()));
+        await Promise.all([...document.images].filter((image) => {
+          const bounds = image.getBoundingClientRect();
+          // Offscreen lazy images may never load; only await images in this capture.
+          return bounds.height > 0 && bounds.bottom > 0 && bounds.top < innerHeight;
+        }).map((image) => image.decode()));
       });
       assert.equal(await page.locator("html").getAttribute("data-theme"), capture.theme);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${capture.name}: horizontal overflow`);

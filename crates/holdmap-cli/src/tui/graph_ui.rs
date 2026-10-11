@@ -49,6 +49,7 @@ fn outgoing(g: &Graph, id: &str) -> String {
 }
 
 pub fn draw_graph(f: &mut Frame, app: &mut App, list: Rect, detail: Rect) {
+    app.table_area = list;
     draw_tree(f, app, list);
     draw_node(f, app, detail);
 }
@@ -99,11 +100,16 @@ fn draw_tree(f: &mut Frame, app: &mut App, area: Rect) {
         .collect();
     let s = &g.stats;
     let n = holdmap_core::util::count;
+    let count = if v.query.is_empty() {
+        n(v.visible_node_count(), "service", "services")
+    } else {
+        format!("{} of {} services", v.visible_node_count(), s.nodes)
+    };
     let title = format!(
         " Graph · {} · {} · {} ",
-        n(s.nodes, "service", "services"),
-        n(s.edges, "link", "links"),
-        n(s.clusters, "cluster", "clusters")
+        count,
+        n(s.edges, "total link", "total links"),
+        n(s.clusters, "total cluster", "total clusters")
     );
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
@@ -112,7 +118,11 @@ fn draw_tree(f: &mut Frame, app: &mut App, area: Rect) {
     if items.is_empty() {
         f.render_widget(
             Paragraph::new(Span::styled(
-                "No dev services yet — press a to include everything.",
+                if v.query.is_empty() {
+                    "No dev services yet — press a to include everything."
+                } else {
+                    "No services match this search. Press Esc to clear it."
+                },
                 theme::muted(),
             ))
             .block(block),

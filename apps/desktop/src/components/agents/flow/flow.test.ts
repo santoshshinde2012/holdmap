@@ -97,6 +97,24 @@ describe("flow UI evidence and recording", () => {
     const { container } = render(ActivityTimeline, { run: activityRuns([s])[0], chosen: null, onselect() {} });
     expect(container.textContent).toContain("Ended"); expect(container.textContent).not.toContain("Time unavailable");
     expect(container.textContent).toContain("Status unknown");
+    expect(container.textContent).not.toContain("No completion received");
+  });
+  it("renders supplied triage rows in their selected order with shown and total counts", () => {
+    const first = span({ id: "first", name: "First call" }), second = span({ id: "second", name: "Second call" });
+    const run = activityRuns([first, second])[0];
+    const { getAllByRole, container } = render(ActivityTimeline, { run, rows: [second], chosen: null, onselect() {} });
+    expect(getAllByRole("button")).toHaveLength(1);
+    expect(getAllByRole("button")[0].textContent).toContain("Second call");
+    expect(container.textContent).toContain("1 of 2");
+    expect(container.textContent).not.toContain("First call");
+    expect(run.spans).toHaveLength(2);
+  });
+  it("provides reset guidance when no recorded rows match without hiding the full run", () => {
+    const run = activityRuns([span()])[0];
+    const { container, queryByRole } = render(ActivityTimeline, { run, rows: [], chosen: null, onselect() {} });
+    expect(container.textContent).toContain("0 of 1");
+    expect(container.textContent).toContain("Reset the filters or clear your search");
+    expect(queryByRole("button")).toBeNull();
   });
   it("distinguishes serialized payload sizes and unverified reported PIDs in call inspection", () => {
     const s = span(), graph = callGraph(activityRuns([s])[0]);
