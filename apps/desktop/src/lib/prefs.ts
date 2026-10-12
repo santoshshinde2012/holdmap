@@ -41,6 +41,12 @@ export function prefGetBoolean(name: string, fallback: boolean): boolean {
   return value === "1" ? true : value === "0" ? false : fallback;
 }
 
+/** Saved values can outlive an app version or be edited; only accept known choices. */
+export function prefGetChoice<T extends string>(name: string, choices: readonly T[], fallback: T): T {
+  const value = prefGet(name);
+  return choices.includes(value as T) ? value as T : fallback;
+}
+
 /** Persist `holdmap.<name>` and drop any leftover `pw.<name>`. */
 export function prefSet(name: string, value: string): void {
   rawSet(PREFIX + name, value);

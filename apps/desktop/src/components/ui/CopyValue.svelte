@@ -3,6 +3,7 @@
   // and has a copy button (revealed on hover / keyboard focus, always reachable by Tab).
   import Icon from "../Icon.svelte";
   import { tooltip } from "../../lib/tooltip";
+  import { onDestroy } from "svelte";
 
   let {
     value,
@@ -18,24 +19,38 @@
     mono?: boolean;
     /** Noun for the toast and the button label ("Path", "Command"…). */
     what?: string;
-    oncopy: (text: string, what: string) => void;
+    oncopy: (text: string, what: string) => boolean | void | Promise<boolean | void>;
     /** Allow wrapping onto several lines instead of truncating. */
     wrap?: boolean;
   } = $props();
 
   let copied = $state(false);
+  let copying = $state(false);
+  let failed = $state(false);
+  let alive = true;
   let t: ReturnType<typeof setTimeout> | undefined;
-  function copy() {
-    oncopy(value, what);
-    copied = true;
+  onDestroy(() => { alive = false; clearTimeout(t); });
+  async function copy() {
+    if (copying) return;
+    copying = true; copied = false; failed = false;
     clearTimeout(t);
-    t = setTimeout(() => (copied = false), 1400);
+    try {
+      const result = await oncopy(value, what);
+      if (!alive) return;
+      copied = result !== false;
+      failed = result === false;
+    } catch {
+      if (alive) failed = true;
+    } finally {
+      copying = false;
+      if (alive) t = setTimeout(() => { copied = false; failed = false; }, 1400);
+    }
   }
 </script>
 
 <span class="cv" class:wrap>
   <span class="txt selectable" class:mono use:tooltip={wrap ? null : { text: value, mono, onlyIfTruncated: true, delay: 300 }}>{display ?? value}</span>
-  <button type="button" class="cp" class:copied aria-label={copied ? `${what} copied` : `Copy ${what.toLowerCase()}`} use:tooltip={copied ? "Copied" : `Copy ${what.toLowerCase()}`} onclick={copy}>
+  <button type="button" class="cp" class:copied disabled={copying} aria-busy={copying || undefined} aria-label={failed ? `${what} could not be copied` : copied ? `${what} copied` : `Copy ${what.toLowerCase()}`} use:tooltip={failed ? "Couldn't copy" : copied ? "Copied" : `Copy ${what.toLowerCase()}`} onclick={copy}>
     <Icon name={copied ? "check" : "copy"} size={12} />
   </button>
 </span>

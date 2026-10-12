@@ -57,6 +57,7 @@ impl AgentStopOutcome {
 
 impl ReviewedAgentStops {
     pub fn preview(engine: &Engine, agents: &[Agent]) -> Result<Self> {
+        let protection = crate::project_policy::ProjectProtection::nearest()?;
         let mut plans = Vec::new();
         let mut seen = HashSet::new();
         for agent in agents {
@@ -72,6 +73,7 @@ impl ReviewedAgentStops {
                 }
                 let plan = engine.plan(&Target::Port(listener.port), &options(listener.protocol));
                 verify_effects(engine, agent, &plan)?;
+                let plan = protection.apply(engine, plan);
                 plans.push(ReviewedAgentPort {
                     name: agent.name.clone(),
                     port: listener.port,
@@ -90,6 +92,15 @@ impl ReviewedAgentStops {
     }
 
     pub fn validate_fresh(&self, engine: &Engine) -> Result<()> {
+        let protection = crate::project_policy::ProjectProtection::nearest()?;
+        self.validate_with_policy(engine, &protection)
+    }
+
+    fn validate_with_policy(
+        &self,
+        engine: &Engine,
+        protection: &crate::project_policy::ProjectProtection,
+    ) -> Result<()> {
         let report = engine.agents();
         for reviewed in &self.plans {
             let agent = report
@@ -105,8 +116,15 @@ impl ReviewedAgentStops {
             {
                 bail!("The agent or its service ownership changed. Refresh and review again.");
             }
-            verify_effects(engine, agent, &reviewed.plan)?;
-            let current = engine.plan(&Target::Port(reviewed.port), &options(reviewed.protocol));
+            verify_effects(
+                engine,
+                agent,
+                &protection.apply(engine, reviewed.plan.clone()),
+            )?;
+            let current = protection.apply(
+                engine,
+                engine.plan(&Target::Port(reviewed.port), &options(reviewed.protocol)),
+            );
             verify_effects(engine, agent, &current)?;
             if current.risk > reviewed.plan.risk || !reviewed.plan.same_effects(&current) {
                 bail!(
@@ -452,6 +470,35 @@ mod tests {
         );
         assert!(result.is_err());
         assert_eq!((executions, records), (0, 0));
+    }
+
+    #[test]
+    fn project_protection_on_another_listener_refuses_the_whole_agent_review() {
+        let (procs, raw) = fixture();
+        let e = engine(procs.clone(), raw.clone());
+        let mut review = preview(&e);
+        let protection = crate::project_policy::ProjectProtection::testing(&[5432]);
+        let mut changed = raw;
+        changed.push(listener(104, 5432, Protocol::Tcp));
+        let fresh = engine(procs, changed);
+        assert!(review.validate_with_policy(&fresh, &protection).is_err());
+        // Display a blocked later plan; execution must not run an earlier permitted one.
+        review.plans[1].plan = protection.apply(&fresh, review.plans[1].plan.clone());
+        let mut effects = 0;
+        let mut history = 0;
+        let result = review.execute_with(
+            &fresh,
+            |p| {
+                effects += 1;
+                success(&p.plan)
+            },
+            |_, _| {
+                history += 1;
+                Ok(())
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!((effects, history), (0, 0));
     }
 
     #[test]

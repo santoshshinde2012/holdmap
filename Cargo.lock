@@ -2097,17 +2097,22 @@ dependencies = [
 name = "holdmap-desktop"
 version = "0.5.0"
 dependencies = [
+ "base64 0.22.1",
  "glib",
  "holdmap-activity",
  "holdmap-core",
+ "minisign-verify",
+ "semver",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",
  "tauri-plugin-global-shortcut",
  "tauri-plugin-notification",
  "tauri-plugin-updater",
+ "tempfile",
 ]
 
 [[package]]

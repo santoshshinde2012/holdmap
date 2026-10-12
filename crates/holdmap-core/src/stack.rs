@@ -37,6 +37,12 @@ pub const LEGACY_FILE_NAME: &str = ".portwise.toml";
 
 /// Default time `up` waits for a service to accept connections.
 pub const DEFAULT_READY_TIMEOUT_S: u64 = 60;
+/// Maximum stack-file size; configuration should stay cheap to read and parse.
+pub const MAX_FILE_BYTES: usize = 1024 * 1024;
+/// Maximum number of services managed by one stack.
+pub const MAX_SERVICES: usize = 512;
+/// Maximum time a service may take to become ready.
+pub const MAX_READY_TIMEOUT_S: u64 = 3600;
 
 /// A problem with a `.holdmap.toml`.
 #[derive(Debug, thiserror::Error)]
@@ -241,10 +247,11 @@ fn check_trusted_open(path: &Path, file: &std::fs::File) -> Result<(), StackErro
 /// Read and validate a stack file (refusing one that isn't [`check_trusted`]).
 pub fn load(path: &Path) -> Result<Stack, StackError> {
     use std::io::Read;
-    let mut file = open_stack_file(path)?;
+    let file = open_stack_file(path)?;
     check_trusted_open(path, &file)?;
     let mut text = String::new();
-    file.read_to_string(&mut text)
+    file.take(MAX_FILE_BYTES as u64 + 1)
+        .read_to_string(&mut text)
         .map_err(|source| StackError::Io {
             path: path.to_path_buf(),
             source,
@@ -269,10 +276,20 @@ pub fn parse(text: &str, root: &Path, file: &Path) -> Result<Stack, StackError> 
         path: file.to_path_buf(),
         message,
     };
+    if text.len() > MAX_FILE_BYTES {
+        return Err(invalid(format!(
+            "stack files must be at most {MAX_FILE_BYTES} bytes"
+        )));
+    }
     let raw: RawFile = toml::from_str(text).map_err(|e| StackError::Parse {
         path: file.to_path_buf(),
         message: e.message().to_string(),
     })?;
+    if raw.services.len() > MAX_SERVICES {
+        return Err(invalid(format!(
+            "a stack may define at most {MAX_SERVICES} services"
+        )));
+    }
     let mut ports: BTreeMap<u16, &str> = BTreeMap::new();
     for (name, s) in &raw.services {
         if !valid_name(name) {
@@ -305,6 +322,13 @@ pub fn parse(text: &str, root: &Path, file: &Path) -> Result<Stack, StackError> 
                 )));
             }
         }
+        if s.ready_timeout_s
+            .is_some_and(|timeout| timeout == 0 || timeout > MAX_READY_TIMEOUT_S)
+        {
+            return Err(invalid(format!(
+                "service `{name}`: ready_timeout_s must be 1–{MAX_READY_TIMEOUT_S} seconds"
+            )));
+        }
         for d in &s.depends_on {
             if !raw.services.contains_key(d) {
                 return Err(invalid(format!(
@@ -313,7 +337,7 @@ pub fn parse(text: &str, root: &Path, file: &Path) -> Result<Stack, StackError> 
             }
         }
         for k in s.env.keys() {
-            if k.is_empty() || k.contains('=') {
+            if k.is_empty() || k.contains(['=', '\0']) || s.env[k].contains('\0') {
                 return Err(invalid(format!(
                     "service `{name}`: invalid environment variable name `{k}`"
                 )));
@@ -362,29 +386,39 @@ pub fn parse(text: &str, root: &Path, file: &Path) -> Result<Stack, StackError> 
 
 /// Deterministic topological order (dependencies first, then by name); errors on a cycle.
 fn topo_order(services: &BTreeMap<String, RawService>) -> Result<Vec<String>, String> {
-    let mut done: BTreeSet<String> = BTreeSet::new();
+    let mut remaining: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut dependents: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    let mut ready = BTreeSet::new();
+    for (name, service) in services {
+        let dependencies: BTreeSet<&str> = service.depends_on.iter().map(String::as_str).collect();
+        remaining.insert(name, dependencies.len());
+        if dependencies.is_empty() {
+            ready.insert(name.as_str());
+        }
+        for dependency in dependencies {
+            dependents.entry(dependency).or_default().push(name);
+        }
+    }
     let mut out = Vec::new();
-    while out.len() < services.len() {
-        let ready = services
-            .iter()
-            .find(|(n, s)| !done.contains(*n) && s.depends_on.iter().all(|d| done.contains(d)));
-        match ready {
-            Some((n, _)) => {
-                done.insert(n.clone());
-                out.push(n.clone());
-            }
-            None => {
-                let left: Vec<&str> = services
-                    .keys()
-                    .filter(|n| !done.contains(*n))
-                    .map(String::as_str)
-                    .collect();
-                return Err(format!(
-                    "dependency cycle between services: {}",
-                    left.join(", ")
-                ));
+    while let Some(name) = ready.pop_first() {
+        out.push(name.to_string());
+        for dependent in dependents.get(name).into_iter().flatten() {
+            let count = remaining.get_mut(dependent).expect("known dependent");
+            *count -= 1;
+            if *count == 0 {
+                ready.insert(*dependent);
             }
         }
+    }
+    if out.len() != services.len() {
+        let left: Vec<&str> = remaining
+            .into_iter()
+            .filter_map(|(name, count)| (count != 0).then_some(name))
+            .collect();
+        return Err(format!(
+            "dependency cycle between services: {}",
+            left.join(", ")
+        ));
     }
     Ok(out)
 }
@@ -722,6 +756,56 @@ port = 5432
         assert!(bad("[services.a]\nport = 1\nprot = 2").contains("unknown field"));
         assert!(bad("port = ").contains(".holdmap.toml"));
         assert!(bad("[services.a]\nport = 70000").contains(".holdmap.toml"));
+        assert!(bad("[services.a]\nport = 1\nready_timeout_s = 0").contains("1–3600"));
+        assert!(
+            bad("[services.a]\nport = 1\nready_timeout_s = 9223372036854775807").contains("1–3600")
+        );
+    }
+
+    #[test]
+    fn stack_input_and_service_counts_are_bounded() {
+        let root = Path::new("/r");
+        let file = Path::new("/r/.holdmap.toml");
+        let oversized = format!("#{}", "x".repeat(MAX_FILE_BYTES));
+        assert!(matches!(
+            parse(&oversized, root, file),
+            Err(StackError::Invalid { .. })
+        ));
+        let services: String = (0..=MAX_SERVICES)
+            .map(|i| format!("[services.s{i}]\n"))
+            .collect();
+        assert!(matches!(
+            parse(&services, root, file),
+            Err(StackError::Invalid { .. })
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(FILE_NAME);
+        std::fs::write(&file, oversized).unwrap();
+        assert!(matches!(load(&file), Err(StackError::Invalid { .. })));
+    }
+
+    #[test]
+    fn dependency_order_handles_large_chains_and_duplicate_dependencies() {
+        let mut text = String::new();
+        for i in (0..MAX_SERVICES).rev() {
+            text.push_str(&format!("[services.s{i:03}]\n"));
+            if i > 0 {
+                text.push_str(&format!(
+                    "depends_on = ['s{:03}', 's{:03}']\n",
+                    i - 1,
+                    i - 1
+                ));
+            }
+        }
+        let stack = parse(&text, Path::new("/r"), Path::new("f")).unwrap();
+        assert_eq!(stack.services.len(), MAX_SERVICES);
+        for (index, service) in stack.services.iter().enumerate() {
+            assert_eq!(service.name, format!("s{index:03}"));
+        }
+        let selected = stack
+            .start_order(&[format!("s{:03}", MAX_SERVICES - 1)])
+            .unwrap();
+        assert_eq!(selected.len(), MAX_SERVICES);
     }
 
     #[cfg(unix)]

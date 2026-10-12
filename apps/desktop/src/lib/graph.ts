@@ -12,6 +12,9 @@ export const HEADER = 34;
 export { FIT_PADDING, needsMiniMap } from "./flow";
 
 export type LayoutMode = "layered" | "force";
+/** Bound the synchronous quadratic simulation so large graphs stay responsive. */
+export const FORCE_NODE_LIMIT = 100;
+export const layoutModeFor = (nodeCount: number, requested: LayoutMode): LayoutMode => requested === "force" && nodeCount > FORCE_NODE_LIMIT ? "layered" : requested;
 export type Point = { x: number; y: number };
 /** Centre positions by node id. */
 export type Positions = Map<string, Point>;
@@ -72,6 +75,7 @@ function layeredConnected(g: Graph): Positions {
  *  repulsion between nodes, a pull towards each cluster's centroid so groups stay tight, and
  *  gravity so unconnected nodes stay on screen. */
 export function force(g: Graph, iterations = 260): Positions {
+  if (g.nodes.length > FORCE_NODE_LIMIT) return layered(g);
   const pos = layered(g);
   const ids = g.nodes.map((n) => n.id);
   const cluster = new Map(g.nodes.map((n) => [n.id, n.cluster]));
@@ -164,23 +168,47 @@ export function layout(g: Graph, mode: LayoutMode): Positions {
 export function related(g: Graph, id: string): { nodes: Set<string>; edges: Set<string> } {
   const nodes = new Set([id]);
   const edges = new Set<string>();
-  const walk = (start: string, dir: "down" | "up") => {
+  const down = new Map<string, GraphEdge[]>(), up = new Map<string, GraphEdge[]>();
+  for (const edge of g.edges) {
+    const outgoing = down.get(edge.from) ?? [];
+    outgoing.push(edge);
+    down.set(edge.from, outgoing);
+    const incoming = up.get(edge.to) ?? [];
+    incoming.push(edge);
+    up.set(edge.to, incoming);
+  }
+  const walk = (start: string, adjacency: Map<string, GraphEdge[]>, direction: "from" | "to") => {
     const stack = [start];
     const seen = new Set([start]);
     while (stack.length) {
       const cur = stack.pop()!;
-      for (const e of g.edges) {
-        const [from, to] = dir === "down" ? [e.from, e.to] : [e.to, e.from];
-        if (from !== cur) continue;
+      for (const e of adjacency.get(cur) ?? []) {
+        const to = e[direction];
         edges.add(e.id);
         nodes.add(to);
         if (!seen.has(to)) { seen.add(to); stack.push(to); }
       }
     }
   };
-  walk(id, "down");
-  walk(id, "up");
+  walk(id, down, "to");
+  walk(id, up, "from");
   return { nodes, edges };
+}
+
+/** Count distinct local peers in one pass, rather than scanning every edge per node. */
+export function localLinkCounts(g: Graph | null): Map<string, number> {
+  const peers = new Map<string, Set<string>>();
+  for (const edge of g?.edges ?? []) {
+    if (edge.kind !== "local") continue;
+    for (const [from, to] of [[edge.from, edge.to], [edge.to, edge.from]]) {
+      const adjacent = peers.get(from) ?? new Set<string>();
+      adjacent.add(to);
+      peers.set(from, adjacent);
+    }
+  }
+  const counts = new Map<string, number>();
+  for (const node of g?.nodes ?? []) for (const port of node.ports) counts.set(port.entry_id, peers.get(node.id)?.size ?? 0);
+  return counts;
 }
 
 export const dependents = (g: Graph, id: string): GraphNode[] =>

@@ -91,6 +91,36 @@ fn stack_dry_run_redacts_command_without_executing_it() {
     assert!(!directory.path().join("state/logs").exists());
 }
 
+#[cfg(unix)]
+#[test]
+fn stack_failure_redacts_credentials_from_the_service_log() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = directory.path().join(".holdmap.toml");
+    std::fs::write(
+        &config,
+        format!(
+            r#"[services.web]
+port = {}
+command = '''printf '%s\n' '--password security-fixture-secret'; exit 7'''
+"#,
+            free_port()
+        ),
+    )
+    .unwrap();
+    let output = command(&directory.path().join("state"))
+        .arg("up")
+        .arg("--file")
+        .arg(&config)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    let diagnostic = String::from_utf8_lossy(&output.stderr);
+    assert!(diagnostic.contains("Last lines"));
+    assert!(diagnostic.contains("--password"));
+    assert!(diagnostic.contains("••••"));
+    assert!(!diagnostic.contains("security-fixture-secret"));
+}
+
 // Run this test executable as a controlled listener, without depending on Python or a shell.
 // It is ignored during the normal suite and selected explicitly by the parent regression.
 #[test]

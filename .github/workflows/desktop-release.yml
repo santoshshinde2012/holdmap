@@ -33,7 +33,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: desktop-release-${{ inputs.tag || github.ref }}
+  group: desktop-release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -116,7 +116,7 @@ jobs:
 
       # Each optional capability writes a config overlay and/or env vars only when its secrets
       # exist, so forks and unsigned builds still succeed.
-      - name: Updater (signed latest.json), if configured
+      - name: Signed updater artifacts, if configured
         if: needs.plan.outputs.updater == 'true'
         shell: bash
         env:
@@ -126,7 +126,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           jq -n --arg pk "$PUBKEY" --arg url "https://github.com/$REPO/releases/latest/download/latest.json" \
-            '{bundle: {createUpdaterArtifacts: true}, plugins: {updater: {pubkey: $pk, endpoints: [$url]}}}' \
+            '{bundle: {createUpdaterArtifacts: true}, plugins: {updater: {pubkey: $pk, endpoints: [$url], requireSignedVersion: true}}}' \
             > apps/desktop/src-tauri/tauri.updater.conf.json
           {
             echo "TAURI_SIGNING_PRIVATE_KEY<<__KEY__"; echo "$KEY"; echo "__KEY__"
@@ -165,19 +165,18 @@ jobs:
             ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 apps/desktop/src-tauri/tauri.windows-sign.conf.json
           "EXTRA_ARGS=$env:EXTRA_ARGS --config src-tauri/tauri.windows-sign.conf.json" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Build (and upload to the release)
+      - name: Build desktop bundles
         id: tauri
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: apps/desktop
-          # Without a signed updater, publish only the explicit installer manifest below.
-          # The pinned action otherwise uploads unsigned .app.tar.gz even with JSON disabled.
-          tagName: ${{ needs.plan.outputs.updater == 'true' && needs.plan.outputs.tag || '' }}
+          # Publish only after the native bundle and updater signatures pass verification.
+          tagName: ''
           args: ${{ matrix.args }} ${{ env.EXTRA_ARGS }}
-          uploadUpdaterJson: ${{ needs.plan.outputs.updater == 'true' }}
-          uploadUpdaterSignatures: ${{ needs.plan.outputs.updater == 'true' }}
+          uploadUpdaterJson: false
+          uploadUpdaterSignatures: false
           updaterJsonPreferNsis: true
           uploadWorkflowArtifacts: ${{ needs.plan.outputs.tag == '' }}
           workflowArtifactNamePattern: holdmap-desktop-${{ matrix.name }}-[bundle] # [name] is the product name, the same for every bundle
@@ -203,11 +202,9 @@ jobs:
             hdiutil detach "$mnt" >/dev/null
           done
 
-      # Signed updater uploads can fail mid-transfer. Stage the complete action manifest under
-      # its published names, including updater archives/signatures, and re-upload with retries.
+      # Stage the complete action manifest under its published names before verification.
       - name: Collect the desktop release assets
         id: files
-        if: always() && steps.tauri.outcome != 'skipped'
         shell: bash
         env:
           TAURI_ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
@@ -216,6 +213,18 @@ jobs:
           RELEASE_UPDATER: ${{ needs.plan.outputs.updater }}
         run: |
           node scripts/collect-desktop-release-assets.mjs
+      - name: Verify signed updater artifacts and release version
+        if: needs.plan.outputs.updater == 'true'
+        shell: bash
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+          RELEASE_VERSION: ${{ steps.tauri.outputs.appVersion }}
+          RELEASE_MATRIX: ${{ matrix.name }}
+          RELEASE_ASSET_MANIFEST: ${{ steps.files.outputs.sum }}.json
+          VERIFIED_MANIFEST: holdmap-desktop-${{ matrix.name }}.updater.json
+        run: |
+          cargo run --release --locked -p holdmap-desktop --example verify_updater -- \
+            "$RELEASE_ASSET_MANIFEST" "$RELEASE_MATRIX" "$RELEASE_VERSION" "$VERIFIED_MANIFEST"
       - name: Upload desktop assets to the release
         if: env.TAG != '' && steps.files.outcome == 'success'
         shell: bash
@@ -259,8 +268,43 @@ jobs:
           done
           exit 1
 
+      - name: Retain the verified updater platform manifest
+        if: env.TAG != '' && needs.plan.outputs.updater == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verified-updater-${{ matrix.name }}
+          path: holdmap-desktop-${{ matrix.name }}.updater.json
+          if-no-files-found: error
+
+  updater:
+    # One publisher prevents concurrent jobs from dropping each other's latest.json entries.
+    needs: [plan, build]
+    if: needs.plan.outputs.tag != '' && needs.plan.outputs.updater == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+      UPDATER_MANIFEST_DIR: verified-updater
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: verified-updater-*
+          path: ${{ env.UPDATER_MANIFEST_DIR }}
+          merge-multiple: true
+      - name: Publish the complete verified updater index
+        run: node scripts/publish-desktop-updater.mjs
+
   notes:
-    # tauri-action rewrites the existing release with an empty body; put dist's notes back.
+    # Retain dist's notes and append desktop installers after every platform succeeds.
     needs: [plan, build]
     if: needs.plan.outputs.tag != ''
     runs-on: ubuntu-latest

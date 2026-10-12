@@ -13,7 +13,7 @@ use holdmap_core::stack::{self, ServiceState, ServiceStatus, Stack};
 use holdmap_core::store::Store;
 use holdmap_core::util::{local_url, shell_command, spawn_detached};
 use holdmap_core::*;
-use std::io::Write;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -96,16 +96,6 @@ pub fn load(arg: &StackFileArg) -> Result<Stack> {
     Ok(stack::load(&path)?)
 }
 
-/// The nearest stack file's protected ports, if any (used by `holdmap stop`).
-pub fn protected_ports() -> Vec<u16> {
-    std::env::current_dir()
-        .ok()
-        .and_then(|d| stack::find(&d))
-        .and_then(|f| stack::load(&f).ok())
-        .map(|s| s.protect)
-        .unwrap_or_default()
-}
-
 fn engine(docker: bool) -> Result<Engine> {
     Engine::new(&ScanOptions {
         all_states: false,
@@ -140,17 +130,77 @@ fn log_path(stack: &Stack, service: &str) -> PathBuf {
     ))
 }
 
+const MAX_LOG_TAIL_BYTES: u64 = 64 * 1024;
+const MAX_HEALTH_PROBES: usize = 32;
+
 fn tail(path: &Path, n: usize) -> Vec<String> {
-    let text = std::fs::read_to_string(path).unwrap_or_default();
+    if n == 0 {
+        return Vec::new();
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // FILE_FLAG_OPEN_REPARSE_POINT: inspect the link rather than its target.
+        options.custom_flags(0x0020_0000);
+    }
+    let Ok(mut file) = options.open(path) else {
+        return Vec::new();
+    };
+    let Ok(metadata) = file.metadata() else {
+        return Vec::new();
+    };
+    if !metadata.is_file() {
+        return Vec::new();
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        // FILE_ATTRIBUTE_REPARSE_POINT includes junctions and other redirects.
+        if metadata.file_attributes() & 0x400 != 0 {
+            return Vec::new();
+        }
+    }
+    let offset = metadata.len().saturating_sub(MAX_LOG_TAIL_BYTES);
+    if file.seek(SeekFrom::Start(offset)).is_err() {
+        return Vec::new();
+    }
+    let mut bytes = Vec::new();
+    // A growing log must not turn this diagnostic read into an unbounded allocation.
+    if file
+        .take(MAX_LOG_TAIL_BYTES)
+        .read_to_end(&mut bytes)
+        .is_err()
+    {
+        return Vec::new();
+    }
+    let bytes = if offset > 0 {
+        // Discard the partial first line, including any split UTF-8 or credential prefix.
+        bytes
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map(|newline| &bytes[newline + 1..])
+            .unwrap_or_default()
+    } else {
+        bytes.as_slice()
+    };
+    let text = String::from_utf8_lossy(bytes);
     let lines: Vec<&str> = text.lines().collect();
     lines[lines.len().saturating_sub(n)..]
         .iter()
-        .map(|l| l.to_string())
+        .map(|line| holdmap_core::redact::line(line))
         .collect()
 }
 
 pub fn up(a: &UpArgs, docker: bool) -> Result<u8> {
     let stack = load(&a.file)?;
+    crate::project_policy::ProjectProtection::for_stack(&stack)?;
     let services = stack.start_order(&a.services)?;
     println!(
         "{} {} {}",
@@ -264,14 +314,8 @@ fn up_one(stack: &Stack, s: &stack::Service, a: &UpArgs, docker: bool) -> Result
                 );
                 return Ok(UpStep::Failed(exit::BUSY));
             }
-            if stack.protect.contains(&port) {
-                eprintln!(
-                    "  {} :{port} is in `protect`; not stopping {who}",
-                    style::err_mark()
-                );
-                return Ok(UpStep::Failed(exit::BLOCKED));
-            }
-            let plan = e.plan(&Target::Port(port), &StopOptions::default());
+            let plan = crate::project_policy::ProjectProtection::for_stack(stack)?
+                .apply(&e, e.plan(&Target::Port(port), &StopOptions::default()));
             print!("{}", render::plan_text(&plan));
             if plan.is_blocked() {
                 return Ok(UpStep::Failed(
@@ -285,9 +329,11 @@ fn up_one(stack: &Stack, s: &stack::Service, a: &UpArgs, docker: bool) -> Result
                     println!("{}", dim("Cancelled."));
                     return Ok(UpStep::Failed(exit::BUSY));
                 }
+                let fresh =
+                    crate::project_policy::checked_engine(docker, &plan, Some(&stack.file))?;
                 let report = execute(&plan, &mut |l| println!("    {} {}", dim("·"), dim(l)));
                 println!("{}", render::report_line(&report));
-                crate::state::record(&e, &plan, &report);
+                crate::state::record(&fresh, &plan, &report);
                 if !report.success {
                     return Ok(UpStep::Failed(exit::BUSY));
                 }
@@ -394,6 +440,7 @@ pub fn down(a: &DownArgs, docker: bool) -> Result<u8> {
     let stack = load(&a.file)?;
     let services = stack.stop_order(&a.services)?;
     let e = engine(docker)?;
+    let protection = crate::project_policy::ProjectProtection::for_stack(&stack)?;
     let statuses = stack.status(e.snapshot());
     let opts = StopOptions {
         force: a.force,
@@ -448,7 +495,7 @@ pub fn down(a: &DownArgs, docker: bool) -> Result<u8> {
                 dim("has no `command` (started elsewhere); use --all to stop it too")
             ),
             ServiceState::Running => {
-                let plan = e.plan(&Target::Port(port), &opts);
+                let plan = protection.apply(&e, e.plan(&Target::Port(port), &opts));
                 println!("  {} {tag}", paint("●", S::Green));
                 print!("{}", render::plan_text(&plan));
                 plans.push(plan);
@@ -484,9 +531,10 @@ pub fn down(a: &DownArgs, docker: bool) -> Result<u8> {
             code = code.max(crate::commands::block_code(plan));
             continue;
         }
+        let fresh = crate::project_policy::checked_engine(docker, plan, Some(&stack.file))?;
         let report = execute(plan, &mut |l| println!("    {} {}", dim("·"), dim(l)));
         println!("{}", render::report_line(&report));
-        crate::state::record(&e, plan, &report);
+        crate::state::record(&fresh, plan, &report);
         if !report.success {
             code = code.max(exit::BUSY);
         }
@@ -509,27 +557,8 @@ pub fn status(a: &StatusArgs, docker: bool) -> Result<u8> {
     let stack = load(&a.file)?;
     let e = engine(docker)?;
     let statuses = stack.status(e.snapshot());
-    // Probe the running services in parallel: a slow one mustn't hold up the rest.
-    let http: Vec<Option<HttpInfo>> = std::thread::scope(|sc| {
-        let handles: Vec<_> = statuses
-            .iter()
-            .map(|st| {
-                let health = stack
-                    .service(&st.name)
-                    .and_then(|s| s.health.clone())
-                    .unwrap_or_else(|| "/".into());
-                let probe = !a.no_http && st.state == ServiceState::Running;
-                let port = st.port;
-                sc.spawn(move || {
-                    port.filter(|_| probe)
-                        .and_then(|p| http::probe(p, &health, Duration::from_millis(1500)))
-                })
-            })
-            .collect();
-        handles
-            .into_iter()
-            .map(|h| h.join().ok().flatten())
-            .collect()
+    let http = probe_status_http(&stack, &statuses, !a.no_http, |port, health| {
+        http::probe(port, health, Duration::from_millis(1500))
     });
     let all_up = statuses
         .iter()
@@ -619,6 +648,63 @@ pub fn status(a: &StatusArgs, docker: bool) -> Result<u8> {
         }
     }
     Ok(if all_up { exit::OK } else { exit::BUSY })
+}
+
+/// Bound concurrent probes and preserve service order, including skipped services.
+fn probe_status_http<F>(
+    stack: &Stack,
+    statuses: &[ServiceStatus],
+    enabled: bool,
+    probe: F,
+) -> Vec<Option<HttpInfo>>
+where
+    F: Fn(u16, &str) -> Option<HttpInfo> + Sync,
+{
+    let mut results = vec![None; statuses.len()];
+    if !enabled {
+        return results;
+    }
+    let health: std::collections::HashMap<_, _> = stack
+        .services
+        .iter()
+        .map(|service| {
+            (
+                service.name.as_str(),
+                service.health.as_deref().unwrap_or("/"),
+            )
+        })
+        .collect();
+    let tasks: Vec<_> = statuses
+        .iter()
+        .enumerate()
+        .filter(|(_, status)| status.state == ServiceState::Running)
+        .filter_map(|(index, status)| {
+            Some((
+                index,
+                status.port?,
+                health.get(status.name.as_str()).copied().unwrap_or("/"),
+            ))
+        })
+        .collect();
+    for chunk in tasks.chunks(MAX_HEALTH_PROBES) {
+        let probe = &probe;
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = chunk
+                .iter()
+                .map(|&(index, port, health)| {
+                    (
+                        index,
+                        std::thread::Builder::new()
+                            .spawn_scoped(scope, move || probe(port, health)),
+                    )
+                })
+                .collect();
+            for (index, handle) in handles {
+                results[index] = handle.ok().and_then(|handle| handle.join().ok()).flatten();
+            }
+        });
+    }
+    results
 }
 
 /// Quote a word for a POSIX shell when needed.
@@ -772,5 +858,117 @@ mod tests {
         assert_eq!(shell_quote("a b"), "'a b'");
         assert_eq!(shell_quote("it's"), r"'it'\''s'");
         assert_eq!(shell_quote(""), "''");
+    }
+
+    #[test]
+    fn log_tail_reads_only_the_bounded_suffix_and_redacts_credentials() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("service.log");
+        let mut file = std::fs::File::create(&path).unwrap();
+        // A sparse multi-gigabyte log must use the same bounded read as a small log.
+        file.set_len(4 * 1024 * 1024 * 1024).unwrap();
+        file.seek(SeekFrom::End(0)).unwrap();
+        writeln!(file, "\nfirst\nsecond\n--password fixture-secret\nlast").unwrap();
+        let lines = tail(&path, 3);
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[0], "second");
+        assert!(lines[1].contains("••••"));
+        assert!(!lines[1].contains("fixture-secret"));
+        assert_eq!(lines[2], "last");
+        assert!(tail(&path, 0).is_empty());
+        assert!(tail(directory.path(), 3).is_empty());
+        assert!(tail(&directory.path().join("missing"), 3).is_empty());
+    }
+
+    #[test]
+    fn log_tail_handles_invalid_utf8_and_never_shows_a_truncated_first_line() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("service.log");
+        std::fs::write(&path, b"first\ninvalid \xff\nlast\n").unwrap();
+        assert_eq!(tail(&path, 2), vec!["invalid \u{fffd}", "last"]);
+        std::fs::write(&path, vec![b'x'; MAX_LOG_TAIL_BYTES as usize + 1]).unwrap();
+        assert!(tail(&path, 12).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn log_tail_refuses_symlinks_and_fifos_without_blocking() {
+        use std::os::unix::ffi::OsStrExt;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("service.log");
+        std::fs::write(&path, "private fixture\n").unwrap();
+        let link = directory.path().join("link.log");
+        std::os::unix::fs::symlink(&path, &link).unwrap();
+        assert!(tail(&link, 12).is_empty());
+        let fifo = directory.path().join("fifo.log");
+        let name = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+        // SAFETY: name is a valid NUL-terminated path in this test's private directory.
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        assert!(tail(&fifo, 12).is_empty());
+    }
+
+    #[test]
+    fn health_probes_bound_concurrency_preserve_order_and_skip_inactive_services() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let text: String = (0..70)
+            .map(|index| {
+                format!(
+                    "[services.service{index}]\nport = {}\nhealth = '/health{index}'\n",
+                    10000 + index
+                )
+            })
+            .collect();
+        let stack = stack::parse(
+            &text,
+            Path::new("/fixture"),
+            Path::new("/fixture/.holdmap.toml"),
+        )
+        .unwrap();
+        let mut statuses: Vec<_> = stack
+            .services
+            .iter()
+            .map(|service| ServiceStatus {
+                name: service.name.clone(),
+                port: service.port,
+                state: ServiceState::Running,
+                holder: None,
+            })
+            .collect();
+        statuses[1].state = ServiceState::Stopped;
+        statuses[2].port = None;
+        let active = AtomicUsize::new(0);
+        let peak = AtomicUsize::new(0);
+        let calls = AtomicUsize::new(0);
+        let results = probe_status_http(&stack, &statuses, true, |port, path| {
+            let count = active.fetch_add(1, Ordering::SeqCst) + 1;
+            peak.fetch_max(count, Ordering::SeqCst);
+            calls.fetch_add(1, Ordering::SeqCst);
+            assert_eq!(path, format!("/health{}", port - 10000));
+            std::thread::sleep(Duration::from_millis(5));
+            active.fetch_sub(1, Ordering::SeqCst);
+            Some(HttpInfo {
+                port,
+                status: 200,
+                reason: "OK".into(),
+                title: None,
+                server: None,
+                location: None,
+                elapsed_ms: 5,
+            })
+        });
+        assert_eq!(calls.load(Ordering::SeqCst), 68);
+        assert!(peak.load(Ordering::SeqCst) <= MAX_HEALTH_PROBES);
+        assert_eq!(active.load(Ordering::SeqCst), 0);
+        for (index, result) in results.iter().enumerate() {
+            if index == 1 || index == 2 {
+                assert!(result.is_none());
+            } else {
+                assert_eq!(result.as_ref().unwrap().port, statuses[index].port.unwrap());
+            }
+        }
+        let disabled = probe_status_http(&stack, &statuses, false, |_, _| {
+            panic!("disabled HTTP must not probe")
+        });
+        assert!(disabled.iter().all(Option::is_none));
     }
 }

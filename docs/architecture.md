@@ -1003,6 +1003,9 @@ return an error while leaving the previous cache eligible for a retry. Collectio
 scan lock without holding the engine mutex. Folder actions run off-thread and force a fresh
 scan rather than authorizing paths from an old cache. Openers construct localhost URLs or
 resolve port/agent folders in the backend; the webview cannot supply an arbitrary command or URL.
+Tray updates requested by scans use the native event loop rather than creating a thread per
+refresh. Shortcut replacement registers the new shortcut before releasing the working one,
+so a collision leaves the previous shortcut active.
 
 `confirmation.rs` owns a separate in-memory cache of immutable plans: at most 128 pending
 previews, each valid for five minutes and consumed once. The native stop command requires the
@@ -1015,6 +1018,16 @@ The main webview's local-only capability permits event listen/unlisten and windo
 Native commands enforce their own target checks, and the CSP limits script loading and network
 connections to the app and native IPC. Svelte renders untrusted process, agent and HTTP prose as
 escaped text, including inline command spans. The browser demo has no native IPC access.
+
+Configured signed updates use `update.rs`: manifest requests time out after 30 seconds and
+downloads after 10 minutes. A shared guard serializes installations, including if an awaiting
+caller disappears while the filesystem worker continues. Signature verification precedes
+installation; synchronous archive and filesystem work runs on a blocking worker.
+Signed release configuration requires the signature's authenticated version to match the
+announced update. `verify_updater.rs` streams each updater artifact through the same minisign
+verifier before release upload, checks its signed version and collected SHA-256 digest, and
+emits platform metadata. One final job validates all four platform manifests against the
+published asset digests and IDs, then publishes the complete `latest.json` index.
 
 ### Desktop UI
 
@@ -1080,6 +1093,12 @@ The SOLID boundaries are concrete responsibilities and substitutable interfaces:
   file), `hint` reads a command line for the ports it would bind, and `http` probes a port with a
   bounded `GET /`. The CLI composes them with the engine's normal plan → confirm → execute path,
   so `down`, `up --replace` and `stop --all-dev` get the same protection checks as `stop`.
+  The CLI and TUI enforce the nearest project's `protect` setting against all known effects
+  of a plan, including other listeners held by the same process, descendants, containers and
+  managed services. Explicit stack files add their protected ports to that policy. They reload
+  the policy and scan after confirmation before execution; unreadable, invalid or untrusted
+  project files fail closed. Only CLI `stop`/`kill --allow-protected` authorizes the project
+  override. Desktop and MCP share the engine's process policy without loading CLI stack files.
 - `docs/cli.md`, the man pages and the shell completions are all generated from the clap
   definitions; `cargo test` fails when `docs/cli.md` is stale.
 
@@ -1092,6 +1111,13 @@ Private files/directories use `0600`/`0700`. Windows rejects final reparse point
 hard links, while inheriting filesystem ACLs from the chosen directory; it does not install or
 verify an account-exclusive DACL. Custom state locations must remain account-controlled.
 Restart commands come from this validated history, rather than a command supplied by the UI.
+State mutations use an in-process mutex and a checked cross-process file lock; acquiring the
+file lock times out after five seconds on every supported OS. Configuration serialization is
+bounded to 1 MiB; an oversized save fails before replacing the existing settings. History reads inspect only the
+newest 64 MiB, skip lines over 1 MiB, and retain at most 5,000 valid entries. Writes enforce the
+same size and count limits before atomic replacement. A recorded restart directory must still
+be absolute and exist as a directory; entries without a recorded directory retain their legacy
+behavior.
 
 Project stack validation opens, checks and reads the same file handle. Unix permits current
 account or root ownership and rejects group/world writes; Windows trusts the checkout's ACLs.
@@ -1099,6 +1125,22 @@ Project-file creation is exclusive, and forced CLI exports check for link redire
 truncating a file. Explicit stack commands retain the user's shell authority. HTTP health paths
 reject request/header injection; subprocess capture limits output to 4 MiB per stream and
 respects a deadline even when descendants retain inherited pipes.
+Stack input is limited to 1 MiB and 512 services, with `ready_timeout_s` from 1 to 3,600 seconds.
+Dependency ordering uses an ordered ready queue and deduplicated dependency counts.
+`holdmap status` probes at most 32 services concurrently; disabled or nonrunning services
+create no probe workers. Startup diagnostics read only a 64 KiB log suffix, omit a cut first
+line, and redact recognized credentials before display.
+
+Container-runtime HTTP responses are capped at 4 MiB including framing, with 64 KiB limits
+for headers and trailers. Incremental chunk parsing validates boundaries before decoding and
+rejects malformed, truncated or ambiguous framing. Unix/TCP connect, writes and reads share
+one request deadline. DNS callers wait within it, with at most four outstanding OS resolver
+workers and 16 candidate addresses; OS lookups themselves cannot be cancelled. Windows
+named-pipe open callers wait within the same deadline, with at most four outstanding workers
+and late handles closed automatically. OS opens have no guaranteed cancellation, so stalled
+workers consume that bounded capacity and later requests fail promptly at the limit.
+Connected pipes use nonblocking mode and bounded polling for reads and writes.
+Runtime error displays redact recognized credentials and retain at most 2,000 characters.
 
 The shared redactor recognizes credential flags, assignments, URL userinfo, encoded query
 keys, headers and nested JSON values with parsing limits. Raw arguments remain available for

@@ -197,6 +197,19 @@ class DesktopReleaseAssetTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assert_manifest(root, "macos-arm64", ["holdmap_0.4.0_aarch64.dmg"])
 
+    def test_built_version_must_match_the_release_tag_before_collecting(self):
+        prior = os.environ.get("TAG")
+        try:
+            os.environ["TAG"] = "v0.3.0"
+            root, result = self.collect("macos-arm64", ["dmg/holdmap_0.4.0_aarch64.dmg"], False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((root / "holdmap-desktop-macos-arm64.sha256").exists())
+        finally:
+            if prior is None:
+                os.environ.pop("TAG", None)
+            else:
+                os.environ["TAG"] = prior
+
     def test_signed_mac_archive_and_signature_use_published_names(self):
         for matrix, architecture in [("macos-arm64", "aarch64"), ("macos-x64", "x64")]:
             with self.subTest(matrix=matrix):
@@ -265,6 +278,123 @@ class DesktopReleaseAssetTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assert_manifest(root, "macos-arm64", ["holdmap_0.4.0_aarch64.dmg"])
         self.assertEqual(list((root / "outside").iterdir()), [])
+
+
+class CompleteDesktopUpdaterTests(unittest.TestCase):
+    def setUp(self):
+        self.sandbox = tempfile.TemporaryDirectory(prefix="holdmap-updater-index-test-")
+        self.addCleanup(self.sandbox.cleanup)
+        self.root = Path(self.sandbox.name)
+        self.state = self.root / "github.json"
+        self.assets = []
+        for identifier, (matrix, target, kind, suffix) in enumerate([
+            ("macos-arm64", "darwin-aarch64", "app", ".app.tar.gz"),
+            ("macos-x64", "darwin-x86_64", "app", ".app.tar.gz"),
+            ("linux-x64", "linux-x86_64", "appimage", ".AppImage"),
+            ("windows-x64", "windows-x86_64", "nsis", ".exe"),
+        ], 701):
+            name = "holdmap-" + matrix + suffix
+            digest = hashlib.sha256(name.encode()).hexdigest()
+            asset = {"name": name, "digest": digest, "signature": "dGVzdA=="}
+            manifest = {"matrix": matrix, "version": "0.5.0",
+                        "platforms": {target: asset, target + "-" + kind: asset}}
+            (self.root / (matrix + ".updater.json")).write_text(json.dumps(manifest))
+            self.assets.append({"name": name, "id": identifier, "digest": "sha256:" + digest})
+        self.initial = {"assets": self.assets, "uploads": [], "next_id": 900}
+        self.state.write_text(json.dumps(self.initial))
+        stub = self.root / "gh"
+        stub.write_text('''#!/usr/bin/env python3
+import hashlib, json, os, sys
+from pathlib import Path
+path = Path(os.environ["HOLDMAP_TEST_GITHUB"])
+state = json.loads(path.read_text())
+args = sys.argv[1:]
+if args[0] == "api":
+    if args[-1].endswith("/assets?per_page=100"):
+        print(json.dumps([state["assets"]]))
+    else:
+        print(json.dumps({"id":42,"tag_name":"v0.5.0","body":"Release notes",
+                          "published_at":"2026-10-01T12:00:00Z"}))
+elif args[:2] == ["release", "upload"]:
+    payload = Path(args[3])
+    if payload.name != "latest.json" or "--clobber" not in args:
+        sys.exit("only the updater index may be replaced")
+    state["latest_json"] = json.loads(payload.read_text())
+    state["assets"] = [asset for asset in state["assets"] if asset["name"] != "latest.json"]
+    state["assets"].append({"name":"latest.json","id":state["next_id"],
+                            "digest":"sha256:"+hashlib.sha256(payload.read_bytes()).hexdigest()})
+    state["next_id"] += 1
+    state["uploads"].append("latest.json")
+    path.write_text(json.dumps(state))
+else:
+    sys.exit("unexpected GitHub operation")
+''')
+        stub.chmod(0o700)
+
+    def publish(self):
+        environment = os.environ.copy()
+        environment.update({"PATH": str(self.root) + os.pathsep + environment["PATH"],
+                            "GITHUB_REPOSITORY": "example/holdmap", "TAG": "v0.5.0",
+                            "UPDATER_MANIFEST_DIR": str(self.root), "HOLDMAP_TEST_GITHUB": str(self.state)})
+        return subprocess.run(["node", str(ROOT / "scripts/publish-desktop-updater.mjs")],
+                              env=environment, capture_output=True, text=True, check=False)
+
+    def test_complete_index_uses_verified_stable_asset_ids_and_is_idempotent(self):
+        for _ in range(2):
+            result = self.publish()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        state = json.loads(self.state.read_text())
+        self.assertEqual(state["assets"][:4], self.assets)
+        self.assertEqual(state["uploads"], ["latest.json"])
+        index = state["latest_json"]
+        self.assertEqual(index["version"], "0.5.0")
+        self.assertEqual(len(index["platforms"]), 8)
+        for matrix, target, identifier in [("macos-arm64", "darwin-aarch64", 701),
+                                           ("macos-x64", "darwin-x86_64", 702),
+                                           ("linux-x64", "linux-x86_64", 703),
+                                           ("windows-x64", "windows-x86_64", 704)]:
+            with self.subTest(matrix=matrix):
+                self.assertTrue(index["platforms"][target]["url"].endswith("/" + str(identifier)))
+
+    def test_missing_or_inconsistent_platforms_cannot_publish(self):
+        path = self.root / "windows-x64.updater.json"
+        original = path.read_text()
+        for case in ["missing", "wrong_version", "duplicate_matrix", "unexpected_platform", "wrong_format"]:
+            with self.subTest(case=case):
+                manifest = json.loads(original)
+                if case == "missing":
+                    path.unlink()
+                elif case == "wrong_version":
+                    manifest["version"] = "0.4.0"
+                elif case == "duplicate_matrix":
+                    manifest["matrix"] = "linux-x64"
+                elif case == "unexpected_platform":
+                    manifest["platforms"]["linux-aarch64"] = manifest["platforms"]["windows-x86_64"]
+                else:
+                    manifest["platforms"]["windows-x86_64"]["name"] = "unexpected.dmg"
+                if case != "missing":
+                    path.write_text(json.dumps(manifest))
+                result = self.publish()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(json.loads(self.state.read_text())["uploads"], [])
+                path.write_text(original)
+
+    def test_replaced_missing_or_duplicate_published_assets_cannot_publish(self):
+        for case in ["changed", "missing", "duplicate", "unknown_digest"]:
+            with self.subTest(case=case):
+                state = json.loads(json.dumps(self.initial))
+                if case == "changed":
+                    state["assets"][0]["digest"] = "sha256:" + "0" * 64
+                elif case == "missing":
+                    state["assets"].pop(0)
+                elif case == "duplicate":
+                    state["assets"].append(state["assets"][0].copy())
+                else:
+                    state["assets"][0]["digest"] = None
+                self.state.write_text(json.dumps(state))
+                result = self.publish()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(json.loads(self.state.read_text())["uploads"], [])
 
 
 class SignedDesktopUploadTests(unittest.TestCase):

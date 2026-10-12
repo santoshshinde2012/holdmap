@@ -172,6 +172,8 @@ port = 5432               # no command: started elsewhere, up just waits for it
 ```
 
 `holdmap status` shows the stack and `holdmap down` stops it, dependents first.
+Stack files support up to 512 services within 1 MiB. Set `ready_timeout_s` to 1–3,600 seconds
+per service (default 60); `holdmap status` runs at most 32 HTTP checks concurrently.
 
 ## CLI
 

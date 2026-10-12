@@ -242,6 +242,17 @@ try {
   };
   await check("Public guide screenshots load with descriptive alt text", () => checkGuideImages({ width: 1440, height: 900 }));
   await check("Public guide screenshots fit the mobile viewport", () => checkGuideImages({ width: 390, height: 900 }));
+  await check("Public hero headline remains fully readable at narrow mobile widths", async () => {
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(guideBase.href, { waitUntil: "domcontentloaded" });
+      const fits = await page.locator("#hero-title .line").evaluateAll((lines) => lines.length === 2 && lines.every((line) => {
+        const bounds = line.getBoundingClientRect();
+        return line.scrollWidth <= line.clientWidth + 1 && bounds.left >= -1 && bounds.right <= innerWidth + 1;
+      }));
+      if (!fits) throw new Error(`Hero headline is clipped at ${width}px`);
+    }
+  });
 
   // Both Mac browser profiles advertise Intel. That string cannot select CPU architecture.
   const downloadProfiles = [

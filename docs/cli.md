@@ -213,8 +213,7 @@ Options:
   -y, --yes                Don't ask for confirmation
   -n, --dry-run            Show the plan but don't do anything
   -t, --timeout <TIMEOUT>  Grace period before escalating to SIGKILL [default: 5s]
-      --allow-protected    Also allow stopping protected processes (system services, editors,
-                           terminals)
+      --allow-protected    Also allow stopping soft-protected processes and project `protect` ports
       --no-tree            Only stop the socket holder, not its dev-server tree
       --udp                Only consider UDP sockets for port targets
       --json               Machine-readable JSON output (implies no prompt; requires --yes unless
@@ -244,8 +243,7 @@ Options:
   -y, --yes                Don't ask for confirmation
   -n, --dry-run            Show the plan but don't do anything
   -t, --timeout <TIMEOUT>  Grace period before escalating to SIGKILL [default: 5s]
-      --allow-protected    Also allow stopping protected processes (system services, editors,
-                           terminals)
+      --allow-protected    Also allow stopping soft-protected processes and project `protect` ports
       --no-tree            Only stop the socket holder, not its dev-server tree
       --udp                Only consider UDP sockets for port targets
       --json               Machine-readable JSON output (implies no prompt; requires --yes unless

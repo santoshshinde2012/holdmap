@@ -377,8 +377,10 @@ export async function remoteScan(host: string): Promise<Snapshot> {
 
 /** Browser demo only: a plausible, gently moving CPU figure per process so sparklines have a shape. */
 /** The mock ports; `?mockPorts=N` pads the list to N for scrolling and polling load tests. */
+export const MAX_MOCK_PORTS = 1_000;
 function mockEntries(): PortEntry[] {
-  const want = Number(new URLSearchParams(globalThis.location?.search ?? "").get("mockPorts")) || 0;
+  const requested = Number(new URLSearchParams(globalThis.location?.search ?? "").get("mockPorts"));
+  const want = Number.isFinite(requested) ? Math.min(MAX_MOCK_PORTS, Math.max(0, Math.floor(requested))) : 0;
   const out = [...MOCK_SNAPSHOT.entries];
   const tmpl = MOCK_SNAPSHOT.entries.filter((e) => e.process);
   for (let i = 0; out.length < want; i++) {

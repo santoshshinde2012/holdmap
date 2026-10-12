@@ -7,11 +7,15 @@
   import type { HistoryEntry } from "../lib/types";
   import { tildify } from "../lib/format";
   import { tooltip } from "../lib/tooltip";
+  import { commandForShell } from "../lib/shell";
+  import Callout from "./ui/Callout.svelte";
 
-  let { items, onrestart, onclear, onclose, oncopy }: { items: HistoryEntry[]; onrestart: (h: HistoryEntry) => Promise<void> | void; onclear: () => void; onclose: () => void; oncopy: (text: string, what: string) => void } = $props();
+  let { items, platform = "", onrestart, onclear, onclose, oncopy }: { items: HistoryEntry[]; platform?: string; onrestart: (h: HistoryEntry) => Promise<void> | void; onclear: () => Promise<void> | void; onclose: () => void; oncopy: (text: string, what: string) => void } = $props();
 
   let restarting = $state<string | null>(null);
   let confirmClear = $state(false);
+  let clearing = $state(false);
+  let clearError = $state<string | null>(null);
   const key = (h: HistoryEntry) => `${h.at_ms}:${h.pid}`;
   const when = (ms: number) => {
     const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
@@ -20,8 +24,13 @@
     if (s < 86400) return `${Math.round(s / 3600)} h ago`;
     return new Date(ms).toLocaleDateString();
   };
-  const cmd = (h: HistoryEntry) => `${h.cwd ? `cd ${JSON.stringify(h.cwd)} && ` : ""}${h.command.join(" ")}`;
+  const cmd = (h: HistoryEntry) => commandForShell(h.command, h.cwd, platform);
   async function restart(h: HistoryEntry) { restarting = key(h); try { await onrestart(h); } finally { restarting = null; } }
+  async function clear() {
+    if (clearing) return;
+    clearing = true; clearError = null;
+    try { await onclear(); confirmClear = false; } catch (error) { clearError = String(error); } finally { clearing = false; }
+  }
 </script>
 
 <Dialog title="Recently stopped" description="Bring a service back in the directory it ran from." icon="history" size="lg" {onclose} initialFocus="self">
@@ -42,12 +51,13 @@
       {/each}
     </ul>
   {/if}
+  {#if clearError}<Callout tone="danger" size="sm">{clearError}</Callout>{/if}
   {#snippet footer()}
     {#if items.length}
       {#if confirmClear}
         <span class="ask">Clear all {items.length} entries?</span>
-        <Button variant="ghost" onclick={() => (confirmClear = false)}>Keep</Button>
-        <Button variant="danger" onclick={() => { confirmClear = false; onclear(); }}>Clear history</Button>
+        <Button variant="ghost" disabled={clearing} onclick={() => (confirmClear = false)}>Keep</Button>
+        <Button variant="danger" loading={clearing} loadingText="Clearing…" onclick={clear}>Clear history</Button>
       {:else}
         <Button variant="ghost" icon="x" onclick={() => (confirmClear = true)}>Clear history…</Button>
         <span class="sp"></span>

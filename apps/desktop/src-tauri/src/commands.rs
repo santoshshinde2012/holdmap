@@ -121,7 +121,7 @@ pub async fn scan(
     let snapshot = blocking(move || handle.state::<AppState>().snapshot(all, max_age)).await?;
     // The tray menu is updated on the main thread; don't make the scan wait for it.
     let (handle, snap) = (app.clone(), snapshot.clone());
-    std::thread::spawn(move || refresh_tray(&handle, &snap));
+    let _ = app.run_on_main_thread(move || refresh_tray(&handle, &snap));
     Ok(snapshot)
 }
 
@@ -563,9 +563,9 @@ pub fn set_hotkey(
     state: State<'_, AppState>,
     preset: String,
 ) -> Result<Option<String>, String> {
-    let active = crate::shortcuts::apply(&app, &preset)?;
-    save(&state, |c| c.hotkey = preset)?;
-    Ok(active)
+    crate::shortcuts::apply_and_save(&app, &preset, || {
+        save(&state, |c| c.hotkey = preset.clone()).map(|_| ())
+    })
 }
 
 /// Read-only scan of another machine over SSH (agentless: `ss` + `ps`). `local` reads this

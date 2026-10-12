@@ -164,14 +164,22 @@ impl App {
             agent.name
         );
         // This combined plan is presentation only; execution consumes the retained review.
-        let mut display = reviewed.plans()[0].plan.clone();
-        display.target = format!("{} services", agent.name);
-        display.summary = headline.clone();
-        display.steps = reviewed
+        let mut display = reviewed
             .plans()
             .iter()
-            .flat_map(|p| p.plan.steps.clone())
-            .collect();
+            .find(|p| p.plan.is_blocked())
+            .unwrap_or(&reviewed.plans()[0])
+            .plan
+            .clone();
+        display.target = format!("{} services", agent.name);
+        display.summary = headline.clone();
+        if !display.is_blocked() {
+            display.steps = reviewed
+                .plans()
+                .iter()
+                .flat_map(|p| p.plan.steps.clone())
+                .collect();
+        }
         display.risk = reviewed
             .plans()
             .iter()

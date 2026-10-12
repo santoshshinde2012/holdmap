@@ -123,7 +123,16 @@ pub fn restart(entry: &HistoryEntry, log_dir: &Path) -> io::Result<(u32, PathBuf
     let log = log_dir.join(format!("{}-{}.log", entry.port, crate::util::now_ms()));
     let mut cmd = Command::new(prog);
     cmd.args(args);
-    if let Some(cwd) = entry.cwd.as_ref().filter(|c| c.is_dir()) {
+    if let Some(cwd) = entry.cwd.as_ref() {
+        if !cwd.is_absolute() || !cwd.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "recorded working directory {} is unavailable",
+                    cwd.display()
+                ),
+            ));
+        }
         cmd.current_dir(cwd);
     }
     let mut child = crate::util::spawn_detached(&mut cmd, &log)?;
@@ -193,5 +202,73 @@ mod tests {
             ..entry
         };
         assert!(restart(&empty, tmp.path()).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn restart_spawns_a_windows_command_in_its_recorded_cwd() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join("restarted-cwd.txt");
+        let entry = HistoryEntry {
+            at_ms: 0,
+            port: 1,
+            protocol: Protocol::Tcp,
+            label: "owned Windows restart fixture".into(),
+            command: vec![
+                "cmd.exe".into(),
+                "/D".into(),
+                "/C".into(),
+                "cd > restarted-cwd.txt".into(),
+            ],
+            cwd: Some(dir.path().to_path_buf()),
+            project: None,
+            framework: None,
+            pid: 0,
+        };
+        let (pid, log) = restart(&entry, &dir.path().join("logs")).unwrap();
+        assert!(pid > 0 && log.is_file());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let cwd = loop {
+            if let Ok(value) = std::fs::read_to_string(&marker) {
+                if !value.trim().is_empty() {
+                    break value;
+                }
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "owned restart command did not write its cwd"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        assert_eq!(
+            std::fs::canonicalize(cwd.trim()).unwrap(),
+            std::fs::canonicalize(dir.path()).unwrap()
+        );
+    }
+
+    #[test]
+    fn restart_refuses_to_run_in_an_unrelated_working_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let entry = HistoryEntry {
+            at_ms: 0,
+            port: 1,
+            protocol: Protocol::Tcp,
+            label: "fixture".into(),
+            command: vec!["fixture-do-not-launch".into()],
+            cwd: Some(dir.path().join("removed")),
+            project: None,
+            framework: None,
+            pid: 0,
+        };
+        let logs = dir.path().join("logs");
+        let error = restart(&entry, &logs).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+        assert!(error.to_string().contains("recorded working directory"));
+        assert!(!logs.exists());
+        let relative = HistoryEntry {
+            cwd: Some("relative".into()),
+            ..entry
+        };
+        assert!(restart(&relative, &logs).is_err());
     }
 }

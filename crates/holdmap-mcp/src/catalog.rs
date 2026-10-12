@@ -1,10 +1,22 @@
 //! Static tool discovery metadata and the input/output contracts shared by the adapter.
 
 use serde_json::{json, Value};
+use std::sync::OnceLock;
 
 pub(super) const INSTRUCTIONS: &str = "Inspect local state before acting: list_ports finds occupied ports; explain_port explains a conflict; get_topology with all=true shows dependents and cluster names before a stop. Prefer find_free_port to stopping an unrelated process, and use wait_for_port after starting a service. list_agents shows observed process ownership, likely child tools and access evidence, not chats or confirmed MCP invocations; inspect limits and omitted counts. Read holdmap://guide for workflows, or use the diagnose_port, inspect_agents and prepare_dev_server prompts. Both stop_port and stop_agent_ports default to dry_run=true. Show all returned plans and obtain the user's authorization before executing. Execution requires dry_run=false and the preview's one-use confirmation_id in this session within 5 minutes, with identical target/options. Every selected agent and stop effect is rechecked before any plan executes; changes require a new preview. Only the user's own dev servers/containers are stopped by default; protected and other users' processes are always refused. Requests must fit within 1 MiB; legacy batches are limited to 64 messages and are rejected as a whole when larger.";
 
 pub(super) fn list() -> Value {
+    catalog().clone()
+}
+
+/// Discovery and validation share one immutable catalog instead of rebuilding unrelated
+/// output schemas whenever an individual tool validates its arguments.
+fn catalog() -> &'static Value {
+    static CATALOG: OnceLock<Value> = OnceLock::new();
+    CATALOG.get_or_init(build_catalog)
+}
+
+fn build_catalog() -> Value {
     let mut tools = json!([
         {
             "name": "list_ports",
@@ -112,12 +124,11 @@ pub(super) fn list() -> Value {
     tools
 }
 
-pub(super) fn definition(name: &str) -> Option<Value> {
-    list()
+pub(super) fn definition(name: &str) -> Option<&'static Value> {
+    catalog()
         .as_array()?
         .iter()
         .find(|tool| tool["name"] == name)
-        .cloned()
 }
 
 fn object(properties: Value, required: &[&str]) -> Value {

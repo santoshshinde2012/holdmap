@@ -735,24 +735,68 @@ pub fn spawn_detached(
         cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
     }
     let child = cmd.spawn()?;
-    DETACHED
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(child.id());
+    // A PID-only exemption would outlive this service and apply to a future reused PID.
+    // Fail closed if identity cannot be captured; an unverified child remains protected.
+    if let Some(token) = crate::sys::start_token(child.id()).filter(|token| *token != 0) {
+        DETACHED
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(child.id(), token);
+    }
     Ok(child)
 }
 
-/// PIDs this process started on the user's behalf with [`spawn_detached`] (a restarted dev
+/// Process identities started on the user's behalf with [`spawn_detached`] (a restarted dev
 /// server). They're the user's services, not part of holdmap, so self-protection skips them.
-static DETACHED: std::sync::Mutex<std::collections::BTreeSet<u32>> =
-    std::sync::Mutex::new(std::collections::BTreeSet::new());
+static DETACHED: std::sync::Mutex<std::collections::BTreeMap<u32, u64>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
 
 /// Was `pid` started detached by this process (see [`spawn_detached`])?
 pub fn started_detached(pid: u32) -> bool {
-    DETACHED
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .contains(&pid)
+    let mut records = DETACHED.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(token) = records.get(&pid).copied() else {
+        return false;
+    };
+    if token != 0 && crate::sys::start_token(pid) == Some(token) {
+        true
+    } else {
+        records.remove(&pid);
+        false
+    }
+}
+
+pub(crate) fn detached_processes(
+    processes: &std::collections::HashMap<u32, crate::model::ProcessInfo>,
+) -> std::collections::HashSet<u32> {
+    retained_detached(
+        &mut DETACHED.lock().unwrap_or_else(|e| e.into_inner()),
+        processes,
+        crate::sys::start_token,
+    )
+}
+
+pub(crate) fn retained_detached(
+    records: &mut std::collections::BTreeMap<u32, u64>,
+    processes: &std::collections::HashMap<u32, crate::model::ProcessInfo>,
+    live_token: impl Fn(u32) -> Option<u64>,
+) -> std::collections::HashSet<u32> {
+    let mut detached = std::collections::HashSet::new();
+    records.retain(|pid, token| {
+        if *token == 0 {
+            return false;
+        }
+        if processes
+            .get(pid)
+            .is_some_and(|process| process.start_token == *token)
+        {
+            detached.insert(*pid);
+            return true;
+        }
+        // A service can start after this process snapshot was collected. Retain its record
+        // if it is still alive, but grant no exemption to a different snapshot identity.
+        live_token(*pid) == Some(*token)
+    });
+    detached
 }
 
 #[cfg(test)]

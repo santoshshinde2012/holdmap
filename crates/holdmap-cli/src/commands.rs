@@ -143,7 +143,8 @@ fn port_opts(udp: bool) -> StopOptions {
 
 pub fn explain(a: &PortArgs, docker: bool) -> Result<u8> {
     let e = engine(docker, true)?;
-    let ex = e.explain(a.port, &port_opts(a.udp));
+    let ex = crate::project_policy::ProjectProtection::nearest()?
+        .explain(&e, e.explain(a.port, &port_opts(a.udp)));
     if a.json {
         print_json(&ex)?;
     } else {
@@ -157,7 +158,8 @@ pub fn explain(a: &PortArgs, docker: bool) -> Result<u8> {
 
 pub fn inspect(a: &PortArgs, docker: bool) -> Result<u8> {
     let e = engine(docker, true)?;
-    let ex = e.explain(a.port, &port_opts(a.udp));
+    let ex = crate::project_policy::ProjectProtection::nearest()?
+        .explain(&e, e.explain(a.port, &port_opts(a.udp)));
     let details = holdmap_core::details::for_port(&e.scan, a.port);
     let http_info = ex
         .entries
@@ -401,25 +403,11 @@ pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
         ..Default::default()
     };
     let yes = a.yes;
-    let protect = crate::stack::protected_ports();
+    let protect = crate::project_policy::ProjectProtection::nearest()?;
     let mut code = exit::OK;
     let mut results = Vec::new();
     for t in &targets {
-        let plan = e.plan(t, &opts);
-        if let Target::Port(p) = t {
-            if protect.contains(p) && !a.allow_protected {
-                if !a.json {
-                    println!(
-                        "{} :{p} is listed in `protect` in {}; pass --allow-protected to stop it anyway",
-                        style::err_mark(),
-                        holdmap_core::stack::FILE_NAME
-                    );
-                }
-                code = code.max(exit::BLOCKED);
-                results.push(StopResult { plan, report: None });
-                continue;
-            }
-        }
+        let mut plan = protect.apply(&e, e.plan(t, &opts));
         if !a.json {
             if let Target::Port(p) = t {
                 let ex = e.explain(*p, &opts);
@@ -454,6 +442,18 @@ pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
                 continue;
             }
         }
+        let fresh = engine(docker, true)?;
+        // Re-read protection and current listeners after the confirmation prompt. Keep
+        // the reviewed process identities; never substitute newly discovered owners.
+        plan = crate::project_policy::ProjectProtection::nearest()?.apply(&fresh, plan);
+        if plan.is_blocked() {
+            if !a.json {
+                print!("{}", render::plan_text(&plan));
+            }
+            code = code.max(block_code(&plan));
+            results.push(StopResult { plan, report: None });
+            continue;
+        }
         let json = a.json;
         let report = execute(&plan, &mut |line| {
             if !json {
@@ -463,7 +463,7 @@ pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
         if !a.json {
             println!("{}", render::report_line(&report));
         }
-        crate::state::record(&e, &plan, &report);
+        crate::state::record(&fresh, &plan, &report);
         if !report.success {
             code = code.max(exit::BUSY);
         }
@@ -602,6 +602,7 @@ pub fn wait(a: &WaitArgs) -> Result<u8> {
 }
 
 pub fn run(a: &RunArgs, docker: bool) -> Result<u8> {
+    let protection = crate::project_policy::ProjectProtection::nearest()?;
     let mut port = a.port;
     if port_busy(port, Protocol::Tcp) {
         let e = engine(docker, true)?;
@@ -612,7 +613,7 @@ pub fn run(a: &RunArgs, docker: bool) -> Result<u8> {
         };
         let ex = e.explain(port, &opts);
         eprintln!("{} {}", render::status_dot(ex.status), bold(&ex.headline));
-        let plan = e.plan(&Target::Port(port), &opts);
+        let plan = protection.apply(&e, e.plan(&Target::Port(port), &opts));
         let mut freed = false;
         if !plan.is_blocked() {
             eprint!("{}", render::plan_text(&plan));
@@ -621,6 +622,7 @@ pub fn run(a: &RunArgs, docker: bool) -> Result<u8> {
                     && std::io::stdin().is_terminal()
                     && confirm("Stop it and continue?")?);
             if go {
+                crate::project_policy::checked_engine(docker, &plan, None)?;
                 let report = execute(&plan, &mut |l| eprintln!("  {} {}", dim("·"), dim(l)));
                 eprintln!("{}", render::report_line(&report));
                 freed = report.success;

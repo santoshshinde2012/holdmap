@@ -12,8 +12,8 @@
   import AutoMiniMap from "./graph/AutoMiniMap.svelte";
   import Icon from "./Icon.svelte";
   import type { Graph, GraphNode } from "../lib/types";
-  import { FIT_PADDING, layout, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Positions } from "../lib/graph";
-  import { prefGet, prefSet } from "../lib/prefs";
+  import { FIT_PADDING, FORCE_NODE_LIMIT, layout, layoutModeFor, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Positions } from "../lib/graph";
+  import { prefGet, prefGetChoice, prefSet } from "../lib/prefs";
 
   let {
     graph,
@@ -35,7 +35,7 @@
     onstopcluster: (name: string) => void;
   } = $props();
 
-  let mode = $state<LayoutMode>((prefGet("layout") as LayoutMode) ?? "layered");
+  let mode = $state<LayoutMode>(prefGetChoice("layout", ["layered", "force"], "layered"));
   let animate = $state(prefGet("animate") !== "0");
   let external = $state(prefGet("external") !== "0");
   let hover = $state<string | null>(null);
@@ -56,16 +56,18 @@
     return { ...graph, nodes, edges: graph.edges.filter((e) => ids.has(e.from) && ids.has(e.to)) };
   });
 
+  const forceLimited = $derived((shown?.nodes.length ?? 0) > FORCE_NODE_LIMIT);
+  const effectiveMode = $derived(layoutModeFor(shown?.nodes.length ?? 0, mode));
   // Re-layout only when the structure changes, so 3-second refreshes don't make nodes jump.
   const signature = $derived(
-    shown ? `${mode}|${shown.nodes.map((n) => `${n.id}@${n.cluster ?? ""}`).join(",")}|${shown.edges.map((e) => e.id).join(",")}` : ""
+    shown ? `${effectiveMode}|${shown.nodes.map((n) => `${n.id}@${n.cluster ?? ""}`).join(",")}|${shown.edges.map((e) => e.id).join(",")}` : ""
   );
   // Memoised layout keyed by structure; plain (non-reactive) cache on purpose.
   const cache: { sig: string; pos: Positions } = { sig: "", pos: new Map() };
   const positions = $derived.by(() => {
     if (!shown) return new Map() as Positions;
     if (signature !== cache.sig) {
-      cache.pos = layout(shown, mode);
+      cache.pos = layout(shown, effectiveMode);
       cache.sig = signature;
     }
     return cache.pos;
@@ -132,8 +134,8 @@
       <Panel position="top-left">
         <div class="bar" role="toolbar" aria-label="Graph view options">
           <div class="seg" role="radiogroup" aria-label="Layout">
-            <button role="radio" aria-checked={mode === "layered"} class:on={mode === "layered"} onclick={() => (mode = "layered")} title="Layered: clients on the left, data stores on the right"><Icon name="layers" size={12} />Layered</button>
-            <button role="radio" aria-checked={mode === "force"} class:on={mode === "force"} onclick={() => (mode = "force")} title="Force-directed: tightly connected services cluster together"><Icon name="radar" size={12} />Force</button>
+            <button role="radio" aria-checked={effectiveMode === "layered"} class:on={effectiveMode === "layered"} onclick={() => (mode = "layered")} title="Layered: clients on the left, data stores on the right"><Icon name="layers" size={12} />Layered</button>
+            <button role="radio" aria-checked={effectiveMode === "force"} class:on={effectiveMode === "force"} disabled={forceLimited} onclick={() => (mode = "force")} title={forceLimited ? `Layered keeps large graphs responsive. Force is available for up to ${FORCE_NODE_LIMIT} services.` : "Force-directed: tightly connected services cluster together"}><Icon name="radar" size={12} />Force</button>
           </div>
           <button class="tog" aria-pressed={animate && !reduced} class:on={animate && !reduced} disabled={reduced} onclick={() => (animate = !animate)} title={reduced ? "Reduced motion is on in your system settings" : "Animate live connections"}><Icon name="zap" size={12} />Traffic</button>
           {#if ontoggleall}<button class="tog" aria-pressed={all} class:on={all} onclick={ontoggleall} title="Include databases, apps and system services that aren't connected to your dev servers"><Icon name="layers" size={12} />All services</button>{/if}
@@ -170,7 +172,7 @@
   .seg button, .tog { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); cursor: pointer; }
   .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
   .tog.on { color: var(--accent); background: var(--accent-soft); }
-  .tog:disabled { opacity: 0.5; cursor: not-allowed; }
+  .tog:disabled, .seg button:disabled { opacity: 0.5; cursor: not-allowed; }
   .stats { display: flex; gap: 10px; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-sm); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; justify-content: flex-end; }
   .stats b { color: var(--text); }
   .legend { display: flex; gap: 10px; margin-top: 6px; justify-content: flex-end; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }

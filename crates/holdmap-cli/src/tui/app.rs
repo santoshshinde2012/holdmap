@@ -476,7 +476,7 @@ impl App {
         };
         let target = Target::Cluster(name);
         let options = StopOptions::default();
-        let plan = engine.plan(&target, &options);
+        let plan = crate::project_policy::preview(&engine, engine.plan(&target, &options));
         self.modal = Modal::Confirm {
             headline: plan.summary.clone(),
             plan: Box::new(plan),
@@ -534,7 +534,17 @@ impl App {
             protocol: Some(entry.protocol),
             ..Default::default()
         };
-        let ex = Arc::new(engine.explain(entry.port, &opts));
+        let mut ex = engine.explain(entry.port, &opts);
+        if let Some(plan) = ex.plan.take() {
+            let previous = plan.blocked.clone();
+            let plan = crate::project_policy::preview(&engine, plan);
+            if let Some(blocked) = plan.blocked.as_ref().filter(|_| plan.blocked != previous) {
+                ex.recommendation = blocked.message.clone();
+                ex.commands.clear();
+            }
+            ex.plan = Some(plan);
+        }
+        let ex = Arc::new(ex);
         self.explain_cache.insert(entry.id.clone(), ex.clone());
         Some(ex)
     }
@@ -568,6 +578,7 @@ impl App {
             .plan
             .clone()
             .unwrap_or_else(|| engine.plan(&Target::Port(entry.port), &opts));
+        let plan = crate::project_policy::preview(&engine, plan);
         self.modal = Modal::Confirm {
             plan: Box::new(plan),
             headline: ex.headline.clone(),
@@ -599,17 +610,24 @@ impl App {
         let tx = self.tx.clone();
         let docker = self.docker;
         std::thread::spawn(move || {
-            let fresh = Engine::new(&ScanOptions {
-                all_states: false,
-                docker,
-            })
-            .map_err(|e| e.to_string());
+            let fresh = crate::project_policy::checked_engine(docker, &plan, None)
+                .map_err(|e| e.to_string());
             if let Some(reviewed) = agent_stops {
                 let outcome = fresh.and_then(|engine| {
                     reviewed
                         .execute_with(
                             &engine,
                             |reviewed| {
+                                if let Err(error) = crate::project_policy::check_before_execute(
+                                    docker,
+                                    &reviewed.plan,
+                                ) {
+                                    return StopReport {
+                                        target: reviewed.target(),
+                                        error: Some(error.to_string()),
+                                        ..Default::default()
+                                    };
+                                }
                                 let _ = tx.send(Msg::StopLine(format!(
                                     "→ {} ({})",
                                     reviewed.target(),
@@ -641,7 +659,8 @@ impl App {
                         })));
                         return;
                     };
-                    let current = engine.plan(&target, &options);
+                    let current =
+                        crate::project_policy::preview(&engine, engine.plan(&target, &options));
                     if current.is_blocked()
                         || current.risk > plan.risk
                         || !plan.same_effects(&current)
@@ -1517,6 +1536,38 @@ mod input_tests {
         );
         app.on_key(key(KeyCode::Char('n')));
         assert!(matches!(app.modal, Modal::None));
+    }
+
+    #[test]
+    fn project_protected_confirmation_never_grants_an_override_on_any_tab() {
+        for tab in [Tab::Ports, Tab::Graph, Tab::Agents] {
+            let mut app = app(tab);
+            let mut plan = holdmap_core::engine::blocked_plan(
+                "fixture".into(),
+                vec![],
+                holdmap_core::BlockKind::Protected,
+                "Port 5432 is in project protect",
+            );
+            plan.blocked.as_mut().unwrap().overridable = true;
+            app.modal = Modal::Confirm {
+                plan: Box::new(plan),
+                headline: "fixture".into(),
+                agent_stops: None,
+                reviewed_target: None,
+                scroll: 0,
+                max_scroll: 0,
+            };
+            for code in [KeyCode::Char('y'), KeyCode::Char('X')] {
+                app.on_key(key(code));
+                assert!(matches!(app.modal, Modal::Confirm { .. }));
+                assert!(app.busy.is_none());
+                assert!(app.rx.try_recv().is_err());
+            }
+            app.on_key(key(KeyCode::Enter));
+            assert!(matches!(app.modal, Modal::None));
+            assert!(app.busy.is_none());
+            assert!(app.rx.try_recv().is_err());
+        }
     }
 
     #[test]

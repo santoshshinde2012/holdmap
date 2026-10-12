@@ -233,16 +233,18 @@ fn start(entry: &HistoryEntry, timeout: Duration) -> Result<u8> {
 }
 
 pub fn restart(a: &RestartArgs, docker: bool) -> Result<u8> {
+    let protection = crate::project_policy::ProjectProtection::nearest()?;
+    protection.check_port(a.port)?;
     let e = Engine::new(&ScanOptions {
         all_states: true,
         docker,
     })?;
     let opts = StopOptions::default();
     if port_busy(a.port, Protocol::Tcp) {
-        let plan = e.plan(&Target::Port(a.port), &opts);
+        let plan = protection.apply(&e, e.plan(&Target::Port(a.port), &opts));
         print!("{}", render::plan_text(&plan));
         if plan.is_blocked() {
-            bail!("can't restart: {}", plan.summary);
+            return Ok(crate::commands::block_code(&plan).max(crate::exit::BUSY));
         }
         let entry = history::entries_from_plan(
             &e.scan,
@@ -259,12 +261,14 @@ pub fn restart(a: &RestartArgs, docker: bool) -> Result<u8> {
             println!("{}", dim("Cancelled."));
             return Ok(crate::exit::BUSY);
         }
+        crate::project_policy::checked_engine(docker, &plan, None)?;
         let report = execute(&plan, &mut |l| println!("  {} {}", dim("·"), dim(l)));
         println!("{}", render::report_line(&report));
         if !report.success {
             return Ok(crate::exit::BUSY);
         }
         let _ = store().record(std::slice::from_ref(&entry));
+        crate::project_policy::ProjectProtection::nearest()?.check_port(a.port)?;
         return start(&entry, a.timeout);
     }
     let Some(entry) = store().last_for_port(a.port).filter(|h| h.restartable()) else {
@@ -273,6 +277,7 @@ pub fn restart(a: &RestartArgs, docker: bool) -> Result<u8> {
             a.port
         );
     };
+    crate::project_policy::ProjectProtection::nearest()?.check_port(a.port)?;
     start(&entry, a.timeout)
 }
 

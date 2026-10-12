@@ -13,6 +13,9 @@ const architectures = { "macos-arm64": "aarch64", "macos-x64": "x64", "linux-x64
 if (!Object.hasOwn(architectures, matrix) || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? "")) {
   throw new Error("Invalid release matrix or app version");
 }
+if (process.env.TAG && process.env.TAG !== `v${version}`) {
+  throw new Error("Desktop version differs from the release tag");
+}
 const artifacts = JSON.parse(process.env.TAURI_ARTIFACT_PATHS || "[]");
 if (!Array.isArray(artifacts) || artifacts.some((path) => typeof path !== "string")) {
   throw new Error("Invalid tauri-action artifactPaths output");

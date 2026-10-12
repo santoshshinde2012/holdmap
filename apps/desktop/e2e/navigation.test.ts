@@ -127,4 +127,18 @@ test.describe("compact windows", () => {
     await expect(drawer).toHaveCount(0);
     await expect(app.getByRole("listbox", { name: "Ports in use" })).toBeVisible();
   });
+
+  test("the filter toolbar scrolls without widening the document", async ({ app }) => {
+    const dimensions = await app.getByRole("toolbar", { name: "View and filters" }).evaluate((toolbar) => ({
+      document: document.documentElement.scrollWidth, viewport: innerWidth,
+      toolbar: toolbar.scrollWidth, visibleToolbar: toolbar.clientWidth,
+    }));
+    expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport + 1);
+    expect(dimensions.toolbar).toBeGreaterThan(dimensions.visibleToolbar);
+    const sort = app.getByRole("combobox", { name: /^Sort:/ });
+    await sort.focus();
+    await expect(sort).toBeFocused();
+    await sort.press("Enter");
+    await expect(app.getByRole("listbox", { name: "Sort by", exact: true })).toBeVisible();
+  });
 });

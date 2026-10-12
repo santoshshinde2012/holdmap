@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { prefGet, prefGetBoolean, prefSet } from "./prefs";
+import { prefGet, prefGetBoolean, prefGetChoice, prefSet } from "./prefs";
 
 afterEach(() => {
   localStorage.clear();
@@ -41,5 +41,18 @@ describe("prefs", () => {
     prefSet("singleKeyShortcuts", "invalid");
     expect(prefGetBoolean("singleKeyShortcuts", true)).toBe(true);
     expect(prefGetBoolean("singleKeyShortcuts", false)).toBe(false);
+  });
+
+  it("rejects stale or malformed choices while migrating supported legacy choices", () => {
+    const views = ["list", "graph", "agents"] as const;
+    expect(prefGetChoice("view", views, "list")).toBe("list");
+    prefSet("view", "removed-view");
+    expect(prefGetChoice("view", views, "list")).toBe("list");
+    prefSet("view", "graph");
+    expect(prefGetChoice("view", views, "list")).toBe("graph");
+    localStorage.clear();
+    localStorage.setItem("pw.view", "agents");
+    expect(prefGetChoice("view", views, "list")).toBe("agents");
+    expect(localStorage.getItem("holdmap.view")).toBe("agents");
   });
 });

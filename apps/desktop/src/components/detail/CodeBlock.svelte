@@ -1,17 +1,37 @@
 <script lang="ts">
   // Monospace command/code with a labelled copy button; long lines scroll, never overflow.
   import Button from "../ui/Button.svelte";
-  let { code, what = "Command", prompt = false, label, oncopy }: { code: string; what?: string; prompt?: boolean; label?: string; oncopy: (text: string, what: string) => void } = $props();
+  import { onDestroy } from "svelte";
+  let { code, what = "Command", prompt = false, label, oncopy }: { code: string; what?: string; prompt?: boolean; label?: string; oncopy: (text: string, what: string) => boolean | void | Promise<boolean | void> } = $props();
   let copied = $state(false);
+  let copying = $state(false);
+  let failed = $state(false);
+  let alive = true;
   let t: ReturnType<typeof setTimeout> | undefined;
-  function copy() { oncopy(code, what); copied = true; clearTimeout(t); t = setTimeout(() => (copied = false), 1400); }
+  onDestroy(() => { alive = false; clearTimeout(t); });
+  async function copy() {
+    if (copying) return;
+    copying = true; copied = false; failed = false;
+    clearTimeout(t);
+    try {
+      const result = await oncopy(code, what);
+      if (!alive) return;
+      copied = result !== false;
+      failed = result === false;
+    } catch {
+      if (alive) failed = true;
+    } finally {
+      copying = false;
+      if (alive) t = setTimeout(() => { copied = false; failed = false; }, 1400);
+    }
+  }
 </script>
 
 <div class="cb">
   {#if label}<div class="cl">{label}</div>{/if}
   <div class="row">
     <pre class="selectable">{#if prompt}<span class="pr" aria-hidden="true">$ </span>{/if}<code>{code}</code></pre>
-    <Button size="xs" variant="ghost" icon={copied ? "check" : "copy"} aria-label={copied ? `${what} copied` : `Copy ${what.toLowerCase()}`} onclick={copy}>{copied ? "Copied" : "Copy"}</Button>
+    <Button size="xs" variant="ghost" icon={copied ? "check" : "copy"} disabled={copying} aria-busy={copying || undefined} aria-label={failed ? `${what} could not be copied` : copied ? `${what} copied` : `Copy ${what.toLowerCase()}`} onclick={copy}>{failed ? "Couldn't copy" : copied ? "Copied" : "Copy"}</Button>
   </div>
 </div>
 

@@ -43,11 +43,13 @@ git diff --check
 
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
+cargo test --workspace --all-targets --locked
+cargo test --workspace --doc --locked
 if [[ "$(uname -s)" == Linux ]]; then
   G_DEBUG=fatal-warnings MALLOC_PERTURB_=165 \
     cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
 fi
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap-activity -p holdmap
-cargo build --locked -p holdmap-desktop
+# Embed the built frontend, matching the production Tauri build's feature selection.
+cargo build --locked -p holdmap-desktop --features tauri/custom-protocol
 cargo deny --all-features check

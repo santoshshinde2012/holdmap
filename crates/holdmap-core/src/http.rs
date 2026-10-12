@@ -60,16 +60,22 @@ pub fn probe(port: u16, path: &str, timeout: Duration) -> Option<HttpInfo> {
         return None;
     }
     let started = Instant::now();
+    let deadline = started.checked_add(timeout)?;
     let mut stream = [
         SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
         SocketAddr::from((Ipv6Addr::LOCALHOST, port)),
     ]
     .iter()
-    .find_map(|a| TcpStream::connect_timeout(a, timeout).ok())?;
-    let left = timeout
-        .saturating_sub(started.elapsed())
-        .max(Duration::from_millis(50));
-    stream.set_read_timeout(Some(left)).ok()?;
+    .find_map(|a| {
+        let left = deadline.saturating_duration_since(Instant::now());
+        (!left.is_zero())
+            .then(|| TcpStream::connect_timeout(a, left).ok())
+            .flatten()
+    })?;
+    let left = deadline.saturating_duration_since(Instant::now());
+    if left.is_zero() {
+        return None;
+    }
     stream.set_write_timeout(Some(left)).ok()?;
     let req = format!(
         "GET {path} HTTP/1.1\r\nHost: localhost:{port}\r\nUser-Agent: holdmap/{}\r\nAccept: text/html,*/*;q=0.8\r\nConnection: close\r\n\r\n",
@@ -78,9 +84,12 @@ pub fn probe(port: u16, path: &str, timeout: Duration) -> Option<HttpInfo> {
     stream.write_all(req.as_bytes()).ok()?;
     let mut buf = Vec::with_capacity(8192);
     let mut chunk = [0u8; 8192];
-    let deadline = started + timeout;
     let mut first = None;
     while buf.len() < MAX_BODY && Instant::now() < deadline {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() || stream.set_read_timeout(Some(left)).is_err() {
+            break;
+        }
         match stream.read(&mut chunk) {
             Ok(0) => break,
             Ok(n) => {
@@ -124,10 +133,13 @@ pub fn parse_response(port: u16, raw: &[u8]) -> Option<HttpInfo> {
     let mut lines = head.lines();
     let status_line = lines.next()?;
     let mut parts = status_line.splitn(3, ' ');
-    if !parts.next()?.starts_with("HTTP/") {
+    if !matches!(parts.next()?, "HTTP/1.0" | "HTTP/1.1") {
         return None;
     }
     let status: u16 = parts.next()?.trim().parse().ok()?;
+    if !(100..=599).contains(&status) {
+        return None;
+    }
     let reason = clip(parts.next().unwrap_or("").trim(), 60);
     let mut server = None;
     let mut location = None;
@@ -229,6 +241,8 @@ mod tests {
         assert!(parse_response(1, b"SSH-2.0-OpenSSH_9.6\r\n").is_none());
         assert!(parse_response(1, b"-ERR unknown command\r\n").is_none());
         assert!(parse_response(1, b"HTTP/1.1 abc\r\n\r\n").is_none());
+        assert!(parse_response(1, b"HTTP/unknown 200 OK\r\n\r\n").is_none());
+        assert!(parse_response(1, b"HTTP/1.1 999 OK\r\n\r\n").is_none());
     }
 
     #[test]
@@ -296,5 +310,39 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(2));
         drop(l);
         assert!(probe(port, "/", Duration::from_millis(300)).is_none());
+    }
+
+    #[test]
+    fn probe_keeps_a_total_deadline_when_the_server_drips_bytes() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        let t = std::thread::spawn(move || {
+            let (mut stream, _) = l.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(1)))
+                .unwrap();
+            let mut request = [0; 4096];
+            let _ = stream.read(&mut request);
+            stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").unwrap();
+            std::thread::sleep(Duration::from_millis(70));
+            if stream.write_all(b"a").is_ok() {
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        });
+        let started = Instant::now();
+        assert!(probe(port, "/", Duration::from_millis(100)).is_some());
+        assert!(started.elapsed() < Duration::from_millis(160));
+        t.join().unwrap();
+    }
+
+    #[test]
+    fn zero_timeout_does_not_open_a_connection() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        l.set_nonblocking(true).unwrap();
+        assert!(probe(l.local_addr().unwrap().port(), "/", Duration::ZERO).is_none());
+        assert_eq!(
+            l.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
     }
 }
