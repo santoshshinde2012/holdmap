@@ -110,7 +110,43 @@ impl Project {
         assert!(output.status.success(), "{output:?}");
         let stack = holdmap_core::stack::load(&self.root.join(".holdmap.toml")).unwrap();
         assert_eq!(stack.services.len(), 1, "init must find the owned listener");
-        assert_eq!(stack.services[0].port, Some(port));
+        if stack.services[0].port != Some(port) {
+            let pid = self.child.as_ref().unwrap().id();
+            let table = holdmap_core::process::ProcessTable::capture();
+            let process = table.get(pid).cloned().map(|mut process| {
+                process.cmdline = holdmap_core::redact::args(&process.cmdline);
+                process
+            });
+            let canonical_root = std::fs::canonicalize(&self.root).unwrap();
+            let mut ready: Ready =
+                serde_json::from_slice(&std::fs::read(&self.ready).unwrap()).unwrap();
+            ready.argv = holdmap_core::redact::args(&ready.argv);
+            let diagnostic = serde_json::json!({
+                "root": self.root,
+                "canonical_root": canonical_root,
+                "fixture": ready,
+                "observed_process": process,
+                "observer_user": table.get(std::process::id()).and_then(|process| process.user.as_ref()),
+                "is_mine": table.is_mine(pid),
+                "cwd_under_root": process.as_ref().and_then(|process| process.cwd.as_ref()).map(|cwd| holdmap_core::stack::path_is_under(cwd, &canonical_root)),
+                "canonical_process_cwd": process.as_ref().and_then(|process| process.cwd.as_ref()).and_then(|cwd| std::fs::canonicalize(cwd).ok()),
+            });
+            let listed = self
+                .command()
+                .args(["list", "--all", "--json"])
+                .args([format!("pid:{pid}"), port.to_string()])
+                .output()
+                .unwrap();
+            panic!(
+                "init did not capture owned port {port}; diagnostics={diagnostic:#}; init stdout={}; init stderr={}; owned list status={}; owned list stdout={}; owned list stderr={}; generated={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+                listed.status,
+                String::from_utf8_lossy(&listed.stdout),
+                String::from_utf8_lossy(&listed.stderr),
+                std::fs::read_to_string(&stack.file).unwrap(),
+            );
+        }
         assert!(holdmap_core::stack::path_is_under(
             &stack.services[0].cwd,
             &self.cwd

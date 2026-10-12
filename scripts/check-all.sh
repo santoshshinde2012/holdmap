@@ -43,8 +43,8 @@ git diff --check
 
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --all-targets --locked
-cargo test --workspace --doc --locked
+cargo test --workspace --all-targets --locked --no-fail-fast
+cargo test --workspace --doc --locked --no-fail-fast
 if [[ "$(uname -s)" == Linux ]]; then
   G_DEBUG=fatal-warnings MALLOC_PERTURB_=165 \
     cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security

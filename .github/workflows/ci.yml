@@ -41,7 +41,7 @@ jobs:
       - name: Placeholder frontend for native compilation
         run: mkdir -p apps/desktop/dist && echo '<html></html>' > apps/desktop/dist/index.html
       - run: cargo check --workspace --all-targets --locked --features tauri/custom-protocol
-      - run: cargo test -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity --locked
+      - run: cargo test -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity --locked --no-fail-fast
 
   lint:
     name: fmt + clippy + docs
@@ -94,7 +94,7 @@ jobs:
       # Includes the docs checks: docs/cli.md vs clap, README commands and flags, Markdown links
       # and anchors, orphaned screenshots and file-naming conventions.
       - name: Test
-        run: cargo test -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity --locked
+        run: cargo test -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity --locked --no-fail-fast
       - name: Smoke test the CLI against the real OS
         shell: bash
         run: |
