@@ -689,12 +689,17 @@ pub fn local_hms(epoch_secs: u64) -> String {
 }
 
 /// A [`std::process::Command`] that runs `line` through the platform shell (`sh -c` on Unix,
-/// `cmd /C` on Windows), so stack files can use pipes, `&&` and quoting.
+/// `cmd /D /S /C` on Windows), so stack files can use pipes, `&&` and native shell quoting.
+/// `line` is an authorized shell command, not an escaped argument vector.
 pub fn shell_command(line: &str) -> std::process::Command {
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
         let mut c = std::process::Command::new("cmd");
-        c.args(["/C", line]);
+        // cmd.exe does not use C argv escaping: Command::arg would insert literal
+        // backslashes before inner quotes. /S removes this outer pair and preserves
+        // the command's own quotes; /D disables unrelated registry AutoRun commands.
+        c.args(["/D", "/S", "/C"]).raw_arg(format!("\"{line}\""));
         c
     }
     #[cfg(not(windows))]
@@ -702,6 +707,75 @@ pub fn shell_command(line: &str) -> std::process::Command {
         let mut c = std::process::Command::new("sh");
         c.args(["-c", line]);
         c
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_shell_tests {
+    use super::*;
+
+    fn bounded_status(mut command: Command) -> std::process::ExitStatus {
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        let mut child = command.spawn().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                return status;
+            }
+            if Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("owned shell fixture exceeded its deadline");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    #[ignore = "internal finite Windows shell subprocess fixture"]
+    fn shell_fixture() {
+        let marker = std::env::var_os("HOLDMAP_SHELL_TEST_MARKER").expect("parent supplied marker");
+        std::fs::write(marker, "executed").unwrap();
+    }
+
+    #[test]
+    fn windows_shell_preserves_quoted_executable_paths_and_shell_operators() {
+        let directory = tempfile::tempdir().unwrap();
+        let spaced = directory.path().join("owned shell space & literal");
+        std::fs::create_dir(&spaced).unwrap();
+        let exe = spaced.join("fixture.exe");
+        std::fs::copy(std::env::current_exe().unwrap(), &exe).unwrap();
+        let marker = directory.path().join("executed.txt");
+        let output = directory.path().join("output.txt");
+        let line = format!(
+            r#""{}" --ignored --exact util::windows_shell_tests::shell_fixture --nocapture && echo literal ^& safe > "%HOLDMAP_SHELL_TEST_OUTPUT%""#,
+            exe.display()
+        );
+
+        // Negative control: ordinary argv escaping changes native cmd syntax and cannot
+        // launch this quoted executable. The production helper must preserve the text.
+        let mut escaped = Command::new("cmd");
+        escaped
+            .args(["/D", "/S", "/C", &line])
+            .env("HOLDMAP_SHELL_TEST_MARKER", &marker)
+            .env("HOLDMAP_SHELL_TEST_OUTPUT", &output);
+        assert!(!bounded_status(escaped).success());
+        assert!(!marker.exists());
+        assert!(!output.exists());
+
+        let mut command = shell_command(&line);
+        command
+            .env("HOLDMAP_SHELL_TEST_MARKER", &marker)
+            .env("HOLDMAP_SHELL_TEST_OUTPUT", &output);
+        assert!(bounded_status(command).success());
+        assert_eq!(std::fs::read_to_string(marker).unwrap(), "executed");
+        assert_eq!(
+            std::fs::read_to_string(output).unwrap().trim(),
+            "literal & safe"
+        );
     }
 }
 

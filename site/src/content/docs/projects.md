@@ -11,7 +11,11 @@ stops them, dependents first.
 ## Write one
 
 `holdmap init` writes a starter file from the dev servers running under the current folder.
-Add `--print` to see it first. A typical file:
+Add `--print` to see it first. Review the generated commands before starting them; captured
+credentials are redacted and must be supplied separately, such as through environment variables.
+On Windows, generated commands use Windows PowerShell to preserve literal process arguments.
+Commands that cannot be reconstructed safely are left for manual review. Commands you write
+yourself use `cmd.exe` syntax on Windows and `sh` syntax on Unix. A typical file:
 
 ```toml
 name = "shop"            # optional; defaults to the folder name

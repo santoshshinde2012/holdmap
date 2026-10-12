@@ -195,8 +195,8 @@ fn marker_args() -> Vec<String> {
 fn marker_line() -> String {
     let args = marker_args();
     if cfg!(windows) {
-        // cmd /C strips the outer pair; the inner pair preserves a spaced executable path.
-        format!("\"\"{}\" {}\"", args[0], args[1..].join(" "))
+        // This is cmd syntax; shell_command supplies cmd /S /C's outer quotes.
+        format!("\"{}\" {}", args[0], args[1..].join(" "))
     } else {
         args.iter()
             .map(|arg| format!("'{}'", arg.replace('\'', "'\"'\"'")))

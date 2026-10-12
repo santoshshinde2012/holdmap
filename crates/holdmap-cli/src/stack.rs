@@ -708,6 +708,7 @@ where
 }
 
 /// Quote a word for a POSIX shell when needed.
+#[cfg(any(not(windows), test))]
 pub fn shell_quote(w: &str) -> String {
     if !w.is_empty()
         && w.chars()
@@ -717,6 +718,87 @@ pub fn shell_quote(w: &str) -> String {
     } else {
         format!("'{}'", w.replace('\'', r"'\''"))
     }
+}
+
+/// Preserve native Windows argv without CMD expansion or PowerShell's edition-specific
+/// native argument binder. Only the UTF-16LE base64 program is passed through CMD.
+#[cfg(windows)]
+fn windows_captured_command(argv: &[String]) -> Result<String, &'static str> {
+    use base64::Engine as _;
+    if argv.first().is_none_or(String::is_empty) || argv.iter().any(|arg| arg.contains('\0')) {
+        return Err("captured arguments are empty or contain NUL; enter a command manually");
+    }
+    if Path::new(&argv[0]).file_name().is_some_and(|name| {
+        let name = name.to_string_lossy();
+        name.eq_ignore_ascii_case("cmd") || name.eq_ignore_ascii_case("cmd.exe")
+    }) {
+        return Err("captured CMD shell syntax is ambiguous; enter its original command manually");
+    }
+    let ps_literal = |value: &str| format!("'{}'", value.replace('\'', "''"));
+    let native_quote = |value: &str| {
+        let mut quoted = String::from("\"");
+        let mut slashes = 0;
+        for ch in value.chars() {
+            if ch == '\\' {
+                slashes += 1;
+            } else {
+                quoted.extend(std::iter::repeat_n(
+                    '\\',
+                    if ch == '"' { slashes * 2 + 1 } else { slashes },
+                ));
+                slashes = 0;
+                quoted.push(ch);
+            }
+        }
+        quoted.extend(std::iter::repeat_n('\\', slashes * 2));
+        quoted.push('"');
+        quoted
+    };
+    let arguments = argv[1..]
+        .iter()
+        .map(|arg| native_quote(arg))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let filename = if argv[0].contains(['\\', '/']) {
+        format!("[System.IO.Path]::GetFullPath([System.IO.Path]::Combine($holdmapStart.WorkingDirectory, {}))", ps_literal(&argv[0]))
+    } else {
+        ps_literal(&argv[0])
+    };
+    let script = format!(
+        "$ErrorActionPreference = 'Stop'; try {{ $holdmapStart = New-Object System.Diagnostics.ProcessStartInfo; \
+         $holdmapStart.WorkingDirectory = [Environment]::CurrentDirectory; $holdmapStart.FileName = {filename}; \
+         $holdmapStart.Arguments = {}; $holdmapStart.UseShellExecute = $false; \
+         $holdmapProcess = [System.Diagnostics.Process]::Start($holdmapStart); \
+         try {{ $holdmapProcess.WaitForExit(); $holdmapExitCode = $holdmapProcess.ExitCode }} \
+         finally {{ $holdmapProcess.Dispose() }}; exit $holdmapExitCode }} \
+         catch {{ [Console]::Error.WriteLine($_.Exception.Message); exit 1 }}",
+        ps_literal(&arguments),
+    );
+    let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let command = format!(
+        "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand {}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    );
+    // CMD's limit is 8191 UTF-16 characters; leave room for its executable/options/quotes.
+    if command.encode_utf16().count() > 8000 {
+        return Err("captured command exceeds the Windows shell limit; enter a command manually");
+    }
+    Ok(command)
+}
+
+fn captured_command(argv: &[String]) -> Result<String, &'static str> {
+    #[cfg(windows)]
+    return windows_captured_command(argv);
+    #[cfg(not(windows))]
+    Ok(match argv {
+        // Keep the existing Unix rewritten process-title convention.
+        [one] => one.clone(),
+        many => many
+            .iter()
+            .map(|word| shell_quote(word))
+            .collect::<Vec<_>>()
+            .join(" "),
+    })
 }
 
 /// `holdmap init` without a shell: write a starter `.holdmap.toml` from the dev servers running
@@ -733,6 +815,7 @@ pub fn init_project(force: bool, print: bool, docker: bool) -> Result<u8> {
     let mut seen_roots = std::collections::BTreeSet::new();
     let mut names = std::collections::BTreeSet::new();
     let mut services = Vec::new();
+    let mut review_comments = Vec::new();
     let mut entries: Vec<&PortEntry> = e
         .snapshot()
         .entries
@@ -744,7 +827,7 @@ pub fn init_project(force: bool, print: bool, docker: bool) -> Result<u8> {
             x.process
                 .as_ref()
                 .and_then(|p| p.cwd.as_deref())
-                .is_some_and(|c| c.starts_with(&root))
+                .is_some_and(|c| stack::path_is_under(c, &root))
         })
         .collect();
     entries.sort_by_key(|x| x.port);
@@ -772,23 +855,33 @@ pub fn init_project(force: bool, print: bool, docker: bool) -> Result<u8> {
             name = format!("{}-{n}", stack::service_name(&base));
             n += 1;
         }
-        let command = proc_
+        let argv = proc_
             .filter(|p| !p.cmdline.is_empty())
             // Never copy a password or token from a running command into a file that tends
             // to get committed; `••••` makes the gap obvious.
-            .map(|p| holdmap_core::redact::args(&p.cmdline))
-            .map(|cmdline| match cmdline.as_slice() {
-                // A process that rewrote its title (`npm run dev`) shows one argument with spaces.
-                [one] => one.clone(),
-                many => many
-                    .iter()
-                    .map(|w| shell_quote(w))
-                    .collect::<Vec<_>>()
-                    .join(" "),
-            });
+            .map(|p| holdmap_core::redact::args(&p.cmdline));
+        let command = match argv.as_ref().map(|argv| captured_command(argv)) {
+            Some(Ok(command)) => Some(command),
+            Some(Err(reason)) => {
+                eprintln!("{} :{}: {reason}", style::warn_mark(), x.port);
+                review_comments.push(format!(
+                    "# [services.{name}] needs manual review: {reason}\n"
+                ));
+                None
+            }
+            None => None,
+        };
+        #[cfg(windows)]
+        if let Some(argv) = &argv {
+            // Human review stays possible without making these literals executable shell text.
+            review_comments.push(format!(
+                "# [services.{name}] captured argv: {}\n",
+                serde_json::to_string(argv)?
+            ));
+        }
         let rel = proc_
             .and_then(|p| p.cwd.as_ref())
-            .and_then(|c| c.strip_prefix(&root).ok())
+            .and_then(|c| stack::relative_to_root(c, &root))
             .map(|r| r.to_string_lossy().replace('\\', "/"));
         services.push((name, x.port, command, rel));
     }
@@ -796,7 +889,10 @@ pub fn init_project(force: bool, print: bool, docker: bool) -> Result<u8> {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "project".into());
-    let text = stack::scaffold(&name, &services);
+    let mut text = stack::scaffold(&name, &services);
+    for comment in review_comments {
+        text.push_str(&comment);
+    }
     // Never write a file we can't read back.
     stack::parse(&text, &root, &path)?;
     if print {
@@ -858,6 +954,37 @@ mod tests {
         assert_eq!(shell_quote("a b"), "'a b'");
         assert_eq!(shell_quote("it's"), r"'it'\''s'");
         assert_eq!(shell_quote(""), "''");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn captured_windows_commands_are_bounded_and_do_not_evaluate_single_arg_titles() {
+        use base64::Engine as _;
+        for argv in [
+            vec![],
+            vec![String::new()],
+            vec!["bad\0executable".into()],
+            vec!["fixture.exe".into(), "x".repeat(10_000)],
+            vec!["cmd.exe".into(), "/C".into(), "echo literal".into()],
+        ] {
+            assert!(windows_captured_command(&argv).is_err());
+        }
+        let command = windows_captured_command(&[r"C:\Program Files\fixture.exe".into()]).unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(command.split_whitespace().last().unwrap())
+            .unwrap();
+        let (units, remainder) = bytes.as_chunks::<2>();
+        assert!(remainder.is_empty());
+        let utf16: Vec<u16> = units
+            .iter()
+            .map(|part| u16::from_le_bytes([part[0], part[1]]))
+            .collect();
+        let script = String::from_utf16(&utf16).unwrap();
+        assert!(script.contains(r"'C:\Program Files\fixture.exe'"));
+        assert!(script.contains("$holdmapStart.Arguments = ''"));
+        assert!(script.contains("$holdmapStart.UseShellExecute = $false"));
+        assert!(script.contains("exit $holdmapExitCode"));
+        assert!(script.contains("exit 1"));
     }
 
     #[test]

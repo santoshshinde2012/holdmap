@@ -493,7 +493,7 @@ impl Stack {
     /// `cwd`), its project root is under it, or it's a container of the compose project named like the stack.
     pub fn owns(&self, entry: &PortEntry) -> bool {
         let under = |p: &Path| {
-            p.starts_with(&self.root) || self.services.iter().any(|s| p.starts_with(&s.cwd))
+            path_is_under(p, &self.root) || self.services.iter().any(|s| path_is_under(p, &s.cwd))
         };
         entry
             .process
@@ -515,6 +515,57 @@ impl Stack {
             .map(|s| service_status(self, s, snap))
             .collect()
     }
+}
+
+/// Whether `path` is within `root`, including the root itself. Equivalent ordinary/verbatim
+/// Windows drive and UNC prefixes match without filesystem IO; component names and directory
+/// boundaries remain exact, including for Windows case-sensitive directories.
+pub fn path_is_under(path: &Path, root: &Path) -> bool {
+    #[cfg(windows)]
+    return windows_relative_components(path, root).is_some();
+    #[cfg(not(windows))]
+    path.starts_with(root)
+}
+
+/// The portion of `path` below `root`, or `None` when outside it. This uses the same
+/// namespace-aware Windows comparison as [`path_is_under`] and performs no filesystem IO.
+pub fn relative_to_root(path: &Path, root: &Path) -> Option<PathBuf> {
+    #[cfg(windows)]
+    return windows_relative_components(path, root).map(|parts| parts.as_path().to_path_buf());
+    #[cfg(not(windows))]
+    path.strip_prefix(root).ok().map(Path::to_path_buf)
+}
+
+#[cfg(windows)]
+fn windows_relative_components<'a>(
+    path: &'a Path,
+    root: &Path,
+) -> Option<std::path::Components<'a>> {
+    use std::path::{Component, Prefix};
+    let mut path = path.components();
+    for root in root.components() {
+        let matches = match (path.next(), root) {
+            (Some(Component::Prefix(path)), Component::Prefix(root)) => {
+                match (path.kind(), root.kind()) {
+                    (
+                        Prefix::Disk(a) | Prefix::VerbatimDisk(a),
+                        Prefix::Disk(b) | Prefix::VerbatimDisk(b),
+                    ) => a.eq_ignore_ascii_case(&b),
+                    (
+                        Prefix::UNC(a_server, a_share) | Prefix::VerbatimUNC(a_server, a_share),
+                        Prefix::UNC(b_server, b_share) | Prefix::VerbatimUNC(b_server, b_share),
+                    ) => a_server == b_server && a_share == b_share,
+                    (a, b) => a == b,
+                }
+            }
+            (Some(path), root) => path == root,
+            (None, _) => false,
+        };
+        if !matches {
+            return None;
+        }
+    }
+    Some(path)
 }
 
 /// Where a service stands right now.
@@ -909,6 +960,82 @@ port = 5432
             e.process = None;
         }
         e
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_ownership_matches_ordinary_and_verbatim_drive_and_unc_prefixes() {
+        for (root, cwd, sibling) in [
+            (
+                r"\\?\C:\workspace\shop",
+                r"C:\workspace\shop\apps\web",
+                r"C:\workspace\shop-other\web",
+            ),
+            (
+                r"C:\workspace\shop",
+                r"\\?\c:\workspace\shop\apps\web",
+                r"\\?\C:\workspace\shop-other\web",
+            ),
+            (
+                r"\\?\UNC\server\share\shop",
+                r"\\server\share\shop\web",
+                r"\\server\other\shop\web",
+            ),
+        ] {
+            let stack = parse(
+                "[services.web]\nport=3000\ncommand='fixture'\n",
+                Path::new(root),
+                &Path::new(root).join(FILE_NAME),
+            )
+            .unwrap();
+            assert!(stack.owns(&entry(3000, Some(cwd), None)), "{root} / {cwd}");
+            let relative = relative_to_root(Path::new(cwd), Path::new(root)).unwrap();
+            assert_eq!(
+                relative,
+                Path::new(if cwd.ends_with(r"apps\web") {
+                    r"apps\web"
+                } else {
+                    "web"
+                })
+            );
+            assert!(
+                !stack.owns(&entry(3000, Some(sibling), None)),
+                "{root} / {sibling}"
+            );
+            assert!(relative_to_root(Path::new(sibling), Path::new(root)).is_none());
+            let snap = Snapshot {
+                entries: vec![entry(3000, Some(cwd), None)],
+                hidden_sockets: 0,
+                platform: "windows".into(),
+                taken_at_ms: 0,
+                scan_ms: 0,
+                docker_available: false,
+                warnings: vec![],
+            };
+            assert_eq!(stack.status(&snap)[0].state, ServiceState::Running);
+        }
+        // The namespace correction must not broaden ownership to different filesystem
+        // names, devices, shares or roots that merely have the same textual prefix.
+        assert!(!path_is_under(
+            Path::new(r"C:\workspace\Shop\web"),
+            Path::new(r"\\?\C:\workspace\shop")
+        ));
+        assert!(!path_is_under(
+            Path::new(r"D:\workspace\shop"),
+            Path::new(r"\\?\C:\workspace\shop")
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_loaded_windows_stack_owns_an_existing_cwd_without_a_verbatim_prefix() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join(FILE_NAME);
+        std::fs::write(&file, "[services.web]\nport=3000\ncommand='fixture'\n").unwrap();
+        let stack = load(&file).unwrap();
+        let canonical = std::fs::canonicalize(directory.path()).unwrap();
+        let ordinary = canonical.to_str().unwrap().strip_prefix(r"\\?\").unwrap();
+        assert!(stack.owns(&entry(3000, Some(ordinary), None)));
     }
 
     #[test]
