@@ -20,9 +20,11 @@ mod power;
 mod scheduler;
 mod shortcuts;
 mod state;
+mod stop_batch;
 mod tray;
 mod update;
 mod watch;
+mod window_lifecycle;
 
 use state::AppState;
 use std::sync::atomic::Ordering;
@@ -52,7 +54,7 @@ pub fn run() {
         .manage(activity::ActivityState::default())
         .manage(power::PowerState::default())
         .manage(scheduler::SchedulerState::default())
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(local_window::guard(tauri::generate_handler![
             commands::app_info,
             commands::scan,
             commands::topology,
@@ -68,6 +70,7 @@ pub fn run() {
             commands::http_info,
             commands::plan,
             commands::stop,
+            commands::stop_many,
             commands::free_port,
             commands::get_config,
             commands::toggle_pin,
@@ -96,7 +99,7 @@ pub fn run() {
             scheduler::list_schedules,
             scheduler::cancel_schedule,
             update::install_update,
-        ])
+        ]))
         .setup(move |app| {
             let handle = app.handle().clone();
             let tray_ok = match tray::setup_tray(&handle) {
@@ -115,8 +118,8 @@ pub fn run() {
             let hotkey = app.state::<AppState>().store.config().hotkey;
             shortcuts::setup(app, &hotkey);
             if tray_ok && shortcuts::started_hidden() {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.hide();
+                if let Err(error) = window_lifecycle::hide_main(&handle) {
+                    eprintln!("holdmap: couldn't start in the tray ({error})");
                 }
             }
             update::spawn_check(handle.clone());
@@ -127,19 +130,25 @@ pub fn run() {
         .on_window_event(|window, event| {
             // With a tray, closing the window keeps holdmap running in the menu bar.
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if window
+                let tray_available = window
                     .app_handle()
                     .state::<AppState>()
                     .tray_ok
-                    .load(Ordering::Relaxed)
-                {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
+                    .load(Ordering::Relaxed);
+                window_lifecycle::close_requested(window, api, tray_available);
             }
         })
-        .run(context)
-        .expect("error while running holdmap");
+        .build(context)
+        .expect("error while building holdmap")
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                // Dock clicks also restore minimized windows, which macOS counts as visible.
+                tray::show_main(app);
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
 }
 
 #[cfg(test)]

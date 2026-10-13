@@ -8,6 +8,52 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Security
+
+- Every native app command passes the trusted-main-webview policy before dispatch,
+  including restart, settings, history and update installation.
+- Activity metadata encoding rejects excess record counts before serialization and stops
+  at the request byte limit, including escaped JSON, before opening a connection.
+- HTTP status, headers and titles redact recognized credentials before clipping or export.
+  URL fragments and namespaced recording labels also hide recognized credential forms.
+- Settings updates and history appends preserve existing files when validation or reads
+  fail, and checked restart lookups report those errors explicitly.
+
+### Fixed
+
+- Closing the macOS main window hides the application through AppKit, returning from
+  fullscreen to the previous app instead of leaving a black Space. Tray, shortcut and Dock
+  reopening restore the same window and webview, including minimized windows. First-open
+  guidance explains closing, reopening and Quit when the native tray is available.
+- Desktop scan failures preserve the last successful rows while showing the failure and
+  an accessible retry action. Searched-port availability is rechecked against updated scans
+  and cannot keep showing a stale free result after a failed refresh. Socket-mode changes
+  during an in-flight scan trigger a fresh request for the selected mode.
+- Narrow browser windows keep the search field, every header action and scan-retry button
+  within the viewport, including when macOS platform detection reserves titlebar space.
+- HTTP health checks require complete headers and a final response, handle bounded body
+  framing and stop reading as soon as a length-delimited response completes.
+- Stops report process outcomes and history-save failures separately. CLI, desktop and MCP
+  batches halt after recording failures; automatic restart requires a successful stop and
+  saved history. Failed stop steps cannot appear successful merely because the port is free.
+- Pending desktop stop/restart reviews show cancellable progress, discard cancelled or
+  superseded replies and require another review when a selected listener changes identity.
+- Unavailable settings show an explicit retry flow while platform information and scans
+  remain usable.
+- Agent service batches validate every reviewed listener against one fresh native scan
+  before stopping anything. Retained plans correctly verify multiple ports released by a
+  shared child process, and partial results preserve the actual attempted/completed counts.
+  Identical successfully completed supervisor commands run once per batch while each
+  listener is still verified and recorded separately. Immediate, scheduled and MCP batches
+  share this rule in the core, retaining original reviewed plans for history.
+
+### Performance
+
+- Native settings, history and OS integration work run off the UI thread, including
+  cross-process file-lock waits and durable writes.
+- Numeric port checks keep at most one request in flight and one latest queued request,
+  preventing slow checks from accumulating during live scans.
+
 ## [0.5.1] - 2026-10-13
 
 ### Security
@@ -512,7 +558,9 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
-[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/santoshshinde2012/holdmap/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.1.9...v0.2.0

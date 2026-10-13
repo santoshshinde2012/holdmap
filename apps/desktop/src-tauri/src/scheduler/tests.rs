@@ -105,6 +105,305 @@ fn plans(engine: &Engine) -> Vec<PinnedStop> {
         .collect()
 }
 
+#[test]
+fn immediate_batch_checks_every_target_and_agent_before_dispatch() {
+    let original = fixture_engine(20);
+    let reviewed = plans(&original);
+    for (engine, agent_id) in [
+        (fixture_engine(21), "agent:100"),
+        (original.clone(), "agent:999"),
+    ] {
+        assert!(
+            crate::stop_batch::run(&engine, agent_id, &reviewed, |_, _| {
+                panic!("batch dispatched before every target passed preflight")
+            })
+            .is_err()
+        );
+    }
+    let mut foreign = original.clone();
+    let mut child = process(102, Some(100), "node", 20);
+    child.uid = Some(2000);
+    child.user = Some("foreign".into());
+    foreign.scan.table = ProcessTable::from_processes(
+        [
+            (100, process(100, None, "claude", 1)),
+            (101, process(101, Some(100), "node", 10)),
+            (102, child),
+            (999, process(999, None, "holdmap", 100)),
+        ]
+        .into(),
+        999,
+    );
+    assert!(
+        crate::stop_batch::run(&foreign, "agent:100", &reviewed, |_, _| {
+            panic!("foreign owner dispatched")
+        })
+        .is_err()
+    );
+}
+
+#[test]
+fn immediate_batch_consumes_exact_handles_and_never_replays() {
+    let engine = fixture_engine(20);
+    let mut confirmations = crate::confirmation::Confirmations::default();
+    let requests: Vec<_> = plans(&engine)
+        .into_iter()
+        .map(|pinned| ScheduledStopRequest {
+            confirmation_id: confirmations
+                .preview(pinned.target.clone(), false, false, pinned.plan)
+                .confirmation_id,
+            target: pinned.target,
+            force: false,
+            allow_protected: false,
+        })
+        .collect();
+    let taken = crate::stop_batch::take(&mut confirmations, &requests).unwrap();
+    assert_eq!(taken.len(), 2);
+    assert!(crate::stop_batch::take(&mut confirmations, &requests).is_err());
+    let mut requests = requests;
+    requests[0].confirmation_id = confirmations
+        .preview(taken[0].target.clone(), false, false, taken[0].plan.clone())
+        .confirmation_id;
+    requests[1].confirmation_id = "unknown".into();
+    assert!(crate::stop_batch::take(&mut confirmations, &requests).is_err());
+    // A failed later handle cannot leave a reusable partially accepted batch.
+    assert!(confirmations
+        .take(
+            &requests[0].confirmation_id,
+            &requests[0].target,
+            false,
+            false
+        )
+        .is_err());
+}
+
+#[test]
+fn immediate_batch_halts_after_failed_stop_verification_or_history_save() {
+    let engine = fixture_engine(20);
+    let reviewed = plans(&engine);
+    for (success, freed, history_error) in [
+        (false, false, None),
+        (false, true, None),
+        (true, false, None),
+        (true, true, Some("fixture persistence failure".into())),
+    ] {
+        let attempts = Cell::new(0);
+        let result = crate::stop_batch::run(&engine, "agent:100", &reviewed, |pinned, _| {
+            attempts.set(attempts.get() + 1);
+            crate::commands::Stopped {
+                report: holdmap_core::StopReport {
+                    target: pinned.target.clone(),
+                    success,
+                    freed,
+                    ..Default::default()
+                },
+                history_error: history_error.clone(),
+            }
+        })
+        .unwrap();
+        assert_eq!(attempts.get(), 1);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].report.success, success);
+        assert_eq!(result[0].report.freed, freed);
+        assert_eq!(result[0].history_error, history_error);
+    }
+}
+
+#[test]
+fn immediate_batch_retains_shared_process_plans_after_both_listeners_are_released() {
+    use std::net::TcpListener;
+    let listeners = [
+        TcpListener::bind("127.0.0.1:0").unwrap(),
+        TcpListener::bind("127.0.0.1:0").unwrap(),
+    ];
+    let ports = listeners
+        .each_ref()
+        .map(|socket| socket.local_addr().unwrap().port());
+    let mut engine = fixture_engine(20);
+    // A synthetic identity outside OS PID ranges cannot authorize a real signal.
+    let child = process(2_020_202_020, Some(100), "node", 10);
+    engine.scan.table = ProcessTable::from_processes(
+        [
+            (100, process(100, None, "claude", 1)),
+            (child.pid, child.clone()),
+            (999, process(999, None, "holdmap", 100)),
+        ]
+        .into(),
+        999,
+    );
+    for (entry, port) in engine.scan.snapshot.entries.iter_mut().zip(ports) {
+        entry.id = format!("tcp:{port}:{}:listen", child.pid);
+        entry.port = port;
+        entry.pid = Some(child.pid);
+        entry.pids = vec![child.pid];
+        entry.process = Some(child.clone());
+    }
+    let reviewed: Vec<_> = ports
+        .into_iter()
+        .map(|port| {
+            let target = format!("{port}/tcp");
+            let (parsed, options) = stop_request(&target, false, false);
+            PinnedStop {
+                target,
+                plan: engine.plan(&parsed, &options),
+            }
+        })
+        .collect();
+    assert!(reviewed.iter().all(|pinned| !pinned.plan.is_blocked()));
+    let mut attempts = 0;
+    let mut listeners = Some(listeners);
+    let results = crate::stop_batch::run(&engine, "agent:100", &reviewed, |_, execution| {
+        // One shared process exit releases both listeners. Later plans still verify their
+        // own real bind probes instead of being replaced with a NothingToStop plan.
+        drop(listeners.take());
+        attempts += 1;
+        let report = holdmap_core::execute(execution, &mut |_| {});
+        assert!(report.signalled.is_empty());
+        crate::commands::Stopped {
+            report,
+            history_error: None,
+        }
+    })
+    .unwrap();
+    assert_eq!(attempts, 2);
+    assert_eq!(results.len(), 2);
+    assert!(results
+        .iter()
+        .all(|result| result.report.success && result.report.freed));
+}
+
+#[test]
+fn immediate_batch_reuses_only_successful_supervisor_commands_and_keeps_each_verification() {
+    use holdmap_core::engine::strategies::StopStrategy;
+    use holdmap_core::engine::{Resolution, ResolveCtx};
+    use holdmap_core::{Owner, Supervisor};
+
+    struct FixtureSupervisor;
+    impl StopStrategy for FixtureSupervisor {
+        fn name(&self) -> &'static str {
+            "fixture supervisor"
+        }
+        fn resolve(
+            &self,
+            context: &ResolveCtx,
+            entry: &PortEntry,
+            _: &[String],
+        ) -> Option<Resolution> {
+            let guard = context.proc_ref(entry.pid?)?;
+            let mut resolution = Resolution::new(
+                Owner::Supervised {
+                    supervisor: Supervisor::Pm2 {
+                        name: "fixture".into(),
+                        id: "0".into(),
+                    },
+                    pid: guard.pid,
+                    name: guard.name.clone(),
+                },
+                "Stop the fixture supervisor",
+            );
+            resolution.steps.push(Step::RunCommand {
+                program: "pm2".into(),
+                args: vec!["stop".into(), "0".into()],
+                reason: format!("release port {}", entry.port),
+                guard: Some(guard),
+            });
+            Some(resolution)
+        }
+    }
+
+    let mut engine =
+        fixture_engine(20).with_strategies(StrategyRegistry::empty().with(FixtureSupervisor));
+    let first = engine.scan.snapshot.entries[0].clone();
+    engine.scan.snapshot.entries[1].pid = first.pid;
+    engine.scan.snapshot.entries[1].pids = first.pids;
+    engine.scan.snapshot.entries[1].process = first.process;
+    let reviewed = plans(&engine);
+    for success in [true, false] {
+        let mut commands = 0;
+        let mut verified = Vec::new();
+        let mut attempted = 0;
+        let results =
+            crate::stop_batch::run(&engine, "agent:100", &reviewed, |original, execution| {
+                attempted += 1;
+                // History must still use the original guarded supervisor effect.
+                assert!(matches!(
+                    original.plan.steps[0],
+                    Step::RunCommand { guard: Some(_), .. }
+                ));
+                for step in &execution.steps {
+                    match step {
+                        Step::RunCommand { .. } => {
+                            commands += 1;
+                            assert_eq!(
+                                commands, 1,
+                                "an exited supervisor guard cannot authorize a second command"
+                            );
+                        }
+                        Step::VerifyFree { port, .. } => verified.push(*port),
+                        _ => panic!("unexpected fixture effect"),
+                    }
+                }
+                crate::commands::Stopped {
+                    report: holdmap_core::StopReport {
+                        target: original.target.clone(),
+                        success,
+                        freed: true,
+                        ..Default::default()
+                    },
+                    history_error: None,
+                }
+            })
+            .unwrap();
+        assert_eq!(commands, 1);
+        if success {
+            assert_eq!(attempted, 2);
+            assert_eq!(verified, [3000, 4000]);
+            assert_eq!(results.len(), 2);
+            assert!(results[1].report.log[0].contains("without repeating that command"));
+        } else {
+            assert_eq!(attempted, 1);
+            assert_eq!(verified, [3000]);
+            assert_eq!(results.len(), 1);
+        }
+    }
+    let mut commands = 0;
+    let mut verified = Vec::new();
+    let mut recorded = 0;
+    let outcome = execute_stops(
+        &reviewed,
+        |execution| {
+            for step in &execution.steps {
+                match step {
+                    Step::RunCommand { .. } => commands += 1,
+                    Step::VerifyFree { port, .. } => verified.push(*port),
+                    _ => panic!("unexpected scheduled fixture effect"),
+                }
+            }
+            holdmap_core::StopReport {
+                success: true,
+                freed: true,
+                ..Default::default()
+            }
+        },
+        |original, _| {
+            assert!(matches!(
+                original.steps[0],
+                Step::RunCommand { guard: Some(_), .. }
+            ));
+            recorded += 1;
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert!(outcome.unwrap().contains("Stopped 2"));
+    assert_eq!(
+        commands, 1,
+        "scheduled batch cannot repeat an exited guard's command"
+    );
+    assert_eq!(verified, [3000, 4000]);
+    assert_eq!(recorded, 2);
+}
+
 fn operation() -> Operation {
     Operation::Stops {
         plans: plans(&fixture_engine(20)),

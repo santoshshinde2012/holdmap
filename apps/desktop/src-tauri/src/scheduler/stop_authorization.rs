@@ -11,13 +11,13 @@ const MAX_TARGETS: usize = 32;
 
 fn exact_listener(target: &str) -> Result<(u16, Protocol), String> {
     let Some((port, protocol)) = target.split_once('/') else {
-        return Err("Scheduled stops require an exact TCP or UDP listener.".into());
+        return Err("Choose an exact TCP or UDP listener.".into());
     };
-    let port: u16 = port.parse().map_err(|_| "Invalid scheduled port.")?;
+    let port: u16 = port.parse().map_err(|_| "Invalid listener port.")?;
     let protocol = match protocol {
         "tcp" => Protocol::Tcp,
         "udp" => Protocol::Udp,
-        _ => return Err("Scheduled stops require an exact TCP or UDP listener.".into()),
+        _ => return Err("Choose an exact TCP or UDP listener.".into()),
     };
     if port == 0
         || target
@@ -29,7 +29,7 @@ fn exact_listener(target: &str) -> Result<(u16, Protocol), String> {
                 }
             )
     {
-        return Err("Scheduled stops require a canonical nonzero port and protocol.".into());
+        return Err("Choose a canonical nonzero port and protocol.".into());
     }
     Ok((port, protocol))
 }
@@ -42,10 +42,13 @@ pub(super) fn validate_requests(requests: &[ScheduledStopRequest]) -> Result<(),
     for request in requests {
         exact_listener(&request.target)?;
         if request.force || request.allow_protected {
-            return Err("Force stops and protected-process overrides cannot be scheduled.".into());
+            return Err(
+                "These listener stops require normal mode without protected-process overrides."
+                    .into(),
+            );
         }
         if request.confirmation_id.is_empty() || request.confirmation_id.len() > 64 {
-            return Err("Review a fresh stop plan before scheduling.".into());
+            return Err("Review a fresh stop plan for every listener.".into());
         }
         if !seen.insert(&request.target) {
             return Err("A listener target appears more than once.".into());
@@ -188,7 +191,7 @@ pub(super) fn validate_ownership(engine: &Engine, plans: &[PinnedStop]) -> Resul
             Step::StopContainer { .. } | Step::VerifyFree { .. } => true,
         };
         if !allowed {
-            return Err("Every scheduled process or supervisor stop needs a pinned owner from the current account. Foreign or unknown ownership is not permitted.".into());
+            return Err("Every process or supervisor stop needs a pinned owner from the current account. Foreign or unknown ownership is not permitted.".into());
         }
     }
     Ok(())

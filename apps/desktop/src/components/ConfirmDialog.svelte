@@ -32,6 +32,8 @@
     cluster = null,
     restart = false,
     portCount = 1,
+    completedPortCount,
+    attemptedPortCount,
     agentName = null,
     onschedule,
     schedulingBusy = false,
@@ -41,6 +43,7 @@
     onreview,
     demo = false,
     intent = "combined",
+    oncopyrestart,
   }: {
     /** The port being stopped; null when stopping a whole cluster. */
     entry: PortEntry | null;
@@ -57,6 +60,9 @@
     restart?: boolean;
     /** Number of reviewed ports in an agent bulk action; single-port dialogs keep their labels. */
     portCount?: number;
+    /** Actual freed ports, including a partially completed bulk stop. */
+    completedPortCount?: number;
+    attemptedPortCount?: number;
     agentName?: string | null;
     onschedule?: (delaySecs: number) => void;
     schedulingBusy?: boolean;
@@ -67,6 +73,7 @@
     demo?: boolean;
     /** Separate entry points cannot switch between immediate and scheduled execution. */
     intent?: "combined" | "now" | "schedule";
+    oncopyrestart?: () => void;
   } = $props();
 
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -99,7 +106,10 @@
   const confirmLabel = $derived(multiple ? `Stop ${portCount} ports` : entry ? `${verb} :${entry.port}` : bulk ? "Stop all" : verb);
   const order = $derived(cluster ? orderFromSummary(plan.summary) : []);
   const subject = $derived(multiple ? `${agentName ? `${agentName}'s ` : ""}${portCount} ports` : cluster ? cluster.name : entry ? title(entry) : plan.target);
-  const heading = $derived(scheduled ? "Stop scheduled" : phase === "done" ? (multiple ? `${portCount} ports are free` : cluster ? `Cluster ${cluster.name} stopped` : bulk ? "Dev servers stopped" : `Port ${entry?.port} is free`) : blocked ? (multiple ? `Can't stop ${subject} safely` : bulk ? `Nothing to stop` : `Can't stop ${cluster ? cluster.name : `:${entry?.port}`} safely`) : intent === "schedule" ? `Schedule stop :${entry?.port}?` : `${verb} ${subject}?`);
+  const completedCount = $derived(completedPortCount ?? portCount);
+  const resultSubject = $derived(multiple ? `${completedCount} port${completedCount === 1 ? "" : "s"}` : subject);
+  const skippedCount = $derived(multiple ? Math.max(0, portCount - (attemptedPortCount ?? completedCount)) : 0);
+  const heading = $derived(scheduled ? "Stop scheduled" : phase === "done" ? (multiple && completedCount > 1 ? `${completedCount} ports are free` : cluster ? `Cluster ${cluster.name} stopped` : bulk ? "Dev servers stopped" : `Port ${entry?.port} is free`) : blocked ? (multiple ? `Can't stop ${subject} safely` : bulk ? `Nothing to stop` : `Can't stop ${cluster ? cluster.name : `:${entry?.port}`} safely`) : intent === "schedule" ? `Schedule stop :${entry?.port}?` : `${verb} ${subject}?`);
   const sub = $derived(multiple ? "Every port's steps appear below" : cluster ? `${CLUSTER_LABEL[cluster.kind]}${cluster.detail ? ` · ${cluster.detail}` : ""} · ${cluster.nodes.length} services` : entry ? `:${entry.port} · ${entry.process ? `${entry.process.name} · PID ${entry.process.pid}` : entry.container?.name ?? ""}` : bulk ? stepCount(plan) : "");
 
   function stepCount(p: ActionPlan): string {
@@ -147,7 +157,7 @@
     <div class="result" in:fade={{ duration: reduced ? 0 : 150 }} role="status">
       <div class="big-check"><Icon name="check" size={26} /></div>
       <h2>{heading}</h2>
-      <p>{subject} stopped in {seconds(report.elapsed_ms)}{report.escalated ? " — it ignored SIGTERM, so holdmap used SIGKILL" : ""}.</p>
+      <p>{resultSubject} stopped in {seconds(report.elapsed_ms)}{report.escalated ? " — it ignored SIGTERM, so holdmap used SIGKILL" : ""}.</p>
     </div>
   {:else}
     <p class="summary selectable"><RichText text={blocked ? blocked.message : plan.summary} /></p>
@@ -189,7 +199,10 @@
         {#if plan.risk !== "low" && phase === "confirm" && !((cluster || bulk) && plan.risk === "medium")}
           <Callout tone={plan.risk === "high" ? "danger" : "warn"} size="sm">{plan.risk === "high" ? "High risk: this isn't one of your dev servers." : "This isn't a dev server — make sure nothing needs it."}</Callout>
         {/if}
-        {#if phase === "failed" && report}<Callout tone="danger" size="sm">{report.error ?? `Port still busy: ${report.ports_still_busy.join(", ")}`}</Callout>{/if}
+        {#if phase === "failed" && report}
+          <Callout tone="danger" size="sm">{report.error ?? (report.freed ? "The port is free, but the reviewed stop didn't complete successfully." : `Port still busy: ${report.ports_still_busy.join(", ")}`)}</Callout>
+          {#if report.freed}<Callout tone="warn" size="sm">The port is now free. Further stops and automatic restart were skipped because a reviewed step failed.</Callout>{/if}
+        {/if}
         {#if schedulingError}<Callout tone="danger" title="Could not schedule the stop">{schedulingError}</Callout>{/if}
         {#if timingError}<Callout tone="danger" title="Choose a new scheduled time">{timingError}</Callout>{/if}
       </div>
@@ -203,12 +216,27 @@
     {/if}
   {/if}
 
+  {#if multiple && (phase === "failed" || report?.history_error)}
+    <Callout tone="warn" title="Batch outcome">
+      <p>{completedCount} of {portCount} ports confirmed free.</p>
+      <p>{attemptedPortCount ?? completedCount} attempted · {skippedCount} not attempted.</p>
+    </Callout>
+  {/if}
+  {#if report?.history_error}
+    <Callout tone="danger" title="Restart history couldn't be saved">
+      <p>{report.history_error}</p>
+      {#if restart}<p>Automatic restart was skipped. Start the service again with its normal launcher.</p>{/if}
+      {#if skippedCount}<p>The remaining {skippedCount} reviewed {skippedCount === 1 ? "port was" : "ports were"} not stopped.</p>{/if}
+    </Callout>
+  {/if}
+
   {#snippet footer()}
     {#if scheduled}
       <Button variant="secondary" onclick={oncancel} data-primary>Done</Button>
       {#if onviewschedules}<Button variant="primary" icon="clock" onclick={onviewschedules}>View scheduled actions</Button>{/if}
     {:else if phase === "done"}
       <Button variant="secondary" onclick={oncancel} data-primary>Done</Button>
+      {#if report?.history_error && oncopyrestart}<Button variant="primary" icon="copy" onclick={oncopyrestart}>Copy restart command</Button>{/if}
     {:else if blocked}
       <span class="hint">{overridable ? "Nothing is sent yet." : "holdmap won't stop this for you."}</span>
       {#if overridable}
@@ -218,6 +246,7 @@
         <Button variant="primary" onclick={oncancel} data-primary>Got it</Button>
       {/if}
     {:else if phase === "failed"}
+      {#if onreview}<Button variant="secondary" onclick={onreview}>Review again</Button>{/if}
       <Button variant="primary" onclick={oncancel} data-primary>Close</Button>
     {:else}
       <span class="hint">{scheduling ? "Nothing stops until the scheduled time." : "Nothing is sent until you confirm."}</span>

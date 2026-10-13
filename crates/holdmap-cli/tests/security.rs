@@ -23,6 +23,38 @@ fn free_port() -> u16 {
 }
 
 #[test]
+fn state_read_errors_are_reported_without_presenting_empty_results() {
+    let directory = tempfile::tempdir().unwrap();
+    let state = directory.path().join("state");
+    holdmap_core::util::create_private_dir(&state).unwrap();
+    let config = state.join("config.json");
+    let corrupt = "{invalid saved configuration";
+    std::fs::write(&config, corrupt).unwrap();
+    for args in [vec!["pins", "--json"], vec!["pin", "3000"]] {
+        let output = command(&state).args(args).output().unwrap();
+        assert_eq!(output.status.code(), Some(2), "{output:?}");
+        assert!(output.stdout.is_empty(), "{output:?}");
+        assert!(!output.stderr.is_empty());
+        assert_eq!(std::fs::read_to_string(&config).unwrap(), corrupt);
+    }
+    std::fs::remove_file(&config).unwrap();
+    std::fs::create_dir(state.join("history.jsonl")).unwrap();
+    let output = command(&state)
+        .args(["history", "--json"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(
+        output.stdout.is_empty(),
+        "an unreadable history must not look empty"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Could not read service-stop history"),
+        "{output:?}"
+    );
+}
+
+#[test]
 fn run_redacts_displayed_arguments_before_exec_failure() {
     let directory = tempfile::tempdir().unwrap();
     let output = command(&directory.path().join("state"))

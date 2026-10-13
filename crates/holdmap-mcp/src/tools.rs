@@ -13,6 +13,8 @@ use std::time::{Duration, Instant};
 pub(super) enum ToolError {
     Unknown,
     Failed(String),
+    /// A tool changed local state; preserve its actual outcome alongside the failure.
+    FailedWithData(String, Value),
 }
 
 pub(super) fn port_arg(args: &Value, key: &str) -> Result<u16, ToolError> {

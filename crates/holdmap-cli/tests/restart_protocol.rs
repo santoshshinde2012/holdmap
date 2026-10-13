@@ -5,6 +5,7 @@ use holdmap_core::history::HistoryEntry;
 use holdmap_core::store::Store;
 use holdmap_core::Protocol;
 use serde::{Deserialize, Serialize};
+use std::io::Read;
 use std::net::{TcpListener, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
@@ -139,6 +140,72 @@ impl Owned {
     fn assert_no_marker(&self) {
         assert!(!self.directory.path().join("launched.marker").exists());
     }
+
+    fn remember_restart(&mut self, stdout: &[u8]) {
+        // The CLI can launch successfully and then fail its readiness check. Retain
+        // that owned identity before any assertion so Drop still cleans it up.
+        let pid = String::from_utf8_lossy(stdout)
+            .lines()
+            .find(|line| line.contains("started `"))
+            .and_then(|line| line.split_once("(PID "))
+            .and_then(|(_, rest)| {
+                rest.chars()
+                    .take_while(char::is_ascii_digit)
+                    .collect::<String>()
+                    .parse::<u32>()
+                    .ok()
+            });
+        self.restarted = pid.and_then(|pid| self.restart_identity(pid));
+    }
+
+    fn restart_identity(&self, pid: u32) -> Option<(u32, u64)> {
+        let table = holdmap_core::ProcessTable::capture();
+        let process = table.get(pid)?;
+        let exe = self.exe.to_string_lossy();
+        let quit = self.directory.path().join("quit");
+        let quit = quit.to_string_lossy();
+        // A printed PID may have exited and been reused before the CLI returns.
+        // Only this immutable executable alias and unique fixture path authorize cleanup.
+        (process.start_token != 0
+            && process
+                .cmdline
+                .iter()
+                .any(|argument| argument.as_str() == exe.as_ref())
+            && process
+                .cmdline
+                .iter()
+                .any(|argument| argument.as_str() == quit.as_ref()))
+        .then_some((pid, process.start_token))
+    }
+
+    fn startup_logs(&self) -> String {
+        let Ok(entries) = std::fs::read_dir(self.state().join("logs")) else {
+            return "(no restart logs)".into();
+        };
+        let mut paths: Vec<_> = entries
+            .flatten()
+            .take(4)
+            .map(|entry| entry.path())
+            .collect();
+        paths.sort();
+        paths
+            .into_iter()
+            .map(|path| {
+                format!(
+                    "{}:\n{}",
+                    path.display(),
+                    std::fs::File::open(&path)
+                        .and_then(|file| {
+                            let mut bytes = Vec::new();
+                            file.take(64 * 1024).read_to_end(&mut bytes)?;
+                            Ok(String::from_utf8_lossy(&bytes).into_owned())
+                        })
+                        .unwrap_or_else(|error| format!("(could not read: {error})"))
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
 
 impl Drop for Owned {
@@ -194,13 +261,21 @@ fn restarting_an_owned_tcp_listener_preserves_a_separate_udp_process_on_the_same
         .args(["restart", &tcp.port.to_string(), "--yes", "--timeout", "5s"])
         .output()
         .unwrap();
-    assert!(output.status.success(), "{output:?}");
+    owned.remember_restart(&output.stdout);
+    assert!(
+        output.status.success(),
+        "{output:?}\nStartup logs:\n{}",
+        owned.startup_logs()
+    );
     let restarted = wait_ready(&owned.directory.path().join("tcp.json"), |ready| {
         ready.pid != tcp.pid
     });
     assert_eq!(restarted.port, tcp.port);
-    let token = holdmap_core::sys::start_token(restarted.pid).expect("owned restarted identity");
-    owned.restarted = Some((restarted.pid, token));
+    owned.restarted = Some(
+        owned
+            .restart_identity(restarted.pid)
+            .expect("owned restarted identity"),
+    );
     assert_udp_alive(tcp.port);
     assert!(
         owned.children[1].try_wait().unwrap().is_none(),
@@ -255,6 +330,72 @@ fn newest_unrestartable_tcp_history_cannot_fall_back_to_an_older_command_or_newe
         .unwrap();
     assert_eq!(output.status.code(), Some(2), "{output:?}");
     owned.assert_no_marker();
+}
+
+#[test]
+fn history_failure_preserves_the_stop_report_and_leaves_later_targets_running() {
+    let mut owned = Owned::new();
+    let first = owned.start("tcp", 0);
+    let second = owned.start("tcp", 0);
+    holdmap_core::util::create_private_dir(&owned.state()).unwrap();
+    // A nonregular history path is an actual storage failure, independent of ACLs or
+    // whether the host runs tests with elevated permissions.
+    std::fs::create_dir(owned.state().join("history.jsonl")).unwrap();
+    let output = owned
+        .command()
+        .args([
+            "stop",
+            &first.port.to_string(),
+            &second.port.to_string(),
+            "--yes",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let attempts = result.as_array().unwrap();
+    assert_eq!(attempts.len(), 1, "later targets must remain unattempted");
+    assert_eq!(attempts[0]["report"]["success"], true);
+    assert_eq!(attempts[0]["report"]["freed"], true);
+    assert!(attempts[0]["history_error"]
+        .as_str()
+        .unwrap()
+        .contains("Could not save"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Remaining targets were not attempted")
+    );
+    assert!(owned.children[0].try_wait().unwrap().is_some());
+    assert!(owned.children[1].try_wait().unwrap().is_none());
+    assert!(holdmap_core::tcp_accepting(second.port));
+}
+
+#[test]
+fn a_failed_restart_history_save_does_not_replay_the_stopped_command() {
+    let mut owned = Owned::new();
+    let original = owned.start("tcp", 0);
+    holdmap_core::util::create_private_dir(&owned.state()).unwrap();
+    std::fs::create_dir(owned.state().join("history.jsonl")).unwrap();
+    let output = owned
+        .command()
+        .args([
+            "restart",
+            &original.port.to_string(),
+            "--yes",
+            "--timeout",
+            "1s",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Restart was not attempted"));
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("started `"));
+    assert!(owned.children[0].try_wait().unwrap().is_some());
+    assert!(!holdmap_core::tcp_accepting(original.port));
+    let ready: Ready =
+        serde_json::from_slice(&std::fs::read(owned.directory.path().join("tcp.json")).unwrap())
+            .unwrap();
+    assert_eq!(ready.pid, original.pid, "no restarted fixture was launched");
 }
 
 #[test]

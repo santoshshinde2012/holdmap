@@ -1,7 +1,7 @@
 //! `holdmap watch`: stream port events (opened / closed / conflict) as they happen.
 
 use crate::style::{self, paint, S};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use holdmap_core::events::{PortEvent, Watcher};
 use holdmap_core::store::Store;
 use holdmap_core::{ScanOptions, Scanner};
@@ -40,7 +40,8 @@ pub fn run(a: &WatchArgs, docker: bool) -> Result<u8> {
         docker,
     };
     let pins: Vec<u16> = Store::open_default()
-        .config()
+        .try_config()
+        .context("Could not read saved pins")?
         .pins
         .iter()
         .map(|p| p.port)

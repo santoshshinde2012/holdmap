@@ -13,6 +13,19 @@ CLI, so process identity checks and process protections are shared. The CLI's pr
 Use **0.5.1 or newer** for corrected history restart and copy behavior, settings error handling
 and graph responsiveness. See the [0.5.1 changes](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#051---2026-10-13).
 
+## Close, reopen and quit
+
+When the menu-bar or tray icon is available, closing the desktop window keeps Holdmap
+running, including active schedules and recording. Click the icon to reopen the window,
+or use your configured global shortcut. Choose **Quit holdmap** from the icon's menu to
+exit completely. If the tray is unavailable, closing the window quits the app.
+
+The current source includes an **unreleased macOS fix**: closing from fullscreen returns
+to the previous app without leaving an empty black Space, and clicking the Dock icon
+reopens the same window. Published **0.5.1 downloads predate these fixes**. Build from
+current source, or use a later release whose changelog includes them. See the
+[unreleased changes](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#unreleased).
+
 ## Service graph and cluster grouping
 
 Choose **Graph** to see connections between services, or choose **Cluster** in the list's

@@ -6,13 +6,13 @@ use crate::state::{scan_now, AppState};
 use crate::tray::refresh_tray;
 use holdmap_core::agents::AgentsReport;
 use holdmap_core::history::{self, HistoryEntry};
-use holdmap_core::store::Config;
+use holdmap_core::store::{Config, Store};
 use holdmap_core::topology::Graph;
 use holdmap_core::{execute, Engine, Explanation, Snapshot, StopOptions, StopReport, Target};
 use serde::Serialize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Serialize)]
 pub struct AppInfo {
@@ -37,6 +37,25 @@ pub struct Restarted {
     pid: u32,
     command: String,
     log: String,
+}
+
+/// Keep the outcome of process control distinct from persistence of its restart recording.
+#[derive(Serialize)]
+pub struct Stopped {
+    #[serde(flatten)]
+    pub(crate) report: StopReport,
+    pub(crate) history_error: Option<String>,
+}
+
+fn record_stop(store: &Store, entries: &[HistoryEntry], report: StopReport) -> Stopped {
+    let history_error = store
+        .record(entries)
+        .err()
+        .map(|error| holdmap_core::redact::line(&error.to_string()));
+    Stopped {
+        report,
+        history_error,
+    }
 }
 
 fn stop_options(force: bool, allow_protected: bool) -> StopOptions {
@@ -77,6 +96,15 @@ async fn blocking<T: Send + 'static>(
         .map_err(|e| format!("background task failed: {e}"))?
 }
 
+/// File locks, private-file validation, parsing and fsync must not block the native UI.
+async fn with_store<T: Send + 'static>(
+    app: AppHandle,
+    operation: impl FnOnce(&Store) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let store = app.state::<AppState>().store.clone();
+    blocking(move || operation(&store)).await
+}
+
 async fn with_engine<T: Send + 'static>(
     app: &AppHandle,
     f: impl FnOnce(&Engine) -> T + Send + 'static,
@@ -90,14 +118,18 @@ async fn with_engine<T: Send + 'static>(
 }
 
 #[tauri::command]
-pub fn app_info(state: State<'_, AppState>) -> AppInfo {
-    AppInfo {
-        version: env!("CARGO_PKG_VERSION"),
-        platform: std::env::consts::OS,
-        tray: state.tray_ok.load(Ordering::Relaxed),
-        shortcut: crate::shortcuts::registered(),
-        config_dir: state.store.dir().display().to_string(),
-    }
+pub async fn app_info(app: AppHandle) -> Result<AppInfo, String> {
+    blocking(move || {
+        let state = app.state::<AppState>();
+        Ok(AppInfo {
+            version: env!("CARGO_PKG_VERSION"),
+            platform: std::env::consts::OS,
+            tray: state.tray_ok.load(Ordering::Relaxed),
+            shortcut: crate::shortcuts::registered(),
+            config_dir: state.store.dir().display().to_string(),
+        })
+    })
+    .await
 }
 
 /// How old a scan the UI's poll may share (the watcher scans on the same cadence).
@@ -205,7 +237,7 @@ pub async fn stop(
     force: bool,
     allow_protected: bool,
     confirmation_id: String,
-) -> Result<StopReport, String> {
+) -> Result<Stopped, String> {
     let docker = app.state::<AppState>().docker();
     let emitter = app.clone();
     blocking(move || {
@@ -229,8 +261,50 @@ pub async fn stop(
             );
         });
         let entries = history::entries_from_plan(&engine.scan, &confirmed, &report);
-        let _ = emitter.state::<AppState>().store.record(&entries);
-        Ok(report)
+        Ok(record_stop(
+            &emitter.state::<AppState>().store,
+            &entries,
+            report,
+        ))
+    })
+    .await
+}
+
+/// Consume every reviewed listener handle and preflight one fresh agent scan before any
+/// effect. Retained plans allow a shared child to release several ports with one exit.
+#[tauri::command]
+pub async fn stop_many(
+    app: AppHandle,
+    agent_id: String,
+    requests: Vec<crate::scheduler::ScheduledStopRequest>,
+) -> Result<Vec<Stopped>, String> {
+    crate::scheduler::validate_batch_requests(&requests)?;
+    if agent_id.is_empty() || agent_id.len() > 64 {
+        return Err("Invalid agent identity.".into());
+    }
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let plans = {
+            let mut confirmations = state
+                .confirmations
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            crate::stop_batch::take(&mut confirmations, &requests)?
+        };
+        let engine = scan_now(false, state.docker())?;
+        crate::stop_batch::run(&engine, &agent_id, &plans, |pinned, execution| {
+            let report = execute(execution, &mut |line| {
+                let _ = app.emit(
+                    "stop-progress",
+                    Progress {
+                        target: pinned.target.clone(),
+                        line: line.to_string(),
+                    },
+                );
+            });
+            let entries = history::entries_from_plan(&engine.scan, &pinned.plan, &report);
+            record_stop(&state.store, &entries, report)
+        })
     })
     .await
 }
@@ -247,56 +321,67 @@ pub async fn free_port(near: u16) -> Result<Option<u16>, String> {
 }
 
 #[tauri::command]
-pub fn get_config(state: State<'_, AppState>) -> Config {
-    state.store.config()
+pub async fn get_config(app: AppHandle) -> Result<Config, String> {
+    with_store(app, |store| {
+        store
+            .try_config()
+            .map_err(|error| format!("Couldn't read settings: {error}"))
+    })
+    .await
 }
 
 /// Pin or unpin a port; returns the updated config.
 #[tauri::command]
-pub fn toggle_pin(
-    state: State<'_, AppState>,
+pub async fn toggle_pin(
+    app: AppHandle,
     port: u16,
     label: Option<String>,
 ) -> Result<Config, String> {
-    state
-        .store
-        .update_config(|c| c.toggle_pin(port, label))
-        .map(|(c, _)| c)
-        .map_err(|e| e.to_string())
+    // Quick pin uses an observed project title; keep its automatic label within the same
+    // bound as the editable label without rejecting a service with a long project name.
+    let label = label.map(|label| label.chars().take(40).collect::<String>());
+    validate_pin(port, label.as_deref())?;
+    with_store(app, move |store| {
+        save(store, |c| {
+            c.toggle_pin(port, label);
+        })
+    })
+    .await
 }
 
 /// Notification preferences.
 #[tauri::command]
-pub fn set_notify(
-    state: State<'_, AppState>,
-    notify: bool,
-    dev_only: bool,
-) -> Result<Config, String> {
-    state
-        .store
-        .update_config(|c| {
+pub async fn set_notify(app: AppHandle, notify: bool, dev_only: bool) -> Result<Config, String> {
+    with_store(app, move |store| {
+        save(store, |c| {
             c.notify = notify;
             c.notify_dev_only = dev_only;
         })
-        .map(|(c, _)| c)
-        .map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// Recently stopped services, newest first. Secrets in their commands are hidden: the real
 /// command never leaves the backend.
 #[tauri::command]
-pub fn history(state: State<'_, AppState>, limit: Option<usize>) -> Vec<HistoryEntry> {
-    state
-        .store
-        .history(limit.unwrap_or(50))
-        .iter()
-        .map(HistoryEntry::redacted)
-        .collect()
+pub async fn history(app: AppHandle, limit: Option<usize>) -> Result<Vec<HistoryEntry>, String> {
+    with_store(app, move |store| {
+        Ok(store
+            .try_history(limit.unwrap_or(50))
+            .map_err(|error| format!("Couldn't read stop history: {error}"))?
+            .iter()
+            .map(HistoryEntry::redacted)
+            .collect())
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
-    state.store.clear_history().map_err(|e| e.to_string())
+pub async fn clear_history(app: AppHandle) -> Result<(), String> {
+    with_store(app, |store| {
+        store.clear_history().map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// Start a previously stopped command again in its original directory. The webview names the
@@ -415,11 +500,14 @@ fn folder_for(engine: &Engine, port: u16) -> Result<std::path::PathBuf, String> 
 
 /// Open `http://localhost:<port>` in the default browser.
 #[tauri::command]
-pub fn open_port(port: u16) -> Result<(), String> {
+pub async fn open_port(port: u16) -> Result<(), String> {
     if port == 0 {
         return Err("Port must be between 1 and 65535".into());
     }
-    holdmap_core::util::open_url(&format!("http://localhost:{port}")).map_err(|e| e.to_string())
+    blocking(move || {
+        holdmap_core::util::open_url(&format!("http://localhost:{port}")).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// Open the project folder of the service on `port` in Finder / Explorer.
@@ -502,45 +590,48 @@ pub async fn open_agent_folder(
 
 /// Whether holdmap launches at login.
 #[tauri::command]
-pub fn autostart(app: AppHandle, enable: Option<bool>) -> Result<bool, String> {
-    crate::shortcuts::autostart(&app, enable)
+pub async fn autostart(app: AppHandle, enable: Option<bool>) -> Result<bool, String> {
+    blocking(move || crate::shortcuts::autostart(&app, enable)).await
 }
 
-fn save(state: &AppState, f: impl FnOnce(&mut Config)) -> Result<Config, String> {
-    state
-        .store
+fn save(store: &Store, f: impl FnOnce(&mut Config)) -> Result<Config, String> {
+    store
         .update_config(f)
         .map(|(c, _)| c)
         .map_err(|e| format!("Couldn't save settings: {e}"))
 }
 
-/// Pin a port (or update its label).
-#[tauri::command]
-pub fn set_pin(
-    state: State<'_, AppState>,
-    port: u16,
-    label: Option<String>,
-) -> Result<Config, String> {
+fn validate_pin(port: u16, label: Option<&str>) -> Result<(), String> {
     if port == 0 {
         return Err("Port must be between 1 and 65535".into());
     }
-    if label.as_ref().is_some_and(|l| l.chars().count() > 40) {
+    if label.is_some_and(|label| label.chars().count() > 40) {
         return Err("Keep the label to 40 characters or fewer".into());
     }
-    save(&state, |c| c.set_pin(port, label))
+    Ok(())
+}
+
+/// Pin a port (or update its label).
+#[tauri::command]
+pub async fn set_pin(app: AppHandle, port: u16, label: Option<String>) -> Result<Config, String> {
+    validate_pin(port, label.as_deref())?;
+    with_store(app, move |store| save(store, |c| c.set_pin(port, label))).await
 }
 
 #[tauri::command]
-pub fn unpin(state: State<'_, AppState>, port: u16) -> Result<Config, String> {
-    save(&state, |c| {
-        c.unpin(port);
+pub async fn unpin(app: AppHandle, port: u16) -> Result<Config, String> {
+    with_store(app, move |store| {
+        save(store, |c| {
+            c.unpin(port);
+        })
     })
+    .await
 }
 
 /// Scan interval and history length (validated against the core's allowed ranges).
 #[tauri::command]
-pub fn set_preferences(
-    state: State<'_, AppState>,
+pub async fn set_preferences(
+    app: AppHandle,
     scan_interval_secs: Option<u64>,
     history_limit: Option<usize>,
 ) -> Result<Config, String> {
@@ -562,14 +653,17 @@ pub fn set_preferences(
             ));
         }
     }
-    save(&state, |c| {
-        if let Some(s) = scan_interval_secs {
-            c.scan_interval_secs = s;
-        }
-        if let Some(h) = history_limit {
-            c.history_limit = h;
-        }
+    with_store(app, move |store| {
+        save(store, |c| {
+            if let Some(s) = scan_interval_secs {
+                c.scan_interval_secs = s;
+            }
+            if let Some(h) = history_limit {
+                c.history_limit = h;
+            }
+        })
     })
+    .await
 }
 
 #[derive(Serialize)]
@@ -589,14 +683,16 @@ pub fn hotkeys() -> Vec<HotkeyPreset> {
 
 /// Change the global shortcut; persists only when registration succeeded.
 #[tauri::command]
-pub fn set_hotkey(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    preset: String,
-) -> Result<Option<String>, String> {
-    crate::shortcuts::apply_and_save(&app, &preset, || {
-        save(&state, |c| c.hotkey = preset.clone()).map(|_| ())
+pub async fn set_hotkey(app: AppHandle, preset: String) -> Result<Option<String>, String> {
+    blocking(move || {
+        crate::shortcuts::apply_and_save(&app, &preset, || {
+            save(&app.state::<AppState>().store, |c| {
+                c.hotkey = preset.clone()
+            })
+            .map(|_| ())
+        })
     })
+    .await
 }
 
 /// Read-only scan of another machine over SSH (agentless: `ss` + `ps`). `local` reads this
@@ -643,6 +739,71 @@ mod tests {
             restartable: None,
             copyable: None,
         }
+    }
+
+    fn completed_report() -> StopReport {
+        StopReport {
+            target: "3000/tcp".into(),
+            success: true,
+            freed: true,
+            ports_still_busy: vec![],
+            signalled: vec![100],
+            escalated: false,
+            survivors: vec![],
+            elapsed_ms: 17,
+            log: vec!["Port 3000 is free".into()],
+            error: None,
+        }
+    }
+
+    #[test]
+    fn stop_outcome_and_history_failure_are_reported_independently() {
+        let tmp = tempfile::tempdir().unwrap();
+        let state = tmp.path().join("state");
+        std::fs::write(&state, b"preserve existing non-directory").unwrap();
+        let report = record_stop(
+            &Store::new(&state),
+            &[recorded(3000, 7, Protocol::Tcp, 100)],
+            completed_report(),
+        );
+        assert!(report.report.success && report.report.freed);
+        assert!(report.history_error.is_some());
+        assert_eq!(report.report.signalled, [100]);
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json["success"], true);
+        assert_eq!(json["freed"], true);
+        assert!(json["history_error"].is_string());
+        assert!(
+            json.get("report").is_none(),
+            "original IPC result fields stay flat"
+        );
+        assert_eq!(
+            std::fs::read(&state).unwrap(),
+            b"preserve existing non-directory"
+        );
+    }
+
+    #[test]
+    fn successful_stop_recording_is_available_for_the_exact_restart_identity() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::new(tmp.path());
+        let entry = recorded(3000, 7, Protocol::Tcp, 100);
+        let report = record_stop(&store, std::slice::from_ref(&entry), completed_report());
+        assert!(report.history_error.is_none());
+        assert!(report.report.success && report.report.freed);
+        assert_eq!(
+            store
+                .entry_matching(7, 3000, Some(Protocol::Tcp), Some(100))
+                .unwrap(),
+            Some(entry)
+        );
+    }
+
+    #[test]
+    fn both_pin_commands_share_the_same_native_validation() {
+        assert!(validate_pin(0, None).is_err());
+        assert!(validate_pin(3000, Some(&"x".repeat(41))).is_err());
+        assert!(validate_pin(3000, Some(&"界".repeat(40))).is_ok());
     }
 
     #[test]

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { slide } from "svelte/transition";
   import Icon from "./Icon.svelte";
-  let { mod, ondismiss }: { mod: string; ondismiss: () => void } = $props();
+  let { mod, tray = false, platform = "", shortcut = null, ondismiss }: { mod: string; tray?: boolean; platform?: string; shortcut?: string | null; ondismiss: () => void } = $props();
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 </script>
 
@@ -15,6 +15,9 @@
       <li><kbd>⇧</kbd><kbd>A</kbd> agents, tools and the ports they started</li>
       <li><kbd>⌫</kbd> stop the selected port (always asks first)</li>
     </ul>
+    {#if tray}
+      <p class="tray-hint">Closing the window keeps holdmap running in the {platform === "macos" ? "menu bar" : "system tray"}. Click the holdmap icon{#if platform === "macos"} or its Dock icon{/if} to reopen{#if shortcut}, or press <kbd>{shortcut}</kbd>{/if}. Choose Quit to exit.</p>
+    {/if}
   </div>
   <button class="btn sm" onclick={ondismiss}>Got it</button>
 </div>
@@ -25,6 +28,7 @@
   .body { flex: 1; min-width: 0; }
   strong { font-size: var(--fs-heading); font-weight: var(--fw-semibold); letter-spacing: var(--ls-heading); line-height: var(--lh-heading); }
   p { margin: 2px 0 var(--sp-2); color: var(--text-2); }
+  .tray-hint { margin: var(--sp-3) 0 0; font-size: var(--fs-caption); line-height: var(--lh-caption); }
   ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); color: var(--text-2); font-size: var(--fs-body); line-height: var(--lh-body); }
   li { display: inline-flex; align-items: center; gap: 4px; }
 </style>

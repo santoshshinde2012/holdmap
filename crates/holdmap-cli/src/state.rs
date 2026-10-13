@@ -96,7 +96,7 @@ pub fn pin(a: &PinArgs, on: bool) -> Result<u8> {
 }
 
 pub fn pins(json: bool, docker: bool) -> Result<u8> {
-    let c = store().config();
+    let c = store().try_config().context("Could not read saved pins")?;
     if json {
         println!("{}", serde_json::to_string_pretty(&c.pins)?);
         return Ok(crate::exit::OK);
@@ -143,7 +143,9 @@ pub fn history_cmd(a: &HistoryArgs) -> Result<u8> {
         println!("{} History cleared.", style::ok_mark());
         return Ok(crate::exit::OK);
     }
-    let h = s.history(a.limit);
+    let h = s
+        .try_history(a.limit)
+        .context("Could not read service-stop history")?;
     if a.json {
         let shown: Vec<HistoryEntry> = h.iter().map(HistoryEntry::redacted).collect();
         println!("{}", serde_json::to_string_pretty(&shown)?);
@@ -176,11 +178,6 @@ pub fn history_cmd(a: &HistoryArgs) -> Result<u8> {
         dim("Restart supported recordings with `holdmap restart <port>`.")
     );
     Ok(crate::exit::OK)
-}
-
-/// Record a successful stop in the history (best effort: never fails the stop).
-pub fn record(e: &Engine, plan: &ActionPlan, report: &StopReport) {
-    let _ = record_checked(e, plan, report);
 }
 
 /// Record executed effects without hiding a storage failure from interactive surfaces.
@@ -256,7 +253,9 @@ pub fn restart(a: &RestartArgs, docker: bool) -> Result<u8> {
         if !report.success {
             return Ok(crate::exit::BUSY);
         }
-        let _ = store().record(std::slice::from_ref(&entry));
+        store().record(std::slice::from_ref(&entry)).context(
+            "The service stopped, but its restart history could not be saved. Restart was not attempted; start it using its normal launcher",
+        )?;
         crate::project_policy::ProjectProtection::nearest()?.check_port(a.port)?;
         return start(&entry, a.timeout);
     }

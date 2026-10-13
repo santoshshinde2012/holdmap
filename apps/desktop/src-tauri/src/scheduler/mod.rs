@@ -14,12 +14,32 @@ pub use runner::spawn;
 
 use crate::power::{self, PowerState};
 use crate::state::{scan_now, AppState};
-use model::{Operation, PinnedStop};
+use model::Operation;
+pub(crate) use model::PinnedStop;
 use queue::{validate_delay, ClockTime};
 use runner::{publish, release};
 use std::time::Instant;
 use stop_authorization::{agent_identity, validate_requests, validate_stops};
 use tauri::{Manager, WebviewWindow};
+
+/// Immediate agent batches share the scheduler's exact listener and ownership boundaries.
+pub(crate) fn validate_batch_requests(requests: &[ScheduledStopRequest]) -> Result<(), String> {
+    validate_requests(requests)
+}
+
+pub(crate) fn validate_agent_batch(
+    engine: &holdmap_core::Engine,
+    agent_id: &str,
+    plans: &[PinnedStop],
+) -> Result<(), String> {
+    stop_authorization::validate_ownership(engine, plans)?;
+    agent_identity(engine, agent_id, plans)?;
+    for pinned in plans {
+        let (target, options) = crate::commands::stop_request(&pinned.target, false, false);
+        crate::confirmation::validate_fresh(&pinned.plan, &engine.plan(&target, &options))?;
+    }
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn schedule_shutdown(

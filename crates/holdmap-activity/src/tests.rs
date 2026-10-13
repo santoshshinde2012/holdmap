@@ -114,6 +114,63 @@ fn credential_path_control_and_free_text_names_are_redacted() {
 }
 
 #[test]
+fn credential_components_are_redacted_across_collector_input_routes() {
+    let collector = ActivityCollector::new();
+    let credentials = collector.start().unwrap();
+    let token = format!("ghp_{}", "a".repeat(20));
+    let temporary_key = format!("ASIA{}", "A".repeat(16));
+    for name in [
+        format!("mcp__github__{token}"),
+        format!("github.{token}.lookup"),
+        temporary_key.clone(),
+        format!("mcp__aws__{temporary_key}__lookup"),
+    ] {
+        let mut hook_input = hook("PreToolUse", "fixture-hook");
+        hook_input["tool_name"] = json!(name);
+        let mut trace_input = trace_record("0000000000000001", None, "fixture");
+        trace_input["attributes"][1]["value"]["stringValue"] = json!(name);
+        let mut normalized = span("fixture-normalized");
+        normalized.name = name.clone();
+        for (route, payload) in [
+            (protocol::Route::ClaudeHook, hook_input),
+            (protocol::Route::Traces, traces(vec![trace_input])),
+            (protocol::Route::Activity, json!([normalized])),
+        ] {
+            let (code, _, _) = exchange(
+                &credentials,
+                &request(&credentials, "POST", route.path(), "", &payload.to_string()),
+            );
+            assert_eq!(code, 200);
+        }
+        let snapshot = collector.snapshot();
+        assert_eq!(snapshot.spans.len(), 3);
+        assert_eq!(snapshot.dropped, 0);
+        assert!(snapshot
+            .spans
+            .iter()
+            .all(|span| span.name.ends_with("(name redacted)")));
+        let encoded = serde_json::to_string(&snapshot).unwrap();
+        assert!(!encoded.contains(&token));
+        assert!(!encoded.contains(&temporary_key));
+        collector.clear().unwrap();
+    }
+    for name in [
+        "AsiaHelper",
+        "asia_search",
+        "mcp__asia__search",
+        "mcp__fixture__lookup",
+        "fixture.search",
+    ] {
+        let mut raw = hook("PreToolUse", "fixture-safe");
+        raw["tool_name"] = json!(name);
+        assert_eq!(
+            normalize_hook(Provider::Claude, &raw, 10).unwrap()[0].name,
+            name
+        );
+    }
+}
+
+#[test]
 fn correlation_hashes_are_domain_separated_and_bounded() {
     let a = pseudonymize_id("session", "fixture").unwrap();
     assert_eq!(a, pseudonymize_id("session", "fixture").unwrap());
@@ -602,6 +659,24 @@ fn exchange(credentials: &CollectorCredentials, wire: &str) -> (u16, Value, Stri
     let (headers, body) = response.split_once("\r\n\r\n").expect("HTTP response");
     let code = headers.split_whitespace().nth(1).unwrap().parse().unwrap();
     (code, serde_json::from_str(body).unwrap(), response)
+}
+
+#[test]
+fn local_client_accepts_the_maximum_record_batch() {
+    let collector = ActivityCollector::new();
+    let credentials = collector.start().unwrap();
+    let client = client::LocalClient::from_credentials(&credentials).unwrap();
+    let records: Vec<_> = (0..COLLECTOR_LIMITS.max_records_per_request)
+        .map(|index| span(&format!("fixture-call-{index}")))
+        .collect();
+    client.record(&records).unwrap();
+    let snapshot = client.snapshot().unwrap();
+    assert_eq!(snapshot.spans, records);
+    assert_eq!(
+        snapshot.received,
+        COLLECTOR_LIMITS.max_records_per_request as u64
+    );
+    assert_eq!(snapshot.dropped, 0);
 }
 
 #[test]

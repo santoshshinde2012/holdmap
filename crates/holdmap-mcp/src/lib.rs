@@ -365,7 +365,11 @@ fn call(id: Value, params: &Value, confirmations: &mut confirmation::Confirmatio
         .get("arguments")
         .cloned()
         .unwrap_or_else(|| json!({}));
-    match tools::call(name, &args, confirmations) {
+    tool_response(id, tools::call(name, &args, confirmations), name)
+}
+
+fn tool_response(id: Value, result: Result<(String, Value), ToolError>, name: &str) -> Value {
+    match result {
         Ok((summary, data)) => ok(
             id,
             json!({
@@ -382,6 +386,17 @@ fn call(id: Value, params: &Value, confirmations: &mut confirmation::Confirmatio
             id,
             json!({
                 "content": [{"type": "text", "text": message}],
+                "isError": true
+            }),
+        ),
+        Err(ToolError::FailedWithData(message, data)) => ok(
+            id,
+            json!({
+                "content": [
+                    {"type": "text", "text": message},
+                    {"type": "text", "text": serde_json::to_string_pretty(&data).unwrap_or_default()}
+                ],
+                "structuredContent": data,
                 "isError": true
             }),
         ),

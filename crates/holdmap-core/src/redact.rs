@@ -68,8 +68,21 @@ fn url_credentials(s: &str) -> Option<String> {
 /// `?token=abc&page=2` → `?token=••••&page=2`.
 fn query_secrets(s: &str) -> Option<String> {
     let q = s.find('?')?;
+    let fragment = s.find('#').unwrap_or(s.len());
+    if q > fragment {
+        return None;
+    }
+    parameter_secrets(s, q + 1, fragment)
+}
+
+/// OAuth-style redirects can also carry credentials in their fragment parameters.
+fn fragment_secrets(s: &str) -> Option<String> {
+    parameter_secrets(s, s.find('#')? + 1, s.len())
+}
+
+fn parameter_secrets(s: &str, start: usize, end: usize) -> Option<String> {
     let mut changed = false;
-    let parts: Vec<String> = s[q + 1..]
+    let parts: Vec<String> = s[start..end]
         .split('&')
         .map(|kv| match kv.split_once('=') {
             Some((k, v)) if sensitive(&decode_key(k)) && !v.is_empty() && v != MASK => {
@@ -79,7 +92,7 @@ fn query_secrets(s: &str) -> Option<String> {
             _ => kv.to_string(),
         })
         .collect();
-    changed.then(|| format!("{}?{}", &s[..q], parts.join("&")))
+    changed.then(|| format!("{}{}{}", &s[..start], parts.join("&"), &s[end..]))
 }
 
 fn decode_key(key: &str) -> String {
@@ -153,6 +166,9 @@ fn redact_arg(a: &str, depth: usize) -> String {
         out = r;
     }
     if let Some(r) = query_secrets(&out) {
+        out = r;
+    }
+    if let Some(r) = fragment_secrets(&out) {
         out = r;
     }
     out
@@ -1069,6 +1085,38 @@ mod tests {
             "http://localhost:3000/a?token=••••&x=1"
         );
         assert_eq!(arg("http://user@host/x"), "http://user@host/x");
+    }
+
+    #[test]
+    fn security_url_fragment_credentials_are_hidden_without_losing_safe_parameters() {
+        for (raw, expected) in [
+            (
+                "http://localhost/callback#access_token=fragment-private&view=ports",
+                "http://localhost/callback#access_token=••••&view=ports",
+            ),
+            (
+                "/callback?view=ports#%61ccess%5Ftoken=fragment-private&state=ok",
+                "/callback?view=ports#%61ccess%5Ftoken=••••&state=ok",
+            ),
+            (
+                "/callback?token=query-private#access_token=fragment-private&state=ok",
+                "/callback?token=••••#access_token=••••&state=ok",
+            ),
+            (
+                "http://localhost/?token=query-private#overview",
+                "http://localhost/?token=••••#overview",
+            ),
+            (
+                "http://localhost/#/callback?access_token=fragment-private&view=ports",
+                "http://localhost/#/callback?access_token=••••&view=ports",
+            ),
+        ] {
+            assert_eq!(arg(raw), expected);
+            assert_eq!(line(&format!("open {raw}")), format!("open {expected}"));
+            assert_eq!(arg(expected), expected, "redaction remains idempotent");
+        }
+        let safe = "http://localhost/?view=ports#overview";
+        assert_eq!(arg(safe), safe);
     }
 
     #[test]

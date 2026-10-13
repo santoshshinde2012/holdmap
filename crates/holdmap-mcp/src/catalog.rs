@@ -179,7 +179,8 @@ fn stop_report_schema() -> Value {
         json!({
             "target": {"type": "string"}, "success": {"type": "boolean"}, "freed": {"type": "boolean"},
             "ports_still_busy": array(port()), "signalled": array(count()), "escalated": {"type": "boolean"},
-            "survivors": array(count()), "elapsed_ms": count(), "log": strings(), "error": {"type": ["string", "null"]}
+            "survivors": array(count()), "elapsed_ms": count(), "log": strings(), "error": {"type": ["string", "null"]},
+            "history_error": {"type": "string"}
         }),
         &[
             "target",

@@ -156,6 +156,40 @@ export async function stop(target: string, force: boolean, allowProtected = fals
   return call("stop", { target, force, allowProtected, confirmationId });
 }
 
+/** Review all agent targets against one fresh native scan before dispatching any stop. */
+export async function stopMany(agentId: string, requests: ScheduledStopRequest[]): Promise<StopReport[]> {
+  if (!agentId?.trim() || agentId.length > 64) throw new Error("Choose the agent whose reviewed services should be stopped.");
+  if (!requests.length || requests.length > 32) throw new Error("Review between 1 and 32 agent listener targets.");
+  const targets = new Set<string>(), handles = new Set<string>();
+  for (const request of requests) {
+    if (!/^[1-9]\d{0,4}\/(tcp|udp)$/.test(request.target) || Number(request.target.split("/")[0]) > 65_535) throw new Error("Each stop requires a canonical local port and protocol.");
+    if (!request.confirmation_id?.trim() || request.confirmation_id.length > 64) throw new Error("Review each stop plan before confirming.");
+    if (request.force !== false || request.allow_protected !== false) throw new Error("Agent batch stops require normal mode without a protection override.");
+    if (targets.has(request.target) || handles.has(request.confirmation_id)) throw new Error("Each agent listener needs its own reviewed plan.");
+    targets.add(request.target);
+    handles.add(request.confirmation_id);
+  }
+  if (isTauri) return call("stop_many", { agentId, requests });
+  // Browser mode validates and consumes the complete review before changing sample data.
+  // It never imports or invokes native process APIs.
+  const previews = requests.map((request) => demoStopPreviews.get(request.confirmation_id));
+  for (const request of requests) demoStopPreviews.delete(request.confirmation_id);
+  for (const [index, request] of requests.entries()) {
+    const preview = previews[index];
+    if (!preview || Date.now() >= preview.expires || preview.target !== request.target || preview.force || preview.allowProtected || preview.blocked) throw new Error("An agent stop plan expired, changed or was already used. Review every target again.");
+  }
+  const agent = mockAgents().agents.find((value) => value.id === agentId);
+  const owned = new Set(agent?.ports.filter((port) => port.role === "dev_server" || port.role === "service").map((port) => `${port.port}/${port.protocol}`));
+  if (!agent || requests.some((request) => !owned.has(request.target))) throw new Error("The reviewed listeners no longer belong to this agent's stoppable services.");
+  const reports: StopReport[] = [];
+  for (const request of requests) {
+    const report = await stop(request.target, false, false);
+    reports.push(report);
+    if (!report.success || !report.freed || report.history_error) break;
+  }
+  return reports;
+}
+
 export async function freePort(near: number): Promise<number | null> {
   if (!isTauri) {
     const used = new Set(MOCK_SNAPSHOT.entries.map((e) => e.port));

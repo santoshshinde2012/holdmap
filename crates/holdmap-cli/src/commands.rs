@@ -115,7 +115,8 @@ pub fn list(a: &ListArgs, docker: bool) -> Result<u8> {
         return Ok(exit::BUSY);
     }
     let pins: Vec<u16> = store::Store::open_default()
-        .config()
+        .try_config()
+        .context("Could not read saved pins")?
         .pins
         .iter()
         .map(|p| p.port)
@@ -366,6 +367,9 @@ pub(crate) fn block_code(plan: &ActionPlan) -> u8 {
 struct StopResult {
     plan: ActionPlan,
     report: Option<StopReport>,
+    /// Persistence does not alter the actual process outcome; callers can distinguish both.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    history_error: Option<String>,
 }
 
 pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
@@ -419,14 +423,22 @@ pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
         }
         if plan.is_blocked() {
             code = code.max(block_code(&plan));
-            results.push(StopResult { plan, report: None });
+            results.push(StopResult {
+                plan,
+                report: None,
+                history_error: None,
+            });
             continue;
         }
         if a.dry_run {
             if !a.json {
                 println!("{}", dim("Dry run: nothing was changed."));
             }
-            results.push(StopResult { plan, report: None });
+            results.push(StopResult {
+                plan,
+                report: None,
+                history_error: None,
+            });
             continue;
         }
         if !yes {
@@ -438,7 +450,11 @@ pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
             if !confirm(q)? {
                 println!("{}", dim("Cancelled."));
                 code = code.max(exit::BUSY);
-                results.push(StopResult { plan, report: None });
+                results.push(StopResult {
+                    plan,
+                    report: None,
+                    history_error: None,
+                });
                 continue;
             }
         }
@@ -451,7 +467,11 @@ pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
                 print!("{}", render::plan_text(&plan));
             }
             code = code.max(block_code(&plan));
-            results.push(StopResult { plan, report: None });
+            results.push(StopResult {
+                plan,
+                report: None,
+                history_error: None,
+            });
             continue;
         }
         let json = a.json;
@@ -463,14 +483,27 @@ pub fn stop(a: &StopArgs, docker: bool) -> Result<u8> {
         if !a.json {
             println!("{}", render::report_line(&report));
         }
-        crate::state::record(&fresh, &plan, &report);
+        let history_error = crate::state::record_checked(&fresh, &plan, &report)
+            .err()
+            .map(|error| holdmap_core::redact::line(&format!("{error:#}. Remaining targets were not attempted; review again before retrying.")));
+        if let Some(error) = &history_error {
+            eprintln!("{} {error}", style::warn_mark());
+            code = code.max(exit::ERROR);
+        }
         if !report.success {
             code = code.max(exit::BUSY);
         }
         results.push(StopResult {
             plan,
             report: Some(report),
+            history_error,
         });
+        if results
+            .last()
+            .is_some_and(|result| result.history_error.is_some())
+        {
+            break;
+        }
     }
     if a.json {
         print_json(&results)?;
