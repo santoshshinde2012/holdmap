@@ -20,6 +20,29 @@ env:
 # rustc warning override on the byte-preserved upstream GLib dependency.
 
 jobs:
+  msrv:
+    name: minimum Rust version (1.95)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: '1.95.0'
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: msrv-1.95
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+      - name: Placeholder frontend for native compilation
+        run: mkdir -p apps/desktop/dist && echo '<html></html>' > apps/desktop/dist/index.html
+      - run: cargo check --workspace --all-targets --locked --features tauri/custom-protocol
+      - run: cargo test -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity --locked --no-fail-fast
+
   lint:
     name: fmt + clippy + docs
     runs-on: ubuntu-latest
@@ -71,7 +94,7 @@ jobs:
       # Includes the docs checks: docs/cli.md vs clap, README commands and flags, Markdown links
       # and anchors, orphaned screenshots and file-naming conventions.
       - name: Test
-        run: cargo test -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity --locked
+        run: cargo test -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity --locked --no-fail-fast
       - name: Smoke test the CLI against the real OS
         shell: bash
         run: |
@@ -206,11 +229,15 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
       - run: npm ci
         working-directory: apps/desktop
+      - name: PowerShell native argv regressions (5.1 and 7)
+        if: runner.os == 'Windows'
+        run: npm test -- src/lib/shell.test.ts
+        working-directory: apps/desktop
       - name: Build the app (no installers)
         run: npx tauri build --no-bundle
         working-directory: apps/desktop
       - name: Native desktop tests
-        run: cargo test -p holdmap-desktop --locked
+        run: cargo test -p holdmap-desktop --all-targets --locked
       - name: Optimized Linux GLib security regression
         if: runner.os == 'Linux'
         run: cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security

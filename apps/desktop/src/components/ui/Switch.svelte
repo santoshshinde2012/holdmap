@@ -54,7 +54,7 @@
     aria-labelledby={label ? `${id}-label` : labelledby}
     aria-describedby={description ? `${id}-desc` : describedby}
     aria-busy={busy || undefined}
-    disabled={disabled}
+    disabled={disabled || busy}
     onclick={toggle}
   ><span class="thumb"></span></button>
 </div>

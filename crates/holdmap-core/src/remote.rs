@@ -151,6 +151,13 @@ impl RemoteRunner for SshRunner {
         args.extend(["--", dest.as_str(), remote.as_str()]);
         let out = crate::util::run_with_timeout("ssh", &args, self.timeout)
             .ok_or_else(|| io::Error::other(format!("ssh {} failed or timed out", self.host)))?;
+        if !out.success {
+            return Err(io::Error::other(format!(
+                "ssh {} failed: {}",
+                self.host,
+                crate::redact::line(out.stderr.trim())
+            )));
+        }
         if out.stdout.trim().is_empty() {
             return Err(io::Error::other(format!(
                 "ssh {} returned nothing{}",
@@ -174,6 +181,7 @@ impl RemoteRunner for LocalShell {
     }
     fn run(&self, script: &str) -> io::Result<String> {
         crate::util::run_with_timeout("sh", &["-c", script], Duration::from_secs(20))
+            .filter(|o| o.success)
             .map(|o| o.stdout)
             .ok_or_else(|| io::Error::other("sh failed"))
     }
@@ -336,7 +344,7 @@ pub fn parse_ps(text: &str) -> ProcessTable {
                 user: Some(user.to_string()),
                 start_time: start,
                 start_token: start,
-                memory_bytes: rss.parse::<u64>().unwrap_or(0) * 1024,
+                memory_bytes: rss.parse::<u64>().unwrap_or(0).saturating_mul(1024),
                 cpu_percent: 0.0,
             },
         );
@@ -348,6 +356,18 @@ pub fn parse_ps(text: &str) -> ProcessTable {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remote_memory_values_do_not_overflow() {
+        let table = parse_ps("12 1 1000 dev 1 18446744073709551615 node server.js\n");
+        assert_eq!(table.get(12).unwrap().memory_bytes, u64::MAX);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn failed_shell_commands_do_not_return_partial_success() {
+        assert!(LocalShell.run("printf 'partial'; exit 7").is_err());
+    }
 
     #[test]
     fn host_validation_accepts_real_destinations() {

@@ -11,11 +11,15 @@ stops them, dependents first.
 ## Write one
 
 `holdmap init` writes a starter file from the dev servers running under the current folder.
-Add `--print` to see it first. A typical file:
+Add `--print` to see it first. Review the generated commands before starting them; captured
+credentials are redacted and must be supplied separately, such as through environment variables.
+On Windows, generated commands use Windows PowerShell to preserve literal process arguments.
+Commands that cannot be reconstructed safely are left for manual review. Commands you write
+yourself use `cmd.exe` syntax on Windows and `sh` syntax on Unix. A typical file:
 
 ```toml
 name = "shop"            # optional; defaults to the folder name
-protect = [5432]         # ports holdmap must never stop
+protect = [5432]         # ports protected from CLI stop actions
 
 [services.api]
 port = 4000
@@ -62,11 +66,20 @@ holdmap down      # dependents first, through the usual safety checks
 
 If a port is held by something that isn't part of the stack, `up` stops and tells you who it is.
 `holdmap up --replace` stops it first (with the normal plan and confirmation); ports listed in
-`protect` are never touched. `down` leaves services without a `command` (such as a database
+`protect` are left running. `down` leaves services without a `command` (such as a database
 container) alone unless you pass `--all`, and `--dry-run` shows what `up` or `down` would do.
 
 ## Safety
 
-The file runs commands through your shell, so holdmap only trusts one that you (or root) own and
-that other users can't write to. A `.holdmap.toml` dropped into a shared folder such as `/tmp` is
-refused.
+The CLI and terminal UI read `protect` from the nearest project file above the current folder.
+Protection applies to every listener affected by a stop, including PID, name, cluster and
+process-tree targets, replacement and restart. An invalid or untrusted project file blocks
+these actions. `up` and `down` also honor the project file selected with `--file`.
+Only an explicit `holdmap stop --allow-protected` (or `kill --allow-protected`) overrides the
+project setting. The desktop app and MCP server use the shared process protection rules;
+they do not load this CLI project setting.
+
+The file runs commands through your shell. On Unix, holdmap requires a file owned by you (or
+root) that is not group- or world-writable; a file from another account in a shared folder such
+as `/tmp` is refused. These checks apply to the file, not its parent directory. Windows relies
+on the checkout's ACLs, so use a project folder that other accounts cannot modify.

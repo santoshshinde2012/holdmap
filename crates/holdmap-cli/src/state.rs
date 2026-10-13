@@ -42,7 +42,7 @@ pub struct HistoryArgs {
 
 #[derive(clap::Args, Debug)]
 pub struct RestartArgs {
-    /// Port number (e.g. 3000 or :3000).
+    /// TCP port number (e.g. 3000 or :3000).
     #[arg(value_parser = crate::parse_port)]
     pub port: u16,
     /// Don't ask before stopping the current owner.
@@ -167,13 +167,13 @@ pub fn history_cmd(a: &HistoryArgs) -> Result<u8> {
             dim(if e.restartable() {
                 format!("`{}`", style::one_line(&e.command_line(), cmd_width))
             } else {
-                "(no command recorded)".into()
+                "(restart unavailable)".into()
             })
         );
     }
     println!(
         "\n{}",
-        dim("Start one again with `holdmap restart <port>`.")
+        dim("Restart supported recordings with `holdmap restart <port>`.")
     );
     Ok(crate::exit::OK)
 }
@@ -233,47 +233,86 @@ fn start(entry: &HistoryEntry, timeout: Duration) -> Result<u8> {
 }
 
 pub fn restart(a: &RestartArgs, docker: bool) -> Result<u8> {
+    let protection = crate::project_policy::ProjectProtection::nearest()?;
+    protection.check_port(a.port)?;
     let e = Engine::new(&ScanOptions {
         all_states: true,
         docker,
     })?;
-    let opts = StopOptions::default();
     if port_busy(a.port, Protocol::Tcp) {
-        let plan = e.plan(&Target::Port(a.port), &opts);
+        let plan = protection.apply(&e, tcp_restart_plan(&e, a.port));
         print!("{}", render::plan_text(&plan));
         if plan.is_blocked() {
-            bail!("can't restart: {}", plan.summary);
+            return Ok(crate::commands::block_code(&plan).max(crate::exit::BUSY));
         }
-        let entry = history::entries_from_plan(
-            &e.scan,
-            &plan,
-            &StopReport {
-                success: true,
-                ..Default::default()
-            },
-        )
-        .into_iter()
-        .find(|h| h.port == a.port && h.restartable())
-        .context("this owner can't be restarted by holdmap (no command to re-run, e.g. a container or service — use its own restart)")?;
+        let entry = planned_tcp_restart_entry(&e, &plan, a.port)?;
         if !a.yes && !crate::commands::confirm("Restart it?")? {
             println!("{}", dim("Cancelled."));
             return Ok(crate::exit::BUSY);
         }
+        crate::project_policy::checked_engine(docker, &plan, None)?;
         let report = execute(&plan, &mut |l| println!("  {} {}", dim("·"), dim(l)));
         println!("{}", render::report_line(&report));
         if !report.success {
             return Ok(crate::exit::BUSY);
         }
         let _ = store().record(std::slice::from_ref(&entry));
+        crate::project_policy::ProjectProtection::nearest()?.check_port(a.port)?;
         return start(&entry, a.timeout);
     }
-    let Some(entry) = store().last_for_port(a.port).filter(|h| h.restartable()) else {
+    let Some(entry) = store()
+        .last_matching(a.port, Some(Protocol::Tcp), None)?
+        .filter(|h| h.restartable())
+    else {
         bail!(
-            "port {} is free and holdmap has no record of what ran there (see `holdmap history`)",
+            "port {} is free and holdmap has no record it can safely restart (see `holdmap history`)",
             a.port
         );
     };
+    crate::project_policy::ProjectProtection::nearest()?.check_port(a.port)?;
     start(&entry, a.timeout)
+}
+
+fn tcp_restart_plan(e: &Engine, port: u16) -> ActionPlan {
+    e.plan(
+        &Target::Port(port),
+        &StopOptions {
+            protocol: Some(Protocol::Tcp),
+            ..Default::default()
+        },
+    )
+}
+
+/// A port restart launches one recorded process. Refuse multiple independent roots before
+/// stopping anything, and never choose a UDP recording for this TCP readiness operation.
+fn planned_tcp_restart_entry(e: &Engine, plan: &ActionPlan, port: u16) -> Result<HistoryEntry> {
+    let roots: std::collections::BTreeSet<_> = plan
+        .steps
+        .iter()
+        .filter_map(|step| match step {
+            Step::SignalProcesses { processes, .. } => processes.first(),
+            _ => None,
+        })
+        .map(|process| (process.pid, process.start_token))
+        .collect();
+    if roots.len() > 1 {
+        bail!(
+            "TCP port {port} has multiple process owners; restart them using their normal launchers"
+        );
+    }
+    history::entries_from_plan(
+        &e.scan,
+        plan,
+        &StopReport {
+            success: true,
+            ..Default::default()
+        },
+    )
+    .into_iter()
+    .find(|h| h.port == port && h.protocol == Protocol::Tcp && h.restartable())
+    .context(
+        "this owner has no safely restartable command recorded; start it using its normal launcher",
+    )
 }
 
 pub fn open(a: &OpenArgs) -> Result<u8> {
@@ -293,4 +332,125 @@ pub fn open(a: &OpenArgs) -> Result<u8> {
     open_url(&url).with_context(|| format!("failed to open {url}"))?;
     println!("{} opened {url}", style::ok_mark());
     Ok(crate::exit::OK)
+}
+
+#[cfg(test)]
+mod restart_tests {
+    use super::*;
+    use holdmap_core::engine::strategies::{
+        OtherUserStrategy, ProcessTreeStrategy, ProtectedStrategy, StrategyRegistry,
+    };
+    use holdmap_core::process::ProcessTable;
+    use holdmap_core::scan::Scanner;
+
+    fn process(pid: u32) -> ProcessInfo {
+        ProcessInfo {
+            pid,
+            ppid: None,
+            name: "owned-listener".into(),
+            exe: None,
+            cmdline: vec![format!("owned-listener-{pid}")],
+            cwd: None,
+            uid: Some(1000),
+            user: Some("dev".into()),
+            start_time: 1_700_000_000,
+            start_token: u64::from(pid) + 1000,
+            memory_bytes: 0,
+            cpu_percent: 0.0,
+        }
+    }
+
+    fn socket(pid: u32, protocol: Protocol) -> RawSocket {
+        RawSocket {
+            protocol,
+            family: Family::V4,
+            local_addr: "127.0.0.1".parse().unwrap(),
+            local_port: 41000,
+            remote_addr: None,
+            remote_port: None,
+            state: if protocol == Protocol::Tcp {
+                SocketState::Listen
+            } else {
+                SocketState::Bound
+            },
+            uid: Some(1000),
+            inode: None,
+            pids: vec![pid],
+        }
+    }
+
+    fn engine(raw: Vec<RawSocket>) -> Engine {
+        let processes = [100, 200, 999]
+            .into_iter()
+            .map(|pid| (pid, process(pid)))
+            .collect();
+        let table = ProcessTable::from_processes(processes, 999);
+        Engine::from_scan(
+            Scanner::fixed(raw, table, vec![])
+                .scan(&ScanOptions {
+                    all_states: true,
+                    docker: false,
+                })
+                .unwrap(),
+        )
+        // These are synthetic process identities. Retain process ownership/protection
+        // and tree planning without querying the host's systemd/PM2/Homebrew services.
+        .with_strategies(
+            StrategyRegistry::empty()
+                .with(ProtectedStrategy)
+                .with(OtherUserStrategy)
+                .with(ProcessTreeStrategy),
+        )
+    }
+
+    #[test]
+    fn tcp_restart_preserves_a_distinct_udp_owner_in_either_snapshot_order() {
+        for raw in [
+            vec![socket(200, Protocol::Udp), socket(100, Protocol::Tcp)],
+            vec![socket(100, Protocol::Tcp), socket(200, Protocol::Udp)],
+        ] {
+            let engine = engine(raw);
+            let plan = tcp_restart_plan(&engine, 41000);
+            assert!(!plan.is_blocked(), "{plan:?}");
+            let signalled: Vec<_> = plan
+                .steps
+                .iter()
+                .flat_map(|step| match step {
+                    Step::SignalProcesses { processes, .. } => processes.iter(),
+                    _ => [].iter(),
+                })
+                .map(|process| process.pid)
+                .collect();
+            assert_eq!(signalled, [100]);
+            assert!(plan.steps.iter().all(|step| !matches!(
+                step,
+                Step::VerifyFree {
+                    protocol: Protocol::Udp,
+                    ..
+                }
+            )));
+            let entry = planned_tcp_restart_entry(&engine, &plan, 41000).unwrap();
+            assert_eq!((entry.protocol, entry.pid), (Protocol::Tcp, 100));
+        }
+    }
+
+    #[test]
+    fn multiple_independent_tcp_roots_cannot_be_restarted_as_one_recording() {
+        let engine = engine(vec![socket(100, Protocol::Tcp), socket(200, Protocol::Tcp)]);
+        let plan = tcp_restart_plan(&engine, 41000);
+        assert!(!plan.is_blocked(), "{plan:?}");
+        let roots: std::collections::BTreeSet<_> = plan
+            .steps
+            .iter()
+            .filter_map(|step| match step {
+                Step::SignalProcesses { processes, .. } => {
+                    processes.first().map(|process| process.pid)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(roots, [100, 200].into_iter().collect());
+        let error = planned_tcp_restart_entry(&engine, &plan, 41000).unwrap_err();
+        assert!(error.to_string().contains("multiple process owners"));
+    }
 }

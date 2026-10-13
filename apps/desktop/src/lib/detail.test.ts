@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { canRestart, cliCommands, curlCommand, detailTabs, glance, killCommand, killHelpersCommand, peerLabel, projectFolder, resolveTab, stopState } from "./detail";
+import { canRestart, cliCommands, curlCommand, detailTabs, glance, killCommand, killHelpersCommand, peerLabel, projectFolder, resolveTab, restartRootPid, stopState } from "./detail";
+import type { ActionPlan, ProcRef } from "./types";
 import { MOCK_SNAPSHOT, mockExplain, mockPlan } from "./mock";
 
 const entry = (port: number) => MOCK_SNAPSHOT.entries.find((e) => e.port === port)!;
@@ -65,6 +66,26 @@ describe("quick actions", () => {
     expect(canRestart(e, null)).toBe(false);
     const ctr = MOCK_SNAPSHOT.entries.find((x) => x.container)!;
     expect(canRestart(ctr, mockPlan(String(ctr.port), false))).toBe(false);
+  });
+  it("binds a child listener to the recorded reviewed parent, ignoring unrelated steps", () => {
+    const ref = (pid: number): ProcRef => ({ pid, name: "node", command: "node server.js", start_token: pid });
+    const signal = (processes: ProcRef[]) => ({ action: "signal_processes" as const, processes, force: false, timeout_ms: 100 });
+    const plan: ActionPlan = { ...mockPlan("3000", false), steps: [signal([ref(999)]), signal([ref(42000), ref(e.process!.pid)])] };
+    expect(restartRootPid(e, plan)).toBe(42000);
+    expect(canRestart(e, plan)).toBe(true);
+    plan.steps.push(signal([ref(42000), ref(e.process!.pid)]));
+    expect(restartRootPid(e, plan)).toBe(42000);
+  });
+  it("refuses to guess a recorded root for multiple holder trees or an unrelated plan", () => {
+    const ref = (pid: number): ProcRef => ({ pid, name: "node", command: "node server.js", start_token: pid });
+    const signal = (processes: ProcRef[]) => ({ action: "signal_processes" as const, processes, force: false, timeout_ms: 100 });
+    const multi = { ...e, pids: [e.process!.pid, 44000] };
+    const plan: ActionPlan = { ...mockPlan("3000", false), steps: [signal([ref(42000), ref(e.process!.pid)]), signal([ref(44000)])] };
+    expect(restartRootPid(multi, plan)).toBeNull();
+    expect(canRestart(multi, plan)).toBe(false);
+    expect(restartRootPid(e, { ...plan, steps: [signal([ref(999)])] })).toBeNull();
+    expect(restartRootPid(e, { ...plan, steps: [signal([])] })).toBeNull();
+    expect(restartRootPid(e, null)).toBeNull();
   });
   it("labels peers", () => {
     expect(peerLabel({ address: "127.0.0.1", connections: 3, process: "Google Chrome" })).toBe("Google Chrome ×3");

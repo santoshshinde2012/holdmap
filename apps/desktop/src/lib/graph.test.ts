@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeLabel, fitEdgeLabel, linksLabel, needsMiniMap, force, groupId, layered, NODE_H, NODE_W, nodeForEntry, orderFromSummary, related, sectionsByCluster, separate, toFlow, trafficDots } from "./graph";
+import { edgeLabel, fitEdgeLabel, linksLabel, localLinkCounts, needsMiniMap, force, FORCE_NODE_LIMIT, groupId, layered, layoutModeFor, NODE_H, NODE_W, nodeForEntry, orderFromSummary, related, sectionsByCluster, separate, toFlow, trafficDots } from "./graph";
 import { MOCK_SNAPSHOT, mockTopology } from "./mock";
 
 const g = mockTopology();
@@ -25,6 +25,13 @@ describe("layout", () => {
     const lone = { ...g, nodes: g.nodes.filter((n) => n.id === "redis" || n.id === "docs").map((n) => ({ ...n, cluster: null })), edges: [], clusters: [] };
     const p = force(lone);
     expect(Math.abs(p.get("redis")!.x - p.get("docs")!.x)).toBeLessThan(1200);
+  });
+
+  it("uses the layered layout for large graphs even with a saved force preference", () => {
+    const large = { ...g, nodes: Array.from({ length: 1000 }, (_, index) => ({ ...g.nodes[0], id: `large-${index}`, cluster: null })), edges: [], clusters: [] };
+    expect(layoutModeFor(FORCE_NODE_LIMIT, "force")).toBe("force");
+    expect(layoutModeFor(large.nodes.length, "force")).toBe("layered");
+    expect(force(large)).toEqual(layered(large));
   });
 
   it("separate pushes stacked nodes apart", () => {
@@ -69,6 +76,27 @@ describe("helpers", () => {
     const r = related(g, "api");
     expect([...r.nodes].sort()).toEqual(["api", "db", "docs", "redis", "web"]);
     expect(r.edges.has("ml->db")).toBe(false);
+  });
+
+  it("counts distinct local peers and excludes outbound links", () => {
+    const counts = localLinkCounts({ ...g, edges: [...g.edges, { ...g.edges[0], id: "duplicate" }] });
+    for (const node of g.nodes) {
+      const expected = new Set(g.edges.filter((edge) => edge.kind === "local" && (edge.from === node.id || edge.to === node.id)).map((edge) => edge.from === node.id ? edge.to : edge.from)).size;
+      for (const port of node.ports) expect(counts.get(port.entry_id)).toBe(expected);
+    }
+    expect(localLinkCounts(null).size).toBe(0);
+  });
+
+  it("walks cycles without adding another branch through a shared dependency", () => {
+    const edges = [
+      { ...g.edges[0], id: "a-b", from: "a", to: "b" },
+      { ...g.edges[0], id: "b-a", from: "b", to: "a" },
+      { ...g.edges[0], id: "a-db", from: "a", to: "db" },
+      { ...g.edges[0], id: "other-db", from: "other", to: "db" },
+    ];
+    const result = related({ ...g, edges }, "a");
+    expect([...result.nodes].sort()).toEqual(["a", "b", "db"]);
+    expect([...result.edges].sort()).toEqual(["a-b", "a-db", "b-a"]);
   });
 
   it("parses the stop order from a cluster plan summary", () => {

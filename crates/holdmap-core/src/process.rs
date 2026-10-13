@@ -43,6 +43,9 @@ pub struct ProcessTable {
     session_hosts: HashMap<u32, (u32, crate::safety::SessionKind)>,
     user_names: HashMap<u32, String>,
     self_uid: Option<u32>,
+    /// Original cmd.exe syntax is private restart state, never a ProcessInfo/UI field.
+    #[cfg(windows)]
+    windows_cmd: HashMap<u32, crate::history::WindowsCmdRestart>,
 }
 
 /// Linux cuts a process name (`comm`) to 15 bytes ("npm exec vite p", "containerd-shim"). When
@@ -107,6 +110,41 @@ fn refresh_kind() -> ProcessRefreshKind {
         .with_cpu()
 }
 
+/// Windows keeps the original parent's PID after that parent exits. Discard a relation only
+/// when comparable creation times prove that the PID now names a newer, unrelated process.
+/// Correct the stored PPID as well as the child map so attribution and stop trees agree.
+#[cfg(any(windows, test))]
+fn normalize_windows_parentage(processes: &mut HashMap<u32, ProcessInfo>) {
+    const WINDOWS_UNIX_EPOCH_TICKS: u64 = 11_644_473_600 * 10_000_000;
+    let stale: Vec<u32> = processes
+        .values()
+        .filter_map(|child| {
+            let parent = processes.get(&child.ppid?)?;
+            let newer = if parent.start_token >= WINDOWS_UNIX_EPOCH_TICKS
+                && child.start_token >= WINDOWS_UNIX_EPOCH_TICKS
+            {
+                // Native GetProcessTimes identities use 100 ns ticks since 1601. Compare
+                // these directly, including processes created within the same second.
+                parent.start_token > child.start_token
+            } else if parent.start_time != 0 && child.start_time != 0 {
+                // A denied identity query falls back to sysinfo's Unix epoch seconds.
+                // Never mix those fallback values with native Windows creation tokens.
+                parent.start_time > child.start_time
+            } else {
+                // Unknown creation times do not prove a reused parent. Preserve the edge
+                // for protection; unknown process identities still fail signal checks.
+                false
+            };
+            newer.then_some(child.pid)
+        })
+        .collect();
+    for pid in stale {
+        if let Some(child) = processes.get_mut(&pid) {
+            child.ppid = None;
+        }
+    }
+}
+
 impl ProcessTable {
     /// Capture all processes visible to the current user.
     pub fn capture() -> Self {
@@ -142,7 +180,8 @@ impl ProcessTable {
             });
         }
         let users = &cache.as_ref().expect("just filled").users;
-        let procs = sys
+        #[cfg_attr(not(windows), allow(unused_mut))]
+        let mut procs: HashMap<u32, ProcessInfo> = sys
             .processes()
             .values()
             .filter(|p| p.thread_kind().is_none()) // skip Linux threads
@@ -192,8 +231,38 @@ impl ProcessTable {
             })
             .map(|p| (p.pid, p))
             .collect();
+        #[cfg(windows)]
+        {
+            let resolved = crate::stack::canonicalize_windows_dos_paths(
+                procs.values().filter_map(|process| process.cwd.clone()),
+            );
+            for process in procs.values_mut() {
+                if process
+                    .cwd
+                    .as_deref()
+                    .is_some_and(crate::stack::windows_dos_path)
+                {
+                    // An unresolved alias cannot safely establish project ownership.
+                    process.cwd = process
+                        .cwd
+                        .as_ref()
+                        .and_then(|cwd| resolved.get(cwd).cloned());
+                }
+            }
+        }
         #[cfg_attr(not(unix), allow(unused_mut))]
         let mut t = Self::from_processes(procs, std::process::id());
+        #[cfg(windows)]
+        {
+            t.windows_cmd = t
+                .procs
+                .values()
+                .filter_map(|process| {
+                    crate::history::WindowsCmdRestart::capture(process)
+                        .map(|command| (process.pid, command))
+                })
+                .collect();
+        }
         #[cfg(unix)]
         {
             t.user_names = users
@@ -206,7 +275,21 @@ impl ProcessTable {
     }
 
     /// Build a table from known processes (used by tests and fixtures).
-    pub fn from_processes(procs: HashMap<u32, ProcessInfo>, self_pid: u32) -> Self {
+    pub fn from_processes(
+        #[cfg_attr(not(windows), allow(unused_mut))] mut procs: HashMap<u32, ProcessInfo>,
+        self_pid: u32,
+    ) -> Self {
+        #[cfg(windows)]
+        normalize_windows_parentage(&mut procs);
+        let detached = crate::util::detached_processes(&procs);
+        Self::from_processes_with_detached(procs, self_pid, &detached)
+    }
+
+    fn from_processes_with_detached(
+        procs: HashMap<u32, ProcessInfo>,
+        self_pid: u32,
+        detached: &HashSet<u32>,
+    ) -> Self {
         let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
         for p in procs.values() {
             if let Some(pp) = p.ppid {
@@ -229,6 +312,8 @@ impl ProcessTable {
             session_hosts: HashMap::new(),
             user_names: HashMap::new(),
             self_uid: None,
+            #[cfg(windows)]
+            windows_cmd: HashMap::new(),
         };
         t.self_uid = t.procs.get(&self_pid).and_then(|p| p.uid);
         t.self_ancestors = t.ancestors(self_pid).into_iter().collect();
@@ -239,7 +324,7 @@ impl ProcessTable {
             let mut queue = std::collections::VecDeque::from([self_pid]);
             while let Some(p) = queue.pop_front() {
                 for &c in t.children(p) {
-                    if !crate::util::started_detached(c) && out.insert(c) {
+                    if !detached.contains(&c) && out.insert(c) {
                         queue.push_back(c);
                     }
                 }
@@ -275,6 +360,14 @@ impl ProcessTable {
     /// Look up a process.
     pub fn get(&self, pid: u32) -> Option<&ProcessInfo> {
         self.procs.get(&pid)
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn windows_cmd_restart(
+        &self,
+        pid: u32,
+    ) -> Option<&crate::history::WindowsCmdRestart> {
+        self.windows_cmd.get(&pid)
     }
 
     /// Number of processes.
@@ -420,6 +513,157 @@ pub(crate) mod tests {
         assert!(!t.is_self_descendant(child.id()));
         let _ = child.kill();
         let _ = child.wait();
+    }
+
+    #[test]
+    fn reused_detached_pids_cannot_exempt_new_holdmap_helpers_from_protection() {
+        let app = proc(300, 1, "holdmap-desktop", &[]);
+        let service = proc(301, 300, "node", &["node", "server.js"]);
+        let child = proc(302, 301, "worker", &["worker"]);
+        let processes: HashMap<_, _> = [app.clone(), service.clone(), child.clone()]
+            .into_iter()
+            .map(|process| (process.pid, process))
+            .collect();
+        let mut records = std::collections::BTreeMap::from([(service.pid, service.start_token)]);
+        let detached = crate::util::retained_detached(&mut records, &processes, |_| None);
+        let original = ProcessTable::from_processes_with_detached(processes, app.pid, &detached);
+        assert!(!original.is_self_descendant(service.pid));
+        assert!(!original.is_self_descendant(child.pid));
+
+        let mut helper = service.clone();
+        helper.start_token += 1;
+        helper.name = "WebKitWebProcess".into();
+        helper.cmdline.clear();
+        let processes: HashMap<_, _> = [app.clone(), helper.clone(), child.clone()]
+            .into_iter()
+            .map(|process| (process.pid, process))
+            .collect();
+        let detached = crate::util::retained_detached(&mut records, &processes, |pid| {
+            processes.get(&pid).map(|process| process.start_token)
+        });
+        assert!(records.is_empty(), "stale exemptions must be removed");
+        let reused = ProcessTable::from_processes_with_detached(processes, app.pid, &detached);
+        for pid in [helper.pid, child.pid] {
+            assert!(reused.is_self_descendant(pid));
+            assert!(matches!(
+                crate::safety::protection(reused.get(pid).unwrap(), &reused),
+                crate::safety::Protection::Hard(_)
+            ));
+        }
+    }
+
+    #[test]
+    fn detached_records_wait_for_a_fresh_snapshot_and_require_verified_identity() {
+        let service = proc(301, 300, "node", &["node"]);
+        let mut records =
+            std::collections::BTreeMap::from([(service.pid, service.start_token), (302, 0)]);
+        let absent = HashMap::new();
+        let detached = crate::util::retained_detached(&mut records, &absent, |pid| {
+            (pid == service.pid).then_some(service.start_token)
+        });
+        assert!(detached.is_empty());
+        assert_eq!(
+            records.len(),
+            1,
+            "unknown tokens must never authorize an exemption"
+        );
+        let processes = HashMap::from([(service.pid, service)]);
+        assert_eq!(
+            crate::util::retained_detached(&mut records, &processes, |_| None),
+            HashSet::from([301])
+        );
+        crate::util::retained_detached(&mut records, &absent, |_| None);
+        assert!(
+            records.is_empty(),
+            "exited services must not grow the registry forever"
+        );
+    }
+
+    #[test]
+    fn windows_reused_parent_pids_do_not_expand_stop_plans_or_agent_ownership() {
+        const BASE: u64 = (11_644_473_600 + 1_700_000_000) * 10_000_000;
+        let mut agent = proc(70, 1, "codex", &["codex"]);
+        agent.start_token = BASE + 500;
+        let mut orphan = proc(71, 70, "node", &["node", "other-server.js"]);
+        orphan.start_token = BASE + 100;
+        let mut orphan_child = proc(72, 71, "node", &["node", "other-worker.js"]);
+        orphan_child.start_token = BASE + 200;
+        let mut valid_child = proc(73, 70, "node", &["node", "server.js"]);
+        valid_child.start_token = BASE + 600;
+        let mut processes = [
+            agent,
+            orphan,
+            orphan_child,
+            valid_child,
+            proc(99, 1, "holdmap", &[]),
+        ]
+        .into_iter()
+        .map(|process| (process.pid, process))
+        .collect();
+        // Run the Windows normalization explicitly so this regression executes on every OS.
+        normalize_windows_parentage(&mut processes);
+        let table = ProcessTable::from_processes(processes, 99);
+        assert_eq!(table.get(71).unwrap().ppid, None);
+        assert!(table.ancestors(71).is_empty());
+        assert_eq!(table.descendants(70), vec![73]);
+        assert_eq!(table.descendants(71), vec![72]);
+        let scan = crate::scan::Scanner::fixed(Vec::new(), table, Vec::new())
+            .scan(&crate::scan::ScanOptions {
+                all_states: false,
+                docker: false,
+            })
+            .unwrap();
+        let report = crate::agents::AgentsBuilder::new(&scan)
+            .with_project_detection(false)
+            .build();
+        let agent = report.agents.iter().find(|agent| agent.pid == 70).unwrap();
+        assert_eq!(agent.process_ids, vec![70, 73]);
+        let engine = crate::engine::Engine::from_scan(scan);
+        let plan = engine.plan(
+            &crate::engine::Target::Pid(70),
+            &crate::engine::StopOptions {
+                allow_protected: true,
+                ..Default::default()
+            },
+        );
+        assert!(plan.blocked.is_none());
+        let planned: Vec<_> = plan
+            .steps
+            .iter()
+            .filter_map(|step| match step {
+                crate::engine::Step::SignalProcesses { processes, .. } => Some(processes),
+                _ => None,
+            })
+            .flatten()
+            .map(|process| process.pid)
+            .collect();
+        assert_eq!(planned, vec![70, 73]);
+    }
+
+    #[test]
+    fn windows_parentage_compares_fallback_times_and_preserves_unknown_protection() {
+        let mut parent = proc(500, 1, "holdmap", &[]);
+        let mut child = proc(501, 500, "WebKitWebProcess", &[]);
+        parent.start_time = 1_700_000_002;
+        parent.start_token = parent.start_time;
+        child.start_time = 1_700_000_001;
+        child.start_token = (11_644_473_600 + child.start_time) * 10_000_000;
+        let mut processes =
+            HashMap::from([(parent.pid, parent.clone()), (child.pid, child.clone())]);
+        normalize_windows_parentage(&mut processes);
+        assert_eq!(processes[&child.pid].ppid, None);
+
+        child.start_time = 0;
+        child.start_token = 0;
+        let mut processes = HashMap::from([(parent.pid, parent), (child.pid, child)]);
+        normalize_windows_parentage(&mut processes);
+        assert_eq!(processes[&501].ppid, Some(500));
+        let table = ProcessTable::from_processes(processes, 500);
+        assert!(table.is_self_descendant(501));
+        assert!(matches!(
+            crate::safety::protection(table.get(501).unwrap(), &table),
+            crate::safety::Protection::Hard(_)
+        ));
     }
 
     #[test]

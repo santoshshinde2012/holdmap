@@ -37,6 +37,12 @@ pub const LEGACY_FILE_NAME: &str = ".portwise.toml";
 
 /// Default time `up` waits for a service to accept connections.
 pub const DEFAULT_READY_TIMEOUT_S: u64 = 60;
+/// Maximum stack-file size; configuration should stay cheap to read and parse.
+pub const MAX_FILE_BYTES: usize = 1024 * 1024;
+/// Maximum number of services managed by one stack.
+pub const MAX_SERVICES: usize = 512;
+/// Maximum time a service may take to become ready.
+pub const MAX_READY_TIMEOUT_S: u64 = 3600;
 
 /// A problem with a `.holdmap.toml`.
 #[derive(Debug, thiserror::Error)]
@@ -241,10 +247,11 @@ fn check_trusted_open(path: &Path, file: &std::fs::File) -> Result<(), StackErro
 /// Read and validate a stack file (refusing one that isn't [`check_trusted`]).
 pub fn load(path: &Path) -> Result<Stack, StackError> {
     use std::io::Read;
-    let mut file = open_stack_file(path)?;
+    let file = open_stack_file(path)?;
     check_trusted_open(path, &file)?;
     let mut text = String::new();
-    file.read_to_string(&mut text)
+    file.take(MAX_FILE_BYTES as u64 + 1)
+        .read_to_string(&mut text)
         .map_err(|source| StackError::Io {
             path: path.to_path_buf(),
             source,
@@ -253,7 +260,34 @@ pub fn load(path: &Path) -> Result<Stack, StackError> {
         .parent()
         .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()))
         .unwrap_or_default();
-    parse(&text, &root, path)
+    let mut stack = parse(&text, &root, path)?;
+    #[cfg(windows)]
+    {
+        let paths: Vec<_> = stack
+            .services
+            .iter()
+            .map(|service| service.cwd.clone())
+            .collect();
+        let resolved = canonicalize_windows_dos_paths(paths);
+        for service in &mut stack.services {
+            if windows_dos_path(&service.cwd) {
+                service.cwd =
+                    resolved
+                        .get(&service.cwd)
+                        .cloned()
+                        .ok_or_else(|| StackError::Invalid {
+                            path: path.to_path_buf(),
+                            message: format!(
+                                "could not safely resolve Windows short-name working directory {}",
+                                service.cwd.display()
+                            ),
+                        })?;
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = &mut stack;
+    Ok(stack)
 }
 
 fn valid_name(s: &str) -> bool {
@@ -269,10 +303,20 @@ pub fn parse(text: &str, root: &Path, file: &Path) -> Result<Stack, StackError> 
         path: file.to_path_buf(),
         message,
     };
+    if text.len() > MAX_FILE_BYTES {
+        return Err(invalid(format!(
+            "stack files must be at most {MAX_FILE_BYTES} bytes"
+        )));
+    }
     let raw: RawFile = toml::from_str(text).map_err(|e| StackError::Parse {
         path: file.to_path_buf(),
         message: e.message().to_string(),
     })?;
+    if raw.services.len() > MAX_SERVICES {
+        return Err(invalid(format!(
+            "a stack may define at most {MAX_SERVICES} services"
+        )));
+    }
     let mut ports: BTreeMap<u16, &str> = BTreeMap::new();
     for (name, s) in &raw.services {
         if !valid_name(name) {
@@ -305,6 +349,13 @@ pub fn parse(text: &str, root: &Path, file: &Path) -> Result<Stack, StackError> 
                 )));
             }
         }
+        if s.ready_timeout_s
+            .is_some_and(|timeout| timeout == 0 || timeout > MAX_READY_TIMEOUT_S)
+        {
+            return Err(invalid(format!(
+                "service `{name}`: ready_timeout_s must be 1–{MAX_READY_TIMEOUT_S} seconds"
+            )));
+        }
         for d in &s.depends_on {
             if !raw.services.contains_key(d) {
                 return Err(invalid(format!(
@@ -313,7 +364,7 @@ pub fn parse(text: &str, root: &Path, file: &Path) -> Result<Stack, StackError> 
             }
         }
         for k in s.env.keys() {
-            if k.is_empty() || k.contains('=') {
+            if k.is_empty() || k.contains(['=', '\0']) || s.env[k].contains('\0') {
                 return Err(invalid(format!(
                     "service `{name}`: invalid environment variable name `{k}`"
                 )));
@@ -362,29 +413,39 @@ pub fn parse(text: &str, root: &Path, file: &Path) -> Result<Stack, StackError> 
 
 /// Deterministic topological order (dependencies first, then by name); errors on a cycle.
 fn topo_order(services: &BTreeMap<String, RawService>) -> Result<Vec<String>, String> {
-    let mut done: BTreeSet<String> = BTreeSet::new();
+    let mut remaining: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut dependents: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    let mut ready = BTreeSet::new();
+    for (name, service) in services {
+        let dependencies: BTreeSet<&str> = service.depends_on.iter().map(String::as_str).collect();
+        remaining.insert(name, dependencies.len());
+        if dependencies.is_empty() {
+            ready.insert(name.as_str());
+        }
+        for dependency in dependencies {
+            dependents.entry(dependency).or_default().push(name);
+        }
+    }
     let mut out = Vec::new();
-    while out.len() < services.len() {
-        let ready = services
-            .iter()
-            .find(|(n, s)| !done.contains(*n) && s.depends_on.iter().all(|d| done.contains(d)));
-        match ready {
-            Some((n, _)) => {
-                done.insert(n.clone());
-                out.push(n.clone());
-            }
-            None => {
-                let left: Vec<&str> = services
-                    .keys()
-                    .filter(|n| !done.contains(*n))
-                    .map(String::as_str)
-                    .collect();
-                return Err(format!(
-                    "dependency cycle between services: {}",
-                    left.join(", ")
-                ));
+    while let Some(name) = ready.pop_first() {
+        out.push(name.to_string());
+        for dependent in dependents.get(name).into_iter().flatten() {
+            let count = remaining.get_mut(dependent).expect("known dependent");
+            *count -= 1;
+            if *count == 0 {
+                ready.insert(*dependent);
             }
         }
+    }
+    if out.len() != services.len() {
+        let left: Vec<&str> = remaining
+            .into_iter()
+            .filter_map(|(name, count)| (count != 0).then_some(name))
+            .collect();
+        return Err(format!(
+            "dependency cycle between services: {}",
+            left.join(", ")
+        ));
     }
     Ok(out)
 }
@@ -459,7 +520,7 @@ impl Stack {
     /// `cwd`), its project root is under it, or it's a container of the compose project named like the stack.
     pub fn owns(&self, entry: &PortEntry) -> bool {
         let under = |p: &Path| {
-            p.starts_with(&self.root) || self.services.iter().any(|s| p.starts_with(&s.cwd))
+            path_is_under(p, &self.root) || self.services.iter().any(|s| path_is_under(p, &s.cwd))
         };
         entry
             .process
@@ -481,6 +542,168 @@ impl Stack {
             .map(|s| service_status(self, s, snap))
             .collect()
     }
+}
+
+/// Whether `path` is within `root`, including the root itself. Equivalent ordinary/verbatim
+/// Windows drive and UNC prefixes match without filesystem IO; component names and directory
+/// boundaries remain exact, including for Windows case-sensitive directories.
+pub fn path_is_under(path: &Path, root: &Path) -> bool {
+    #[cfg(windows)]
+    return windows_relative_components(path, root).is_some();
+    #[cfg(not(windows))]
+    path.starts_with(root)
+}
+
+/// The portion of `path` below `root`, or `None` when outside it. This uses the same
+/// namespace-aware Windows comparison as [`path_is_under`] and performs no filesystem IO.
+pub fn relative_to_root(path: &Path, root: &Path) -> Option<PathBuf> {
+    #[cfg(windows)]
+    return windows_relative_components(path, root).map(|parts| parts.as_path().to_path_buf());
+    #[cfg(not(windows))]
+    path.strip_prefix(root).ok().map(Path::to_path_buf)
+}
+
+#[cfg(windows)]
+fn windows_relative_components<'a>(
+    path: &'a Path,
+    root: &Path,
+) -> Option<std::path::Components<'a>> {
+    use std::path::{Component, Prefix};
+    let mut path = path.components();
+    for root in root.components() {
+        let matches = match (path.next(), root) {
+            (Some(Component::Prefix(path)), Component::Prefix(root)) => {
+                match (path.kind(), root.kind()) {
+                    (
+                        Prefix::Disk(a) | Prefix::VerbatimDisk(a),
+                        Prefix::Disk(b) | Prefix::VerbatimDisk(b),
+                    ) => a.eq_ignore_ascii_case(&b),
+                    (
+                        Prefix::UNC(a_server, a_share) | Prefix::VerbatimUNC(a_server, a_share),
+                        Prefix::UNC(b_server, b_share) | Prefix::VerbatimUNC(b_server, b_share),
+                    ) => a_server == b_server && a_share == b_share,
+                    (a, b) => a == b,
+                }
+            }
+            (Some(path), root) => path == root,
+            (None, _) => false,
+        };
+        if !matches {
+            return None;
+        }
+    }
+    Some(path)
+}
+
+#[cfg(windows)]
+pub(crate) fn windows_dos_path(path: &Path) -> bool {
+    path.is_absolute()
+        && path.components().any(|part| {
+            let std::path::Component::Normal(name) = part else {
+                return false;
+            };
+            let name = name.to_string_lossy();
+            name.split_once('~').is_some_and(|(_, suffix)| {
+                let number = suffix.split('.').next().unwrap_or_default();
+                !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+            })
+        })
+}
+
+/// Canonicalize unique DOS short-name paths under one operation budget, not one deadline per
+/// service/process. Stalled OS calls cannot accumulate across scans; missing results fail closed.
+#[cfg(windows)]
+pub(crate) fn canonicalize_windows_dos_paths(
+    paths: impl IntoIterator<Item = PathBuf>,
+) -> std::collections::HashMap<PathBuf, PathBuf> {
+    static ACTIVE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    resolve_windows_dos_paths(
+        paths,
+        std::time::Duration::from_millis(250),
+        &ACTIVE,
+        std::sync::Arc::new(|path| std::fs::canonicalize(path).ok()),
+    )
+}
+
+#[cfg(windows)]
+type WindowsPathResolver = std::sync::Arc<dyn Fn(&Path) -> Option<PathBuf> + Send + Sync>;
+
+#[cfg(windows)]
+fn resolve_windows_dos_paths(
+    paths: impl IntoIterator<Item = PathBuf>,
+    budget: std::time::Duration,
+    active: &'static std::sync::atomic::AtomicUsize,
+    resolve: WindowsPathResolver,
+) -> std::collections::HashMap<PathBuf, PathBuf> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    const MAX_ACTIVE: usize = 4;
+    struct Slot(&'static AtomicUsize);
+    impl Drop for Slot {
+        fn drop(&mut self) {
+            self.0.fetch_sub(1, Ordering::AcqRel);
+        }
+    }
+    let mut paths = paths
+        .into_iter()
+        .filter(|path| windows_dos_path(path))
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .peekable();
+    let mut resolved = std::collections::HashMap::new();
+    let (send, receive) = std::sync::mpsc::sync_channel(MAX_ACTIVE);
+    let deadline = std::time::Instant::now() + budget;
+    let mut pending = 0;
+    loop {
+        while pending < MAX_ACTIVE && paths.peek().is_some() && std::time::Instant::now() < deadline
+        {
+            let mut count = active.load(Ordering::Acquire);
+            let acquired = loop {
+                if count >= MAX_ACTIVE {
+                    break false;
+                }
+                match active.compare_exchange_weak(
+                    count,
+                    count + 1,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => break true,
+                    Err(current) => count = current,
+                }
+            };
+            if !acquired {
+                break;
+            }
+            let slot = Slot(active);
+            let path = paths.next().expect("checked pending path");
+            let send = send.clone();
+            let resolve = resolve.clone();
+            let worker = std::thread::Builder::new()
+                .name("holdmap-path-alias".into())
+                .spawn(move || {
+                    let _slot = slot;
+                    let canonical = resolve(&path);
+                    let _ = send.send((path, canonical));
+                });
+            if worker.is_ok() {
+                pending += 1;
+            }
+        }
+        if pending == 0 {
+            break;
+        }
+        let Some(remaining) = deadline.checked_duration_since(std::time::Instant::now()) else {
+            break;
+        };
+        let Ok((path, canonical)) = receive.recv_timeout(remaining) else {
+            break;
+        };
+        pending -= 1;
+        if let Some(canonical) = canonical {
+            resolved.insert(path, canonical);
+        }
+    }
+    resolved
 }
 
 /// Where a service stands right now.
@@ -722,6 +945,56 @@ port = 5432
         assert!(bad("[services.a]\nport = 1\nprot = 2").contains("unknown field"));
         assert!(bad("port = ").contains(".holdmap.toml"));
         assert!(bad("[services.a]\nport = 70000").contains(".holdmap.toml"));
+        assert!(bad("[services.a]\nport = 1\nready_timeout_s = 0").contains("1–3600"));
+        assert!(
+            bad("[services.a]\nport = 1\nready_timeout_s = 9223372036854775807").contains("1–3600")
+        );
+    }
+
+    #[test]
+    fn stack_input_and_service_counts_are_bounded() {
+        let root = Path::new("/r");
+        let file = Path::new("/r/.holdmap.toml");
+        let oversized = format!("#{}", "x".repeat(MAX_FILE_BYTES));
+        assert!(matches!(
+            parse(&oversized, root, file),
+            Err(StackError::Invalid { .. })
+        ));
+        let services: String = (0..=MAX_SERVICES)
+            .map(|i| format!("[services.s{i}]\n"))
+            .collect();
+        assert!(matches!(
+            parse(&services, root, file),
+            Err(StackError::Invalid { .. })
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(FILE_NAME);
+        std::fs::write(&file, oversized).unwrap();
+        assert!(matches!(load(&file), Err(StackError::Invalid { .. })));
+    }
+
+    #[test]
+    fn dependency_order_handles_large_chains_and_duplicate_dependencies() {
+        let mut text = String::new();
+        for i in (0..MAX_SERVICES).rev() {
+            text.push_str(&format!("[services.s{i:03}]\n"));
+            if i > 0 {
+                text.push_str(&format!(
+                    "depends_on = ['s{:03}', 's{:03}']\n",
+                    i - 1,
+                    i - 1
+                ));
+            }
+        }
+        let stack = parse(&text, Path::new("/r"), Path::new("f")).unwrap();
+        assert_eq!(stack.services.len(), MAX_SERVICES);
+        for (index, service) in stack.services.iter().enumerate() {
+            assert_eq!(service.name, format!("s{index:03}"));
+        }
+        let selected = stack
+            .start_order(&[format!("s{:03}", MAX_SERVICES - 1)])
+            .unwrap();
+        assert_eq!(selected.len(), MAX_SERVICES);
     }
 
     #[cfg(unix)]
@@ -825,6 +1098,232 @@ port = 5432
             e.process = None;
         }
         e
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_ownership_matches_ordinary_and_verbatim_drive_and_unc_prefixes() {
+        for (root, cwd, sibling) in [
+            (
+                r"\\?\C:\workspace\shop",
+                r"C:\workspace\shop\apps\web",
+                r"C:\workspace\shop-other\web",
+            ),
+            (
+                r"C:\workspace\shop",
+                r"\\?\c:\workspace\shop\apps\web",
+                r"\\?\C:\workspace\shop-other\web",
+            ),
+            (
+                r"\\?\UNC\server\share\shop",
+                r"\\server\share\shop\web",
+                r"\\server\other\shop\web",
+            ),
+        ] {
+            let stack = parse(
+                "[services.web]\nport=3000\ncommand='fixture'\n",
+                Path::new(root),
+                &Path::new(root).join(FILE_NAME),
+            )
+            .unwrap();
+            assert!(stack.owns(&entry(3000, Some(cwd), None)), "{root} / {cwd}");
+            let relative = relative_to_root(Path::new(cwd), Path::new(root)).unwrap();
+            assert_eq!(
+                relative,
+                Path::new(if cwd.ends_with(r"apps\web") {
+                    r"apps\web"
+                } else {
+                    "web"
+                })
+            );
+            assert!(
+                !stack.owns(&entry(3000, Some(sibling), None)),
+                "{root} / {sibling}"
+            );
+            assert!(relative_to_root(Path::new(sibling), Path::new(root)).is_none());
+            let snap = Snapshot {
+                entries: vec![entry(3000, Some(cwd), None)],
+                hidden_sockets: 0,
+                platform: "windows".into(),
+                taken_at_ms: 0,
+                scan_ms: 0,
+                docker_available: false,
+                warnings: vec![],
+            };
+            assert_eq!(stack.status(&snap)[0].state, ServiceState::Running);
+        }
+        // The namespace correction must not broaden ownership to different filesystem
+        // names, devices, shares or roots that merely have the same textual prefix.
+        assert!(!path_is_under(
+            Path::new(r"C:\workspace\Shop\web"),
+            Path::new(r"\\?\C:\workspace\shop")
+        ));
+        assert!(!path_is_under(
+            Path::new(r"D:\workspace\shop"),
+            Path::new(r"\\?\C:\workspace\shop")
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_loaded_windows_stack_owns_an_existing_cwd_without_a_verbatim_prefix() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join(FILE_NAME);
+        std::fs::write(&file, "[services.web]\nport=3000\ncommand='fixture'\n").unwrap();
+        let stack = load(&file).unwrap();
+        let canonical = std::fs::canonicalize(directory.path()).unwrap();
+        let ordinary = canonical.to_str().unwrap().strip_prefix(r"\\?\").unwrap();
+        assert!(stack.owns(&entry(3000, Some(ordinary), None)));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_short_name_cwds_resolve_once_and_match_loaded_stack_ownership() {
+        let directory = tempfile::tempdir().unwrap();
+        let cwd = directory.path().join("apps/work space");
+        std::fs::create_dir_all(&cwd).unwrap();
+        let file = directory.path().join(FILE_NAME);
+        let service_cwd = cwd.to_string_lossy();
+        std::fs::write(
+            &file,
+            format!(
+                "[services.web]\nport=3000\ncommand='fixture'\ncwd={}\n",
+                toml_str(&service_cwd)
+            ),
+        )
+        .unwrap();
+        let stack = load(&file).unwrap();
+        let resolved = canonicalize_windows_dos_paths([cwd.clone(), cwd.clone()]);
+        let cwd = if windows_dos_path(&cwd) {
+            assert_eq!(
+                resolved.len(),
+                1,
+                "one resolution for a shared DOS alias cwd"
+            );
+            resolved.get(&cwd).unwrap().clone()
+        } else {
+            cwd
+        };
+        assert!(stack.owns(&entry(3000, cwd.to_str(), None)));
+        assert_eq!(
+            relative_to_root(&cwd, &stack.root),
+            Some(PathBuf::from(r"apps\work space"))
+        );
+        assert_eq!(
+            std::fs::canonicalize(&stack.services[0].cwd).unwrap(),
+            std::fs::canonicalize(&cwd).unwrap()
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_alias_batch_deadline_caps_workers_discards_late_results_and_recovers() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::{Arc, Condvar, Mutex};
+        use std::time::{Duration, Instant};
+        static ACTIVE: AtomicUsize = AtomicUsize::new(0);
+        let gate = Arc::new((Mutex::new(false), Condvar::new()));
+        struct Release(Arc<(Mutex<bool>, Condvar)>);
+        impl Drop for Release {
+            fn drop(&mut self) {
+                *self.0 .0.lock().unwrap() = true;
+                self.0 .1.notify_all();
+            }
+        }
+        let release = Release(gate.clone());
+        let calls = Arc::new(AtomicUsize::new(0));
+        let resolve = {
+            let gate = gate.clone();
+            let calls = calls.clone();
+            Arc::new(move |path: &Path| {
+                calls.fetch_add(1, Ordering::AcqRel);
+                let mut released = gate.0.lock().unwrap();
+                while !*released {
+                    released = gate.1.wait(released).unwrap();
+                }
+                Some(path.to_path_buf())
+            })
+        };
+        let paths: Vec<_> = (0..8)
+            .map(|i| PathBuf::from(format!(r"C:\RUNNER~1\owned-{i}")))
+            .collect();
+        let started = Instant::now();
+        assert!(resolve_windows_dos_paths(
+            paths.clone(),
+            Duration::from_millis(50),
+            &ACTIVE,
+            resolve.clone()
+        )
+        .is_empty());
+        assert!(
+            started.elapsed() < Duration::from_millis(500),
+            "one operation deadline, not eight path deadlines"
+        );
+        assert_eq!(ACTIVE.load(Ordering::Acquire), 4);
+        assert!(resolve_windows_dos_paths(
+            paths.clone(),
+            Duration::from_millis(50),
+            &ACTIVE,
+            resolve
+        )
+        .is_empty());
+        assert_eq!(
+            ACTIVE.load(Ordering::Acquire),
+            4,
+            "stalled workers cannot accumulate across captures"
+        );
+        drop(release);
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while ACTIVE.load(Ordering::Acquire) != 0 {
+            assert!(
+                Instant::now() < deadline,
+                "late workers must release capacity"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(calls.load(Ordering::Acquire), 4);
+        let resolved = resolve_windows_dos_paths(
+            paths.clone(),
+            Duration::from_secs(1),
+            &ACTIVE,
+            Arc::new(|path| Some(path.to_path_buf())),
+        );
+        assert_eq!(
+            resolved.len(),
+            paths.len(),
+            "late results belong only to their discarded receiver"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_alias_batch_deduplicates_paths_without_querying_normal_names() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        use std::time::Duration;
+        static ACTIVE: AtomicUsize = AtomicUsize::new(0);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counted = calls.clone();
+        let alias = PathBuf::from(r"C:\RUNNER~1\owned");
+        let paths = [
+            alias.clone(),
+            alias.clone(),
+            PathBuf::from(r"C:\ordinary\owned"),
+        ];
+        let resolved = resolve_windows_dos_paths(
+            paths,
+            Duration::from_secs(1),
+            &ACTIVE,
+            Arc::new(move |path| {
+                counted.fetch_add(1, Ordering::AcqRel);
+                Some(path.to_path_buf())
+            }),
+        );
+        assert_eq!(calls.load(Ordering::Acquire), 1);
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved.contains_key(&alias));
     }
 
     #[test]

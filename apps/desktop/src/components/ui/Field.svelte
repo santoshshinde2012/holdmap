@@ -51,7 +51,7 @@
 </div>
 
 <style>
-  .field { display: grid; gap: 6px; min-width: 0; }
+  .field { position: relative; display: grid; gap: 6px; min-width: 0; }
   .top { display: flex; align-items: baseline; gap: 8px; }
   label { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); color: var(--text); }
   .req { color: var(--danger); }

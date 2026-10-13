@@ -6,7 +6,17 @@ order: 6
 
 A tray and menu-bar app with the port list, details, the service graph, the agents map, pins, history with
 one-click restart, remote hosts over SSH and a command palette. It runs on the same core as the
-CLI, so the plans and protections are identical. [Try it in the browser](../../#demo).
+CLI, so process identity checks and process protections are shared. The CLI's project-specific
+`.holdmap.toml` settings apply to CLI and terminal UI actions.
+[Try it in the browser](../../#demo).
+
+## Service graph and cluster grouping
+
+Choose **Graph** to see connections between services, or choose **Cluster** in the list's
+sort menu to group ports by their Compose project or workspace. Both views refresh as
+services change. **Layered** arranges dependencies from left to right. **Force** groups
+tightly connected services and is available for up to 100 services; larger graphs use
+Layered to keep navigation responsive, including when Force was previously selected.
 
 ## Shut down this computer
 

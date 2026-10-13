@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   // Preferences. Changes apply immediately (desktop convention) with a "Saved" confirmation;
   // invalid input never reaches the backend.
   import Dialog from "./ui/Dialog.svelte";
@@ -26,11 +26,19 @@
   let errors = $state<Record<string, string | null>>({});
   let interval = $state<number | null>(untrack(() => model.config.scan_interval_secs ?? 4));
   let historyLimit = $state<number | null>(untrack(() => model.config.history_limit));
+  let autostart = $state(untrack(() => model.autostart));
+  let singleKeyShortcuts = $state(untrack(() => model.singleKeyShortcuts));
+  let notify = $state(untrack(() => model.config.notify));
+  let notifyDevOnly = $state(untrack(() => model.config.notify_dev_only));
+  let hotkey = $state(untrack(() => model.config.hotkey ?? "alt-p"));
   let confirmClear = $state(false);
   let navEls: HTMLButtonElement[] = $state([]);
   let t: ReturnType<typeof setTimeout> | undefined;
+  onDestroy(() => clearTimeout(t));
 
   async function save(key: string, f: () => Promise<void> | void, ok = "Saved") {
+    if (busy[key]) return;
+    clearTimeout(t);
     busy[key] = true;
     errors[key] = null;
     status = { kind: "saving", text: "Saving…" };
@@ -44,6 +52,7 @@
       status = { kind: "error", text: "Couldn't save — see the message above" };
     } finally {
       busy[key] = false;
+      followModel(key);
     }
   }
   const idx = $derived(SETTINGS_SECTIONS.findIndex((s) => s.id === section));
@@ -62,6 +71,19 @@
     { value: "compact", label: "Compact", icon: "minus" },
   ];
   let density = $state<Density>(untrack(() => model.density));
+  function followModel(key: string) {
+    if (key === "autostart") autostart = model.autostart;
+    if (key === "singleKeyShortcuts") singleKeyShortcuts = model.singleKeyShortcuts;
+    if (key === "notify") { notify = model.config.notify; notifyDevOnly = model.config.notify_dev_only; }
+    if (key === "hotkey") hotkey = model.config.hotkey ?? "alt-p";
+    if (key === "theme") theme = model.theme;
+    if (key === "density") density = model.density;
+  }
+  // Controls may show an optimistic value while saving, then follow the value that
+  // actually persisted. A rejected write must restore the previous model value.
+  $effect(() => {
+    for (const key of ["autostart", "singleKeyShortcuts", "notify", "hotkey", "theme", "density"]) if (!busy[key]) followModel(key);
+  });
 </script>
 
 <Dialog title="Settings" description="Startup, appearance, notifications, scanning and power for this computer." icon="sliders" size="xl" {onclose} initialFocus="[role=tab][aria-selected=true]">
@@ -79,7 +101,7 @@
         <SettingsGroup title="Startup">
           <SettingRow label="Launch at login" description="Start holdmap in the menu bar when you log in. The window stays hidden until you need it.">
             {#snippet children({ labelId, descId })}
-              <Switch labelledby={labelId} describedby={descId} checked={model.autostart} busy={busy.autostart} onchange={(v) => save("autostart", () => actions.setAutostart(v), v ? "holdmap will start at login" : "Launch at login off")} />
+              <Switch labelledby={labelId} describedby={descId} bind:checked={autostart} busy={busy.autostart} onchange={(v) => save("autostart", () => actions.setAutostart(v), v ? "holdmap will start at login" : "Launch at login off")} />
             {/snippet}
           </SettingRow>
         </SettingsGroup>
@@ -87,7 +109,7 @@
         <SettingsGroup title="Global shortcut" description="Bring holdmap to the front from any app.">
           <SettingRow label="Show holdmap" description={model.shortcut ? `Currently ${model.shortcut}.` : "No global shortcut is active."}>
             {#snippet children()}
-              <Select labelHidden label="Global shortcut" width="190px" value={model.config.hotkey ?? "alt-p"} options={model.hotkeys.map((h) => ({ value: h.id, label: h.label }))} onchange={(v) => save("hotkey", () => actions.setHotkey(v))} />
+              <Select labelHidden label="Global shortcut" width="190px" bind:value={hotkey} disabled={busy.hotkey} options={model.hotkeys.map((h) => ({ value: h.id, label: h.label }))} onchange={(v) => save("hotkey", () => actions.setHotkey(v))} />
             {/snippet}
           </SettingRow>
         </SettingsGroup>
@@ -95,10 +117,11 @@
         <SettingsGroup title="Keyboard navigation">
           <SettingRow label="Single-key shortcuts" description="Use letters, / and ? for quick actions when you aren't typing. Turn off for speech input. Arrow keys and Cmd/Ctrl shortcuts stay available.">
             {#snippet children({ labelId, descId })}
-              <Switch labelledby={labelId} describedby={descId} checked={model.singleKeyShortcuts} busy={busy.singleKeyShortcuts} onchange={(v) => save("singleKeyShortcuts", () => actions.setSingleKeyShortcuts(v), v ? "Single-key shortcuts on" : "Single-key shortcuts off")} />
+              <Switch labelledby={labelId} describedby={descId} bind:checked={singleKeyShortcuts} busy={busy.singleKeyShortcuts} onchange={(v) => save("singleKeyShortcuts", () => actions.setSingleKeyShortcuts(v), v ? "Single-key shortcuts on" : "Single-key shortcuts off")} />
             {/snippet}
           </SettingRow>
         </SettingsGroup>
+        {#if errors.singleKeyShortcuts}<div class="err"><Callout tone="danger" size="sm">{errors.singleKeyShortcuts}</Callout></div>{/if}
       {:else if section === "appearance"}
         <SettingsGroup title="Display">
           <SettingRow label="Appearance" description="System follows your OS light/dark setting.">
@@ -115,16 +138,17 @@
             {#snippet children()}<span class="ro">System</span>{/snippet}
           </SettingRow>
         </SettingsGroup>
+        {#if errors.theme || errors.density}<div class="err"><Callout tone="danger" size="sm">{errors.theme ?? errors.density}</Callout></div>{/if}
         {#if model.singleKeyShortcuts}<p class="tip"><Kbd keys={["⇧", "L"]} size="sm" /> cycles the theme while you aren't typing.</p>{/if}
       {:else if section === "notifications"}
         <SettingsGroup title="Desktop notifications" description="holdmap watches in the background and tells you when something changes.">
           <SettingRow label="Notify me" description="New listeners, port conflicts, and pinned ports that stop.">
             {#snippet children({ labelId, descId })}
-              <Switch labelledby={labelId} describedby={descId} checked={model.config.notify} busy={busy.notify} onchange={(v) => save("notify", () => actions.setNotify(v, model.config.notify_dev_only), v ? "Notifications on" : "Notifications off")} />
+              <Switch labelledby={labelId} describedby={descId} bind:checked={notify} busy={busy.notify} onchange={(v) => save("notify", () => actions.setNotify(v, model.config.notify_dev_only), v ? "Notifications on" : "Notifications off")} />
             {/snippet}
           </SettingRow>
           <div class="row-in">
-            <Checkbox label="Only dev servers and pinned ports" description="Skip system services and desktop apps that open ports." checked={model.config.notify_dev_only} disabled={!model.config.notify || busy.notify} onchange={(v) => save("notify", () => actions.setNotify(model.config.notify, v))} />
+            <Checkbox label="Only dev servers and pinned ports" description="Skip system services and desktop apps that open ports." bind:checked={notifyDevOnly} disabled={!model.config.notify || busy.notify} onchange={(v) => save("notify", () => actions.setNotify(model.config.notify, v))} />
           </div>
         </SettingsGroup>
         {#if errors.notify}<div class="err"><Callout tone="danger" size="sm">{errors.notify}</Callout></div>{/if}
@@ -132,14 +156,14 @@
         <SettingsGroup title="Scanning">
           <SettingRow label="Scan every" description={interval ? cadenceText(interval) : "1–60 seconds."}>
             {#snippet children()}
-              <NumberInput label="Scan interval" labelHidden min={1} max={60} unit="s" width="104px" bind:value={interval} error={errors.interval} onchange={(v) => save("interval", () => actions.setScanInterval(v))} />
+              <NumberInput label="Scan interval" labelHidden min={1} max={60} unit="s" width="104px" bind:value={interval} disabled={busy.interval} error={errors.interval} onchange={(v) => save("interval", () => actions.setScanInterval(v))} />
             {/snippet}
           </SettingRow>
         </SettingsGroup>
         <SettingsGroup title="History">
           <SettingRow label="Remember" description="How many stopped services to keep for one-click restart.">
             {#snippet children()}
-              <NumberInput label="History length" labelHidden min={10} max={5000} step={10} unit="entries" width="140px" bind:value={historyLimit} error={errors.history} onchange={(v) => save("history", () => actions.setHistoryLimit(v))} />
+              <NumberInput label="History length" labelHidden min={10} max={5000} step={10} unit="entries" width="140px" bind:value={historyLimit} disabled={busy.history} error={errors.history} onchange={(v) => save("history", () => actions.setHistoryLimit(v))} />
             {/snippet}
           </SettingRow>
           <SettingRow label="Clear history" description="Removes the list of stopped services. Running services aren't affected.">
@@ -153,6 +177,7 @@
             {/snippet}
           </SettingRow>
         </SettingsGroup>
+        {#if errors.clear}<div class="err"><Callout tone="danger" size="sm">{errors.clear}</Callout></div>{/if}
       {:else if section === "power"}
         <SettingsGroup title="This computer" description="Power controls always apply to the computer running the desktop app, including while viewing remote hosts.">
           <div class="power-card">

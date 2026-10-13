@@ -121,7 +121,7 @@ pub async fn scan(
     let snapshot = blocking(move || handle.state::<AppState>().snapshot(all, max_age)).await?;
     // The tray menu is updated on the main thread; don't make the scan wait for it.
     let (handle, snap) = (app.clone(), snapshot.clone());
-    std::thread::spawn(move || refresh_tray(&handle, &snap));
+    let _ = app.run_on_main_thread(move || refresh_tray(&handle, &snap));
     Ok(snapshot)
 }
 
@@ -303,16 +303,24 @@ pub fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
 /// history entry (when it was stopped, which port); the command itself is read from the
 /// history file, so the UI can never make the app run a command of its choosing.
 #[tauri::command]
-pub async fn restart(app: AppHandle, at_ms: u64, port: u16) -> Result<Restarted, String> {
+pub async fn restart(
+    app: AppHandle,
+    at_ms: u64,
+    port: u16,
+    protocol: Option<holdmap_core::Protocol>,
+    pid: Option<u32>,
+) -> Result<Restarted, String> {
     blocking(move || {
-        let entry = app
-            .state::<AppState>()
-            .store
-            .entry(at_ms, port)
-            .ok_or_else(|| format!("holdmap has no record of stopping :{port} then"))?;
+        let entry = restart_recording(
+            &app.state::<AppState>().store,
+            Some(at_ms),
+            port,
+            protocol,
+            pid,
+        )?;
         if !entry.restartable() {
             return Err(format!(
-                "holdmap didn't record a command for :{} — start it the usual way",
+                "holdmap can't safely restart this recording for :{} — start it the usual way",
                 entry.port
             ));
         }
@@ -331,16 +339,15 @@ pub async fn restart(app: AppHandle, at_ms: u64, port: u16) -> Result<Restarted,
 /// recorded again: "Restart" for a running dev server. Only an entry recorded in the last
 /// two minutes counts, so this never resurrects something stopped long ago.
 #[tauri::command]
-pub async fn restart_stopped(app: AppHandle, port: u16) -> Result<Restarted, String> {
+pub async fn restart_stopped(
+    app: AppHandle,
+    port: u16,
+    protocol: Option<holdmap_core::Protocol>,
+    pid: Option<u32>,
+) -> Result<Restarted, String> {
     blocking(move || {
         let store = &app.state::<AppState>().store;
-        let entry = store
-            .last_for_port(port)
-            .filter(|e| holdmap_core::util::now_ms().saturating_sub(e.at_ms) < 120_000)
-            .filter(HistoryEntry::restartable)
-            .ok_or_else(|| {
-                format!("holdmap didn't record a command for :{port} — start it the usual way")
-            })?;
+        let entry = restart_recording(store, None, port, protocol, pid)?;
         let (pid, log) = history::restart(&entry, &store.logs_dir()).map_err(|e| e.to_string())?;
         Ok(Restarted {
             pid,
@@ -349,6 +356,30 @@ pub async fn restart_stopped(app: AppHandle, port: u16) -> Result<Restarted, Str
         })
     })
     .await
+}
+
+fn restart_recording(
+    store: &holdmap_core::store::Store,
+    at_ms: Option<u64>,
+    port: u16,
+    protocol: Option<holdmap_core::Protocol>,
+    pid: Option<u32>,
+) -> Result<HistoryEntry, String> {
+    let entry = match at_ms {
+        Some(at_ms) => store.entry_matching(at_ms, port, protocol, pid),
+        None => store.last_matching(port, protocol, pid),
+    }
+    .map_err(|error| error.to_string())?;
+    entry
+        .filter(|entry| {
+            at_ms.is_some() || holdmap_core::util::now_ms().saturating_sub(entry.at_ms) < 120_000
+        })
+        .filter(HistoryEntry::restartable)
+        .ok_or_else(|| {
+            format!(
+                "holdmap has no safely restartable recording for :{port} — start it the usual way"
+            )
+        })
 }
 
 /// Connections, process tree, uptime and bind risk for the listeners on `port`. Loaded
@@ -563,9 +594,9 @@ pub fn set_hotkey(
     state: State<'_, AppState>,
     preset: String,
 ) -> Result<Option<String>, String> {
-    let active = crate::shortcuts::apply(&app, &preset)?;
-    save(&state, |c| c.hotkey = preset)?;
-    Ok(active)
+    crate::shortcuts::apply_and_save(&app, &preset, || {
+        save(&state, |c| c.hotkey = preset.clone()).map(|_| ())
+    })
 }
 
 /// Read-only scan of another machine over SSH (agentless: `ss` + `ps`). `local` reads this
@@ -596,6 +627,87 @@ mod tests {
     use super::*;
     use holdmap_core::agents::AgentsBuilder;
     use holdmap_core::{ProcessInfo, ProcessTable, Protocol, Scan};
+
+    fn recorded(port: u16, at_ms: u64, protocol: Protocol, pid: u32) -> HistoryEntry {
+        HistoryEntry {
+            at_ms,
+            port,
+            protocol,
+            pid,
+            label: format!("fixture {pid}"),
+            command: vec![format!("fixture-owner-{pid}")],
+            cwd: None,
+            project: None,
+            framework: None,
+            windows_restart: None,
+            restartable: None,
+            copyable: None,
+        }
+    }
+
+    #[test]
+    fn history_restart_selects_exact_protocol_and_owner_and_refuses_ambiguity() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = holdmap_core::store::Store::new(dir.path());
+        let at_ms = holdmap_core::util::now_ms();
+        let tcp = recorded(3000, at_ms, Protocol::Tcp, 100);
+        let udp = recorded(3000, at_ms, Protocol::Udp, 200);
+        store.record(&[tcp.clone(), udp.clone()]).unwrap();
+        assert!(restart_recording(&store, Some(at_ms), 3000, None, None).is_err());
+        assert_eq!(
+            restart_recording(&store, Some(at_ms), 3000, Some(Protocol::Tcp), Some(100)).unwrap(),
+            tcp
+        );
+        assert_eq!(
+            restart_recording(&store, Some(at_ms), 3000, Some(Protocol::Udp), Some(200)).unwrap(),
+            udp
+        );
+        assert!(
+            restart_recording(&store, Some(at_ms), 3000, Some(Protocol::Udp), Some(100)).is_err()
+        );
+        store
+            .record(&[recorded(3001, at_ms, Protocol::Tcp, 100)])
+            .unwrap();
+        assert!(
+            restart_recording(&store, Some(at_ms), 3001, None, None).is_ok(),
+            "unique older callers remain compatible"
+        );
+        store
+            .record(&[recorded(3000, at_ms, Protocol::Tcp, 100)])
+            .unwrap();
+        assert!(
+            restart_recording(&store, Some(at_ms), 3000, Some(Protocol::Tcp), Some(100)).is_err()
+        );
+    }
+
+    #[test]
+    fn running_restart_keeps_selected_root_and_protocol_and_refuses_stale_or_unsafe_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = holdmap_core::store::Store::new(dir.path());
+        let now = holdmap_core::util::now_ms();
+        let selected = recorded(3000, now - 2, Protocol::Tcp, 100);
+        let sibling = recorded(3000, now - 1, Protocol::Tcp, 200);
+        let udp = recorded(3000, now, Protocol::Udp, 300);
+        store.record(&[selected.clone(), sibling, udp]).unwrap();
+        assert_eq!(
+            restart_recording(&store, None, 3000, Some(Protocol::Tcp), Some(100)).unwrap(),
+            selected
+        );
+        assert!(restart_recording(&store, None, 3000, Some(Protocol::Tcp), Some(300)).is_err());
+        let stale = recorded(3001, now - 120_000, Protocol::Tcp, 100);
+        store.record(&[stale]).unwrap();
+        assert!(restart_recording(&store, None, 3001, Some(Protocol::Tcp), Some(100)).is_err());
+        let unsafe_record = HistoryEntry {
+            at_ms: now,
+            command: vec![],
+            ..selected
+        };
+        store.record(&[unsafe_record]).unwrap();
+        assert!(
+            restart_recording(&store, None, 3000, Some(Protocol::Tcp), Some(100)).is_err(),
+            "must not fall back to an older launch"
+        );
+    }
 
     fn folders(path: &str) -> AgentsReport {
         let process = ProcessInfo {

@@ -4,7 +4,7 @@ use crate::confirmation::Confirmations;
 use holdmap_core::store::Store;
 use holdmap_core::{Engine, ScanOptions, Snapshot};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub struct AppState {
@@ -19,6 +19,8 @@ pub struct AppState {
     pub tray_ok: AtomicBool,
     /// Whether the updater plugin is registered (release builds with an update key).
     pub updater: AtomicBool,
+    /// Serialize download/install attempts even when multiple UI actions request one.
+    pub installing_update: Arc<AtomicBool>,
     /// Config, pins and stop history (`$HOLDMAP_HOME` or the platform config dir).
     pub store: Store,
 }
@@ -40,6 +42,7 @@ impl Default for AppState {
             docker: AtomicBool::new(true),
             tray_ok: AtomicBool::new(false),
             updater: AtomicBool::new(false),
+            installing_update: Arc::new(AtomicBool::new(false)),
             store: Store::open_default(),
         }
     }

@@ -249,6 +249,8 @@ Versions follow [SemVer](https://semver.org/). One `vX.Y.Z` tag releases everyth
 - Once the release is published, `release.yml` calls `desktop-release.yml` (tauri-action), which
   adds the `.dmg`, `.msi`, NSIS `.exe`, `.AppImage`, `.deb` and `.rpm`, with checksums and provenance. Run it by hand with an empty tag
   for a dry run that keeps the bundles as workflow artifacts.
+  Signed updater artifacts are verified against the public key and signed release version
+  before upload. After all platforms succeed, one job publishes the complete `latest.json`.
 
 Check a change to the release setup locally with `dist plan`,
 `dist build --artifacts=local --target x86_64-unknown-linux-gnu` and `actionlint`.
@@ -270,7 +272,7 @@ not regenerate CI with this setting. Keep action pins in the config and workflow
 | Secret `RELEASE_PLEASE_TOKEN` (fine-grained, contents and pull requests: write) | The release PR; the workflow skips with a notice until it exists |
 | Secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | Signed, notarised macOS app (optional) |
 | Secrets `WINDOWS_CERTIFICATE` (base64 `.pfx`), `WINDOWS_CERTIFICATE_PASSWORD` | Signed Windows installers (optional) |
-| `npm run tauri signer generate`, then secrets `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` and variable `TAURI_UPDATER_PUBKEY` | In-app updates with signed `latest.json` (optional; keep the private key backed up) |
+| `npm run tauri signer generate`, then secrets `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` and variable `TAURI_UPDATER_PUBKEY` | In-app updates with signed artifacts and an authenticated release version (optional; keep the private key backed up) |
 | `"npm"` in `publish-jobs` in `dist-workspace.toml`, `dist generate`, secret `NPM_TOKEN`; after restoring the publishing job, pass `--npm-registry-published` to both release-note preparation calls | Publishing the npm package (optional) |
 
 **Release steps.** Merging the release PR prepares the version; publishing starts when a

@@ -63,11 +63,28 @@ out of scope.
   by other accounts. Writes use exclusive temporary files and directory-relative operations.
   Windows rejects final reparse points and extra hard links, but inherits the chosen directory's
   ACLs: it does not install or verify an account-exclusive DACL. Use an account-controlled
-  profile directory or a private `HOLDMAP_HOME`.
-- Commands use argument arrays except explicitly configured project shell commands. Stack
+  profile directory or a private `HOLDMAP_HOME`. State updates serialize within the process
+  and acquire a checked cross-process lock with a five-second acquisition timeout on every
+  supported OS. Configuration is limited to 1 MiB; oversized saves fail before replacing
+  existing settings. History reads inspect only the newest 64 MiB and at most 5,000 valid entries;
+  writes enforce the same retention bounds and reject entries larger than 1 MiB. A restart
+  refuses a recorded working directory that is relative, missing or no longer a directory.
+  Desktop restart requests identify the stored port, protocol and original process; ambiguous
+  recordings are refused. Original Windows shell syntax stays in private history and is omitted
+  from exports; older shell recordings without that syntax cannot be safely replayed.
+- Executable launches use argument arrays. Project shell commands and recorded Windows
+  `cmd.exe` commands preserve their authorized shell syntax. Stack
   files are checked and read through the same handle. On Unix they must belong to the current
   account or root and must not be group/world writable; Windows relies on the checkout's ACLs.
+  Stack files are limited to 1 MiB and 512 services; `ready_timeout_s` must be 1–3,600 seconds.
+  CLI and terminal UI actions enforce the nearest project's protected ports against all known
+  process-tree, container and service effects, reloading the policy and socket ownership after
+  confirmation. Invalid or untrusted project files block those actions. Explicit stack files add
+  their protections; only CLI `stop`/`kill --allow-protected` overrides this project policy.
+  Desktop and MCP use the shared process policy without loading CLI project settings.
   CLI project-file creation and forced exports reject link redirection before truncation.
+  Diagnostic startup log tails read at most 64 KiB, reject redirected or nonregular files,
+  and redact recognized credentials. Saved service logs still contain the command's output.
 - The desktop's strict CSP and local-only capabilities constrain the webview. Native openers
   construct localhost URLs or resolve folders through a fresh scan, and agent paths must belong
   to the current report. Untrusted process and HTTP text renders as text, not HTML. The website
@@ -76,6 +93,14 @@ out of scope.
   64 messages. Oversized input is rejected before dispatch, and an oversized frame is drained
   completely so it cannot become a later valid request. HTTP probe paths reject request/header
   injection; captured command output is bounded to 4 MiB per stream with a deadline.
+  Container-runtime HTTP responses are limited to 4 MiB including framing, with 64 KiB
+  headers/trailers; malformed, truncated and ambiguous framing is rejected. Unix/TCP
+  connect, writes and reads share a request deadline. DNS callers wait within that deadline,
+  while uncancellable OS lookups use at most four outstanding workers. Windows named-pipe
+  open callers share the request deadline and allow at most four outstanding OS open workers;
+  handles returned after a timeout are closed. An OS open has no guaranteed cancellation,
+  so its worker may remain blocked while later requests fail promptly at the worker limit.
+  Once connected, nonblocking pipe reads and writes share the same deadline.
 - No product analytics are implemented. Optional agent recording (version 0.5.0)
   accepts explicitly configured local metadata through a token-authenticated loopback endpoint
   and retains at most 1,000 spans in memory. Prompts, tool inputs/results and unrelated fields
@@ -88,6 +113,12 @@ out of scope.
   configuration retain the user's own authority.
 - Releases use immutable action SHAs and scoped tokens, SHA-256 checksums and build provenance
   (`gh attestation verify <file> -R santoshshinde2012/holdmap`).
+  Signed desktop release artifacts are verified against the configured public key and their
+  authenticated version before upload; one final job publishes the complete updater index.
+  Configured desktop updates require the signed version to match the announced version,
+  allow one installation at a time, and time out manifest requests after 30 seconds and
+  downloads after 10 minutes. Installation work runs
+  off the async workers; its concurrency guard remains held until installation finishes.
 
 <a id="linux-glib-dependency-backports-unreleased"></a>
 

@@ -111,7 +111,11 @@ fn stop_ports(e: &Engine, report: &AgentsReport, a: &AgentsArgs, docker: bool) -
             }
             println!("{}", style::dim("Dry run: nothing was changed."));
         }
-        return Ok(crate::exit::OK);
+        return Ok(if review.plans().iter().any(|p| p.plan.is_blocked()) {
+            crate::exit::BLOCKED
+        } else {
+            crate::exit::OK
+        });
     }
     if !a.json {
         for reviewed in review.plans() {
@@ -124,6 +128,14 @@ fn stop_ports(e: &Engine, report: &AgentsReport, a: &AgentsArgs, docker: bool) -
             print!("{}", crate::render::plan_text(&reviewed.plan));
         }
         println!("{}", style::dim("Agent sessions will stay running."));
+    }
+    if review.plans().iter().any(|p| p.plan.is_blocked()) {
+        if a.json {
+            crate::commands::print_json(
+                &review.plans().iter().map(|p| &p.plan).collect::<Vec<_>>(),
+            )?;
+        }
+        return Ok(crate::exit::BLOCKED);
     }
     if !a.yes {
         let list = review
@@ -150,6 +162,14 @@ fn stop_ports(e: &Engine, report: &AgentsReport, a: &AgentsArgs, docker: bool) -
     let outcome = review.execute_with(
         &fresh,
         |reviewed| {
+            if let Err(error) = crate::project_policy::check_before_execute(docker, &reviewed.plan)
+            {
+                return holdmap_core::StopReport {
+                    target: reviewed.target(),
+                    error: Some(error.to_string()),
+                    ..Default::default()
+                };
+            }
             let mut report = execute(&reviewed.plan, &mut |l| {
                 if !a.json {
                     println!("  {} {}", style::dim("·"), style::dim(l));

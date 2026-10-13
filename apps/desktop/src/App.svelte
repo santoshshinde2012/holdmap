@@ -15,7 +15,7 @@
   import PinDialog from "./components/PinDialog.svelte";
   import RemoteDialog from "./components/RemoteDialog.svelte";
   import { Button, Dialog, FilterChip, IconButton, Kbd, SegmentedControl, Select, Splitter, TextField } from "./components/ui";
-  import type { DetailTab } from "./lib/detail";
+  import { restartRootPid, type DetailTab } from "./lib/detail";
   import { THEME_ICON, THEME_LABEL, type SettingsActions, type SettingsModel, type SettingsSection, type HotkeyPreset, type Theme } from "./lib/settings";
   import ConfirmDialog, { type Phase } from "./components/ConfirmDialog.svelte";
   import ShortcutsDialog from "./components/ShortcutsDialog.svelte";
@@ -30,10 +30,12 @@
   import { createFlowLoader } from "./lib/agent-flow/live";
   import type { AgentFlowMode, AgentFlowReport, ActivitySnapshot, RecordingStatus } from "./lib/agent-flow/model";
   import type { AgentsReport, ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortDetails, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
-  import { linksLabel, nodeForEntry, sectionsByCluster } from "./lib/graph";
+  import { linksLabel, localLinkCounts, nodeForEntry, sectionsByCluster } from "./lib/graph";
   import type { Command } from "./lib/palette";
   import { GROUPS, groupOf, matches, seconds, stopTarget, title, url, canOpen, type Filters, type Group } from "./lib/format";
-  import { prefGet, prefGetBoolean, prefSet } from "./lib/prefs";
+  import { prefGet, prefGetBoolean, prefGetChoice, prefSet } from "./lib/prefs";
+  import { commandForShell } from "./lib/shell";
+  import { portHolderKeys } from "./lib/port-live";
   import { shortcutContext } from "./lib/keyboard";
 
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
@@ -48,7 +50,7 @@
   /** Only a refresh the user asked for spins the button; background scans stay quiet. */
   let manualRefresh = $state(false);
   let filters = $state<Filters>({ query: "", all: false, proto: "any", dev: false, mine: false, exposed: false });
-  let sort = $state<Sort>((prefGet("sort") as Sort) ?? "group");
+  let sort = $state<Sort>(prefGetChoice("sort", ["group", "cluster", "port", "newest", "memory"], "group"));
   let selectedId = $state<string | null>(null);
   // Details are stale-while-revalidate: the last value stays on screen while each scan
   // refreshes it in the background, and the skeleton only shows on a port's first load.
@@ -57,9 +59,10 @@
   let httpInfo = $state.raw<Record<number, HttpInfo | null>>({});
   /** Bumped by every scan; the selected port's details are revalidated once per scan. */
   let scanGen = $state(0);
-  /** Per port: the holder's PID the explanation is about, the scan it's from, the newest request. */
-  const explainMeta = new LruMap<number, { pid: number | null; gen: number; seq: number }>(DETAILS_CACHE_MAX);
-  const httpAt = new LruMap<number, number>(STAMP_CACHE_MAX);
+  /** Per port: the complete holder identity, the scan it's from, the newest request. */
+  const explainMeta = new LruMap<number, { holder: string; gen: number; seq: number }>(DETAILS_CACHE_MAX);
+  type ProbeStamp = { at: number; seq: number };
+  const httpAt = new LruMap<number, ProbeStamp>(STAMP_CACHE_MAX);
   const HTTP_TTL_MS = 15_000;
   let explainSeq = 0;
   /** Ports whose explanation failed: retried quietly each scan, without a skeleton or toast. */
@@ -73,7 +76,7 @@
   let showHelp = $state(false);
   let showPalette = $state(false);
   let onboarded = $state(prefGet("onboarded") === "1");
-  let theme = $state<Theme>((prefGet("theme") as Theme) ?? "system");
+  let theme = $state<Theme>(prefGetChoice("theme", ["system", "light", "dark"], "system"));
   let density = $state<Density>(parseDensity(prefGet("density")));
   let singleKeyShortcuts = $state(prefGetBoolean("singleKeyShortcuts", true));
   let collapsed = $state<Set<string>>(parseCollapsed(prefGet("collapsed")));
@@ -83,7 +86,7 @@
   let memUsage = $state.raw<Record<string, number[]>>({});
   /** Connections, process tree and bind risk: loaded lazily for the selected port only. */
   let portDetails = $state.raw<Record<number, PortDetails[]>>({});
-  const detailsAt = new LruMap<number, number>(STAMP_CACHE_MAX);
+  const detailsAt = new LruMap<number, ProbeStamp>(STAMP_CACHE_MAX);
   const DETAILS_TTL_MS = 3_000;
   let usage = $state.raw<Record<string, number[]>>({});
   let systemDark = $state(matchMedia("(prefers-color-scheme: dark)").matches);
@@ -94,7 +97,7 @@
   let listEl = $state<HTMLDivElement | undefined>();
   let now = $state(Date.now());
   let toastSeq = 0;
-  let view = $state<View>((prefGet("view") as View) ?? "list");
+  let view = $state<View>(prefGetChoice("view", ["list", "graph", "agents"], "list"));
   /** GraphView (and @xyflow) loads only when the Graph tab is opened — keeps the first paint light. */
   let GraphView = $state<typeof import("./components/GraphView.svelte").default | null>(null);
   let graph = $state.raw<Graph | null>(null);
@@ -115,6 +118,8 @@
 
   const visibleAgentIds = $derived(filterAgents(agentsReport?.agents ?? [], agentQuery).map((a) => a.id));
   let graphAll = $state(false);
+  const topologyWanted = $derived(view === "graph" || (view === "list" && sort === "cluster"));
+  const topologyAll = $derived(view === "graph" ? graphAll : filters.all);
   let selectedNode = $state<string | null>(null);
   let config = $state<Config | null>(null);
   let showHistory = $state(false);
@@ -155,13 +160,19 @@
     drawerOpen = false;
   });
   $effect(() => {
-    if (view !== "graph") return;
+    const visible = topologyWanted, all = topologyAll, graphVisible = view === "graph";
+    untrack(() => topologyLoader.invalidate());
+    if (!visible) return;
     // untrack: loadTopology reads `graph` before its await; tracking it re-ran this effect on
     // every new graph (CPU moves each scan), so Graph view rebuilt the topology in a tight loop.
-    untrack(loadTopology);
-    if (!GraphView) {
+    untrack(() => {
+      void all;
+      void loadTopology();
+    });
+    if (graphVisible && untrack(() => !GraphView)) {
       import("./components/GraphView.svelte").then((m) => { GraphView = m.default; }).catch((e) => console.error("Couldn't load the graph", e));
     }
+    return () => topologyLoader.invalidate();
   });
   $effect(() => {
     if (view !== "agents") return;
@@ -171,14 +182,7 @@
     }
   });
   const pins = $derived(new Set((config?.pins ?? []).map((p) => p.port)));
-  const linkCount = $derived.by(() => {
-    const m = new Map<string, number>();
-    for (const n of graph?.nodes ?? []) {
-      const c = new Set(graph!.edges.filter((e) => e.kind === "local" && (e.from === n.id || e.to === n.id)).map((e) => (e.from === n.id ? e.to : e.from))).size;
-      for (const p of n.ports) m.set(p.entry_id, c);
-    }
-    return m;
-  });
+  const linkCount = $derived(localLinkCounts(graph));
   const mod = $derived(isMac ? "⌘" : "Ctrl");
   const modK = $derived(isMac ? "⌘K" : "Ctrl K");
 
@@ -235,6 +239,7 @@
 
   /** When the scan in flight started: the header stays "Live" while one is merely running. */
   let scanStarted = $state(0);
+  let disposed = false;
 
   async function refresh(manual = false) {
     if (refreshing) return;
@@ -258,7 +263,9 @@
 
   /** Take in a snapshot, from our own scan or pushed by the app's watcher; never go back in time. */
   function apply(next: Snapshot) {
+    if (disposed) return;
     if (snapshot && next.taken_at_ms < snapshot.taken_at_ms) return;
+    if (applyQueued && next.taken_at_ms < applyQueued.taken_at_ms) return;
     applyQueued = next;
     if (applyRaf) return;
     applyRaf = requestAnimationFrame(() => {
@@ -280,20 +287,20 @@
       memUsage = share(memUsage, usageRecord(memHist, s.entries.map((e) => e.id)));
       error = null;
       // Forget details for ports that are gone or now held by a different process.
-      const holder = new Map(s.entries.map((e) => [e.port, e.pid]));
+      const holder = portHolderKeys(s.entries);
       const selectedPort = s.entries.find((e) => e.id === selectedId)?.port ?? null;
-      const keep = (port: number) => holder.has(port) && (explainMeta.peek(port)?.pid ?? null) === holder.get(port);
+      const keep = (port: number) => holder.has(port) && explainMeta.peek(port)?.holder === holder.get(port);
       explanations = capRecord(pruned(explanations, keep), DETAILS_CACHE_MAX, selectedPort);
-      httpInfo = capRecord(pruned(httpInfo, (port) => holder.has(port)), DETAILS_CACHE_MAX, selectedPort);
-      portDetails = capRecord(pruned(portDetails, (port) => holder.has(port)), DETAILS_CACHE_MAX, selectedPort);
+      httpInfo = capRecord(pruned(httpInfo, keep), DETAILS_CACHE_MAX, selectedPort);
+      portDetails = capRecord(pruned(portDetails, keep), DETAILS_CACHE_MAX, selectedPort);
+      httpAt.prune(keep);
+      detailsAt.prune(keep);
       explainMeta.prune(keep);
-      httpAt.prune((port) => holder.has(port));
-      detailsAt.prune((port) => holder.has(port));
       for (const port of [...explainFailed]) if (!keep(port)) explainFailed.delete(port);
       scanGen++;
       if (selectedId && !s.entries.some((e) => e.id === selectedId)) selectedId = null;
-      // Topology is heavy: only build it while the graph is on screen.
-      if (view === "graph") loadTopology();
+      // Build topology for the graph or the list's cluster grouping, only while needed.
+      if (topologyWanted) loadTopology();
       else graph = null;
       if (view === "agents") loadAgents();
       else if (!agentsReport) loadAgents(); // badge count without opening the tab
@@ -371,13 +378,15 @@
     selectedAgent = step(visibleAgentIds, selectedAgent, delta);
   }
 
-  async function loadTopology() {
-    try {
-      graph = share(graph, await api.topology(graphAll));
+  const topologyLoader = createFlowLoader(() => api.topology(topologyAll),
+    (value) => {
+      graph = share(graph, value);
       if (selectedNode && !graph.nodes.some((n) => n.id === selectedNode)) selectedNode = null;
-    } catch (e) {
-      if (view === "graph") toast("error", "Couldn't build the service graph", String(e));
-    }
+    },
+    (message) => { if (message && topologyWanted) toast("error", "Couldn't build the service graph", message); },
+    () => {});
+  function loadTopology() {
+    return topologyLoader.request();
   }
 
   // Keep the graph selection in step with the list selection.
@@ -689,11 +698,12 @@
   // Primitives, so the effect below re-runs on a new selection or a new scan, not on every
   // poll that hands the selected entry a fresh memory or CPU figure.
   const selPort = $derived(selected?.port ?? null);
-  const selPid = $derived(selected?.pid ?? null);
+  const holderKeys = $derived(portHolderKeys(snapshot?.entries ?? []));
+  const selHolder = $derived(selPort === null ? null : holderKeys.get(selPort) ?? null);
   const selTcp = $derived(selected?.protocol === "tcp");
   $effect(() => {
-    const port = selPort, pid = selPid, tcp = selTcp, gen = scanGen;
-    if (port === null) return;
+    const port = selPort, holder = selHolder, tcp = selTcp, gen = scanGen;
+    if (port === null || holder === null) return;
     const meta = explainMeta.get(port);
     const first = !untrack(() => explanations[port]) && !explainFailed.has(port);
     if (!first && meta?.gen === gen) return;
@@ -701,25 +711,35 @@
     // Debounced so arrowing through the list doesn't fire a request per row.
     const t = setTimeout(async () => {
       const seq = ++explainSeq;
-      explainMeta.set(port, { pid, gen, seq });
-      if (Date.now() - (detailsAt.get(port) ?? -Infinity) > DETAILS_TTL_MS) {
-        detailsAt.set(port, Date.now());
-        api.portDetails(port).then((d) => { if (explainMeta.has(port)) portDetails = withKey(portDetails, port, share(portDetails[port], d)); }, () => detailsAt.delete(port));
+      explainMeta.set(port, { holder, gen, seq });
+      if (Date.now() - (detailsAt.get(port)?.at ?? -Infinity) > DETAILS_TTL_MS) {
+        const stamp = { at: Date.now(), seq };
+        detailsAt.set(port, stamp);
+        api.portDetails(port).then((d) => {
+          if (explainMeta.peek(port)?.holder === holder && detailsAt.peek(port) === stamp) portDetails = withKey(portDetails, port, share(portDetails[port], d));
+        }, () => { if (detailsAt.peek(port) === stamp) detailsAt.delete(port); });
       }
-      if (tcp && Date.now() - (httpAt.get(port) ?? -Infinity) > HTTP_TTL_MS) {
-        httpAt.set(port, Date.now());
-        api.http(port).then((h) => h, () => null).then((h) => { if (explainMeta.has(port)) httpInfo = withKey(httpInfo, port, share(httpInfo[port], h)); });
+      if (tcp && Date.now() - (httpAt.get(port)?.at ?? -Infinity) > HTTP_TTL_MS) {
+        const stamp = { at: Date.now(), seq };
+        httpAt.set(port, stamp);
+        api.http(port).then((h) => h, () => null).then((h) => {
+          if (explainMeta.peek(port)?.holder === holder && httpAt.peek(port) === stamp) httpInfo = withKey(httpInfo, port, share(httpInfo[port], h));
+        });
       }
       try {
         const x = await api.explain(port);
         // Only the newest request for this port may land, and only while it's still wanted.
-        if (explainMeta.get(port)?.seq === seq) explanations = withKey(explanations, port, share(explanations[port], x));
-        explainFailed.delete(port);
+        if (explainMeta.peek(port)?.seq === seq) {
+          explanations = withKey(explanations, port, share(explanations[port], x));
+          explainFailed.delete(port);
+        }
       } catch (err) {
-        if (first) toast("error", "Couldn't explain this port", String(err));
-        explainFailed.add(port);
+        if (explainMeta.peek(port)?.seq === seq) {
+          if (first) toast("error", "Couldn't explain this port", String(err));
+          explainFailed.add(port);
+        }
       } finally {
-        if (explainingPort === port) explainingPort = null;
+        if (explainMeta.peek(port)?.seq === seq && explainingPort === port) explainingPort = null;
       }
     }, first ? 60 : 0);
     return () => clearTimeout(t);
@@ -735,10 +755,11 @@
     const p = queryPort;
     if (p === null || visible.some((e) => e.port === p)) { freePort = null; return; }
     if (freePort?.port === p) return;
+    let active = true;
     const t = setTimeout(async () => {
-      try { freePort = await api.explain(p); } catch (err) { toast("error", `Couldn't check port ${p}`, String(err)); }
+      try { const result = await api.explain(p); if (active) freePort = result; } catch (err) { if (active) toast("error", `Couldn't check port ${p}`, String(err)); }
     }, 120);
-    return () => clearTimeout(t);
+    return () => { active = false; clearTimeout(t); };
   });
 
   function toast(kind: Toast["kind"], text: string, detail?: string, action?: Toast["action"]) {
@@ -765,7 +786,8 @@
     const s = c.plan.steps.find((x) => x.action === "signal_processes");
     if (!s || s.action !== "signal_processes" || !s.processes.length) return null;
     const dir = c.entry?.project?.root ?? c.entry?.process?.cwd;
-    return `${dir ? `cd ${JSON.stringify(dir)} && ` : ""}${s.processes[0].command}`;
+    const args = c.entry?.process?.cmdline;
+    return args?.length ? commandForShell(args, dir, info.platform) : null;
   }
 
   async function runStop() {
@@ -809,7 +831,9 @@
         if (c.restart && c.entry && !queue.length) {
           const port = c.entry.port;
           try {
-            const s = await api.restartStopped(port);
+            const pid = restartRootPid(c.entry, c.plan);
+            if (pid === null) throw new Error("Couldn't identify one recorded process from the reviewed stop plan. Choose a recording in Recently stopped or use the service's normal launcher.");
+            const s = await api.restartStopped(port, c.entry.protocol, pid);
             setTimeout(() => { if (confirm === c) confirm = null; }, 600);
             toast("ok", `Restarted :${port}`, `${s.command} (PID ${s.pid}) · log ${s.log}`);
           } catch (err) {
@@ -915,8 +939,10 @@
     try {
       await navigator.clipboard.writeText(text);
       toast("ok", `${what} copied`, text.length > 90 ? text.slice(0, 90) + "…" : text);
+      return true;
     } catch {
       toast("error", "Clipboard unavailable", "Your system blocked clipboard access.");
+      return false;
     }
   }
 
@@ -1071,7 +1097,7 @@
     }
     refresh();
     loadSchedules();
-    api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, configDir: i.config_dir ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; });
+    api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, configDir: i.config_dir ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; }).catch((e) => toast("error", "Couldn't load app information", String(e)));
     api.hotkeys().then((h) => (hotkeyList = h)).catch(() => {});
     api.getConfig().then((c) => (config = c)).catch(() => {});
     api.autostart().then((v) => (autostartOn = v)).catch(() => {});
@@ -1111,7 +1137,10 @@
         pushed = true;
         if (!filters.all && !refreshing && !confirm) apply(s);
       }),
-    ];
+    ].map((registration) => registration.catch((e) => {
+      if (!disposed) toast("error", "Live updates unavailable", String(e));
+      return () => {};
+    }));
     // Back from another app, Space or a covered window: catch up at once, not on the next tick.
     const onVisible = () => {
       if (document.hidden) {
@@ -1129,6 +1158,13 @@
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     return () => {
+      disposed = true;
+      cancelAnimationFrame(applyRaf);
+      applyRaf = 0;
+      applyQueued = null;
+      topologyLoader.invalidate();
+      flowLoader.invalidate();
+      activityLoader.invalidate();
       clearInterval(clock);
       clearInterval(schedulePoll);
       document.removeEventListener("visibilitychange", onVisible);
@@ -1136,7 +1172,7 @@
       mq.removeEventListener("change", onMq);
       nq.removeEventListener("change", onNq);
       rq.removeEventListener("change", onRq);
-      unlisten.forEach((u) => u.then((f) => f()));
+      unlisten.forEach((u) => u.then((f) => f()).catch((e) => console.warn("Couldn't remove a live listener", e)));
     };
   });
 
@@ -1255,7 +1291,7 @@
     {#if view === "graph"}
       <div class="graph-wrap">
         {#if GraphView}
-          <GraphView {graph} {selectedNode} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; loadTopology(); }} onselect={selectNode} onstopcluster={requestClusterStop} />
+          <GraphView {graph} {selectedNode} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; }} onselect={selectNode} onstopcluster={requestClusterStop} />
         {:else}
           <div class="graph-loading" aria-busy="true">Loading graph…</div>
         {/if}
@@ -1381,7 +1417,7 @@
     onconfirm={runStop} oncancel={closeConfirm} onoverride={() => confirm?.entry && requestStop(confirm.entry, confirm.force, true, { agentId: confirm.agentId, intent: "now" })} />
 {/if}
 {#if showPalette}<CommandPalette {commands} onclose={() => { showPalette = false; }} />{/if}
-{#if showHistory}<HistoryPanel items={historyItems} onrestart={restartEntry} oncopy={copy} onclose={() => (showHistory = false)} onclear={async () => { await api.clearHistory(); historyItems = []; }} />{/if}
+{#if showHistory}<HistoryPanel items={historyItems} platform={info.platform} onrestart={restartEntry} oncopy={copy} onclose={() => (showHistory = false)} onclear={async () => { await api.clearHistory(); historyItems = []; }} />{/if}
 {#if showHelp}<ShortcutsDialog {mod} {singleKeyShortcuts} onclose={() => (showHelp = false)} />{/if}
 {#if showSettings && settingsModel}<SettingsDialog model={settingsModel} actions={settingsActions} bind:section={settingsSection} onclose={() => (showSettings = false)} />{/if}
 {#if showShutdown}<ShutdownDialog intent={shutdownIntent} preview={shutdownPreview} loading={shutdownLoading} busy={shutdownBusy} requested={shutdownRequested} error={shutdownError} demo={!api.isTauri} onconfirm={confirmShutdown} onclose={closeShutdown} onretry={() => openShutdown(shutdownIntent)} onschedule={scheduleShutdown} scheduled={shutdownScheduled} onviewschedules={openSchedules} />{/if}

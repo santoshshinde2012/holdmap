@@ -5,9 +5,45 @@
 
 use crate::history::HistoryEntry;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::fs;
-use std::io::{self, BufRead, Read, Write};
+use std::io::{self, BufRead, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+
+const MAX_CONFIG_BYTES: usize = 1024 * 1024;
+const MAX_HISTORY_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_HISTORY_ENTRY_BYTES: usize = 1024 * 1024;
+
+// Hold the process lock as well as the file lock: separate Store instances and
+// concurrent frontends must not lose each other's read/change/write transactions.
+static TRANSACTIONS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+struct Transaction {
+    _local: std::sync::MutexGuard<'static, ()>,
+    _file: fs::File,
+}
+
+struct BoundedBuffer {
+    bytes: Vec<u8>,
+    limit: usize,
+}
+
+impl Write for BoundedBuffer {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if bytes.len() > self.limit.saturating_sub(self.bytes.len()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "serialized state exceeds its size limit",
+            ));
+        }
+        self.bytes.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
 
 /// A pinned ("favourite") port, shown first and watched even while it's free.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -199,7 +235,12 @@ impl Store {
             .ok()
             .and_then(|f| {
                 let mut text = String::new();
-                f.take(1024 * 1024).read_to_string(&mut text).ok()?;
+                f.take(MAX_CONFIG_BYTES as u64 + 1)
+                    .read_to_string(&mut text)
+                    .ok()?;
+                if text.len() > MAX_CONFIG_BYTES {
+                    return None;
+                }
                 serde_json::from_str(&text).ok()
             })
             .unwrap_or_default()
@@ -207,16 +248,102 @@ impl Store {
 
     /// Write `config.json` atomically.
     pub fn save_config(&self, c: &Config) -> io::Result<()> {
-        let text = serde_json::to_string_pretty(c).map_err(io::Error::other)?;
-        self.write_atomic(&self.config_path(), text.as_bytes())
+        let _transaction = self.transaction()?;
+        self.save_config_unlocked(c)
+    }
+
+    fn save_config_unlocked(&self, c: &Config) -> io::Result<()> {
+        let mut text = BoundedBuffer {
+            bytes: Vec::new(),
+            limit: MAX_CONFIG_BYTES,
+        };
+        serde_json::to_writer_pretty(&mut text, c)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        self.write_atomic(&self.config_path(), &text.bytes)
     }
 
     /// Load, change and save the config.
     pub fn update_config<R>(&self, f: impl FnOnce(&mut Config) -> R) -> io::Result<(Config, R)> {
+        let _transaction = self.transaction()?;
         let mut c = self.config();
         let r = f(&mut c);
-        self.save_config(&c)?;
+        self.save_config_unlocked(&c)?;
         Ok((c, r))
+    }
+
+    fn transaction(&self) -> io::Result<Transaction> {
+        let local = TRANSACTIONS.lock().unwrap_or_else(|e| e.into_inner());
+        crate::util::create_private_dir(&self.dir)?;
+        #[cfg(unix)]
+        let file = {
+            use std::os::fd::{AsRawFd, FromRawFd};
+            use std::os::unix::fs::MetadataExt;
+            let dir = self.open_dir()?;
+            // SAFETY: the directory is held open and the fixed filename is valid. Never
+            // follow a pre-existing link, or inherit the lock descriptor into children.
+            let fd = unsafe {
+                libc::openat(
+                    dir.as_raw_fd(),
+                    c"state.lock".as_ptr(),
+                    libc::O_RDWR
+                        | libc::O_CREAT
+                        | libc::O_NOFOLLOW
+                        | libc::O_CLOEXEC
+                        | libc::O_NONBLOCK,
+                    0o600,
+                )
+            };
+            if fd < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            // SAFETY: openat returned a new owned descriptor.
+            let file = unsafe { fs::File::from_raw_fd(fd) };
+            crate::util::check_owned_file(&file)?;
+            if file.metadata()?.mode() & 0o022 != 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "state lock must not be writable by other accounts",
+                ));
+            }
+            file
+        };
+        #[cfg(not(unix))]
+        let file = {
+            self.check_dir()?;
+            let mut options = fs::OpenOptions::new();
+            options.read(true).write(true).create(true).truncate(false);
+            #[cfg(windows)]
+            {
+                use std::os::windows::fs::OpenOptionsExt;
+                options.custom_flags(
+                    windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT,
+                );
+            }
+            let file = options.open(self.dir.join("state.lock"))?;
+            #[cfg(windows)]
+            crate::util::check_windows_private_file(&file)?;
+            file
+        };
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            match file.try_lock() {
+                Ok(()) => break,
+                Err(fs::TryLockError::WouldBlock) if std::time::Instant::now() < deadline => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(fs::TryLockError::WouldBlock) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "another holdmap process is updating state",
+                    ));
+                }
+                Err(fs::TryLockError::Error(error)) => return Err(error),
+            }
+        }
+        Ok(Transaction {
+            _local: local,
+            _file: file,
+        })
     }
 
     fn write_atomic(&self, path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -275,6 +402,7 @@ impl Store {
                 {
                     return Err(io::Error::last_os_error());
                 }
+                dir.sync_all()?;
                 Ok(())
             })();
             if result.is_err() {
@@ -314,32 +442,85 @@ impl Store {
         if entries.is_empty() {
             return Ok(());
         }
+        let _transaction = self.transaction()?;
+        let limit = self
+            .config()
+            .history_limit
+            .clamp(1, *Config::HISTORY_LIMIT.end());
         let mut all = self.history(usize::MAX);
         all.reverse(); // oldest first
-        all.extend(entries.iter().cloned());
-        let limit = self.config().history_limit.max(1);
-        let skip = all.len().saturating_sub(limit);
-        let mut out = Vec::new();
-        for e in &all[skip..] {
-            serde_json::to_writer(&mut out, e).map_err(io::Error::other)?;
-            out.push(b'\n');
+        let incoming = &entries[entries.len().saturating_sub(limit)..];
+        let skip = all
+            .len()
+            .saturating_add(incoming.len())
+            .saturating_sub(limit);
+        let mut lines = VecDeque::new();
+        let mut total = 0;
+        for e in all.iter().chain(incoming).skip(skip) {
+            let mut line = BoundedBuffer {
+                bytes: Vec::new(),
+                limit: MAX_HISTORY_ENTRY_BYTES - 1,
+            };
+            serde_json::to_writer(&mut line, e).map_err(io::Error::other)?;
+            line.bytes.push(b'\n');
+            while total + line.bytes.len() > MAX_HISTORY_BYTES as usize {
+                total -= lines.pop_front().map_or(0, |line: Vec<u8>| line.len());
+            }
+            total += line.bytes.len();
+            lines.push_back(line.bytes);
+        }
+        let mut out = Vec::with_capacity(total);
+        for line in lines {
+            out.extend_from_slice(&line);
         }
         self.write_atomic(&self.history_path(), &out)
     }
 
     /// Most recent first.
     pub fn history(&self, limit: usize) -> Vec<HistoryEntry> {
-        let Ok(f) = self.read_file("history.jsonl") else {
+        let limit = limit.min(*Config::HISTORY_LIMIT.end());
+        if limit == 0 {
+            return Vec::new();
+        }
+        let Ok(mut f) = self.read_file("history.jsonl") else {
             return Vec::new();
         };
-        let mut v: Vec<HistoryEntry> = io::BufReader::new(f)
-            .lines()
-            .map_while(Result::ok)
-            .filter_map(|l| serde_json::from_str(&l).ok())
-            .collect();
-        v.reverse();
-        v.truncate(limit);
-        v
+        let start = f
+            .metadata()
+            .map_or(0, |m| m.len().saturating_sub(MAX_HISTORY_BYTES));
+        if f.seek(SeekFrom::Start(start)).is_err() {
+            return Vec::new();
+        }
+        let mut reader = io::BufReader::new(f.take(MAX_HISTORY_BYTES));
+        if start > 0 && reader.skip_until(b'\n').is_err() {
+            return Vec::new();
+        }
+        let mut entries = VecDeque::with_capacity(limit);
+        let mut line = Vec::new();
+        loop {
+            line.clear();
+            match reader
+                .by_ref()
+                .take(MAX_HISTORY_ENTRY_BYTES as u64 + 1)
+                .read_until(b'\n', &mut line)
+            {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {}
+            }
+            if line.len() > MAX_HISTORY_ENTRY_BYTES {
+                if line.last() != Some(&b'\n') && reader.skip_until(b'\n').is_err() {
+                    break;
+                }
+                continue;
+            }
+            if let Ok(entry) = serde_json::from_slice(&line) {
+                if entries.len() == limit {
+                    entries.pop_front();
+                }
+                entries.push_back(entry);
+            }
+        }
+        entries.into_iter().rev().collect()
     }
 
     #[cfg(unix)]
@@ -431,13 +612,56 @@ impl Store {
     /// The history entry stopped at `at_ms` on `port` (how a frontend names one to restart,
     /// so the command that runs always comes from this file, never from the caller).
     pub fn entry(&self, at_ms: u64, port: u16) -> Option<HistoryEntry> {
-        self.history(usize::MAX)
+        self.entry_matching(at_ms, port, None, None).ok().flatten()
+    }
+
+    /// Resolve a caller's history identity without accepting executable data from it.
+    /// Old callers may omit protocol/PID, but ambiguous recordings always fail closed.
+    pub fn entry_matching(
+        &self,
+        at_ms: u64,
+        port: u16,
+        protocol: Option<crate::model::Protocol>,
+        pid: Option<u32>,
+    ) -> io::Result<Option<HistoryEntry>> {
+        let mut matches = self
+            .history(usize::MAX)
             .into_iter()
-            .find(|e| e.at_ms == at_ms && e.port == port)
+            .filter(|entry| entry.at_ms == at_ms && history_matches(entry, port, protocol, pid));
+        let first = matches.next();
+        if matches.next().is_some() {
+            return Err(ambiguous_history());
+        }
+        Ok(first)
+    }
+
+    /// The newest recording for this owner/protocol; equal-time duplicates are ambiguous.
+    pub fn last_matching(
+        &self,
+        port: u16,
+        protocol: Option<crate::model::Protocol>,
+        pid: Option<u32>,
+    ) -> io::Result<Option<HistoryEntry>> {
+        let mut matches = self
+            .history(usize::MAX)
+            .into_iter()
+            .filter(|entry| history_matches(entry, port, protocol, pid));
+        let first = matches.next();
+        if first
+            .as_ref()
+            .is_some_and(|first| matches.any(|next| next.at_ms == first.at_ms))
+        {
+            return Err(ambiguous_history());
+        }
+        Ok(first)
     }
 
     /// Forget the stop history.
     pub fn clear_history(&self) -> io::Result<()> {
+        if !self.dir.exists() {
+            return Ok(());
+        }
+        let _transaction = self.transaction()?;
         let result = (|| {
             #[cfg(unix)]
             {
@@ -462,6 +686,24 @@ impl Store {
     }
 }
 
+fn history_matches(
+    entry: &HistoryEntry,
+    port: u16,
+    protocol: Option<crate::model::Protocol>,
+    pid: Option<u32>,
+) -> bool {
+    entry.port == port
+        && protocol.is_none_or(|protocol| entry.protocol == protocol)
+        && pid.is_none_or(|pid| entry.pid == pid)
+}
+
+fn ambiguous_history() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidInput,
+        "ambiguous stopped service recording; start it using its normal launcher",
+    )
+}
+
 fn next_temp_id() -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -483,6 +725,9 @@ mod tests {
             project: None,
             framework: None,
             pid: 1,
+            windows_restart: None,
+            restartable: None,
+            copyable: None,
         }
     }
 
@@ -578,6 +823,66 @@ mod tests {
     }
 
     #[test]
+    fn oversized_config_saves_and_updates_preserve_existing_settings() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::new(tmp.path());
+        let mut original = Config {
+            notify: false,
+            ..Default::default()
+        };
+        original.set_pin(3000, Some("web".into()));
+        store.save_config(&original).unwrap();
+        let prior_bytes = fs::read(store.config_path()).unwrap();
+        let mut oversized = original.clone();
+        oversized.set_pin(4000, Some("x".repeat(MAX_CONFIG_BYTES)));
+        assert_eq!(
+            store.save_config(&oversized).unwrap_err().kind(),
+            io::ErrorKind::InvalidData
+        );
+        assert_eq!(fs::read(store.config_path()).unwrap(), prior_bytes);
+        assert_eq!(store.config(), original);
+        assert_eq!(
+            store
+                .update_config(|config| {
+                    config.toggle_pin(4000, Some("x".repeat(MAX_CONFIG_BYTES)));
+                })
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidData
+        );
+        assert_eq!(fs::read(store.config_path()).unwrap(), prior_bytes);
+        assert_eq!(store.config(), original);
+    }
+
+    #[test]
+    fn config_size_cap_accepts_exact_boundary_and_rejects_oversized_valid_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::new(tmp.path());
+        let mut config = Config {
+            notify: false,
+            ..Default::default()
+        };
+        config.set_pin(3000, Some("x".into()));
+        let overhead = serde_json::to_vec_pretty(&config).unwrap().len() - 1;
+        config.pins[0].label = Some("x".repeat(MAX_CONFIG_BYTES - overhead));
+        store.save_config(&config).unwrap();
+        assert_eq!(
+            fs::metadata(store.config_path()).unwrap().len(),
+            MAX_CONFIG_BYTES as u64
+        );
+        assert_eq!(store.config(), config);
+        // This remains valid JSON, but a reader must check the byte beyond the cap rather
+        // than silently accepting a complete JSON prefix from an oversized file.
+        fs::OpenOptions::new()
+            .append(true)
+            .open(store.config_path())
+            .unwrap()
+            .write_all(b" ")
+            .unwrap();
+        assert_eq!(store.config(), Config::default());
+    }
+
+    #[test]
     fn history_is_private_and_keeps_the_real_command() {
         let tmp = tempfile::tempdir().unwrap();
         let s = Store::new(tmp.path().join("hm"));
@@ -621,6 +926,223 @@ mod tests {
         s.clear_history().unwrap();
         assert!(s.history(10).is_empty());
         s.clear_history().unwrap();
+    }
+
+    #[test]
+    fn history_lookup_binds_protocol_and_owner_and_rejects_ambiguous_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::new(dir.path());
+        let tcp = h(3000, 100);
+        let udp = HistoryEntry {
+            protocol: Protocol::Udp,
+            pid: 2,
+            command: vec!["udp-owner".into()],
+            ..tcp.clone()
+        };
+        store.record(&[tcp.clone(), udp.clone()]).unwrap();
+        assert!(store.entry(100, 3000).is_none());
+        assert_eq!(
+            store
+                .entry_matching(100, 3000, None, None)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert_eq!(
+            store
+                .entry_matching(100, 3000, Some(Protocol::Tcp), Some(1))
+                .unwrap(),
+            Some(tcp.clone())
+        );
+        assert_eq!(
+            store
+                .entry_matching(100, 3000, Some(Protocol::Udp), Some(2))
+                .unwrap(),
+            Some(udp)
+        );
+        assert!(store
+            .entry_matching(100, 3000, Some(Protocol::Udp), Some(1))
+            .unwrap()
+            .is_none());
+        assert!(store.last_matching(3000, None, None).is_err());
+        let newer_udp = HistoryEntry {
+            at_ms: 200,
+            protocol: Protocol::Udp,
+            pid: 3,
+            ..tcp.clone()
+        };
+        store.record(std::slice::from_ref(&newer_udp)).unwrap();
+        assert_eq!(
+            store
+                .last_matching(3000, Some(Protocol::Tcp), None)
+                .unwrap(),
+            Some(tcp.clone())
+        );
+        assert_eq!(
+            store.last_matching(3000, None, None).unwrap(),
+            Some(newer_udp)
+        );
+        // Even the complete identity cannot disambiguate duplicate persisted records.
+        // File order is authoritative even when the clock moves backwards; an intervening
+        // timestamp must not hide another record carrying the same identity.
+        store.record(&[h(3000, 90), tcp]).unwrap();
+        assert!(store
+            .entry_matching(100, 3000, Some(Protocol::Tcp), Some(1))
+            .is_err());
+        assert!(store
+            .last_matching(3000, Some(Protocol::Tcp), Some(1))
+            .is_err());
+    }
+
+    #[test]
+    fn newest_matching_history_keeps_nonrestartable_record_without_older_fallback() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::new(dir.path());
+        let older = h(3000, 100);
+        let latest = HistoryEntry {
+            at_ms: 200,
+            command: vec![],
+            ..older.clone()
+        };
+        store.record(&[older, latest.clone()]).unwrap();
+        assert_eq!(
+            store
+                .last_matching(3000, Some(Protocol::Tcp), None)
+                .unwrap(),
+            Some(latest.clone())
+        );
+        assert!(!latest.restartable());
+    }
+
+    #[test]
+    fn oversized_history_lines_are_skipped_and_recent_valid_entries_survive() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::new(tmp.path());
+        store.record(&[h(3000, 1)]).unwrap();
+        let mut file = fs::OpenOptions::new()
+            .append(true)
+            .open(store.history_path())
+            .unwrap();
+        file.write_all(&vec![b'x'; MAX_HISTORY_ENTRY_BYTES + 1])
+            .unwrap();
+        file.write_all(b"\n").unwrap();
+        serde_json::to_writer(&mut file, &h(3001, 2)).unwrap();
+        file.write_all(b"\n").unwrap();
+        assert_eq!(
+            store
+                .history(10)
+                .iter()
+                .map(|e| e.at_ms)
+                .collect::<Vec<_>>(),
+            [2, 1]
+        );
+        assert!(store.history(0).is_empty());
+        let too_large = HistoryEntry {
+            command: vec!["x".repeat(MAX_HISTORY_ENTRY_BYTES)],
+            ..h(3002, 3)
+        };
+        assert!(store.record(&[too_large]).is_err());
+        assert_eq!(
+            store
+                .history(10)
+                .iter()
+                .map(|e| e.at_ms)
+                .collect::<Vec<_>>(),
+            [2, 1]
+        );
+    }
+
+    #[test]
+    fn oversized_history_files_keep_the_newest_complete_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::new(tmp.path());
+        store.record(&[h(3000, 1)]).unwrap();
+        let mut file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(store.history_path())
+            .unwrap();
+        file.seek(SeekFrom::End(0)).unwrap();
+        // A sparse oversized line avoids allocating the entire file in the test.
+        file.set_len(MAX_HISTORY_BYTES + 100).unwrap();
+        file.seek(SeekFrom::End(0)).unwrap();
+        file.write_all(b"\n").unwrap();
+        serde_json::to_writer(&mut file, &h(3001, 2)).unwrap();
+        file.write_all(b"\n").unwrap();
+        assert_eq!(
+            store
+                .history(10)
+                .iter()
+                .map(|e| e.at_ms)
+                .collect::<Vec<_>>(),
+            [2]
+        );
+    }
+
+    #[test]
+    fn history_limit_cannot_disable_the_retention_bound() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::new(tmp.path());
+        store
+            .update_config(|c| c.history_limit = usize::MAX)
+            .unwrap();
+        let entries: Vec<_> = (0..=*Config::HISTORY_LIMIT.end())
+            .map(|i| h(3000, i as u64))
+            .collect();
+        store.record(&entries).unwrap();
+        let history = store.history(usize::MAX);
+        assert_eq!(history.len(), *Config::HISTORY_LIMIT.end());
+        assert_eq!(history.first().unwrap().at_ms, 5000);
+        assert_eq!(history.last().unwrap().at_ms, 1);
+    }
+
+    #[test]
+    fn concurrent_store_instances_preserve_config_and_history_updates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::new(tmp.path());
+        std::thread::scope(|scope| {
+            let workers: Vec<_> = (0..24)
+                .map(|i| {
+                    let store = store.clone();
+                    scope.spawn(move || {
+                        store.update_config(|c| c.set_pin(3000 + i, None)).unwrap();
+                        store.record(&[h(3000 + i, u64::from(i))]).unwrap();
+                    })
+                })
+                .collect();
+            for worker in workers {
+                worker.join().unwrap();
+            }
+        });
+        assert_eq!(store.config().pins.len(), 24);
+        assert_eq!(store.history(usize::MAX).len(), 24);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn state_transactions_honor_an_existing_advisory_lock() {
+        use std::os::fd::AsRawFd;
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::new(tmp.path());
+        let file = crate::util::create_private(&tmp.path().join("state.lock")).unwrap();
+        // SAFETY: file owns the descriptor for the entire test.
+        assert_eq!(unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) }, 0);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            sender
+                .send(store.update_config(|c| c.set_pin(3000, None)))
+                .unwrap();
+        });
+        assert!(receiver
+            .recv_timeout(std::time::Duration::from_millis(40))
+            .is_err());
+        // SAFETY: release only the lock this test took on the same live descriptor.
+        assert_eq!(unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_UN) }, 0);
+        assert!(receiver
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap()
+            .is_ok());
+        worker.join().unwrap();
     }
 
     #[test]

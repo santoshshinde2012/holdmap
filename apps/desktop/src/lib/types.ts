@@ -274,6 +274,10 @@ export interface HistoryEntry {
   project: string | null;
   framework: string | null;
   pid: number;
+  /** Backend availability; older ordinary argv records omit these flags. */
+  restartable?: boolean;
+  /** False when private native syntax cannot be reproduced from redacted display argv. */
+  copyable?: boolean;
 }
 
 export type PortEvent =

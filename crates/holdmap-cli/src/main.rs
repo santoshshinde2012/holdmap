@@ -6,6 +6,7 @@ mod agent_flow;
 mod agents;
 mod commands;
 mod graph;
+mod project_policy;
 mod remote;
 mod render;
 mod shell;
@@ -260,7 +261,7 @@ pub struct StopArgs {
     /// Grace period before escalating to SIGKILL.
     #[arg(short, long, default_value = "5s", value_parser = humantime::parse_duration)]
     pub timeout: Duration,
-    /// Also allow stopping protected processes (system services, editors, terminals).
+    /// Also allow stopping soft-protected processes and project `protect` ports.
     #[arg(long)]
     pub allow_protected: bool,
     /// Only stop the socket holder, not its dev-server tree.
@@ -496,7 +497,15 @@ fn main() -> ExitCode {
                     holdmap_core::util::printable(&cause.to_string())
                 );
             }
-            ExitCode::from(exit::ERROR)
+            ExitCode::from(
+                if e.downcast_ref::<project_policy::ProtectionRefusal>()
+                    .is_some()
+                {
+                    exit::BLOCKED
+                } else {
+                    exit::ERROR
+                },
+            )
         }
     }
 }

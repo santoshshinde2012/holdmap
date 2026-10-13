@@ -1,6 +1,6 @@
 import type { ActivitySnapshot, AgentFlowReport, RecordingCredentials, RecordingStatus } from "./agent-flow/model";
 import { demoActivity, demoAgentFlow, demoRecordingStatus, startDemoRecording, stopDemoRecording, clearDemoActivity } from "./activity-demo";
-import type { ActionPlan, AgentsReport, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
+import type { ActionPlan, AgentsReport, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Protocol, Snapshot, StopReport } from "./types";
 import { version as pkgVersion } from "../../package.json";
 import type { ShutdownPreview } from "./power";
 import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
@@ -206,9 +206,9 @@ export async function openAgentFolder(agentId: string, path: string): Promise<st
 }
 
 /** Start again what holdmap just stopped on `port` (the second half of "Restart"). */
-export async function restartStopped(port: number): Promise<{ pid: number; command: string; log: string }> {
+export async function restartStopped(port: number, protocol: Protocol, pid: number): Promise<{ pid: number; command: string; log: string }> {
   if (!isTauri) return { pid: 4243, command: "npm run dev", log: "/tmp/holdmap.log" };
-  return call("restart_stopped", { port });
+  return call("restart_stopped", { port, protocol, pid });
 }
 
 /** Download, verify and install the update the backend announced, then restart. */
@@ -316,8 +316,8 @@ export async function clearHistory(): Promise<void> {
 
 export async function restart(entry: HistoryEntry): Promise<{ pid: number; command: string; log: string }> {
   if (!isTauri) return { pid: 4242, command: entry.command.join(" "), log: "/tmp/holdmap.log" };
-  // Name the entry only: the backend reads the command from its own history file.
-  return call("restart", { atMs: entry.at_ms, port: entry.port });
+  // Name the exact recording only: executable syntax stays in the backend's history file.
+  return call("restart", { atMs: entry.at_ms, port: entry.port, protocol: entry.protocol, pid: entry.pid });
 }
 
 /** Query (enable = undefined) or change launch at login. */
@@ -377,8 +377,10 @@ export async function remoteScan(host: string): Promise<Snapshot> {
 
 /** Browser demo only: a plausible, gently moving CPU figure per process so sparklines have a shape. */
 /** The mock ports; `?mockPorts=N` pads the list to N for scrolling and polling load tests. */
+export const MAX_MOCK_PORTS = 1_000;
 function mockEntries(): PortEntry[] {
-  const want = Number(new URLSearchParams(globalThis.location?.search ?? "").get("mockPorts")) || 0;
+  const requested = Number(new URLSearchParams(globalThis.location?.search ?? "").get("mockPorts"));
+  const want = Number.isFinite(requested) ? Math.min(MAX_MOCK_PORTS, Math.max(0, Math.floor(requested))) : 0;
   const out = [...MOCK_SNAPSHOT.entries];
   const tmpl = MOCK_SNAPSHOT.entries.filter((e) => e.process);
   for (let i = 0; out.length < want; i++) {
