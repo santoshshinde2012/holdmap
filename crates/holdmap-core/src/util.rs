@@ -822,15 +822,30 @@ mod windows_shell_tests {
             std::fs::write(directory.join("console-verified"), "verified").unwrap();
             return;
         }
-        struct RestoreError(HANDLE);
+        struct RestoreError(HANDLE, u32);
         impl Drop for RestoreError {
             fn drop(&mut self) {
                 // SAFETY: restoring the still-live original standard error handle.
-                unsafe { SetStdHandle(STD_ERROR_HANDLE, self.0) };
+                unsafe {
+                    SetHandleInformation(self.0, HANDLE_FLAG_INHERIT, self.1);
+                    SetStdHandle(STD_ERROR_HANDLE, self.0);
+                }
             }
         }
         // Exercise the shared stdout/stderr handle case inside this isolated helper only.
-        let _error = RestoreError(unsafe { GetStdHandle(STD_ERROR_HANDLE) });
+        let original_error = unsafe { GetStdHandle(STD_ERROR_HANDLE) };
+        let mut original_flags = 0;
+        assert_ne!(
+            unsafe { GetHandleInformation(original_error, &mut original_flags) },
+            0
+        );
+        let _error = RestoreError(original_error, original_flags);
+        // Replacing a standard handle does not close it. This saved, now nonstandard
+        // pipe must not be inheritable: a real shared-stream launcher has no such pipe.
+        assert_ne!(
+            unsafe { SetHandleInformation(original_error, HANDLE_FLAG_INHERIT, 0) },
+            0
+        );
         assert_ne!(
             unsafe { SetStdHandle(STD_ERROR_HANDLE, GetStdHandle(STD_OUTPUT_HANDLE)) },
             0
@@ -966,7 +981,13 @@ mod windows_shell_tests {
                     "negative control must retain output pipes"
                 );
             } else {
-                let output = output.expect("launcher pipes must close before service exit");
+                let output = output.unwrap_or_else(|| {
+                    panic!(
+                        "launcher pipes must close before service exit; mode={mode}; ready={:?}; log={:?}",
+                        detached_ready(&working),
+                        std::fs::read_to_string(working.join("service.log"))
+                    )
+                });
                 assert!(output.success, "{output:?}");
                 if mode == "console" {
                     assert!(working.join("console-verified").exists());
