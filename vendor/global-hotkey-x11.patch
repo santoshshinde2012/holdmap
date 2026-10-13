@@ -1,0 +1,227 @@
+--- a/src/platform_impl/x11/mod.rs
++++ b/src/platform_impl/x11/mod.rs
+@@ -40,56 +40,38 @@
+     }
+ 
+     pub fn register(&self, hotkey: HotKey) -> crate::Result<()> {
++        self.request(|tx| ThreadMessage::RegisterHotKey(hotkey, tx))
++    }
++
++    pub fn unregister(&self, hotkey: HotKey) -> crate::Result<()> {
++        self.request(|tx| ThreadMessage::UnRegisterHotKey(hotkey, tx))
++    }
++
++    pub fn register_all(&self, hotkeys: &[HotKey]) -> crate::Result<()> {
++        self.request(|tx| ThreadMessage::RegisterHotKeys(hotkeys.to_vec(), tx))
++    }
++
++    pub fn unregister_all(&self, hotkeys: &[HotKey]) -> crate::Result<()> {
++        self.request(|tx| ThreadMessage::UnRegisterHotKeys(hotkeys.to_vec(), tx))
++    }
++
++    fn request(
++        &self,
++        message: impl FnOnce(Sender<crate::Result<()>>) -> ThreadMessage,
++    ) -> crate::Result<()> {
+         let (tx, rx) = crossbeam_channel::bounded(1);
+-        let _ = self
+-            .thread_tx
+-            .send(ThreadMessage::RegisterHotKey(hotkey, tx));
+-
+-        if let Ok(result) = rx.recv() {
+-            result?;
+-        }
+-
+-        Ok(())
+-    }
+-
+-    pub fn unregister(&self, hotkey: HotKey) -> crate::Result<()> {
+-        let (tx, rx) = crossbeam_channel::bounded(1);
+-        let _ = self
+-            .thread_tx
+-            .send(ThreadMessage::UnRegisterHotKey(hotkey, tx));
+-
+-        if let Ok(result) = rx.recv() {
+-            result?;
+-        }
+-
+-        Ok(())
+-    }
+-
+-    pub fn register_all(&self, hotkeys: &[HotKey]) -> crate::Result<()> {
+-        let (tx, rx) = crossbeam_channel::bounded(1);
+-        let _ = self
+-            .thread_tx
+-            .send(ThreadMessage::RegisterHotKeys(hotkeys.to_vec(), tx));
+-
+-        if let Ok(result) = rx.recv() {
+-            result?;
+-        }
+-
+-        Ok(())
+-    }
+-
+-    pub fn unregister_all(&self, hotkeys: &[HotKey]) -> crate::Result<()> {
+-        let (tx, rx) = crossbeam_channel::bounded(1);
+-        let _ = self
+-            .thread_tx
+-            .send(ThreadMessage::UnRegisterHotKeys(hotkeys.to_vec(), tx));
+-
+-        if let Ok(result) = rx.recv() {
+-            result?;
+-        }
+-
+-        Ok(())
+-    }
++        self.thread_tx
++            .send(message(tx))
++            .map_err(|_| worker_unavailable())?;
++        rx.recv().map_err(|_| worker_unavailable())?
++    }
++}
++
++fn worker_unavailable() -> Error {
++    Error::OsError(std::io::Error::new(
++        std::io::ErrorKind::BrokenPipe,
++        "X11 hotkey worker is unavailable",
++    ))
+ }
+ 
+ impl Drop for GlobalHotKeyManager {
+@@ -156,9 +138,10 @@
+                 ReplyError::X11Error(err) => {
+                     if let ErrorKind::Access = err.error_kind {
+                         for m in ignored_mods() {
+-                            if let Ok(result) = conn.ungrab_key(keycode, root, mods | m) {
+-                                result.ignore_error();
+-                            }
++                            conn.ungrab_key(keycode, root, mods | m)
++                                .map_err(|err| Error::FailedToRegister(err.to_string()))?
++                                .check()
++                                .map_err(|err| Error::FailedToRegister(err.to_string()))?;
+                         }
+ 
+                         Err(Error::AlreadyRegistered(hotkey))
+@@ -208,9 +191,10 @@
+     };
+ 
+     for m in ignored_mods() {
+-        if let Ok(result) = conn.ungrab_key(keycode, root, modifiers | m) {
+-            result.ignore_error();
+-        }
++        conn.ungrab_key(keycode, root, modifiers | m)
++            .map_err(|_| Error::FailedToUnRegister(hotkey))?
++            .check()
++            .map_err(|_| Error::FailedToUnRegister(hotkey))?;
+     }
+ 
+     let entry = hotkeys.entry(keycode).or_default();
+@@ -299,23 +283,19 @@
+                     let _ = tx.send(register_hotkey(&conn, root, &mut hotkeys, hotkey));
+                 }
+                 ThreadMessage::RegisterHotKeys(keys, tx) => {
+-                    for hotkey in keys {
+-                        if let Err(e) = register_hotkey(&conn, root, &mut hotkeys, hotkey) {
+-                            let _ = tx.send(Err(e));
+-                        }
+-                    }
+-                    let _ = tx.send(Ok(()));
++                    let result = keys
++                        .into_iter()
++                        .try_for_each(|hotkey| register_hotkey(&conn, root, &mut hotkeys, hotkey));
++                    let _ = tx.send(result);
+                 }
+                 ThreadMessage::UnRegisterHotKey(hotkey, tx) => {
+                     let _ = tx.send(unregister_hotkey(&conn, root, &mut hotkeys, hotkey));
+                 }
+                 ThreadMessage::UnRegisterHotKeys(keys, tx) => {
+-                    for hotkey in keys {
+-                        if let Err(e) = unregister_hotkey(&conn, root, &mut hotkeys, hotkey) {
+-                            let _ = tx.send(Err(e));
+-                        }
+-                    }
+-                    let _ = tx.send(Ok(()));
++                    let result = keys.into_iter().try_for_each(|hotkey| {
++                        unregister_hotkey(&conn, root, &mut hotkeys, hotkey)
++                    });
++                    let _ = tx.send(result);
+                 }
+                 ThreadMessage::DropThread => {
+                     return Ok(());
+@@ -486,3 +466,76 @@
+ 
+     Ok(None)
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn call(manager: &GlobalHotKeyManager, operation: usize) -> crate::Result<()> {
++        let hotkey = HotKey::new(Some(Modifiers::ALT), Code::KeyK);
++        match operation {
++            0 => manager.register(hotkey),
++            1 => manager.unregister(hotkey),
++            2 => manager.register_all(&[hotkey]),
++            3 => manager.unregister_all(&[hotkey]),
++            _ => unreachable!(),
++        }
++    }
++
++    fn reply(message: ThreadMessage) -> Sender<crate::Result<()>> {
++        match message {
++            ThreadMessage::RegisterHotKey(_, tx)
++            | ThreadMessage::UnRegisterHotKey(_, tx)
++            | ThreadMessage::RegisterHotKeys(_, tx)
++            | ThreadMessage::UnRegisterHotKeys(_, tx) => tx,
++            ThreadMessage::DropThread => panic!("expected an operation"),
++        }
++    }
++
++    fn assert_unavailable(result: crate::Result<()>) {
++        assert!(matches!(
++            result,
++            Err(Error::OsError(error)) if error.kind() == std::io::ErrorKind::BrokenPipe
++        ));
++    }
++
++    #[test]
++    fn every_operation_rejects_a_closed_request_channel() {
++        let (thread_tx, thread_rx) = unbounded();
++        drop(thread_rx);
++        let manager = GlobalHotKeyManager { thread_tx };
++        for operation in 0..4 {
++            assert_unavailable(call(&manager, operation));
++        }
++    }
++
++    #[test]
++    fn every_operation_rejects_a_dropped_acknowledgment() {
++        for operation in 0..4 {
++            let (thread_tx, thread_rx) = unbounded();
++            let manager = GlobalHotKeyManager { thread_tx };
++            let worker = std::thread::spawn(move || {
++                drop(reply(thread_rx.recv().expect("request")));
++            });
++            assert_unavailable(call(&manager, operation));
++            worker.join().expect("owned worker");
++        }
++    }
++
++    #[test]
++    fn every_operation_preserves_the_worker_error() {
++        for operation in 0..4 {
++            let (thread_tx, thread_rx) = unbounded();
++            let manager = GlobalHotKeyManager { thread_tx };
++            let worker = std::thread::spawn(move || {
++                reply(thread_rx.recv().expect("request"))
++                    .send(Err(Error::FailedToRegister("owned fixture error".into())))
++                    .expect("acknowledgment");
++            });
++            assert!(
++                matches!(call(&manager, operation), Err(Error::FailedToRegister(error)) if error == "owned fixture error")
++            );
++            worker.join().expect("owned worker");
++        }
++    }
++}

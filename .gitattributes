@@ -1,2 +1,9 @@
 # Preserve the exact audited upstream bytes on every platform, including its license EOF.
 vendor/glib/** -text whitespace=-blank-at-eof
+vendor/global-hotkey/** -text whitespace=-blank-at-eof
+# Preserve whitespace in one upstream workflow and mandatory blank diff context lines.
+vendor/global-hotkey/.github/workflows/covector-version-or-publish.yml whitespace=-blank-at-eof,-blank-at-eol
+# Provenance and reviewed diffs are hashed independently of the source snapshots.
+vendor/glib-provenance.json -text
+vendor/global-hotkey-provenance.json -text
+vendor/global-hotkey-x11.patch -text whitespace=-blank-at-eol

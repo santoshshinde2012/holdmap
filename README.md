@@ -38,6 +38,10 @@ folder actions, terminal agent navigation and the routed H identity.
 See the [0.5.0 changes](CHANGELOG.md#050---2026-10-11). Desktop screenshots use the shared
 browser UI with sample data.
 
+Version **0.5.1** hardens project protections, command replay and credential redaction,
+and fixes desktop error handling and graph responsiveness. Use **0.5.1 or newer** for
+these fixes; see the [0.5.1 changes](CHANGELOG.md#051---2026-10-13).
+
 The new routed H logo connects Holdmap's initial with its process and agent maps.
 The [vector master and regeneration guide](apps/desktop/assets/README.md) keep app,
 tray and website icons consistent. Version 0.5.0 includes the updated native icons;
@@ -108,13 +112,13 @@ See [Apple's guidance on native apps and Rosetta](https://support.apple.com/en-g
 <!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
      suffix isn't read as part of the version). -->
 <!-- x-release-please-start-version -->
-[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.0_aarch64.dmg
-[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.0_x64.dmg
-[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.0_x64_en-US.msi
-[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.0_x64-setup.exe
-[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.0_amd64.AppImage
-[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.0_amd64.deb
-[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.5.0%2D1.x86_64.rpm
+[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.1_aarch64.dmg
+[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.1_x64.dmg
+[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.1_x64_en-US.msi
+[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.1_x64-setup.exe
+[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.1_amd64.AppImage
+[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.1_amd64.deb
+[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.5.1%2D1.x86_64.rpm
 <!-- x-release-please-end -->
 
 **Homebrew:** coming soon.
@@ -354,9 +358,10 @@ or notarised. Windows installers are unsigned unless signing credentials are con
   `xattr -dr com.apple.quarantine /Applications/holdmap.app`.
 - **Windows:** in "Windows protected your PC", click **More info**, then **Run anyway**.
 
-Update an existing 0.4.0 desktop installation by downloading the matching 0.5.0 installer
-above; version 0.4.0 has no configured signed updater. Run the CLI installer again to update
-the CLI, TUI and MCP server.
+Update an existing desktop installation by downloading the latest installer above that
+matches your operating system and architecture. Releases without a configured signed
+updater require manual installation. Run the CLI installer again to update the CLI, TUI
+and MCP server.
 
 <details>
 <summary>More screenshots</summary>

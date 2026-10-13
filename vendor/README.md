@@ -1,4 +1,6 @@
-# Vendored GLib security backports
+# Vendored dependency fixes
+
+## GLib security backports
 
 `glib/` is the published GLib **0.18.5** crate with two audited upstream fixes:
 
@@ -68,3 +70,68 @@ patch, this snapshot and its provenance checks together. Until then, changes to 
 must be reviewed against the original archive, upstream fixes and documented local initialization
 fix; do not apply general formatting,
 rename files, alter the version to change scanner results, or add unrelated patches.
+
+## Global-hotkey X11 reliability fixes
+
+`global-hotkey/` retains the published **0.8.0** package, version and dual Apache-2.0/MIT
+licenses. Only `src/platform_impl/x11/mod.rs` changes; the macOS and Windows backends,
+public API, manifests and all other upstream files remain byte-identical.
+
+The independent Linux desktop proof reproduced a genuine global key reservation after
+the user selected **Off**: callbacks stopped and the setting persisted, but all four
+CapsLock/NumLock variants stayed grabbed until the app exited. The released X11 driver
+queued `XUngrabKey` requests without flushing or checking them. Collision rollback used
+the same buffered requests. [Upstream pull request #197](https://github.com/tauri-apps/global-hotkey/pull/197)
+identifies both causes, but remains unmerged and absent from the latest published release
+when this fix was prepared.
+
+This local patch checks each ungrab acknowledgment before removing registration state
+or completing collision rollback. The checks flush requests and confirm that the X server
+processed them; request or connection errors propagate through the existing error types.
+This is a checked implementation of the buffering correction rather than a claim that the
+open upstream patch has been released.
+
+The patch also returns `OsError(BrokenPipe)` when either the worker request channel or its
+reply channel closes. Previously all four public register/unregister methods could report
+success after the X11 worker failed, including an invalid `DISPLAY`. The asynchronous
+constructor remains unchanged: unavailable optional hotkeys cannot abort Tauri plugin
+setup before the app can honor **Off**. Batch operations now send one fail-fast reply and
+stop at their first error, matching the existing Windows behavior. Earlier successful keys
+in a failed batch retain their registrations until explicitly removed.
+
+The original package is from commit `2a620bf3852008b568f6d36c2baedcc3dd0822f2`.
+Its [published archive](https://static.crates.io/crates/global-hotkey/global-hotkey-0.8.0.crate)
+has SHA-256 `8c386b0a4a70cb2d39fffd74480f985b6f0bfbcb934b6a6b6b7e630e448f242e`,
+which matches the original Cargo.lock checksum.
+[global-hotkey-provenance.json](global-hotkey-provenance.json) records every original file
+hash, the related upstream PR commit, the reviewed local fixes and the changed file hash.
+[global-hotkey-x11.patch](global-hotkey-x11.patch) contains the exact minimal source diff,
+including private channel regression tests. The published crate snapshot includes its
+original lockfile, examples and metadata; Cargo build/cache output stays outside it.
+
+Run `python3 scripts/verify-vendored-global-hotkey.py` from the repository. It verifies the
+complete file set and hashes, reverses the exact reviewed patch back to the published X11
+source, and checks that the lockfile, genuine Tauri plugin and Linux desktop regressions
+all consume the same local package. It requires Python 3.11+ and Cargo; metadata resolution
+may fetch dependencies but does not build the desktop or connect to a display.
+
+[The retained Linux regressions](../apps/desktop/src-tauri/tests/hotkey_x11.rs) exercise all
+four public API calls against an unavailable X11 worker in a finite owned subprocess. The
+positive tests use a separate X11 client to check every lock variant, immediate release,
+partial collision rollback, preservation of another client's reservation and fail-fast
+batch behavior. They only connect when explicitly armed for a private Xvfb display:
+
+```sh
+xvfb-run -a env HOLDMAP_X11_TEST=1 cargo test -p holdmap-desktop --locked --test hotkey_x11 -- --include-ignored --test-threads=1
+```
+
+The ordinary workspace suite runs the unavailable-display regression and ignores the
+private-display cases. An unarmed subprocess helper returns without any OS action.
+Do not point these tests at an ordinary user's display. The independent genuine desktop
+runtime proof also tests actual **Off**, shortcut callbacks, all lock reservations and
+release while the application remains alive.
+
+When a compatible upstream release contains these fixes, remove this patch, snapshot,
+provenance checks and Cargo override together. Until then, preserve upstream source bytes,
+version and licenses; review any further change against the published archive and exact
+documented local diff. These X11 changes do not add Wayland portal support.

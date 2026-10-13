@@ -1,0 +1,13 @@
+# Keep every default detector; allow only the verified upstream shortcut example.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "global-hotkey upstream documentation names a keyboard shortcut, not a credential"
+condition = "AND"
+paths = ['''(^|/)vendor/global-hotkey/src/hotkey\.rs$''']
+regexTarget = "match"
+regexes = ['''^key, `shift\+alt\+KeyQ`$''']

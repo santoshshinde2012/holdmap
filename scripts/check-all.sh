@@ -19,6 +19,7 @@ scripts/check-versions.sh
 scripts/check-secrets.sh
 python3 scripts/test-release-security.py
 python3 scripts/verify-vendored-glib.py
+python3 scripts/verify-vendored-global-hotkey.py
 actionlint
 git diff --check
 
@@ -48,6 +49,10 @@ cargo test --workspace --doc --locked --no-fail-fast
 if [[ "$(uname -s)" == Linux ]]; then
   G_DEBUG=fatal-warnings MALLOC_PERTURB_=165 \
     cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
+  xvfb-run -a env HOLDMAP_X11_TEST=1 \
+    cargo test -p holdmap-desktop --locked --test hotkey_x11 -- --include-ignored --test-threads=1
+elif [[ "$(uname -s)" == Darwin ]]; then
+  python3 scripts/check-updater-runtime.py
 fi
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap-activity -p holdmap
 # Embed the built frontend, matching the production Tauri build's feature selection.

@@ -8,6 +8,51 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-13
+
+### Security
+
+- CLI and terminal process controls enforce project protection against every known
+  process-tree, container and service effect, reject untrusted configuration, and refresh
+  policy and ownership after confirmation.
+- Restart requests retain protocol and process identity. TCP restart preserves unrelated
+  UDP owners; ambiguous multi-owner recordings and unsafe legacy Windows shell recordings
+  require the normal launcher instead of replaying a different command.
+- Windows CMD syntax is retained privately for faithful restart and omitted from exports.
+  Shell scripts, PowerShell encoded payloads and credential option variants are redacted
+  without modifying the private execution arguments.
+- Runtime framing, connection and I/O deadlines, configuration/history/log reads and worker
+  concurrency are bounded. Private state transactions reject unsafe files and preserve
+  existing data on failed writes.
+- Configured signed updater artifacts and their authenticated release versions are verified
+  before upload. One publisher produces the complete platform index after every build passes.
+
+### Fixed
+
+- Linux global shortcuts release every X11 key reservation immediately when disabled or
+  changed. Failed registration rolls back its partial reservations, and unavailable X11
+  workers report errors instead of success.
+- Windows detached and quiet launches release caller output pipes while preserving normal
+  inherited standard I/O. Project discovery resolves DOS short-name working directories
+  within bounded shared worker limits.
+- Docker responses buffered before peer closure are drained correctly on macOS without
+  exposing the caller to broken-pipe signals.
+- Desktop live scans and details preserve current owners, queued updates and listener cleanup.
+  History supports duplicate rows, exact restart selection and recoverable action failures.
+- Settings, pin, clipboard and history actions report failures and prevent duplicate pending
+  work. Global shortcut changes preserve the previous working registration after a failure.
+- Compact desktop controls and the website's mobile headline fit narrow viewports. Keyboard
+  focus returns correctly after history confirmation and cancellation.
+- Unix process fixtures use immutable executable aliases and static SSH scripts, eliminating
+  writable-executable races while retaining real process-control and injection checks.
+
+### Performance
+
+- Service dependency ordering, graph relationships and highlighting use bounded or linear
+  work. Large graphs use layered layout instead of expensive force layout.
+- CLI log tails read only the bounded suffix, health probes limit parallel work, and the MCP
+  tool catalog is initialized once.
+
 ## [0.5.0] - 2026-10-11
 
 ### Added
