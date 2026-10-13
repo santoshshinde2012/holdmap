@@ -142,3 +142,36 @@ test.describe("compact windows", () => {
     await expect(app.getByRole("listbox", { name: "Sort by", exact: true })).toBeVisible();
   });
 });
+
+for (const width of [390, 760]) {
+  test.describe(`${width}px windows`, () => {
+    test.use({ viewport: { width, height: 900 } });
+
+    test("macOS header actions fit while filters scroll within the viewport", async ({ app }) => {
+      await app.addInitScript(() => {
+        Object.defineProperty(navigator, "platform", { configurable: true, get: () => "MacIntel" });
+      });
+      await app.reload();
+      await expect(app.getByRole("listbox", { name: "Ports in use" }).getByRole("option").first()).toBeVisible();
+      await expect(app.locator(".app")).toHaveClass(/\bmac\b/);
+      const actions = app.locator(".titlebar .tools button");
+      const bounds = await actions.evaluateAll((buttons) => buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return { name: button.getAttribute("aria-label") ?? button.textContent, left: rect.left, right: rect.right, width: rect.width };
+      }));
+      expect(bounds.length).toBeGreaterThan(0);
+      for (const action of bounds) {
+        expect(action.left, `${action.name} starts inside the viewport`).toBeGreaterThanOrEqual(0);
+        expect(action.right, `${action.name} ends inside the viewport`).toBeLessThanOrEqual(width);
+        expect(action.width, `${action.name} stays visible`).toBeGreaterThan(0);
+      }
+      const dimensions = await app.getByRole("toolbar", { name: "View and filters" }).evaluate((toolbar) => ({
+        document: document.documentElement.scrollWidth, viewport: innerWidth,
+        toolbar: toolbar.scrollWidth, visibleToolbar: toolbar.clientWidth,
+      }));
+      expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport + 1);
+      expect(dimensions.visibleToolbar).toBeLessThanOrEqual(dimensions.viewport);
+      expect(dimensions.toolbar).toBeGreaterThan(dimensions.visibleToolbar);
+    });
+  });
+}

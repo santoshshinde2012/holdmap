@@ -39,9 +39,22 @@ export interface TrapOptions {
   restore?: boolean;
 }
 
+// A replacement dialog may start focused inside the dialog it replaces. Keep that
+// dialog's return targets so closing the replacement still reaches the original trigger.
+const returnTargets = new WeakMap<HTMLElement, HTMLElement[]>();
+let outgoingTargets: HTMLElement[] | null = null;
+
 /** Svelte action: trap focus in `node` while it is mounted. */
 export function focusTrap(node: HTMLElement, opts: TrapOptions = {}) {
   const previous = document.activeElement as HTMLElement | null;
+  // Svelte can remove the outgoing surface before mounting its replacement,
+  // leaving focus on body until the queued restore runs.
+  const targets = previous && previous !== document.body ? [previous] : [...(outgoingTargets ?? [])];
+  for (let ancestor = previous; ancestor; ancestor = ancestor.parentElement) {
+    const earlier = returnTargets.get(ancestor);
+    if (earlier) { targets.push(...earlier); break; }
+  }
+  returnTargets.set(node, targets);
   const pick = () =>
     (opts.initial === "self" && node) ||
     (opts.initial && opts.initial !== "self" && node.querySelector<HTMLElement>(opts.initial)) ||
@@ -54,7 +67,16 @@ export function focusTrap(node: HTMLElement, opts: TrapOptions = {}) {
   return {
     destroy() {
       node.removeEventListener("keydown", onKey);
-      if (opts.restore !== false && previous && document.contains(previous)) queueMicrotask(() => previous.focus());
+      outgoingTargets = targets;
+      if (opts.restore !== false) queueMicrotask(() => {
+        if (outgoingTargets === targets) outgoingTargets = null;
+        // An outgoing dialog must not pull focus out of the dialog replacing it.
+        for (let active = document.activeElement as HTMLElement | null; active; active = active.parentElement) {
+          if (active !== node && returnTargets.has(active)) return;
+        }
+        targets.find((target) => document.contains(target) && !target.closest("[inert]"))?.focus();
+      });
+      else queueMicrotask(() => { if (outgoingTargets === targets) outgoingTargets = null; });
     },
   };
 }

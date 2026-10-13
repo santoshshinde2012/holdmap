@@ -85,6 +85,7 @@ scripts/check-versions.sh
 scripts/check-secrets.sh                     # full Git history and tracked/new source; needs a full clone
 python3 scripts/test-release-security.py    # isolated release input regressions; never publishes
 python3 scripts/check-updater-runtime.py    # macOS: real signed scratch install and relaunch
+python3 scripts/check-window-lifecycle-runtime.py # interactive macOS: owned close/fullscreen/reopen regression
 actionlint
 python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK/Linux test resolution
 python3 scripts/verify-vendored-global-hotkey.py # X11 fixes, original archive and shortcut dependency resolution
@@ -129,6 +130,16 @@ scratch app before verifying the actual relaunch. Wrong keys, tampered bytes, mi
 authenticated versions and escaping result paths must leave the original app untouched.
 The runner needs the desktop's locked CLI installed with `npm ci`; it never replaces a host
 installation, changes release keys or enables automatic updates for published installers.
+
+Run `python3 scripts/check-window-lifecycle-runtime.py` in an interactive macOS desktop session
+for native close changes. It creates a private scratch app, exercises the native fullscreen
+close action, and checks application activation, active Space and window/webview identity.
+It also verifies secondary and no-tray window destruction and attempts restoration before exit.
+The runner force-stops only its owned child if the outer deadline expires;
+if macOS denies background activation, the fullscreen case reports an explicit skip.
+The fixture does not start scans or plugins, access the user store, replace an installed app,
+or request Accessibility or Screen Recording permission. Browser tests cannot cover these
+AppKit lifecycle behaviors; this interactive check runs separately from headless CI.
 
 ## Vendored security fixes
 

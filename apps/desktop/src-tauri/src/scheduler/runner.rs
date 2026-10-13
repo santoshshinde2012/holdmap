@@ -5,6 +5,7 @@ use super::queue::{ClockTime, SchedulerState};
 use super::stop_authorization::validate_stops;
 use crate::power::{self, PowerState};
 use crate::state::{scan_now, AppState};
+use holdmap_core::exec::CompletedSupervisorStops;
 use holdmap_core::{execute, history, ActionPlan, StopReport};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
@@ -27,8 +28,10 @@ pub(super) fn execute_stops(
     mut record: impl FnMut(&ActionPlan, &StopReport) -> Result<(), String>,
 ) -> Result<Option<String>, String> {
     let mut completed = 0;
+    let mut supervisor_stops = CompletedSupervisorStops::default();
     for pinned in plans {
-        let report = execute_plan(&pinned.plan);
+        let execution = supervisor_stops.remaining(&pinned.plan);
+        let report = execute_plan(&execution);
         let history_error = record(&pinned.plan, &report).err();
         if !report.success || !report.freed {
             let detail = report.error.clone().unwrap_or_else(|| {
@@ -47,6 +50,7 @@ pub(super) fn execute_stops(
         if let Some(error) = history_error {
             return Err(format!("{} of {} targets stopped, but stop history could not be saved: {}. Remaining targets were not dispatched. No automatic retry.", completed, plans.len(), error));
         }
+        supervisor_stops.remember(&execution, &report);
     }
     Ok(Some(format!(
         "Stopped {completed} listener targets. Stop history was saved."

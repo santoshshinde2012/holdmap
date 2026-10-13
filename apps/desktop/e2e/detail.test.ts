@@ -67,9 +67,11 @@ test.describe("narrow docked details", () => {
     await stop.click();
     const review = app.getByRole("alertdialog");
     await expect(review.getByRole("button", { name: "Stop :3000", exact: true })).toBeVisible();
+    await expect(review.getByRole("button", { name: "Stop :3000", exact: true })).toBeFocused();
     await expect(review.getByRole("combobox", { name: "When", exact: true })).toHaveCount(0);
     await review.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(app.getByRole("button", { name: "shop-web on ports 3000", exact: true })).toBeVisible();
+    await expect(stop).toBeFocused();
   });
 
   test("blocked owners cannot be stopped or scheduled and protected overrides stay explicit", async ({ app }) => {

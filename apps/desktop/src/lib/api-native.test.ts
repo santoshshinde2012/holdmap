@@ -55,6 +55,21 @@ describe("native stop confirmation contract", () => {
     expect(invoke).toHaveBeenNthCalledWith(1, "plan", { target: "3000", force: true, allowProtected: true });
     expect(invoke).toHaveBeenNthCalledWith(2, "stop", { target: "3000", force: true, allowProtected: true, confirmationId: "fixture-42" });
   });
+
+  it("dispatches an agent batch once with exact reviewed listener handles", async () => {
+    const api = await import("./api");
+    const requests = ["3000/tcp", "5173/tcp"].map((target, index) => ({ target, confirmation_id: `review-${index}`, force: false, allow_protected: false }));
+    const reports = [{ success: true, freed: true, history_error: null }];
+    invoke.mockResolvedValueOnce(reports);
+    await expect(api.stopMany("agent:52000", requests)).resolves.toBe(reports);
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("stop_many", { agentId: "agent:52000", requests });
+  });
+
+  it.each(["03000/tcp", "0/tcp", "65536/tcp", "3000", "3000/TCP"])("rejects noncanonical batch target %s before native IPC", async (target) => {
+    const api = await import("./api");
+    await expect(api.stopMany("agent:52000", [{ target, confirmation_id: "review", force: false, allow_protected: false }])).rejects.toThrow("canonical");
+    expect(invoke).not.toHaveBeenCalled();
+  });
 });
 
 describe("local shutdown confirmation contract", () => {

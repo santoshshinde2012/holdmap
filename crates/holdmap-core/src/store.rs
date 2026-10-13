@@ -231,19 +231,29 @@ impl Store {
 
     /// Load the config; a missing or unreadable file yields defaults.
     pub fn config(&self) -> Config {
-        self.read_file("config.json")
-            .ok()
-            .and_then(|f| {
-                let mut text = String::new();
-                f.take(MAX_CONFIG_BYTES as u64 + 1)
-                    .read_to_string(&mut text)
-                    .ok()?;
-                if text.len() > MAX_CONFIG_BYTES {
-                    return None;
-                }
-                serde_json::from_str(&text).ok()
-            })
-            .unwrap_or_default()
+        self.try_config().unwrap_or_default()
+    }
+
+    /// Load settings without hiding an existing file's read, trust or format errors.
+    /// A missing file yields defaults; mutations use this path to preserve unreadable data.
+    pub fn try_config(&self) -> io::Result<Config> {
+        let file = match self.read_file("config.json") {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Config::default()),
+            Err(error) => return Err(error),
+        };
+        let mut text = String::new();
+        file.take(MAX_CONFIG_BYTES as u64 + 1)
+            .read_to_string(&mut text)?;
+        if text.len() > MAX_CONFIG_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "settings file exceeds its size limit",
+            ));
+        }
+        serde_json::from_str(&text).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidData, "settings file is invalid JSON")
+        })
     }
 
     /// Write `config.json` atomically.
@@ -265,7 +275,7 @@ impl Store {
     /// Load, change and save the config.
     pub fn update_config<R>(&self, f: impl FnOnce(&mut Config) -> R) -> io::Result<(Config, R)> {
         let _transaction = self.transaction()?;
-        let mut c = self.config();
+        let mut c = self.try_config()?;
         let r = f(&mut c);
         self.save_config_unlocked(&c)?;
         Ok((c, r))
@@ -444,10 +454,10 @@ impl Store {
         }
         let _transaction = self.transaction()?;
         let limit = self
-            .config()
+            .try_config()?
             .history_limit
             .clamp(1, *Config::HISTORY_LIMIT.end());
-        let mut all = self.history(usize::MAX);
+        let mut all = self.try_history(usize::MAX)?;
         all.reverse(); // oldest first
         let incoming = &entries[entries.len().saturating_sub(limit)..];
         let skip = all
@@ -478,38 +488,42 @@ impl Store {
 
     /// Most recent first.
     pub fn history(&self, limit: usize) -> Vec<HistoryEntry> {
+        self.try_history(limit).unwrap_or_default()
+    }
+
+    /// Read bounded history without hiding filesystem or trust errors. A missing file is
+    /// empty; malformed/oversized rows are skipped as in [`Self::history`].
+    pub fn try_history(&self, limit: usize) -> io::Result<Vec<HistoryEntry>> {
         let limit = limit.min(*Config::HISTORY_LIMIT.end());
         if limit == 0 {
-            return Vec::new();
+            return Ok(Vec::new());
         }
-        let Ok(mut f) = self.read_file("history.jsonl") else {
-            return Vec::new();
+        let mut f = match self.read_file("history.jsonl") {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(error),
         };
-        let start = f
-            .metadata()
-            .map_or(0, |m| m.len().saturating_sub(MAX_HISTORY_BYTES));
-        if f.seek(SeekFrom::Start(start)).is_err() {
-            return Vec::new();
-        }
+        let start = f.metadata()?.len().saturating_sub(MAX_HISTORY_BYTES);
+        f.seek(SeekFrom::Start(start))?;
         let mut reader = io::BufReader::new(f.take(MAX_HISTORY_BYTES));
-        if start > 0 && reader.skip_until(b'\n').is_err() {
-            return Vec::new();
+        if start > 0 {
+            reader.skip_until(b'\n')?;
         }
         let mut entries = VecDeque::with_capacity(limit);
         let mut line = Vec::new();
         loop {
             line.clear();
-            match reader
+            if reader
                 .by_ref()
                 .take(MAX_HISTORY_ENTRY_BYTES as u64 + 1)
-                .read_until(b'\n', &mut line)
+                .read_until(b'\n', &mut line)?
+                == 0
             {
-                Ok(0) | Err(_) => break,
-                Ok(_) => {}
+                break;
             }
             if line.len() > MAX_HISTORY_ENTRY_BYTES {
-                if line.last() != Some(&b'\n') && reader.skip_until(b'\n').is_err() {
-                    break;
+                if line.last() != Some(&b'\n') {
+                    reader.skip_until(b'\n')?;
                 }
                 continue;
             }
@@ -520,7 +534,7 @@ impl Store {
                 entries.push_back(entry);
             }
         }
-        entries.into_iter().rev().collect()
+        Ok(entries.into_iter().rev().collect())
     }
 
     #[cfg(unix)]
@@ -625,7 +639,7 @@ impl Store {
         pid: Option<u32>,
     ) -> io::Result<Option<HistoryEntry>> {
         let mut matches = self
-            .history(usize::MAX)
+            .try_history(usize::MAX)?
             .into_iter()
             .filter(|entry| entry.at_ms == at_ms && history_matches(entry, port, protocol, pid));
         let first = matches.next();
@@ -643,7 +657,7 @@ impl Store {
         pid: Option<u32>,
     ) -> io::Result<Option<HistoryEntry>> {
         let mut matches = self
-            .history(usize::MAX)
+            .try_history(usize::MAX)?
             .into_iter()
             .filter(|entry| history_matches(entry, port, protocol, pid));
         let first = matches.next();
@@ -820,6 +834,85 @@ mod tests {
         // Corrupt config falls back to defaults instead of failing.
         fs::write(tmp.path().join("hm/config.json"), "{nope").unwrap();
         assert_eq!(s.config(), Config::default());
+    }
+
+    #[test]
+    fn checked_state_reads_distinguish_missing_files_from_unreadable_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::new(tmp.path().join("state"));
+        assert_eq!(store.try_config().unwrap(), Config::default());
+        assert!(store.try_history(10).unwrap().is_empty());
+        store.save_config(&Config::default()).unwrap();
+        fs::write(store.config_path(), "{invalid settings").unwrap();
+        assert_eq!(
+            store.try_config().unwrap_err().kind(),
+            io::ErrorKind::InvalidData
+        );
+        assert_eq!(
+            store.config(),
+            Config::default(),
+            "tolerant reads stay compatible"
+        );
+        fs::create_dir(store.history_path()).unwrap();
+        assert!(store.try_history(10).is_err());
+        assert!(store.entry_matching(7, 3000, None, None).is_err());
+        assert!(store.last_matching(3000, None, None).is_err());
+        assert!(store.history(10).is_empty());
+    }
+
+    #[test]
+    fn updates_preserve_invalid_settings_and_history_instead_of_replacing_them() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::new(tmp.path());
+        store.save_config(&Config::default()).unwrap();
+        let invalid = b"{settings that need manual recovery";
+        fs::write(store.config_path(), invalid).unwrap();
+        let mut visited = false;
+        assert!(store
+            .update_config(|c| {
+                visited = true;
+                c.notify = false;
+            })
+            .is_err());
+        assert!(!visited, "a failed read cannot invoke the mutation");
+        assert!(store.record(&[h(3000, 7)]).is_err());
+        assert_eq!(fs::read(store.config_path()).unwrap(), invalid);
+        assert!(!store.history_path().exists());
+        store.save_config(&Config::default()).unwrap();
+        fs::create_dir(store.history_path()).unwrap();
+        fs::write(store.history_path().join("sentinel"), b"preserve").unwrap();
+        assert!(store.record(&[h(3000, 7)]).is_err());
+        assert_eq!(
+            fs::read(store.history_path().join("sentinel")).unwrap(),
+            b"preserve"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn failed_trust_checks_preserve_existing_settings_and_restart_history() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::new(tmp.path().join("state"));
+        store.record(&[h(3000, 7)]).unwrap();
+        let prior = fs::read(store.history_path()).unwrap();
+        fs::set_permissions(store.history_path(), fs::Permissions::from_mode(0o660)).unwrap();
+        assert_eq!(
+            store.try_history(10).unwrap_err().kind(),
+            io::ErrorKind::PermissionDenied
+        );
+        assert!(store.record(&[h(4000, 8)]).is_err());
+        assert_eq!(fs::read(store.history_path()).unwrap(), prior);
+        fs::set_permissions(store.history_path(), fs::Permissions::from_mode(0o600)).unwrap();
+        let target = tmp.path().join("settings-target");
+        fs::write(&target, b"unrelated settings").unwrap();
+        symlink(&target, store.config_path()).unwrap();
+        assert!(store.try_config().is_err());
+        assert!(store.update_config(|c| c.notify = false).is_err());
+        assert!(store.record(&[h(4000, 8)]).is_err());
+        assert!(store.config_path().is_symlink());
+        assert_eq!(fs::read(&target).unwrap(), b"unrelated settings");
+        assert_eq!(fs::read(store.history_path()).unwrap(), prior);
     }
 
     #[test]

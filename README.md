@@ -327,6 +327,12 @@ details, inferred MCP nodes and explicit omission counts. Native reports refresh
 of the window's poll; the browser [live demo](https://santoshshinde2012.github.io/holdmap/#demo)
 uses the same UI with sample data.
 
+**Close and reopen.** With a working menu-bar or tray icon, closing the main window keeps
+Holdmap running. Click its icon or use your configured global shortcut to reopen; on macOS,
+the Dock icon also restores it. Current source uses macOS application hiding so a fullscreen
+close returns to the previous app and retains the window's state for reopening. Choose
+**Quit** to exit. If the tray is unavailable, closing the main window exits normally.
+
 **Folder actions in 0.5.0.** Click a folder on the Agents map or its
 name/path in a card; **Enter** or **Space** activates a focused folder. The shared chooser shows
 the full path and offers **Open in Finder** (macOS), **Open in Explorer** (Windows) or
@@ -428,6 +434,12 @@ the preview and confirmation flow before executing stops.
 ## Safety model
 
 holdmap stops processes, so one set of rules in `holdmap-core` applies to every surface:
+
+**Current source:** state-read/write failures stay visible and preserve existing files.
+If a stop completes but its history cannot be saved, the desktop preserves the actual result
+and blocks automatic restart or later queued stops. CLI `stop --json` includes `history_error`
+and exits with code 2; additional requested targets are not attempted. This recovery behavior
+is part of the [unreleased changes](CHANGELOG.md#unreleased).
 
 - **Graceful first:** SIGTERM (`taskkill` on Windows), then a force kill after `--timeout` (5 s).
 - **The right target:** the dev-server tree root (`npm`, `nodemon`, `uvicorn --reload`…) so nothing

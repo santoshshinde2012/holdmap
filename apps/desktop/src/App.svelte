@@ -40,7 +40,7 @@
 
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
   type View = "list" | "graph" | "agents";
-  interface Confirm { entry: PortEntry | null; /** Reviewed plans for more ports after `entry` (Agents "Stop all"). */ queue?: { entry: PortEntry; plan: ActionPlan }[]; agentName?: string; agentId?: string; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; restart?: boolean; timingIntent?: "combined" | "now" | "schedule"; scheduled?: ScheduledAction; schedulingBusy?: boolean; schedulingError?: string }
+  interface Confirm { entry: PortEntry | null; /** Reviewed plans for more ports after `entry` (Agents "Stop all"). */ queue?: { entry: PortEntry; plan: ActionPlan }[]; agentName?: string; agentId?: string; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; completedPortCount?: number; attemptedPortCount?: number; restart?: boolean; timingIntent?: "combined" | "now" | "schedule"; scheduled?: ScheduledAction; schedulingBusy?: boolean; schedulingError?: string }
 
   // Live data is replaced wholesale on every poll, so it is raw state run through `share`:
   // unchanged entries keep their identity and nothing downstream re-renders or re-fetches.
@@ -70,7 +70,14 @@
   let update = $state<string | null>(null);
   const installUpdate = () => api.installUpdate().catch((e) => toast("error", "Couldn't install the update", String(e)));
   let freePort = $state<Explanation | null>(null);
+  let checkingPort = $state<number | null>(null);
+  let portCheckError = $state<string | null>(null);
+  let portCheckRetry = $state(0);
+  let portCheckPending = false;
+  let queuedPortCheck: (() => Promise<void>) | null = null;
   let confirm = $state<Confirm | null>(null);
+  let pendingReview = $state<string | null>(null);
+  let reviewSequence = 0;
   let busy = $state<Record<string, boolean>>({});
   let toasts = $state<Toast[]>([]);
   let showHelp = $state(false);
@@ -122,6 +129,8 @@
   const topologyAll = $derived(view === "graph" ? graphAll : filters.all);
   let selectedNode = $state<string | null>(null);
   let config = $state<Config | null>(null);
+  let configError = $state<string | null>(null);
+  let configLoading = $state(false);
   let showHistory = $state(false);
   let historyItems = $state<HistoryEntry[]>([]);
   let reduced = $state(matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -149,7 +158,7 @@
   let pinDialog = $state<{ port: number | null; label: string; pinned: boolean } | null>(null);
   let showRemote = $state(false);
   let hotkeyList = $state<HotkeyPreset[]>([]);
-  let info = $state<{ version: string; platform: string; configDir: string | null }>({ version: "", platform: "", configDir: null });
+  let info = $state<{ version: string; platform: string; tray: boolean; configDir: string | null }>({ version: "", platform: "", tray: false, configDir: null });
   let detailTab = $state<DetailTab>("overview");
   const PANE_DEFAULT = 460;
   let paneWidth = $state(Math.min(680, Math.max(340, Number(prefGet("pane")) || PANE_DEFAULT)));
@@ -234,7 +243,7 @@
   // The agents map has no side pane: a port picked there opens in the drawer, as on narrow windows.
   const showDrawer = $derived((narrow || view === "agents") && drawerOpen && !!selected);
   /** Any overlay that owns the keyboard (they stop key events themselves; this is a backstop). */
-  const modalOpen = $derived(!!confirm || showHelp || showHistory || showPalette || showSettings || showShutdown || showSchedules || showRemote || !!pinDialog || showDrawer);
+  const modalOpen = $derived(!!confirm || !!pendingReview || showHelp || showHistory || showPalette || showSettings || showShutdown || showSchedules || showRemote || !!pinDialog || showDrawer);
   const scanMs = $derived(Math.min(60, Math.max(1, config?.scan_interval_secs ?? 3)) * 1000);
 
   /** When the scan in flight started: the header stays "Live" while one is merely running. */
@@ -243,18 +252,25 @@
 
   async function refresh(manual = false) {
     if (refreshing) return;
+    const all = filters.all;
     refreshing = true;
     manualRefresh = manual;
     scanStarted = Date.now();
     try {
-      apply(await api.scan(filters.all, manual ? 0 : undefined));
-      if (manual && snapshot) toast("info", "Refreshed", `${snapshot.entries.length} port${snapshot.entries.length === 1 ? "" : "s"} · scanned in ${snapshot.scan_ms} ms`);
+      const next = await api.scan(all, manual ? 0 : undefined);
+      // A socket-state change during this request needs its own scan. A reply for
+      // the previous mode must not appear under the newly selected control.
+      if (filters.all === all) {
+        apply(next);
+        if (manual && !disposed) toast("info", "Refreshed", `${next.entries.length} port${next.entries.length === 1 ? "" : "s"} · scanned in ${next.scan_ms} ms`);
+      }
     } catch (e) {
-      error = String(e);
+      if (!disposed && filters.all === all) error = String(e);
     } finally {
       refreshing = false;
       manualRefresh = false;
     }
+    if (!disposed && filters.all !== all) await refresh(manual);
   }
 
   /** Newest snapshot waiting for the next animation frame (coalesces bursty watcher + poll). */
@@ -406,24 +422,41 @@
     if (view === "list") requestAnimationFrame(() => document.getElementById("row-" + id)?.scrollIntoView({ block: "nearest" }));
   }
 
+  /** Every action review shares one generation, including overrides and bulk actions. */
+  async function reviewAction(subject: string, build: () => Promise<Confirm>) {
+    if (disposed || confirm?.phase === "running" || confirm?.schedulingBusy) return;
+    const sequence = ++reviewSequence;
+    pendingReview = subject;
+    try {
+      const reviewed = await build();
+      if (!disposed && sequence === reviewSequence) confirm = reviewed;
+    } catch (e) {
+      if (!disposed && sequence === reviewSequence) toast("error", `Couldn't review ${subject}`, String(e));
+    } finally {
+      if (sequence === reviewSequence) pendingReview = null;
+    }
+  }
+
+  function cancelReview() {
+    reviewSequence++;
+    pendingReview = null;
+    confirm = null;
+  }
+
   async function requestClusterStop(name: string) {
     const c = graph?.clusters.find((x) => x.name === name) ?? null;
-    try {
+    return reviewAction(`stop for cluster ${name}`, async () => {
       const plan = await api.plan(`cluster:${name}`, false, false);
-      confirm = { entry: null, cluster: c ?? { id: name, name, kind: "workspace", detail: null, root: null, nodes: [] }, plan, force: false, allowProtected: false, phase: "confirm", log: [], report: null };
-    } catch (e) {
-      toast("error", `Couldn't plan stopping ${name}`, String(e));
-    }
+      return { entry: null, cluster: c ?? { id: name, name, kind: "workspace", detail: null, root: null, nodes: [] }, plan, force: false, allowProtected: false, phase: "confirm", log: [], report: null };
+    });
   }
 
   /** Every running dev server of yours at once (tray, palette); the dialog shows the full plan. */
   async function requestStopAllDev() {
-    try {
+    return reviewAction("stop for all dev servers", async () => {
       const plan = await api.plan("dev:all", false, false);
-      confirm = { entry: null, cluster: null, plan, force: false, allowProtected: false, phase: "confirm", log: [], report: null };
-    } catch (e) {
-      toast("error", "Couldn't plan stopping the dev servers", String(e));
-    }
+      return { entry: null, cluster: null, plan, force: false, allowProtected: false, phase: "confirm", log: [], report: null };
+    });
   }
 
   /** Stop every unprotected port an agent started (dev servers and services), asking once. */
@@ -435,11 +468,15 @@
       toast("info", `${a.name} has no stoppable ports`, "Its own IDE / agent listeners stay protected.");
       return;
     }
+    if (list.length > 32) {
+      toast("info", "Too many ports for one stop", `${a.name} has ${list.length} ports. Stop selected services individually from its card; a batch supports up to 32 reviewed ports.`);
+      return;
+    }
     if (list.length === 1) return requestStop(list[0], false, false, { agentId });
-    try {
+    return reviewAction(`stop for ${a.name}'s ports`, async () => {
       const plans = await Promise.all(list.map((entry) => api.plan(stopTarget(entry), false, false)));
       const plan = plans[0];
-      confirm = {
+      return {
         entry: list[0],
         agentName: a.name,
         agentId,
@@ -460,9 +497,7 @@
         log: [],
         report: null,
       };
-    } catch (e) {
-      toast("error", `Couldn't plan stopping ${a.name}'s ports`, String(e));
-    }
+    });
   }
 
   async function revealAgentFolder(agentId: string, path: string): Promise<boolean> {
@@ -531,10 +566,28 @@
     scheduleShutdown: () => openShutdown("schedule"),
     viewSchedules: openSchedules,
   };
-  function openSettings(section: SettingsSection = "general") { settingsSection = section; showSettings = true; }
+  async function loadConfig() {
+    if (configLoading) return;
+    configLoading = true;
+    try {
+      const value = await api.getConfig();
+      if (!disposed) { config = value; configError = null; }
+    } catch (e) {
+      if (!disposed) {
+        configError = String(e);
+        if (!showSettings) toast("error", "Couldn't load settings", configError, { label: "Open settings", run: () => openSettings() });
+      }
+    } finally { configLoading = false; }
+  }
+  function openSettings(section: SettingsSection = "general") {
+    if (pendingReview) cancelReview();
+    settingsSection = section;
+    showSettings = true;
+  }
 
   async function openShutdown(intent: "now" | "schedule" = "now") {
     if (shutdownBusy || shutdownLoading) return;
+    if (pendingReview) cancelReview();
     shutdownIntent = intent;
     showSettings = false;
     showShutdown = true;
@@ -641,6 +694,7 @@
     shutdownSequence++;
     shutdownLoading = false;
     shutdownPreview = null;
+    cancelReview();
     confirm = null;
     showSchedules = true;
     loadSchedules(true);
@@ -751,14 +805,45 @@
   const memTrend = $derived(selected ? memUsage[selected.id] ?? [] : []);
   const explaining = $derived(selPort !== null && explainingPort === selPort);
 
+  /** A slow native check owns one request; only the latest follow-up is retained. */
+  async function runPortCheck(check: () => Promise<void>) {
+    if (portCheckPending) { queuedPortCheck = check; return; }
+    portCheckPending = true;
+    try { await check(); }
+    finally {
+      portCheckPending = false;
+      const next = queuedPortCheck;
+      queuedPortCheck = null;
+      if (next && !disposed) void runPortCheck(next);
+    }
+  }
+
   $effect(() => {
-    const p = queryPort;
-    if (p === null || visible.some((e) => e.port === p)) { freePort = null; return; }
-    if (freePort?.port === p) return;
+    const p = queryPort, current = snapshot;
+    // Availability belongs to a scan, not just a search string. Check again when new
+    // data arrives, and never offer a stale "free" result after a failed scan.
+    void scanGen;
+    void portCheckRetry;
+    const failed = error;
+    portCheckError = null;
+    checkingPort = null;
+    if (p === null || !current || failed || current.entries.some((e) => e.port === p)) { freePort = null; return; }
+    // Keep the same result visible during revalidation to avoid blinking on every
+    // scan; changing the query or a failed check removes it immediately.
+    if (untrack(() => freePort?.port) !== p) freePort = null;
+    checkingPort = p;
     let active = true;
-    const t = setTimeout(async () => {
-      try { const result = await api.explain(p); if (active) freePort = result; } catch (err) { if (active) toast("error", `Couldn't check port ${p}`, String(err)); }
-    }, 120);
+    const t = setTimeout(() => void runPortCheck(async () => {
+      if (!active || disposed) return;
+      try {
+        const result = await api.explain(p);
+        if (active) freePort = result;
+      } catch (err) {
+        if (active) { freePort = null; portCheckError = String(err); }
+      } finally {
+        if (active) checkingPort = null;
+      }
+    }), 120);
     return () => { active = false; clearTimeout(t); };
   });
 
@@ -770,12 +855,12 @@
 
   async function requestStop(entry: PortEntry, force: boolean, allowProtected = false, options: { agentId?: string; intent?: "combined" | "now" | "schedule" } = {}) {
     const { agentId, intent: timingIntent = agentId ? "combined" : "now" } = options;
-    try {
+    const holder = holderKeys.get(entry.port);
+    return reviewAction(`stop for :${entry.port}`, async () => {
       const plan = await api.plan(stopTarget(entry), force, allowProtected);
-      confirm = { entry, cluster: null, plan, force, allowProtected, timingIntent, phase: "confirm", log: [], report: null, agentId, agentName: agentId ? agentsReport?.agents.find((a) => a.id === agentId)?.name : undefined };
-    } catch (e) {
-      toast("error", `Couldn't plan stopping :${entry.port}`, String(e));
-    }
+      if (!holder || holderKeys.get(entry.port) !== holder) throw new Error("The port's owner changed while the stop was being reviewed. Review its current owner again.");
+      return { entry, cluster: null, plan, force, allowProtected, timingIntent, phase: "confirm", log: [], report: null, agentId, agentName: agentId ? agentsReport?.agents.find((a) => a.id === agentId)?.name : undefined };
+    });
   }
 
   function requestScheduledStop(entry: PortEntry) {
@@ -794,6 +879,8 @@
     if (!confirm || confirm.timingIntent === "schedule" || confirm.phase !== "confirm" || confirm.plan.blocked || confirm.schedulingBusy || confirm.scheduled || confirm.schedulingError) return;
     const c = confirm;
     c.phase = "running";
+    c.attemptedPortCount = 0;
+    c.completedPortCount = 0;
     const queue = c.queue ?? [];
     const target = c.entry ? stopTarget(c.entry) : c.cluster ? `cluster:${c.cluster.name}` : "dev:all";
     const key = c.entry?.id ?? target;
@@ -805,24 +892,31 @@
     const idx = c.entry ? ordered.findIndex((e) => e.id === c.entry!.id) : -1;
     const neighbour = idx >= 0 ? (ordered[idx + 1] ?? ordered[idx - 1])?.id ?? null : null;
     try {
-      const r = await api.stop(target, c.force, c.allowProtected, c.plan.confirmation_id);
-      c.report = r;
-      if (!c.log.length) c.log = r.log;
-      // Agents "Stop all": continue with the rest after the first port frees.
-      if (r.freed && queue.length) {
-        for (const next of queue) {
-          c.log = [...c.log, `→ :${next.entry.port}`];
-          const nr = await api.stop(stopTarget(next.entry), c.force, c.allowProtected, next.plan.confirmation_id);
-          c.log = [...c.log, ...nr.log];
-          c.report = nr;
-          if (!nr.freed) {
-            c.phase = "failed";
-            toast("error", `Stopped some ports; :${next.entry.port} is still busy`, nr.log.at(-1));
-            return;
-          }
-        }
+      let reports: StopReport[];
+      if (queue.length) {
+        if (!c.agentId || !c.entry) throw new Error("Review the agent's complete stop plan again.");
+        const reviewed = [{ entry: c.entry, plan: c.plan }, ...queue];
+        const requests = reviewed.map(({ entry, plan }) => ({ target: stopTarget(entry), confirmation_id: plan.confirmation_id ?? "", force: false, allow_protected: false }));
+        reports = await api.stopMany(c.agentId, requests);
+        c.log = reports.flatMap((report, index) => [`→ :${reviewed[index]?.entry.port ?? report.target}`, ...report.log]);
+      } else {
+        reports = [await api.stop(target, c.force, c.allowProtected, c.plan.confirmation_id)];
+        if (!c.log.length) c.log = reports[0].log;
       }
-      if (c.report?.freed) {
+      if (!reports.length) throw new Error("No reviewed stop was acknowledged. Review the current services again.");
+      c.attemptedPortCount = reports.length;
+      c.completedPortCount = reports.filter((report) => report.freed).length;
+      const incomplete = reports.find((report) => !report.success || !report.freed || report.history_error);
+      const r = incomplete ?? reports[reports.length - 1];
+      c.report = { ...r, elapsed_ms: reports.reduce((elapsed, report) => elapsed + report.elapsed_ms, 0) };
+      // A partial native result ends the batch. Never dispatch additional work from the UI.
+      if (incomplete) { c.phase = r.history_error && r.success && r.freed ? "done" : "failed"; return; }
+      if (reports.length !== queue.length + 1) {
+        c.report = { ...c.report, success: false, error: `${reports.length} of ${queue.length + 1} reviewed targets were acknowledged. Review the remaining services again.` };
+        c.phase = "failed";
+        return;
+      }
+      if (c.report?.success && c.report.freed) {
         c.phase = "done";
         if (c.entry && selectedId === c.entry.id) selectedId = neighbour;
         if (!c.entry) { selectedId = null; selectedNode = null; }
@@ -846,7 +940,7 @@
           if (confirm === c) confirm = null;
           toast("ok",
             queue.length ? `${what} are free` : c.entry ? `Port ${c.entry.port} is free` : c.cluster ? `Cluster ${c.cluster.name} stopped` : "Dev servers stopped",
-            `${what} stopped in ${seconds(r.elapsed_ms)}${r.escalated ? " (needed SIGKILL)" : ""}`,
+            `${what} stopped in ${seconds(c.report?.elapsed_ms ?? r.elapsed_ms)}${reports.some((report) => report.escalated) ? " (needed SIGKILL)" : ""}`,
             restart && c.entry && !queue.length ? { label: "Copy restart command", run: () => copy(restart, "Restart command") } : { label: "Restart…", run: openHistory });
         }, 900);
       } else {
@@ -863,7 +957,7 @@
   }
 
   function closeConfirm() {
-    if (confirm && confirm.phase !== "running" && !confirm.schedulingBusy) confirm = null;
+    if (confirm && confirm.phase !== "running" && !confirm.schedulingBusy) cancelReview();
   }
 
   async function scheduleStop(delaySecs: number) {
@@ -882,11 +976,14 @@
     }
   }
 
-  function reviewScheduledStop() {
+  function reviewStop() {
     const c = confirm;
-    if (!c || c.schedulingBusy) return;
+    if (!c || c.schedulingBusy || c.phase === "running") return;
     if (c.agentId && c.queue?.length) requestStopAgentPorts(c.agentId);
+    else if (c.restart && c.entry) requestRestart(c.entry);
     else if (c.entry) requestStop(c.entry, false, false, { agentId: c.agentId, intent: c.timingIntent });
+    else if (c.cluster) requestClusterStop(c.cluster.name);
+    else requestStopAllDev();
   }
 
   function selectEntry(e: PortEntry, openDrawer = true) {
@@ -927,12 +1024,12 @@
 
   /** Restart = the normal confirmed stop, then the same command again in the same folder. */
   async function requestRestart(entry: PortEntry) {
-    try {
+    const holder = holderKeys.get(entry.port);
+    return reviewAction(`restart for :${entry.port}`, async () => {
       const plan = await api.plan(stopTarget(entry), false, false);
-      confirm = { entry, cluster: null, plan, force: false, allowProtected: false, phase: "confirm", log: [], report: null, restart: true };
-    } catch (e) {
-      toast("error", `Couldn't plan restarting :${entry.port}`, String(e));
-    }
+      if (!holder || holderKeys.get(entry.port) !== holder) throw new Error("The port's owner changed while the restart was being reviewed. Review its current owner again.");
+      return { entry, cluster: null, plan, force: false, allowProtected: false, phase: "confirm", log: [], report: null, restart: true };
+    });
   }
 
   async function copy(text: string, what: string) {
@@ -1097,9 +1194,9 @@
     }
     refresh();
     loadSchedules();
-    api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, configDir: i.config_dir ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; }).catch((e) => toast("error", "Couldn't load app information", String(e)));
+    api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, tray: i.tray, configDir: i.config_dir ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; }).catch((e) => toast("error", "Couldn't load app information", String(e)));
     api.hotkeys().then((h) => (hotkeyList = h)).catch(() => {});
-    api.getConfig().then((c) => (config = c)).catch(() => {});
+    void loadConfig();
     api.autostart().then((v) => (autostartOn = v)).catch(() => {});
     const rq = matchMedia("(prefers-reduced-motion: reduce)");
     const onRq = () => (reduced = rq.matches);
@@ -1159,6 +1256,8 @@
     window.addEventListener("focus", onVisible);
     return () => {
       disposed = true;
+      reviewSequence++;
+      queuedPortCheck = null;
       cancelAnimationFrame(applyRaf);
       applyRaf = 0;
       applyQueued = null;
@@ -1197,7 +1296,7 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="app" class:mac={isMac} class:scheduled={!!nextSchedule}>
+<div class="app" class:mac={isMac}>
   <header class="titlebar" data-tauri-drag-region>
     <div class="brand" data-tauri-drag-region>
       <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width="22" height="22" />
@@ -1241,12 +1340,12 @@
     </div>
 
     <div class="tools">
-      <span class="live" class:stale={fresh.stale} aria-live="off">
-        <span class="pulse" class:on={view === "agents" ? agentsRefreshing : refreshing}></span>{fresh.text}
+      <span class="live" class:stale={fresh.stale || (view !== "agents" && !!error)} aria-live="off">
+        <span class="pulse" class:on={view === "agents" ? agentsRefreshing : refreshing}></span>{view !== "agents" && error ? refreshing ? "Retrying…" : "Scan failed" : fresh.text}
       </span>
       <Button size="sm" icon="command" kbd={modK} class="cmdk" onclick={() => (showPalette = true)} aria-keyshortcuts="Meta+K Control+K" tip={{ text: "Command palette", kbd: modK }}>Commands</Button>
       <span class="tsep" aria-hidden="true"></span>
-      <IconButton icon="refresh" label="Refresh" kbd={singleKeyShortcuts ? "R" : undefined} onclick={() => refresh(true)} class={manualRefresh ? "spinning" : ""} />
+      <IconButton icon="refresh" label="Refresh" kbd={singleKeyShortcuts ? "R" : undefined} onclick={() => refresh(true)} disabled={refreshing} aria-busy={manualRefresh || undefined} class={manualRefresh ? "spinning" : ""} />
       <IconButton icon="history" label="Recently stopped" kbd={singleKeyShortcuts ? "H" : undefined} onclick={openHistory} />
       <IconButton icon="clock" label={`Scheduled actions${activeSchedules.length ? ` (${activeSchedules.length} active)` : ""}`} onclick={openSchedules} bind:el={schedulesTrigger} />
       <IconButton icon="server" label="Remote host…" onclick={() => (showRemote = true)} />
@@ -1276,6 +1375,20 @@
     {/if}
   </div>
 
+  <div class="notices">
+  {#if error && (snapshot || view !== "list")}
+    <div class="scan-banner" role="region" aria-label="Scan status">
+      <Icon name="alert" size={16} />
+      <div class="scan-summary">
+        <div role="alert">
+          <strong>Couldn't update port status</strong>
+          <p class="selectable">{error}</p>
+        </div>
+        <span>{snapshot ? "Showing the last successful scan. " : ""}Retrying automatically.</span>
+      </div>
+      <Button size="sm" icon="refresh" loading={refreshing} loadingText="Retrying…" onclick={() => refresh(true)}>Try again</Button>
+    </div>
+  {/if}
   {#if nextSchedule}
     <div class="schedule-banner" role="region" aria-label="Active scheduled actions">
       <Icon name="clock" size={16} />
@@ -1286,6 +1399,7 @@
       <Button size="sm" variant="secondary" onclick={openSchedules}>View / cancel</Button>
     </div>
   {/if}
+  </div>
 
   <main class="content" class:narrow class:wide={view === "agents"} style="--pane-w: {paneWidth}px">
     {#if view === "graph"}
@@ -1314,12 +1428,12 @@
       </div>
     {:else}
     <div class="list {density}" id="port-list" role="listbox" aria-label="Ports in use" aria-activedescendant={selectedId ? "row-" + selectedId : undefined} tabindex="0" bind:this={listEl}>
-      {#if snapshot && !onboarded}<Onboarding mod={mod} ondismiss={dismissOnboarding} />{/if}
+      {#if snapshot && !onboarded}<Onboarding mod={mod} tray={api.isTauri && info.tray} platform={info.platform} {shortcut} ondismiss={dismissOnboarding} />{/if}
 
       {#if error && !snapshot}
         <EmptyState tone="err" title="Couldn't read the socket table">
           <p class="selectable">{error}</p>
-          <Button variant="primary" icon="refresh" onclick={() => refresh(true)}>Try again</Button>
+          <Button variant="primary" icon="refresh" loading={refreshing} loadingText="Retrying…" onclick={() => refresh(true)}>Try again</Button>
         </EmptyState>
       {:else if !snapshot}
         <div class="skeletons" aria-busy="true" aria-label="Loading ports">
@@ -1334,9 +1448,22 @@
           {/each}
         </div>
       {:else if ordered.length === 0}
-        {#if freePort && freePort.status === "free"}
+        {#if error}
+          <EmptyState tone="warn" title="Port status unavailable">
+            <p>The last scan couldn't be updated. Check again before starting your server.</p>
+          </EmptyState>
+        {:else if checkingPort !== null && !freePort}
+          <EmptyState icon="radar" title="Checking port {checkingPort}…">
+            <p aria-busy="true">Checking its current availability.</p>
+          </EmptyState>
+        {:else if portCheckError && queryPort !== null}
+          <EmptyState tone="err" title="Couldn't check port {queryPort}">
+            <p class="selectable">{portCheckError}</p>
+            <Button icon="refresh" onclick={() => portCheckRetry++}>Check again</Button>
+          </EmptyState>
+        {:else if freePort && freePort.status === "free"}
           <EmptyState tone="ok" icon="check" title="Port {freePort.port} is free">
-            <p>Nothing is listening on it — start your server there:</p>
+            <p aria-busy={checkingPort !== null || undefined}>{checkingPort !== null ? "Checking availability…" : "Nothing is listening on it — start your server there:"}</p>
             <Button icon="copy" onclick={() => copy(`holdmap run -p ${freePort?.port} -- npm run dev`, "Command")}><code>holdmap run -p {freePort.port} -- npm run dev</code></Button>
             <Button variant="ghost" icon="star" onclick={() => openPin(null)}>Pin :{freePort.port} and watch it</Button>
           </EmptyState>
@@ -1411,15 +1538,30 @@
       {graph} pinned={pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} details={selectedDetails} {cpuTrend} {memTrend} platform={info.platform} onrestart={() => selected && requestRestart(selected)} onreveal={() => selected && reveal(selected)} oneditor={() => selected && openEditor(selected)} />
   </Dialog>
 {/if}
-{#if confirm}
-  <ConfirmDialog intent={confirm.timingIntent ?? "combined"} entry={confirm.entry} cluster={confirm.cluster} plan={confirm.plan} portCount={(confirm.queue?.length ?? 0) + 1} agentName={confirm.agentName} restart={!!confirm.restart} phase={confirm.phase} log={confirm.log} report={confirm.report}
-    onschedule={confirm.entry && !confirm.force && !confirm.allowProtected && !confirm.restart ? scheduleStop : undefined} schedulingBusy={!!confirm.schedulingBusy} schedulingError={confirm.schedulingError ?? null} scheduled={confirm.scheduled ?? null} onviewschedules={openSchedules} onreview={reviewScheduledStop} demo={!api.isTauri}
+{#if pendingReview}
+  <Dialog title="Reviewing {pendingReview}…" size="sm" onclose={cancelReview} initialFocus="[data-primary]">
+    <p role="status" aria-busy="true">Checking the current owners and the steps this action would take.</p>
+    {#snippet footer()}<Button onclick={cancelReview} data-primary>Cancel</Button>{/snippet}
+  </Dialog>
+{:else if confirm}
+  <ConfirmDialog intent={confirm.timingIntent ?? "combined"} entry={confirm.entry} cluster={confirm.cluster} plan={confirm.plan} portCount={(confirm.queue?.length ?? 0) + 1} completedPortCount={confirm.completedPortCount} attemptedPortCount={confirm.attemptedPortCount} agentName={confirm.agentName} restart={!!confirm.restart} phase={confirm.phase} log={confirm.log} report={confirm.report}
+    onschedule={confirm.entry && !confirm.force && !confirm.allowProtected && !confirm.restart ? scheduleStop : undefined} schedulingBusy={!!confirm.schedulingBusy} schedulingError={confirm.schedulingError ?? null} scheduled={confirm.scheduled ?? null} onviewschedules={openSchedules} onreview={reviewStop} demo={!api.isTauri}
+    oncopyrestart={confirm.entry && !confirm.queue?.length && restartCommand(confirm) ? () => { const command = confirm && restartCommand(confirm); if (command) void copy(command, "Restart command"); } : undefined}
     onconfirm={runStop} oncancel={closeConfirm} onoverride={() => confirm?.entry && requestStop(confirm.entry, confirm.force, true, { agentId: confirm.agentId, intent: "now" })} />
 {/if}
 {#if showPalette}<CommandPalette {commands} onclose={() => { showPalette = false; }} />{/if}
 {#if showHistory}<HistoryPanel items={historyItems} platform={info.platform} onrestart={restartEntry} oncopy={copy} onclose={() => (showHistory = false)} onclear={async () => { await api.clearHistory(); historyItems = []; }} />{/if}
 {#if showHelp}<ShortcutsDialog {mod} {singleKeyShortcuts} onclose={() => (showHelp = false)} />{/if}
 {#if showSettings && settingsModel}<SettingsDialog model={settingsModel} actions={settingsActions} bind:section={settingsSection} onclose={() => (showSettings = false)} />{/if}
+{#if showSettings && !settingsModel}
+  <Dialog title="Settings unavailable" size="sm" onclose={() => (showSettings = false)} initialFocus="[data-primary]">
+    <p role={configError ? "alert" : "status"}>{configError ?? "Loading your settings…"}</p>
+    {#snippet footer()}
+      <Button onclick={() => (showSettings = false)}>Close</Button>
+      <Button variant="primary" icon="refresh" loading={configLoading} loadingText="Loading…" onclick={() => loadConfig()} data-primary>Try again</Button>
+    {/snippet}
+  </Dialog>
+{/if}
 {#if showShutdown}<ShutdownDialog intent={shutdownIntent} preview={shutdownPreview} loading={shutdownLoading} busy={shutdownBusy} requested={shutdownRequested} error={shutdownError} demo={!api.isTauri} onconfirm={confirmShutdown} onclose={closeShutdown} onretry={() => openShutdown(shutdownIntent)} onschedule={scheduleShutdown} scheduled={shutdownScheduled} onviewschedules={openSchedules} />{/if}
 {#if showSchedules}<SchedulesDialog {schedules} loading={schedulesLoading} error={schedulesError} demo={!api.isTauri} onclose={closeSchedules} onrefresh={() => loadSchedules(true)} oncancel={cancelSchedule} />{/if}
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
@@ -1427,12 +1569,17 @@
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />
 
 <style>
-  .app { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100vh; }
-  .app.scheduled { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+  .app { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto minmax(0, 1fr) auto; height: 100vh; }
+  .notices { min-width: 0; }
+  .scan-banner { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-5); background: var(--warn-soft); border-bottom: 1px solid var(--border); color: var(--warn); }
+  .scan-summary { display: grid; gap: 3px; flex: 1; min-width: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
+  .scan-summary strong { font-weight: var(--fw-semibold); }
+  .scan-summary p { margin: 3px 0 0; color: var(--text-2); overflow-wrap: anywhere; }
+  .scan-summary > span { color: var(--text-2); }
   .schedule-banner { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-5); background: var(--accent-soft); border-bottom: 1px solid var(--border); color: var(--accent); }
   .schedule-summary { display: grid; gap: 3px; flex: 1; min-width: 0; font-size: var(--fs-body-sm); }
   .schedule-summary span { color: var(--text-2); overflow-wrap: anywhere; }
-  @media (max-width: 560px) { .schedule-banner { padding: var(--sp-2) var(--sp-3); gap: var(--sp-2); } }
+  @media (max-width: 560px) { .schedule-banner, .scan-banner { padding: var(--sp-2) var(--sp-3); gap: var(--sp-2); } }
   .titlebar { display: flex; align-items: center; gap: var(--sp-4); height: 52px; padding: 0 var(--sp-3) 0 var(--sp-4); background: var(--surface); border-bottom: 1px solid var(--border); }
   .app.mac .titlebar { padding-left: 84px; }
   .brand { display: flex; align-items: center; gap: var(--sp-2); flex: none; }
@@ -1481,4 +1628,10 @@
 
   @media (max-width: 1080px) { .tools :global(.cmdk .lbl), .tools :global(.cmdk .kbds) { display: none; } .tools :global(.cmdk) { padding: 0 8px; } }
   @media (max-width: 760px) { .brand .name, .live, .hints, .tsep { display: none; } .titlebar { gap: var(--sp-2); } }
+  @media (max-width: 560px) {
+    .titlebar { display: grid; grid-template-columns: auto minmax(0, 1fr); height: auto; padding-top: var(--sp-2); padding-bottom: var(--sp-2); }
+    .app.mac .titlebar { padding-left: var(--sp-4); }
+    .search { width: 100%; min-width: 0; }
+    .tools { grid-column: 1 / -1; justify-self: end; }
+  }
 </style>

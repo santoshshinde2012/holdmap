@@ -1,6 +1,9 @@
 //! Plan executor: graceful ladder (SIGTERM → wait → SIGKILL), container/supervisor stops, and a
 //! final "is the port actually free?" verification.
 
+mod batch;
+pub use batch::CompletedSupervisorStops;
+
 use crate::docker;
 use crate::engine::{port_busy, ActionPlan, Owner, ProcRef, Step, StopReport};
 use crate::process::ProcessTable;

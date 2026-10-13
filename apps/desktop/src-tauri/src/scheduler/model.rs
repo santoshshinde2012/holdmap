@@ -47,9 +47,9 @@ pub struct ScheduledAction {
 }
 
 #[derive(Clone)]
-pub(super) struct PinnedStop {
-    pub(super) target: String,
-    pub(super) plan: ActionPlan,
+pub(crate) struct PinnedStop {
+    pub(crate) target: String,
+    pub(crate) plan: ActionPlan,
 }
 
 #[derive(Clone)]

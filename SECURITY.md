@@ -39,7 +39,16 @@ out of scope.
 - Stop plans retain their original effects. Desktop confirmation handles are one-use, expire
   after five minutes and are limited to 128 pending previews. Execution binds the target and
   options to that preview, compares a fresh plan with `ActionPlan::same_effects`, and rejects
-  changed owners or effects. Agent bulk dialogs preview every queued plan.
+  changed owners or effects. Agent bulk dialogs preview every queued plan. Native immediate
+  batches accept at most 32 distinct exact TCP/UDP listeners in normal stop mode; every
+  one-use handle, current-account process identity and agent membership is checked against
+  one fresh scan before any effect. Execution retains those plans so several listeners
+  released by one child exit can all be verified. A failed effect, occupied port or history
+  write halts the remaining batch; earlier completed stops are reported and cannot be rolled
+  back automatically.
+  Repeated supervisor commands reuse an earlier successful batch effect only when the
+  executable, argument array and guard PID/start token match exactly. Each target keeps
+  its own port verification and records history from the original reviewed plan.
 - The shared executor checks process identity and current hard/soft protection before the
   initial signal and escalation. Soft protection requires an explicit authorization carried
   in the plan; hard protection cannot be overridden. Supervisor commands recheck current
@@ -53,11 +62,18 @@ out of scope.
   effects rather than prove human
   consent; the MCP client remains responsible for obtaining authorization. MCP has no
   protected-process override.
+  MCP stop results preserve actual process success/free status when restart history cannot
+  be saved, return a tool error with structured reports, and halt remaining batch effects.
+  Immediate, scheduled and MCP batches share the core's exact successful supervisor-command
+  reuse rule while retaining every port verification and original history plan.
 - Command and error displays conservatively redact recognized credentials, including URL
   credentials, encoded query keys, authorization/cookie headers and nested JSON values. Raw
   commands remain available only where execution needs them, including restart history.
   Human terminal output makes untrusted escape/control sequences inert; JSON retains its
   structured metadata.
+  HTTP status/header/title metadata uses the same policy before clipping and serialization.
+  Credential-bearing URL fragment parameters and recognized credentials embedded in
+  namespaced recording labels are filtered as well.
 - History/config reads and writes check regular files and reject link redirection. Unix state
   directories/files use `0700`/`0600`; reads require account ownership and reject files writable
   by other accounts. Writes use exclusive temporary files and directory-relative operations.
@@ -72,6 +88,12 @@ out of scope.
   Desktop restart requests identify the stored port, protocol and original process; ambiguous
   recordings are refused. Original Windows shell syntax stays in private history and is omitted
   from exports; older shell recordings without that syntax cannot be safely replayed.
+  Settings updates and history appends fail without replacing existing files when checked
+  reads are invalid, untrusted or unavailable. Native history/settings reads expose those
+  failures; their file I/O and lock waits run off the UI thread. A history-save failure is
+  distinct from the process-stop result and prevents automatic restart or further batch
+  dispatch. CLI JSON includes an optional `history_error` and returns exit code 2 in that
+  case; the desktop retains the actual success/free status alongside its recording warning.
 - Executable launches use argument arrays. Project shell commands and recorded Windows
   `cmd.exe` commands preserve their authorized shell syntax. Stack
   files are checked and read through the same handle. On Unix they must belong to the current
@@ -89,6 +111,11 @@ out of scope.
   construct localhost URLs or resolve folders through a fresh scan, and agent paths must belong
   to the current report. Untrusted process and HTTP text renders as text, not HTML. The website
   demo uses sample data through the same UI and has no native process access.
+  Every first-party IPC command also passes a shared trusted-main-webview gate before
+  argument decoding or dispatch, including scans, settings, history, restart and updater
+  installation. Both the window and webview must be `main`, with the packaged local origin
+  or, in debug builds, the configured development origin. Tauri's own capability checks
+  remain responsible for plugin permissions and the requesting frame's origin.
 - MCP stdio frames are limited to 1 MiB excluding the newline; legacy batches are limited to
   64 messages. Oversized input is rejected before dispatch, and an oversized frame is drained
   completely so it cannot become a later valid request. HTTP probe paths reject request/header
@@ -107,6 +134,8 @@ out of scope.
   are discarded before retention;
   identifiers are pseudonymized. Source labels are sanitized, not guaranteed secret-free.
   Status/snapshot/errors exclude the token, and recording has no process-action authority.
+  The recording client rejects batches above 256 records before encoding and caps encoding
+  at 256 KiB, including JSON escaping, before opening a connection.
   See [agent flow bounds and privacy](docs/agent-flow.md#privacy-security-and-bounds).
   Holdmap's other network operations are localhost probes, SSH to
   named hosts, and desktop update checks against GitHub Releases. Project commands and SSH

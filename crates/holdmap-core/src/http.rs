@@ -3,6 +3,7 @@
 //! [`MAX_BODY`] bytes, so probing an unknown listener stays cheap and side-effect free.
 
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream};
 use std::time::{Duration, Instant};
@@ -95,9 +96,13 @@ pub fn probe(port: u16, path: &str, timeout: Duration) -> Option<HttpInfo> {
             Ok(n) => {
                 first.get_or_insert_with(|| started.elapsed());
                 buf.extend_from_slice(&chunk[..n.min(MAX_BODY - buf.len())]);
-                // Stop early once the title has been seen.
-                if contains_ci(&buf, b"</title>") {
-                    break;
+                // Only inspect the final response's framed body: headers and trailers can
+                // contain title-like text, and informational responses precede the result.
+                if let Some(response) = final_response(&buf) {
+                    let body = response.body_prefix()?;
+                    if body.complete || contains_ci(&body.bytes, b"</title>") {
+                        break;
+                    }
                 }
             }
             Err(_) => break,
@@ -125,21 +130,15 @@ fn contains_ci(hay: &[u8], needle: &[u8]) -> bool {
 
 /// Parse a raw HTTP/1.x response (status line, headers and the start of the body).
 pub fn parse_response(port: u16, raw: &[u8]) -> Option<HttpInfo> {
-    let text = String::from_utf8_lossy(raw);
-    let (head, body) = text
-        .split_once("\r\n\r\n")
-        .or_else(|| text.split_once("\n\n"))
-        .unwrap_or((&text, ""));
+    let response = final_response(raw)?;
+    let prefix = response.body_prefix()?;
+    let head = String::from_utf8_lossy(response.head);
+    let body = String::from_utf8_lossy(&prefix.bytes);
     let mut lines = head.lines();
     let status_line = lines.next()?;
     let mut parts = status_line.splitn(3, ' ');
-    if !matches!(parts.next()?, "HTTP/1.0" | "HTTP/1.1") {
-        return None;
-    }
-    let status: u16 = parts.next()?.trim().parse().ok()?;
-    if !(100..=599).contains(&status) {
-        return None;
-    }
+    parts.next()?;
+    parts.next()?;
     let reason = clip(parts.next().unwrap_or("").trim(), 60);
     let mut server = None;
     let mut location = None;
@@ -158,19 +157,198 @@ pub fn parse_response(port: u16, raw: &[u8]) -> Option<HttpInfo> {
     }
     Some(HttpInfo {
         port,
-        status,
+        status: response.status,
         reason,
-        title: title(body),
+        title: title(&body),
         server,
         location,
         elapsed_ms: 0,
     })
 }
 
+// Keep the parser small and bounded; probes only need a final status and a body prefix.
+// Eight informational responses are sufficient for a local diagnostic without allowing
+// a listener to keep the parser chasing an unbounded chain of Early Hints.
+const MAX_INFORMATIONAL_RESPONSES: usize = 8;
+
+#[derive(Clone, Copy)]
+enum BodyFraming {
+    Empty,
+    Length(usize),
+    Chunked,
+    Close,
+}
+
+struct Response<'a> {
+    head: &'a [u8],
+    body: &'a [u8],
+    status: u16,
+    framing: BodyFraming,
+}
+
+struct BodyPrefix<'a> {
+    bytes: Cow<'a, [u8]>,
+    complete: bool,
+}
+
+impl Response<'_> {
+    fn body_prefix(&self) -> Option<BodyPrefix<'_>> {
+        let (bytes, complete) = match self.framing {
+            BodyFraming::Empty => (&[][..], true),
+            BodyFraming::Length(length) => (
+                &self.body[..self.body.len().min(length)],
+                self.body.len() >= length,
+            ),
+            BodyFraming::Close => (self.body, false),
+            BodyFraming::Chunked => return chunked_prefix(self.body),
+        };
+        Some(BodyPrefix {
+            bytes: Cow::Borrowed(bytes),
+            complete,
+        })
+    }
+}
+
+fn final_response(mut raw: &[u8]) -> Option<Response<'_>> {
+    for _ in 0..=MAX_INFORMATIONAL_RESPONSES {
+        let (end, delimiter_len) = header_end(raw)?;
+        let head = &raw[..end];
+        let mut parts = head
+            .split(|&byte| byte == b'\n')
+            .next()?
+            .splitn(3, |&byte| byte == b' ');
+        if !matches!(parts.next()?, b"HTTP/1.0" | b"HTTP/1.1") {
+            return None;
+        }
+        let code = parts.next()?;
+        let code = code.strip_suffix(b"\r").unwrap_or(code);
+        if code.len() != 3 || !code.iter().all(u8::is_ascii_digit) {
+            return None;
+        }
+        let status = u16::from(code[0] - b'0') * 100
+            + u16::from(code[1] - b'0') * 10
+            + u16::from(code[2] - b'0');
+        if !(100..=599).contains(&status) || status == 101 {
+            // This GET did not request a protocol upgrade.
+            return None;
+        }
+        let framing = body_framing(head, status)?;
+        raw = &raw[end + delimiter_len..];
+        if status >= 200 {
+            return Some(Response {
+                head,
+                body: raw,
+                status,
+                framing,
+            });
+        }
+    }
+    None
+}
+
+fn header_end(raw: &[u8]) -> Option<(usize, usize)> {
+    let crlf = raw.windows(4).position(|window| window == b"\r\n\r\n");
+    let lf = raw.windows(2).position(|window| window == b"\n\n");
+    match (crlf, lf) {
+        (Some(crlf), Some(lf)) if lf < crlf => Some((lf, 2)),
+        (Some(crlf), _) => Some((crlf, 4)),
+        (_, Some(lf)) => Some((lf, 2)),
+        _ => None,
+    }
+}
+
+fn body_framing(head: &[u8], status: u16) -> Option<BodyFraming> {
+    let mut length = None;
+    let mut chunked = false;
+    for line in head.split(|&byte| byte == b'\n').skip(1) {
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        let colon = line.iter().position(|&byte| byte == b':')?;
+        let (name, value) = (&line[..colon], &line[colon + 1..]);
+        if name.is_empty()
+            || !name
+                .iter()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(byte))
+        {
+            return None;
+        }
+        if name.eq_ignore_ascii_case(b"content-length") {
+            let value = std::str::from_utf8(value).ok()?.trim_matches([' ', '\t']);
+            for item in value.split(',') {
+                let item = item.trim_matches([' ', '\t']);
+                if item.is_empty() || !item.bytes().all(|byte| byte.is_ascii_digit()) {
+                    return None;
+                }
+                let parsed = item.parse::<usize>().ok()?;
+                if length.is_some_and(|previous| previous != parsed) {
+                    return None;
+                }
+                length = Some(parsed);
+            }
+        } else if name.eq_ignore_ascii_case(b"transfer-encoding") {
+            let value = std::str::from_utf8(value).ok()?.trim_matches([' ', '\t']);
+            if chunked || !value.eq_ignore_ascii_case("chunked") {
+                return None;
+            }
+            chunked = true;
+        }
+    }
+    if chunked && length.is_some() {
+        return None;
+    }
+    Some(if status < 200 || matches!(status, 204 | 304) {
+        BodyFraming::Empty
+    } else if chunked {
+        BodyFraming::Chunked
+    } else if let Some(length) = length {
+        BodyFraming::Length(length)
+    } else {
+        BodyFraming::Close
+    })
+}
+
+fn chunked_prefix(mut raw: &[u8]) -> Option<BodyPrefix<'_>> {
+    let mut bytes = Vec::with_capacity(raw.len());
+    loop {
+        let Some(end) = raw.windows(2).position(|window| window == b"\r\n") else {
+            return Some(BodyPrefix {
+                bytes: Cow::Owned(bytes),
+                complete: false,
+            });
+        };
+        let size = raw[..end].split(|&byte| byte == b';').next()?;
+        if size.is_empty() || !size.iter().all(u8::is_ascii_hexdigit) {
+            return None;
+        }
+        let size = usize::from_str_radix(std::str::from_utf8(size).ok()?, 16).ok()?;
+        raw = &raw[end + 2..];
+        if size == 0 {
+            // Trailers do not contain response content, even if they contain HTML.
+            let complete = raw.starts_with(b"\r\n") || header_end(raw).is_some();
+            return Some(BodyPrefix {
+                bytes: Cow::Owned(bytes),
+                complete,
+            });
+        }
+        bytes.extend_from_slice(&raw[..raw.len().min(size)]);
+        if raw.len().saturating_sub(size) < 2 {
+            return Some(BodyPrefix {
+                bytes: Cow::Owned(bytes),
+                complete: false,
+            });
+        }
+        if &raw[size..size + 2] != b"\r\n" {
+            return None;
+        }
+        raw = &raw[size + 2..];
+    }
+}
+
 fn clip(s: &str, max: usize) -> String {
-    let s = &*crate::util::printable(s);
+    // Metadata is display-only; redact the entire value before clipping, since truncation
+    // can remove the @ or closing syntax needed to recognize a credential-bearing URL.
+    let s = crate::redact::line(s);
     if s.chars().count() <= max {
-        s.to_string()
+        s
     } else {
         format!("{}…", s.chars().take(max - 1).collect::<String>())
     }
@@ -215,6 +393,85 @@ mod tests {
     }
 
     #[test]
+    fn http_metadata_redacts_credentials_before_clipping_or_exporting() {
+        let raw = b"HTTP/1.1 302 token=reason-private\r\nServer: token=server-private\r\nLocation: http://developer:url-private@localhost/callback?%74oken=query-private&view=ports\r\n\r\n<title>Agent token=title-private &amp; Ready</title>";
+        let info = parse_response(3000, raw).unwrap();
+        assert_eq!(info.status, 302);
+        assert_eq!(info.reason, format!("token={}", crate::redact::MASK));
+        assert_eq!(info.server.as_deref(), Some("token=••••"));
+        assert_eq!(info.title.as_deref(), Some("Agent token=•••• & Ready"));
+        assert_eq!(
+            info.location.as_deref(),
+            Some("http://developer:••••@localhost/callback?%74oken=••••&view=ports")
+        );
+        let exported = serde_json::to_string(&info).unwrap();
+        let summary = info.summary();
+        for secret in [
+            "reason-private",
+            "server-private",
+            "url-private",
+            "query-private",
+            "title-private",
+        ] {
+            assert!(
+                !exported.contains(secret),
+                "JSON leaked {secret}: {exported}"
+            );
+            assert!(
+                !summary.contains(secret),
+                "summary leaked {secret}: {summary}"
+            );
+        }
+        // Long values must be redacted in full before display limits truncate them.
+        let response = format!(
+            "HTTP/1.1 302 Found\r\nLocation: http://developer:{}@localhost\r\n\r\n",
+            "private-url-password".repeat(20)
+        );
+        assert_eq!(
+            parse_response(3000, response.as_bytes())
+                .unwrap()
+                .location
+                .as_deref(),
+            Some("http://developer:••••@localhost")
+        );
+        let info = parse_response(
+            3000,
+            b"HTTP/1.1 302 Found\r\nLocation: /callback?view=ports#access_token=fragment-private&state=ok\r\n\r\n",
+        )
+        .unwrap();
+        assert_eq!(
+            info.location.as_deref(),
+            Some("/callback?view=ports#access_token=••••&state=ok")
+        );
+    }
+
+    #[test]
+    fn real_http_probe_never_returns_raw_redirect_credentials() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0; 4096];
+            assert!(stream.read(&mut request).unwrap() > 0);
+            stream
+                .write_all(b"HTTP/1.1 302 Found\r\nLocation: http://dev:probe-private@localhost/?access_token=probe-token-private\r\nContent-Length: 0\r\n\r\n")
+                .unwrap();
+        });
+        let info = probe(port, "/", Duration::from_secs(2)).unwrap();
+        server.join().unwrap();
+        let exported = serde_json::to_string(&info).unwrap();
+        assert!(!exported.contains("probe-private"), "{exported}");
+        assert!(!exported.contains("probe-token-private"), "{exported}");
+        assert_eq!(
+            info.location.as_deref(),
+            Some("http://dev:••••@localhost/?access_token=••••")
+        );
+    }
+
+    #[test]
     fn parses_status_headers_and_title() {
         let raw = b"HTTP/1.1 200 OK\r\nServer: nginx/1.27\r\nContent-Type: text/html\r\n\r\n<html><head><TITLE>\n  Shop &amp; Co  \n</TITLE></head></html>";
         let i = parse_response(3000, raw).unwrap();
@@ -243,6 +500,93 @@ mod tests {
         assert!(parse_response(1, b"HTTP/1.1 abc\r\n\r\n").is_none());
         assert!(parse_response(1, b"HTTP/unknown 200 OK\r\n\r\n").is_none());
         assert!(parse_response(1, b"HTTP/1.1 999 OK\r\n\r\n").is_none());
+    }
+
+    #[test]
+    fn incomplete_headers_and_invalid_status_codes_do_not_report_health() {
+        for raw in [
+            &b"HTTP/1.1 200 OK"[..],
+            &b"HTTP/1.1 200 OK\r\nServer: unfinished"[..],
+            &b"HTTP/1.1 0200 OK\r\n\r\n"[..],
+            &b"HTTP/1.1 +200 OK\r\n\r\n"[..],
+        ] {
+            assert!(parse_response(1, raw).is_none(), "{raw:?}");
+        }
+    }
+
+    #[test]
+    fn informational_responses_require_a_final_response() {
+        let hints = b"HTTP/1.1 103 Early Hints\r\nServer: hint-server\r\n\r\n";
+        assert!(parse_response(1, hints).is_none());
+        let mut response = hints.to_vec();
+        response.extend_from_slice(
+            b"HTTP/1.1 200 OK\r\nServer: final-server\r\n\r\n<title>Ready</title>",
+        );
+        let info = parse_response(1, &response).unwrap();
+        assert_eq!(info.status, 200);
+        assert_eq!(info.server.as_deref(), Some("final-server"));
+        assert_eq!(info.title.as_deref(), Some("Ready"));
+        assert!(parse_response(1, b"HTTP/1.1 101 Switching Protocols\r\n\r\n").is_none());
+    }
+
+    #[test]
+    fn informational_response_chains_are_bounded() {
+        let hints = b"HTTP/1.1 103 Early Hints\r\n\r\n";
+        let mut response = hints.repeat(MAX_INFORMATIONAL_RESPONSES);
+        response.extend_from_slice(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
+        assert_eq!(parse_response(1, &response).unwrap().status, 200);
+        let mut excessive = hints.to_vec();
+        excessive.extend_from_slice(&response);
+        assert!(parse_response(1, &excessive).is_none());
+    }
+
+    #[test]
+    fn body_framing_excludes_chunk_metadata_and_bytes_outside_the_body() {
+        let raw = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\n<ti\r\n11\r\ntle>Hello</title>\r\n0\r\nTrailer: <title>Wrong</title>\r\n\r\n";
+        let info = parse_response(1, raw).unwrap();
+        assert_eq!(info.title.as_deref(), Some("Hello"));
+        let info = parse_response(
+            1,
+            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK<title>Wrong</title>",
+        )
+        .unwrap();
+        assert_eq!(info.title, None);
+        let info =
+            parse_response(1, b"HTTP/1.1 204 No Content\r\n\r\n<title>Wrong</title>").unwrap();
+        assert_eq!(info.title, None);
+    }
+
+    #[test]
+    fn ambiguous_and_invalid_body_framing_is_refused() {
+        for raw in [
+            &b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\nContent-Length: 2\r\n\r\nOK"[..],
+            &b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n"
+                [..],
+            &b"HTTP/1.1 200 OK\r\nContent-Length: +2\r\n\r\nOK"[..],
+            &b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nnot-a-size\r\n"[..],
+            &b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nOKwrong"[..],
+        ] {
+            assert!(parse_response(1, raw).is_none(), "{raw:?}");
+        }
+    }
+
+    #[test]
+    fn partial_bodies_preserve_available_content_within_the_probe_budget() {
+        for raw in [
+            &b"HTTP/1.1 200 OK\r\nContent-Length: 100000\r\n\r\n<title>Ready</title>"[..],
+            &b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n186a0\r\n<title>Ready</title>"
+                [..],
+        ] {
+            assert_eq!(
+                parse_response(1, raw).unwrap().title.as_deref(),
+                Some("Ready")
+            );
+        }
+        assert!(parse_response(
+            1,
+            b"HTTP/1.1 200 OK\r\nContent-Length: 2, 2\r\nContent-Length: 2\r\n\r\nOK"
+        )
+        .is_some());
     }
 
     #[test]
@@ -298,6 +642,61 @@ mod tests {
         let req = t.join().unwrap();
         assert!(req.starts_with("GET /health HTTP/1.1\r\n"), "{req}");
         assert!(req.contains(&format!("Host: localhost:{port}")));
+    }
+
+    #[test]
+    fn probe_waits_for_split_final_headers_and_decodes_split_title_chunks() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0; 4096];
+            assert!(stream.read(&mut request).unwrap() > 0);
+            stream
+                .write_all(b"HTTP/1.1 103 Early Hints\r\n\r\nHTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nServer: </title>\r\n")
+                .unwrap();
+            std::thread::sleep(Duration::from_millis(20));
+            stream.write_all(b"\r\n3\r\n<ti\r\n").unwrap();
+            std::thread::sleep(Duration::from_millis(20));
+            stream
+                .write_all(b"11\r\ntle>Hello</title>\r\n0\r\n\r\n")
+                .unwrap();
+        });
+        let info = probe(port, "/", Duration::from_secs(2)).unwrap();
+        assert_eq!(info.status, 200);
+        assert_eq!(info.title.as_deref(), Some("Hello"));
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn probe_finishes_completed_bodies_without_waiting_for_connection_close() {
+        for response in [
+            &b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nOK"[..],
+            &b"HTTP/1.1 204 No Content\r\nConnection: keep-alive\r\n\r\n"[..],
+            &b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: keep-alive\r\n\r\n2\r\nOK\r\n0\r\n\r\n"[..],
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let (release, wait) = std::sync::mpsc::channel();
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                let mut request = [0; 4096];
+                assert!(stream.read(&mut request).unwrap() > 0);
+                stream.write_all(response).unwrap();
+                let _ = wait.recv_timeout(Duration::from_secs(3));
+            });
+            let started = Instant::now();
+            let info = probe(port, "/", Duration::from_secs(1)).unwrap();
+            let elapsed = started.elapsed();
+            release.send(()).unwrap();
+            server.join().unwrap();
+            assert!(info.healthy());
+            assert!(elapsed < Duration::from_millis(700), "{elapsed:?}");
+        }
     }
 
     #[test]

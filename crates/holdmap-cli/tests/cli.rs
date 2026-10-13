@@ -10,7 +10,7 @@ use std::time::Duration;
 /// `HOLDMAP_HOME` (the later `env` wins).
 fn hm() -> Command {
     static HOME: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
-    let home = HOME.get_or_init(|| tempfile::tempdir().unwrap());
+    let home = HOME.get_or_init(home);
     let mut c = Command::cargo_bin("holdmap").unwrap();
     c.env("HOLDMAP_COLOR", "never")
         .env("HOLDMAP_HOME", home.path())
@@ -458,7 +458,9 @@ mod linux {
 }
 
 fn home() -> tempfile::TempDir {
-    tempfile::tempdir().unwrap()
+    let home = tempfile::tempdir().unwrap();
+    holdmap_core::util::create_private_dir(home.path()).unwrap();
+    home
 }
 
 #[test]

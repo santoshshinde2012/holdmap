@@ -54,9 +54,9 @@ impl LocalClient {
     }
 
     /// Submit normalized metadata only. The collector independently validates every record.
+    /// Requests exceeding 256 records or 256 KiB of encoded JSON fail before connecting.
     pub fn record(&self, spans: &[ActivitySpan]) -> Result<(), ClientError> {
-        let body = serde_json::to_vec(spans)
-            .map_err(|_| ClientError("Couldn't encode activity metadata."))?;
+        let body = encode_spans(spans)?;
         let response = self.post(Route::Activity, &body)?;
         let result: serde_json::Value = serde_json::from_slice(&response)
             .map_err(|_| ClientError("The recording acknowledgement was invalid."))?;
@@ -119,6 +119,37 @@ impl LocalClient {
         }
         parse_response(&response)?.ok_or(ClientError("The recording response was incomplete."))
     }
+}
+
+/// Reject excess records before visiting them and stop serialization at the wire limit.
+/// Checking a completed Vec would first allocate a copy of arbitrarily large input.
+fn encode_spans(spans: &[ActivitySpan]) -> Result<Vec<u8>, ClientError> {
+    if spans.len() > COLLECTOR_LIMITS.max_records_per_request {
+        return Err(ClientError("Activity metadata exceeded the record limit."));
+    }
+    struct BoundedBody(Vec<u8>);
+    impl Write for BoundedBody {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if bytes.len() > COLLECTOR_LIMITS.max_body_bytes.saturating_sub(self.0.len()) {
+                return Err(std::io::Error::other("activity request limit"));
+            }
+            self.0.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut body = BoundedBody(Vec::new());
+    serde_json::to_writer(&mut body, spans).map_err(|error| {
+        if error.is_io() {
+            ClientError("Activity metadata exceeded the request limit.")
+        } else {
+            ClientError("Couldn't encode activity metadata.")
+        }
+    })?;
+    Ok(body.0)
 }
 
 fn write_deadline(
@@ -210,6 +241,76 @@ fn parse_response(bytes: &[u8]) -> Result<Option<Vec<u8>>, ClientError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{normalize_hook, Provider};
+    use serde_json::json;
+    use std::net::TcpListener;
+
+    fn fixture_span() -> ActivitySpan {
+        normalize_hook(
+            Provider::Claude,
+            &json!({
+                "hook_event_name": "PreToolUse",
+                "session_id": "fixture-session",
+                "tool_use_id": "fixture-call",
+                "tool_name": "Bash"
+            }),
+            100,
+        )
+        .unwrap()
+        .remove(0)
+    }
+
+    #[test]
+    fn record_rejects_excess_records_and_large_or_escaped_metadata_before_connecting() {
+        let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let client = LocalClient::new(
+            &format!("http://{}", listener.local_addr().unwrap()),
+            &"a".repeat(64),
+        )
+        .unwrap();
+        let span = fixture_span();
+        let error = client
+            .record(&vec![
+                span.clone();
+                COLLECTOR_LIMITS.max_records_per_request + 1
+            ])
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Activity metadata exceeded the record limit."
+        );
+        for name in [
+            "private".repeat(COLLECTOR_LIMITS.max_body_bytes),
+            "\"".repeat(COLLECTOR_LIMITS.max_body_bytes / 2),
+        ] {
+            let mut oversized = span.clone();
+            oversized.name = name;
+            let error = client.record(&[oversized]).unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                "Activity metadata exceeded the request limit."
+            );
+            assert!(!error.to_string().contains("private"));
+        }
+        assert_eq!(
+            listener.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
+    }
+
+    #[test]
+    fn encoding_accepts_exact_body_limit_and_refuses_the_next_byte() {
+        let mut span = fixture_span();
+        let base = serde_json::to_vec(&[span.clone()]).unwrap().len() - span.name.len();
+        span.name = "x".repeat(COLLECTOR_LIMITS.max_body_bytes - base);
+        let encoded = encode_spans(&[span.clone()]).unwrap();
+        assert_eq!(encoded.len(), COLLECTOR_LIMITS.max_body_bytes);
+        assert_eq!(encoded, serde_json::to_vec(&[span.clone()]).unwrap());
+        span.name.push('x');
+        assert!(encode_spans(&[span]).is_err());
+        assert_eq!(encode_spans(&[]).unwrap(), b"[]");
+    }
 
     #[test]
     fn client_refuses_dns_remote_paths_and_header_injection() {

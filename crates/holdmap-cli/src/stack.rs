@@ -333,7 +333,8 @@ fn up_one(stack: &Stack, s: &stack::Service, a: &UpArgs, docker: bool) -> Result
                     crate::project_policy::checked_engine(docker, &plan, Some(&stack.file))?;
                 let report = execute(&plan, &mut |l| println!("    {} {}", dim("·"), dim(l)));
                 println!("{}", render::report_line(&report));
-                crate::state::record(&fresh, &plan, &report);
+                crate::state::record_checked(&fresh, &plan, &report)
+                    .context("The stop completed, but startup was not attempted after a history-save failure")?;
                 if !report.success {
                     return Ok(UpStep::Failed(exit::BUSY));
                 }
@@ -534,7 +535,8 @@ pub fn down(a: &DownArgs, docker: bool) -> Result<u8> {
         let fresh = crate::project_policy::checked_engine(docker, plan, Some(&stack.file))?;
         let report = execute(plan, &mut |l| println!("    {} {}", dim("·"), dim(l)));
         println!("{}", render::report_line(&report));
-        crate::state::record(&fresh, plan, &report);
+        crate::state::record_checked(&fresh, plan, &report)
+            .context("The stop completed, but remaining services were not attempted after a history-save failure")?;
         if !report.success {
             code = code.max(exit::BUSY);
         }

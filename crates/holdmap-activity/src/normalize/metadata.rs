@@ -35,6 +35,34 @@ fn unsafe_character(character: char) -> bool {
         || matches!(character, '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
 }
 
+fn name_separator(byte: u8) -> bool {
+    matches!(byte, b' ' | b'_' | b'-' | b'.' | b':')
+}
+
+fn credential_prefix(value: &str) -> bool {
+    ["sk-", "xox", "ghp_", "gho_", "github_pat_", "akia", "bearer "]
+        .iter()
+        .any(|prefix| value.starts_with(prefix))
+        || (value.starts_with("eyj") && value.len() > 24)
+        // Recognize the common 20-character STS access-key ID shape so ordinary
+        // labels such as AsiaHelper or asia_search remain useful source names.
+        || (value.starts_with("asia")
+            && value
+                .as_bytes()
+                .get(..20)
+                .is_some_and(|key| key.iter().all(u8::is_ascii_alphanumeric))
+            && value.as_bytes().get(20).is_none_or(|byte| name_separator(*byte)))
+}
+
+fn has_credential_component(value: &str) -> bool {
+    // MCP and namespaced tool labels prepend server names to a tool identifier.
+    // Prefix checks must apply after separators too, before any label is retained.
+    value.char_indices().any(|(index, _)| {
+        (index == 0 || name_separator(value.as_bytes()[index - 1]))
+            && credential_prefix(&value[index..])
+    })
+}
+
 pub(super) fn safe_name(value: Option<&str>, fallback: &str) -> String {
     let Some(value) = value else {
         return fallback.into();
@@ -51,14 +79,7 @@ pub(super) fn safe_name(value: Option<&str>, fallback: &str) -> String {
         || value
             .chars()
             .any(|c| !c.is_ascii_alphanumeric() && !matches!(c, ' ' | '_' | '-' | '.' | ':'))
-        || lowered.starts_with("sk-")
-        || lowered.starts_with("xox")
-        || lowered.starts_with("ghp_")
-        || lowered.starts_with("gho_")
-        || lowered.starts_with("github_pat_")
-        || lowered.starts_with("akia")
-        || lowered.starts_with("bearer ")
-        || (lowered.starts_with("eyj") && value.len() > 24)
+        || has_credential_component(&lowered)
         || (value.contains(' ')
             && !matches!(
                 value,

@@ -2,7 +2,9 @@
 
 use crate::confirmation::{self, Confirmations, Observation, Request};
 use crate::tools::{engine, port_arg, ToolError};
+use holdmap_core::exec::CompletedSupervisorStops;
 use holdmap_core::{ActionPlan, Engine, ProcRef, Step, StopOptions, StopReport, Target};
+use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
@@ -16,7 +18,16 @@ pub(super) fn call(
 
 trait Backend {
     fn observe(&mut self, request: &Request) -> Result<Observation, ToolError>;
-    fn execute(&mut self, plan: &ActionPlan) -> StopReport;
+    fn execute(&mut self, original: &ActionPlan, execution: &ActionPlan) -> Stopped;
+}
+
+/// Process control and saving its restart recording have independent outcomes.
+#[derive(Serialize)]
+struct Stopped {
+    #[serde(flatten)]
+    report: StopReport,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    history_error: Option<String>,
 }
 
 #[derive(Default)]
@@ -32,16 +43,24 @@ impl Backend for LocalBackend {
         Ok(observation)
     }
 
-    fn execute(&mut self, plan: &ActionPlan) -> StopReport {
-        let report = holdmap_core::execute(plan, &mut |_| {});
+    fn execute(&mut self, original: &ActionPlan, execution: &ActionPlan) -> Stopped {
+        let report = holdmap_core::execute(execution, &mut |_| {});
         let engine = self
             .engine
             .as_ref()
             .expect("observation precedes execution");
-        let _ = holdmap_core::store::Store::open_default().record(
-            &holdmap_core::history::entries_from_plan(&engine.scan, plan, &report),
-        );
-        report
+        let history_error = holdmap_core::store::Store::open_default()
+            .record(&holdmap_core::history::entries_from_plan(
+                &engine.scan,
+                original,
+                &report,
+            ))
+            .err()
+            .map(|error| holdmap_core::redact::line(&error.to_string()));
+        Stopped {
+            report,
+            history_error,
+        }
     }
 }
 
@@ -94,30 +113,45 @@ fn call_with(
         .take(id, &request)
         .map_err(ToolError::Failed)?;
     let current = backend.observe(&request)?;
-    let reports = execute_checked(&confirmed, &current, |plan| backend.execute(plan))?;
-    if reports.iter().any(|report| !report.success) {
-        return Err(ToolError::Failed(format!(
-            "Stop failed; the confirmation was consumed. Review a new preview before retrying.\n{}",
-            reports
-                .iter()
-                .flat_map(|report| report.log.iter())
-                .cloned()
-                .collect::<Vec<_>>()
-                .join("\n")
-        )));
-    }
-    let data = match request {
-        Request::Port { port, .. } => {
-            return Ok((
-                format!("Port {port} is free."),
-                serde_json::to_value(&reports[0]).unwrap_or_default(),
-            ));
-        }
+    let reports = execute_checked(&confirmed, &current, |original, execution| {
+        backend.execute(original, execution)
+    })?;
+    let data = match &request {
+        Request::Port { .. } => serde_json::to_value(&reports[0]).unwrap_or_default(),
         Request::Agents { .. } => json!({
             "agents": confirmed.agents.iter().map(|(id, _)| id).collect::<Vec<_>>(),
             "plans": confirmed.plans, "reports": reports
         }),
     };
+    if let Some(failed) = reports.iter().find(|stopped| {
+        !stopped.report.success || !stopped.report.freed || stopped.history_error.is_some()
+    }) {
+        let outcome = if failed.report.success && failed.report.freed {
+            "The stop succeeded and its listener is free, but the restart recording could not be saved."
+        } else {
+            "Stop failed."
+        };
+        let history = failed
+            .history_error
+            .as_ref()
+            .map(|error| format!("\nHistory error: {error}"))
+            .unwrap_or_default();
+        return Err(ToolError::FailedWithData(
+            format!(
+                "{outcome}{history}\nNo further batch targets were attempted. The confirmation was consumed; request a new preview before retrying.\n{}",
+                reports
+                    .iter()
+                    .flat_map(|stopped| stopped.report.log.iter())
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+            data,
+        ));
+    }
+    if let Request::Port { port, .. } = request {
+        return Ok((format!("Port {port} is free."), data));
+    }
     Ok((
         "Confirmed agent ports stopped; no new target was added to the reviewed plans.".into(),
         data,
@@ -261,15 +295,27 @@ fn preview_data(observation: &Observation) -> Value {
 fn execute_checked(
     confirmed: &Observation,
     current: &Observation,
-    mut execute: impl FnMut(&ActionPlan) -> StopReport,
-) -> Result<Vec<StopReport>, ToolError> {
+    mut execute: impl FnMut(&ActionPlan, &ActionPlan) -> Stopped,
+) -> Result<Vec<Stopped>, ToolError> {
     confirmation::validate_fresh(confirmed, current).map_err(ToolError::Failed)?;
     let mut reports = Vec::new();
+    let mut completed = CompletedSupervisorStops::default();
     for plan in &confirmed.plans {
-        let report = execute(plan);
-        let success = report.success;
-        reports.push(report);
-        if !success {
+        let execution = completed.remaining(plan);
+        let mut stopped = execute(plan, &execution);
+        if execution.steps.len() < plan.steps.len() {
+            stopped.report.log.insert(
+                0,
+                "The same reviewed supervisor stop completed earlier in this batch; verifying this listener without repeating that command.".into(),
+            );
+        }
+        let complete =
+            stopped.report.success && stopped.report.freed && stopped.history_error.is_none();
+        if complete {
+            completed.remember(&execution, &stopped.report);
+        }
+        reports.push(stopped);
+        if !complete {
             break;
         }
     }
@@ -290,6 +336,13 @@ mod tests {
     const AGENT_PID: u32 = 4_100_100;
     const OWNED_PID: u32 = 4_100_200;
     const SHARED_PORT: u16 = 53123;
+
+    fn stopped(report: StopReport) -> Stopped {
+        Stopped {
+            report,
+            history_error: None,
+        }
+    }
 
     /// Production agent discovery/planning over synthetic metadata, with no live listeners.
     /// Codex has no home-history reader, and the fixture binds no actual sockets.
@@ -569,12 +622,13 @@ mod tests {
             fn observe(&mut self, request: &Request) -> Result<Observation, ToolError> {
                 observe(&self.current, request)
             }
-            fn execute(&mut self, _: &ActionPlan) -> StopReport {
+            fn execute(&mut self, _: &ActionPlan, _: &ActionPlan) -> Stopped {
                 self.executed += 1;
-                StopReport {
+                stopped(StopReport {
                     success: true,
+                    freed: true,
                     ..Default::default()
-                }
+                })
             }
         }
         let owned = low_risk_engine(Some(Supervisor::Pm2 {
@@ -625,9 +679,9 @@ mod tests {
         let owned_changed = protocol_engine(&[Protocol::Tcp], Some(4_100_300), 21);
         let current = observe(&owned_changed, &request).ok().unwrap();
         let mut calls = 0;
-        assert!(execute_checked(&confirmed, &current, |_| {
+        assert!(execute_checked(&confirmed, &current, |_, _| {
             calls += 1;
-            StopReport::default()
+            stopped(StopReport::default())
         })
         .is_err());
         assert_eq!(
@@ -711,9 +765,9 @@ mod tests {
         let mut current = confirmed.clone();
         current.plans[1] = plan(300, 3001);
         let mut count = 0;
-        assert!(execute_checked(&confirmed, &current, |_| {
+        assert!(execute_checked(&confirmed, &current, |_, _| {
             count += 1;
-            StopReport::default()
+            stopped(StopReport::default())
         })
         .is_err());
         assert_eq!(count, 0);
@@ -721,14 +775,15 @@ mod tests {
         for plan in &mut current.plans {
             plan.summary = "Fresh display text".into();
         }
-        let reports = execute_checked(&confirmed, &current, |plan| {
+        let reports = execute_checked(&confirmed, &current, |plan, execution| {
             assert_eq!(plan.summary, "Reviewed plan");
+            assert_eq!(plan, execution);
             count += 1;
-            StopReport {
+            stopped(StopReport {
                 success: true,
                 freed: true,
                 ..Default::default()
-            }
+            })
         })
         .ok()
         .unwrap();
@@ -748,19 +803,287 @@ mod tests {
             observation.request = request.clone();
             Ok(observation)
         }
-        fn execute(&mut self, plan: &ActionPlan) -> StopReport {
-            let Step::SignalProcesses { processes, .. } = &plan.steps[0] else {
+        fn execute(&mut self, _: &ActionPlan, execution: &ActionPlan) -> Stopped {
+            let Step::SignalProcesses { processes, .. } = &execution.steps[0] else {
                 panic!("fixture step");
             };
             self.executed
                 .extend(processes.iter().map(|process| process.pid));
-            StopReport {
+            stopped(StopReport {
                 success: true,
                 freed: true,
                 ..Default::default()
-            }
+            })
         }
     }
+
+    #[test]
+    fn saved_history_failure_preserves_the_successful_stop_and_halts_remaining_targets() {
+        struct PersistenceFailureBackend {
+            current: Observation,
+            executed: Vec<String>,
+        }
+        impl Backend for PersistenceFailureBackend {
+            fn observe(&mut self, request: &Request) -> Result<Observation, ToolError> {
+                let mut current = self.current.clone();
+                current.request = request.clone();
+                Ok(current)
+            }
+            fn execute(&mut self, original: &ActionPlan, execution: &ActionPlan) -> Stopped {
+                assert_eq!(original, execution);
+                self.executed.push(original.target.clone());
+                Stopped {
+                    report: StopReport {
+                        target: original.target.clone(),
+                        success: true,
+                        freed: true,
+                        signalled: vec![100],
+                        log: vec!["The reviewed listener is free".into()],
+                        ..Default::default()
+                    },
+                    history_error: Some("fixture history write failed".into()),
+                }
+            }
+        }
+
+        for (name, args, request, plans) in [
+            (
+                "stop_port",
+                json!({"port":3000}),
+                Request::Port {
+                    port: 3000,
+                    force: false,
+                    allow_non_dev: false,
+                },
+                vec![plan(100, 3000)],
+            ),
+            (
+                "stop_agent_ports",
+                json!({"agent":"fixture"}),
+                Request::Agents {
+                    query: "fixture".into(),
+                    force: false,
+                },
+                vec![plan(100, 3000), plan(200, 3001)],
+            ),
+        ] {
+            let mut backend = PersistenceFailureBackend {
+                current: Observation {
+                    request,
+                    agents: if name == "stop_agent_ports" {
+                        vec![("agent:50".into(), 5)]
+                    } else {
+                        vec![]
+                    },
+                    plans,
+                },
+                executed: vec![],
+            };
+            let mut cache = Confirmations::default();
+            let (_, preview) = call_with(name, &args, &mut cache, &mut backend)
+                .ok()
+                .unwrap();
+            let mut execution = args.clone();
+            execution["dry_run"] = json!(false);
+            execution["confirmation_id"] = preview["confirmation_id"].clone();
+            let outcome = call_with(name, &execution, &mut cache, &mut backend);
+            assert!(matches!(&outcome, Err(ToolError::FailedWithData(..))));
+            let response = crate::tool_response(json!(7), outcome, name);
+            assert_eq!(response["result"]["isError"], true);
+            let data = &response["result"]["structuredContent"];
+            let report = if name == "stop_agent_ports" {
+                assert_eq!(data["plans"].as_array().unwrap().len(), 2);
+                assert_eq!(data["reports"].as_array().unwrap().len(), 1);
+                &data["reports"][0]
+            } else {
+                data
+            };
+            assert_eq!(report["success"], true);
+            assert_eq!(report["freed"], true);
+            assert_eq!(report["signalled"], json!([100]));
+            assert!(report["error"].is_null());
+            assert_eq!(report["history_error"], "fixture history write failed");
+            let text = response["result"]["content"][0]["text"].as_str().unwrap();
+            assert!(text.contains("stop succeeded"));
+            assert!(text.contains("No further batch targets were attempted"));
+            assert!(!text.contains("Stop failed."));
+            crate::validation::validate(
+                data,
+                &crate::catalog::definition(name).unwrap()["outputSchema"],
+            )
+            .unwrap();
+            assert_eq!(backend.executed, [":3000"]);
+            assert!(call_with(name, &execution, &mut cache, &mut backend).is_err());
+            assert_eq!(
+                backend.executed,
+                [":3000"],
+                "a history error cannot replay its consumed confirmation"
+            );
+        }
+    }
+
+    #[test]
+    fn production_supervisor_batch_runs_once_and_keeps_original_history_and_each_port_verification()
+    {
+        struct SupervisorBackend {
+            engine: Engine,
+            commands: usize,
+            verified: Vec<u16>,
+            recorded: Vec<ActionPlan>,
+        }
+        impl Backend for SupervisorBackend {
+            fn observe(&mut self, request: &Request) -> Result<Observation, ToolError> {
+                observe(&self.engine, request)
+            }
+            fn execute(&mut self, original: &ActionPlan, execution: &ActionPlan) -> Stopped {
+                // Saving history receives the original supervisor command even when its
+                // guard exited after the first stop and the execution copy omits it.
+                assert!(matches!(
+                    original.steps[0],
+                    Step::RunCommand { guard: Some(_), .. }
+                ));
+                self.recorded.push(original.clone());
+                for step in &execution.steps {
+                    match step {
+                        Step::RunCommand {
+                            guard: Some(guard),
+                            program,
+                            args,
+                            ..
+                        } => {
+                            assert_eq!(
+                                self.commands, 0,
+                                "the first command exited the shared guard"
+                            );
+                            assert_eq!(guard.pid, OWNED_PID);
+                            assert_eq!(program, "pm2");
+                            assert_eq!(args, &["stop", "3"]);
+                            self.commands += 1;
+                        }
+                        Step::VerifyFree {
+                            port,
+                            protocol: Protocol::Tcp,
+                            ..
+                        } => {
+                            self.verified.push(*port);
+                        }
+                        _ => panic!("unexpected fixture effect"),
+                    }
+                }
+                stopped(StopReport {
+                    target: original.target.clone(),
+                    success: true,
+                    freed: true,
+                    ..Default::default()
+                })
+            }
+        }
+
+        let mut scan = protocol_engine(&[Protocol::Tcp], None, 20).scan;
+        let mut processes: std::collections::HashMap<_, _> = scan
+            .table
+            .iter()
+            .cloned()
+            .map(|process| (process.pid, process))
+            .collect();
+        processes
+            .get_mut(&OWNED_PID)
+            .unwrap()
+            .cmdline
+            .extend(["--token".into(), "fixture-private-token".into()]);
+        scan.table = ProcessTable::from_processes(processes, scan.table.self_pid());
+        let mut second_listener = scan.raw[0].clone();
+        second_listener.local_port += 1;
+        scan.raw.push(second_listener);
+        let (entries, hidden_sockets) = build_entries(&scan.raw, &scan.table, &[], false);
+        scan.snapshot.entries = entries;
+        scan.snapshot.hidden_sockets = hidden_sockets;
+        let engine = Engine::from_scan(scan).with_strategies(StrategyRegistry::empty().with(
+            LowRiskStop(Some(Supervisor::Pm2 {
+                name: "fixture".into(),
+                id: "3".into(),
+            })),
+        ));
+        let mut backend = SupervisorBackend {
+            engine,
+            commands: 0,
+            verified: vec![],
+            recorded: vec![],
+        };
+        let mut cache = Confirmations::default();
+        let (_, preview) = call_with(
+            "stop_agent_ports",
+            &json!({"agent":"codex"}),
+            &mut cache,
+            &mut backend,
+        )
+        .ok()
+        .unwrap();
+        assert_eq!(preview["plans"].as_array().unwrap().len(), 2);
+        assert!(!preview.to_string().contains("fixture-private-token"));
+        let (text, data) = call_with(
+            "stop_agent_ports",
+            &json!({"agent":"codex","dry_run":false,"confirmation_id":preview["confirmation_id"]}),
+            &mut cache,
+            &mut backend,
+        )
+        .ok()
+        .unwrap();
+        assert!(text.contains("Confirmed agent ports stopped"));
+        assert_eq!(backend.commands, 1);
+        assert_eq!(backend.verified, [SHARED_PORT, SHARED_PORT + 1]);
+        assert_eq!(backend.recorded.len(), 2);
+        assert_eq!(data["plans"], preview["plans"]);
+        assert_eq!(data["reports"].as_array().unwrap().len(), 2);
+        for report in data["reports"].as_array().unwrap() {
+            assert_eq!(report["success"], true);
+            assert_eq!(report["freed"], true);
+            assert!(
+                report.get("history_error").is_none(),
+                "healthy response shape is unchanged"
+            );
+        }
+        assert!(data["reports"][1]["log"][0]
+            .as_str()
+            .unwrap()
+            .contains("without repeating that command"));
+        assert!(!data.to_string().contains("fixture-private-token"));
+        crate::validation::validate(
+            &data,
+            &crate::catalog::definition("stop_agent_ports").unwrap()["outputSchema"],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn unsuccessful_stop_or_busy_listener_halts_the_batch_before_the_next_effect() {
+        let confirmed = Observation {
+            request: Request::Agents {
+                query: "fixture".into(),
+                force: false,
+            },
+            agents: vec![("agent:50".into(), 5)],
+            plans: vec![plan(100, 3000), plan(200, 3001)],
+        };
+        for (success, freed) in [(false, false), (false, true), (true, false)] {
+            let mut attempted = 0;
+            let reports = execute_checked(&confirmed, &confirmed, |_, _| {
+                attempted += 1;
+                stopped(StopReport {
+                    success,
+                    freed,
+                    ..Default::default()
+                })
+            })
+            .ok()
+            .unwrap();
+            assert_eq!(attempted, 1);
+            assert_eq!(reports.len(), 1);
+            assert_eq!(reports[0].report.success, success);
+            assert_eq!(reports[0].report.freed, freed);
+        }
+    }
+
     #[test]
     fn two_call_stop_flow_requires_preview_validates_before_consuming_and_executes_once() {
         let mut backend = FixtureBackend {

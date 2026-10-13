@@ -1,5 +1,99 @@
 # holdmap architecture
 
+## Reliability review (current source)
+
+The shared Rust core remains the authority for scans, evidence, planning and execution.
+The desktop coordinates presentation and recovery; its native dispatcher applies the same
+trusted-main-webview policy to every first-party command before decoding arguments.
+Existing per-operation checks remain in place for recording, power and scheduling.
+Tauri independently checks the requesting frame's origin and plugin capabilities.
+Mock-runtime IPC tests prove secondary local views cannot reach command dispatch and the
+main view can, without invoking process controls or launching another app.
+
+The review prioritizes failures reproduced from the code. Product demand and field
+performance require separate measurement:
+
+| Developer problem | Approach | Evidence |
+|---|---|---|
+| A failed scan still appears live | Retain the last successful rows, mark scan failure, show an accessible recovery message and allow explicit retry | Frontend failure-after-success and recovery regressions |
+| A searched port appears free after the data changes | Associate availability with the accepted scan, invalidate failed/stale results and ignore late checks | Frontend availability and asynchronous-response regressions |
+| A socket-view change is ignored during a slow scan | Discard the previous mode's reply and immediately request the latest selected mode | In-flight socket-mode regression |
+| A local service sends interim or incomplete HTTP responses | Require complete headers and a final response, decode bounded body framing and share one request deadline | HTTP parser fixtures and loopback servers |
+| Large reported metadata is copied before its limit is checked | Check record count first and serialize through a capped writer before connecting | Exact-limit, escaped-input and no-network regressions |
+| New native commands omit a local-window check | Put the shared policy around the generated dispatcher | Mock-runtime accepted/denied IPC regressions |
+| Persistence fails after a stop completes | Keep process results and history errors distinct; block automatic replay and further batch dispatch | Native, CLI listener and frontend partial-success regressions |
+| One child serves several agent ports, making a later stop look stale | Preflight every reviewed target in one native scan, then execute retained plans and verify each port | Shared-process bind-probe, all-target preflight and frontend batch regressions |
+| Invalid settings or unreadable history is overwritten by a mutation | Use fallible reads for updates and restart lookup; retain tolerant read wrappers for compatibility | Private-file, invalid-format and preserved-byte regressions |
+| File locks freeze native controls | Move settings, history and OS integration to background threads | Native checks plus shared store lock regressions |
+| Cancelled or superseded plans reopen a review | Use one review generation and restore focus across the loading/review dialogs | Async reply, PID replacement and browser focus regressions |
+| Slow availability checks accumulate on each scan | Keep one request in flight and replace the queued request with the latest | Bursty scan and query-change regression |
+| Recognized secrets appear in HTTP metadata or reported labels | Redact full values before clipping, including fragment parameters and namespaced label components | HTTP serialization and live collector regressions |
+
+The desktop stop adapter flattens the original `StopReport` and adds `history_error`;
+it preserves execution facts when recording fails. Only a successful, freed result with
+saved history permits automatic restart. Core state mutations use `try_config` and
+`try_history`, whose missing-file behavior is compatible with first run and whose other
+errors propagate without replacing saved files. Native adapters clone the store before
+dispatching file work to background threads. CLI single-stop JSON retains its existing
+plan/report shape with an optional history error and halts additional requested targets
+after a recording failure.
+
+Immediate agent batches use `stop_many`: a bounded list of exact TCP/UDP listener requests
+with their original one-use confirmation handles. Native request validation, current-account
+ownership, agent membership and fresh effect comparison all complete before dispatch.
+The executor then uses the retained plans, including their PID-reuse and protection guards,
+so a child that releases two listeners does not invalidate its second reviewed plan merely
+by exiting. Each attempted target returns its own execution and persistence result; the
+first incomplete result halts further dispatch. OS effects remain sequential and cannot be
+rolled back if a later effect fails.
+Identical guarded supervisor commands completed successfully earlier in the batch are
+removed from later execution copies, while each listener verification and original history
+plan remain intact. Command identity includes the executable, exact argument array and
+guard PID/start token; display descriptions do not grant authority.
+`holdmap_core::exec::CompletedSupervisorStops` applies the same rule to immediate desktop,
+native schedules and MCP execution. MCP errors retain structured actual stop reports with
+an optional history error, halt further dispatch and require a fresh preview before retry.
+Their structured data and compatible text JSON follow the supported protocol's
+[structured tool result contract](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#structured-content).
+
+Primary references checked on 13 October 2026 are
+[Tauri capabilities](https://v2.tauri.app/security/capabilities/) and
+[permissions](https://v2.tauri.app/security/permissions/) for native access boundaries,
+[async command guidance](https://v2.tauri.app/develop/calling-rust/#async-commands)
+for background native work,
+[MCP security guidance](https://modelcontextprotocol.io/specification/latest/basic/security_best_practices)
+for local tool authority,
+[WCAG status messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html)
+for recovery feedback, and
+[HTTP/1.1 framing](https://www.rfc-editor.org/rfc/rfc9112.html#section-6.3)
+for probe parsing, and
+[AWS STS key identifiers](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetAccessKeyInfo.html)
+for temporary credential label filtering. These references guide the implementation; they do not constitute a
+security certification or user research.
+
+Broader product work should measure representative large process graphs, scan duration and
+interaction latency on each supported OS, then validate the port-conflict and agent-triage
+flows with developers. Collection limits and missing evidence must remain visible as those
+flows grow. Cross-platform CI remains necessary for OS-specific guarantees.
+
+The security and reliability pass completed on 14 October 2026. The macOS `scripts/check-all.sh` gate
+passed with 625 Rust tests, 411 frontend unit tests and 52 browser tests, plus website
+checks, security audits, strict Clippy/rustdoc and five signed-updater runtime scenarios.
+Visual checks at 1440px and 390px verified layout and modal focus. Linux verification on
+Rust 1.95 included real process/socket tests, optimized GLib regressions, armed Xvfb
+shortcut tests, native checks and strict workspace Clippy. That pass also included
+all-target Windows `cargo check` and strict Clippy for all five packages on Rust 1.95
+with MinGW. Windows execution, PE linking and interactive Linux GUI behavior were not
+exercised locally.
+
+The subsequent macOS window-lifecycle fix reproduced the fullscreen black Space and
+verified native close-button handling: the application deactivated, its window left the
+active Space, and the same native window, content view and WKWebView remained intact.
+Secondary-window closing and main-window destruction without a tray also passed. An
+unattended background fixture could not conclusively verify every focus restoration;
+macOS uses [cooperative activation](https://developer.apple.com/documentation/appkit/passing-control-from-one-app-to-another-with-cooperative-activation).
+The owned interactive check is documented separately from headless CI.
+
 ## Agent communication visibility (0.5.0)
 
 The read-only Connections projection uses one consistent scan and `AgentsReport`. It retains
@@ -1006,6 +1100,18 @@ resolve port/agent folders in the backend; the webview cannot supply an arbitrar
 Tray updates requested by scans use the native event loop rather than creating a thread per
 refresh. Shortcut replacement registers the new shortcut before releasing the working one,
 so a collision leaves the previous shortcut active.
+
+`window_lifecycle.rs` intercepts main-window close requests only while a working tray exists.
+On macOS it uses Tauri's application hide, which calls
+[AppKit `NSApplication.hide`](https://developer.apple.com/documentation/appkit/nsapplication/hide(_:)).
+Hiding only the fullscreen window can leave its Space active with no content. Application
+hiding deactivates Holdmap while retaining the same window, webview and fullscreen state;
+it does not race an asynchronous fullscreen exit. Other platforms hide the main window.
+Secondary windows close normally, and a missing tray preserves ordinary main-window closing.
+Tray and global-shortcut requests share the restore operation: unhide the macOS application,
+restore it if minimized, then show and focus the window. macOS Dock `RunEvent::Reopen` also uses this
+operation; minimized windows count as visible in AppKit's reopen event, so restoration does
+not depend on that event's visibility flag.
 
 `confirmation.rs` owns a separate in-memory cache of immutable plans: at most 128 pending
 previews, each valid for five minutes and consumed once. The native stop command requires the

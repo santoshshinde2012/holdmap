@@ -689,13 +689,21 @@ mod tests {
         };
         let (pid, log) = restart(&entry, &tmp.path().join("logs")).unwrap();
         assert!(pid > 0 && log.exists());
-        for _ in 0..100 {
-            if marker.exists() {
-                break;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let pwd = loop {
+            if let Ok(value) = std::fs::read_to_string(&marker) {
+                // Redirection creates the file before pwd writes it. Its terminating
+                // newline identifies complete output, including under parallel load.
+                if value.ends_with('\n') && !value.trim().is_empty() {
+                    break value;
+                }
             }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "owned restart command did not finish writing its cwd"
+            );
             std::thread::sleep(std::time::Duration::from_millis(20));
-        }
-        let pwd = std::fs::read_to_string(&marker).unwrap();
+        };
         assert_eq!(
             std::fs::canonicalize(pwd.trim()).unwrap(),
             std::fs::canonicalize(tmp.path()).unwrap()

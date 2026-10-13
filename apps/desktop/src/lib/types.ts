@@ -181,6 +181,8 @@ export interface StopReport {
   elapsed_ms: number;
   log: string[];
   error: string | null;
+  /** A process stop may succeed even when its restart history cannot be saved. */
+  history_error?: string | null;
 }
 
 export interface AppInfo {
