@@ -250,8 +250,8 @@ fn ssh_forwarding_normalizes_destination_and_quotes_remote_arguments() {
     // fixture executables are selected; the test never opens an SSH connection. Static
     // scripts have no writable executable descriptors for parallel forks to inherit.
     let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    symlink(fixtures.join("ssh_forwarding.sh"), bin.join("ssh")).unwrap();
-    symlink(fixtures.join("remote_holdmap.sh"), bin.join("holdmap")).unwrap();
+    symlink(fixtures.join("ssh.sh"), bin.join("ssh")).unwrap();
+    symlink(fixtures.join("holdmap.sh"), bin.join("holdmap")).unwrap();
     let marker = directory.path().join("must-not-exist");
     let argument = format!("literal'; touch {} ; printf '", marker.display());
     let captured = directory.path().join("remote.args");
