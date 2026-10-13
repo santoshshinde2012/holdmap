@@ -284,7 +284,14 @@ fn generated_windows_stack_round_trips_argv_cwd_and_environment_then_stops_only_
     let restarted = project.wait_ready();
     assert_ne!(restarted.pid, original.pid);
     assert_eq!(restarted.port, original.port);
-    assert_eq!(restarted.argv, holdmap_core::redact::args(&original.argv));
+    assert_eq!(
+        std::fs::canonicalize(&restarted.argv[0]).unwrap(),
+        std::fs::canonicalize(&original.argv[0]).unwrap()
+    );
+    assert_eq!(
+        restarted.argv[1..],
+        holdmap_core::redact::args(&original.argv)[1..]
+    );
     assert_eq!(
         std::fs::canonicalize(&restarted.cwd).unwrap(),
         std::fs::canonicalize(&original.cwd).unwrap()

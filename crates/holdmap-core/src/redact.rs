@@ -241,12 +241,14 @@ struct ScriptPayload {
 }
 
 /// Recognize interpreter invocation only. Positional text for ordinary programs stays argv.
-fn script_payload(cmd: &[String]) -> Option<ScriptPayload> {
-    let program = cmd
-        .first()?
-        .rsplit(['/', '\\'])
-        .next()?
-        .to_ascii_lowercase();
+fn script_payloads(cmd: &[String]) -> Vec<ScriptPayload> {
+    let Some(program) = cmd
+        .first()
+        .and_then(|value| value.rsplit(['/', '\\']).next())
+    else {
+        return Vec::new();
+    };
+    let program = program.to_ascii_lowercase();
     let program = program.strip_suffix(".exe").unwrap_or(&program);
     let posix = matches!(
         program,
@@ -254,35 +256,85 @@ fn script_payload(cmd: &[String]) -> Option<ScriptPayload> {
     );
     let powershell = matches!(program, "powershell" | "pwsh");
     if !posix && !powershell && program != "cmd" {
-        return None;
+        return Vec::new();
     }
+    let mut payloads = Vec::new();
     let mut index = 1;
+    let mut command_option = false;
     while let Some(argument) = cmd.get(index) {
         let lower = argument.to_ascii_lowercase();
         if posix {
-            if argument == "--" || !argument.starts_with('-') {
-                return None;
+            if argument == "--" {
+                if command_option {
+                    payloads.push(ScriptPayload {
+                        at: index + 1,
+                        rest: false,
+                        prefix: 0,
+                        encoded: false,
+                    });
+                }
+                return payloads;
             }
-            if matches!(argument.as_str(), "--rcfile" | "--init-file") {
-                index += 2;
-                continue;
+            if !argument.starts_with(['-', '+']) {
+                if command_option {
+                    payloads.push(ScriptPayload {
+                        at: index,
+                        rest: false,
+                        prefix: 0,
+                        encoded: false,
+                    });
+                }
+                return payloads;
             }
-            let short = argument.strip_prefix('-').unwrap_or("");
+            let short_options = argument.strip_prefix(['-', '+']).unwrap_or("");
+            // Zsh accepts an option name attached after -o/+o; the remainder is
+            // the value, not a cluster of flags (for example -oclobber).
+            let (short, attached_option) = if program == "zsh" && !short_options.starts_with('-') {
+                short_options
+                    .split_once('o')
+                    .map_or((short_options, false), |(flags, value)| {
+                        (flags, !value.is_empty())
+                    })
+            } else {
+                (short_options, false)
+            };
             if argument == "--command"
-                || !short.starts_with('-')
+                || argument.starts_with('-')
+                    && !short.starts_with('-')
                     && short.contains('c')
                     && short.chars().all(|c| c.is_ascii_alphabetic())
             {
-                return Some(ScriptPayload {
+                command_option = true;
+            }
+            // Bourne-family interpreters keep parsing options after -c. Their -o
+            // option consumes the next argv element, including in a short cluster.
+            let bourne = matches!(
+                program,
+                "sh" | "bash" | "dash" | "zsh" | "ksh" | "mksh" | "ash"
+            );
+            let valued_short = !short_options.starts_with('-')
+                && short_options.chars().all(|c| c.is_ascii_alphabetic())
+                && (bourne && short_options.contains('o')
+                    || program == "bash" && short_options.contains('O'))
+                && !attached_option;
+            if valued_short
+                || program == "bash" && matches!(argument.as_str(), "--rcfile" | "--init-file")
+            {
+                index += 2;
+                continue;
+            }
+            if command_option && !bourne {
+                payloads.push(ScriptPayload {
                     at: index + 1,
                     rest: false,
                     prefix: 0,
                     encoded: false,
                 });
+                return payloads;
             }
         } else if program == "cmd" {
             if lower.starts_with("/c") || lower.starts_with("/k") {
-                return Some(ScriptPayload {
+                payloads.push(ScriptPayload {
                     at: if argument.len() == 2 {
                         index + 1
                     } else {
@@ -292,55 +344,83 @@ fn script_payload(cmd: &[String]) -> Option<ScriptPayload> {
                     prefix: if argument.len() == 2 { 0 } else { 2 },
                     encoded: false,
                 });
+                return payloads;
             }
         } else {
-            let flag = lower.trim_start_matches(['-', '/']);
-            if lower == flag || flag.is_empty() {
-                return None;
-            }
-            if "file".starts_with(flag) {
-                return None;
+            // Match PowerShell's host switch normalization and documented minimum
+            // abbreviations. Preserve the original argv exclusively for execution.
+            let normalized = lower.trim();
+            let Some(flag) =
+                normalized.strip_prefix(['-', '/', '\u{2013}', '\u{2014}', '\u{2015}'])
+            else {
+                return payloads;
+            };
+            let flag = flag
+                .strip_prefix(['-', '\u{2013}', '\u{2014}', '\u{2015}'])
+                .unwrap_or(flag);
+            let matches =
+                |name: &str, minimum: &str| flag.len() >= minimum.len() && name.starts_with(flag);
+            if flag.is_empty() || matches("file", "f") {
+                return payloads;
             }
             // These abbreviations are accepted by PowerShell's own host parser. Opaque
             // UTF-16/base64 payloads can contain credentials, so never export their bytes.
-            if "encodedcommand".starts_with(flag)
-                || matches!(flag, "ec" | "ea")
-                || "encodedarguments".starts_with(flag)
-            {
-                return Some(ScriptPayload {
+            if matches("encodedarguments", "encodeda") || flag == "ea" || matches("token", "to") {
+                payloads.push(ScriptPayload {
                     at: index + 1,
                     rest: false,
                     prefix: 0,
                     encoded: true,
                 });
+                // EncodedArguments supplies invocation arguments but continues parsing
+                // host switches, so a following command is a separate script payload.
+                index += 2;
+                continue;
             }
-            if "command".starts_with(flag) || matches!(flag, "commandwithargs" | "cwa") {
-                return Some(ScriptPayload {
+            if matches("encodedcommand", "e") || flag == "ec" {
+                payloads.push(ScriptPayload {
+                    at: index + 1,
+                    rest: false,
+                    prefix: 0,
+                    encoded: true,
+                });
+                // An encoded command consumes one payload; unlike plain -Command,
+                // PowerShell continues parsing subsequent host arguments.
+                index += 2;
+                continue;
+            }
+            if matches("command", "c") || matches!(flag, "commandwithargs" | "cwa") {
+                payloads.push(ScriptPayload {
                     at: index + 1,
                     rest: flag != "commandwithargs" && flag != "cwa",
                     prefix: 0,
                     encoded: false,
                 });
+                return payloads;
             }
-            if matches!(
-                flag,
-                "executionpolicy"
-                    | "ep"
-                    | "ex"
-                    | "windowstyle"
-                    | "w"
-                    | "inputformat"
-                    | "outputformat"
-                    | "workingdirectory"
-                    | "wd"
-            ) {
+            if [
+                ("configurationfile", "configurationfile"),
+                ("configurationname", "config"),
+                ("custompipename", "cus"),
+                ("windowstyle", "w"),
+                ("outputformat", "o"),
+                ("inputformat", "inp"),
+                ("executionpolicy", "ex"),
+                ("settingsfile", "settings"),
+                ("workingdirectory", "wo"),
+                ("utctimestamp", "utc"),
+            ]
+            .iter()
+            .any(|(name, minimum)| matches(name, minimum))
+                || matches!(flag, "of" | "if" | "ep" | "wd")
+            {
                 index += 2;
                 continue;
             }
         }
         index += 1;
     }
-    None
+    payloads
 }
 
 fn quoted_word(value: &str) -> Option<(&str, &str)> {
@@ -385,13 +465,23 @@ fn script_word(value: &str, depth: usize) -> String {
 }
 
 fn args_inner(cmd: &[String], depth: usize, script: bool) -> Vec<String> {
-    let payload = script_payload(cmd);
+    let mut payloads = script_payloads(cmd).into_iter().peekable();
     let mut out = Vec::with_capacity(cmd.len());
     let mut hide_next = false;
     let mut bearer = false;
     let mut pending_header = false;
     let mut assignment_equals = false;
     for (index, a) in cmd.iter().enumerate() {
+        while payloads
+            .peek()
+            .is_some_and(|payload| payload.at < index && !payload.rest)
+        {
+            payloads.next();
+        }
+        let active_payload = payloads
+            .peek()
+            .copied()
+            .filter(|p| index == p.at || p.rest && index > p.at);
         if assignment_equals {
             assignment_equals = false;
             out.push(a.clone());
@@ -418,7 +508,6 @@ fn args_inner(cmd: &[String], depth: usize, script: bool) -> Vec<String> {
             bearer = false;
             continue;
         }
-        let active_payload = payload.filter(|p| index == p.at || p.rest && index > p.at);
         let script_argument = script || active_payload.is_some_and(|p| !p.encoded);
         let semantic = if script_argument {
             quoted_word(a).map_or(a.as_str(), |(_, inner)| inner)
@@ -625,6 +714,36 @@ mod tests {
         ])
         .join(" ")
         .contains("split-secret"));
+        for options in [
+            vec!["-o", "pipefail", "-c"],
+            vec!["-O", "extglob", "-c"],
+            vec!["-co", "pipefail"],
+            vec!["-c", "-x"],
+            vec!["-c", "--"],
+            vec!["--rcfile", "rc", "-lc"],
+        ] {
+            let mut command = vec!["bash".to_owned()];
+            command.extend(options.into_iter().map(str::to_owned));
+            command.push("echo --token option-shell-secret".into());
+            let displayed = args(&command);
+            assert_eq!(displayed.len(), command.len());
+            assert!(
+                !displayed.join(" ").contains("option-shell-secret"),
+                "{command:?}: {displayed:?}"
+            );
+        }
+        for option in ["-opipefail", "-oclobber", "+opipefail"] {
+            let original: Vec<String> =
+                ["zsh", option, "-c", "echo --token attached-option-secret"]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect();
+            assert!(
+                !args(&original).join(" ").contains("attached-option-secret"),
+                "{original:?}"
+            );
+            assert_eq!(original[3], "echo --token attached-option-secret");
+        }
     }
 
     #[test]
@@ -672,6 +791,157 @@ mod tests {
     }
 
     #[test]
+    fn security_powershell_host_options_preserve_script_detection() {
+        for (flag, value) in [
+            ("-o", "Text"),
+            ("-out", "Text"),
+            ("-of", "Text"),
+            ("-inp", "Text"),
+            ("-if", "Text"),
+            ("-ex", "Bypass"),
+            ("-ep", "Bypass"),
+            ("-wo", "/tmp"),
+            ("-wd", "/tmp"),
+            ("-w", "Hidden"),
+            ("-config", "owned configuration"),
+            ("-configurationfile", "owned configuration.json"),
+            ("-cus", "owned pipe"),
+            ("-settings", "owned settings.json"),
+            ("-utc", "owned timestamp"),
+        ] {
+            for command_flag in ["-Command", "-EncodedCommand"] {
+                let original: Vec<String> = [
+                    "pwsh",
+                    flag,
+                    value,
+                    command_flag,
+                    "echo --token option-host-secret",
+                ]
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+                let displayed = args(&original);
+                assert_eq!(displayed.len(), original.len());
+                assert_eq!(displayed[2], value);
+                assert!(
+                    !displayed.join(" ").contains("option-host-secret"),
+                    "{original:?}: {displayed:?}"
+                );
+                assert!(!line(&original.join(" ")).contains("option-host-secret"));
+                assert_eq!(original[4], "echo --token option-host-secret");
+            }
+        }
+        for flag in [
+            "\u{2013}Command",
+            "\u{2014}Command",
+            "\u{2015}Command",
+            "  -Command  ",
+            "--Command",
+        ] {
+            let original = vec![
+                "pwsh".into(),
+                flag.into(),
+                "echo --token normalized-host-secret".into(),
+            ];
+            assert!(
+                !args(&original).join(" ").contains("normalized-host-secret"),
+                "{original:?}"
+            );
+            assert_eq!(original[2], "echo --token normalized-host-secret");
+        }
+        // -i/-in are Interactive, not valued InputFormat abbreviations. Both may
+        // precede a command, while a positional filename still ends host options.
+        for interactive in ["-i", "-in"] {
+            let invocation: Vec<String> = [
+                "pwsh",
+                interactive,
+                "-Command",
+                "echo --token interactive-secret",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+            assert!(!args(&invocation).join(" ").contains("interactive-secret"));
+            let positional: Vec<String> = [
+                "pwsh",
+                interactive,
+                "script.ps1",
+                "-Command",
+                "literal --token explanation",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+            assert_eq!(args(&positional), positional);
+        }
+    }
+
+    #[test]
+    fn security_powershell_encoded_arguments_continue_to_separate_commands() {
+        for arguments_flag in ["-ea", "-encodeda", "-EncodedArguments"] {
+            for command_flag in ["-Command", "-EncodedCommand"] {
+                let original: Vec<String> = [
+                    "pwsh",
+                    arguments_flag,
+                    "reversible-argument-secret",
+                    "-o",
+                    "Text",
+                    command_flag,
+                    "echo --token following-command-secret",
+                ]
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+                let displayed = args(&original);
+                assert_eq!(displayed.len(), original.len());
+                assert_eq!(displayed[2], MASK);
+                assert!(
+                    !displayed.join(" ").contains("following-command-secret"),
+                    "{displayed:?}"
+                );
+                let exported = line(&original.join(" "));
+                assert!(!exported.contains("reversible-argument-secret"));
+                assert!(!exported.contains("following-command-secret"));
+                assert_eq!(original[2], "reversible-argument-secret");
+                assert_eq!(original[6], "echo --token following-command-secret");
+            }
+            let reverse: Vec<String> = [
+                "pwsh",
+                "-EncodedCommand",
+                "reversible-command-secret",
+                arguments_flag,
+                "reversible-argument-secret",
+                "-to",
+                "host-token-secret",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+            let displayed = args(&reverse);
+            assert_eq!(displayed.len(), reverse.len());
+            assert_eq!(displayed[2], MASK);
+            assert_eq!(displayed[4], MASK);
+            assert_eq!(displayed[6], MASK);
+            assert!(!line(&reverse.join(" ")).contains("secret"));
+            assert_eq!(reverse[2], "reversible-command-secret");
+            assert_eq!(reverse[4], "reversible-argument-secret");
+        }
+        let token: Vec<String> = [
+            "pwsh",
+            "-to",
+            "host-token-secret",
+            "-Command",
+            "echo --token script-token-secret",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+        let displayed = args(&token);
+        assert_eq!(displayed[2], MASK);
+        assert!(!displayed.join(" ").contains("script-token-secret"));
+    }
+
+    #[test]
     fn security_shell_redaction_bounds_scripts_and_preserves_unrelated_positional_text() {
         let body = "x".repeat(MAX_SCRIPT_BYTES + 1);
         assert_eq!(args(&["sh".into(), "-c".into(), body])[2], MASK);
@@ -695,6 +965,13 @@ mod tests {
                 "script.sh".into(),
                 "-c".into(),
                 "echo --token explanation".into(),
+            ],
+            vec![
+                "zsh".into(),
+                "-oclobber".into(),
+                "script.zsh".into(),
+                "-c".into(),
+                "literal --token explanation".into(),
             ],
             vec![
                 "pwsh".into(),
