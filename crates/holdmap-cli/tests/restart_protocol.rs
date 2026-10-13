@@ -21,6 +21,9 @@ struct Owned {
     exe: PathBuf,
     children: Vec<Child>,
     restarted: Option<(u32, u64)>,
+    // Keep the immutable executable alias until all owned listeners have been cleaned up.
+    #[cfg(unix)]
+    _executable_directory: tempfile::TempDir,
 }
 
 impl Owned {
@@ -31,13 +34,34 @@ impl Owned {
         } else {
             "owned-listener"
         };
-        let exe = directory.path().join(name);
-        std::fs::copy(std::env::current_exe().unwrap(), &exe).unwrap();
+        let current_exe = std::env::current_exe().unwrap();
+        #[cfg(unix)]
+        let executable_directory = tempfile::Builder::new()
+            .prefix("hm-restart-bin-")
+            .tempdir_in(current_exe.parent().unwrap())
+            .unwrap();
+        #[cfg(unix)]
+        let exe = {
+            // A concurrent fork may retain a copied ELF's writable descriptor until
+            // exec, producing Linux ETXTBSY. Link the running binary on the same
+            // filesystem without opening it for writing; keep the service cwd isolated.
+            let exe = executable_directory.path().join(name);
+            std::fs::hard_link(&current_exe, &exe).unwrap();
+            exe
+        };
+        #[cfg(not(unix))]
+        let exe = {
+            let exe = directory.path().join(name);
+            std::fs::copy(&current_exe, &exe).unwrap();
+            exe
+        };
         Self {
             directory,
             exe,
             children: vec![],
             restarted: None,
+            #[cfg(unix)]
+            _executable_directory: executable_directory,
         }
     }
 

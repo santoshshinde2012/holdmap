@@ -241,42 +241,17 @@ fn generated_project_and_man_files_do_not_overwrite_link_targets() {
 #[cfg(unix)]
 #[test]
 fn ssh_forwarding_normalizes_destination_and_quotes_remote_arguments() {
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::symlink;
 
     let directory = tempfile::tempdir().unwrap();
     let bin = directory.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
-    let ssh = bin.join("ssh");
     // Simulate OpenSSH's concatenated remote command in an isolated local shell. Only
-    // fixture executables are selected; the test never opens an SSH connection.
-    std::fs::write(
-        &ssh,
-        r#"#!/bin/sh
-port=
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -o) shift 2 ;;
-    -p) port=$2; shift 2 ;;
-    -t) shift ;;
-    --) shift; break ;;
-    *) exit 80 ;;
-  esac
-done
-[ "$port" = 2222 ] && [ "$1" = 'user@fixture.invalid' ] || exit 81
-shift
-exec /bin/sh -c "$*"
-"#,
-    )
-    .unwrap();
-    let remote_holdmap = bin.join("holdmap");
-    std::fs::write(
-        &remote_holdmap,
-        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$HOLDMAP_SECURITY_REMOTE_ARGS\"\n",
-    )
-    .unwrap();
-    for path in [&ssh, &remote_holdmap] {
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
-    }
+    // fixture executables are selected; the test never opens an SSH connection. Static
+    // scripts have no writable executable descriptors for parallel forks to inherit.
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    symlink(fixtures.join("ssh_forwarding.sh"), bin.join("ssh")).unwrap();
+    symlink(fixtures.join("remote_holdmap.sh"), bin.join("holdmap")).unwrap();
     let marker = directory.path().join("must-not-exist");
     let argument = format!("literal'; touch {} ; printf '", marker.display());
     let captured = directory.path().join("remote.args");
