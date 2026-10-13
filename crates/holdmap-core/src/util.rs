@@ -769,9 +769,20 @@ mod windows_shell_tests {
         let directory = std::path::Path::new(&argv[start + 1]);
         if mode == "console" {
             use std::os::windows::io::AsRawHandle;
-            // The enclosing timeout runner uses CREATE_NO_WINDOW, so this helper owns
-            // its new console and can verify the real console-handle APIs independently.
-            assert_ne!(unsafe { AllocConsole() }, 0);
+            // This isolated helper first detaches any runner-provided console; freeing
+            // an unattached process also succeeds. It then owns its new test console.
+            assert_ne!(
+                unsafe { FreeConsole() },
+                0,
+                "{}",
+                std::io::Error::last_os_error()
+            );
+            assert_ne!(
+                unsafe { AllocConsole() },
+                0,
+                "{}",
+                std::io::Error::last_os_error()
+            );
             let kinds = [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE];
             let originals = kinds.map(|kind| unsafe { GetStdHandle(kind) });
             // STARTF_USESTDHANDLES can preserve the original redirected pipes after

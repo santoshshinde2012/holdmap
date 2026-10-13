@@ -337,6 +337,9 @@ pub fn open(a: &OpenArgs) -> Result<u8> {
 #[cfg(test)]
 mod restart_tests {
     use super::*;
+    use holdmap_core::engine::strategies::{
+        OtherUserStrategy, ProcessTreeStrategy, ProtectedStrategy, StrategyRegistry,
+    };
     use holdmap_core::process::ProcessTable;
     use holdmap_core::scan::Scanner;
 
@@ -390,6 +393,14 @@ mod restart_tests {
                 })
                 .unwrap(),
         )
+        // These are synthetic process identities. Retain process ownership/protection
+        // and tree planning without querying the host's systemd/PM2/Homebrew services.
+        .with_strategies(
+            StrategyRegistry::empty()
+                .with(ProtectedStrategy)
+                .with(OtherUserStrategy)
+                .with(ProcessTreeStrategy),
+        )
     }
 
     #[test]
@@ -428,6 +439,17 @@ mod restart_tests {
         let engine = engine(vec![socket(100, Protocol::Tcp), socket(200, Protocol::Tcp)]);
         let plan = tcp_restart_plan(&engine, 41000);
         assert!(!plan.is_blocked(), "{plan:?}");
+        let roots: std::collections::BTreeSet<_> = plan
+            .steps
+            .iter()
+            .filter_map(|step| match step {
+                Step::SignalProcesses { processes, .. } => {
+                    processes.first().map(|process| process.pid)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(roots, [100, 200].into_iter().collect());
         let error = planned_tcp_restart_entry(&engine, &plan, 41000).unwrap_err();
         assert!(error.to_string().contains("multiple process owners"));
     }
