@@ -10,6 +10,9 @@ CLI, so process identity checks and process protections are shared. The CLI's pr
 `.holdmap.toml` settings apply to CLI and terminal UI actions.
 [Try it in the browser](../../#demo).
 
+Use **0.5.1 or newer** for corrected history restart and copy behavior, settings error handling
+and graph responsiveness. See the [0.5.1 changes](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#051---2026-10-13).
+
 ## Service graph and cluster grouping
 
 Choose **Graph** to see connections between services, or choose **Cluster** in the list's
@@ -93,9 +96,10 @@ Windows installers are unsigned unless signing credentials are configured. On fi
 - **Windows:** in "Windows protected your PC", click **More info**, then **Run anyway**.
 - **Linux:** `chmod +x` the AppImage, or install the .deb or .rpm.
 
-To update an existing 0.4.0 desktop installation, download the matching 0.5.0 installer
-from [Install](../../#install). Version 0.4.0 has no configured signed updater. Update the CLI
-by running its installer again.
+To update an existing desktop installation, download the latest installer that matches
+your operating system and architecture from [Install](../../#install). Releases without
+a configured signed updater require manual installation. Update the CLI by running its
+installer again.
 
 ## Keyboard
 

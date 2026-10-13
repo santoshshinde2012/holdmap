@@ -40,6 +40,9 @@ tempfile.workspace = true
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 # Bind the regressions directly to the audited GLib source also selected by GTK's patch.
 glib = { path = "../../../vendor/glib" }
+# Exercise the same X11 driver that the production shortcut plugin resolves.
+global-hotkey = "0.8.0"
+x11rb = "0.13.2"
 
 [lints]
 workspace = true

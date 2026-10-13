@@ -42,7 +42,7 @@ The repository root is the Rust workspace; each surface keeps its source and too
 | `site/` | Astro website, Markdown guides, site assets and build tools |
 | `docs/` | Architecture, generated CLI reference and screenshots used by the README/site |
 | `scripts/` | Workspace checks, CLI documentation generation and development helpers |
-| `vendor/` | Audited third-party source backport, unchanged upstream snapshot and provenance |
+| `vendor/` | Audited third-party fixes, preserved upstream snapshots and provenance |
 | `.github/` | CI, release, dependency updates and website deployment |
 
 Keep source assets and their licences with the surface that uses them. Commit generated
@@ -59,7 +59,8 @@ Install [actionlint](https://github.com/rhysd/actionlint#installation) and
 [cargo-deny](https://embarkstudios.github.io/cargo-deny/cli/index.html),
 [Gitleaks](https://github.com/gitleaks/gitleaks#installing) and Python 3.11+ first, then install
 Chromium once with `(cd apps/desktop && npm ci && npx playwright install chromium)`.
-On Linux, use `npx playwright install --with-deps chromium` for its system dependencies.
+On Linux, use `npx playwright install --with-deps chromium` for its system dependencies,
+and install `xvfb xauth` for the isolated native shortcut regressions.
 The browser suite starts and stops its own preview server; failure traces and screenshots go
 in the ignored `apps/desktop/test-results/` directory. For an existing Chrome installation,
 set `HOLDMAP_E2E_CHROMIUM_EXECUTABLE` to its executable path.
@@ -83,8 +84,10 @@ scripts/check-cross.sh                       # type-checks the macOS and Windows
 scripts/check-versions.sh
 scripts/check-secrets.sh                     # full Git history and tracked/new source; needs a full clone
 python3 scripts/test-release-security.py    # isolated release input regressions; never publishes
+python3 scripts/check-updater-runtime.py    # macOS: real signed scratch install and relaunch
 actionlint
 python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK/Linux test resolution
+python3 scripts/verify-vendored-global-hotkey.py # X11 fixes, original archive and shortcut dependency resolution
 cargo deny --all-features check
 (cd apps/desktop && npm audit)
 (cd site && npm audit)
@@ -120,6 +123,13 @@ dependency advisories; Dependabot maintains desktop, website, Rust and workflow 
 Repository administrators should enable Dependabot alerts and security updates in GitHub's
 security settings; those settings are separate from the committed update configuration.
 
+The macOS native job also runs the unchanged updater adapter with a genuine Tauri runtime.
+It generates an ephemeral signing key, serves a loopback fixture and installs into a private
+scratch app before verifying the actual relaunch. Wrong keys, tampered bytes, mismatched
+authenticated versions and escaping result paths must leave the original app untouched.
+The runner needs the desktop's locked CLI installed with `npm ci`; it never replaces a host
+installation, changes release keys or enables automatic updates for published installers.
+
 ## Vendored security fixes
 
 The Linux desktop currently uses narrow [GLib 0.18.5 security backports](vendor/README.md).
@@ -138,6 +148,21 @@ packages need the source verifier and runtime regressions. Do not add advisory i
 relabel the backport as a fixed upstream version. Keep `vendor/glib/` outside the first-party
 workspace and preserve upstream filenames. Remove the override and its verification together
 when the GTK binding family supports a compatible fixed upstream release.
+
+The desktop also uses audited [global-hotkey 0.8.0 X11 fixes](vendor/README.md) for immediate
+key release, failed-registration rollback and worker error propagation. Its macOS and Windows
+sources remain byte-identical to the published archive. The source verifier checks the full
+snapshot, reversible local patch and both production/test dependency edges. Normal Linux
+tests use a finite child with an invalid display to verify error handling. Real X11 registration,
+Caps/Num Lock variants and collision rollback run on an owned virtual display:
+
+```sh
+xvfb-run -a env HOLDMAP_X11_TEST=1 cargo test -p holdmap-desktop --locked --test hotkey_x11 -- --include-ignored --test-threads=1
+```
+
+These tests require the explicit guard so ordinary workspace tests do not reserve keys on a
+developer's display. Remove this override and its verification together when a compatible
+upstream release includes these fixes.
 
 ## Published screenshots
 

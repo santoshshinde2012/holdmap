@@ -118,6 +118,8 @@ jobs:
           arguments: --all-features
       - name: Verify vendored GLib backport and dependency resolution
         run: python3 scripts/verify-vendored-glib.py
+      - name: Verify vendored X11 shortcut fixes and dependency resolution
+        run: python3 scripts/verify-vendored-global-hotkey.py
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -238,9 +240,17 @@ jobs:
         working-directory: apps/desktop
       - name: Native desktop tests
         run: cargo test -p holdmap-desktop --all-targets --locked
+      - name: Real X11 shortcut registration and release
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y xvfb xauth
+          xvfb-run -a env HOLDMAP_X11_TEST=1 cargo test -p holdmap-desktop --locked --test hotkey_x11 -- --include-ignored --test-threads=1
       - name: Optimized Linux GLib security regression
         if: runner.os == 'Linux'
         run: cargo test -p holdmap-desktop --locked --config 'profile.test.package.glib.opt-level=3' --test glib_security
         env:
           G_DEBUG: fatal-warnings
           MALLOC_PERTURB_: 165
+      - name: Signed updater runtime installation and relaunch
+        if: runner.os == 'macOS'
+        run: python3 scripts/check-updater-runtime.py
