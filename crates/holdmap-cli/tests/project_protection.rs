@@ -78,6 +78,9 @@ fn fixture_command(exe: &Path, cwd: &Path, ready: &Path, count: usize) -> std::p
 struct Listener {
     child: OwnedChild,
     ready: Ready,
+    // Keep the executable alias alive until the owned child has been cleaned up.
+    #[cfg(unix)]
+    _executable_directory: tempfile::TempDir,
 }
 
 impl Listener {
@@ -91,8 +94,28 @@ impl Listener {
             std::process::id(),
             std::env::consts::EXE_SUFFIX
         );
-        let exe = directory.join(name);
-        std::fs::copy(std::env::current_exe().unwrap(), &exe).unwrap();
+        let current_exe = std::env::current_exe().unwrap();
+        #[cfg(unix)]
+        let executable_directory = tempfile::Builder::new()
+            .prefix("hm-policy-bin-")
+            .tempdir_in(current_exe.parent().unwrap())
+            .unwrap();
+        #[cfg(unix)]
+        let exe = {
+            // A parallel fork can retain a copied executable's writable descriptor until
+            // exec, causing Linux ETXTBSY even after copy() closes its own descriptor.
+            // Linking the running binary on its own filesystem creates no writable handle.
+            // Its working directory stays in the isolated project, outside checkout policy.
+            let exe = executable_directory.path().join(name);
+            std::fs::hard_link(&current_exe, &exe).unwrap();
+            exe
+        };
+        #[cfg(not(unix))]
+        let exe = {
+            let exe = directory.join(name);
+            std::fs::copy(&current_exe, &exe).unwrap();
+            exe
+        };
         let ready_file = directory.join("ready.json");
         let mut command = fixture_command(&exe, directory, &ready_file, count);
         if tree {
@@ -100,7 +123,12 @@ impl Listener {
         }
         let mut child = OwnedChild(command.spawn().unwrap());
         let ready = wait_ready(&ready_file, &mut child.0);
-        let listener = Self { child, ready };
+        let listener = Self {
+            child,
+            ready,
+            #[cfg(unix)]
+            _executable_directory: executable_directory,
+        };
         listener.assert_alive();
         listener
     }
