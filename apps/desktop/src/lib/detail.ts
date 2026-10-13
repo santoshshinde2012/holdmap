@@ -97,8 +97,21 @@ export function projectFolder(entry: PortEntry): string | null {
  * process of yours that holdmap can stop and start again: not a container or a supervisor. */
 export function canRestart(entry: PortEntry, plan: ActionPlan | null): boolean {
   if (!entry.process || entry.container || !entry.is_mine || entry.protected) return false;
-  if (!plan || plan.blocked) return false;
-  return plan.steps.some((s) => s.action === "signal_processes");
+  return restartRootPid(entry, plan) !== null;
+}
+
+/** History records the first process in its matching reviewed signal step, which can be
+ * an npm/shell parent rather than the listener. Never guess between multiple owners. */
+export function restartRootPid(entry: PortEntry, plan: ActionPlan | null): number | null {
+  if (!plan || plan.blocked) return null;
+  const holders = new Set([...entry.pids, entry.pid, entry.process?.pid].filter((pid): pid is number => pid !== null && pid !== undefined));
+  const roots = new Set<number>();
+  for (const step of plan.steps) {
+    if (step.action === "signal_processes" && step.processes.some((process) => holders.has(process.pid))) {
+      roots.add(step.processes[0].pid);
+    }
+  }
+  return roots.size === 1 ? roots.values().next().value! : null;
 }
 
 /** "Google Chrome ×3", "192.168.1.24". */

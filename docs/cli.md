@@ -541,7 +541,7 @@ Stop what holds a port and start the same command again (or re-run it from histo
 Usage: holdmap restart [OPTIONS] <PORT>
 
 Arguments:
-  <PORT>  Port number (e.g. 3000 or :3000)
+  <PORT>  TCP port number (e.g. 3000 or :3000)
 
 Options:
   -y, --yes                Don't ask before stopping the current owner

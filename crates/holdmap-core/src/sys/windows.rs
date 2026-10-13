@@ -65,6 +65,88 @@ pub fn start_token(pid: u32) -> Option<u64> {
     creation_time(&h)
 }
 
+/// Read the original command text only while this handle pins the expected process.
+/// The native query uses a fixed, aligned buffer and rejects malformed/out-of-buffer strings.
+pub(crate) fn command_line(pid: u32, expected_token: u64) -> Option<String> {
+    use std::ffi::c_void;
+    use std::sync::OnceLock;
+    type Query = unsafe extern "system" fn(HANDLE, u32, *mut c_void, u32, *mut u32) -> i32;
+    #[repr(C)]
+    struct UnicodeString {
+        length: u16,
+        maximum_length: u16,
+        buffer: *const u16,
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetModuleHandleW(name: *const u16) -> HANDLE;
+        fn GetProcAddress(
+            module: HANDLE,
+            name: *const u8,
+        ) -> Option<unsafe extern "system" fn() -> isize>;
+    }
+    static QUERY: OnceLock<Option<Query>> = OnceLock::new();
+    let query = (*QUERY.get_or_init(|| {
+        let module_name: Vec<u16> = "ntdll.dll".encode_utf16().chain([0]).collect();
+        // SAFETY: names are NUL-terminated; ntdll remains loaded for this process's lifetime.
+        let module = unsafe { GetModuleHandleW(module_name.as_ptr()) };
+        if module.is_null() {
+            return None;
+        }
+        // SAFETY: dynamically resolve the native query so an unavailable API fails closed.
+        let address =
+            unsafe { GetProcAddress(module, c"NtQueryInformationProcess".as_ptr().cast()) }?;
+        // SAFETY: this exact OS export has the NtQueryInformationProcess signature above.
+        Some(unsafe { std::mem::transmute::<unsafe extern "system" fn() -> isize, Query>(address) })
+    }))?;
+    let handle = open(pid, PROCESS_QUERY_LIMITED_INFORMATION).ok()?;
+    if !still_active(&handle) || creation_time(&handle)? != expected_token {
+        return None;
+    }
+    // Windows limits command strings to 32767 UTF-16 units; allow space for native metadata.
+    const BUFFER_BYTES: usize = 128 * 1024;
+    let mut buffer = vec![0usize; BUFFER_BYTES / std::mem::size_of::<usize>()];
+    let mut returned = 0u32;
+    // SAFETY: the buffer is initialized, appropriately aligned and exactly BUFFER_BYTES long.
+    // ProcessCommandLineInformation (60) is also used by sysinfo on supported Windows versions.
+    let status = unsafe {
+        query(
+            handle.0,
+            60,
+            buffer.as_mut_ptr().cast(),
+            BUFFER_BYTES as u32,
+            &mut returned,
+        )
+    };
+    if status < 0
+        || returned as usize > BUFFER_BYTES
+        || (returned as usize) < std::mem::size_of::<UnicodeString>()
+    {
+        return None;
+    }
+    // SAFETY: a successful query wrote a UNICODE_STRING in the aligned buffer header.
+    let text = unsafe { &*buffer.as_ptr().cast::<UnicodeString>() };
+    let base = buffer.as_ptr() as usize;
+    let start = text.buffer as usize;
+    let length = text.length as usize;
+    if length == 0
+        || !length.is_multiple_of(2)
+        || text.length > text.maximum_length
+        || !start.is_multiple_of(std::mem::align_of::<u16>())
+        || start < base + std::mem::size_of::<UnicodeString>()
+        || start.checked_add(length)? > base + returned as usize
+    {
+        return None;
+    }
+    // SAFETY: the validated UTF-16 byte range is aligned and entirely within this buffer.
+    let units = unsafe { std::slice::from_raw_parts(text.buffer, length / 2) };
+    let command = String::from_utf16(units).ok()?;
+    if command.contains('\0') {
+        return None;
+    }
+    Some(command)
+}
+
 fn still_active(h: &Handle) -> bool {
     let mut code = 0u32;
     // SAFETY: valid handle, valid out pointer.

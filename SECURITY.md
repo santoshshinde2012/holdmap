@@ -69,7 +69,11 @@ out of scope.
   existing settings. History reads inspect only the newest 64 MiB and at most 5,000 valid entries;
   writes enforce the same retention bounds and reject entries larger than 1 MiB. A restart
   refuses a recorded working directory that is relative, missing or no longer a directory.
-- Commands use argument arrays except explicitly configured project shell commands. Stack
+  Desktop restart requests identify the stored port, protocol and original process; ambiguous
+  recordings are refused. Original Windows shell syntax stays in private history and is omitted
+  from exports; older shell recordings without that syntax cannot be safely replayed.
+- Executable launches use argument arrays. Project shell commands and recorded Windows
+  `cmd.exe` commands preserve their authorized shell syntax. Stack
   files are checked and read through the same handle. On Unix they must belong to the current
   account or root and must not be group/world writable; Windows relies on the checkout's ACLs.
   Stack files are limited to 1 MiB and 512 services; `ready_timeout_s` must be 1–3,600 seconds.

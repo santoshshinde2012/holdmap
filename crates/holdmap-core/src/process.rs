@@ -43,6 +43,9 @@ pub struct ProcessTable {
     session_hosts: HashMap<u32, (u32, crate::safety::SessionKind)>,
     user_names: HashMap<u32, String>,
     self_uid: Option<u32>,
+    /// Original cmd.exe syntax is private restart state, never a ProcessInfo/UI field.
+    #[cfg(windows)]
+    windows_cmd: HashMap<u32, crate::history::WindowsCmdRestart>,
 }
 
 /// Linux cuts a process name (`comm`) to 15 bytes ("npm exec vite p", "containerd-shim"). When
@@ -177,7 +180,8 @@ impl ProcessTable {
             });
         }
         let users = &cache.as_ref().expect("just filled").users;
-        let procs = sys
+        #[cfg_attr(not(windows), allow(unused_mut))]
+        let mut procs: HashMap<u32, ProcessInfo> = sys
             .processes()
             .values()
             .filter(|p| p.thread_kind().is_none()) // skip Linux threads
@@ -227,8 +231,38 @@ impl ProcessTable {
             })
             .map(|p| (p.pid, p))
             .collect();
+        #[cfg(windows)]
+        {
+            let resolved = crate::stack::canonicalize_windows_dos_paths(
+                procs.values().filter_map(|process| process.cwd.clone()),
+            );
+            for process in procs.values_mut() {
+                if process
+                    .cwd
+                    .as_deref()
+                    .is_some_and(crate::stack::windows_dos_path)
+                {
+                    // An unresolved alias cannot safely establish project ownership.
+                    process.cwd = process
+                        .cwd
+                        .as_ref()
+                        .and_then(|cwd| resolved.get(cwd).cloned());
+                }
+            }
+        }
         #[cfg_attr(not(unix), allow(unused_mut))]
         let mut t = Self::from_processes(procs, std::process::id());
+        #[cfg(windows)]
+        {
+            t.windows_cmd = t
+                .procs
+                .values()
+                .filter_map(|process| {
+                    crate::history::WindowsCmdRestart::capture(process)
+                        .map(|command| (process.pid, command))
+                })
+                .collect();
+        }
         #[cfg(unix)]
         {
             t.user_names = users
@@ -278,6 +312,8 @@ impl ProcessTable {
             session_hosts: HashMap::new(),
             user_names: HashMap::new(),
             self_uid: None,
+            #[cfg(windows)]
+            windows_cmd: HashMap::new(),
         };
         t.self_uid = t.procs.get(&self_pid).and_then(|p| p.uid);
         t.self_ancestors = t.ancestors(self_pid).into_iter().collect();
@@ -324,6 +360,14 @@ impl ProcessTable {
     /// Look up a process.
     pub fn get(&self, pid: u32) -> Option<&ProcessInfo> {
         self.procs.get(&pid)
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn windows_cmd_restart(
+        &self,
+        pid: u32,
+    ) -> Option<&crate::history::WindowsCmdRestart> {
+        self.windows_cmd.get(&pid)
     }
 
     /// Number of processes.

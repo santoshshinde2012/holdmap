@@ -21,6 +21,98 @@ const entry: HistoryEntry = { at_ms: 1000, port: 3000, protocol: "tcp", label: "
 const model: SettingsModel = { theme: "dark", density: "comfortable", singleKeyShortcuts: true, config: { pins: [], notify: true, notify_dev_only: true, history_limit: 100, scan_interval_secs: 4, hotkey: "off", recent_hosts: [] }, autostart: false, shortcut: null, hotkeys: [], version: "test", platform: "macos", configDir: null, powerAvailable: true, powerDemo: false };
 const settingsActions: SettingsActions = { setTheme() {}, setDensity() {}, setSingleKeyShortcuts() {}, async setAutostart() {}, async setHotkey() {}, async setNotify() {}, async setScanInterval() {}, async setHistoryLimit() {}, async clearHistory() {}, copy() {}, shutdown() {} };
 
+describe("history action availability", () => {
+  it("keeps simultaneous ports, protocols and duplicate records from the same stopped process distinct", async () => {
+    const records: HistoryEntry[] = [entry, { ...entry, port: 3001 }, { ...entry, protocol: "udp" }, { ...entry }];
+    const onrestart = vi.fn().mockResolvedValue(undefined);
+    const view = render(HistoryPanel, { items: records, onrestart, oncopy() {}, onclear() {}, onclose() {} });
+    const buttons = view.getAllByRole("button", { name: "Restart" });
+    expect(buttons).toHaveLength(4);
+    await fireEvent.click(buttons[1]);
+    expect(onrestart).toHaveBeenCalledWith(records[1]);
+    await fireEvent.click(buttons[2]);
+    expect(onrestart).toHaveBeenLastCalledWith(records[2]);
+  });
+
+  it("honors backend refusals and associates each disabled action with a visible explanation", async () => {
+    const oncopy = vi.fn(), onrestart = vi.fn();
+    const view = render(HistoryPanel, { items: [{ ...entry, command: ["C:\\Windows\\System32\\cmd.exe", "/C", "fragmented shell text"], restartable: false, copyable: false }], platform: "windows", oncopy, onrestart, onclear() {}, onclose() {} });
+    for (const name of ["Copy command", "Restart"]) {
+      const button = view.getByRole("button", { name }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      const reason = document.getElementById(button.getAttribute("aria-describedby")!);
+      expect(reason?.textContent).toContain(name === "Restart" ? "Start the service normally" : "cannot reproduce the original command");
+      await fireEvent.click(button);
+    }
+    expect(oncopy).not.toHaveBeenCalled();
+    expect(onrestart).not.toHaveBeenCalled();
+  });
+
+  it.each(["cmd", "C:\\Windows\\System32\\CMD.EXE"])("fails safely for older Windows %s recordings without availability flags", async (program) => {
+    const oncopy = vi.fn(), onrestart = vi.fn();
+    const view = render(HistoryPanel, { items: [{ ...entry, command: [program, "/C", "parsed shell text"] }], platform: "windows", oncopy, onrestart, onclear() {}, onclose() {} });
+    for (const name of ["Copy command", "Restart"]) {
+      const button = view.getByRole("button", { name }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      await fireEvent.click(button);
+    }
+    expect(oncopy).not.toHaveBeenCalled();
+    expect(onrestart).not.toHaveBeenCalled();
+    expect(view.container.textContent).toContain("Original Windows shell syntax was not recorded");
+  });
+
+  it("allows backend restart for captured native shell syntax while keeping copy unavailable", async () => {
+    const recorded = { ...entry, command: ["cmd.exe", "/C", "redacted display text"], restartable: true, copyable: false };
+    const oncopy = vi.fn(), onrestart = vi.fn().mockResolvedValue(undefined);
+    const view = render(HistoryPanel, { items: [recorded], platform: "windows", oncopy, onrestart, onclear() {}, onclose() {} });
+    expect((view.getByRole("button", { name: "Copy command" }) as HTMLButtonElement).disabled).toBe(true);
+    const restart = view.getByRole("button", { name: "Restart" }) as HTMLButtonElement;
+    expect(restart.disabled).toBe(false);
+    expect(restart.getAttribute("aria-describedby")).toBeNull();
+    await fireEvent.click(restart);
+    await waitFor(() => expect(onrestart).toHaveBeenCalledWith(recorded));
+    expect(oncopy).not.toHaveBeenCalled();
+  });
+
+  it("preserves ordinary legacy argv, executable case and shell quoting when flags are absent", async () => {
+    const recorded = { ...entry, command: ["Node", "server.js", "a&b"], cwd: "/tmp/a b" };
+    const oncopy = vi.fn(), onrestart = vi.fn().mockResolvedValue(undefined);
+    const view = render(HistoryPanel, { items: [recorded], platform: "macos", oncopy, onrestart, onclear() {}, onclose() {} });
+    await fireEvent.click(view.getByRole("button", { name: "Copy command" }));
+    expect(oncopy).toHaveBeenCalledWith("cd -- '/tmp/a b' && 'Node' server.js 'a&b'", "Command");
+    await fireEvent.click(view.getByRole("button", { name: "Restart" }));
+    expect(onrestart).toHaveBeenCalledWith(recorded);
+    expect(view.container.querySelector(".unavailable")).toBeNull();
+  });
+
+  it("keeps ordinary Windows argv available without flags and preserves executable case", async () => {
+    const recorded = { ...entry, command: ["C:\\Program Files\\Node.EXE", "server.js"], cwd: "C:\\Work" };
+    const oncopy = vi.fn(), onrestart = vi.fn().mockResolvedValue(undefined);
+    const view = render(HistoryPanel, { items: [recorded], platform: "windows", oncopy, onrestart, onclear() {}, onclose() {} });
+    await fireEvent.click(view.getByRole("button", { name: "Copy command" }));
+    expect(oncopy.mock.calls[0][0]).toContain("'C:\\Program Files\\Node.EXE'");
+    await fireEvent.click(view.getByRole("button", { name: "Restart" }));
+    expect(onrestart).toHaveBeenCalledWith(recorded);
+    expect(view.container.querySelector(".unavailable")).toBeNull();
+  });
+
+  it.each([{ command: [] }, { command: [""] }])("does not offer actions for an empty executable even with stale true flags: $command", async ({ command }) => {
+    const view = render(HistoryPanel, { items: [{ ...entry, command, restartable: true, copyable: true }], oncopy() {}, onrestart() {}, onclear() {}, onclose() {} });
+    expect((view.getByRole("button", { name: "Copy command" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((view.getByRole("button", { name: "Restart" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(view.container.textContent).toContain("No restart command was recorded. Start the service using its normal launcher.");
+  });
+
+  it("refreshes action availability and removes stale explanations with a newer backend recording", async () => {
+    const props = { oncopy() {}, onrestart() {}, onclear() {}, onclose() {} };
+    const view = render(HistoryPanel, { ...props, items: [{ ...entry, restartable: false, copyable: false }] });
+    await view.rerender({ ...props, items: [{ ...entry, restartable: true, copyable: true }] });
+    expect((view.getByRole("button", { name: "Copy command" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((view.getByRole("button", { name: "Restart" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(view.container.querySelector(".unavailable")).toBeNull();
+  });
+});
+
 describe("native write failures", () => {
   it("contains failed unpin writes, prevents duplicate submissions, and allows retry", async () => {
     let reject!: (error: Error) => void;

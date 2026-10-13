@@ -612,9 +612,48 @@ impl Store {
     /// The history entry stopped at `at_ms` on `port` (how a frontend names one to restart,
     /// so the command that runs always comes from this file, never from the caller).
     pub fn entry(&self, at_ms: u64, port: u16) -> Option<HistoryEntry> {
-        self.history(usize::MAX)
+        self.entry_matching(at_ms, port, None, None).ok().flatten()
+    }
+
+    /// Resolve a caller's history identity without accepting executable data from it.
+    /// Old callers may omit protocol/PID, but ambiguous recordings always fail closed.
+    pub fn entry_matching(
+        &self,
+        at_ms: u64,
+        port: u16,
+        protocol: Option<crate::model::Protocol>,
+        pid: Option<u32>,
+    ) -> io::Result<Option<HistoryEntry>> {
+        let mut matches = self
+            .history(usize::MAX)
             .into_iter()
-            .find(|e| e.at_ms == at_ms && e.port == port)
+            .filter(|entry| entry.at_ms == at_ms && history_matches(entry, port, protocol, pid));
+        let first = matches.next();
+        if matches.next().is_some() {
+            return Err(ambiguous_history());
+        }
+        Ok(first)
+    }
+
+    /// The newest recording for this owner/protocol; equal-time duplicates are ambiguous.
+    pub fn last_matching(
+        &self,
+        port: u16,
+        protocol: Option<crate::model::Protocol>,
+        pid: Option<u32>,
+    ) -> io::Result<Option<HistoryEntry>> {
+        let mut matches = self
+            .history(usize::MAX)
+            .into_iter()
+            .filter(|entry| history_matches(entry, port, protocol, pid));
+        let first = matches.next();
+        if first
+            .as_ref()
+            .is_some_and(|first| matches.any(|next| next.at_ms == first.at_ms))
+        {
+            return Err(ambiguous_history());
+        }
+        Ok(first)
     }
 
     /// Forget the stop history.
@@ -647,6 +686,24 @@ impl Store {
     }
 }
 
+fn history_matches(
+    entry: &HistoryEntry,
+    port: u16,
+    protocol: Option<crate::model::Protocol>,
+    pid: Option<u32>,
+) -> bool {
+    entry.port == port
+        && protocol.is_none_or(|protocol| entry.protocol == protocol)
+        && pid.is_none_or(|pid| entry.pid == pid)
+}
+
+fn ambiguous_history() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidInput,
+        "ambiguous stopped service recording; start it using its normal launcher",
+    )
+}
+
 fn next_temp_id() -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -668,6 +725,9 @@ mod tests {
             project: None,
             framework: None,
             pid: 1,
+            windows_restart: None,
+            restartable: None,
+            copyable: None,
         }
     }
 
@@ -869,6 +929,92 @@ mod tests {
     }
 
     #[test]
+    fn history_lookup_binds_protocol_and_owner_and_rejects_ambiguous_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::new(dir.path());
+        let tcp = h(3000, 100);
+        let udp = HistoryEntry {
+            protocol: Protocol::Udp,
+            pid: 2,
+            command: vec!["udp-owner".into()],
+            ..tcp.clone()
+        };
+        store.record(&[tcp.clone(), udp.clone()]).unwrap();
+        assert!(store.entry(100, 3000).is_none());
+        assert_eq!(
+            store
+                .entry_matching(100, 3000, None, None)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert_eq!(
+            store
+                .entry_matching(100, 3000, Some(Protocol::Tcp), Some(1))
+                .unwrap(),
+            Some(tcp.clone())
+        );
+        assert_eq!(
+            store
+                .entry_matching(100, 3000, Some(Protocol::Udp), Some(2))
+                .unwrap(),
+            Some(udp)
+        );
+        assert!(store
+            .entry_matching(100, 3000, Some(Protocol::Udp), Some(1))
+            .unwrap()
+            .is_none());
+        assert!(store.last_matching(3000, None, None).is_err());
+        let newer_udp = HistoryEntry {
+            at_ms: 200,
+            protocol: Protocol::Udp,
+            pid: 3,
+            ..tcp.clone()
+        };
+        store.record(std::slice::from_ref(&newer_udp)).unwrap();
+        assert_eq!(
+            store
+                .last_matching(3000, Some(Protocol::Tcp), None)
+                .unwrap(),
+            Some(tcp.clone())
+        );
+        assert_eq!(
+            store.last_matching(3000, None, None).unwrap(),
+            Some(newer_udp)
+        );
+        // Even the complete identity cannot disambiguate duplicate persisted records.
+        // File order is authoritative even when the clock moves backwards; an intervening
+        // timestamp must not hide another record carrying the same identity.
+        store.record(&[h(3000, 90), tcp]).unwrap();
+        assert!(store
+            .entry_matching(100, 3000, Some(Protocol::Tcp), Some(1))
+            .is_err());
+        assert!(store
+            .last_matching(3000, Some(Protocol::Tcp), Some(1))
+            .is_err());
+    }
+
+    #[test]
+    fn newest_matching_history_keeps_nonrestartable_record_without_older_fallback() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::new(dir.path());
+        let older = h(3000, 100);
+        let latest = HistoryEntry {
+            at_ms: 200,
+            command: vec![],
+            ..older.clone()
+        };
+        store.record(&[older, latest.clone()]).unwrap();
+        assert_eq!(
+            store
+                .last_matching(3000, Some(Protocol::Tcp), None)
+                .unwrap(),
+            Some(latest.clone())
+        );
+        assert!(!latest.restartable());
+    }
+
+    #[test]
     fn oversized_history_lines_are_skipped_and_recent_valid_entries_survive() {
         let tmp = tempfile::tempdir().unwrap();
         let store = Store::new(tmp.path());
@@ -912,11 +1058,14 @@ mod tests {
         let store = Store::new(tmp.path());
         store.record(&[h(3000, 1)]).unwrap();
         let mut file = fs::OpenOptions::new()
-            .append(true)
+            .read(true)
+            .write(true)
             .open(store.history_path())
             .unwrap();
+        file.seek(SeekFrom::End(0)).unwrap();
         // A sparse oversized line avoids allocating the entire file in the test.
         file.set_len(MAX_HISTORY_BYTES + 100).unwrap();
+        file.seek(SeekFrom::End(0)).unwrap();
         file.write_all(b"\n").unwrap();
         serde_json::to_writer(&mut file, &h(3001, 2)).unwrap();
         file.write_all(b"\n").unwrap();

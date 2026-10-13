@@ -260,7 +260,34 @@ pub fn load(path: &Path) -> Result<Stack, StackError> {
         .parent()
         .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()))
         .unwrap_or_default();
-    parse(&text, &root, path)
+    let mut stack = parse(&text, &root, path)?;
+    #[cfg(windows)]
+    {
+        let paths: Vec<_> = stack
+            .services
+            .iter()
+            .map(|service| service.cwd.clone())
+            .collect();
+        let resolved = canonicalize_windows_dos_paths(paths);
+        for service in &mut stack.services {
+            if windows_dos_path(&service.cwd) {
+                service.cwd =
+                    resolved
+                        .get(&service.cwd)
+                        .cloned()
+                        .ok_or_else(|| StackError::Invalid {
+                            path: path.to_path_buf(),
+                            message: format!(
+                                "could not safely resolve Windows short-name working directory {}",
+                                service.cwd.display()
+                            ),
+                        })?;
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = &mut stack;
+    Ok(stack)
 }
 
 fn valid_name(s: &str) -> bool {
@@ -566,6 +593,117 @@ fn windows_relative_components<'a>(
         }
     }
     Some(path)
+}
+
+#[cfg(windows)]
+pub(crate) fn windows_dos_path(path: &Path) -> bool {
+    path.is_absolute()
+        && path.components().any(|part| {
+            let std::path::Component::Normal(name) = part else {
+                return false;
+            };
+            let name = name.to_string_lossy();
+            name.split_once('~').is_some_and(|(_, suffix)| {
+                let number = suffix.split('.').next().unwrap_or_default();
+                !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+            })
+        })
+}
+
+/// Canonicalize unique DOS short-name paths under one operation budget, not one deadline per
+/// service/process. Stalled OS calls cannot accumulate across scans; missing results fail closed.
+#[cfg(windows)]
+pub(crate) fn canonicalize_windows_dos_paths(
+    paths: impl IntoIterator<Item = PathBuf>,
+) -> std::collections::HashMap<PathBuf, PathBuf> {
+    static ACTIVE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    resolve_windows_dos_paths(
+        paths,
+        std::time::Duration::from_millis(250),
+        &ACTIVE,
+        std::sync::Arc::new(|path| std::fs::canonicalize(path).ok()),
+    )
+}
+
+#[cfg(windows)]
+type WindowsPathResolver = std::sync::Arc<dyn Fn(&Path) -> Option<PathBuf> + Send + Sync>;
+
+#[cfg(windows)]
+fn resolve_windows_dos_paths(
+    paths: impl IntoIterator<Item = PathBuf>,
+    budget: std::time::Duration,
+    active: &'static std::sync::atomic::AtomicUsize,
+    resolve: WindowsPathResolver,
+) -> std::collections::HashMap<PathBuf, PathBuf> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    const MAX_ACTIVE: usize = 4;
+    struct Slot(&'static AtomicUsize);
+    impl Drop for Slot {
+        fn drop(&mut self) {
+            self.0.fetch_sub(1, Ordering::AcqRel);
+        }
+    }
+    let mut paths = paths
+        .into_iter()
+        .filter(|path| windows_dos_path(path))
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .peekable();
+    let mut resolved = std::collections::HashMap::new();
+    let (send, receive) = std::sync::mpsc::sync_channel(MAX_ACTIVE);
+    let deadline = std::time::Instant::now() + budget;
+    let mut pending = 0;
+    loop {
+        while pending < MAX_ACTIVE && paths.peek().is_some() && std::time::Instant::now() < deadline
+        {
+            let mut count = active.load(Ordering::Acquire);
+            let acquired = loop {
+                if count >= MAX_ACTIVE {
+                    break false;
+                }
+                match active.compare_exchange_weak(
+                    count,
+                    count + 1,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => break true,
+                    Err(current) => count = current,
+                }
+            };
+            if !acquired {
+                break;
+            }
+            let slot = Slot(active);
+            let path = paths.next().expect("checked pending path");
+            let send = send.clone();
+            let resolve = resolve.clone();
+            let worker = std::thread::Builder::new()
+                .name("holdmap-path-alias".into())
+                .spawn(move || {
+                    let _slot = slot;
+                    let canonical = resolve(&path);
+                    let _ = send.send((path, canonical));
+                });
+            if worker.is_ok() {
+                pending += 1;
+            }
+        }
+        if pending == 0 {
+            break;
+        }
+        let Some(remaining) = deadline.checked_duration_since(std::time::Instant::now()) else {
+            break;
+        };
+        let Ok((path, canonical)) = receive.recv_timeout(remaining) else {
+            break;
+        };
+        pending -= 1;
+        if let Some(canonical) = canonical {
+            resolved.insert(path, canonical);
+        }
+    }
+    resolved
 }
 
 /// Where a service stands right now.
@@ -1036,6 +1174,156 @@ port = 5432
         let canonical = std::fs::canonicalize(directory.path()).unwrap();
         let ordinary = canonical.to_str().unwrap().strip_prefix(r"\\?\").unwrap();
         assert!(stack.owns(&entry(3000, Some(ordinary), None)));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_short_name_cwds_resolve_once_and_match_loaded_stack_ownership() {
+        let directory = tempfile::tempdir().unwrap();
+        let cwd = directory.path().join("apps/work space");
+        std::fs::create_dir_all(&cwd).unwrap();
+        let file = directory.path().join(FILE_NAME);
+        let service_cwd = cwd.to_string_lossy();
+        std::fs::write(
+            &file,
+            format!(
+                "[services.web]\nport=3000\ncommand='fixture'\ncwd={}\n",
+                toml_str(&service_cwd)
+            ),
+        )
+        .unwrap();
+        let stack = load(&file).unwrap();
+        let resolved = canonicalize_windows_dos_paths([cwd.clone(), cwd.clone()]);
+        let cwd = if windows_dos_path(&cwd) {
+            assert_eq!(
+                resolved.len(),
+                1,
+                "one resolution for a shared DOS alias cwd"
+            );
+            resolved.get(&cwd).unwrap().clone()
+        } else {
+            cwd
+        };
+        assert!(stack.owns(&entry(3000, cwd.to_str(), None)));
+        assert_eq!(
+            relative_to_root(&cwd, &stack.root),
+            Some(PathBuf::from(r"apps\work space"))
+        );
+        assert_eq!(
+            std::fs::canonicalize(&stack.services[0].cwd).unwrap(),
+            std::fs::canonicalize(&cwd).unwrap()
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_alias_batch_deadline_caps_workers_discards_late_results_and_recovers() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::{Arc, Condvar, Mutex};
+        use std::time::{Duration, Instant};
+        static ACTIVE: AtomicUsize = AtomicUsize::new(0);
+        let gate = Arc::new((Mutex::new(false), Condvar::new()));
+        struct Release(Arc<(Mutex<bool>, Condvar)>);
+        impl Drop for Release {
+            fn drop(&mut self) {
+                *self.0 .0.lock().unwrap() = true;
+                self.0 .1.notify_all();
+            }
+        }
+        let release = Release(gate.clone());
+        let calls = Arc::new(AtomicUsize::new(0));
+        let resolve = {
+            let gate = gate.clone();
+            let calls = calls.clone();
+            Arc::new(move |path: &Path| {
+                calls.fetch_add(1, Ordering::AcqRel);
+                let mut released = gate.0.lock().unwrap();
+                while !*released {
+                    released = gate.1.wait(released).unwrap();
+                }
+                Some(path.to_path_buf())
+            })
+        };
+        let paths: Vec<_> = (0..8)
+            .map(|i| PathBuf::from(format!(r"C:\RUNNER~1\owned-{i}")))
+            .collect();
+        let started = Instant::now();
+        assert!(resolve_windows_dos_paths(
+            paths.clone(),
+            Duration::from_millis(50),
+            &ACTIVE,
+            resolve.clone()
+        )
+        .is_empty());
+        assert!(
+            started.elapsed() < Duration::from_millis(500),
+            "one operation deadline, not eight path deadlines"
+        );
+        assert_eq!(ACTIVE.load(Ordering::Acquire), 4);
+        assert!(resolve_windows_dos_paths(
+            paths.clone(),
+            Duration::from_millis(50),
+            &ACTIVE,
+            resolve
+        )
+        .is_empty());
+        assert_eq!(
+            ACTIVE.load(Ordering::Acquire),
+            4,
+            "stalled workers cannot accumulate across captures"
+        );
+        drop(release);
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while ACTIVE.load(Ordering::Acquire) != 0 {
+            assert!(
+                Instant::now() < deadline,
+                "late workers must release capacity"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(calls.load(Ordering::Acquire), 4);
+        let resolved = resolve_windows_dos_paths(
+            paths.clone(),
+            Duration::from_secs(1),
+            &ACTIVE,
+            Arc::new(|path| Some(path.to_path_buf())),
+        );
+        assert_eq!(
+            resolved.len(),
+            paths.len(),
+            "late results belong only to their discarded receiver"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_alias_batch_deduplicates_paths_without_querying_normal_names() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        use std::time::Duration;
+        static ACTIVE: AtomicUsize = AtomicUsize::new(0);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counted = calls.clone();
+        let alias = PathBuf::from(r"C:\RUNNER~1\owned");
+        let paths = [
+            alias.clone(),
+            alias.clone(),
+            PathBuf::from(r"C:\ordinary\owned"),
+        ];
+        let resolved = resolve_windows_dos_paths(
+            paths,
+            Duration::from_secs(1),
+            &ACTIVE,
+            Arc::new(move |path| {
+                counted.fetch_add(1, Ordering::AcqRel);
+                Some(path.to_path_buf())
+            }),
+        );
+        assert_eq!(calls.load(Ordering::Acquire), 1);
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved.contains_key(&alias));
     }
 
     #[test]

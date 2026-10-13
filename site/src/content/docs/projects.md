@@ -79,6 +79,7 @@ Only an explicit `holdmap stop --allow-protected` (or `kill --allow-protected`) 
 project setting. The desktop app and MCP server use the shared process protection rules;
 they do not load this CLI project setting.
 
-The file runs commands through your shell, so holdmap only trusts one that you (or root) own and
-that other users can't write to. A `.holdmap.toml` dropped into a shared folder such as `/tmp` is
-refused.
+The file runs commands through your shell. On Unix, holdmap requires a file owned by you (or
+root) that is not group- or world-writable; a file from another account in a shared folder such
+as `/tmp` is refused. These checks apply to the file, not its parent directory. Windows relies
+on the checkout's ACLs, so use a project folder that other accounts cannot modify.

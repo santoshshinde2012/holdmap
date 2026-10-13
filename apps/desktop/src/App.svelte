@@ -15,7 +15,7 @@
   import PinDialog from "./components/PinDialog.svelte";
   import RemoteDialog from "./components/RemoteDialog.svelte";
   import { Button, Dialog, FilterChip, IconButton, Kbd, SegmentedControl, Select, Splitter, TextField } from "./components/ui";
-  import type { DetailTab } from "./lib/detail";
+  import { restartRootPid, type DetailTab } from "./lib/detail";
   import { THEME_ICON, THEME_LABEL, type SettingsActions, type SettingsModel, type SettingsSection, type HotkeyPreset, type Theme } from "./lib/settings";
   import ConfirmDialog, { type Phase } from "./components/ConfirmDialog.svelte";
   import ShortcutsDialog from "./components/ShortcutsDialog.svelte";
@@ -831,7 +831,9 @@
         if (c.restart && c.entry && !queue.length) {
           const port = c.entry.port;
           try {
-            const s = await api.restartStopped(port);
+            const pid = restartRootPid(c.entry, c.plan);
+            if (pid === null) throw new Error("Couldn't identify one recorded process from the reviewed stop plan. Choose a recording in Recently stopped or use the service's normal launcher.");
+            const s = await api.restartStopped(port, c.entry.protocol, pid);
             setTimeout(() => { if (confirm === c) confirm = null; }, 600);
             toast("ok", `Restarted :${port}`, `${s.command} (PID ${s.pid}) · log ${s.log}`);
           } catch (err) {

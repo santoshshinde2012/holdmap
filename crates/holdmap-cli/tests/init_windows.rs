@@ -147,14 +147,10 @@ impl Project {
                 std::fs::read_to_string(&stack.file).unwrap(),
             );
         }
-        assert!(holdmap_core::stack::path_is_under(
-            &stack.services[0].cwd,
-            &self.cwd
-        ));
-        assert!(holdmap_core::stack::path_is_under(
-            &self.cwd,
-            &stack.services[0].cwd
-        ));
+        assert_eq!(
+            std::fs::canonicalize(&stack.services[0].cwd).unwrap(),
+            std::fs::canonicalize(&self.cwd).unwrap()
+        );
         stack
     }
 
@@ -289,14 +285,10 @@ fn generated_windows_stack_round_trips_argv_cwd_and_environment_then_stops_only_
     assert_ne!(restarted.pid, original.pid);
     assert_eq!(restarted.port, original.port);
     assert_eq!(restarted.argv, holdmap_core::redact::args(&original.argv));
-    assert!(holdmap_core::stack::path_is_under(
-        &restarted.cwd,
-        &original.cwd
-    ));
-    assert!(holdmap_core::stack::path_is_under(
-        &original.cwd,
-        &restarted.cwd
-    ));
+    assert_eq!(
+        std::fs::canonicalize(&restarted.cwd).unwrap(),
+        std::fs::canonicalize(&original.cwd).unwrap()
+    );
     assert_eq!(restarted.inherited, original.inherited);
     project.assert_no_injection();
     let output = project

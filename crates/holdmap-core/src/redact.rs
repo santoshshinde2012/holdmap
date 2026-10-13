@@ -226,11 +226,178 @@ fn takes_secret_value(a: &str) -> bool {
 
 /// Redact a command line given as arguments.
 pub fn args(cmd: &[String]) -> Vec<String> {
+    args_inner(cmd, 0, false)
+}
+
+const MAX_SCRIPT_BYTES: usize = 64 * 1024;
+const MAX_SCRIPT_DEPTH: usize = 8;
+
+#[derive(Clone, Copy)]
+struct ScriptPayload {
+    at: usize,
+    rest: bool,
+    prefix: usize,
+    encoded: bool,
+}
+
+/// Recognize interpreter invocation only. Positional text for ordinary programs stays argv.
+fn script_payload(cmd: &[String]) -> Option<ScriptPayload> {
+    let program = cmd
+        .first()?
+        .rsplit(['/', '\\'])
+        .next()?
+        .to_ascii_lowercase();
+    let program = program.strip_suffix(".exe").unwrap_or(&program);
+    let posix = matches!(
+        program,
+        "sh" | "bash" | "dash" | "zsh" | "ksh" | "mksh" | "ash" | "fish" | "csh" | "tcsh"
+    );
+    let powershell = matches!(program, "powershell" | "pwsh");
+    if !posix && !powershell && program != "cmd" {
+        return None;
+    }
+    let mut index = 1;
+    while let Some(argument) = cmd.get(index) {
+        let lower = argument.to_ascii_lowercase();
+        if posix {
+            if argument == "--" || !argument.starts_with('-') {
+                return None;
+            }
+            if matches!(argument.as_str(), "--rcfile" | "--init-file") {
+                index += 2;
+                continue;
+            }
+            let short = argument.strip_prefix('-').unwrap_or("");
+            if argument == "--command"
+                || !short.starts_with('-')
+                    && short.contains('c')
+                    && short.chars().all(|c| c.is_ascii_alphabetic())
+            {
+                return Some(ScriptPayload {
+                    at: index + 1,
+                    rest: false,
+                    prefix: 0,
+                    encoded: false,
+                });
+            }
+        } else if program == "cmd" {
+            if lower.starts_with("/c") || lower.starts_with("/k") {
+                return Some(ScriptPayload {
+                    at: if argument.len() == 2 {
+                        index + 1
+                    } else {
+                        index
+                    },
+                    rest: true,
+                    prefix: if argument.len() == 2 { 0 } else { 2 },
+                    encoded: false,
+                });
+            }
+        } else {
+            let flag = lower.trim_start_matches(['-', '/']);
+            if lower == flag || flag.is_empty() {
+                return None;
+            }
+            if "file".starts_with(flag) {
+                return None;
+            }
+            // These abbreviations are accepted by PowerShell's own host parser. Opaque
+            // UTF-16/base64 payloads can contain credentials, so never export their bytes.
+            if "encodedcommand".starts_with(flag)
+                || matches!(flag, "ec" | "ea")
+                || "encodedarguments".starts_with(flag)
+            {
+                return Some(ScriptPayload {
+                    at: index + 1,
+                    rest: false,
+                    prefix: 0,
+                    encoded: true,
+                });
+            }
+            if "command".starts_with(flag) || matches!(flag, "commandwithargs" | "cwa") {
+                return Some(ScriptPayload {
+                    at: index + 1,
+                    rest: flag != "commandwithargs" && flag != "cwa",
+                    prefix: 0,
+                    encoded: false,
+                });
+            }
+            if matches!(
+                flag,
+                "executionpolicy"
+                    | "ep"
+                    | "ex"
+                    | "windowstyle"
+                    | "w"
+                    | "inputformat"
+                    | "outputformat"
+                    | "workingdirectory"
+                    | "wd"
+            ) {
+                index += 2;
+                continue;
+            }
+        }
+        index += 1;
+    }
+    None
+}
+
+fn quoted_word(value: &str) -> Option<(&str, &str)> {
+    let quote = value.get(..1)?;
+    if !matches!(quote, "'" | "\"") || value.len() < 2 || !value.ends_with(quote) {
+        return None;
+    }
+    let inner = &value[1..value.len() - 1];
+    // Nested/escaped quote grammar is interpreter-specific. Only unwrap one plain pair.
+    (!inner.contains(quote)).then_some((quote, inner))
+}
+
+fn secret_syntax(value: &str) -> bool {
+    value.split_whitespace().any(|word| {
+        let word = word.trim_matches(['\'', '"']);
+        takes_secret_value(word) || word.split_once('=').is_some_and(|(key, _)| sensitive(key))
+    })
+}
+
+fn script_word(value: &str, depth: usize) -> String {
+    if depth >= MAX_SCRIPT_DEPTH || value.len() > MAX_SCRIPT_BYTES {
+        return MASK.into();
+    }
+    if let Some((quote, inner)) = quoted_word(value) {
+        let redacted = arg(inner);
+        if redacted != inner {
+            return format!("{quote}{redacted}{quote}");
+        }
+        return format!("{quote}{}{quote}", line_inner(inner, depth + 1, true));
+    }
+    if value.starts_with(['\'', '"']) && secret_syntax(value) {
+        return MASK.into();
+    }
+    if let Some((key, data)) = value.split_once('=') {
+        // PowerShell variables are assignment targets too; only inspect them inside a
+        // recognized script, leaving ordinary positional strings untouched.
+        if key.starts_with('$') && sensitive(key) && !data.is_empty() {
+            return format!("{key}={MASK}");
+        }
+    }
+    arg(value)
+}
+
+fn args_inner(cmd: &[String], depth: usize, script: bool) -> Vec<String> {
+    let payload = script_payload(cmd);
     let mut out = Vec::with_capacity(cmd.len());
     let mut hide_next = false;
     let mut bearer = false;
     let mut pending_header = false;
-    for a in cmd {
+    let mut assignment_equals = false;
+    for (index, a) in cmd.iter().enumerate() {
+        if assignment_equals {
+            assignment_equals = false;
+            out.push(a.clone());
+            hide_next = true;
+            continue;
+        }
         if hide_next {
             out.push(MASK.to_string());
             hide_next = false;
@@ -251,8 +418,38 @@ pub fn args(cmd: &[String]) -> Vec<String> {
             bearer = false;
             continue;
         }
-        hide_next = takes_secret_value(a);
-        let redacted = arg(a);
+        let active_payload = payload.filter(|p| index == p.at || p.rest && index > p.at);
+        let script_argument = script || active_payload.is_some_and(|p| !p.encoded);
+        let semantic = if script_argument {
+            quoted_word(a).map_or(a.as_str(), |(_, inner)| inner)
+        } else {
+            a.as_str()
+        };
+        hide_next = takes_secret_value(semantic);
+        assignment_equals = (script || active_payload.is_some_and(|p| p.rest && !p.encoded))
+            && semantic.starts_with('$')
+            && sensitive(semantic)
+            && cmd.get(index + 1).is_some_and(|next| next == "=");
+        let redacted = if let Some(payload) = active_payload {
+            if payload.encoded || depth >= MAX_SCRIPT_DEPTH || a.len() > MAX_SCRIPT_BYTES {
+                MASK.into()
+            } else {
+                let prefix = if index == payload.at {
+                    payload.prefix
+                } else {
+                    0
+                };
+                format!(
+                    "{}{}",
+                    &a[..prefix],
+                    line_inner(&a[prefix..], depth + 1, true)
+                )
+            }
+        } else if script {
+            script_word(a, depth)
+        } else {
+            arg(a)
+        };
         if redacted != *a {
             out.push(crate::util::printable(&redacted).into_owned());
             continue;
@@ -284,6 +481,13 @@ pub fn args(cmd: &[String]) -> Vec<String> {
 
 /// Redact a command string, preserving spacing and keeping quoted multiword values together.
 pub fn line(s: &str) -> String {
+    line_inner(s, 0, false)
+}
+
+fn line_inner(s: &str, depth: usize, script: bool) -> String {
+    if script && (depth >= MAX_SCRIPT_DEPTH || s.len() > MAX_SCRIPT_BYTES) {
+        return MASK.into();
+    }
     let mut spans = Vec::new();
     let mut start = None;
     let mut quote = None;
@@ -315,7 +519,16 @@ pub fn line(s: &str) -> String {
         .iter()
         .map(|(start, end)| s[*start..*end].to_string())
         .collect();
-    let redacted = args(&words);
+    if script
+        && words.iter().any(|word| {
+            word.contains(char::is_whitespace) && secret_syntax(word) && quoted_word(word).is_none()
+        })
+    {
+        // Mixed/unclosed interpreter quotes can merge a credential flag with its value.
+        // Preserve privacy rather than guessing a cmd/PowerShell-specific grammar.
+        return MASK.into();
+    }
+    let redacted = args_inner(&words, depth, script);
     let mut out = String::new();
     let mut cursor = 0;
     for ((start, end), word) in spans.iter().zip(redacted) {
@@ -369,6 +582,164 @@ pub fn serialize_line<S: serde::Serializer>(v: &str, s: S) -> Result<S::Ok, S::E
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn security_shell_script_arguments_hide_credentials_without_mutating_argv() {
+        for (program, flag) in [
+            ("sh", "-c"),
+            ("/bin/bash", "-lc"),
+            ("zsh", "-c"),
+            ("dash", "-c"),
+            (r"C:\Windows\System32\cmd.exe", "/C"),
+            ("cmd", "/K"),
+            ("powershell.exe", "-Command"),
+            ("pwsh", "-c"),
+        ] {
+            let original = vec![
+                program.into(),
+                flag.into(),
+                "echo --token fixture-shell-secret --password 'two words'".into(),
+            ];
+            let displayed = args(&original);
+            assert_eq!(displayed.len(), original.len());
+            assert!(original[2].contains("fixture-shell-secret"));
+            assert!(
+                !displayed[2].contains("fixture-shell-secret"),
+                "{program}: {displayed:?}"
+            );
+            assert!(
+                !displayed[2].contains("two words"),
+                "{program}: {displayed:?}"
+            );
+            assert!(displayed[2].contains("--token"));
+            assert!(displayed[2].contains(MASK));
+        }
+        assert!(!line("cmd /Cecho --password inline-secret").contains("inline-secret"));
+        assert!(!line("sh -c 'echo --token quoted-secret'").contains("quoted-secret"));
+        assert!(!args(&[
+            "pwsh".into(),
+            "-Command".into(),
+            "$env:TOKEN".into(),
+            "=".into(),
+            "split-secret".into()
+        ])
+        .join(" ")
+        .contains("split-secret"));
+    }
+
+    #[test]
+    fn security_nested_scripts_and_quoted_assignments_fail_closed() {
+        for script in [
+            "sh -c 'echo --password \"nested secret\"'",
+            "set \"TOKEN=assignment secret\" && node worker.js",
+            "$env:TOKEN='assignment secret'; Invoke-Worker",
+            "$env:TOKEN = 'spaced assignment secret'; Invoke-Worker",
+            "\"\"quoted worker.exe\" --token \"complex secret\"\"",
+            "'echo --token unclosed-secret",
+        ] {
+            let command = vec!["sh".into(), "-c".into(), script.into()];
+            let displayed = args(&command);
+            assert!(!displayed[2].contains("secret"), "{script}: {displayed:?}");
+            assert!(displayed[2].contains(MASK), "{script}: {displayed:?}");
+        }
+    }
+
+    #[test]
+    fn security_powershell_encoded_payloads_are_private_on_all_exports() {
+        // UTF-16LE/base64 of `echo --password encoded-secret`, reversible credential data.
+        let encoded =
+            "ZQBjAGgAbwAgAC0ALQBwAGEAcwBzAHcAbwByAGQAIABlAG4AYwBvAGQAZQBkAC0AcwBlAGMAcgBlAHQA";
+        for flag in [
+            "-EncodedCommand",
+            "-e",
+            "-ec",
+            "-enc",
+            "-ENCO",
+            "-EncodedArguments",
+        ] {
+            let original = vec![
+                "pwsh.exe".into(),
+                "-NoProfile".into(),
+                flag.into(),
+                encoded.into(),
+            ];
+            let displayed = args(&original);
+            assert_eq!(displayed.len(), original.len());
+            assert_eq!(displayed[3], MASK);
+            assert_eq!(original[3], encoded);
+            assert!(!line(&original.join(" ")).contains(encoded));
+        }
+    }
+
+    #[test]
+    fn security_shell_redaction_bounds_scripts_and_preserves_unrelated_positional_text() {
+        let body = "x".repeat(MAX_SCRIPT_BYTES + 1);
+        assert_eq!(args(&["sh".into(), "-c".into(), body])[2], MASK);
+        assert_eq!(
+            args_inner(
+                &["sh".into(), "-c".into(), "echo --token secret".into()],
+                MAX_SCRIPT_DEPTH,
+                false
+            )[2],
+            MASK
+        );
+        for original in [
+            vec!["echo".into(), "sh -c 'literal --token explanation'".into()],
+            vec![
+                "python".into(),
+                "-c".into(),
+                "print('literal --token explanation')".into(),
+            ],
+            vec![
+                "sh".into(),
+                "script.sh".into(),
+                "-c".into(),
+                "echo --token explanation".into(),
+            ],
+            vec![
+                "pwsh".into(),
+                "-File".into(),
+                "script.ps1".into(),
+                "-Command".into(),
+                "literal --token explanation".into(),
+            ],
+            vec![
+                "node".into(),
+                "-EncodedCommand".into(),
+                "opaque positional text".into(),
+            ],
+        ] {
+            assert_eq!(args(&original), original);
+        }
+    }
+
+    #[test]
+    fn security_process_serialization_hides_shell_body_while_keeping_native_arguments() {
+        let original = vec![
+            "sh".into(),
+            "-c".into(),
+            "node worker --password process-secret".into(),
+        ];
+        let process = crate::model::ProcessInfo {
+            pid: 1,
+            ppid: None,
+            name: "sh".into(),
+            exe: None,
+            cmdline: original.clone(),
+            cwd: None,
+            uid: None,
+            user: None,
+            start_time: 1,
+            start_token: 1,
+            memory_bytes: 0,
+            cpu_percent: 0.0,
+        };
+        let exported = serde_json::to_string(&process).unwrap();
+        assert!(!exported.contains("process-secret"));
+        assert!(exported.contains(MASK));
+        assert_eq!(process.cmdline, original);
+        assert!(!process.command().contains("process-secret"));
+    }
 
     fn v(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| s.to_string()).collect()
