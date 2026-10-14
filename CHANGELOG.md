@@ -53,6 +53,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Desktop recording downloads use a native save dialog with atomic writes, cancellation and
   retryable errors. Recording encoders load only when needed; the public demo checks initial
   and optional JavaScript budgets separately and follows the current map and Flow controls.
+- The public demo reveals dialog actions in the website's viewport, including after focus,
+  animation and content-size changes, so scaled folder and stop dialogs remain usable.
 
 ### Security
 

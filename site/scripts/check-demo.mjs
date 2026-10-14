@@ -203,10 +203,8 @@ try {
     const dialog = frame.locator('[role="alertdialog"]');
     await dialog.waitFor({ timeout: 5000 });
     await measureViewport("stop-dialog");
-    // The iframe is scaled: scrolling a child already inside its own viewport can leave the
-    // modal below the parent browser window. Bring the actual demo canvas into view first.
-    await page.locator("#demo [data-viewport]").scrollIntoViewIfNeeded();
-    await measureViewport("stop-dialog-in-view");
+    // The embedded demo must reveal its own modal actions in the parent viewport.
+    // Use a normal click without a test-only outer scroll or forced pointer event.
     await dialog.locator("[data-primary]").click();
     await frame.locator('[id^="row-tcp:3000:"]').waitFor({ state: "detached", timeout: 10000 });
     await measureViewport("after-stop");

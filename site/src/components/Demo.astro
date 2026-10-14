@@ -137,6 +137,91 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
     const isMac = document.documentElement.dataset.os === "macos";
     if (!isMac) document.querySelectorAll(".tries kbd[data-mod]").forEach((k) => (k.textContent = "Ctrl"));
     let frame: HTMLIFrameElement | null = null;
+    let stopWatchingDialogs = () => {};
+
+    function watchDialogs(iframe: HTMLIFrameElement) {
+      stopWatchingDialogs();
+      const doc = iframe.contentDocument;
+      if (!doc?.body) return;
+      const selector = '[role="dialog"], [role="alertdialog"]';
+      const dialogs = new Set<HTMLElement>();
+      const pending = new Set<HTMLElement>();
+      let layout = 0;
+      let active = true;
+      const reveal = (dialog: HTMLElement) => {
+        if (!active || !dialog.isConnected) return;
+        const actions = [...dialog.querySelectorAll<HTMLElement>('[data-primary], [data-folder-open], footer button:not([disabled]), footer a[href]')];
+        if (!actions.length) actions.push(dialog);
+        const bounds = () => {
+          const box = iframe.getBoundingClientRect();
+          const sx = box.width / iframe.clientWidth, sy = box.height / iframe.clientHeight;
+          return actions.map((action) => action.getBoundingClientRect()).filter((r) => r.width && r.height).map((r) => ({
+            top: box.top + r.top * sy, bottom: box.top + r.bottom * sy,
+            left: box.left + r.left * sx, right: box.left + r.right * sx,
+          }));
+        };
+        let targets = bounds();
+        const clip = viewport.getBoundingClientRect();
+        // Focus can scroll an overflow:hidden ancestor of the unscaled iframe.
+        if (targets.some((r) => r.top < clip.top || r.bottom > clip.bottom || r.left < clip.left || r.right > clip.right)) {
+          viewport.scrollTop = 0;
+          viewport.scrollLeft = 0;
+          targets = bounds();
+        }
+        if (!targets.length) return;
+        const top = Math.min(...targets.map((r) => r.top)), bottom = Math.max(...targets.map((r) => r.bottom));
+        const safeTop = Math.max(8, (document.querySelector('[data-nav]')?.getBoundingClientRect().bottom ?? 0) + 8);
+        const safeBottom = window.innerHeight - 8;
+        // A child can be inside its own viewport while its scaled actions are below
+        // the website's viewport. Move only enough to expose those actions.
+        const dy = bottom > safeBottom ? bottom - safeBottom : top < safeTop ? top - safeTop : 0;
+        if (dy) window.scrollBy({ top: dy, behavior: "instant" });
+      };
+      const schedule = (dialog: HTMLElement) => {
+        pending.add(dialog);
+        if (!layout) layout = requestAnimationFrame(() => {
+          layout = 0;
+          for (const surface of pending) reveal(surface);
+          pending.clear();
+        });
+      };
+      const resized = new ResizeObserver((entries) => entries.forEach((entry) => schedule(entry.target as HTMLElement)));
+      const watch = (dialog: HTMLElement) => {
+        if (dialogs.has(dialog)) return;
+        dialogs.add(dialog);
+        resized.observe(dialog);
+        schedule(dialog);
+        // Measure again after the dialog's fly transition, without a fixed delay.
+        requestAnimationFrame(() => {
+          if (!active || !dialog.isConnected) return;
+          void Promise.allSettled(dialog.getAnimations().map((animation) => animation.finished)).then(() => { if (active && dialog.isConnected) schedule(dialog); });
+        });
+      };
+      const added = new MutationObserver((changes) => {
+        for (const change of changes) for (const node of change.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          const element = node as HTMLElement;
+          if (element.matches(selector)) watch(element);
+          element.querySelectorAll<HTMLElement>(selector).forEach(watch);
+        }
+        for (const dialog of dialogs) if (!dialog.isConnected) { resized.unobserve(dialog); dialogs.delete(dialog); pending.delete(dialog); }
+      });
+      const focused = (event: FocusEvent) => {
+        const dialog = (event.target as Element | null)?.closest<HTMLElement>(selector);
+        if (dialog) schedule(dialog);
+      };
+      // Ignore style/attribute changes from map panning and ordinary text refreshes.
+      added.observe(doc.body, { childList: true, subtree: true });
+      doc.addEventListener("focusin", focused);
+      doc.querySelectorAll<HTMLElement>(selector).forEach(watch);
+      stopWatchingDialogs = () => {
+        active = false;
+        added.disconnect();
+        resized.disconnect();
+        doc.removeEventListener("focusin", focused);
+        cancelAnimationFrame(layout);
+      };
+    }
 
     const fit = () => viewport.style.setProperty("--s", String(viewport.clientWidth / 1280));
     new ResizeObserver(fit).observe(viewport);
@@ -147,6 +232,7 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
       frame = document.createElement("iframe");
       frame.title = "holdmap live demo: the desktop app with sample data";
       frame.src = `${root!.dataset.src}?theme=${theme()}`;
+      frame.addEventListener("load", () => watchDialogs(frame!));
       frame.addEventListener("load", () => {
         setTimeout(() => { poster.setAttribute("data-hidden", ""); buttons.forEach((b) => (b.disabled = false)); }, 500);
       }, { once: true });
