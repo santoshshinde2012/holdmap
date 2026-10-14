@@ -8,6 +8,12 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Fixed
+
+- Discover draft releases through authenticated release listing and numeric IDs instead
+  of the published-only tag endpoint. Release recovery can verify and publish existing
+  complete draft assets from `main` without rebuilding or moving their tag.
+
 ## [0.7.0] - 2026-10-14
 
 ### Added

@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { promisify } from "node:util";
+import { lookupRelease } from "./release-api.mjs";
 
 const execute = promisify(execFile);
 const repository = process.env.GITHUB_REPOSITORY;
@@ -15,8 +16,7 @@ if (!Array.isArray(manifest) || manifest.length === 0 || manifest.some((asset) =
   throw new Error("Invalid staged release asset manifest");
 }
 const gh = async (args) => (await execute("gh", args, { timeout: 120_000, maxBuffer: 10 * 1024 * 1024 })).stdout;
-const release = JSON.parse(await gh(["api", `repos/${repository}/releases/tags/${tag}`]));
-if (!Number.isSafeInteger(release.id)) throw new Error("Invalid GitHub release ID");
+const release = await lookupRelease(repository, tag);
 const list = async () => JSON.parse(await gh(["api", "--paginate", "--slurp", `repos/${repository}/releases/${release.id}/assets?per_page=100`])).flat();
 const matching = (assets, asset) => {
   const existing = assets.filter((candidate) => candidate.name === asset.name);
