@@ -13,7 +13,7 @@ pub(crate) fn trusted_origin(label: &str, url: &tauri::Url, dev_url: Option<&tau
     packaged || dev_url.is_some_and(|dev| dev.origin() == url.origin())
 }
 
-pub(crate) fn authorize(window: &WebviewWindow, action: &str) -> Result<(), String> {
+pub(crate) fn authorize<R: Runtime>(window: &WebviewWindow<R>, action: &str) -> Result<(), String> {
     authorize_webview(window.as_ref(), action)
 }
 
