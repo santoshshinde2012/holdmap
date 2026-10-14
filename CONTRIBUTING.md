@@ -353,6 +353,15 @@ maintainer pushes its tag.
    unsigned. Without a configured signed updater, desktop users download the new installer
    manually; do not advertise automatic updates.
 
+If every artifact build succeeded but final publication failed, fix and validate the
+publication code on `main`, then run `gh workflow run release.yml --ref main --field tag=vX.Y.Z --field run_id=RUN_ID`
+with the existing draft's tag and its original tag-build run ID. This recovery path checks
+that the original run completed every required artifact and optional updater job, then skips
+builds, verifies every existing installer and checksum, and publishes only a complete draft
+before dispatching the tagged website. It runs only from `main`; it never moves the release tag. If publication already
+succeeded and only the website dispatch failed, rerun Pages on the published tag with
+`deploy_from_branch=true` instead.
+
 ## Licence
 
 By contributing, you agree that your contributions are dual-licensed under MIT OR Apache-2.0, as

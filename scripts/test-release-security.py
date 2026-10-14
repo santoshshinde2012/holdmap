@@ -292,6 +292,132 @@ class DesktopReleaseAssetTests(unittest.TestCase):
         self.assertEqual(list((root / "outside").iterdir()), [])
 
 
+class ReleaseLookupTests(unittest.TestCase):
+    def setUp(self):
+        sandbox = tempfile.TemporaryDirectory(prefix="holdmap-release-lookup-test-")
+        self.addCleanup(sandbox.cleanup)
+        self.root = Path(sandbox.name)
+        self.state = self.root / "github.json"
+        self.calls = self.root / "calls.jsonl"
+        stub = self.root / "gh"
+        stub.write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+args = sys.argv[1:]
+with Path(os.environ["HOLDMAP_TEST_CALLS"]).open("a") as log:
+    log.write(json.dumps(args) + "\\n")
+if args[:3] != ["api", "--method", "GET"]:
+    sys.exit("only explicit GET requests are permitted")
+state = json.loads(Path(os.environ["HOLDMAP_TEST_GITHUB"]).read_text())
+endpoint = args[-1]
+if "/releases/tags/" in endpoint:
+    sys.exit("Not Found (HTTP 404): this route exposes published releases only")
+elif endpoint.startswith("repos/example/holdmap/releases?per_page=100&page="):
+    page = int(endpoint.rsplit("=", 1)[1])
+    print(json.dumps(state["pages"][page - 1] if page <= len(state["pages"]) else []))
+elif endpoint == "repos/example/holdmap/releases/42":
+    print(json.dumps(state["release"]))
+else:
+    sys.exit("unexpected GitHub operation")
+''')
+        stub.chmod(0o700)
+
+    def fixture(self, draft=True):
+        release = {"id": 42, "tag_name": "v0.7.0", "draft": draft, "prerelease": False}
+        return {"pages": [[release.copy()]], "release": release}
+
+    def lookup(self, data, tag="v0.7.0", repository="example/holdmap"):
+        self.state.write_text(json.dumps(data))
+        self.calls.unlink(missing_ok=True)
+        environment = os.environ.copy()
+        environment.update({"PATH": str(self.root) + os.pathsep + environment["PATH"],
+                            "GITHUB_REPOSITORY": repository, "TAG": tag,
+                            "HOLDMAP_TEST_GITHUB": str(self.state), "HOLDMAP_TEST_CALLS": str(self.calls)})
+        result = subprocess.run(["node", "--input-type=module", "-e",
+                                 "const {lookupRelease} = await import(process.argv[1]); "
+                                 "console.log(JSON.stringify(await lookupRelease(process.env.GITHUB_REPOSITORY, process.env.TAG)));",
+                                 (ROOT / "scripts/release-api.mjs").as_uri()],
+                                env=environment, capture_output=True, text=True, check=False, timeout=30)
+        calls = [json.loads(line) for line in self.calls.read_text().splitlines()] if self.calls.exists() else []
+        for call in calls:
+            self.assertEqual(call[:3], ["api", "--method", "GET"])
+            self.assertNotIn("/releases/tags/", call[-1])
+        return result, calls
+
+    def test_drafts_and_published_releases_use_listing_then_pinned_numeric_id(self):
+        for draft in [True, False]:
+            with self.subTest(draft=draft):
+                data = self.fixture(draft)
+                result, calls = self.lookup(data)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout), data["release"])
+                self.assertEqual([call[-1] for call in calls], [
+                    "repos/example/holdmap/releases?per_page=100&page=1",
+                    "repos/example/holdmap/releases/42"])
+
+    def test_later_page_lookup_and_duplicate_tags_across_pages(self):
+        data = self.fixture()
+        others = [{"id": 1000 + index, "tag_name": "other-" + str(index)} for index in range(100)]
+        data["pages"] = [others, data["pages"][0]]
+        result, calls = self.lookup(data)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any(call[-1].endswith("page=2") for call in calls))
+        data["pages"][0][0] = data["release"].copy()
+        result, calls = self.lookup(data)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Duplicate release tag", result.stderr)
+        self.assertFalse(any(call[-1].endswith("/releases/42") for call in calls))
+
+    def test_missing_or_malformed_listed_release_identity_fails_before_id_lookup(self):
+        cases = [[], {}, None, [{"tag_name": "v0.7.0"}]]
+        cases.extend([{"id": identifier, "tag_name": "v0.7.0"}]
+                     for identifier in [0, -1, 42.5, 2 ** 53, "42", None])
+        for page in cases:
+            with self.subTest(page=page):
+                data = self.fixture()
+                data["pages"] = [page]
+                result, calls = self.lookup(data)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(len(calls), 1)
+
+    def test_numeric_id_response_must_preserve_tag_id_draft_and_prerelease_identity(self):
+        cases = [None, {}]
+        for field, value in [("id", 43), ("tag_name", "v0.6.0"), ("draft", None),
+                             ("prerelease", True), ("id", None)]:
+            release = self.fixture()["release"]
+            release[field] = value
+            cases.append(release)
+        for release in cases:
+            with self.subTest(release=release):
+                data = self.fixture()
+                data["release"] = release
+                result, calls = self.lookup(data)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(len(calls), 2)
+
+    def test_release_listing_is_bounded_even_if_a_matching_tag_was_found(self):
+        data = self.fixture()
+        data["pages"] = [[{"id": 1000 + page * 100 + index, "tag_name": f"other-{page}-{index}"}
+                          for index in range(100)] for page in range(11)]
+        data["pages"][0][0] = data["release"].copy()
+        result, calls = self.lookup(data)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unexpectedly large release list", result.stderr)
+        self.assertEqual(len(calls), 11)
+
+    def test_noncanonical_tags_and_repositories_never_reach_github(self):
+        for tag in ["v01.2.3", "v0.7.0-01", "v0.7.0\n", "v0.7.0$(false)"]:
+            with self.subTest(tag=tag):
+                result, calls = self.lookup(self.fixture(), tag=tag)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [])
+        for repository in ["example/..", "example/holdmap/extra", "example/holdmap\n"]:
+            with self.subTest(repository=repository):
+                result, calls = self.lookup(self.fixture(), repository=repository)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [])
+
+
 class CompleteReleaseAssetTests(unittest.TestCase):
     def setUp(self):
         sandbox = tempfile.TemporaryDirectory(prefix="holdmap-release-completeness-test-")
@@ -310,7 +436,11 @@ if args[:3] != ["api", "--method", "GET"]:
     sys.exit("only explicit GET API requests are permitted")
 state = json.loads(Path(os.environ["HOLDMAP_TEST_GITHUB"]).read_text())
 endpoint = args[-1]
-if endpoint.startswith("repos/example/holdmap/releases/tags/"):
+if endpoint.startswith("repos/example/holdmap/releases?per_page=100&page="):
+    page = int(endpoint.rsplit("=", 1)[1])
+    releases = state.get("releases", [state["release"]])
+    print(json.dumps(releases[(page - 1) * 100:page * 100]))
+elif endpoint == "repos/example/holdmap/releases/42":
     print(json.dumps(state["release"]))
 elif endpoint.startswith("repos/example/holdmap/releases/42/assets?per_page=100&page="):
     page = int(endpoint.rsplit("=", 1)[1])
@@ -391,6 +521,7 @@ else:
         calls = [json.loads(line) for line in self.calls.read_text().splitlines()] if self.calls.exists() else []
         for call in calls:
             self.assertEqual(call[:3], ["api", "--method", "GET"], "verifier must never publish or mutate")
+            self.assertNotIn("/releases/tags/", call[-1], "drafts are absent from the published-only tag route")
         self.assertEqual(json.loads(self.state.read_text()), data, "verifier must not modify release state")
         return result, calls
 
@@ -537,7 +668,10 @@ class CompleteDesktopUpdaterTests(unittest.TestCase):
                         "platforms": {target: asset, target + "-" + kind: asset}}
             (self.root / (matrix + ".updater.json")).write_text(json.dumps(manifest))
             self.assets.append({"name": name, "id": identifier, "digest": "sha256:" + digest})
-        self.initial = {"assets": self.assets, "uploads": [], "next_id": 900}
+        self.initial = {"assets": self.assets, "uploads": [], "next_id": 900,
+                        "release": {"id": 42, "tag_name": "v0.5.0", "draft": True,
+                                    "prerelease": False, "body": "Release notes",
+                                    "published_at": None, "created_at": "2026-10-01T12:00:00Z"}}
         self.state.write_text(json.dumps(self.initial))
         stub = self.root / "gh"
         stub.write_text('''#!/usr/bin/env python3
@@ -547,11 +681,15 @@ path = Path(os.environ["HOLDMAP_TEST_GITHUB"])
 state = json.loads(path.read_text())
 args = sys.argv[1:]
 if args[0] == "api":
-    if args[-1].endswith("/assets?per_page=100"):
+    endpoint = args[-1]
+    if endpoint == "repos/example/holdmap/releases?per_page=100&page=1":
+        print(json.dumps([state["release"]]))
+    elif endpoint == "repos/example/holdmap/releases/42":
+        print(json.dumps(state["release"]))
+    elif endpoint == "repos/example/holdmap/releases/42/assets?per_page=100":
         print(json.dumps([state["assets"]]))
     else:
-        print(json.dumps({"id":42,"tag_name":"v0.5.0","body":"Release notes",
-                          "published_at":"2026-10-01T12:00:00Z"}))
+        sys.exit("unexpected GitHub API endpoint; tag routes do not expose drafts")
 elif args[:2] == ["release", "upload"]:
     payload = Path(args[3])
     if payload.name != "latest.json" or "--clobber" not in args:
@@ -652,6 +790,7 @@ class SignedDesktopUploadTests(unittest.TestCase):
             published.append({"name": name, "id": identifier, "digest": "sha256:" + digest})
         self.manifest.write_text(json.dumps(assets))
         self.initial = {"assets": published, "uploads": [], "next_id": 900,
+                        "release": {"id": 42, "tag_name": "v0.4.0", "draft": True, "prerelease": False},
                         "latest_json": {"platforms": {"darwin-aarch64": {
                             "url": "https://api.github.com/repos/example/holdmap/releases/assets/702"}}}}
         self.state.write_text(json.dumps(self.initial))
@@ -663,7 +802,15 @@ path = Path(os.environ["HOLDMAP_TEST_GITHUB"])
 state = json.loads(path.read_text())
 args = sys.argv[1:]
 if args[0] == "api":
-    print(json.dumps([state["assets"]] if args[-1].endswith("/assets?per_page=100") else {"id": 42}))
+    endpoint = args[-1]
+    if endpoint == "repos/example/holdmap/releases?per_page=100&page=1":
+        print(json.dumps([state["release"]]))
+    elif endpoint == "repos/example/holdmap/releases/42":
+        print(json.dumps(state["release"]))
+    elif endpoint == "repos/example/holdmap/releases/42/assets?per_page=100":
+        print(json.dumps([state["assets"]]))
+    else:
+        sys.exit("unexpected GitHub API endpoint; tag routes do not expose drafts")
 elif args[:2] == ["release", "upload"]:
     if "--clobber" in args:
         sys.exit("asset replacement is forbidden")

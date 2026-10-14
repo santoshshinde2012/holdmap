@@ -2,6 +2,7 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
+import { lookupRelease } from "./release-api.mjs";
 
 const execute = promisify(execFile);
 const repository = process.env.GITHUB_REPOSITORY;
@@ -27,7 +28,7 @@ const api = async (path, limit = 2 * 1024 * 1024, binary = false) => {
   const result = await execute("gh", [...args, path], { timeout: 30_000, maxBuffer: limit, encoding: "buffer" });
   return result.stdout;
 };
-const release = JSON.parse((await api(`repos/${repository}/releases/tags/${tag}`)).toString("utf8"));
+const release = await lookupRelease(repository, tag);
 if (!Number.isSafeInteger(release.id) || release.id <= 0 || release.tag_name !== tag
   || release.prerelease !== prerelease || typeof release.draft !== "boolean") {
   throw new Error("Release identity or prerelease status differs from TAG");

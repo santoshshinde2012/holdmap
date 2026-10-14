@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { lookupRelease } from "./release-api.mjs";
 
 const repository = process.env.GITHUB_REPOSITORY;
 const tag = process.env.TAG;
@@ -56,8 +57,7 @@ for (const file of files) {
 
 const execute = promisify(execFile);
 const gh = async (args) => (await execute("gh", args, { timeout: 120_000, maxBuffer: 10 * 1024 * 1024 })).stdout;
-const release = JSON.parse(await gh(["api", `repos/${repository}/releases/tags/${tag}`]));
-if (!Number.isSafeInteger(release.id) || release.id <= 0 || release.tag_name !== tag) throw new Error("Invalid GitHub release");
+const release = await lookupRelease(repository, tag);
 const list = async () => JSON.parse(await gh(["api", "--paginate", "--slurp", `repos/${repository}/releases/${release.id}/assets?per_page=100`])).flat();
 const assets = await list();
 const published = {};

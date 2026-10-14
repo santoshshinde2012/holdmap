@@ -135,6 +135,8 @@ jobs:
         run: npm audit
       - name: Release security regressions
         run: python3 scripts/test-release-security.py
+      - name: Release recovery regressions
+        run: python3 scripts/test-release-recovery.py
       - name: Cross-check isolation regressions
         run: python3 scripts/test-check-cross.py
       - name: actionlint

@@ -33,10 +33,21 @@ on:
   push:
     tags:
       - '**[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft release tag to verify and publish without rebuilding
+        required: true
+        type: string
+      run_id:
+        description: Original tag build run with every artifact and updater job successful
+        required: true
+        type: string
 
 jobs:
   # Run 'dist plan' (or host) to determine what tasks we need to do
   plan:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: "ubuntu-22.04"
     outputs:
       val: ${{ steps.plan.outputs.manifest }}
@@ -82,7 +93,7 @@ jobs:
     # Let the initial task tell us to not run (currently very blunt)
     needs:
       - plan
-    if: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null && (needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload') }}
+    if: ${{ github.event_name != 'workflow_dispatch' && fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null && (needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload') }}
     strategy:
       fail-fast: false
       # Target platforms/runners are computed by dist in create-release.
@@ -351,7 +362,12 @@ jobs:
     needs:
       - plan
       - custom-desktop-release
-    if: needs.plan.outputs.publishing == 'true'
+    # Recovery runs use checked-in main code to verify an existing draft. Tag builds
+    # still require successful artifact jobs; PRs and other dispatch refs cannot publish.
+    if: ${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name != 'workflow_dispatch' && needs.plan.result == 'success' && needs.custom-desktop-release.result == 'success' && needs.plan.outputs.publishing == 'true')) }}
+    concurrency:
+      group: release-publication-${{ inputs.tag || needs.plan.outputs.tag }}
+      cancel-in-progress: false
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     permissions:
@@ -359,7 +375,8 @@ jobs:
       actions: write # dispatch Pages on the published stable tag
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      TAG: ${{ needs.plan.outputs.tag }}
+      TAG: ${{ inputs.tag || needs.plan.outputs.tag }}
+      RELEASE_BUILD_RUN_ID: ${{ inputs.run_id }}
       CHECK_RELEASE_DRAFT: 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -368,10 +385,13 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 22
+      - name: Verify original artifact builds for recovery
+        if: github.event_name == 'workflow_dispatch'
+        run: python3 scripts/check-release-recovery.py
       - name: Verify every platform's uploaded assets and checksums
         run: node scripts/check-release-assets.mjs
       - name: Publish the complete release
         run: gh release edit "$TAG" --draft=false --verify-tag --repo "$GITHUB_REPOSITORY"
       - name: Rebuild the public website from the published stable tag
-        if: fromJson(needs.plan.outputs.val).announcement_is_prerelease == false
+        if: ${{ !contains(env.TAG, '-') }}
         run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG" --raw-field deploy_from_branch=true
