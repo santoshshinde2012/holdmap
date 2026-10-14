@@ -3,6 +3,7 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use std::net::TcpListener;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 /// The binary with colour off, no Docker and a throwaway state directory, so tests that stop
@@ -19,11 +20,22 @@ fn hm() -> Command {
 }
 
 fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
+    // bind(:0) then drop lets parallel ephemeral listeners or outbound connections
+    // immediately reuse the port before the CLI checks it. Choose distinct candidates
+    // below the default Linux/macOS/Windows ephemeral ranges and probe every address.
+    // This is a free-port observation, not a reservation against unrelated processes.
+    static NEXT: AtomicUsize = AtomicUsize::new(12_000);
+    loop {
+        let candidate = NEXT.fetch_add(1, Ordering::Relaxed);
+        assert!(
+            candidate < 16_000,
+            "no unused fixture TCP port found in 12000..16000"
+        );
+        let port = candidate as u16;
+        if holdmap_core::probe_tcp(port) == holdmap_core::ProbeResult::Free {
+            return port;
+        }
+    }
 }
 
 #[test]
@@ -157,6 +169,24 @@ fn wait_free_succeeds_on_free_port() {
     hm().args(["wait", &port.to_string(), "--free", "--timeout", "1s", "-q"])
         .assert()
         .success();
+}
+
+#[test]
+fn wait_free_times_out_while_our_listener_is_held() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    hm().args([
+        "wait",
+        &port.to_string(),
+        "--free",
+        "--timeout",
+        "300ms",
+        "-q",
+    ])
+    .timeout(Duration::from_secs(10))
+    .assert()
+    .code(1);
+    assert!(listener.local_addr().is_ok());
 }
 
 #[test]
