@@ -1,6 +1,6 @@
-// Build the real desktop UI (apps/desktop) for the browser into public/demo/. Outside Tauri the
-// app runs on its mock data provider (src/lib/mock.ts), so the demo is the actual interface with
-// a sample machine: nothing is scanned or stopped for real.
+// Build the real desktop UI (apps/desktop) for the browser into public/demo/. Production browser
+// builds use src/lib/mock.ts (no Vite live collector), so the demo is the actual interface with a
+// sample machine: nothing is scanned or stopped for real.
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";

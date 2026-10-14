@@ -88,7 +88,7 @@ describe("port action capabilities", () => {
     const onschedule = vi.fn();
     const view = render(DetailPane, { ...props(base), onstop, onschedule });
     const footer = view.getByLabelText("Port actions");
-    expect(footer.textContent).toContain("Port :3000 / TCP");
+    expect(footer.textContent).not.toContain("Port :3000 / TCP");
     expect(footer.textContent).toContain("keeps this computer running");
     await fireEvent.click(view.getByRole("button", { name: "Schedule stop…" }));
     expect(onschedule).toHaveBeenCalledTimes(1);
@@ -115,7 +115,7 @@ describe("port action capabilities", () => {
   it("waits for the first stop plan before enabling destructive controls", () => {
     const view = render(DetailPane, { ...props(base), explanation: null, loading: true, onschedule() {} });
     expect((view.getByRole("button", { name: /^Stop…/ }) as HTMLButtonElement).disabled).toBe(true);
-    expect(view.getByLabelText("Stop this port").textContent).toContain("Checking stop permissions");
+    expect(view.getByLabelText("Port actions").textContent).toContain("Checking stop permissions");
     expect(view.queryByRole("button", { name: "Schedule stop…" })).toBeNull();
   });
 
@@ -127,7 +127,7 @@ describe("port action capabilities", () => {
     const stop = view.getByRole("button", { name: /^Stop…/ }) as HTMLButtonElement;
     expect(stop.disabled).toBe(false);
     expect(stop.classList.contains("danger-outline")).toBe(true);
-    expect(view.getByLabelText("Stop this port").textContent).toContain("review an explicit override");
+    expect(view.getByLabelText("Port actions").textContent).toContain("review an explicit override");
     expect(view.queryByRole("button", { name: "Schedule stop…" })).toBeNull();
     expect(view.queryByRole("button", { name: "Restart" })).toBeNull();
     await fireEvent.click(view.getByRole("button", { name: "More actions" }));
@@ -142,7 +142,7 @@ describe("port action capabilities", () => {
     const oncopy = vi.fn();
     const view = render(DetailPane, { ...props(entry), explanation, oncopy, onschedule() {} });
     expect((view.getByRole("button", { name: /^Stop…/ }) as HTMLButtonElement).disabled).toBe(true);
-    expect(view.getByLabelText("Stop this port").textContent).toContain("Protected process");
+    expect(view.getByLabelText("Port actions").textContent).toContain("Protected process");
     expect((view.getByRole("button", { name: /^Open/ }) as HTMLButtonElement).disabled).toBe(false);
     expect(view.queryByRole("button", { name: "Schedule stop…" })).toBeNull();
     await fireEvent.click(view.getByRole("button", { name: "More actions" }));
@@ -154,7 +154,7 @@ describe("port action capabilities", () => {
     const entry = { ...base, pid: null, process: null, project: null };
     const view = render(DetailPane, { ...props(entry), explanation: null, onschedule() {} });
     expect((view.getByRole("button", { name: /^Stop…/ }) as HTMLButtonElement).disabled).toBe(true);
-    expect(view.getByLabelText("Stop this port").textContent).toContain("owner is hidden");
+    expect(view.getByLabelText("Port actions").textContent).toContain("owner is hidden");
     expect(view.queryByRole("button", { name: "Schedule stop…" })).toBeNull();
   });
 

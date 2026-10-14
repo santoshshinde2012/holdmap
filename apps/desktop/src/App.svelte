@@ -14,18 +14,19 @@
   import type { ShutdownPreview } from "./lib/power";
   import PinDialog from "./components/PinDialog.svelte";
   import RemoteDialog from "./components/RemoteDialog.svelte";
-  import { Button, Dialog, FilterChip, IconButton, Kbd, SegmentedControl, Select, Splitter, TextField } from "./components/ui";
+  import { ActionDock, Button, Dialog, FilterChip, IconButton, Kbd, Select, Splitter, TextField } from "./components/ui";
   import { restartRootPid, type DetailTab } from "./lib/detail";
   import { THEME_ICON, THEME_LABEL, type SettingsActions, type SettingsModel, type SettingsSection, type HotkeyPreset, type Theme } from "./lib/settings";
   import ConfirmDialog, { type Phase } from "./components/ConfirmDialog.svelte";
   import ShortcutsDialog from "./components/ShortcutsDialog.svelte";
+  import ScreenRecordDialog from "./components/ScreenRecordDialog.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
   import Onboarding from "./components/Onboarding.svelte";
   import EmptyState from "./components/EmptyState.svelte";
   import Toasts, { type Toast } from "./components/Toasts.svelte";
   import HistoryPanel from "./components/HistoryPanel.svelte";
   import * as api from "./lib/api";
-  import { agentMatches, filterAgents, step, stoppableEntries } from "./lib/agents";
+  import { agentMatches, filterAgents, step, stoppableEntries, type Picture } from "./lib/agents";
   import { createAgentReportLoader } from "./lib/agents-live";
   import { createFlowLoader } from "./lib/agent-flow/live";
   import type { AgentFlowMode, AgentFlowReport, ActivitySnapshot, RecordingStatus } from "./lib/agent-flow/model";
@@ -37,6 +38,8 @@
   import { commandForShell } from "./lib/shell";
   import { portHolderKeys } from "./lib/port-live";
   import { shortcutContext } from "./lib/keyboard";
+  import { captureSupport, displayCaptureError, formatClock, MAX_DURATION_MS, requestDisplayStream, stopTracks, type CaptureResult } from "./lib/screen-record";
+  import { ScreenRecording } from "./lib/screen-record-encode";
 
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
   type View = "list" | "graph" | "agents";
@@ -116,6 +119,15 @@
   let agentsRefreshing = $state(false);
   let agentsStarted = $state(0);
   let agentFlowMode = $state<AgentFlowMode>("overview");
+  let agentSection = $state<"overview" | "flow">(prefGetChoice("agents.section", ["overview", "flow"], "overview"));
+  $effect(() => prefSet("agents.section", agentSection));
+  let flowSource = $state<"connections" | "calls">(prefGetChoice("flow.source", ["connections", "calls"], "connections"));
+  $effect(() => prefSet("flow.source", flowSource));
+  const savedPicture = prefGetChoice("agents.picture", ["context", "footprint", "project"] as const, "context");
+  let picture = $state<Picture>(savedPicture === "project" ? "context" : savedPicture);
+  $effect(() => prefSet("agents.picture", picture));
+  let projectReady = $state(false);
+  let projectCaption = $state("");
   let flowPaused = $state(false);
   let flowReport = $state.raw<AgentFlowReport | null>(null);
   let activity = $state.raw<ActivitySnapshot | null>(null);
@@ -158,6 +170,13 @@
   let settingsSection = $state<SettingsSection>("general");
   let pinDialog = $state<{ port: number | null; label: string; pinned: boolean } | null>(null);
   let showRemote = $state(false);
+  let screenCapture = $state<ScreenRecording | null>(null);
+  let screenCaptureElapsed = $state(0);
+  let screenCaptureDialog = $state<"confirm" | "encoding" | "ready" | null>(null);
+  let screenCaptureResult = $state<CaptureResult | null>(null);
+  let screenCaptureError = $state<string | null>(null);
+  let screenCaptureBusy = $state(false);
+  let screenCaptureFinishing = false;
   let hotkeyList = $state<HotkeyPreset[]>([]);
   let info = $state<{ version: string; platform: string; tray: boolean; configDir: string | null }>({ version: "", platform: "", tray: false, configDir: null });
   let detailTab = $state<DetailTab>("overview");
@@ -245,7 +264,7 @@
   // The agents map has no side pane: a port picked there opens in the drawer, as on narrow windows.
   const showDrawer = $derived((narrow || view === "agents") && drawerOpen && !!selected);
   /** Any overlay that owns the keyboard (they stop key events themselves; this is a backstop). */
-  const modalOpen = $derived(!!confirm || !!pendingReview || showHelp || showHistory || showPalette || showSettings || showShutdown || showSchedules || showRemote || !!pinDialog || showDrawer);
+  const modalOpen = $derived(!!confirm || !!pendingReview || showHelp || showHistory || showPalette || showSettings || showShutdown || showSchedules || showRemote || !!pinDialog || showDrawer || !!screenCaptureDialog);
   const scanMs = $derived(Math.min(60, Math.max(1, config?.scan_interval_secs ?? 3)) * 1000);
 
   /** When the scan in flight started: the header stays "Live" while one is merely running. */
@@ -859,6 +878,72 @@
     setTimeout(() => (toasts = toasts.filter((t) => t.id !== id)), kind === "error" ? 9000 : action ? 8000 : 3200);
   }
 
+  function openScreenRecord() {
+    if (screenCapture) { void finishScreenCapture(); return; }
+    screenCaptureError = null;
+    screenCaptureResult = null;
+    screenCaptureDialog = "confirm";
+  }
+
+  async function beginScreenCapture() {
+    screenCaptureError = null;
+    screenCaptureBusy = true;
+    try {
+      const stream = await requestDisplayStream();
+      try {
+        screenCapture = await ScreenRecording.start(stream, {
+          onTick: (ms) => { screenCaptureElapsed = ms; },
+          onEnded: () => { void finishScreenCapture(); },
+        });
+      } catch (cause) {
+        stopTracks(stream);
+        throw cause;
+      }
+      screenCaptureDialog = null;
+      screenCaptureBusy = false;
+      screenCaptureElapsed = 0;
+    } catch (cause) {
+      screenCaptureBusy = false;
+      screenCaptureError = displayCaptureError(cause).message;
+      screenCaptureDialog = "confirm";
+    }
+  }
+
+  async function finishScreenCapture() {
+    if (screenCaptureFinishing) return;
+    const session = screenCapture;
+    if (!session) return;
+    screenCaptureFinishing = true;
+    screenCapture = null;
+    screenCaptureDialog = "encoding";
+    try {
+      screenCaptureResult = await session.stop();
+      screenCaptureDialog = "ready";
+    } catch (cause) {
+      screenCaptureDialog = "confirm";
+      screenCaptureError = cause instanceof Error ? cause.message : String(cause);
+      toast("error", "Couldn't finish the recording", screenCaptureError);
+    } finally {
+      screenCaptureFinishing = false;
+      screenCaptureBusy = false;
+    }
+  }
+
+  function closeScreenCaptureDialog() {
+    if (screenCaptureDialog === "encoding") return;
+    screenCaptureDialog = null;
+    screenCaptureResult = null;
+    screenCaptureError = null;
+    screenCaptureBusy = false;
+  }
+
+  function discardScreenCapture() {
+    screenCapture?.discard();
+    screenCapture = null;
+    screenCaptureFinishing = false;
+    closeScreenCaptureDialog();
+  }
+
   async function requestStop(entry: PortEntry, force: boolean, allowProtected = false, options: { agentId?: string; intent?: "combined" | "now" | "schedule" } = {}) {
     const { agentId, intent: timingIntent = agentId ? "combined" : "now" } = options;
     const holder = holderKeys.get(entry.port);
@@ -1116,6 +1201,9 @@
       { id: "pin-new", group: "Actions", icon: "star", title: s ? `Pin :${s.port} with a label…` : "Pin a port…", shortcut: s ? ["⇧", "P"] : undefined, keywords: "favourite label watch", run: () => openPin(s) },
       { id: "remote", group: "Actions", icon: "server", title: "Inspect a remote host over SSH…", keywords: "ssh remote server machine", run: () => (showRemote = true) },
       { id: "history", group: "Actions", icon: "history", title: "Recently stopped — restart", shortcut: ["H"], keywords: "history restart undo", run: openHistory },
+      screenCapture
+        ? { id: "screen-stop", group: "Actions", icon: "stop", title: "Stop screen recording", subtitle: formatClock(screenCaptureElapsed), keywords: "capture video gif mp4 screenshot stop", shortcut: ["⇧", "V"], run: () => void finishScreenCapture() }
+        : { id: "screen-record", group: "Actions", icon: "video", title: "Record screen…", subtitle: captureSupport().display ? `Local MP4 and GIF · up to ${Math.round(MAX_DURATION_MS / 60_000)} min · never uploaded` : "Needs Chrome, Edge, Safari or the desktop app", keywords: "capture video gif mp4 screenshot download", shortcut: ["⇧", "V"], run: openScreenRecord },
       { id: "notify", group: "Settings", icon: "bell", title: config?.notify ? "Turn notifications off" : "Turn notifications on", keywords: "alert conflict new listener", run: toggleNotify },
       { id: "density", group: "Settings", icon: "list", title: density === "compact" ? "Comfortable rows" : "Compact rows", keywords: "density dense rows height compact comfortable", run: () => { density = density === "compact" ? "comfortable" : "compact"; } },
       { id: "autostart", group: "Settings", icon: "sparkles", title: autostartOn ? "Don't launch at login" : "Launch at login", keywords: "startup boot login", run: toggleAutostart },
@@ -1185,6 +1273,7 @@
       case "g": view = view === "graph" ? "list" : "graph"; break;
       case "A": view = view === "agents" ? "list" : "agents"; break;
       case "h": openHistory(); break;
+      case "V": if (screenCapture) void finishScreenCapture(); else openScreenRecord(); break;
       case "p": if (s) togglePin(s); else return; break;
       case "P": if (s) openPin(s); else return; break;
       case "s": { const n = view === "graph" ? selectedGraphNode : null; const c = n?.cluster ? graph?.clusters.find((x) => x.id === n.cluster) : null; if (c) requestClusterStop(c.name); else return; break; }
@@ -1280,6 +1369,7 @@
       nq.removeEventListener("change", onNq);
       rq.removeEventListener("change", onRq);
       unlisten.forEach((u) => u.then((f) => f()).catch((e) => console.warn("Couldn't remove a live listener", e)));
+      discardScreenCapture();
     };
   });
 
@@ -1357,7 +1447,15 @@
         <IconButton icon="command" label="Commands" kbd={modK} onclick={() => (showPalette = true)} aria-keyshortcuts="Meta+K Control+K" />
         <IconButton icon="refresh" label="Refresh" kbd={singleKeyShortcuts ? "R" : undefined} onclick={() => refresh(true)} disabled={refreshing} aria-busy={manualRefresh || undefined} class={manualRefresh ? "spinning" : ""} />
       </div>
+      {#if screenCapture}
+        <div class="cluster rec" role="status">
+          <span class="rec-dot" aria-hidden="true"></span>
+          <span class="rec-time">{formatClock(screenCaptureElapsed)}</span>
+          <IconButton icon="stop" label="Stop screen recording" kbd={singleKeyShortcuts ? ["⇧", "V"] : undefined} onclick={() => void finishScreenCapture()} />
+        </div>
+      {/if}
       <div class="cluster">
+        <IconButton icon="video" label={screenCapture ? "Recording screen" : "Record screen"} kbd={singleKeyShortcuts ? ["⇧", "V"] : undefined} pressed={!!screenCapture} onclick={openScreenRecord} />
         <IconButton icon="history" label="Recently stopped" kbd={singleKeyShortcuts ? "H" : undefined} onclick={openHistory} />
         <IconButton icon="clock" label={activeSchedules.length ? `Scheduled actions (${activeSchedules.length} active)` : "Scheduled actions"} badge={activeSchedules.length || undefined} onclick={openSchedules} bind:el={schedulesTrigger} />
         <IconButton icon="server" label="Remote host…" onclick={() => (showRemote = true)} />
@@ -1370,11 +1468,23 @@
   </header>
 
   <div class="toolbar" role="toolbar" aria-label="View and filters">
-    <SegmentedControl label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: singleKeyShortcuts ? "Port list (G)" : "Port list" }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, countLabel: linksLabel(graph?.stats.edges ?? 0), title: singleKeyShortcuts ? "Service graph (G)" : "Service graph" }, { value: "agents", label: "Agents", icon: "bot", count: agentsReport?.agents.length || null, countLabel: agentsReport ? `${agentsReport.agents.length} agents and tools` : undefined, title: singleKeyShortcuts ? "Agents, tools and apps (⇧A)" : "Agents, tools and apps" }]} />
+    <ActionDock hinge={false} animate={false} label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: singleKeyShortcuts ? "Port list (G)" : "Port list" }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, countLabel: linksLabel(graph?.stats.edges ?? 0), title: singleKeyShortcuts ? "Service graph (G)" : "Service graph" }, { value: "agents", label: "Agents", icon: "bot", count: agentsReport?.agents.length || null, countLabel: agentsReport ? `${agentsReport.agents.length} agents and tools` : undefined, title: singleKeyShortcuts ? "Agents, tools and apps (⇧A)" : "Agents, tools and apps" }]} />
+    {#if view === "agents"}
+      <ActionDock label="Agents workspace" bind:value={agentSection} options={[{ value: "overview", label: "Overview", icon: "bot", title: "Agents, resources and access" }, { value: "flow", label: "Flow", icon: "branch", title: "Connections and recorded calls" }]} />
+      {#if agentSection === "overview"}
+        <ActionDock label="Map picture" bind:value={picture} options={[
+          { value: "context", label: "Computer", icon: "monitor", title: "Context: this computer, the agents on it, and systems they talk to" },
+          { value: "footprint", label: "Footprint", icon: "layers", title: "Containers: folders, tools, ports and hosts across every agent" },
+          { value: "project", label: "Project", icon: "folder", title: projectReady ? `Components in ${projectCaption || "the selected source tree"}` : "Select a folder on Footprint to see that source tree", disabled: !projectReady },
+        ]} />
+      {/if}
+      {#if agentSection === "flow"}
+        <ActionDock label="Flow data source" bind:value={flowSource} options={[{ value: "connections", label: "Connections", icon: "link", title: "Observed process trees, listeners and live sockets" }, { value: "calls", label: "Calls", icon: "activity", title: "Recorded tool calls from configured agents" }]} />
+      {/if}
+    {/if}
     {#if view !== "agents"}
-      <span class="divider" aria-hidden="true"></span>
-      <SegmentedControl label="Socket states" value={filters.all ? "all" : "listen"} options={[{ value: "listen", label: "Listening" }, { value: "all", label: "All sockets", title: `Include established, TIME_WAIT…${singleKeyShortcuts ? " (A)" : ""}` }]} onchange={(v) => { filters.all = v === "all"; refresh(); }} />
-      <SegmentedControl label="Protocol" bind:value={filters.proto} options={[{ value: "any", label: "Any" }, { value: "tcp", label: "TCP" }, { value: "udp", label: "UDP" }]} />
+      <ActionDock label="Socket states" value={filters.all ? "all" : "listen"} options={[{ value: "listen", label: "Listening" }, { value: "all", label: "All sockets", title: `Include established, TIME_WAIT…${singleKeyShortcuts ? " (A)" : ""}` }]} onchange={(v) => { filters.all = v === "all"; refresh(); }} />
+      <ActionDock hinge={false} animate={false} label="Protocol" bind:value={filters.proto} options={[{ value: "any", label: "Any" }, { value: "tcp", label: "TCP" }, { value: "udp", label: "UDP" }]} />
       <span class="divider" aria-hidden="true"></span>
       <FilterChip label="Dev servers" dot="var(--tone-green)" count={stats.dev} bind:pressed={filters.dev} title="Only dev servers" kbd={singleKeyShortcuts ? "D" : undefined} />
       <FilterChip label="Mine" icon="lock" count={stats.mine} bind:pressed={filters.mine} title="Only my processes" kbd={singleKeyShortcuts ? "M" : undefined} />
@@ -1382,7 +1492,7 @@
       {#if filtersActive}<Button size="sm" variant="ghost" icon="x" onclick={clearFilters}>Clear</Button>{/if}
       <div class="spacer"></div>
       {#if !narrow}<IconButton icon="panel" size="sm" pressed={sideOpen} label={sideOpen ? "Hide details pane" : "Show details pane"} kbd={singleKeyShortcuts ? "B" : undefined} onclick={() => (sideOpen = !sideOpen)} />{/if}
-      <Select size="sm" prefix="Sort" label="Sort by" labelHidden bind:value={sort} width="150px" options={[{ value: "group", label: "Grouped", description: "By kind: dev, containers, databases…" }, { value: "cluster", label: "Cluster", description: "Compose project, workspace, supervisor" }, { value: "port", label: "Port" }, { value: "newest", label: "Newest" }, { value: "memory", label: "Memory" }]} />
+      <Select size="sm" prefix="Sort" label="Sort by" labelHidden bind:value={sort} width="168px" options={[{ value: "group", label: "Grouped", description: "By kind: dev, containers, databases…" }, { value: "cluster", label: "Cluster", description: "Compose project, workspace, supervisor" }, { value: "port", label: "Port", description: "Lowest port number first" }, { value: "newest", label: "Newest", description: "Most recently seen first" }, { value: "memory", label: "Memory", description: "Highest memory use first" }]} />
     {:else}
       <div class="spacer"></div>
       {#if agentQuery}<Button size="sm" variant="ghost" icon="x" onclick={() => (agentQuery = "")}>Clear search</Button>{/if}
@@ -1427,7 +1537,7 @@
     {:else if view === "agents"}
       <div class="graph-wrap agents-wrap">
         {#if AgentsView}
-          <AgentsView report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
+          <AgentsView bind:section={agentSection} bind:flowSource bind:picture bind:projectReady bind:projectCaption pictureChrome={false} report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
             onselectagent={(id) => { const a = agentsReport?.agents.find((a) => a.id === id); if (a && !agentMatches(a, agentQuery)) agentQuery = ""; selectedAgent = id; }} onentry={openEntry}
             onreveal={revealAgentFolder} oneditor={openAgentFolder}
             onstop={(e, agentId) => requestStop(e, false, false, { agentId })} onstopall={requestStopAgentPorts}
@@ -1582,6 +1692,9 @@
 {#if showSchedules && !confirm && !showShutdown}<SchedulesDialog {schedules} loading={schedulesLoading} error={schedulesError} demo={!api.isTauri} powerAvailable={!api.isTauri || ["macos", "linux", "windows"].includes(info.platform)} entries={snapshot?.entries ?? []} onclose={closeSchedules} onrefresh={() => loadSchedules(true)} oncancel={cancelSchedule} onschedulepower={() => openShutdown("schedule", "schedules")} onscheduleport={(entry) => { closeSchedules(); requestScheduledStop(entry); }} />{/if}
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
 {#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
+{#if screenCaptureDialog}
+  <ScreenRecordDialog phase={screenCaptureDialog} error={screenCaptureError} result={screenCaptureResult} busy={screenCaptureBusy} onstart={() => void beginScreenCapture()} onclose={closeScreenCaptureDialog} />
+{/if}
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />
 
 <style>
@@ -1604,6 +1717,10 @@
   .search { flex: 1; max-width: 520px; margin: 0 auto; min-width: 140px; }
   .tools { display: flex; align-items: center; gap: 8px; flex: none; }
   .cluster { display: flex; align-items: center; gap: 1px; padding: 2px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .cluster.rec { gap: 6px; padding: 2px 4px 2px 10px; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 28%, var(--border)); }
+  .rec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+  .rec-time { font-size: var(--fs-caption); font-variant-numeric: tabular-nums; font-weight: var(--fw-semibold); min-width: 2.4em; }
+  @media (prefers-reduced-motion: no-preference) { .rec-dot { animation: beat 1.1s ease-in-out infinite; } }
   .tools :global(.spinning svg) { animation: spin 0.9s linear infinite; }
   .live { display: inline-flex; align-items: center; gap: 7px; height: var(--h-md); padding: 0 10px 0 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }

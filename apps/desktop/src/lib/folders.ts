@@ -37,6 +37,21 @@ export function currentFolderOwner(
   return owner && ownsFolder(owner, target.path) ? owner : null;
 }
 
+/** Split at `/` and `\\` so a long path wraps between directories, not mid-token. */
+export function pathWrapParts(path: string): string[] {
+  const parts: string[] = [];
+  let buf = "";
+  for (const ch of path) {
+    buf += ch;
+    if (ch === "/" || ch === "\\") {
+      parts.push(buf);
+      buf = "";
+    }
+  }
+  if (buf) parts.push(buf);
+  return parts.length ? parts : [path];
+}
+
 export function fileManagerLabel(platform?: string): string {
   switch (platform?.toLowerCase()) {
     case "macos":

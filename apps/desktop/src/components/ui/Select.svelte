@@ -171,7 +171,7 @@
 
 <style>
   .trigger { display: inline-flex; align-items: center; gap: 8px; height: var(--h-md); padding: 0 8px 0 10px; min-width: 0; border-radius: var(--r-md); border: 1px solid var(--input-border); background: var(--input-bg); color: var(--muted); box-shadow: var(--control-shadow); font: inherit; font-size: var(--fs-body); line-height: var(--lh-body); cursor: pointer; transition: border-color var(--dur-1), box-shadow var(--dur-1); text-align: left; }
-  .trigger.sm { height: var(--h-sm); border-radius: var(--r-sm); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
+  .trigger.sm { height: var(--h-sm); padding: 0 10px 0 12px; border-radius: var(--r-full); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .trigger:hover:not(:disabled) { border-color: var(--input-border-hover); }
   .trigger:focus-visible, .trigger.open { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
   .trigger.invalid { border-color: var(--danger); }
@@ -183,8 +183,8 @@
   .pop.up { animation-name: popup; }
   @keyframes pop { from { opacity: 0; transform: translateY(-3px); } }
   @keyframes popup { from { opacity: 0; transform: translateY(3px); } }
-  .opt { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 8px; border-radius: var(--r-sm); font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text); cursor: default; }
-  .opt.active { background: var(--row-selected); }
+  .opt { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 8px 10px; border-radius: var(--r-md); font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text); cursor: default; }
+  .opt.active { background: var(--accent-soft); }
   .opt.disabled { opacity: 0.45; }
   .oi { color: var(--muted); display: inline-grid; }
   .ot { flex: 1; display: grid; min-width: 0; overflow-wrap: anywhere; }

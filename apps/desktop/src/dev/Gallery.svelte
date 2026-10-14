@@ -1,7 +1,7 @@
 <script lang="ts">
   // Living reference for the UI kit (open the app with #ui-gallery). Used for visual review and
   // screenshots; not reachable from the product UI.
-  import { Button, Callout, Checkbox, CopyValue, FilterChip, IconButton, Kbd, NumberInput, SegmentedControl, Select, Switch, TextField } from "../components/ui";
+  import { ActionDock, ActionPill, Button, Callout, Checkbox, CopyValue, FilterChip, IconButton, Kbd, NumberInput, SegmentedControl, Select, Switch, TextField } from "../components/ui";
 
   let q = $state("shop-web");
   let host = $state("dev@buildbox:22x");
@@ -9,6 +9,7 @@
   let interval = $state<number | null>(4);
   let sort = $state("group");
   let seg = $state("tcp");
+  let dock = $state("flow");
   let on = $state(true);
   let off = $state(false);
   let check = $state(true);
@@ -45,6 +46,16 @@
         <SegmentedControl label="Protocol" bind:value={seg} options={[{ value: "any", label: "Any" }, { value: "tcp", label: "TCP" }, { value: "udp", label: "UDP" }]} />
       </div>
       <div class="stack">
+        <span class="lbl">Action dock</span>
+        <div class="flex">
+          <ActionDock label="Agents workspace" bind:value={dock} options={[{ value: "overview", label: "Overview", icon: "bot" }, { value: "flow", label: "Flow", icon: "branch" }]} />
+          {#if dock === "flow"}
+            <ActionDock label="Flow data source" value="connections" options={[{ value: "connections", label: "Connections", icon: "link" }, { value: "calls", label: "Calls", icon: "activity" }]} />
+          {/if}
+        </div>
+        <div class="flex"><ActionPill icon="refresh" label="Refresh" /><ActionPill icon="panel" toggle pressed label="Hide inspector" /><ActionPill icon="zap" toggle size="compact" pressed label="Traffic" /></div>
+      </div>
+      <div class="stack">
         <span class="lbl">Filter chips</span>
         <div class="flex"><FilterChip label="Dev servers" dot="var(--tone-green)" count={6} bind:pressed={chip} /><FilterChip label="Mine" icon="lock" count={9} /><FilterChip label="Exposed" icon="globe" tone="warn" count={3} pressed /></div>
       </div>
@@ -62,7 +73,8 @@
       <div class="flex"><Button variant="primary" icon="star">Pin port</Button><Button>Cancel</Button><Button variant="ghost">Ghost</Button><Button variant="soft" icon="sparkles">Soft</Button></div>
       <div class="flex"><Button variant="danger" icon="stop" kbd="⌫">Stop</Button><Button variant="danger-outline" size="sm">Stop</Button><Button variant="primary" loading loadingText="Scanning…">Scan</Button><Button disabled>Disabled</Button></div>
       <div class="flex"><Button size="xs">XS 24</Button><Button size="sm">SM 28</Button><Button size="md">MD 32</Button><Button size="lg">LG 36</Button></div>
-      <div class="flex"><IconButton icon="refresh" label="Refresh" kbd="R" /><IconButton icon="history" label="History" variant="outline" /><IconButton icon="star" label="Pin" pressed /><Kbd keys={["⌘", "K"]} /><Kbd keys="Esc" /></div>
+      <div class="flex"><IconButton icon="refresh" label="Refresh" kbd="R" /><IconButton icon="video" label="Record screen" kbd={["⇧", "V"]} /><IconButton icon="history" label="History" variant="outline" /><IconButton icon="star" label="Pin" pressed /><Kbd keys={["⌘", "K"]} /><Kbd keys="Esc" /></div>
+      <div class="flex"><Button variant="primary" icon="download">Download MP4</Button><Button icon="download">Download GIF</Button></div>
       <CopyValue value="/Users/dev/code/shop-web/node_modules/.bin/next-server" mono oncopy={noop} what="Path" />
       <Callout tone="warn" title="Reachable from your network">Bind to <code>127.0.0.1</code> if that isn't intended.</Callout>
     </section>

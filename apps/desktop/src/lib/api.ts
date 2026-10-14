@@ -1,13 +1,24 @@
 import type { ActivitySnapshot, AgentFlowReport, RecordingCredentials, RecordingStatus } from "./agent-flow/model";
 import { demoActivity, demoAgentFlow, demoRecordingStatus, startDemoRecording, stopDemoRecording, clearDemoActivity } from "./activity-demo";
+import { liveJson, useLiveCollector } from "./browser-live";
 import type { ActionPlan, AgentsReport, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Protocol, Snapshot, StopReport } from "./types";
 import { version as pkgVersion } from "../../package.json";
 import type { ShutdownPreview } from "./power";
 import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
 import { MOCK_SNAPSHOT, mockAgents, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
-/** True inside the Tauri webview; false in a plain browser (`npm run dev`), where mocks are used. */
+/** True inside the Tauri webview. */
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+type Inspection = Explanation & { details?: PortDetails[]; http?: HttpInfo | null };
+
+function liveReads(): boolean {
+  return useLiveCollector();
+}
+
+function liveWrites(): never {
+  throw new Error("Use the Holdmap desktop app to change running processes. The browser live collector is read-only.");
+}
 
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke } = await import("@tauri-apps/api/core");
@@ -36,6 +47,7 @@ function watchDemoSchedules() {
 
 /** Review shutdown of the local desktop host. Browser mode only simulates this flow. */
 export async function shutdownPreview(): Promise<ShutdownPreview> {
+  if (liveReads()) liveWrites();
   if (isTauri) return call("shutdown_preview");
   demoPowerPreviews.clear();
   const confirmation_id = `demo-power-${++demoPowerSequence}`;
@@ -45,6 +57,7 @@ export async function shutdownPreview(): Promise<ShutdownPreview> {
 
 export async function shutdownMachine(confirmationId: string): Promise<{ requested: boolean }> {
   if (!confirmationId?.trim()) throw new Error("Review shutdown before confirming.");
+  if (liveReads()) liveWrites();
   if (isTauri) return call("shutdown_machine", { confirmationId });
   const expires = demoPowerPreviews.get(confirmationId);
   demoPowerPreviews.delete(confirmationId);
@@ -58,6 +71,7 @@ export async function shutdownMachine(confirmationId: string): Promise<{ request
 export async function scheduleShutdown(confirmationId: string, delaySecs: number): Promise<ScheduledAction> {
   validateScheduleDelay(delaySecs);
   if (!confirmationId?.trim()) throw new Error("Review shutdown before scheduling.");
+  if (liveReads()) liveWrites();
   if (isTauri) return call("schedule_shutdown", { confirmationId, delaySecs });
   const expires = demoPowerPreviews.get(confirmationId);
   if (!expires || Date.now() >= expires) throw new Error("Shutdown confirmation expired or was already used. Review again.");
@@ -70,6 +84,7 @@ export async function scheduleShutdown(confirmationId: string, delaySecs: number
 export async function scheduleStops(requests: ScheduledStopRequest[], delaySecs: number, agentId?: string): Promise<ScheduledAction> {
   validateScheduleDelay(delaySecs);
   validateScheduledStops(requests);
+  if (liveReads()) liveWrites();
   if (isTauri) return call("schedule_stops", { requests, delaySecs, agentId: agentId ?? null });
   for (const request of requests) {
     const preview = demoStopPreviews.get(request.confirmation_id);
@@ -103,25 +118,27 @@ export async function appInfo(): Promise<AppInfo> {
 
 /** A snapshot no older than `maxAgeMs` (the app shares a scan that just ran; 0 forces one). */
 export async function scan(all: boolean, maxAgeMs?: number): Promise<Snapshot> {
-  if (!isTauri) {
-    await delay(250);
-    return { ...MOCK_SNAPSHOT, entries: mockEntries().map(mockUsage), taken_at_ms: Date.now() };
-  }
-  return call("scan", { all, maxAgeMs });
+  if (isTauri) return call("scan", { all, maxAgeMs });
+  if (liveReads()) return liveJson("scan", { all });
+  await delay(250);
+  return { ...MOCK_SNAPSHOT, entries: mockEntries().map(mockUsage), taken_at_ms: Date.now() };
 }
 
 export async function explain(port: number): Promise<Explanation> {
-  if (!isTauri) return mockExplain(port);
-  return call("explain", { port });
+  if (isTauri) return call("explain", { port });
+  if (liveReads()) return liveJson("explain", { port });
+  return mockExplain(port);
 }
 
 /** HTTP status and page title of a local port, or null when it doesn't speak HTTP. */
 export async function http(port: number): Promise<HttpInfo | null> {
-  if (!isTauri) return mockHttp(port);
-  return call("http_info", { port });
+  if (isTauri) return call("http_info", { port });
+  if (liveReads()) return (await liveJson<Inspection>("inspect", { port })).http ?? null;
+  return mockHttp(port);
 }
 
 export async function plan(target: string, force: boolean, allowProtected = false): Promise<ActionPlan> {
+  if (liveReads()) liveWrites();
   if (!isTauri) {
     const reviewed = mockPlan(target, force, allowProtected);
     const confirmation_id = `demo-stop-${++demoStopSequence}`;
@@ -135,6 +152,7 @@ export async function plan(target: string, force: boolean, allowProtected = fals
 }
 
 export async function stop(target: string, force: boolean, allowProtected = false, confirmationId?: string): Promise<StopReport> {
+  if (liveReads()) liveWrites();
   if (!isTauri) {
     if (confirmationId) {
       const reviewed = demoStopPreviews.get(confirmationId);
@@ -170,6 +188,7 @@ export async function stopMany(agentId: string, requests: ScheduledStopRequest[]
     handles.add(request.confirmation_id);
   }
   if (isTauri) return call("stop_many", { agentId, requests });
+  if (liveReads()) liveWrites();
   // Browser mode validates and consumes the complete review before changing sample data.
   // It never imports or invokes native process APIs.
   const previews = requests.map((request) => demoStopPreviews.get(request.confirmation_id));
@@ -191,6 +210,7 @@ export async function stopMany(agentId: string, requests: ScheduledStopRequest[]
 }
 
 export async function freePort(near: number): Promise<number | null> {
+  if (liveReads()) liveWrites();
   if (!isTauri) {
     const used = new Set(MOCK_SNAPSHOT.entries.map((e) => e.port));
     let p = near;
@@ -211,8 +231,9 @@ export async function openPort(port: number): Promise<void> {
 
 /** Connections, process tree, uptime and bind risk for the listeners on a port (lazy). */
 export async function portDetails(port: number): Promise<PortDetails[]> {
-  if (!isTauri) return mockDetails(port);
-  return call("port_details", { port });
+  if (isTauri) return call("port_details", { port });
+  if (liveReads()) return (await liveJson<Inspection>("inspect", { port })).details ?? [];
+  return mockDetails(port);
 }
 
 /** Show the project folder of the service on `port` in Finder / Explorer. */
@@ -241,6 +262,7 @@ export async function openAgentFolder(agentId: string, path: string): Promise<st
 
 /** Start again what holdmap just stopped on `port` (the second half of "Restart"). */
 export async function restartStopped(port: number, protocol: Protocol, pid: number): Promise<{ pid: number; command: string; log: string }> {
+  if (liveReads()) liveWrites();
   if (!isTauri) return { pid: 4243, command: "npm run dev", log: "/tmp/holdmap.log" };
   return call("restart_stopped", { port, protocol, pid });
 }
@@ -259,56 +281,64 @@ export async function onEvent<T>(name: string, cb: (payload: T) => void): Promis
 
 /** Service topology of the latest scan (dev services and their peers unless `all`). */
 export async function topology(all: boolean): Promise<Graph> {
-  if (!isTauri) {
-    // Live like the real thing: every poll is a new graph whose CPU figures move.
-    const g = mockTopology();
-    return { ...g, nodes: g.nodes.map((n) => (n.root_pid ? { ...n, cpu_percent: Math.round((n.cpu_percent + Math.random()) * 10) / 10 } : n)) };
-  }
-  return call("topology", { all });
+  if (isTauri) return call("topology", { all });
+  if (liveReads()) return liveJson("topology", { all });
+  const g = mockTopology();
+  return { ...g, nodes: g.nodes.map((n) => (n.root_pid ? { ...n, cpu_percent: Math.round((n.cpu_percent + Math.random()) * 10) / 10 } : n)) };
 }
 
 /** The AI coding agents of the latest scan and their footprint. */
 export async function agents(): Promise<AgentsReport> {
-  if (!isTauri) return mockAgents({ ...MOCK_SNAPSHOT, taken_at_ms: Date.now() });
-  return call("agents");
+  if (isTauri) return call("agents");
+  if (liveReads()) return liveJson("agents");
+  return mockAgents({ ...MOCK_SNAPSHOT, taken_at_ms: Date.now() });
 }
 
 /** OS process/socket relationships. Recorded calls are fetched independently. */
 export async function agentFlow(): Promise<AgentFlowReport> {
-  if (!isTauri) return demoAgentFlow(await agents());
-  return call("agent_flow");
+  if (isTauri) return call("agent_flow");
+  if (liveReads()) return liveJson("agent_flow");
+  return demoAgentFlow(await agents());
 }
 
 export async function activitySnapshot(): Promise<ActivitySnapshot> {
-  if (!isTauri) return demoActivity();
-  return call("activity_snapshot");
+  if (isTauri) return call("activity_snapshot");
+  if (liveReads()) return liveJson("activity");
+  return demoActivity();
 }
 
 export async function activityStatus(): Promise<RecordingStatus> {
-  if (!isTauri) return demoRecordingStatus();
-  return call("activity_status");
+  if (isTauri) return call("activity_status");
+  if (liveReads()) return { active: false, endpoint: null, started_at_ms: null, received: 0, dropped: 0 };
+  return demoRecordingStatus();
 }
 
 /** Explicit opt-in only; credentials are transient and never persisted in frontend settings. */
 export async function startActivity(): Promise<RecordingCredentials> {
-  if (!isTauri) { startDemoRecording(); return { endpoint: "", token: "" }; }
-  return call("start_activity");
+  if (isTauri) return call("start_activity");
+  if (liveReads()) liveWrites();
+  startDemoRecording();
+  return { endpoint: "", token: "" };
 }
 
 export async function stopActivity(): Promise<RecordingStatus> {
-  if (!isTauri) { stopDemoRecording(); return demoRecordingStatus(); }
-  return call("stop_activity");
+  if (isTauri) return call("stop_activity");
+  if (liveReads()) liveWrites();
+  stopDemoRecording();
+  return demoRecordingStatus();
 }
 
 export async function clearActivity(): Promise<void> {
-  if (!isTauri) { clearDemoActivity(); return; }
-  return call("clear_activity");
+  if (isTauri) return call("clear_activity");
+  if (liveReads()) liveWrites();
+  clearDemoActivity();
 }
 
 /** Returned only on the user's copy action. Includes an ephemeral recording credential. */
 export async function activitySetup(provider: "codex" | "claude"): Promise<string> {
-  if (!isTauri) return "# Browser demo: no local collector is running.\n# Install the desktop app and start recording under Agents > Flow > Calls.\n";
-  return call("activity_setup", { provider });
+  if (isTauri) return call("activity_setup", { provider });
+  if (liveReads()) return "# Live browser mode cannot start a local recorder.\n# Use the desktop app: Agents > Flow > Calls > Start recording.\n";
+  return "# Browser demo: no local collector is running.\n# Install the desktop app and start recording under Agents > Flow > Calls.\n";
 }
 
 let mockConfig: Config = { pins: [{ port: 3000, label: null }], notify: true, notify_dev_only: true, history_limit: 200, scan_interval_secs: 4, hotkey: "alt-p", recent_hosts: ["devbox", "deploy@staging.internal"] };
@@ -349,6 +379,7 @@ export async function clearHistory(): Promise<void> {
 }
 
 export async function restart(entry: HistoryEntry): Promise<{ pid: number; command: string; log: string }> {
+  if (liveReads()) liveWrites();
   if (!isTauri) return { pid: 4242, command: entry.command.join(" "), log: "/tmp/holdmap.log" };
   // Name the exact recording only: executable syntax stays in the backend's history file.
   return call("restart", { atMs: entry.at_ms, port: entry.port, protocol: entry.protocol, pid: entry.pid });
@@ -399,14 +430,13 @@ export async function setHotkey(preset: string): Promise<string | null> {
 
 /** Read-only scan of another machine over SSH. */
 export async function remoteScan(host: string): Promise<Snapshot> {
-  if (!isTauri) {
-    await delay(900);
-    if (/fail|offline/.test(host)) throw new Error(`ssh ${host} failed or timed out: ssh: connect to host ${host} port 22: Connection refused`);
-    mockConfig = { ...mockConfig, recent_hosts: [host, ...mockConfig.recent_hosts.filter((h) => h !== host)].slice(0, 6) };
-    const entries = MOCK_SNAPSHOT.entries.filter((e) => e.process && !e.container).slice(0, 7).map((e) => ({ ...e, id: "r:" + e.id, user: e.port < 1024 ? "root" : "deploy", project: null }));
-    return { ...MOCK_SNAPSHOT, entries, scan_ms: 212, taken_at_ms: Date.now(), platform: `remote:${host}` };
-  }
-  return call("remote_scan", { host });
+  if (isTauri) return call("remote_scan", { host });
+  if (liveReads()) throw new Error("Remote scans need the Holdmap desktop app.");
+  await delay(900);
+  if (/fail|offline/.test(host)) throw new Error(`ssh ${host} failed or timed out: ssh: connect to host ${host} port 22: Connection refused`);
+  mockConfig = { ...mockConfig, recent_hosts: [host, ...mockConfig.recent_hosts.filter((h) => h !== host)].slice(0, 6) };
+  const entries = MOCK_SNAPSHOT.entries.filter((e) => e.process && !e.container).slice(0, 7).map((e) => ({ ...e, id: "r:" + e.id, user: e.port < 1024 ? "root" : "deploy", project: null }));
+  return { ...MOCK_SNAPSHOT, entries, scan_ms: 212, taken_at_ms: Date.now(), platform: `remote:${host}` };
 }
 
 /** Browser demo only: a plausible, gently moving CPU figure per process so sparklines have a shape. */

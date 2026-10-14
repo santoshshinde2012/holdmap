@@ -223,6 +223,27 @@ kbd {
 }
 .icon-btn:hover { background: var(--row-hover); color: var(--text); }
 
+/* Exclusive choices fill; independent toggles use .toggle.on (soft accent). */
+.action-pill {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: var(--h-sm); padding: 0 11px;
+  border: 1px solid var(--input-border); border-radius: var(--r-full);
+  background: var(--surface); color: var(--text-2);
+  font: inherit; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium);
+  white-space: nowrap; cursor: pointer; box-shadow: var(--control-shadow);
+  transition: background var(--dur-1) var(--ease), border-color var(--dur-1), color var(--dur-1), box-shadow var(--dur-1);
+}
+.action-pill:hover:not(:disabled) { background: var(--surface-2); color: var(--text); border-color: var(--input-border-hover); }
+.action-pill.on { background: var(--accent); color: var(--accent-fg); border-color: transparent; box-shadow: none; }
+.action-pill.on:hover:not(:disabled) { background: var(--accent-hover); color: var(--accent-fg); border-color: transparent; }
+.action-pill.toggle.on { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: none; }
+.action-pill.toggle.on:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-soft) 70%, var(--accent)); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+.action-pill:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+.action-pill:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.action-pill.compact { height: var(--h-xs); padding: 0 9px; font-size: var(--fs-caption); line-height: var(--lh-caption); gap: 5px; box-shadow: none; }
+.action-pill .count { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); padding: 1px 5px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent); font-variant-numeric: tabular-nums; }
+.action-pill.on .count { background: rgb(255 255 255 / 0.22); color: var(--accent-fg); }
+
 .badge {
   display: inline-flex; align-items: center; gap: 5px;
   height: 20px; padding: 0 7px; border-radius: var(--r-full);

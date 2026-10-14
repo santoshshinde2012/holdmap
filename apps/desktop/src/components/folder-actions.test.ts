@@ -3,6 +3,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { tick } from "svelte";
 import FolderActions from "./FolderActions.svelte";
+import { pathWrapParts } from "../lib/folders";
 
 beforeAll(() => {
   (Element.prototype as unknown as { animate: unknown }).animate ??= vi.fn(() => ({ cancel() {}, finish() {}, onfinish: null, currentTime: 0, play() {}, pause() {} }));
@@ -20,6 +21,7 @@ describe("folder chooser", () => {
     await tick();
     expect(screen.getByRole("dialog", { name: "Folder actions" })).toBeTruthy();
     expect(screen.getByText(target.path).tagName).toBe("CODE");
+    expect(screen.getByText(target.path).querySelectorAll("wbr").length).toBe(pathWrapParts(target.path).length - 1);
     expect(document.activeElement).toBe(button("Close"));
     await fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(p.onclose).toHaveBeenCalledOnce();

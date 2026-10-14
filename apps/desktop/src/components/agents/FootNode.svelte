@@ -4,12 +4,12 @@
   import { Handle, Position, type NodeProps, type Node } from "@xyflow/svelte";
   import Icon from "../Icon.svelte";
   import type { FootFlowData } from "../../lib/agents";
-  import { EVIDENCE_LABEL } from "../../lib/agents";
+  import { EVIDENCE_LABEL, folderAction } from "../../lib/agents";
 
   let { data }: NodeProps<Node<FootFlowData>> = $props();
   const n = $derived(data.node);
-  const ICON = { folder: "folder", tool: "plug", port: "server", service: "plug", remote: "globe", more: "more", omitted: "more", agent: "bot", header: "" } as const;
-  const WHAT = { folder: "Folder", tool: "MCP server", port: "Port", service: "Service", remote: "Remote host", more: "More remote links", omitted: "Unlisted links", agent: "Agent", header: "" } as const;
+  const ICON = { folder: "folder", tool: "plug", port: "server", service: "plug", remote: "globe", more: "more", omitted: "more", agent: "bot", header: "", machine: "monitor" } as const;
+  const WHAT = { folder: "Folder", tool: "MCP server", port: "Port", service: "Service", remote: "Remote host", more: "More remote links", omitted: "Unlisted links", agent: "Agent", header: "", machine: "Computer" } as const;
   const opens = $derived(!!n.entryId);
   const interactive = $derived(opens || n.kind === "tool" || n.kind === "folder");
   const title = $derived(n.path ?? n.warning ?? undefined);
@@ -26,7 +26,7 @@
   class:opens={interactive}
   style="--agent: {data.color}"
   role={interactive ? "button" : "group"}
-  aria-label="{WHAT[n.kind]} {n.label}, {n.sub}{n.evidence !== 'observed' ? `, ${EVIDENCE_LABEL[n.evidence]}` : ''}{n.warning ? `, ${n.warning}` : ''}{opens ? '. Opens details' : n.kind === 'tool' ? '. Opens its agent card' : n.kind === 'folder' ? '. Opens folder actions' : ''}"
+  aria-label="{n.kind === 'machine' ? '' : `${WHAT[n.kind]} `}{n.label}, {n.sub}{n.evidence !== 'observed' ? `, ${EVIDENCE_LABEL[n.evidence]}` : ''}{n.warning ? `, ${n.warning}` : ''}{opens ? '. Opens details' : n.kind === 'tool' ? '. Opens its agent card' : n.kind === 'folder' ? `. ${folderAction(data.picture)}` : ''}"
   {title}
 >
   <Handle type="target" position={Position.Left} isConnectable={false} />
@@ -62,7 +62,9 @@
   .k-port .ic { color: var(--tone-green); background: color-mix(in srgb, var(--tone-green) 12%, var(--surface)); }
   .k-service .ic { color: var(--tone-violet); background: color-mix(in srgb, var(--tone-violet) 12%, var(--surface)); }
   .k-tool .ic { color: var(--tone-violet); background: color-mix(in srgb, var(--tone-violet) 12%, var(--surface)); }
+  .k-machine { width: 248px; height: 84px; }
   .k-remote .ic, .k-more .ic { color: var(--tone-blue); background: color-mix(in srgb, var(--tone-blue) 12%, var(--surface)); }
+  .k-machine .ic { color: var(--tone-blue); background: color-mix(in srgb, var(--tone-blue) 14%, var(--surface)); }
   .muted .ic { opacity: 0.75; }
   .body { flex: 1; min-width: 0; display: grid; gap: 1px; }
   .label { font-weight: var(--fw-semibold); font-size: var(--fs-body); line-height: var(--lh-body); letter-spacing: var(--ls-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

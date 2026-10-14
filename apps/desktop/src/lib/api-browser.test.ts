@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MAX_MOCK_PORTS, scan } from "./api";
+import { agents, MAX_MOCK_PORTS, scan } from "./api";
 import { MOCK_SNAPSHOT } from "./mock";
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
@@ -29,5 +29,11 @@ describe("bounded browser load fixtures", () => {
     const pending = scan(false);
     await vi.advanceTimersByTimeAsync(250);
     expect((await pending).entries).toHaveLength(100);
+  });
+
+  it("keeps sample agents in unit tests instead of calling a live collector", async () => {
+    const report = await agents();
+    expect(report.agents.map((agent) => agent.name)).toEqual(["Claude Code", "Cursor", "Docker Desktop"]);
+    expect(report.agents.some((agent) => agent.folders.some((folder) => folder.label === "shop-web"))).toBe(true);
   });
 });
