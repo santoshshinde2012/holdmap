@@ -293,7 +293,7 @@ jobs:
           # Overwrite the previous copy
           name: artifacts-dist-manifest
           path: dist-manifest.json
-      # Create a GitHub Release while uploading all files to it
+      # Stage a private draft while CLI assets and desktop installers are assembled.
       - name: "Download GitHub Artifacts"
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -304,7 +304,7 @@ jobs:
         run: |
           # Remove the granular manifests
           rm -f artifacts/*-dist-manifest.json
-      - name: Create GitHub Release
+      - name: Create draft GitHub Release
         env:
           PRERELEASE_FLAG: "${{ fromJson(steps.host.outputs.manifest).announcement_is_prerelease && '--prerelease' || '' }}"
           ANNOUNCEMENT_TITLE: "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
@@ -315,7 +315,7 @@ jobs:
           printf '%s' "$ANNOUNCEMENT_BODY" |
             python3 scripts/prepare-release-notes.py --tag "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/notes.txt"
 
-          gh release create "$RELEASE_TAG" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
+          gh release create "$RELEASE_TAG" --draft --verify-tag --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
 
   announce:
     needs:
@@ -346,3 +346,32 @@ jobs:
       "attestations": "write"
       "contents": "write"
       "id-token": "write"
+
+  publish-complete-release:
+    needs:
+      - plan
+      - custom-desktop-release
+    if: needs.plan.outputs.publishing == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: write # dispatch Pages on the published stable tag
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      CHECK_RELEASE_DRAFT: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22
+      - name: Verify every platform's uploaded assets and checksums
+        run: node scripts/check-release-assets.mjs
+      - name: Publish the complete release
+        run: gh release edit "$TAG" --draft=false --verify-tag --repo "$GITHUB_REPOSITORY"
+      - name: Rebuild the public website from the published stable tag
+        if: fromJson(needs.plan.outputs.val).announcement_is_prerelease == false
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG" --raw-field deploy_from_branch=true

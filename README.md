@@ -33,17 +33,19 @@
 holdmap tells you what's really there — which agent or tool started it — and stops only what
 it should.
 
-Version **0.5.0** adds Agent Flow and opt-in local recording, reviewed scheduling, clickable
-folder actions, terminal agent navigation and the routed H identity.
-See the [0.5.0 changes](CHANGELOG.md#050---2026-10-11). Desktop screenshots use the shared
-browser UI with sample data.
+Version **0.7.0** adds local screen recording, Computer / Footprint / Project agent-map
+zoom, and live local scans during `npm run dev`. Check the
+[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
+current installers and see the [changelog](CHANGELOG.md) for release notes. Desktop
+screenshots use the shared browser UI with sample data.
 
-Version **0.6.0** keeps editor-extension services labelled as the editor, gives Graph and
-Flow the full canvas, and lets Scheduled actions start a reviewed shutdown or service stop.
-Use **0.6.0 or newer** for these; see the [0.6.0 changes](CHANGELOG.md#060---2026-10-14).
-Version **0.5.1** hardens project protections, command replay and credential redaction,
-and fixes desktop error handling and graph responsiveness. See the
-[0.5.1 changes](CHANGELOG.md#051---2026-10-13).
+Version **0.6.0** added editor-extension identity on the list and graph, full-canvas Graph
+and Flow, schedules started from the empty manager, and a macOS fullscreen close that
+returns to the previous app ([0.6.0 changes](CHANGELOG.md#060---2026-10-14)).
+
+Version **0.5.0** added Agent Flow, reviewed scheduling, folder actions and the routed H
+identity ([0.5.0 changes](CHANGELOG.md#050---2026-10-11)). **0.5.1** hardened project
+protections and desktop error handling ([0.5.1 changes](CHANGELOG.md#051---2026-10-13)).
 
 The new routed H logo connects Holdmap's initial with its process and agent maps.
 The [vector master and regeneration guide](apps/desktop/assets/README.md) keep app,
@@ -101,6 +103,9 @@ you: open a new terminal, or run the `source` line it prints.
 
 **Desktop app**
 
+Choose your platform and installer format in the [website's download section](https://santoshshinde2012.github.io/holdmap/#install).
+It follows the latest published release, including while a newer source version is being built.
+
 | Platform | Download |
 |---|---|
 | macOS, Apple silicon | [holdmap_aarch64.dmg][dmg-arm64] |
@@ -113,17 +118,18 @@ It runs natively and does not require Rosetta. Choose **Intel** for an Intel Mac
 Apple menu → **About This Mac** shows either a chip name or an Intel processor.
 See [Apple's guidance on native apps and Rosetta](https://support.apple.com/en-gb/102527).
 
-<!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
-     suffix isn't read as part of the version). -->
+<!-- release-please updates this source-version marker; download links follow published releases. -->
 <!-- x-release-please-start-version -->
-[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_aarch64.dmg
-[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_x64.dmg
-[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_x64_en-US.msi
-[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_x64-setup.exe
-[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_amd64.AppImage
-[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_amd64.deb
-[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.6.0%2D1.x86_64.rpm
+Source version: **0.7.0**.
 <!-- x-release-please-end -->
+
+[dmg-arm64]: https://santoshshinde2012.github.io/holdmap/#install
+[dmg-x64]: https://santoshshinde2012.github.io/holdmap/#install
+[msi]: https://santoshshinde2012.github.io/holdmap/#install
+[nsis]: https://santoshshinde2012.github.io/holdmap/#install
+[appimage]: https://santoshshinde2012.github.io/holdmap/#install
+[deb]: https://santoshshinde2012.github.io/holdmap/#install
+[rpm]: https://santoshshinde2012.github.io/holdmap/#install
 
 **Homebrew:** coming soon.
 
@@ -290,7 +296,7 @@ the action. Local shutdown was introduced in 0.4.0; version 0.3.0 binaries preda
 
 </details>
 
-**Scheduling in 0.5.0:** Power settings separate **Shut down now…** from **Schedule
+**Scheduling:** Power settings separate **Shut down now…** from **Schedule
 shutdown…**. The scheduled review, **Schedule computer shutdown?**, starts at **In 1 hour**
 and excludes **Now**; immediate shutdown has no timing controls. In the browser, the entries
 are **Simulate shutdown now…** and **Schedule simulation…**, with **Schedule shutdown
@@ -298,11 +304,11 @@ simulation?** clearly identifying the scheduled review. For a local port, **Sche
 opens the one-hour review separately from **Stop…**. Choose another preset, a custom delay
 or **At a time** as needed; agent service reviews also support delays. **Scheduled actions**
 shows each deadline, countdown, reviewed port and cancellation result. When nothing is
-scheduled, it can start a shutdown or a reviewed service stop. Schedules run while
-Holdmap stays open, including in the tray; quitting clears them. Keep the computer awake.
+scheduled, **0.6.0** can start a shutdown or a reviewed service stop from that dialog.
+Schedules run while Holdmap stays open, including in the tray; quitting clears them. Keep the computer awake.
 Missed deadlines or clock changes require a fresh review. Agent schedules stop only the
-reviewed services and ports, preserving the agent session. Version 0.4.0 downloads predate
-scheduling; use 0.5.0 or newer.
+reviewed services and ports, preserving the agent session. Use **0.6.0 or newer** (scheduling
+itself landed in 0.5.0).
 
 <details>
 <summary>Scheduled shutdown, agent services and cancellation in dark and light themes</summary>
@@ -315,6 +321,10 @@ scheduling; use 0.5.0 or newer.
 ![Light scheduled action manager](docs/screenshots/desktop-schedules-light.png)
 
 </details>
+
+The screen recorder and Computer / Footprint / Project map zoom described below require
+**0.7.0 or newer**. Version **0.6.0** installers predate these features.
+To add them to an existing **0.6.0** installation, download and install the new desktop build.
 
 A tray and menu-bar app with the port list, details, the service graph (`G`), the agents map
 (`⇧A`), pins, history with one-click restart, local screen recording (`⇧V`, MP4 and GIF stay on
@@ -333,11 +343,12 @@ uses the same UI with sample data.
 
 **Close and reopen.** With a working menu-bar or tray icon, closing the main window keeps
 Holdmap running. Click its icon or use your configured global shortcut to reopen; on macOS,
-the Dock icon also restores it. Current source uses macOS application hiding so a fullscreen
+the Dock icon also restores it. **0.6.0** hides the application through AppKit so a fullscreen
 close returns to the previous app and retains the window's state for reopening. Choose
 **Quit** to exit. If the tray is unavailable, closing the main window exits normally.
 
-**Folder actions in 0.5.0.** Click a folder on Footprint to zoom into that source tree; click it
+**Folder actions.** The chooser was added in **0.5.0**. In the **0.7.0** map, click a folder
+on Footprint to zoom into that source tree; click it
 again (or its name/path in a card) for folder actions. **Enter** or **Space** activates a focused folder. The shared chooser shows
 the full path and offers **Open in Finder** (macOS), **Open in Explorer** (Windows) or
 **Open in file manager**, **Open in editor**, and **Copy path**. **Esc** closes it and returns
@@ -438,11 +449,11 @@ the preview and confirmation flow before executing stops.
 
 holdmap stops processes, so one set of rules in `holdmap-core` applies to every surface:
 
-**Current source:** state-read/write failures stay visible and preserve existing files.
+**In 0.6.0:** state-read/write failures stay visible and preserve existing files.
 If a stop completes but its history cannot be saved, the desktop preserves the actual result
 and blocks automatic restart or later queued stops. CLI `stop --json` includes `history_error`
-and exits with code 2; additional requested targets are not attempted. This recovery behavior
-is part of the [0.6.0 changes](CHANGELOG.md#060---2026-10-14).
+and exits with code 2; additional requested targets are not attempted. See the
+[0.6.0 changes](CHANGELOG.md#060---2026-10-14).
 
 - **Graceful first:** SIGTERM (`taskkill` on Windows), then a force kill after `--timeout` (5 s).
 - **The right target:** the dev-server tree root (`npm`, `nodemon`, `uvicorn --reload`…) so nothing

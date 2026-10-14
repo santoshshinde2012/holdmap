@@ -94,6 +94,45 @@ unattended background fixture could not conclusively verify every focus restorat
 macOS uses [cooperative activation](https://developer.apple.com/documentation/appkit/passing-control-from-one-app-to-another-with-cooperative-activation).
 The owned interactive check is documented separately from headless CI.
 
+## Local screen recording (unreleased)
+
+Screen pixels have a separate, user-initiated lifecycle from agent activity metadata. The
+capture call runs directly from the Choose screen action so the operating system retains
+control of source selection and consent. A generation guard releases late streams after
+cancellation or unmount, and stopping releases capture tracks before finalizing exports.
+No capture permission or screen selection is persisted, and no audio is requested.
+On Linux, a display-only host permission handler applies the same trusted-main-view policy.
+WebKitGTK otherwise denies requests by default. Its display backend independently requires
+the ScreenCast portal's selection and PipeWire stream, including on X11; the host gate
+does not choose a source or grant camera/microphone access. Portal cancellation or absence
+prevents capture. This follows [WebKitGTK's permission default](https://webkitgtk.org/reference/webkit2gtk/stable/class.UserMediaPermissionRequest.html),
+[its display backend](https://github.com/WebKit/WebKit/blob/webkitgtk-2.40.3/Source/WebCore/platform/mediastream/gstreamer/GStreamerDisplayCaptureDeviceManager.cpp),
+and the [ScreenCast portal contract](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.ScreenCast.html).
+
+The encoder module loads on demand. H.264 capability checks include the output dimensions;
+WebCodecs/Mediabunny has a MediaRecorder MP4 fallback. GIF quantization runs in a same-origin
+worker with one RGBA frame in flight and at most 240 indexed frames. Adaptive sampling
+preserves the complete timeline, with cumulative GIF delays avoiding rounding drift.
+Finalization has a deadline and can be discarded. The CSP permits local and blob workers
+without relaxing script execution or network destinations.
+
+Desktop saves use a trusted-main-window binary command, a 128 MiB payload bound, filename
+and container-header validation, and a serialized native save dialog. JavaScript cannot
+supply the destination path. Same-directory private temporary files replace the chosen
+destination atomically after a complete write; cancellation and errors retain the in-memory
+export for retry. No filesystem or dialog plugin permissions are granted to the webview.
+Browser exports use the browser download manager and do not claim confirmed disk writes.
+Closing a completed preview retains one bounded result in memory for the current session;
+Review recording reopens it, and explicit discard releases it before another recording.
+Hiding or minimizing the window preserves active capture until Stop or the two-minute limit.
+
+The implementation follows the primary [Screen Capture specification](https://w3c.github.io/mediacapture-screen-share/),
+the [WebKit capture-permission fix](https://bugs.webkit.org/show_bug.cgi?id=274896),
+[Mediabunny source lifecycle](https://mediabunny.dev/guide/media-sources),
+the [gifenc worker guidance](https://github.com/mattdesl/gifenc), and
+[Tauri native dialogs](https://v2.tauri.app/plugin/dialog/). Synthetic owned canvas streams
+validate actual MP4/GIF content without capturing a user's screen or requesting capture permissions.
+
 ## Agent communication visibility (0.5.0)
 
 The read-only Connections projection uses one consistent scan and `AgentsReport`. It retains
@@ -428,8 +467,12 @@ holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop ap
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
 coordinate collection and confirmation, and present the returned types.
 
-This guide describes version 0.5.0 and current source. Agent Flow, scheduling, folder actions
-and terminal agent navigation are included in [0.5.0](../CHANGELOG.md#050---2026-10-11).
+This guide describes version 0.7.0 and current source. Screen recording, C4-style
+agent-map zoom and live browser development scans are included from 0.7.0.
+Editor-extension identity, full-canvas Graph and Flow,
+and schedules started from the empty manager are in [0.6.0](../CHANGELOG.md#060---2026-10-14).
+Agent Flow, scheduling, folder actions and terminal agent navigation landed in
+[0.5.0](../CHANGELOG.md#050---2026-10-11).
 Child-tool metadata, MCP discovery, local desktop shutdown, cache and security improvements
 were introduced in [0.4.0](../CHANGELOG.md#040---2026-10-10); version 0.3.0 predates them.
 

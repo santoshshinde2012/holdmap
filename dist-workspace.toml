@@ -19,8 +19,8 @@ installers = ["shell", "powershell", "npm"]
 # advertise a `brew install` that fails. To turn it on: add "homebrew" to installers, set
 # tap = "santoshshinde2012/homebrew-tap" and publish-jobs = ["homebrew"], then `dist generate`.
 publish-jobs = []
-# After the GitHub Release exists, build the desktop installers and attach them to it
-# (.github/workflows/desktop-release.yml, a reusable workflow).
+# After the draft GitHub Release exists, attach the desktop installers before publishing
+# (.github/workflows/desktop-release.yml, a reusable workflow; release.yml owns finalization).
 post-announce-jobs = ["./desktop-release"]
 # The desktop job uploads to the release and writes build-provenance attestations.
 github-custom-job-permissions = { "desktop-release" = { contents = "write", id-token = "write", attestations = "write" } }

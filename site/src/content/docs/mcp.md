@@ -37,8 +37,9 @@ After connecting, the server advertises its tools, a guide resource and three wo
 Prompt and resource menus depend on the client; clients exposing tools alone can use the same
 workflows below. Holdmap observes the machine where the server runs.
 
-This page describes the MCP interface in **0.5.0**, including the guide, prompts,
-schemas and mandatory stop confirmations introduced in 0.4.0.
+This page describes the MCP interface in **0.7.0**. The guide, prompts,
+schemas and mandatory stop confirmations were introduced in **0.4.0**; optional local
+activity recording followed in **0.5.0**.
 **Upgrading from 0.3.0 changes the stop protocol:**
 clients must preview first and pass the returned `confirmation_id` to execute. Version 0.3.0
 servers expose the nine tools below with the previous protocol and do not return that handle.

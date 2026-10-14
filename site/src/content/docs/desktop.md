@@ -10,12 +10,15 @@ CLI, so process identity checks and process protections are shared. The CLI's pr
 `.holdmap.toml` settings apply to CLI and terminal UI actions.
 [Try it in the browser](../../#demo).
 
-Use **0.6.0 or newer** for editor-extension identity on the graph, hideable details and
-Flow inspector, grouped title-bar actions, and schedules started from the empty manager.
-Closing the macOS window from fullscreen returns to the previous app. See the
+**Version 0.7.0** adds screen recording, Computer / Footprint / Project map zoom and live
+local scans during `npm run dev`. Check the
+[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
+current installers.
+
+Version **0.6.0** added editor-extension identity on the graph, hideable details and Flow
+inspector, grouped title-bar actions, schedules started from the empty manager, and a
+macOS fullscreen close that returns to the previous app. See the
 [0.6.0 changes](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#060---2026-10-14).
-Version **0.5.1** downloads predate these; they still include the history, settings and graph
-fixes in the [0.5.1 changes](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#051---2026-10-13).
 
 ## Close, reopen and quit
 
@@ -25,8 +28,7 @@ or use your configured global shortcut. Choose **Quit holdmap** from the icon's 
 exit completely. If the tray is unavailable, closing the window quits the app.
 
 Closing from fullscreen returns to the previous app without leaving an empty black Space,
-and clicking the Dock icon reopens the same window. Published **0.5.1 downloads predate
-these fixes**; use **0.6.0 or newer**.
+and clicking the Dock icon reopens the same window. Use **0.6.0 or newer**.
 
 ## Service graph and cluster grouping
 
@@ -48,16 +50,40 @@ choices persist.
 
 ## Record the screen
 
+Screen recording requires **0.7.0 or newer**, or the browser demo. Version **0.6.0**
+installers do not include it.
+To add it to an existing 0.6.0 installation, download and install the new desktop build.
+
 The camera icon in the title bar, **Record screen…** in the command palette, or `⇧V`
 starts a local capture. Holdmap explains that recordings stay on this computer, then the
 operating system asks which display or window to share. Microphone and system audio are
 not captured. A timer in the title bar and **Stop screen recording** replace the dialog so
 this window can be part of the capture.
+Recording continues while Holdmap is hidden or minimized. Reopen the window to stop it;
+the two-minute limit still applies.
 
-When the recording stops (or after two minutes), download **MP4** and **GIF**. Nothing is
-uploaded. macOS may ask for Screen Recording permission in System Settings. This is
-separate from [Agents → Flow recording](../agents/#set-up-optional-recording), which
-collects optional tool-call metadata rather than pixels.
+When the recording stops (or after two minutes), preview and download **MP4** and **GIF**.
+The desktop app opens a native save dialog and reports the saved location after writing the
+file. Cancelling the save dialog or a failed write keeps the recording available for retry.
+The browser uses its own download manager. **Close**, `Esc` and clicking outside the preview
+keep the latest recording for this session. Use the camera icon, **Review recording** in the
+command palette, or `⇧V` to reopen it. **Discard recording** removes it and lets you record again.
+Save a file before reloading or quitting; the preview is kept only in memory.
+
+MP4 uses H.264 when an encoder is available. GIF uses a smaller picture and reduces its
+frame rate during longer recordings to cover the whole capture while keeping memory bounded.
+Exports are limited to 128 MiB per file; if a format cannot be encoded, the other available
+format can still be saved. Preparing files can be cancelled with **Discard recording**.
+
+Nothing is uploaded. Each recording asks which screen or window to share. macOS may ask for
+Screen Recording permission in System Settings; if capture is blocked, allow this app or browser
+there and retry. Unsupported windows explain that capture is unavailable. This is separate
+from [Agents → Flow recording](../agents/#set-up-optional-recording), which collects optional
+tool-call metadata rather than pixels.
+
+Linux desktop capture needs PipeWire and a working ScreenCast portal for your desktop
+environment. Its system picker still asks which screen or window to share each time.
+If that service is unavailable, try a browser with screen sharing or the system recorder.
 
 ## Shut down this computer
 
@@ -76,7 +102,8 @@ shutdown and cannot power off a computer. Version 0.3.0 binaries predate this fe
 
 ## Schedule shutdown or a service stop
 
-**Version 0.5.0** adds scheduling to the desktop and browser demo. Version 0.4.0 downloads
+Scheduling is available from **0.5.0**. The empty manager can start reviews from **0.6.0**.
+Version 0.4.0 downloads
 include immediate shutdown and stop confirmations, but predate scheduling.
 
 1. For this computer, open **Settings → Power → Schedule shutdown…**, or start from the
@@ -180,8 +207,8 @@ skim memory, CPU, process count, stoppable ports and parent; expand for folders 
 labels), ports and apps it started, child processes as tools & apps, connections, and access: the
 account it runs as, sandbox and approval flags, network listeners, and macOS-protected folders.
 Each fact is marked seen, inferred or unknown. From a card you can reveal a folder, open it in your
-editor, or stop the unprotected ports that agent started. The map zooms Computer → Footprint →
-Project from the same observed processes, sockets and folders; it does not invent communication
+editor, or stop the unprotected ports that agent started. From **0.7.0**, the map zooms
+Computer → Footprint → Project from the same observed processes, sockets and folders; it does not invent communication
 between agents. Recent projects come from folder names
 only. Chats, settings and tokens are never read. Remote hosts show as IP addresses. Click a port to
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.

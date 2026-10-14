@@ -115,6 +115,7 @@ try {
   });
   await check("Agents shows searchable tool metadata without a listening port", async () => {
     await try_("Agents");
+    await frame.getByRole("radio", { name: "Footprint", exact: true }).click();
     await frame.getByRole("article", { name: "Cursor", exact: true }).waitFor({ timeout: 8000 });
     const search = frame.getByLabel("Search agents", { exact: true });
     await search.fill("filesystem");
@@ -125,6 +126,7 @@ try {
     await measureViewport("after-agents");
   });
   await check("Agent folders offer keyboard-accessible choices with honest browser previews", async () => {
+    await frame.getByRole("button", { name: /^Folder shop-web,.*Zooms into this project/ }).click();
     const folder = frame.getByRole("button", { name: /^Folder shop-web,.*\. Opens folder actions$/ });
     const mapNode = folder.locator("xpath=ancestor::div[contains(@class, 'svelte-flow__node')][1]");
     const dialog = frame.getByRole("dialog", { name: "Folder actions", exact: true });
@@ -158,8 +160,9 @@ try {
     const flow = frame.getByRole("region", { name: "Agent flow", exact: true });
     await flow.getByText("Example data", { exact: true }).waitFor();
     await flow.getByRole("region", { name: "Flow participants", exact: true }).waitFor();
+    await flow.locator(".limits summary").click();
     await flow.getByText(/Sockets do not reveal messages or data direction/).waitFor();
-    await flow.getByRole("radio", { name: "Calls", exact: true }).click();
+    await frame.getByRole("radio", { name: "Calls", exact: true }).click();
     const run = flow.locator("#agent-flow-run");
     await run.waitFor();
     const trace = await run.locator("option").filter({ hasText: "Planning agent" }).getAttribute("value");
@@ -200,10 +203,8 @@ try {
     const dialog = frame.locator('[role="alertdialog"]');
     await dialog.waitFor({ timeout: 5000 });
     await measureViewport("stop-dialog");
-    // The iframe is scaled: scrolling a child already inside its own viewport can leave the
-    // modal below the parent browser window. Bring the actual demo canvas into view first.
-    await page.locator("#demo [data-viewport]").scrollIntoViewIfNeeded();
-    await measureViewport("stop-dialog-in-view");
+    // The embedded demo must reveal its own modal actions in the parent viewport.
+    // Use a normal click without a test-only outer scroll or forced pointer event.
     await dialog.locator("[data-primary]").click();
     await frame.locator('[id^="row-tcp:3000:"]').waitFor({ state: "detached", timeout: 10000 });
     await measureViewport("after-stop");

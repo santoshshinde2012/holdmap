@@ -61,6 +61,7 @@ Install [actionlint](https://github.com/rhysd/actionlint#installation) and
 Chromium once with `(cd apps/desktop && npm ci && npx playwright install chromium)`.
 On Linux, use `npx playwright install --with-deps chromium` for its system dependencies,
 and install `xvfb xauth` for the isolated native shortcut regressions.
+On macOS, install FFmpeg (`brew install ffmpeg`) for the synthetic MP4/GIF runtime check.
 The browser suite starts and stops its own preview server; failure traces and screenshots go
 in the ignored `apps/desktop/test-results/` directory. For an existing Chrome installation,
 set `HOLDMAP_E2E_CHROMIUM_EXECUTABLE` to its executable path.
@@ -86,6 +87,7 @@ scripts/check-secrets.sh                     # full Git history and tracked/new 
 python3 scripts/test-release-security.py    # isolated release input regressions; never publishes
 python3 scripts/check-updater-runtime.py    # macOS: real signed scratch install and relaunch
 python3 scripts/check-window-lifecycle-runtime.py # interactive macOS: owned close/fullscreen/reopen regression
+python3 scripts/check-screen-recording-runtime.py # macOS: synthetic MP4/GIF, real WKWebView and binary IPC; needs FFmpeg
 actionlint
 python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK/Linux test resolution
 python3 scripts/verify-vendored-global-hotkey.py # X11 fixes, original archive and shortcut dependency resolution
@@ -130,6 +132,13 @@ scratch app before verifying the actual relaunch. Wrong keys, tampered bytes, mi
 authenticated versions and escaping result paths must leave the original app untouched.
 The runner needs the desktop's locked CLI installed with `npm ci`; it never replaces a host
 installation, changes release keys or enables automatic updates for published installers.
+
+The synthetic recording check builds the production encoder and save adapter into an owned
+WKWebView with the production CSP. It records a generated canvas, sends both formats through
+real binary IPC to a fixture-only destination, and checks hashes, permissions, animation,
+duration and cleanup with FFprobe/FFmpeg. Its capture API tripwire rejects any screen-picker
+request. It never captures the user's screen or opens the production native save chooser;
+save-policy and atomic-write behavior have separate native unit coverage.
 
 Run `python3 scripts/check-window-lifecycle-runtime.py` in an interactive macOS desktop session
 for native close changes. It creates a private scratch app, exercises the native fullscreen
@@ -273,20 +282,28 @@ Versions follow [SemVer](https://semver.org/). One `vX.Y.Z` tag releases everyth
   it maintains the release PR itself; it doesn't create tags or releases here, so the tag stays a
   deliberate maintainer step.
   Without `RELEASE_PLEASE_TOKEN`, prepare the same version changes manually, including
-  `version.txt`, `.release-please-manifest.json`, README download links and generated CLI help;
+  `version.txt`, `.release-please-manifest.json`, the README source-version marker and generated CLI help;
   run `scripts/check-versions.sh` and the full validation before opening the release PR.
+  README installer links stay on the website's release-resolved download section; they do not
+  point at filenames from a release that is still being assembled.
 - Pushing the tag runs `release.yml` ([dist](https://github.com/axodotdev/cargo-dist)): CLI
   archives for six targets (macOS arm64/x64, Linux gnu arm64/x64, Linux musl x64, Windows x64),
   shell and PowerShell installers, an npm package tarball, a
   CycloneDX SBOM, SHA-256 checksums, binaries built with `cargo auditable`, and GitHub build
-  provenance (`gh attestation verify <file> -R santoshshinde2012/holdmap`). It creates the GitHub
-  Release. npm registry publication is optional and disabled by default; release notes link
+  provenance (`gh attestation verify <file> -R santoshshinde2012/holdmap`). It creates a draft
+  GitHub Release. npm registry publication is optional and disabled by default; release notes link
   the attached package tarball when no registry publishing job is configured.
-- Once the release is published, `release.yml` calls `desktop-release.yml` (tauri-action), which
+- While the release is still a draft, `release.yml` calls `desktop-release.yml` (tauri-action), which
   adds the `.dmg`, `.msi`, NSIS `.exe`, `.AppImage`, `.deb` and `.rpm`, with checksums and provenance. Run it by hand with an empty tag
   for a dry run that keeps the bundles as workflow artifacts.
   Signed updater artifacts are verified against the public key and signed release version
-  before upload. After all platforms succeed, one job publishes the complete `latest.json`.
+  before upload. After all platforms succeed, one job uploads the complete `latest.json`.
+  A final read-only asset check requires every CLI archive, desktop installer and checksum
+  before publishing the release. Failed builds leave the previous public download in place.
+- After publishing a stable release, the final job dispatches `Pages` on that version tag.
+  The website checks out its own event's source and records the checked-out commit in
+  `build-info.json`; it does not execute source supplied by a `workflow_run` event.
+  Prereleases leave the latest stable website in place.
 
 Check a change to the release setup locally with `dist plan`,
 `dist build --artifacts=local --target x86_64-unknown-linux-gnu` and `actionlint`.
@@ -300,10 +317,11 @@ generated metadata. When upgrading dist or changing its config, review the new u
 template against these controls and update the workflow deliberately; `dist generate` does
 not regenerate CI with this setting. Keep action pins in the config and workflow in sync.
 
-**Repository setup** (once; everything optional is skipped when absent):
+**Repository setup** (once; signing and registry integrations are optional):
 
 | What | Needed for |
 |---|---|
+| Environment `github-pages`: selected deployment branches and tags must allow Branch `main` and Tag `v*` | Required for the stable release's tag-dispatched website deployment. A `main`-only environment rejects the tag; add the explicit tag policy before publishing the first release with this workflow. |
 | Secret `HOMEBREW_TAP_TOKEN` (fine-grained, contents: write on `santoshshinde2012/homebrew-tap`), then in `dist-workspace.toml` add `"homebrew"` to `installers`, set `tap` and `publish-jobs = ["homebrew"]`, run `dist generate` and review/add the upstream Homebrew publishing job | Homebrew (`brew install santoshshinde2012/tap/holdmap`); off until then, so release notes don't advertise it |
 | Secret `RELEASE_PLEASE_TOKEN` (fine-grained, contents and pull requests: write) | The release PR; the workflow skips with a notice until it exists |
 | Secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | Signed, notarised macOS app (optional) |
@@ -321,10 +339,12 @@ maintainer pushes its tag.
    `git push origin vX.Y.Z` (replace `X.Y.Z` with the release version). Use `-s` instead of
    `-a` when the maintainer has a configured signing key. Artifact provenance independently
    binds the builds to the tagged source and release workflow.
-4. Wait for the complete `Release` run, including its reusable desktop jobs. Check all six
-   CLI archives and seven desktop installers, their checksums and build provenance, then
-   confirm the release-triggered `Pages` deployment uses the tagged commit and new downloads.
-   The initial CLI announcement precedes desktop upload and is not the readiness signal.
+4. Wait for the complete `Release` run, including its reusable desktop jobs and final asset
+   verification. The release stays a draft until all six CLI archives, seven desktop installers
+   and their checksums are uploaded. Check their build provenance, then confirm the
+   stable release's dispatched `Pages` deployment uses the tagged commit and new downloads.
+   Check `build-info.json` against the tag's commit. Confirm the `github-pages` environment
+   allows Tag `v*` before publishing; the workflow does not change environment policies.
    Without signing credentials, macOS is ad-hoc signed without notarization and Windows is
    unsigned. Without a configured signed updater, desktop users download the new installer
    manually; do not advertise automatic updates.

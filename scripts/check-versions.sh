@@ -20,15 +20,14 @@ versions = {
     ".release-please-manifest.json": json.load(open(".release-please-manifest.json"))["."],
 }
 readme = open("README.md").read()
-block = re.search(r"x-release-please-start-version -->\n(.*?)<!-- x-release-please-end", readme, re.S)
-if not block:
-    sys.exit("README.md lost its x-release-please version block (desktop download links)")
-for n, line in enumerate(block.group(1).splitlines()):
-    found = re.findall(r"\d+\.\d+\.\d+", line)
-    if len(found) > 1:
-        sys.exit(f"README.md download block line {n + 1} has more than one version; release-please only bumps the first")
-    if found:
-        versions[f"README.md download link {n + 1}"] = found[0]
+start, end = "<!-- x-release-please-start-version -->", "<!-- x-release-please-end -->"
+if readme.count(start) != 1 or readme.count(end) != 1:
+    sys.exit("README.md must have exactly one x-release-please source-version marker block")
+block = re.search(re.escape(start) + r"\s*(.*?)\s*" + re.escape(end), readme, re.S)
+marker = re.fullmatch(r"Source version: \*\*(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\*\*\.", block.group(1)) if block else None
+if not marker:
+    sys.exit("README.md source-version marker block must contain exactly one field: Source version: **X.Y.Z**.")
+versions["README.md source version marker"] = marker.group(1)
 badge = open("docs/badges/version.svg").read()
 badge_versions = {}
 for n, line in enumerate(badge.splitlines()):

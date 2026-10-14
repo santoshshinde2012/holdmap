@@ -1,6 +1,7 @@
 // Site-wide facts: links, the latest release and its download files. Resolved once at build
 // time; the Pages workflow rebuilds after every release, so links always match the latest one.
 import versionTxt from "../../../version.txt?raw";
+import { publishedReleaseVersion } from "./published-release.mjs";
 
 export const REPO = "santoshshinde2012/holdmap";
 export const repoUrl = `https://github.com/${REPO}`;
@@ -22,10 +23,11 @@ export const description =
 const STARS_SHOWN_FROM = 25;
 
 type Repo = { stargazers_count?: number };
-type Release = { tag_name?: string };
+const offline = process.env.HOLDMAP_SITE_OFFLINE === "1";
+const requireRelease = process.env.HOLDMAP_SITE_REQUIRE_RELEASE === "1";
 
 async function github<T>(path: string): Promise<T | null> {
-  if (process.env.HOLDMAP_SITE_OFFLINE) return null;
+  if (offline) return null;
   const headers: Record<string, string> = { accept: "application/vnd.github+json", "user-agent": "holdmap-site" };
   if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   try {
@@ -37,10 +39,10 @@ async function github<T>(path: string): Promise<T | null> {
 }
 
 const fileVersion = versionTxt.trim();
-const [release, repo] = await Promise.all([github<Release>("/releases/latest"), github<Repo>("")]);
+const [release, repo] = await Promise.all([github<unknown>("/releases/latest"), github<Repo>("")]);
 
-/** The latest published release (falls back to version.txt when GitHub can't be reached). */
-export const version = release?.tag_name?.replace(/^v/, "") || fileVersion;
+/** Publishing requires a validated stable release; local builds can fall back to version.txt. */
+export const version = publishedReleaseVersion({ sourceVersion: fileVersion, release, repositoryUrl: repoUrl, offline, requireRelease });
 export const stars = repo?.stargazers_count && repo.stargazers_count >= STARS_SHOWN_FROM ? repo.stargazers_count : null;
 
 // Keep the chosen release label, filenames and checksums together while a new release builds.

@@ -17,6 +17,7 @@ mod commands;
 mod confirmation;
 mod local_window;
 mod power;
+mod recording_save;
 mod scheduler;
 mod shortcuts;
 mod state;
@@ -38,7 +39,17 @@ pub fn run() {
     holdmap_core::project::set_scan_budget(std::time::Duration::from_millis(15));
     let context = tauri::generate_context!();
     let updater = update::configured(&context);
-    let mut builder = tauri::Builder::default().plugin(tauri_plugin_notification::init());
+    let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init());
+    #[cfg(target_os = "linux")]
+    {
+        // WebKitGTK denies display requests unless the embedder handles them. Its
+        // display backend still requires the ScreenCast portal's source picker.
+        builder = builder.on_permission_request(|webview, kind| {
+            local_window::screen_capture_permission(&webview, kind)
+        });
+    }
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_autostart::init(
@@ -54,6 +65,7 @@ pub fn run() {
         .manage(activity::ActivityState::default())
         .manage(power::PowerState::default())
         .manage(scheduler::SchedulerState::default())
+        .manage(recording_save::RecordingSaveState::default())
         .invoke_handler(local_window::guard(tauri::generate_handler![
             commands::app_info,
             commands::scan,
@@ -99,6 +111,7 @@ pub fn run() {
             scheduler::list_schedules,
             scheduler::cancel_schedule,
             update::install_update,
+            recording_save::save_screen_recording,
         ]))
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -204,7 +217,14 @@ mod security_tests {
             csp.contains("media-src 'self' blob: mediastream:"),
             "screen recordings use blob and mediastream URLs"
         );
-        assert!(csp.contains("img-src 'self' data: blob:"), "GIF previews use blob URLs");
+        assert!(
+            csp.contains("img-src 'self' data: blob:"),
+            "GIF previews use blob URLs"
+        );
+        assert!(
+            csp.contains("worker-src 'self' blob:"),
+            "GIF and video encoding use local workers"
+        );
         assert_eq!(
             csp.split(';')
                 .map(str::trim)

@@ -280,6 +280,231 @@ class DesktopReleaseAssetTests(unittest.TestCase):
         self.assertEqual(list((root / "outside").iterdir()), [])
 
 
+class CompleteReleaseAssetTests(unittest.TestCase):
+    def setUp(self):
+        sandbox = tempfile.TemporaryDirectory(prefix="holdmap-release-completeness-test-")
+        self.addCleanup(sandbox.cleanup)
+        self.root = Path(sandbox.name)
+        self.state = self.root / "github.json"
+        self.calls = self.root / "calls.jsonl"
+        stub = self.root / "gh"
+        stub.write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+args = sys.argv[1:]
+with Path(os.environ["HOLDMAP_TEST_CALLS"]).open("a") as log:
+    log.write(json.dumps(args) + "\\n")
+if args[:3] != ["api", "--method", "GET"]:
+    sys.exit("only explicit GET API requests are permitted")
+state = json.loads(Path(os.environ["HOLDMAP_TEST_GITHUB"]).read_text())
+endpoint = args[-1]
+if endpoint.startswith("repos/example/holdmap/releases/tags/"):
+    print(json.dumps(state["release"]))
+elif endpoint.startswith("repos/example/holdmap/releases/42/assets?per_page=100&page="):
+    page = int(endpoint.rsplit("=", 1)[1])
+    print(json.dumps(state["assets"][(page - 1) * 100:page * 100]))
+elif endpoint.startswith("repos/example/holdmap/releases/assets/"):
+    identifier = endpoint.rsplit("/", 1)[1]
+    if "Accept: application/octet-stream" not in args:
+        sys.exit("metadata downloads must request raw asset bytes")
+    if identifier not in state["payloads"]:
+        sys.exit("binary downloads are forbidden")
+    sys.stdout.buffer.write(state["payloads"][identifier].encode())
+else:
+    sys.exit("unexpected GitHub operation")
+''')
+        stub.chmod(0o700)
+
+    def fixture(self, version="0.6.0", draft=True):
+        cli = ["holdmap-" + suffix for suffix in [
+            "aarch64-apple-darwin.tar.xz", "x86_64-apple-darwin.tar.xz",
+            "aarch64-unknown-linux-gnu.tar.xz", "x86_64-unknown-linux-gnu.tar.xz",
+            "x86_64-unknown-linux-musl.tar.xz", "x86_64-pc-windows-msvc.zip",
+        ]]
+        desktop = {
+            "macos-arm64": [f"holdmap_{version}_aarch64.dmg"],
+            "macos-x64": [f"holdmap_{version}_x64.dmg"],
+            "windows-x64": [f"holdmap_{version}_x64_en-US.msi", f"holdmap_{version}_x64-setup.exe"],
+            "linux-x64": [f"holdmap_{version}_amd64.deb", f"holdmap-{version}-1.x86_64.rpm", f"holdmap_{version}_amd64.AppImage"],
+        }
+        data = {"release": {"id": 42, "tag_name": "v" + version,
+                            "draft": draft, "prerelease": "-" in version},
+                "assets": [], "payloads": {}}
+
+        def add(name, body=None):
+            raw = (body if body is not None else "binary:" + name).encode()
+            asset = {"id": 700 + len(data["assets"]), "name": name, "size": len(raw),
+                     "digest": "sha256:" + hashlib.sha256(raw).hexdigest(), "state": "uploaded"}
+            data["assets"].append(asset)
+            if body is not None:
+                data["payloads"][str(asset["id"])] = body
+
+        for name in cli + [name for names in desktop.values() for name in names] + [
+            "holdmap-installer.sh", "holdmap-installer.ps1", "holdmap-npm-package.tar.gz", "source.tar.gz",
+        ] + [name + ".cdx.xml" for name in ["holdmap", "holdmap-core", "holdmap-activity", "holdmap-mcp", "holdmap-desktop"]]:
+            add(name)
+
+        def checksums(names, binary=False):
+            by_name = {asset["name"]: asset for asset in data["assets"]}
+            return "".join(by_name[name]["digest"][7:] + (" *" if binary else "  ") + name + "\n" for name in names)
+
+        for name in cli + ["source.tar.gz"]:
+            add(name + ".sha256", checksums([name], binary=True))
+        for platform, names in desktop.items():
+            add("holdmap-desktop-" + platform + ".sha256", checksums(names))
+        add("sha256.sum", checksums(cli + ["holdmap-npm-package.tar.gz", "source.tar.gz"], binary=True))
+        add("dist-manifest.json", json.dumps({"announcement_tag": "v" + version,
+            "announcement_is_prerelease": "-" in version,
+            "releases": [{"app_name": "holdmap", "app_version": version}]}))
+        return data
+
+    def replace_payload(self, data, name, body, update_digest=True):
+        asset = next(asset for asset in data["assets"] if asset["name"] == name)
+        data["payloads"][str(asset["id"])] = body
+        if update_digest:
+            asset["size"] = len(body.encode())
+            asset["digest"] = "sha256:" + hashlib.sha256(body.encode()).hexdigest()
+
+    def verify(self, data, tag=None, repository="example/holdmap", draft="true"):
+        self.state.write_text(json.dumps(data))
+        self.calls.unlink(missing_ok=True)
+        environment = os.environ.copy()
+        environment.update({"PATH": str(self.root) + os.pathsep + environment["PATH"],
+                            "GITHUB_REPOSITORY": repository,
+                            "TAG": data["release"]["tag_name"] if tag is None else tag,
+                            "CHECK_RELEASE_DRAFT": draft,
+                            "HOLDMAP_TEST_GITHUB": str(self.state), "HOLDMAP_TEST_CALLS": str(self.calls)})
+        result = subprocess.run(["node", str(ROOT / "scripts/check-release-assets.mjs")],
+                                env=environment, capture_output=True, text=True, check=False, timeout=30)
+        calls = [json.loads(line) for line in self.calls.read_text().splitlines()] if self.calls.exists() else []
+        for call in calls:
+            self.assertEqual(call[:3], ["api", "--method", "GET"], "verifier must never publish or mutate")
+        self.assertEqual(json.loads(self.state.read_text()), data, "verifier must not modify release state")
+        return result, calls
+
+    def test_complete_stable_and_prerelease_assets_pass_without_binary_downloads(self):
+        for version, draft in [("0.6.0", "true"), ("1.2.3-rc.1", "true"), ("0.6.0", "false")]:
+            with self.subTest(version=version, draft=draft):
+                data = self.fixture(version, draft=draft == "true")
+                result, calls = self.verify(data, draft=draft)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("no release changes made", result.stdout)
+                self.assertEqual(len([call for call in calls if "/releases/assets/" in call[-1]]), 13)
+
+    def test_missing_platform_or_duplicate_asset_fails(self):
+        for name in ["holdmap_0.6.0_aarch64.dmg", "holdmap_0.6.0_x64.dmg",
+                     "holdmap_0.6.0_amd64.AppImage", "holdmap_0.6.0_x64-setup.exe",
+                     "holdmap-desktop-windows-x64.sha256", "holdmap-installer.sh", "holdmap-core.cdx.xml",
+                     "holdmap-aarch64-unknown-linux-gnu.tar.xz.sha256"]:
+            with self.subTest(missing=name):
+                data = self.fixture()
+                data["assets"] = [asset for asset in data["assets"] if asset["name"] != name]
+                result, _ = self.verify(data)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(name, result.stderr)
+        data = self.fixture()
+        duplicate = data["assets"][0].copy()
+        duplicate["id"] = 9999
+        data["assets"].append(duplicate)
+        result, _ = self.verify(data)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Duplicate", result.stderr)
+
+    def test_assets_on_later_pages_and_duplicates_are_not_hidden(self):
+        data = self.fixture()
+        extra = [{"id": 10_000 + i, "name": f"optional-{i}.sig", "size": 1,
+                  "state": "uploaded", "digest": "sha256:" + "0" * 64} for i in range(80)]
+        data["assets"] = extra + data["assets"]
+        result, calls = self.verify(data)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any(call[-1].endswith("page=2") for call in calls))
+        duplicate = data["assets"][80].copy()
+        duplicate["id"] = 20_000
+        data["assets"].append(duplicate)
+        result, _ = self.verify(data)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Duplicate", result.stderr)
+
+    def test_cli_checksums_and_metadata_size_limits_are_enforced(self):
+        for name in ["holdmap-aarch64-apple-darwin.tar.xz.sha256", "sha256.sum"]:
+            with self.subTest(name=name):
+                data = self.fixture()
+                asset = next(asset for asset in data["assets"] if asset["name"] == name)
+                body = data["payloads"][str(asset["id"])]
+                self.replace_payload(data, name, "0" * 64 + body[64:])
+                result, _ = self.verify(data)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Checksum differs", result.stderr)
+        data = self.fixture()
+        asset = next(asset for asset in data["assets"] if asset["name"] == "sha256.sum")
+        asset["size"] = 64 * 1024 + 1
+        result, calls = self.verify(data)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("size limit", result.stderr)
+        self.assertFalse(any(call[-1].endswith("/" + str(asset["id"])) for call in calls))
+
+    def test_unfinished_zero_byte_or_unverifiable_asset_fails(self):
+        for field, value in [("state", "starter"), ("size", 0), ("digest", None), ("digest", "sha256:bad")]:
+            with self.subTest(field=field, value=value):
+                data = self.fixture()
+                data["assets"][0][field] = value
+                result, _ = self.verify(data)
+                self.assertNotEqual(result.returncode, 0)
+
+    def test_checksum_content_must_match_uploaded_bytes_and_cover_every_platform(self):
+        for case in ["binary_digest", "metadata_digest", "missing_entry", "duplicate_entry", "path_entry"]:
+            with self.subTest(case=case):
+                data = self.fixture()
+                name = "holdmap-desktop-windows-x64.sha256"
+                asset = next(asset for asset in data["assets"] if asset["name"] == name)
+                original = data["payloads"][str(asset["id"])]
+                if case == "binary_digest":
+                    body = "0" * 64 + original[64:]
+                elif case == "metadata_digest":
+                    body = original.replace("  holdmap_", " *holdmap_", 1)
+                elif case == "missing_entry":
+                    body = original.splitlines(keepends=True)[0]
+                elif case == "duplicate_entry":
+                    body = original + original.splitlines(keepends=True)[0]
+                else:
+                    body = original.replace("  holdmap_", "  ../holdmap_", 1)
+                self.replace_payload(data, name, body, update_digest=case != "metadata_digest")
+                result, _ = self.verify(data)
+                self.assertNotEqual(result.returncode, 0)
+
+    def test_release_and_distribution_identity_must_agree(self):
+        for case in ["tag", "prerelease", "published", "manifest"]:
+            with self.subTest(case=case):
+                data = self.fixture()
+                if case == "tag":
+                    data["release"]["tag_name"] = "v0.5.0"
+                    tag = "v0.6.0"
+                else:
+                    tag = None
+                if case == "prerelease":
+                    data["release"]["prerelease"] = True
+                elif case == "published":
+                    data["release"]["draft"] = False
+                elif case == "manifest":
+                    self.replace_payload(data, "dist-manifest.json", json.dumps({
+                        "announcement_tag": "v0.5.0", "announcement_is_prerelease": False,
+                        "releases": [{"app_name": "holdmap", "app_version": "0.5.0"}]}))
+                result, _ = self.verify(data, tag=tag)
+                self.assertNotEqual(result.returncode, 0)
+
+    def test_invalid_tag_and_repository_never_reach_github(self):
+        for tag in ["", "v0.6", "v0.6.0\n", "v0.6.0-..", "v0.6.0-rc/1", "v0.6.0$(touch marker)"]:
+            with self.subTest(tag=tag):
+                result, calls = self.verify(self.fixture(), tag=tag)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [])
+        for repository in ["", "../holdmap", "example/..", "example/.", "example/holdmap/extra", "example/holdmap\n"]:
+            with self.subTest(repository=repository):
+                result, calls = self.verify(self.fixture(), repository=repository)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [])
+
+
 class CompleteDesktopUpdaterTests(unittest.TestCase):
     def setUp(self):
         self.sandbox = tempfile.TemporaryDirectory(prefix="holdmap-updater-index-test-")

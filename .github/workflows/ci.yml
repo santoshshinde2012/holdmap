@@ -254,3 +254,12 @@ jobs:
       - name: Signed updater runtime installation and relaunch
         if: runner.os == 'macOS'
         run: python3 scripts/check-updater-runtime.py
+      - name: Install media probes for the owned recording check
+        if: runner.os == 'macOS'
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            brew install ffmpeg
+          fi
+      - name: Synthetic MP4 and GIF recording in native WKWebView
+        if: runner.os == 'macOS'
+        run: python3 scripts/check-screen-recording-runtime.py

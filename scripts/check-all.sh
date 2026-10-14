@@ -7,6 +7,11 @@ for tool in cargo node npm python3 actionlint gitleaks; do
   command -v "$tool" >/dev/null || { echo "Missing prerequisite: $tool (see CONTRIBUTING.md)" >&2; exit 1; }
 done
 cargo deny --version >/dev/null
+if [[ "$(uname -s)" == Darwin ]]; then
+  for tool in ffmpeg ffprobe; do
+    command -v "$tool" >/dev/null || { echo "Missing prerequisite: $tool (install ffmpeg; see CONTRIBUTING.md)" >&2; exit 1; }
+  done
+fi
 node --input-type=module -e '
   const [major, minor] = process.versions.node.split(".").map(Number);
   if (major < 22 || (major === 22 && minor < 12)) {
@@ -53,6 +58,7 @@ if [[ "$(uname -s)" == Linux ]]; then
     cargo test -p holdmap-desktop --locked --test hotkey_x11 -- --include-ignored --test-threads=1
 elif [[ "$(uname -s)" == Darwin ]]; then
   python3 scripts/check-updater-runtime.py
+  python3 scripts/check-screen-recording-runtime.py
 fi
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap-activity -p holdmap
 # Embed the built frontend, matching the production Tauri build's feature selection.

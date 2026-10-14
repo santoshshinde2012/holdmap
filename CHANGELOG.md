@@ -8,6 +8,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-14
+
 ### Added
 
 - Local screen recording from the title bar or command palette (`⇧V`). After you pick a screen
@@ -22,6 +24,12 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Changed
 
+- Closing a recording preview keeps the latest files available through **Review recording**
+  for this session, including after cancelled or failed saves. **Discard recording** clears
+  them before recording again; reloading or quitting still clears in-memory previews.
+- README and the public Desktop, Agents and MCP guides identify **0.7.0** as the release
+  adding screen recording, C4-style map zoom and live development scans, while preserving
+  historical feature availability.
 - Desktop `npm run dev` reads this machine through the holdmap CLI (ports, agents, C4 map, flow connections). Sample shop-web data stays on the public website demo, Playwright, and `?demo=1`. Stopping processes still needs the desktop app.
 - Exclusive view actions use hinged action pills instead of nested segmented tracks: List / Graph /
   Agents, then Overview/Flow when Agents is selected, Computer/Footprint/Project when Overview is
@@ -37,6 +45,36 @@ by [release-please](https://github.com/googleapis/release-please) from
 - The list details pane keeps tabs on one scrolling row. Identity and badges share the header;
   Open, Restart, Schedule and Stop sit in one footer bar without repeating the port.
 - Folder actions wrap long paths at directory separators instead of mid-token.
+
+### Fixed
+
+- Screen recording cancellation releases late streams and prevents stale results from reopening.
+  Stopping ends screen sharing before preparing exports; preparation can be discarded.
+- Linux desktop screen sharing handles WebKitGTK's display permission for the trusted main
+  view, then requires the system ScreenCast portal's source selection. Camera and microphone
+  permissions are not granted by this handler.
+- GIF exports cover the complete recording with bounded adaptive sampling and background
+  encoding. MP4 uses resolution-aware H.264 checks with a MediaRecorder fallback. Encoder
+  failures preserve any other successful format.
+- Desktop recording downloads use a native save dialog with atomic writes, cancellation and
+  retryable errors. Recording encoders load only when needed; the public demo checks initial
+  and optional JavaScript budgets separately and follows the current map and Flow controls.
+- The public demo reveals dialog actions in the website's viewport, including after focus,
+  animation and content-size changes, so scaled folder and stop dialogs remain usable.
+- Release-triggered website builds use the same source commit as the installers and report
+  that revision in `build-info.json`, even when development has advanced meanwhile.
+- Releases remain drafts until every CLI archive, desktop installer and checksum passes the
+  final asset check, so the latest download cannot advance to an incomplete release.
+
+### Security
+
+- Restrict GIF encoding to the owning dedicated worker's trusted messages and validate
+  bounded frame data. Release website builds run on the published stable version tag without
+  executing a `workflow_run` checkout or populating shared dependency caches. README downloads
+  stay valid while a release is built.
+- Update rustls to 0.23.46 for RUSTSEC-2026-0346 through RUSTSEC-2026-0349. Native recording
+  saves accept bounded MP4/GIF bytes only from the trusted main view and require a user-chosen
+  destination without granting general filesystem access to the webview.
 
 ## [0.6.0] - 2026-10-14
 

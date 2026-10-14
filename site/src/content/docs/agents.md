@@ -13,9 +13,13 @@ strictly limited metadata projection from integrations you configure.
 Recognized products include Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider,
 Cline, Goose, Docker Desktop, OrbStack, Podman Desktop and others.
 
-Version 0.5.0 includes Flow, folder actions and the updated CLI and terminal navigation
-described here. Child-tool classifications, expanded metadata and desktop agent search were
-introduced in 0.4.0. The live demo uses the same interface with sample data.
+The Computer / Footprint / Project map, live local scans during `npm run dev`, and separate
+screen recorder described below require **0.7.0 or newer**. Check the
+[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
+current installers. Version **0.6.0** added editor-extension identity and Hide cards / Hide
+inspector. Flow, folder actions and the updated CLI and terminal navigation landed in
+0.5.0. Child-tool classifications, expanded metadata and desktop agent search were introduced
+in 0.4.0. The live demo uses the same interface with sample data.
 
 ## From the CLI
 
@@ -74,9 +78,9 @@ These terminal captures use isolated local fixtures:
 
 ## Open an agent folder
 
-In 0.5.0, click a folder on the map or its name/path in an expanded card. On Footprint, the first
-click zooms into that source tree; click the folder again (or **Enter** / **Space** on Project) for
-**Folder actions**. **Enter** or **Space** activates a focused folder. **Folder actions** shows the full path and
+Folder actions are available from **0.5.0**: click a folder on the map or its name/path in an
+expanded card. From **0.7.0**, the first click on Footprint zooms into that source tree;
+click the folder again (or **Enter** / **Space** on Project) for **Folder actions**. **Enter** or **Space** activates a focused folder. **Folder actions** shows the full path and
 offers **Open in Finder** on macOS, **Open in Explorer** on Windows, or **Open in file manager**,
 plus **Open in editor** and **Copy path**. **Esc** or **Close** returns focus to the folder.
 Copying uses the original path, even when a card shortens its display.

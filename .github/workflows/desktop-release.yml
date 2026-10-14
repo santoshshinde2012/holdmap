@@ -1,7 +1,8 @@
 # Desktop installers (.dmg, .msi + NSIS .exe, .AppImage, .deb, .rpm) built by tauri-action and
-# attached to the GitHub Release that release.yml (dist) created for the same `vX.Y.Z` tag, with
+# attached to the draft GitHub Release that release.yml created for the same `vX.Y.Z` tag, with
 # SHA-256 checksums and SLSA build provenance. release.yml calls this reusable workflow after it
-# publishes the release (dist's `post-announce-jobs`), so it builds the tag's own commit.
+# stages the CLI assets (dist's `post-announce-jobs`), so it builds the tag's own commit.
+# release.yml publishes only after every platform, release notes and updater job succeeds.
 #
 # Optional, each skipped when its secrets are absent:
 # - macOS signing + notarisation: APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD,

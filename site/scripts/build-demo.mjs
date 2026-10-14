@@ -16,7 +16,7 @@ if (!existsSync(join(desktop, "node_modules"))) {
   process.exit(1);
 }
 
-execFileSync("npx", ["vite", "build", "--base", base, "--outDir", out, "--emptyOutDir", "--logLevel", "warn"], {
+execFileSync("npx", ["vite", "build", "--base", base, "--outDir", out, "--emptyOutDir", "--manifest", "manifest.json", "--logLevel", "warn"], {
   cwd: desktop,
   stdio: "inherit",
   env: { ...process.env, TAURI_ENV_PLATFORM: "" },
