@@ -166,15 +166,20 @@ const HOST_MARKERS: &[(&str, SessionKind)] = &[
     ("gemini-cli", SessionKind::Agent),
 ];
 
-/// Per-user extension folders of VS Code-based editors (`~/.vscode/extensions/…`). Executables
-/// and scripts below them are the editor's own extension services (database tools, language
-/// servers), not the user's projects. Remote servers are covered by [`HOST_MARKERS`].
+/// Per-user extension folders of VS Code-based editors (`~/.vscode/extensions/…` and
+/// remote `~/.vscode-server/extensions/…`). Executables and scripts below them are the
+/// editor's own extension services (database tools, language servers), not the user's
+/// projects. The remote *host* processes themselves are covered by [`HOST_MARKERS`].
 const EDITOR_EXTENSION_DIRS: &[(&str, &str)] = &[
     (".vscode", "VS Code"),
     (".vscode-insiders", "VS Code Insiders"),
     (".vscode-oss", "VSCodium"),
+    (".vscode-server", "VS Code"),
+    (".vscode-insiders-server", "VS Code Insiders"),
     (".cursor", "Cursor"),
+    (".cursor-server", "Cursor"),
     (".windsurf", "Windsurf"),
+    (".windsurf-server", "Windsurf"),
     (".kiro", "Kiro"),
     (".positron", "Positron"),
 ];
@@ -627,6 +632,14 @@ mod tests {
         assert_eq!(editor_extension(t.get(30).unwrap()), Some("Cursor"));
         assert!(matches!(get(30), Protection::Soft(_)));
         assert_eq!(editor_extension(t.get(40).unwrap()), Some("VS Code"));
+        let mut remote = proc(
+            100,
+            1,
+            "ossdbtoolsservice_main",
+            &["/home/me/.vscode-server/extensions/ms-ossdata.vscode-pgsql-1.32.0/ossdbtoolsservice_main"],
+        );
+        remote.exe = Some("/home/me/.vscode-server/extensions/ms-ossdata.vscode-pgsql-1.32.0/ossdbtoolsservice_main".into());
+        assert_eq!(editor_extension(&remote), Some("VS Code"));
         for pid in [50, 60, 70, 80] {
             assert_eq!(editor_extension(t.get(pid).unwrap()), None, "PID {pid}");
             assert_eq!(get(pid), Protection::None, "PID {pid}");

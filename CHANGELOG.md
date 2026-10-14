@@ -10,9 +10,10 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Fixed
 
-- Editor-extension services (VS Code, Cursor, Windsurf and similar) that inherit an open
-  workspace as their working directory are labelled as that editor's extension, not as the
-  project's framework. A Postgres tools process in a Next.js checkout is no longer
+- Editor-extension services (VS Code, Cursor, Windsurf and similar, including remote
+  `*.vscode-server` / `*.cursor-server` trees) that inherit an open workspace as their
+  working directory are labelled as that editor's extension, not as the project's
+  framework. A Postgres tools process in a Next.js checkout is no longer
   "Next.js · seller-agent". Those listeners are protected and are not treated as stoppable
   dev servers.
 
