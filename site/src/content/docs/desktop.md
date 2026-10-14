@@ -10,13 +10,15 @@ CLI, so process identity checks and process protections are shared. The CLI's pr
 `.holdmap.toml` settings apply to CLI and terminal UI actions.
 [Try it in the browser](../../#demo).
 
-The current download is **0.6.0**: editor-extension identity on the graph, hideable details and
-Flow inspector, grouped title-bar actions, schedules started from the empty manager, and a
+**Version 0.7.0** adds screen recording, Computer / Footprint / Project map zoom and live
+local scans during `npm run dev`. Check the
+[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
+current installers.
+
+Version **0.6.0** added editor-extension identity on the graph, hideable details and Flow
+inspector, grouped title-bar actions, schedules started from the empty manager, and a
 macOS fullscreen close that returns to the previous app. See the
 [0.6.0 changes](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#060---2026-10-14).
-
-Screen recording, Computer / Footprint / Project map zoom and live local scans during
-`npm run dev` are newer features in current source. They are not included in the 0.6.0 download.
 
 ## Close, reopen and quit
 
@@ -48,8 +50,9 @@ choices persist.
 
 ## Record the screen
 
-Screen recording is available in the current source and browser demo. The released
-**0.6.0 installers do not include it yet**.
+Screen recording requires **0.7.0 or newer**, or the browser demo. Version **0.6.0**
+installers do not include it.
+To add it to an existing 0.6.0 installation, download and install the new desktop build.
 
 The camera icon in the title bar, **Record screen…** in the command palette, or `⇧V`
 starts a local capture. Holdmap explains that recordings stay on this computer, then the
@@ -99,7 +102,8 @@ shutdown and cannot power off a computer. Version 0.3.0 binaries predate this fe
 
 ## Schedule shutdown or a service stop
 
-Scheduling is in the current **0.6.0** download (it landed in 0.5.0). Version 0.4.0 downloads
+Scheduling is available from **0.5.0**. The empty manager can start reviews from **0.6.0**.
+Version 0.4.0 downloads
 include immediate shutdown and stop confirmations, but predate scheduling.
 
 1. For this computer, open **Settings → Power → Schedule shutdown…**, or start from the
@@ -203,7 +207,7 @@ skim memory, CPU, process count, stoppable ports and parent; expand for folders 
 labels), ports and apps it started, child processes as tools & apps, connections, and access: the
 account it runs as, sandbox and approval flags, network listeners, and macOS-protected folders.
 Each fact is marked seen, inferred or unknown. From a card you can reveal a folder, open it in your
-editor, or stop the unprotected ports that agent started. In current source, the map zooms
+editor, or stop the unprotected ports that agent started. From **0.7.0**, the map zooms
 Computer → Footprint → Project from the same observed processes, sockets and folders; it does not invent communication
 between agents. Recent projects come from folder names
 only. Chats, settings and tokens are never read. Remote hosts show as IP addresses. Click a port to

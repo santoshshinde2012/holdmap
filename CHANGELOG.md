@@ -8,6 +8,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-14
+
 ### Added
 
 - Local screen recording from the title bar or command palette (`⇧V`). After you pick a screen
@@ -25,8 +27,9 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Closing a recording preview keeps the latest files available through **Review recording**
   for this session, including after cancelled or failed saves. **Discard recording** clears
   them before recording again; reloading or quitting still clears in-memory previews.
-- README and the public Desktop, Agents and MCP guides identify **0.6.0** as the current
-  download and distinguish newer, unreleased desktop features in current source.
+- README and the public Desktop, Agents and MCP guides identify **0.7.0** as the release
+  adding screen recording, C4-style map zoom and live development scans, while preserving
+  historical feature availability.
 - Desktop `npm run dev` reads this machine through the holdmap CLI (ports, agents, C4 map, flow connections). Sample shop-web data stays on the public website demo, Playwright, and `?demo=1`. Stopping processes still needs the desktop app.
 - Exclusive view actions use hinged action pills instead of nested segmented tracks: List / Graph /
   Agents, then Overview/Flow when Agents is selected, Computer/Footprint/Project when Overview is

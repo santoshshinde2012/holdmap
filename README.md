@@ -33,14 +33,15 @@
 holdmap tells you what's really there — which agent or tool started it — and stops only what
 it should.
 
-The current download is **0.6.0**: editor-extension identity on the list and graph, full-canvas
-Graph and Flow, schedules started from the empty manager, and a macOS fullscreen close that
-returns to the previous app. See the [0.6.0 changes](CHANGELOG.md#060---2026-10-14). Desktop
+Version **0.7.0** adds local screen recording, Computer / Footprint / Project agent-map
+zoom, and live local scans during `npm run dev`. Check the
+[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
+current installers and see the [changelog](CHANGELOG.md) for release notes. Desktop
 screenshots use the shared browser UI with sample data.
 
-Current source also adds local screen recording, Computer / Footprint / Project agent-map
-zoom, and live local scans during `npm run dev`. These features are unreleased; see
-[Unreleased](CHANGELOG.md#unreleased).
+Version **0.6.0** added editor-extension identity on the list and graph, full-canvas Graph
+and Flow, schedules started from the empty manager, and a macOS fullscreen close that
+returns to the previous app ([0.6.0 changes](CHANGELOG.md#060---2026-10-14)).
 
 Version **0.5.0** added Agent Flow, reviewed scheduling, folder actions and the routed H
 identity ([0.5.0 changes](CHANGELOG.md#050---2026-10-11)). **0.5.1** hardened project
@@ -117,13 +118,13 @@ See [Apple's guidance on native apps and Rosetta](https://support.apple.com/en-g
 <!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
      suffix isn't read as part of the version). -->
 <!-- x-release-please-start-version -->
-[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_aarch64.dmg
-[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_x64.dmg
-[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_x64_en-US.msi
-[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_x64-setup.exe
-[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_amd64.AppImage
-[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_amd64.deb
-[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.6.0%2D1.x86_64.rpm
+[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.7.0_aarch64.dmg
+[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.7.0_x64.dmg
+[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.7.0_x64_en-US.msi
+[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.7.0_x64-setup.exe
+[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.7.0_amd64.AppImage
+[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.7.0_amd64.deb
+[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.7.0%2D1.x86_64.rpm
 <!-- x-release-please-end -->
 
 **Homebrew:** coming soon.
@@ -317,8 +318,9 @@ itself landed in 0.5.0).
 
 </details>
 
-The description below includes the unreleased screen recorder and Computer / Footprint /
-Project map zoom in current source; the published download remains **0.6.0**.
+The screen recorder and Computer / Footprint / Project map zoom described below require
+**0.7.0 or newer**. Version **0.6.0** installers predate these features.
+To add them to an existing **0.6.0** installation, download and install the new desktop build.
 
 A tray and menu-bar app with the port list, details, the service graph (`G`), the agents map
 (`⇧A`), pins, history with one-click restart, local screen recording (`⇧V`, MP4 and GIF stay on
@@ -341,7 +343,8 @@ the Dock icon also restores it. **0.6.0** hides the application through AppKit s
 close returns to the previous app and retains the window's state for reopening. Choose
 **Quit** to exit. If the tray is unavailable, closing the main window exits normally.
 
-**Folder actions in 0.5.0.** Click a folder on Footprint to zoom into that source tree; click it
+**Folder actions.** The chooser was added in **0.5.0**. In the **0.7.0** map, click a folder
+on Footprint to zoom into that source tree; click it
 again (or its name/path in a card) for folder actions. **Enter** or **Space** activates a focused folder. The shared chooser shows
 the full path and offers **Open in Finder** (macOS), **Open in Explorer** (Windows) or
 **Open in file manager**, **Open in editor**, and **Copy path**. **Esc** closes it and returns
