@@ -199,6 +199,11 @@ Every read command takes `--json`. Exit codes: `0` ok, `1` busy / not found / ti
 error, `3` blocked by the safety policy, `4` needs elevation. All flags are in the
 **[CLI reference](docs/cli.md)**.
 
+Current source keeps every matching process in a name-based stop with `--no-tree` and
+verifies TCP/UDP listeners held by every included descendant in a PID/name tree stop.
+Supervisor commands must match the planned service or app; systemd service stops recheck
+protection for other members of the same service before running.
+
 **Agent visibility in 0.4.0.** `holdmap agents` includes child MCP candidates even when
 no port listens, resource totals for all owned processes, and counts for omitted display rows.
 Search by product, vendor, exact owned PID (`pid:1234`), working folder or tool name:
@@ -243,6 +248,9 @@ Use **All**, **Failed** or **No completion** to narrow the timeline, and sort by
 reported duration. Search matches individual records; the graph retains their reported parents
 and the inspected record. A finished call with an unknown outcome stays distinct from a call
 without completion data.
+For OTLP spans, an explicit final status takes precedence over a conflicting custom
+`success` attribute. An optional MCP observer that panics is disabled for that session,
+and protocol responses continue; blocking or aborting callbacks remain unsupported.
 
 Version 0.5.0 also has **Settings → General → Single-key shortcuts**. Turn it off to use
 speech input or reserve letter keys; arrow navigation and modifier shortcuts remain available.
@@ -340,6 +348,9 @@ its URL, a `curl` or the kill command. Version 0.4.0 also adds agent search, exp
 details, inferred MCP nodes and explicit omission counts. Native reports refresh independently
 of the window's poll; the browser [live demo](https://santoshshinde2012.github.io/holdmap/#demo)
 uses the same UI with sample data.
+
+Current source preserves composing and modified keys in settings, menus and resize controls.
+Dialog Tab navigation includes only enabled, visible controls in the active tab order.
 
 **Close and reopen.** With a working menu-bar or tray icon, closing the main window keeps
 Holdmap running. Click its icon or use your configured global shortcut to reopen; on macOS,

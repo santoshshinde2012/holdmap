@@ -8,15 +8,35 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 rustup target add x86_64-pc-windows-gnu aarch64-apple-darwin >/dev/null
-CRATES=(-p holdmap-core -p holdmap -p holdmap-mcp)
+CRATES=(-p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity)
+
+# Keep the temporary dependency patch and its lockfile out of the working checkout.
+# Copy current source, including uncommitted changes, and reuse only build output.
+cross_dir=$(mktemp -d "${TMPDIR:-/tmp}/holdmap-cross.XXXXXXXX")
+trap 'rm -rf -- "$cross_dir"' EXIT
+cp Cargo.toml Cargo.lock rust-toolchain.toml "$cross_dir/"
+cp -R crates vendor "$cross_dir/"
+mkdir -p "$cross_dir/apps/desktop"
+cp -R apps/desktop/src-tauri "$cross_dir/apps/desktop/"
+cross_target_dir=${CARGO_TARGET_DIR:-"$PWD/target"}
+if [[ "$cross_target_dir" != /* ]]; then cross_target_dir="$PWD/$cross_target_dir"; fi
+export CARGO_TARGET_DIR="$cross_target_dir"
+cd "$cross_dir"
 
 echo "==> Windows (x86_64-pc-windows-gnu)"
-cargo clippy --target x86_64-pc-windows-gnu "${CRATES[@]}" --all-targets -- -D warnings
+cargo clippy --target x86_64-pc-windows-gnu "${CRATES[@]}" --all-targets --locked -- -D warnings
 
 echo "==> macOS (aarch64-apple-darwin, stubbed netstat2)"
-cargo fetch -q
-real=$(ls -d "${CARGO_HOME:-$HOME/.cargo}"/registry/src/*/netstat2-0.11.* | sort -V | tail -1)
-stub=$(mktemp -d)
+cargo fetch -q --locked
+real=$(cargo metadata --locked --format-version 1 | python3 -c '
+import json, pathlib, sys
+packages = [p for p in json.load(sys.stdin)["packages"] if p["name"] == "netstat2"]
+if len(packages) != 1:
+    sys.exit("Expected exactly one locked netstat2 dependency")
+print(pathlib.Path(packages[0]["manifest_path"]).parent)
+')
+stub="$cross_dir/netstat2-stub"
+mkdir "$stub"
 cp -r "$real/src/types" "$stub/types"
 mkdir -p "$stub/src" && mv "$stub/types" "$stub/src/types"
 cat > "$stub/Cargo.toml" <<TOML
@@ -38,9 +58,7 @@ pub fn get_sockets_info(_: AddressFamilyFlags, _: ProtocolFlags) -> Result<Vec<S
     unimplemented!("type-check stub")
 }
 RS
-cp Cargo.toml "$stub/Cargo.toml.orig"; cp Cargo.lock "$stub/Cargo.lock.orig"
-restore() { cp "$stub/Cargo.toml.orig" Cargo.toml; cp "$stub/Cargo.lock.orig" Cargo.lock; rm -rf "$stub"; }
-trap restore EXIT
-printf '\n[patch.crates-io]\nnetstat2 = { path = "%s" }\n' "$stub" >> Cargo.toml
-cargo clippy --target aarch64-apple-darwin "${CRATES[@]}" --all-targets -- -D warnings
+# Extend the existing patch table through Cargo's configuration, preserving the
+# audited GLib/global-hotkey overrides without creating a duplicate TOML table.
+cargo clippy --config "patch.crates-io.netstat2.path=\"$stub\"" --target aarch64-apple-darwin "${CRATES[@]}" --all-targets -- -D warnings
 echo "==> cross checks passed"

@@ -307,9 +307,12 @@ impl Engine {
                     .map(|p| p.pid)
                     .collect();
                 pids.sort_unstable();
-                // Children of a matched process are covered by its tree.
-                let set: BTreeSet<u32> = pids.iter().copied().collect();
-                pids.retain(|p| !self.table().ancestors(*p).iter().any(|a| set.contains(a)));
+                // A matching child is covered only when its matched ancestor's tree is
+                // included. With --no-tree, every explicitly matching PID remains a target.
+                if opts.tree {
+                    let set: BTreeSet<u32> = pids.iter().copied().collect();
+                    pids.retain(|p| !self.table().ancestors(*p).iter().any(|a| set.contains(a)));
+                }
                 if pids.is_empty() {
                     return blocked_plan(
                         target.to_string(),
@@ -338,7 +341,21 @@ impl Engine {
             .iter()
             .map(|pid| self.resolve_pid(*pid, opts))
             .collect();
-        let entries = self.ctx(opts).entries_held_by(pids);
+        // Verify the listeners of every process actually included in the signal steps,
+        // including children of a requested PID/name. A launcher may have no socket itself.
+        let affected: BTreeSet<u32> = resolutions
+            .iter()
+            .flat_map(|resolution| &resolution.steps)
+            .filter_map(|step| match step {
+                Step::SignalProcesses { processes, .. } => Some(processes),
+                _ => None,
+            })
+            .flatten()
+            .map(|process| process.pid)
+            .collect();
+        let entries = self
+            .ctx(opts)
+            .entries_held_by(&affected.into_iter().collect::<Vec<_>>());
         if !entries.is_empty() && entries.iter().all(|e| e.is_dev) {
             for r in &mut resolutions {
                 if r.risk == Risk::Medium {
@@ -725,6 +742,71 @@ mod tests {
         assert_eq!(Target::parse("pid:42"), Target::Pid(42));
         assert_eq!(Target::parse("vite"), Target::Name("vite".into()));
         assert_eq!(Target::parse("70000"), Target::Name("70000".into()));
+    }
+
+    #[test]
+    fn name_targets_without_trees_keep_every_matching_process() {
+        let e = engine(
+            dev_tree(),
+            vec![listen(3000, &[22]), listen(3001, &[23])],
+            99,
+        );
+        for tree in [false, true] {
+            let plan = e.plan(
+                &Target::Name("node".into()),
+                &StopOptions {
+                    tree,
+                    ..Default::default()
+                },
+            );
+            assert!(!plan.is_blocked(), "{plan:?}");
+            let processes: Vec<_> = plan
+                .steps
+                .iter()
+                .filter_map(|step| match step {
+                    Step::SignalProcesses { processes, .. } => Some(processes),
+                    _ => None,
+                })
+                .flatten()
+                .map(|process| process.pid)
+                .collect();
+            assert_eq!(processes, [22, 23], "tree={tree}");
+            assert_eq!(plan.owners.len(), if tree { 1 } else { 2 });
+        }
+    }
+
+    #[test]
+    fn pid_and_name_tree_plans_verify_descendant_listeners() {
+        let mut udp = listen(3001, &[23]);
+        udp.protocol = Protocol::Udp;
+        udp.state = SocketState::Bound;
+        let e = engine(dev_tree(), vec![listen(3000, &[22]), udp], 99);
+        for target in [Target::Pid(20), Target::Name("npm".into())] {
+            for tree in [false, true] {
+                let plan = e.plan(
+                    &target,
+                    &StopOptions {
+                        tree,
+                        ..Default::default()
+                    },
+                );
+                assert!(!plan.is_blocked(), "{plan:?}");
+                let verified: Vec<_> = plan
+                    .steps
+                    .iter()
+                    .filter_map(|step| match step {
+                        Step::VerifyFree { port, protocol, .. } => Some((*port, *protocol)),
+                        _ => None,
+                    })
+                    .collect();
+                let expected = if tree {
+                    vec![(3000, Protocol::Tcp), (3001, Protocol::Udp)]
+                } else {
+                    vec![]
+                };
+                assert_eq!(verified, expected, "{target}, tree={tree}");
+            }
+        }
     }
 
     #[test]

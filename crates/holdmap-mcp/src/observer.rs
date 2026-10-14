@@ -56,6 +56,9 @@ pub struct ToolCallCompleted {
 /// to the protocol output stream. Neither callback receives arguments, results, raw request
 /// IDs, client metadata, error text or transport payloads. Unknown tools, invalid envelopes,
 /// notifications and non-tool methods are not observed.
+/// A callback that unwinds disables observation for the rest of the session; tool dispatch
+/// and protocol responses continue. Blocking callbacks and aborts (including `panic=abort`)
+/// cannot be isolated; callbacks must avoid both.
 pub trait ToolCallObserver {
     /// Receive dispatch metadata; the default implementation discards it.
     fn started(&mut self, _event: &ToolCallStarted) {}
@@ -68,6 +71,41 @@ pub trait ToolCallObserver {
 pub struct NoopToolCallObserver;
 
 impl ToolCallObserver for NoopToolCallObserver {}
+
+/// A failed optional sink must not prevent dispatch or hide an already executed result.
+/// Once it unwinds, do not reuse the observer's potentially inconsistent state.
+pub(super) struct BestEffortObserver<'a> {
+    inner: &'a mut dyn ToolCallObserver,
+    available: bool,
+}
+
+impl<'a> BestEffortObserver<'a> {
+    pub(super) fn new(inner: &'a mut dyn ToolCallObserver) -> Self {
+        Self {
+            inner,
+            available: true,
+        }
+    }
+
+    fn notify(&mut self, callback: impl FnOnce(&mut dyn ToolCallObserver)) {
+        if self.available {
+            self.available = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                callback(self.inner);
+            }))
+            .is_ok();
+        }
+    }
+}
+
+impl ToolCallObserver for BestEffortObserver<'_> {
+    fn started(&mut self, event: &ToolCallStarted) {
+        self.notify(|observer| observer.started(event));
+    }
+
+    fn completed(&mut self, event: &ToolCallCompleted) {
+        self.notify(|observer| observer.completed(event));
+    }
+}
 
 pub(super) fn canonical_name(name: &str) -> Option<&'static str> {
     match name {
@@ -271,5 +309,51 @@ mod tests {
         assert_eq!(std::str::from_utf8(&output).unwrap().lines().count(), 2);
         assert!(recorder.started.is_empty());
         assert!(recorder.completed.is_empty());
+    }
+
+    #[test]
+    fn observer_panics_preserve_dispatch_and_responses_and_disable_the_sink() {
+        struct FailingObserver {
+            fail_at_start: bool,
+            starts: usize,
+            completions: usize,
+        }
+
+        impl ToolCallObserver for FailingObserver {
+            fn started(&mut self, _: &ToolCallStarted) {
+                self.starts += 1;
+                assert!(!self.fail_at_start, "fixture start sink failed");
+            }
+
+            fn completed(&mut self, _: &ToolCallCompleted) {
+                self.completions += 1;
+                panic!("fixture completion sink failed");
+            }
+        }
+
+        let input = [
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"wait_for_port","arguments":{"port":0}}}),
+            json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"wait_for_port","arguments":{"port":0}}}),
+            json!({"jsonrpc":"2.0","id":3,"method":"ping"}),
+        ]
+        .iter()
+        .map(Value::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+        let mut expected = Vec::new();
+        crate::serve(input.as_bytes(), &mut expected).unwrap();
+        assert_eq!(std::str::from_utf8(&expected).unwrap().lines().count(), 3);
+        for fail_at_start in [true, false] {
+            let mut observer = FailingObserver {
+                fail_at_start,
+                starts: 0,
+                completions: 0,
+            };
+            let mut output = Vec::new();
+            crate::serve_with_observer(input.as_bytes(), &mut output, &mut observer).unwrap();
+            assert_eq!(output, expected);
+            assert_eq!(observer.starts, 1);
+            assert_eq!(observer.completions, usize::from(!fail_at_start));
+        }
     }
 }

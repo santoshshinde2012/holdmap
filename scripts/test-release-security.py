@@ -4,15 +4,27 @@ import json
 import hashlib
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 class ReleaseSecurityTests(unittest.TestCase):
+    def test_distribution_action_pins_match_the_release_workflow(self):
+        config = tomllib.loads((ROOT / "dist-workspace.toml").read_text())
+        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        for action, expected in config["dist"]["github-action-commits"].items():
+            with self.subTest(action=action):
+                pins = re.findall(r"(?m)^\s*-?\s*uses:\s*" + re.escape(action)
+                                  + r"@([0-9a-f]{40})(?:\s|$)", workflow)
+                self.assertTrue(pins, f"Release workflow must use configured action {action}")
+                self.assertEqual(set(pins), {expected})
+
     def setUp(self):
         self.sandbox = tempfile.TemporaryDirectory(prefix="holdmap-release-test-")
         self.addCleanup(self.sandbox.cleanup)

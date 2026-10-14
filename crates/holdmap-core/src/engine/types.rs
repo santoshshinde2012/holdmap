@@ -41,6 +41,29 @@ pub enum Supervisor {
 }
 
 impl Supervisor {
+    pub(crate) fn stop_command_matches(&self, program: &str, args: &[String]) -> bool {
+        match self {
+            Self::SystemdService { unit, user } => {
+                if !crate::util::exact_systemd_unit(unit, ".service") {
+                    return false;
+                }
+                let mut expected: Vec<String> = if *user { vec!["--user".into()] } else { vec![] };
+                expected.extend(["stop".into(), unit.clone()]);
+                program == "systemctl" && args == expected
+            }
+            Self::SystemdSocket { .. } => self.socket_command_matches(program, args),
+            Self::BrewService { formula } => {
+                program == "brew" && args == ["services", "stop", formula]
+            }
+            Self::Pm2 { id, .. } => {
+                id.parse::<u32>()
+                    .is_ok_and(|parsed| parsed.to_string() == *id)
+                    && program == "pm2"
+                    && args == ["stop", id]
+            }
+        }
+    }
+
     pub(crate) fn socket_command_matches(&self, program: &str, args: &[String]) -> bool {
         let Self::SystemdSocket {
             unit,

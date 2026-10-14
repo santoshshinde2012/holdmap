@@ -135,6 +135,8 @@ jobs:
         run: npm audit
       - name: Release security regressions
         run: python3 scripts/test-release-security.py
+      - name: Cross-check isolation regressions
+        run: python3 scripts/test-check-cross.py
       - name: actionlint
         env:
           ACTIONLINT_VERSION: 1.7.12

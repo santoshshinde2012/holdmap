@@ -432,6 +432,37 @@ fn claude_tool_wrapper_and_execution_remain_distinct_with_explicit_status() {
 }
 
 #[test]
+fn otlp_final_span_status_overrides_conflicting_provider_success_attributes() {
+    for (code, success, expected) in [
+        (Some(2), Some(true), ActivityStatus::Error),
+        (Some(1), Some(false), ActivityStatus::Ok),
+        (Some(0), Some(true), ActivityStatus::Ok),
+        (Some(0), Some(false), ActivityStatus::Error),
+        (Some(0), None, ActivityStatus::Unknown),
+        (None, Some(true), ActivityStatus::Ok),
+        (None, Some(false), ActivityStatus::Error),
+        (None, None, ActivityStatus::Unknown),
+    ] {
+        let mut record = trace_record("0000000000000001", None, "fixture");
+        if let Some(code) = code {
+            record["status"] = json!({"code":code,"message":"private status text"});
+        }
+        if let Some(success) = success {
+            record["attributes"]
+                .as_array_mut()
+                .unwrap()
+                .push(attribute("success", json!({"boolValue":success})));
+        }
+        let batch = normalize::otlp(&traces(vec![record]), true, 0).unwrap();
+        assert_eq!(batch.dropped, 0);
+        assert_eq!(batch.spans[0].status, expected);
+        assert!(!serde_json::to_string(&batch.spans)
+            .unwrap()
+            .contains("private status text"));
+    }
+}
+
+#[test]
 fn otlp_requires_valid_identifiers_timestamps_and_typed_values() {
     let base = trace_record("0000000000000001", None, "fixture");
     let mut records = vec![base.clone()];

@@ -1,5 +1,6 @@
 // Focus management shared by every modal surface (Dialog, Sheet, palette): a Tab trap, initial
 // focus and focus restoration, so keyboard users never land behind an overlay.
+import { isComposingKey } from "./keyboard";
 
 export const FOCUSABLE = [
   "a[href]",
@@ -13,14 +14,22 @@ export const FOCUSABLE = [
 
 /** Tabbable descendants of `root`, in DOM order. */
 export function focusables(root: ParentNode): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
-    (el) => !el.closest("[inert]") && el.getAttribute("aria-hidden") !== "true" && !el.hidden,
-  );
+  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => {
+    // Native controls also match the selector when their explicit tabindex is negative.
+    // :disabled includes controls inside a disabled fieldset, unlike [disabled].
+    if (el.tabIndex < 0 || el.matches(":disabled") || el.closest("[inert], [hidden], [aria-hidden='true']")) return false;
+    const style = getComputedStyle(el);
+    if (style.visibility === "hidden" || style.visibility === "collapse") return false;
+    for (let ancestor: HTMLElement | null = el; ancestor; ancestor = ancestor.parentElement) {
+      if (getComputedStyle(ancestor).display === "none") return false;
+    }
+    return true;
+  });
 }
 
 /** Keep Tab / Shift+Tab inside `root`. Returns true when it moved focus. */
 export function trapTab(e: KeyboardEvent, root: HTMLElement): boolean {
-  if (e.key !== "Tab") return false;
+  if (e.key !== "Tab" || e.defaultPrevented || isComposingKey(e) || e.altKey || e.ctrlKey || e.metaKey) return false;
   const items = focusables(root);
   if (!items.length) { e.preventDefault(); root.focus(); return true; }
   const first = items[0], last = items[items.length - 1];

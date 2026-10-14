@@ -108,6 +108,7 @@ pub fn serve_with_observer<R: BufRead, W: Write>(
     observer: &mut dyn ToolCallObserver,
 ) -> io::Result<()> {
     let mut session = Session::default();
+    let mut observer = observer::BestEffortObserver::new(observer);
     while let Some(frame) = read_frame(&mut input)? {
         let response = match frame {
             Frame::TooLarge => Some(session.compatible(error(
@@ -127,7 +128,7 @@ pub fn serve_with_observer<R: BufRead, W: Write>(
             Ok(Value::Array(batch)) if session.version < "2025-06-18" && !batch.is_empty() => {
                 let responses: Vec<Value> = batch
                     .into_iter()
-                    .filter_map(|message| session.handle_with_observer(message, observer))
+                    .filter_map(|message| session.handle_with_observer(message, &mut observer))
                     .collect();
                 if responses.is_empty() {
                     None
@@ -135,7 +136,7 @@ pub fn serve_with_observer<R: BufRead, W: Write>(
                     Some(Value::Array(responses))
                 }
             }
-            Ok(message) => session.handle_with_observer(message, observer),
+            Ok(message) => session.handle_with_observer(message, &mut observer),
             Err(e) => {
                 Some(session.compatible(error(Value::Null, -32700, &format!("parse error: {e}"))))
             }

@@ -8,6 +8,7 @@
   import Icon from "../Icon.svelte";
   import { nextIndex } from "../../lib/roving";
   import { tooltip } from "../../lib/tooltip";
+  import { isComposingKey } from "../../lib/keyboard";
 
   let {
     value = $bindable(),
@@ -50,6 +51,7 @@
     if (o.value !== value) { value = o.value; onchange?.(o.value); }
   }
   function key(e: KeyboardEvent) {
+    if (isComposingKey(e) || e.altKey || e.ctrlKey || e.metaKey) return;
     const n = nextIndex(idx, e.key, options.length, { orientation: "both", disabled: options.map((o) => !!o.disabled) });
     if (n !== null) { select(n, true); e.preventDefault(); }
   }

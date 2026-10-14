@@ -1,5 +1,41 @@
 import { expect, test } from "./fixtures";
 
+test("settings preserve composition, modified navigation and the modal tab order", async ({ app }) => {
+  await app.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = app.getByRole("dialog", { name: "Settings", exact: true });
+  const general = settings.getByRole("tab", { name: "General", exact: true });
+  await expect(general).toBeFocused();
+  const extras = [{ isComposing: true }, { keyCode: 229 }, { altKey: true }, { ctrlKey: true }, { metaKey: true }];
+  for (const extra of extras) await general.dispatchEvent("keydown", { key: "End", ...extra });
+  await expect(general).toHaveAttribute("aria-selected", "true");
+
+  await settings.getByRole("tab", { name: "Scanning & data", exact: true }).click();
+  const interval = settings.getByRole("spinbutton", { name: "Scan interval", exact: true });
+  const original = await interval.inputValue();
+  for (const extra of extras) await interval.dispatchEvent("keydown", { key: "End", ...extra });
+  await expect(interval).toHaveValue(original);
+  await interval.press("ArrowUp");
+  await expect(interval).toHaveValue(String(Number(original) + 1));
+
+  const appearance = settings.getByRole("tab", { name: "Appearance", exact: true });
+  await appearance.click();
+  const dark = settings.getByRole("radio", { name: "Dark", exact: true });
+  for (const extra of extras) await dark.dispatchEvent("keydown", { key: "Home", ...extra });
+  await expect(dark).toHaveAttribute("aria-checked", "true");
+  const done = settings.getByRole("button", { name: "Done", exact: true });
+  await done.focus();
+  await app.keyboard.press("Tab");
+  await expect(settings.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+  await app.keyboard.press("Tab");
+  await expect(appearance).toBeFocused();
+  await app.keyboard.press("Tab");
+  await expect(dark).toBeFocused();
+  await app.keyboard.press("Tab");
+  await expect(settings.getByRole("radio", { name: "Comfortable", exact: true })).toBeFocused();
+  await app.keyboard.press("Tab");
+  await expect(done).toBeFocused();
+});
+
 test("settings controls retain successful changes across sections and reopening", async ({ app }) => {
   await app.getByRole("button", { name: "Settings", exact: true }).click();
   const settings = app.getByRole("dialog", { name: "Settings", exact: true });
