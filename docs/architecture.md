@@ -932,7 +932,7 @@ agent state.
 | `footprint.rs` | Working folders, project metadata, privacy boundaries and recent-folder deduplication |
 | `network.rs` | Owned listeners and address-aware local or remote connections |
 | `tools.rs` | `ToolClassifier` and process-derived MCP, dev-server, shell or command metadata |
-| `access.rs` | Account, sandbox, approval and exposure facts with evidence |
+| `access.rs` | Account, sandbox, approval and exposure facts with evidence; well-known debug/model-server port names |
 | `recent.rs` | Bounded, allowlisted current-account project history |
 | `model.rs` | Serializable report types, shared search and folder/port control candidates |
 

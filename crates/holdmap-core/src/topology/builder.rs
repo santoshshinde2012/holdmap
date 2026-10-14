@@ -190,7 +190,11 @@ impl<'a> TopologyBuilder<'a> {
     ) -> Option<(Node, Option<ProjectInfo>)> {
         let t = self.table();
         let p = t.get(root)?;
-        let project = p.cwd.as_ref().and_then(|c| detector.detect(c));
+        let project = if crate::safety::editor_extension(p).is_some() {
+            None
+        } else {
+            p.cwd.as_ref().and_then(|c| detector.detect(c))
+        };
         let framework = crate::project::detect_framework(p, project.as_ref());
         let pids = self.tree_pids(root);
         let (cpu, mem) = self.usage(&pids);

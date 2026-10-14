@@ -64,7 +64,8 @@ the 0.4.0 installers retain their original icons.
   Aider, Docker Desktop, OrbStack and more: memory, CPU, stoppable ports, parent process, the
   folders each one works in, the ports and apps it started (children grouped as tools & apps),
   the services and hosts it talks to, and access (account, sandbox, approval flags, network
-  exposure), each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor,
+  exposure including debug and model-server ports), each fact marked seen, inferred or unknown.
+  Agent settings files are not read. Reveal a folder, open it in your editor,
   or stop only the services that agent started, through the normal safety policy.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
   server for AI coding assistants. macOS, Linux and Windows. No product analytics.

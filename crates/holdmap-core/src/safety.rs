@@ -166,6 +166,19 @@ const HOST_MARKERS: &[(&str, SessionKind)] = &[
     ("gemini-cli", SessionKind::Agent),
 ];
 
+/// Per-user extension folders of VS Code-based editors (`~/.vscode/extensions/…`). Executables
+/// and scripts below them are the editor's own extension services (database tools, language
+/// servers), not the user's projects. Remote servers are covered by [`HOST_MARKERS`].
+const EDITOR_EXTENSION_DIRS: &[(&str, &str)] = &[
+    (".vscode", "VS Code"),
+    (".vscode-insiders", "VS Code Insiders"),
+    (".vscode-oss", "VSCodium"),
+    (".cursor", "Cursor"),
+    (".windsurf", "Windsurf"),
+    (".kiro", "Kiro"),
+    (".positron", "Positron"),
+];
+
 const TERMINALS: &[&str] = &[
     "terminal",
     "iterm2",
@@ -306,6 +319,37 @@ pub fn session_kind(p: &ProcessInfo) -> Option<SessionKind> {
     None
 }
 
+/// The editor whose per-user extension folder holds `p`'s executable or script, if any
+/// (`~/.vscode/extensions/ms-ossdata.vscode-pgsql-1.32.0/…/ossdbtoolsservice_main` → VS Code).
+/// As in [`session_kind`], only the real executable or a runtime's parsed script count:
+/// a forged `argv[0]` is ignored when `exe` points elsewhere.
+pub fn editor_extension(p: &ProcessInfo) -> Option<&'static str> {
+    if let Some(exe) = p.exe.as_ref() {
+        if let Some(editor) = extension_editor(exe.to_string_lossy().as_ref()) {
+            return Some(editor);
+        }
+        return crate::agents::catalog::runtime_entry(p).and_then(extension_editor);
+    }
+    p.cmdline
+        .first()
+        .map(String::as_str)
+        .and_then(extension_editor)
+        .or_else(|| crate::agents::catalog::runtime_entry(p).and_then(extension_editor))
+}
+
+fn extension_editor(path: &str) -> Option<&'static str> {
+    let parts: Vec<&str> = path.split(['/', '\\']).collect();
+    parts.windows(3).find_map(|w| {
+        if !w[1].eq_ignore_ascii_case("extensions") || w[2].is_empty() {
+            return None;
+        }
+        EDITOR_EXTENSION_DIRS
+            .iter()
+            .find(|(dir, _)| w[0].eq_ignore_ascii_case(dir))
+            .map(|(_, editor)| *editor)
+    })
+}
+
 fn norm(name: &str) -> String {
     let n = name.trim().to_ascii_lowercase();
     n.strip_suffix(".exe").map(str::to_owned).unwrap_or(n)
@@ -369,6 +413,12 @@ pub fn protection(p: &ProcessInfo, table: &ProcessTable) -> Protection {
             p.name,
             p.pid,
             kind.label()
+        ));
+    }
+    if let Some(editor) = editor_extension(p) {
+        return Protection::Soft(format!(
+            "{} ({}) runs from a {editor} extension; stopping it breaks that extension until {editor} restarts it",
+            p.name, p.pid
         ));
     }
     if let Some((sp, kind)) = table.hosted_session(p.pid) {
@@ -517,6 +567,83 @@ mod tests {
             Protection::None,
             "a project folder named claude is fine"
         );
+    }
+
+    #[test]
+    fn editor_extension_services_are_protected_but_paths_in_arguments_are_data() {
+        let pg = "/Users/me/.vscode/extensions/ms-ossdata.vscode-pgsql-1.32.0-darwin-arm64/pgsqltoolsservice/v3.7.2/OSX/pgsqltoolsservice/ossdbtoolsservice_main";
+        let mut tools = proc(
+            20,
+            10,
+            "ossdbtoolsservice_main",
+            &[pg, "--parent-pid", "10"],
+        );
+        tools.exe = Some(pg.into());
+        let t = table(
+            vec![
+                proc(1, 0, "launchd", &[]),
+                proc(10, 1, "Code Helper (Plugin)", &[]),
+                tools,
+                proc(
+                    30,
+                    1,
+                    "node",
+                    &[
+                        "node",
+                        "--max-old-space-size=3072",
+                        "/home/me/.cursor/extensions/acme.lsp-1.0.0/dist/server.js",
+                    ],
+                ),
+                proc(
+                    40,
+                    1,
+                    "svc.exe",
+                    &[r"C:\Users\me\.vscode\extensions\acme.db-2.0.0\bin\svc.exe"],
+                ),
+                proc(
+                    50,
+                    1,
+                    "node",
+                    &["node", "app.js", "/Users/me/.vscode/extensions/x/y.js"],
+                ),
+                proc(60, 1, "cat", &["cat", "/Users/me/.vscode/extensions/x/a"]),
+                proc(
+                    70,
+                    1,
+                    "node",
+                    &["node", "/srv/shop/extensions/api/server.js"],
+                ),
+                proc(80, 1, "tool", &["/Users/me/.vscode/extensions/"]),
+            ],
+            300,
+        );
+        let get = |pid| protection(t.get(pid).unwrap(), &t);
+        match get(20) {
+            Protection::Soft(reason) => {
+                assert!(reason.contains("runs from a VS Code extension"), "{reason}")
+            }
+            other => panic!("extension service must be protected: {other:?}"),
+        }
+        assert_eq!(editor_extension(t.get(30).unwrap()), Some("Cursor"));
+        assert!(matches!(get(30), Protection::Soft(_)));
+        assert_eq!(editor_extension(t.get(40).unwrap()), Some("VS Code"));
+        for pid in [50, 60, 70, 80] {
+            assert_eq!(editor_extension(t.get(pid).unwrap()), None, "PID {pid}");
+            assert_eq!(get(pid), Protection::None, "PID {pid}");
+        }
+        let mut forged = proc(
+            90,
+            1,
+            "listener",
+            &["/Users/me/.vscode/extensions/fake.v1/bin/svc"],
+        );
+        forged.exe = Some("/tmp/listener".into());
+        assert_eq!(
+            editor_extension(&forged),
+            None,
+            "argv0 must not override a real executable"
+        );
+        assert_eq!(protection(&forged, &t), Protection::None);
     }
 
     #[test]

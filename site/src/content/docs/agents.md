@@ -167,6 +167,22 @@ Access covers the account the process runs as, sandbox and approval flags, netwo
 (on macOS) protected folders. Each fact carries evidence: **seen**, **inferred** or **unknown**.
 Unknown is labelled on cards so you never mistake a guess for a measurement.
 
+Facts come from the live process table, command line and sockets. Holdmap does **not** read
+agent settings (`~/.claude.json`, `~/.codex/config.toml`, `.cursor/mcp.json` and similar), so
+YOLO or sandbox modes that exist only in those files stay **unknown**. Dedicated scanners such
+as [mcp-scan](https://www.npmjs.com/package/owasp-mcp-scan) cover installed MCP configs; Holdmap
+covers what is running now.
+
+Network facts name well-known debug and model-server ports (Node inspector, Chrome DevTools,
+Ollama). Names taken from the port number are **inferred**; names taken from a detected
+framework are **seen**. A loopback debugger is still this machine only; the same port on every
+interface is elevated. MCP children started with unpinned `npx` (no numeric version) are
+labelled on the tool, not treated as a completed tool call.
+
+Editor-extension services that inherit the open workspace as their working directory are labelled
+as that editor's extension, protected, and skipped as stoppable dev servers. They are not given
+the project's framework (a database tools process in a Next.js folder is not Next.js).
+
 ## Safety
 
 Stopping from the Agents surface only targets unprotected ports the agent started (dev servers and

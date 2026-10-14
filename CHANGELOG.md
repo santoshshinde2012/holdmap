@@ -8,6 +8,23 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Fixed
+
+- Editor-extension services (VS Code, Cursor, Windsurf and similar) that inherit an open
+  workspace as their working directory are labelled as that editor's extension, not as the
+  project's framework. A Postgres tools process in a Next.js checkout is no longer
+  "Next.js · seller-agent". Those listeners are protected and are not treated as stoppable
+  dev servers.
+
+### Changed
+
+- Agent network facts name well-known debug and model-server ports (Node inspector, Chrome
+  DevTools, Ollama) from the port number as inferred hints, and from a detected framework as
+  seen. Copilot CLI `--yolo`/`--allow-all`, Cursor Agent `--force`/`--approve-mcps`/`--trust`
+  and Gemini `--approval-mode auto_edit` are reported from the process command line. MCP
+  children started with unpinned `npx` are labelled as such. Agent settings files are still
+  not read.
+
 ### Security
 
 - Every native app command passes the trusted-main-webview policy before dispatch,
