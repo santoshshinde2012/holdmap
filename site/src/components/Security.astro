@@ -2,10 +2,10 @@
 import Icon from "./Icon.astro";
 import { securityUrl } from "../lib/site";
 const items = [
-  { icon: "HardDrive", title: "Local only", text: "Talks to localhost, to hosts you ssh to, and (desktop) GitHub Releases for updates. Nothing else." },
-  { icon: "EyeOff", title: "No analytics", text: "No analytics, no accounts, no tracking. This site doesn't track you either." },
-  { icon: "KeyRound", title: "Credential redaction", text: "Recognized credential fields in command lines are redacted; redaction is heuristic. Passive scans do not inspect agent chats or settings. Optional local recording excludes content fields before retention." },
-  { icon: "ShieldCheck", title: "Protected by default", text: "Hard protection cannot be overridden. Soft-protected processes require an explicit <code>--allow-protected</code> override. MCP refuses all protected targets." },
+  { icon: "HardDrive", title: "Local inspection", text: "Scans this computer and probes localhost. SSH connects to hosts you choose; desktop update checks use GitHub Releases. Project commands and SSH configuration can make their own network requests." },
+  { icon: "EyeOff", title: "No product analytics", text: "No Holdmap account or product analytics. This site has no analytics scripts. Optional screen capture and agent activity recording start only when you choose them." },
+  { icon: "KeyRound", title: "Credential redaction", text: "Recognized credentials in command displays are redacted; arbitrary positional secrets can be missed. Passive scans use process and socket metadata rather than opening agent chats or settings. Optional activity recording excludes payload fields before retention." },
+  { icon: "ShieldCheck", title: "Protected by default", text: "Hard protection cannot be overridden. Soft protection needs the CLI's explicit <code>--allow-protected</code> option or a desktop review that permits it. MCP refuses all protected targets." },
 ];
 ---
 <section class="section" aria-labelledby="sec-title">
@@ -13,7 +13,7 @@ const items = [
     <div class="section-head">
       <span class="eyebrow">Security and privacy</span>
       <h2 class="h2" id="sec-title">It stops processes, <span class="soft">so it's careful.</span></h2>
-      <p class="lede">A PID-reuse guard, <code>--dry-run</code> for every plan, history only you can read, and a locked-down desktop webview. Read the <a href={securityUrl}>security policy</a>.</p>
+      <p class="lede">Reviewed stop plans, process-identity checks and a restricted desktop webview. Restart history keeps raw commands needed to relaunch. Unix state uses private file permissions; Windows inherits the chosen folder's ACLs. Read the <a href={securityUrl}>security policy</a>.</p>
     </div>
     <ul class="cols" role="list">
       {items.map((i) => (

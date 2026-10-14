@@ -46,6 +46,10 @@ servers expose the nine tools below with the previous protocol and do not return
 Use 0.4.0 or newer for the confirmation flow below; always follow your installed
 version's discovered schemas.
 
+Version **0.7.0** negotiates MCP `2025-11-25`, `2025-06-18`, `2025-03-26` and `2024-11-05`.
+Older negotiated versions keep their compatible discovery and result shapes; newer clients
+receive structured tool results alongside readable text.
+
 ## Tools
 
 | Tool | What it does |
@@ -138,6 +142,28 @@ Bulk execution stops on its first failure; it does not roll back a completed sto
 
 Stdio requests are limited to 1 MiB; legacy batches to 64 messages. Oversized frames and batches
 are rejected before dispatching any of their requests.
+
+## Record this server's tool metadata
+
+Ordinary `holdmap mcp` does not record calls. To opt in, use **Start recording** in the desktop's
+Calls view, or keep `holdmap activity serve --duration 10m` running for a separate CLI session.
+Take the endpoint and private token from the desktop Setup example or the CLI's startup output, then pass
+`HOLDMAP_ACTIVITY_ENDPOINT` and `HOLDMAP_ACTIVITY_TOKEN` through the MCP client's environment.
+Add `--record-activity` to the server's arguments:
+
+```json
+{"command":"holdmap","args":["mcp","--record-activity"]}
+```
+
+This observes only known tools called on this Holdmap MCP server. It reports the tool name,
+status, timing and serialized request/result byte counts; arguments, results, raw request IDs
+and error text are not given to the recorder. Byte counts are not network traffic measurements.
+The desktop shows records sent to its own collector; a CLI collector is read with
+`holdmap activity snapshot --json` using that collector's environment variables.
+
+Keep the token private and update the client's environment when a recording restarts. Metadata
+delivery failures leave the MCP tools available. See [Agent Flow setup and privacy](../agents/#set-up-optional-recording)
+for retention, instrumentation and visibility limits.
 
 ## Guard rails
 

@@ -45,6 +45,17 @@ hostile-text JSON-LD regression. It reuses the desktop's locked DOM-parser depen
 The existing Pages workflow runs `npm test` on pull requests; publishing follows its deployment
 policy. Building a pull request does not publish it.
 
+## Release information
+
+The homepage's release highlights and `src/content/docs/whats-new.md` describe the named
+release, with links to its complete notes. Update those together when preparing a new feature
+release; do not substitute the latest download version into older feature descriptions.
+Download labels and commands resolve the published stable release independently of source.
+
+Website-only edits published after a release deploy through the normal `main` push workflow,
+and `build-info.json` records their actual source commit. Dispatching with `source_tag` instead
+builds that release tag's website source and intentionally excludes later website edits.
+
 ## Website snapshots
 
 These captures show the current website build at 1440×900, with a 390×900 mobile guide

@@ -6,15 +6,15 @@ order: 1
 
 holdmap answers three questions about any port: **who** is on it, **why** it's busy, and **how** to
 stop it without collateral damage — and shows which **agents, tools and apps** started those ports.
-The CLI, the terminal UI, the desktop app and the MCP server all ask the same Rust core, so they
-always agree.
+The CLI, terminal UI, desktop app and MCP server share the same Rust ownership and stop policy.
+What each scan can see still depends on OS permissions and collection limits.
 
 ## Install
 
 **macOS and Linux**
 
 ```sh
-curl -LsSf https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-installer.sh | sh
 ```
 
 **Windows (PowerShell)**
@@ -25,7 +25,17 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/santoshshinde2012/
 
 The binary goes to `~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows). If that folder isn't on
 your `PATH` yet, the installer adds it: open a new terminal, or run the `source` line it prints.
-The desktop app is a separate download, see [Install](../#install).
+The desktop app is a separate download, see [Install](../#install). Current releases include
+Apple silicon and Intel macOS builds, plus x64 Windows and Linux desktop installers. The Linux
+ARM64 download is CLI-only. Homebrew and npm registry installation are not available; the npm
+package is attached to the GitHub release as a tarball.
+
+After installation, compare `holdmap --version` with the
+[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest).
+[What's new in 0.7.0](whats-new/) covers local MP4/GIF screen recording and
+Computer / Footprint / Project agent maps. For an
+existing desktop installation, download the matching new installer; **0.7.0** has no configured
+signed updater feed. Rerun the CLI installer to update the command-line tool.
 
 ## Your first minute
 
@@ -36,12 +46,15 @@ holdmap explain 3000         # who holds it, why, and what to do
 holdmap inspect 3000         # owner, process tree, connections, bind risk and the stop plan
 holdmap stop 3000 --dry-run  # show exactly what stop would do
 holdmap stop 3000            # stop it gracefully, then check the port is free
-holdmap                      # the interactive TUI (Tab → Agents)
+holdmap                      # the interactive TUI (Shift+Tab opens Agents)
 ```
 
-`stop` always shows the plan and asks before it acts. It stops the whole dev-server tree (so `npm`
+By default, `stop` shows the plan and asks before it acts. It stops the whole dev-server tree (so `npm`
 or `nodemon` can't respawn the child), sends SIGTERM first and SIGKILL only after a timeout, and then
 checks that the port really is free.
+
+`--dry-run` previews without changing anything. Scripts can pass `--yes` to skip the prompt;
+the normal identity and protection checks still apply.
 
 ## Everyday recipes
 

@@ -115,15 +115,21 @@ async function reviewShutdown(page, scheduled = false) {
   return dialog;
 }
 
-async function openAgents(page) {
+async function openAgents(page, picture = "Footprint") {
   await page.getByRole("radio", { name: /^Agents/ }).click();
   await expect(page.getByRole("article")).toHaveCount(3);
   await expect(heading(page, "Cursor")).toContainText("15 processes");
-  await expect(page.getByRole("button", { name: /^MCP server Filesystem MCP,/ })).toBeVisible();
+  const choice = page.getByRole("radio", { name: picture, exact: true });
+  await choice.click();
+  await expect(choice).toHaveAttribute("aria-checked", "true");
+  if (picture === "Footprint") await expect(page.getByRole("button", { name: /^MCP server Filesystem MCP,/ })).toBeVisible();
+  if (picture === "Computer") await expect(page.getByRole("group", { name: /^This computer,/ })).toBeVisible();
 }
 
 async function openFolderActions(page) {
   await openAgents(page);
+  await page.getByRole("button", { name: /^Folder shop-web,.*Zooms into this project/ }).click();
+  await expect(page.getByRole("radio", { name: "Project", exact: true })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("button", { name: /^Folder shop-web,.*\. Opens folder actions$/ }).click();
   const dialog = page.getByRole("dialog", { name: "Folder actions", exact: true });
   await expect(dialog).toContainText("/Users/dev/code/shop-web");
@@ -143,7 +149,7 @@ async function openAgentFlow(page, calls = false) {
   const flow = page.getByRole("region", { name: "Agent flow", exact: true });
   await expect(flow.getByText("Example data", { exact: true })).toBeVisible();
   if (calls) {
-    await flow.getByRole("radio", { name: "Calls", exact: true }).click();
+    await page.getByRole("radio", { name: "Calls", exact: true }).click();
     const run = flow.locator("#agent-flow-run");
     const trace = await run.locator("option").filter({ hasText: "Planning agent" }).getAttribute("value");
     assert(trace, "Recorded trace fixture is available");
@@ -242,6 +248,26 @@ const captures = [
   } },
   { name: "desktop-agents-dark.png", theme: "dark", prepare: openAgents },
   { name: "desktop-agents-light.png", theme: "light", prepare: openAgents },
+  { name: "desktop-agents-computer-dark.png", theme: "dark", prepare: (page) => openAgents(page, "Computer") },
+  { name: "desktop-agents-project-dark.png", theme: "dark", async prepare(page) {
+    await openAgents(page);
+    await page.getByRole("button", { name: /^Folder shop-web,.*Zooms into this project/ }).click();
+    await expect(page.getByRole("radio", { name: "Project", exact: true })).toHaveAttribute("aria-checked", "true");
+    await expect(page.getByRole("button", { name: /^Folder shop-web,.*Opens folder actions/ })).toBeVisible();
+    const canvas = page.locator(".svelte-flow__pane");
+    const box = await canvas.boundingBox();
+    assert(box, "Project canvas must be visible");
+    await canvas.click({ position: { x: box.width - 20, y: box.height - 20 } });
+    await expect(page.getByRole("button", { name: /^Port shop-web, :3000/ })).not.toHaveClass(/\bdim\b/);
+  } },
+  ...["dark", "light"].map((theme) => ({ name: `desktop-screen-record-${theme}.png`, theme, async prepare(page) {
+    await page.getByRole("button", { name: "Record screen", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Record screen", exact: true });
+    await expect(dialog.getByRole("button", { name: "Choose screen…", exact: true })).toBeVisible();
+    await expect(dialog).toContainText("Microphone and system audio are not captured");
+    await expect(dialog).toContainText("Maximum 2 minutes");
+    return dialog;
+  } })),
   { name: "desktop-agent-tools-dark.png", theme: "dark", async prepare(page) {
     await openAgents(page);
     await page.getByLabel("Search agents", { exact: true }).fill("filesystem");
@@ -347,6 +373,11 @@ try {
       await context.addInitScript(({ theme, pane }) => {
         Object.defineProperty(Navigator.prototype, "platform", { get: () => "MacIntel" });
         Math.random = () => 0.5;
+        window.__holdmapScreenshotCaptureRequests = 0;
+        if (navigator.mediaDevices) Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", { configurable: true, value: () => {
+          window.__holdmapScreenshotCaptureRequests++;
+          throw new Error("Screenshot fixtures must never request a real display capture.");
+        } });
         for (const [name, value] of Object.entries({ onboarded: "1", theme, view: "list", sort: "group", density: "comfortable", collapsed: "[]", pane, animate: "0", layout: "layered" })) localStorage.setItem(`holdmap.${name}`, value);
       }, { theme: capture.theme, pane: capture.pane ?? "520" });
       const page = await context.newPage();
@@ -360,6 +391,7 @@ try {
       const target = await capture.prepare(page);
       await page.mouse.move(0, 0);
       assert.deepEqual(errors, [], `Uncaught errors while preparing ${capture.name}`);
+      assert.equal(await page.evaluate(() => window.__holdmapScreenshotCaptureRequests), 0, "Screenshots must never request a display capture");
       const directory = capture.output ?? output;
       await mkdir(directory, { recursive: true });
       const path = join(directory, capture.name);

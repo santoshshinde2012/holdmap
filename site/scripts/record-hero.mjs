@@ -5,20 +5,27 @@
 //     node scripts/record-hero.mjs <desktop|mobile> <dark|light> [fps] [base-url]
 // Frames land in .hero-frames/<variant>-<theme>/; scripts/encode-hero.sh turns them into the videos.
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
-const { chromium } = await import(process.env.PLAYWRIGHT ?? "playwright");
+const { chromium } = await import(process.env.PLAYWRIGHT ?? new URL("../../apps/desktop/node_modules/playwright/index.mjs", import.meta.url).href);
 const [, , variant = "desktop", theme = "dark", fpsArg = "60", base = "http://127.0.0.1:4330/holdmap/"] = process.argv;
 const FPS = +fpsArg, M = variant === "mobile";
+if (!["desktop", "mobile"].includes(variant) || !["dark", "light"].includes(theme) || !Number.isInteger(FPS) || FPS < 1 || FPS > 120) {
+  throw new Error("Expected <desktop|mobile> <dark|light> and an integer frame rate from 1 to 120.");
+}
 const VW = M ? 400 : 1152, VH = M ? 560 : 720, DPR = M ? 3 : 2;
 const dir = `.hero-frames/${variant}-${theme}`;
 rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true });
 
 const b = await chromium.launch({ executablePath: process.env.CHROME || undefined, args: ["--hide-scrollbars", `--force-device-scale-factor=${DPR}`] });
+try {
 const ctx = await b.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: DPR, hasTouch: M, isMobile: false,
   userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36" });
 await ctx.addInitScript(() => { Object.defineProperty(Navigator.prototype, "platform", { get: () => "MacIntel" }); });
 const p = await ctx.newPage();
+const errors = [];
+p.on("pageerror", (error) => errors.push(error.message));
 await p.clock.install();
 await p.goto(`${base}demo/?theme=${theme}`, { waitUntil: "networkidle" });
+if (await p.evaluate(() => "__TAURI_INTERNALS__" in window)) throw new Error("Hero capture requires the browser demo with simulated stops.");
 await p.addStyleTag({ content: `a[style*="position:fixed"]{display:none!important} *{cursor:none!important;caret-color:transparent!important} ::-webkit-scrollbar{display:none}${M ? " .app.mac .titlebar{padding-left:16px!important}" : ""}` });
 await p.locator('[id^="row-tcp:3000:"]').waitFor();
 await p.waitForTimeout(600);
@@ -81,8 +88,8 @@ async function step() {
   frame++;
 }
 const hold = async (ms) => { for (let i = 0, n = Math.round((ms * FPS) / 1000); i < n; i++) await step(); };
-const until = async (fn, max = 4000) => { for (let i = 0; i < (max * FPS) / 1000; i++) { if (await fn()) return; await step(); } };
-const center = async (loc) => { const r = await loc.boundingBox(); return [r.x + r.width / 2, r.y + r.height / 2]; };
+const until = async (fn, max = 4000) => { for (let i = 0; i < (max * FPS) / 1000; i++) { if (await fn()) return; await step(); } throw new Error(`Tour condition timed out after ${max}ms.`); };
+const center = async (loc) => { const r = await loc.boundingBox(); if (!r) throw new Error(`Tour target is not visible: ${loc}`); return [r.x + r.width / 2, r.y + r.height / 2]; };
 const move = async (xy, ms) => { await p.evaluate(([x, y, ms]) => window.__cur.move(x, y, ms), [...xy, ms]); await hold(ms); await p.mouse.move(...xy); };
 const click = async (xy) => { await p.evaluate(() => window.__cur.click()); if (M) { await p.touchscreen.tap(...xy); await p.mouse.move(-1, -1); } else await p.mouse.click(...xy); }; // touch leaves no hover
 const keys = (k, ms = 900) => p.evaluate(([k, ms]) => window.__keys(k, ms), [k, ms]);
@@ -148,6 +155,7 @@ if (!M) {
 // the last frame is the opening list minus :3000, which encode-hero.sh dissolves back into frame 0.
 const dismiss = p.getByRole("button", { name: "Dismiss notification" });
 await until(async () => (await dismiss.count()) > 0, 6000);
+await until(async () => (await p.locator('[id^="row-tcp:3000:"]').count()) === 0);
 await hold(500);
 if (M) {
   await move(await center(p.getByRole("button", { name: "Close details" })), 650);
@@ -179,6 +187,11 @@ await hold(250);
 await p.evaluate(() => window.__cur.hide());
 await hold(700);
 mark("end");
+if (await p.locator('[role="alertdialog"]').count()) throw new Error("The simulated stop dialog remained open.");
+if (await p.locator('input[type="search"]').first().inputValue()) throw new Error("The final search was not cleared.");
+if (errors.length) throw new Error(`Browser errors during the tour: ${errors.join("; ")}`);
 writeFileSync(`${dir}/meta.json`, JSON.stringify({ variant, theme, VW, VH, DPR, FPS, frames: frame, marks }, null, 1));
 console.log(variant, theme, frame, "frames in", ((Date.now() - t0) / 1000).toFixed(0), "s", JSON.stringify(marks));
-await b.close();
+} finally {
+  await b.close();
+}

@@ -1,0 +1,45 @@
+---
+import Icon from "./Icon.astro";
+import { repoUrl, url } from "../lib/site";
+
+// Feature availability belongs to this release, even while a later version is assembling.
+const highlights = [
+  { icon: "Video", title: "Record a screen or window", text: "Capture up to two minutes, with local MP4 and GIF exports when encoding is supported. Review it again during the session. No audio is captured.", href: url("docs/desktop/#record-the-screen"), link: "Screen recording guide" },
+  { icon: "Layers", title: "Zoom from computer to project", text: "Explore Computer, Footprint and Project views of the same observed agents, tools, folders and ports. Select a folder to focus its source tree.", href: url("docs/agents/#desktop-and-tui"), link: "Explore the agents map" },
+  { icon: "Terminal", title: "Use live local development scans", text: "Desktop npm run dev reads your machine through the CLI. The website demo keeps its sample data; stopping real processes requires the desktop app.", href: url("docs/desktop/#develop-with-local-data"), link: "Local development setup" },
+];
+---
+<section id="whats-new" class="section" aria-labelledby="release-title">
+  <div class="wrap">
+    <div class="section-head head-row">
+      <div>
+        <span class="eyebrow">Release highlights</span>
+        <h2 class="h2" id="release-title">New in 0.7.0. <span class="soft">Capture, explore, and inspect locally.</span></h2>
+      </div>
+      <a class="link-arrow" href={url("docs/whats-new/")}>What's new <Icon name="ArrowRight" size={16} /></a>
+    </div>
+    <ul class="highlights" role="list">
+      {highlights.map((item) => (
+        <li class="card">
+          <Icon name={item.icon} size={20} />
+          <h3>{item.title}</h3>
+          <p>{item.text}</p>
+          <a class="link-arrow" href={item.href}>{item.link} <Icon name="ArrowRight" size={16} /></a>
+        </li>
+      ))}
+    </ul>
+    <p class="release-note">Also in this release: stronger process-stop checks, more reliable MCP responses, and better keyboard and dialog focus handling. <a href={`${repoUrl}/releases/tag/v0.7.0`}>Read the full 0.7.0 release notes</a>.</p>
+  </div>
+</section>
+
+<style>
+  .highlights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 0; margin: 0; list-style: none; }
+  .card { display: flex; flex-direction: column; align-items: flex-start; padding: 28px; min-width: 0; }
+  .card > :global(svg) { color: var(--muted); }
+  h3 { margin: 20px 0 12px; font-size: var(--fs-lg); line-height: 28px; font-weight: 600; letter-spacing: -0.012em; }
+  .card p { margin: 0 0 24px; font-size: var(--fs-md); line-height: 24px; color: var(--muted); }
+  .card .link-arrow { margin-top: auto; }
+  .release-note { margin: 24px 0 0; color: var(--muted); font-size: var(--fs-ui); line-height: 24px; }
+  .release-note a { color: var(--text-2); }
+  @media (max-width: 860px) { .highlights { grid-template-columns: minmax(0, 1fr); } .card { padding: 24px; } }
+</style>
