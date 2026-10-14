@@ -8,6 +8,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-14
+
 ### Fixed
 
 - Editor-extension services (VS Code, Cursor, Windsurf and similar, including remote
@@ -16,7 +18,8 @@ by [release-please](https://github.com/googleapis/release-please) from
   framework — in the list and on the service graph, even if a project leaked onto the
   entry. A Postgres tools process in a Next.js checkout is no longer
   "Next.js · seller-agent". Those listeners are protected and are not treated as stoppable
-  dev servers.
+  dev servers. Installed Cargo helpers such as rust-analyzer are not labelled as the open
+  Rust project's framework on Windows.
 
 ### Changed
 
@@ -597,7 +600,8 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
-[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/santoshshinde2012/holdmap/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.3.0...v0.4.0

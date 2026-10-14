@@ -38,9 +38,12 @@ folder actions, terminal agent navigation and the routed H identity.
 See the [0.5.0 changes](CHANGELOG.md#050---2026-10-11). Desktop screenshots use the shared
 browser UI with sample data.
 
+Version **0.6.0** keeps editor-extension services labelled as the editor, gives Graph and
+Flow the full canvas, and lets Scheduled actions start a reviewed shutdown or service stop.
+Use **0.6.0 or newer** for these; see the [0.6.0 changes](CHANGELOG.md#060---2026-10-14).
 Version **0.5.1** hardens project protections, command replay and credential redaction,
-and fixes desktop error handling and graph responsiveness. Use **0.5.1 or newer** for
-these fixes; see the [0.5.1 changes](CHANGELOG.md#051---2026-10-13).
+and fixes desktop error handling and graph responsiveness. See the
+[0.5.1 changes](CHANGELOG.md#051---2026-10-13).
 
 The new routed H logo connects Holdmap's initial with its process and agent maps.
 The [vector master and regeneration guide](apps/desktop/assets/README.md) keep app,
@@ -113,13 +116,13 @@ See [Apple's guidance on native apps and Rosetta](https://support.apple.com/en-g
 <!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
      suffix isn't read as part of the version). -->
 <!-- x-release-please-start-version -->
-[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.1_aarch64.dmg
-[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.1_x64.dmg
-[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.1_x64_en-US.msi
-[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.1_x64-setup.exe
-[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.1_amd64.AppImage
-[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.5.1_amd64.deb
-[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.5.1%2D1.x86_64.rpm
+[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_aarch64.dmg
+[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_x64.dmg
+[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_x64_en-US.msi
+[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_x64-setup.exe
+[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_amd64.AppImage
+[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.6.0_amd64.deb
+[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.6.0%2D1.x86_64.rpm
 <!-- x-release-please-end -->
 
 **Homebrew:** coming soon.
@@ -437,7 +440,7 @@ holdmap stops processes, so one set of rules in `holdmap-core` applies to every 
 If a stop completes but its history cannot be saved, the desktop preserves the actual result
 and blocks automatic restart or later queued stops. CLI `stop --json` includes `history_error`
 and exits with code 2; additional requested targets are not attempted. This recovery behavior
-is part of the [unreleased changes](CHANGELOG.md#unreleased).
+is part of the [0.6.0 changes](CHANGELOG.md#060---2026-10-14).
 
 - **Graceful first:** SIGTERM (`taskkill` on Windows), then a force kill after `--timeout` (5 s).
 - **The right target:** the dev-server tree root (`npm`, `nodemon`, `uvicorn --reload`…) so nothing
