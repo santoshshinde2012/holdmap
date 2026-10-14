@@ -1,6 +1,6 @@
 ---
 title: Desktop app
-description: "The holdmap desktop app: service graph, agents map, shortcuts, and reviewed shutdown or scheduled stops on macOS, Windows and Linux."
+description: "Use the holdmap desktop app for screen recording, agent map zoom, shortcuts and reviewed service stops or scheduled shutdown on macOS, Windows and Linux."
 order: 6
 ---
 
@@ -85,6 +85,10 @@ Linux desktop capture needs PipeWire and a working ScreenCast portal for your de
 environment. Its system picker still asks which screen or window to share each time.
 If that service is unavailable, try a browser with screen sharing or the system recorder.
 
+Review local capture limits before choosing a screen or window:
+
+![Screen recording explains local exports, the two-minute limit and permission before choosing a screen](../../../../docs/screenshots/desktop-screen-record-light.png)
+
 ## Shut down this computer
 
 Open **Settings → Power → Shut down now…**, separately from **Schedule shutdown…**; its review
@@ -155,19 +159,44 @@ This Linux GTK dependency issue does not affect the CLI, TUI or
 MCP server, or the macOS and Windows desktop builds. See the
 [security policy](https://github.com/santoshshinde2012/holdmap/blob/main/SECURITY.md#linux-glib-dependency-backports).
 
-The macOS app is ad-hoc signed and sealed, but is not Developer-ID signed or notarised.
-Windows installers are unsigned unless signing credentials are configured. On first launch:
+The **0.7.0** macOS app is ad-hoc signed and sealed, without Developer-ID signing or
+notarisation. Its Windows installers are unsigned. First verify the download using the
+checksums and build provenance linked from [Install](../../#install), then open it:
 
-- **macOS:** open it once, then go to **System Settings › Privacy & Security › Open Anyway**
-  (macOS 14 and earlier: right-click the app, then **Open**). Or run
-  `xattr -dr com.apple.quarantine /Applications/holdmap.app`.
-- **Windows:** in "Windows protected your PC", click **More info**, then **Run anyway**.
+- **macOS:** if blocked, use **System Settings › Privacy & Security › Open Anyway** after
+  trying to open the verified app. See [Apple's instructions](https://support.apple.com/en-us/102445).
+- **Windows:** if offered, choose **More info → Run anyway** in SmartScreen. Organization
+  policy or Smart App Control may block unsigned installers; see
+  [Microsoft's Smart App Control FAQ](https://support.microsoft.com/en-us/windows/security/threat-malware-protection/smart-app-control-frequently-asked-questions).
 - **Linux:** `chmod +x` the AppImage, or install the .deb or .rpm.
 
 To update an existing desktop installation, download the latest installer that matches
 your operating system and architecture from [Install](../../#install). Releases without
 a configured signed updater require manual installation. Update the CLI by running its
 installer again.
+
+## Develop with local data
+
+From **0.7.0**, the browser development server reads live ports, agents, map relationships
+and Flow connections from a local Holdmap CLI. Follow the
+[development setup](https://github.com/santoshshinde2012/holdmap/blob/main/CONTRIBUTING.md#setup)
+for required toolchains and native packages. From the repository root:
+
+```sh
+cargo build -p holdmap
+cd apps/desktop
+npm ci
+npm run dev
+```
+
+The development server uses `target/debug/holdmap`, then `target/release/holdmap`, then
+`holdmap` on your `PATH`. Set `HOLDMAP` to use a different CLI executable. The live collector
+is read-only: use `npm run tauri dev` from `apps/desktop`, or the installed desktop app, for
+real process stops, restarts and operating-system actions.
+
+Add `?demo=1` to the development URL for sample data. The public website demo and production
+browser builds always use sample data; they do not scan or stop processes on your computer.
+Screen sharing is separate and always requires your explicit screen or window selection.
 
 ## Keyboard
 
@@ -189,6 +218,7 @@ installer again.
 | `h` | Recently stopped, with one-click restart |
 | `d` · `m` · `e` · `t` | Filter: dev servers · mine · exposed · TCP/UDP |
 | `⌘R` | Rescan now |
+| `⇧V` | Record the screen, stop capture or review the latest recording |
 | `⇧L` | Cycle the theme |
 | `⌘,` | Settings |
 | `?` | Every shortcut |
@@ -210,7 +240,8 @@ Each fact is marked seen, inferred or unknown. From a card you can reveal a fold
 editor, or stop the unprotected ports that agent started. From **0.7.0**, the map zooms
 Computer → Footprint → Project from the same observed processes, sockets and folders; it does not invent communication
 between agents. Recent projects come from folder names
-only. Chats, settings and tokens are never read. Remote hosts show as IP addresses. Click a port to
+only. Chats, agent settings and credential stores are not inspected. Recognized credentials in
+observed process arguments are redacted for display; redaction is heuristic. Remote hosts show as IP addresses. Click a port to
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
 `holdmap agents` and `holdmap agents AGENT --stop-ports` do the same in a terminal.
 

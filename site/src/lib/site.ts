@@ -17,7 +17,7 @@ export const issuesUrl = `${repoUrl}/issues`;
 export const tagline =
   "See which ports, agents and tools are running — and stop the right thing safely.";
 export const description =
-  "holdmap shows which process or AI agent holds a port, then stops only that owner. Free CLI, TUI, desktop app and MCP server for macOS, Linux and Windows.";
+  "holdmap maps ports, AI agents and projects, stops reviewed services, and records screens locally. CLI, TUI, desktop and MCP for macOS, Linux and Windows.";
 
 /** Stars are only shown once the number says something. */
 const STARS_SHOWN_FROM = 25;
@@ -49,9 +49,9 @@ export const stars = repo?.stargazers_count && repo.stargazers_count >= STARS_SH
 const dl = (file: string) => `${repoUrl}/releases/download/v${version}/${file}`;
 
 export const install = {
-  sh: `curl -LsSf ${dl("holdmap-installer.sh")} | sh`,
+  sh: `curl --proto '=https' --tlsv1.2 -LsSf ${dl("holdmap-installer.sh")} | sh`,
   ps: `powershell -ExecutionPolicy Bypass -c "irm ${dl("holdmap-installer.ps1")} | iex"`,
-  cargo: `cargo install --locked --git ${repoUrl} holdmap`,
+  cargo: `cargo install --locked --git ${repoUrl} --tag v${version} holdmap`,
 };
 
 export type Os = "macos" | "windows" | "linux";

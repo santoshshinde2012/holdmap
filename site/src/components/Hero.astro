@@ -2,7 +2,7 @@
 import Icon from "./Icon.astro";
 import HeroVideo from "./HeroVideo.astro";
 import HeroChapters from "./HeroChapters.astro";
-import { downloads, install, repoUrl, version } from "../lib/site";
+import { downloads, install, repoUrl, url, version } from "../lib/site";
 
 // A browser's macOS platform does not identify its CPU; offer both native builds.
 const primary = Object.fromEntries(downloads.filter((d) => d.primary && d.os !== "macos").map((d) => [d.os, d.url]));
@@ -36,6 +36,7 @@ const primary = Object.fromEntries(downloads.filter((d) => d.primary && d.os !==
       <p class="meta" id="hero-install-hint">
         <a href={`${repoUrl}/releases/tag/v${version}`}>v{version}</a>
         <span aria-hidden="true">·</span> CLI, TUI, desktop app and MCP server
+        <span aria-hidden="true">·</span> <a href={url("docs/whats-new/")}>What's new</a>
       </p>
     </div>
     <div class="chapters"><HeroChapters /></div>

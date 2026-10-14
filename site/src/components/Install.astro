@@ -10,8 +10,8 @@ const tabs: { key: Os | "source"; label: string }[] = [
 ];
 const cmdFor = (k: string) => (k === "windows" ? install.ps : k === "source" ? install.cargo : install.sh);
 const firstOpen: Record<string, string> = {
-  macos: "The app isn't notarised yet. Open it once, then go to <b>System Settings › Privacy &amp; Security › Open Anyway</b> (macOS 14 and earlier: right-click the app, then <b>Open</b>). Or run <code>xattr -dr com.apple.quarantine /Applications/holdmap.app</code>.",
-  windows: "The installer isn't code-signed yet. In “Windows protected your PC”, click <b>More info</b>, then <b>Run anyway</b>.",
+  macos: "The current app is ad-hoc signed and sealed, but isn't Developer-ID signed or notarised. Verify your download below, open it once, then use <b>System Settings › Privacy &amp; Security › Open Anyway</b> (macOS 14 and earlier: right-click the app, then <b>Open</b>).",
+  windows: `The current installer isn't code-signed. Verify your download below. If SmartScreen offers them, use <b>More info</b>, then <b>Run anyway</b>. See the <a href="${url("docs/desktop/#first-open")}">first-open guide</a> if those options are unavailable.`,
   linux: "Make the AppImage executable (<code>chmod +x holdmap_*.AppImage</code>) or install the .deb / .rpm with your package manager.",
 };
 ---
@@ -44,7 +44,7 @@ const firstOpen: Record<string, string> = {
           </div>
           <p class="hint">
             {t.key === "source"
-              ? <Fragment>Needs Rust 1.95 or newer. The desktop app builds with <code>npm run tauri build</code> in <code>apps/desktop</code>; see <a href="https://github.com/santoshshinde2012/holdmap/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</Fragment>
+              ? <Fragment>Builds the released CLI from its version tag; needs Rust 1.95 or newer. For the desktop app, install the Node.js and OS prerequisites in <a href="https://github.com/santoshshinde2012/holdmap/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>, then run <code>npm ci</code> and <code>npm run tauri build</code> in <code>apps/desktop</code>.</Fragment>
               : <Fragment>Installs to <code>{t.key === "windows" ? "%USERPROFILE%\\.local\\bin" : "~/.local/bin"}</code> and adds it to your <code>PATH</code> if needed. Then run <code>holdmap</code>.</Fragment>}
           </p>
         </div>
@@ -72,6 +72,7 @@ const firstOpen: Record<string, string> = {
     <div class="grid">
       <div class="card table-card">
         <h3>All desktop downloads</h3>
+        <p class="small">Desktop builds cover Apple silicon and Intel Macs, plus x64 Windows and Linux. Linux ARM64 is available for the CLI; there is no prebuilt ARM64 desktop installer.</p>
         <div class="table-wrap">
           <table>
             <thead><tr><th scope="col">Platform</th><th scope="col">File</th><th scope="col">Checksum</th></tr></thead>
@@ -97,7 +98,8 @@ Get-FileHash holdmap_{version}_x64-setup.exe
 <span class="d"># where it was built, and from which commit</span>
 gh attestation verify holdmap_{version}_aarch64.dmg \
   --repo {REPO}</code></pre>
-        <p class="small">Homebrew is coming soon. Updating? Run the CLI installer again; download the matching desktop installer above. Trouble? See <a href={url("docs/troubleshooting/")}>troubleshooting</a>.</p>
+        <p class="small">Homebrew and npm registry installs are not available. The <a href={latestUrl}>release assets</a> include an npm package tarball.</p>
+        <p class="small">Updating from an older release? Run the current CLI installer above again. Desktop v0.7.0 requires a manual update: install the matching download above. A signed updater feed is not included in that release. See <a href={url("docs/troubleshooting/")}>troubleshooting</a>.</p>
       </div>
     </div>
   </div>

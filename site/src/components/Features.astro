@@ -14,8 +14,11 @@ import paletteLight from "../assets/ui/ui-palette-light.png";
 import graphDark from "../assets/ui/ui-graph-dark.png";
 import graphLight from "../assets/ui/ui-graph-light.png";
 import agentsShot from "../../../docs/screenshots/desktop-agents-dark.png";
+import agentsLight from "../../../docs/screenshots/desktop-agents-light.png";
 import agentFlowDark from "../../../docs/screenshots/desktop-agent-flow-dark.png";
 import agentFlowLight from "../../../docs/screenshots/desktop-agent-flow-light.png";
+import screenRecordDark from "../../../docs/screenshots/desktop-screen-record-dark.png";
+import screenRecordLight from "../../../docs/screenshots/desktop-screen-record-light.png";
 
 // Real crops of the desktop app (captured from the live demo at 3x), shown at a fixed CSS width.
 type Shot = { dark: ImageMetadata; light: ImageMetadata; w: number; alt: string };
@@ -24,7 +27,7 @@ const shots: Record<string, Shot> = {
   detail: { dark: detailDark, light: detailLight, w: 440, alt: "Port 3000's detail pane: shop-web, Next.js, branch feat/checkout, and a recommended action." },
   rows: { dark: rowsDark, light: rowsLight, w: 820, alt: "The port list with project names, frameworks, branches and memory." },
   palette: { dark: paletteDark, light: paletteLight, w: 560, alt: "The command palette filtered to stop actions." },
-  graph: { dark: graphDark, light: graphLight, w: 720, alt: "The service graph: shop-web calls shop-api, which uses redis and db." },
+  graph: { dark: graphDark, light: graphLight, w: 720, alt: "The service graph: observed connections between shop-web, shop-api, redis and db." },
 };
 const widths = (w: number) => [w, w * 2, w * 3];
 ---
@@ -66,7 +69,7 @@ const widths = (w: number) => [w, w * 2, w * 3];
       <li class="card">
         <div class="copy">
           <h3>Everything from the keyboard</h3>
-          <p>A searchable command palette and predictable arrow navigation. Version 0.5.0 lets you disable single-key shortcuts while keeping modifier shortcuts available.</p>
+          <p>A searchable command palette and predictable arrow navigation. Turn off single-key shortcuts while keeping modifier shortcuts and native controls available.</p>
         </div>
         <div class="visual bleed short">{["dark", "light"].map((t) => (
           <Picture src={shots.palette[t as "dark"]} formats={["avif"]} fallbackFormat="webp" widths={widths(shots.palette.w)} sizes={`${shots.palette.w}px`} alt={shots.palette.alt} loading="lazy" style={`width:${shots.palette.w}px`} pictureAttributes={{ class: `only-${t}` }} />
@@ -84,8 +87,9 @@ const widths = (w: number) => [w, w * 2, w * 3];
       </li>
       <li class="card span-3 split agents">
         <div class="copy">
-          <h3>Agents, tools and apps</h3>
-          <p>Claude Code, Cursor, Copilot, Docker Desktop and more: folders, ports they started, memory and CPU, stoppable count, parent process, children as tools &amp; apps, and access — each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor, or stop only what that agent started.</p>
+          <h3>Computer → Footprint → Project</h3>
+          <p>Zoom from this computer and its agents to their folders, tools, ports and a single source tree. Inspect memory, CPU, parent processes and access, with each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor, or stop only the services an agent started.</p>
+          <a class="link-arrow" href={url("docs/agents/#desktop-and-tui")}>Explore the agent map <Icon name="ArrowRight" size={16} /></a>
           <pre class="snippet term inline" tabindex="0" aria-label="Example agents command"><span class="p">$</span> holdmap agents
 <span class="v">Claude Code</span>  pid 51200 · 214 MB · 3% CPU · 1 stoppable
   folders   shop-api  ~/code/shop-api
@@ -94,15 +98,26 @@ const widths = (w: number) => [w, w * 2, w * 3];
 <span class="p">$</span> holdmap agents claude --stop-ports --dry-run
 <span class="d">Dry run: nothing was changed.</span></pre>
         </div>
-        <div class="visual agents-shot">
-          <Picture src={agentsShot} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280, 1920]} sizes={`(max-width: 1000px) calc(100vw - 80px), 720px`} alt="The agents map: Claude Code and Cursor with folders, ports, connections and access" loading="lazy" />
+        <div class="visual agents-shot">{["dark", "light"].map((t) => (
+          <Picture src={t === "dark" ? agentsShot : agentsLight} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280, 1920]} sizes={`(max-width: 1000px) calc(100vw - 80px), 720px`} alt="The Footprint map with Computer and Project zoom controls, agents, folders, tools and observed connections" loading="lazy" pictureAttributes={{ class: `only-${t}` }} />
+        ))}</div>
+      </li>
+      <li class="card span-3 split">
+        <div class="copy">
+          <h3>Record a screen or window</h3>
+          <p>Choose what to share, then save available MP4 or GIF exports locally. Record for up to two minutes with no microphone or system audio. Close and reopen the latest preview while Holdmap stays open; nothing is uploaded.</p>
+          <p class="source-note">Each capture asks for a screen or window. Export formats depend on the encoder available in your app or browser.</p>
+          <a class="link-arrow" href={url("docs/desktop/#record-the-screen")}>Screen recording and saving <Icon name="ArrowRight" size={16} /></a>
         </div>
+        <div class="visual agents-shot">{["dark", "light"].map((t) => (
+          <Picture src={t === "dark" ? screenRecordDark : screenRecordLight} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280]} sizes={`(max-width: 1000px) calc(100vw - 80px), 720px`} alt="Screen recording consent explains local MP4 and GIF exports, the two-minute limit and the screen picker" loading="lazy" pictureAttributes={{ class: `only-${t}` }} />
+        ))}</div>
       </li>
       <li class="card span-3 split agent-flow">
         <div class="copy">
           <h3>See agent connections and recorded calls</h3>
           <p><strong>Connections</strong> maps observed processes, listeners and live sockets. <strong>Calls</strong> shows tool and agent activity reported by integrations you configure. Find failures or missing completion, sort by reported duration, and inspect the reported parent context. Optional recording keeps sanitized metadata in memory on this computer; payload fields are excluded.</p>
-          <p class="source-note">Available in 0.5.0. Socket relationships do not reveal messages. Session grouping does not imply communication; parent links come from supplied trace context.</p>
+          <p class="source-note">Socket relationships do not reveal messages. Session grouping does not imply communication; parent links come from supplied trace context.</p>
           <a class="link-arrow" href={url("docs/agents/#desktop-flow-connections-and-calls")}>Agent Flow and recording <Icon name="ArrowRight" size={16} /></a>
         </div>
         <div class="visual agents-shot">{["dark", "light"].map((t) => (
@@ -112,13 +127,14 @@ const widths = (w: number) => [w, w * 2, w * 3];
       <li class="card">
         <div class="copy">
           <h3>MCP for AI agents</h3>
-          <p>Claude, Cursor and VS Code can list ports, see which agents and tools run where, stop the ports an agent started, find a free one and stop their own servers. Never protected ones.</p>
+          <p>Claude, Cursor and VS Code can list ports, inspect agents and tools, find a free port and stop their own services. Stops require a reviewed, one-use confirmation. Protected targets are refused.</p>
         </div>
-        <pre class="snippet term" tabindex="0" aria-label="Example MCP tool call"><span class="d">{"// tool call"}</span>
-{"{"} <span class="c">"tool"</span>: <span class="g">"list_agents"</span> {"}"}
+        <pre class="snippet term" tabindex="0" aria-label="Example MCP tools/call parameters"><span class="d">{"// tools/call parameters"}</span>
+{"{"} <span class="c">"name"</span>: <span class="g">"list_agents"</span>, <span class="c">"arguments"</span>: {"{}"} {"}"}
 <span class="d">→</span> Claude Code · Cursor · Docker Desktop
-{"{"} <span class="c">"tool"</span>: <span class="g">"stop_agent_ports"</span>,
-  <span class="c">"agent"</span>: <span class="y">"claude"</span> {"}"}</pre>
+{"{"} <span class="c">"name"</span>: <span class="g">"stop_agent_ports"</span>,
+  <span class="c">"arguments"</span>: {"{"} <span class="c">"agent"</span>: <span class="y">"claude"</span>,
+    <span class="c">"dry_run"</span>: <span class="g">true</span> {"}"} {"}"}</pre>
       </li>
       <li class="card">
         <div class="copy">
@@ -126,7 +142,7 @@ const widths = (w: number) => [w, w * 2, w * 3];
           <p>Read reports support <code>--json</code>, stop actions support <code>--dry-run</code>, and exit codes mean something.</p>
         </div>
         <pre class="snippet term" tabindex="0" aria-label="Example CLI command"><span class="p">$</span> holdmap list --json \
-    | jq '.[0].project'
+    | jq '.entries[0].project.name'
 <span class="g">"shop-web"</span></pre>
       </li>
       <li class="card">

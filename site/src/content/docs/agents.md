@@ -7,8 +7,9 @@ order: 2
 holdmap finds the **AI coding agents** and **developer tools** on your machine and shows, for
 each one, the folders it works in, the ports and apps it started, the services and hosts it talks
 to, and what the OS says about its access. Every process fact is marked seen, inferred or unknown.
-The process scan does not read chats, settings or tokens. Optional recording accepts a separate,
-strictly limited metadata projection from integrations you configure.
+Passive scans do not inspect chats, agent settings or credential stores. Recognized credentials
+in observed process arguments are redacted for display; redaction is heuristic. Optional recording
+accepts a separate, strictly limited metadata projection from integrations you configure.
 
 Recognized products include Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider,
 Cline, Goose, Docker Desktop, OrbStack, Podman Desktop and others.
@@ -64,6 +65,12 @@ matching known account, and do not establish current work by a particular runnin
   protocol. Scroll the full plan with **PgUp/PgDn**. **Enter**, **n** or **Esc** cancels; only
   **y** confirms. The batch is freshly checked before any action. Changed targets require a new
   review; failures stop remaining plans and show what completed. Agent sessions stay running.
+
+These browser captures show **Computer** and one selected **Project** using sample data:
+
+![Computer view shows this machine, its running agents and observed remote systems](../../../../docs/screenshots/desktop-agents-computer-dark.png)
+
+![Project view focuses the agents, tools and services observed for shop-web](../../../../docs/screenshots/desktop-agents-project-dark.png)
 
 The compact CLI overview and updated terminal navigation are included in **0.5.0**;
 version 0.4.0 downloads predate these changes. `--json` retains
@@ -149,6 +156,11 @@ computer. **Stop recording** ends collection and keeps the current snapshot. **C
 removes it from memory; fully quitting Holdmap also discards it. When the tray or menu bar is
 available, closing the desktop window keeps Holdmap and any active recording running there.
 Recording does not survive a full quit.
+
+Every new recording session creates a fresh token and an OS-assigned loopback endpoint.
+After stopping and starting recording again, copy the new provider settings, merge them into
+your configuration and restart its producers. Settings from the previous session will no
+longer send activity to the new collector.
 
 The default setup uses Codex telemetry logs and Claude Code telemetry traces; Claude Code
 tracing is a beta capability. Standard OpenTelemetry JSON traces and explicit hook or MCP

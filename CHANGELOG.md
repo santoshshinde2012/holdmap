@@ -8,6 +8,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Documentation
+
+- Refresh the public website for 0.7.0 with release highlights, a release guide, current
+  screenshots and product tours, and corrected install, upgrade, recording and privacy details.
+
 ### Fixed
 
 - Discover draft releases through authenticated release listing and numeric IDs instead

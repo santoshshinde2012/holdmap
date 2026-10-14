@@ -1,6 +1,6 @@
 ---
-// The hero's product video: a real recording of the desktop app (the live-demo build with sample
-// data) on a CSS-drawn laptop, driven together with the chapter list (HeroChapters). The poster is
+// The hero's product video: a real recording of the browser demo with sample data on a CSS-drawn
+// laptop, driven together with the chapter list (HeroChapters). The poster is
 // a real <picture> (the LCP element); the video only loads once the hero is in view, and with
 // reduced motion it waits for a click. Phones get a portrait cut in a compact device frame instead,
 // because the laptop shot is unreadable at that size. Each cut exists in both themes.
@@ -36,7 +36,7 @@ async function poster(desk: ImageMetadata, mob: ImageMetadata) {
 const posters = { dark: await poster(deskDark, mobDark), light: await poster(deskLight, mobLight) };
 const sizes = `${MOBILE} calc(100vw - 72px), (max-width: 1023px) calc(78vw - 52px), 640px`;
 const files = { base: url("hero/") };
-const alt = "A 21-second tour of the holdmap desktop app: searching for shop, opening port 3000 (shop-web, Next.js, branch feat/checkout, 1.1 GB), opening the command palette, previewing the stop plan and freeing the port.";
+const alt = "A tour of holdmap with sample data: finding shop-web on port 3000, inspecting its owner and memory use, reviewing a stop plan, and simulating the port becoming free.";
 ---
 <figure class="hero-video" data-hero-video data-base={files.base} data-cuts={JSON.stringify(cuts)} data-mobile={MOBILE}>
   <div class="device">
@@ -61,7 +61,7 @@ const alt = "A 21-second tour of the holdmap desktop app: searching for shop, op
     <div class="deck" aria-hidden="true"></div>
   </div>
   <figcaption class="meta">
-    <span>Recorded in the desktop app, with sample data.</span>
+    <span>Browser demo with sample data. Stops are simulated.</span>
     <button type="button" class="pp" data-toggle aria-label="Pause the video" hidden>
       <Icon name="Pause" size={14} class="i-pause" /><Icon name="Play" size={14} class="i-play" />
       <span class="i-pause">Pause</span><span class="i-play">Play</span>
@@ -146,7 +146,7 @@ const alt = "A 21-second tour of the holdmap desktop app: searching for shop, op
       const n = name();
       if (n === loaded) return;
       loaded = n;
-      video.replaceChildren(...[["webm", 'video/webm; codecs="av01.0.08M.08"'], ["mp4", 'video/mp4; codecs="avc1.640033"']].map(([ext, type]) => Object.assign(document.createElement("source"), { src: `${n}.${ext}`, type })));
+      video.replaceChildren(...[["webm", 'video/webm; codecs="av01.0.09M.08"'], ["mp4", 'video/mp4; codecs="avc1.640033"']].map(([ext, type]) => Object.assign(document.createElement("source"), { src: `${n}.${ext}`, type })));
       video.load();
       if (at) video.addEventListener("loadedmetadata", () => (video.currentTime = at), { once: true });
     }
