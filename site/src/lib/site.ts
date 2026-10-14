@@ -16,7 +16,7 @@ export const issuesUrl = `${repoUrl}/issues`;
 export const tagline =
   "See which ports, agents and tools are running — and stop the right thing safely.";
 export const description =
-  "See which processes hold your ports and what AI agents start. Inspect developer tools and stop port owners with a CLI, TUI, desktop app or MCP server.";
+  "holdmap shows which process or AI agent holds a port, then stops only that owner. Free CLI, TUI, desktop app and MCP server for macOS, Linux and Windows.";
 
 /** Stars are only shown once the number says something. */
 const STARS_SHOWN_FROM = 25;

@@ -4,7 +4,7 @@ import interUrl from "../assets/fonts/inter-site.woff2?url";
 import monoUrl from "../assets/fonts/jetbrains-mono-site.woff2?url";
 import Nav from "../components/Nav.astro";
 import Footer from "../components/Footer.astro";
-import { description as siteDescription, repoUrl, siteUrl } from "../lib/site";
+import { description as siteDescription, latestUrl, repoUrl, siteUrl } from "../lib/site";
 import { serializeJsonLd } from "../lib/seo.mjs";
 
 interface Props {
@@ -14,7 +14,7 @@ interface Props {
 const { title, description = siteDescription, ogType = "website", noindex = false, breadcrumbs = [] } = Astro.props;
 const fullTitle = title
   ? `${title} · holdmap`
-  : "holdmap — Port manager and AI agent visibility";
+  : "holdmap — See which process or AI agent is using a port";
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const og = `${siteUrl}og.png`;
@@ -27,18 +27,30 @@ const structuredData = {
       "@type": "WebPage", "@id": `${canonical}#webpage`, url: canonical,
       name: fullTitle, description, inLanguage: "en",
       isPartOf: { "@id": `${siteUrl}#website` }, about: { "@id": `${siteUrl}#software` },
+      primaryImageOfPage: { "@type": "ImageObject", url: og, width: 1200, height: 630 },
       ...(breadcrumbs.length ? { breadcrumb: { "@id": `${canonical}#breadcrumbs` } } : {}),
     },
     ...(home ? [
       {
+        "@type": "Organization", "@id": `${siteUrl}#org`, name: "holdmap", url: siteUrl, sameAs: [repoUrl],
+      },
+      {
         "@type": "WebSite", "@id": `${siteUrl}#website`, url: siteUrl,
         name: "holdmap", description: siteDescription, inLanguage: "en",
+        publisher: { "@id": `${siteUrl}#org` },
       },
       {
         "@type": "SoftwareApplication", "@id": `${siteUrl}#software`, name: "holdmap",
         url: siteUrl, description: siteDescription, applicationCategory: "DeveloperApplication",
-        operatingSystem: ["macOS", "Linux", "Windows"], isAccessibleForFree: true,
-        sameAs: repoUrl,
+        applicationSubCategory: "Developer tools", operatingSystem: ["macOS", "Linux", "Windows"],
+        isAccessibleForFree: true, downloadUrl: latestUrl, sameAs: repoUrl,
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        featureList: [
+          "See which process holds a port",
+          "Map AI agents to the ports they started",
+          "Stop a port after a reviewed plan",
+          "CLI, TUI, desktop app and MCP server",
+        ],
         license: [`${repoUrl}/blob/main/LICENSE-MIT`, `${repoUrl}/blob/main/LICENSE-APACHE`],
       },
     ] : []),
@@ -70,8 +82,10 @@ const structuredData = {
         d.dataset.os = p.indexOf("win") > -1 ? "windows" : p.indexOf("mac") > -1 || /iphone|ipad/.test(p) ? "macos" : /linux|x11|cros|android/.test(p) ? "linux" : "macos";
       })(document.documentElement);
     </script>
+    <meta name="application-name" content="holdmap" />
     <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" content="#0a0a0b" />
+    <meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fafaf9" media="(prefers-color-scheme: light)" />
     <link rel="preload" href={interUrl} as="font" type="font/woff2" crossorigin />
     <link rel="preload" href={monoUrl} as="font" type="font/woff2" crossorigin />
     <link rel="icon" href={`${base}/favicon.ico`} sizes="48x48" />
@@ -79,6 +93,7 @@ const structuredData = {
     <link rel="apple-touch-icon" href={`${base}/apple-touch-icon.png`} />
     <link rel="sitemap" href={`${siteUrl}sitemap.xml`} />
     <meta property="og:type" content={ogType} />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:site_name" content="holdmap" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />

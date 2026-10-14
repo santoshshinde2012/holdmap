@@ -87,7 +87,7 @@ function canonicalIcns(buffer) {
 }
 
 try {
-  const executablePath = process.env.HOLDMAP_E2E_CHROMIUM_EXECUTABLE ?? process.env.PORTWISE_E2E_CHROMIUM_EXECUTABLE;
+  const executablePath = process.env.HOLDMAP_E2E_CHROMIUM_EXECUTABLE;
   browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
   const page = await browser.newPage({ viewport: { width: 1024, height: 1024 }, deviceScaleFactor: 1, reducedMotion: "reduce" });
   await page.route("**/*", (route) => route.abort());

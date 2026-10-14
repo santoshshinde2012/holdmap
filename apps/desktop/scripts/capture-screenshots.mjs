@@ -18,7 +18,7 @@ const output = resolve(desktop, "../../docs/screenshots");
 const siteAssets = resolve(desktop, "../../site/src/assets");
 const vite = join(desktop, "node_modules/vite/bin/vite.js");
 const build = await mkdtemp(join(tmpdir(), "holdmap-screenshots-"));
-const executablePath = process.env.HOLDMAP_E2E_CHROMIUM_EXECUTABLE ?? process.env.PORTWISE_E2E_CHROMIUM_EXECUTABLE;
+const executablePath = process.env.HOLDMAP_E2E_CHROMIUM_EXECUTABLE;
 const viewport = { width: 1440, height: 1000 };
 let server;
 let browser;

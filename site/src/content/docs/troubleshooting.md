@@ -1,15 +1,15 @@
 ---
 title: Troubleshooting
-description: Fixes for the common snags, from "command not found" to hidden ports and uninstalling.
+description: Fix holdmap install, PATH, hidden ports, desktop first-open and uninstall issues on macOS, Linux and Windows.
 order: 7
 ---
 
 **`command not found: holdmap` right after installing.** Open a new terminal, or run
 `source ~/.config/holdmap/env.sh`.
 
-**An old copy runs instead of the new one.** Copies from v0.1.0 live in `~/.cargo/bin`. After the
-rename from portwise, also remove `~/.local/bin/portwise` / `~/.cargo/bin/portwise`. Then
-`command -v holdmap` shows which binary runs.
+**An old copy runs instead of the new one.** Copies from v0.1.0 live in `~/.cargo/bin`. If
+`command -v` still names an older `portwise` binary, remove `~/.local/bin/portwise` and
+`~/.cargo/bin/portwise`. Then `command -v holdmap` shows which binary runs.
 
 **`Permission denied` on a shell startup file.** An old `sudo` left it owned by root. Run
 `sudo chown "$USER" ~/.bash_profile` and install again. Never run the installer with `sudo`.
@@ -26,9 +26,7 @@ of a scan took (sockets, processes, containers). `--no-docker` skips container l
 [MCP setup](../mcp/#set-it-up).
 
 **Environment variables.** `HOLDMAP_HOME` (config dir), `HOLDMAP_COLOR`, `HOLDMAP_TRACE`,
-`HOLDMAP_EDITOR`. Legacy aliases still accepted: `PORTWISE_HOME`, `PORTWISE_TRACE`,
-`PORTWISE_EDITOR`, `PORTWISE_COLOR`. Project stacks use `.holdmap.toml` (`.portwise.toml` still
-works).
+`HOLDMAP_EDITOR`. Project stacks use `.holdmap.toml`.
 
 **Uninstall.** `rm ~/.local/bin/holdmap`, remove the `env.sh` line the installer added to your
 shell startup files, and delete the app. Settings and history live in `~/.config/holdmap` (macOS:
