@@ -13,9 +13,11 @@ strictly limited metadata projection from integrations you configure.
 Recognized products include Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider,
 Cline, Goose, Docker Desktop, OrbStack, Podman Desktop and others.
 
-Version 0.5.0 includes Flow, folder actions and the updated CLI and terminal navigation
-described here. Child-tool classifications, expanded metadata and desktop agent search were
-introduced in 0.4.0. The live demo uses the same interface with sample data.
+The current download is **0.6.0**: editor-extension identity, Hide cards / Hide inspector,
+and the same Flow and folder actions described here. Flow, folder actions and the updated
+CLI and terminal navigation landed in 0.5.0. Child-tool classifications, expanded metadata
+and desktop agent search were introduced in 0.4.0. The live demo uses the same interface
+with sample data.
 
 ## From the CLI
 

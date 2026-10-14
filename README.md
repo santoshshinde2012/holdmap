@@ -33,17 +33,14 @@
 holdmap tells you what's really there — which agent or tool started it — and stops only what
 it should.
 
-Version **0.5.0** adds Agent Flow and opt-in local recording, reviewed scheduling, clickable
-folder actions, terminal agent navigation and the routed H identity.
-See the [0.5.0 changes](CHANGELOG.md#050---2026-10-11). Desktop screenshots use the shared
-browser UI with sample data.
+The current download is **0.6.0**: editor-extension identity on the list and graph, full-canvas
+Graph and Flow, schedules started from the empty manager, and a macOS fullscreen close that
+returns to the previous app. See the [0.6.0 changes](CHANGELOG.md#060---2026-10-14). Desktop
+screenshots use the shared browser UI with sample data.
 
-Version **0.6.0** keeps editor-extension services labelled as the editor, gives Graph and
-Flow the full canvas, and lets Scheduled actions start a reviewed shutdown or service stop.
-Use **0.6.0 or newer** for these; see the [0.6.0 changes](CHANGELOG.md#060---2026-10-14).
-Version **0.5.1** hardens project protections, command replay and credential redaction,
-and fixes desktop error handling and graph responsiveness. See the
-[0.5.1 changes](CHANGELOG.md#051---2026-10-13).
+Version **0.5.0** added Agent Flow, reviewed scheduling, folder actions and the routed H
+identity ([0.5.0 changes](CHANGELOG.md#050---2026-10-11)). **0.5.1** hardened project
+protections and desktop error handling ([0.5.1 changes](CHANGELOG.md#051---2026-10-13)).
 
 The new routed H logo connects Holdmap's initial with its process and agent maps.
 The [vector master and regeneration guide](apps/desktop/assets/README.md) keep app,
@@ -290,7 +287,7 @@ the action. Local shutdown was introduced in 0.4.0; version 0.3.0 binaries preda
 
 </details>
 
-**Scheduling in 0.5.0:** Power settings separate **Shut down now…** from **Schedule
+**Scheduling:** Power settings separate **Shut down now…** from **Schedule
 shutdown…**. The scheduled review, **Schedule computer shutdown?**, starts at **In 1 hour**
 and excludes **Now**; immediate shutdown has no timing controls. In the browser, the entries
 are **Simulate shutdown now…** and **Schedule simulation…**, with **Schedule shutdown
@@ -298,11 +295,11 @@ simulation?** clearly identifying the scheduled review. For a local port, **Sche
 opens the one-hour review separately from **Stop…**. Choose another preset, a custom delay
 or **At a time** as needed; agent service reviews also support delays. **Scheduled actions**
 shows each deadline, countdown, reviewed port and cancellation result. When nothing is
-scheduled, it can start a shutdown or a reviewed service stop. Schedules run while
+scheduled, **0.6.0** can start a shutdown or a reviewed service stop from that dialog. Schedules run while
 Holdmap stays open, including in the tray; quitting clears them. Keep the computer awake.
 Missed deadlines or clock changes require a fresh review. Agent schedules stop only the
-reviewed services and ports, preserving the agent session. Version 0.4.0 downloads predate
-scheduling; use 0.5.0 or newer.
+reviewed services and ports, preserving the agent session. Use **0.6.0 or newer** (scheduling
+itself landed in 0.5.0).
 
 <details>
 <summary>Scheduled shutdown, agent services and cancellation in dark and light themes</summary>
@@ -331,7 +328,7 @@ uses the same UI with sample data.
 
 **Close and reopen.** With a working menu-bar or tray icon, closing the main window keeps
 Holdmap running. Click its icon or use your configured global shortcut to reopen; on macOS,
-the Dock icon also restores it. Current source uses macOS application hiding so a fullscreen
+the Dock icon also restores it. **0.6.0** hides the application through AppKit so a fullscreen
 close returns to the previous app and retains the window's state for reopening. Choose
 **Quit** to exit. If the tray is unavailable, closing the main window exits normally.
 
@@ -436,11 +433,11 @@ the preview and confirmation flow before executing stops.
 
 holdmap stops processes, so one set of rules in `holdmap-core` applies to every surface:
 
-**Current source:** state-read/write failures stay visible and preserve existing files.
+**In 0.6.0:** state-read/write failures stay visible and preserve existing files.
 If a stop completes but its history cannot be saved, the desktop preserves the actual result
 and blocks automatic restart or later queued stops. CLI `stop --json` includes `history_error`
-and exits with code 2; additional requested targets are not attempted. This recovery behavior
-is part of the [0.6.0 changes](CHANGELOG.md#060---2026-10-14).
+and exits with code 2; additional requested targets are not attempted. See the
+[0.6.0 changes](CHANGELOG.md#060---2026-10-14).
 
 - **Graceful first:** SIGTERM (`taskkill` on Windows), then a force kill after `--timeout` (5 s).
 - **The right target:** the dev-server tree root (`npm`, `nodemon`, `uvicorn --reload`…) so nothing

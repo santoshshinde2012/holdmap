@@ -8,6 +8,10 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Changed
+
+- README and the public Desktop and Agents guides present **0.6.0** as the current download.
+
 ## [0.6.0] - 2026-10-14
 
 ### Fixed
