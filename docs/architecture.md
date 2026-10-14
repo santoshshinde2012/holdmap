@@ -457,8 +457,12 @@ holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop ap
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
 coordinate collection and confirmation, and present the returned types.
 
-This guide describes version 0.5.0 and current source. Agent Flow, scheduling, folder actions
-and terminal agent navigation are included in [0.5.0](../CHANGELOG.md#050---2026-10-11).
+This guide describes version 0.6.0 and current source. Newer screen recording, C4-style
+agent-map zoom and live browser development scans remain unreleased.
+Editor-extension identity, full-canvas Graph and Flow,
+and schedules started from the empty manager are in [0.6.0](../CHANGELOG.md#060---2026-10-14).
+Agent Flow, scheduling, folder actions and terminal agent navigation landed in
+[0.5.0](../CHANGELOG.md#050---2026-10-11).
 Child-tool metadata, MCP discovery, local desktop shutdown, cache and security improvements
 were introduced in [0.4.0](../CHANGELOG.md#040---2026-10-10); version 0.3.0 predates them.
 

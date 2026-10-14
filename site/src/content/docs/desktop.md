@@ -10,12 +10,13 @@ CLI, so process identity checks and process protections are shared. The CLI's pr
 `.holdmap.toml` settings apply to CLI and terminal UI actions.
 [Try it in the browser](../../#demo).
 
-Use **0.6.0 or newer** for editor-extension identity on the graph, hideable details and
-Flow inspector, grouped title-bar actions, and schedules started from the empty manager.
-Closing the macOS window from fullscreen returns to the previous app. See the
+The current download is **0.6.0**: editor-extension identity on the graph, hideable details and
+Flow inspector, grouped title-bar actions, schedules started from the empty manager, and a
+macOS fullscreen close that returns to the previous app. See the
 [0.6.0 changes](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#060---2026-10-14).
-Version **0.5.1** downloads predate these; they still include the history, settings and graph
-fixes in the [0.5.1 changes](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#051---2026-10-13).
+
+Screen recording, Computer / Footprint / Project map zoom and live local scans during
+`npm run dev` are newer features in current source. They are not included in the 0.6.0 download.
 
 ## Close, reopen and quit
 
@@ -25,8 +26,7 @@ or use your configured global shortcut. Choose **Quit holdmap** from the icon's 
 exit completely. If the tray is unavailable, closing the window quits the app.
 
 Closing from fullscreen returns to the previous app without leaving an empty black Space,
-and clicking the Dock icon reopens the same window. Published **0.5.1 downloads predate
-these fixes**; use **0.6.0 or newer**.
+and clicking the Dock icon reopens the same window. Use **0.6.0 or newer**.
 
 ## Service graph and cluster grouping
 
@@ -90,7 +90,7 @@ shutdown and cannot power off a computer. Version 0.3.0 binaries predate this fe
 
 ## Schedule shutdown or a service stop
 
-**Version 0.5.0** adds scheduling to the desktop and browser demo. Version 0.4.0 downloads
+Scheduling is in the current **0.6.0** download (it landed in 0.5.0). Version 0.4.0 downloads
 include immediate shutdown and stop confirmations, but predate scheduling.
 
 1. For this computer, open **Settings → Power → Schedule shutdown…**, or start from the
@@ -194,8 +194,8 @@ skim memory, CPU, process count, stoppable ports and parent; expand for folders 
 labels), ports and apps it started, child processes as tools & apps, connections, and access: the
 account it runs as, sandbox and approval flags, network listeners, and macOS-protected folders.
 Each fact is marked seen, inferred or unknown. From a card you can reveal a folder, open it in your
-editor, or stop the unprotected ports that agent started. The map zooms Computer → Footprint →
-Project from the same observed processes, sockets and folders; it does not invent communication
+editor, or stop the unprotected ports that agent started. In current source, the map zooms
+Computer → Footprint → Project from the same observed processes, sockets and folders; it does not invent communication
 between agents. Recent projects come from folder names
 only. Chats, settings and tokens are never read. Remote hosts show as IP addresses. Click a port to
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.

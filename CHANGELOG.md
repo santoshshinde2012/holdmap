@@ -22,6 +22,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Changed
 
+- README and the public Desktop, Agents and MCP guides identify **0.6.0** as the current
+  download and distinguish newer, unreleased desktop features in current source.
 - Desktop `npm run dev` reads this machine through the holdmap CLI (ports, agents, C4 map, flow connections). Sample shop-web data stays on the public website demo, Playwright, and `?demo=1`. Stopping processes still needs the desktop app.
 - Exclusive view actions use hinged action pills instead of nested segmented tracks: List / Graph /
   Agents, then Overview/Flow when Agents is selected, Computer/Footprint/Project when Overview is
