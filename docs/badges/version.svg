@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="101" height="20" viewBox="0 0 101 20" role="img" aria-labelledby="holdmap-version-title">
-  <title id="holdmap-version-title">Holdmap version: v0.5.1</title> <!-- x-release-please-version -->
+  <title id="holdmap-version-title">Holdmap version: v0.6.0</title> <!-- x-release-please-version -->
   <clipPath id="holdmap-version-clip">
     <rect width="101" height="20" rx="3" />
   </clipPath>
@@ -9,6 +9,6 @@
   </g>
   <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11">
     <text x="25" y="14">version</text>
-    <text x="75.5" y="14">v0.5.1</text> <!-- x-release-please-version -->
+    <text x="75.5" y="14">v0.6.0</text> <!-- x-release-please-version -->
   </g>
 </svg>

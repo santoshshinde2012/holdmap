@@ -376,7 +376,9 @@ fn runs_project_build(p: &ProcessInfo, project: &ProjectDetails) -> bool {
     }
     let argv0 = p.cmdline.first().map(std::path::Path::new);
     p.exe.as_deref().into_iter().chain(argv0).any(|path| {
-        (path.is_relative() && path.components().count() > 1)
+        // `target/debug/api` is relative. `/Users/me/.cargo/bin/rust-analyzer` is absolute
+        // on Unix but relative-with-root on Windows, so `is_relative()` alone is not enough.
+        (path.is_relative() && !path.has_root() && path.components().count() > 1)
             || path.starts_with(&project.info.root)
             || path.components().any(|c| {
                 c.as_os_str()
