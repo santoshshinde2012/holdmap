@@ -418,6 +418,178 @@ else:
                 self.assertEqual(calls, [])
 
 
+class PagesSourceTests(unittest.TestCase):
+    workflow_revision = "1" * 40
+    source_revision = "a" * 40
+    annotation = "b" * 40
+    ref_path = "repos/example/holdmap/git/ref/tags/v0.7.0"
+
+    def setUp(self):
+        sandbox = tempfile.TemporaryDirectory(prefix="holdmap-pages-source-test-")
+        self.addCleanup(sandbox.cleanup)
+        self.root = Path(sandbox.name)
+        self.responses = self.root / "responses.json"
+        self.calls = self.root / "calls.jsonl"
+        self.output = self.root / "output"
+        stub = self.root / "gh"
+        stub.write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+args = sys.argv[1:]
+with Path(os.environ["HOLDMAP_TEST_CALLS"]).open("a") as log:
+    log.write(json.dumps(args) + "\\n")
+if len(args) != 6 or args[:5] != ["api", "--method", "GET", "-H", "X-GitHub-Api-Version: 2022-11-28"]:
+    sys.exit("only fixed GET requests are permitted")
+responses = json.loads(Path(os.environ["HOLDMAP_TEST_RESPONSES"]).read_text())
+if args[-1] not in responses:
+    sys.exit("unexpected GitHub API route")
+print(json.dumps(responses[args[-1]]))
+''')
+        stub.chmod(0o700)
+
+    def fixture(self):
+        release = {"id": 42, "tag_name": "v0.7.0", "draft": False, "prerelease": False}
+        return {
+            "repos/example/holdmap/releases?per_page=100&page=1": [release.copy()],
+            "repos/example/holdmap/releases/42": release,
+            self.ref_path: {"ref": "refs/tags/v0.7.0", "object": {"type": "tag", "sha": self.annotation}},
+            "repos/example/holdmap/git/tags/" + self.annotation:
+                {"sha": self.annotation, "object": {"type": "commit", "sha": self.source_revision}},
+        }
+
+    def resolve(self, data=None, event="workflow_dispatch", ref="refs/heads/main", tag="v0.7.0",
+                repository="example/holdmap"):
+        self.responses.write_text(json.dumps(data if data is not None else self.fixture()))
+        self.calls.unlink(missing_ok=True)
+        self.output.unlink(missing_ok=True)
+        environment = os.environ.copy()
+        environment.update({"PATH": str(self.root) + os.pathsep + environment["PATH"],
+                            "GITHUB_EVENT_NAME": event, "GITHUB_REF": ref,
+                            "GITHUB_REPOSITORY": repository, "GITHUB_SHA": self.workflow_revision,
+                            "SOURCE_TAG": tag, "GITHUB_OUTPUT": str(self.output),
+                            "HOLDMAP_TEST_CALLS": str(self.calls), "HOLDMAP_TEST_RESPONSES": str(self.responses)})
+        result = subprocess.run(["node", str(ROOT / "scripts/resolve-pages-source.mjs")],
+                                env=environment, capture_output=True, text=True, check=False, timeout=30)
+        calls = [json.loads(line)[-1] for line in self.calls.read_text().splitlines()] if self.calls.exists() else []
+        if result.returncode != 0:
+            self.assertFalse(self.output.exists(), "failed source resolution must emit no checkout authority")
+        return result, calls
+
+    def test_main_and_pull_request_builds_keep_the_event_revision_without_api_calls(self):
+        for event, ref in [("push", "refs/heads/main"), ("pull_request", "refs/pull/51/merge")]:
+            with self.subTest(event=event):
+                result, calls = self.resolve(event=event, ref=ref, tag="")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls, [])
+                self.assertEqual(self.output.read_text(), f"revision={self.workflow_revision}\n")
+
+    def test_dispatch_peels_annotated_and_lightweight_tags_to_the_actual_source_commit(self):
+        for annotated in [False, True]:
+            with self.subTest(annotated=annotated):
+                data = self.fixture()
+                if not annotated:
+                    data[self.ref_path]["object"] = {"type": "commit", "sha": self.source_revision}
+                result, calls = self.resolve(data)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.output.read_text(), f"revision={self.source_revision}\n")
+                self.assertIn(self.ref_path, calls)
+                self.assertNotIn("/releases/tags/", " ".join(calls))
+
+    def test_non_main_dispatch_and_invalid_or_prerelease_tags_fail_before_github(self):
+        cases = [("workflow_dispatch", "refs/tags/v0.7.0", "v0.7.0"),
+                 ("workflow_dispatch", "refs/heads/other", "v0.7.0"),
+                 ("push", "refs/heads/main", "v0.7.0"),
+                 ("workflow_run", "refs/heads/main", "")]
+        cases.extend(("workflow_dispatch", "refs/heads/main", tag) for tag in [
+            "", "v01.2.3", "v0.7.0-rc.1", "refs/tags/v0.7.0", "v0.7.0\n", "v0.7.0$(false)"])
+        for event, ref, tag in cases:
+            with self.subTest(event=event, ref=ref, tag=tag):
+                result, calls = self.resolve(event=event, ref=ref, tag=tag)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [])
+        for repository in ["../holdmap", "example/..", "example/holdmap?query=1", "example/holdmap\n"]:
+            with self.subTest(repository=repository):
+                result, calls = self.resolve(repository=repository)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [])
+
+    def test_draft_missing_or_mismatched_releases_never_reach_tag_resolution(self):
+        for case in ["draft", "missing", "prerelease", "wrong_tag"]:
+            with self.subTest(case=case):
+                data = self.fixture()
+                release = data["repos/example/holdmap/releases/42"]
+                if case == "draft":
+                    release["draft"] = True
+                elif case == "prerelease":
+                    release["prerelease"] = True
+                elif case == "wrong_tag":
+                    release["tag_name"] = "v0.6.0"
+                else:
+                    data["repos/example/holdmap/releases?per_page=100&page=1"] = []
+                result, calls = self.resolve(data)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn(self.ref_path, calls)
+
+    def test_ambiguous_refs_malformed_objects_and_tag_cycles_fail_closed(self):
+        for case in ["branch", "short_sha", "blob", "annotation_mismatch", "cycle"]:
+            with self.subTest(case=case):
+                data = self.fixture()
+                if case == "branch":
+                    data[self.ref_path]["ref"] = "refs/heads/v0.7.0"
+                elif case == "short_sha":
+                    data[self.ref_path]["object"]["sha"] = "a" * 39
+                elif case == "blob":
+                    data[self.ref_path]["object"]["type"] = "blob"
+                elif case == "annotation_mismatch":
+                    data["repos/example/holdmap/git/tags/" + self.annotation]["sha"] = "c" * 40
+                else:
+                    data["repos/example/holdmap/git/tags/" + self.annotation]["object"] = {
+                        "type": "tag", "sha": self.annotation}
+                result, _ = self.resolve(data)
+                self.assertNotEqual(result.returncode, 0)
+
+    def test_annotated_tag_chain_has_a_finite_limit(self):
+        data = self.fixture()
+        digests = [f"{index:040x}" for index in range(200, 210)]
+        data[self.ref_path]["object"] = {"type": "tag", "sha": digests[0]}
+        for left, right in zip(digests, digests[1:]):
+            data["repos/example/holdmap/git/tags/" + left] = {"sha": left, "object": {"type": "tag", "sha": right}}
+        result, calls = self.resolve(data)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("exceeds its limit", result.stderr)
+        self.assertEqual(len([path for path in calls if "/git/tags/" in path]), 8)
+
+    def test_workflow_verifies_pinned_checkout_before_install_and_records_actual_head(self):
+        workflow = (ROOT / ".github/workflows/pages.yml").read_text()
+        self.assertLess(workflow.index("run: node scripts/resolve-pages-source.mjs"),
+                        workflow.index("ref: ${{ steps.source.outputs.revision }}"))
+        check = 'test "$(git rev-parse HEAD)" = "$WEBSITE_SOURCE_REVISION"'
+        self.assertLess(workflow.index(check), workflow.index("Install (desktop app"))
+        self.assertIn("revision: execFileSync('git', ['rev-parse', 'HEAD']", workflow)
+        git = self.root / "git"
+        git.write_text('#!/bin/sh\nprintf "%s\\n" "$HOLDMAP_TEST_CHECKOUT_SHA"\n')
+        git.chmod(0o700)
+        for actual in [self.source_revision, self.workflow_revision]:
+            environment = {**os.environ, "PATH": str(self.root) + os.pathsep + os.environ["PATH"],
+                           "WEBSITE_SOURCE_REVISION": self.source_revision, "HOLDMAP_TEST_CHECKOUT_SHA": actual}
+            result = subprocess.run(["bash", "-c", check], env=environment, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0 if actual == self.source_revision else 1)
+
+    def test_release_dispatch_runs_on_main_with_the_literal_source_tag(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        command = re.search(r"(?m)^\s*run: (gh workflow run pages\.yml[^\n]+)$", workflow).group(1)
+        stub = self.root / "gh"
+        stub.write_text('#!/usr/bin/env python3\nimport json, sys\nprint(json.dumps(sys.argv[1:]))\n')
+        stub.chmod(0o700)
+        environment = {**os.environ, "PATH": str(self.root) + os.pathsep + os.environ["PATH"],
+                       "TAG": "v0.7.0", "GITHUB_REPOSITORY": "example/holdmap"}
+        result = subprocess.run(["bash", "-c", command], env=environment,
+                                capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), ["workflow", "run", "pages.yml", "--repo", "example/holdmap",
+                                                   "--ref", "main", "--raw-field", "source_tag=v0.7.0"])
+
+
 class CompleteReleaseAssetTests(unittest.TestCase):
     def setUp(self):
         sandbox = tempfile.TemporaryDirectory(prefix="holdmap-release-completeness-test-")

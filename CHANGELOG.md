@@ -13,6 +13,9 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Discover draft releases through authenticated release listing and numeric IDs instead
   of the published-only tag endpoint. Release recovery can verify and publish existing
   complete draft assets from `main` without rebuilding or moving their tag.
+- Release website deployments run trusted workflow code from `main` while building the
+  exact published tag's source, preserving source revision metadata and avoiding stale
+  tag-context Pages deployments.
 
 ## [0.7.0] - 2026-10-14
 

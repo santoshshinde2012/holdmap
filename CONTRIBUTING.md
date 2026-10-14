@@ -304,9 +304,11 @@ Versions follow [SemVer](https://semver.org/). One `vX.Y.Z` tag releases everyth
   before upload. After all platforms succeed, one job uploads the complete `latest.json`.
   A final read-only asset check requires every CLI archive, desktop installer and checksum
   before publishing the release. Failed builds leave the previous public download in place.
-- After publishing a stable release, the final job dispatches `Pages` on that version tag.
-  The website checks out its own event's source and records the checked-out commit in
-  `build-info.json`; it does not execute source supplied by a `workflow_run` event.
+- After publishing a stable release, the final job dispatches `Pages` on `main` with that
+  version as `source_tag`. The trusted workflow verifies the published stable release,
+  resolves its tag to an immutable commit, and checks out that commit for the website build.
+  `build-info.json` records the actual checked-out source; the deployment uses the workflow's
+  `main` revision. This avoids reusing a tag-context deployment while preserving installer source.
   Prereleases leave the latest stable website in place.
 
 Check a change to the release setup locally with `dist plan`,
@@ -325,7 +327,7 @@ not regenerate CI with this setting. Keep action pins in the config and workflow
 
 | What | Needed for |
 |---|---|
-| Environment `github-pages`: selected deployment branches and tags must allow Branch `main` and Tag `v*` | Required for the stable release's tag-dispatched website deployment. A `main`-only environment rejects the tag; add the explicit tag policy before publishing the first release with this workflow. |
+| Environment `github-pages`: selected deployment branches must allow Branch `main` | Required for both regular website deployments and stable-release dispatches. Published release source is resolved separately through the validated `source_tag` input. |
 | Secret `HOMEBREW_TAP_TOKEN` (fine-grained, contents: write on `santoshshinde2012/homebrew-tap`), then in `dist-workspace.toml` add `"homebrew"` to `installers`, set `tap` and `publish-jobs = ["homebrew"]`, run `dist generate` and review/add the upstream Homebrew publishing job | Homebrew (`brew install santoshshinde2012/tap/holdmap`); off until then, so release notes don't advertise it |
 | Secret `RELEASE_PLEASE_TOKEN` (fine-grained, contents and pull requests: write) | The release PR; the workflow skips with a notice until it exists |
 | Secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | Signed, notarised macOS app (optional) |
@@ -348,7 +350,7 @@ maintainer pushes its tag.
    and their checksums are uploaded. Check their build provenance, then confirm the
    stable release's dispatched `Pages` deployment uses the tagged commit and new downloads.
    Check `build-info.json` against the tag's commit. Confirm the `github-pages` environment
-   allows Tag `v*` before publishing; the workflow does not change environment policies.
+   allows Branch `main` before publishing; the workflow does not change environment policies.
    Without signing credentials, macOS is ad-hoc signed without notarization and Windows is
    unsigned. Without a configured signed updater, desktop users download the new installer
    manually; do not advertise automatic updates.
@@ -359,8 +361,10 @@ with the existing draft's tag and its original tag-build run ID. This recovery p
 that the original run completed every required artifact and optional updater job, then skips
 builds, verifies every existing installer and checksum, and publishes only a complete draft
 before dispatching the tagged website. It runs only from `main`; it never moves the release tag. If publication already
-succeeded and only the website dispatch failed, rerun Pages on the published tag with
-`deploy_from_branch=true` instead.
+succeeded and only the website dispatch failed, run
+`gh workflow run pages.yml --ref main --field source_tag=vX.Y.Z` instead. Dispatches require a
+published stable tag and run only from `main`; annotated tags are resolved before checkout,
+and the checked-out commit is verified before dependencies or selected release source code execute.
 
 ## Licence
 
