@@ -372,7 +372,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
-      actions: write # dispatch Pages on the published stable tag
+      actions: write # dispatch trusted main workflow with the published source tag
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ inputs.tag || needs.plan.outputs.tag }}
@@ -394,4 +394,4 @@ jobs:
         run: gh release edit "$TAG" --draft=false --verify-tag --repo "$GITHUB_REPOSITORY"
       - name: Rebuild the public website from the published stable tag
         if: ${{ !contains(env.TAG, '-') }}
-        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG" --raw-field deploy_from_branch=true
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main --raw-field "source_tag=$TAG"
