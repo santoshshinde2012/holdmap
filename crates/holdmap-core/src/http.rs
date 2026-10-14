@@ -397,12 +397,23 @@ mod tests {
         let raw = b"HTTP/1.1 302 token=reason-private\r\nServer: token=server-private\r\nLocation: http://developer:url-private@localhost/callback?%74oken=query-private&view=ports\r\n\r\n<title>Agent token=title-private &amp; Ready</title>";
         let info = parse_response(3000, raw).unwrap();
         assert_eq!(info.status, 302);
-        assert_eq!(info.reason, format!("token={}", crate::redact::MASK));
-        assert_eq!(info.server.as_deref(), Some("token=••••"));
-        assert_eq!(info.title.as_deref(), Some("Agent token=•••• & Ready"));
-        assert_eq!(
-            info.location.as_deref(),
-            Some("http://developer:••••@localhost/callback?%74oken=••••&view=ports")
+        // Failure diagnostics must not echo potentially unredacted metadata or credentials.
+        assert!(
+            info.reason == format!("token={}", crate::redact::MASK),
+            "HTTP reason credentials were not redacted"
+        );
+        assert!(
+            info.server.as_deref() == Some("token=••••"),
+            "HTTP server credentials were not redacted"
+        );
+        assert!(
+            info.title.as_deref() == Some("Agent token=•••• & Ready"),
+            "HTTP title credentials were not redacted"
+        );
+        assert!(
+            info.location.as_deref()
+                == Some("http://developer:••••@localhost/callback?%74oken=••••&view=ports"),
+            "HTTP redirect credentials were not redacted"
         );
         let exported = serde_json::to_string(&info).unwrap();
         let summary = info.summary();
@@ -415,11 +426,11 @@ mod tests {
         ] {
             assert!(
                 !exported.contains(secret),
-                "JSON leaked {secret}: {exported}"
+                "HTTP JSON output contains an unredacted credential"
             );
             assert!(
                 !summary.contains(secret),
-                "summary leaked {secret}: {summary}"
+                "HTTP summary contains an unredacted credential"
             );
         }
         // Long values must be redacted in full before display limits truncate them.
@@ -427,21 +438,22 @@ mod tests {
             "HTTP/1.1 302 Found\r\nLocation: http://developer:{}@localhost\r\n\r\n",
             "private-url-password".repeat(20)
         );
-        assert_eq!(
+        assert!(
             parse_response(3000, response.as_bytes())
                 .unwrap()
                 .location
-                .as_deref(),
-            Some("http://developer:••••@localhost")
+                .as_deref()
+                == Some("http://developer:••••@localhost"),
+            "HTTP redirect credentials were not redacted before clipping"
         );
         let info = parse_response(
             3000,
             b"HTTP/1.1 302 Found\r\nLocation: /callback?view=ports#access_token=fragment-private&state=ok\r\n\r\n",
         )
         .unwrap();
-        assert_eq!(
-            info.location.as_deref(),
-            Some("/callback?view=ports#access_token=••••&state=ok")
+        assert!(
+            info.location.as_deref() == Some("/callback?view=ports#access_token=••••&state=ok"),
+            "HTTP redirect fragment credentials were not redacted"
         );
     }
 
@@ -463,11 +475,17 @@ mod tests {
         let info = probe(port, "/", Duration::from_secs(2)).unwrap();
         server.join().unwrap();
         let exported = serde_json::to_string(&info).unwrap();
-        assert!(!exported.contains("probe-private"), "{exported}");
-        assert!(!exported.contains("probe-token-private"), "{exported}");
-        assert_eq!(
-            info.location.as_deref(),
-            Some("http://dev:••••@localhost/?access_token=••••")
+        assert!(
+            !exported.contains("probe-private"),
+            "HTTP probe JSON output contains an unredacted password"
+        );
+        assert!(
+            !exported.contains("probe-token-private"),
+            "HTTP probe JSON output contains an unredacted token"
+        );
+        assert!(
+            info.location.as_deref() == Some("http://dev:••••@localhost/?access_token=••••"),
+            "HTTP probe redirect credentials were not redacted"
         );
     }
 

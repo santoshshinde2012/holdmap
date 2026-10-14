@@ -17,6 +17,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Fixed
 
+- Keep credential-redaction regression failures from printing tested secrets or raw HTTP
+  metadata in test logs, including JSON, summaries and redirect assertions.
 - Discover draft releases through authenticated release listing and numeric IDs instead
   of the published-only tag endpoint. Release recovery can verify and publish existing
   complete draft assets from `main` without rebuilding or moving their tag.
