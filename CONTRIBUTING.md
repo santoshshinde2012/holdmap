@@ -282,8 +282,10 @@ Versions follow [SemVer](https://semver.org/). One `vX.Y.Z` tag releases everyth
   it maintains the release PR itself; it doesn't create tags or releases here, so the tag stays a
   deliberate maintainer step.
   Without `RELEASE_PLEASE_TOKEN`, prepare the same version changes manually, including
-  `version.txt`, `.release-please-manifest.json`, README download links and generated CLI help;
+  `version.txt`, `.release-please-manifest.json`, the README source-version marker and generated CLI help;
   run `scripts/check-versions.sh` and the full validation before opening the release PR.
+  README installer links stay on the website's release-resolved download section; they do not
+  point at filenames from a release that is still being assembled.
 - Pushing the tag runs `release.yml` ([dist](https://github.com/axodotdev/cargo-dist)): CLI
   archives for six targets (macOS arm64/x64, Linux gnu arm64/x64, Linux musl x64, Windows x64),
   shell and PowerShell installers, an npm package tarball, a

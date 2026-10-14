@@ -103,6 +103,9 @@ you: open a new terminal, or run the `source` line it prints.
 
 **Desktop app**
 
+Choose your platform and installer format in the [website's download section](https://santoshshinde2012.github.io/holdmap/#install).
+It follows the latest published release, including while a newer source version is being built.
+
 | Platform | Download |
 |---|---|
 | macOS, Apple silicon | [holdmap_aarch64.dmg][dmg-arm64] |
@@ -115,17 +118,18 @@ It runs natively and does not require Rosetta. Choose **Intel** for an Intel Mac
 Apple menu → **About This Mac** shows either a chip name or an Intel processor.
 See [Apple's guidance on native apps and Rosetta](https://support.apple.com/en-gb/102527).
 
-<!-- release-please bumps these (one version per line; the rpm's "-" is %2D so its "-1" release
-     suffix isn't read as part of the version). -->
+<!-- release-please updates this source-version marker; download links follow published releases. -->
 <!-- x-release-please-start-version -->
-[dmg-arm64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.7.0_aarch64.dmg
-[dmg-x64]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.7.0_x64.dmg
-[msi]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.7.0_x64_en-US.msi
-[nsis]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.7.0_x64-setup.exe
-[appimage]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.7.0_amd64.AppImage
-[deb]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap_0.7.0_amd64.deb
-[rpm]: https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-0.7.0%2D1.x86_64.rpm
+Source version: **0.7.0**.
 <!-- x-release-please-end -->
+
+[dmg-arm64]: https://santoshshinde2012.github.io/holdmap/#install
+[dmg-x64]: https://santoshshinde2012.github.io/holdmap/#install
+[msi]: https://santoshshinde2012.github.io/holdmap/#install
+[nsis]: https://santoshshinde2012.github.io/holdmap/#install
+[appimage]: https://santoshshinde2012.github.io/holdmap/#install
+[deb]: https://santoshshinde2012.github.io/holdmap/#install
+[rpm]: https://santoshshinde2012.github.io/holdmap/#install
 
 **Homebrew:** coming soon.
 

@@ -37,27 +37,29 @@ concurrency:
 jobs:
   build:
     name: build + check
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
-    env:
-      # A release-triggered rebuild must describe the source that produced the downloads,
-      # even if main advanced while the cross-platform release was building.
-      SOURCE_REVISION: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name != 'workflow_run'
         with:
-          ref: ${{ env.SOURCE_REVISION }}
+          persist-credentials: false
+      # Only this repository's successful tag-push Release runs reach this checkout.
+      # Build the source that produced the downloads even if main advanced meanwhile.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'workflow_run'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            apps/desktop/package-lock.json
-            site/package-lock.json
+          # This workflow also builds PR and selected branch source. Keep its installs
+          # out of caches that a later default-branch build could restore.
+          package-manager-cache: false
       - name: Install (desktop app, for the live demo)
         working-directory: apps/desktop
         run: npm ci
@@ -99,9 +101,10 @@ jobs:
         working-directory: site
         run: |
           node --input-type=module <<'JS'
+          import { execFileSync } from 'node:child_process';
           import { writeFileSync } from 'node:fs';
           writeFileSync('dist/build-info.json', JSON.stringify({
-            revision: process.env.SOURCE_REVISION,
+            revision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
             repository: process.env.GITHUB_REPOSITORY,
             run_id: process.env.GITHUB_RUN_ID,
           }) + '\n');
