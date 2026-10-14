@@ -42,9 +42,14 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    env:
+      # A release-triggered rebuild must describe the source that produced the downloads,
+      # even if main advanced while the cross-platform release was building.
+      SOURCE_REVISION: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -94,7 +99,7 @@ jobs:
           node --input-type=module <<'JS'
           import { writeFileSync } from 'node:fs';
           writeFileSync('dist/build-info.json', JSON.stringify({
-            revision: process.env.GITHUB_SHA,
+            revision: process.env.SOURCE_REVISION,
             repository: process.env.GITHUB_REPOSITORY,
             run_id: process.env.GITHUB_RUN_ID,
           }) + '\n');
