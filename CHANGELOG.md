@@ -48,6 +48,22 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Fixed
 
+- Name-based stops with `--no-tree` retain all matching processes, including children of
+  another match. PID/name tree stops verify TCP and UDP listeners held by included descendants.
+- Supervisor execution requires the planned command, unit or app ID. Ordinary systemd
+  service stops recheck protected cgroup members outside the main process's descendant tree;
+  hard protections remain enforced even with a soft-protection override.
+- Optional MCP observers that panic are disabled for the session without interrupting tool
+  dispatch or protocol responses. Explicit final OTLP span status takes precedence over a
+  conflicting custom `success` attribute.
+- Desktop settings, action menus and resize controls preserve composing and modified keys.
+  Dialog focus traps exclude controls outside the active tab order and disabled or hidden
+  controls, and preserve composing, modified and already handled Tab events.
+- Cross-platform checks run against a temporary copy of current source, preserve existing
+  vendored Cargo patches and leave the checkout's manifest and lockfile untouched on success
+  or failure. The checks also include the activity crate.
+- Keep distribution action pins synchronized with the release workflow, with a regression
+  check that rejects future drift.
 - Screen recording cancellation releases late streams and prevents stale results from reopening.
   Stopping ends screen sharing before preparing exports; preparation can be discarded.
 - Linux desktop screen sharing handles WebKitGTK's display permission for the trusted main

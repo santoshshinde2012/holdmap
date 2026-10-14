@@ -23,6 +23,7 @@ node --input-type=module -e '
 scripts/check-versions.sh
 scripts/check-secrets.sh
 python3 scripts/test-release-security.py
+python3 scripts/test-check-cross.py
 python3 scripts/verify-vendored-glib.py
 python3 scripts/verify-vendored-global-hotkey.py
 actionlint

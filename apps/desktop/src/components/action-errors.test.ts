@@ -21,6 +21,21 @@ const entry: HistoryEntry = { at_ms: 1000, port: 3000, protocol: "tcp", label: "
 const model: SettingsModel = { theme: "dark", density: "comfortable", singleKeyShortcuts: true, config: { pins: [], notify: true, notify_dev_only: true, history_limit: 100, scan_interval_secs: 4, hotkey: "off", recent_hosts: [] }, autostart: false, shortcut: null, hotkeys: [], version: "test", platform: "macos", configDir: null, powerAvailable: true, powerDemo: false };
 const settingsActions: SettingsActions = { setTheme() {}, setDensity() {}, setSingleKeyShortcuts() {}, async setAutostart() {}, async setHotkey() {}, async setNotify() {}, async setScanInterval() {}, async setHistoryLimit() {}, async clearHistory() {}, copy() {}, shutdown() {} };
 
+describe("settings keyboard navigation", () => {
+  it("changes sections only for unmodified navigation outside composition", async () => {
+    const view = render(SettingsDialog, { model, actions: settingsActions, onclose() {} });
+    const general = view.getByRole("tab", { name: "General" });
+    general.focus();
+    for (const extra of [{ isComposing: true }, { keyCode: 229 }, { altKey: true }, { ctrlKey: true }, { metaKey: true }]) {
+      await fireEvent.keyDown(general, { key: "End", ...extra });
+    }
+    expect(general.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(general);
+    await fireEvent.keyDown(general, { key: "End" });
+    expect(view.getByRole("tab", { name: "About" }).getAttribute("aria-selected")).toBe("true");
+  });
+});
+
 describe("history action availability", () => {
   it("keeps simultaneous ports, protocols and duplicate records from the same stopped process distinct", async () => {
     const records: HistoryEntry[] = [entry, { ...entry, port: 3001 }, { ...entry, protocol: "udp" }, { ...entry }];

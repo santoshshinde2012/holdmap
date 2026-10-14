@@ -16,6 +16,7 @@
   import Callout from "./ui/Callout.svelte";
   import Kbd from "./ui/Kbd.svelte";
   import { nextIndex } from "../lib/roving";
+  import { isComposingKey } from "../lib/keyboard";
   import type { Density } from "../lib/rows";
   import { SETTINGS_SECTIONS, THEME_ICON, cadenceText, type SettingsActions, type SettingsModel, type SettingsSection, type Theme } from "../lib/settings";
 
@@ -57,6 +58,7 @@
   }
   const idx = $derived(SETTINGS_SECTIONS.findIndex((s) => s.id === section));
   function navKey(e: KeyboardEvent) {
+    if (isComposingKey(e) || e.altKey || e.ctrlKey || e.metaKey) return;
     const n = nextIndex(idx, e.key, SETTINGS_SECTIONS.length, { orientation: "both" });
     if (n !== null) { section = SETTINGS_SECTIONS[n].id; navEls[n]?.focus(); e.preventDefault(); }
   }

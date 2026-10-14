@@ -81,6 +81,7 @@ cargo test --workspace --locked
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap-activity -p holdmap
 cargo build --locked -p holdmap-desktop
 scripts/check-cross.sh                       # type-checks the macOS and Windows backends from Linux
+python3 scripts/test-check-cross.py          # cross-check isolation without installing targets
 (cd site && npm run check && npm run build && npm test)  # website: types, links, size budget and SEO
 scripts/check-versions.sh
 scripts/check-secrets.sh                     # full Git history and tracked/new source; needs a full clone
@@ -102,6 +103,9 @@ screenshot must be used. After changing a command or flag, regenerate the refere
 `scripts/gen-docs.sh` (or `HOLDMAP_BLESS=1 cargo test -p holdmap cli_reference`) and commit it.
 The generated reference includes nested commands such as `activity serve` and distinguishes
 current-source capabilities from published downloads.
+Cross-platform checks copy current Rust source into a temporary workspace and reuse build
+output. Their macOS type stub extends the existing Cargo patches; the checkout's manifest and
+lockfile stay untouched, including when a check fails.
 Website checks reject unresolved Markdown image placeholders and missing image sources or
 alt attributes; decorative images may use `alt=""`. Public browser checks load guide screenshots
 at desktop and mobile widths, as well as exercising the app demo.

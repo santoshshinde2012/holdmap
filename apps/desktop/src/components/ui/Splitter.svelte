@@ -1,6 +1,7 @@
 <script lang="ts">
   // Vertical resize handle for a right-hand pane: drag, or focus and use ←/→ (Shift ×4),
   // Home/End; double-click resets. Width is clamped to [min, max].
+  import { isComposingKey } from "../../lib/keyboard";
   let { width = $bindable(420), min = 340, max = 680, initial = 420, label = "Resize details pane", onchange }: { width?: number; min?: number; max?: number; initial?: number; label?: string; onchange?: (w: number) => void } = $props();
   let dragging = $state(false);
   let startX = 0, startW = 0;
@@ -11,6 +12,7 @@
   function up() { if (dragging) { dragging = false; onchange?.(width); } }
   $effect(() => { document.body.classList.toggle("pw-resizing", dragging); });
   function key(e: KeyboardEvent) {
+    if (isComposingKey(e) || e.altKey || e.ctrlKey || e.metaKey) return;
     const step = e.shiftKey ? 64 : 16;
     if (e.key === "ArrowLeft") set(width + step);
     else if (e.key === "ArrowRight") set(width - step);

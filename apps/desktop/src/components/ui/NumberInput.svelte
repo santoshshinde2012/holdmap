@@ -4,6 +4,7 @@
   import Icon from "../Icon.svelte";
   import Field, { fieldId } from "./Field.svelte";
   import { validateRange } from "../../lib/validate";
+  import { isComposingKey } from "../../lib/keyboard";
 
   let {
     value = $bindable(null),
@@ -65,6 +66,7 @@
     commit(Math.min(max, Math.max(min, Math.round(base + dir * step * (big ? 10 : 1)))));
   }
   function key(e: KeyboardEvent) {
+    if (isComposingKey(e) || e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.key === "ArrowUp") { bump(1, e.shiftKey); e.preventDefault(); }
     else if (e.key === "ArrowDown") { bump(-1, e.shiftKey); e.preventDefault(); }
     else if (e.key === "Home") { commit(min); e.preventDefault(); }

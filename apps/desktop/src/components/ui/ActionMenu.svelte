@@ -7,6 +7,7 @@
   // move, Enter runs, Esc or a click outside closes and returns focus to the button.
   import Icon from "../Icon.svelte";
   import IconButton from "./IconButton.svelte";
+  import { isComposingKey } from "../../lib/keyboard";
 
   let { items, label = "More actions", size = "md" }: { items: MenuItem[]; label?: string; size?: "sm" | "md" } = $props();
   let open = $state(false);
@@ -24,6 +25,7 @@
     if (focus) btn?.focus();
   }
   function onkey(e: KeyboardEvent) {
+    if (isComposingKey(e) || e.altKey || e.ctrlKey || e.metaKey) return;
     const list = buttons();
     const i = list.indexOf(document.activeElement as HTMLButtonElement);
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }

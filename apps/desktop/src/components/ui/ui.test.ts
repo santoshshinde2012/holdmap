@@ -9,6 +9,8 @@ import Switch from "./Switch.svelte";
 import SegmentedControl from "./SegmentedControl.svelte";
 import ActionDock from "./ActionDock.svelte";
 import ActionPill from "./ActionPill.svelte";
+import ActionMenu from "./ActionMenu.svelte";
+import Splitter from "./Splitter.svelte";
 import Select from "./Select.svelte";
 import NumberInput from "./NumberInput.svelte";
 import Tabs from "./Tabs.svelte";
@@ -26,6 +28,42 @@ beforeAll(() => {
 });
 afterEach(cleanup);
 const flush = () => new Promise((r) => setTimeout(r, 0));
+
+describe("menu and pane keyboard controls", () => {
+  it("ignores composing and modified menu navigation and dismissal", async () => {
+    render(ActionMenu, { items: [{ id: "copy", label: "Copy", icon: "copy", run() {} }, { id: "open", label: "Open", icon: "arrow", run() {} }] });
+    await fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    const items = screen.getAllByRole("menuitem");
+    await flush();
+    items[0].focus();
+    for (const key of ["End", "ArrowDown", "Escape"]) {
+      for (const extra of [{ isComposing: true }, { keyCode: 229 }, { altKey: true }, { ctrlKey: true }, { metaKey: true }]) {
+        await fireEvent.keyDown(items[0], { key, ...extra });
+      }
+    }
+    expect(screen.getByRole("menu")).toBeTruthy();
+    expect(document.activeElement).toBe(items[0]);
+    await fireEvent.keyDown(items[0], { key: "ArrowDown" });
+    expect(document.activeElement).toBe(items[1]);
+    await fireEvent.keyDown(items[1], { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("resizes only on unmodified keys while preserving the large Shift step", async () => {
+    const onchange = vi.fn();
+    render(Splitter, { width: 420, onchange });
+    const handle = screen.getByRole("separator");
+    for (const key of ["ArrowLeft", "ArrowRight", "Home", "End"]) {
+      for (const extra of [{ isComposing: true }, { keyCode: 229 }, { altKey: true }, { ctrlKey: true }, { metaKey: true }]) {
+        await fireEvent.keyDown(handle, { key, ...extra });
+      }
+    }
+    expect(onchange).not.toHaveBeenCalled();
+    expect(handle.getAttribute("aria-valuenow")).toBe("420");
+    await fireEvent.keyDown(handle, { key: "ArrowLeft", shiftKey: true });
+    expect(onchange).toHaveBeenCalledWith(484);
+  });
+});
 
 describe("untrusted process and server prose", () => {
   it("renders markup literally in text and inline command spans", () => {
@@ -101,6 +139,19 @@ describe("SegmentedControl and Tabs", () => {
     expect(radios[1].getAttribute("aria-checked")).toBe("true");
     await fireEvent.keyDown(radios[1], { key: "End" });
     expect(onchange).toHaveBeenLastCalledWith("udp");
+  });
+  it("segmented choices ignore composing and modified navigation", async () => {
+    const onchange = vi.fn();
+    render(SegmentedControl, { label: "Protocol", value: "any", options, onchange });
+    const radios = screen.getAllByRole("radio");
+    radios[0].focus();
+    for (const extra of [{ isComposing: true }, { keyCode: 229 }, { altKey: true }, { ctrlKey: true }, { metaKey: true }]) {
+      await fireEvent.keyDown(radios[0], { key: "End", ...extra });
+    }
+    expect(onchange).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(radios[0]);
+    await fireEvent.keyDown(radios[0], { key: "End" });
+    expect(onchange).toHaveBeenCalledWith("udp");
   });
   it("action dock is a hinged radiogroup of exclusive pills", async () => {
     const onchange = vi.fn();
@@ -209,6 +260,20 @@ describe("Select", () => {
 });
 
 describe("NumberInput", () => {
+  it("keeps composition and modified text navigation from changing persisted values", async () => {
+    const onchange = vi.fn();
+    render(NumberInput, { label: "Scan every", value: 4, min: 1, max: 60, onchange });
+    const input = screen.getByRole("spinbutton");
+    for (const key of ["ArrowUp", "ArrowDown", "Home", "End", "Enter"]) {
+      for (const extra of [{ isComposing: true }, { keyCode: 229 }, { altKey: true }, { ctrlKey: true }, { metaKey: true }]) {
+        await fireEvent.keyDown(input, { key, ...extra });
+      }
+    }
+    expect(onchange).not.toHaveBeenCalled();
+    expect((input as HTMLInputElement).value).toBe("4");
+    await fireEvent.keyDown(input, { key: "ArrowUp", shiftKey: true });
+    expect(onchange).toHaveBeenCalledWith(14);
+  });
   it("steps with arrows and clamps to the range", async () => {
     const onchange = vi.fn();
     render(NumberInput, { label: "Scan every", value: 59, min: 1, max: 60, onchange });

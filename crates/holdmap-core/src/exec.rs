@@ -307,9 +307,50 @@ fn command_owners_authorized(
     table: &ProcessTable,
     allow_protected: bool,
 ) -> bool {
+    command_owners_authorized_with(
+        owners,
+        guard,
+        program,
+        args,
+        table,
+        allow_protected,
+        |unit, user, service| socket_unit_authorized(unit, user, service, table, allow_protected),
+    )
+}
+
+fn command_owners_authorized_with(
+    owners: &[Owner],
+    guard: Option<&ProcRef>,
+    program: &str,
+    args: &[String],
+    table: &ProcessTable,
+    allow_protected: bool,
+    unit_authorized: impl Fn(&str, bool, Option<&str>) -> bool,
+) -> bool {
     if let Some(guard) = guard {
-        return owners.iter().any(|owner| matches!(owner, Owner::Supervised { pid, .. } | Owner::OsService { pid: Some(pid), .. } if *pid == guard.pid))
-            && signal_authorized(guard, table, allow_protected);
+        if !signal_authorized(guard, table, allow_protected) {
+            return false;
+        }
+        return owners.iter().any(|owner| {
+            let Owner::Supervised {
+                supervisor, pid, ..
+            } = owner
+            else {
+                return false;
+            };
+            if *pid != guard.pid || !supervisor.stop_command_matches(program, args) {
+                return false;
+            }
+            match supervisor {
+                crate::engine::Supervisor::SystemdService { unit, user } => {
+                    // Stopping a service terminates its whole cgroup, including members
+                    // that are not descendants of the pinned MainPID.
+                    unit_authorized(unit, *user, None)
+                }
+                crate::engine::Supervisor::SystemdSocket { .. } => false,
+                _ => true,
+            }
+        });
     }
     for owner in owners {
         if let Owner::Supervised { supervisor, .. } = owner {
@@ -325,7 +366,7 @@ fn command_owners_authorized(
                 continue;
             };
             // The command stops a specific unit, not its shared protected PID1 manager.
-            return socket_unit_authorized(unit, *user, service.as_deref(), table, allow_protected);
+            return unit_authorized(unit, *user, service.as_deref());
         }
     }
     false
@@ -485,6 +526,79 @@ mod tests {
             &current,
             true
         ));
+        for (program, args) in [
+            ("sh", vec!["-c".into(), "fixture-command".into()]),
+            ("pm2", vec!["stop".into(), "all".into()]),
+            ("pm2", vec!["stop".into(), "2".into()]),
+            ("pm2", vec!["delete".into(), "1".into()]),
+            ("pm2", vec![]),
+        ] {
+            assert!(!command_owners_authorized(
+                std::slice::from_ref(&owner),
+                Some(&reference),
+                program,
+                &args,
+                &current,
+                true
+            ));
+        }
+    }
+
+    #[test]
+    fn security_ordinary_systemd_stops_check_protected_independent_unit_members() {
+        let main = proc(420, 1, "node", &["node", "worker.js"]);
+        let guard = ProcRef {
+            pid: main.pid,
+            name: main.name.clone(),
+            start_token: main.start_token,
+            command: main.command(),
+        };
+        let owner = Owner::Supervised {
+            supervisor: crate::engine::Supervisor::SystemdService {
+                unit: "fixture.service".into(),
+                user: true,
+            },
+            pid: main.pid,
+            name: main.name.clone(),
+        };
+        let check = |member: crate::model::ProcessInfo, allow_protected, args: &[String]| {
+            let table = table(vec![main.clone(), member], 9000);
+            // The affected member is not a child of MainPID. Service membership, rather
+            // than process ancestry, determines the scope of systemctl stop.
+            assert!(table.descendants(main.pid).is_empty());
+            assert!(signal_authorized(&guard, &table, allow_protected));
+            command_owners_authorized_with(
+                std::slice::from_ref(&owner),
+                Some(&guard),
+                "systemctl",
+                args,
+                &table,
+                allow_protected,
+                |unit, user, service| {
+                    socket_unit_processes_authorized(
+                        unit,
+                        user,
+                        service,
+                        &table,
+                        allow_protected,
+                        |_| Some(("fixture.service".into(), true)),
+                    )
+                },
+            )
+        };
+        let args = ["--user".into(), "stop".into(), "fixture.service".into()];
+        assert!(check(proc(500, 1, "worker", &["worker"]), false, &args));
+        assert!(!check(proc(500, 1, "codex", &["codex"]), false, &args));
+        assert!(check(proc(500, 1, "codex", &["codex"]), true, &args));
+        assert!(!check(proc(500, 1, "init", &["init"]), true, &args));
+        for args in [
+            vec!["stop".into(), "fixture.service".into()],
+            vec!["--user".into(), "stop".into(), "other.service".into()],
+            vec!["--user".into(), "stop".into(), "*.service".into()],
+            vec!["--user".into(), "stop".into(), "--all".into()],
+        ] {
+            assert!(!check(proc(500, 1, "worker", &["worker"]), false, &args));
+        }
     }
 
     #[test]

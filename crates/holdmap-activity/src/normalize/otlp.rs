@@ -159,17 +159,19 @@ fn trace_span(
     let start_at_ms =
         Some(nano_ms(value.get("startTimeUnixNano")).ok_or(ActivityError::InvalidMetadata)?);
     let end_at_ms = nano_ms(value.get("endTimeUnixNano")).ok_or(ActivityError::InvalidMetadata)?;
-    let status = match attr_bool(&attributes, "success") {
-        Some(true) => ActivityStatus::Ok,
-        Some(false) => ActivityStatus::Error,
-        None => match value
-            .get("status")
-            .and_then(|status| status.get("code"))
-            .and_then(Value::as_u64)
-        {
-            Some(1) => ActivityStatus::Ok,
-            Some(2) => ActivityStatus::Error,
-            _ => ActivityStatus::Unknown,
+    // The exported span status is its final outcome. A provider-specific attribute can
+    // fill an Unset status, but must not override explicit OTLP success or failure.
+    let status = match value
+        .get("status")
+        .and_then(|status| status.get("code"))
+        .and_then(Value::as_u64)
+    {
+        Some(1) => ActivityStatus::Ok,
+        Some(2) => ActivityStatus::Error,
+        _ => match attr_bool(&attributes, "success") {
+            Some(true) => ActivityStatus::Ok,
+            Some(false) => ActivityStatus::Error,
+            None => ActivityStatus::Unknown,
         },
     };
     validate_span(ActivitySpan {

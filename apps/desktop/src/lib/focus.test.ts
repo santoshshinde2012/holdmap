@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { focusTrap } from "./focus";
+import { focusables, focusTrap, trapTab } from "./focus";
 
 afterEach(() => { document.body.replaceChildren(); });
 
@@ -10,6 +10,34 @@ function surface() {
   document.body.append(root);
   return { root, button };
 }
+
+describe("dialog tab order", () => {
+  it("excludes roving controls, disabled controls and hidden ancestors", () => {
+    const { root, button } = surface();
+    root.insertAdjacentHTML("beforeend", '<button tabindex="-1">Inactive tab</button><button tabindex="-2">Programmatic focus</button><button disabled tabindex="0">Disabled</button><fieldset disabled><input></fieldset><div hidden><button>Hidden</button></div><div aria-hidden="true"><button>Decorative</button></div><div inert><button>Inert</button></div><div style="display:none"><button>Collapsed</button></div><button style="visibility:hidden">Invisible</button>');
+    expect(focusables(root)).toEqual([button]);
+    button.focus();
+    const forward = new KeyboardEvent("keydown", { key: "Tab", cancelable: true });
+    expect(trapTab(forward, root)).toBe(true);
+    expect(forward.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(button);
+    const backward = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, cancelable: true });
+    expect(trapTab(backward, root)).toBe(true);
+    expect(document.activeElement).toBe(button);
+  });
+  it("leaves consumed, composing and modified Tab keys alone", () => {
+    const { root, button } = surface();
+    button.focus();
+    for (const extra of [{ isComposing: true }, { keyCode: 229 }, { altKey: true }, { ctrlKey: true }, { metaKey: true }]) {
+      const event = new KeyboardEvent("keydown", { key: "Tab", cancelable: true, ...extra });
+      expect(trapTab(event, root)).toBe(false);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    const consumed = new KeyboardEvent("keydown", { key: "Tab", cancelable: true });
+    consumed.preventDefault();
+    expect(trapTab(consumed, root)).toBe(false);
+  });
+});
 
 describe("dialog focus restoration", () => {
   it("returns to the original trigger after replacing a loading dialog with its review", async () => {
