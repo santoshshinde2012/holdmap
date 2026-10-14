@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { activeScheduleCount, DemoSchedules, resolveScheduleDelay, scheduleCountdown, validateScheduleDelay, validateScheduledStops } from "./schedules";
+import { activeScheduleCount, DemoSchedules, resolveScheduleDelay, schedulableEntries, scheduleCountdown, validateScheduleDelay, validateScheduledStops } from "./schedules";
+import { MOCK_SNAPSHOT } from "./mock";
 
 const request = (target = "3000/tcp", confirmation_id = "review-1") => ({ target, confirmation_id, force: false, allow_protected: false });
 
@@ -14,6 +15,13 @@ describe("schedule authorization and timing", () => {
     for (const requests of [[], [request("3000")], [request("0/tcp")], [request("65536/udp")], [request("3000/tcp", "")], [request(), request()], [request(), request("3001/tcp")], [{ ...request(), force: true }], [{ ...request(), allow_protected: true }], Array.from({ length: 33 }, (_, i) => request(`${3000 + i}/tcp`, `review-${i}`))]) {
       expect(() => validateScheduledStops(requests)).toThrow();
     }
+  });
+
+  it("lists local unprotected listeners a review can schedule", () => {
+    const ports = schedulableEntries(MOCK_SNAPSHOT.entries);
+    expect(ports.some((entry) => entry.port === 3000)).toBe(true);
+    expect(ports.every((entry) => !entry.remote && !entry.protected && (entry.process || entry.container))).toBe(true);
+    expect(ports[0].is_dev || ports.every((entry) => !entry.is_dev)).toBe(true);
   });
 
   it("formats useful countdowns without negative times", () => {

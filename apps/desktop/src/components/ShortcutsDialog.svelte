@@ -6,7 +6,7 @@
     ["Navigate", [[[mod, "K"], "Command palette"], [[mod, "F"], "Search"], [["/"], "Search"], [["↑", "↓"], singleKeyShortcuts ? "Move selection (or J / K)" : "Move selection"], [["←", "→"], "Collapse · expand section"], [["Home", "End"], "First · last port"], [["↵"], "Open details"], [["Esc"], "Clear search · close"]]],
     ["Act", [[["⌫"], "Stop selected (graceful)"], [["⇧", "⌫"], "Force kill selected"], [["O"], "Open in browser"], [["C"], "Copy URL"], [["P"], "Pin / unpin"], [["⇧", "P"], "Pin with a label…"], [["S"], "Stop the service's cluster"], [["R"], "Refresh now"]]],
     ["Filter", [[["A"], "Listening ↔ all sockets"], [["T"], "Protocol: any → TCP → UDP"], [["D"], "Dev servers only"], [["M"], "Mine only"], [["E"], "Network-exposed only"]]],
-    ["View", [[["G"], "List ↔ graph"], [["⇧", "A"], "Agents, tools & apps (reveal · stop)"], [["H"], "Recently stopped"], [[mod, ","], "Settings"], [["⇧", "L"], "Cycle theme"], [["?"], "This help"]]],
+    ["View", [[["G"], "List ↔ graph"], [["⇧", "A"], "Agents, tools & apps (reveal · stop)"], [["B"], "Hide · show details pane"], [["H"], "Recently stopped"], [[mod, ","], "Settings"], [["⇧", "L"], "Cycle theme"], [["?"], "This help"]]],
   ]);
   const groups = $derived(allGroups.map(([name, items]): [string, [string[], string][]] => [name, items.filter(([keys]) => singleKeyShortcuts || keys.some((key) => key === mod || ["↑", "↓", "←", "→", "Home", "End", "↵", "Esc", "⌫"].includes(key)))]));
 </script>

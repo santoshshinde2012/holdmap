@@ -31,6 +31,11 @@ pub struct DefaultToolClassifier;
 impl ToolClassifier for DefaultToolClassifier {
     fn classify(&self, process: &ProcessInfo, ports: &[AgentPort]) -> ToolClassification {
         if let Some(name) = mcp_name(process) {
+            let name = if unpinned_npx_mcp(process) {
+                format!("{name} · unpinned npx")
+            } else {
+                name
+            };
             return ToolClassification {
                 name,
                 kind: ToolKind::McpServer,
@@ -191,6 +196,35 @@ fn launcher_packages(process: &ProcessInfo, npx: bool) -> Vec<&str> {
     candidates
 }
 
+/// `npx` without a numeric version (or with `latest` / a dist-tag) follows whatever the
+/// registry serves today. Settings files are not read; this is the launcher argument only.
+fn unpinned_npx_mcp(process: &ProcessInfo) -> bool {
+    let program = process.cmdline.first().map(|a| catalog::basename(a));
+    if program.as_deref() != Some("npx") {
+        return false;
+    }
+    launcher_packages(process, true).iter().any(|package| {
+        let package = package.replace('\\', "/");
+        let (name, version) = package
+            .rsplit_once('@')
+            .filter(|(name, _)| !name.is_empty())
+            .map_or((package.as_str(), None), |(name, version)| {
+                (name, Some(version))
+            });
+        mcp_identifier(name).is_some() && version_unpinned(version)
+    })
+}
+
+fn version_unpinned(version: Option<&str>) -> bool {
+    match version {
+        None => true,
+        Some("latest" | "next" | "*" | "") => true,
+        Some(v) if v.starts_with('^') || v.starts_with('~') || v.contains('*') => true,
+        Some(v) if v.starts_with(|c: char| c.is_ascii_digit()) => false,
+        Some(_) => true,
+    }
+}
+
 fn mcp_identifier(value: &str) -> Option<String> {
     let value = value.replace('\\', "/");
     let parts: Vec<&str> = value.split('/').collect();
@@ -304,6 +338,29 @@ mod tests {
         assert_eq!(
             DefaultToolClassifier.classify(&process, &[]).name,
             "@playwright/mcp"
+        );
+        let process = proc(1, 0, "npx", &["npx", "-y", "@playwright/mcp"]);
+        assert_eq!(
+            DefaultToolClassifier.classify(&process, &[]).name,
+            "@playwright/mcp · unpinned npx"
+        );
+        let process = proc(
+            1,
+            0,
+            "npx",
+            &[
+                "npx",
+                "-y",
+                "@modelcontextprotocol/server-filesystem@latest",
+            ],
+        );
+        assert!(
+            DefaultToolClassifier
+                .classify(&process, &[])
+                .name
+                .contains("unpinned npx"),
+            "{:?}",
+            process.cmdline
         );
         for process in [
             proc(1, 0, "cp", &["cp", "/tmp/mcp-server-fetch", "/tmp/backup"]),

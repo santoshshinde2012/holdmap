@@ -3,7 +3,9 @@
 use super::cluster::{supervisor_tool, ClusterRegistry, NodeFacts};
 use super::model::*;
 use crate::engine::is_launcher;
-use crate::model::{PortEntry, ProjectInfo, Protocol, RawSocket, SocketState};
+use crate::model::{
+    Framework, FrameworkCategory, PortEntry, ProjectInfo, Protocol, RawSocket, SocketState,
+};
 use crate::process::ProcessTable;
 use crate::project::ProjectDetector;
 use crate::safety::{DefaultProtectionPolicy, ProtectionPolicy};
@@ -39,6 +41,39 @@ fn fmt_endpoint(a: IpAddr, port: u16) -> String {
         IpAddr::V6(v) => format!("[{v}]:{port}"),
         IpAddr::V4(v) => format!("{v}:{port}"),
     }
+}
+
+/// Editor-extension runtimes inherit the open workspace as cwd. The graph title is the
+/// extension, not the project — same identity the list already uses.
+fn editor_extension_framework(f: &Framework) -> bool {
+    f.category == FrameworkCategory::App && f.name.to_ascii_lowercase().contains("extension")
+}
+
+fn node_identity(e: &PortEntry) -> (String, Option<String>) {
+    let label = if let Some(c) = &e.container {
+        c.compose_service.clone().unwrap_or_else(|| c.name.clone())
+    } else if let Some(f) = e
+        .framework
+        .as_ref()
+        .filter(|f| editor_extension_framework(f))
+    {
+        f.name.clone()
+    } else if let Some(p) = &e.project {
+        p.name.clone()
+    } else if let Some(f) = &e.framework {
+        f.name.clone()
+    } else if let Some(p) = &e.process {
+        p.name.clone()
+    } else {
+        e.label.clone()
+    };
+    let subtitle = e
+        .framework
+        .as_ref()
+        .map(|f| f.name.clone())
+        .or_else(|| e.process.as_ref().map(|p| p.name.clone()))
+        .filter(|s| *s != label);
+    (label, subtitle)
 }
 
 impl<'a> TopologyBuilder<'a> {
@@ -145,23 +180,7 @@ impl<'a> TopologyBuilder<'a> {
             None => Vec::new(),
         };
         let (cpu, mem) = self.usage(&pids);
-        let label = if let Some(c) = &e.container {
-            c.compose_service.clone().unwrap_or_else(|| c.name.clone())
-        } else if let Some(p) = &e.project {
-            p.name.clone()
-        } else if let Some(f) = &e.framework {
-            f.name.clone()
-        } else if let Some(p) = &e.process {
-            p.name.clone()
-        } else {
-            e.label.clone()
-        };
-        let subtitle = e
-            .framework
-            .as_ref()
-            .map(|f| f.name.clone())
-            .or_else(|| e.process.as_ref().map(|p| p.name.clone()))
-            .filter(|s| *s != label);
+        let (label, subtitle) = node_identity(e);
         Node {
             id: id.to_string(),
             kind,
@@ -190,7 +209,11 @@ impl<'a> TopologyBuilder<'a> {
     ) -> Option<(Node, Option<ProjectInfo>)> {
         let t = self.table();
         let p = t.get(root)?;
-        let project = p.cwd.as_ref().and_then(|c| detector.detect(c));
+        let project = if crate::safety::editor_extension(p).is_some() {
+            None
+        } else {
+            p.cwd.as_ref().and_then(|c| detector.detect(c))
+        };
         let framework = crate::project::detect_framework(p, project.as_ref());
         let pids = self.tree_pids(root);
         let (cpu, mem) = self.usage(&pids);

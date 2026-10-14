@@ -219,6 +219,54 @@ mod tests {
     }
 
     #[test]
+    fn native_helpers_in_a_project_folder_are_not_its_framework() {
+        let project = |kind: &str, root: &str, deps: &[&str]| ProjectDetails {
+            info: ProjectInfo {
+                name: "seller-agent".into(),
+                root: root.into(),
+                kind: kind.into(),
+                git_branch: None,
+                workspace: None,
+                git_root: None,
+            },
+            deps: deps.iter().map(|d| d.to_string()).collect(),
+        };
+        let next = project("package.json", "/Users/me/SellerAgent", &["next", "react"]);
+        let pg = "/Users/me/.vscode/extensions/ms-ossdata.vscode-pgsql-1.32.0-darwin-arm64/pgsqltoolsservice/v3.7.2/OSX/pgsqltoolsservice/ossdbtoolsservice_main";
+        let mut tools = proc(5, 1, "ossdbtoolsservice_main", &[pg, "--parent-pid", "4"]);
+        tools.exe = Some(pg.into());
+        tools.cwd = Some("/Users/me/SellerAgent".into());
+        let f = detect_framework(&tools, Some(&next)).unwrap();
+        assert_eq!(
+            (f.name.as_str(), f.category),
+            ("VS Code extension", crate::model::FrameworkCategory::App)
+        );
+        let mut helper = proc(6, 1, "acme-sync", &["/opt/acme/bin/acme-sync"]);
+        helper.exe = Some("/opt/acme/bin/acme-sync".into());
+        assert_eq!(detect_framework(&helper, Some(&next)), None);
+        // Launchers run the project's code, so a dev tree rooted at `npm run dev` keeps its label.
+        let mut npm_title = proc(7, 1, "npm run dev", &["npm", "run", "dev"]);
+        npm_title.exe = Some("/usr/local/bin/node".into());
+        assert_eq!(
+            detect_framework(&npm_title, Some(&next)).unwrap().name,
+            "Next.js"
+        );
+
+        let rust = project("Cargo.toml", "/srv/api", &["axum"]);
+        let mut built = proc(8, 1, "api", &["/srv/api/target/debug/api"]);
+        built.exe = Some("/srv/api/target/debug/api".into());
+        assert_eq!(detect_framework(&built, Some(&rust)).unwrap().name, "Axum");
+        let mut installed = proc(9, 1, "rust-analyzer", &["rust-analyzer"]);
+        installed.exe = Some("/Users/me/.cargo/bin/rust-analyzer".into());
+        assert_eq!(detect_framework(&installed, Some(&rust)), None);
+
+        let go = project("go.mod", "/srv/orders", &["github.com/gin-gonic/gin"]);
+        let mut go_run = proc(10, 1, "main", &["/tmp/go-build123/b001/exe/main"]);
+        go_run.exe = Some("/tmp/go-build123/b001/exe/main".into());
+        assert_eq!(detect_framework(&go_run, Some(&go)).unwrap().name, "Gin");
+    }
+
+    #[test]
     fn home_is_not_a_project() {
         let tmp = tempfile::tempdir().unwrap();
         fs::write(tmp.path().join("package.json"), "{}").unwrap();
@@ -267,6 +315,36 @@ mod tests {
                 "Python http.server",
             ),
             (proc(1, 0, "node", &["node", "index.js"]), "Node.js"),
+            (
+                proc(
+                    1,
+                    0,
+                    "Code Helper (Plugin)",
+                    &[
+                        "Code Helper (Plugin)",
+                        "--inspect-port=0",
+                        "--remote-debugging-port=0",
+                    ],
+                ),
+                "Editor / Electron app",
+            ),
+            (
+                proc(1, 0, "node", &["node", "--inspect", "index.js"]),
+                "Node inspector",
+            ),
+            (
+                proc(
+                    1,
+                    0,
+                    "node",
+                    &["node", "--inspect=0.0.0.0:9229", "index.js"],
+                ),
+                "Node inspector",
+            ),
+            (
+                proc(1, 0, "node", &["node", "--inspect-port=0", "index.js"]),
+                "Node.js",
+            ),
         ];
         for (p, want) in cases {
             assert_eq!(
@@ -278,6 +356,16 @@ mod tests {
         }
         assert!(detect_framework(&proc(1, 0, "mystery", &["mystery"]), None).is_none());
         assert!(detect_framework(&proc(1, 0, "invite-svc", &["invite-svc"]), None).is_none());
+        // Product signatures win: a Next.js server with a debugger is still Next.js.
+        assert_eq!(
+            detect_framework(
+                &proc(1, 0, "next-server", &["next-server", "--inspect"]),
+                None
+            )
+            .unwrap()
+            .name,
+            "Next.js"
+        );
     }
 
     #[test]

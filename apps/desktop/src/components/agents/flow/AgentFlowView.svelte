@@ -9,12 +9,15 @@
   import { activityMatches, activityRuns, graphWindow, observedGraph, nodeDescription } from "../../../lib/agent-flow/build";
   import { activityContext, activityRows, type ActivityFilter, type ActivityOrder } from "../../../lib/agent-flow/triage";
   import type { AgentFlowProps } from "../../../lib/agent-flow/model";
+  import { prefGetBoolean, prefSet } from "../../../lib/prefs";
 
   let { query = "", dark, reduced, flowReport = null, activity = null, recording = null, flowLoading = false, activityLoading = false,
     flowError = null, activityError = null, demo = false, paused = false, onpausechange, onflowmodechange, onrefreshflow, onrefreshactivity,
     onstartrecording, onstoprecording, onclearactivity, onactivitysetup, onclearquery,
   }: AgentFlowProps & { query?: string; dark: boolean; reduced: boolean } = $props();
 
+  let inspector = $state(prefGetBoolean("flow.inspector", true));
+  $effect(() => prefSet("flow.inspector", inspector ? "1" : "0"));
   let mode = $state<"connections" | "calls">("connections");
   let chosen = $state<string | null>(null);
   let runId = $state<string | null>(null);
@@ -50,6 +53,7 @@
       {#if paused}<span class="paused">View paused</span>{/if}
       {#if onpausechange}<button type="button" aria-label={paused ? "Resume flow updates" : "Pause flow updates"} onclick={() => onpausechange(!paused)}><Icon name={paused ? "play" : "stop"} size={12} />{paused ? "Resume view" : "Pause view"}</button>{/if}
       <button type="button" disabled={loading} aria-label={mode === "calls" ? "Refresh recorded activity" : "Refresh connections"} onclick={() => mode === "calls" ? onrefreshactivity?.() : onrefreshflow?.()}><Icon name="refresh" size={12} />Refresh</button>
+      {#if graph.nodes.length || (mode === "calls" && run)}<button type="button" aria-pressed={inspector} class:on={inspector} onclick={() => (inspector = !inspector)} title={inspector ? "Hide the inspector so the graph uses the full width" : "Show connection and activity details"}><Icon name="panel" size={12} />{inspector ? "Hide inspector" : "Show inspector"}</button>{/if}
     </div>
   </header>
   <div class="source">
@@ -81,9 +85,10 @@
   {/if}
   {#if windowed.omitted}<p class="window-note">Showing {graph.nodes.length} of {context.nodes.length} context spans in the graph. All matching records remain in the timeline; select one to show it and its reported parents.</p>{/if}
   {#if graph.nodes.length || (mode === "calls" && run)}
-    <div class="workspace">
+    <div class="workspace" class:full={!inspector}>
       {#if graph.nodes.length}<FlowCanvas {graph} calls={mode === "calls"} chosen={selected} {dark} {reduced} onselect={(id) => chosen = id} />
       {:else}<div class="empty"><Icon name="activity" size={28} /><h3>No activity matches this view</h3><p>Reset the filters or clear your search to see this recorded run.</p></div>{/if}
+      {#if inspector}
       <aside class="companion" aria-label={mode === "calls" ? "Recorded activity details" : "Connection details"}>
         <FlowInspector {graph} chosen={selected} onclose={() => chosen = null} />
         {#if mode === "calls" && run}<ActivityTimeline {run} {rows} chosen={selected} onselect={(id) => chosen = id} />
@@ -92,6 +97,7 @@
           <section class="relationships" aria-label="Flow relationships"><h3>Relationships <span>{graph.edges.length}</span></h3><ul>{#each graph.edges as e (e.id)}<li><button type="button" class:chosen={selected === e.id} onclick={() => chosen = e.id}><strong>{graph.nodes.find((n) => n.id === e.from)?.label} {e.kind === "tcp" ? "↔" : "→"} {graph.nodes.find((n) => n.id === e.to)?.label}</strong><span>{e.label} · {e.evidence}</span></button></li>{/each}</ul></section>
         {/if}
       </aside>
+      {/if}
     </div>
   {:else}
     <div class="empty" aria-busy={loading}>
@@ -122,6 +128,8 @@
   .run-picker label, .activity-controls label { font-size: var(--fs-caption); font-weight: var(--fw-semibold); } .run-picker select, .activity-controls select { max-width: min(650px, 80%); min-width: 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); font: inherit; font-size: var(--fs-caption); } .run-picker span, .shown-count { color: var(--muted); font-size: var(--fs-caption); }
   .activity-controls p { flex-basis: 100%; margin: 0; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-body); }
   .workspace { flex: 1; min-height: 180px; display: grid; grid-template-columns: minmax(0, 1fr) 330px; }
+  .workspace.full { grid-template-columns: minmax(0, 1fr); }
+  .toolbar-actions button.on { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
   .failed-count { color: var(--danger) !important; }
   .companion { overflow: auto; min-height: 0; border-left: 1px solid var(--border); background: var(--surface); }
   .participants h3, .relationships h3 { margin: 0; padding: 12px 14px 6px; font-size: var(--fs-body-sm); } h3 span { color: var(--muted); font-weight: var(--fw-regular); }
@@ -132,12 +140,12 @@
   .empty { flex: 1; min-height: 120px; padding: 25px 18px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 9px; text-align: center; color: var(--muted); }
   .empty h3 { margin: 0; color: var(--text); font-size: var(--fs-heading); } .empty p { max-width: 440px; margin: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body); }
   .limits { border-top: 1px solid var(--border); padding: 8px 14px; font-size: var(--fs-caption); color: var(--muted); } .limits summary { display: flex; gap: 6px; align-items: center; color: var(--text-2); cursor: pointer; } .limits ul { margin: 8px 0; padding-left: 18px; max-height: 110px; overflow: auto; }
-  @container (max-width: 940px) { .workspace { grid-template-columns: minmax(0, 1fr) 285px; } .totals { display: none; } }
   @container (max-width: 940px) {
-    .workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 42%) minmax(0, 1fr); overflow: hidden; }
+    .workspace:not(.full) { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 42%) minmax(0, 1fr); overflow: hidden; }
     .companion { overflow: auto; border-left: 0; border-top: 1px solid var(--border); }
     .companion :global(.inspector) { max-height: calc(100% - 24px); box-sizing: border-box; overflow: auto; }
     .source { align-items: flex-start; }
+    .totals { display: none; }
   }
   .reduced :global(*) { animation: none !important; transition: none !important; }
 </style>

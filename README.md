@@ -64,7 +64,8 @@ the 0.4.0 installers retain their original icons.
   Aider, Docker Desktop, OrbStack and more: memory, CPU, stoppable ports, parent process, the
   folders each one works in, the ports and apps it started (children grouped as tools & apps),
   the services and hosts it talks to, and access (account, sandbox, approval flags, network
-  exposure), each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor,
+  exposure including debug and model-server ports), each fact marked seen, inferred or unknown.
+  Agent settings files are not read. Reveal a folder, open it in your editor,
   or stop only the services that agent started, through the normal safety policy.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
   server for AI coding assistants. macOS, Linux and Windows. No product analytics.
@@ -298,7 +299,8 @@ are **Simulate shutdown now…** and **Schedule simulation…**, with **Schedule
 simulation?** clearly identifying the scheduled review. For a local port, **Schedule stop…**
 opens the one-hour review separately from **Stop…**. Choose another preset, a custom delay
 or **At a time** as needed; agent service reviews also support delays. **Scheduled actions**
-shows each deadline, countdown, reviewed port and cancellation result. Schedules run while
+shows each deadline, countdown, reviewed port and cancellation result. When nothing is
+scheduled, it can start a shutdown or a reviewed service stop. Schedules run while
 Holdmap stays open, including in the tray; quitting clears them. Keep the computer awake.
 Missed deadlines or clock changes require a fresh review. Agent schedules stop only the
 reviewed services and ports, preserving the agent session. Version 0.4.0 downloads predate
@@ -318,7 +320,9 @@ scheduling; use 0.5.0 or newer.
 
 A tray and menu-bar app with the port list, details, the service graph (`G`), the agents map
 (`⇧A`), pins, history with one-click restart, remote hosts over SSH and a command palette (`⌘K` /
-`Ctrl+K`). `⌘⌥P` (`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. On the
+`Ctrl+K`). `⌘⌥P` (`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. `B`
+hides the details pane so Graph uses the full window; Agents and Flow have matching Hide
+cards / Hide inspector controls. On the
 Agents map, expand a card to reveal a folder, open it in your editor, or stop the unprotected
 ports that agent started. From a port’s details pane you can open it in a browser, restart a
 dev server, open its folder (`HOLDMAP_EDITOR`, else Cursor, VS Code, Zed…) or Finder, and copy

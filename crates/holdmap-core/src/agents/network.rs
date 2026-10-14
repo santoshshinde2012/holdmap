@@ -20,7 +20,11 @@ pub(super) fn ports(scan: &Scan, set: &HashSet<u32>, helpers: &HashSet<u32>) -> 
         .filter(|e| e.state.is_listening())
         .filter_map(|e| {
             let pid = holder(e)?;
-            let role = if helpers.contains(&pid) {
+            let extension = scan
+                .table
+                .get(pid)
+                .is_some_and(|p| crate::safety::editor_extension(p).is_some());
+            let role = if helpers.contains(&pid) || extension {
                 PortRole::Agent
             } else if e.is_dev {
                 PortRole::DevServer

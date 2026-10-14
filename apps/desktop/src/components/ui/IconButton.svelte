@@ -11,6 +11,8 @@
     size = "md",
     variant = "ghost",
     pressed,
+    badge,
+    placement = "bottom",
     tip = true,
     el = $bindable(),
     class: cls = "",
@@ -23,19 +25,25 @@
     variant?: "ghost" | "outline";
     /** Toggle state; renders aria-pressed. */
     pressed?: boolean;
+    /** Small count on the control; keep the accessible name in `label`. */
+    badge?: number | string;
+    placement?: "top" | "bottom";
     tip?: boolean;
     el?: HTMLButtonElement;
     class?: string;
   } = $props();
   const px = $derived(size === "xs" ? 12 : size === "sm" ? 14 : 16);
+  const mark = $derived(badge != null && badge !== 0 && badge !== "" ? String(badge) : "");
 </script>
 
-<button bind:this={el} type="button" class="ib {size} {variant} {cls}" class:on={pressed} aria-label={label} aria-pressed={pressed} use:tooltip={tip ? { text: label, kbd } : null} {...rest}>
+<button bind:this={el} type="button" class="ib {size} {variant} {cls}" class:on={pressed} aria-label={label} aria-pressed={pressed} use:tooltip={tip ? { text: label, kbd, placement } : null} {...rest}>
   <Icon name={icon} size={px} />
+  {#if mark}<span class="badge" aria-hidden="true">{mark}</span>{/if}
 </button>
 
 <style>
-  .ib { display: inline-grid; place-items: center; flex: none; width: var(--h-md); height: var(--h-md); border-radius: var(--r-md); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; transition: background var(--dur-1), color var(--dur-1), border-color var(--dur-1); }
+  .ib { position: relative; display: inline-grid; place-items: center; flex: none; width: var(--h-md); height: var(--h-md); border-radius: var(--r-md); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; transition: background var(--dur-1), color var(--dur-1), border-color var(--dur-1); }
+  .badge { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--accent); color: var(--accent-fg); font-size: var(--fs-caption); line-height: 1; font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; display: inline-grid; place-items: center; }
   .ib:hover:not(:disabled) { background: var(--row-hover); color: var(--text); }
   .ib:active:not(:disabled) { background: var(--surface-3); }
   .ib:disabled { opacity: 0.45; cursor: not-allowed; }

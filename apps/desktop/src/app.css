@@ -59,6 +59,7 @@
   --ok-soft: rgb(18 183 106 / 0.11);
   --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
   --shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 4px 16px rgb(16 24 40 / 0.06);
+  --shadow-md: 0 2px 6px rgb(16 24 40 / 0.06), 0 10px 28px rgb(16 24 40 / 0.10);
   --shadow-lg: 0 0 0 1px rgb(16 24 40 / 0.06), 0 24px 56px rgb(16 24 40 / 0.18), 0 4px 12px rgb(16 24 40 / 0.06);
   --row-hover: rgb(17 24 39 / 0.035);
   --row-selected: rgb(80 72 229 / 0.075);
@@ -110,6 +111,7 @@
   --ok-soft: rgb(71 209 140 / 0.12);
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 2px 6px rgb(0 0 0 / 0.45), 0 12px 32px rgb(0 0 0 / 0.4);
   --shadow-lg: 0 0 0 1px rgb(255 255 255 / 0.07), 0 24px 64px rgb(0 0 0 / 0.65);
   --row-hover: rgb(255 255 255 / 0.03);
   --row-selected: rgb(142 140 255 / 0.11);

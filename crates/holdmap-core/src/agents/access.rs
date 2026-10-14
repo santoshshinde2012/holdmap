@@ -211,8 +211,15 @@ pub fn approvals(product: &str, root: &ProcessInfo) -> AccessFact {
             if let Some(f) = has_flag(args, &["--yolo", "-y"]) {
                 return auto(f);
             }
-            if let Some(m @ "yolo") = flag_value(args, &["--approval-mode"]) {
-                return auto(format!("--approval-mode {m}"));
+            match flag_value(args, &["--approval-mode"]) {
+                Some(m @ "yolo") => return auto(format!("--approval-mode {m}")),
+                Some(m @ "auto_edit") => {
+                    return seen(
+                        AccessLevel::Standard,
+                        format!("Started with --approval-mode {m}: file edits are accepted without asking; other tools still ask."),
+                    )
+                }
+                _ => {}
             }
         }
         "aider" => {
@@ -221,11 +228,28 @@ pub fn approvals(product: &str, root: &ProcessInfo) -> AccessFact {
             }
         }
         "copilot-cli" => {
-            if let Some(f) = has_flag(args, &["--allow-all-tools"]) {
+            if let Some(f) = has_flag(args, &["--allow-all", "--yolo", "--allow-all-tools"]) {
                 return auto(f);
             }
         }
-        "cursor-agent" | "cline" | "goose" | "opencode" | "amp" | "crush" | "qwen" => {
+        "cursor-agent" => {
+            if let Some(f) = has_flag(args, &["--force", "--yolo"]) {
+                return auto(f);
+            }
+            if let Some(f) = has_flag(args, &["--approve-mcps"]) {
+                return seen(
+                    AccessLevel::Elevated,
+                    format!("Started with {f}: MCP servers are accepted without asking."),
+                );
+            }
+            if let Some(f) = has_flag(args, &["--trust"]) {
+                return seen(
+                    AccessLevel::Elevated,
+                    format!("Started with {f}: the workspace is trusted without asking."),
+                );
+            }
+        }
+        "cline" | "goose" | "opencode" | "amp" | "crush" | "qwen" => {
             if let Some(f) = has_flag(
                 args,
                 &[
@@ -252,47 +276,57 @@ pub fn approvals(product: &str, root: &ProcessInfo) -> AccessFact {
 
 /// Network: what it listens on and how many remote hosts it talks to.
 pub fn network(ports: &[AgentPort], remote_hosts: usize) -> AccessFact {
-    let list = |ps: &[&AgentPort]| {
-        let mut v: Vec<String> = ps.iter().map(|p| format!(":{}", p.port)).collect();
-        v.dedup();
-        if v.len() > 4 {
-            let n = v.len() - 4;
-            v.truncate(4);
-            v.push(format!("+{n}"));
-        }
-        v.join(", ")
-    };
     let remote = match remote_hosts {
         0 => String::new(),
         1 => " Talks to 1 remote host.".into(),
         n => format!(" Talks to {n} remote hosts."),
     };
-    let exposed: Vec<&AgentPort> = ports
+    let shown: Vec<&AgentPort> = if ports.iter().any(|p| p.exposure != Exposure::Loopback) {
+        ports
+            .iter()
+            .filter(|p| p.exposure != Exposure::Loopback)
+            .collect()
+    } else {
+        ports.iter().collect()
+    };
+    let mut hinted = false;
+    let mut labels: Vec<String> = shown
         .iter()
-        .filter(|p| p.exposure != Exposure::Loopback)
+        .map(|p| {
+            let (label, from_port) = listener_label(p);
+            hinted |= from_port;
+            label
+        })
         .collect();
-    let (level, text) = if !exposed.is_empty() {
+    labels.dedup();
+    if labels.len() > 4 {
+        let n = labels.len() - 4;
+        labels.truncate(4);
+        labels.push(format!("+{n}"));
+    }
+    let list = labels.join(", ");
+    let (level, text) = if shown.iter().any(|p| p.exposure != Exposure::Loopback) {
         (
             AccessLevel::Elevated,
-            format!(
-                "Listens on {} beyond loopback: potentially reachable from your network.",
-                list(&exposed)
-            ),
+            format!("Listens on {list} beyond loopback: potentially reachable from your network."),
         )
     } else if ports.is_empty() {
         (AccessLevel::Standard, "No listening sockets.".to_string())
     } else {
-        let all: Vec<&AgentPort> = ports.iter().collect();
         (
             AccessLevel::Standard,
-            format!("Listens on {} on this machine only.", list(&all)),
+            format!("Listens on {list} on this machine only."),
         )
     };
     fact(
         AccessTopic::Network,
         level,
         format!("{text}{remote}"),
-        Evidence::Observed,
+        if hinted {
+            Evidence::Inferred
+        } else {
+            Evidence::Observed
+        },
     )
 }
 
@@ -363,20 +397,46 @@ pub fn privacy(platform: &str, folders: &[AgentFolder]) -> AccessFact {
     )
 }
 
+/// Debug, notebook and model-server ports that are risky when reachable. A hint from the
+/// number only: the process may be something else on a reused port.
+pub fn sensitive_bind(port: u16) -> Option<&'static str> {
+    Some(match port {
+        5005 => "Java debug",
+        5678 => "debugpy",
+        5858 | 9229 | 9230 => "Node inspector",
+        9222 => "Chrome DevTools",
+        11434 => "Ollama",
+        _ => return None,
+    })
+}
+
+fn listener_label(p: &AgentPort) -> (String, bool) {
+    if let Some(name) = p.framework.as_deref().filter(|name| {
+        matches!(
+            *name,
+            "Node inspector" | "Chrome DevTools" | "Jupyter" | "Ollama" | "llama.cpp" | "LM Studio"
+        )
+    }) {
+        return (format!(":{} ({name})", p.port), false);
+    }
+    if let Some(hint) = sensitive_bind(p.port) {
+        return (format!(":{} ({hint})", p.port), true);
+    }
+    (format!(":{}", p.port), false)
+}
+
 /// A conventional service name for a well-known port (a hint, not a probe).
 pub fn service_hint(port: u16) -> Option<&'static str> {
-    Some(match port {
-        22 => "SSH",
-        53 => "DNS",
-        80 => "HTTP",
-        443 => "HTTPS",
-        3306 => "MySQL",
-        5432 => "PostgreSQL",
-        6379 => "Redis",
-        9229 => "Node inspector",
-        11434 => "Ollama",
-        27017 => "MongoDB",
-        _ => return None,
+    sensitive_bind(port).or(match port {
+        22 => Some("SSH"),
+        53 => Some("DNS"),
+        80 => Some("HTTP"),
+        443 => Some("HTTPS"),
+        3306 => Some("MySQL"),
+        5432 => Some("PostgreSQL"),
+        6379 => Some("Redis"),
+        27017 => Some("MongoDB"),
+        _ => None,
     })
 }
 
@@ -404,6 +464,20 @@ mod tests {
         assert_eq!(approvals("codex", &p).level, AccessLevel::Elevated);
         let p = proc(1, 0, "gemini", &["gemini", "-y"]);
         assert_eq!(approvals("gemini", &p).level, AccessLevel::Elevated);
+        let p = proc(1, 0, "gemini", &["gemini", "--approval-mode", "auto_edit"]);
+        assert_eq!(approvals("gemini", &p).level, AccessLevel::Standard);
+        let p = proc(1, 0, "copilot", &["copilot", "--yolo"]);
+        assert_eq!(approvals("copilot-cli", &p).level, AccessLevel::Elevated);
+        let p = proc(1, 0, "copilot", &["copilot", "--allow-all"]);
+        assert_eq!(approvals("copilot-cli", &p).level, AccessLevel::Elevated);
+        let p = proc(1, 0, "cursor-agent", &["cursor-agent", "--approve-mcps"]);
+        let f = approvals("cursor-agent", &p);
+        assert_eq!(f.level, AccessLevel::Elevated);
+        assert!(f.summary.contains("--approve-mcps"), "{}", f.summary);
+        let p = proc(1, 0, "cursor-agent", &["cursor-agent", "--trust"]);
+        assert!(approvals("cursor-agent", &p).summary.contains("--trust"));
+        let p = proc(1, 0, "cursor-agent", &["cursor-agent", "--force"]);
+        assert_eq!(approvals("cursor-agent", &p).level, AccessLevel::Elevated);
         let p = proc(1, 0, "claude", &["claude"]);
         let f = approvals("claude-code", &p);
         assert_eq!(
@@ -510,5 +584,47 @@ mod tests {
         assert_eq!(fact.level, AccessLevel::Elevated);
         assert!(fact.summary.contains("beyond loopback"));
         assert!(!fact.summary.contains("machine only"));
+    }
+
+    #[test]
+    fn debug_and_model_ports_are_named_in_the_network_fact() {
+        let port = |n: u16, exposure, framework: Option<&str>| AgentPort {
+            entry_id: format!("tcp:{n}"),
+            port: n,
+            protocol: crate::model::Protocol::Tcp,
+            exposure,
+            pid: Some(1),
+            process: None,
+            label: "service".into(),
+            role: super::super::PortRole::Service,
+            project: None,
+            framework: framework.map(str::to_string),
+        };
+        let loopback = crate::model::Exposure::Loopback;
+        let all = crate::model::Exposure::AllInterfaces;
+        let fact = network(&[port(9229, loopback, None)], 0);
+        assert_eq!(fact.level, AccessLevel::Standard);
+        assert_eq!(fact.evidence, Evidence::Inferred);
+        assert!(
+            fact.summary.contains(":9229 (Node inspector)"),
+            "{}",
+            fact.summary
+        );
+        let fact = network(&[port(9229, all, Some("Next.js"))], 0);
+        assert_eq!(fact.level, AccessLevel::Elevated);
+        assert_eq!(fact.evidence, Evidence::Inferred);
+        assert!(fact.summary.contains("Node inspector"));
+        let fact = network(&[port(8888, loopback, Some("Vite"))], 0);
+        assert_eq!(fact.evidence, Evidence::Observed);
+        assert!(fact.summary.contains(":8888"), "{}", fact.summary);
+        assert!(!fact.summary.contains("Jupyter"), "{}", fact.summary);
+        let fact = network(&[port(11434, all, Some("Ollama"))], 0);
+        assert_eq!(fact.level, AccessLevel::Elevated);
+        assert_eq!(fact.evidence, Evidence::Observed);
+        assert!(fact.summary.contains(":11434 (Ollama)"), "{}", fact.summary);
+        assert_eq!(sensitive_bind(11434), Some("Ollama"));
+        assert_eq!(service_hint(9222), Some("Chrome DevTools"));
+        assert_eq!(service_hint(5432), Some("PostgreSQL"));
+        assert_eq!(sensitive_bind(8888), None);
     }
 }

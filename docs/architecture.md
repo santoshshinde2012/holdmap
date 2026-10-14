@@ -932,7 +932,7 @@ agent state.
 | `footprint.rs` | Working folders, project metadata, privacy boundaries and recent-folder deduplication |
 | `network.rs` | Owned listeners and address-aware local or remote connections |
 | `tools.rs` | `ToolClassifier` and process-derived MCP, dev-server, shell or command metadata |
-| `access.rs` | Account, sandbox, approval and exposure facts with evidence |
+| `access.rs` | Account, sandbox, approval and exposure facts with evidence; well-known debug/model-server port names |
 | `recent.rs` | Bounded, allowlisted current-account project history |
 | `model.rs` | Serializable report types, shared search and folder/port control candidates |
 
@@ -1172,7 +1172,10 @@ The graph view uses **Svelte Flow (`@xyflow/svelte`) and `@dagrejs/dagre`**. Nod
 (so they reuse the icons, tokens and focus rings), group nodes draw the cluster hulls, and the
 minimap and zoom controls are built in. dagre gives a stable left-to-right layout that matches the
 stop order; the alternative "organic" layout is a small seeded force simulation, so the graph
-doesn't move between refreshes.
+doesn't move between refreshes. Unconnected subgraphs explain the empty canvas and offer
+**All services**; External stays idle until there are outbound hosts. Editor-extension nodes
+keep the extension identity, not the inherited project. Details, agent cards, the Flow
+inspector and on-canvas legends can be hidden so Graph and Flow use the full window.
 
 ## 7. Design notes
 

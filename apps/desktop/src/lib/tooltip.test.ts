@@ -8,4 +8,8 @@ describe("tooltip placement", () => {
     expect(place({ top: 100, bottom: 120, left: 790, width: 10 }, { width: 100, height: 20 }, 800, 600).left).toBe(696);
     expect(place({ top: 100, bottom: 120, left: 0, width: 10 }, { width: 100, height: 20 }, 800, 600).left).toBe(4);
   });
+
+  it("keeps a bottom preference below the control when there is room", () => {
+    expect(place({ top: 40, bottom: 60, left: 100, width: 40 }, { width: 80, height: 24 }, 800, 600, "bottom")).toEqual({ top: 66, left: 80 });
+  });
 });

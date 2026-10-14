@@ -112,6 +112,8 @@ const SIGNATURES: &[Sig] = &[
     sig(&["flask run", "flask"], "Flask", C::DevServer),
     sig(&["streamlit"], "Streamlit", C::DevServer),
     sig(&["jupyter", "ipykernel"], "Jupyter", C::Tool),
+    sig(&["llama-server"], "llama.cpp", C::Tool),
+    sig(&["lm-studio", "lmstudio"], "LM Studio", C::Tool),
     sig(
         &["http.server", "simplehttpserver"],
         "Python http.server",
@@ -301,6 +303,14 @@ fn haystack(p: &ProcessInfo) -> String {
 
 /// Detect the framework for a process, optionally refined by its project's dependencies.
 pub fn detect_framework(p: &ProcessInfo, project: Option<&ProjectDetails>) -> Option<Framework> {
+    // An editor extension's service runs in the open workspace, but the workspace's
+    // dependencies say nothing about it.
+    if let Some(editor) = crate::safety::editor_extension(p) {
+        return Some(Framework {
+            name: format!("{editor} extension"),
+            category: C::App,
+        });
+    }
     let hay = haystack(p);
     let name = p.name.to_ascii_lowercase();
     let generic_vite = |f: &Framework| f.name == "Vite";
@@ -325,6 +335,15 @@ pub fn detect_framework(p: &ProcessInfo, project: Option<&ProjectDetails>) -> Op
         }
         return Some(f);
     }
+    // After product signatures: a generic `node --inspect` is a debugger, not "Node.js".
+    // Next.js/Vite already matched above and keep their product label; well-known inspector
+    // ports are named in the agent's network fact.
+    if node_inspector(p) {
+        return Some(Framework {
+            name: "Node inspector".into(),
+            category: C::Tool,
+        });
+    }
     let runtime = RUNTIMES.iter().find(|(r, _)| {
         name == *r
             || name.starts_with(&format!("{r}3"))
@@ -332,10 +351,12 @@ pub fn detect_framework(p: &ProcessInfo, project: Option<&ProjectDetails>) -> Op
             || (*r == "node" && name.starts_with("node"))
     });
     // Only trust manifest dependencies that belong to the process's own ecosystem: a python
-    // process in a directory that also has a Cargo.toml isn't an Axum server.
-    let compatible = |p: &&ProjectDetails| match runtime {
-        Some((r, _)) => manifest_matches_runtime(&p.info.kind, r),
-        None => true,
+    // process in a directory that also has a Cargo.toml isn't an Axum server, and a native
+    // helper started in a Next.js checkout isn't a Next.js server. Launchers (`npm run dev`,
+    // `cargo run`) run the project's own code.
+    let compatible = |project: &&ProjectDetails| match runtime {
+        Some((r, _)) => manifest_matches_runtime(&project.info.kind, r),
+        None => crate::engine::is_launcher(p) || runs_project_build(p, project),
     };
     if let Some(f) = project.filter(compatible).and_then(dep_framework) {
         return Some(f);
@@ -344,6 +365,65 @@ pub fn detect_framework(p: &ProcessInfo, project: Option<&ProjectDetails>) -> Op
         name: (*label).into(),
         category: C::AppServer,
     })
+}
+
+/// A native process is the project's own build when the project compiles to a binary and the
+/// executable lives in it (`target/debug/api`, `./bin/server`) or in Go's temporary `go run`
+/// build directory.
+fn runs_project_build(p: &ProcessInfo, project: &ProjectDetails) -> bool {
+    if !matches!(project.info.kind.as_str(), "Cargo.toml" | "go.mod") {
+        return false;
+    }
+    let argv0 = p.cmdline.first().map(std::path::Path::new);
+    p.exe.as_deref().into_iter().chain(argv0).any(|path| {
+        (path.is_relative() && path.components().count() > 1)
+            || path.starts_with(&project.info.root)
+            || path.components().any(|c| {
+                c.as_os_str()
+                    .to_str()
+                    .is_some_and(|s| s.starts_with("go-build"))
+            })
+    })
+}
+
+fn node_inspector(p: &ProcessInfo) -> bool {
+    let mut args = p
+        .cmdline
+        .iter()
+        .take_while(|a| a.as_str() != "--")
+        .map(String::as_str);
+    while let Some(a) = args.next() {
+        if matches!(a, "--inspect" | "--inspect-brk" | "--inspect-wait") {
+            return true;
+        }
+        if let Some(v) = a
+            .strip_prefix("--inspect=")
+            .or_else(|| a.strip_prefix("--inspect-brk="))
+            .or_else(|| a.strip_prefix("--inspect-wait="))
+        {
+            return inspect_bind_active(v);
+        }
+        if a == "--inspect-port" {
+            return args.next().is_some_and(inspect_port_active);
+        }
+        if let Some(v) = a.strip_prefix("--inspect-port=") {
+            return inspect_port_active(v);
+        }
+    }
+    false
+}
+
+fn inspect_port_active(value: &str) -> bool {
+    value != "0"
+}
+
+fn inspect_bind_active(value: &str) -> bool {
+    inspect_port_active(
+        value
+            .rsplit_once(':')
+            .map(|(_, port)| port)
+            .unwrap_or(value),
+    )
 }
 
 fn manifest_matches_runtime(kind: &str, runtime: &str) -> bool {

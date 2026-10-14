@@ -246,7 +246,8 @@ pub struct AgentFolder {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PortRole {
-    /// Held by the agent itself or one of its helpers (an IDE server, an auth callback).
+    /// Held by the agent itself or one of its helpers (an IDE server, an auth callback, an
+    /// editor extension's service).
     Agent,
     /// A dev server the agent started.
     DevServer,

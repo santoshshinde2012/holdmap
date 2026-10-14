@@ -384,8 +384,11 @@ pub fn build_entries_using(
         families.dedup();
         let uid = socks.iter().find_map(|s| s.uid);
         let process = pid.and_then(|p| table.get(p)).cloned();
+        // An editor extension's service often inherits the open workspace as cwd. That
+        // checkout is not the service's project, so we skip it before labelling.
         let project = process
             .as_ref()
+            .filter(|p| crate::safety::editor_extension(p).is_none())
             .and_then(|p| p.cwd.as_ref())
             .and_then(|cwd| detector.detect(cwd));
         let mut framework = process
@@ -863,6 +866,81 @@ mod tests {
             inode: Some(1),
             pids: pids.to_vec(),
         }
+    }
+
+    #[test]
+    fn editor_extension_listeners_are_not_labelled_as_the_open_project() {
+        use crate::project::{ProjectCache, ProjectDetails};
+        use std::path::Path;
+        use std::sync::Arc;
+        use std::time::Duration;
+        let pg =
+            "/Users/me/.vscode/extensions/ms-ossdata.vscode-pgsql-1.32.0/ossdbtoolsservice_main";
+        let mut tools = proc(
+            20,
+            10,
+            "ossdbtoolsservice_main",
+            &[pg, "--parent-pid", "10"],
+        );
+        tools.exe = Some(pg.into());
+        tools.cwd = Some("/Users/me/SellerAgent".into());
+        let t = table(
+            vec![
+                proc(1, 0, "init", &[]),
+                proc(10, 1, "Code Helper (Plugin)", &[]),
+                tools,
+            ],
+            300,
+        );
+        let raw = vec![sock(
+            Protocol::Tcp,
+            Family::V4,
+            "127.0.0.1",
+            59891,
+            SocketState::Listen,
+            &[20],
+        )];
+        let cache = ProjectCache::new(
+            Arc::new(|cwd: &Path, _: Option<&Path>| {
+                Some(ProjectDetails {
+                    info: crate::model::ProjectInfo {
+                        name: "seller-agent".into(),
+                        root: cwd.to_path_buf(),
+                        kind: "package.json".into(),
+                        git_branch: None,
+                        workspace: None,
+                        git_root: None,
+                    },
+                    deps: vec!["next".into(), "react".into()],
+                })
+            }),
+            Duration::from_secs(60),
+        );
+        let mut detector = ProjectDetector::with_cache(cache, None, Duration::from_secs(5));
+        let (entries, _) = build_entries_using(
+            &raw,
+            &t,
+            &[],
+            false,
+            &DefaultProtectionPolicy,
+            &mut detector,
+        );
+        let row = entries.iter().find(|e| e.port == 59891).unwrap();
+        assert_eq!(
+            row.project.as_ref(),
+            None,
+            "cwd is the open workspace, not the extension"
+        );
+        assert_eq!(
+            row.framework.as_ref().map(|f| f.name.as_str()),
+            Some("VS Code extension")
+        );
+        assert_eq!(row.label, "VS Code extension");
+        assert!(
+            !row.is_dev,
+            "extension services are not stoppable dev servers"
+        );
+        assert!(row.protected);
     }
 
     #[test]

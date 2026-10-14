@@ -76,6 +76,13 @@ describe("lazy details", () => {
 });
 
 describe("port action capabilities", () => {
+  it("offers a hide control for the details pane", async () => {
+    const onhide = vi.fn();
+    const view = render(DetailPane, { ...props(base), onhide });
+    await fireEvent.click(view.getByRole("button", { name: "Hide details pane" }));
+    expect(onhide).toHaveBeenCalledOnce();
+  });
+
   it("offers a separate scheduled-stop review without running an immediate stop", async () => {
     const onstop = vi.fn();
     const onschedule = vi.fn();

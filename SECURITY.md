@@ -192,6 +192,12 @@ history/logs without inspecting them. Version 0.5.0 includes the agent recording
 action safeguards listed in the [0.5.0 release entry](CHANGELOG.md#050---2026-10-11), alongside
 the [0.4.0 security fixes](CHANGELOG.md#040---2026-10-10). Version 0.3.0 predates those fixes.
 
+Holdmap reports agent access from the live process table, command line and sockets. It does not
+read agent settings files (they often hold tokens) and it is not a CVE scanner for installed
+Claude Code, Cursor, Codex or Copilot versions. Dedicated MCP config scanners cover on-disk
+`mcp.json` and similar; Holdmap covers what is running now. Changing that boundary is an
+explicit, documented product choice.
+
 ## Scheduled desktop actions (version 0.5.0)
 
 Scheduling uses the trusted local main window and keeps authorization in the native process.

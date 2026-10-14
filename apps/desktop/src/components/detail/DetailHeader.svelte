@@ -7,7 +7,7 @@
   import { canOpen, title, url } from "../../lib/format";
   import { tooltip } from "../../lib/tooltip";
 
-  let { entry, pinned, onpin, oncopy, onclose }: { entry: PortEntry; pinned: boolean; onpin?: () => void; oncopy: (text: string, what: string) => void; onclose?: () => void } = $props();
+  let { entry, pinned, onpin, oncopy, onclose, onhide }: { entry: PortEntry; pinned: boolean; onpin?: () => void; oncopy: (text: string, what: string) => void; onclose?: () => void; onhide?: () => void } = $props();
   const name = $derived(title(entry));
   const fw = $derived(entry.framework && entry.framework.name !== name ? entry.framework.name : null);
   const status = $derived(entry.state === "listen" ? "Listening" : entry.protocol === "udp" ? "Bound" : entry.state.replace(/_/g, " "));
@@ -19,6 +19,7 @@
     <div class="tools">
       {#if onpin}<IconButton icon="star" label={pinned ? `Unpin :${entry.port}` : `Pin :${entry.port}`} kbd="P" pressed={pinned} class="pin" size="sm" onclick={onpin} />{/if}
       {#if canOpen(entry)}<IconButton icon="link" label="Copy URL" kbd="C" size="sm" onclick={() => oncopy(url(entry), "URL")} />{/if}
+      {#if onhide}<IconButton icon="panel" label="Hide details pane" kbd="B" size="sm" onclick={onhide} />{/if}
       {#if onclose}<IconButton icon="x" label="Close details" kbd="Esc" size="sm" onclick={onclose} />{/if}
     </div>
   </div>
