@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import SegmentedControl from "../../ui/SegmentedControl.svelte";
+  import { ActionDock, ActionPill } from "../../ui";
   import Icon from "../../Icon.svelte";
   import FlowCanvas from "./FlowCanvas.svelte";
   import FlowInspector from "./FlowInspector.svelte";
@@ -10,15 +10,20 @@
   import { activityContext, activityRows, type ActivityFilter, type ActivityOrder } from "../../../lib/agent-flow/triage";
   import type { AgentFlowProps } from "../../../lib/agent-flow/model";
   import { prefGetBoolean, prefSet } from "../../../lib/prefs";
+  import { tooltip } from "../../../lib/tooltip";
 
   let { query = "", dark, reduced, flowReport = null, activity = null, recording = null, flowLoading = false, activityLoading = false,
     flowError = null, activityError = null, demo = false, paused = false, onpausechange, onflowmodechange, onrefreshflow, onrefreshactivity,
     onstartrecording, onstoprecording, onclearactivity, onactivitysetup, onclearquery,
-  }: AgentFlowProps & { query?: string; dark: boolean; reduced: boolean } = $props();
+    mode = $bindable("connections"), sourceChrome = true,
+  }: AgentFlowProps & { query?: string; dark: boolean; reduced: boolean; mode?: "connections" | "calls"; sourceChrome?: boolean } = $props();
 
   let inspector = $state(prefGetBoolean("flow.inspector", true));
   $effect(() => prefSet("flow.inspector", inspector ? "1" : "0"));
-  let mode = $state<"connections" | "calls">("connections");
+  let showLimits = $state(prefGetBoolean("flow.limits", true));
+  $effect(() => prefSet("flow.limits", showLimits ? "1" : "0"));
+  let showRecording = $state(prefGetBoolean("flow.recording", true));
+  $effect(() => prefSet("flow.recording", showRecording ? "1" : "0"));
   let chosen = $state<string | null>(null);
   let runId = $state<string | null>(null);
   let filter = $state<ActivityFilter>("all");
@@ -38,36 +43,52 @@
   const limits = $derived(mode === "connections" ? flowReport?.limits ?? [] : activity?.limits ?? []);
   const calls = $derived((activity?.spans ?? []).filter((s) => s.kind === "tool").length);
   const selected = $derived(chosen && (graph.nodes.some((n) => n.id === chosen) || graph.edges.some((e) => e.id === chosen)) ? chosen : null);
+  const canInspect = $derived(graph.nodes.length > 0 || (mode === "calls" && !!run));
+  const canLimit = $derived(limits.length > 0 || (mode === "connections" && !!flowReport && (flowReport.omitted_nodes > 0 || flowReport.omitted_edges > 0)));
+  const sourceLabel = $derived(demo ? "Example data" : mode === "connections" ? "OS snapshot" : "Reported activity");
+  const sourceHint = $derived(mode === "connections"
+    ? "See which processes own tools and listeners, and which endpoints have live sockets. Sockets do not reveal messages or data direction."
+    : "See recorded tool calls and parent spans from configured agents. Session membership and event order do not imply communication.");
+  const sourceTotals = $derived(mode === "connections" ? `${graph.nodes.length} participants · ${graph.edges.length} relationships` : `${calls} tool calls · ${activity?.spans.length ?? 0} spans`);
   const runName = (r: typeof runs[number]) => `${r.spans.find((s) => s.kind === "agent")?.name ?? r.spans[0]?.name ?? r.label} · ${r.label.toLowerCase()} · ${r.calls} tool ${r.calls === 1 ? "call" : "calls"}`;
   $effect(() => { if (!allRuns.some((r) => r.id === runId)) runId = runs[0]?.id ?? null; });
-  $effect(() => { const next = mode; untrack(() => onflowmodechange?.(next)); });
+  $effect.pre(() => {
+    const next = mode;
+    untrack(() => {
+      chosen = null;
+      onflowmodechange?.(next);
+    });
+  });
 
-  function change(next: "connections" | "calls") { mode = next; chosen = null; }
+  function change(next: "connections" | "calls") { mode = next; }
   function resetView() { filter = "all"; order = "time"; onclearquery?.(); }
 </script>
 
 <section class="flow-view" class:reduced aria-label="Agent flow">
   <header class="toolbar">
-    <SegmentedControl value={mode} options={[{ value: "connections", label: "Connections", icon: "link" }, { value: "calls", label: "Calls", icon: "activity" }]} label="Flow data source" onchange={change} />
+    {#if sourceChrome}
+      <ActionDock label="Flow data source" value={mode} options={[{ value: "connections", label: "Connections", icon: "link" }, { value: "calls", label: "Calls", icon: "activity" }]} onchange={change} />
+    {/if}
+    <div class="source">
+      <strong>{sourceLabel}</strong>
+      <span class="hint" use:tooltip={{ text: sourceHint, placement: "bottom", onlyIfTruncated: true }}>{sourceHint}</span>
+      <span class="totals">{sourceTotals}</span>
+    </div>
+    {#if paused}<span class="paused">View paused</span>{/if}
+    {#if mode === "calls"}
+      <RecordingControls bind:this={recordingControls} bar={showRecording} {recording} {demo} statusLoading={activityLoading} statusError={Boolean(activityError)}
+        records={activity?.spans.length ?? 0} dropped={activity?.dropped ?? 0}
+        {onstartrecording} {onstoprecording} {onclearactivity} {onactivitysetup} />
+    {/if}
     <div class="toolbar-actions">
-      {#if paused}<span class="paused">View paused</span>{/if}
-      {#if onpausechange}<button type="button" aria-label={paused ? "Resume flow updates" : "Pause flow updates"} onclick={() => onpausechange(!paused)}><Icon name={paused ? "play" : "stop"} size={12} />{paused ? "Resume view" : "Pause view"}</button>{/if}
-      <button type="button" disabled={loading} aria-label={mode === "calls" ? "Refresh recorded activity" : "Refresh connections"} onclick={() => mode === "calls" ? onrefreshactivity?.() : onrefreshflow?.()}><Icon name="refresh" size={12} />Refresh</button>
-      {#if graph.nodes.length || (mode === "calls" && run)}<button type="button" aria-pressed={inspector} class:on={inspector} onclick={() => (inspector = !inspector)} title={inspector ? "Hide the inspector so the graph uses the full width" : "Show connection and activity details"}><Icon name="panel" size={12} />{inspector ? "Hide inspector" : "Show inspector"}</button>{/if}
+      {#if onpausechange}<ActionPill icon={paused ? "play" : "stop"} label={paused ? "Resume view" : "Pause view"} name={paused ? "Resume flow updates" : "Pause flow updates"} toggle pressed={paused} onclick={() => onpausechange(!paused)} />{/if}
+      <ActionPill icon="refresh" label="Refresh" name={mode === "calls" ? "Refresh recorded activity" : "Refresh connections"} disabled={loading} onclick={() => mode === "calls" ? onrefreshactivity?.() : onrefreshflow?.()} />
+      {#if canInspect}<ActionPill icon="panel" toggle pressed={inspector} label={inspector ? "Hide inspector" : "Show inspector"} title={inspector ? "Hide the inspector so the graph uses the full width" : "Show connection and activity details"} onclick={() => (inspector = !inspector)} />{/if}
+      {#if canLimit}<ActionPill icon="info" toggle pressed={showLimits} label={showLimits ? "Hide limits" : "Show limits"} title={showLimits ? "Hide visibility limits" : "Show what this view can and cannot see"} onclick={() => (showLimits = !showLimits)} />{/if}
+      {#if mode === "calls"}<ActionPill icon="activity" toggle pressed={showRecording} label={showRecording ? "Hide recording" : "Show recording"} title={showRecording ? "Hide recording controls" : "Show recording controls"} onclick={() => (showRecording = !showRecording)} />{/if}
     </div>
   </header>
-  <div class="source">
-    <div><strong>{demo ? "Example data" : mode === "connections" ? "Operating system snapshot" : "Integration reported activity"}</strong>
-      <p>{mode === "connections" ? "See which processes own tools and listeners, and which endpoints have live sockets. Sockets do not reveal messages or data direction." : "See recorded tool calls and parent spans from configured agents. Session membership and event order do not imply communication."}</p>
-    </div>
-    <span class="totals">{mode === "connections" ? `${graph.nodes.length} participants · ${graph.edges.length} relationships` : `${calls} tool calls · ${activity?.spans.length ?? 0} spans`}</span>
-  </div>
   {#if error}<div class="load-error" role="status">Updates unavailable. {graph.nodes.length ? "Showing the last available data." : "Refresh to try again."}</div>{/if}
-  {#if mode === "calls"}
-    <RecordingControls bind:this={recordingControls} {recording} {demo} statusLoading={activityLoading} statusError={Boolean(activityError)}
-      records={activity?.spans.length ?? 0} dropped={activity?.dropped ?? 0}
-      {onstartrecording} {onstoprecording} {onclearactivity} {onactivitysetup} />
-  {/if}
   {#if mode === "calls" && runs.length}
     <div class="run-picker"><label for="agent-flow-run">{run?.kind === "session" ? "Session" : "Run"}</label><select id="agent-flow-run" value={runId ?? ""} onchange={(e) => { runId = e.currentTarget.value; chosen = null; }}>{#each runs as r (r.id)}<option value={r.id}>{runName(r)}</option>{/each}</select>
       {#if run?.kind === "session"}<span>Session grouping · no parent correlation supplied</span>{/if}
@@ -76,11 +97,10 @@
   {/if}
   {#if mode === "calls" && run}
     <div class="activity-controls" role="group" aria-label="Recorded activity controls">
-      <SegmentedControl value={filter} options={[{ value: "all", label: "All" }, { value: "failed", label: "Failed" }, { value: "incomplete", label: "No completion" }]} label="Activity filter" onchange={(next) => filter = next} />
+      <ActionDock hinge={false} animate={false} value={filter} options={[{ value: "all", label: "All" }, { value: "failed", label: "Failed" }, { value: "incomplete", label: "No completion" }]} label="Activity filter" onchange={(next) => filter = next} />
       <label for="agent-flow-order">Order</label><select id="agent-flow-order" bind:value={order}><option value="time">Chronological</option><option value="duration">Longest reported duration</option></select>
       <span class="shown-count">{rows.length} of {run.spans.length} records shown</span>
-      <button type="button" onclick={resetView}>Reset activity view</button>
-      <p>No completion means no end was received. A finished span may still have an unknown status. The graph keeps inspected records and reported parents for context.</p>
+      <ActionPill label="Reset activity view" onclick={resetView} />
     </div>
   {/if}
   {#if windowed.omitted}<p class="window-note">Showing {graph.nodes.length} of {context.nodes.length} context spans in the graph. All matching records remain in the timeline; select one to show it and its reported parents.</p>{/if}
@@ -104,32 +124,35 @@
       <Icon name={mode === "calls" ? "activity" : "link"} size={28} />
       <h3>{loading ? "Loading flow…" : query.trim() ? "No flow matches this search" : mode === "calls" ? "No recorded activity yet" : "No observed connections yet"}</h3>
       <p>{query.trim() ? "Search by agent or tool name, process ID, address or port. Clear your search to see all available data." : mode === "calls" ? "Start recording and connect an integration to see reported calls. Running agents alone do not provide call telemetry." : "Start an agent or tool. Its observed process tree, listeners and live socket relationships appear after a scan."}</p>
-      {#if query.trim() && onclearquery}<button type="button" onclick={onclearquery}>Clear search</button>
-      {:else if mode === "calls" && !query.trim() && !recordingControls?.setupVisible()}<button type="button" onclick={() => recordingControls?.openSetup()}>Set up recording</button>{/if}
+      {#if query.trim() && onclearquery}<ActionPill label="Clear search" onclick={onclearquery} />
+      {:else if mode === "calls" && !query.trim() && !recordingControls?.setupVisible()}<ActionPill label="Set up recording" onclick={() => { showRecording = true; recordingControls?.openSetup(); }} />{/if}
     </div>
   {/if}
-  {#if limits.length || (flowReport && mode === "connections" && (flowReport.omitted_nodes || flowReport.omitted_edges))}
-    <details class="limits" open={!graph.nodes.length}><summary><Icon name="info" size={12} />Visibility limits{#if mode === "connections" && flowReport && (flowReport.omitted_nodes || flowReport.omitted_edges)} · {flowReport.omitted_nodes} participants and {flowReport.omitted_edges} relationships omitted{/if}</summary><ul>{#each limits as limit}<li>{limit}</li>{/each}</ul></details>
+  {#if showLimits && canLimit}
+    <details class="limits"><summary><Icon name="info" size={12} />Visibility limits{#if mode === "connections" && flowReport && (flowReport.omitted_nodes || flowReport.omitted_edges)} · {flowReport.omitted_nodes} participants and {flowReport.omitted_edges} relationships omitted{/if}</summary><ul>{#each limits as limit}<li>{limit}</li>{/each}</ul></details>
   {/if}
 </section>
 
 <style>
   .flow-view { min-height: 0; height: 100%; display: flex; flex-direction: column; color: var(--text); container-type: inline-size; background: var(--bg); }
-  .toolbar, .run-picker, .activity-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
-  .toolbar { justify-content: space-between; }
-  .toolbar-actions { display: flex; align-items: center; gap: 6px; }
+  .toolbar, .run-picker, .activity-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+  .toolbar { gap: 10px; }
+  .toolbar > :global(.dock) { order: 0; }
+  .source { order: 1; display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1 1 160px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .source strong { color: var(--text-2); font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
+  .source .hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .paused { order: 2; }
+  .toolbar > :global(.recording-bar) { order: 3; padding: 0; border: 0; flex: none; }
+  .toolbar-actions { order: 4; display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .toolbar > :global(.setup), .toolbar > :global(.clear-review), .toolbar > :global(.notice), .toolbar > :global(.status-unavailable) { order: 5; flex-basis: 100%; }
   button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 28px; padding: 4px 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; color: var(--text-2); cursor: pointer; font: inherit; font-size: var(--fs-caption); }
   button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-2); } button:disabled { opacity: .5; cursor: not-allowed; } button:focus-visible, select:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-  .source { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
-  .source strong { font-size: var(--fs-body-sm); } .source p { margin: 4px 0 0; max-width: 850px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-body); }
   .totals, .paused { font-size: var(--fs-caption); color: var(--muted); white-space: nowrap; }
   .load-error { margin: 0; padding: 8px 14px; background: var(--surface-2); color: var(--warn); border-bottom: 1px solid var(--border); font-size: var(--fs-caption); }
   .window-note { margin: 0; padding: 8px 14px; color: var(--muted); background: var(--surface); border-bottom: 1px solid var(--border); font-size: var(--fs-caption); }
   .run-picker label, .activity-controls label { font-size: var(--fs-caption); font-weight: var(--fw-semibold); } .run-picker select, .activity-controls select { max-width: min(650px, 80%); min-width: 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); font: inherit; font-size: var(--fs-caption); } .run-picker span, .shown-count { color: var(--muted); font-size: var(--fs-caption); }
-  .activity-controls p { flex-basis: 100%; margin: 0; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-body); }
   .workspace { flex: 1; min-height: 180px; display: grid; grid-template-columns: minmax(0, 1fr) 330px; }
   .workspace.full { grid-template-columns: minmax(0, 1fr); }
-  .toolbar-actions button.on { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
   .failed-count { color: var(--danger) !important; }
   .companion { overflow: auto; min-height: 0; border-left: 1px solid var(--border); background: var(--surface); }
   .participants h3, .relationships h3 { margin: 0; padding: 12px 14px 6px; font-size: var(--fs-body-sm); } h3 span { color: var(--muted); font-weight: var(--fw-regular); }
@@ -144,7 +167,6 @@
     .workspace:not(.full) { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 42%) minmax(0, 1fr); overflow: hidden; }
     .companion { overflow: auto; border-left: 0; border-top: 1px solid var(--border); }
     .companion :global(.inspector) { max-height: calc(100% - 24px); box-sizing: border-box; overflow: auto; }
-    .source { align-items: flex-start; }
     .totals { display: none; }
   }
   .reduced :global(*) { animation: none !important; transition: none !important; }

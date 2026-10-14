@@ -10,6 +10,7 @@ beforeAll(() => {
   Element.prototype.scrollIntoView ??= () => {};
   globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
   window.matchMedia ??= ((media: string) => ({ matches: false, media, addEventListener() {}, removeEventListener() {} })) as unknown as typeof matchMedia;
+  (Element.prototype as unknown as { animate: unknown }).animate ??= vi.fn(() => ({ cancel() {}, finish() {}, onfinish: null, currentTime: 0, play() {}, pause() {} }));
 });
 afterEach(() => { cleanup(); localStorage.clear(); });
 
@@ -109,6 +110,21 @@ describe("agent visibility", () => {
     await fireEvent.click(view.getByRole("button", { name: "Hide cards" }));
     expect(view.queryByRole("complementary", { name: "Agents" })).toBeNull();
     expect(view.getByRole("button", { name: "Show cards" })).toBeTruthy();
+  });
+
+  it("starts on the computer picture with Project disabled until a folder is chosen", async () => {
+    const view = render(AgentsView, { report: mockAgents(), entries: [], selectedAgent: null, dark: false, reduced: true, onselectagent() {}, onentry() {}, ...actions });
+    expect(view.getByRole("radio", { name: "Computer" }).getAttribute("aria-checked")).toBe("true");
+    expect((view.getByRole("radio", { name: "Project" }) as HTMLButtonElement).disabled).toBe(true);
+    await fireEvent.click(view.getByRole("radio", { name: "Footprint" }));
+    expect(view.getByRole("radio", { name: "Footprint" }).getAttribute("aria-checked")).toBe("true");
+    expect(view.getByRole("button", { name: "Recent projects" })).toBeTruthy();
+  });
+
+  it("enables Project after a folder is chosen from a card", async () => {
+    const view = render(AgentsView, { report: mockAgents(), entries: MOCK_SNAPSHOT.entries, selectedAgent: "agent:52000", dark: false, reduced: true, onselectagent() {}, onentry() {}, ...actions });
+    await fireEvent.click(view.getByRole("button", { name: "Folder actions for /Users/dev/code/shop-web" }));
+    expect((view.getByRole("radio", { name: "Project" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("hides the agents legend and counts", async () => {

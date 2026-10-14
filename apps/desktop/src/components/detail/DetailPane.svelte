@@ -129,7 +129,7 @@
     <AtAGlance {entries} onselect={onselectentry} {mod} {onhide} />
   {:else}
     <DetailHeader {entry} {pinned} {onpin} {oncopy} {onclose} {onhide} />
-    <Tabs {tabs} value={active} onchange={(value) => tab = value} {base} label="Details sections" layout="wrap" />
+    <Tabs {tabs} value={active} onchange={(value) => tab = value} {base} label="Details sections" />
     {#key entryId + active}
       <div class="body" in:fade={{ duration: reduced ? 0 : 120 }}>
         <ScrollArea bind:el={scroller} padded={false}>
@@ -144,22 +144,21 @@
       </div>
     {/key}
     <footer class="actions" aria-label="Port actions">
-      {#if canOpen(entry) || restartable || menu.length}
-        <div class="utilities">
-          {#if canOpen(entry)}<Button icon="external" kbd="O" onclick={onopen}>Open</Button>{/if}
-          {#if restartable}<Button variant="ghost" icon="refresh" onclick={onrestart} disabled={busy || loading} tip={{ text: "Stop it, then run the same command again in the same folder" }}>Restart</Button>{/if}
-          {#if menu.length}<div class="more"><ActionMenu items={menu} /></div>{/if}
+      <div class="bar">
+        {#if canOpen(entry) || restartable || menu.length}
+          <div class="utilities">
+            {#if canOpen(entry)}<Button size="sm" variant="ghost" icon="external" kbd="O" onclick={onopen}>Open</Button>{/if}
+            {#if restartable}<Button size="sm" variant="ghost" icon="refresh" onclick={onrestart} disabled={busy || loading} tip={{ text: "Stop it, then run the same command again in the same folder" }}>Restart</Button>{/if}
+            {#if menu.length}<ActionMenu items={menu} size="sm" />{/if}
+          </div>
+        {/if}
+        <div class="stop" role="group" aria-label="Stop this port">
+          {#if schedulable}<Button size="sm" variant="secondary" icon="clock" disabled={busy || loading} onclick={onschedule}>Schedule stop…</Button>{/if}
+          <Button size="sm" variant={stop?.overridable ? "danger-outline" : "danger"} icon="stop" kbd={entry.container ? undefined : "⌫"} loading={busy} loadingText="Stopping…" disabled={loading || (!stopReady && !stop?.overridable)} onclick={onstop}>{entry.container ? "Stop container…" : "Stop…"}</Button>
         </div>
-      {/if}
-      <div class="stop-actions" role="group" aria-label="Stop this port">
-        <div class="action-heading"><span>Port :{entry.port} / {entry.protocol.toUpperCase()}</span>{#if entry.protected || stop?.overridable}<span class="protected"><Icon name="shield" size={12} />Protected</span>{/if}</div>
-        {#if stopReason}<p class="why"><Icon name={stop?.overridable || entry.protected ? "shield" : "lock"} size={13} /><span>{stopReason}{#if stop?.overridable} — review an explicit override to stop it.{/if}</span></p>{/if}
-        <div class="stop-buttons" class:paired={schedulable}>
-          <Button full variant={stop?.overridable ? "danger-outline" : "danger"} icon="stop" kbd={entry.container ? undefined : "⌫"} loading={busy} loadingText="Stopping…" disabled={loading || (!stopReady && !stop?.overridable)} onclick={onstop}>{entry.container ? "Stop container…" : "Stop…"}</Button>
-          {#if schedulable}<Button full icon="clock" disabled={busy || loading} onclick={onschedule}>Schedule stop…</Button>{/if}
-        </div>
-        <p class="scope">Stops the port owner; keeps this computer running.</p>
       </div>
+      {#if stopReason}<p class="why"><Icon name={stop?.overridable || entry.protected ? "shield" : "lock"} size={13} /><span>{stopReason}{#if stop?.overridable} — review an explicit override to stop it.{/if}</span></p>
+      {:else}<p class="scope">Stops the port owner; keeps this computer running.</p>{/if}
     </footer>
   {/if}
 </aside>
@@ -170,19 +169,12 @@
   .body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
   .body :global(.sa), .body :global(.vp), .body :global(.content) { min-width: 0; }
   .panel { outline: none; min-width: 0; padding: var(--sp-4) var(--sp-4) var(--sp-5); overflow-wrap: anywhere; }
-  .actions { display: grid; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--border); background: var(--surface); flex: none; min-width: 0; }
-  .utilities { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
-  .more { margin-left: auto; }
-  .stop-actions { display: grid; gap: var(--sp-2); min-width: 0; }
-  .action-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-2); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--text-2); }
-  .protected { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
-  .stop-buttons { display: grid; gap: var(--sp-2); min-width: 0; }
-  .stop-buttons.paired { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stop-buttons :global(.ui-btn) { min-width: 0; min-height: var(--h-md); height: auto; padding: 7px 8px; white-space: normal; line-height: var(--lh-body-sm); }
-  .stop-buttons :global(.lbl) { overflow: visible; }
-  .why { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); }
-  .why :global(svg) { flex: none; margin-top: 2px; }
+  .actions { display: grid; gap: 8px; padding: 10px 14px 12px; border-top: 1px solid var(--border); background: var(--surface); flex: none; min-width: 0; }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .utilities, .stop { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+  .stop { margin-left: auto; }
+  .why { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
+  .why :global(svg) { flex: none; margin-top: 1px; }
   .scope { margin: 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
-  @container (max-width: 280px) { .stop-buttons.paired { grid-template-columns: minmax(0, 1fr); } }
 
 </style>

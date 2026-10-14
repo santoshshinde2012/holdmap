@@ -11,6 +11,7 @@
   import FitOnChange from "./graph/FitOnChange.svelte";
   import AutoMiniMap from "./graph/AutoMiniMap.svelte";
   import Icon from "./Icon.svelte";
+  import { ActionDock, ActionPill } from "./ui";
   import type { Graph, GraphNode } from "../lib/types";
   import { FIT_PADDING, FORCE_NODE_LIMIT, layout, layoutModeFor, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Positions } from "../lib/graph";
   import { prefGet, prefGetBoolean, prefGetChoice, prefSet } from "../lib/prefs";
@@ -146,16 +147,13 @@
       <Panel position="top-left">
         <div class="chrome">
           <div class="bar" role="toolbar" aria-label="Graph view options">
-            <div class="seg" role="radiogroup" aria-label="Layout">
-              <button role="radio" aria-checked={effectiveMode === "layered"} class:on={effectiveMode === "layered"} onclick={() => (mode = "layered")} title="Layered: clients on the left, data stores on the right"><Icon name="layers" size={12} />Layered</button>
-              <button role="radio" aria-checked={effectiveMode === "force"} class:on={effectiveMode === "force"} disabled={forceLimited} onclick={() => (mode = "force")} title={forceLimited ? `Layered keeps large graphs responsive. Force is available for up to ${FORCE_NODE_LIMIT} services.` : "Force-directed: tightly connected services cluster together"}><Icon name="radar" size={12} />Force</button>
-            </div>
-            <button class="tog" aria-pressed={animate && !reduced} class:on={animate && !reduced} disabled={reduced} onclick={() => (animate = !animate)} title={reduced ? "Reduced motion is on in your system settings" : "Animate live connections"}><Icon name="zap" size={12} />Traffic</button>
+            <ActionDock hinge={false} animate={false} size="compact" label="Layout" value={effectiveMode} options={[{ value: "layered", label: "Layered", icon: "layers", title: "Layered: clients on the left, data stores on the right" }, { value: "force", label: "Force", icon: "radar", title: forceLimited ? `Layered keeps large graphs responsive. Force is available for up to ${FORCE_NODE_LIMIT} services.` : "Force-directed: tightly connected services cluster together", disabled: forceLimited }]} onchange={(v) => (mode = v)} />
+            <ActionPill size="compact" toggle icon="zap" label="Traffic" pressed={animate && !reduced} disabled={reduced} title={reduced ? "Reduced motion is on in your system settings" : "Animate live connections"} onclick={() => (animate = !animate)} />
             <span class="sep" aria-hidden="true"></span>
-            {#if ontoggleall}<button class="tog" aria-pressed={all} class:on={all} onclick={ontoggleall} title="Include databases, apps and system services that aren't connected to your dev servers"><Icon name="layers" size={12} />All services</button>{/if}
-            <button class="tog" aria-pressed={showExternal} class:on={showExternal} disabled={!hasRemote} onclick={() => (external = !external)} title={hasRemote ? "Show outbound connections to remote hosts" : "No outbound connections to remote hosts right now"}><Icon name="globe" size={12} />External</button>
+            {#if ontoggleall}<ActionPill size="compact" toggle icon="layers" label="All services" pressed={all} title="Include databases, apps and system services that aren't connected to your dev servers" onclick={ontoggleall} />{/if}
+            <ActionPill size="compact" toggle icon="globe" label="External" pressed={showExternal} disabled={!hasRemote} title={hasRemote ? "Show outbound connections to remote hosts" : "No outbound connections to remote hosts right now"} onclick={() => (external = !external)} />
             <span class="sep" aria-hidden="true"></span>
-            <button class="tog" aria-pressed={widgets} class:on={widgets} onclick={() => (widgets = !widgets)} title="Show or hide the legend and counts"><Icon name="layers" size={12} />Legend</button>
+            <ActionPill size="compact" toggle icon="layers" label="Legend" pressed={widgets} title="Show or hide the legend and counts" onclick={() => (widgets = !widgets)} />
           </div>
           {#if widgets && stats}
             <div class="stats" aria-live="polite">
@@ -198,13 +196,8 @@
   .graph :global(.svelte-flow__minimap:hover), .graph :global(.svelte-flow__minimap:focus-within) { opacity: 1; }
   .graph :global(.svelte-flow__background) { --xy-background-pattern-color: var(--border); }
   .chrome { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; max-width: min(100%, 920px); }
-  .bar { display: flex; gap: 6px; align-items: center; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; box-shadow: var(--shadow-sm); }
+  .bar { display: flex; gap: 6px; align-items: center; width: max-content; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; box-shadow: var(--shadow-sm); }
   .sep { width: 1px; height: 16px; background: var(--border); margin: 0 2px; flex: none; }
-  .seg { display: inline-flex; padding: 2px; background: var(--surface-2); border-radius: 8px; }
-  .seg button, .tog { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); cursor: pointer; }
-  .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
-  .tog.on { color: var(--accent); background: var(--accent-soft); }
-  .tog:disabled, .seg button:disabled { opacity: 0.5; cursor: not-allowed; }
   .stats { display: flex; gap: 10px; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-sm); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; justify-content: flex-end; }
   .stats b { color: var(--text); }
   .legend { display: flex; gap: 10px; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-sm); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }

@@ -27,7 +27,9 @@
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",
     "@tauri-apps/api": "^2",
-    "@xyflow/svelte": "^1.7.0"
+    "@xyflow/svelte": "^1.7.0",
+    "gifenc": "^1.0.3",
+    "mediabunny": "^1.61.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",

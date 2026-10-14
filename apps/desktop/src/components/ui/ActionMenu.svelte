@@ -8,7 +8,7 @@
   import Icon from "../Icon.svelte";
   import IconButton from "./IconButton.svelte";
 
-  let { items, label = "More actions" }: { items: MenuItem[]; label?: string } = $props();
+  let { items, label = "More actions", size = "md" }: { items: MenuItem[]; label?: string; size?: "sm" | "md" } = $props();
   let open = $state(false);
   let btn: HTMLButtonElement | undefined = $state();
   let menu: HTMLDivElement | undefined = $state();
@@ -45,7 +45,7 @@
 <svelte:window onpointerdown={outside} />
 
 <div class="wrap">
-  <IconButton bind:el={btn} icon="more" {label} size="md" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} onclick={() => (open ? close() : show())} />
+  <IconButton bind:el={btn} icon="more" {label} {size} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} onclick={() => (open ? close() : show())} />
   {#if open}
     <!-- svelte-ignore a11y_interactive_supports_focus -->
     <div class="menu" role="menu" {id} aria-label={label} tabindex="-1" bind:this={menu} onkeydown={onkey}>

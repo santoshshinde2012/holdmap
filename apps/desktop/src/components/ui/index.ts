@@ -24,3 +24,5 @@ export { default as SettingsGroup } from "./SettingsGroup.svelte";
 export { default as RichText } from "./RichText.svelte";
 export { default as ActionMenu } from "./ActionMenu.svelte";
 export type { MenuItem } from "./ActionMenu.svelte";
+export { default as ActionDock } from "./ActionDock.svelte";
+export { default as ActionPill } from "./ActionPill.svelte";

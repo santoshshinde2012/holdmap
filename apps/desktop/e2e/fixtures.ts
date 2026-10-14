@@ -27,6 +27,28 @@ export async function openAgents(page: Page): Promise<Locator> {
   return page.getByLabel("Search agents", { exact: true });
 }
 
+export async function openAgentsPicture(page: Page, picture: "Computer" | "Footprint"): Promise<Locator> {
+  const search = await openAgents(page);
+  const radio = page.getByRole("radio", { name: picture, exact: true });
+  await radio.click();
+  await expect(radio).toHaveAttribute("aria-checked", "true");
+  return search;
+}
+
+export function folderNode(page: Page, name: string, action: "zoom" | "open"): Locator {
+  const hint = action === "zoom" ? "Zooms into this project" : "Opens folder actions";
+  return page.getByRole("button", { name: new RegExp(`^Folder ${name},.*${hint}`) });
+}
+
+export async function openProject(page: Page, name = "shop-web"): Promise<Locator> {
+  await openAgentsPicture(page, "Footprint");
+  await folderNode(page, name, "zoom").click();
+  await expect(page.getByRole("radio", { name: "Project", exact: true })).toHaveAttribute("aria-checked", "true");
+  const open = folderNode(page, name, "open");
+  await expect(open).toBeVisible();
+  return open;
+}
+
 export function agentCard(page: Page, name: string): Locator {
   return page.getByRole("article", { name, exact: true });
 }

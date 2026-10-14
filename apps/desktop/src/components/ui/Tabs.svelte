@@ -62,13 +62,13 @@
 </div>
 
 <style>
-  .tabs { position: relative; display: flex; gap: 0; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--border); padding: 0 var(--sp-3); outline: none; }
+  .tabs { position: relative; display: flex; gap: 0; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--border); padding: 0 10px; outline: none; }
   .tabs::-webkit-scrollbar { display: none; }
   .tabs.wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(110px, 100%), 1fr)); gap: var(--sp-1); overflow-x: visible; padding: var(--sp-2) var(--sp-3); }
   .wrap button { min-width: 0; min-height: 36px; height: auto; justify-content: center; gap: 4px; padding: 6px 4px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); border: 1px solid transparent; border-radius: var(--r-sm); white-space: normal; }
   .wrap button.on { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
   .wrap .ind { display: none; }
-  button { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 9px; flex: none; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); white-space: nowrap; cursor: pointer; border-radius: var(--r-sm) var(--r-sm) 0 0; transition: color var(--dur-1); }
+  button { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 36px; padding: 0 8px; flex: none; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); white-space: nowrap; cursor: pointer; border-radius: var(--r-sm) var(--r-sm) 0 0; transition: color var(--dur-1); }
   button:hover { color: var(--text); }
   button.on { color: var(--text); }
   button:focus-visible { outline: 2px solid var(--ring); outline-offset: -4px; }

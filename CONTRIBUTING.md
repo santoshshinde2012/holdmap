@@ -15,7 +15,7 @@ git clone https://github.com/santoshshinde2012/holdmap && cd holdmap
 cargo build && cargo test
 scripts/demo-servers.sh start      # realistic listeners to try things on (`stop` to clean up)
 cargo run -p holdmap -- list --dev
-cd apps/desktop && npm ci && npm run tauri dev   # or `npm run dev` for the UI with mock data
+cd apps/desktop && npm ci && npm run tauri dev   # or `npm run dev` for the UI with a live local scan (`?demo=1` for sample data)
 ```
 
 [docs/architecture.md](docs/architecture.md) explains how the crates and the desktop app fit

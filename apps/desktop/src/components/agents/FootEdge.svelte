@@ -7,7 +7,7 @@
   let { id, data }: EdgeProps<Edge<FootFlowEdgeData>> = $props();
   const e = $derived(data!.edge);
   const dashed = $derived(e.kind === "recent" || e.kind === "remote" || e.inferred);
-  const width = $derived(e.kind === "parent" ? 2.2 : e.connections > 2 ? 2 : 1.5);
+  const width = $derived(e.kind === "parent" || e.kind === "host" ? 2.2 : e.connections > 2 ? 2 : 1.5);
 </script>
 
 <BaseEdge
