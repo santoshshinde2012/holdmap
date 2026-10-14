@@ -3,7 +3,8 @@
 The Astro site is published at <https://santoshshinde2012.github.io/holdmap/>.
 Canonical URLs, social image URLs and structured-data identities retain the `/holdmap/`
 base. The homepage describes the software; guide pages have their own titles and summaries
-and a visible breadcrumb trail. Public pages permit large search image previews.
+and a visible breadcrumb trail. Public titles and descriptions name holdmap, stay unique,
+and stay in the search snippet range. Public pages permit large search image previews.
 JSON-LD escapes HTML delimiters before insertion into a script.
 The schema describes the software without inventing ratings, reviews or release capabilities;
 it does not promise a Google software-app rich result.

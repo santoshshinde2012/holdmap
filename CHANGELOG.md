@@ -41,6 +41,10 @@ by [release-please](https://github.com/googleapis/release-please) from
   children started with unpinned `npx` are labelled as such. Agent settings files are still
   not read.
 
+- README, the public guide and website metadata use Holdmap names. Page titles and
+  descriptions are unique, include holdmap, and stay in the search snippet range. The
+  homepage schema describes the free app without inventing ratings or a release version.
+
 ### Security
 
 - Every native app command passes the trusted-main-webview policy before dispatch,

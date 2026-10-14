@@ -1,6 +1,6 @@
 ---
 title: Project stacks
-description: Describe a project's services once in .holdmap.toml and start them in dependency order with holdmap up.
+description: Describe a project's services once in .holdmap.toml, then start and stop them in dependency order with holdmap up and down.
 order: 3
 ---
 

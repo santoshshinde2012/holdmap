@@ -1,6 +1,6 @@
 ---
 title: Desktop app
-description: Explore the holdmap desktop app, agent visibility, keyboard shortcuts and confirmed local computer shutdown and scheduled actions.
+description: "The holdmap desktop app: service graph, agents map, shortcuts, and reviewed shutdown or scheduled stops on macOS, Windows and Linux."
 order: 6
 ---
 
@@ -184,8 +184,7 @@ with the selected port; stopping a port keeps the computer running. Tabs wrap an
 remains readable in a 340-pixel pane.
 The Sort menu keeps its choices and descriptions within the right edge of the window.
 
-Folder opening uses `HOLDMAP_EDITOR`, then legacy `PORTWISE_EDITOR` when unset, or a known
-installed editor. The file manager and URL, `curl` and command-copy actions remain available
+Folder opening uses `HOLDMAP_EDITOR`, then a known installed editor. The file manager and URL, `curl` and command-copy actions remain available
 through **More actions**.
 
 ![Compact port details wrap tabs and keep separate Stop and Schedule stop controls visible](../../../../docs/screenshots/desktop-detail-compact-light.png)

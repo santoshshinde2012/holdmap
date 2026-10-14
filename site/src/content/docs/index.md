@@ -1,6 +1,6 @@
 ---
 title: Getting started
-description: Install holdmap, see who's on a port or which agent started it, and stop the right thing safely.
+description: Install holdmap, list who is on a port or which agent started it, and stop only that owner from the CLI, TUI or desktop app.
 order: 1
 ---
 

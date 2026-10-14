@@ -1144,7 +1144,7 @@ published asset digests and IDs, then publishes the complete `latest.json` index
   keep native opening in `App.svelte`/`api.ts`. Native commands force a fresh scan before
   validating owner/path membership, then call the core's directory-validated openers.
   The configured editor is an executable, never a shell command; a missing explicit
-  `HOLDMAP_EDITOR` or legacy `PORTWISE_EDITOR` fails without choosing a substitute.
+  `HOLDMAP_EDITOR` fails without choosing a substitute.
   Browser callbacks report simulations. This separates presentation, ownership policy and OS
   effects into small contracts that fixture providers can exercise without opening real apps.
 - **UI kit.** `apps/desktop/src/components/ui/` provides shared controls (fields, selects,
