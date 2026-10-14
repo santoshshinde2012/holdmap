@@ -142,6 +142,14 @@ test("records a local MP4 and GIF that can be downloaded", async ({ app }) => {
   expect(await app.evaluate(() => window.__holdmapCapture.streams.every((stream) => stream.getTracks().every((track) => track.readyState === "ended")))).toBe(true);
   await done.press("Escape");
   await expect(done).toHaveCount(0);
+  await expect(app.getByRole("button", { name: "Review recording", exact: true })).toBeFocused();
+  await app.keyboard.press("Shift+V");
+  await expect(done).toBeVisible();
+  const [sameGif] = await Promise.all([app.waitForEvent("download"), done.getByRole("button", { name: "Download GIF" }).click()]);
+  expect(sameGif.suggestedFilename()).toBe(gifDownload.suggestedFilename());
+  expect(await app.evaluate(() => window.__holdmapCapture.streams.length)).toBe(1);
+  await done.getByRole("button", { name: "Discard recording" }).click();
+  await expect(done).toHaveCount(0);
   await expect(app.getByRole("button", { name: "Record screen", exact: true })).toBeFocused();
 });
 
@@ -219,6 +227,19 @@ test("permission failure can be retried and ending sharing opens the saved resul
   await expect(done).toBeVisible({ timeout: 20_000 });
   await expect(done.getByRole("button", { name: "Download GIF" })).toBeVisible();
   await expect(app.getByRole("button", { name: "Stop screen recording" })).toHaveCount(0);
+  await app.mouse.click(5, 5); // Closing the backdrop keeps an unsaved preview available.
+  await expect(done).toHaveCount(0);
+  await expect(app.getByRole("button", { name: "Review recording", exact: true })).toBeFocused();
+  await app.getByRole("button", { name: "Commands" }).click();
+  const palette = app.getByRole("dialog", { name: "Command palette", exact: true });
+  await palette.getByRole("combobox", { name: "Search commands" }).fill("Review recording");
+  await palette.getByRole("option", { name: /Review recording/ }).click();
+  await expect(done).toBeVisible();
+  await expect(done.getByRole("button", { name: "Download GIF" })).toBeVisible();
+  expect(await app.evaluate(() => window.__holdmapCapture.streams.length)).toBe(1);
+  await done.press("Escape");
+  await expect(app.getByRole("button", { name: "Review recording", exact: true })).toBeFocused();
+  await expect(app.getByRole("button", { name: "Review recording", exact: true })).toHaveAttribute("data-screen-record", "true");
 });
 
 test("unsupported capture explains the current window without promising desktop support", async ({ app }) => {

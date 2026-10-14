@@ -122,6 +122,9 @@ supply the destination path. Same-directory private temporary files replace the 
 destination atomically after a complete write; cancellation and errors retain the in-memory
 export for retry. No filesystem or dialog plugin permissions are granted to the webview.
 Browser exports use the browser download manager and do not claim confirmed disk writes.
+Closing a completed preview retains one bounded result in memory for the current session;
+Review recording reopens it, and explicit discard releases it before another recording.
+Hiding or minimizing the window preserves active capture until Stop or the two-minute limit.
 
 The implementation follows the primary [Screen Capture specification](https://w3c.github.io/mediacapture-screen-share/),
 the [WebKit capture-permission fix](https://bugs.webkit.org/show_bug.cgi?id=274896),

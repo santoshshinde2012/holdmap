@@ -56,11 +56,16 @@ starts a local capture. Holdmap explains that recordings stay on this computer, 
 operating system asks which display or window to share. Microphone and system audio are
 not captured. A timer in the title bar and **Stop screen recording** replace the dialog so
 this window can be part of the capture.
+Recording continues while Holdmap is hidden or minimized. Reopen the window to stop it;
+the two-minute limit still applies.
 
 When the recording stops (or after two minutes), preview and download **MP4** and **GIF**.
 The desktop app opens a native save dialog and reports the saved location after writing the
 file. Cancelling the save dialog or a failed write keeps the recording available for retry.
-The browser uses its own download manager. Close the preview to discard unsaved files.
+The browser uses its own download manager. **Close**, `Esc` and clicking outside the preview
+keep the latest recording for this session. Use the camera icon, **Review recording** in the
+command palette, or `⇧V` to reopen it. **Discard recording** removes it and lets you record again.
+Save a file before reloading or quitting; the preview is kept only in memory.
 
 MP4 uses H.264 when an encoder is available. GIF uses a smaller picture and reduces its
 frame rate during longer recordings to cover the whole capture while keeping memory bounded.

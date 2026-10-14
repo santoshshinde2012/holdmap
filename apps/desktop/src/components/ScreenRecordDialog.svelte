@@ -16,6 +16,7 @@
     supported = captureSupport().display,
     onstart,
     onclose,
+    ondiscard = onclose,
   }: {
     phase: "confirm" | "encoding" | "ready";
     error?: string | null;
@@ -26,6 +27,7 @@
     supported?: boolean;
     onstart: () => void;
     onclose: () => void;
+    ondiscard?: () => void;
   } = $props();
 
   let mp4Url = $state<string | null>(null);
@@ -73,6 +75,7 @@
     {#if supported}
       <Callout tone="info" title="Local only">
         <p>Choose which display to capture in the screen picker. The recording never leaves this machine. Maximum {Math.round(MAX_DURATION_MS / 60_000)} minutes. <strong>MP4</strong> and <strong>GIF</strong> exports depend on this window's encoding support.</p>
+        <p>Recording continues while Holdmap is hidden or minimized. Reopen Holdmap to stop it, or it stops automatically after {Math.round(MAX_DURATION_MS / 60_000)} minutes.</p>
       </Callout>
     {:else}
       <Callout tone="warn" title="Screen capture unavailable">
@@ -94,6 +97,7 @@
     </div>
     {#if previewError}<p class="waiting">This window cannot play the MP4 preview. You can still save the file and open it in a video player.</p>{/if}
     <p class="meta">{formatClock(result.durationMs)} · {result.width}×{result.height}{#if result.mp4} · MP4 {humanBytes(result.mp4.bytes)}{/if}{#if result.gif} · GIF {humanBytes(result.gif.bytes)}{/if}</p>
+    <p class="waiting retention">Close keeps this recording for this session. Save a file to keep it after reloading or quitting. Discard removes it and lets you record again.</p>
     {#if result.warnings.length}
       <Callout tone="warn" title="Partial export">
         {#each result.warnings as warning}<p>{warning}</p>{/each}
@@ -110,6 +114,7 @@
     {:else if phase === "encoding"}
       <Button onclick={onclose}>Discard recording</Button>
     {:else}
+      <Button variant="ghost" disabled={!!saving} onclick={ondiscard}>Discard recording</Button>
       <Button disabled={!!saving} onclick={onclose}>Close</Button>
       {#if result?.gif && result?.mp4}<Button icon="download" disabled={!!saving} loading={saving === "gif"} loadingText="Saving GIF…" onclick={() => result?.gif && void download(result.gif, "gif")}>Download GIF</Button>{/if}
       {#if result?.mp4}<Button variant="primary" icon="download" disabled={!!saving} loading={saving === "mp4"} loadingText="Saving MP4…" onclick={() => result?.mp4 && void download(result.mp4, "mp4")} data-primary>Download MP4</Button>
@@ -122,6 +127,7 @@
   .gap { margin-top: var(--sp-3); }
   .status { margin: 0; color: var(--text-2); }
   .waiting { margin: var(--sp-3) 0 0; color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body); overflow-wrap: anywhere; }
+  .retention { margin-top: 0; margin-bottom: var(--sp-3); }
   .preview { margin: 0 0 var(--sp-3); border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); border: 1px solid var(--border); }
   .preview video, .preview img { display: block; width: 100%; max-height: 360px; object-fit: contain; background: #0b0d12; }
   .meta { margin: 0 0 var(--sp-3); color: var(--muted); font-size: var(--fs-body-sm); font-variant-numeric: tabular-nums; }

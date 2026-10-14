@@ -4,7 +4,9 @@ import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import type { CaptureResult } from "./lib/screen-record";
 
 const encoder = vi.hoisted(() => ({ start: vi.fn() }));
+const save = vi.hoisted(() => vi.fn());
 vi.mock("./lib/screen-record-encode", () => ({ ScreenRecording: { start: encoder.start } }));
+vi.mock("./lib/screen-record-save", () => ({ saveRecording: save }));
 import App from "./App.svelte";
 
 const capture = vi.fn();
@@ -44,6 +46,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   capture.mockReset();
   encoder.start.mockReset();
+  save.mockReset();
   localStorage.clear();
   if (originalMedia) Object.defineProperty(navigator, "mediaDevices", originalMedia);
   else Reflect.deleteProperty(navigator, "mediaDevices");
@@ -169,5 +172,87 @@ describe("screen recording lifecycle", () => {
     expect(view.getByRole("alert").textContent).toContain("Couldn't prepare recording");
     expect(view.getByRole("alert").textContent).toContain("The encoder could not prepare video frames");
     expect(captured.track.stop).toHaveBeenCalledOnce();
+  });
+
+  it.each(["cancelled", "failed"])("retains the recording after a %s save, close and keyboard reopen", async (outcome) => {
+    const captured = result();
+    const recording = session();
+    recording.stop.mockResolvedValue(captured);
+    capture.mockResolvedValue(stream().stream);
+    encoder.start.mockResolvedValue(recording);
+    if (outcome === "cancelled") save.mockResolvedValueOnce({ saved: false });
+    else save.mockRejectedValueOnce(new Error("Destination is read-only"));
+    save.mockResolvedValueOnce({ saved: true, path: "/tmp/holdmap-test.gif" });
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(500);
+    await choose(view);
+    await fireEvent.click(view.getByRole("button", { name: "Stop screen recording" }));
+    await vi.advanceTimersByTimeAsync(20);
+    await fireEvent.click(view.getByRole("button", { name: "Download GIF" }));
+    await vi.advanceTimersByTimeAsync(20);
+    if (outcome === "failed") expect(view.getByRole("alert").textContent).toContain("Destination is read-only");
+    await fireEvent.keyDown(view.getByRole("dialog", { name: "Download recording" }), { key: "Escape" });
+    await vi.advanceTimersByTimeAsync(20);
+    expect(view.queryByRole("dialog", { name: "Download recording" })).toBeNull();
+    expect(document.activeElement).toBe(view.getByRole("button", { name: "Review recording" }));
+    await fireEvent.keyDown(document.body, { key: "V", shiftKey: true });
+    await vi.advanceTimersByTimeAsync(20);
+    expect(view.getByRole("dialog", { name: "Download recording" })).toBeTruthy();
+    await fireEvent.click(view.getByRole("button", { name: "Download GIF" }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save.mock.calls[1][0].blob).toBe(captured.gif!.blob);
+    expect(view.getByRole("status").textContent).toContain("Saved to /tmp/holdmap-test.gif");
+    expect(encoder.start).toHaveBeenCalledOnce();
+    expect(capture).toHaveBeenCalledOnce();
+  });
+
+  it("explicitly discards the latest result before retaining a replacement recording", async () => {
+    const first = session();
+    const second = session();
+    const next = result();
+    next.gif!.filename = "holdmap-second.gif";
+    second.stop.mockResolvedValue(next);
+    capture.mockImplementation(async () => stream().stream);
+    encoder.start.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    save.mockResolvedValue({ saved: false });
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(500);
+    await choose(view);
+    await fireEvent.click(view.getByRole("button", { name: "Stop screen recording" }));
+    await vi.advanceTimersByTimeAsync(20);
+    await fireEvent.click(view.getByRole("button", { name: "Discard recording" }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(view.queryByRole("button", { name: "Review recording" })).toBeNull();
+    expect(document.activeElement).toBe(view.getByRole("button", { name: "Record screen" }));
+    await choose(view);
+    await fireEvent.click(view.getByRole("button", { name: "Stop screen recording" }));
+    await vi.advanceTimersByTimeAsync(20);
+    await fireEvent.click(view.getByRole("button", { name: "Download GIF" }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(encoder.start).toHaveBeenCalledTimes(2);
+    expect(save.mock.calls[0][0].filename).toBe("holdmap-second.gif");
+    expect(save.mock.calls[0][0].blob).toBe(next.gif!.blob);
+  });
+
+  it("keeps active capture across hidden and visible events until it is explicitly stopped", async () => {
+    const recording = session();
+    capture.mockResolvedValue(stream().stream);
+    encoder.start.mockResolvedValue(recording);
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(500);
+    await choose(view);
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    await fireEvent(document, new Event("visibilitychange"));
+    hidden.mockReturnValue(false);
+    await fireEvent(document, new Event("visibilitychange"));
+    await fireEvent(window, new Event("focus"));
+    expect(view.getByRole("button", { name: "Stop screen recording" })).toBeTruthy();
+    expect(recording.stop).not.toHaveBeenCalled();
+    expect(recording.discard).not.toHaveBeenCalled();
+    expect(encoder.start).toHaveBeenCalledOnce();
+    await fireEvent.click(view.getByRole("button", { name: "Stop screen recording" }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(view.getByRole("dialog", { name: "Download recording" })).toBeTruthy();
   });
 });

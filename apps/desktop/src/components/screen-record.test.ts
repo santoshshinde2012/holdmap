@@ -108,4 +108,15 @@ describe("screen record dialog", () => {
     view.unmount();
     expect(revoke.mock.calls.flat()).toEqual(["blob:mp4", "blob:gif"]);
   });
+
+  it("distinguishes closing the preview from explicitly discarding its recording", async () => {
+    const onclose = vi.fn(), ondiscard = vi.fn();
+    render(ScreenRecordDialog, { phase: "ready", result: result(), onstart: vi.fn(), onclose, ondiscard });
+    expect(screen.getByText(/Close keeps this recording for this session/)).toBeTruthy();
+    await fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onclose).toHaveBeenCalledOnce();
+    expect(ondiscard).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole("button", { name: "Discard recording" }));
+    expect(ondiscard).toHaveBeenCalledOnce();
+  });
 });

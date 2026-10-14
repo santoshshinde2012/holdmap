@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { dataAge, freshness, pruned, share, shouldPoll, withKey } from "./lib/live";
   import Icon from "./components/Icon.svelte";
   import PortRow from "./components/list/PortRow.svelte";
@@ -887,11 +887,10 @@
   function openScreenRecord() {
     if (screenCapture) { void finishScreenCapture(); return; }
     if (screenCaptureBusy || screenCaptureFinishing || screenCaptureDialog) return;
-    screenCaptureTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    screenCaptureTrigger = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     screenCaptureError = null;
     screenCaptureErrorTitle = "Couldn't start";
-    screenCaptureResult = null;
-    screenCaptureDialog = "confirm";
+    screenCaptureDialog = screenCaptureResult ? "ready" : "confirm";
   }
 
   async function beginScreenCapture() {
@@ -972,10 +971,24 @@
   }
 
   function closeScreenCaptureDialog() {
+    // Closing a preview must not destroy the only copy after a cancelled or failed save.
+    // Keep one bounded result for this app session; an explicit discard clears it.
+    if (screenCaptureDialog === "ready" && screenCaptureResult) screenCaptureDialog = null;
+    else discardScreenCapture();
+    restoreScreenCaptureFocus();
+  }
+
+  function discardScreenCaptureDialog() {
     discardScreenCapture();
-    queueMicrotask(() => {
+    restoreScreenCaptureFocus();
+  }
+
+  function restoreScreenCaptureFocus() {
+    // Let the outgoing dialog restore its own focus first, including a palette
+    // that opened this preview, then choose the still-mounted recording trigger.
+    void tick().then(() => {
       if (disposed || modalOpen) return;
-      const trigger = screenCaptureTrigger?.isConnected ? screenCaptureTrigger : document.querySelector<HTMLElement>('button[aria-label="Record screen"]');
+      const trigger = screenCaptureTrigger?.isConnected ? screenCaptureTrigger : document.querySelector<HTMLElement>('[data-screen-record]');
       trigger?.focus();
     });
   }
@@ -1256,7 +1269,9 @@
       { id: "history", group: "Actions", icon: "history", title: "Recently stopped — restart", shortcut: ["H"], keywords: "history restart undo", run: openHistory },
       screenCapture
         ? { id: "screen-stop", group: "Actions", icon: "stop", title: "Stop screen recording", subtitle: formatClock(screenCaptureElapsed), keywords: "capture video gif mp4 screenshot stop", shortcut: ["⇧", "V"], run: () => void finishScreenCapture() }
-        : { id: "screen-record", group: "Actions", icon: "video", title: "Record screen…", subtitle: captureSupport().display ? `Local MP4 and GIF · up to ${Math.round(MAX_DURATION_MS / 60_000)} min · never uploaded` : "Screen capture is unavailable in this window", keywords: "capture video gif mp4 screenshot download", shortcut: ["⇧", "V"], run: openScreenRecord },
+        : screenCaptureResult
+          ? { id: "screen-review", group: "Actions", icon: "video", title: "Review recording", subtitle: "Preview and save the latest recording from this session", keywords: "capture video gif mp4 screenshot download record", shortcut: ["⇧", "V"], run: openScreenRecord }
+          : { id: "screen-record", group: "Actions", icon: "video", title: "Record screen…", subtitle: captureSupport().display ? `Local MP4 and GIF · up to ${Math.round(MAX_DURATION_MS / 60_000)} min · never uploaded` : "Screen capture is unavailable in this window", keywords: "capture video gif mp4 screenshot download", shortcut: ["⇧", "V"], run: openScreenRecord },
       { id: "notify", group: "Settings", icon: "bell", title: config?.notify ? "Turn notifications off" : "Turn notifications on", keywords: "alert conflict new listener", run: toggleNotify },
       { id: "density", group: "Settings", icon: "list", title: density === "compact" ? "Comfortable rows" : "Compact rows", keywords: "density dense rows height compact comfortable", run: () => { density = density === "compact" ? "comfortable" : "compact"; } },
       { id: "autostart", group: "Settings", icon: "sparkles", title: autostartOn ? "Don't launch at login" : "Launch at login", keywords: "startup boot login", run: toggleAutostart },
@@ -1275,6 +1290,9 @@
     if (context.command && e.key === ",") { openSettings(); e.preventDefault(); return; }
     if ((context.command && e.key.toLowerCase() === "f") || (!typing && !control && context.character && singleKeyShortcuts && e.key === "/")) { search?.focus(); search?.select(); e.preventDefault(); return; }
     if (context.command && e.key.toLowerCase() === "r") { refresh(true); e.preventDefault(); return; }
+    if (!typing && context.character && singleKeyShortcuts && e.key === "V" && document.activeElement?.matches("[data-screen-record]")) {
+      openScreenRecord(); e.preventDefault(); return;
+    }
     if (control) return; // native/select/button controls retain their own keyboard behavior
     const inSearch = document.activeElement === search || e.target === search;
     if (typing && !inSearch) return;
@@ -1504,11 +1522,11 @@
         <div class="cluster rec" role="status">
           <span class="rec-dot" aria-hidden="true"></span>
           <span class="rec-time">{formatClock(screenCaptureElapsed)}</span>
-          <IconButton icon="stop" label="Stop screen recording" kbd={singleKeyShortcuts ? ["⇧", "V"] : undefined} onclick={() => void finishScreenCapture()} />
+          <IconButton icon="stop" label="Stop screen recording" data-screen-record kbd={singleKeyShortcuts ? ["⇧", "V"] : undefined} onclick={() => void finishScreenCapture()} />
         </div>
       {/if}
       <div class="cluster">
-        <IconButton icon="video" label={screenCapture ? "Recording screen" : "Record screen"} kbd={singleKeyShortcuts ? ["⇧", "V"] : undefined} pressed={!!screenCapture} onclick={openScreenRecord} />
+        <IconButton icon="video" label={screenCapture ? "Recording screen" : screenCaptureResult ? "Review recording" : "Record screen"} data-screen-record kbd={singleKeyShortcuts ? ["⇧", "V"] : undefined} pressed={!!screenCapture || !!screenCaptureResult} onclick={openScreenRecord} />
         <IconButton icon="history" label="Recently stopped" kbd={singleKeyShortcuts ? "H" : undefined} onclick={openHistory} />
         <IconButton icon="clock" label={activeSchedules.length ? `Scheduled actions (${activeSchedules.length} active)` : "Scheduled actions"} badge={activeSchedules.length || undefined} onclick={openSchedules} bind:el={schedulesTrigger} />
         <IconButton icon="server" label="Remote host…" onclick={() => (showRemote = true)} />
@@ -1746,7 +1764,7 @@
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
 {#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
 {#if screenCaptureDialog}
-  <ScreenRecordDialog phase={screenCaptureDialog} error={screenCaptureError} errorTitle={screenCaptureErrorTitle} result={screenCaptureResult} busy={screenCaptureBusy} starting={screenCaptureStarting} onstart={() => void beginScreenCapture()} onclose={closeScreenCaptureDialog} />
+  <ScreenRecordDialog phase={screenCaptureDialog} error={screenCaptureError} errorTitle={screenCaptureErrorTitle} result={screenCaptureResult} busy={screenCaptureBusy} starting={screenCaptureStarting} onstart={() => void beginScreenCapture()} onclose={closeScreenCaptureDialog} ondiscard={discardScreenCaptureDialog} />
 {/if}
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />
 
