@@ -48,16 +48,30 @@ choices persist.
 
 ## Record the screen
 
+Screen recording is available in the current source and browser demo. The released
+**0.6.0 installers do not include it yet**.
+
 The camera icon in the title bar, **Record screen…** in the command palette, or `⇧V`
 starts a local capture. Holdmap explains that recordings stay on this computer, then the
 operating system asks which display or window to share. Microphone and system audio are
 not captured. A timer in the title bar and **Stop screen recording** replace the dialog so
 this window can be part of the capture.
 
-When the recording stops (or after two minutes), download **MP4** and **GIF**. Nothing is
-uploaded. macOS may ask for Screen Recording permission in System Settings. This is
-separate from [Agents → Flow recording](../agents/#set-up-optional-recording), which
-collects optional tool-call metadata rather than pixels.
+When the recording stops (or after two minutes), preview and download **MP4** and **GIF**.
+The desktop app opens a native save dialog and reports the saved location after writing the
+file. Cancelling the save dialog or a failed write keeps the recording available for retry.
+The browser uses its own download manager. Close the preview to discard unsaved files.
+
+MP4 uses H.264 when an encoder is available. GIF uses a smaller picture and reduces its
+frame rate during longer recordings to cover the whole capture while keeping memory bounded.
+Exports are limited to 128 MiB per file; if a format cannot be encoded, the other available
+format can still be saved. Preparing files can be cancelled with **Discard recording**.
+
+Nothing is uploaded. Each recording asks which screen or window to share. macOS may ask for
+Screen Recording permission in System Settings; if capture is blocked, allow this app or browser
+there and retry. Unsupported windows explain that capture is unavailable. This is separate
+from [Agents → Flow recording](../agents/#set-up-optional-recording), which collects optional
+tool-call metadata rather than pixels.
 
 ## Shut down this computer
 

@@ -15,6 +15,24 @@ const astro = files(join(dist, "_astro"));
 const images = astro.filter((f) => /\.(avif|webp|png|jpe?g)$/.test(f));
 const fonts = astro.filter((f) => f.endsWith(".woff2"));
 const demoJs = files(join(dist, "demo", "assets")).filter((f) => f.endsWith(".js"));
+// Follow Vite's static import graph: recording encoders load only after choosing a screen.
+// Keep a separate budget for optional chunks so deferred code is still accounted for.
+const demoManifest = JSON.parse(readFileSync(join(dist, "demo", "manifest.json"), "utf8"));
+const initialDemoFiles = new Set();
+const visitedDemoEntries = new Set();
+function visitDemoEntry(key) {
+  if (visitedDemoEntries.has(key)) return;
+  visitedDemoEntries.add(key);
+  const entry = demoManifest[key];
+  if (!entry) throw new Error(`Missing demo manifest entry: ${key}`);
+  if (entry.file.endsWith(".js")) initialDemoFiles.add(join(dist, "demo", entry.file));
+  for (const imported of entry.imports ?? []) visitDemoEntry(imported);
+}
+for (const [key, entry] of Object.entries(demoManifest)) {
+  if (entry.isEntry) visitDemoEntry(key);
+}
+if (!initialDemoFiles.size) throw new Error("Demo has no entry JavaScript in its manifest.");
+const deferredDemoJs = demoJs.filter((file) => !initialDemoFiles.has(file));
 const videos = files(join(dist, "hero")).filter((f) => /\.(mp4|webm)$/.test(f));
 
 const rows = [
@@ -23,7 +41,8 @@ const rows = [
   ["Site fonts (woff2)", fonts.reduce((n, f) => n + statSync(f).size, 0), 100 * 1024],
   ["Largest image", Math.max(...images.map((f) => statSync(f).size)), 260 * 1024],
   ["Open Graph image", statSync(join(dist, "og.png")).size, 300 * 1024],
-  ["Live demo JS (loaded on demand)", demoJs.reduce((n, f) => n + gz(f), 0), 220 * 1024],
+  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 220 * 1024],
+  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 160 * 1024],
   ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];
 

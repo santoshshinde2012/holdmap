@@ -26,11 +26,12 @@ export function recordingFilename(ext: "mp4" | "gif", at = new Date()): string {
   return `holdmap-${at.getFullYear()}${p(at.getMonth() + 1)}${p(at.getDate())}-${p(at.getHours())}${p(at.getMinutes())}${p(at.getSeconds())}.${ext}`;
 }
 
-export function gifSize(srcW: number, srcH: number, maxWidth = GIF_MAX_WIDTH): { width: number; height: number } {
-  const width = Math.max(1, srcW);
-  const height = Math.max(1, srcH);
-  if (width <= maxWidth) return { width, height };
-  return { width: maxWidth, height: Math.max(1, Math.round(height * (maxWidth / width))) };
+export function gifSize(srcW: number, srcH: number, maxEdge = GIF_MAX_WIDTH): { width: number; height: number } {
+  const width = Math.max(1, Number.isFinite(srcW) ? srcW : 1);
+  const height = Math.max(1, Number.isFinite(srcH) ? srcH : 1);
+  const bound = Math.max(1, Number.isFinite(maxEdge) ? Math.floor(maxEdge) : GIF_MAX_WIDTH);
+  const scale = Math.min(1, bound / Math.max(width, height));
+  return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
 }
 
 /** Delay between GIF frames so a recording stays within `GIF_MAX_FRAMES`. */
@@ -51,12 +52,15 @@ export function captureSupport(): { display: boolean; gif: boolean } {
 export function displayCaptureError(cause: unknown): Error {
   const error = cause as { name?: string; message?: string };
   if (error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError") {
-    return new Error("Screen recording was cancelled or blocked. Grant screen recording permission and try again.");
+    return new Error("Screen selection was cancelled or permission was denied. Choose a screen again to retry. If access stays blocked, check screen recording permission for this app or browser in system settings.");
   }
   if (error?.name === "NotFoundError") return new Error("No screen or window was available to capture.");
-  if (error?.name === "NotSupportedError" || error?.name === "TypeError") {
-    return new Error("This window cannot capture the screen. Use the Holdmap desktop app, or Chrome, Edge or Safari.");
+  if (error?.name === "NotSupportedError") {
+    return new Error("Screen capture is unavailable in this window. Try a browser that supports screen sharing, or use your operating system's screen recorder.");
   }
+  if (error?.name === "NotReadableError") return new Error("The selected screen could not be read. Check system screen recording permission, then choose a screen again.");
+  if (error?.name === "InvalidStateError") return new Error("Return to this window and choose a screen again to start recording.");
+  if (error?.name === "AbortError") return new Error("Screen capture was interrupted before it started. Choose a screen again to retry.");
   return new Error(typeof error?.message === "string" && error.message.trim() ? error.message : "Couldn't start screen recording.");
 }
 
@@ -78,13 +82,19 @@ export async function requestDisplayStream(): Promise<MediaStream> {
 export function downloadBlob(blob: Blob, filename: string): void {
   const href = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.href = href;
-  link.download = filename;
-  link.rel = "noopener";
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(href), 30_000);
+  try {
+    link.href = href;
+    link.download = filename;
+    link.rel = "noopener";
+    document.body.append(link);
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(href), 30_000);
+  } catch (cause) {
+    URL.revokeObjectURL(href);
+    throw cause;
+  } finally {
+    link.remove();
+  }
 }
 
 export function stopTracks(stream: MediaStream | null): void {

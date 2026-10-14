@@ -94,6 +94,35 @@ unattended background fixture could not conclusively verify every focus restorat
 macOS uses [cooperative activation](https://developer.apple.com/documentation/appkit/passing-control-from-one-app-to-another-with-cooperative-activation).
 The owned interactive check is documented separately from headless CI.
 
+## Local screen recording (unreleased)
+
+Screen pixels have a separate, user-initiated lifecycle from agent activity metadata. The
+capture call runs directly from the Choose screen action so the operating system retains
+control of source selection and consent. A generation guard releases late streams after
+cancellation or unmount, and stopping releases capture tracks before finalizing exports.
+No capture permission or screen selection is persisted, and no audio is requested.
+
+The encoder module loads on demand. H.264 capability checks include the output dimensions;
+WebCodecs/Mediabunny has a MediaRecorder MP4 fallback. GIF quantization runs in a same-origin
+worker with one RGBA frame in flight and at most 240 indexed frames. Adaptive sampling
+preserves the complete timeline, with cumulative GIF delays avoiding rounding drift.
+Finalization has a deadline and can be discarded. The CSP permits local and blob workers
+without relaxing script execution or network destinations.
+
+Desktop saves use a trusted-main-window binary command, a 128 MiB payload bound, filename
+and container-header validation, and a serialized native save dialog. JavaScript cannot
+supply the destination path. Same-directory private temporary files replace the chosen
+destination atomically after a complete write; cancellation and errors retain the in-memory
+export for retry. No filesystem or dialog plugin permissions are granted to the webview.
+Browser exports use the browser download manager and do not claim confirmed disk writes.
+
+The implementation follows the primary [Screen Capture specification](https://w3c.github.io/mediacapture-screen-share/),
+the [WebKit capture-permission fix](https://bugs.webkit.org/show_bug.cgi?id=274896),
+[Mediabunny source lifecycle](https://mediabunny.dev/guide/media-sources),
+the [gifenc worker guidance](https://github.com/mattdesl/gifenc), and
+[Tauri native dialogs](https://v2.tauri.app/plugin/dialog/). Synthetic owned canvas streams
+validate actual MP4/GIF content without capturing a user's screen or requesting capture permissions.
+
 ## Agent communication visibility (0.5.0)
 
 The read-only Connections projection uses one consistent scan and `AgentsReport`. It retains

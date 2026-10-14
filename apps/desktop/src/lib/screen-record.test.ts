@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { captureSupport, displayCaptureError, formatClock, gifDelayMs, gifSize, recordingFilename, GIF_MAX_FRAMES } from "./screen-record";
+
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("screen recording helpers", () => {
   it("formats a compact elapsed clock", () => {
@@ -21,15 +23,30 @@ describe("screen recording helpers", () => {
     expect(gifSize(0, 0)).toEqual({ width: 1, height: 1 });
   });
 
+  it("bounds portrait and ultrawide recordings by their longest edge", () => {
+    expect(gifSize(1080, 1920)).toEqual({ width: 360, height: 640 });
+    expect(gifSize(7680, 1080)).toEqual({ width: 640, height: 90 });
+    expect(gifSize(1080, 7680)).toEqual({ width: 90, height: 640 });
+  });
+
+  it("keeps malformed frame dimensions finite and inside the pixel budget", () => {
+    expect(gifSize(Number.POSITIVE_INFINITY, Number.NaN)).toEqual({ width: 1, height: 1 });
+    expect(gifSize(1920, 1080, Number.NaN)).toEqual({ width: 640, height: 360 });
+    expect(gifSize(1920, 1080, -1)).toEqual({ width: 1, height: 1 });
+  });
+
   it("keeps GIF length within the frame budget", () => {
     expect(gifDelayMs(1_000)).toBe(125);
     expect(gifDelayMs(120_000) * GIF_MAX_FRAMES).toBe(120_000);
   });
 
   it("explains permission and support failures without leaking internals", () => {
-    expect(displayCaptureError({ name: "NotAllowedError" }).message).toMatch(/cancelled or blocked/);
-    expect(displayCaptureError({ name: "NotSupportedError" }).message).toMatch(/cannot capture/);
+    expect(displayCaptureError({ name: "NotAllowedError" }).message).toMatch(/cancelled or permission was denied/);
+    expect(displayCaptureError({ name: "NotSupportedError" }).message).toMatch(/unavailable in this window/);
     expect(displayCaptureError({ name: "NotFoundError" }).message).toMatch(/No screen/);
+    expect(displayCaptureError({ name: "NotReadableError" }).message).toMatch(/could not be read/);
+    expect(displayCaptureError({ name: "InvalidStateError" }).message).toMatch(/Return to this window/);
+    expect(displayCaptureError({ name: "AbortError" }).message).toMatch(/interrupted/);
     expect(displayCaptureError({ message: "boom" }).message).toBe("boom");
   });
 
@@ -40,6 +57,7 @@ describe("screen recording helpers", () => {
 
 describe("downloadBlob", () => {
   it("creates a temporary object URL and clicks an anchor", async () => {
+    vi.useFakeTimers();
     const create = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:holdmap-test");
     const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
@@ -47,8 +65,18 @@ describe("downloadBlob", () => {
     downloadBlob(new Blob(["ok"], { type: "video/mp4" }), "holdmap-test.mp4");
     expect(create).toHaveBeenCalledOnce();
     expect(click).toHaveBeenCalledOnce();
-    click.mockRestore();
-    create.mockRestore();
-    revoke.mockRestore();
+    expect(document.querySelector("a[download]")).toBeNull();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(revoke).toHaveBeenCalledWith("blob:holdmap-test");
+  });
+
+  it("cleans up the anchor and URL when a download request fails", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:failed-download");
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => { throw new Error("Download blocked"); });
+    const { downloadBlob } = await import("./screen-record");
+    expect(() => downloadBlob(new Blob(["ok"]), "holdmap-test.gif")).toThrow("Download blocked");
+    expect(document.querySelector("a[download]")).toBeNull();
+    expect(revoke).toHaveBeenCalledWith("blob:failed-download");
   });
 });

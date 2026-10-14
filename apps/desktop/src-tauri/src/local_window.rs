@@ -109,6 +109,7 @@ mod tests {
             "set_preferences",
             "scan",
             "install_update",
+            "save_screen_recording",
             "future_command",
         ] {
             let request = || tauri::webview::InvokeRequest {

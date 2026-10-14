@@ -39,7 +39,7 @@
   import { portHolderKeys } from "./lib/port-live";
   import { shortcutContext } from "./lib/keyboard";
   import { captureSupport, displayCaptureError, formatClock, MAX_DURATION_MS, requestDisplayStream, stopTracks, type CaptureResult } from "./lib/screen-record";
-  import { ScreenRecording } from "./lib/screen-record-encode";
+  import type { ScreenRecording } from "./lib/screen-record-encode";
 
   type Sort = "group" | "cluster" | "port" | "newest" | "memory";
   type View = "list" | "graph" | "agents";
@@ -175,8 +175,14 @@
   let screenCaptureDialog = $state<"confirm" | "encoding" | "ready" | null>(null);
   let screenCaptureResult = $state<CaptureResult | null>(null);
   let screenCaptureError = $state<string | null>(null);
+  let screenCaptureErrorTitle = $state("Couldn't start");
   let screenCaptureBusy = $state(false);
+  let screenCaptureStarting = $state(false);
   let screenCaptureFinishing = false;
+  let screenCaptureSequence = 0;
+  let screenCapturePendingStream: MediaStream | null = null;
+  let screenCaptureEncoding: ScreenRecording | null = null;
+  let screenCaptureTrigger: HTMLElement | null = null;
   let hotkeyList = $state<HotkeyPreset[]>([]);
   let info = $state<{ version: string; platform: string; tray: boolean; configDir: string | null }>({ version: "", platform: "", tray: false, configDir: null });
   let detailTab = $state<DetailTab>("overview");
@@ -880,32 +886,60 @@
 
   function openScreenRecord() {
     if (screenCapture) { void finishScreenCapture(); return; }
+    if (screenCaptureBusy || screenCaptureFinishing || screenCaptureDialog) return;
+    screenCaptureTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     screenCaptureError = null;
+    screenCaptureErrorTitle = "Couldn't start";
     screenCaptureResult = null;
     screenCaptureDialog = "confirm";
   }
 
   async function beginScreenCapture() {
+    if (disposed || screenCaptureBusy || screenCaptureDialog !== "confirm") return;
+    const sequence = ++screenCaptureSequence;
     screenCaptureError = null;
+    screenCaptureErrorTitle = "Couldn't start";
+    screenCaptureElapsed = 0;
     screenCaptureBusy = true;
+    screenCaptureStarting = false;
     try {
       const stream = await requestDisplayStream();
+      // The OS picker cannot be aborted. A dismissed or replaced request must release
+      // any later stream immediately instead of starting an invisible recording.
+      if (disposed || sequence !== screenCaptureSequence) { stopTracks(stream); return; }
+      screenCapturePendingStream = stream;
+      screenCaptureStarting = true;
+      let ended = false;
+      let session: ScreenRecording;
       try {
-        screenCapture = await ScreenRecording.start(stream, {
-          onTick: (ms) => { screenCaptureElapsed = ms; },
-          onEnded: () => { void finishScreenCapture(); },
+        const { ScreenRecording } = await import("./lib/screen-record-encode");
+        if (disposed || sequence !== screenCaptureSequence) { stopTracks(stream); return; }
+        session = await ScreenRecording.start(stream, {
+          onTick: (ms) => { if (!disposed && sequence === screenCaptureSequence) screenCaptureElapsed = Math.min(MAX_DURATION_MS, Math.max(0, ms)); },
+          onEnded: () => {
+            ended = true;
+            if (!disposed && sequence === screenCaptureSequence) void finishScreenCapture();
+          },
         });
       } catch (cause) {
         stopTracks(stream);
         throw cause;
       }
+      if (disposed || sequence !== screenCaptureSequence) { session.discard(); return; }
+      screenCapturePendingStream = null;
+      screenCapture = session;
       screenCaptureDialog = null;
       screenCaptureBusy = false;
-      screenCaptureElapsed = 0;
+      // Sharing can end while the preview or encoder is still starting.
+      if (ended || stream.getVideoTracks().every((track) => track.readyState === "ended")) void finishScreenCapture();
     } catch (cause) {
+      if (disposed || sequence !== screenCaptureSequence) return;
       screenCaptureBusy = false;
-      screenCaptureError = displayCaptureError(cause).message;
+      screenCaptureErrorTitle = screenCaptureStarting ? "Couldn't prepare recording" : "Couldn't start";
+      screenCaptureError = screenCaptureStarting ? (cause instanceof Error ? cause.message : String(cause)) : displayCaptureError(cause).message;
       screenCaptureDialog = "confirm";
+    } finally {
+      if (sequence === screenCaptureSequence) { screenCapturePendingStream = null; screenCaptureBusy = false; screenCaptureStarting = false; }
     }
   }
 
@@ -913,35 +947,54 @@
     if (screenCaptureFinishing) return;
     const session = screenCapture;
     if (!session) return;
+    const sequence = screenCaptureSequence;
     screenCaptureFinishing = true;
+    screenCaptureEncoding = session;
     screenCapture = null;
     screenCaptureDialog = "encoding";
     try {
-      screenCaptureResult = await session.stop();
+      const result = await session.stop();
+      if (disposed || sequence !== screenCaptureSequence) return;
+      screenCaptureResult = result;
       screenCaptureDialog = "ready";
     } catch (cause) {
+      if (disposed || sequence !== screenCaptureSequence) return;
       screenCaptureDialog = "confirm";
+      screenCaptureErrorTitle = "Couldn't finish";
       screenCaptureError = cause instanceof Error ? cause.message : String(cause);
-      toast("error", "Couldn't finish the recording", screenCaptureError);
     } finally {
-      screenCaptureFinishing = false;
-      screenCaptureBusy = false;
+      if (sequence === screenCaptureSequence) {
+        screenCaptureEncoding = null;
+        screenCaptureFinishing = false;
+        screenCaptureBusy = false;
+      }
     }
   }
 
   function closeScreenCaptureDialog() {
-    if (screenCaptureDialog === "encoding") return;
+    discardScreenCapture();
+    queueMicrotask(() => {
+      if (disposed || modalOpen) return;
+      const trigger = screenCaptureTrigger?.isConnected ? screenCaptureTrigger : document.querySelector<HTMLElement>('button[aria-label="Record screen"]');
+      trigger?.focus();
+    });
+  }
+
+  function discardScreenCapture() {
+    ++screenCaptureSequence;
+    stopTracks(screenCapturePendingStream);
+    screenCapturePendingStream = null;
+    screenCapture?.discard();
+    screenCaptureEncoding?.discard();
+    screenCapture = null;
+    screenCaptureEncoding = null;
+    screenCaptureFinishing = false;
     screenCaptureDialog = null;
     screenCaptureResult = null;
     screenCaptureError = null;
     screenCaptureBusy = false;
-  }
-
-  function discardScreenCapture() {
-    screenCapture?.discard();
-    screenCapture = null;
-    screenCaptureFinishing = false;
-    closeScreenCaptureDialog();
+    screenCaptureStarting = false;
+    screenCaptureElapsed = 0;
   }
 
   async function requestStop(entry: PortEntry, force: boolean, allowProtected = false, options: { agentId?: string; intent?: "combined" | "now" | "schedule" } = {}) {
@@ -1203,7 +1256,7 @@
       { id: "history", group: "Actions", icon: "history", title: "Recently stopped — restart", shortcut: ["H"], keywords: "history restart undo", run: openHistory },
       screenCapture
         ? { id: "screen-stop", group: "Actions", icon: "stop", title: "Stop screen recording", subtitle: formatClock(screenCaptureElapsed), keywords: "capture video gif mp4 screenshot stop", shortcut: ["⇧", "V"], run: () => void finishScreenCapture() }
-        : { id: "screen-record", group: "Actions", icon: "video", title: "Record screen…", subtitle: captureSupport().display ? `Local MP4 and GIF · up to ${Math.round(MAX_DURATION_MS / 60_000)} min · never uploaded` : "Needs Chrome, Edge, Safari or the desktop app", keywords: "capture video gif mp4 screenshot download", shortcut: ["⇧", "V"], run: openScreenRecord },
+        : { id: "screen-record", group: "Actions", icon: "video", title: "Record screen…", subtitle: captureSupport().display ? `Local MP4 and GIF · up to ${Math.round(MAX_DURATION_MS / 60_000)} min · never uploaded` : "Screen capture is unavailable in this window", keywords: "capture video gif mp4 screenshot download", shortcut: ["⇧", "V"], run: openScreenRecord },
       { id: "notify", group: "Settings", icon: "bell", title: config?.notify ? "Turn notifications off" : "Turn notifications on", keywords: "alert conflict new listener", run: toggleNotify },
       { id: "density", group: "Settings", icon: "list", title: density === "compact" ? "Comfortable rows" : "Compact rows", keywords: "density dense rows height compact comfortable", run: () => { density = density === "compact" ? "comfortable" : "compact"; } },
       { id: "autostart", group: "Settings", icon: "sparkles", title: autostartOn ? "Don't launch at login" : "Launch at login", keywords: "startup boot login", run: toggleAutostart },
@@ -1693,7 +1746,7 @@
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
 {#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
 {#if screenCaptureDialog}
-  <ScreenRecordDialog phase={screenCaptureDialog} error={screenCaptureError} result={screenCaptureResult} busy={screenCaptureBusy} onstart={() => void beginScreenCapture()} onclose={closeScreenCaptureDialog} />
+  <ScreenRecordDialog phase={screenCaptureDialog} error={screenCaptureError} errorTitle={screenCaptureErrorTitle} result={screenCaptureResult} busy={screenCaptureBusy} starting={screenCaptureStarting} onstart={() => void beginScreenCapture()} onclose={closeScreenCaptureDialog} />
 {/if}
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />
 

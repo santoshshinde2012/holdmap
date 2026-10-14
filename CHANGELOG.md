@@ -38,6 +38,23 @@ by [release-please](https://github.com/googleapis/release-please) from
   Open, Restart, Schedule and Stop sit in one footer bar without repeating the port.
 - Folder actions wrap long paths at directory separators instead of mid-token.
 
+### Fixed
+
+- Screen recording cancellation releases late streams and prevents stale results from reopening.
+  Stopping ends screen sharing before preparing exports; preparation can be discarded.
+- GIF exports cover the complete recording with bounded adaptive sampling and background
+  encoding. MP4 uses resolution-aware H.264 checks with a MediaRecorder fallback. Encoder
+  failures preserve any other successful format.
+- Desktop recording downloads use a native save dialog with atomic writes, cancellation and
+  retryable errors. Recording encoders load only when needed; the public demo checks initial
+  and optional JavaScript budgets separately and follows the current map and Flow controls.
+
+### Security
+
+- Update rustls to 0.23.46 for RUSTSEC-2026-0346 through RUSTSEC-2026-0349. Native recording
+  saves accept bounded MP4/GIF bytes only from the trusted main view and require a user-chosen
+  destination without granting general filesystem access to the webview.
+
 ## [0.6.0] - 2026-10-14
 
 ### Fixed
