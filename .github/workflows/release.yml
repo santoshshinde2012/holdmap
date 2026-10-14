@@ -356,6 +356,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      actions: write # dispatch Pages on the published stable tag
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ needs.plan.outputs.tag }}
@@ -371,3 +372,6 @@ jobs:
         run: node scripts/check-release-assets.mjs
       - name: Publish the complete release
         run: gh release edit "$TAG" --draft=false --verify-tag --repo "$GITHUB_REPOSITORY"
+      - name: Rebuild the public website from the published stable tag
+        if: fromJson(needs.plan.outputs.val).announcement_is_prerelease == false
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG" --raw-field deploy_from_branch=true

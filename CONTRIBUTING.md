@@ -300,6 +300,10 @@ Versions follow [SemVer](https://semver.org/). One `vX.Y.Z` tag releases everyth
   before upload. After all platforms succeed, one job uploads the complete `latest.json`.
   A final read-only asset check requires every CLI archive, desktop installer and checksum
   before publishing the release. Failed builds leave the previous public download in place.
+- After publishing a stable release, the final job dispatches `Pages` on that version tag.
+  The website checks out its own event's source and records the checked-out commit in
+  `build-info.json`; it does not execute source supplied by a `workflow_run` event.
+  Prereleases leave the latest stable website in place.
 
 Check a change to the release setup locally with `dist plan`,
 `dist build --artifacts=local --target x86_64-unknown-linux-gnu` and `actionlint`.
@@ -313,10 +317,11 @@ generated metadata. When upgrading dist or changing its config, review the new u
 template against these controls and update the workflow deliberately; `dist generate` does
 not regenerate CI with this setting. Keep action pins in the config and workflow in sync.
 
-**Repository setup** (once; everything optional is skipped when absent):
+**Repository setup** (once; signing and registry integrations are optional):
 
 | What | Needed for |
 |---|---|
+| Environment `github-pages`: selected deployment branches and tags must allow Branch `main` and Tag `v*` | Required for the stable release's tag-dispatched website deployment. A `main`-only environment rejects the tag; add the explicit tag policy before publishing the first release with this workflow. |
 | Secret `HOMEBREW_TAP_TOKEN` (fine-grained, contents: write on `santoshshinde2012/homebrew-tap`), then in `dist-workspace.toml` add `"homebrew"` to `installers`, set `tap` and `publish-jobs = ["homebrew"]`, run `dist generate` and review/add the upstream Homebrew publishing job | Homebrew (`brew install santoshshinde2012/tap/holdmap`); off until then, so release notes don't advertise it |
 | Secret `RELEASE_PLEASE_TOKEN` (fine-grained, contents and pull requests: write) | The release PR; the workflow skips with a notice until it exists |
 | Secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | Signed, notarised macOS app (optional) |
@@ -337,7 +342,9 @@ maintainer pushes its tag.
 4. Wait for the complete `Release` run, including its reusable desktop jobs and final asset
    verification. The release stays a draft until all six CLI archives, seven desktop installers
    and their checksums are uploaded. Check their build provenance, then confirm the
-   release-triggered `Pages` deployment uses the tagged commit and new downloads.
+   stable release's dispatched `Pages` deployment uses the tagged commit and new downloads.
+   Check `build-info.json` against the tag's commit. Confirm the `github-pages` environment
+   allows Tag `v*` before publishing; the workflow does not change environment policies.
    Without signing credentials, macOS is ad-hoc signed without notarization and Windows is
    unsigned. Without a configured signed updater, desktop users download the new installer
    manually; do not advertise automatic updates.
