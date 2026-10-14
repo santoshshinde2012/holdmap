@@ -34,23 +34,11 @@ holdmap tells you what's really there — which agent or tool started it — and
 it should.
 
 Version **0.7.0** adds local screen recording, Computer / Footprint / Project agent-map
-zoom, and live local scans during `npm run dev`. Check the
+zoom, and live local scans during desktop development. Read
+[what's new](https://santoshshinde2012.github.io/holdmap/docs/whats-new/), check the
 [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
 current installers and see the [changelog](CHANGELOG.md) for release notes. Desktop
 screenshots use the shared browser UI with sample data.
-
-Version **0.6.0** added editor-extension identity on the list and graph, full-canvas Graph
-and Flow, schedules started from the empty manager, and a macOS fullscreen close that
-returns to the previous app ([0.6.0 changes](CHANGELOG.md#060---2026-10-14)).
-
-Version **0.5.0** added Agent Flow, reviewed scheduling, folder actions and the routed H
-identity ([0.5.0 changes](CHANGELOG.md#050---2026-10-11)). **0.5.1** hardened project
-protections and desktop error handling ([0.5.1 changes](CHANGELOG.md#051---2026-10-13)).
-
-The new routed H logo connects Holdmap's initial with its process and agent maps.
-The [vector master and regeneration guide](apps/desktop/assets/README.md) keep app,
-tray and website icons consistent. Version 0.5.0 includes the updated native icons;
-the 0.4.0 installers retain their original icons.
 
 ## Features
 
@@ -72,9 +60,13 @@ the 0.4.0 installers retain their original icons.
   exposure including debug and model-server ports), each fact marked seen, inferred or unknown.
   Agent settings files are not read. Reveal a folder, open it in your editor,
   or stop only the services that agent started, through the normal safety policy.
+- **Three levels of agent maps.** Computer shows this machine and outside systems;
+  Footprint shows agents' folders, tools, ports and hosts; Project focuses on one source tree.
+- **Local screen recording.** Choose a screen or window, capture up to two minutes without
+  audio, then preview and save the available MP4/GIF exports. Nothing is uploaded.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
   server for AI coding assistants. macOS, Linux and Windows. No product analytics.
-- **Agent flow (0.5.0).** Follow observed process/socket relationships, or opt in to
+- **Agent flow.** Follow observed process/socket relationships, or opt in to
   local recording of reported tools, model calls and delegated agents. Inspect parallel work,
   failures, duration and reported serialized sizes without storing prompts or tool arguments.
 
@@ -88,7 +80,7 @@ desktop are unaffected by this Linux dependency issue. See the
 **macOS and Linux**
 
 ```sh
-curl -LsSf https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-installer.sh | sh
 ```
 
 **Windows (PowerShell)**
@@ -99,7 +91,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/santoshshinde2012/
 
 The binary goes to `~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows). If that folder is
 already on your `PATH`, `holdmap` works right away. If not, the installer adds it and tells
-you: open a new terminal, or run the `source` line it prints.
+you: open a new terminal, or run the PATH command it prints.
 
 **Desktop app**
 
@@ -110,8 +102,10 @@ It follows the latest published release, including while a newer source version 
 |---|---|
 | macOS, Apple silicon | [holdmap_aarch64.dmg][dmg-arm64] |
 | macOS, Intel | [holdmap_x64.dmg][dmg-x64] |
-| Windows | [.msi][msi] or [setup .exe][nsis] |
-| Linux | [.AppImage][appimage], [.deb][deb] or [.rpm][rpm] |
+| Windows, x64 | [.msi][msi] or [setup .exe][nsis] |
+| Linux, x64 | [.AppImage][appimage], [.deb][deb] or [.rpm][rpm] |
+
+Linux ARM64 has a CLI archive, but no prebuilt desktop installer.
 
 On a Mac with Apple silicon (M1 or newer), choose the **Apple silicon** download.
 It runs natively and does not require Rosetta. Choose **Intel** for an Intel Mac;
@@ -131,9 +125,11 @@ Source version: **0.7.0**.
 [deb]: https://santoshshinde2012.github.io/holdmap/#install
 [rpm]: https://santoshshinde2012.github.io/holdmap/#install
 
-**Homebrew:** coming soon.
-
-**From source** (Rust 1.95+): `cargo install --locked --git https://github.com/santoshshinde2012/holdmap holdmap`
+**From source** (Rust 1.95+): use the versioned Cargo command in
+[Install](https://santoshshinde2012.github.io/holdmap/#install) to build a published release.
+To install your checked-out source, run `cargo install --locked --path crates/holdmap-cli`
+from the repository root. Homebrew and npm-registry installation are not available;
+the release's npm tarball is a downloadable asset.
 
 Every release has SHA-256 checksums and build provenance (`gh attestation verify FILE --repo santoshshinde2012/holdmap`).
 
@@ -266,9 +262,17 @@ with labelled sample data. [Agent flow guide](docs/agent-flow.md) explains provi
 privacy, metadata contracts and the CLI alternative:
 
 ```sh
-holdmap agents --flow --json          # observed relationships; no recording required
-holdmap activity serve              # opt in; prints temporary local credentials
-holdmap activity setup --provider codex   # use the credentials via the environment
+holdmap agents --flow --json        # observed relationships; no recording required
+holdmap activity serve              # keep running in this terminal
+```
+
+In a second terminal, set `HOLDMAP_ACTIVITY_ENDPOINT` and `HOLDMAP_ACTIVITY_TOKEN` to the
+exact values printed by that collector, then run the commands below. Keep the token private.
+`setup` prints a reviewable configuration example; it does not change the agent's settings.
+Apply that example to the supported agent, or enable recording for this MCP server:
+
+```sh
+holdmap activity setup --provider codex   # prints configuration for the active collector
 holdmap activity snapshot --json    # retained metadata from that collector
 holdmap mcp --record-activity        # optional recording of this server's known tools
 ```
@@ -335,13 +339,14 @@ The screen recorder and Computer / Footprint / Project map zoom described below 
 To add them to an existing **0.6.0** installation, download and install the new desktop build.
 
 A tray and menu-bar app with the port list, details, the service graph (`G`), the agents map
-(`⇧A`), pins, history with one-click restart, local screen recording (`⇧V`, MP4 and GIF stay on
-this computer), remote hosts over SSH and a command palette (`⌘K` /
+(`⇧A`), pins, history with one-click restart, local screen recording (`⇧V`), remote hosts over
+SSH and a command palette (`⌘K` /
 `Ctrl+K`). `⌘⌥P` (`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. `B`
 hides the details pane so Graph uses the full window; Agents and Flow have matching Hide
 cards / Hide inspector / Hide limits / Hide recording controls. On the
 Agents map, Computer / Footprint / Project zoom over the same observed processes (C4-style:
-this machine, every agent’s containers, then one source tree). Expand a card to reveal a folder, open it in your editor, or stop the unprotected
+this machine, folders/tools/ports/hosts across agents, then one source tree). Expand a card
+to reveal a folder, open it in your editor, or stop the unprotected
 ports that agent started. From a port’s details pane you can open it in a browser, restart a
 dev server, open its folder (`HOLDMAP_EDITOR`, else Cursor, VS Code, Zed…) or Finder, and copy
 its URL, a `curl` or the kill command. Version 0.4.0 also adds agent search, expanded child-tool
@@ -381,18 +386,27 @@ the chooser; use 0.5.0 or newer.
 
 </details>
 
-**First open.** The macOS app is ad-hoc signed and sealed, but is not Developer-ID signed
-or notarised. Windows installers are unsigned unless signing credentials are configured:
+**Screen recording.** Choose the camera button, **Record screen…** in the command palette,
+or `⇧V`, then select a screen or window in the system chooser. Capture lasts up to two
+minutes with no microphone or system audio. Stopping ends screen sharing before preparing
+the available MP4/GIF exports; format availability depends on encoding support.
+Save through the native file dialog, or the browser's download manager in the demo.
+Closing the preview keeps it available through **Review recording** for this session;
+**Discard recording**, reload or quitting clears it. Save a file to keep it.
+This is separate from optional agent tool-call metadata recording. See the
+[screen recording guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#record-the-screen)
+for permissions, platform requirements and export limits.
 
-- **macOS:** open it once, then go to **System Settings > Privacy & Security > Open Anyway**
-  (macOS 14 and earlier: right-click the app, then **Open**). Or run
-  `xattr -dr com.apple.quarantine /Applications/holdmap.app`.
-- **Windows:** in "Windows protected your PC", click **More info**, then **Run anyway**.
+**First open.** The **0.7.0** macOS app is ad-hoc signed and sealed without Developer-ID
+signing or notarisation; its Windows installers are unsigned. Verify the checksums and
+build provenance before opening a download. Follow the
+[first-open guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#first-open)
+for OS-specific instructions and policy restrictions.
 
 Update an existing desktop installation by downloading the latest installer above that
-matches your operating system and architecture. Releases without a configured signed
-updater require manual installation. Run the CLI installer again to update the CLI, TUI
-and MCP server.
+matches your operating system and architecture. **0.7.0 requires manual desktop installation**;
+its published installers have no configured signed updater feed. Run the CLI installer again
+to update the CLI, TUI and MCP server; it does not update the separate desktop app.
 
 <details>
 <summary>More screenshots</summary>
@@ -449,7 +463,9 @@ MCP identities remain inferred from process metadata and do not prove tool calls
 Tool input/output schemas preserve structured data, and malformed arguments are rejected before
 acting, including incorrectly typed stop controls. Both stop tools preview by default; execution
 requires the one-use `confirmation_id` returned by a preview in the same session, with unchanged
-target/options and fresh matching effects. The session keeps at most 32 previews for five minutes.
+target/options and fresh matching effects. The MCP client must show the plans and obtain user
+authorization for their effects; the handle binds the preview but does not establish consent.
+The session keeps at most 32 previews for five minutes.
 Frames are capped at 1 MiB and legacy batches at 64 messages, with oversized input rejected before
 dispatch. `list_ports` reports collection warnings even
 for empty results. See the [MCP guide](site/src/content/docs/mcp.md) and
@@ -601,13 +617,14 @@ Blue groups interfaces, violet shows domain logic, amber marks action safeguards
 collection and state, and slate identifies the public website. Labels and boundaries carry the
 same meaning independently of color. The browser demo uses sample data and has no native OS access.
 
-SOLID is expressed through specific boundaries: collectors have separate responsibilities;
-registries extend owner and project detection; narrow provider, detector and classifier traits
-let the normal builders use system implementations or fixtures. Defaults are chosen at the
-composition points. Activity source adapters share one metadata validator; HTTP routes,
-credentials and request limits have one policy. Recording controls, graph presentation and
-MCP delivery have separate owners. [Architecture details](docs/architecture.md) explain these
-contracts and their regression coverage.
+SOLID guides these boundaries: collection, domain policy, execution and presentation have
+separate owners; registries extend detection and planning; narrow provider, detector and
+classifier traits accept system implementations or fixtures. Composition points choose
+implementations. Activity adapters share metadata validation, while recording controls,
+graph presentation and MCP delivery remain separate. The
+[design notes](docs/architecture.md#7-design-notes) map all five principles to concrete
+contracts and regression coverage. [Contributor review guidance](CONTRIBUTING.md#design-review)
+explains how to preserve those contracts when extending the app.
 
 Action authority stays at the adapters and executor: desktop and MCP retain immutable previews,
 compare fresh effects before execution, and pass the original plan to the shared identity and
@@ -638,33 +655,56 @@ dependencies and temporary captures are regenerated; Git history holds earlier v
 
 ## Troubleshooting
 
-- **`command not found: holdmap`** right after installing: open a new terminal, or run
-  `source ~/.config/holdmap/env.sh`.
-- **An old copy runs instead of the new one:** remove leftover binaries in `~/.cargo/bin`
-  and `~/.local/bin` (`rm ~/.cargo/bin/holdmap ~/.local/bin/portwise ~/.cargo/bin/portwise`
-  as needed). `command -v holdmap` shows which one runs.
+- **`command not found: holdmap`** right after installing: open a new terminal or use the
+  PATH command printed by the installer. The default macOS/Linux shell setup uses
+  `source ~/.config/holdmap/env.sh`; custom install/config locations can change that path.
+  On Windows, open a new PowerShell window and check `Get-Command holdmap`.
+- **An old copy runs instead of the new one:** check `command -v holdmap` (macOS/Linux) or
+  `Get-Command holdmap` (Windows), then `holdmap --version`. A Cargo-installed copy in
+  `~/.cargo/bin` can shadow the installer's copy in `~/.local/bin`; update or remove only the
+  old copy you identified. Very old installations used the separate name `portwise`.
 - **`Permission denied` on a shell rc file:** an old `sudo` left it owned by root. Run
   `sudo chown "$USER" ~/.bash_profile` and install again. Never run the installer with `sudo`.
 - **Other users' ports are hidden:** run with `sudo` (an elevated terminal on Windows).
 - **Slow or stale list:** `HOLDMAP_TRACE=scan holdmap list` prints how long each part of a scan
   took (sockets, processes, containers).
-- **Uninstall:** `rm ~/.local/bin/holdmap`, remove the `env.sh` line the installer added to your
-  shell rc files, and delete the app. Settings and history live in `~/.config/holdmap` (macOS:
-  `~/Library/Application Support/holdmap`, Windows: `%APPDATA%\holdmap`).
+- **Uninstall:** remove the binary at the path reported above, remove the installer's PATH
+  setup, and uninstall the desktop app through your OS. Settings and restart history remain in
+  `~/.config/holdmap` (macOS: `~/Library/Application Support/holdmap`, Windows: `%APPDATA%\holdmap`),
+  or your custom `HOLDMAP_HOME`. Delete that directory separately to clear them. History contains
+  raw launch commands; inspect it before sharing diagnostics.
 
 ## Learn more
 
 - [Website and guide](https://santoshshinde2012.github.io/holdmap/): the live demo and short how-tos.
+- [What's new in 0.7.0](https://santoshshinde2012.github.io/holdmap/docs/whats-new/): recording, maps, fixes and upgrade instructions.
 - [Website maintenance](site/README.md): SEO checks, deployment and current website snapshots.
 - [Agents, tools and apps](https://santoshshinde2012.github.io/holdmap/docs/agents/): folders, access and stopping what an agent started.
 - [CLI reference](docs/cli.md): every command and flag.
 - [Architecture](docs/architecture.md): how the core, CLI, TUI, desktop app and MCP server fit together.
+- [Brand assets](apps/desktop/assets/README.md): the vector master and icon regeneration guide.
 - [Changelog](CHANGELOG.md) and [security policy](SECURITY.md).
 
 ## Contributing
 
 Use Rust 1.95+ and Node.js 22.12+ (`nvm use`). [CONTRIBUTING.md](CONTRIBUTING.md) covers native
-system dependencies, Chromium, actionlint and cargo-deny setup. Useful checks are:
+system dependencies, Chromium, actionlint and cargo-deny setup.
+
+For browser development with live local data, build the CLI first, then start the desktop UI:
+
+```sh
+cargo build --locked -p holdmap
+cd apps/desktop
+npm ci
+npm run dev
+```
+
+Add `?demo=1` to the development URL for sample data. The live development collector is
+read-only; `npm run tauri dev` from `apps/desktop` runs the native app with real actions.
+The public website always uses sample scan data. See the
+[development guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#develop-with-local-data).
+
+Run these checks from the repository root:
 
 ```sh
 cargo test --locked                                  # core, CLI/TUI, MCP and activity
