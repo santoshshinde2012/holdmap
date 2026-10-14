@@ -21,6 +21,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Fixed
 
+- Windows MSVC native test executables embed the Common Controls v6 manifest required
+  by Tauri's mocked IPC tests, preventing a loader failure before the test harness starts.
 - Closing the macOS main window hides the application through AppKit, returning from
   fullscreen to the previous app instead of leaving a black Space. Tray, shortcut and Dock
   reopening restore the same window and webview, including minimized windows. First-open
