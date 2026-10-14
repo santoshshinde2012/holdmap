@@ -45,8 +45,8 @@
 <style>
   .glance { padding: var(--sp-6) var(--sp-5); display: grid; gap: var(--sp-5); color: var(--muted); }
   h3 { margin: 0; color: var(--text); font-size: var(--fs-title); font-weight: var(--fw-semibold); letter-spacing: var(--ls-title); line-height: var(--lh-title); }
-  .counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
-  .counts div { display: grid; gap: 2px; padding: 10px 12px; box-shadow: -1px 0 0 var(--border); }
+  .counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--surface-2); }
+  .counts div { display: grid; gap: 2px; padding: 12px; box-shadow: -1px 0 0 var(--border); }
   .n { color: var(--text); font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
   .counts .warn .n { color: var(--warn); }
   .l { font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); text-transform: uppercase; font-weight: var(--fw-medium); }

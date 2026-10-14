@@ -211,6 +211,15 @@ export function localLinkCounts(g: Graph | null): Map<string, number> {
   return counts;
 }
 
+/** Caption under the name: framework / image / role, never repeating the title. */
+export function nodeSubtitle(n: GraphNode): string {
+  if (n.kind === "external") return "Internet & remote hosts";
+  const parts = [n.framework?.name, n.container?.image ?? null, n.kind === "client" ? "client" : null]
+    .filter((s): s is string => !!s && s !== n.label);
+  if (parts.length) return parts.join(" · ");
+  return n.subtitle && n.subtitle !== n.label ? n.subtitle : "";
+}
+
 export const dependents = (g: Graph, id: string): GraphNode[] =>
   uniq(g.edges.filter((e) => e.to === id && e.kind === "local").map((e) => e.from)).map((x) => g.nodes.find((n) => n.id === x)!).filter(Boolean);
 export const dependencies = (g: Graph, id: string): GraphNode[] =>

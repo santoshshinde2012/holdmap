@@ -26,3 +26,32 @@ describe("large graph controls", () => {
     expect(force.title).toContain(`up to ${FORCE_NODE_LIMIT} services`);
   });
 });
+
+describe("graph chrome", () => {
+  it("explains an unconnected graph and offers All services", () => {
+    const graph = mockTopology();
+    graph.edges = [];
+    graph.clusters = [];
+    const view = render(GraphView, { graph, selectedNode: null, dark: false, reduced: true, onselect() {}, onstopcluster() {}, all: false, ontoggleall() {} });
+    expect(view.getByRole("status").textContent).toMatch(/aren't connected/i);
+    expect(view.getByRole("button", { name: "Show all services" })).toBeTruthy();
+  });
+
+  it("disables External when there are no remote hosts", () => {
+    const graph = mockTopology();
+    graph.nodes = graph.nodes.filter((n) => n.kind !== "external");
+    graph.edges = graph.edges.filter((e) => e.kind !== "outbound");
+    const view = render(GraphView, { graph, selectedNode: null, dark: false, reduced: true, onselect() {}, onstopcluster() {} });
+    const ext = view.getByRole("button", { name: "External" }) as HTMLButtonElement;
+    expect(ext.disabled).toBe(true);
+    expect(ext.getAttribute("aria-pressed")).toBe("false");
+    expect(ext.title).toMatch(/no outbound/i);
+  });
+
+  it("points at All services when the filtered graph is empty", () => {
+    const graph = { ...mockTopology(), nodes: [], edges: [], clusters: [] };
+    const view = render(GraphView, { graph, selectedNode: null, dark: false, reduced: true, onselect() {}, onstopcluster() {}, all: false, ontoggleall() {} });
+    expect(view.getByText("No connected project services")).toBeTruthy();
+    expect(view.getByRole("button", { name: "Show all services" })).toBeTruthy();
+  });
+});

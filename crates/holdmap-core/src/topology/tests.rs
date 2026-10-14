@@ -457,3 +457,55 @@ fn retain_dev_drops_unrelated_nodes() {
     assert!(g.node("svc:20").is_some());
     assert_eq!(g.stats.nodes, g.nodes.len());
 }
+
+#[test]
+fn editor_extension_nodes_keep_the_extension_not_the_open_project() {
+    let mut tools = proc(
+        20,
+        10,
+        "ossdbtoolsservice_main",
+        &["/Users/me/.vscode/extensions/ms-ossdata.vscode-pgsql-1.32.0/ossdbtoolsservice_main"],
+    );
+    tools.exe = Some(
+        "/Users/me/.vscode/extensions/ms-ossdata.vscode-pgsql-1.32.0/ossdbtoolsservice_main".into(),
+    );
+    tools.cwd = Some("/Users/me/SellerAgent".into());
+    let mut scan = scan_of(
+        vec![
+            proc(1, 0, "init", &[]),
+            proc(10, 1, "Code Helper (Plugin)", &[]),
+            tools,
+        ],
+        vec![listen(59891, &[20])],
+        vec![],
+    );
+    let row = scan
+        .snapshot
+        .entries
+        .iter_mut()
+        .find(|e| e.port == 59891)
+        .expect("listener");
+    // Even if a project leaked onto the entry, the graph still titles the extension.
+    row.project = Some(ProjectInfo {
+        name: "seller-agent".into(),
+        root: "/Users/me/SellerAgent".into(),
+        kind: "package.json".into(),
+        git_branch: None,
+        workspace: None,
+        git_root: None,
+    });
+    row.framework = Some(Framework {
+        name: "VS Code extension".into(),
+        category: FrameworkCategory::App,
+    });
+    row.label = "Next.js · seller-agent".into();
+    let g = TopologyBuilder::new(&scan).build();
+    let node = g
+        .nodes
+        .iter()
+        .find(|n| n.ports.iter().any(|p| p.port == 59891))
+        .expect("extension listener is a graph node");
+    assert_eq!(node.label, "VS Code extension");
+    assert_ne!(node.label, "seller-agent");
+    assert_eq!(node.subtitle.as_deref(), None);
+}

@@ -3,16 +3,12 @@
   import { Handle, Position, type NodeProps, type Node } from "@xyflow/svelte";
   import FrameworkIcon from "../FrameworkIcon.svelte";
   import Icon from "../Icon.svelte";
-  import type { FlowNodeData } from "../../lib/graph";
+  import { nodeSubtitle, type FlowNodeData } from "../../lib/graph";
   import { humanBytes as bytes } from "../../lib/format";
 
   let { data }: NodeProps<Node<FlowNodeData>> = $props();
   const n = $derived(data.node!);
-  const sub = $derived(
-    n.kind === "external"
-      ? "Internet & remote hosts"
-      : [n.framework?.name, n.container ? n.container.image : null, n.kind === "client" ? "client" : null].filter(Boolean).join(" · ") || n.subtitle || ""
-  );
+  const sub = $derived(nodeSubtitle(n));
   const exposed = $derived(n.ports.some((p) => p.exposure === "all_interfaces"));
 </script>
 
@@ -52,7 +48,7 @@
   .node {
     width: 236px; height: 72px; box-sizing: border-box; display: flex; align-items: center; gap: 10px;
     padding: 0 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border-strong);
-    box-shadow: var(--shadow-sm); color: var(--text); cursor: pointer;
+    box-shadow: var(--shadow); color: var(--text); cursor: pointer;
     transition: opacity var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
   }
   .node:hover { box-shadow: var(--shadow-md); border-color: var(--accent); }
@@ -67,8 +63,9 @@
   .body { flex: 1; min-width: 0; display: grid; gap: 4px; }
   .top { display: flex; align-items: center; gap: 5px; min-width: 0; }
   .label { font-weight: var(--fw-semibold); font-size: var(--fs-body); line-height: var(--lh-body); letter-spacing: var(--ls-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .lock { color: var(--muted); display: inline-flex; }
-  .exp { color: var(--warn); display: inline-flex; }
+  .lock, .exp { display: inline-flex; align-items: center; padding: 2px; border-radius: 5px; background: var(--surface-2); }
+  .lock { color: var(--muted); }
+  .exp { color: var(--warn); background: var(--warn-soft); }
   .ports { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; }
   .port { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--accent); background: var(--accent-soft); padding: 1px 5px; border-radius: 5px; }
   .more { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }

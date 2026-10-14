@@ -20,6 +20,9 @@ describe("framework brands", () => {
     expect(fw("Axum")).toBe("Rs");
     expect(fw("Gunicorn")).toBe("U");
     expect(fw("Cargo")).not.toBe("Go");
+    expect(fw("VS Code extension")).toBe("VS");
+    expect(fw("Cursor extension")).toBe("Cu");
+    expect(fw("Ollama")).toBe("Ol");
   });
   it("derives initials for unknown names", () => {
     expect(initials("sand-egress-tun")).toBe("SE");

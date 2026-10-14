@@ -34,6 +34,12 @@ services change. **Layered** arranges dependencies from left to right. **Force**
 tightly connected services and is available for up to 100 services; larger graphs use
 Layered to keep navigation responsive, including when Force was previously selected.
 
+The graph starts with your dev servers and anything they talk to. **All services** adds
+databases, apps and the rest of the machine. **External** shows outbound remote hosts and
+stays idle when there are none. If the canvas has services but no links, it explains that
+and offers All services. Editor-extension listeners keep the extension name, not the
+inherited project — same identity as the [list and Agents view](../agents/).
+
 ## Shut down this computer
 
 Open **Settings → Power → Shut down now…**, separately from **Schedule shutdown…**; its review

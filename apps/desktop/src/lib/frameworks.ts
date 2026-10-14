@@ -49,6 +49,10 @@ const BRANDS: [RegExp, Brand][] = [
   [/caddy/i, B("Cd", "#166534")],
   [/airplay|controlcenter/i, B("", "#52525b")],
   [/vs ?code|code helper/i, B("VS", "#1d63b8")],
+  [/cursor/i, B("Cu", "#1e3a8a")],
+  [/windsurf/i, B("Ws", "#0f766e")],
+  [/^ollama/i, B("Ol", "#111827")],
+  [/lm[- ]?studio/i, B("LM", "#1e3a5f")],
 ];
 
 const HUES = ["#4338ca", "#0f766e", "#b45309", "#be185d", "#1d4ed8", "#7e22ce", "#15803d", "#9f1239"];

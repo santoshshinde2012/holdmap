@@ -13,13 +13,19 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Editor-extension services (VS Code, Cursor, Windsurf and similar, including remote
   `*.vscode-server` / `*.cursor-server` trees) that inherit an open workspace as their
   working directory are labelled as that editor's extension, not as the project's
-  framework. A Postgres tools process in a Next.js checkout is no longer
+  framework — in the list and on the service graph, even if a project leaked onto the
+  entry. A Postgres tools process in a Next.js checkout is no longer
   "Next.js · seller-agent". Those listeners are protected and are not treated as stoppable
   dev servers.
 
 ### Changed
 
-- Agent network facts name well-known debug and model-server ports (Node inspector, Chrome
+- The graph view explains when services on the canvas aren't connected, offers All
+  services from that empty state, and leaves External idle until there are outbound
+  hosts. Service cards no longer repeat the title as a subtitle. Framework tiles include
+  Ollama, Cursor and Windsurf.
+
+- Agent network facts name well-known debug and model-server ports (Node inspector, Chrome)
   DevTools, Ollama) from the port number as inferred hints, and from a detected framework as
   seen. Copilot CLI `--yolo`/`--allow-all`, Cursor Agent `--force`/`--approve-mcps`/`--trust`
   and Gemini `--approval-mode auto_edit` are reported from the process command line. MCP

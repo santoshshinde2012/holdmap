@@ -1172,7 +1172,9 @@ The graph view uses **Svelte Flow (`@xyflow/svelte`) and `@dagrejs/dagre`**. Nod
 (so they reuse the icons, tokens and focus rings), group nodes draw the cluster hulls, and the
 minimap and zoom controls are built in. dagre gives a stable left-to-right layout that matches the
 stop order; the alternative "organic" layout is a small seeded force simulation, so the graph
-doesn't move between refreshes.
+doesn't move between refreshes. Unconnected subgraphs explain the empty canvas and offer
+**All services**; External stays idle until there are outbound hosts. Editor-extension nodes
+keep the extension identity, not the inherited project.
 
 ## 7. Design notes
 

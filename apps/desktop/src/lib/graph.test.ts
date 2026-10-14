@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeLabel, fitEdgeLabel, linksLabel, localLinkCounts, needsMiniMap, force, FORCE_NODE_LIMIT, groupId, layered, layoutModeFor, NODE_H, NODE_W, nodeForEntry, orderFromSummary, related, sectionsByCluster, separate, toFlow, trafficDots } from "./graph";
+import { edgeLabel, fitEdgeLabel, linksLabel, localLinkCounts, needsMiniMap, force, FORCE_NODE_LIMIT, groupId, layered, layoutModeFor, NODE_H, NODE_W, nodeForEntry, nodeSubtitle, orderFromSummary, related, sectionsByCluster, separate, toFlow, trafficDots } from "./graph";
 import { MOCK_SNAPSHOT, mockTopology } from "./mock";
 
 const g = mockTopology();
@@ -150,6 +150,13 @@ describe("helpers", () => {
   it("labels the Graph badge count in words", () => {
     expect(linksLabel(1)).toBe("1 link");
     expect(linksLabel(6)).toBe("6 links");
+  });
+
+  it("does not repeat the service name as a subtitle", () => {
+    const ollama = g.nodes[0];
+    expect(nodeSubtitle({ ...ollama, label: "Ollama", framework: { name: "Ollama", category: "app" }, kind: "service", subtitle: "Ollama", container: null })).toBe("");
+    expect(nodeSubtitle({ ...ollama, label: "shop-web", framework: { name: "Next.js", category: "dev_server" }, kind: "service", subtitle: "Next.js" })).toBe("Next.js");
+    expect(nodeSubtitle({ ...ollama, kind: "external", label: "External", framework: null, subtitle: null })).toBe("Internet & remote hosts");
   });
 });
 
