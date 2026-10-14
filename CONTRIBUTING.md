@@ -61,6 +61,7 @@ Install [actionlint](https://github.com/rhysd/actionlint#installation) and
 Chromium once with `(cd apps/desktop && npm ci && npx playwright install chromium)`.
 On Linux, use `npx playwright install --with-deps chromium` for its system dependencies,
 and install `xvfb xauth` for the isolated native shortcut regressions.
+On macOS, install FFmpeg (`brew install ffmpeg`) for the synthetic MP4/GIF runtime check.
 The browser suite starts and stops its own preview server; failure traces and screenshots go
 in the ignored `apps/desktop/test-results/` directory. For an existing Chrome installation,
 set `HOLDMAP_E2E_CHROMIUM_EXECUTABLE` to its executable path.
@@ -86,6 +87,7 @@ scripts/check-secrets.sh                     # full Git history and tracked/new 
 python3 scripts/test-release-security.py    # isolated release input regressions; never publishes
 python3 scripts/check-updater-runtime.py    # macOS: real signed scratch install and relaunch
 python3 scripts/check-window-lifecycle-runtime.py # interactive macOS: owned close/fullscreen/reopen regression
+python3 scripts/check-screen-recording-runtime.py # macOS: synthetic MP4/GIF, real WKWebView and binary IPC; needs FFmpeg
 actionlint
 python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK/Linux test resolution
 python3 scripts/verify-vendored-global-hotkey.py # X11 fixes, original archive and shortcut dependency resolution
@@ -130,6 +132,13 @@ scratch app before verifying the actual relaunch. Wrong keys, tampered bytes, mi
 authenticated versions and escaping result paths must leave the original app untouched.
 The runner needs the desktop's locked CLI installed with `npm ci`; it never replaces a host
 installation, changes release keys or enables automatic updates for published installers.
+
+The synthetic recording check builds the production encoder and save adapter into an owned
+WKWebView with the production CSP. It records a generated canvas, sends both formats through
+real binary IPC to a fixture-only destination, and checks hashes, permissions, animation,
+duration and cleanup with FFprobe/FFmpeg. Its capture API tripwire rejects any screen-picker
+request. It never captures the user's screen or opens the production native save chooser;
+save-policy and atomic-write behavior have separate native unit coverage.
 
 Run `python3 scripts/check-window-lifecycle-runtime.py` in an interactive macOS desktop session
 for native close changes. It creates a private scratch app, exercises the native fullscreen
