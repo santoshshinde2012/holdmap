@@ -19,7 +19,7 @@
   import { FIT_PADDING } from "../lib/flow";
   import { agentColor, filterAgents, footprintGraph, layoutFootprint, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Positions } from "../lib/agents";
   import type { AgentsReport, PortEntry } from "../lib/types";
-  import { prefGet, prefSet } from "../lib/prefs";
+  import { prefGet, prefGetBoolean, prefSet } from "../lib/prefs";
   import { untrack } from "svelte";
   import { currentFolderOwner, preferredFolderOwner, resolveFolderTarget, type FolderTarget } from "../lib/folders";
   import { isComposingKey } from "../lib/keyboard";
@@ -65,6 +65,10 @@
 
   let recent = $state(prefGet("agents.recent") !== "0");
   $effect(() => prefSet("agents.recent", recent ? "1" : "0"));
+  let rail = $state(prefGetBoolean("agents.rail", true));
+  $effect(() => prefSet("agents.rail", rail ? "1" : "0"));
+  let widgets = $state(prefGetBoolean("agents.widgets", true));
+  $effect(() => prefSet("agents.widgets", widgets ? "1" : "0"));
   let hover = $state<string | null>(null);
   /** A folder / host picked on the map (agents and ports select through the app). */
   let picked = $state<string | null>(null);
@@ -150,12 +154,20 @@
 </script>
 
 <div class="agents-root" class:reduced>
-  <header class="agents-nav"><SegmentedControl value={section} options={[{ value: "overview", label: "Overview", icon: "bot" }, { value: "flow", label: "Flow", icon: "branch" }]} label="Agent view" onchange={(value) => section = value} /><span>{section === "overview" ? "Agents, resources and access" : "Connections and recorded calls"}</span></header>
+  <header class="agents-nav">
+    <SegmentedControl value={section} options={[{ value: "overview", label: "Overview", icon: "bot" }, { value: "flow", label: "Flow", icon: "branch" }]} label="Agent view" onchange={(value) => section = value} />
+    <span>{section === "overview" ? "Agents, resources and access" : "Connections and recorded calls"}</span>
+    {#if section === "overview" && report && report.agents.length}
+      <button type="button" class="nav-tog" aria-pressed={rail} onclick={() => (rail = !rail)} title={rail ? "Hide agent cards so the map uses the full width" : "Show agent cards"}>
+        <Icon name="sidebar" size={12} />{rail ? "Hide cards" : "Show cards"}
+      </button>
+    {/if}
+  </header>
   {#if section === "flow"}
     <div class="flow-body"><AgentFlowView {query} {dark} {reduced} {...flowProps} /></div>
   {:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="agents" {onkeydown}>
+<div class="agents" class:rail-off={!rail} {onkeydown}>
   {#if !report}
     <div class="empty" aria-busy="true"><Icon name="bot" size={28} /><p>Looking for agents…</p></div>
   {:else if report.agents.length === 0}
@@ -171,6 +183,7 @@
       {/if}
     </div>
   {:else}
+    {#if rail}
     <aside class="rail" aria-label="Agents">
       <header class="rail-head">
         <h2>Agents <span class="n">{visibleAgents.length}{#if visibleAgents.length !== report.agents.length}{" / "}{report.agents.length}{/if}</span></h2>
@@ -191,6 +204,7 @@
         <ul>{#each report.limits as l}<li>{l}</li>{/each}</ul>
       </details>
     </aside>
+    {/if}
     <div class="map">
       {#if visibleAgents.length}
       <SvelteFlow
@@ -219,8 +233,10 @@
         <Panel position="top-left">
           <div class="bar" role="toolbar" aria-label="Agents map options">
             <button class="tog" aria-pressed={recent} class:on={recent} onclick={() => (recent = !recent)} title="Show projects the agent opened recently (from its own project list), not only where it works now"><Icon name="history" size={12} />Recent projects</button>
+            <button class="tog" aria-pressed={widgets} class:on={widgets} onclick={() => (widgets = !widgets)} title="Show or hide the legend and counts"><Icon name="layers" size={12} />Legend</button>
           </div>
         </Panel>
+        {#if widgets}
         <Panel position="top-right">
           {#if stats}
             <div class="stats" aria-live="polite">
@@ -236,6 +252,7 @@
             <span class="lg"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="currentColor" stroke-width="1.6" stroke-dasharray="4 3" /></svg>recent / remote / inferred</span>
           </div>
         </Panel>
+        {/if}
       </SvelteFlow>
       {/if}
     </div>
@@ -251,7 +268,10 @@
 <style>
   .agents-root { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
   .agents-nav { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
-  .agents-nav > span { color: var(--muted); font-size: var(--fs-caption); }
+  .agents-nav > span { color: var(--muted); font-size: var(--fs-caption); flex: 1; min-width: 0; }
+  .nav-tog { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; margin-left: auto; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); cursor: pointer; }
+  .nav-tog:hover { background: var(--surface-2); border-color: var(--border-strong); }
+  .agents.rail-off { grid-template-columns: 1fr; }
   .flow-body { flex: 1; min-height: 0; }
   .agents { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 340px) 1fr; background: var(--bg); container-type: inline-size; }
   .rail { min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg); }
@@ -293,7 +313,7 @@
   .no-matches span { font-size: var(--fs-caption); line-height: var(--lh-caption); }
   @container (max-width: 1100px) { .stats .opt { display: none; } }
   @container (max-width: 860px) {
-    .agents { grid-template-columns: 1fr; grid-template-rows: minmax(0, 42%) 1fr; }
+    .agents:not(.rail-off) { grid-template-columns: 1fr; grid-template-rows: minmax(0, 42%) 1fr; }
     .rail { border-right: 0; border-bottom: 1px solid var(--border); }
     .stats, .legend { display: none; }
   }

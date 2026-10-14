@@ -25,6 +25,15 @@ by [release-please](https://github.com/googleapis/release-please) from
   hosts. Service cards no longer repeat the title as a subtitle. Framework tiles include
   Ollama, Cursor and Windsurf.
 
+- Details, agent cards, the Flow inspector, and graph legends can be hidden so Graph and
+  Flow use the full canvas. `B` toggles the details pane; each view keeps a control to
+  bring the panel or legend back. Choices persist.
+
+- The desktop title bar groups commands, scan, history, schedules, remote, theme and
+  settings. View tooltips sit below the control so they no longer cover the logo. Scheduled
+  actions can start a shutdown or a reviewed service stop from the empty manager, instead of
+  only explaining that those reviews exist elsewhere.
+
 - Agent network facts name well-known debug and model-server ports (Node inspector, Chrome)
   DevTools, Ollama) from the port number as inferred hints, and from a detected framework as
   seen. Copilot CLI `--yolo`/`--allow-all`, Cursor Agent `--force`/`--approve-mcps`/`--trust`

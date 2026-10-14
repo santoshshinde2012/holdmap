@@ -33,6 +33,7 @@
     onopen,
     oncopy,
     onclose,
+    onhide,
     graph = null,
     pinned = false,
     onpin,
@@ -63,6 +64,8 @@
     onopen: () => void;
     oncopy: (text: string, what: string) => void;
     onclose?: () => void;
+    /** Docked pane: hide it so the graph or list can use the full width. */
+    onhide?: () => void;
     graph?: Graph | null;
     pinned?: boolean;
     onpin?: () => void;
@@ -123,9 +126,9 @@
 
 <aside class="pane" class:drawer aria-label="Port details">
   {#if !entry}
-    <AtAGlance {entries} onselect={onselectentry} {mod} />
+    <AtAGlance {entries} onselect={onselectentry} {mod} {onhide} />
   {:else}
-    <DetailHeader {entry} {pinned} {onpin} {oncopy} {onclose} />
+    <DetailHeader {entry} {pinned} {onpin} {oncopy} {onclose} {onhide} />
     <Tabs {tabs} value={active} onchange={(value) => tab = value} {base} label="Details sections" layout="wrap" />
     {#key entryId + active}
       <div class="body" in:fade={{ duration: reduced ? 0 : 120 }}>

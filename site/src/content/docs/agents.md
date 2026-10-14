@@ -44,6 +44,7 @@ matching known account, and do not establish current work by a particular runnin
   before anything opens.
   Search by agent, folder, tool, exact PID (`pid:51200`) or explicit port (`port:3001`). A port
   search includes both the listener owner and agents connected to it.
+  **Hide cards** and **Legend** give the map the full width; both persist.
 - **TUI:** start `holdmap`, then press **Shift+Tab** to open Agents directly. **Tab** cycles
   Ports → Graph → Agents. Use **↑/↓** to select an agent, **/** to search, and **PgUp/PgDn** to
   scroll its details. Wide windows show both panes side by side; small windows stack them.
@@ -97,10 +98,11 @@ In **Agents**, choose **Flow**. The two data sources answer different questions:
 | **Calls** | Tool, model, agent, handoff and execution-step metadata supplied by a configured integration, with status, timing and reported parent spans. | Uninstrumented activity, private message content or verified OS process ownership. |
 
 The graph has zoom, fit and a minimap. Participants, relationships and the activity timeline
-provide keyboard-accessible ways to inspect the same evidence. **Pause view** stops automatic
+provide keyboard-accessible ways to inspect the same evidence. **Hide inspector** gives the
+graph the full width; **Show inspector** brings the details back. **Pause view** stops automatic
 updates; **Refresh** still fetches an explicit update. It does not stop recording or an agent.
 The selected run and record remain stable during refreshes. Small windows stack the readable
-timeline below the graph.
+timeline below the graph. Choices persist.
 
 Use **All**, **Failed** or **No completion** to find the records you need. Search matches
 individual metadata records, and **Order** switches between chronological order and longest

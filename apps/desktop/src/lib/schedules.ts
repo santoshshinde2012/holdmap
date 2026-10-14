@@ -1,3 +1,5 @@
+import type { PortEntry } from "./types";
+
 /** Local, session-only schedules. Native actions are authorized and executed in Rust. */
 export type ScheduleKind = "shutdown" | "port" | "agent";
 export type ScheduleStatus = "pending" | "checking" | "running" | "completed" | "cancelled" | "needs_review" | "failed";
@@ -60,6 +62,13 @@ export function validateScheduledStops(requests: ScheduledStopRequest[]): void {
 
 export function activeScheduleCount(schedules: ScheduledAction[]): number {
   return schedules.filter((schedule) => ["pending", "checking", "running"].includes(schedule.status)).length;
+}
+
+/** Local, unprotected listeners a schedule review can target. The review still authorizes the stop. */
+export function schedulableEntries(entries: PortEntry[]): PortEntry[] {
+  return entries
+    .filter((entry) => !entry.remote && !entry.protected && !!(entry.process || entry.container))
+    .sort((a, b) => Number(!!b.is_dev) - Number(!!a.is_dev) || a.port - b.port);
 }
 
 export const SCHEDULE_STATUS: Record<ScheduleStatus, string> = {

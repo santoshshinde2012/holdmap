@@ -40,6 +40,10 @@ stays idle when there are none. If the canvas has services but no links, it expl
 and offers All services. Editor-extension listeners keep the extension name, not the
 inherited project — same identity as the [list and Agents view](../agents/).
 
+Hide the details pane (`B`, the toolbar panel control, or the pane's own hide button) so
+the graph uses the full window. **Legend** on the canvas hides the counts and key. Both
+choices persist.
+
 ## Shut down this computer
 
 Open **Settings → Power → Shut down now…**, separately from **Schedule shutdown…**; its review
@@ -60,16 +64,19 @@ shutdown and cannot power off a computer. Version 0.3.0 binaries predate this fe
 **Version 0.5.0** adds scheduling to the desktop and browser demo. Version 0.4.0 downloads
 include immediate shutdown and stop confirmations, but predate scheduling.
 
-1. For this computer, open **Settings → Power → Schedule shutdown…**. The review is titled
+1. For this computer, open **Settings → Power → Schedule shutdown…**, or start from the
+   empty **Scheduled actions** dialog (clock control). The review is titled
    **Schedule computer shutdown?**. For a local port, use **Schedule stop…** in its details
-   instead of **Stop…**. For an agent's services, open its card and choose **Stop all** or a service's **Stop**.
+   instead of **Stop…**, or pick a service from that empty dialog. For an agent's services,
+   open its card and choose **Stop all** or a service's **Stop**.
 2. Dedicated schedule reviews start at **In 1 hour** and exclude **Now**. Choose another preset,
    **Custom delay**, or **At a time**. Delays range from
    one minute to 24 hours. The preview shows the local date, time and timezone.
 3. Read the reviewed effects. For shutdown, acknowledge that all apps and unsaved work are
    affected, then choose **Schedule shutdown**. For services, choose **Schedule stop**.
 4. Open the clock control, the active schedule banner, or **Settings → Power → View scheduled
-   actions** to check the countdown and cancel. Cancellation succeeds only before execution
+   actions** to check the countdown and cancel. The empty Scheduled actions dialog can start
+   a shutdown or a reviewed service stop. Cancellation succeeds only before execution
    starts; the UI waits for the backend's acknowledgement.
 
 Keep Holdmap running, including in its tray, and keep this computer awake. Completely quitting
@@ -136,6 +143,7 @@ installer again.
 | `p` | Pin or unpin the port |
 | `g` | Switch between the list and the service graph |
 | `⇧A` | Agents, tools and apps: folders, ports they started, connections and access |
+| `B` | Hide or show the details pane (list and graph) |
 | `h` | Recently stopped, with one-click restart |
 | `d` · `m` · `e` · `t` | Filter: dev servers · mine · exposed · TCP/UDP |
 | `⌘R` | Rescan now |

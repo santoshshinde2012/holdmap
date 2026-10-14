@@ -254,4 +254,17 @@ describe("schedule management", () => {
     expect(screen.getByText(/agent itself stays running/)).toBeTruthy();
     expect(screen.getByText(/Your computer, agents and ports are never changed/)).toBeTruthy();
   });
+
+  it("offers shutdown and stop creation from an empty manager, then reviews a chosen port", async () => {
+    const onschedulepower = vi.fn(), onscheduleport = vi.fn();
+    render(SchedulesDialog, { schedules: [], onclose: vi.fn(), oncancel: vi.fn(async () => {}), demo: true, entries: MOCK_SNAPSHOT.entries, onschedulepower, onscheduleport });
+    expect(screen.getByText("No scheduled actions")).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: /Schedule a shutdown simulation/ }));
+    expect(onschedulepower).toHaveBeenCalledOnce();
+    await fireEvent.click(screen.getByRole("button", { name: /Schedule a service stop/ }));
+    expect(screen.getByRole("list", { name: "Services you can schedule" })).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: /:3000/ }));
+    expect(onscheduleport).toHaveBeenCalledOnce();
+    expect(onscheduleport.mock.calls[0][0].port).toBe(3000);
+  });
 });

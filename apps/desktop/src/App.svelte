@@ -139,6 +139,7 @@
   let showSettings = $state(false);
   let showShutdown = $state(false);
   let shutdownIntent = $state<"now" | "schedule">("now");
+  let shutdownSource = $state<"settings" | "schedules">("settings");
   let shutdownPreview = $state.raw<ShutdownPreview | null>(null);
   let shutdownLoading = $state(false);
   let shutdownBusy = $state(false);
@@ -162,6 +163,7 @@
   let detailTab = $state<DetailTab>("overview");
   const PANE_DEFAULT = 460;
   let paneWidth = $state(Math.min(680, Math.max(340, Number(prefGet("pane")) || PANE_DEFAULT)));
+  let sideOpen = $state(prefGetBoolean("side", true));
   $effect(() => { prefSet("view", view); });
   $effect(() => {
     void view;
@@ -585,11 +587,13 @@
     showSettings = true;
   }
 
-  async function openShutdown(intent: "now" | "schedule" = "now") {
+  async function openShutdown(intent: "now" | "schedule" = "now", source: "settings" | "schedules" = "settings") {
     if (shutdownBusy || shutdownLoading) return;
     if (pendingReview) cancelReview();
     shutdownIntent = intent;
+    shutdownSource = source;
     showSettings = false;
+    showSchedules = false;
     showShutdown = true;
     shutdownPreview = null;
     shutdownError = null;
@@ -613,8 +617,10 @@
     shutdownSequence++;
     shutdownLoading = false;
     shutdownPreview = null;
-    // Restore a visible trigger rather than the Settings button just removed from the DOM.
-    openSettings("power");
+    const back = shutdownSource;
+    shutdownSource = "settings";
+    if (back === "schedules") openSchedules();
+    else openSettings("power");
   }
 
   async function confirmShutdown() {
@@ -1102,6 +1108,7 @@
       { id: "sort-p", group: "View", icon: "hash", title: "Sort: by port", run: () => (sort = "port") },
       { id: "sort-n", group: "View", icon: "clock", title: "Sort: newest first", run: () => (sort = "newest") },
       { id: "help", group: "View", icon: "keyboard", title: "Keyboard shortcuts", shortcut: ["?"], run: () => (showHelp = true) },
+      { id: "side", group: "View", icon: "panel", title: sideOpen ? "Hide the details pane" : "Show the details pane", shortcut: ["B"], keywords: "sidebar panel details larger graph canvas hide", run: () => (sideOpen = !sideOpen) },
       { id: "view", group: "View", icon: view === "graph" ? "list" : "graph", title: view === "graph" ? "Show the list" : "Show the service graph", shortcut: ["G"], keywords: "mesh topology network dependencies", run: () => (view = view === "graph" ? "list" : "graph") },
       { id: "agents", group: "View", icon: view === "agents" ? "list" : "bot", title: view === "agents" ? "Show the list" : "Show agents, tools and apps", shortcut: ["⇧", "A"], keywords: "ai coding agents tools apps docker claude codex cursor copilot gemini windsurf aider access folders stop", run: () => (view = view === "agents" ? "list" : "agents") },
       { id: "sort-c", group: "View", icon: "layers", title: "Group by cluster (compose, workspace, supervisor…)", run: () => (sort = "cluster") },
@@ -1174,6 +1181,7 @@
       case "m": if (view === "agents") return; filters.mine = !filters.mine; break;
       case "e": if (view === "agents") return; filters.exposed = !filters.exposed; break;
       case "L": cycleTheme(); break;
+      case "b": sideOpen = !sideOpen; break;
       case "g": view = view === "graph" ? "list" : "graph"; break;
       case "A": view = view === "agents" ? "list" : "agents"; break;
       case "h": openHistory(); break;
@@ -1288,6 +1296,8 @@
     return () => clearInterval(t);
   });
   $effect(() => { prefSet("pane", String(paneWidth)); });
+  $effect(() => { prefSet("side", sideOpen ? "1" : "0"); });
+  const showSide = $derived(!narrow && view !== "agents" && sideOpen);
 
   const ago = $derived(dataAge(now, view === "agents" ? agentsReport?.taken_at_ms ?? null : snapshot?.taken_at_ms ?? null, view === "agents" ? agentsRefreshing ? agentsStarted : null : refreshing ? scanStarted : null));
   const fresh = $derived(freshness(ago, scanMs / 1000));
@@ -1341,21 +1351,26 @@
 
     <div class="tools">
       <span class="live" class:stale={fresh.stale || (view !== "agents" && !!error)} aria-live="off">
-        <span class="pulse" class:on={view === "agents" ? agentsRefreshing : refreshing}></span>{view !== "agents" && error ? refreshing ? "Retrying…" : "Scan failed" : fresh.text}
+        <span class="pulse" class:on={view === "agents" ? agentsRefreshing : refreshing}></span><span class="live-text">{view !== "agents" && error ? refreshing ? "Retrying…" : "Scan failed" : fresh.text}</span>
       </span>
-      <Button size="sm" icon="command" kbd={modK} class="cmdk" onclick={() => (showPalette = true)} aria-keyshortcuts="Meta+K Control+K" tip={{ text: "Command palette", kbd: modK }}>Commands</Button>
-      <span class="tsep" aria-hidden="true"></span>
-      <IconButton icon="refresh" label="Refresh" kbd={singleKeyShortcuts ? "R" : undefined} onclick={() => refresh(true)} disabled={refreshing} aria-busy={manualRefresh || undefined} class={manualRefresh ? "spinning" : ""} />
-      <IconButton icon="history" label="Recently stopped" kbd={singleKeyShortcuts ? "H" : undefined} onclick={openHistory} />
-      <IconButton icon="clock" label={`Scheduled actions${activeSchedules.length ? ` (${activeSchedules.length} active)` : ""}`} onclick={openSchedules} bind:el={schedulesTrigger} />
-      <IconButton icon="server" label="Remote host…" onclick={() => (showRemote = true)} />
-      <IconButton icon={themeIcon} label="Theme: {THEME_LABEL[theme]}" kbd={singleKeyShortcuts ? ["⇧", "L"] : undefined} onclick={cycleTheme} />
-      <IconButton icon="sliders" label="Settings" kbd={[mod, ","]} onclick={() => openSettings()} />
+      <div class="cluster">
+        <IconButton icon="command" label="Commands" kbd={modK} onclick={() => (showPalette = true)} aria-keyshortcuts="Meta+K Control+K" />
+        <IconButton icon="refresh" label="Refresh" kbd={singleKeyShortcuts ? "R" : undefined} onclick={() => refresh(true)} disabled={refreshing} aria-busy={manualRefresh || undefined} class={manualRefresh ? "spinning" : ""} />
+      </div>
+      <div class="cluster">
+        <IconButton icon="history" label="Recently stopped" kbd={singleKeyShortcuts ? "H" : undefined} onclick={openHistory} />
+        <IconButton icon="clock" label={activeSchedules.length ? `Scheduled actions (${activeSchedules.length} active)` : "Scheduled actions"} badge={activeSchedules.length || undefined} onclick={openSchedules} bind:el={schedulesTrigger} />
+        <IconButton icon="server" label="Remote host…" onclick={() => (showRemote = true)} />
+      </div>
+      <div class="cluster">
+        <IconButton icon={themeIcon} label="Theme: {THEME_LABEL[theme]}" kbd={singleKeyShortcuts ? ["⇧", "L"] : undefined} onclick={cycleTheme} />
+        <IconButton icon="sliders" label="Settings" kbd={[mod, ","]} onclick={() => openSettings()} />
+      </div>
     </div>
   </header>
 
   <div class="toolbar" role="toolbar" aria-label="View and filters">
-    <SegmentedControl label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: `List${singleKeyShortcuts ? " (G)" : ""}` }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, countLabel: linksLabel(graph?.stats.edges ?? 0), title: `Service graph${graph?.stats.edges ? ` · ${linksLabel(graph.stats.edges)} between services` : ""}${singleKeyShortcuts ? " (G)" : ""}` }, { value: "agents", label: "Agents", icon: "bot", count: agentsReport?.agents.length || null, countLabel: agentsReport ? `${agentsReport.agents.length} agents and tools` : undefined, title: `Agents, tools and apps: folders, access, ports they started and connections${singleKeyShortcuts ? " (⇧A)" : ""}` }]} />
+    <SegmentedControl label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: singleKeyShortcuts ? "Port list (G)" : "Port list" }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, countLabel: linksLabel(graph?.stats.edges ?? 0), title: singleKeyShortcuts ? "Service graph (G)" : "Service graph" }, { value: "agents", label: "Agents", icon: "bot", count: agentsReport?.agents.length || null, countLabel: agentsReport ? `${agentsReport.agents.length} agents and tools` : undefined, title: singleKeyShortcuts ? "Agents, tools and apps (⇧A)" : "Agents, tools and apps" }]} />
     {#if view !== "agents"}
       <span class="divider" aria-hidden="true"></span>
       <SegmentedControl label="Socket states" value={filters.all ? "all" : "listen"} options={[{ value: "listen", label: "Listening" }, { value: "all", label: "All sockets", title: `Include established, TIME_WAIT…${singleKeyShortcuts ? " (A)" : ""}` }]} onchange={(v) => { filters.all = v === "all"; refresh(); }} />
@@ -1366,10 +1381,9 @@
       <FilterChip label="Exposed" icon="globe" count={stats.exposed} tone={stats.exposed > 0 ? "warn" : "accent"} bind:pressed={filters.exposed} title="Reachable from the network" kbd={singleKeyShortcuts ? "E" : undefined} />
       {#if filtersActive}<Button size="sm" variant="ghost" icon="x" onclick={clearFilters}>Clear</Button>{/if}
       <div class="spacer"></div>
+      {#if !narrow}<IconButton icon="panel" size="sm" pressed={sideOpen} label={sideOpen ? "Hide details pane" : "Show details pane"} kbd={singleKeyShortcuts ? "B" : undefined} onclick={() => (sideOpen = !sideOpen)} />{/if}
       <Select size="sm" prefix="Sort" label="Sort by" labelHidden bind:value={sort} width="150px" options={[{ value: "group", label: "Grouped", description: "By kind: dev, containers, databases…" }, { value: "cluster", label: "Cluster", description: "Compose project, workspace, supervisor" }, { value: "port", label: "Port" }, { value: "newest", label: "Newest" }, { value: "memory", label: "Memory" }]} />
     {:else}
-      <span class="divider" aria-hidden="true"></span>
-      <span class="agents-hint">Folders, tools and ports each agent started · access marked seen / inferred / unknown</span>
       <div class="spacer"></div>
       {#if agentQuery}<Button size="sm" variant="ghost" icon="x" onclick={() => (agentQuery = "")}>Clear search</Button>{/if}
     {/if}
@@ -1401,7 +1415,7 @@
   {/if}
   </div>
 
-  <main class="content" class:narrow class:wide={view === "agents"} style="--pane-w: {paneWidth}px">
+  <main class="content" class:narrow class:wide={view === "agents" || !showSide} style="--pane-w: {paneWidth}px">
     {#if view === "graph"}
       <div class="graph-wrap">
         {#if GraphView}
@@ -1511,14 +1525,16 @@
     </div>
     {/if}
 
-    {#if !narrow && view !== "agents"}
+    {#if showSide}
       <div class="pane-wrap">
         <Splitter bind:width={paneWidth} min={340} max={680} initial={PANE_DEFAULT} />
         <DetailPane entry={selected} {explanation} http={selectedHttp} loading={explaining} busy={selected ? !!busy[selected.id] : false} bind:tab={detailTab} {mod}
-          onstop={() => selected && requestStop(selected, false)} onschedule={() => selected && requestScheduledStop(selected)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy}
+          onstop={() => selected && requestStop(selected, false)} onschedule={() => selected && requestScheduledStop(selected)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onhide={() => (sideOpen = false)}
           {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)}
           entries={snapshot?.entries ?? []} onselectentry={(e) => selectEntry(e, false)} details={selectedDetails} {cpuTrend} {memTrend} platform={info.platform} onrestart={() => selected && requestRestart(selected)} onreveal={() => selected && reveal(selected)} oneditor={() => selected && openEditor(selected)} />
       </div>
+    {:else if !narrow && view !== "agents"}
+      <IconButton class="reveal-side" icon="panel" label="Show details pane" kbd={singleKeyShortcuts ? "B" : undefined} onclick={() => (sideOpen = true)} />
     {/if}
   </main>
 
@@ -1563,7 +1579,7 @@
   </Dialog>
 {/if}
 {#if showShutdown}<ShutdownDialog intent={shutdownIntent} preview={shutdownPreview} loading={shutdownLoading} busy={shutdownBusy} requested={shutdownRequested} error={shutdownError} demo={!api.isTauri} onconfirm={confirmShutdown} onclose={closeShutdown} onretry={() => openShutdown(shutdownIntent)} onschedule={scheduleShutdown} scheduled={shutdownScheduled} onviewschedules={openSchedules} />{/if}
-{#if showSchedules}<SchedulesDialog {schedules} loading={schedulesLoading} error={schedulesError} demo={!api.isTauri} onclose={closeSchedules} onrefresh={() => loadSchedules(true)} oncancel={cancelSchedule} />{/if}
+{#if showSchedules && !confirm && !showShutdown}<SchedulesDialog {schedules} loading={schedulesLoading} error={schedulesError} demo={!api.isTauri} powerAvailable={!api.isTauri || ["macos", "linux", "windows"].includes(info.platform)} entries={snapshot?.entries ?? []} onclose={closeSchedules} onrefresh={() => loadSchedules(true)} oncancel={cancelSchedule} onschedulepower={() => openShutdown("schedule", "schedules")} onscheduleport={(entry) => { closeSchedules(); requestScheduledStop(entry); }} />{/if}
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
 {#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />
@@ -1586,11 +1602,10 @@
   .brand img { border-radius: 6px; box-shadow: var(--shadow-sm); }
   .name { font-weight: var(--fw-semibold); font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); }
   .search { flex: 1; max-width: 520px; margin: 0 auto; min-width: 140px; }
-  .tools { display: flex; align-items: center; gap: 2px; flex: none; }
-  .tools :global(.cmdk) { margin-right: 2px; color: var(--text-2); }
+  .tools { display: flex; align-items: center; gap: 8px; flex: none; }
+  .cluster { display: flex; align-items: center; gap: 1px; padding: 2px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); }
   .tools :global(.spinning svg) { animation: spin 0.9s linear infinite; }
-  .tsep { width: 1px; height: 18px; background: var(--border-strong); margin: 0 6px; }
-  .live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); margin-right: var(--sp-3); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 76px; justify-content: flex-end; }
+  .live { display: inline-flex; align-items: center; gap: 7px; height: var(--h-md); padding: 0 10px 0 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
   .pulse.on { animation: beat 0.9s ease-in-out infinite; }
   .live.stale .pulse { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
@@ -1600,11 +1615,11 @@
   .toolbar::-webkit-scrollbar { display: none; }
   .divider { width: 1px; height: 18px; background: var(--border-strong); margin: 0 var(--sp-1); flex: none; }
   .spacer { flex: 1; min-width: var(--sp-2); }
-  .agents-hint { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); white-space: normal; max-width: 42rem; }
 
-  .content { display: grid; grid-template-columns: minmax(0, 1fr) var(--pane-w, 440px); min-height: 0; }
+  .content { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) var(--pane-w, 440px); min-height: 0; }
   .content.narrow, .content.wide { grid-template-columns: 1fr; }
   .pane-wrap { position: relative; min-height: 0; min-width: 0; }
+  .content :global(.reveal-side) { position: absolute; top: 12px; right: 12px; z-index: 6; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
   .list { overflow-y: auto; padding: 0 0 var(--sp-6); outline: none; container: portlist / inline-size; }
   .lgroup + .lgroup { margin-top: var(--sp-2); }
   .list:focus-visible:not([aria-activedescendant]) { box-shadow: inset 0 0 0 2px var(--ring); }
@@ -1626,8 +1641,7 @@
   .graph-wrap { position: relative; min-height: 0; min-width: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  @media (max-width: 1080px) { .tools :global(.cmdk .lbl), .tools :global(.cmdk .kbds) { display: none; } .tools :global(.cmdk) { padding: 0 8px; } }
-  @media (max-width: 760px) { .brand .name, .live, .hints, .tsep { display: none; } .titlebar { gap: var(--sp-2); } }
+  @media (max-width: 760px) { .brand .name, .live-text, .hints { display: none; } .live { padding: 0; width: var(--h-md); justify-content: center; border: 0; background: transparent; } .titlebar { gap: var(--sp-2); } }
   @media (max-width: 560px) {
     .titlebar { display: grid; grid-template-columns: auto minmax(0, 1fr); height: auto; padding-top: var(--sp-2); padding-bottom: var(--sp-2); }
     .app.mac .titlebar { padding-left: var(--sp-4); }

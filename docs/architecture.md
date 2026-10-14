@@ -1174,7 +1174,8 @@ minimap and zoom controls are built in. dagre gives a stable left-to-right layou
 stop order; the alternative "organic" layout is a small seeded force simulation, so the graph
 doesn't move between refreshes. Unconnected subgraphs explain the empty canvas and offer
 **All services**; External stays idle until there are outbound hosts. Editor-extension nodes
-keep the extension identity, not the inherited project.
+keep the extension identity, not the inherited project. Details, agent cards, the Flow
+inspector and on-canvas legends can be hidden so Graph and Flow use the full window.
 
 ## 7. Design notes
 

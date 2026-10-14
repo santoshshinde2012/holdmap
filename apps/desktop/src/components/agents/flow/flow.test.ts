@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import AgentFlowView from "./AgentFlowView.svelte";
 import ActivityTimeline from "./ActivityTimeline.svelte";
@@ -7,7 +7,11 @@ import FlowInspector from "./FlowInspector.svelte";
 import { activityRuns, callGraph, observedGraph, spanNodeId } from "../../../lib/agent-flow/build";
 import type { ActivitySpan, AgentFlowReport } from "../../../lib/agent-flow/model";
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+beforeAll(() => {
+  globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
+  window.matchMedia ??= ((media: string) => ({ matches: false, media, addEventListener() {}, removeEventListener() {} })) as unknown as typeof matchMedia;
+});
+afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const base = { dark: false, reduced: true };
 const span = (values: Partial<ActivitySpan> = {}): ActivitySpan => ({ id: "request", trace_id: "", parent_id: null, session_id: "session", agent_id: null, parent_agent_id: null, provider: "codex", source: "hook", kind: "tool", name: "Read file", start_at_ms: 1000, end_at_ms: null, duration_ms: null, status: "requested", input_bytes: 0, output_bytes: null, pid: 123, process_started_at: null, ...values });
 const emptyReport: AgentFlowReport = { taken_at_ms: 1000, nodes: [], edges: [], limits: ["Process access was unavailable; this scan is incomplete."], omitted_nodes: 0, omitted_edges: 0 };
@@ -121,6 +125,17 @@ describe("flow UI evidence and recording", () => {
     const { container } = render(FlowInspector, { graph, chosen: spanNodeId(s), onclose() {} });
     expect(container.textContent).toContain("Serialized input0 B"); expect(container.textContent).toContain("Serialized outputNot provided");
     expect(container.textContent).toContain("123 · unverified"); expect(container.textContent).toContain("A requested call may not have executed");
+  });
+  it("hides the inspector so the graph uses the full width", async () => {
+    const report: AgentFlowReport = { ...emptyReport, nodes: [
+      { id: "a", kind: "process", label: "Worker", agent_id: null, pid: 99, start_token: 1, entry_id: null, address: null, port: null, protocol: null, tool_kind: null, evidence: "observed" },
+      { id: "b", kind: "remote", label: "Endpoint", agent_id: null, pid: null, start_token: null, entry_id: null, address: "192.0.2.1", port: 443, protocol: "tcp", tool_kind: null, evidence: "observed" }],
+      edges: [{ id: "socket", from: "a", to: "b", kind: "tcp", evidence: "observed", connections: 3, source_pids: [99] }] };
+    const view = render(AgentFlowView, { ...base, flowReport: report });
+    expect(view.getByRole("complementary", { name: "Connection details" })).toBeTruthy();
+    await fireEvent.click(view.getByRole("button", { name: "Hide inspector" }));
+    expect(view.queryByRole("complementary", { name: "Connection details" })).toBeNull();
+    expect(view.getByRole("button", { name: "Show inspector" })).toBeTruthy();
   });
   it("explains live socket evidence without communication direction or transferred bytes", () => {
     const report: AgentFlowReport = { ...emptyReport, nodes: [

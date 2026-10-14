@@ -6,8 +6,12 @@ import AgentsView from "../AgentsView.svelte";
 import { MOCK_SNAPSHOT, mockAgents } from "../../lib/mock";
 import type { Agent } from "../../lib/types";
 
-beforeAll(() => { Element.prototype.scrollIntoView ??= () => {}; });
-afterEach(cleanup);
+beforeAll(() => {
+  Element.prototype.scrollIntoView ??= () => {};
+  globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
+  window.matchMedia ??= ((media: string) => ({ matches: false, media, addEventListener() {}, removeEventListener() {} })) as unknown as typeof matchMedia;
+});
+afterEach(() => { cleanup(); localStorage.clear(); });
 
 const actions = { onreveal() {}, oneditor() {}, onstop() {}, onstopall() {} };
 const props = (agent: Agent, selected = false) => ({ agent, selected, report: mockAgents(), entries: MOCK_SNAPSHOT.entries, color: "var(--accent)", onselect() {}, onentry() {}, ...actions });
@@ -97,5 +101,21 @@ describe("agent visibility", () => {
     expect(container.textContent).toContain("0 / 3");
     expect(container.textContent).toContain("individual tool calls aren't collected");
     expect(container.querySelector("article.card")).toBeNull();
+  });
+
+  it("hides the agent cards so the map uses the full width", async () => {
+    const view = render(AgentsView, { report: mockAgents(), entries: [], selectedAgent: null, dark: false, reduced: true, onselectagent() {}, onentry() {}, ...actions });
+    expect(view.getByRole("complementary", { name: "Agents" })).toBeTruthy();
+    await fireEvent.click(view.getByRole("button", { name: "Hide cards" }));
+    expect(view.queryByRole("complementary", { name: "Agents" })).toBeNull();
+    expect(view.getByRole("button", { name: "Show cards" })).toBeTruthy();
+  });
+
+  it("hides the agents legend and counts", async () => {
+    const view = render(AgentsView, { report: mockAgents(), entries: [], selectedAgent: null, dark: false, reduced: true, onselectagent() {}, onentry() {}, ...actions });
+    expect(view.container.querySelector(".legend")).toBeTruthy();
+    await fireEvent.click(view.getByRole("button", { name: "Legend" }));
+    expect(view.container.querySelector(".legend")).toBeNull();
+    expect(view.getByRole("button", { name: "Legend" }).getAttribute("aria-pressed")).toBe("false");
   });
 });

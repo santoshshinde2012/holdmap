@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { cleanup, render } from "@testing-library/svelte";
+import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import GraphView from "../GraphView.svelte";
 import { mockTopology } from "../../lib/mock";
 import { FORCE_NODE_LIMIT } from "../../lib/graph";
@@ -53,5 +53,15 @@ describe("graph chrome", () => {
     const view = render(GraphView, { graph, selectedNode: null, dark: false, reduced: true, onselect() {}, onstopcluster() {}, all: false, ontoggleall() {} });
     expect(view.getByText("No connected project services")).toBeTruthy();
     expect(view.getByRole("button", { name: "Show all services" })).toBeTruthy();
+  });
+
+  it("hides the legend and counts so the canvas can use the full width", async () => {
+    const view = render(GraphView, { graph: mockTopology(), selectedNode: null, dark: false, reduced: true, onselect() {}, onstopcluster() {} });
+    expect(view.container.querySelector(".legend")).toBeTruthy();
+    expect(view.container.querySelector(".stats")).toBeTruthy();
+    await fireEvent.click(view.getByRole("button", { name: "Legend" }));
+    expect(view.container.querySelector(".legend")).toBeNull();
+    expect(view.container.querySelector(".stats")).toBeNull();
+    expect(view.getByRole("button", { name: "Legend" }).getAttribute("aria-pressed")).toBe("false");
   });
 });

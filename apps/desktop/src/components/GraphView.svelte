@@ -13,7 +13,7 @@
   import Icon from "./Icon.svelte";
   import type { Graph, GraphNode } from "../lib/types";
   import { FIT_PADDING, FORCE_NODE_LIMIT, layout, layoutModeFor, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Positions } from "../lib/graph";
-  import { prefGet, prefGetChoice, prefSet } from "../lib/prefs";
+  import { prefGet, prefGetBoolean, prefGetChoice, prefSet } from "../lib/prefs";
 
   let {
     graph,
@@ -38,10 +38,12 @@
   let mode = $state<LayoutMode>(prefGetChoice("layout", ["layered", "force"], "layered"));
   let animate = $state(prefGet("animate") !== "0");
   let external = $state(prefGet("external") !== "0");
+  let widgets = $state(prefGetBoolean("widgets", true));
   let hover = $state<string | null>(null);
   $effect(() => prefSet("layout", mode));
   $effect(() => prefSet("animate", animate ? "1" : "0"));
   $effect(() => prefSet("external", external ? "1" : "0"));
+  $effect(() => prefSet("widgets", widgets ? "1" : "0"));
 
   setContext("graph-actions", { stopCluster: (name: string) => onstopcluster(name) });
 
@@ -152,17 +154,21 @@
             <span class="sep" aria-hidden="true"></span>
             {#if ontoggleall}<button class="tog" aria-pressed={all} class:on={all} onclick={ontoggleall} title="Include databases, apps and system services that aren't connected to your dev servers"><Icon name="layers" size={12} />All services</button>{/if}
             <button class="tog" aria-pressed={showExternal} class:on={showExternal} disabled={!hasRemote} onclick={() => (external = !external)} title={hasRemote ? "Show outbound connections to remote hosts" : "No outbound connections to remote hosts right now"}><Icon name="globe" size={12} />External</button>
+            <span class="sep" aria-hidden="true"></span>
+            <button class="tog" aria-pressed={widgets} class:on={widgets} onclick={() => (widgets = !widgets)} title="Show or hide the legend and counts"><Icon name="layers" size={12} />Legend</button>
           </div>
-          {#if stats}
+          {#if widgets && stats}
             <div class="stats" aria-live="polite">
               <span><b>{stats.n}</b> services</span><span><b>{stats.e}</b> links</span><span class="opt"><b>{stats.c}</b> clusters</span><span class="opt"><b>{stats.conns}</b> connections</span>
             </div>
           {/if}
-          <div class="legend" aria-hidden="true">
-            {#each legend as [k, l]}<span class="lg lg-{k}"><i></i>{l}</span>{/each}
-            <span class="lg"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="currentColor" stroke-width="1.6" /></svg>uses</span>
-            <span class="lg"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="currentColor" stroke-width="1.6" stroke-dasharray="4 3" /></svg>remote</span>
-          </div>
+          {#if widgets}
+            <div class="legend" aria-hidden="true">
+              {#each legend as [k, l]}<span class="lg lg-{k}"><i></i>{l}</span>{/each}
+              <span class="lg"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="currentColor" stroke-width="1.6" /></svg>uses</span>
+              <span class="lg"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="currentColor" stroke-width="1.6" stroke-dasharray="4 3" /></svg>remote</span>
+            </div>
+          {/if}
         </div>
       </Panel>
     </SvelteFlow>

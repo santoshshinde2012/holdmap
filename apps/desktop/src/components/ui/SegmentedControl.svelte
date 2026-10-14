@@ -15,6 +15,7 @@
     label,
     size = "sm",
     full = false,
+    placement = "bottom",
     onchange,
   }: {
     value: T;
@@ -23,6 +24,7 @@
     label: string;
     size?: "sm" | "md";
     full?: boolean;
+    placement?: "top" | "bottom";
     onchange?: (v: T) => void;
   } = $props();
 
@@ -65,7 +67,7 @@
       class:on={o.value === value}
       class:noind={!ind.ready}
       disabled={o.disabled}
-      use:tooltip={o.title ?? null}
+      use:tooltip={o.title ? { text: o.title, placement } : null}
       onclick={() => select(i)}
     >
       {#if o.icon}<Icon name={o.icon} size={size === "sm" ? 12 : 14} />{/if}<span>{o.label}</span>{#if o.count != null}<span class="count" aria-hidden={o.countLabel ? "true" : undefined}>{o.count}</span>{#if o.countLabel}<span class="sr-only">, {o.countLabel}</span>{/if}{/if}

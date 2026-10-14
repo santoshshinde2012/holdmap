@@ -2,18 +2,22 @@
   // The details pane with nothing selected: a summary of the machine instead of a blank pane.
   // Counts, the ports other devices can reach (one click selects them) and the keys to start with.
   import Icon from "../Icon.svelte";
+  import IconButton from "../ui/IconButton.svelte";
   import Kbd from "../ui/Kbd.svelte";
   import FrameworkIcon from "../FrameworkIcon.svelte";
   import { glance } from "../../lib/detail";
   import { title } from "../../lib/format";
   import type { PortEntry } from "../../lib/types";
 
-  let { entries, onselect, mod = "Ctrl" }: { entries: PortEntry[]; onselect: (e: PortEntry) => void; mod?: string } = $props();
+  let { entries, onselect, mod = "Ctrl", onhide }: { entries: PortEntry[]; onselect: (e: PortEntry) => void; mod?: string; onhide?: () => void } = $props();
   const g = $derived(glance(entries));
 </script>
 
 <div class="glance">
-  <h3>At a glance</h3>
+  <div class="head">
+    <h3>At a glance</h3>
+    {#if onhide}<IconButton icon="panel" size="sm" label="Hide details pane" kbd="B" onclick={onhide} />{/if}
+  </div>
   <div class="counts">
     <div><span class="n">{g.total}</span><span class="l">listening</span></div>
     <div><span class="n">{g.dev}</span><span class="l">dev servers</span></div>
@@ -44,6 +48,7 @@
 
 <style>
   .glance { padding: var(--sp-6) var(--sp-5); display: grid; gap: var(--sp-5); color: var(--muted); }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
   h3 { margin: 0; color: var(--text); font-size: var(--fs-title); font-weight: var(--fw-semibold); letter-spacing: var(--ls-title); line-height: var(--lh-title); }
   .counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--surface-2); }
   .counts div { display: grid; gap: 2px; padding: 12px; box-shadow: -1px 0 0 var(--border); }
