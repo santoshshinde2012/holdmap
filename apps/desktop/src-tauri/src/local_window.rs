@@ -17,6 +17,24 @@ pub(crate) fn authorize(window: &WebviewWindow, action: &str) -> Result<(), Stri
     authorize_webview(window.as_ref(), action)
 }
 
+/// Linux's host gate only: WebKitGTK separately requires OS portal selection for
+/// every display request. Camera, microphone and other permissions keep defaults.
+#[cfg(any(target_os = "linux", test))]
+pub(crate) fn screen_capture_permission<R: Runtime>(
+    webview: &Webview<R>,
+    kind: tauri::webview::PermissionKind,
+) -> tauri::webview::PermissionResponse {
+    use tauri::webview::{PermissionKind, PermissionResponse};
+    if !matches!(kind, PermissionKind::DisplayCapture) {
+        return PermissionResponse::Default;
+    }
+    if authorize_webview(webview, "Screen capture").is_ok() {
+        PermissionResponse::Allow
+    } else {
+        PermissionResponse::Deny
+    }
+}
+
 fn authorize_webview<R: Runtime>(webview: &Webview<R>, action: &str) -> Result<(), String> {
     let url = webview
         .url()
@@ -82,6 +100,41 @@ mod tests {
             assert!(!trusted_origin("main", &url, Some(&dev)), "{url}");
         }
         assert!(!trusted_origin("main", &dev, None));
+    }
+
+    #[test]
+    fn display_host_permission_requires_the_main_local_view_and_never_grants_other_devices() {
+        use tauri::webview::{PermissionKind, PermissionResponse};
+        for (label, external, expected) in [
+            ("main", false, PermissionResponse::Allow),
+            ("secondary", false, PermissionResponse::Deny),
+            ("main", true, PermissionResponse::Deny),
+        ] {
+            let app = mock_builder().build(mock_context(noop_assets())).unwrap();
+            let url = if external {
+                tauri::WebviewUrl::External("https://example.com/".parse().unwrap())
+            } else {
+                Default::default()
+            };
+            let window = tauri::WebviewWindowBuilder::new(&app, label, url)
+                .build()
+                .unwrap();
+            assert_eq!(
+                screen_capture_permission(window.as_ref(), PermissionKind::DisplayCapture),
+                expected
+            );
+            for kind in [
+                PermissionKind::Camera,
+                PermissionKind::Microphone,
+                PermissionKind::Geolocation,
+                PermissionKind::Other,
+            ] {
+                assert_eq!(
+                    screen_capture_permission(window.as_ref(), kind),
+                    PermissionResponse::Default
+                );
+            }
+        }
     }
 
     #[test]

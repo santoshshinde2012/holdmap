@@ -101,6 +101,13 @@ capture call runs directly from the Choose screen action so the operating system
 control of source selection and consent. A generation guard releases late streams after
 cancellation or unmount, and stopping releases capture tracks before finalizing exports.
 No capture permission or screen selection is persisted, and no audio is requested.
+On Linux, a display-only host permission handler applies the same trusted-main-view policy.
+WebKitGTK otherwise denies requests by default. Its display backend independently requires
+the ScreenCast portal's selection and PipeWire stream, including on X11; the host gate
+does not choose a source or grant camera/microphone access. Portal cancellation or absence
+prevents capture. This follows [WebKitGTK's permission default](https://webkitgtk.org/reference/webkit2gtk/stable/class.UserMediaPermissionRequest.html),
+[its display backend](https://github.com/WebKit/WebKit/blob/webkitgtk-2.40.3/Source/WebCore/platform/mediastream/gstreamer/GStreamerDisplayCaptureDeviceManager.cpp),
+and the [ScreenCast portal contract](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.ScreenCast.html).
 
 The encoder module loads on demand. H.264 capability checks include the output dimensions;
 WebCodecs/Mediabunny has a MediaRecorder MP4 fallback. GIF quantization runs in a same-origin

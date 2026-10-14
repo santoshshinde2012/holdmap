@@ -42,6 +42,14 @@ pub fn run() {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init());
+    #[cfg(target_os = "linux")]
+    {
+        // WebKitGTK denies display requests unless the embedder handles them. Its
+        // display backend still requires the ScreenCast portal's source picker.
+        builder = builder.on_permission_request(|webview, kind| {
+            local_window::screen_capture_permission(&webview, kind)
+        });
+    }
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_autostart::init(

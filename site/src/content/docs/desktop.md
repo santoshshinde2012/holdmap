@@ -73,6 +73,10 @@ there and retry. Unsupported windows explain that capture is unavailable. This i
 from [Agents → Flow recording](../agents/#set-up-optional-recording), which collects optional
 tool-call metadata rather than pixels.
 
+Linux desktop capture needs PipeWire and a working ScreenCast portal for your desktop
+environment. Its system picker still asks which screen or window to share each time.
+If that service is unavailable, try a browser with screen sharing or the system recorder.
+
 ## Shut down this computer
 
 Open **Settings → Power → Shut down now…**, separately from **Schedule shutdown…**; its review

@@ -44,6 +44,9 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 - Screen recording cancellation releases late streams and prevents stale results from reopening.
   Stopping ends screen sharing before preparing exports; preparation can be discarded.
+- Linux desktop screen sharing handles WebKitGTK's display permission for the trusted main
+  view, then requires the system ScreenCast portal's source selection. Camera and microphone
+  permissions are not granted by this handler.
 - GIF exports cover the complete recording with bounded adaptive sampling and background
   encoding. MP4 uses resolution-aware H.264 checks with a MediaRecorder fallback. Encoder
   failures preserve any other successful format.
