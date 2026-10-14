@@ -250,6 +250,16 @@ capture did not stop an agent or service. Recent-project history is excluded fro
   commands use the shared session boundary; frontend recording actions stay separate from
   graph projection and selection. Prefer these concrete boundaries over speculative interfaces.
 
+## Design review
+
+Review changes against the concrete [SOLID boundaries](docs/architecture.md#7-design-notes).
+Keep collection, decisions, execution, persistence and rendering with their existing owners.
+Extend established registries and small interfaces when their contract fits, and select
+concrete providers at composition points. Replacement providers and observers must preserve
+result, failure and safety semantics; cover changed contracts with fixture regressions.
+Introduce an abstraction for a real variation point or test seam. New OS effects still
+require explicit executor authorization and identity/protection tests.
+
 ## Naming conventions
 
 Each ecosystem uses its own idiom. `cargo test` enforces these rules

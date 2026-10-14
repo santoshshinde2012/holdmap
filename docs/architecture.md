@@ -94,7 +94,7 @@ unattended background fixture could not conclusively verify every focus restorat
 macOS uses [cooperative activation](https://developer.apple.com/documentation/appkit/passing-control-from-one-app-to-another-with-cooperative-activation).
 The owned interactive check is documented separately from headless CI.
 
-## Local screen recording (unreleased)
+## Local screen recording (0.7.0)
 
 Screen pixels have a separate, user-initiated lifecycle from agent activity metadata. The
 capture call runs directly from the Choose screen action so the operating system retains
@@ -683,8 +683,10 @@ Supervisors come before `protected` on purpose: a pm2 app or a systemd unit must
 through its supervisor even though its process would also match a later rule. The table is the
 order of `StrategyRegistry::default()` in `engine/strategies/mod.rs`.
 
-Adding a supervisor means adding one `impl StopStrategy` and registering it. `Engine`, the CLI
-and the UIs don't change (open/closed).
+`StopStrategy` and `StrategyRegistry` extend owner resolution without changing the engine's
+dispatch loop. A new supervisor family also needs a typed `Supervisor` identity, exact command
+matching and executor authorization, with identity/protection regressions. Adapter changes
+depend on whether the serialized contract or presentation changes.
 
 ### Stop sequence
 

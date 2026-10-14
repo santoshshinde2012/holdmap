@@ -10,6 +10,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Documentation
 
+- Refresh the README's 0.7.0 features, install/update guidance and development workflow;
+  clarify SOLID review expectations and the authorization required for new supervisor strategies.
 - Refresh the public website for 0.7.0 with release highlights, a release guide, current
   screenshots and product tours, and corrected install, upgrade, recording and privacy details.
 
