@@ -128,11 +128,6 @@ See [Apple's guidance on native apps and Rosetta](https://support.apple.com/en-g
 
 Every release has SHA-256 checksums and build provenance (`gh attestation verify FILE --repo santoshshinde2012/holdmap`).
 
-> **Renamed from portwise.** The binary is now `holdmap` — remove any old `portwise` on your
-> `PATH`. Config moves from a leftover `portwise` directory to `holdmap` on first run.
-> `.portwise.toml` still works. Legacy env aliases: `PORTWISE_HOME`, `PORTWISE_TRACE`,
-> `PORTWISE_EDITOR`, `PORTWISE_COLOR`.
-
 ## Environment
 
 | Variable | Purpose |
@@ -142,7 +137,7 @@ Every release has SHA-256 checksums and build provenance (`gh attestation verify
 | `HOLDMAP_TRACE` | Diagnostics topics, e.g. `scan` or `all` |
 | `HOLDMAP_ACTIVITY_ENDPOINT` | Active local collector URL for CLI hooks, snapshots and MCP recording |
 | `HOLDMAP_ACTIVITY_TOKEN` | Temporary bearer token printed by `activity serve`; keep private |
-| `HOLDMAP_EDITOR` | Editor executable for folder actions; when unset, legacy `PORTWISE_EDITOR`, then an installed editor |
+| `HOLDMAP_EDITOR` | Editor executable for folder actions; when unset, a known installed editor |
 
 ## Quick start
 
@@ -343,8 +338,7 @@ the full path and offers **Open in Finder** (macOS), **Open in Explorer** (Windo
 **Open in file manager**, **Open in editor**, and **Copy path**. **Esc** closes it and returns
 focus to the folder. Clipboard copying preserves the original path.
 
-Editor opening uses `HOLDMAP_EDITOR`, or legacy `PORTWISE_EDITOR` when unset, then a known
-installed editor. Set an executable name or absolute path, without shell arguments. A missing
+Editor opening uses `HOLDMAP_EDITOR`, then a known installed editor. Set an executable name or absolute path, without shell arguments. A missing
 explicitly configured editor shows an error instead of opening another app. Native actions
 recheck the chosen agent and exact folder against a fresh scan; stale folders remain copyable
 but cannot be opened. Recent folders remain account history, not proof of current work.
@@ -619,9 +613,9 @@ dependencies and temporary captures are regenerated; Git history holds earlier v
 
 - **`command not found: holdmap`** right after installing: open a new terminal, or run
   `source ~/.config/holdmap/env.sh`.
-- **Upgrading from v0.1.0 or from portwise:** remove old binaries
-  (`rm ~/.cargo/bin/holdmap ~/.local/bin/portwise ~/.cargo/bin/portwise` as needed).
-  `command -v holdmap` shows which one runs.
+- **An old copy runs instead of the new one:** remove leftover binaries in `~/.cargo/bin`
+  and `~/.local/bin` (`rm ~/.cargo/bin/holdmap ~/.local/bin/portwise ~/.cargo/bin/portwise`
+  as needed). `command -v holdmap` shows which one runs.
 - **`Permission denied` on a shell rc file:** an old `sudo` left it owned by root. Run
   `sudo chown "$USER" ~/.bash_profile` and install again. Never run the installer with `sudo`.
 - **Other users' ports are hidden:** run with `sudo` (an elevated terminal on Windows).

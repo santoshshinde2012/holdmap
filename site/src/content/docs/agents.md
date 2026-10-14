@@ -1,6 +1,6 @@
 ---
 title: Agents, tools and apps
-description: Inspect AI agents, observe process connections, record instrumented tool calls locally, and review safe service stops with clear evidence.
+description: Use holdmap to inspect AI coding agents, see which ports they started, and stop only those services.
 order: 2
 ---
 
@@ -74,8 +74,7 @@ offers **Open in Finder** on macOS, **Open in Explorer** on Windows, or **Open i
 plus **Open in editor** and **Copy path**. **Esc** or **Close** returns focus to the folder.
 Copying uses the original path, even when a card shortens its display.
 
-The editor preference is `HOLDMAP_EDITOR`; legacy `PORTWISE_EDITOR` is accepted when it is
-unset. Use an installed executable name or absolute path, without shell arguments. Without a
+The editor preference is `HOLDMAP_EDITOR`. Use an installed executable name or absolute path, without shell arguments. Without a
 preference, Holdmap finds a known installed editor. A missing explicit preference shows an
 error instead of silently opening another app.
 

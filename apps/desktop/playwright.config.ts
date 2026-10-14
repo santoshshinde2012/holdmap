@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 const baseURL = "http://127.0.0.1:4175";
-const executablePath = process.env.HOLDMAP_E2E_CHROMIUM_EXECUTABLE ?? process.env.PORTWISE_E2E_CHROMIUM_EXECUTABLE;
+const executablePath = process.env.HOLDMAP_E2E_CHROMIUM_EXECUTABLE;
 
 export default defineConfig({
   testDir: "./e2e",

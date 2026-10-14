@@ -1,6 +1,6 @@
 ---
 title: MCP for AI agents
-description: Connect coding agents to Holdmap tools, discover workflows, inspect agent activity and diagnose development services.
+description: Connect Claude, Cursor or VS Code to holdmap over MCP so agents can list ports, inspect activity and stop services safely.
 order: 4
 ---
 

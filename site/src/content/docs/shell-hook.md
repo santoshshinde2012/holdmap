@@ -1,6 +1,6 @@
 ---
 title: Shell hook
-description: Make "address already in use" errors explain themselves with a one-line shell integration.
+description: "Use holdmap's one-line shell hook so address-already-in-use errors name the process and how to stop it."
 order: 4
 ---
 

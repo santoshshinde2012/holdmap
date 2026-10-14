@@ -56,8 +56,12 @@ for (const file of pages) {
   assert.ok(document.querySelector("main h1").textContent.trim(), `${path}: empty main heading`);
   const title = one("head title").textContent.trim();
   const description = content('meta[name="description"]');
+  const heading = document.querySelector("main h1").textContent.trim();
   assert.ok(title.includes("holdmap"), `${path}: title lacks the product name`);
-  assert.ok(description.length >= 40, `${path}: description must summarize this page`);
+  assert.ok(!/portwise/i.test(`${title}\n${description}\n${heading}`), `${path}: public metadata still uses the old product name`);
+  assert.ok(title.length >= 15 && title.length <= 70, `${path}: title should stay in the search snippet range (${title.length})`);
+  assert.ok(/holdmap/i.test(description), `${path}: description should name holdmap`);
+  assert.ok(description.length >= 70 && description.length <= 160, `${path}: description should stay in the search snippet range (${description.length})`);
   assert.ok(!titles.has(title), `${path}: duplicate page title`);
   assert.ok(!descriptions.has(description), `${path}: duplicate description`);
   titles.add(title);
@@ -73,6 +77,7 @@ for (const file of pages) {
   assert.equal(content('meta[property="og:title"]'), title);
   assert.equal(content('meta[property="og:description"]'), description);
   assert.equal(content('meta[property="og:type"]'), path === "index.html" ? "website" : "article");
+  assert.equal(content('meta[property="og:locale"]'), "en_US");
   assert.equal(content('meta[property="og:site_name"]'), "holdmap");
   assert.equal(content('meta[property="og:image"]'), `${siteUrl}og.png`);
   assert.equal(content('meta[property="og:image:type"]'), "image/png");
@@ -102,6 +107,11 @@ for (const file of pages) {
     assert.equal(software.url, siteUrl);
     assert.equal(software.name, "holdmap");
     assert.equal(software.isAccessibleForFree, true);
+    assert.equal(software.downloadUrl, "https://github.com/santoshshinde2012/holdmap/releases/latest");
+    assert.equal(software.offers?.["@type"], "Offer");
+    assert.equal(software.offers?.price, "0");
+    assert.equal(software.offers?.priceCurrency, "USD");
+    assert.ok(Array.isArray(software.featureList) && software.featureList.length >= 3, "SoftwareApplication should list real capabilities");
     assert.deepEqual(software.operatingSystem, ["macOS", "Linux", "Windows"]);
     assert.ok(!software.aggregateRating && !software.review && !software.softwareVersion, "Do not invent reviews or imply development features are in a published release");
   } else {
