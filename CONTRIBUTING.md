@@ -288,14 +288,16 @@ Versions follow [SemVer](https://semver.org/). One `vX.Y.Z` tag releases everyth
   archives for six targets (macOS arm64/x64, Linux gnu arm64/x64, Linux musl x64, Windows x64),
   shell and PowerShell installers, an npm package tarball, a
   CycloneDX SBOM, SHA-256 checksums, binaries built with `cargo auditable`, and GitHub build
-  provenance (`gh attestation verify <file> -R santoshshinde2012/holdmap`). It creates the GitHub
-  Release. npm registry publication is optional and disabled by default; release notes link
+  provenance (`gh attestation verify <file> -R santoshshinde2012/holdmap`). It creates a draft
+  GitHub Release. npm registry publication is optional and disabled by default; release notes link
   the attached package tarball when no registry publishing job is configured.
-- Once the release is published, `release.yml` calls `desktop-release.yml` (tauri-action), which
+- While the release is still a draft, `release.yml` calls `desktop-release.yml` (tauri-action), which
   adds the `.dmg`, `.msi`, NSIS `.exe`, `.AppImage`, `.deb` and `.rpm`, with checksums and provenance. Run it by hand with an empty tag
   for a dry run that keeps the bundles as workflow artifacts.
   Signed updater artifacts are verified against the public key and signed release version
-  before upload. After all platforms succeed, one job publishes the complete `latest.json`.
+  before upload. After all platforms succeed, one job uploads the complete `latest.json`.
+  A final read-only asset check requires every CLI archive, desktop installer and checksum
+  before publishing the release. Failed builds leave the previous public download in place.
 
 Check a change to the release setup locally with `dist plan`,
 `dist build --artifacts=local --target x86_64-unknown-linux-gnu` and `actionlint`.
@@ -330,10 +332,10 @@ maintainer pushes its tag.
    `git push origin vX.Y.Z` (replace `X.Y.Z` with the release version). Use `-s` instead of
    `-a` when the maintainer has a configured signing key. Artifact provenance independently
    binds the builds to the tagged source and release workflow.
-4. Wait for the complete `Release` run, including its reusable desktop jobs. Check all six
-   CLI archives and seven desktop installers, their checksums and build provenance, then
-   confirm the release-triggered `Pages` deployment uses the tagged commit and new downloads.
-   The initial CLI announcement precedes desktop upload and is not the readiness signal.
+4. Wait for the complete `Release` run, including its reusable desktop jobs and final asset
+   verification. The release stays a draft until all six CLI archives, seven desktop installers
+   and their checksums are uploaded. Check their build provenance, then confirm the
+   release-triggered `Pages` deployment uses the tagged commit and new downloads.
    Without signing credentials, macOS is ad-hoc signed without notarization and Windows is
    unsigned. Without a configured signed updater, desktop users download the new installer
    manually; do not advertise automatic updates.

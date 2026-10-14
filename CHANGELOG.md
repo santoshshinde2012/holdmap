@@ -22,6 +22,9 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Changed
 
+- Closing a recording preview keeps the latest files available through **Review recording**
+  for this session, including after cancelled or failed saves. **Discard recording** clears
+  them before recording again; reloading or quitting still clears in-memory previews.
 - README and the public Desktop, Agents and MCP guides identify **0.6.0** as the current
   download and distinguish newer, unreleased desktop features in current source.
 - Desktop `npm run dev` reads this machine through the holdmap CLI (ports, agents, C4 map, flow connections). Sample shop-web data stays on the public website demo, Playwright, and `?demo=1`. Stopping processes still needs the desktop app.
@@ -55,6 +58,10 @@ by [release-please](https://github.com/googleapis/release-please) from
   and optional JavaScript budgets separately and follows the current map and Flow controls.
 - The public demo reveals dialog actions in the website's viewport, including after focus,
   animation and content-size changes, so scaled folder and stop dialogs remain usable.
+- Release-triggered website builds use the same source commit as the installers and report
+  that revision in `build-info.json`, even when development has advanced meanwhile.
+- Releases remain drafts until every CLI archive, desktop installer and checksum passes the
+  final asset check, so the latest download cannot advance to an incomplete release.
 
 ### Security
 
