@@ -68,6 +68,9 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Security
 
+- Restrict GIF encoding to the owning dedicated worker's trusted messages and validate
+  bounded frame data. Release website builds check same-repository provenance and do not
+  populate shared dependency caches. README downloads stay valid while a release is built.
 - Update rustls to 0.23.46 for RUSTSEC-2026-0346 through RUSTSEC-2026-0349. Native recording
   saves accept bounded MP4/GIF bytes only from the trusted main view and require a user-chosen
   destination without granting general filesystem access to the webview.
