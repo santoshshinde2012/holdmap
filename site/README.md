@@ -32,7 +32,13 @@ npm run test:demo
 npm audit --audit-level=low
 ```
 
-`npm test` checks built links, asset budgets and SEO. `npm run check:seo` checks the static
+Publishing builds set `HOLDMAP_SITE_REQUIRE_RELEASE=1`: GitHub's latest release must be a
+published stable `vX.Y.Z` tag with a matching release URL, or the build fails. An older
+published release stays the download target while a newer source version is assembling.
+Local builds can set `HOLDMAP_SITE_OFFLINE=1` for a deterministic `version.txt` fallback;
+combining offline and required-release modes fails. `npm run test:release` checks this policy.
+
+`npm test` checks the release policy, built links, asset budgets and SEO. `npm run check:seo` checks the static
 HTML without executing page scripts: unique metadata, canonical/social URLs, real social
 image dimensions, page and breadcrumb schemas, sitemap coverage, noindex exclusions and a
 hostile-text JSON-LD regression. It reuses the desktop's locked DOM-parser dependency.

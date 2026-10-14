@@ -75,6 +75,8 @@ jobs:
         env:
           # Read-only: the latest release tag and the star count, shown on the page.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Never replace the public site with download URLs inferred from unreleased source.
+          HOLDMAP_SITE_REQUIRE_RELEASE: '1'
         run: npm run build
       - name: Links and size budget
         working-directory: site
