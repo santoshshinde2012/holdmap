@@ -38,6 +38,10 @@ Graph and Flow, schedules started from the empty manager, and a macOS fullscreen
 returns to the previous app. See the [0.6.0 changes](CHANGELOG.md#060---2026-10-14). Desktop
 screenshots use the shared browser UI with sample data.
 
+Current source also adds local screen recording, Computer / Footprint / Project agent-map
+zoom, and live local scans during `npm run dev`. These features are unreleased; see
+[Unreleased](CHANGELOG.md#unreleased).
+
 Version **0.5.0** added Agent Flow, reviewed scheduling, folder actions and the routed H
 identity ([0.5.0 changes](CHANGELOG.md#050---2026-10-11)). **0.5.1** hardened project
 protections and desktop error handling ([0.5.1 changes](CHANGELOG.md#051---2026-10-13)).
@@ -295,8 +299,8 @@ simulation?** clearly identifying the scheduled review. For a local port, **Sche
 opens the one-hour review separately from **Stop…**. Choose another preset, a custom delay
 or **At a time** as needed; agent service reviews also support delays. **Scheduled actions**
 shows each deadline, countdown, reviewed port and cancellation result. When nothing is
-scheduled, **0.6.0** can start a shutdown or a reviewed service stop from that dialog. Schedules run while
-Holdmap stays open, including in the tray; quitting clears them. Keep the computer awake.
+scheduled, **0.6.0** can start a shutdown or a reviewed service stop from that dialog.
+Schedules run while Holdmap stays open, including in the tray; quitting clears them. Keep the computer awake.
 Missed deadlines or clock changes require a fresh review. Agent schedules stop only the
 reviewed services and ports, preserving the agent session. Use **0.6.0 or newer** (scheduling
 itself landed in 0.5.0).
@@ -313,12 +317,17 @@ itself landed in 0.5.0).
 
 </details>
 
+The description below includes the unreleased screen recorder and Computer / Footprint /
+Project map zoom in current source; the published download remains **0.6.0**.
+
 A tray and menu-bar app with the port list, details, the service graph (`G`), the agents map
-(`⇧A`), pins, history with one-click restart, remote hosts over SSH and a command palette (`⌘K` /
+(`⇧A`), pins, history with one-click restart, local screen recording (`⇧V`, MP4 and GIF stay on
+this computer), remote hosts over SSH and a command palette (`⌘K` /
 `Ctrl+K`). `⌘⌥P` (`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. `B`
 hides the details pane so Graph uses the full window; Agents and Flow have matching Hide
-cards / Hide inspector controls. On the
-Agents map, expand a card to reveal a folder, open it in your editor, or stop the unprotected
+cards / Hide inspector / Hide limits / Hide recording controls. On the
+Agents map, Computer / Footprint / Project zoom over the same observed processes (C4-style:
+this machine, every agent’s containers, then one source tree). Expand a card to reveal a folder, open it in your editor, or stop the unprotected
 ports that agent started. From a port’s details pane you can open it in a browser, restart a
 dev server, open its folder (`HOLDMAP_EDITOR`, else Cursor, VS Code, Zed…) or Finder, and copy
 its URL, a `curl` or the kill command. Version 0.4.0 also adds agent search, expanded child-tool
@@ -332,8 +341,8 @@ the Dock icon also restores it. **0.6.0** hides the application through AppKit s
 close returns to the previous app and retains the window's state for reopening. Choose
 **Quit** to exit. If the tray is unavailable, closing the main window exits normally.
 
-**Folder actions in 0.5.0.** Click a folder on the Agents map or its
-name/path in a card; **Enter** or **Space** activates a focused folder. The shared chooser shows
+**Folder actions in 0.5.0.** Click a folder on Footprint to zoom into that source tree; click it
+again (or its name/path in a card) for folder actions. **Enter** or **Space** activates a focused folder. The shared chooser shows
 the full path and offers **Open in Finder** (macOS), **Open in Explorer** (Windows) or
 **Open in file manager**, **Open in editor**, and **Copy path**. **Esc** closes it and returns
 focus to the folder. Clipboard copying preserves the original path.
@@ -473,7 +482,7 @@ and exits with code 2; additional requested targets are not attempted. See the
 
 `holdmap-core` owns collection, attribution, protection and stop planning. The CLI/TUI, native
 backend and MCP adapter coordinate requests and present its types. The website builds the same
-Svelte UI in browser mode, using sample data through the UI's API boundary.
+Svelte UI. The public website demo uses sample data; `npm run dev` and the desktop app read live local scans.
 
 ![Holdmap system architecture](docs/diagrams/system-architecture.svg)
 

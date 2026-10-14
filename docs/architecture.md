@@ -428,7 +428,9 @@ holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop ap
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
 coordinate collection and confirmation, and present the returned types.
 
-This guide describes version 0.6.0. Editor-extension identity, full-canvas Graph and Flow,
+This guide describes version 0.6.0 and current source. Newer screen recording, C4-style
+agent-map zoom and live browser development scans remain unreleased.
+Editor-extension identity, full-canvas Graph and Flow,
 and schedules started from the empty manager are in [0.6.0](../CHANGELOG.md#060---2026-10-14).
 Agent Flow, scheduling, folder actions and terminal agent navigation landed in
 [0.5.0](../CHANGELOG.md#050---2026-10-11).
@@ -479,9 +481,9 @@ flowchart TB
     CLI_APP["CLI orchestration<br/>Plan, confirmation + rendering"]
     MCP_APP["MCP server<br/>Schemas, tools + session previews"]
     NATIVE["Tauri backend<br/>Commands, fresh scans + previews"]
-    API["api.ts<br/>Native IPC or sample data"]
+    API["api.ts<br/>Native IPC, live CLI, or sample data"]
     CONTEXT["MCP discovery<br/>Guide resource + prompts"]
-    MOCK["Browser API<br/>Deterministic sample data"]
+    MOCK["Browser API<br/>Live CLI in vite · sample in the public demo"]
   end
 
   subgraph DOMAIN["holdmap-core · domain + policies"]
@@ -1056,14 +1058,14 @@ flowchart TB
   subgraph UI["Svelte 5 front-end"]
     APP["App.svelte · Presentation root<br/>List, graph, agents + keyboard navigation"]
     GV["GraphView.svelte<br/>@xyflow/svelte"]
-    AV["AgentsView.svelte<br/>agent cards + footprint map<br/>(lib/agents.ts: column layout)"]
+    AV["AgentsView.svelte<br/>agent cards + C4 pictures<br/>(lib/agents.ts: context / footprint / project)"]
     NODES["components/graph/<br/>ServiceNode · ClusterNode · TrafficEdge · FitOnChange"]
     AGNODES["components/agents/<br/>AgentNode · FootNode · AgentTools"]
     LG["lib/graph.ts<br/>dagre layered · force · toFlow · related · sections"]
     OTHER["Feature panels + dialogs<br/>Detail, settings, history + confirmation"]
     LIST["components/list/<br/>Rows, groups, badges + sparklines<br/>Pure view model: lib/rows.ts"]
     KIT["components/ui/<br/>UI kit (see below)"]
-    API["lib/api.ts: native IPC or lib/mock.ts browser data"]
+    API["lib/api.ts: Tauri IPC, live CLI in vite, or lib/mock.ts demo data"]
     APP --> GV --> NODES
     APP --> AV --> AGNODES
     GV --> LG
@@ -1139,6 +1141,13 @@ published asset digests and IDs, then publishes the complete `latest.json` index
 
 ### Desktop UI
 
+- **Screen recording.** `lib/screen-record.ts` owns consent copy, duration bounds, filenames
+  and blob downloads. `lib/screen-record-encode.ts` captures via `getDisplayMedia` (video only),
+  encodes H.264/MP4 with WebCodecs (`mediabunny`) or `MediaRecorder` when that codec is missing,
+  and writes a bounded GIF with `gifenc`. `ScreenRecordDialog.svelte` confirms before the OS
+  picker, then the title bar shows Stop + elapsed time so the modal does not cover this window
+  while recording. Files stay on the machine (`blob:` / `mediastream:` CSP; macOS Screen Recording
+  usage string). Tests cover helpers, the dialog and a Playwright capture using a fake canvas stream.
 - **Folder actions (0.5.0).** Map and card paths share `FolderActions.svelte` rather
   than separate opener flows. `lib/folders.ts` selects an exact-path owner once and revalidates
   that same target during polling; the UI never silently switches agents. The dialog handles
@@ -1150,17 +1159,25 @@ published asset digests and IDs, then publishes the complete `latest.json` index
   Browser callbacks report simulations. This separates presentation, ownership policy and OS
   effects into small contracts that fixture providers can exercise without opening real apps.
 - **UI kit.** `apps/desktop/src/components/ui/` provides shared controls (fields, selects,
-  switches, buttons, dialogs and tabs); feature components compose them and use the shared
-  design tokens for local controls. Open the app with
-  `#ui-gallery` to see every control in both themes.
+  switches, buttons, dialogs, action docks, action pills and tabs). Exclusive toolbar choices are
+  hinged action docks, not nested segmented tracks; independent toggles use the same pill with a
+  soft fill. Feature components compose them and use the shared design tokens for local controls.
+  Open the app with `#ui-gallery` to see every control in both themes.
+- **Agents C4 pictures.** `lib/agents.ts` builds three zoom levels from the same `AgentsReport`
+  (never invented peers): Computer context (this machine, agents, observed remotes), Footprint
+  containers (folders, tools, ports, hosts), and Project components (one source tree).
+  `AgentsView.svelte` fits those graphs into Svelte Flow; Computer / Footprint / Project are
+  exclusive action docks on the Overview toolbar. Folder clicks zoom, then open
+  `FolderActions.svelte`. Evidence labels stay observed / inferred / unknown.
 - **Pure view logic.** `lib/rows.ts` (badges, status, sparklines), `lib/detail.ts` (details pane)
   and `lib/settings.ts` (the Settings contract) are pure and unit-tested, so components depend on
   interfaces rather than on `api.ts`.
-- **Compact details and menus (0.5.0).** Detail panels wrap shared tabs and long
-  content within the pane, while a dedicated action footer distinguishes port stops from
-  computer power controls. The shared Select calls pure `lib/popover.ts` placement logic to
-  fit the viewport; feature panels do not duplicate edge calculations. Both depend on small
-  presentation contracts and injected action callbacks rather than native APIs.
+- **Compact details and menus (0.5.0).** Detail panels keep shared tabs on one scrolling
+  row and long content within the pane, while a dedicated action footer distinguishes port
+  stops from computer power controls. The shared Select calls pure `lib/popover.ts`
+  placement logic to fit the viewport; feature panels do not duplicate edge calculations.
+  Both depend on small presentation contracts and injected action callbacks rather than
+  native APIs.
 - **Accessibility.** The list is a `role=listbox` with `aria-activedescendant`, dialogs trap and
   restore focus, and `src/contrast.test.ts` keeps text tokens at WCAG AA in both themes.
 - **Typography.** Inter Variable for UI text and JetBrains Mono Variable for code, PIDs and paths,
@@ -1313,8 +1330,9 @@ advertised.
 The Astro site lives in `site/`. Its guides use Markdown content under `site/src/content/docs`,
 the CLI reference comes from `docs/cli.md`, and screenshots come from `docs/screenshots`.
 `site/scripts/build-demo.mjs` builds `apps/desktop` into the ignored `site/public/demo` output.
-The browser selects `lib/mock.ts` rather than Tauri, so demo actions affect sample state and
-never scan or stop host processes. Pages validates pull-request builds and deploys the main
+`npm run dev` reads this machine through the holdmap CLI (`/__holdmap` on the Vite server). The
+public website demo and Playwright select `lib/mock.ts`, so demo actions affect sample state and
+never scan or stop host processes. `?demo=1` forces that sample in vite. Pages validates pull-request builds and deploys the main
 branch; editing source does not itself publish a site.
 
 Guide routes render Markdown through Astro's content component and pass it into the shared

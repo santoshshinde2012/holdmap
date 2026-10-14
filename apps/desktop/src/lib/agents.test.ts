@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { MOCK_SNAPSHOT, mockAgents } from "./mock";
 import {
-  AGENT_W, FOOT_W, accessFacts, accessHeadline, agentColor, agentMatches, column, columnX, counts, countsLine, edgeGeometry, filterAgents, footprintGraph, folderSourceLabel, guessHome, headers,
-  layoutFootprint, monogram, neighbours, parentName, processRows, resourcesLine, shortLabel, signature, sizeOf, step, stoppableEntries, stoppablePorts, tildePath, toFootFlow,
+  AGENT_W, FOOT_W, MACHINE_ID, accessFacts, accessHeadline, agentColor, agentMatches, column, columnX, contextGraph, counts, countsLine, edgeGeometry, filterAgents, folderAction, footprintGraph, folderSourceLabel, guessHome, headers,
+  layoutContext, layoutFootprint, layoutPicture, layoutProject, monogram, neighbours, parentName, pathContains, pictureColumn, pictureGraph, platformLabel, processRows, projectGraph, resourcesLine, shortLabel, signature, sizeOf, step, stoppableEntries, stoppablePorts, tildePath, toFootFlow,
 } from "./agents";
 import type { AgentsReport } from "./types";
 import { preferredFolderOwner, resolveFolderTarget } from "./folders";
@@ -106,7 +106,7 @@ describe("footprint graph", () => {
 
   it("is empty without agents", () => {
     const g = footprintGraph({ agents: [], platform: "linux", taken_at_ms: 0, limits: [] });
-    expect(g).toEqual({ nodes: [], edges: [] });
+    expect(g).toEqual({ nodes: [], edges: [], picture: "footprint" });
   });
 });
 
@@ -273,5 +273,79 @@ describe("agent search and process relationships", () => {
     const rows = processRows(a);
     expect(new Set(rows.map(({ process }) => process.pid)).size).toBe(3);
     expect(rows.find(({ process }) => process.pid === sandbox.pid)!.depth).toBe(0);
+  });
+});
+
+describe("pictures", () => {
+  it("draws computer context from observed agents, parent edges and remotes only", () => {
+    const g = contextGraph(report());
+    expect(g.picture).toBe("context");
+    expect(g.nodes.find((n) => n.id === MACHINE_ID)).toMatchObject({ kind: "machine", label: "This computer", sub: "macOS · 3 agents" });
+    expect(platformLabel("macos")).toBe("macOS");
+    expect(g.nodes.some((n) => n.kind === "folder" || n.kind === "port" || n.kind === "tool")).toBe(false);
+    expect(g.edges.filter((e) => e.kind === "host").map((e) => e.to).sort()).toEqual(["agent:48000", "agent:52000"]);
+    expect(g.edges.find((e) => e.kind === "parent")).toMatchObject({ from: "agent:52000", to: "agent:51200", label: "started" });
+    expect(g.nodes.filter((n) => n.kind === "remote").map((n) => n.label).sort()).toEqual(["198.51.100.24", "203.0.113.10", "203.0.113.40"]);
+    const pos = layoutContext(g);
+    expect(pos.get(MACHINE_ID)!.x).toBeLessThan(pos.get("agent:52000")!.x);
+    expect(headers(g, pos).map((h) => h.label)).toEqual(["This computer", "Agents", "Outside"]);
+    expect(pictureGraph(report(), "context").picture).toBe("context");
+  });
+
+  it("keeps a child agent off the computer host edge", () => {
+    const g = contextGraph(report());
+    expect(g.edges.some((e) => e.kind === "host" && e.to === "agent:51200")).toBe(false);
+  });
+
+  it("scopes a project to agents that work in that source tree", () => {
+    const g = projectGraph(report(), "/Users/dev/code/shop-web");
+    expect(g.picture).toBe("project");
+    expect(g.nodes.filter((n) => n.kind === "agent").map((n) => n.label)).toEqual(["Cursor"]);
+    expect(g.nodes.find((n) => n.kind === "folder")).toMatchObject({ label: "shop-web", path: "/Users/dev/code/shop-web" });
+    expect(g.nodes.filter((n) => n.kind === "port").map((n) => n.sub)).toEqual([":3000 · Next.js"]);
+    expect(g.nodes.some((n) => n.label === "Filesystem MCP")).toBe(true);
+    expect(g.nodes.some((n) => n.id.startsWith("port:") && n.sub.includes(":5173"))).toBe(false);
+    expect(g.nodes.some((n) => n.kind === "service")).toBe(true);
+    const pos = layoutProject(g);
+    expect(pictureColumn("agent", "project")).toBe(0);
+    expect(pos.get("agent:52000")!.x).toBeLessThan(pos.get("folder:/Users/dev/code/shop-web")!.x);
+    expect(headers(g, pos).map((h) => h.label)[0]).toBe("Agents");
+    expect(projectGraph(report(), "/no/such/path").nodes).toEqual([]);
+  });
+
+  it("does not invent a project picture without a folder", () => {
+    expect(pictureGraph(report(), "project").nodes).toEqual([]);
+    expect(layoutPicture(footprintGraph(report()))).toEqual(layoutFootprint(footprintGraph(report())));
+  });
+
+  it("is empty without agents and does not treat sibling paths as the same project", () => {
+    expect(contextGraph({ agents: [], platform: "linux", taken_at_ms: 0, limits: [] })).toEqual({ nodes: [], edges: [], picture: "context" });
+    expect(pathContains("/Users/dev/code/shop-web/src", "/Users/dev/code/shop-web")).toBe(true);
+    expect(pathContains("/Users/dev/code/shop-web-other", "/Users/dev/code/shop-web")).toBe(false);
+    expect(pathContains("C:\\Users\\dev\\code\\shop-web\\src", "C:\\Users\\dev\\code\\shop-web")).toBe(true);
+    expect(folderAction("footprint")).toBe("Zooms into this project");
+    expect(folderAction("project")).toBe("Opens folder actions");
+  });
+
+  it("scopes shop-api to Claude Code and the services it uses", () => {
+    const g = projectGraph(report(), "/Users/dev/code/shop-api");
+    expect(g.nodes.filter((n) => n.kind === "agent").map((n) => n.label)).toEqual(["Claude Code"]);
+    expect(g.nodes.filter((n) => n.kind === "port").map((n) => n.sub)).toEqual([":3001 · Express"]);
+    expect(g.nodes.some((n) => n.kind === "service" && n.sub.includes(":5432"))).toBe(true);
+    expect(g.nodes.some((n) => n.label === "Filesystem MCP")).toBe(false);
+  });
+
+  it("lays out context without overlap and colours host edges by the agent", () => {
+    const g = contextGraph(report());
+    const pos = layoutContext(g);
+    const a = layoutContext(g);
+    expect([...pos.entries()]).toEqual([...a.entries()]);
+    const agents = g.nodes.filter((n) => n.kind === "agent").map((n) => ({ y: pos.get(n.id)!.y, h: sizeOf(n.kind).h })).sort((x, y) => x.y - y.y);
+    for (let i = 1; i < agents.length; i++) expect(agents[i].y - agents[i].h / 2).toBeGreaterThanOrEqual(agents[i - 1].y + agents[i - 1].h / 2);
+    const { nodes, edges } = toFootFlow(g, pos);
+    expect(nodes.filter((n) => n.type === "header").map((n) => n.data.node.label)).toEqual(["This computer", "Agents", "Outside"]);
+    expect(nodes.find((n) => n.id === MACHINE_ID)!.data.picture).toBe("context");
+    const host = edges.find((e) => e.data.edge.kind === "host" && e.target === "agent:52000")!;
+    expect(host.data.color).toBe(agentColor(g, "agent:52000"));
   });
 });

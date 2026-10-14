@@ -19,6 +19,9 @@ CLI and terminal navigation landed in 0.5.0. Child-tool classifications, expande
 and desktop agent search were introduced in 0.4.0. The live demo uses the same interface
 with sample data.
 
+The Computer / Footprint / Project map, live local scans during `npm run dev`, and separate
+screen recorder described below are newer, unreleased source features, not part of 0.6.0.
+
 ## From the CLI
 
 ```sh
@@ -46,7 +49,13 @@ matching known account, and do not establish current work by a particular runnin
   before anything opens.
   Search by agent, folder, tool, exact PID (`pid:51200`) or explicit port (`port:3001`). A port
   search includes both the listener owner and agents connected to it.
-  **Hide cards** and **Legend** give the map the full width; both persist.
+  Choosing **Agents** reveals **Overview** and **Flow** as action pills on the same toolbar row.
+  **Overview** then reveals **Computer**, **Footprint** and **Project**; **Flow** reveals
+  **Connections** and **Calls**. Computer is this machine, the agents running on it, and observed
+  outside systems, with parent `started` edges. **Footprint** shows folders, tools, ports and hosts
+  across every agent. Click a folder to zoom into **Project** — only agents, ports, tools and hosts
+  observed for that source tree — never sample or invented peers. **Hide cards** and **Legend** give the map the full width; both persist.
+  The installed app and `npm run dev` read the live process table; the website demo uses labelled sample data.
 - **TUI:** start `holdmap`, then press **Shift+Tab** to open Agents directly. **Tab** cycles
   Ports → Graph → Agents. Use **↑/↓** to select an agent, **/** to search, and **PgUp/PgDn** to
   scroll its details. Wide windows show both panes side by side; small windows stack them.
@@ -70,8 +79,9 @@ These terminal captures use isolated local fixtures:
 
 ## Open an agent folder
 
-In 0.5.0, click a folder on the map or its name/path in an expanded card.
-**Enter** or **Space** activates a focused folder. **Folder actions** shows the full path and
+Folder actions are available from **0.5.0**: click a folder on the map or its name/path in an
+expanded card. In current source, the first click on Footprint zooms into that source tree;
+click the folder again (or **Enter** / **Space** on Project) for **Folder actions**. **Enter** or **Space** activates a focused folder. **Folder actions** shows the full path and
 offers **Open in Finder** on macOS, **Open in Explorer** on Windows, or **Open in file manager**,
 plus **Open in editor** and **Copy path**. **Esc** or **Close** returns focus to the folder.
 Copying uses the original path, even when a card shortens its display.
@@ -99,8 +109,9 @@ In **Agents**, choose **Flow**. The two data sources answer different questions:
 | **Calls** | Tool, model, agent, handoff and execution-step metadata supplied by a configured integration, with status, timing and reported parent spans. | Uninstrumented activity, private message content or verified OS process ownership. |
 
 The graph has zoom, fit and a minimap. Participants, relationships and the activity timeline
-provide keyboard-accessible ways to inspect the same evidence. **Hide inspector** gives the
-graph the full width; **Show inspector** brings the details back. **Pause view** stops automatic
+provide keyboard-accessible ways to inspect the same evidence. **Hide inspector**, **Hide
+limits** and **Hide recording** put those chrome sections away so the graph can stay in
+focus; **Show** brings each back. **Pause view** stops automatic
 updates; **Refresh** still fetches an explicit update. It does not stop recording or an agent.
 The selected run and record remain stable during refreshes. Small windows stack the readable
 timeline below the graph. Choices persist.
@@ -120,6 +131,9 @@ These captures use clearly labelled browser example metadata:
 ![Calls shows a reported multi-agent trace with parallel tools and an activity timeline](../../assets/agent-flow/calls-dark.webp)
 
 ### Set up optional recording
+
+This records tool-call metadata from configured agents. Pixel capture of a display is a
+separate [screen recording](../desktop/#record-the-screen) that downloads MP4 and GIF locally.
 
 1. Open **Flow → Calls → Start recording** in the local desktop app.
 2. Open **Setup**, copy the Codex or Claude Code settings, merge them into your existing

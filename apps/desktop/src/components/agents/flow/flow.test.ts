@@ -21,7 +21,7 @@ describe("flow UI evidence and recording", () => {
     const { container } = render(AgentFlowView, { ...base, flowReport: emptyReport });
     expect(container.textContent).toContain("No observed connections yet");
     expect(container.textContent).toContain("Sockets do not reveal messages or data direction");
-    expect(container.querySelector<HTMLDetailsElement>(".limits")?.open).toBe(true);
+    expect(container.querySelector<HTMLDetailsElement>(".limits")?.open).toBe(false);
     expect(container.textContent).toContain("this scan is incomplete");
   });
   it("separates observed connections from missing call instrumentation with keyboard navigation", async () => {
@@ -136,6 +136,26 @@ describe("flow UI evidence and recording", () => {
     await fireEvent.click(view.getByRole("button", { name: "Hide inspector" }));
     expect(view.queryByRole("complementary", { name: "Connection details" })).toBeNull();
     expect(view.getByRole("button", { name: "Show inspector" })).toBeTruthy();
+  });
+  it("hides visibility limits so the graph can stay in focus", async () => {
+    const { container, getByRole } = render(AgentFlowView, { ...base, flowReport: emptyReport });
+    expect(container.querySelector(".limits")).toBeTruthy();
+    await fireEvent.click(getByRole("button", { name: "Hide limits" }));
+    expect(container.querySelector(".limits")).toBeNull();
+    expect(getByRole("button", { name: "Show limits" })).toBeTruthy();
+    await fireEvent.click(getByRole("button", { name: "Show limits" }));
+    expect(container.querySelector(".limits")).toBeTruthy();
+  });
+  it("hides recording controls on Calls without dropping setup", async () => {
+    const { getByRole, queryByRole } = render(AgentFlowView, { ...base, demo: true, onstartrecording: vi.fn() });
+    await fireEvent.click(getByRole("radio", { name: "Calls" }));
+    expect(getByRole("button", { name: "Start recording" })).toBeTruthy();
+    await fireEvent.click(getByRole("button", { name: "Hide recording" }));
+    expect(queryByRole("button", { name: "Start recording" })).toBeNull();
+    expect(getByRole("button", { name: "Show recording" })).toBeTruthy();
+    await fireEvent.click(getByRole("button", { name: "Set up recording" }));
+    expect(getByRole("region", { name: "Recording setup" })).toBeTruthy();
+    expect(getByRole("button", { name: "Start recording" })).toBeTruthy();
   });
   it("explains live socket evidence without communication direction or transferred bytes", () => {
     const report: AgentFlowReport = { ...emptyReport, nodes: [

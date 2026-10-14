@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentFolderOwner, fileManagerLabel, resolveFolderTarget } from "./folders";
+import { currentFolderOwner, fileManagerLabel, pathWrapParts, resolveFolderTarget } from "./folders";
 import { mockAgents } from "./mock";
 
 const sharedPath = "/Users/dev/code/shop-web";
@@ -82,6 +82,16 @@ describe("current folder owner", () => {
     expect(currentFolderOwner(report, null)).toBeNull();
     expect(currentFolderOwner(report, { ...target, agentId: "missing-agent" })).toBeNull();
     expect(currentFolderOwner(report, { ...target, path: `${sharedPath}/child` })).toBeNull();
+  });
+});
+
+describe("path wrapping", () => {
+  it("splits long paths at directory separators so wrapping does not cut a token", () => {
+    expect(pathWrapParts("/Users/santosh/.cursor/extensions/anysphere.cursorpyright-1.0.12/dist")).toEqual([
+      "/", "Users/", "santosh/", ".cursor/", "extensions/", "anysphere.cursorpyright-1.0.12/", "dist",
+    ]);
+    expect(pathWrapParts("C:\\Users\\dev\\shop-web")).toEqual(["C:\\", "Users\\", "dev\\", "shop-web"]);
+    expect(pathWrapParts("folder")).toEqual(["folder"]);
   });
 });
 

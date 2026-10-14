@@ -15,6 +15,9 @@ Flow inspector, grouped title-bar actions, schedules started from the empty mana
 macOS fullscreen close that returns to the previous app. See the
 [0.6.0 changes](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#060---2026-10-14).
 
+Screen recording, Computer / Footprint / Project map zoom and live local scans during
+`npm run dev` are newer features in current source. They are not included in the 0.6.0 download.
+
 ## Close, reopen and quit
 
 When the menu-bar or tray icon is available, closing the desktop window keeps Holdmap
@@ -42,6 +45,21 @@ inherited project — same identity as the [list and Agents view](../agents/).
 Hide the details pane (`B`, the toolbar panel control, or the pane's own hide button) so
 the graph uses the full window. **Legend** on the canvas hides the counts and key. Both
 choices persist.
+
+## Record the screen
+
+Available in current source; not included in the **0.6.0** download.
+
+The camera icon in the title bar, **Record screen…** in the command palette, or `⇧V`
+starts a local capture. Holdmap explains that recordings stay on this computer, then the
+operating system asks which display or window to share. Microphone and system audio are
+not captured. A timer in the title bar and **Stop screen recording** replace the dialog so
+this window can be part of the capture.
+
+When the recording stops (or after two minutes), download **MP4** and **GIF**. Nothing is
+uploaded. macOS may ask for Screen Recording permission in System Settings. This is
+separate from [Agents → Flow recording](../agents/#set-up-optional-recording), which
+collects optional tool-call metadata rather than pixels.
 
 ## Shut down this computer
 
@@ -164,7 +182,9 @@ skim memory, CPU, process count, stoppable ports and parent; expand for folders 
 labels), ports and apps it started, child processes as tools & apps, connections, and access: the
 account it runs as, sandbox and approval flags, network listeners, and macOS-protected folders.
 Each fact is marked seen, inferred or unknown. From a card you can reveal a folder, open it in your
-editor, or stop the unprotected ports that agent started. Recent projects come from folder names
+editor, or stop the unprotected ports that agent started. In current source, the map zooms
+Computer → Footprint → Project from the same observed processes, sockets and folders; it does not invent communication
+between agents. Recent projects come from folder names
 only. Chats, settings and tokens are never read. Remote hosts show as IP addresses. Click a port to
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
 `holdmap agents` and `holdmap agents AGENT --stop-ports` do the same in a terminal.
@@ -177,15 +197,14 @@ the browser demo runs the current UI with sample data.
 
 ## From the details pane
 
-In 0.5.0, **Open** and **Restart** stay beside **More actions**, which offers folder
-opening and copy commands. **Stop…** and **Schedule stop…** have a separate footer labelled
-with the selected port; stopping a port keeps the computer running. Tabs wrap and content
-remains readable in a 340-pixel pane.
+**Open**, **Restart** and **More actions** share one footer with **Schedule stop…** and
+**Stop…**. Stopping a port keeps the computer running. Tabs stay on one scrolling row;
+content remains readable in a 340-pixel pane.
 The Sort menu keeps its choices and descriptions within the right edge of the window.
 
 Folder opening uses `HOLDMAP_EDITOR`, then a known installed editor. The file manager and URL, `curl` and command-copy actions remain available
 through **More actions**.
 
-![Compact port details wrap tabs and keep separate Stop and Schedule stop controls visible](../../../../docs/screenshots/desktop-detail-compact-light.png)
+![Compact port details keep tabs on one row and Stop beside Schedule stop](../../../../docs/screenshots/desktop-detail-compact-light.png)
 
 ![The Sort menu remains within the right edge with readable grouping descriptions](../../../../docs/screenshots/desktop-sort-right-edge-light.png)

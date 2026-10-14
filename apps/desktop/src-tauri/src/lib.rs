@@ -200,6 +200,11 @@ mod security_tests {
             assert!(csp.contains(d), "CSP lacks {d}");
         }
         assert!(!csp.contains("unsafe-eval"));
+        assert!(
+            csp.contains("media-src 'self' blob: mediastream:"),
+            "screen recordings use blob and mediastream URLs"
+        );
+        assert!(csp.contains("img-src 'self' data: blob:"), "GIF previews use blob URLs");
         assert_eq!(
             csp.split(';')
                 .map(str::trim)
@@ -225,6 +230,7 @@ mod security_tests {
             "NSDocumentsFolderUsageDescription",
             "NSDesktopFolderUsageDescription",
             "NSDownloadsFolderUsageDescription",
+            "NSScreenCaptureUsageDescription",
         ] {
             let at = plist
                 .find(key)

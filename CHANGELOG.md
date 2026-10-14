@@ -8,9 +8,37 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- Local screen recording from the title bar or command palette (`⇧V`). After you pick a screen
+  or window, Holdmap encodes **MP4** and **GIF** on this computer — nothing is uploaded, and
+  microphone and system audio are not captured. Download either file when the recording stops
+  (two minutes maximum).
+- The Agents map zooms like a C4 diagram over the same observed report: **Computer** (this machine,
+  the agents on it, and systems they talk to), **Footprint** (folders, tools, ports and hosts), and
+  **Project** (one source tree). Edges stay honest — parent, host, folder, port and remote links are
+  collected, never invented. Click a folder on Footprint to open that project; click it again for
+  Reveal / Editor.
+
 ### Changed
 
-- README and the public Desktop and Agents guides present **0.6.0** as the current download.
+- README and the public Desktop, Agents and MCP guides identify **0.6.0** as the current
+  download and distinguish newer, unreleased desktop features in current source.
+- Desktop `npm run dev` reads this machine through the holdmap CLI (ports, agents, C4 map, flow connections). Sample shop-web data stays on the public website demo, Playwright, and `?demo=1`. Stopping processes still needs the desktop app.
+- Exclusive view actions use hinged action pills instead of nested segmented tracks: List / Graph /
+  Agents, then Overview/Flow when Agents is selected, Computer/Footprint/Project when Overview is
+  selected, Connections/Calls when Flow is selected, and Listening / protocol when List or Graph is
+  selected. Independent toolbar and canvas toggles share the same pill shape with a soft fill. Hide
+  cards lives on the map with Legend.
+- The Agents map keeps Hide cards, counts and the legend in one compact overlay so the graph is not
+  covered by a full-width bar. Sort lists a short reason for every order. The empty scheduled-actions
+  dialog uses the same action rows as the rest of the app.
+- Flow uses one toolbar: the source line, recording controls, Pause, Refresh and hide controls share
+  that row, and Visibility limits start collapsed. Hide inspector, Hide limits and Hide recording
+  put those sections away so the graph can stay in focus; each choice persists.
+- The list details pane keeps tabs on one scrolling row. Identity and badges share the header;
+  Open, Restart, Schedule and Stop sit in one footer bar without repeating the port.
+- Folder actions wrap long paths at directory separators instead of mid-token.
 
 ## [0.6.0] - 2026-10-14
 

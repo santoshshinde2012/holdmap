@@ -7,6 +7,8 @@ import { tick } from "svelte";
 import TextField from "./TextField.svelte";
 import Switch from "./Switch.svelte";
 import SegmentedControl from "./SegmentedControl.svelte";
+import ActionDock from "./ActionDock.svelte";
+import ActionPill from "./ActionPill.svelte";
 import Select from "./Select.svelte";
 import NumberInput from "./NumberInput.svelte";
 import Tabs from "./Tabs.svelte";
@@ -100,8 +102,36 @@ describe("SegmentedControl and Tabs", () => {
     await fireEvent.keyDown(radios[1], { key: "End" });
     expect(onchange).toHaveBeenLastCalledWith("udp");
   });
+  it("action dock is a hinged radiogroup of exclusive pills", async () => {
+    const onchange = vi.fn();
+    const { container } = render(ActionDock, { label: "Agents workspace", value: "overview", options: [{ value: "overview", label: "Overview", icon: "bot" }, { value: "flow", label: "Flow", icon: "branch" }], onchange });
+    const radios = screen.getAllByRole("radio");
+    expect(screen.getByRole("radiogroup", { name: "Agents workspace" })).toBeTruthy();
+    expect(container.querySelector(".hinge")).toBeTruthy();
+    expect(radios[0].getAttribute("aria-checked")).toBe("true");
+    radios[0].focus();
+    await fireEvent.keyDown(radios[0], { key: "ArrowRight" });
+    expect(onchange).toHaveBeenLastCalledWith("flow");
+    expect(radios[1].getAttribute("aria-checked")).toBe("true");
+  });
+  it("action dock can omit the hinge for sibling groups", () => {
+    const { container } = render(ActionDock, { label: "Protocol", value: "any", hinge: false, options: [{ value: "any", label: "Any" }, { value: "tcp", label: "TCP" }] });
+    expect(container.querySelector(".hinge")).toBeNull();
+  });
+  it("action pill exposes a toggle as pressed", async () => {
+    const onclick = vi.fn();
+    render(ActionPill, { label: "Legend", toggle: true, pressed: true, onclick });
+    const button = screen.getByRole("button", { name: "Legend" });
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    await fireEvent.click(button);
+    expect(onclick).toHaveBeenCalledOnce();
+  });
   it("a counted segment says what the number means to screen readers", () => {
     render(SegmentedControl, { label: "View", value: "list", options: [{ value: "list", label: "List" }, { value: "graph", label: "Graph", count: 6, countLabel: "6 links" }] });
+    expect(screen.getByRole("radio", { name: "Graph, 6 links" })).toBeTruthy();
+  });
+  it("action dock counts are named for screen readers", () => {
+    render(ActionDock, { label: "View", value: "list", hinge: false, options: [{ value: "list", label: "List" }, { value: "graph", label: "Graph", count: 6, countLabel: "6 links" }] });
     expect(screen.getByRole("radio", { name: "Graph, 6 links" })).toBeTruthy();
   });
   it("tabs pair with panels and move with arrows", async () => {

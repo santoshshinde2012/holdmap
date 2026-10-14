@@ -103,24 +103,29 @@
       <p role="status" class="empty">Loading scheduled actions…</p>
     {:else if !schedules.length}
       <div class="empty">
-        <Icon name="clock" size={26} />
         <h3>No scheduled actions</h3>
         <p>{canCreate ? "Pick what should happen later. Every action is reviewed before it is queued." : "Choose a delay when reviewing a computer shutdown or a local port or agent service stop."}</p>
       </div>
       {#if canCreate}
         <div class="create" role="group" aria-label="Create a schedule">
           {#if onschedulepower}
-            <button type="button" class="card" data-create disabled={!powerAvailable} onclick={onschedulepower}>
-              <span class="tile"><Icon name="monitor" size={18} /></span>
-              <strong>{demo ? "Schedule a shutdown simulation" : "Schedule a computer shutdown"}</strong>
-              <span>{demo ? "Review this demo computer, then choose a delay. Nothing is powered off." : "Review this computer, then choose a delay. Keep Holdmap running until then."}</span>
+            <button type="button" class="row" data-create disabled={!powerAvailable} onclick={onschedulepower}>
+              <span class="tile"><Icon name="monitor" size={16} /></span>
+              <span class="copy">
+                <strong>{demo ? "Schedule a shutdown simulation" : "Schedule a computer shutdown"}</strong>
+                <span>{demo ? "Review this demo computer, then choose a delay. Nothing is powered off." : "Review this computer, then choose a delay. Keep Holdmap running until then."}</span>
+              </span>
+              <span class="go"><Icon name="chevron" size={16} /></span>
             </button>
           {/if}
           {#if onscheduleport}
-            <button type="button" class="card" onclick={() => (picking = true)}>
-              <span class="tile"><Icon name="plug" size={18} /></span>
-              <strong>Schedule a service stop</strong>
-              <span>Pick a local port, then review its current owner before it is queued.</span>
+            <button type="button" class="row" onclick={() => (picking = true)}>
+              <span class="tile"><Icon name="plug" size={16} /></span>
+              <span class="copy">
+                <strong>Schedule a service stop</strong>
+                <span>Pick a local port, then review its current owner before it is queued.</span>
+              </span>
+              <span class="go"><Icon name="chevron" size={16} /></span>
             </button>
           {/if}
         </div>
@@ -174,13 +179,15 @@
   .summary { display: flex; justify-content: space-between; gap: var(--sp-3); color: var(--text); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); }
   .summary span { color: var(--muted); font-weight: var(--fw-regular); }
   .quick { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-  .create { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3); }
-  .card { display: grid; justify-items: start; gap: 6px; padding: 14px; text-align: left; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); color: var(--text); cursor: pointer; font: inherit; box-shadow: var(--shadow-sm); }
-  .card:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-2); }
-  .card:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-  .card:disabled { opacity: 0.5; cursor: not-allowed; }
-  .card strong { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-semibold); }
-  .card span:last-child { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .create { display: grid; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; text-align: left; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); color: var(--text); cursor: pointer; font: inherit; box-shadow: var(--control-shadow); }
+  .row:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-2); }
+  .row:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .row:disabled { opacity: 0.5; cursor: not-allowed; }
+  .row .copy { flex: 1; min-width: 0; display: grid; gap: 2px; }
+  .row strong { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-semibold); }
+  .row .copy span { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .go { color: var(--muted); flex: none; display: inline-grid; }
   .schedules { list-style: none; display: grid; gap: var(--sp-3); margin: 0; padding: 0; }
   .schedule { display: grid; gap: var(--sp-3); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--r-lg); }
   .heading { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
@@ -198,10 +205,10 @@
   .review { color: var(--warn); }
   .actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
   .actions span { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
-  .empty { padding: var(--sp-5) var(--sp-3); display: grid; justify-items: center; gap: var(--sp-3); text-align: center; color: var(--muted); }
-  .empty.compact { padding: var(--sp-4) var(--sp-2); }
+  .empty { padding: var(--sp-2) 0 var(--sp-1); display: grid; gap: 6px; color: var(--muted); }
+  .empty.compact { padding: var(--sp-4) var(--sp-2); justify-items: center; text-align: center; }
   .empty h3 { color: var(--text); }
-  .empty p { max-width: 420px; margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); }
+  .empty p { max-width: 480px; margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); }
   .picker { display: grid; gap: var(--sp-3); }
   .picker-head h3 { margin: 0; }
   .picker-head p { margin: 4px 0 0; color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }

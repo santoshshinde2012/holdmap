@@ -10,5 +10,7 @@
   <string>holdmap reads project files (package.json, Cargo.toml, .git) on your Desktop to show which project and branch a port belongs to. It never changes them.</string>
   <key>NSDownloadsFolderUsageDescription</key>
   <string>holdmap reads project files (package.json, Cargo.toml, .git) in your Downloads folder to show which project and branch a port belongs to. It never changes them.</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>holdmap captures the screen or window you choose so you can download a local MP4 and GIF. Recordings stay on this computer and are never uploaded.</string>
 </dict>
 </plist>

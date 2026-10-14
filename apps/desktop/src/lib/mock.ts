@@ -1,4 +1,5 @@
-// Realistic sample data so the UI can be developed in a plain browser (`npm run dev`) and tested.
+// Labelled sample data for the public website demo, Playwright, unit tests, and `npm run dev ?demo=1`.
+// `npm run dev` without that flag reads this machine through the holdmap CLI.
 import type { AccessFact, ActionPlan, Agent, AgentLink, AgentPort, AgentsReport, BindRisk, Cluster, Explanation, Graph, GraphEdge, GraphNode, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
 
 const now = Math.floor(Date.now() / 1000);

@@ -17,7 +17,7 @@ test("Flow keeps observed socket evidence separate from reported calls", async (
   await expect(details).toContainText("Observed source PIDs");
   await expect(details).toContainText("Direction, messages and transferred bytes cannot be determined");
   await expect(flow.locator(".svelte-flow__edge.animated")).toHaveCount(0);
-  await flow.getByRole("radio", { name: "Calls", exact: true }).click();
+  await app.getByRole("radio", { name: "Calls", exact: true }).click();
   await expect(flow.getByRole("region", { name: "Recorded activity timeline" })).toBeVisible();
   await expect(flow).toContainText("Event order is not proof of communication");
   await expect(flow.getByRole("button", { name: "Start recording", exact: true })).toBeDisabled();
@@ -26,7 +26,7 @@ test("Flow keeps observed socket evidence separate from reported calls", async (
 test("reported call inspection and run selection stay stable during refresh and pause", async ({ app }) => {
   await openFlow(app);
   const flow = app.getByRole("region", { name: "Agent flow", exact: true });
-  await flow.getByRole("radio", { name: "Calls", exact: true }).click();
+  await app.getByRole("radio", { name: "Calls", exact: true }).click();
   const run = flow.locator("select#agent-flow-run");
   await expect(run).toBeVisible();
   const value = await run.inputValue();
@@ -51,9 +51,9 @@ test("Flow has keyboard controls, a readable narrow layout and honest setup guid
   await openFlow(app);
   const flow = app.getByRole("region", { name: "Agent flow", exact: true });
   await expect(flow.getByRole("button", { name: "Fit all relationships in view" })).toBeVisible();
-  await flow.getByRole("radio", { name: "Connections", exact: true }).focus();
+  await app.getByRole("radio", { name: "Connections", exact: true }).focus();
   await app.keyboard.press("ArrowRight");
-  await expect(flow.getByRole("radio", { name: "Calls", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(app.getByRole("radio", { name: "Calls", exact: true })).toHaveAttribute("aria-checked", "true");
   await flow.getByRole("button", { name: "Setup", exact: true }).click();
   await expect(flow.getByRole("region", { name: "Recording setup" })).toContainText("Recording is available in the local desktop app");
   await expect(flow).toContainText("Settings are never changed automatically");
@@ -73,7 +73,7 @@ test("Flow has keyboard controls, a readable narrow layout and honest setup guid
 test("full recorded trace shows parallel tools, a failed step and a visible inspector", async ({ app }) => {
   await openFlow(app);
   const flow = app.getByRole("region", { name: "Agent flow", exact: true });
-  await flow.getByRole("radio", { name: "Calls", exact: true }).click();
+  await app.getByRole("radio", { name: "Calls", exact: true }).click();
   const run = flow.locator("#agent-flow-run");
   const trace = await run.locator("option").filter({ hasText: "Planning agent" }).getAttribute("value");
   await run.selectOption(trace!);
@@ -93,7 +93,7 @@ test("Flow keyboard controls cannot act on a previously selected listener", asyn
   await app.getByRole("option", { name: /^Port 3000 tcp,/ }).click();
   await openFlow(app);
   const flow = app.getByRole("region", { name: "Agent flow", exact: true });
-  await flow.getByRole("radio", { name: "Calls", exact: true }).click();
+  await app.getByRole("radio", { name: "Calls", exact: true }).click();
   const record = flow.getByRole("region", { name: "Recorded activity timeline" }).getByRole("button").first();
   await record.click();
   await record.press("Delete");
@@ -106,7 +106,7 @@ test("Flow keyboard controls cannot act on a previously selected listener", asyn
 test("the run selector retains its native arrow-key behavior", async ({ app }) => {
   await openFlow(app);
   const flow = app.getByRole("region", { name: "Agent flow", exact: true });
-  await flow.getByRole("radio", { name: "Calls", exact: true }).click();
+  await app.getByRole("radio", { name: "Calls", exact: true }).click();
   const run = flow.locator("#agent-flow-run");
   await expect(run.locator("option")).toHaveCount(2);
   const target = await run.locator("option").nth(1).getAttribute("value");
@@ -129,7 +129,7 @@ test("the run selector retains its native arrow-key behavior", async ({ app }) =
 test("Calls filters isolate failures and missing completions while preserving reported context", async ({ app }) => {
   await openFlow(app);
   const flow = app.getByRole("region", { name: "Agent flow", exact: true });
-  await flow.getByRole("radio", { name: "Calls", exact: true }).click();
+  await app.getByRole("radio", { name: "Calls", exact: true }).click();
   const run = flow.locator("#agent-flow-run");
   const trace = await run.locator("option").filter({ hasText: "Planning agent" }).getAttribute("value");
   await run.selectOption(trace!);
@@ -166,7 +166,7 @@ test("Calls metadata search and native duration ordering retain the current run"
   await app.setViewportSize({ width: 820, height: 800 });
   await openFlow(app);
   const flow = app.getByRole("region", { name: "Agent flow", exact: true });
-  await flow.getByRole("radio", { name: "Calls", exact: true }).click();
+  await app.getByRole("radio", { name: "Calls", exact: true }).click();
   const run = flow.locator("#agent-flow-run");
   const trace = await run.locator("option").filter({ hasText: "Planning agent" }).getAttribute("value");
   await run.selectOption(trace!);

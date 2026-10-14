@@ -48,7 +48,7 @@
   .ib:active:not(:disabled) { background: var(--surface-3); }
   .ib:disabled { opacity: 0.45; cursor: not-allowed; }
   .ib:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-  .sm { width: var(--h-sm); height: var(--h-sm); border-radius: var(--r-sm); }
+  .sm { width: var(--h-sm); height: var(--h-sm); border-radius: var(--r-full); }
   .xs { width: var(--h-xs); height: var(--h-xs); border-radius: var(--r-sm); }
   .outline { border-color: var(--input-border); background: var(--surface); box-shadow: var(--control-shadow); }
   .outline:hover:not(:disabled) { border-color: var(--input-border-hover); background: var(--surface-2); }

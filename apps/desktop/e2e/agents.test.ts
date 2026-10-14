@@ -1,7 +1,7 @@
-import { agentCard, agentHeading, expect, openAgents, test } from "./fixtures";
+import { agentCard, agentHeading, expect, folderNode, openAgents, openAgentsPicture, openProject, test } from "./fixtures";
 
 test("Agents shows aggregate resources and inferred MCP servers without listeners", async ({ app }) => {
-  await openAgents(app);
+  await openAgentsPicture(app, "Footprint");
   const cursor = agentCard(app, "Cursor");
   await expect(agentHeading(app, "Cursor")).toContainText("15 processes");
   await expect(agentHeading(app, "Cursor")).toContainText("5 tools");
@@ -98,8 +98,7 @@ const shopFolderPath = "/Users/dev/code/shop-web";
 
 test("folder map actions copy the original path and preserve listeners", async ({ app }) => {
   await app.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-  await openAgents(app);
-  const folder = app.getByRole("button", { name: /^Folder shop-web,.*\. Opens folder actions$/ });
+  const folder = await openProject(app);
   const mapNode = app.locator(".svelte-flow__node").filter({ has: folder });
   await mapNode.focus();
   await folder.click();
@@ -143,8 +142,7 @@ test("agent card folders offer editor and file-manager previews without native e
 });
 
 test("folder map keyboard actions retain focus and survive background scans", async ({ app }) => {
-  await openAgents(app);
-  const folder = app.getByRole("button", { name: /^Folder shop-web,.*\. Opens folder actions$/ });
+  const folder = await openProject(app);
   const mapNode = app.locator(".svelte-flow__node").filter({ has: folder });
   const dialog = app.getByRole("dialog", { name: "Folder actions", exact: true });
   await mapNode.focus();
@@ -188,7 +186,7 @@ test("typing in agent search does not trigger port actions or filters", async ({
 });
 
 test("an agent map listener opens port details and can be dismissed", async ({ app }) => {
-  await openAgents(app);
+  await openAgentsPicture(app, "Footprint");
   const listener = app.getByRole("button", { name: /^Port shop-api, :3001.*Opens details$/ });
   await listener.click();
   const details = app.getByRole("dialog", { name: "Details for port 3001", exact: true });
@@ -200,4 +198,25 @@ test("an agent map listener opens port details and can be dismissed", async ({ a
   await expect(details).toHaveCount(0);
   await expect(app.getByRole("radio", { name: /^Agents/ })).toHaveAttribute("aria-checked", "true");
   await expect(listener).toBeVisible();
+});
+
+test("the computer picture shows this machine and does not invent a project", async ({ app }) => {
+  await openAgents(app);
+  await expect(app.getByRole("radio", { name: "Computer", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(app.getByRole("radio", { name: "Project", exact: true })).toBeDisabled();
+  await expect(app.getByRole("group", { name: /^This computer,/ })).toBeVisible();
+  await expect(folderNode(app, "shop-web", "zoom")).toHaveCount(0);
+  await openProject(app);
+  await expect(app.getByRole("button", { name: /^Port shop-web, :3000/ })).toBeVisible();
+  await expect(app.getByRole("button", { name: /^Port shop-web, :5173/ })).toHaveCount(0);
+});
+
+test("Flow replaces Computer pills with Connections and Calls", async ({ app }) => {
+  await openAgents(app);
+  await app.getByRole("radio", { name: "Flow", exact: true }).click();
+  await expect(app.getByRole("radio", { name: "Computer", exact: true })).toHaveCount(0);
+  await expect(app.getByRole("radio", { name: "Connections", exact: true })).toBeVisible();
+  await expect(app.getByRole("radio", { name: "Calls", exact: true })).toBeVisible();
+  await app.getByRole("radio", { name: "Overview", exact: true }).click();
+  await expect(app.getByRole("radio", { name: "Computer", exact: true })).toBeVisible();
 });

@@ -1,13 +1,15 @@
-// Pure view logic for the Agents view: the footprint graph (agents in the centre column, the
-// folders they work in on the left, the ports they run and services they use on the right,
-// remote hosts at the far right), its deterministic column layout, conversion to Svelte Flow
-// nodes and edges with self-computed edge geometry, and the summaries the agent cards show.
-// No DOM or Svelte imports, so all of it is unit-tested.
+// Pure view logic for the Agents view: C4-style pictures of the same observed report
+// (computer context, shared footprint, one source tree), deterministic column layout,
+// conversion to Svelte Flow nodes and edges with self-computed edge geometry, and the
+// summaries the agent cards show. No invented communication. No DOM or Svelte imports,
+// so all of it is unit-tested.
 
 import type { AccessFact, AccessLevel, AccessTopic, Agent, AgentKind, AgentPort, PortEntry, AgentProcess, AgentToolKind, AgentsReport, Evidence } from "./types";
 
-export type FootKind = "agent" | "folder" | "tool" | "port" | "service" | "remote" | "more" | "omitted" | "header";
-export type FootEdgeKind = "parent" | "folder" | "recent" | "tool" | "runs" | "uses" | "remote" | "omitted";
+export type FootKind = "agent" | "folder" | "tool" | "port" | "service" | "remote" | "more" | "omitted" | "header" | "machine";
+export type FootEdgeKind = "parent" | "folder" | "recent" | "tool" | "runs" | "uses" | "remote" | "omitted" | "host";
+/** C4-style zoom: computer context, agent containers, one source tree's components. */
+export type Picture = "context" | "footprint" | "project";
 export type Tone = "warn" | "muted" | null;
 
 export interface FootNode {
@@ -41,6 +43,7 @@ export interface FootEdge {
 export interface FootGraph {
   nodes: FootNode[];
   edges: FootEdge[];
+  picture: Picture;
 }
 
 export const KIND_LABEL: Record<AgentKind, string> = {
@@ -233,7 +236,176 @@ export function footprintGraph(r: AgentsReport, opts: GraphOptions = {}): FootGr
       edge({ from: a.id, to: id, kind: "omitted", label: null, inferred: false, connections: 0 });
     }
   }
-  return { nodes: [...nodes.values()], edges: [...edges.values()] };
+  return { nodes: [...nodes.values()], edges: [...edges.values()], picture: "footprint" };
+}
+
+export const MACHINE_ID = "machine";
+
+export function platformLabel(platform: string): string {
+  return platform === "macos" ? "macOS" : platform === "windows" ? "Windows" : platform === "linux" ? "Linux" : platform;
+}
+
+function baseNode(): Omit<FootNode, "id" | "kind" | "label" | "sub" | "owners"> {
+  return { entryId: null, path: null, evidence: "observed", tone: null, agent: null };
+}
+
+/** C4 context: this computer, the agents on it, and outside systems they talk to. No invented peers. */
+export function contextGraph(r: AgentsReport, opts: GraphOptions = {}): FootGraph {
+  const remoteLimit = opts.remoteLimit ?? 6;
+  const nodes = new Map<string, FootNode>();
+  const edges = new Map<string, FootEdge>();
+  const ids = new Set(r.agents.map((a) => a.id));
+  const base = baseNode();
+  const node = (n: Omit<FootNode, "owners">, owner: string) => {
+    const cur = nodes.get(n.id);
+    if (cur) {
+      if (!cur.owners.includes(owner)) cur.owners.push(owner);
+      return cur;
+    }
+    const created = { ...n, owners: [owner] };
+    nodes.set(n.id, created);
+    return created;
+  };
+  const edge = (e: Omit<FootEdge, "id">) => {
+    const id = `${e.from}->${e.to}:${e.kind}`;
+    if (!edges.has(id)) edges.set(id, { ...e, id });
+  };
+  if (!r.agents.length) return { nodes: [], edges: [], picture: "context" };
+  node({
+    ...base,
+    id: MACHINE_ID,
+    kind: "machine",
+    label: "This computer",
+    sub: `${platformLabel(r.platform)} · ${r.agents.length} ${r.agents.length === 1 ? "agent" : "agents"}`,
+  }, r.agents[0].id);
+  nodes.get(MACHINE_ID)!.owners = r.agents.map((a) => a.id);
+  for (const a of r.agents) {
+    const c = counts(a);
+    node({
+      ...base,
+      id: a.id,
+      kind: "agent",
+      label: a.name,
+      sub: `${KIND_LABEL[a.kind]} · ${c.folders} ${c.folders === 1 ? "folder" : "folders"} · ${c.ports} ${c.ports === 1 ? "port" : "ports"}`,
+      agent: a,
+    }, a.id);
+    if (a.parent && ids.has(a.parent)) edge({ from: a.parent, to: a.id, kind: "parent", label: "started", inferred: false, connections: 0 });
+    else edge({ from: MACHINE_ID, to: a.id, kind: "host", label: "runs", inferred: false, connections: 0 });
+    const remotes = a.links.filter((x) => x.kind === "remote");
+    for (const l of remotes.slice(0, remoteLimit)) {
+      const id = `remote:${l.address}`;
+      node({ ...base, id, kind: "remote", label: l.address.replace(/:\d+$/, ""), sub: l.service ?? `:${l.port}` }, a.id);
+      edge({ from: a.id, to: id, kind: "remote", label: `×${l.connections}`, inferred: false, connections: l.connections });
+    }
+    const rest = remotes.slice(remoteLimit);
+    if (rest.length > 0) {
+      const id = `more:${a.id}`;
+      const conns = rest.reduce((n, l) => n + l.connections, 0);
+      node({ ...base, id, kind: "more", label: `+${rest.length} more remote links`, sub: `${conns} connection${conns === 1 ? "" : "s"}`, tone: "muted" }, a.id);
+      edge({ from: a.id, to: id, kind: "remote", label: null, inferred: false, connections: conns });
+    }
+  }
+  return { nodes: [...nodes.values()], edges: [...edges.values()], picture: "context" };
+}
+
+/** True when `cwd` is that folder or a child of it. `shop-web` does not match `shop-web-other`. */
+export function pathContains(cwd: string | null | undefined, path: string): boolean {
+  if (!cwd) return false;
+  if (cwd === path) return true;
+  const sep = path.includes("\\") || cwd.includes("\\") ? "\\" : "/";
+  const prefix = path.endsWith("/") || path.endsWith("\\") ? path : path + sep;
+  return cwd.startsWith(prefix);
+}
+
+function portInProject(p: AgentPort, folder: { path: string; label: string; project: Agent["folders"][number]["project"] }, agent: Agent): boolean {
+  if (p.project && (p.project === folder.project?.name || p.project === folder.label)) return true;
+  return pathContains(agent.processes.find((x) => x.pid === p.pid)?.cwd, folder.path);
+}
+
+/** C4 components: one source tree, the agents in it, and observed ports, tools and hosts. */
+export function projectGraph(r: AgentsReport, path: string, opts: GraphOptions = {}): FootGraph {
+  const recent = opts.recent ?? true;
+  const remoteLimit = opts.remoteLimit ?? 3;
+  const hits = r.agents.flatMap((a) => a.folders.filter((f) => f.path === path && (f.source !== "recent" || recent)).map((folder) => ({ agent: a, folder })));
+  if (!hits.length) return { nodes: [], edges: [], picture: "project" };
+  const working = hits.filter((h) => h.folder.source !== "recent");
+  const used = working.length ? working : hits;
+  const folder = used.find((h) => h.folder.evidence === "observed")?.folder ?? used[0].folder;
+  const scoped: Agent[] = used.map((h) => h.agent);
+  const nodes = new Map<string, FootNode>();
+  const edges = new Map<string, FootEdge>();
+  const base = baseNode();
+  const node = (n: Omit<FootNode, "owners">, owner: string) => {
+    const cur = nodes.get(n.id);
+    if (cur) {
+      if (!cur.owners.includes(owner)) cur.owners.push(owner);
+      if (cur.evidence !== "observed" && n.evidence === "observed") cur.evidence = "observed";
+      if (cur.tone === "muted" && n.tone === null && n.kind === "folder") Object.assign(cur, { tone: null, sub: n.sub });
+      return cur;
+    }
+    const created = { ...n, owners: [owner] };
+    nodes.set(n.id, created);
+    return created;
+  };
+  const edge = (e: Omit<FootEdge, "id">) => {
+    const id = `${e.from}->${e.to}:${e.kind}`;
+    if (!edges.has(id)) edges.set(id, { ...e, id });
+  };
+  const folderId = `folder:${path}`;
+  for (const { agent: a, folder: f } of used) {
+    const mem = a.memory_bytes >= 1 << 30 ? `${(a.memory_bytes / (1 << 30)).toFixed(1)} GB` : `${Math.round(a.memory_bytes / (1 << 20))} MB`;
+    node({ ...base, id: a.id, kind: "agent", label: a.name, sub: `${KIND_LABEL[a.kind]} · pid ${a.pid} · ${mem}`, agent: a }, a.id);
+    node({
+      ...base,
+      id: folderId,
+      kind: "folder",
+      label: folder.label,
+      sub: folder.project?.git_branch ? `⎇ ${folder.project.git_branch}` : f.source === "recent" ? "recent project" : "this project",
+      path,
+      evidence: f.evidence,
+      tone: f.source === "recent" ? "muted" : null,
+    }, a.id);
+    edge({ from: a.id, to: folderId, kind: f.source === "recent" ? "recent" : "folder", label: null, inferred: f.evidence !== "observed", connections: 0 });
+    if (a.parent && scoped.some((x) => x.id === a.parent)) edge({ from: a.parent, to: a.id, kind: "parent", label: "started", inferred: false, connections: 0 });
+    for (const p of a.ports) {
+      if (!portInProject(p, folder, a)) continue;
+      const id = `port:${p.entry_id}`;
+      node({ ...base, id, kind: "port", label: p.project ?? p.framework ?? p.process ?? shortLabel(p.label), sub: `:${p.port}${p.framework && p.project ? ` · ${p.framework}` : ""}`, entryId: p.entry_id, tone: p.exposure !== "loopback" ? "warn" : null, warning: p.exposure === "specific" ? "Bound to a specific interface" : p.exposure === "all_interfaces" ? "Reachable from the network" : undefined }, a.id);
+      edge({ from: a.id, to: id, kind: "runs", label: null, inferred: false, connections: 0 });
+    }
+    for (const t of a.tools ?? []) {
+      if (t.kind !== "mcp_server") continue;
+      if (!pathContains(t.cwd, path)) continue;
+      const id = `tool:${t.pid}`;
+      node({ ...base, id, kind: "tool", label: t.name, sub: `MCP · pid ${t.pid}${t.ports.length ? ` · :${t.ports.join(", :")}` : " · no listener"}`, evidence: t.evidence }, a.id);
+      edge({ from: a.id, to: id, kind: "tool", label: null, inferred: t.evidence !== "observed", connections: 0 });
+    }
+    for (const l of a.links.filter((x) => x.kind === "local")) {
+      const id = l.entry_id ? `port:${l.entry_id}` : `svc:${l.id}`;
+      node({ ...base, id, kind: "service", label: shortLabel(l.label), sub: `:${l.port}${l.process ? ` · ${l.process}` : ""}`, entryId: l.entry_id }, a.id);
+      edge({ from: a.id, to: id, kind: "uses", label: `×${l.connections}`, inferred: false, connections: l.connections });
+    }
+    const remotes = a.links.filter((x) => x.kind === "remote");
+    for (const l of remotes.slice(0, remoteLimit)) {
+      const id = `remote:${l.address}`;
+      node({ ...base, id, kind: "remote", label: l.address.replace(/:\d+$/, ""), sub: l.service ?? `:${l.port}` }, a.id);
+      edge({ from: a.id, to: id, kind: "remote", label: `×${l.connections}`, inferred: false, connections: l.connections });
+    }
+    const rest = remotes.slice(remoteLimit);
+    if (rest.length > 0) {
+      const id = `more:${a.id}`;
+      const conns = rest.reduce((n, l) => n + l.connections, 0);
+      node({ ...base, id, kind: "more", label: `+${rest.length} more remote links`, sub: `${conns} connection${conns === 1 ? "" : "s"}`, tone: "muted" }, a.id);
+      edge({ from: a.id, to: id, kind: "remote", label: null, inferred: false, connections: conns });
+    }
+  }
+  return { nodes: [...nodes.values()], edges: [...edges.values()], picture: "project" };
+}
+
+export function pictureGraph(r: AgentsReport, picture: Picture, opts: GraphOptions & { folder?: string | null } = {}): FootGraph {
+  if (picture === "context") return contextGraph(r, opts);
+  if (picture === "project") return opts.folder ? projectGraph(r, opts.folder, opts) : { nodes: [], edges: [], picture: "project" };
+  return footprintGraph(r, opts);
 }
 
 // ---- layout ----
@@ -254,16 +426,37 @@ export function column(kind: FootKind): number {
   return kind === "folder" ? 0 : kind === "agent" ? 1 : kind === "port" || kind === "service" || kind === "tool" || kind === "omitted" ? 2 : 3;
 }
 
+export function pictureColumn(kind: FootKind, picture: Picture = "footprint"): number {
+  if (picture === "context") return kind === "machine" ? 0 : kind === "agent" ? 1 : 2;
+  if (picture === "project") return kind === "agent" ? 0 : kind === "folder" ? 1 : kind === "port" || kind === "service" || kind === "tool" || kind === "omitted" ? 2 : 3;
+  return column(kind);
+}
+
 export const COLUMN_TITLES = ["Folders", "Agents", "Tools, ports & services", "Remote hosts"];
+export const CONTEXT_TITLES = ["This computer", "Agents", "Outside"];
+export const PROJECT_TITLES = ["Agents", "This project", "Tools, ports & services", "Outside"];
 
-export const sizeOf = (kind: FootKind) => (kind === "agent" ? { w: AGENT_W, h: AGENT_H } : kind === "header" ? { w: FOOT_W, h: 20 } : { w: FOOT_W, h: FOOT_H });
+export function pictureTitles(picture: Picture): string[] {
+  return picture === "context" ? CONTEXT_TITLES : picture === "project" ? PROJECT_TITLES : COLUMN_TITLES;
+}
 
-/** Column centre x positions. */
-export function columnX(): number[] {
-  const widths = [FOOT_W, AGENT_W, FOOT_W, FOOT_W];
+export const sizeOf = (kind: FootKind) => (kind === "agent" || kind === "machine" ? { w: AGENT_W, h: AGENT_H } : kind === "header" ? { w: FOOT_W, h: 20 } : { w: FOOT_W, h: FOOT_H });
+
+function columnXs(widths: number[]): number[] {
   const xs = [widths[0] / 2];
   for (let c = 1; c < widths.length; c++) xs.push(xs[c - 1] + widths[c - 1] / 2 + COL_GAP + widths[c] / 2);
   return xs;
+}
+
+/** Column centre x positions. */
+export function columnX(): number[] {
+  return columnXs([FOOT_W, AGENT_W, FOOT_W, FOOT_W]);
+}
+
+export function pictureColumnX(picture: Picture = "footprint"): number[] {
+  if (picture === "context") return columnXs([AGENT_W, AGENT_W, FOOT_W]);
+  if (picture === "project") return columnXs([AGENT_W, FOOT_W, FOOT_W, FOOT_W]);
+  return columnX();
 }
 
 /** Stack items (with wished-for centre y) in order, at least `gap` apart, then centre the stack
@@ -330,11 +523,92 @@ export function layoutFootprint(g: FootGraph): Positions {
   return pos;
 }
 
+function agentOrder(agents: FootNode[]): FootNode[] {
+  const order: FootNode[] = [];
+  const childrenOf = (id: string) => agents.filter((a) => a.agent?.parent === id);
+  const visit = (a: FootNode) => {
+    if (order.includes(a)) return;
+    order.push(a);
+    for (const c of childrenOf(a.id)) visit(c);
+  };
+  for (const a of agents) if (!a.agent?.parent || !agents.some((x) => x.id === a.agent!.parent)) visit(a);
+  for (const a of agents) visit(a);
+  return order;
+}
+
+/** Computer on the left, agents in the middle, observed outside systems on the right. */
+export function layoutContext(g: FootGraph): Positions {
+  const xs = pictureColumnX("context");
+  const order = agentOrder(g.nodes.filter((n) => n.kind === "agent"));
+  const pos: Positions = new Map();
+  const agentY = new Map<string, number>();
+  let y = 0;
+  for (const a of order) {
+    agentY.set(a.id, y + AGENT_H / 2);
+    pos.set(a.id, { x: xs[1], y: agentY.get(a.id)! });
+    y += AGENT_H + ROW_GAP * 4;
+  }
+  const remotes = g.nodes.filter((n) => n.kind === "remote" || n.kind === "more");
+  const wishes = remotes
+    .map((n) => ({ id: n.id, y: n.owners.reduce((s, o) => s + (agentY.get(o) ?? 0), 0) / Math.max(1, n.owners.length), h: FOOT_H, kind: n.kind, label: n.label }))
+    .sort((a, b) => a.y - b.y || a.label.localeCompare(b.label));
+  const ys = stack(wishes, ROW_GAP);
+  for (const w of wishes) pos.set(w.id, { x: xs[2], y: ys.get(w.id)! });
+  const machine = g.nodes.find((n) => n.kind === "machine");
+  if (machine) {
+    const ysAgents = order.map((a) => agentY.get(a.id)!);
+    pos.set(machine.id, { x: xs[0], y: ysAgents.length ? ysAgents.reduce((s, v) => s + v, 0) / ysAgents.length : AGENT_H / 2 });
+  }
+  return pos;
+}
+
+/** Agents on the left, one source tree, then the ports, tools and hosts observed for it. */
+export function layoutProject(g: FootGraph): Positions {
+  const xs = pictureColumnX("project");
+  const order = agentOrder(g.nodes.filter((n) => n.kind === "agent"));
+  const pos: Positions = new Map();
+  const agentY = new Map<string, number>();
+  let y = 0;
+  for (const a of order) {
+    agentY.set(a.id, y + AGENT_H / 2);
+    y += AGENT_H + ROW_GAP * 4;
+  }
+  const others = g.nodes.filter((n) => n.kind !== "agent");
+  const byCol = [1, 2, 3].map((c) => others.filter((n) => pictureColumn(n.kind, "project") === c));
+  const place = () => {
+    for (const [i, col] of byCol.entries()) {
+      const c = [1, 2, 3][i];
+      const wishes = col
+        .map((n) => ({ id: n.id, y: n.owners.reduce((s, o) => s + (agentY.get(o) ?? 0), 0) / Math.max(1, n.owners.length), h: FOOT_H, kind: n.kind, label: n.label }))
+        .sort((a, b) => a.y - b.y || (a.kind === b.kind ? 0 : a.kind === "port" ? -1 : 1) || a.label.localeCompare(b.label));
+      const ys = stack(wishes, ROW_GAP);
+      for (const w of wishes) pos.set(w.id, { x: xs[c], y: ys.get(w.id)! });
+    }
+  };
+  place();
+  const wishes = order.map((a) => {
+    const mine = others.filter((n) => n.owners.includes(a.id)).map((n) => pos.get(n.id)!.y);
+    return { id: a.id, y: mine.length ? mine.reduce((s, v) => s + v, 0) / mine.length : agentY.get(a.id)!, h: AGENT_H };
+  });
+  const ys = stack(wishes, ROW_GAP * 3);
+  for (const a of order) agentY.set(a.id, ys.get(a.id)!);
+  place();
+  for (const a of order) pos.set(a.id, { x: xs[0], y: agentY.get(a.id)! });
+  return pos;
+}
+
+export function layoutPicture(g: FootGraph): Positions {
+  return g.picture === "context" ? layoutContext(g) : g.picture === "project" ? layoutProject(g) : layoutFootprint(g);
+}
+
 /** Column header positions: centred over each non-empty column, above its top node. */
 export function headers(g: FootGraph, pos: Positions): { id: string; label: string; x: number; y: number }[] {
-  const xs = columnX();
+  if (!pos.size) return [];
+  const picture = g.picture ?? "footprint";
+  const xs = pictureColumnX(picture);
+  const titles = pictureTitles(picture);
   const top = Math.min(...[...pos.values()].map((p) => p.y)) - AGENT_H / 2 - HEADER_Y_GAP / 2;
-  return COLUMN_TITLES.map((label, c) => ({ id: `header:${c}`, label, x: xs[c], y: top, used: g.nodes.some((n) => column(n.kind) === c) }))
+  return titles.map((label, c) => ({ id: `header:${c}`, label, x: xs[c], y: top, used: g.nodes.some((n) => pictureColumn(n.kind, picture) === c) }))
     .filter((h) => h.used)
     .map(({ id, label, x, y }) => ({ id, label, x, y }));
 }
@@ -365,6 +639,12 @@ export interface FootFlowData extends Record<string, unknown> {
   dim: boolean;
   hl: boolean;
   selected: boolean;
+  picture: Picture;
+}
+
+/** Folder click: zoom on Computer/Footprint, open actions once that source tree is in view. */
+export function folderAction(picture: Picture): string {
+  return picture === "project" ? "Opens folder actions" : "Zooms into this project";
 }
 
 export interface FootFlowNode {
@@ -442,7 +722,7 @@ export function toFootFlow(g: FootGraph, pos: Positions, opts: FootFlowOptions =
   for (const h of headers(g, pos)) {
     const { w, h: hh } = sizeOf("header");
     const n: FootNode = { id: h.id, kind: "header", label: h.label, sub: "", owners: [], entryId: null, path: null, evidence: "observed", tone: null, agent: null };
-    nodes.push({ id: h.id, type: "header", position: { x: h.x - w / 2, y: h.y - hh / 2 }, width: w, height: hh, selectable: false, focusable: false, draggable: false, data: { node: n, color: "", ownerColors: [], dim: false, hl: false, selected: false } });
+    nodes.push({ id: h.id, type: "header", position: { x: h.x - w / 2, y: h.y - hh / 2 }, width: w, height: hh, selectable: false, focusable: false, draggable: false, data: { node: n, color: "", ownerColors: [], dim: false, hl: false, selected: false, picture: g.picture } });
   }
   for (const n of g.nodes) {
     const p = pos.get(n.id);
@@ -455,7 +735,7 @@ export function toFootFlow(g: FootGraph, pos: Positions, opts: FootFlowOptions =
       width: w,
       height: h,
       draggable: false,
-      data: { node: n, color: agentColor(g, n.kind === "agent" ? n.id : n.owners[0], opts.agentIds), ownerColors: n.owners.map((o) => agentColor(g, o, opts.agentIds)), dim: !!rel && !rel.nodes.has(n.id), hl: !!rel && rel.nodes.has(n.id) && n.id !== opts.focus, selected: opts.selectedId === n.id },
+      data: { node: n, color: agentColor(g, n.kind === "agent" ? n.id : n.owners[0], opts.agentIds), ownerColors: n.owners.map((o) => agentColor(g, o, opts.agentIds)), dim: !!rel && !rel.nodes.has(n.id), hl: !!rel && rel.nodes.has(n.id) && n.id !== opts.focus, selected: opts.selectedId === n.id, picture: g.picture },
     });
   }
   const edges: FootFlowEdge[] = [];
@@ -464,14 +744,14 @@ export function toFootFlow(g: FootGraph, pos: Positions, opts: FootFlowOptions =
     const na = byId.get(e.from), nb = byId.get(e.to);
     if (!a || !b || !na || !nb) continue;
     const geometry = edgeGeometry({ ...a, ...sizeOf(na.kind) }, { ...b, ...sizeOf(nb.kind) });
-    edges.push({ id: e.id, source: e.from, target: e.to, type: "foot", data: { edge: e, geometry, color: agentColor(g, e.kind === "parent" ? e.to : e.from, opts.agentIds), dim: !!rel && !rel.edges.has(e.id), hl: !!rel && rel.edges.has(e.id) } });
+    edges.push({ id: e.id, source: e.from, target: e.to, type: "foot", data: { edge: e, geometry, color: agentColor(g, e.kind === "parent" || e.kind === "host" ? e.to : e.from, opts.agentIds), dim: !!rel && !rel.edges.has(e.id), hl: !!rel && rel.edges.has(e.id) } });
   }
   return { nodes, edges };
 }
 
 /** Structure key: re-layout only when this changes, so live refreshes don't move nodes. */
 export function signature(g: FootGraph): string {
-  return `${g.nodes.map((n) => `${n.id}@${n.owners.join("+")}`).join(",")}|${g.edges.map((e) => e.id).join(",")}`;
+  return `${g.picture}|${g.nodes.map((n) => `${n.id}@${n.owners.join("+")}`).join(",")}|${g.edges.map((e) => e.id).join(",")}`;
 }
 
 // ---- cards ----

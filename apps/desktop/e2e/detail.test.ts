@@ -24,7 +24,7 @@ test.describe("narrow docked details", () => {
     const details = app.getByRole("complementary", { name: "Port details", exact: true });
     const tabs = details.getByRole("tablist", { name: "Details sections", exact: true });
     await expect(tabs.getByRole("tab")).toHaveCount(5);
-    await expectContained(details, tabs.getByRole("tab"));
+    await expectContained(details, tabs);
 
     const metrics = details.getByLabel("Port activity", { exact: true });
     await expect(metrics).toContainText("Memory");
@@ -53,7 +53,7 @@ test.describe("narrow docked details", () => {
     await expect(commands).toBeFocused();
     await expect(commands).toHaveAttribute("aria-selected", "true");
     await expect(details.getByRole("tabpanel", { name: /^Commands/ })).toContainText("holdmap explain 3000");
-    await expectContained(details, tabs.getByRole("tab"));
+    await expectContained(details, commands);
     await commands.press("Home");
     await expect(overview).toBeFocused();
     await expect(overview).toHaveAttribute("aria-selected", "true");

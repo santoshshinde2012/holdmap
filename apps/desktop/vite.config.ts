@@ -1,11 +1,12 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { liveCollector } from "./vite-live.ts";
 
 const host = process.env.TAURI_DEV_HOST;
 
 // https://v2.tauri.app/start/frontend/vite/
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [svelte(), liveCollector()],
   clearScreen: false,
   server: {
     port: 1420,
