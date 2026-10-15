@@ -111,18 +111,43 @@ sources are insufficient evidence of ownership or use.
 
 These current-source browser captures use labelled sample definitions and process observations:
 
-| Configured MCP definitions | Skill file metadata |
+| MCP and skills map | Selected skill details |
 | --- | --- |
-| ![MCP inventory separates configured server aliases from observed running child tools](../../../../docs/screenshots/desktop-capabilities-dark.png) | ![Skill inventory shows folder identities, optional declared purpose and unknown activation](../../../../docs/screenshots/desktop-skills-dark.png) |
+| ![Capability map places declared MCP sources left of agents and skill sources to the right, with runtime candidates separate below](../../../../docs/screenshots/desktop-capabilities-dark.png) | ![Selecting a skill card reveals folder identity, optional declared purpose and source in the left inspector](../../../../docs/screenshots/desktop-skills-dark.png) |
 
 | Light theme | Narrow window |
 | --- | --- |
-| ![MCP inventory in the light theme preserves source, scope and enablement evidence](../../../../docs/screenshots/desktop-capabilities-light.png) | ![MCP and skills inspection remains readable in a narrow window](../../../../docs/screenshots/desktop-capabilities-narrow-light.png) |
+| ![The light-theme capability map preserves declared-source relationships and separates runtime observations](../../../../docs/screenshots/desktop-capabilities-light.png) | ![A narrow capability map opens selected details in a dismissible inspector](../../../../docs/screenshots/desktop-capabilities-narrow-light.png) |
 
 ### Inspect supported definitions
 
-Open **MCP & skills**, select the running agent and review **Configured MCP servers**, **Skill
-files** and the coverage limits. Source paths identify where each definition was found.
+Open **MCP & skills** for a map with the same visual style as Overview. The left rail starts
+with **All agents** and the running agents. Configured MCP definitions sit to the left of the
+agents; skill files sit to the right. Lines associate an agent's inspected source layout with
+a definition. They do not mean the agent loaded, trusted, connected to or used it. Running MCP
+candidates occupy a separate lane below the agents, with no inferred links to definitions.
+
+Select an agent card to focus its map and open agent details. Select an MCP, skill or runtime
+card to replace the left rail with that item's inspector. Nothing is selected automatically,
+and there is no empty details column. **Agents**, the close button or **Esc** returns to the
+agent rail and restores focus, while retaining the selected agent scope; **Show all** returns
+to the combined map. Keyboard users can focus a map card and press **Enter** or **Space**.
+On narrow windows, **Browse agents** opens a dismissible agent drawer. Fit, zoom and the minimap
+help explore larger maps. A bounded map reports omitted definitions and relationships.
+The narrow canvas opens at a readable zoom around an agent; pan the map or choose **Fit all
+capabilities in view** to see the wider layout.
+
+Use **All**, **MCP servers**, **Skills** or **Running** to choose the evidence on the map.
+**Filters** reveals scope and MCP configuration state. Running candidates have independent
+evidence: definition scope and enablement do not filter them, and **Running** resets/disables
+those selectors. Search matches names, retained purposes, source paths and reported PIDs.
+Filtering or a refresh that removes the inspected item closes its details rather than choosing
+another item. An unchanged definition stays selected across refreshes.
+
+**Coverage** opens the collection notes on request, grouping common notes across agents. An
+empty or unsupported selected agent remains on the map with a compact explanation and actions
+to view all agents or coverage; it does not expand a long list of notes automatically. Source
+paths in the inspector identify where each definition was found.
 An explicit enabled/disabled value is a declaration; a missing value stays **Unknown**. Client
 precedence, project trust, approval policy and effective loading are not resolved. Repeated
 aliases from different files remain separate definitions; Holdmap does not choose a winner.

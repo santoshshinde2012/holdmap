@@ -269,6 +269,15 @@ observed process arguments are redacted for display; redaction is heuristic. Rem
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
 `holdmap agents` and `holdmap agents AGENT --stop-ports` do the same in a terminal.
 
+Current source also gives **MCP & skills** an Overview-style graphical map. Agent cards sit
+between declared MCP definitions and skill files; running MCP candidates remain separate below.
+Select a card with a click, **Enter** or **Space** to open its source, purpose and evidence in
+the left inspector. Close it or press **Esc** to return to the agent rail without losing the
+agent scope. No inspector opens automatically. **Filters** reveals scope/state controls and
+**Coverage** reveals grouped collection notes only on request. A narrow window uses a
+dismissible **Browse agents** drawer. This interface is **Unreleased**, separate from the
+published 0.7.1 downloads; see the [capability guide](../agents/#mcp-and-skills-current-source).
+
 Version 0.4.0 also lets you search by agent, child tool, folder, exact PID or
 `port:3000`. Likely MCP server children appear even without a listening socket; expanded cards
 show their evidence, resource use and redacted commands. Omitted counts and collection warnings

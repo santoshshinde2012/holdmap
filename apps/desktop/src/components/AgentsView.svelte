@@ -201,7 +201,7 @@
 
 <div class="agents-root" class:reduced>
   {#if section === "capabilities"}
-    <AgentCapabilitiesView {report} {query} {selectedAgent} loading={capabilitiesLoading} error={capabilitiesError} demo={flowProps.demo} {onselectagent} onclearquery={flowProps.onclearquery} onretry={onrefreshcapabilities} onrecordedcalls={() => { flowSource = "calls"; section = "flow"; }} />
+    <AgentCapabilitiesView {report} {query} {selectedAgent} {dark} {reduced} loading={capabilitiesLoading} error={capabilitiesError} demo={flowProps.demo} {onselectagent} onclearquery={flowProps.onclearquery} onretry={onrefreshcapabilities} onrecordedcalls={() => { flowSource = "calls"; section = "flow"; }} />
   {:else if section === "flow"}
     <div class="flow-body"><AgentFlowView {query} {dark} {reduced} {...flowProps} bind:mode={flowSource} sourceChrome={false} /></div>
   {:else}

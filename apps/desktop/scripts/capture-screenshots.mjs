@@ -173,17 +173,22 @@ async function openCapabilities(page, skill = false) {
   await page.getByRole("radio", { name: "MCP & skills", exact: true }).click();
   const workspace = page.getByRole("region", { name: "MCP and skills workspace", exact: true });
   await expect(workspace.getByText("Example inventory", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Inspect capabilities for Cursor, PID 52000", exact: true }).click();
-  if (skill) {
-    await page.getByRole("radio", { name: /^Skills/ }).click();
-    await page.getByRole("button", { name: "Inspect skill frontend-checks, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md", exact: true }).click();
-  } else {
-    await page.getByRole("radio", { name: /^MCP servers/ }).click();
-    await page.getByRole("button", { name: "Inspect MCP server filesystem, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.cursor/mcp.json", exact: true }).click();
+  const graph = workspace.getByRole("region", { name: "Agent capability graph", exact: true });
+  await expect(graph.getByRole("button", { name: "Inspect capabilities for Cursor, PID 52000", exact: true })).toBeVisible();
+  if (!skill) {
+    await expect(page.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
+    await expect(graph.locator(".svelte-flow__edge")).toHaveCount(7);
+    await graph.getByRole("button", { name: "Fit all capabilities in view", exact: true }).click();
+    return;
   }
+  await page.getByRole("button", { name: "Inspect capabilities for Cursor, PID 52000", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Capability details", exact: true }).getByRole("heading", { name: "Cursor", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close capability details", exact: true }).click();
+  await page.getByRole("radio", { name: /^Skills/ }).click();
+  await page.getByRole("button", { name: "Inspect skill frontend-checks, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md", exact: true }).press("Enter");
   const detail = page.getByRole("complementary", { name: "Capability details", exact: true });
-  await expect(detail).toContainText(skill ? "frontend-checks/SKILL.md" : "/Users/dev/code/shop-web/.cursor/mcp.json");
-  await expect(detail).toContainText(skill ? "Check UI behavior, accessibility and responsive layouts" : "Configured does not mean connected, loaded or invoked");
+  await expect(detail).toContainText("frontend-checks/SKILL.md");
+  await expect(detail).toContainText("Check UI behavior, accessibility and responsive layouts");
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, "Capability workspace must fit the viewport");
   assert.equal(await workspace.evaluate((element) => element.scrollWidth > element.clientWidth), false, "Capability workspace must not overflow horizontally");
 }

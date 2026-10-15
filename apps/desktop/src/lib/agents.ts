@@ -712,8 +712,8 @@ export interface FootFlowOptions {
 }
 
 /** The agent's colour, by its position in the report. */
-export function agentColor(g: FootGraph, agentId: string, agentIds?: readonly string[]): string {
-  const i = (agentIds ?? g.nodes.filter((n) => n.kind === "agent").map((n) => n.id)).indexOf(agentId);
+export function agentColor(g: FootGraph | null, agentId: string, agentIds?: readonly string[]): string {
+  const i = (agentIds ?? g?.nodes.filter((n) => n.kind === "agent").map((n) => n.id) ?? []).indexOf(agentId);
   return AGENT_COLORS[(i < 0 ? 0 : i) % AGENT_COLORS.length];
 }
 

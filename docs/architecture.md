@@ -1066,6 +1066,21 @@ aliases and skill activations stay in Calls without alias-only joins to an inven
 Metadata identities do not authorize stops, file actions or execution of configured commands.
 See [the usage/source contracts](agent-flow.md#provider-coverage-and-research).
 
+The desktop projects these DTOs through the pure `buildCapabilityMap` layout and a dedicated
+SvelteFlow canvas. Agents sit between configured MCP definitions and skill files; runtime
+candidates occupy a separate lane without inferred configuration edges. Only exact shared
+source identities collapse into one definition, with a connection to each observed owner.
+Resource sampling does not change layout identity. The renderer caps the map at 24 agents,
+64 definitions and 24 runtime candidates, retains explicit selection where possible, and
+reports omitted cards and relationships. These display bounds are separate from discovery
+bounds. Search and filters narrow the map; an explicitly selected empty agent stays visible.
+The left rail becomes an inspector only after selection. Closing it restores focus, and
+coverage notes are available on demand. Narrow canvases start at a readable hub-centered
+zoom; users can pan or explicitly fit the complete graph. Keyboard focus brings offscreen
+cards into view without selecting them. Pointer focus leaves the pressed card in place
+until its click completes. Inventory and runtime cards never resolve reported usage by
+matching names.
+
 ## 4. Project detection
 
 ![Extensible project detection](diagrams/project-detection.svg)

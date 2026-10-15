@@ -218,7 +218,10 @@ explicitly inspects supported current-account configuration and skill metadata. 
 **Agents → MCP & skills** workspace and MCP `list_agents(include_capabilities:true)` expose
 the same inventory. It distinguishes configured definitions, skill files, running child tools
 and recorded usage; loading, trust and effective client policy stay unknown. Ordinary scans
-keep configuration inspection off. See the [coverage, privacy and usage guide](site/src/content/docs/agents.md#mcp-and-skills-current-source).
+keep configuration inspection off. The desktop uses an Overview-style map: select an agent,
+MCP definition, skill or runtime card to open its details in the left rail. Close or press
+**Esc** to return to the map without changing the agent scope. **Filters** and **Coverage**
+open only when requested. See the [coverage, privacy and usage guide](site/src/content/docs/agents.md#mcp-and-skills-current-source).
 
 **Terminal agents in 0.5.0.** Start `holdmap` and press **Shift+Tab**
 to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its
@@ -454,9 +457,9 @@ installation-guide actions; see [Unreleased changes](CHANGELOG.md#unreleased).
 Current-source **MCP & skills** captures use labelled sample definitions; this workspace is
 Unreleased and is separate from the published 0.7.1 interface:
 
-| **Configured MCP definitions** | **Skill file metadata** |
+| **MCP and skills map** | **Selected skill details** |
 | --- | --- |
-| ![MCP inventory keeps configured aliases separate from observed running tools](docs/screenshots/desktop-capabilities-dark.png) | ![Skill folders and optional declared purpose do not establish activation](docs/screenshots/desktop-skills-dark.png) |
+| ![Capability map connects agents to declared MCP and skill sources while runtime candidates remain separate](docs/screenshots/desktop-capabilities-dark.png) | ![Selecting a skill card reveals its source and optional declared purpose in the left inspector](docs/screenshots/desktop-skills-dark.png) |
 
 </details>
 
