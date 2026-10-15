@@ -22,6 +22,7 @@
     onstop,
     onstopall,
     onnavigate,
+    oncapabilities,
     now = Date.now(),
   }: {
     agent: Agent;
@@ -40,6 +41,8 @@
     onstop: (e: PortEntry) => void;
     onstopall: () => void;
     onnavigate?: (id: string) => void;
+    /** Opts into the separate, read-only configuration inventory workspace. */
+    oncapabilities?: () => void;
     now?: number;
   } = $props();
 
@@ -99,6 +102,9 @@
 
   {#if selected}
     <div class="body">
+      {#if oncapabilities}
+        <button type="button" class="act" onclick={oncapabilities}><Icon name="plug" size={12} />MCP &amp; skills{#if agent.capabilities?.inspected} · {agent.capabilities.mcp_servers.length} definitions · {agent.capabilities.skills.length} skill files{:else} · inspect sources{/if}</button>
+      {/if}
       <dl class="facts">
         {#each facts as f}
           <div class="fact lv-{f.level}">

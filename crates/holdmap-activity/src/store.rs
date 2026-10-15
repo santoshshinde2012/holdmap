@@ -96,6 +96,7 @@ fn compatible(existing: &ActivitySpan, incoming: &ActivitySpan) -> bool {
         && agrees(&existing.session_id, &incoming.session_id)
         && agrees(&existing.agent_id, &incoming.agent_id)
         && agrees(&existing.parent_agent_id, &incoming.parent_agent_id)
+        && agrees(&existing.mcp_server, &incoming.mcp_server)
         && (existing.pid.is_none() || incoming.pid.is_none() || existing.pid == incoming.pid)
         && (existing.process_started_at.is_none()
             || incoming.process_started_at.is_none()
@@ -140,6 +141,7 @@ fn merge(existing: &mut ActivitySpan, incoming: ActivitySpan) {
     existing.session_id = existing.session_id.take().or(incoming.session_id);
     existing.agent_id = existing.agent_id.take().or(incoming.agent_id);
     existing.parent_agent_id = existing.parent_agent_id.take().or(incoming.parent_agent_id);
+    existing.mcp_server = existing.mcp_server.take().or(incoming.mcp_server);
     existing.pid = existing.pid.or(incoming.pid);
     existing.process_started_at = existing.process_started_at.or(incoming.process_started_at);
     if existing.trace_id.is_empty() {

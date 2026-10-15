@@ -18,6 +18,7 @@ pub struct AgentsBuilder<'a> {
     recent: &'a dyn RecentProjects,
     detector: &'a dyn AgentDetector,
     tool_classifier: &'a dyn ToolClassifier,
+    capabilities: Option<&'a dyn CapabilityDiscovery>,
     project_cache: Arc<ProjectCache>,
     home: Option<PathBuf>,
     detect_projects: bool,
@@ -35,6 +36,7 @@ impl<'a> AgentsBuilder<'a> {
             recent: &NONE,
             detector: &CATALOG,
             tool_classifier: &TOOLS,
+            capabilities: None,
             project_cache: ProjectCache::global(),
             home: std::env::var_os("HOME")
                 .or_else(|| std::env::var_os("USERPROFILE"))
@@ -60,6 +62,13 @@ impl<'a> AgentsBuilder<'a> {
     /// Describe child tools with a custom classifier.
     pub fn with_tool_classifier(mut self, classifier: &'a dyn ToolClassifier) -> Self {
         self.tool_classifier = classifier;
+        self
+    }
+
+    /// Explicitly inspect supported capability configuration and skill file locations.
+    /// The default never invokes a provider or reads these sources.
+    pub fn with_capabilities(mut self, capabilities: &'a dyn CapabilityDiscovery) -> Self {
+        self.capabilities = Some(capabilities);
         self
     }
 
@@ -158,12 +167,50 @@ impl<'a> AgentsBuilder<'a> {
             })
             .collect();
         agents.sort_by(|a, b| a.name.cmp(&b.name).then(a.pid.cmp(&b.pid)));
+        if let Some(provider) = self.capabilities {
+            let mut contexts: HashMap<(String, Vec<PathBuf>), AgentCapabilities> = HashMap::new();
+            for agent in &mut agents {
+                if !agent.access.mine {
+                    agent.capabilities.limit("Capability inventory is restricted to agents with a confirmed current-account identity.");
+                    continue;
+                }
+                let mut projects = Vec::new();
+                for folder in &agent.folders {
+                    if folder.source == FolderSource::Recent
+                        || folder.evidence != Evidence::Observed
+                    {
+                        continue;
+                    }
+                    projects.push(folder.path.clone());
+                    if let Some(project) = &folder.project {
+                        projects.push(project.root.clone());
+                    }
+                }
+                // Root process folders come first; duplicate contexts can reuse a bounded pass.
+                let mut seen = HashSet::new();
+                projects.retain(|path| seen.insert(path.clone()));
+                let key = (agent.product.clone(), projects.clone());
+                if let Some(inventory) = contexts.get(&key) {
+                    agent.capabilities = inventory.clone();
+                } else if contexts.len() < capabilities::MAX_CAPABILITY_CONTEXTS {
+                    let inventory = provider.discover(&agent.product, &projects, platform);
+                    agent.capabilities = inventory.clone();
+                    contexts.insert(key, inventory);
+                } else {
+                    agent.capabilities.limit("Capability inventory is limited to 16 distinct agent/project contexts per report.");
+                }
+            }
+        }
 
         let mut limits = vec![
             "Folders are working directories and the agents' recent-project lists; open files aren't collected.".to_string(),
             "Remote hosts are shown by IP address; holdmap doesn't look names up.".to_string(),
-            "Chats, settings, tokens and credentials are never read.".to_string(),
-            "MCP servers are inferred from running executable or package names; tool calls and transports aren't observed.".to_string(),
+            if self.capabilities.is_some() {
+                "Capability inventory retains only aliases, switches, transport kinds, file locations and sanitized skill-header names/descriptions; other configuration values and skill instruction bodies are not exported.".to_string()
+            } else {
+                "Chats, settings, tokens and credentials are never read.".to_string()
+            },
+            "Running MCP candidates are inferred from executable or package names; inventory transports are configuration declarations, not verified connections. Capability inventory does not observe tool calls.".to_string(),
             "Recent projects are account-wide history, not proof this agent is working there.".to_string(),
         ];
         if platform == "macos" {
@@ -358,6 +405,7 @@ impl<'a> AgentsBuilder<'a> {
             process_ids: pids.to_vec(),
             tools,
             more_tools,
+            capabilities: AgentCapabilities::default(),
             folders,
             more_folders,
             ports,

@@ -11,6 +11,20 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+describe("capability inventory scope", () => {
+  it("requires an explicit request before setting the native capability inspection flag", async () => {
+    const api = await import("./api");
+    await api.agents();
+    await api.agents(true);
+    await api.agents(false);
+    expect(invoke.mock.calls).toEqual([
+      ["agents", { includeCapabilities: false }],
+      ["agents", { includeCapabilities: true }],
+      ["agents", { includeCapabilities: false }],
+    ]);
+  });
+});
+
 describe("history restart identity", () => {
   const recorded: HistoryEntry = { at_ms: 1000, port: 3000, protocol: "tcp", pid: 123, label: "node", command: ["private caller text must not be executed"], cwd: "/caller/folder", project: null, framework: null };
 

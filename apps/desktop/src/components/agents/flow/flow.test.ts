@@ -103,6 +103,25 @@ describe("flow UI evidence and recording", () => {
     expect(container.textContent).toContain("Status unknown");
     expect(container.textContent).not.toContain("No completion received");
   });
+  it("explains skill activation without a workflow outcome or fabricated name", () => {
+    const record = span({ kind: "skill", name: "Skill", provider: "claude", source: "otlp", status: "unknown", start_at_ms: null, end_at_ms: 2000, input_bytes: null });
+    const run = activityRuns([record])[0];
+    const timeline = render(ActivityTimeline, { run, chosen: null, onselect() {} });
+    expect(timeline.container.textContent).toContain("Skill activation (name not reported)");
+    expect(timeline.container.textContent).toContain("Activated");
+    expect(timeline.container.textContent).toContain("Activation reported");
+    expect(timeline.container.textContent).not.toContain("Ended");
+    expect(timeline.container.textContent).not.toContain("No completion received");
+    const inspector = render(FlowInspector, { graph: callGraph(run), chosen: spanNodeId(record), onclose() {} });
+    expect(inspector.container.textContent).toContain("not completion or success");
+    expect(inspector.container.textContent).toContain("cannot identify an installed skill");
+  });
+  it("shows reported MCP aliases without claiming a configured or running server match", () => {
+    const record = span({ name: "lookup", mcp_server: "filesystem" });
+    const inspector = render(FlowInspector, { graph: callGraph(activityRuns([record])[0]), chosen: spanNodeId(record), onclose() {} });
+    expect(inspector.container.textContent).toContain("filesystem · reported alias");
+    expect(inspector.container.textContent).toContain("does not establish a connection to a configured MCP server or a running process");
+  });
   it("renders supplied triage rows in their selected order with shown and total counts", () => {
     const first = span({ id: "first", name: "First call" }), second = span({ id: "second", name: "Second call" });
     const run = activityRuns([first, second])[0];

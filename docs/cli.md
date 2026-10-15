@@ -353,6 +353,8 @@ Arguments:
 
 Options:
   -w, --wide           Show full agent details, including processes and redacted command lines
+      --capabilities   Inspect bounded local MCP configuration and installed skill locations; no
+                       tool calls
       --flow           Show observed process, listener and TCP relationships; no call or payload
                        inference
       --stop-ports     Stop the unprotected ports each matching agent started (dev servers and

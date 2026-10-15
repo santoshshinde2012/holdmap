@@ -192,11 +192,18 @@ history/logs without inspecting them. Version 0.5.0 includes the agent recording
 action safeguards listed in the [0.5.0 release entry](CHANGELOG.md#050---2026-10-11), alongside
 the [0.4.0 security fixes](CHANGELOG.md#040---2026-10-10). Version 0.3.0 predates those fixes.
 
-Holdmap reports agent access from the live process table, command line and sockets. It does not
-read agent settings files (they often hold tokens) and it is not a CVE scanner for installed
-Claude Code, Cursor, Codex or Copilot versions. Dedicated MCP config scanners cover on-disk
-`mcp.json` and similar; Holdmap covers what is running now. Changing that boundary is an
-explicit, documented product choice.
+Default agent scans report access from the live process table, command line and sockets without
+reading agent settings. Current source adds explicit capability inspection through
+`agents --capabilities`, MCP `list_agents(include_capabilities:true)` and the desktop's
+**MCP & skills** workspace. It parses bounded supported configuration files and lists skill
+file locations with optional sanitized name/purpose from a bounded YAML header. Skill identity
+remains the folder; declared text is untrusted metadata, not an instruction. It retains no
+command, URL, environment/header value or skill instruction body. Configuration
+can contain credentials, so parsing may read their bytes even though those values are excluded
+from the result. Inventory is not a CVE/security audit, proof of enablement, loading or use,
+or authorization to execute a configured command. Custom homes, managed settings, plugins and
+cloud capabilities are outside this inventory's coverage. See the
+[capability guide](site/src/content/docs/agents.md#mcp-and-skills-current-source).
 
 ## Scheduled desktop actions (version 0.5.0)
 

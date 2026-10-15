@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { VisualGraph, VisualNode, VisualEdge } from "../../../lib/agent-flow/model";
   import { PROVIDER_LABEL, SOURCE_LABEL, STATUS_LABEL } from "../../../lib/agent-flow/model";
-  import { duration, isIncomplete, payloadSize } from "../../../lib/agent-flow/build";
+  import { activityStatus, duration, isIncomplete, payloadSize } from "../../../lib/agent-flow/build";
   import Icon from "../../Icon.svelte";
   let { graph, chosen, onclose }: { graph: VisualGraph; chosen: string | null; onclose: () => void } = $props();
   const node: VisualNode | undefined = $derived(graph.nodes.find((n) => n.id === chosen));
@@ -25,14 +25,17 @@
       <p>{n.evidence === "observed" ? "Observed in the operating system snapshot." : n.evidence === "inferred" ? "The tool role is inferred from process metadata. It does not prove a tool invocation." : "This identity could not be resolved from the snapshot."}</p>
     {:else if node?.span}
       {@const s = node.span}
-      <dl><dt>Type</dt><dd>{s.kind}</dd><dt>Status</dt><dd>{STATUS_LABEL[s.status]}</dd><dt>Provider</dt><dd>{PROVIDER_LABEL[s.provider]}</dd><dt>Source</dt><dd>{SOURCE_LABEL[s.source]}</dd><dt>Duration</dt><dd>{duration(s)}</dd>
+      <dl><dt>Type</dt><dd>{s.kind === "skill" ? "Skill activation" : s.kind}</dd><dt>Status</dt><dd>{activityStatus(s)}</dd><dt>Provider</dt><dd>{PROVIDER_LABEL[s.provider]}</dd><dt>Source</dt><dd>{SOURCE_LABEL[s.source]}</dd><dt>Duration</dt><dd>{duration(s)}</dd>
         <dt>Serialized input</dt><dd>{payloadSize(s.input_bytes)}</dd><dt>Serialized output</dt><dd>{payloadSize(s.output_bytes)}</dd>
         {#if s.pid != null}<dt>Reported PID</dt><dd>{s.pid} · unverified</dd>{/if}
+        {#if s.mcp_server}<dt>MCP server</dt><dd>{s.mcp_server} · reported alias</dd>{/if}
       </dl>
       {#if s.kind === "tool" || s.kind === "model"}
         <div class="payload" aria-label="Reported serialized payload sizes"><span>Input<strong>{s.input_bytes == null ? "Unknown" : payloadSize(s.input_bytes)}</strong></span><i aria-hidden="true">→</i><span>{s.kind === "tool" ? "Tool" : "Model"}<strong>{STATUS_LABEL[s.status]}</strong></span><i aria-hidden="true">→</i><span>Result<strong>{s.output_bytes == null ? "Unknown" : payloadSize(s.output_bytes)}</strong></span></div>
       {/if}
       {#if isIncomplete(s)}<p class="warning">No completion has been received. A requested call may not have executed.</p>{/if}
+      {#if s.kind === "skill"}<p>The integration reported a skill activation, not completion or success of its workflow. A hidden name cannot identify an installed skill.</p>{/if}
+      {#if s.mcp_server}<p>This alias does not establish a connection to a configured MCP server or a running process. Configuration and recorded usage are separate evidence.</p>{/if}
       <p>Reported by the configured integration. Sizes describe reported serialized payloads, not network traffic. Only allowlisted metadata is retained; prompt and tool-argument fields are excluded. Names are sanitized source labels.</p>
     {:else if edge}
       <dl><dt>From</dt><dd>{from?.label ?? "Unknown"}</dd><dt>To</dt><dd>{to?.label ?? "Unknown"}</dd><dt>Evidence</dt><dd>{edge.kind === "span_parent" ? "Integration reported" : edge.evidence}</dd>

@@ -62,6 +62,13 @@ Start recording, configure a supported exporter or `holdmap mcp --record-activit
 the endpoint and token for that same active collector. New recording sessions have new tokens.
 See [recording setup](../agents/#set-up-optional-recording).
 
+**Current-source MCP or skills are missing.** Published **0.7.1** does not include the new
+inventory or skill-activation projection. With a current-source build, explicitly open
+**Agents → MCP & skills**, pass `agents --capabilities`, or call MCP `list_agents` with
+`include_capabilities: true`. Read the coverage limits; custom homes and client policy are not
+resolved. Use matching current-source collector and client builds for new usage records.
+See [supported definitions and troubleshooting](../agents/#mcp-and-skills-current-source).
+
 **Environment variables.** `HOLDMAP_HOME` (config dir), `HOLDMAP_COLOR`, `HOLDMAP_TRACE`,
 `HOLDMAP_EDITOR`, plus `HOLDMAP_ACTIVITY_ENDPOINT` and private `HOLDMAP_ACTIVITY_TOKEN` for
 explicit local recording integrations. Project stacks use `.holdmap.toml`.

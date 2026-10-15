@@ -1,7 +1,8 @@
 //! Hook-specific lifecycle projection. Source payloads are never retained.
 
 use super::metadata::{
-    id_parts, integer, json_size, provider_label, safe_name, text, validate_span, MAX_DURATION_MS,
+    id_parts, integer, json_size, mcp_server_from_tool, mcp_server_name, provider_label, safe_name,
+    text, validate_span, MAX_DURATION_MS,
 };
 use crate::{ActivityError, ActivityKind, ActivitySpan, ActivityStatus, Provider, Source};
 use serde_json::Value;
@@ -144,6 +145,20 @@ pub fn normalize_hook(
         provider,
         source: Source::Hook,
         kind,
+        mcp_server: if kind == ActivityKind::Tool {
+            if provider == Provider::Claude && value.get("mcp_server").is_some() {
+                mcp_server_name(
+                    value
+                        .get("mcp_server")
+                        .and_then(|server| server.get("name"))
+                        .and_then(Value::as_str),
+                )
+            } else {
+                mcp_server_from_tool(&name)
+            }
+        } else {
+            None
+        },
         name,
         start_at_ms: started,
         end_at_ms: ended,

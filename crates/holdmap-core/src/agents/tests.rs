@@ -20,6 +20,112 @@ fn agents_builder(scan: &Scan) -> AgentsBuilder<'_> {
     ))
 }
 
+#[test]
+fn capabilities_are_opt_in_old_agent_json_defaults_to_unknown_and_names_are_searchable() {
+    let scan = scan_of(
+        vec![
+            proc(99, 1, "holdmap", &["holdmap"]),
+            proc(100, 1, "codex", &["codex"]),
+        ],
+        vec![],
+        "fixture",
+    );
+    let report = agents_builder(&scan)
+        .with_home(None)
+        .with_project_detection(false)
+        .build();
+    let mut agent = report.agents.into_iter().next().unwrap();
+    assert_eq!(agent.capabilities, AgentCapabilities::default());
+    let mut old = serde_json::to_value(&agent).unwrap();
+    old.as_object_mut().unwrap().remove("capabilities");
+    let old: Agent = serde_json::from_value(old).unwrap();
+    assert_eq!(old.capabilities, AgentCapabilities::default());
+    assert!(!agent.matches("capability-alias-fixture"));
+    agent.capabilities.mcp_servers.push(McpServerCapability {
+        id: "fixture-mcp".into(),
+        name: "capability-alias-fixture".into(),
+        scope: CapabilityScope::User,
+        source_path: "/fixture/config.toml".into(),
+        project_path: None,
+        transport: McpTransport::Unknown,
+        enabled: None,
+        evidence: Evidence::Observed,
+    });
+    assert!(agent.matches("CAPABILITY-ALIAS"));
+    agent.capabilities.skills.push(SkillCapability {
+        id: "fixture-skill".into(),
+        name: "skill-folder-fixture".into(),
+        declared_name: Some("Visible skill".into()),
+        description: Some("Review code with bounded metadata.".into()),
+        scope: CapabilityScope::User,
+        source_path: "/fixture/skill-folder-fixture/SKILL.md".into(),
+        project_path: None,
+        evidence: Evidence::Observed,
+    });
+    assert!(agent.matches("skill-folder-fixture"));
+    assert!(agent.matches("VISIBLE SKILL"));
+    assert!(agent.matches("bounded metadata"));
+}
+
+#[test]
+fn capability_contexts_are_reused_and_the_report_has_an_overall_discovery_bound() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    #[derive(Debug, Default)]
+    struct Inventory(AtomicUsize);
+    impl CapabilityDiscovery for Inventory {
+        fn discover(&self, _: &str, _: &[PathBuf], _: &str) -> AgentCapabilities {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            AgentCapabilities {
+                inspected: true,
+                ..Default::default()
+            }
+        }
+    }
+    let mut processes = vec![proc(99, 1, "holdmap", &["holdmap"])];
+    for index in 0..capabilities::MAX_CAPABILITY_CONTEXTS + 2 {
+        processes.push(at(
+            proc(100 + index as u32, 1, "codex", &["codex"]),
+            Path::new(&format!("/live/context-{index}")),
+        ));
+    }
+    // A repeated context must reuse the first report rather than consume another lookup.
+    processes.push(at(
+        proc(200, 1, "codex", &["codex"]),
+        Path::new("/live/context-0"),
+    ));
+    let scan = scan_of(processes, vec![], "fixture");
+    let provider = Inventory::default();
+    let report = agents_builder(&scan)
+        .with_home(None)
+        .with_project_detection(false)
+        .with_capabilities(&provider)
+        .build();
+    assert_eq!(
+        provider.0.load(Ordering::Relaxed),
+        capabilities::MAX_CAPABILITY_CONTEXTS
+    );
+    assert!(
+        report
+            .agents
+            .iter()
+            .find(|agent| agent.pid == 200)
+            .unwrap()
+            .capabilities
+            .inspected
+    );
+    let omitted: Vec<_> = report
+        .agents
+        .iter()
+        .filter(|agent| !agent.capabilities.inspected)
+        .collect();
+    assert_eq!(omitted.len(), 2);
+    assert!(omitted.iter().all(|agent| agent
+        .capabilities
+        .limits
+        .iter()
+        .any(|limit| limit.contains("16 distinct"))));
+}
+
 fn listen(addr: &str, port: u16, pid: u32) -> RawSocket {
     RawSocket {
         protocol: Protocol::Tcp,
@@ -486,6 +592,22 @@ fn recent_history_is_queried_only_for_confirmed_current_account_roots() {
         }
     }
 
+    #[derive(Debug, Default)]
+    struct RecordingCapabilities(AtomicUsize);
+    impl CapabilityDiscovery for RecordingCapabilities {
+        fn discover(&self, _: &str, projects: &[PathBuf], _: &str) -> AgentCapabilities {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            assert!(
+                projects.iter().all(|path| path.starts_with("/live")),
+                "capability discovery must not inspect account-wide recent projects"
+            );
+            AgentCapabilities {
+                inspected: true,
+                ..Default::default()
+            }
+        }
+    }
+
     let cases = [
         (
             "linux",
@@ -540,9 +662,11 @@ fn recent_history_is_queried_only_for_confirmed_current_account_roots() {
         }
         let scan = scan_of(processes, vec![], platform);
         let provider = RecordingRecent::default();
+        let capabilities = RecordingCapabilities::default();
         let report = agents_builder(&scan)
             .with_home(None)
             .with_recent(&provider)
+            .with_capabilities(&capabilities)
             .with_project_detection(false)
             .build();
         assert_eq!(
@@ -550,12 +674,18 @@ fn recent_history_is_queried_only_for_confirmed_current_account_roots() {
             roots.iter().filter(|(_, _, _, expected)| *expected).count(),
             "history must not be queried for other or unknown accounts on {platform}"
         );
+        assert_eq!(
+            capabilities.0.load(Ordering::Relaxed),
+            roots.iter().filter(|(_, _, _, expected)| *expected).count(),
+            "capability discovery must use the same confirmed-account boundary as history"
+        );
         for (pid, _, _, expected) in roots {
             let agent = report.agents.iter().find(|agent| agent.pid == pid).unwrap();
             assert_eq!(
                 agent.access.mine, expected,
                 "account access must use the same UID-first identity as history for PID {pid} on {platform}"
             );
+            assert_eq!(agent.capabilities.inspected, expected);
             let user_fact = agent
                 .access
                 .facts

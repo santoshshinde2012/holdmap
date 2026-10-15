@@ -260,7 +260,11 @@ Each fact is marked seen, inferred or unknown. From a card you can reveal a fold
 editor, or stop the unprotected ports that agent started. From **0.7.0**, the map zooms
 Computer → Footprint → Project from the same observed processes, sockets and folders; it does not invent communication
 between agents. Recent projects come from folder names
-only. Chats, agent settings and credential stores are not inspected. Recognized credentials in
+only. Default scans do not inspect chats, agent settings or credential stores. Current source's
+explicit [MCP & skills inspection](../agents/#mcp-and-skills-current-source) separately parses
+bounded configuration metadata and lists skill locations with optional sanitized YAML-header
+names/purposes; it excludes credential values and skill instruction bodies from its results.
+Recognized credentials in
 observed process arguments are redacted for display; redaction is heuristic. Remote hosts show as IP addresses. Click a port to
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
 `holdmap agents` and `holdmap agents AGENT --stop-ports` do the same in a terminal.

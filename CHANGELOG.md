@@ -10,6 +10,13 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- Opt-in MCP configuration and skill-file inventory for supported local agents through
+  Agents → MCP & skills, `agents --capabilities` and MCP `list_agents(include_capabilities:true)`.
+  It includes optional bounded skill-header names/purposes. Default scans stay off; inventory
+  never executes definitions or treats presence as use.
+- Calls labels sanitized reported MCP aliases and explicit Claude skill activations separately
+  from tool-call counts. Provider-redacted skill names and unreported outcomes remain unknown;
+  documented log-only setup keeps tool-detail/content logging disabled.
 - Settings → About identifies the running desktop copy and architecture, explains manual
   updates when automatic updates are unavailable, and links to the official desktop
   downloads and installation guide. The command palette also exposes desktop downloads.

@@ -7,7 +7,7 @@ order: 2
 holdmap finds the **AI coding agents** and **developer tools** on your machine and shows, for
 each one, the folders it works in, the ports and apps it started, the services and hosts it talks
 to, and what the OS says about its access. Every process fact is marked seen, inferred or unknown.
-Passive scans do not inspect chats, agent settings or credential stores. Recognized credentials
+Default scans do not inspect chats, agent settings or credential stores. Recognized credentials
 in observed process arguments are redacted for display; redaction is heuristic. Optional recording
 accepts a separate, strictly limited metadata projection from integrations you configure.
 
@@ -33,6 +33,10 @@ holdmap agents claude --stop-ports --yes       # stop unprotected ports that age
 holdmap agents --json                  # machine-readable report
 ```
 
+Current source also supports `holdmap agents --capabilities --json` for explicitly requested
+configuration/skill metadata. This addition is **Unreleased** and is not in the published
+**0.7.1** binaries; ordinary `agents` scans keep that inspection off.
+
 Each entry shows memory, CPU, process count, how many ports are stoppable, the parent process,
 child processes grouped as tools & apps it started, folder source labels (working dir / child cwd /
 recent), ports with roles, connections, and access facts.
@@ -51,7 +55,8 @@ matching known account, and do not establish current work by a particular runnin
   search includes both the listener owner and agents connected to it.
   Choosing **Agents** reveals **Overview** and **Flow** as action pills on the same toolbar row.
   **Overview** then reveals **Computer**, **Footprint** and **Project**; **Flow** reveals
-  **Connections** and **Calls**. Computer is this machine, the agents running on it, and observed
+  **Connections** and **Calls**. Current source also offers the explicit **MCP & skills**
+  inspection described below. Computer is this machine, the agents running on it, and observed
   outside systems, with parent `started` edges. **Footprint** shows folders, tools, ports and hosts
   across every agent. Click a folder to zoom into **Project** — only agents, ports, tools and hosts
   observed for that source tree — never sample or invented peers. **Hide cards** and **Legend** give the map the full width; both persist.
@@ -83,6 +88,149 @@ These terminal captures use isolated local fixtures:
 
 ![An 80-column terminal keeps agent identity visible while tool details scroll](../../../../docs/screenshots/tui-agents-narrow-dark.png)
 
+## MCP and skills (current source)
+
+These additions are [Unreleased](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#unreleased),
+not part of the published **0.7.1** installers. Open **Agents → MCP & skills** to explicitly
+inspect supported local configuration for the running current-account agents. The CLI equivalent
+is `holdmap agents --capabilities`, optionally with `--json`; MCP clients can call
+`list_agents` with `include_capabilities: true`. Ordinary scans do not inspect those files.
+
+### Four kinds of evidence
+
+| Evidence | Where to look | What it establishes | What stays unknown |
+| --- | --- | --- | --- |
+| **Configured MCP server** | MCP & skills | A server alias was found in a supported config file, with declared transport, scope, source path and any explicit enabled flag. | Whether this running client loaded it, approved it, connected to it or called a tool. |
+| **Skill file** | MCP & skills | A `SKILL.md` file exists in a supported skill directory. Its folder is the identity; optional declared name and purpose describe the file. | Whether the skill is valid, trusted, enabled, offered to the model or activated. |
+| **Running child tool** | Overview / Connections | The OS observed a process and its parent. A known executable signature can suggest an MCP server. | Its configured alias, negotiated transport and individual calls. |
+| **Recorded usage** | Flow → Calls | A configured integration explicitly reported a tool event, MCP alias or Claude skill activation. | Uninstrumented usage, authenticated process ownership and completion of an activated skill. |
+
+Nothing is launched, connected, installed or enabled by inventory inspection. Calls never joins
+an alias or skill name to an inventory row or process automatically. Matching names across two
+sources are insufficient evidence of ownership or use.
+
+These current-source browser captures use labelled sample definitions and process observations:
+
+| Configured MCP definitions | Skill file metadata |
+| --- | --- |
+| ![MCP inventory separates configured server aliases from observed running child tools](../../../../docs/screenshots/desktop-capabilities-dark.png) | ![Skill inventory shows folder identities, optional declared purpose and unknown activation](../../../../docs/screenshots/desktop-skills-dark.png) |
+
+| Light theme | Narrow window |
+| --- | --- |
+| ![MCP inventory in the light theme preserves source, scope and enablement evidence](../../../../docs/screenshots/desktop-capabilities-light.png) | ![MCP and skills inspection remains readable in a narrow window](../../../../docs/screenshots/desktop-capabilities-narrow-light.png) |
+
+### Inspect supported definitions
+
+Open **MCP & skills**, select the running agent and review **Configured MCP servers**, **Skill
+files** and the coverage limits. Source paths identify where each definition was found.
+An explicit enabled/disabled value is a declaration; a missing value stays **Unknown**. Client
+precedence, project trust, approval policy and effective loading are not resolved. Repeated
+aliases from different files remain separate definitions; Holdmap does not choose a winner.
+
+Skill identity stays the folder name even when the optional YAML header declares another name.
+Inspection reads a bounded prefix of `SKILL.md` to project only a sanitized declared name and
+one-line purpose, up to 300 characters. Missing, malformed or unsafe metadata is omitted; file
+presence can still be shown. The purpose is author-supplied text, not an instruction for Holdmap
+or proof that the skill behaves as described. Instruction bodies are not retained or executed.
+Only the scalar YAML `name` and `description` fields are projected as `declared_name` and
+`description`; other header fields are discarded. A strict opening/closing `---` header is
+required. Unsupported complex values for these two fields, duplicate keys, aliases, anchors,
+tags, malformed YAML or parser limits leave header metadata absent. Inspection neither expands
+aliases nor resolves includes. It does not validate the whole skill package.
+
+These are the supported default locations; `~` means the current account's home. Project paths
+mean observed working folders and known project roots, not arbitrary parent folders or recent
+folder history.
+
+| Client | MCP definitions | Skill directories |
+| --- | --- | --- |
+| Codex / Codex desktop | `~/.codex/config.toml` and `<project>/.codex/config.toml` | `.agents/skills` and `.codex/skills` under home and observed projects |
+| Claude Code | `~/.claude.json` user entries and matching private project entries; `<project>/.mcp.json` | `.claude/skills` under home and observed projects |
+| Cursor / Cursor agent | `.cursor/mcp.json` under home and observed projects | `.cursor/skills`, `.agents/skills`, `.claude/skills` and `.codex/skills` under those locations |
+| Claude Desktop | Manual `Claude/claude_desktop_config.json` under `~/Library/Application Support` on macOS or `%APPDATA%` on Windows | Not inspected |
+
+Skill directories are shallow, with one extra category or `.system` level. Custom config homes,
+other ancestor directories, managed settings, plugins, desktop extensions, connectors and cloud
+inventories are not inspected. Unsupported products/platforms, other accounts, symbolic links,
+reparse points and macOS privacy-protected locations are skipped. File, byte, entry, project,
+context and time limits bound inspection; the report preserves omissions and coverage limits.
+An empty list does not prove that no capabilities exist.
+
+The current collection bounds are explicit:
+
+| Bound | Scope and behavior |
+| --- | --- |
+| **16 agent contexts** | Per report; repeated matching contexts share their inventory, and additional contexts remain unknown. |
+| **8 observed projects** | Per context, alongside the account's supported default locations. |
+| **24 existing sources** | Per context, counting attempted reads of existing configuration/header files and skill directories. Missing default paths do not consume this allowance. |
+| **1 MiB total bytes** | Per context across configuration files and skill-header prefixes. |
+| **256 candidate entries** | Per context across MCP definitions and skill-directory entries; additional entries may remain unexamined. |
+| **64 MCP definitions and 64 skills retained** | Per context, with explicit omitted counts for additional definitions that were observed. Those counts do not estimate unexamined locations. |
+| **256 KiB per config; 8 KiB per skill prefix** | Oversized configs are skipped. Only a complete header within the skill prefix can contribute optional metadata. |
+| **256 YAML parser events; depth 8** | A more complex header contributes no metadata; the skill file can still appear. |
+| **100 ms cooperative deadline** | Per context, checked between filesystem/parser operations. It is not a hard OS timeout and cannot interrupt a blocked filesystem call. |
+
+The total-byte budget includes the bounded prefix read, even though bytes beyond its YAML
+delimiter are not parsed or retained. No background scan expands these limits or searches
+additional locations on your behalf.
+
+Inspection parses bounded JSON/TOML files, which may contain credential bytes, then projects
+only the allowed metadata. Command strings, arguments, URLs and environment/header values are
+excluded from the returned inventory. The skill prefix can contain additional text, but only
+allowed YAML-header metadata is retained. Source paths remain visible for manual inspection.
+This inventory does not audit a server or skill for safety or authorize its command to run.
+
+The same explicit inspection is available without the desktop:
+
+```sh
+holdmap agents --capabilities             # detailed current-account inventory
+holdmap agents claude --capabilities --json
+```
+
+For MCP, send a `tools/call` request to a current-source Holdmap server:
+
+```json
+{"name":"list_agents","arguments":{"include_capabilities":true}}
+```
+
+The default `include_capabilities` is false. Inventory does not run in ordinary scans, and
+`--capabilities` cannot be combined with `--flow` or `--stop-ports`.
+
+### Understand explicit usage
+
+Calls can show a sanitized MCP server alias only from explicit Claude hook metadata or an
+unambiguous `mcp__server__tool` label. The standard MCP protocol does not require this naming
+convention. Claude skill activation logs are separate from tool-call counts. Provider-redacted
+custom skill names stay **name not reported**, and activation never establishes completion or
+success. See the [recording contract and optional log-only setup](https://github.com/santoshshinde2012/holdmap/blob/main/docs/agent-flow.md#record-skill-activations-current-source).
+
+Use matching current-source CLI/desktop and collector builds for these unreleased usage
+fields. The new decoder accepts older snapshots with no MCP alias, but the published 0.7.1
+decoder rejects new fields or the new skill kind. An older collector cannot report this new
+skill event; absent records do not prove that no skill was used.
+
+### Troubleshoot missing capabilities or usage
+
+- **Not inspected:** open MCP & skills or pass the explicit CLI/MCP option. Only confirmed
+  current-account agents are eligible; process visibility alone does not grant config access.
+- **Empty or partial inventory:** read the displayed limits and check the supported paths
+  above. Custom homes, inherited/plugin definitions, unreadable or linked files and bounded
+  scans can omit definitions. Check the client's own config without changing file permissions
+  or enabling an unknown server just to make it appear.
+- **Unknown enablement or purpose:** the file may omit an explicit switch or a safe, supported
+  YAML header. Holdmap does not resolve client policy or validate skill packages.
+- **Configured server with no Calls:** inventory is independent of recording. Configure a
+  supported producer, start a fresh recording and restart that producer with its new endpoint
+  and token. Keep private setup credentials out of bug reports.
+- **Skill name not reported or no activation:** producer versions and telemetry policies vary;
+  default custom names can be redacted. Use the documented log-only option if needed, without
+  enabling detailed tool logging. Do not infer absence or a successful workflow from silence.
+
+The boundaries follow the [MCP tools specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools),
+[Agent Skills specification](https://agentskills.io/specification) and
+[Claude skill telemetry](https://code.claude.com/docs/en/monitoring-usage#skill-activated-event).
+Local inventory and observed activation answer different questions.
+
 ## Open an agent folder
 
 Folder actions are available from **0.5.0**: click a folder on the map or its name/path in an
@@ -112,7 +260,7 @@ In **Agents**, choose **Flow**. The two data sources answer different questions:
 | View | What it shows | What it cannot establish |
 | --- | --- | --- |
 | **Connections** | Observed parent processes, listener ownership and live TCP socket relationships, including the source process IDs. Tool roles may be inferred. | Individual tool invocations, messages, data direction or transferred bytes. |
-| **Calls** | Tool, model, agent, handoff and execution-step metadata supplied by a configured integration, with status, timing and reported parent spans. | Uninstrumented activity, private message content or verified OS process ownership. |
+| **Calls** | Tool, model, agent, handoff and execution-step metadata supplied by a configured integration, with status, timing and reported parent spans. Current source also shows explicit skill activations separately. | Uninstrumented activity, private message content or verified OS process ownership. |
 
 The graph has zoom, fit and a minimap. Participants, relationships and the activity timeline
 provide keyboard-accessible ways to inspect the same evidence. **Hide inspector**, **Hide
@@ -195,11 +343,10 @@ Access covers the account the process runs as, sandbox and approval flags, netwo
 (on macOS) protected folders. Each fact carries evidence: **seen**, **inferred** or **unknown**.
 Unknown is labelled on cards so you never mistake a guess for a measurement.
 
-Facts come from the live process table, command line and sockets. Holdmap does **not** read
-agent settings (`~/.claude.json`, `~/.codex/config.toml`, `.cursor/mcp.json` and similar), so
-YOLO or sandbox modes that exist only in those files stay **unknown**. Dedicated scanners such
-as [mcp-scan](https://www.npmjs.com/package/owasp-mcp-scan) cover installed MCP configs; Holdmap
-covers what is running now.
+Access facts come from the live process table, command line and sockets. Default scans do not
+read agent settings, so YOLO or sandbox modes that exist only there stay **unknown**. The
+separate, explicit [MCP & skills inventory](#mcp-and-skills-current-source) does not interpret
+those files as permission grants, change process protection or replace a dedicated security audit.
 
 Network facts name well-known debug and model-server ports (Node inspector, Chrome DevTools,
 Ollama). Names taken from the port number are **inferred**; names taken from a detected

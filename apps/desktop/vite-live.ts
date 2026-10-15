@@ -27,7 +27,7 @@ function portArg(url: URL): string {
 
 const routes: Record<string, Route> = {
   scan: (url) => ["list", "--json", ...(url.searchParams.get("all") === "1" ? ["--all"] : [])],
-  agents: () => ["agents", "--json"],
+  agents: (url) => ["agents", "--json", ...(url.searchParams.get("capabilities") === "1" ? ["--capabilities"] : [])],
   topology: (url) => ["graph", "--json", ...(url.searchParams.get("all") === "1" ? ["--all"] : [])],
   agent_flow: () => ["agents", "--flow", "--json"],
   explain: (url) => ["explain", portArg(url), "--json"],

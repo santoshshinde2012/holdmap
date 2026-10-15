@@ -80,6 +80,185 @@ fn hooks_project_only_metadata_and_serialized_sizes() {
 }
 
 #[test]
+fn mcp_aliases_require_explicit_metadata_or_an_unambiguous_sanitized_tool_label() {
+    for (name, expected) in [
+        ("mcp__filesystem__read_file", Some("filesystem")),
+        ("mcp__server-name__lookup", Some("server-name")),
+        ("mcp__one__two__lookup", None),
+        ("mcp__server___lookup", None),
+        ("mcp____lookup", None),
+        ("mcp__server__", None),
+        ("mcp_other", None),
+        ("mcp__ghp_fixturecredential__lookup", None),
+    ] {
+        let mut raw = hook("PreToolUse", "mcp-fixture");
+        raw["tool_name"] = json!(name);
+        let record = normalize_hook(Provider::Claude, &raw, 10)
+            .unwrap()
+            .remove(0);
+        assert_eq!(record.mcp_server.as_deref(), expected);
+    }
+    let mut raw = hook("PreToolUse", "explicit-mcp");
+    raw["tool_name"] = json!("mcp_tool");
+    raw["mcp_server"] = json!({"name":"local-files","source":"project","url":"https://private.invalid","headers":{"Authorization":"private-bearer"}});
+    let record = normalize_hook(Provider::Claude, &raw, 10)
+        .unwrap()
+        .remove(0);
+    assert_eq!(record.mcp_server.as_deref(), Some("local-files"));
+    let encoded = serde_json::to_string(&record).unwrap();
+    assert!(!encoded.contains("private.invalid") && !encoded.contains("private-bearer"));
+    for alias in [
+        "/private/skill",
+        "ghp_fixturecredential",
+        "Tool execution",
+        "...",
+        "",
+    ] {
+        raw["mcp_server"]["name"] = json!(alias);
+        assert!(normalize_hook(Provider::Claude, &raw, 10).unwrap()[0]
+            .mcp_server
+            .is_none());
+    }
+}
+
+#[test]
+fn mcp_aliases_enrich_lifecycle_updates_but_conflicts_do_not_merge() {
+    let first = span("mcp-merge");
+    let mut next = first.clone();
+    next.mcp_server = Some("filesystem".into());
+    let mut store = ActivityStore::new();
+    store.ingest(vec![first, next.clone()], 0);
+    assert_eq!(
+        store.snapshot().spans[0].mcp_server.as_deref(),
+        Some("filesystem")
+    );
+    next.mcp_server = Some("another-server".into());
+    assert_eq!(store.ingest(vec![next], 0), (0, 1));
+    assert_eq!(
+        store.snapshot().spans[0].mcp_server.as_deref(),
+        Some("filesystem")
+    );
+}
+
+fn skill_log(name: &str, sequence: u64) -> Value {
+    json!({"eventName":"claude_code.skill_activated","timeUnixNano":"2000000000","attributes":[
+        attribute("session.id",json!({"stringValue":"fixture-skill-session"})),
+        attribute("event.sequence",json!({"intValue":sequence.to_string()})),
+        attribute("skill.name",json!({"stringValue":name})),
+        attribute("event.timestamp",json!({"stringValue":"2026-10-15T08:00:00Z"})),
+        attribute("success",json!({"boolValue":true})),
+        attribute("duration_ms",json!({"intValue":"999"})),
+        attribute("tool_input",json!({"stringValue":"private-arguments"})),
+        attribute("tool_result_size_bytes",json!({"intValue":"999"}))
+    ]})
+}
+
+#[test]
+fn claude_skill_logs_report_activation_without_payloads_or_workflow_outcomes() {
+    let raw = logs(vec![
+        skill_log("pdf", 1),
+        skill_log("custom_skill", 2),
+        skill_log("ghp_fixturecredential", 3),
+    ]);
+    let batch = normalize::otlp(&raw, false, 500).unwrap();
+    assert_eq!(batch.dropped, 0);
+    assert_eq!(batch.spans.len(), 3);
+    assert_eq!(batch.spans[0].name, "pdf");
+    assert_eq!(batch.spans[1].name, "Skill");
+    assert_eq!(batch.spans[2].name, "Skill (name redacted)");
+    for record in &batch.spans {
+        assert_eq!(record.kind, ActivityKind::Skill);
+        assert_eq!(record.provider, Provider::Claude);
+        assert_eq!(record.status, ActivityStatus::Unknown);
+        assert_eq!(record.end_at_ms, Some(2_000));
+        assert!(record.start_at_ms.is_none() && record.duration_ms.is_none());
+        assert!(record.input_bytes.is_none() && record.output_bytes.is_none());
+        assert!(record.mcp_server.is_none());
+    }
+    let encoded = serde_json::to_string(&batch.spans).unwrap();
+    assert!(!encoded.contains("private-arguments") && !encoded.contains("fixture-skill-session"));
+    assert!(!encoded.contains("ghp_fixturecredential"));
+    let mut store = ActivityStore::new();
+    store.ingest(batch.spans.clone(), 0);
+    store.ingest(batch.spans, 0);
+    assert_eq!(store.snapshot().spans.len(), 3);
+}
+
+#[test]
+fn skill_events_require_source_identity_time_and_claude_attribution() {
+    for field in ["session.id", "event.sequence"] {
+        let mut raw = skill_log("pdf", 1);
+        raw["attributes"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|attribute| attribute["key"] != field);
+        let batch = normalize::otlp(&logs(vec![raw]), false, 500).unwrap();
+        assert_eq!((batch.spans.len(), batch.dropped), (0, 1));
+    }
+    let mut raw = skill_log("pdf", 1);
+    raw.as_object_mut().unwrap().remove("timeUnixNano");
+    raw["attributes"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|attribute| attribute["key"] != "event.timestamp");
+    assert_eq!(
+        normalize::otlp(&logs(vec![raw]), false, 500)
+            .unwrap()
+            .dropped,
+        1
+    );
+    let mut raw = skill_log("pdf", 1);
+    raw["eventName"] = json!("skill_activated");
+    assert_eq!(
+        normalize::otlp(&logs(vec![raw.clone()]), false, 500)
+            .unwrap()
+            .dropped,
+        1
+    );
+    let mut claude = logs(vec![raw]);
+    claude["resourceLogs"][0]["scopeLogs"][0]["scope"]["name"] = json!("claude_code");
+    assert_eq!(normalize::otlp(&claude, false, 500).unwrap().spans.len(), 1);
+}
+
+#[test]
+fn normalized_skill_activation_cannot_claim_execution_or_payloads() {
+    let mut record = normalize::otlp(&logs(vec![skill_log("pdf", 1)]), false, 500)
+        .unwrap()
+        .spans
+        .remove(0);
+    record.status = ActivityStatus::Ok;
+    assert_eq!(
+        normalize::normalized(&json!([record.clone()]))
+            .unwrap()
+            .dropped,
+        1
+    );
+    record.status = ActivityStatus::Unknown;
+    record.mcp_server = Some("filesystem".into());
+    assert_eq!(normalize::normalized(&json!([record])).unwrap().dropped, 1);
+    let mut old = serde_json::to_value(span("old-producer")).unwrap();
+    old.as_object_mut().unwrap().remove("mcp_server");
+    assert_eq!(normalize::normalized(&json!([old])).unwrap().spans.len(), 1);
+}
+
+#[test]
+fn current_snapshot_decoder_accepts_older_records_without_mcp_identity() {
+    // Published collectors omit the new optional field. Decode the actual snapshot
+    // shape, rather than only checking the normalized-event ingestion route.
+    let mut older_span = serde_json::to_value(span("older-snapshot")).unwrap();
+    older_span.as_object_mut().unwrap().remove("mcp_server");
+    let snapshot: ActivitySnapshot = serde_json::from_value(json!({
+        "spans": [older_span], "received": 1, "dropped": 0, "limits": []
+    }))
+    .unwrap();
+    assert_eq!(snapshot.spans.len(), 1);
+    assert_eq!(snapshot.spans[0].kind, ActivityKind::Tool);
+    assert!(snapshot.spans[0].mcp_server.is_none());
+    let encoded = serde_json::to_value(snapshot).unwrap();
+    assert!(encoded["spans"][0].get("mcp_server").is_none());
+}
+
+#[test]
 fn credential_path_control_and_free_text_names_are_redacted() {
     for name in [
         "ghp_secret123",
@@ -801,6 +980,43 @@ fn http_hook_routes_preserve_provider_specific_lifecycle_rules() {
         .iter()
         .all(|span| span.source == Source::Hook));
     assert_ne!(snapshot.spans[0].id, snapshot.spans[1].id);
+}
+
+#[test]
+fn http_projects_skill_activations_and_mcp_aliases_without_retaining_source_payloads() {
+    let collector = ActivityCollector::new();
+    let credentials = collector.start().unwrap();
+    let payload = serde_json::to_string(&logs(vec![skill_log("custom_skill", 0)])).unwrap();
+    assert_eq!(
+        exchange(
+            &credentials,
+            &request(&credentials, "POST", "/v1/logs", "", &payload)
+        )
+        .0,
+        200
+    );
+    let mut raw = hook("PostToolUse", "mcp-http");
+    raw["tool_name"] = json!("mcp__filesystem__lookup");
+    raw["tool_input"] = json!({"path":"/private/not-retained"});
+    let payload = serde_json::to_string(&raw).unwrap();
+    assert_eq!(
+        exchange(
+            &credentials,
+            &request(&credentials, "POST", "/v1/hooks/claude", "", &payload)
+        )
+        .0,
+        200
+    );
+    let client =
+        crate::client::LocalClient::new(&credentials.endpoint, &credentials.token).unwrap();
+    let snapshot = client.snapshot().unwrap();
+    assert_eq!(snapshot.spans.len(), 2);
+    assert_eq!(snapshot.spans[0].kind, ActivityKind::Skill);
+    assert_eq!(snapshot.spans[0].name, "Skill");
+    assert_eq!(snapshot.spans[1].mcp_server.as_deref(), Some("filesystem"));
+    assert!(!serde_json::to_string(&snapshot)
+        .unwrap()
+        .contains("/private/not-retained"));
 }
 
 #[test]

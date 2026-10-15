@@ -113,6 +113,7 @@ pub(super) fn test_agent(pid: u32, name: &str) -> Agent {
         process_ids: vec![pid],
         tools: Vec::new(),
         more_tools: 0,
+        capabilities: Default::default(),
         folders: Vec::new(),
         more_folders: 0,
         ports: Vec::new(),

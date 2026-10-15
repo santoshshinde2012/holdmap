@@ -72,6 +72,9 @@ pub struct Agent {
     /// Tools not listed.
     #[serde(default)]
     pub more_tools: usize,
+    /// Explicitly requested configuration/skill inventory, separate from runtime tools.
+    #[serde(default)]
+    pub capabilities: super::AgentCapabilities,
     /// Folders it works in.
     pub folders: Vec<AgentFolder>,
     /// Observed working folders not listed.
@@ -172,7 +175,8 @@ pub struct AgentTool {
 }
 
 impl Agent {
-    /// Match identity, owned PID, folder or displayed tool name without searching commands.
+    /// Match identity, owned PID, folder, tool/capability names or retained skill purpose,
+    /// without searching command lines or raw configuration values.
     pub fn matches(&self, query: &str) -> bool {
         let query = query.trim().to_lowercase();
         if query.is_empty() {
@@ -206,6 +210,21 @@ impl Agent {
                 .tools
                 .iter()
                 .any(|tool| tool.name.to_lowercase().contains(&query))
+            || self
+                .capabilities
+                .mcp_servers
+                .iter()
+                .any(|server| server.name.to_lowercase().contains(&query))
+            || self.capabilities.skills.iter().any(|skill| {
+                [
+                    &Some(skill.name.as_str()),
+                    &skill.declared_name.as_deref(),
+                    &skill.description.as_deref(),
+                ]
+                .into_iter()
+                .flatten()
+                .any(|value| value.to_lowercase().contains(&query))
+            })
     }
 }
 

@@ -16,6 +16,11 @@ function liveReads(): boolean {
   return useLiveCollector();
 }
 
+/** Production previews use examples; the local Vite collector reads real CLI metadata. */
+export function usesSampleData(): boolean {
+  return !isTauri && !liveReads();
+}
+
 function liveWrites(): never {
   throw new Error("Use the Holdmap desktop app to change running processes. The browser live collector is read-only.");
 }
@@ -299,11 +304,11 @@ export async function topology(all: boolean): Promise<Graph> {
   return { ...g, nodes: g.nodes.map((n) => (n.root_pid ? { ...n, cpu_percent: Math.round((n.cpu_percent + Math.random()) * 10) / 10 } : n)) };
 }
 
-/** The AI coding agents of the latest scan and their footprint. */
-export async function agents(): Promise<AgentsReport> {
-  if (isTauri) return call("agents");
-  if (liveReads()) return liveJson("agents");
-  return mockAgents({ ...MOCK_SNAPSHOT, taken_at_ms: Date.now() });
+/** Ordinary agent scans leave capability files alone; inspection is requested by its workspace. */
+export async function agents(includeCapabilities = false): Promise<AgentsReport> {
+  if (isTauri) return call("agents", { includeCapabilities });
+  if (liveReads()) return liveJson("agents", { capabilities: includeCapabilities });
+  return mockAgents({ ...MOCK_SNAPSHOT, taken_at_ms: Date.now() }, includeCapabilities);
 }
 
 /** OS process/socket relationships. Recorded calls are fetched independently. */

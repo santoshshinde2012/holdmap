@@ -88,6 +88,8 @@ export function agentMatches(a: Agent, query: string): boolean {
     ...a.processes.map((p) => p.name),
     ...a.folders.flatMap((f) => [f.path, f.label, f.project?.name ?? ""]),
     ...(a.tools ?? []).flatMap((t) => [t.name, TOOL_LABEL[t.kind], String(t.pid), t.cwd ?? "", ...t.ports.map((p) => `:${p} port:${p}`)]),
+    ...(a.capabilities?.inspected ? a.capabilities.mcp_servers.flatMap((server) => [server.name, "MCP server", server.scope, server.source_path, server.project_path ?? ""]) : []),
+    ...(a.capabilities?.inspected ? a.capabilities.skills.flatMap((skill) => [skill.name, skill.declared_name ?? "", skill.description ?? "", "skill SKILL.md", skill.scope, skill.source_path, skill.project_path ?? ""]) : []),
     ...a.ports.flatMap((p) => [`:${p.port} port:${p.port}`, p.project ?? "", p.framework ?? "", p.process ?? ""]),
     ...a.links.flatMap((l) => [l.address, `:${l.port} port:${l.port}`, l.service ?? "", l.process ?? ""]),
   ].join(" ").toLocaleLowerCase();

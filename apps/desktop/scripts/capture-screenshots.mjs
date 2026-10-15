@@ -168,6 +168,26 @@ async function openAgentFlow(page, calls = false) {
   }
 }
 
+async function openCapabilities(page, skill = false) {
+  await openAgents(page);
+  await page.getByRole("radio", { name: "MCP & skills", exact: true }).click();
+  const workspace = page.getByRole("region", { name: "MCP and skills workspace", exact: true });
+  await expect(workspace.getByText("Example inventory", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Inspect capabilities for Cursor, PID 52000", exact: true }).click();
+  if (skill) {
+    await page.getByRole("radio", { name: /^Skills/ }).click();
+    await page.getByRole("button", { name: "Inspect skill frontend-checks, Project scope", exact: true }).click();
+  } else {
+    await page.getByRole("radio", { name: /^MCP servers/ }).click();
+    await page.getByRole("button", { name: "Inspect MCP server filesystem, Project scope", exact: true }).click();
+  }
+  const detail = page.getByRole("complementary", { name: "Capability details", exact: true });
+  await expect(detail).toContainText(skill ? "frontend-checks/SKILL.md" : "/Users/dev/code/shop-web/.cursor/mcp.json");
+  await expect(detail).toContainText(skill ? "Check UI behavior, accessibility and responsive layouts" : "Configured does not mean connected, loaded or invoked");
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, "Capability workspace must fit the viewport");
+  assert.equal(await workspace.evaluate((element) => element.scrollWidth > element.clientWidth), false, "Capability workspace must not overflow horizontally");
+}
+
 // Clip actual DOM bounds; retain all four services when presenting the Compose cluster.
 async function boundedClip(page, locator, { height, padding = 0 } = {}) {
   const box = await locator.boundingBox();
@@ -178,6 +198,9 @@ async function boundedClip(page, locator, { height, padding = 0 } = {}) {
 }
 
 const captures = [
+  ...["dark", "light"].map((theme) => ({ name: `desktop-capabilities-${theme}.png`, theme, prepare: (page) => openCapabilities(page) })),
+  { name: "desktop-skills-dark.png", theme: "dark", prepare: (page) => openCapabilities(page, true) },
+  { name: "desktop-capabilities-narrow-light.png", theme: "light", viewport: { width: 560, height: 1000 }, prepare: (page) => openCapabilities(page, true) },
   ...["dark", "light"].map((theme) => ({ name: `desktop-about-${theme}.png`, theme, async prepare(page) {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("tab", { name: "About", exact: true }).click();

@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { ActivityRun } from "../../../lib/agent-flow/build";
-  import { duration, isIncomplete, missingParent, spanNodeId } from "../../../lib/agent-flow/build";
+  import { activityName, activityStatus, duration, isIncomplete, missingParent, spanNodeId } from "../../../lib/agent-flow/build";
   import { activityRows } from "../../../lib/agent-flow/triage";
-  import { PROVIDER_LABEL, STATUS_LABEL, type ActivitySpan } from "../../../lib/agent-flow/model";
+  import { PROVIDER_LABEL, type ActivitySpan } from "../../../lib/agent-flow/model";
   let { run, rows, chosen, onselect }: { run: ActivityRun; rows?: ActivitySpan[]; chosen: string | null; onselect: (id: string) => void } = $props();
   const spans = $derived(rows ?? activityRows(run));
   const time = (n: number | null) => n == null ? "Time unavailable" : new Date(n).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -14,12 +14,13 @@
   <ol>
     {#each spans as span (span.id)}
       <li><button type="button" class:chosen={chosen === spanNodeId(span)} aria-pressed={chosen === spanNodeId(span)} onclick={() => onselect(spanNodeId(span))}>
-        <span class="time">{time(span.start_at_ms ?? span.end_at_ms)}{#if span.start_at_ms != null || span.end_at_ms != null}<small>{span.start_at_ms != null ? "Started" : "Ended"}</small>{/if}</span>
-        <span class="body"><strong>{span.name}</strong><span>{span.kind} · {PROVIDER_LABEL[span.provider]}</span>
+        <span class="time">{time(span.start_at_ms ?? span.end_at_ms)}{#if span.start_at_ms != null || span.end_at_ms != null}<small>{span.kind === "skill" ? "Activated" : span.start_at_ms != null ? "Started" : "Ended"}</small>{/if}</span>
+        <span class="body"><strong>{activityName(span)}</strong><span>{span.kind === "skill" ? "Skill activation" : span.kind} · {PROVIDER_LABEL[span.provider]}</span>
+          {#if span.mcp_server}<small>MCP server: {span.mcp_server} · reported alias</small>{/if}
           {#if missingParent(span, run)}<small>Parent span not received</small>{/if}
           {#if isIncomplete(span)}<small>No completion received</small>{/if}
         </span>
-        <span class="status" class:error={span.status === "error"}>{STATUS_LABEL[span.status]}<small>{duration(span)}</small></span>
+        <span class="status" class:error={span.status === "error"}>{activityStatus(span)}<small>{duration(span)}</small></span>
       </button></li>
     {/each}
   </ol>

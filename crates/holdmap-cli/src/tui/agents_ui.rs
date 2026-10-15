@@ -482,6 +482,14 @@ fn detail_lines(agent: &Agent, report: &AgentsReport) -> Vec<Line<'static>> {
         )));
     }
     lines.push(Line::raw(""));
+    lines.push(heading("MCP & skills inventory"));
+    lines.push(muted(
+        "Run holdmap agents --capabilities to inspect local definitions and skill locations.",
+    ));
+    lines.push(muted(
+        "Process scans do not establish configuration, skill loading or use.",
+    ));
+    lines.push(Line::raw(""));
     lines.push(heading("Working folders & recent projects"));
     if agent.folders.is_empty() {
         lines.push(muted("No working folders visible."));

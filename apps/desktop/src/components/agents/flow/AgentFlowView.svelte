@@ -42,15 +42,16 @@
   const error = $derived(mode === "connections" ? flowError : activityError);
   const limits = $derived(mode === "connections" ? flowReport?.limits ?? [] : activity?.limits ?? []);
   const calls = $derived((activity?.spans ?? []).filter((s) => s.kind === "tool").length);
+  const skills = $derived((activity?.spans ?? []).filter((s) => s.kind === "skill").length);
   const selected = $derived(chosen && (graph.nodes.some((n) => n.id === chosen) || graph.edges.some((e) => e.id === chosen)) ? chosen : null);
   const canInspect = $derived(graph.nodes.length > 0 || (mode === "calls" && !!run));
   const canLimit = $derived(limits.length > 0 || (mode === "connections" && !!flowReport && (flowReport.omitted_nodes > 0 || flowReport.omitted_edges > 0)));
   const sourceLabel = $derived(demo ? "Example data" : mode === "connections" ? "OS snapshot" : "Reported activity");
   const sourceHint = $derived(mode === "connections"
     ? "See which processes own tools and listeners, and which endpoints have live sockets. Sockets do not reveal messages or data direction."
-    : "See recorded tool calls and parent spans from configured agents. Session membership and event order do not imply communication.");
-  const sourceTotals = $derived(mode === "connections" ? `${graph.nodes.length} participants · ${graph.edges.length} relationships` : `${calls} tool calls · ${activity?.spans.length ?? 0} spans`);
-  const runName = (r: typeof runs[number]) => `${r.spans.find((s) => s.kind === "agent")?.name ?? r.spans[0]?.name ?? r.label} · ${r.label.toLowerCase()} · ${r.calls} tool ${r.calls === 1 ? "call" : "calls"}`;
+    : "See reported tool calls, skill activations and parent spans. Session membership and event order do not imply communication or a match to configured capabilities.");
+  const sourceTotals = $derived(mode === "connections" ? `${graph.nodes.length} participants · ${graph.edges.length} relationships` : `${calls} tool calls${skills ? ` · ${skills} skill ${skills === 1 ? "activation" : "activations"}` : ""} · ${activity?.spans.length ?? 0} spans`);
+  const runName = (r: typeof runs[number]) => `${r.spans.find((s) => s.kind === "agent")?.name ?? r.spans[0]?.name ?? r.label} · ${r.label.toLowerCase()} · ${r.calls} tool ${r.calls === 1 ? "call" : "calls"}${r.skills ? ` · ${r.skills} skill ${r.skills === 1 ? "activation" : "activations"}` : ""}`;
   $effect(() => { if (!allRuns.some((r) => r.id === runId)) runId = runs[0]?.id ?? null; });
   $effect.pre(() => {
     const next = mode;

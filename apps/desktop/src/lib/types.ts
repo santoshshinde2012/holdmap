@@ -313,6 +313,11 @@ export interface AccessFact { topic: AccessTopic; level: AccessLevel; summary: s
 export interface AgentAccess { user: string | null; uid: number | null; root: boolean; mine: boolean; facts: AccessFact[] }
 export interface AgentTool { pid: number; ppid: number | null; name: string; kind: AgentToolKind; command: string; cwd: string | null; evidence: Evidence; ports: number[]; memory_bytes: number; cpu_percent: number }
 
+export type CapabilityScope = "user" | "project" | "local";
+export interface AgentMcpServer { id: string; name: string; scope: CapabilityScope; source_path: string; project_path: string | null; transport: "stdio" | "http" | "sse" | "unknown"; enabled: boolean | null; evidence: Evidence }
+export interface AgentSkill { id: string; name: string; declared_name?: string | null; description?: string | null; scope: CapabilityScope; source_path: string; project_path: string | null; evidence: Evidence }
+export interface AgentCapabilities { inspected: boolean; mcp_servers: AgentMcpServer[]; skills: AgentSkill[]; limits: string[]; more_mcp_servers: number; more_skills: number }
+
 export interface Agent {
   id: string;
   product: string;
@@ -334,6 +339,8 @@ export interface Agent {
   more_folders: number;
   tools: AgentTool[];
   more_tools: number;
+  /** Opt-in declaration/file inventory; never proof of loading or invocation. */
+  capabilities?: AgentCapabilities;
   ports: AgentPort[];
   links: AgentLink[];
   more_links: number;

@@ -118,9 +118,10 @@
   let selectedAgent = $state<string | null>(null);
   let agentQuery = $state("");
   let agentsRefreshing = $state(false);
+  let agentsError = $state<string | null>(null);
   let agentsStarted = $state(0);
   let agentFlowMode = $state<AgentFlowMode>("overview");
-  let agentSection = $state<"overview" | "flow">(prefGetChoice("agents.section", ["overview", "flow"], "overview"));
+  let agentSection = $state<"overview" | "flow" | "capabilities">(prefGetChoice("agents.section", ["overview", "flow", "capabilities"], "overview"));
   $effect(() => prefSet("agents.section", agentSection));
   let flowSource = $state<"connections" | "calls">(prefGetChoice("flow.source", ["connections", "calls"], "connections"));
   $effect(() => prefSet("flow.source", flowSource));
@@ -215,6 +216,8 @@
   });
   $effect(() => {
     if (view !== "agents") return;
+    // Opening MCP & skills explicitly includes bounded local configuration metadata.
+    agentSection;
     untrack(loadAgents); // same reason as above: loadAgents reads agentsReport
     if (!AgentsView) {
       import("./components/AgentsView.svelte").then((m) => { AgentsView = m.default; }).catch((e) => console.error("Couldn't load the agents map", e));
@@ -365,17 +368,20 @@
   }
 
   const pullAgents = createAgentReportLoader(api.agents, () => agentsReport, (report) => {
+    if (disposed) return;
     agentsReport = share(agentsReport, report);
     if (selectedAgent && !agentsReport.agents.some((a) => a.id === selectedAgent)) selectedAgent = null;
-  });
+  }, () => !disposed && view === "agents" && agentSection === "capabilities");
   async function loadAgents() {
     if (agentsRefreshing) return;
     agentsRefreshing = true;
     agentsStarted = Date.now();
     try {
       await pullAgents();
+      agentsError = null;
     } catch (e) {
-      if (view === "agents") toast("error", "Couldn't look up the agents", String(e));
+      agentsError = String(e);
+      if (view === "agents" && agentSection !== "capabilities") toast("error", "Couldn't look up the agents", String(e));
     } finally { agentsRefreshing = false; }
   }
   const flowLoader = createFlowLoader(api.agentFlow,
@@ -1489,12 +1495,12 @@
         icon="search"
         label="Search agents"
         labelHidden
-        placeholder="Search agents, tools, folders, PIDs…"
+        placeholder={agentSection === "capabilities" ? "Search MCP, skills, sources, PIDs…" : "Search agents, tools, folders, PIDs…"}
         clearable
         kbdHint={singleKeyShortcuts ? "/" : undefined}
         spellcheck="false"
         autocomplete="off"
-        aria-controls="agent-list"
+        aria-controls={agentSection === "capabilities" ? "agent-capabilities" : "agent-list"}
       />
       {:else}
       <TextField
@@ -1546,7 +1552,7 @@
   <div class="toolbar" role="toolbar" aria-label="View and filters">
     <ActionDock hinge={false} animate={false} label="View" bind:value={view} options={[{ value: "list", label: "List", icon: "list", title: singleKeyShortcuts ? "Port list (G)" : "Port list" }, { value: "graph", label: "Graph", icon: "graph", count: graph?.stats.edges || null, countLabel: linksLabel(graph?.stats.edges ?? 0), title: singleKeyShortcuts ? "Service graph (G)" : "Service graph" }, { value: "agents", label: "Agents", icon: "bot", count: agentsReport?.agents.length || null, countLabel: agentsReport ? `${agentsReport.agents.length} agents and tools` : undefined, title: singleKeyShortcuts ? "Agents, tools and apps (⇧A)" : "Agents, tools and apps" }]} />
     {#if view === "agents"}
-      <ActionDock label="Agents workspace" bind:value={agentSection} options={[{ value: "overview", label: "Overview", icon: "bot", title: "Agents, resources and access" }, { value: "flow", label: "Flow", icon: "branch", title: "Connections and recorded calls" }]} />
+      <ActionDock label="Agents workspace" bind:value={agentSection} options={[{ value: "overview", label: "Overview", icon: "bot", title: "Agents, resources and access" }, { value: "capabilities", label: "MCP & skills", icon: "plug", title: "Inspect local MCP configuration and installed skill locations" }, { value: "flow", label: "Flow", icon: "branch", title: "Connections and recorded calls" }]} />
       {#if agentSection === "overview"}
         <ActionDock label="Map picture" bind:value={picture} options={[
           { value: "context", label: "Computer", icon: "monitor", title: "Context: this computer, the agents on it, and systems they talk to" },
@@ -1614,10 +1620,11 @@
       <div class="graph-wrap agents-wrap">
         {#if AgentsView}
           <AgentsView bind:section={agentSection} bind:flowSource bind:picture bind:projectReady bind:projectCaption pictureChrome={false} report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
+            capabilitiesLoading={agentsRefreshing} capabilitiesError={agentsError} onrefreshcapabilities={() => { void loadAgents(); }}
             onselectagent={(id) => { const a = agentsReport?.agents.find((a) => a.id === id); if (a && !agentMatches(a, agentQuery)) agentQuery = ""; selectedAgent = id; }} onentry={openEntry}
             onreveal={revealAgentFolder} oneditor={openAgentFolder}
             onstop={(e, agentId) => requestStop(e, false, false, { agentId })} onstopall={requestStopAgentPorts}
-            {flowReport} {activity} {recording} {flowLoading} {activityLoading} {flowError} {activityError} demo={!api.isTauri}
+            {flowReport} {activity} {recording} {flowLoading} {activityLoading} {flowError} {activityError} demo={api.usesSampleData()}
             paused={flowPaused} onpausechange={(paused) => { flowPaused = paused; }} onflowmodechange={(mode) => { agentFlowMode = mode; }}
             onrefreshflow={() => { void flowLoader.request(); }} onrefreshactivity={() => { void activityLoader.request(); }}
             onstartrecording={startRecording} onstoprecording={stopRecording} onclearactivity={clearRecordedActivity}

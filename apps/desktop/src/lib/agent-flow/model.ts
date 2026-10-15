@@ -45,8 +45,10 @@ export interface ActivitySpan {
   parent_agent_id: string | null;
   provider: "codex" | "claude" | "open_telemetry" | "holdmap";
   source: "hook" | "otlp" | "mcp";
-  kind: "agent" | "tool" | "model" | "handoff" | "step";
+  kind: "agent" | "tool" | "model" | "handoff" | "step" | "skill";
   name: string;
+  /** Sanitized reported alias; never joins a configured server to a process. */
+  mcp_server?: string | null;
   start_at_ms: number | null;
   end_at_ms: number | null;
   duration_ms: number | null;

@@ -252,6 +252,38 @@ fn agent_summary_reports_stdio_tools_resources_and_omissions() {
 }
 
 #[test]
+fn capability_inventory_survives_mcp_projection_without_becoming_runtime_evidence() {
+    let mut report = agents_fixture();
+    report.agents[0].capabilities = serde_json::from_value(json!({
+        "inspected": true,
+        "mcp_servers": [{"id":"configured:design","name":"design","scope":"project","source_path":"/srv/shop-web/.mcp.json","project_path":"/srv/shop-web","transport":"http","enabled":false,"evidence":"observed"}],
+        "skills": [{"id":"skill:review","name":"review","declared_name":"review","description":"Review UI behavior.","scope":"user","source_path":"/home/dev/.claude/skills/review/SKILL.md","project_path":null,"evidence":"observed"}],
+        "more_mcp_servers": 1, "more_skills": 2,
+        "limits": ["Loading and skill activation are unknown."]
+    })).unwrap();
+    let (text, data) = agents_result(report, &json!({"include_capabilities":true}));
+    assert!(text.contains("Configuration/installation does not establish loading or use."));
+    assert!(text.contains("disabled in configuration"));
+    assert!(text.contains("Skill folder review: user"));
+    assert!(text.contains("Purpose metadata: Review UI behavior."));
+    assert!(text.contains("Inventory omitted: 1 MCP definitions, 2 skills."));
+    assert_eq!(
+        data["agents"][0]["capabilities"]["mcp_servers"][0]["enabled"],
+        false
+    );
+    assert_eq!(
+        data["agents"][0]["capabilities"]["skills"][0]["description"],
+        "Review UI behavior."
+    );
+    assert_eq!(data["agents"][0]["tools"].as_array().unwrap().len(), 1);
+    validation::validate(
+        &data,
+        &catalog::definition("list_agents").unwrap()["outputSchema"],
+    )
+    .unwrap();
+}
+
+#[test]
 fn empty_agent_results_preserve_collection_limits_and_filter_context() {
     let report = AgentsReport {
         limits: vec!["The process table could not be collected.".into()],
@@ -319,6 +351,11 @@ fn invalid_tool_arguments_return_actionable_errors() {
         ("get_topology", json!({"all": "true"})),
         ("get_topology", json!({"format": "html"})),
         ("list_agents", json!({"agent": 42})),
+        ("list_agents", json!({"include_capabilities": "true"})),
+        (
+            "list_agents",
+            json!({"include_capabilities": "/private/config.json"}),
+        ),
         ("stop_agent_ports", json!({})),
         ("stop_agent_ports", json!({"agent": 42})),
         ("stop_agent_ports", json!({"agent": ""})),
