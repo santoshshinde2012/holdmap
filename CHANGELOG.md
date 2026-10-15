@@ -709,7 +709,9 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
-[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/santoshshinde2012/holdmap/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/santoshshinde2012/holdmap/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.4.0...v0.5.0

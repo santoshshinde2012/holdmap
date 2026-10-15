@@ -4,9 +4,9 @@ import { repoUrl, url } from "../lib/site";
 
 // Feature availability belongs to this release, even while a later version is assembling.
 const highlights = [
-  { icon: "Video", title: "Record a screen or window", text: "Capture up to two minutes, with local MP4 and GIF exports when encoding is supported. Review it again during the session. No audio is captured.", href: url("docs/desktop/#record-the-screen"), link: "Screen recording guide" },
-  { icon: "Layers", title: "Zoom from computer to project", text: "Explore Computer, Footprint and Project views of the same observed agents, tools, folders and ports. Select a folder to focus its source tree.", href: url("docs/agents/#desktop-and-tui"), link: "Explore the agents map" },
-  { icon: "Terminal", title: "Use live local development scans", text: "Desktop npm run dev reads your machine through the CLI. The website demo keeps its sample data; stopping real processes requires the desktop app.", href: url("docs/desktop/#develop-with-local-data"), link: "Local development setup" },
+  { icon: "Video", title: "Native recording on macOS", text: "New in 0.7.1: macOS 14 or later uses Apple's picker when the app window lacks browser screen sharing. Capture up to two minutes with local exports and no audio.", href: url("docs/desktop/#record-the-screen"), link: "Screen recording guide" },
+  { icon: "Layers", title: "Zoom from computer to project", text: "Introduced in 0.7.0: explore Computer, Footprint and Project views of observed agents, tools, folders and ports. Select a folder to focus its source tree.", href: url("docs/agents/#desktop-and-tui"), link: "Explore the agents map" },
+  { icon: "Terminal", title: "Use live local development scans", text: "Since 0.7.0, desktop npm run dev reads your machine through the CLI. The website demo keeps sample data; real process stops require the desktop app.", href: url("docs/desktop/#develop-with-local-data"), link: "Local development setup" },
 ];
 ---
 <section id="whats-new" class="section" aria-labelledby="release-title">
@@ -14,7 +14,7 @@ const highlights = [
     <div class="section-head head-row">
       <div>
         <span class="eyebrow">Release highlights</span>
-        <h2 class="h2" id="release-title">New in 0.7.0. <span class="soft">Capture, explore, and inspect locally.</span></h2>
+        <h2 class="h2" id="release-title">0.7.1 is here. <span class="soft">Screen recording on macOS.</span></h2>
       </div>
       <a class="link-arrow" href={url("docs/whats-new/")}>What's new <Icon name="ArrowRight" size={16} /></a>
     </div>
@@ -28,7 +28,7 @@ const highlights = [
         </li>
       ))}
     </ul>
-    <p class="release-note">Also in this release: stronger process-stop checks, more reliable MCP responses, and better keyboard and dialog focus handling. <a href={`${repoUrl}/releases/tag/v0.7.0`}>Read the full 0.7.0 release notes</a>.</p>
+    <p class="release-note">0.7.1 fixes native macOS capture while keeping the recording, map and local-development features introduced in 0.7.0. <a href={`${repoUrl}/releases/tag/v0.7.1`}>Read the full 0.7.1 release notes</a>.</p>
   </div>
 </section>
 

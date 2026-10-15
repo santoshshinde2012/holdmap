@@ -29,15 +29,16 @@ of a scan took (sockets, processes, containers). `--no-docker` skips container l
 `x64`. Current Windows and Linux desktop installers are x64. Linux ARM64 has a CLI archive,
 but no prebuilt desktop installer. Choose from [the platform downloads](../../#install).
 
-**The desktop still shows an older version.** Version **0.7.0** requires a manual update.
+**The desktop still shows an older version.** Version **0.7.1** requires a manual update.
 Download and install the current release for the same OS and architecture, then reopen it.
 The CLI installer updates the CLI, TUI and MCP server; it does not update the separate desktop app.
-No signed updater feed is included in 0.7.0.
+No signed updater feed is included in 0.7.1.
 
-**Record screen says “Screen capture unavailable” in the macOS app.** Current source adds
-Apple's native picker when the desktop webview lacks screen sharing, requiring **macOS 14
-or later**. The 0.7.0 installer predates that fallback. Install a release containing the fix
-and reopen the desktop app; updating the CLI does not update it. On older macOS versions,
+**Record screen says “Screen capture unavailable” in the macOS app.** Version **0.7.1**
+adds Apple's native picker when the desktop webview lacks screen sharing, requiring
+**macOS 14 or later**. The 0.7.0 installer predates that fallback. Download the **0.7.1 or
+newer desktop installer** from [Install](../../#install), install it and reopen the app;
+updating the CLI does not update it. On older macOS versions,
 try a browser with screen sharing or the system screen recorder. If the picker opens but
 capture is denied, check this app's Screen Recording permission in System Settings.
 See [screen recording](../desktop/#record-the-screen).
