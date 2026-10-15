@@ -168,7 +168,7 @@ transport just to generate text. Request bounds come from the collector's limits
 Native recording commands use one authorized, serialized session boundary. The CLI MCP
 adapter owns its bounded delivery queue and worker lifetime separately from activity commands.
 
-Current source adds an optional sanitized `mcp_server` label to tool records and a separate
+Version 0.8.0 adds an optional sanitized `mcp_server` label to tool records and a separate
 `skill` kind for explicit Claude activation logs. Skill records carry a source event time,
 pseudonymous session/counter identity and unknown workflow outcome; they do not increase tool
 call counts. Built-in adapters derive MCP aliases only from explicit hook metadata or an
@@ -176,10 +176,10 @@ unambiguous sanitized client label. Explicit normalized tool records can also re
 optional alias through `/v1/activity`, subject to the shared identifier sanitization and record
 validation. None creates a configuration/process join, authenticated identity or action authority. Default Claude
 setup stays trace-only; the documented alternate log-only recipe receives activation events
-without enabling tool-detail or content flags. These additions are Unreleased after 0.7.1.
+without enabling tool-detail or content flags.
 Current decoding accepts older snapshots with an omitted MCP alias. The strict older decoder
 does not accept newly populated fields or the skill kind, so new usage requires matching
-current-source collector and CLI/desktop builds; `/v1` route names do not promise unknown
+0.8.0 collector and CLI/desktop builds; `/v1` route names do not promise unknown
 record shapes will be accepted. This preserves rejection of unrecognized normalized fields.
 
 The browser adapter supplies labelled examples. Pure TypeScript builds reported parent edges,
@@ -498,7 +498,7 @@ holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop ap
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
 coordinate collection and confirmation, and present the returned types.
 
-This guide describes version 0.7.0 and current source. Screen recording, C4-style
+This guide describes version 0.8.0. Screen recording, C4-style
 agent-map zoom and live browser development scans are included from 0.7.0.
 Editor-extension identity, full-canvas Graph and Flow,
 and schedules started from the empty manager are in [0.6.0](../CHANGELOG.md#060---2026-10-14).
@@ -1036,7 +1036,7 @@ checking exact path membership in the current agent report. `stoppable_ports()` 
 normal core planning still decides which can be stopped. CLI, TUI, desktop and MCP preserve the
 agent-service stop controls without signalling the agent root merely because it is visible.
 
-### Optional capability inventory (current source)
+### Optional capability inventory (0.8.0)
 
 `CapabilityDiscovery` separates configured metadata from process-derived tools and recorded
 usage. The default `NoCapabilities` strategy performs no configuration inspection. Only explicit
@@ -1065,7 +1065,7 @@ observed projects, 24 existing file/directory sources, 256 candidate entries and
 configuration/header reads; individual configs are capped at 256 KiB and skill prefixes at
 8 KiB. At most 64 definitions of each kind are retained. The 100 ms context deadline is checked
 cooperatively between operations and cannot interrupt a blocked OS filesystem call. See the
-[detailed source and limit tables](../site/src/content/docs/agents.md#mcp-and-skills-current-source).
+[detailed source and limit tables](../site/src/content/docs/agents.md#mcp-and-skills).
 
 Configuration presence establishes neither loading, authorization nor invocation. Reported MCP
 aliases and skill activations stay in Calls without alias-only joins to an inventory or process.

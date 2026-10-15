@@ -1,6 +1,6 @@
 ---
 title: Desktop app
-description: "Use the holdmap desktop app for screen recording, agent map zoom, shortcuts and reviewed service stops or scheduled shutdown on macOS, Windows and Linux."
+description: "Use holdmap's desktop MCP and skills map, screen recording, update help and reviewed service stops or scheduled shutdown on macOS, Windows and Linux."
 order: 6
 ---
 
@@ -10,9 +10,11 @@ CLI, so process identity checks and process protections are shared. The CLI's pr
 `.holdmap.toml` settings apply to CLI and terminal UI actions.
 [Try it in the browser](../../#demo).
 
-**Version 0.7.1** adds native screen recording on macOS 14 or later when the desktop
-window lacks browser screen sharing. It includes the recorder, Computer / Footprint /
-Project map zoom and live `npm run dev` scans introduced in **0.7.0**. Check the
+**Version 0.8.0** adds the MCP and skills map, reported usage labels, clearer desktop
+update help and recording startup and cleanup fixes. It retains native screen recording on
+macOS 14 or later when the desktop window lacks browser screen sharing, introduced in
+**0.7.1**, and the recorder, Computer / Footprint / Project map zoom and live `npm run dev`
+scans introduced in **0.7.0**. Check the
 [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
 current installers.
 
@@ -86,7 +88,9 @@ From **0.7.1**, the macOS desktop app uses Apple's native screen picker on **mac
 later** when its window does not offer browser screen capture. Install the matching desktop
 download from [Install](../../#install), then reopen the app; a CLI update does not replace it.
 Native capture encodes MP4 and GIF in a private temporary folder, then removes those files
-after copying the exports into the preview or discarding the recording. The two-minute
+after copying the exports into the preview or discarding the recording, once pending native
+operations finish. Version **0.8.0** also fixes cancellation while native capture starts.
+The two-minute
 limit is enforced by the native app even while its window is hidden. Older macOS versions
 can record only when their webview provides screen sharing; otherwise use a supporting
 browser or the system screen recorder.
@@ -169,7 +173,7 @@ This Linux GTK dependency issue does not affect the CLI, TUI or
 MCP server, or the macOS and Windows desktop builds. See the
 [security policy](https://github.com/santoshshinde2012/holdmap/blob/main/SECURITY.md#linux-glib-dependency-backports).
 
-The **0.7.1** macOS app is ad-hoc signed and sealed, without Developer-ID signing or
+The **0.8.0** macOS app is ad-hoc signed and sealed, without Developer-ID signing or
 notarisation. Its Windows installers are unsigned. First verify the download using the
 checksums and build provenance linked from [Install](../../#install), then open it:
 
@@ -189,11 +193,10 @@ Quit Holdmap before replacing it, then reopen the installed copy. Check **Settin
 in that app to confirm its version; `holdmap --version` checks the separate CLI. A copy
 opened from a downloaded disk image or another folder can still be an older version.
 
-Current source also shows the running app's location and architecture in About, with
-desktop download and installation-guide actions. Builds without automatic updates explain
-the manual quit/install/reopen steps. These additions are listed under
-[Unreleased](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#unreleased);
-the published **0.7.1** app still needs the manual installation described above.
+From **0.8.0**, About also shows the running app's location and architecture, with desktop
+download and installation-guide actions. The command palette can open desktop downloads too.
+This release has no configured signed updater feed; follow the manual quit/install/reopen
+steps above. Browser About identifies the web preview and omits desktop app locations.
 
 ## Develop with local data
 
@@ -260,8 +263,8 @@ Each fact is marked seen, inferred or unknown. From a card you can reveal a fold
 editor, or stop the unprotected ports that agent started. From **0.7.0**, the map zooms
 Computer → Footprint → Project from the same observed processes, sockets and folders; it does not invent communication
 between agents. Recent projects come from folder names
-only. Default scans do not inspect chats, agent settings or credential stores. Current source's
-explicit [MCP & skills inspection](../agents/#mcp-and-skills-current-source) separately parses
+only. Default scans do not inspect chats, agent settings or credential stores. From **0.8.0**,
+explicit [MCP & skills inspection](../agents/#mcp-and-skills) separately parses
 bounded configuration metadata and lists skill locations with optional sanitized YAML-header
 names/purposes; it excludes credential values and skill instruction bodies from its results.
 Recognized credentials in
@@ -269,14 +272,20 @@ observed process arguments are redacted for display; redaction is heuristic. Rem
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
 `holdmap agents` and `holdmap agents AGENT --stop-ports` do the same in a terminal.
 
-Current source also gives **MCP & skills** an Overview-style graphical map. Agent cards sit
+Version **0.8.0** gives **MCP & skills** an Overview-style graphical map. Agent cards sit
 between declared MCP definitions and skill files; running MCP candidates remain separate below.
 Select a card with a click, **Enter** or **Space** to open its source, purpose and evidence in
 the left inspector. Close it or press **Esc** to return to the agent rail without losing the
 agent scope. No inspector opens automatically. **Filters** reveals scope/state controls and
 **Coverage** reveals grouped collection notes only on request. A narrow window uses a
-dismissible **Browse agents** drawer. This interface is **Unreleased**, separate from the
-published 0.7.1 downloads; see the [capability guide](../agents/#mcp-and-skills-current-source).
+dismissible **Browse agents** drawer. See the [capability guide](../agents/#mcp-and-skills)
+for supported provider locations and collection limits. Configuration presence does not
+establish that the client loaded a definition or used a skill.
+
+In **Flow → Calls**, approved activity metadata can label a reported MCP server alias or
+explicit Claude skill activation. These labels are separate from configuration inventory;
+matching names do not prove use by a particular process. Set up
+[optional recording](../agents/#set-up-optional-recording) to collect supported metadata.
 
 Version 0.4.0 also lets you search by agent, child tool, folder, exact PID or
 `port:3000`. Likely MCP server children appear even without a listening socket; expanded cards

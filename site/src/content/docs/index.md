@@ -32,9 +32,10 @@ package is attached to the GitHub release as a tarball.
 
 After installation, compare `holdmap --version` with the
 [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest).
-[What's new in 0.7.1](whats-new/) covers native macOS recording fixes, local MP4/GIF capture and
-Computer / Footprint / Project agent maps. For an
-existing desktop installation, download the matching new installer; **0.7.1** has no configured
+[What's new in 0.8.0](whats-new/) covers the MCP and skills map, reported usage labels,
+desktop update help and recording cleanup. Local MP4/GIF capture and Computer / Footprint /
+Project maps remain available. For an existing desktop installation, download the matching
+new installer; **0.8.0** has no configured
 signed updater feed. Rerun the CLI installer to update the command-line tool.
 
 ## Your first minute
@@ -42,6 +43,7 @@ signed updater feed. Rerun the CLI installer to update the command-line tool.
 ```sh
 holdmap list                 # every listening port, grouped by kind
 holdmap agents               # AI agents and tools, with folders / ports / access
+holdmap agents --capabilities # opt into bounded local MCP and skill metadata
 holdmap explain 3000         # who holds it, why, and what to do
 holdmap inspect 3000         # owner, process tree, connections, bind risk and the stop plan
 holdmap stop 3000 --dry-run  # show exactly what stop would do
@@ -68,6 +70,7 @@ the normal identity and protection checks still apply.
 | Ports open to the network | `holdmap list --exposed` |
 | Which services talk to which | `holdmap graph` |
 | Which agents and tools are running | `holdmap agents` |
+| Inspect local MCP definitions and skills | `holdmap agents --capabilities` |
 | Stop ports one agent started | `holdmap agents claude --stop-ports --dry-run` |
 | Another machine's ports | `holdmap ssh devbox` |
 
@@ -77,6 +80,7 @@ Every read command takes `--json`. Exit codes: `0` ok, `1` busy, not found or ti
 ## Next steps
 
 - [Agents, tools and apps](agents/): folders, access, and stop what an agent started.
+- [MCP and skills](agents/#mcp-and-skills): opt-in configuration metadata, skill purposes and a graphical map.
 - [Project stacks](projects/): start and stop a project's services with `holdmap up` and `down`.
 - [Shell hook](shell-hook/): explain "port already in use" the moment it happens.
 - [MCP for AI agents](mcp/): let Claude, Cursor or VS Code read and free ports safely.

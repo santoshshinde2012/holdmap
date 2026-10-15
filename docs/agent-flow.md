@@ -3,10 +3,10 @@
 Version 0.5.0 adds **Agents → Flow** in the desktop and shared browser demo.
 Version 0.4.0 downloads predate this view; use 0.5.0 or newer for native recording.
 
-Current source adds explicit MCP server aliases and Claude skill activation records to Calls,
-alongside a separate opt-in **Agents → MCP & skills** inventory. These additions are
-[Unreleased](../CHANGELOG.md#unreleased), not present in the published 0.7.1 binaries.
-Use matching current-source CLI/desktop and collector builds for these records. The new
+Version 0.8.0 adds explicit MCP server aliases and Claude skill activation records to Calls,
+alongside a separate opt-in **Agents → MCP & skills** inventory. See the
+[0.8.0 release notes](../CHANGELOG.md#080---2026-10-16).
+Use matching 0.8.0 CLI/desktop and collector builds for these records. The new
 decoder accepts older snapshots with no MCP alias. An older 0.7.1 decoder rejects new fields
 or the skill kind, and its collector does not produce this new skill activation projection.
 The `/v1` route names remain unchanged; they do not imply forward-compatible decoding of
@@ -127,7 +127,10 @@ metadata without putting diagnostics into protocol stdout. Missing collector con
 recording failures leave MCP tools operational. Calls to other servers require their own
 instrumentation; this observer cannot see them.
 
-## Record skill activations (current source)
+<a id="record-skill-activations-current-source"></a>
+<a id="record-skill-activations"></a>
+
+## Record skill activations (0.8.0)
 
 Claude's documented `claude_code.skill_activated` OTLP **log** event reports activation through
 the Skill tool or a user slash command. Holdmap requires the reported session ID, event sequence
@@ -184,7 +187,7 @@ actual Codex OTel exporter, not private conversations or agent logs.
 | OS snapshot | Process ancestry, listeners and observed TCP peers | No tool calls, messages, encrypted payloads or stdio exchanges |
 | Codex OTLP JSON logs | Known tool result events, reported call/session IDs, result and duration | Session grouping is not a parent trace; finished events arrive in batches |
 | Claude enhanced OTLP JSON traces | Agent/model/tool wrappers, execution steps and supplied trace parents | Provider beta; spans arrive after completion, and dropped parents remain missing |
-| Claude OTLP JSON logs (current source) | Tool completions and explicit skill activation records | Log-only recipe; activation names can be redacted and activation never proves workflow success |
+| Claude OTLP JSON logs (0.8.0) | Tool completions and explicit skill activation records | Log-only recipe; activation names can be redacted and activation never proves workflow success |
 | Codex/Claude hooks | Supported lifecycle events with tool-use IDs | Requested state precedes execution; no guessed causal edges |
 | Holdmap MCP observer | This server's validated catalog calls and outcomes | Does not observe other MCP servers or general agent messages |
 | Generic OTLP JSON traces | Recognized agent, model, tool and execution-step operations with supplied parents | Exporter-specific coverage; no automatic SDK installation or universal capture |

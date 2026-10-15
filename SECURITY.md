@@ -178,7 +178,7 @@ local patch is safe, and the original advisory is not a false positive.
 desktop browser tests, cargo-deny, workflow validation and `npm audit` at all severities for
 both npm lockfiles. [Secret scanning](scripts/check-secrets.sh) checks full Git history and
 current source with Gitleaks. [CodeQL](.github/workflows/codeql.yml) covers JavaScript/TypeScript,
-Rust, Python and GitHub Actions. A [daily dependency workflow](.github/workflows/security.yml)
+Rust, Swift, Python and GitHub Actions. A [daily dependency workflow](.github/workflows/security.yml)
 rechecks advisories without waiting for a code change. Dependabot vulnerability alerts and
 automated security updates are enabled. [Architecture notes](docs/architecture.md)
 describe the boundaries and fixtures behind these checks.
@@ -193,7 +193,7 @@ action safeguards listed in the [0.5.0 release entry](CHANGELOG.md#050---2026-10
 the [0.4.0 security fixes](CHANGELOG.md#040---2026-10-10). Version 0.3.0 predates those fixes.
 
 Default agent scans report access from the live process table, command line and sockets without
-reading agent settings. Current source adds explicit capability inspection through
+reading agent settings. Version 0.8.0 adds explicit capability inspection through
 `agents --capabilities`, the terminal Agents **c** toggle, MCP `list_agents(include_capabilities:true)`
 and the desktop's **MCP & skills** workspace. Terminal inspection is scoped to the Agents
 pane; turning it off or leaving the pane clears retained inventory and revokes queued file
@@ -207,7 +207,7 @@ their bytes even though those values are excluded from the result. Inventory is 
 CVE/security audit, proof of enablement, loading or use, or authorization to execute a
 configured command. Custom homes, managed settings, plugins, VS Code profile MCP files and
 cloud capabilities are outside this inventory's coverage. See the
-[capability guide](site/src/content/docs/agents.md#mcp-and-skills-current-source).
+[capability guide](site/src/content/docs/agents.md#mcp-and-skills).
 
 ## Scheduled desktop actions (version 0.5.0)
 

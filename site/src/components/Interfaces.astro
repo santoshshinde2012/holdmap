@@ -42,6 +42,7 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
         <p>Look, act, wait and free ports from any shell or script — and see which agents and tools started them. Plain-English answers for people, <code>--json</code> for tools, and exit codes that mean something.</p>
         <ul class="ticks">
           <li><code>holdmap agents</code> maps agents, tools and apps to their footprint</li>
+          <li><code>holdmap agents --capabilities</code> explicitly inspects supported MCP definitions and skill files</li>
           <li><code>holdmap agents claude --stop-ports</code> stops only what that agent started</li>
           <li><code>holdmap explain 3000</code> says who holds it and what to do</li>
         </ul>
@@ -59,7 +60,8 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
         <p>Run <code>holdmap</code> with no arguments. Arrow through ports, filter as you type, browse the Agents tab, and stop with a confirm — all from the keyboard.</p>
         <ul class="ticks">
           <li>Same details as the desktop app: tree, memory, connections</li>
-          <li>Tab cycles Ports → Graph → Agents; <kbd>x</kbd> stops an agent’s ports</li>
+          <li>Tab cycles Ports → Graph → Agents; <kbd>x</kbd> reviews an agent’s service stops</li>
+          <li>In Agents, <kbd>c</kbd> toggles MCP/skill inspection; leaving the tab clears it</li>
           <li>Works over SSH sessions and in tmux</li>
         </ul>
       </div>
@@ -69,9 +71,10 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
     <div class="panel" role="tabpanel" id="if-desktop" aria-labelledby="if-tab-desktop" hidden>
       <div class="text">
         <h3>A desktop and tray app</h3>
-        <p>Ports, service graphs, Computer / Footprint / Project agent maps, local screen recording, pins, restart history and remote hosts over SSH. Your configurable global shortcut brings it up from any app.</p>
+        <p>Ports, service graphs, Computer / Footprint / Project agent maps, opt-in MCP and skill inventories, local screen recording, pins, restart history and remote hosts over SSH. Your configurable global shortcut brings it up from any app.</p>
         <ul class="ticks">
           <li>Agents map on <kbd>⇧</kbd><kbd>A</kbd>: zoom into a source tree, inspect access and review its service stops</li>
+          <li>MCP &amp; skills maps agents to inspected definitions and skill files; select a card for source, scope and any declared skill purpose</li>
           <li>Command palette on <kbd>⌘</kbd><kbd>K</kbd> / <kbd>Ctrl</kbd><kbd>K</kbd></li>
           <li>Record a screen or window with <kbd>⇧</kbd><kbd>V</kbd>; save available MP4 and GIF exports locally</li>
           <li>Review local shutdown, or schedule it and service stops. <a href={url("docs/desktop/#schedule-shutdown-or-a-service-stop")}>Desktop power guide</a></li>
@@ -87,8 +90,8 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
     <div class="panel" role="tabpanel" id="if-mcp" aria-labelledby="if-tab-mcp" hidden>
       <div class="text">
         <h3>An MCP server for AI agents</h3>
-        <p><code>holdmap mcp</code> gives coding assistants nine published tools: list ports, explain them, find a free port, wait, read the graph, see which agents and tools run where, stop the ports an agent started, plan a cluster stop (dry run only) and stop their own dev servers. Protected processes are always refused.</p>
-        <p>Current source also adds read-only <code>inspect_port</code> and <code>get_agent_flow</code>. These tools are Unreleased and need a matching server build.</p>
+        <p><code>holdmap mcp</code> gives coding assistants eleven tools for port inspection, readiness, service graphs, agent inventory and reviewed stops. Protected processes cannot be stopped.</p>
+        <p>Version 0.8.0 adds read-only <code>inspect_port</code> and <code>get_agent_flow</code>, plus opt-in MCP/skill metadata through <code>list_agents</code>. Observed relationships and configured definitions stay separate from recorded calls.</p>
         <p>A guide resource and workflow prompts help assistants use the tools. Results label inferred tools, incomplete collection and redacted commands.</p>
         <div class="code term-window">
           <div class="code-bar"><span>~/.cursor/mcp.json</span><button type="button" class="copy" data-copy={mcpJson} aria-label="Copy the MCP configuration"><Icon name="Copy" size={14} class="i-copy" /><Icon name="Check" size={14} class="i-done" /></button></div>

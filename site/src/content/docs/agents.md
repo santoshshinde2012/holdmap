@@ -1,6 +1,6 @@
 ---
 title: Agents, tools and apps
-description: Use holdmap to inspect AI coding agents, see which ports they started, and stop only those services.
+description: Use holdmap to inspect AI coding agents, map their MCP definitions and skill files, and review the services they started before stopping them.
 order: 2
 ---
 
@@ -33,9 +33,8 @@ holdmap agents claude --stop-ports --yes       # stop unprotected ports that age
 holdmap agents --json                  # machine-readable report
 ```
 
-Current source also supports `holdmap agents --capabilities --json` for explicitly requested
-configuration/skill metadata. This addition is **Unreleased** and is not in the published
-**0.7.1** binaries; ordinary `agents` scans keep that inspection off.
+Version **0.8.0** adds `holdmap agents --capabilities --json` for explicitly requested
+configuration and skill metadata. Ordinary `agents` scans keep that inspection off.
 
 Each entry shows memory, CPU, process count, how many ports are stoppable, the parent process,
 child processes grouped as tools & apps it started, folder source labels (working dir / child cwd /
@@ -53,20 +52,21 @@ matching known account, and do not establish current work by a particular runnin
   before anything opens.
   Search by agent, folder, tool, exact PID (`pid:51200`) or explicit port (`port:3001`). A port
   search includes both the listener owner and agents connected to it.
-  Choosing **Agents** reveals **Overview** and **Flow** as action pills on the same toolbar row.
+  Choosing **Agents** reveals **Overview**, **MCP & skills** and **Flow** as action pills on the same toolbar row.
   **Overview** then reveals **Computer**, **Footprint** and **Project**; **Flow** reveals
-  **Connections** and **Calls**. Current source also offers the explicit **MCP & skills**
-  inspection described below. Computer is this machine, the agents running on it, and observed
+  **Connections** and **Calls**. The **MCP & skills** workspace requires **0.8.0** and uses the
+  explicit inspection described below. Computer is this machine, the agents running on it, and observed
   outside systems, with parent `started` edges. **Footprint** shows folders, tools, ports and hosts
   across every agent. Click a folder to zoom into **Project** — only agents, ports, tools and hosts
   observed for that source tree — never sample or invented peers. **Hide cards** and **Legend** give the map the full width; both persist.
   The installed app and `npm run dev` read the live process table; the website demo uses labelled sample data.
 - **TUI:** start `holdmap`, then press **Shift+Tab** to open Agents directly. **Tab** cycles
   Ports → Graph → Agents. Use **↑/↓** to select an agent, **/** to search, and **PgUp/PgDn** to
-  scroll its details. **Current source (Unreleased):** **c** toggles local MCP/skill inspection
+  scroll its details. In **0.8.0**, **c** toggles local MCP/skill inspection
   for the current account. While enabled, Agents refreshes that inventory; pressing **c** again
-  or leaving Agents turns it off and clears retained inventory. Ordinary refreshes stay on the process table. Wide windows show both panes side by
-  side; small windows stack them. Mouse-wheel scrolling follows the hovered pane. **p** pauses,
+  or leaving Agents turns it off and clears retained inventory. Ordinary refreshes stay on the
+  process table. Wide windows show both panes side by side; small windows stack them.
+  Mouse-wheel scrolling follows the hovered pane. **p** pauses,
   **r** refreshes and **?** opens help. Selection follows the same agent across refreshes.
   Failed scans clearly mark cached data.
 - **Review a service stop:** press **x** to review every affected service and its exact TCP/UDP
@@ -91,10 +91,11 @@ These terminal captures use isolated local fixtures:
 
 ![An 80-column terminal keeps agent identity visible while tool details scroll](../../../../docs/screenshots/tui-agents-narrow-dark.png)
 
-## MCP and skills (current source)
+<a id="mcp-and-skills-current-source"></a>
 
-These additions are [Unreleased](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#unreleased),
-not part of the published **0.7.1** installers. Open **Agents → MCP & skills** to explicitly
+## MCP and skills
+
+Available in **0.8.0 or newer**. Open **Agents → MCP & skills** to explicitly
 inspect supported local configuration for the running current-account agents. The CLI equivalent
 is `holdmap agents --capabilities`, optionally with `--json`; the terminal Agents pane uses
 **c**; MCP clients can call `list_agents` with `include_capabilities: true`. Ordinary scans do
@@ -113,7 +114,7 @@ Nothing is launched, connected, installed or enabled by inventory inspection. Ca
 an alias or skill name to an inventory row or process automatically. Matching names across two
 sources are insufficient evidence of ownership or use.
 
-These current-source browser captures use labelled sample definitions and process observations:
+These browser captures use labelled sample definitions and process observations:
 
 | MCP and skills map | Selected skill details |
 | --- | --- |
@@ -237,7 +238,7 @@ holdmap agents claude --capabilities --json
 holdmap                                 # then Agents tab, press c
 ```
 
-For MCP, send a `tools/call` request to a current-source Holdmap server:
+For MCP, send a `tools/call` request to a Holdmap **0.8.0 or newer** server:
 
 ```json
 {"name":"list_agents","arguments":{"include_capabilities":true}}
@@ -256,11 +257,11 @@ are unverified source labels, never an automatic inventory/process join or actio
 The standard MCP protocol does not require this naming convention. Claude skill activation
 logs are separate from tool-call counts. Provider-redacted
 custom skill names stay **name not reported**, and activation never establishes completion or
-success. See the [recording contract and optional log-only setup](https://github.com/santoshshinde2012/holdmap/blob/main/docs/agent-flow.md#record-skill-activations-current-source).
+success. See the [recording contract and optional log-only setup](https://github.com/santoshshinde2012/holdmap/blob/main/docs/agent-flow.md#record-skill-activations-080).
 
-Use matching current-source CLI/desktop and collector builds for these unreleased usage
-fields. The new decoder accepts older snapshots with no MCP alias, but the published 0.7.1
-decoder rejects new fields or the new skill kind. An older collector cannot report this new
+Use **0.8.0 or newer** for both the CLI/desktop and the collector to read these usage
+fields. The 0.8.0 decoder accepts older snapshots with no MCP alias, but the 0.7.1
+decoder rejects new fields or the skill kind. An older collector cannot report this
 skill event; absent records do not prove that no skill was used.
 
 ### Troubleshoot missing capabilities or usage
@@ -314,7 +315,7 @@ In **Agents**, choose **Flow**. The two data sources answer different questions:
 | View | What it shows | What it cannot establish |
 | --- | --- | --- |
 | **Connections** | Observed parent processes, listener ownership and live TCP socket relationships, including the source process IDs. Tool roles may be inferred. | Individual tool invocations, messages, data direction or transferred bytes. |
-| **Calls** | Tool, model, agent, handoff and execution-step metadata supplied by a configured integration, with status, timing and reported parent spans. Current source also shows explicit skill activations separately. | Uninstrumented activity, private message content or verified OS process ownership. |
+| **Calls** | Tool, model, agent, handoff and execution-step metadata supplied by a configured integration, with status, timing and reported parent spans. Version 0.8.0 also shows explicit skill activations separately. | Uninstrumented activity, private message content or verified OS process ownership. |
 
 The graph has zoom, fit and a minimap. Participants, relationships and the activity timeline
 provide keyboard-accessible ways to inspect the same evidence. **Hide inspector**, **Hide
@@ -399,7 +400,7 @@ Unknown is labelled on cards so you never mistake a guess for a measurement.
 
 Access facts come from the live process table, command line and sockets. Default scans do not
 read agent settings, so YOLO or sandbox modes that exist only there stay **unknown**. The
-separate, explicit [MCP & skills inventory](#mcp-and-skills-current-source) does not interpret
+separate, explicit [MCP & skills inventory](#mcp-and-skills) does not interpret
 those files as permission grants, change process protection or replace a dedicated security audit.
 
 Network facts name well-known debug and model-server ports (Node inspector, Chrome DevTools,
