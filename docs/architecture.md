@@ -348,8 +348,10 @@ The terminal Agents view uses one background scan and one cached `AgentsReport`;
 navigation never collect processes or read project history. `tui/agents_view.rs` holds pure
 filter, count, safe-text and wrapping helpers, `tui/agents_state.rs` owns stable selection,
 search and review requests, and `tui/agents_ui.rs` renders the responsive list/details panes.
-`app.rs` coordinates keyboard events, worker messages and refresh sequencing. A refresh queued
-behind an in-flight scan discards its older response, including after a completed stop.
+`app.rs` coordinates keyboard events, worker messages and refresh sequencing. Agents **c**
+opts into `Engine::agents_with_capabilities()` for the next scan; the default refresh still
+calls `Engine::agents()`. A refresh queued behind an in-flight scan discards its older
+response, including after a completed stop.
 
 `tui/terminal_modes.rs` owns paired mouse/paste modes and terminal restoration;
 `tui/input.rs` owns printable, bounded search text. Paste events enter only active search and
@@ -1038,15 +1040,19 @@ agent-service stop controls without signalling the agent root merely because it 
 
 `CapabilityDiscovery` separates configured metadata from process-derived tools and recorded
 usage. The default `NoCapabilities` strategy performs no configuration inspection. Only explicit
-CLI `agents --capabilities`, desktop **MCP & skills**, or MCP `include_capabilities:true`
-requests select bounded current-account discovery. Desktop/background scans remain on the
-default strategy. The browser dev bridge propagates the same opt-in; the public demo labels
-sample data.
+CLI `agents --capabilities`, the terminal Agents **c** toggle, desktop **MCP & skills**, or MCP
+`include_capabilities:true` requests select bounded current-account discovery. Terminal inspection
+refreshes only while enabled in Agents; pressing **c** again or leaving Agents revokes queued
+inspection, clears retained inventory and discards late replies. Bounded file work already
+underway may finish. Desktop/background scans remain on the default strategy. The browser dev bridge propagates the same opt-in; the
+public demo labels sample data.
 
 The inventory projects server aliases, declared transport/enablement, scope and source paths
-from supported Codex/Claude Code/Cursor JSON/TOML locations and Claude Desktop's documented
-manual MCP JSON on macOS/Windows. Claude Desktop extensions, connectors and skills are not
-inspected. Whole bounded config bytes can
+from supported Codex/Claude Code/Cursor JSON/TOML locations, Claude Desktop's documented
+manual MCP JSON on macOS/Windows, legacy Windsurf's user `mcp_config.json`, Gemini CLI
+`settings.json` `mcpServers`, Copilot workspace/user default MCP files and Cline's default
+MCP settings. Claude Desktop extensions, connectors and skills are not inspected. Custom
+homes and Aider explicit MCP file flags are not followed. Whole bounded config bytes can
 contain credentials while parsing; command, URL, environment/header values are not retained.
 Skills retain folder identities and `SKILL.md` file locations. A bounded prefix permits only
 optional sanitized YAML-header `declared_name` and `description` metadata (purpose capped at
@@ -1080,6 +1086,29 @@ zoom; users can pan or explicitly fit the complete graph. Keyboard focus brings 
 cards into view without selecting them. Pointer focus leaves the pressed card in place
 until its click completes. Inventory and runtime cards never resolve reported usage by
 matching names.
+
+### Capability discovery audit (2026-10-15)
+
+The supported files are a bounded metadata inventory, not an implementation of each client's
+configuration resolver. The following primary-source checks determine what can be inferred:
+
+| Primary reference | Implementation decision |
+| --- | --- |
+| [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) and [local skills](https://learn.chatgpt.com/docs/build-skills) | Inspect default account/observed-project files. Keep trust, ancestor/admin/system/plugin loading, symlink targets and effective skill enablement unresolved. `.codex/skills` remains a compatibility inspection root. |
+| [Claude MCP](https://code.claude.com/docs/en/mcp), [Cursor MCP](https://cursor.com/docs/mcp) and [Cursor skills](https://cursor.com/docs/skills) | Preserve source and scope separately. A URL alone cannot establish Cursor's negotiated HTTP/SSE transport; shallow skill discovery does not reproduce client recursion. |
+| [VS Code configuration](https://code.visualstudio.com/docs/agents/reference/mcp-configuration) and [its own JSONC fixture](https://github.com/microsoft/vscode/blob/main/extensions/copilot/.vscode/mcp.json) | Distinguish `servers` from portable `mcpServers`; permit comments and trailing commas only in VS Code's supported files. |
+| [Copilot CLI configuration](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) and [separate enablement state](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference) | Recognize local launch declarations and bare/wrapped project maps in `.mcp.json`/`.github/mcp.json`. Do not infer trust, precedence or enablement from these definitions. |
+| [Gemini settings](https://geminicli.com/docs/reference/configuration/), [loader](https://github.com/google-gemini/gemini-cli/blob/main/packages/cli/src/config/settings.ts) and [transport implementation](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/tools/mcp-client.ts) | Accept comments without accepting trailing commas. Older and current URL defaults differ, so retain explicit transport declarations or dedicated HTTP fields and otherwise report unknown. Separate enablement policy is not resolved. |
+| [Cline configuration](https://docs.cline.bot/getting-started/config), [MCP](https://docs.cline.bot/mcp/mcp-overview) and [skills](https://docs.cline.bot/customization/skills) | Honor its `streamableHttp`/legacy SSE declarations and documented `disabled` switch. Inspect only the declared default roots; compatibility/custom/editor storage remains outside coverage. |
+| [Current Cascade documentation](https://docs.devin.ai/desktop/cascade/mcp) | The former Windsurf documentation now describes newer Devin locations. Label the existing `.codeium/windsurf` adapter as legacy; do not silently scan unrelated homes or guess a remote transport. |
+| [MCP tools](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) and [request schema](https://modelcontextprotocol.io/specification/2025-11-25/schema#calltoolrequestparams) | Reject malformed argument envelopes before dispatch; preserve ordinary tool errors, typed flow output and legacy JSON parity. No name-based inventory/process/call join is introduced. |
+| [WCAG focus visibility](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html) and [APG dialog guidance](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/) | Keep these graph disclosures nonmodal: dismiss on focus leave/outside interaction without stealing the new focus. Keep interactive card text opaque; emphasis applies to decorative paths and borders. Do not claim modal behavior without inert background content. |
+
+Fixtures cover provider formats, malformed/comment-delimiter strings, unknown/mixed declarations,
+privacy bounds, protocol envelopes, terminal opt-out races and browser focus/theme behavior.
+These checks establish the tested contracts; they do not establish runtime client loading or
+certify every accessibility or operating-system interaction. Upstream source links are moving
+references checked on the date above; client format changes require another adapter review.
 
 ## 4. Project detection
 
@@ -1442,9 +1471,11 @@ batches are rejected as a whole before dispatch, preserving the next frame's bou
 The resource and prompt layers perform no scans, probes, file reads or mutations. Clients
 supporting those MCP capabilities can discover tool-selection guidance and the `diagnose_port`,
 `prepare_dev_server` and `inspect_agents` workflows. A retrieved prompt is context for the client,
-not an executing workflow. Clients exposing tools alone can use the same nine tools directly:
-`list_ports`, `explain_port`, `find_free_port`, `wait_for_port`, `get_topology`, `list_agents`,
-`stop_agent_ports`, `plan_cluster_stop` and `stop_port`. `stop_agent_ports` uses the shared agent
+not an executing workflow. Clients exposing tools alone can use the same tools directly:
+`list_ports`, `explain_port`, `inspect_port`, `find_free_port`, `wait_for_port`, `get_topology`,
+`list_agents`, `get_agent_flow`, `stop_agent_ports`, `plan_cluster_stop` and `stop_port`.
+`inspect_port` shares `explain_port`'s structured inspection. `get_agent_flow` is process
+ancestry and live TCP edges, not recorded tool calls. `stop_agent_ports` uses the shared agent
 matcher and previews by default. Tools preserve collection warnings alongside returned data;
 `wait_for_port` waits for TCP readiness, not application health. No live subscriptions are
 advertised.

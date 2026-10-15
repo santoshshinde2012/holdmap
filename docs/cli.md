@@ -52,7 +52,8 @@ hold, explains in plain English why a port is busy (dev-server tree, Docker cont
 systemd/pm2/brew service, OS feature, TIME_WAIT, another user) and stops the correct thing
 gracefully, verifying the port is free afterwards.
 
-Run without arguments in a terminal to open the interactive TUI (Tab cycles Ports → Graph → Agents).
+Run without arguments in a terminal to open the interactive TUI (Tab cycles Ports → Graph → Agents;
+c toggles MCP/skills in Agents).
 
 Usage: holdmap [OPTIONS] [COMMAND]
 

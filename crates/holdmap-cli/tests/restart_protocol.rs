@@ -43,10 +43,26 @@ impl Owned {
             .unwrap();
         #[cfg(unix)]
         let exe = {
+            let exe = executable_directory.path().join(name);
+            #[cfg(target_os = "macos")]
+            {
+                use std::os::unix::fs::MetadataExt;
+                // macOS policy can reject a nonexistent mixed path for renamed hard
+                // links before main: https://github.com/rust-lang/cargo/issues/10060.
+                // The private copy has its own inode and is closed before any launch.
+                std::fs::copy(&current_exe, &exe).unwrap();
+                let source = std::fs::metadata(&current_exe).unwrap();
+                let alias = std::fs::metadata(&exe).unwrap();
+                assert_ne!(
+                    (source.dev(), source.ino()),
+                    (alias.dev(), alias.ino()),
+                    "macOS executable aliases must not share the source inode"
+                );
+            }
+            #[cfg(not(target_os = "macos"))]
             // A concurrent fork may retain a copied ELF's writable descriptor until
             // exec, producing Linux ETXTBSY. Link the running binary on the same
             // filesystem without opening it for writing; keep the service cwd isolated.
-            let exe = executable_directory.path().join(name);
             std::fs::hard_link(&current_exe, &exe).unwrap();
             exe
         };

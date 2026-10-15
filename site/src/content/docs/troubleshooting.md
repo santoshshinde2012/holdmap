@@ -64,9 +64,10 @@ See [recording setup](../agents/#set-up-optional-recording).
 
 **Current-source MCP or skills are missing.** Published **0.7.1** does not include the new
 inventory or skill-activation projection. With a current-source build, explicitly open
-**Agents → MCP & skills**, pass `agents --capabilities`, or call MCP `list_agents` with
-`include_capabilities: true`. Read the coverage limits; custom homes and client policy are not
-resolved. Use matching current-source collector and client builds for new usage records.
+**Agents → MCP & skills**, pass `agents --capabilities`, press **c** in the terminal Agents pane,
+or call MCP `list_agents` with `include_capabilities: true`. Read the coverage limits; custom
+homes and client policy are not resolved. Use matching current-source collector and client
+builds for new usage records.
 See [supported definitions and troubleshooting](../agents/#mcp-and-skills-current-source).
 
 **Environment variables.** `HOLDMAP_HOME` (config dir), `HOLDMAP_COLOR`, `HOLDMAP_TRACE`,

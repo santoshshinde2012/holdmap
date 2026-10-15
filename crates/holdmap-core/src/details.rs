@@ -1,7 +1,7 @@
 //! The extra facts behind a port that are too costly or noisy for every row: who is connected,
 //! the process tree, how long it has run, and what its bind address means for safety.
 //!
-//! Built on demand for one port (`holdmap inspect`, MCP `explain_port`, the app's details
+//! Built on demand for one port (`holdmap inspect`, MCP `explain_port` / `inspect_port`, the app's details
 //! pane) from a scan that includes connected sockets (`ScanOptions { all_states: true }`).
 
 use crate::model::{Exposure, FrameworkCategory, PortEntry, Protocol, SocketState};

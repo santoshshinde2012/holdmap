@@ -279,61 +279,17 @@ pub(super) fn call(
             }
             Ok((text, serde_json::to_value(&plan).unwrap_or_default()))
         }
-        "explain_port" => {
-            let port = port_arg(args, "port")?;
-            // Connected sockets too, so the answer can say who is talking to the port.
-            let e = Engine::new(&ScanOptions {
-                all_states: true,
-                ..ScanOptions::default()
-            })
-            .map_err(|e| ToolError::Failed(format!("scan failed: {e}")))?;
-            let ex = e.explain(port, &StopOptions::default());
-            let details = holdmap_core::details::for_port(&e.scan, port);
-            let http = ex
-                .entries
-                .iter()
-                .any(|x| x.protocol == holdmap_core::model::Protocol::Tcp && x.state.is_listening())
-                .then(|| holdmap_core::http::probe(port, "/", Duration::from_millis(800)))
-                .flatten();
-            let mut text = format!(
-                "{}\n{}\nRecommendation: {}",
-                ex.headline,
-                ex.details.join("\n"),
-                ex.recommendation
-            );
-            for d in &details {
-                let c = &d.connections;
-                if c.total > 0 {
-                    let peers: Vec<String> = c
-                        .peers
-                        .iter()
-                        .map(|p| {
-                            format!(
-                                "{} ×{}",
-                                p.process.as_deref().unwrap_or(&p.address),
-                                p.connections
-                            )
-                        })
-                        .collect();
-                    text.push_str(&format!(
-                        "\nConnections: {} ({} established): {}",
-                        c.total,
-                        c.established,
-                        peers.join(", ")
-                    ));
-                }
-                text.push_str(&format!(
-                    "\nBind risk ({:?}): {}. {}",
-                    d.bind_risk.level, d.bind_risk.title, d.bind_risk.explanation
-                ));
+        "explain_port" | "inspect_port" => port_inspection(port_arg(args, "port")?),
+        "get_agent_flow" => {
+            let engine = engine()?;
+            let mut report = engine.agents();
+            if let Some(query) = args["agent"].as_str() {
+                report.agents.retain(|agent| agent.matches(query));
             }
-            if let Some(h) = &http {
-                text.push_str(&format!("\nHTTP: {}", h.summary()));
-            }
-            let mut v = serde_json::to_value(&ex).unwrap_or_default();
-            v["details"] = serde_json::to_value(&details).unwrap_or_default();
-            v["http"] = serde_json::to_value(&http).unwrap_or_default();
-            Ok((text, v))
+            Ok(agent_flow_result(holdmap_core::agents::flow(
+                &engine.scan,
+                &report,
+            )))
         }
         "find_free_port" => {
             let port = match args.get("near") {
@@ -381,6 +337,97 @@ pub(super) fn call(
         }
         _ => Err(ToolError::Unknown),
     }
+}
+
+fn port_inspection(port: u16) -> Result<(String, Value), ToolError> {
+    // Connected sockets too, so the answer can say who is talking to the port.
+    let e = Engine::new(&ScanOptions {
+        all_states: true,
+        ..ScanOptions::default()
+    })
+    .map_err(|e| ToolError::Failed(format!("scan failed: {e}")))?;
+    let ex = e.explain(port, &StopOptions::default());
+    let details = holdmap_core::details::for_port(&e.scan, port);
+    let http = ex
+        .entries
+        .iter()
+        .any(|x| x.protocol == holdmap_core::model::Protocol::Tcp && x.state.is_listening())
+        .then(|| holdmap_core::http::probe(port, "/", Duration::from_millis(800)))
+        .flatten();
+    let mut text = format!(
+        "{}\n{}\nRecommendation: {}",
+        ex.headline,
+        ex.details.join("\n"),
+        ex.recommendation
+    );
+    for d in &details {
+        let c = &d.connections;
+        if c.total > 0 {
+            let peers: Vec<String> = c
+                .peers
+                .iter()
+                .map(|p| {
+                    format!(
+                        "{} ×{}",
+                        p.process.as_deref().unwrap_or(&p.address),
+                        p.connections
+                    )
+                })
+                .collect();
+            text.push_str(&format!(
+                "\nConnections: {} ({} established): {}",
+                c.total,
+                c.established,
+                peers.join(", ")
+            ));
+        }
+        text.push_str(&format!(
+            "\nBind risk ({:?}): {}. {}",
+            d.bind_risk.level, d.bind_risk.title, d.bind_risk.explanation
+        ));
+    }
+    if let Some(h) = &http {
+        text.push_str(&format!("\nHTTP: {}", h.summary()));
+    }
+    let mut v = serde_json::to_value(&ex).unwrap_or_default();
+    v["details"] = serde_json::to_value(&details).unwrap_or_default();
+    v["http"] = serde_json::to_value(&http).unwrap_or_default();
+    Ok((text, v))
+}
+
+fn agent_flow_result(report: holdmap_core::agents::AgentFlowReport) -> (String, Value) {
+    let mut parent = 0;
+    let mut listeners = 0;
+    let mut tcp = 0;
+    for edge in &report.edges {
+        match edge.kind {
+            holdmap_core::agents::AgentFlowEdgeKind::Parent => parent += 1,
+            holdmap_core::agents::AgentFlowEdgeKind::OwnsListener => listeners += 1,
+            holdmap_core::agents::AgentFlowEdgeKind::Tcp => tcp += 1,
+        }
+    }
+    let mut lines = vec![
+        format!(
+            "Observed agent connections: {} nodes, {} relationships. Ancestry and live TCP sockets only; tool calls and payloads are not included.",
+            report.nodes.len(),
+            report.edges.len()
+        ),
+        format!("Parent processes: {parent}. Listener ownership: {listeners}. Live TCP: {tcp}."),
+    ];
+    if report.edges.is_empty() {
+        lines.push("No relationships visible in this scan.".into());
+    }
+    if report.omitted_nodes > 0 || report.omitted_edges > 0 {
+        lines.push(format!(
+            "Display limit: {} nodes and {} relationships omitted.",
+            report.omitted_nodes, report.omitted_edges
+        ));
+    }
+    lines.extend(report.limits.iter().cloned());
+    (
+        lines.join("\n"),
+        serde_json::to_value(&report).unwrap_or_default(),
+    )
 }
 
 pub(super) fn validate_args(name: &str, args: &Value) -> Result<(), ToolError> {

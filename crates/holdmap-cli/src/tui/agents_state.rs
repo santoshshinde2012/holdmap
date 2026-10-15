@@ -24,6 +24,17 @@ impl App {
         self.reconcile_agent_selection(selected.as_deref());
     }
 
+    pub(super) fn clear_agent_capabilities(&mut self) {
+        let selected = self.selected_agent().map(|agent| agent.id.clone());
+        if let Some(report) = &mut self.agents {
+            for agent in &mut report.agents {
+                agent.capabilities = Default::default();
+            }
+        }
+        self.agent_scroll = 0;
+        self.reconcile_agent_selection(selected.as_deref());
+    }
+
     fn reconcile_agent_selection(&mut self, preferred: Option<&str>) {
         let visible = self.visible_agent_indices();
         let same = preferred
@@ -254,6 +265,10 @@ mod tests {
             app.on_key(key(KeyCode::Char(ch)));
         }
         assert!(app.agent_searching);
+        assert!(
+            !app.inspect_capabilities,
+            "typing c in search is not inspection consent"
+        );
         assert_eq!(app.query, "port-only");
         assert_eq!(app.selected_agent().unwrap().pid, 222);
         assert!(matches!(app.modal, Modal::None));
@@ -392,5 +407,19 @@ mod tests {
         app.on_key(key(KeyCode::Char('y')));
         assert!(matches!(app.modal, Modal::Confirm { .. }));
         assert!(app.busy.is_some());
+    }
+
+    #[test]
+    fn c_toggles_capability_inspection_without_ctrl_c_quit() {
+        let mut app = app();
+        app.scanning = true;
+        assert!(!app.inspect_capabilities);
+        app.on_key(key(KeyCode::Char('c')));
+        assert!(app.inspect_capabilities);
+        assert!(!app.quit);
+        app.on_key(key(KeyCode::Char('c')));
+        assert!(!app.inspect_capabilities);
+        app.on_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+        assert!(app.quit);
     }
 }

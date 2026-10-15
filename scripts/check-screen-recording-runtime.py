@@ -72,7 +72,12 @@ try {
   const canvas = document.querySelector("canvas");
   const context = canvas.getContext("2d");
   let frame = 0;
+  let lastPaintAt = performance.now();
+  let maxPaintGapMs = 0;
   const paint = () => {
+    const now = performance.now();
+    maxPaintGapMs = Math.max(maxPaintGapMs, now - lastPaintAt);
+    lastPaintAt = now;
     context.fillStyle = frame % 2 ? "#172554" : "#052e16";
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.fillStyle = "#facc15";
@@ -85,8 +90,24 @@ try {
   timer = setInterval(paint, 50);
   // A generated canvas is the only capture source. Never call getDisplayMedia.
   stream = canvas.captureStream(20);
+  const startRequestedAt = performance.now();
   session = await ScreenRecording.start(stream, { onTick() {}, onEnded() {} });
+  const waitStartedAt = performance.now();
+  const firstPaint = frame;
+  const visibilityAtStart = document.visibilityState;
+  lastPaintAt = waitStartedAt;
+  maxPaintGapMs = 0;
   await new Promise(resolve => setTimeout(resolve, 2600));
+  const waitEndedAt = performance.now();
+  report.syntheticTiming = {
+    startupMs: Math.round(waitStartedAt - startRequestedAt),
+    requestedWaitMs: 2600,
+    actualWaitMs: Math.round(waitEndedAt - waitStartedAt),
+    paintedFrames: frame - firstPaint,
+    maxPaintGapMs: Math.round(Math.max(maxPaintGapMs, waitEndedAt - lastPaintAt)),
+    visibilityAtStart,
+    visibilityAtStop: document.visibilityState,
+  };
   const result = await session.stop();
   report.durationMs = result.durationMs;
   report.width = result.width;
@@ -246,7 +267,11 @@ def run(
             code_directory = next(line for line in signature.splitlines() if line.startswith("CodeDirectory "))
             assert ("runtime" in code_directory) == hardened, "fixture signature did not match requested hardening"
             fixture = root / "fixture.json"
-            fixture.write_text(json.dumps({"root": str(root), "app": str(app), "assets": str(assets), "identifier": identifier, "incognito": incognito, "devtools": devtools}))
+            fixture.write_text(json.dumps({
+                "root": str(root), "app": str(app), "assets": str(assets),
+                "identifier": identifier, "incognito": incognito, "devtools": devtools,
+                "synthetic_media": not capabilities_only,
+            }))
             environment = os.environ.copy()
             environment["HOLDMAP_HOME"] = str(root / "unused-store")
             child = subprocess.Popen(
@@ -275,6 +300,7 @@ def run(
             assert result["native_context"] == {
                 "is_dev": not custom_protocol, "incognito": incognito,
                 "debug_assertions": not release_profile,
+                "background_throttling": None if capabilities_only else "disabled",
             }
             assert not (root / "unused-store").exists(), "fixture unexpectedly accessed a user store"
             assert browser["support"]["display"] == (browser["originalAPIs"]["getDisplayMedia"] == "function"), "capture helper disagrees with the original browser API"

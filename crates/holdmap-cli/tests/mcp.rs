@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -13,6 +14,31 @@ const VERSIONS: [&str; 4] = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-
 const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
 const SESSION_TIMEOUT: Duration = Duration::from_secs(30);
 const STDERR_LIMIT: usize = 8192;
+
+struct FixtureServer {
+    stop: Arc<AtomicBool>,
+    worker: Option<JoinHandle<usize>>,
+}
+
+impl FixtureServer {
+    fn finish(mut self) -> usize {
+        self.stop.store(true, Ordering::Release);
+        self.worker
+            .take()
+            .unwrap()
+            .join()
+            .expect("owned HTTP fixture finishes")
+    }
+}
+
+impl Drop for FixtureServer {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
 
 /// Drain both pipes while requests run; closing stdin finishes the server gracefully.
 /// The cleanup guard reaps only the test's own child, including on assertion failures.
@@ -192,6 +218,27 @@ fn tool_text(response: &Value) -> &str {
         .expect("human-readable tool result")
 }
 
+fn assert_tool_json_parity(response: &Value) {
+    let text = response["result"]["content"][1]["text"]
+        .as_str()
+        .expect("backwards-compatible JSON text");
+    let decoded: Value = serde_json::from_str(text).expect("tool text contains valid JSON");
+    // Both representations cross the same JSON decoder. Reserializing its f64 values
+    // can change CPU metrics by one ULP without serde_json's float_roundtrip feature.
+    assert!(
+        decoded == response["result"]["structuredContent"],
+        "JSON text and structured content differ"
+    );
+}
+
+#[test]
+fn cli_mcp_json_parity_accepts_equivalent_cpu_metrics() {
+    let response: Value = serde_json::from_str(
+        r#"{"result":{"content":[{"type":"text","text":"Fixture CPU metric"},{"type":"text","text":"{\n  \"cpu_percent\": 0.18452200293540955\n}"}],"structuredContent":{"cpu_percent":0.18452200293540955},"isError":false}}"#,
+    ).unwrap();
+    assert_tool_json_parity(&response);
+}
+
 fn free_port_content(response: &Value) -> Value {
     assert_eq!(response["result"]["isError"], false);
     let content: Value = serde_json::from_str(
@@ -239,10 +286,12 @@ fn cli_mcp_discovers_tools_context_and_workflows_and_calls_typed_read_tools() {
         BTreeSet::from([
             "list_ports",
             "explain_port",
+            "inspect_port",
             "find_free_port",
             "wait_for_port",
             "get_topology",
             "list_agents",
+            "get_agent_flow",
             "stop_agent_ports",
             "plan_cluster_stop",
             "stop_port"
@@ -367,7 +416,7 @@ fn cli_mcp_negotiates_every_supported_version_without_mixed_error_results() {
         let mut client = McpClient::start(version);
         let discovery = client.request("tools/list", json!({}));
         let tools = discovery["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 9);
+        assert_eq!(tools.len(), 11);
         for tool in tools {
             assert_eq!(tool.get("outputSchema").is_some(), version >= "2025-06-18");
             assert_eq!(tool.get("title").is_some(), version >= "2025-06-18");
@@ -422,7 +471,127 @@ fn cli_mcp_negotiates_every_supported_version_without_mixed_error_results() {
             client.request("resources/read", json!({"uri": "holdmap://unknown"}))["error"]["code"],
             -32002
         );
+        for arguments in [Value::Null, json!([]), json!(true), json!(42), json!("{}")] {
+            let malformed = client.request(
+                "tools/call",
+                json!({"name":"inspect_port", "arguments":arguments}),
+            );
+            assert_eq!(malformed["error"]["code"], -32602);
+            assert!(malformed.get("result").is_none());
+        }
         assert_eq!(client.request("ping", json!({}))["result"], json!({}));
+        client.finish();
+    }
+}
+
+#[test]
+fn cli_mcp_port_inspection_alias_probes_only_the_owned_listener_and_preserves_it() {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("local HTTP fixture");
+    let address = listener.local_addr().unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    let server_stop = Arc::clone(&stop);
+    let server = thread::spawn(move || {
+        let deadline = Instant::now() + SESSION_TIMEOUT;
+        let mut requests = 0;
+        while !server_stop.load(Ordering::Acquire) && Instant::now() < deadline {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    stream
+                        .set_read_timeout(Some(Duration::from_millis(500)))
+                        .unwrap();
+                    stream
+                        .set_write_timeout(Some(Duration::from_millis(500)))
+                        .unwrap();
+                    let mut request = [0_u8; 1024];
+                    let mut size = 0;
+                    while size < request.len()
+                        && Instant::now() < deadline
+                        && !request[..size].windows(4).any(|part| part == b"\r\n\r\n")
+                    {
+                        match stream.read(&mut request[size..]) {
+                            Ok(0) | Err(_) => break,
+                            Ok(read) => size += read,
+                        }
+                    }
+                    if size > 0 {
+                        assert!(request[..size].starts_with(b"GET / HTTP/1.1\r\n"));
+                        let body = "<title>Owned MCP fixture</title>";
+                        let response = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nServer: holdmap-test\r\nConnection: close\r\n\r\n{body}", body.len());
+                        stream.write_all(response.as_bytes()).unwrap();
+                        requests += 1;
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("owned HTTP fixture accept: {error}"),
+            }
+        }
+        requests
+    });
+    let fixture = FixtureServer {
+        stop,
+        worker: Some(server),
+    };
+    let mut client = McpClient::start(VERSIONS[0]);
+    let mut headline = None;
+    for name in ["explain_port", "inspect_port"] {
+        let response = client.request(
+            "tools/call",
+            json!({"name":name,"arguments":{"port":address.port()}}),
+        );
+        assert_eq!(response["result"]["isError"], false);
+        let data = &response["result"]["structuredContent"];
+        assert_eq!(data["port"], address.port());
+        assert_eq!(data["status"], "busy");
+        assert!(data["details"].is_array());
+        assert_eq!(data["http"]["status"], 200);
+        assert_eq!(data["http"]["title"], "Owned MCP fixture");
+        assert!(tool_text(&response).contains("Owned MCP fixture"));
+        assert_tool_json_parity(&response);
+        if let Some(expected) = &headline {
+            assert_eq!(&data["headline"], expected);
+        } else {
+            headline = Some(data["headline"].clone());
+        }
+        TcpStream::connect_timeout(&address, Duration::from_secs(1))
+            .expect("inspection leaves its owned fixture alive");
+    }
+    client.finish();
+    assert_eq!(fixture.finish(), 2);
+}
+
+#[test]
+fn cli_mcp_agent_flow_is_separate_from_opt_in_inventory_and_has_text_parity() {
+    for version in [VERSIONS[0], VERSIONS[3]] {
+        let mut client = McpClient::start(version);
+        let flow = client.request(
+            "tools/call",
+            json!({
+                "name":"get_agent_flow", "arguments":{"agent":"holdmap-no-such-agent-fixture"}
+            }),
+        );
+        assert_eq!(flow["result"]["isError"], false);
+        let text = flow["result"]["content"][1]["text"].as_str().unwrap();
+        let data: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(data["nodes"], json!([]));
+        assert_eq!(data["edges"], json!([]));
+        assert!(data["limits"].is_array());
+        assert!(tool_text(&flow).contains("tool calls and payloads are not included"));
+        if version >= "2025-06-18" {
+            assert_eq!(flow["result"]["structuredContent"], data);
+        } else {
+            assert!(flow["result"].get("structuredContent").is_none());
+        }
+        let rejected = client.request(
+            "tools/call",
+            json!({
+                "name":"get_agent_flow", "arguments":{"include_capabilities":true}
+            }),
+        );
+        assert_eq!(rejected["result"]["isError"], true);
+        assert!(tool_text(&rejected).contains("Unknown argument `include_capabilities`"));
         client.finish();
     }
 }

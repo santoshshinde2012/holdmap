@@ -90,6 +90,8 @@ test("Filters are optional and Running stays separate from disabled definitions"
   const runtime = app.getByRole("button", { name: "Inspect running process Filesystem MCP, PID 52070", exact: true });
   await expect(runtime).toBeVisible();
   await app.getByRole("radio", { name: /^Running/ }).click();
+  await expect(app.getByRole("combobox", { name: /^Scope:/ })).toHaveCount(0);
+  await app.getByRole("button", { name: "Filters", exact: true }).click();
   await expect(scope).toBeDisabled(); await expect(enablement).toBeDisabled();
   await expect(graph(app).getByRole("button", { name: /^Inspect MCP server/ })).toHaveCount(0);
   await expect(graph(app).getByRole("button", { name: /^Inspect skill/ })).toHaveCount(0);
@@ -98,8 +100,9 @@ test("Filters are optional and Running stays separate from disabled definitions"
   await expect(details(app)).toContainText("has not been matched to a configuration entry or invocation");
   await expect(details(app)).toContainText("inferred");
   await expect(details(app)).not.toContainText("Source file");
-  await app.keyboard.press("Escape"); // Close Filters before closing the inspector.
-  await expect(app.getByRole("button", { name: "Filters", exact: true })).toBeFocused();
+  await app.keyboard.press("Escape");
+  await expect(details(app)).toHaveCount(0);
+  await expect(runtime).toBeFocused();
   await expect(app.getByRole("combobox", { name: /^Scope:/ })).toHaveCount(0);
 });
 
@@ -150,6 +153,7 @@ for (const [theme, key, width] of [["dark", "Enter", 390], ["light", "Space", 39
   test(`${width}px ${theme} map supports native ${key}, inspector dismissal and the agent browser`, async ({ app }) => {
     await app.setViewportSize({ width, height: 844 });
     await app.evaluate((theme) => localStorage.setItem("holdmap.theme", theme), theme); await app.reload();
+    await expect(app.locator("html")).toHaveAttribute("data-theme", theme);
     await openCapabilities(app);
     const agent = graph(app).getByRole("button", { name: /^Inspect capabilities for/ }).first();
     await expect.poll(() => agent.evaluate((element) => {
@@ -189,3 +193,53 @@ test("same aliases at different sources remain distinct graph cards with complet
     await app.keyboard.press("Escape"); await expect(card).toBeFocused();
   }
 });
+
+test("mobile inspector and agent browser reveal controls when keyboard focus leaves them", async ({ app }) => {
+  await app.setViewportSize({ width: 390, height: 844 });
+  await openCapabilities(app);
+  const card = graph(app).getByRole("button", { name: /^Inspect skill frontend-checks/ });
+  await card.press("Enter");
+  const inspector = details(app);
+  await expect(inspector).toBeVisible();
+  await inspector.getByRole("button", { name: "Open recorded calls", exact: true }).focus();
+  await app.keyboard.press("Tab");
+  const browse = app.getByRole("button", { name: "Browse agents", exact: true });
+  await expect(inspector).toHaveCount(0);
+  await expect(browse).toBeFocused();
+  await browse.click();
+  await expect(app.getByRole("button", { name: /^All agents/ })).toBeFocused();
+  await app.keyboard.press("Shift+Tab");
+  await expect(app.getByRole("button", { name: "Close agent browser", exact: true })).toBeFocused();
+  await app.keyboard.press("Shift+Tab");
+  await expect(app.getByRole("complementary", { name: "Capability agents", exact: true })).toBeHidden();
+  await expect(app.getByRole("button", { name: "Recorded calls", exact: true })).toBeFocused();
+});
+
+for (const theme of ["dark", "light"] as const) {
+  test(`${theme} capability cards stay readable and nonmodal disclosures dismiss without stealing focus`, async ({ app }) => {
+    await app.evaluate((theme) => localStorage.setItem("holdmap.theme", theme), theme);
+    await app.reload();
+    await expect(app.locator("html")).toHaveAttribute("data-theme", theme);
+    const search = await openCapabilities(app);
+    await graph(app).getByRole("button", { name: cursorMcp("filesystem"), exact: true }).click();
+    await app.mouse.move(0, 0);
+    const unrelated = graph(app).locator("button.card.dim");
+    await expect.poll(() => unrelated.count()).toBeGreaterThan(0);
+    expect(await unrelated.evaluateAll((cards) => cards.every((card) => getComputedStyle(card).opacity === "1"))).toBe(true);
+    await app.getByRole("button", { name: "Coverage", exact: true }).click();
+    const coverage = app.getByRole("region", { name: "Visibility limits", exact: true });
+    await expect(coverage).toBeVisible();
+    await app.getByRole("button", { name: "Close coverage", exact: true }).focus();
+    await app.keyboard.press("Shift+Tab");
+    await expect(coverage).toHaveCount(0);
+    await app.getByRole("button", { name: "Filters", exact: true }).click();
+    await expect(app.getByRole("combobox", { name: /^Scope:/ })).toBeFocused();
+    await search.click();
+    await expect(search).toBeFocused();
+    await expect(app.getByRole("combobox", { name: /^Scope:/ })).toHaveCount(0);
+    await app.getByRole("button", { name: "Coverage", exact: true }).click();
+    await expect(coverage).toBeVisible();
+    await app.getByRole("button", { name: "Coverage", exact: true }).click();
+    await expect(coverage).toHaveCount(0);
+  });
+}

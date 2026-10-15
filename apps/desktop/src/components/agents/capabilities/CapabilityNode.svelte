@@ -32,7 +32,7 @@
   .card { width: 100%; height: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 11px; padding: 14px; border: 1px solid var(--border-strong); border-radius: 15px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); font: inherit; text-align: left; cursor: pointer; transition: opacity var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease); }
   .card:hover { border-color: var(--agent); box-shadow: var(--shadow-md); }
   .card:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
-  .card.dim { opacity: .42; }
+  .card.dim { border-color: var(--border); box-shadow: none; }
   .card.highlighted { border-color: var(--agent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent) 12%, transparent), var(--shadow-sm); }
   .card.selected { opacity: 1; border-color: var(--agent); box-shadow: 0 0 0 2px var(--agent), 0 0 0 6px color-mix(in srgb, var(--agent) 17%, transparent), var(--shadow-md); }
   .tile { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; color: var(--agent); background: color-mix(in srgb, var(--agent) 12%, var(--surface)); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-semibold); }

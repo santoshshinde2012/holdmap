@@ -4,6 +4,7 @@ use super::agents_view::{access_attention, safe_text, working_folders, wrap_line
 use super::app::App;
 use super::{theme, ui};
 use holdmap_core::agents::*;
+use holdmap_core::engine::tilde;
 use holdmap_core::util::human_bytes;
 use holdmap_core::Exposure;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
@@ -38,12 +39,14 @@ pub(super) fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         Span::styled("paused · p resume", theme::muted())
     } else if app.scanning {
         Span::styled("refreshing…", theme::muted())
+    } else if app.inspect_capabilities {
+        Span::styled("inspecting config · every 2s", theme::muted())
     } else {
         Span::styled("live · every 2s", theme::muted())
     };
     let [left, right] = Layout::horizontal([
         Constraint::Min(0),
-        Constraint::Length(if area.width >= 70 { 22 } else { 0 }),
+        Constraint::Length(if area.width >= 70 { 32 } else { 0 }),
     ])
     .areas(area);
     let mut spans = vec![Span::styled(" ◉ holdmap ", theme::title())];
@@ -83,7 +86,14 @@ pub(super) fn draw_search(f: &mut Frame, app: &App, area: Rect) {
         ])
     } else {
         Line::from(Span::styled(
-            " / Search name, PID, folder or tool · PgUp/PgDn scroll details",
+            format!(
+                " / Search name, PID, folder, tool or inventory · c {} · PgUp/PgDn scroll",
+                if app.inspect_capabilities {
+                    "stop inspection"
+                } else {
+                    "inspect MCP/skills"
+                },
+            ),
             theme::muted(),
         ))
     };
@@ -111,6 +121,14 @@ pub(super) fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
             ("↑↓", "agent"),
             ("/", "search"),
             ("PgUp/Dn", "details"),
+            (
+                "c",
+                if app.inspect_capabilities {
+                    "inventory on"
+                } else {
+                    "MCP/skills"
+                },
+            ),
             ("x", "review stop"),
             ("Tab", "ports"),
             ("r", "refresh"),
@@ -122,14 +140,16 @@ pub(super) fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
         &[
             ("↑↓", "agent"),
             ("/", "search"),
-            ("PgUp/Dn", "details"),
-            ("x", "review stop"),
+            ("c", "MCP/skills"),
+            ("PgDn", "more"),
+            ("x", "stop"),
             ("?", "help"),
             ("q", "quit"),
         ]
     } else {
         &[
             ("/", "search"),
+            ("c", "MCP/skills"),
             ("PgDn", "more"),
             ("x", "stop"),
             ("?", "help"),
@@ -360,7 +380,10 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
         .agents
         .as_ref()
         .expect("a selected agent belongs to a report");
-    let lines = wrap_lines(detail_lines(agent, report), content.width.saturating_sub(1));
+    let lines = wrap_lines(
+        detail_lines(agent, report, app.inspect_capabilities),
+        content.width.saturating_sub(1),
+    );
     let max_scroll = lines
         .len()
         .saturating_sub(usize::from(content.height))
@@ -399,7 +422,11 @@ fn evidence(value: Evidence) -> &'static str {
     }
 }
 
-fn detail_lines(agent: &Agent, report: &AgentsReport) -> Vec<Line<'static>> {
+fn detail_lines(
+    agent: &Agent,
+    report: &AgentsReport,
+    inspection_enabled: bool,
+) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     if let Some(parent) = agent
         .parent
@@ -482,13 +509,7 @@ fn detail_lines(agent: &Agent, report: &AgentsReport) -> Vec<Line<'static>> {
         )));
     }
     lines.push(Line::raw(""));
-    lines.push(heading("MCP & skills inventory"));
-    lines.push(muted(
-        "Run holdmap agents --capabilities to inspect local definitions and skill locations.",
-    ));
-    lines.push(muted(
-        "Process scans do not establish configuration, skill loading or use.",
-    ));
+    lines.extend(capability_lines(agent, inspection_enabled));
     lines.push(Line::raw(""));
     lines.push(heading("Working folders & recent projects"));
     if agent.folders.is_empty() {
@@ -588,6 +609,101 @@ fn detail_lines(agent: &Agent, report: &AgentsReport) -> Vec<Line<'static>> {
     lines
 }
 
+fn capability_lines(agent: &Agent, inspection_enabled: bool) -> Vec<Line<'static>> {
+    let mut lines = vec![heading("MCP & skills inventory")];
+    if agent.capabilities.inspected {
+        lines.push(muted(
+            "Configuration / installation only; loading and use are unknown.",
+        ));
+        for server in &agent.capabilities.mcp_servers {
+            let enabled = match server.enabled {
+                Some(true) => "enabled in configuration",
+                Some(false) => "disabled in configuration",
+                None => "enablement unknown",
+            };
+            lines.push(Line::raw(format!(
+                "  {} · {} · {} · {}",
+                safe_text(&server.name),
+                server.transport.label(),
+                server.scope.label(),
+                enabled
+            )));
+            lines.push(muted(format!(
+                "    {}",
+                safe_text(&tilde(&server.source_path))
+            )));
+            if let Some(project) = &server.project_path {
+                lines.push(muted(format!(
+                    "    Project: {}",
+                    safe_text(&tilde(project))
+                )));
+            }
+        }
+        for skill in &agent.capabilities.skills {
+            lines.push(Line::raw(format!(
+                "  {} · skill folder · {}",
+                safe_text(&skill.name),
+                skill.scope.label()
+            )));
+            lines.push(muted(format!(
+                "    {}",
+                safe_text(&tilde(&skill.source_path))
+            )));
+            if let Some(project) = &skill.project_path {
+                lines.push(muted(format!(
+                    "    Project: {}",
+                    safe_text(&tilde(project))
+                )));
+            }
+            if let Some(name) = skill
+                .declared_name
+                .as_ref()
+                .filter(|name| *name != &skill.name)
+            {
+                lines.push(muted(format!("    Declared name: {}", safe_text(name))));
+            }
+            if let Some(description) = &skill.description {
+                lines.push(muted(format!(
+                    "    Purpose metadata: {}",
+                    safe_text(description)
+                )));
+            }
+        }
+        if agent.capabilities.mcp_servers.is_empty() && agent.capabilities.skills.is_empty() {
+            lines.push(muted(
+                "No MCP definitions or skill files listed; missing entries do not prove absence.",
+            ));
+        }
+        if agent.capabilities.more_mcp_servers > 0 || agent.capabilities.more_skills > 0 {
+            lines.push(muted(format!(
+                "Not listed: {} MCP definitions, {} skills.",
+                agent.capabilities.more_mcp_servers, agent.capabilities.more_skills
+            )));
+        }
+        for limit in &agent.capabilities.limits {
+            lines.push(muted(format!("• {}", safe_text(limit))));
+        }
+    } else {
+        lines.push(muted(if inspection_enabled {
+            "Inspection enabled; no inventory reported for this agent. See coverage below."
+        } else {
+            "Not inspected. Press c to inspect local MCP definitions and skill locations."
+        }));
+        lines.push(muted(
+            "Process scans do not establish configuration, skill loading or use.",
+        ));
+        for limit in agent
+            .capabilities
+            .limits
+            .iter()
+            .filter(|limit| !limit.contains("were not inspected"))
+        {
+            lines.push(muted(format!("• {}", safe_text(limit))));
+        }
+    }
+    lines
+}
+
 fn limit_lines(report: &AgentsReport) -> Vec<Line<'static>> {
     let mut lines = vec![Line::raw(""), heading("Visibility limits")];
     lines.push(muted(
@@ -602,7 +718,7 @@ fn limit_lines(report: &AgentsReport) -> Vec<Line<'static>> {
 pub(super) fn draw_help(f: &mut Frame) {
     let area = f.area();
     let width = area.width.min(84);
-    let height = area.height.min(23);
+    let height = area.height.min(24);
     let popup = Rect::new(
         area.x + (area.width - width) / 2,
         area.y + (area.height - height) / 2,
@@ -624,6 +740,7 @@ pub(super) fn draw_help(f: &mut Frame) {
             "mouse wheel",
             "Scroll the list or details under the pointer",
         ),
+        ("c", "Toggle MCP/skill inspection (Agents only)"),
         ("x", "Review a stop for this agent's services and ports"),
         ("y", "Confirm a reviewed stop; Enter / n cancels"),
         ("Tab / v", "Switch Ports → Graph → Agents"),
@@ -645,6 +762,8 @@ pub(super) fn draw_help(f: &mut Frame) {
         Line::raw(""),
         muted("Stopping services keeps the agent session and its own ports running."),
         muted("MCP labels are inferred from processes, not a history of tool calls."),
+        muted("c inspects configuration files; loading and use stay unknown."),
+        muted("Leaving Agents clears inventory and stops inspection."),
         muted("Any key closes help."),
     ]);
     f.render_widget(Paragraph::new(wrap_lines(lines, inner.width)), inner);
@@ -749,7 +868,7 @@ mod tests {
             agents: vec![agent],
             ..Default::default()
         };
-        let lines = detail_lines(&report.agents[0], &report)
+        let lines = detail_lines(&report.agents[0], &report, false)
             .into_iter()
             .map(|line| line.to_string())
             .collect::<Vec<_>>()
@@ -787,6 +906,157 @@ mod tests {
         assert!(visible.contains("Esc clears"));
         assert!(!visible.contains("TCP+UDP"));
         assert!(!visible.contains("sorted by"));
+    }
+
+    #[test]
+    fn inspected_inventory_stays_separate_from_running_tools() {
+        let mut agent = test_agent(42, "Codex");
+        agent.tools = vec![AgentTool {
+            pid: 99,
+            ppid: Some(42),
+            name: "docs-mcp".into(),
+            kind: ToolKind::McpServer,
+            command: "private-command".into(),
+            cwd: None,
+            evidence: Evidence::Inferred,
+            ports: Vec::new(),
+            memory_bytes: 0,
+            cpu_percent: 0.0,
+        }];
+        agent.capabilities = AgentCapabilities {
+            inspected: true,
+            mcp_servers: vec![McpServerCapability {
+                id: "mcp-docs".into(),
+                name: "docs".into(),
+                scope: CapabilityScope::User,
+                source_path: "/Users/dev/.codex/config.toml".into(),
+                project_path: Some("/fixture/first-project".into()),
+                transport: McpTransport::Stdio,
+                enabled: Some(true),
+                evidence: Evidence::Observed,
+            }],
+            skills: vec![SkillCapability {
+                id: "skill-review".into(),
+                name: "review".into(),
+                declared_name: Some("Review diffs".into()),
+                description: Some("Review local diffs.".into()),
+                scope: CapabilityScope::User,
+                source_path: "/Users/dev/.agents/skills/review/SKILL.md".into(),
+                project_path: Some("/fixture/second-project".into()),
+                evidence: Evidence::Observed,
+            }],
+            more_mcp_servers: 1,
+            more_skills: 0,
+            limits: vec!["Configuration and skill file presence do not prove loading.".into()],
+        };
+        let report = AgentsReport {
+            agents: vec![agent],
+            ..Default::default()
+        };
+        let lines = detail_lines(&report.agents[0], &report, false)
+            .into_iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(lines.contains("Configuration / installation only; loading and use are unknown."));
+        assert!(lines.contains("docs · stdio · user · enabled in configuration"));
+        assert!(lines.contains("review · skill folder · user"));
+        assert!(lines.contains("Declared name: Review diffs"));
+        assert!(lines.contains("Purpose metadata: Review local diffs."));
+        assert!(lines.contains("Project: /fixture/first-project"));
+        assert!(lines.contains("Project: /fixture/second-project"));
+        assert!(lines.contains("Not listed: 1 MCP definitions, 0 skills."));
+        assert!(lines.contains("docs-mcp · MCP server · PID 99 · inferred"));
+        assert!(!lines.contains("private-command"));
+        let tools = lines.find("Running tools").unwrap();
+        let inventory = lines.find("MCP & skills inventory").unwrap();
+        assert!(tools < inventory);
+        assert!(!lines.contains("Run holdmap agents --capabilities"));
+        let mut app = app(report);
+        app.inspect_capabilities = true;
+        let terminal = render(&mut app, 120, 36);
+        let visible = text(&terminal, Rect::new(0, 0, 120, 36));
+        assert!(visible.contains("inspecting config"));
+        assert!(visible.contains("docs"));
+        assert!(visible.contains("review"));
+        assert!(!visible.contains("private-command"));
+    }
+
+    #[test]
+    fn inspection_controls_and_unknown_inventory_are_honest_at_small_widths() {
+        let mut agent = test_agent(42, "Unsupported agent");
+        agent.capabilities.limits = vec!["This product's configuration is not supported.".into()];
+        let unavailable = capability_lines(&agent, true)
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(unavailable.contains("Inspection enabled; no inventory reported"));
+        assert!(unavailable.contains("not supported"));
+        assert!(!unavailable.contains("Press c to inspect"));
+        assert!(!unavailable.contains("No MCP definitions or skill files listed"));
+        let not_requested = capability_lines(&agent, false)
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(not_requested.contains("Press c to inspect"));
+        for width in [40, 80] {
+            let mut app = app(AgentsReport {
+                agents: vec![agent.clone()],
+                ..Default::default()
+            });
+            app.inspect_capabilities = true;
+            let terminal = render(&mut app, width, 24);
+            let footer = text(&terminal, Rect::new(0, 23, width, 1))
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            assert!(
+                footer.contains("c MCP/skills"),
+                "inspection is discoverable at {width} columns: {footer}"
+            );
+        }
+    }
+
+    #[test]
+    fn omitted_inventory_and_project_contexts_do_not_imply_absence_or_alias_identity() {
+        let mut agent = test_agent(42, "Claude Code");
+        agent.capabilities.inspected = true;
+        agent.capabilities.more_mcp_servers = 2;
+        let lines = capability_lines(&agent, true)
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(lines.contains("missing entries do not prove absence"));
+        assert!(lines.contains("Not listed: 2 MCP definitions"));
+        for project in ["/fixture/project-a", "/fixture/project-b"] {
+            agent.capabilities.mcp_servers.push(McpServerCapability {
+                id: format!("mcp:{project}:docs"),
+                name: "docs".into(),
+                scope: CapabilityScope::Project,
+                source_path: "/fixture/.claude.json".into(),
+                project_path: Some(project.into()),
+                transport: McpTransport::Http,
+                enabled: None,
+                evidence: Evidence::Observed,
+            });
+        }
+        let lines = capability_lines(&agent, true)
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(
+            lines
+                .matches("docs · HTTP · project · enablement unknown")
+                .count(),
+            2
+        );
+        assert_eq!(lines.matches("/fixture/.claude.json").count(), 2);
+        assert!(lines.contains("Project: /fixture/project-a"));
+        assert!(lines.contains("Project: /fixture/project-b"));
     }
 
     #[test]

@@ -517,6 +517,12 @@ fn protected_projects_traversal_and_unsupported_products_are_explicitly_unknown(
     let unsupported = provider.discover("unknown-product", &[], "fixture");
     assert!(!unsupported.inspected);
     assert!(!unsupported.limits.is_empty());
+    let custom_only = provider.discover("aider", &[], "fixture");
+    assert!(!custom_only.inspected);
+    assert!(custom_only
+        .limits
+        .iter()
+        .any(|limit| limit.contains("Cline")));
     let ordinary = NoCapabilities.discover("codex", &[], "fixture");
     assert!(!ordinary.inspected);
     assert!(!ordinary.limits.is_empty());
@@ -569,4 +575,425 @@ fn omitted_additive_fields_deserialize_to_not_inspected_and_labels_are_shared() 
     assert_eq!(McpTransport::Http.label(), "HTTP");
     assert_eq!(McpTransport::Sse.label(), "SSE");
     assert_eq!(McpTransport::Unknown.label(), "unknown");
+}
+
+#[test]
+fn windsurf_gemini_copilot_and_cline_project_only_allowed_metadata() {
+    let fixture = Fixture::new();
+    fixture.put(
+        "home/.codeium/windsurf/mcp_config.json",
+        br#"{
+            "mcpServers": {
+                "local": {"command": "private-windsurf-command", "env": {"TOKEN": "private-windsurf-token"}},
+                "hosted": {"serverUrl": "https://private-windsurf-endpoint.invalid/mcp"}
+            }
+        }"#,
+    );
+    fixture.put(
+        "project/.codeium/windsurf/mcp_config.json",
+        br#"{"mcpServers":{"must-not-appear":{"command":"private-project-windsurf"}}}"#,
+    );
+    fixture.put(
+        "home/.gemini/settings.json",
+        br#"{
+            "security": {"auth": {"apiKey": "private-gemini-key-fixture"}},
+            "mcpServers": {
+                "local": {"command": "private-gemini-command"},
+                "http": {"httpUrl": "https://private-gemini-http.invalid/mcp"},
+                "events": {"url": "https://private-gemini-sse.invalid/sse"}
+            }
+        }"#,
+    );
+    fixture.put(
+        "project/.gemini/settings.json",
+        br#"{"mcpServers":{"workspace":{"command":"private-gemini-project"}}}"#,
+    );
+    fixture.put(
+        "home/.gemini/mcp-server-enablement.json",
+        br#"{"local": true, "secret": "private-enablement-fixture"}"#,
+    );
+    fixture.put(
+        "home/.copilot/mcp-config.json",
+        br#"{"mcpServers":{"cli":{"command":"private-copilot-cli"}},"token":"private-copilot-home"}"#,
+    );
+    fixture.put(
+        "project/.mcp.json",
+        br#"{"mcpServers":{"portable":{"type":"stdio","command":"private-portable"}}}"#,
+    );
+    fixture.put(
+        "project/.vscode/mcp.json",
+        br#"{"inputs":[{"id":"token","password":true}],"servers":{"workspace":{"type":"http","url":"https://private-vscode-mcp.invalid/"}}}"#,
+    );
+    fixture.put(
+        "home/.cline/data/settings/cline_mcp_settings.json",
+        br#"{"mcpServers":{"docs":{"command":"private-cline-command","disabled":true,"env":{"API_KEY":"private-cline-env"}}}}"#,
+    );
+    fixture.put(
+        "home/.cline/skills/review/SKILL.md",
+        b"---\nname: review\ndescription: Review diffs\n---\nprivate-cline-skill-body",
+    );
+    fixture.put(
+        "project/.cline/skills/deploy/SKILL.md",
+        b"private-cline-project-body",
+    );
+    fixture.put(
+        "home/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
+        br#"{"mcpServers":{"must-not-appear":{"command":"private-globalstorage"}}}"#,
+    );
+
+    let windsurf = fixture.discover("windsurf");
+    assert!(windsurf.inspected);
+    assert_eq!(windsurf.mcp_servers.len(), 2);
+    assert!(!windsurf
+        .mcp_servers
+        .iter()
+        .any(|entry| entry.name == "must-not-appear"));
+    assert_eq!(
+        windsurf
+            .mcp_servers
+            .iter()
+            .find(|entry| entry.name == "hosted")
+            .unwrap()
+            .transport,
+        McpTransport::Unknown
+    );
+    assert!(windsurf.skills.is_empty());
+    assert!(
+        !serde_json::to_string(&windsurf)
+            .unwrap()
+            .contains("private-"),
+        "Windsurf inventory must omit commands, URLs and env"
+    );
+
+    let gemini = fixture.discover("gemini");
+    assert_eq!(gemini.mcp_servers.len(), 4);
+    let transport = |name: &str| {
+        gemini
+            .mcp_servers
+            .iter()
+            .find(|entry| entry.name == name)
+            .unwrap()
+            .transport
+    };
+    assert_eq!(transport("local"), McpTransport::Stdio);
+    assert_eq!(transport("http"), McpTransport::Http);
+    assert_eq!(transport("events"), McpTransport::Unknown);
+    assert_eq!(
+        gemini
+            .mcp_servers
+            .iter()
+            .find(|entry| entry.name == "workspace")
+            .unwrap()
+            .scope,
+        CapabilityScope::Project
+    );
+    assert!(gemini
+        .limits
+        .iter()
+        .any(|limit| limit.contains("enablement")));
+    assert!(
+        !serde_json::to_string(&gemini).unwrap().contains("private-"),
+        "Gemini inventory must omit settings secrets and endpoints"
+    );
+
+    let copilot = fixture.discover("copilot");
+    assert_eq!(copilot.mcp_servers.len(), 2);
+    assert!(copilot
+        .mcp_servers
+        .iter()
+        .any(|entry| entry.name == "workspace" && entry.transport == McpTransport::Http));
+    assert!(copilot
+        .mcp_servers
+        .iter()
+        .any(|entry| entry.name == "portable"));
+    assert!(!copilot.mcp_servers.iter().any(|entry| entry.name == "cli"));
+    assert!(
+        !serde_json::to_string(&copilot)
+            .unwrap()
+            .contains("private-"),
+        "VS Code Copilot inventory must omit inputs, URLs and commands"
+    );
+
+    let copilot_cli = fixture.discover("copilot-cli");
+    assert_eq!(copilot_cli.mcp_servers.len(), 2);
+    assert!(copilot_cli
+        .mcp_servers
+        .iter()
+        .any(|entry| entry.name == "cli"));
+    assert!(copilot_cli
+        .mcp_servers
+        .iter()
+        .any(|entry| entry.name == "portable" && entry.scope == CapabilityScope::Project));
+    assert!(!copilot_cli
+        .mcp_servers
+        .iter()
+        .any(|entry| entry.name == "workspace"));
+    assert!(!serde_json::to_string(&copilot_cli)
+        .unwrap()
+        .contains("private-"));
+
+    let cline = fixture.discover("cline");
+    assert_eq!(cline.mcp_servers.len(), 1);
+    assert_eq!(cline.mcp_servers[0].enabled, Some(false));
+    assert!(!cline
+        .mcp_servers
+        .iter()
+        .any(|entry| entry.name == "must-not-appear"));
+    assert_eq!(cline.skills.len(), 2);
+    assert!(cline.skills.iter().any(|skill| skill.name == "review"));
+    assert!(cline
+        .skills
+        .iter()
+        .any(|skill| { skill.name == "deploy" && skill.scope == CapabilityScope::Project }));
+    assert!(
+        !serde_json::to_string(&cline).unwrap().contains("private-"),
+        "Cline inventory must omit commands, env and skill bodies"
+    );
+}
+
+#[test]
+fn gemini_does_not_resolve_overlapping_transport_keys() {
+    let fixture = Fixture::new();
+    fixture.put(
+        "home/.gemini/settings.json",
+        br#"{"mcpServers":{"both":{"command":"private-command","httpUrl":"https://private-http.invalid/"}}}"#,
+    );
+    let out = fixture.discover("gemini");
+    assert_eq!(out.mcp_servers.len(), 1);
+    assert_eq!(out.mcp_servers[0].transport, McpTransport::Unknown);
+    assert!(!serde_json::to_string(&out).unwrap().contains("private-"));
+}
+
+#[test]
+fn copilot_cli_accepts_documented_local_and_bare_project_maps_without_resolving_precedence() {
+    let fixture = Fixture::new();
+    fixture.put(
+        "home/.copilot/mcp-config.json",
+        br#"{"mcpServers":{"shared":{"type":"local","command":"private-command","env":{"TOKEN":"private-token"}}}}"#,
+    );
+    fixture.put(
+        "project/.mcp.json",
+        br#"{"shared":{"type":"local","command":"private-command"}}"#,
+    );
+    fixture.put(
+        "project/.github/mcp.json",
+        br#"{"mcpServers":{"shared":{"type":"http","url":"https://private-endpoint.invalid/mcp","headers":{"Authorization":"private-header"}}}}"#,
+    );
+    let out = fixture.discover("copilot-cli");
+    assert_eq!(out.mcp_servers.len(), 3);
+    assert!(out.mcp_servers.iter().all(|entry| entry.name == "shared"));
+    assert_eq!(
+        out.mcp_servers
+            .iter()
+            .filter(|entry| entry.transport == McpTransport::Stdio)
+            .count(),
+        2
+    );
+    assert_eq!(
+        out.mcp_servers
+            .iter()
+            .map(|entry| &entry.id)
+            .collect::<HashSet<_>>()
+            .len(),
+        3
+    );
+    assert!(!serde_json::to_string(&out).unwrap().contains("private-"));
+
+    fixture.put("project/.mcp.json", br#"{"mcpServers":false}"#);
+    let invalid = fixture.discover("copilot-cli");
+    assert_eq!(invalid.mcp_servers.len(), 2);
+    assert!(!invalid
+        .mcp_servers
+        .iter()
+        .any(|entry| entry.name == "mcpServers"));
+}
+
+#[test]
+fn cline_http_and_legacy_sse_follow_its_own_schema() {
+    let fixture = Fixture::new();
+    fixture.put(
+        "home/.cline/data/settings/cline_mcp_settings.json",
+        br#"{"mcpServers":{
+            "http":{"type":"streamableHttp","url":"https://private-http.invalid/","disabled":false},
+            "legacy":{"url":"https://private-sse.invalid/","disabled":true},
+            "events":{"type":"sse","url":"https://private-events.invalid/"},
+            "other-client-key":{"httpUrl":"https://private-other.invalid/"},
+            "overlap":{"type":"streamableHttp","command":"private-command","url":"https://private-both.invalid/"},
+            "malformed-type":{"type":false,"command":"private-command"}
+        }}"#,
+    );
+    let out = fixture.discover("cline");
+    let entry = |name: &str| {
+        out.mcp_servers
+            .iter()
+            .find(|entry| entry.name == name)
+            .unwrap()
+    };
+    assert_eq!(entry("http").transport, McpTransport::Http);
+    assert_eq!(entry("http").enabled, Some(true));
+    assert_eq!(entry("legacy").transport, McpTransport::Sse);
+    assert_eq!(entry("legacy").enabled, Some(false));
+    assert_eq!(entry("events").transport, McpTransport::Sse);
+    for name in ["other-client-key", "overlap", "malformed-type"] {
+        assert_eq!(entry(name).transport, McpTransport::Unknown);
+    }
+    assert!(!serde_json::to_string(&out).unwrap().contains("private-"));
+}
+
+#[test]
+fn jsonc_settings_preserve_strings_and_omit_comments_endpoints_and_other_private_fields() {
+    let fixture = Fixture::new();
+    fixture.put(
+        "project/.vscode/mcp.json",
+        br#"{
+            // private-comment
+            "servers": {
+                "local": {"command":"private-command","args":["private-argument",],},
+                "remote": {"type":"http","url":"https://private-endpoint.invalid/a/*x*/?q=//","headers":{"Authorization":"private-header"}},
+            },
+            "inputs": [{"id":"private-input","password":true},],
+        }"#,
+    );
+    fixture.put(
+        "project/.mcp.json",
+        br#"{"mcpServers":{"portable":{"type":"local","command":"private-command"}}, /* private-comment */}"#,
+    );
+    let vscode = fixture.discover("copilot");
+    assert_eq!(vscode.mcp_servers.len(), 3);
+    assert!(vscode
+        .mcp_servers
+        .iter()
+        .any(|entry| entry.name == "portable" && entry.transport == McpTransport::Stdio));
+    assert!(!serde_json::to_string(&vscode).unwrap().contains("private-"));
+
+    fixture.put(
+        "home/.gemini/settings.json",
+        br#"{/* private-comment */"mcpServers":{"remote":{"httpUrl":"https://private-endpoint.invalid/a/*x*/?q=//"}}}// private-tail"#,
+    );
+    let gemini = fixture.discover("gemini");
+    assert_eq!(gemini.mcp_servers.len(), 1);
+    assert_eq!(gemini.mcp_servers[0].transport, McpTransport::Http);
+    assert!(!serde_json::to_string(&gemini).unwrap().contains("private-"));
+    fixture.put(
+        "home/.gemini/settings.json",
+        br#"{"mcpServers":{"remote":{"httpUrl":"https://private-endpoint.invalid/"},}}"#,
+    );
+    let invalid = fixture.discover("gemini");
+    assert!(invalid.mcp_servers.is_empty());
+    assert!(invalid.limits.iter().any(|limit| limit.contains("parsed")));
+}
+
+#[test]
+fn jsonc_lexer_keeps_json_grammar_and_strict_formats_fail_closed() {
+    let input = r#"{/* comment */"url":"https://example.invalid/a/*x*/?q=//", "quoted":"é \\\" // /* ,]", "items":[1,],}// tail"#;
+    let bytes = jsonc_bytes(input, true).unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(value["url"] == "https://example.invalid/a/*x*/?q=//");
+    assert!(value["quoted"] == "é \\\" // /* ,]");
+    assert!(value["items"] == serde_json::json!([1]));
+    for input in [
+        "{,}",
+        "[,]",
+        "[1,,]",
+        "{\"a\":,}",
+        "{\"a\":tru/*x*/e}",
+        "{/* unterminated",
+        "{\"a\":\"unterminated// }",
+        "[1] /* nested /* x */ */",
+    ] {
+        let parsed = jsonc_bytes(input, true)
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
+        assert!(parsed.is_none(), "malformed JSONC must remain rejected");
+    }
+    assert!(jsonc_bytes(&" ".repeat(MAX_FILE_BYTES + 1), true).is_none());
+
+    let fixture = Fixture::new();
+    fixture.put(
+        "home/.cursor/mcp.json",
+        br#"{/* private-comment */"mcpServers":{"must-not-appear":{"command":"private-command"}}}"#,
+    );
+    let strict = fixture.discover("cursor");
+    assert!(strict.mcp_servers.is_empty());
+    assert!(!serde_json::to_string(&strict).unwrap().contains("private-"));
+}
+
+#[test]
+fn json_transport_does_not_apply_another_clients_fields_or_infer_from_malformed_types() {
+    let fixture = Fixture::new();
+    fixture.put(
+        "project/.mcp.json",
+        br#"{"mcpServers":{
+            "other-client":{"type":"http","httpUrl":"https://private-http.invalid/"},
+            "extra-field":{"type":"http","url":"https://private-http.invalid/","serverUrl":"https://private-other.invalid/"},
+            "malformed-type":{"type":false,"command":"private-command"},
+            "empty-command":{"type":"http","url":"https://private-http.invalid/","command":""}
+        }}"#,
+    );
+    let out = fixture.discover("claude-code");
+    assert_eq!(out.mcp_servers.len(), 4);
+    assert!(out
+        .mcp_servers
+        .iter()
+        .all(|entry| entry.transport == McpTransport::Unknown));
+    assert!(!serde_json::to_string(&out).unwrap().contains("private-"));
+}
+
+#[test]
+fn gemini_and_cursor_untyped_urls_do_not_prove_a_remote_transport() {
+    let fixture = Fixture::new();
+    let config = br#"{"mcpServers":{
+        "http":{"type":"http","url":"https://private-http.invalid/"},
+        "events":{"type":"sse","url":"https://private-events.invalid/"},
+        "negotiated":{"url":"https://private-negotiated.invalid/"},
+        "malformed":{"type":true,"url":"https://private-malformed.invalid/"}
+    }}"#;
+    for (product, path) in [
+        ("gemini", "home/.gemini/settings.json"),
+        ("cursor", "home/.cursor/mcp.json"),
+        ("cursor-agent", "home/.cursor/mcp.json"),
+    ] {
+        fixture.put(path, config);
+        let out = fixture.discover(product);
+        assert_eq!(out.mcp_servers.len(), 4);
+        let transport = |name: &str| {
+            out.mcp_servers
+                .iter()
+                .find(|entry| entry.name == name)
+                .unwrap()
+                .transport
+        };
+        assert_eq!(transport("http"), McpTransport::Http);
+        assert_eq!(transport("events"), McpTransport::Sse);
+        assert_eq!(transport("negotiated"), McpTransport::Unknown);
+        assert_eq!(transport("malformed"), McpTransport::Unknown);
+        assert!(!serde_json::to_string(&out).unwrap().contains("private-"));
+    }
+}
+
+#[test]
+fn clients_with_separate_enablement_settings_do_not_reinterpret_arbitrary_server_booleans() {
+    let fixture = Fixture::new();
+    let config = br#"{"mcpServers":{
+        "on":{"command":"private-command","enabled":true,"disabled":false},
+        "off":{"command":"private-command","enabled":false,"disabled":true}
+    }}"#;
+    for (product, path) in [
+        ("gemini", "home/.gemini/settings.json"),
+        ("copilot", "project/.mcp.json"),
+        ("copilot-cli", "home/.copilot/mcp-config.json"),
+    ] {
+        fixture.put(path, config);
+        let out = fixture.discover(product);
+        assert!(!out.mcp_servers.is_empty());
+        assert!(out.mcp_servers.iter().all(|entry| entry.enabled.is_none()));
+        assert!(out.limits.iter().any(|limit| limit.contains("enablement")));
+        assert!(!serde_json::to_string(&out).unwrap().contains("private-"));
+    }
+    fixture.put(
+        "home/.cline/data/settings/cline_mcp_settings.json",
+        br#"{"mcpServers":{"unsupported":{"command":"private-command","enabled":false}}}"#,
+    );
+    let out = fixture.discover("cline");
+    assert_eq!(out.mcp_servers.len(), 1);
+    assert_eq!(out.mcp_servers[0].enabled, None);
 }

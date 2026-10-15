@@ -63,9 +63,12 @@ matching known account, and do not establish current work by a particular runnin
   The installed app and `npm run dev` read the live process table; the website demo uses labelled sample data.
 - **TUI:** start `holdmap`, then press **Shift+Tab** to open Agents directly. **Tab** cycles
   Ports → Graph → Agents. Use **↑/↓** to select an agent, **/** to search, and **PgUp/PgDn** to
-  scroll its details. Wide windows show both panes side by side; small windows stack them.
-  Mouse-wheel scrolling follows the hovered pane. **p** pauses, **r** refreshes and **?** opens
-  help. Selection follows the same agent across refreshes. Failed scans clearly mark cached data.
+  scroll its details. **Current source (Unreleased):** **c** toggles local MCP/skill inspection
+  for the current account. While enabled, Agents refreshes that inventory; pressing **c** again
+  or leaving Agents turns it off and clears retained inventory. Ordinary refreshes stay on the process table. Wide windows show both panes side by
+  side; small windows stack them. Mouse-wheel scrolling follows the hovered pane. **p** pauses,
+  **r** refreshes and **?** opens help. Selection follows the same agent across refreshes.
+  Failed scans clearly mark cached data.
 - **Review a service stop:** press **x** to review every affected service and its exact TCP/UDP
   protocol. Scroll the full plan with **PgUp/PgDn**. **Enter**, **n** or **Esc** cancels; only
   **y** confirms. The batch is freshly checked before any action. Changed targets require a new
@@ -93,8 +96,9 @@ These terminal captures use isolated local fixtures:
 These additions are [Unreleased](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#unreleased),
 not part of the published **0.7.1** installers. Open **Agents → MCP & skills** to explicitly
 inspect supported local configuration for the running current-account agents. The CLI equivalent
-is `holdmap agents --capabilities`, optionally with `--json`; MCP clients can call
-`list_agents` with `include_capabilities: true`. Ordinary scans do not inspect those files.
+is `holdmap agents --capabilities`, optionally with `--json`; the terminal Agents pane uses
+**c**; MCP clients can call `list_agents` with `include_capabilities: true`. Ordinary scans do
+not inspect those files.
 
 ### Four kinds of evidence
 
@@ -132,7 +136,9 @@ card to replace the left rail with that item's inspector. Nothing is selected au
 and there is no empty details column. **Agents**, the close button or **Esc** returns to the
 agent rail and restores focus, while retaining the selected agent scope; **Show all** returns
 to the combined map. Keyboard users can focus a map card and press **Enter** or **Space**.
-On narrow windows, **Browse agents** opens a dismissible agent drawer. Fit, zoom and the minimap
+On narrow windows, **Browse agents** opens a dismissible agent drawer. Nonmodal drawers
+and disclosures close when keyboard focus leaves or an outside pointer interaction occurs,
+revealing the newly focused control without returning focus to an old opener. Fit, zoom and the minimap
 help explore larger maps. A bounded map reports omitted definitions and relationships.
 The narrow canvas opens at a readable zoom around an agent; pan the map or choose **Fit all
 capabilities in view** to see the wider layout.
@@ -173,13 +179,31 @@ folder history.
 | Claude Code | `~/.claude.json` user entries and matching private project entries; `<project>/.mcp.json` | `.claude/skills` under home and observed projects |
 | Cursor / Cursor agent | `.cursor/mcp.json` under home and observed projects | `.cursor/skills`, `.agents/skills`, `.claude/skills` and `.codex/skills` under those locations |
 | Claude Desktop | Manual `Claude/claude_desktop_config.json` under `~/Library/Application Support` on macOS or `%APPDATA%` on Windows | Not inspected |
+| Windsurf (legacy layout) | `~/.codeium/windsurf/mcp_config.json` only; newer Devin homes are not inspected | Not inspected |
+| Gemini CLI | `~/.gemini/settings.json` and `<project>/.gemini/settings.json` (`mcpServers` only) | Not inspected |
+| GitHub Copilot (VS Code) | Observed-project `.vscode/mcp.json` (`servers`) and `.mcp.json` | Not inspected |
+| Copilot CLI | `~/.copilot/mcp-config.json`, observed-project `.mcp.json` and `.github/mcp.json`; project maps can be bare or wrapped in `mcpServers` | Not inspected |
+| Cline | `~/.cline/data/settings/cline_mcp_settings.json` | `.cline/skills` under home and observed projects |
 
-Skill directories are shallow, with one extra category or `.system` level. Custom config homes,
-other ancestor directories, managed settings, plugins, desktop extensions, connectors and cloud
-inventories are not inspected. Unsupported products/platforms, other accounts, symbolic links,
+Skill directories are shallow, with one extra category or `.system` level. Custom config homes
+(`GEMINI_CLI_HOME`, `COPILOT_HOME`, `CLINE_DIR`, `CLINE_MCP_SETTINGS_PATH`, Aider
+`--mcp-servers-file`), VS Code profile `mcp.json`, editor `globalStorage`, other ancestor
+directories, managed settings, plugins, desktop extensions, connectors and cloud inventories
+are not inspected. Codex `.codex/skills` is a compatibility inspection root; current local
+loading also supports ancestor, admin, bundled and symlinked skills beyond this inventory.
+Cline compatibility roots outside `.cline/skills` are not inspected. Gemini `mcp.allowed` /
+`mcp.excluded`, `mcp-server-enablement.json` and Copilot `disabledMcpServers` are separate
+client policy, not projected enablement. Gemini/Copilot enablement stays unknown. Unsupported products/platforms, other accounts, symbolic links,
 reparse points and macOS privacy-protected locations are skipped. File, byte, entry, project,
 context and time limits bound inspection; the report preserves omissions and coverage limits.
 An empty list does not prove that no capabilities exist.
+
+Parsing follows each source format: VS Code JSONC accepts comments and trailing commas;
+Gemini settings accept comments but reject trailing commas. Other supported JSON files remain
+strict JSON. URL-only Cursor, legacy Windsurf and Gemini definitions do not establish HTTP
+versus SSE; their transport stays **Unknown**. Explicit supported type fields and dedicated
+HTTP fields can establish the declaration. Configuration precedence, effective trust and
+negotiated runtime transport remain unresolved.
 
 The current collection bounds are explicit:
 
@@ -210,6 +234,7 @@ The same explicit inspection is available without the desktop:
 ```sh
 holdmap agents --capabilities             # detailed current-account inventory
 holdmap agents claude --capabilities --json
+holdmap                                 # then Agents tab, press c
 ```
 
 For MCP, send a `tools/call` request to a current-source Holdmap server:

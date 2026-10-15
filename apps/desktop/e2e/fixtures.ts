@@ -7,7 +7,7 @@ export const test = base.extend<{ app: Page }>({
     page.on("pageerror", (error) => errors.push(error.message));
     await page.addInitScript(() => {
       localStorage.setItem("holdmap.onboarded", "1");
-      localStorage.setItem("holdmap.theme", "dark");
+      if (!localStorage.getItem("holdmap.theme")) localStorage.setItem("holdmap.theme", "dark");
       localStorage.setItem("holdmap.view", "list");
     });
     await page.goto("/");

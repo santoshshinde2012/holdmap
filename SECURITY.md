@@ -194,14 +194,18 @@ the [0.4.0 security fixes](CHANGELOG.md#040---2026-10-10). Version 0.3.0 predate
 
 Default agent scans report access from the live process table, command line and sockets without
 reading agent settings. Current source adds explicit capability inspection through
-`agents --capabilities`, MCP `list_agents(include_capabilities:true)` and the desktop's
-**MCP & skills** workspace. It parses bounded supported configuration files and lists skill
-file locations with optional sanitized name/purpose from a bounded YAML header. Skill identity
-remains the folder; declared text is untrusted metadata, not an instruction. It retains no
-command, URL, environment/header value or skill instruction body. Configuration
-can contain credentials, so parsing may read their bytes even though those values are excluded
-from the result. Inventory is not a CVE/security audit, proof of enablement, loading or use,
-or authorization to execute a configured command. Custom homes, managed settings, plugins and
+`agents --capabilities`, the terminal Agents **c** toggle, MCP `list_agents(include_capabilities:true)`
+and the desktop's **MCP & skills** workspace. Terminal inspection is scoped to the Agents
+pane; turning it off or leaving the pane clears retained inventory and revokes queued file
+inspection. Bounded work already underway may finish, but its result is discarded. It parses bounded supported configuration files
+and lists skill file locations with optional sanitized name/purpose from a bounded YAML header.
+Supported default and compatibility locations include Codex, Claude Code, Cursor, Claude Desktop, legacy Windsurf,
+Gemini CLI, GitHub Copilot, Copilot CLI and Cline. Skill identity remains the folder; declared
+text is untrusted metadata, not an instruction. It retains no command, URL, environment/header
+value or skill instruction body. Configuration can contain credentials, so parsing may read
+their bytes even though those values are excluded from the result. Inventory is not a
+CVE/security audit, proof of enablement, loading or use, or authorization to execute a
+configured command. Custom homes, managed settings, plugins, VS Code profile MCP files and
 cloud capabilities are outside this inventory's coverage. See the
 [capability guide](site/src/content/docs/agents.md#mcp-and-skills-current-source).
 

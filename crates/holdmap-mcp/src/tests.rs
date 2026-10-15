@@ -50,7 +50,7 @@ fn notifications_get_no_response() {
 fn lists_tools_with_annotations() {
     let r = call(json!({"jsonrpc":"2.0","id":3,"method":"tools/list"}));
     let tools = r["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 9);
+    assert_eq!(tools.len(), 11);
     let stop = tools.iter().find(|t| t["name"] == "stop_port").unwrap();
     assert_eq!(stop["annotations"]["destructiveHint"], true);
     assert_eq!(stop["annotations"]["idempotentHint"], false);
@@ -80,6 +80,14 @@ fn find_free_port_and_explain() {
         json!({"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"explain_port","arguments":{"port":port}}}),
     );
     assert_eq!(r["result"]["structuredContent"]["status"], "free");
+    let inspect = call(
+        json!({"jsonrpc":"2.0","id":71,"method":"tools/call","params":{"name":"inspect_port","arguments":{"port":port}}}),
+    );
+    assert_eq!(inspect["result"]["structuredContent"]["status"], "free");
+    assert_eq!(
+        inspect["result"]["structuredContent"]["headline"],
+        r["result"]["structuredContent"]["headline"]
+    );
     let r = call(
         json!({"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"explain_port","arguments":{"port":0}}}),
     );
@@ -155,7 +163,13 @@ fn serve_loop_round_trip() {
 #[test]
 fn topology_and_cluster_plan_are_read_only() {
     let tools = tools();
-    for name in ["get_topology", "plan_cluster_stop", "list_agents"] {
+    for name in [
+        "get_topology",
+        "plan_cluster_stop",
+        "list_agents",
+        "inspect_port",
+        "get_agent_flow",
+    ] {
         let t = tools
             .as_array()
             .unwrap()
@@ -193,6 +207,92 @@ fn list_agents_returns_a_report() {
         .as_str()
         .unwrap()
         .starts_with("No agents or developer tools match \"no-such-agent\"."));
+}
+
+#[test]
+fn get_agent_flow_is_payload_free_and_accepts_the_same_agent_filter() {
+    let r = call(
+        json!({"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"get_agent_flow","arguments":{"agent":"no-such-agent"}}}),
+    );
+    assert_eq!(r["result"]["isError"], false);
+    let data = &r["result"]["structuredContent"];
+    assert!(data["nodes"].is_array());
+    assert!(data["edges"].is_array());
+    assert!(data["limits"].is_array());
+    assert_eq!(data["omitted_nodes"], 0);
+    assert_eq!(data["omitted_edges"], 0);
+    let text = r["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("Observed agent connections"));
+    assert!(text.contains("tool calls and payloads are not included"));
+    let serialized = serde_json::to_string(data).unwrap();
+    assert!(!serialized.contains("cmdline"));
+    assert!(!serialized.contains("private-"));
+}
+
+#[test]
+fn agent_flow_discovery_describes_and_validates_relationship_evidence() {
+    let schema = &catalog::definition("get_agent_flow").unwrap()["outputSchema"];
+    let mut node = json!({
+        "id":"process:42:7", "kind":"agent", "label":"Fixture agent",
+        "agent_id":"agent:42", "pid":42, "start_token":7, "entry_id":null,
+        "address":null, "port":null, "protocol":null, "tool_kind":null,
+        "evidence":"observed"
+    });
+    let edge = json!({
+        "id":"fixture-edge", "from":"process:42:7", "to":"process:43:8",
+        "kind":"parent", "evidence":"observed", "connections":0, "source_pids":[]
+    });
+    let mut child = node.clone();
+    child["id"] = json!("process:43:8");
+    child["pid"] = json!(43);
+    child["start_token"] = json!(8);
+    child["kind"] = json!("process");
+    let mut data = json!({
+        "taken_at_ms":7, "nodes":[node, child], "edges":[edge],
+        "limits":["Fixture visibility limit."], "omitted_nodes":0, "omitted_edges":0
+    });
+    let _: holdmap_core::agents::AgentFlowReport = serde_json::from_value(data.clone()).unwrap();
+    validation::validate(&data, schema).unwrap();
+    for kind in ["agent", "tool", "process", "listener", "remote", "unknown"] {
+        node["kind"] = json!(kind);
+        data["nodes"][0] = node.clone();
+        validation::validate(&data, schema).unwrap();
+    }
+    for kind in ["parent", "owns_listener", "tcp"] {
+        data["edges"][0]["kind"] = json!(kind);
+        for evidence in ["observed", "inferred", "unknown"] {
+            data["edges"][0]["evidence"] = json!(evidence);
+            validation::validate(&data, schema).unwrap();
+        }
+    }
+    for (collection, key, value) in [
+        ("nodes", "kind", json!("tool_call")),
+        ("nodes", "evidence", json!("confirmed_invocation")),
+        ("nodes", "port", json!(65536)),
+        ("nodes", "tool_kind", json!("confirmed_mcp")),
+        ("nodes", "command", json!("excluded fixture content")),
+        ("edges", "kind", json!("tool_call")),
+        ("edges", "connections", json!(-1)),
+        ("edges", "source_pids", json!(["42"])),
+    ] {
+        let mut invalid = data.clone();
+        invalid[collection][0][key] = value;
+        assert!(
+            validation::validate(&invalid, schema).is_err(),
+            "flow contract must reject invalid {collection}.{key}"
+        );
+    }
+    for collection in ["nodes", "edges"] {
+        let properties = schema["properties"][collection]["items"]["properties"]
+            .as_object()
+            .expect("flow discovery describes each serialized field");
+        for key in data[collection][0].as_object().unwrap().keys() {
+            assert!(properties.contains_key(key));
+            let mut invalid = data.clone();
+            invalid[collection][0].as_object_mut().unwrap().remove(key);
+            assert!(validation::validate(&invalid, schema).is_err());
+        }
+    }
 }
 
 fn agents_fixture() -> AgentsReport {
@@ -341,6 +441,10 @@ fn invalid_tool_arguments_return_actionable_errors() {
         ("explain_port", json!({"port": -1})),
         ("explain_port", json!({"port": 65536})),
         ("explain_port", json!({"port": 3000.5})),
+        ("inspect_port", json!({})),
+        ("inspect_port", json!({"port": 0})),
+        ("get_agent_flow", json!({"agent": 42})),
+        ("get_agent_flow", json!({"typo": true})),
         ("find_free_port", json!({"near": "3000"})),
         ("find_free_port", json!({"near": 0})),
         ("find_free_port", json!({"near": 65536})),
@@ -375,15 +479,25 @@ fn invalid_tool_arguments_return_actionable_errors() {
         assert!(response["result"]["content"][0]["text"].as_str().is_some());
         assert!(response["result"].get("structuredContent").is_none());
     }
-    for arguments in [json!([]), Value::Null, json!(true), json!("{}"), json!(123)] {
-        let response = call(
-            json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_ports","arguments":arguments}}),
-        );
-        assert_eq!(response["result"]["isError"], true);
-        assert_eq!(
-            response["result"]["content"][0]["text"],
-            "`arguments` must be object"
-        );
+}
+
+#[test]
+fn non_object_tool_arguments_are_protocol_errors_in_every_version() {
+    for version in SUPPORTED_VERSIONS {
+        let mut session = Session::default();
+        session.handle(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":version}}));
+        for arguments in [json!([]), Value::Null, json!(true), json!("{}"), json!(123)] {
+            let response = session.handle(
+                json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_ports","arguments":arguments}}),
+            ).unwrap();
+            assert_eq!(response["error"]["code"], -32602);
+            assert!(response.get("result").is_none());
+            assert_eq!(response["id"], 2);
+            assert_eq!(
+                response["error"]["message"],
+                "tools/call arguments must be an object"
+            );
+        }
     }
 }
 

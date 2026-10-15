@@ -147,6 +147,11 @@ real binary IPC to a fixture-only destination, and checks hashes, permissions, a
 duration and cleanup with FFprobe/FFmpeg. Its capture API tripwire rejects any screen-picker
 request. It never captures the user's screen or opens the production native save chooser;
 save-policy and atomic-write behavior have separate native unit coverage.
+On macOS 14 and newer, the generated-canvas fixture requests
+[disabled background throttling](https://docs.rs/tauri/2.12.1/tauri/webview/struct.WebviewWindowBuilder.html#method.background_throttling)
+for its owned, unfocused window so inactive scheduling does not stall its paint/stop timers.
+It reports that policy and timer diagnostics. App UI and capability probes retain default
+scheduling; this fixture does not establish background behavior of permissioned display capture.
 The app UI check uses a hardened release window, checks the real confirmation dialog and
 forces the browser API absent to exercise native capability discovery. The native pixel
 fixture compiles the production Swift writer and validates MP4/GIF media and cancellation.
