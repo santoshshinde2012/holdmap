@@ -1,13 +1,79 @@
 ---
-title: What's new in 0.7.1
-description: Fix macOS screen recording with holdmap 0.7.1, explore the maps and live scans introduced in 0.7.0, and upgrade the desktop app.
+title: What's new in 0.8.0
+description: Explore local MCP and skill maps, reported agent usage and clearer desktop updates in holdmap 0.8.0, with recording startup and cleanup fixes.
 order: 1.5
 ---
 
-**Holdmap 0.7.1** fixes screen recording in macOS desktop windows that do not offer
-browser screen sharing. It builds on the local recorder, agent-map zoom and live development
-scans introduced in **0.7.0**. Download the release from [Install](../../#install), or read the
-[0.7.1 release notes](https://github.com/santoshshinde2012/holdmap/releases/tag/v0.7.1).
+**Holdmap 0.8.0** adds a graphical map of local MCP definitions and skill files, clearer
+reported-usage labels, and desktop update help. It also fixes recording startup cancellation
+and native temporary-file cleanup. [Install](../../#install) always links to the latest
+published release; the [changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md)
+records the full changes.
+
+## New in 0.8.0: MCP and skills, mapped
+
+Open **Agents → MCP & skills** to explicitly inspect supported local configuration for
+running agents in your account. MCP definitions and skill files sit around their agent cards;
+running MCP candidates occupy a separate lane. Select a card with a click, **Enter** or
+**Space** to inspect its source, scope and evidence, plus optional skill-header name and purpose.
+Close the inspector or press **Esc** to return to the agent rail without losing your scope.
+
+Search and filter by kind, scope or configured state. Shared nodes represent exact discovered
+source definitions, with an association to each observed owner. Matching aliases never join a
+definition to a running process or recorded call. Narrow windows keep a readable map and a
+**Browse agents** drawer; pan to explore, or choose **Fit all capabilities in view**.
+
+![Sample MCP and skills map keeps configured definitions, agent owners and running candidates distinct](../../../../docs/screenshots/desktop-capabilities-dark.png)
+
+The same opt-in is available through `holdmap agents --capabilities`, the terminal Agents
+**c** toggle and MCP `list_agents(include_capabilities:true)`. Leaving the terminal Agents pane
+turns inspection off and clears retained inventory. Ordinary scans do not inspect settings.
+
+Supported default and compatibility locations cover Codex, Claude Code, Cursor, Claude Desktop,
+legacy Windsurf, Gemini CLI, GitHub Copilot, Copilot CLI and Cline. Skill coverage varies by
+client. Discovery is bounded and skips links, protected locations and unsupported roots;
+presence does not establish loading, trust, enablement or use. Credential values and skill
+instruction bodies are excluded from results. See the [full source and privacy limits](../agents/#mcp-and-skills).
+
+## Reported usage keeps its evidence
+
+**Agents → Flow → Calls** can label a reported MCP server alias and an explicit Claude skill
+activation when the configured integration supplies approved metadata. Unreported or
+provider-redacted names stay unknown. These labels are separate from configured inventory and
+do not establish that a particular agent loaded a server or invoked a skill just because its
+name matches. [Set up optional recording](../agents/#set-up-optional-recording).
+
+MCP clients also gain two read tools: `inspect_port` returns the same structured inspection as
+`explain_port`, and `get_agent_flow` returns observed process ancestry and live TCP relationships.
+Observed connections do not establish messages or tool calls. [MCP setup and tools](../mcp/).
+
+## Clearer updates and recording cleanup
+
+**Settings → About** shows the running desktop app's version, architecture and location,
+with desktop download and installation-guide actions. The command palette also opens desktop
+downloads. This helps distinguish an installed copy from one opened from a disk image or
+another folder; `holdmap --version` checks the separate CLI. Browser About identifies a web
+preview and omits desktop app locations.
+
+Cancelling while native recording starts now discards the acknowledged capture session.
+Native cleanup retains temporary files until pending operations finish. These changes preserve
+the existing local MP4/GIF exports, two-minute limit and explicit source chooser.
+
+## Upgrade to 0.8.0
+
+Run the CLI installer again, then check `holdmap --version`. The CLI installer includes the
+TUI and MCP server. Download the desktop installer separately for your operating system and
+architecture from [Install](../../#install). Quit Holdmap, install the matching download,
+then reopen it and check **Settings → About**. This release requires manual desktop
+installation; its published installers do not include a configured signed updater feed.
+
+The macOS builds are ad-hoc signed without Developer-ID signing or notarization, and Windows
+installers are unsigned. See [first-open instructions](../desktop/#first-open), the SHA-256
+files, and the build-provenance verification commands in [Install](../../#install).
+
+If you use optional agent activity recording, start a recording session and recopy its producer
+configuration when starting a new session. Each session uses a fresh local endpoint and token.
+[Recording setup](../agents/#set-up-optional-recording).
 
 ## Fixed in 0.7.1: native macOS recording
 
@@ -19,14 +85,14 @@ Native recording stops after two minutes even while the Holdmap window is hidden
 private temporary files for MP4 and GIF, removes them after copying exports into the preview
 or discarding the recording, and keeps the existing review and save controls.
 
-If 0.7.0 showed **Screen capture unavailable**, install the **0.7.1 desktop app** and reopen
+If 0.7.0 showed **Screen capture unavailable**, install **desktop 0.7.1 or newer** and reopen
 it. Updating only the CLI does not replace the desktop app. The app still runs on macOS 11
 or later; macOS 11–13 need browser screen-sharing support or the system screen recorder.
 [Recording requirements](../desktop/#record-the-screen).
 
 ## Features introduced in 0.7.0
 
-The following features remain available in 0.7.1. Read the
+The following features remain available in 0.8.0. Read the
 [0.7.0 release notes](https://github.com/santoshshinde2012/holdmap/releases/tag/v0.7.0) for their
 original release details.
 
@@ -43,10 +109,6 @@ Cancelled saves can be retried; **Discard recording**, reload, or quitting clear
 
 Screen recording is separate from optional agent tool-call metadata recording.
 [Screen recording guide](../desktop/#record-the-screen).
-
-The recording setup explains local export before opening the system's source chooser:
-
-![Screen recording setup offers local MP4 and GIF export with no audio, before choosing a screen or window](../../../../docs/screenshots/desktop-screen-record-dark.png)
 
 ### Computer, Footprint and Project
 
@@ -81,18 +143,3 @@ previews simulate stop and power actions; actual process stops need the desktop 
   within visible, enabled controls in the tab order.
 - Optional MCP observers that panic are disabled without interrupting tool responses. Explicit
   final OTLP status takes precedence over a conflicting custom success field.
-
-## Upgrade to 0.7.1
-
-Run the CLI installer again, then check `holdmap --version`. The CLI installer includes the
-TUI and MCP server; download the desktop installer separately for your operating system and
-architecture from [Install](../../#install). This release requires manual desktop installation;
-automatic updates are not configured for its published installers.
-
-The macOS builds are ad-hoc signed without notarization, and Windows installers are unsigned.
-See [first-open instructions](../desktop/#first-open), the SHA-256 files, and the build-provenance
-verification commands in [Install](../../#install).
-
-If you use optional agent activity recording, start a recording session and recopy its producer
-configuration when starting a new session. Each session uses a fresh local endpoint and token.
-[Recording setup](../agents/#set-up-optional-recording).

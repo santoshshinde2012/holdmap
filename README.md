@@ -33,10 +33,10 @@
 holdmap tells you what's really there — which agent or tool started it — and stops only what
 it should.
 
-Version **0.7.1** fixes screen recording in macOS desktop windows without browser screen
-sharing, using Apple's native picker on macOS 14 or later. It includes the local recorder,
-Computer / Footprint / Project map zoom and live development scans introduced in **0.7.0**.
-Read [what's new in 0.7.1](https://santoshshinde2012.github.io/holdmap/docs/whats-new/), check the
+Version **0.8.0** adds an interactive **MCP & skills** map, opt-in local capability inventory,
+reported MCP aliases and Claude skill activations, and clearer desktop version/update details.
+It also fixes native recording startup and cleanup on macOS.
+Read [what's new in 0.8.0](https://santoshshinde2012.github.io/holdmap/docs/whats-new/), check the
 [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
 current installers and see the [changelog](CHANGELOG.md) for release notes. Desktop
 screenshots use the shared browser UI with sample data.
@@ -59,9 +59,9 @@ screenshots use the shared browser UI with sample data.
   folders each one works in, the ports and apps it started (children grouped as tools & apps),
   the services and hosts it talks to, and access (account, sandbox, approval flags, network
   exposure including debug and model-server ports), each fact marked seen, inferred or unknown.
-  Default scans do not read agent settings. Current source adds an opt-in **MCP & skills**
+  Default scans do not read agent settings. Version 0.8.0 adds an opt-in **MCP & skills**
   inventory of configured server aliases and skill locations, separate from recorded usage;
-  see [Unreleased changes](CHANGELOG.md#unreleased). Reveal a folder, open it in your editor,
+  see [0.8.0 changes](CHANGELOG.md#080---2026-10-16). Reveal a folder, open it in your editor,
   or stop only the services that agent started, through the normal safety policy.
 - **Three levels of agent maps.** Computer shows this machine and outside systems;
   Footprint shows agents' folders, tools, ports and hosts; Project focuses on one source tree.
@@ -72,7 +72,7 @@ screenshots use the shared browser UI with sample data.
 - **Agent flow.** Follow observed process/socket relationships, or opt in to
   local recording of reported tools, model calls and delegated agents. Inspect parallel work,
   failures, duration and reported serialized sizes without storing prompts or tool arguments.
-  Current source also labels reported MCP aliases and explicit Claude skill activations;
+  Version 0.8.0 also labels reported MCP aliases and explicit Claude skill activations;
   an installed skill or server definition is not proof of use.
 
 ## Install
@@ -119,7 +119,7 @@ See [Apple's guidance on native apps and Rosetta](https://support.apple.com/en-g
 
 <!-- release-please updates this source-version marker; download links follow published releases. -->
 <!-- x-release-please-start-version -->
-Source version: **0.7.1**.
+Source version: **0.8.0**.
 <!-- x-release-please-end -->
 
 [dmg-arm64]: https://santoshshinde2012.github.io/holdmap/#install
@@ -200,8 +200,8 @@ Every read command takes `--json`. Exit codes: `0` ok, `1` busy / not found / ti
 error, `3` blocked by the safety policy, `4` needs elevation. All flags are in the
 **[CLI reference](docs/cli.md)**.
 
-Current source keeps every matching process in a name-based stop with `--no-tree` and
-verifies TCP/UDP listeners held by every included descendant in a PID/name tree stop.
+Name-based stops with `--no-tree` retain every matching process, and tree stops
+verify TCP/UDP listeners held by every included descendant in a PID/name tree stop.
 Supervisor commands must match the planned service or app; systemd service stops recheck
 protection for other members of the same service before running.
 
@@ -213,7 +213,7 @@ redacted commands; `--json` preserves evidence, timestamps and collection limits
 is not searched. Recent folders belong to the current account's history and are attached only
 to confirmed matching accounts; they do not prove current work by that running instance.
 
-**MCP & skills in current source (Unreleased).** `holdmap agents --capabilities --json`
+**MCP & skills in 0.8.0.** `holdmap agents --capabilities --json`
 explicitly inspects supported current-account configuration and skill metadata. The desktop's
 **Agents → MCP & skills** workspace, the terminal Agents **c** toggle and MCP
 `list_agents(include_capabilities:true)` expose the same inventory. The terminal toggle stays
@@ -223,7 +223,7 @@ and recorded usage; loading, trust and effective client policy stay unknown. Ord
 keep configuration inspection off. The desktop uses an Overview-style map: select an agent,
 MCP definition, skill or runtime card to open its details in the left rail. Close or press
 **Esc** to return to the map without changing the agent scope. **Filters** and **Coverage**
-open only when requested. See the [coverage, privacy and usage guide](site/src/content/docs/agents.md#mcp-and-skills-current-source).
+open only when requested. See the [coverage, privacy and usage guide](site/src/content/docs/agents.md#mcp-and-skills).
 
 **Terminal agents in 0.5.0.** Start `holdmap` and press **Shift+Tab**
 to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its
@@ -372,7 +372,7 @@ details, inferred MCP nodes and explicit omission counts. Native reports refresh
 of the window's poll; the browser [live demo](https://santoshshinde2012.github.io/holdmap/#demo)
 uses the same UI with sample data.
 
-Current source preserves composing and modified keys in settings, menus and resize controls.
+Desktop controls preserve composing and modified keys in settings, menus and resize controls.
 Dialog Tab navigation includes only enabled, visible controls in the active tab order.
 
 **Close and reopen.** With a working menu-bar or tray icon, closing the main window keeps
@@ -418,21 +418,21 @@ This is separate from optional agent tool-call metadata recording. See the
 [screen recording guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#record-the-screen)
 for permissions, platform requirements and export limits.
 
-**First open.** The **0.7.1** macOS app is ad-hoc signed and sealed without Developer-ID
+**First open.** The **0.8.0** macOS app is ad-hoc signed and sealed without Developer-ID
 signing or notarisation; its Windows installers are unsigned. Verify the checksums and
 build provenance before opening a download. Follow the
 [first-open guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#first-open)
 for OS-specific instructions and policy restrictions.
 
 Update an existing desktop installation by downloading the latest installer above that
-matches your operating system and architecture. **0.7.1 requires manual desktop installation**;
+matches your operating system and architecture. **0.8.0 requires manual desktop installation**;
 its published installers have no configured signed updater feed. Run the CLI installer again
 to update the CLI, TUI and MCP server; it does not update the separate desktop app.
 
 After installing, check **Settings → About** in the reopened app. `holdmap --version`
-checks the CLI, so it cannot confirm which desktop copy is running. Current source also
+checks the CLI, so it cannot confirm which desktop copy is running. Version 0.8.0 also
 shows the running app's location and architecture in About, with desktop download and
-installation-guide actions; see [Unreleased changes](CHANGELOG.md#unreleased).
+installation-guide actions; see [0.8.0 changes](CHANGELOG.md#080---2026-10-16).
 
 <details>
 <summary>More screenshots</summary>
@@ -443,7 +443,9 @@ installation-guide actions; see [Unreleased changes](CHANGELOG.md#unreleased).
 | **Command palette** | **Settings** |
 | ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) | ![Settings: startup and the global shortcut, dark theme](docs/screenshots/desktop-settings-dark.png) |
 | **About in the browser preview, dark** | **About in the browser preview, light** |
-| ![Current-source browser About identifies the web preview and offers desktop download and installation-guide actions, dark theme](docs/screenshots/desktop-about-dark.png) | ![Current-source browser About identifies the web preview and offers desktop download and installation-guide actions, light theme](docs/screenshots/desktop-about-light.png) |
+| ![Browser About identifies the web preview and offers desktop download and installation-guide actions, dark theme](docs/screenshots/desktop-about-dark.png) | ![Browser About identifies the web preview and offers desktop download and installation-guide actions, light theme](docs/screenshots/desktop-about-light.png) |
+| **Screen recording, dark** | **Screen recording, light** |
+| ![Screen recording setup explains local exports and the source chooser, dark theme](docs/screenshots/desktop-screen-record-dark.png) | ![Screen recording setup explains local exports and the source chooser, light theme](docs/screenshots/desktop-screen-record-light.png) |
 | **TUI** | **Agents** |
 | ![The holdmap TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) | ![The agents view: coding agents and developer tools with resource use, folders, ports and access, dark theme](docs/screenshots/desktop-agents-dark.png) |
 | **Agents in light theme** | **Child tools and MCP evidence** |
@@ -457,8 +459,7 @@ installation-guide actions; see [Unreleased changes](CHANGELOG.md#unreleased).
 | **Sort menu at the right edge, dark theme** | **Sort menu at the right edge, light theme** |
 | ![The Sort menu stays inside the viewport with readable grouping descriptions](docs/screenshots/desktop-sort-right-edge-dark.png) | ![The right-edge Sort menu leaves all choices visible in a compact window](docs/screenshots/desktop-sort-right-edge-light.png) |
 
-Current-source **MCP & skills** captures use labelled sample definitions; this workspace is
-Unreleased and is separate from the published 0.7.1 interface:
+The **MCP & skills** workspace in 0.8.0 uses labelled sample definitions in these captures:
 
 | **MCP and skills map** | **Selected skill details** |
 | --- | --- |
@@ -471,8 +472,8 @@ Unreleased and is separate from the published 0.7.1 interface:
 `holdmap mcp` lets AI coding assistants list ports, explain them, find a free port, wait for a
 server, read the service graph, list agents and developer tools (`list_agents`), stop the ports
 an agent started (`stop_agent_ports`, dry-run by default), and stop their own dev servers
-(never protected processes). Current source also adds read-only `inspect_port` and
-`get_agent_flow`; these are Unreleased and require a matching server build.
+(never protected processes). Version 0.8.0 also adds read-only `inspect_port` and
+`get_agent_flow`; update the CLI/MCP installation to use these tools.
 For Claude Desktop or Cursor (`~/.cursor/mcp.json`):
 
 ```json
@@ -496,8 +497,8 @@ Version 0.4.0 also exposes a bundled `holdmap://guide` resource and three workfl
 
 Retrieving a prompt performs no actions. The guide and templates help clients interpret results;
 MCP process identities remain inferred from process metadata and do not prove tool calls or
-transport. The current-source template also uses `get_agent_flow` for observed socket relationships.
-Current source's explicit `include_capabilities:true` option separately projects
+transport. The 0.8.0 template also uses `get_agent_flow` for observed socket relationships.
+The explicit `include_capabilities:true` option separately projects
 configured server aliases and skill metadata; definitions do not prove activation or use.
 Tool input/output schemas preserve structured data, and malformed arguments are rejected before
 acting, including incorrectly typed stop controls. Both stop tools preview by default; execution
@@ -721,7 +722,7 @@ dependencies and temporary captures are regenerated; Git history holds earlier v
 ## Learn more
 
 - [Website and guide](https://santoshshinde2012.github.io/holdmap/): the live demo and short how-tos.
-- [What's new in 0.7.1](https://santoshshinde2012.github.io/holdmap/docs/whats-new/): native macOS recording fixes, maps and upgrade instructions.
+- [What's new in 0.8.0](https://santoshshinde2012.github.io/holdmap/docs/whats-new/): MCP and skills maps, reported usage and upgrade instructions.
 - [Website maintenance](site/README.md): SEO checks, deployment and current website snapshots.
 - [Agents, tools and apps](https://santoshshinde2012.github.io/holdmap/docs/agents/): folders, access and stopping what an agent started.
 - [CLI reference](docs/cli.md): every command and flag.

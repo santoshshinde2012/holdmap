@@ -29,15 +29,16 @@ of a scan took (sockets, processes, containers). `--no-docker` skips container l
 `x64`. Current Windows and Linux desktop installers are x64. Linux ARM64 has a CLI archive,
 but no prebuilt desktop installer. Choose from [the platform downloads](../../#install).
 
-**The desktop still shows an older version.** Version **0.7.1** requires a manual update.
-Quit Holdmap, install the current release for the same OS and architecture, then reopen
-the installed copy. Check **Settings → About** in that app, rather than `holdmap --version`.
+**The desktop still shows an older version.** Check **Settings → About** in that app,
+rather than `holdmap --version`. In **0.8.0**, About also shows a copyable running-app location
+and architecture, with actions for the official desktop downloads and installation guide.
+If automatic updates are unavailable, quit Holdmap, install the current release for the same
+OS and architecture, then reopen the installed copy.
 An app launched from an older disk image or another folder can still be the old version.
 The CLI installer updates the CLI, TUI and MCP server; it does not update the separate desktop app.
-No signed updater feed is included in 0.7.1.
+Version **0.7.1** also requires a manual update and includes no signed updater feed.
 
-Current source adds a copyable running-app location, architecture and desktop download
-actions to **Settings → About**. Browser About identifies the web preview separately and does
+Browser About identifies the web preview separately and does
 not show a desktop settings folder.
 
 **Record screen says “Screen capture unavailable” in the macOS app.** Version **0.7.1**
@@ -62,13 +63,14 @@ Start recording, configure a supported exporter or `holdmap mcp --record-activit
 the endpoint and token for that same active collector. New recording sessions have new tokens.
 See [recording setup](../agents/#set-up-optional-recording).
 
-**Current-source MCP or skills are missing.** Published **0.7.1** does not include the new
-inventory or skill-activation projection. With a current-source build, explicitly open
+**MCP or skills are missing.** Inventory and the skill-activation projection require
+**0.8.0 or newer**; **0.7.1** does not include them. Explicitly open
 **Agents → MCP & skills**, pass `agents --capabilities`, press **c** in the terminal Agents pane,
 or call MCP `list_agents` with `include_capabilities: true`. Read the coverage limits; custom
-homes and client policy are not resolved. Use matching current-source collector and client
-builds for new usage records.
-See [supported definitions and troubleshooting](../agents/#mcp-and-skills-current-source).
+homes and client policy are not resolved. Use **0.8.0 or newer** for both the collector and
+CLI/desktop when reading skill activations or reported MCP aliases. Upgrade the CLI/MCP server
+and desktop separately.
+See [supported definitions and troubleshooting](../agents/#mcp-and-skills).
 
 **Environment variables.** `HOLDMAP_HOME` (config dir), `HOLDMAP_COLOR`, `HOLDMAP_TRACE`,
 `HOLDMAP_EDITOR`, plus `HOLDMAP_ACTIVITY_ENDPOINT` and private `HOLDMAP_ACTIVITY_TOKEN` for

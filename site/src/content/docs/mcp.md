@@ -1,6 +1,6 @@
 ---
 title: MCP for AI agents
-description: Connect Claude, Cursor or VS Code to holdmap over MCP so agents can list ports, inspect activity and stop services safely.
+description: Connect coding assistants to holdmap over MCP for ports, agent inventory, observed relationships and reviewed service stops.
 order: 4
 ---
 
@@ -37,61 +37,56 @@ After connecting, the server advertises its tools, a guide resource and three wo
 Prompt and resource menus depend on the client; clients exposing tools alone can use the same
 workflows below. Holdmap observes the machine where the server runs.
 
-This page covers the published **0.7.1** MCP interface and explicitly marked current-source additions. The guide, prompts,
+This page covers the **0.8.0** MCP interface. The guide, prompts,
 schemas and mandatory stop confirmations were introduced in **0.4.0**; optional local
 activity recording followed in **0.5.0**.
-Current source adds the opt-in `list_agents` argument `include_capabilities: true` for supported
+Version **0.8.0** adds the opt-in `list_agents` argument `include_capabilities: true` for supported
 MCP configuration aliases and skill locations, plus read-only `inspect_port` and `get_agent_flow`.
-These are [Unreleased](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#unreleased)
-and are not accepted by **0.7.1** servers; follow the schema your installed server advertises.
+These additions are not accepted by **0.7.1** servers; upgrade the CLI/MCP installation
+and follow the schema your installed server advertises.
 **Upgrading from 0.3.0 changes the stop protocol:**
 clients must preview first and pass the returned `confirmation_id` to execute. Version 0.3.0
-servers expose the nine tools below with the previous protocol and do not return that handle.
+servers expose the original nine tools with the previous protocol and do not return that handle.
 Use 0.4.0 or newer for the confirmation flow below; always follow your installed
 version's discovered schemas.
 
-Version **0.7.0** negotiates MCP `2025-11-25`, `2025-06-18`, `2025-03-26` and `2024-11-05`.
+Since **0.7.0**, the server negotiates MCP `2025-11-25`, `2025-06-18`, `2025-03-26` and `2024-11-05`.
 Older negotiated versions keep their compatible discovery and result shapes; newer clients
 receive structured tool results alongside readable text.
 
 ## Tools
 
-The published **0.7.1** server provides these nine tools:
+The **0.8.0** server provides these eleven tools:
 
 | Tool | What it does |
 |---|---|
 | `list_ports` | Listening ports with process, PID, project and framework, plus scan warnings, platform and collection time. Filters like `vite`, `:3000`, `3000-3999`. |
 | `explain_port` | Plain-English root cause, the recommended fix and the stop plan, who's connected and the bind risk. |
+| `inspect_port` | The same structured inspection as `explain_port`: connections, process tree, bind risk and bounded local HTTP probing. Added in 0.8.0. |
 | `find_free_port` | A free TCP port, optionally the first one at or after `near`. |
 | `wait_for_port` | Waits until a port accepts connections, or until it's free. |
 | `get_topology` | Which local services talk to which, grouped into clusters. |
-| `list_agents` | Running AI coding agents, child tools and likely MCP servers, folders, ports, connections, CPU, memory and access facts. Filter by agent, owned PID, folder or tool name. Read-only. |
+| `list_agents` | Running AI coding agents, child tools and likely MCP servers, folders, ports, connections, CPU, memory and access facts. Filter by agent, owned PID, folder or tool name. In 0.8.0, explicitly set `include_capabilities: true` to inspect supported MCP definitions and skill locations. Read-only. |
+| `get_agent_flow` | Observed process ancestry and live TCP relationships for agents, with typed nodes, relationships, evidence and collection limits. It does not inspect capability files or report tool invocations. Added in 0.8.0. |
 | `stop_agent_ports` | Preview the unprotected ports started by matching agents; execute the retained plans with a one-use `confirmation_id`. Defaults to `dry_run: true`. |
 | `plan_cluster_stop` | A dry-run, dependency-ordered plan for stopping a cluster. Never executes. |
 | `stop_port` | Preview a port owner's stop plan; execute with a matching one-use `confirmation_id` and verify the port is free. Defaults to `dry_run: true`. |
-
-### Additional current-source tools (Unreleased)
-
-| Tool | What it does |
-| --- | --- |
-| `inspect_port` | The same structured inspection as `explain_port`: connections, process tree, bind risk and bounded local HTTP probing. |
-| `get_agent_flow` | Observed process ancestry and live TCP relationships for agents, with typed nodes, relationships, evidence and collection limits. It does not inspect capability files or report tool invocations. |
 
 Tools publish input and output schemas. Results include a structured JSON object and a readable
 summary with the same JSON for older clients. Invalid argument types, ranges, enum values or
 unknown options return an error before the tool acts. For example, `dry_run` must be the JSON
 boolean `true`, rather than the string `"true"`.
-In current source (Unreleased), a `tools/call` request must omit `arguments` or provide an object; arrays, explicit `null`
+In **0.8.0**, a `tools/call` request must omit `arguments` or provide an object; arrays, explicit `null`
 and scalars are malformed request envelopes (`-32602`). A well-formed object that fails a
 tool's input schema or encounters a domain error instead returns a tool error (`isError`).
 
-With a current-source server, explicitly request configuration metadata using
+With a **0.8.0 or newer** server, explicitly request configuration metadata using
 `{"name":"list_agents","arguments":{"include_capabilities":true}}` inside a `tools/call`
 request. The default is false. Supported bounded configuration files can contain credentials;
 only aliases, transport/enablement metadata and source locations are returned. Skill identity
 comes from folders, with optional sanitized declared name/purpose from bounded YAML headers;
 instruction bodies are not retained. Installed definitions do not prove loading, connection
-or use and do not grant process-action authority. See [MCP & skills coverage](../agents/#mcp-and-skills-current-source).
+or use and do not grant process-action authority. See [MCP & skills coverage](../agents/#mcp-and-skills).
 
 Inspect `list_ports.warnings` before treating an empty result as a complete scan.
 `taken_at_ms` is the collection time in Unix epoch milliseconds; `platform` identifies the
@@ -113,14 +108,14 @@ Clients supporting MCP prompts can discover these templates:
 
 Selecting a prompt returns instructions; it does not run tools, launch servers or stop processes.
 MCP prompt arguments are strings, while tool calls use the types in each tool's input schema.
-The current-source `inspect_agents` template also uses `get_agent_flow` for observed socket relationships.
+The **0.8.0** `inspect_agents` template also uses `get_agent_flow` for observed socket relationships.
 
 For clients exposing tools alone, ask for tasks such as:
 
 - “Explain what owns port 3000 and show its dependencies.”
 - “Find a free port near 3000, then check whether my server is ready after I start it.”
 - “Show the agents working in shop-web, including child tools and collection limits.”
-- “Show observed process and socket relationships for the Codex agent.” (Current source.)
+- “Show observed process and socket relationships for the Codex agent.”
 
 A free port is a candidate, not a reservation. TCP readiness does not establish application
 health. Likely MCP servers are inferred from process metadata. Passive inspection does not

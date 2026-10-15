@@ -2044,7 +2044,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "holdmap"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2068,7 +2068,7 @@ dependencies = [
 
 [[package]]
 name = "holdmap-activity"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "getrandom 0.3.4",
  "httparse",
@@ -2083,7 +2083,7 @@ dependencies = [
 
 [[package]]
 name = "holdmap-core"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "criterion",
  "libc",
@@ -2101,7 +2101,7 @@ dependencies = [
 
 [[package]]
 name = "holdmap-desktop"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.22.1",
  "glib",
@@ -2129,7 +2129,7 @@ dependencies = [
 
 [[package]]
 name = "holdmap-mcp"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "holdmap-core",
  "serde",

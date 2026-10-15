@@ -8,6 +8,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-16
+
 ### Added
 
 - Opt-in MCP configuration and skill-file inventory for supported local agents through
@@ -44,12 +46,24 @@ by [release-please](https://github.com/googleapis/release-please) from
   observed-flow schemas.
 - Keep interactive graph text readable, dismiss nonmodal overlays when focus leaves, and
   exercise the actual light theme in browser tests.
-
 - Retain native recording ownership across startup acknowledgement and cancellation, so
   cancelling during that handoff discards the acknowledged session instead of leaving
   its picker or capture active without a frontend owner.
 - Coordinate native recording cleanup with in-flight operations so temporary files remain
   available until those operations finish.
+
+### Upgrade
+
+- Update the CLI/MCP server and desktop app separately to use the new capabilities and
+  usage records. Use matching 0.8.0 clients and collectors; older 0.7.1 decoders reject
+  the new usage fields and skill kind.
+- Desktop updates require manual installation of the matching OS/architecture installer.
+  Quit Holdmap, install it, reopen it and check Settings → About. The macOS installers are
+  ad-hoc signed without Developer-ID signing or notarization; Windows installers are unsigned.
+  This release does not include a configured signed updater feed. Verify published checksums
+  and build provenance before opening downloads.
+- Refresh the public website, README and guides for the MCP/skills map, supported sources,
+  reported usage, MCP tools and desktop update instructions.
 
 ## [0.7.1] - 2026-10-15
 
@@ -752,7 +766,8 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
-[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/santoshshinde2012/holdmap/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.5.1...v0.6.0
