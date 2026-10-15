@@ -10,8 +10,9 @@ CLI, so process identity checks and process protections are shared. The CLI's pr
 `.holdmap.toml` settings apply to CLI and terminal UI actions.
 [Try it in the browser](../../#demo).
 
-**Version 0.7.0** adds screen recording, Computer / Footprint / Project map zoom and live
-local scans during `npm run dev`. Check the
+**Version 0.7.1** adds native screen recording on macOS 14 or later when the desktop
+window lacks browser screen sharing. It includes the recorder, Computer / Footprint /
+Project map zoom and live `npm run dev` scans introduced in **0.7.0**. Check the
 [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
 current installers.
 
@@ -81,12 +82,14 @@ there and retry. Unsupported windows explain that capture is unavailable. This i
 from [Agents → Flow recording](../agents/#set-up-optional-recording), which collects optional
 tool-call metadata rather than pixels.
 
-When the macOS desktop window does not offer browser screen capture, current source uses
-Apple's native screen picker on **macOS 14 or later**. Native capture encodes MP4 and GIF in
-a private temporary folder, then removes those files after copying the exports into the
-preview or discarding the recording. The two-minute limit is enforced by the native app
-even while its window is hidden. Older macOS versions can record only when their webview
-provides screen sharing; otherwise use a supporting browser or the system screen recorder.
+From **0.7.1**, the macOS desktop app uses Apple's native screen picker on **macOS 14 or
+later** when its window does not offer browser screen capture. Install the matching desktop
+download from [Install](../../#install), then reopen the app; a CLI update does not replace it.
+Native capture encodes MP4 and GIF in a private temporary folder, then removes those files
+after copying the exports into the preview or discarding the recording. The two-minute
+limit is enforced by the native app even while its window is hidden. Older macOS versions
+can record only when their webview provides screen sharing; otherwise use a supporting
+browser or the system screen recorder.
 
 Linux desktop capture needs PipeWire and a working ScreenCast portal for your desktop
 environment. Its system picker still asks which screen or window to share each time.
@@ -166,7 +169,7 @@ This Linux GTK dependency issue does not affect the CLI, TUI or
 MCP server, or the macOS and Windows desktop builds. See the
 [security policy](https://github.com/santoshshinde2012/holdmap/blob/main/SECURITY.md#linux-glib-dependency-backports).
 
-The **0.7.0** macOS app is ad-hoc signed and sealed, without Developer-ID signing or
+The **0.7.1** macOS app is ad-hoc signed and sealed, without Developer-ID signing or
 notarisation. Its Windows installers are unsigned. First verify the download using the
 checksums and build provenance linked from [Install](../../#install), then open it:
 

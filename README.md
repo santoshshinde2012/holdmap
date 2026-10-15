@@ -33,9 +33,10 @@
 holdmap tells you what's really there — which agent or tool started it — and stops only what
 it should.
 
-Version **0.7.0** adds local screen recording, Computer / Footprint / Project agent-map
-zoom, and live local scans during desktop development. Read
-[what's new](https://santoshshinde2012.github.io/holdmap/docs/whats-new/), check the
+Version **0.7.1** fixes screen recording in macOS desktop windows without browser screen
+sharing, using Apple's native picker on macOS 14 or later. It includes the local recorder,
+Computer / Footprint / Project map zoom and live development scans introduced in **0.7.0**.
+Read [what's new in 0.7.1](https://santoshshinde2012.github.io/holdmap/docs/whats-new/), check the
 [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
 current installers and see the [changelog](CHANGELOG.md) for release notes. Desktop
 screenshots use the shared browser UI with sample data.
@@ -400,14 +401,14 @@ This is separate from optional agent tool-call metadata recording. See the
 [screen recording guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#record-the-screen)
 for permissions, platform requirements and export limits.
 
-**First open.** The **0.7.0** macOS app is ad-hoc signed and sealed without Developer-ID
+**First open.** The **0.7.1** macOS app is ad-hoc signed and sealed without Developer-ID
 signing or notarisation; its Windows installers are unsigned. Verify the checksums and
 build provenance before opening a download. Follow the
 [first-open guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#first-open)
 for OS-specific instructions and policy restrictions.
 
 Update an existing desktop installation by downloading the latest installer above that
-matches your operating system and architecture. **0.7.0 requires manual desktop installation**;
+matches your operating system and architecture. **0.7.1 requires manual desktop installation**;
 its published installers have no configured signed updater feed. Run the CLI installer again
 to update the CLI, TUI and MCP server; it does not update the separate desktop app.
 
@@ -680,7 +681,7 @@ dependencies and temporary captures are regenerated; Git history holds earlier v
 ## Learn more
 
 - [Website and guide](https://santoshshinde2012.github.io/holdmap/): the live demo and short how-tos.
-- [What's new in 0.7.0](https://santoshshinde2012.github.io/holdmap/docs/whats-new/): recording, maps, fixes and upgrade instructions.
+- [What's new in 0.7.1](https://santoshshinde2012.github.io/holdmap/docs/whats-new/): native macOS recording fixes, maps and upgrade instructions.
 - [Website maintenance](site/README.md): SEO checks, deployment and current website snapshots.
 - [Agents, tools and apps](https://santoshshinde2012.github.io/holdmap/docs/agents/): folders, access and stopping what an agent started.
 - [CLI reference](docs/cli.md): every command and flag.

@@ -32,9 +32,9 @@ package is attached to the GitHub release as a tarball.
 
 After installation, compare `holdmap --version` with the
 [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest).
-[What's new in 0.7.0](whats-new/) covers local MP4/GIF screen recording and
+[What's new in 0.7.1](whats-new/) covers native macOS recording fixes, local MP4/GIF capture and
 Computer / Footprint / Project agent maps. For an
-existing desktop installation, download the matching new installer; **0.7.0** has no configured
+existing desktop installation, download the matching new installer; **0.7.1** has no configured
 signed updater feed. Rerun the CLI installer to update the command-line tool.
 
 ## Your first minute
