@@ -31,6 +31,10 @@
   let coverageHeading: HTMLHeadingElement | undefined = $state();
   let filterPanel: HTMLDivElement | undefined = $state();
   let workspaceElement: HTMLElement | undefined = $state();
+  let railElement: HTMLElement | undefined = $state();
+  let coveragePanel: HTMLElement | undefined = $state();
+  let workspaceWidth = $state(0);
+  const overlayRail = $derived(workspaceWidth > 0 && workspaceWidth <= 960);
   const agents = $derived(report?.agents ?? []);
   const active = $derived(agents.find((agent) => agent.id === selectedAgent) ?? null);
   const scoped = $derived(active ? [active] : agents);
@@ -125,6 +129,36 @@
     await tick();
     if (panelOpener?.isConnected) panelOpener.focus({ preventScroll: true });
   }
+  function contains(element: HTMLElement | undefined | null, target: EventTarget | null) {
+    return target instanceof Node && !!element?.contains(target);
+  }
+  function leavePanel(event: FocusEvent) {
+    if (!coverageOpen && !filtersOpen) return;
+    if (contains(event.currentTarget as HTMLElement, event.relatedTarget) || contains(panelOpener, event.relatedTarget)) return;
+    // These are nonmodal disclosures: leaving them must reveal the newly focused
+    // control, rather than returning focus to an unrelated opener.
+    coverageOpen = false;
+    filtersOpen = false;
+    if (overlayRail && !contains(railElement, event.relatedTarget) && (showDetails || browseOpen)) void clearDetails(false);
+  }
+  function leaveRail(event: FocusEvent) {
+    // Replacing the agent list with an inspector removes the focused opener;
+    // that temporary focus loss is not navigation out of the drawer.
+    if (!event.relatedTarget || !overlayRail || contains(railElement, event.relatedTarget)
+      || contains(coveragePanel, event.relatedTarget) || contains(filterPanel, event.relatedTarget)) return;
+    if (showDetails || browseOpen) void clearDetails(false);
+  }
+  function outsidePointer(event: PointerEvent) {
+    const target = event.target;
+    if (!contains(panelOpener, target)) {
+      if (coverageOpen && !contains(coveragePanel, target)) coverageOpen = false;
+      if (filtersOpen && !contains(filterPanel, target)) filtersOpen = false;
+    }
+    if (overlayRail && (showDetails || browseOpen) && !contains(railElement, target)
+      && !contains(coveragePanel, target) && !contains(filterPanel, target) && !contains(opener, target)) {
+      void clearDetails(false);
+    }
+  }
   async function openPanel(panel: "coverage" | "filters") {
     if ((panel === "coverage" && coverageOpen) || (panel === "filters" && filtersOpen)) {
       await closePanels();
@@ -154,8 +188,10 @@
   }
 </script>
 
+<svelte:window onpointerdown={outsidePointer} />
+
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions (Dismiss local panels after child controls handle their own Escape keys.) -->
-<section id="agent-capabilities" class="capabilities" aria-label="MCP and skills workspace" aria-busy={loading} bind:this={workspaceElement} {onkeydown}>
+<section id="agent-capabilities" class="capabilities" aria-label="MCP and skills workspace" aria-busy={loading} bind:this={workspaceElement} bind:clientWidth={workspaceWidth} {onkeydown}>
   <header class="workspace-head">
     <div class="workspace-title"><span class="title-icon"><Icon name="plug" size={19} /></span><div><h2>MCP &amp; skills {#if demo}<span class="preview">Example inventory</span>{/if}</h2><p>Explore the capabilities around your agents. Select a card to inspect it.</p></div></div>
     <div class="head-actions">
@@ -170,7 +206,7 @@
     <div class="empty"><Icon name="bot" size={30} /><h3>No running agents to inspect</h3><p>Start a supported agent, then refresh. This map describes recognized running agents; it is not a list of everything installed on this computer.</p>{#if onretry}<Button size="sm" icon="refresh" onclick={onretry}>Refresh agents</Button>{/if}</div>
   {:else}
     <div class="workspace">
-      <aside class="rail" class:is-open={showDetails || browseOpen} aria-label={showDetails ? "Capability details" : "Capability agents"}>
+      <aside class="rail" class:is-open={showDetails || browseOpen} aria-label={showDetails ? "Capability details" : "Capability agents"} bind:this={railElement} onfocusout={leaveRail}>
         {#if showDetails}
           <header class="rail-head"><button class="back" onclick={closeDetails}><Icon name="arrow-left" size={14} />Agents</button><Button variant="ghost" size="xs" icon="x" aria-label="Close capability details" onclick={closeDetails} /></header>
           <div class="inspector">
@@ -224,7 +260,7 @@
         <div class="map-tools">
           <div class="map-context"><button class="browse-button" aria-label="Browse agents" aria-expanded={browseOpen} onclick={browseAgents}><Icon name="sidebar" size={15} /></button><span><b>{active?.name ?? "All agents"}</b><small>{loading ? "Inspecting local sources…" : active ? "PID " + active.pid : agents.length + " agents · shared sources grouped"}</small></span>{#if active}<button class="all-link" onclick={() => selectAgent(null)}>Show all <Icon name="arrow" size={12} /></button>{/if}</div>
           <div class="map-filters"><ActionDock size="compact" hinge={false} animate={false} label="Capability type" bind:value={kind} onchange={changeKind} options={[{ value: "all", label: "All" }, { value: "mcp", label: "MCP servers", icon: "plug", count: inspected ? mcpCount : undefined }, { value: "skill", label: "Skills", icon: "sparkles", count: inspected ? skillCount : undefined }, { value: "running", label: "Running", icon: "cpu", count: processes.length }]} /><Button size="xs" variant={filtersOpen || scope !== "all" || enablement !== "all" ? "soft" : "ghost"} icon="filter" aria-expanded={filtersOpen} aria-controls="capability-filters" onclick={() => openPanel("filters")}>Filters</Button></div>
-          {#if filtersOpen}<div class="filter-panel" id="capability-filters" bind:this={filterPanel}><Select label="Capability scope" prefix="Scope" labelHidden size="sm" disabled={kind === "running"} bind:value={scope} options={[{ value: "all", label: "All scopes" }, { value: "user", label: "User" }, { value: "project", label: "Project" }, { value: "local", label: "Local project" }]} /><Select label="MCP enablement" prefix="State" labelHidden size="sm" bind:value={enablement} disabled={kind === "skill" || kind === "running"} options={[{ value: "all", label: "All states" }, { value: "enabled", label: "Enabled MCP" }, { value: "disabled", label: "Disabled MCP" }, { value: "unknown", label: "Unknown MCP" }]} />{#if filtered}<Button size="xs" variant="ghost" onclick={reset}>Reset filters</Button>{/if}</div>{/if}
+          {#if filtersOpen}<div class="filter-panel" id="capability-filters" bind:this={filterPanel} onfocusout={leavePanel}><Select label="Capability scope" prefix="Scope" labelHidden size="sm" disabled={kind === "running"} bind:value={scope} options={[{ value: "all", label: "All scopes" }, { value: "user", label: "User" }, { value: "project", label: "Project" }, { value: "local", label: "Local project" }]} /><Select label="MCP enablement" prefix="State" labelHidden size="sm" bind:value={enablement} disabled={kind === "skill" || kind === "running"} options={[{ value: "all", label: "All states" }, { value: "enabled", label: "Enabled MCP" }, { value: "disabled", label: "Disabled MCP" }, { value: "unknown", label: "Unknown MCP" }]} />{#if filtered}<Button size="xs" variant="ghost" onclick={reset}>Reset filters</Button>{/if}</div>{/if}
         </div>
         <div class="canvas-host">
           <CapabilityMap bind:this={canvas} agents={scoped} items={visible} {running} {agentIds} {selectedAgent} selectedId={chosen?.id ?? (showAgent ? active?.id ?? null : null)} filtered={narrowed} {dark} {reduced} onselect={select} onselectagent={selectAgent} />
@@ -236,7 +272,7 @@
     </div>
   {/if}
   {#if coverageOpen}
-    <section class="coverage-panel" id="capability-coverage" aria-label="Visibility limits">
+    <section class="coverage-panel" id="capability-coverage" aria-label="Visibility limits" bind:this={coveragePanel} onfocusout={leavePanel}>
       <header><div><span class="eyebrow">Local discovery</span><h3 tabindex="-1" bind:this={coverageHeading}>Coverage &amp; sources</h3></div><Button size="xs" variant="ghost" icon="x" aria-label="Close coverage" onclick={closePanels} /></header>
       <p>Configuration and skill files show what is present. Recorded calls provide separate evidence of use.</p>
       <div class="coverage-stat"><Icon name="code" size={15} /><span>{scoped.filter((agent) => agent.capabilities?.inspected).length} of {scoped.length} agent inventories inspected</span></div>

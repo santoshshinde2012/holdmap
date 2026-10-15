@@ -233,17 +233,9 @@ struct ReadBytes {
 
 impl CapabilityDiscovery for HomeCapabilities {
     fn discover(&self, product: &str, projects: &[PathBuf], platform: &str) -> AgentCapabilities {
-        if !matches!(
-            product,
-            "codex"
-                | "codex-desktop"
-                | "claude-code"
-                | "claude-desktop"
-                | "cursor"
-                | "cursor-agent"
-        ) {
+        if !supported_product(product) {
             let mut out = AgentCapabilities::default();
-            out.limit("Capability inventory supports Codex, Claude Code, Cursor and documented Claude Desktop default locations only.");
+            out.limit("Capability inventory supports documented default locations for Codex, Claude Code, Claude Desktop, Cursor, Windsurf, Gemini CLI, GitHub Copilot, Copilot CLI and Cline.");
             return out;
         }
         if product == "claude-desktop" && !matches!(platform, "macos" | "windows") {
@@ -272,6 +264,30 @@ impl CapabilityDiscovery for HomeCapabilities {
             seen_skills: HashSet::new(),
             projects: Vec::new(),
         };
+        match product {
+            "claude-desktop" => {
+                inventory.out.limit("Claude Desktop inventory covers only its manual MCP JSON; extensions, connectors and skills are not inspected.");
+            }
+            "cursor" | "cursor-agent" => {
+                inventory.out.limit("Untyped Cursor remote URLs can use HTTP or SSE; their transport is not established without connection negotiation.");
+            }
+            "windsurf" => {
+                inventory.out.limit("Windsurf inventory covers only legacy ~/.codeium/windsurf/mcp_config.json; newer Devin/Cascade homes, project MCP files and skills are not inspected. Untyped remote endpoints do not establish HTTP versus SSE.");
+            }
+            "gemini" => {
+                inventory.out.limit("Gemini CLI inventory covers mcpServers in default ~/.gemini/settings.json and observed-project .gemini/settings.json; custom homes, system settings, enablement policy/state and skill directories are not inspected. Untyped URLs leave HTTP versus SSE unknown.");
+            }
+            "copilot" => {
+                inventory.out.limit("VS Code Copilot inventory covers observed-project .vscode/mcp.json (servers) and .mcp.json; user/profile config, enablement state and skill directories are not inspected.");
+            }
+            "copilot-cli" => {
+                inventory.out.limit("Copilot CLI inventory covers default ~/.copilot/mcp-config.json and observed-project .mcp.json/.github/mcp.json; custom homes, enablement settings and skill directories are not inspected. Folder trust, inheritance and precedence are not resolved.");
+            }
+            "cline" => {
+                inventory.out.limit("Cline inventory covers default ~/.cline/data/settings/cline_mcp_settings.json and shallow .cline/skills directories; custom homes, .agents/.clinerules/.claude compatibility roots and editor globalStorage are not followed.");
+            }
+            _ => {}
+        }
         if product == "claude-desktop" {
             let base = if platform == "macos" {
                 self.home.join("Library/Application Support")
@@ -280,12 +296,11 @@ impl CapabilityDiscovery for HomeCapabilities {
                     .clone()
                     .unwrap_or_else(|| self.home.join("AppData/Roaming"))
             };
-            inventory.out.limit("Claude Desktop inventory covers only its manual MCP JSON; extensions, connectors and skills are not inspected.");
             inventory.config(
                 &base.join("Claude/claude_desktop_config.json"),
                 CapabilityScope::User,
                 None,
-                false,
+                ConfigFormat::JsonMcpServers,
             );
             return inventory.out;
         }
@@ -390,16 +405,75 @@ impl Inventory<'_> {
             return;
         }
         match self.product {
-            "codex" | "codex-desktop" => {
-                self.config(&base.join(".codex/config.toml"), scope, project, true)
-            }
+            "codex" | "codex-desktop" => self.config(
+                &base.join(".codex/config.toml"),
+                scope,
+                project,
+                ConfigFormat::Toml,
+            ),
             "claude-code" if scope == CapabilityScope::User => {
-                self.config(&base.join(".claude.json"), scope, project, false);
+                self.config(
+                    &base.join(".claude.json"),
+                    scope,
+                    project,
+                    ConfigFormat::JsonMcpServers,
+                );
             }
-            "claude-code" => self.config(&base.join(".mcp.json"), scope, project, false),
-            "cursor" | "cursor-agent" => {
-                self.config(&base.join(".cursor/mcp.json"), scope, project, false)
+            "claude-code" => self.config(
+                &base.join(".mcp.json"),
+                scope,
+                project,
+                ConfigFormat::JsonMcpServers,
+            ),
+            "cursor" | "cursor-agent" => self.config(
+                &base.join(".cursor/mcp.json"),
+                scope,
+                project,
+                ConfigFormat::JsonMcpServers,
+            ),
+            "windsurf" if scope == CapabilityScope::User => self.config(
+                &base.join(".codeium/windsurf/mcp_config.json"),
+                scope,
+                project,
+                ConfigFormat::JsonMcpServers,
+            ),
+            "gemini" => self.config(
+                &base.join(".gemini/settings.json"),
+                scope,
+                project,
+                ConfigFormat::JsonMcpServers,
+            ),
+            "copilot" if scope == CapabilityScope::Project => {
+                self.config(
+                    &base.join(".vscode/mcp.json"),
+                    scope,
+                    project,
+                    ConfigFormat::JsonServers,
+                );
+                self.config(
+                    &base.join(".mcp.json"),
+                    scope,
+                    project,
+                    ConfigFormat::JsonCopilot,
+                );
             }
+            "copilot-cli" if scope == CapabilityScope::User => self.config(
+                &base.join(".copilot/mcp-config.json"),
+                scope,
+                project,
+                ConfigFormat::JsonCopilot,
+            ),
+            "copilot-cli" => {
+                for file in [".mcp.json", ".github/mcp.json"] {
+                    self.config(&base.join(file), scope, project, ConfigFormat::JsonCopilot);
+                }
+            }
+            "cline" if scope == CapabilityScope::User => self.config(
+                &base.join(".cline/data/settings/cline_mcp_settings.json"),
+                scope,
+                project,
+                ConfigFormat::JsonMcpServers,
+            ),
             _ => {}
         }
     }
@@ -417,6 +491,7 @@ impl Inventory<'_> {
                 ".claude/skills",
                 ".codex/skills",
             ],
+            "cline" => &[".cline/skills"],
             _ => &[],
         };
         for directory in directories {
@@ -487,9 +562,17 @@ impl Inventory<'_> {
 
     fn read_json(&mut self, path: &Path) -> Option<serde_json::Value> {
         let text = self.read(path)?;
-        match serde_json::from_str(&text) {
-            Ok(value) => Some(value),
-            Err(_) => {
+        // VS Code accepts JSONC (including trailing commas); Gemini's settings loader
+        // strips comments but still rejects trailing commas. Other formats stay strict.
+        let value = if matches!(self.product, "copilot" | "gemini") {
+            jsonc_bytes(&text, self.product == "copilot")
+                .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        } else {
+            serde_json::from_str(&text).ok()
+        };
+        match value {
+            Some(value) => Some(value),
+            None => {
                 self.out.limit(
                     "Some configuration files could not be parsed; their contents are omitted.",
                 );
@@ -498,68 +581,102 @@ impl Inventory<'_> {
         }
     }
 
-    fn config(&mut self, path: &Path, scope: CapabilityScope, project: Option<&Path>, toml: bool) {
+    fn config(
+        &mut self,
+        path: &Path,
+        scope: CapabilityScope,
+        project: Option<&Path>,
+        format: ConfigFormat,
+    ) {
         if !self.seen_sources.insert(path.to_owned()) {
             return;
         }
-        if toml {
-            let Some(text) = self.read(path) else { return };
-            let Ok(value) = text.parse::<toml::Table>() else {
-                self.out.limit(
-                    "Some configuration files could not be parsed; their contents are omitted.",
-                );
-                return;
-            };
-            if let Some(servers) = value.get("mcp_servers").and_then(toml::Value::as_table) {
-                for (name, entry) in servers {
-                    if !self.bounded() {
-                        break;
+        match format {
+            ConfigFormat::Toml => {
+                let Some(text) = self.read(path) else { return };
+                let Ok(value) = text.parse::<toml::Table>() else {
+                    self.out.limit(
+                        "Some configuration files could not be parsed; their contents are omitted.",
+                    );
+                    return;
+                };
+                if let Some(servers) = value.get("mcp_servers").and_then(toml::Value::as_table) {
+                    for (name, entry) in servers {
+                        if !self.bounded() {
+                            break;
+                        }
+                        self.entries += 1;
+                        let Some(entry) = entry.as_table() else {
+                            continue;
+                        };
+                        let command = entry
+                            .get("command")
+                            .and_then(toml::Value::as_str)
+                            .is_some_and(|value| !value.is_empty());
+                        let url = entry
+                            .get("url")
+                            .and_then(toml::Value::as_str)
+                            .is_some_and(|value| !value.is_empty());
+                        let transport = match (command, url) {
+                            (true, false) => McpTransport::Stdio,
+                            (false, true) => McpTransport::Http,
+                            _ => McpTransport::Unknown,
+                        };
+                        let enabled = entry.get("enabled").and_then(toml::Value::as_bool);
+                        self.server(name, path, scope, project, transport, enabled);
                     }
-                    self.entries += 1;
-                    let Some(entry) = entry.as_table() else {
-                        continue;
-                    };
-                    let command = entry
-                        .get("command")
-                        .and_then(toml::Value::as_str)
-                        .is_some_and(|value| !value.is_empty());
-                    let url = entry
-                        .get("url")
-                        .and_then(toml::Value::as_str)
-                        .is_some_and(|value| !value.is_empty());
-                    let transport = match (command, url) {
-                        (true, false) => McpTransport::Stdio,
-                        (false, true) => McpTransport::Http,
-                        _ => McpTransport::Unknown,
-                    };
-                    let enabled = entry.get("enabled").and_then(toml::Value::as_bool);
-                    self.server(name, path, scope, project, transport, enabled);
                 }
             }
-        } else if let Some(value) = self.read_json(path) {
-            if let Some(servers) = value
-                .get("mcpServers")
-                .and_then(serde_json::Value::as_object)
-            {
-                self.json_servers(servers, path, scope, project);
-            }
-            // Parse the account file once and project only exact observed project aliases.
-            // No unrelated project records or credential values survive this projection.
-            if self.product == "claude-code" && scope == CapabilityScope::User {
-                for project in self.projects.clone() {
-                    if !self.bounded() || !self.safe_path(&project) {
-                        continue;
-                    }
-                    let Some(key) = project.to_str() else {
-                        continue;
-                    };
-                    if let Some(servers) = value
-                        .get("projects")
-                        .and_then(|projects| projects.get(key))
-                        .and_then(|project| project.get("mcpServers"))
-                        .and_then(serde_json::Value::as_object)
-                    {
-                        self.json_servers(servers, path, CapabilityScope::Local, Some(&project));
+            ConfigFormat::JsonMcpServers
+            | ConfigFormat::JsonServers
+            | ConfigFormat::JsonCopilot => {
+                let Some(value) = self.read_json(path) else {
+                    return;
+                };
+                let key = match format {
+                    ConfigFormat::JsonServers => "servers",
+                    _ => "mcpServers",
+                };
+                let servers = if matches!(format, ConfigFormat::JsonCopilot)
+                    && self.product == "copilot-cli"
+                    && scope == CapabilityScope::Project
+                    && value.get(key).is_none()
+                {
+                    // Copilot CLI documents both wrapped and bare project server maps.
+                    value.as_object()
+                } else {
+                    value.get(key).and_then(serde_json::Value::as_object)
+                };
+                if let Some(servers) = servers {
+                    self.json_servers(servers, path, scope, project, format);
+                }
+                // Parse the account file once and project only exact observed project aliases.
+                // No unrelated project records or credential values survive this projection.
+                if matches!(format, ConfigFormat::JsonMcpServers)
+                    && self.product == "claude-code"
+                    && scope == CapabilityScope::User
+                {
+                    for project in self.projects.clone() {
+                        if !self.bounded() || !self.safe_path(&project) {
+                            continue;
+                        }
+                        let Some(key) = project.to_str() else {
+                            continue;
+                        };
+                        if let Some(servers) = value
+                            .get("projects")
+                            .and_then(|projects| projects.get(key))
+                            .and_then(|project| project.get("mcpServers"))
+                            .and_then(serde_json::Value::as_object)
+                        {
+                            self.json_servers(
+                                servers,
+                                path,
+                                CapabilityScope::Local,
+                                Some(&project),
+                                format,
+                            );
+                        }
                     }
                 }
             }
@@ -572,6 +689,7 @@ impl Inventory<'_> {
         path: &Path,
         scope: CapabilityScope,
         project: Option<&Path>,
+        format: ConfigFormat,
     ) {
         for (name, entry) in servers {
             if !self.bounded() {
@@ -581,33 +699,22 @@ impl Inventory<'_> {
             let Some(entry) = entry.as_object() else {
                 continue;
             };
-            let command = entry
-                .get("command")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|value| !value.is_empty());
-            let url = entry
-                .get("url")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|value| !value.is_empty());
-            let transport = match entry.get("type").and_then(serde_json::Value::as_str) {
-                Some("stdio") if command && !url => McpTransport::Stdio,
-                Some("http" | "streamable-http") if url && !command => McpTransport::Http,
-                Some("sse") if url && !command => McpTransport::Sse,
-                None if command && !url => McpTransport::Stdio,
-                None if matches!(self.product, "cursor" | "cursor-agent") && url && !command => {
-                    McpTransport::Http
-                }
-                _ => McpTransport::Unknown,
-            };
+            let transport = json_transport(self.product, format, entry);
             let explicit = entry.get("enabled").and_then(serde_json::Value::as_bool);
             let inverse = entry
                 .get("disabled")
                 .and_then(serde_json::Value::as_bool)
                 .map(|disabled| !disabled);
-            let enabled = match (explicit, inverse) {
-                (Some(enabled), Some(inverse)) if enabled == inverse => Some(enabled),
-                (Some(_), Some(_)) => None,
-                (enabled, disabled) => enabled.or(disabled),
+            let enabled = match self.product {
+                // These clients use separate settings or policy; their server
+                // definitions do not establish an enabled/disabled state.
+                "gemini" | "copilot" | "copilot-cli" => None,
+                "cline" => inverse,
+                _ => match (explicit, inverse) {
+                    (Some(enabled), Some(inverse)) if enabled == inverse => Some(enabled),
+                    (Some(_), Some(_)) => None,
+                    (enabled, disabled) => enabled.or(disabled),
+                },
             };
             self.server(name, path, scope, project, transport, enabled);
         }
@@ -728,6 +835,176 @@ impl Inventory<'_> {
             }
         }
     }
+}
+
+#[derive(Clone, Copy)]
+enum ConfigFormat {
+    Toml,
+    JsonMcpServers,
+    JsonServers,
+    JsonCopilot,
+}
+
+fn json_transport(
+    product: &str,
+    format: ConfigFormat,
+    entry: &serde_json::Map<String, serde_json::Value>,
+) -> McpTransport {
+    let command = nonempty_key(entry, "command");
+    let url = nonempty_key(entry, "url");
+    let http_url = nonempty_key(entry, "httpUrl");
+    let server_url = nonempty_key(entry, "serverUrl");
+    // A field from a different client's schema, a malformed endpoint or overlapping
+    // launch methods cannot establish a transport for this particular definition.
+    if ["command", "url", "httpUrl", "serverUrl"]
+        .iter()
+        .any(|key| entry.contains_key(*key) && !nonempty_key(entry, key))
+        || http_url && product != "gemini"
+        || server_url && product != "windsurf"
+        || [command, url, http_url, server_url]
+            .into_iter()
+            .filter(|present| *present)
+            .count()
+            != 1
+    {
+        return McpTransport::Unknown;
+    }
+    let kind = match entry.get("type") {
+        Some(serde_json::Value::String(kind)) => Some(kind.as_str()),
+        None => None,
+        Some(_) => return McpTransport::Unknown,
+    };
+    if product == "gemini" {
+        // Older Gemini releases used url for SSE; current ones negotiate HTTP/SSE.
+        // Only the explicit type or the dedicated HTTP key establishes the kind.
+        return match (kind, command, url, http_url) {
+            (None, true, _, _) => McpTransport::Stdio,
+            (None, _, _, true) => McpTransport::Http,
+            (Some("http"), _, true, _) => McpTransport::Http,
+            (Some("sse"), _, true, _) => McpTransport::Sse,
+            _ => McpTransport::Unknown,
+        };
+    }
+    if product == "windsurf" && !command {
+        // Its documented URL fields also serve legacy SSE endpoints. Without
+        // connection negotiation, file presence alone cannot distinguish them.
+        return McpTransport::Unknown;
+    }
+    match kind {
+        Some("stdio") | None if command => McpTransport::Stdio,
+        Some("local") if command && matches!(format, ConfigFormat::JsonCopilot) => {
+            McpTransport::Stdio
+        }
+        Some("http" | "streamable-http") if url => McpTransport::Http,
+        Some("streamableHttp") if url && product == "cline" => McpTransport::Http,
+        Some("sse") if url => McpTransport::Sse,
+        None if url && product == "cline" => McpTransport::Sse,
+        _ => McpTransport::Unknown,
+    }
+}
+
+/// Mask JSON comments and optional trailing commas without changing strings or
+/// concatenating tokens. The ordinary bounded JSON parser still validates grammar.
+fn jsonc_bytes(text: &str, trailing_commas: bool) -> Option<Vec<u8>> {
+    if text.len() > MAX_FILE_BYTES {
+        return None;
+    }
+    let mut bytes = text.as_bytes().to_vec();
+    let mut index = 0;
+    let mut string = false;
+    let mut escaped = false;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if string {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                string = false;
+            }
+            index += 1;
+        } else if byte == b'"' {
+            string = true;
+            index += 1;
+        } else if bytes.get(index..index + 2) == Some(b"//") {
+            while index < bytes.len() && !matches!(bytes[index], b'\n' | b'\r') {
+                bytes[index] = b' ';
+                index += 1;
+            }
+        } else if bytes.get(index..index + 2) == Some(b"/*") {
+            bytes[index..index + 2].fill(b' ');
+            index += 2;
+            loop {
+                if bytes.get(index..index + 2) == Some(b"*/") {
+                    bytes[index..index + 2].fill(b' ');
+                    index += 2;
+                    break;
+                }
+                let byte = bytes.get_mut(index)?; // Unterminated comments stay invalid.
+                if !matches!(*byte, b'\n' | b'\r') {
+                    *byte = b' ';
+                }
+                index += 1;
+            }
+        } else {
+            index += 1;
+        }
+    }
+    if trailing_commas {
+        string = false;
+        escaped = false;
+        for index in 0..bytes.len() {
+            let byte = bytes[index];
+            if string {
+                if escaped {
+                    escaped = false;
+                } else if byte == b'\\' {
+                    escaped = true;
+                } else if byte == b'"' {
+                    string = false;
+                }
+            } else if byte == b'"' {
+                string = true;
+            } else if byte == b','
+                && bytes[..index]
+                    .iter()
+                    .rfind(|byte| !matches!(byte, b' ' | b'\t' | b'\n' | b'\r'))
+                    .is_some_and(|byte| !matches!(byte, b'[' | b'{' | b',' | b':'))
+                && bytes[index + 1..]
+                    .iter()
+                    .find(|byte| !matches!(byte, b' ' | b'\t' | b'\n' | b'\r'))
+                    .is_some_and(|byte| matches!(byte, b'}' | b']'))
+            {
+                bytes[index] = b' ';
+            }
+        }
+    }
+    Some(bytes)
+}
+
+fn supported_product(product: &str) -> bool {
+    matches!(
+        product,
+        "codex"
+            | "codex-desktop"
+            | "claude-code"
+            | "claude-desktop"
+            | "cursor"
+            | "cursor-agent"
+            | "windsurf"
+            | "gemini"
+            | "copilot"
+            | "copilot-cli"
+            | "cline"
+    )
+}
+
+fn nonempty_key(entry: &serde_json::Map<String, serde_json::Value>, key: &str) -> bool {
+    entry
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|value| !value.is_empty())
 }
 
 fn safe_name(name: &str) -> bool {

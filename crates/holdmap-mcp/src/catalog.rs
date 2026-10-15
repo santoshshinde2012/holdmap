@@ -3,7 +3,7 @@
 use serde_json::{json, Value};
 use std::sync::OnceLock;
 
-pub(super) const INSTRUCTIONS: &str = "Inspect local state before acting: list_ports finds occupied ports; explain_port explains a conflict; get_topology with all=true shows dependents and cluster names before a stop. Prefer find_free_port to stopping an unrelated process, and use wait_for_port after starting a service. list_agents shows observed process ownership, likely child tools and access evidence, not chats or confirmed MCP invocations; inspect limits and omitted counts. Read holdmap://guide for workflows, or use the diagnose_port, inspect_agents and prepare_dev_server prompts. Both stop_port and stop_agent_ports default to dry_run=true. Show all returned plans and obtain the user's authorization before executing. Execution requires dry_run=false and the preview's one-use confirmation_id in this session within 5 minutes, with identical target/options. Every selected agent and stop effect is rechecked before any plan executes; changes require a new preview. Only the user's own dev servers/containers are stopped by default; protected and other users' processes are always refused. Requests must fit within 1 MiB; legacy batches are limited to 64 messages and are rejected as a whole when larger.";
+pub(super) const INSTRUCTIONS: &str = "Inspect local state before acting: list_ports finds occupied ports; explain_port or inspect_port explains a conflict with connections and bind risk; get_topology with all=true shows service dependents and cluster names before a stop; get_agent_flow shows observed process ancestry and live TCP relationships for agents, not tool calls. Prefer find_free_port to stopping an unrelated process, and use wait_for_port after starting a service. list_agents shows observed process ownership, likely child tools and access evidence, not chats or confirmed MCP invocations; inspect limits and omitted counts. Read holdmap://guide for workflows, or use the diagnose_port, inspect_agents and prepare_dev_server prompts. Both stop_port and stop_agent_ports default to dry_run=true. Show all returned plans and obtain the user's authorization before executing. Execution requires dry_run=false and the preview's one-use confirmation_id in this session within 5 minutes, with identical target/options. Every selected agent and stop effect is rechecked before any plan executes; changes require a new preview. Only the user's own dev servers/containers are stopped by default; protected and other users' processes are always refused. Requests must fit within 1 MiB; legacy batches are limited to 64 messages and are rejected as a whole when larger.";
 
 pub(super) fn list() -> Value {
     catalog().clone()
@@ -21,7 +21,7 @@ fn build_catalog() -> Value {
         {
             "name": "list_ports",
             "title": "List ports in use",
-            "description": "Inspect listening TCP/UDP ports before starting a service. Returns owners, PIDs, projects, frameworks, exposure and protection flags; hidden_sockets counts rows whose owner is unavailable. Includes platform, taken_at_ms (Unix epoch milliseconds) and scan warnings: check warnings before treating an empty result as complete. Use explain_port for a busy port's cause and safe next step. Commands have secrets hidden.",
+            "description": "Inspect listening TCP/UDP ports before starting a service. Returns owners, PIDs, projects, frameworks, exposure and protection flags; hidden_sockets counts rows whose owner is unavailable. Includes platform, taken_at_ms (Unix epoch milliseconds) and scan warnings: check warnings before treating an empty result as complete. Use explain_port or inspect_port for a busy port's cause and safe next step. Commands have secrets hidden.",
             "inputSchema": {"type": "object", "properties": {
                 "query": {"type": "string", "description": "Filter, e.g. 'vite', ':3000', '3000-3999', 'proto:udp'"},
                 "dev_only": {"type": "boolean", "description": "Only likely development servers"},
@@ -33,6 +33,13 @@ fn build_catalog() -> Value {
             "name": "explain_port",
             "title": "Explain why a port is busy",
             "description": "Plain-English root cause for a port (process tree, container, supervisor, OS service, TIME_WAIT, other user) plus the recommended fix and stop plan, who is connected, uptime, bind-address risk and the HTTP status/title. Command lines have secrets hidden.",
+            "inputSchema": {"type": "object", "properties": {"port": {"type": "integer", "minimum": 1, "maximum": 65535}}, "required": ["port"]},
+            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+        },
+        {
+            "name": "inspect_port",
+            "title": "Inspect a port in full",
+            "description": "Full inspection of a port: process tree, who is connected, bind-address risk, HTTP status/title, recommended fix and stop plan. Same structured result as explain_port. Command lines have secrets hidden.",
             "inputSchema": {"type": "object", "properties": {"port": {"type": "integer", "minimum": 1, "maximum": 65535}}, "required": ["port"]},
             "annotations": {"readOnlyHint": true, "openWorldHint": false}
         },
@@ -71,6 +78,15 @@ fn build_catalog() -> Value {
             "inputSchema": {"type": "object", "properties": {
                 "agent": {"type": "string", "description": "Filter by product id, name, vendor, folder, visible capability/tool name or exact agent/child PID"},
                 "include_capabilities": {"type": "boolean", "default": false, "description": "Explicitly inspect bounded local MCP definitions and skill file locations; no loading or usage claim"}
+            }},
+            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+        },
+        {
+            "name": "get_agent_flow",
+            "title": "Agent process and socket relationships",
+            "description": "Observed process ancestry and live TCP socket relationships for running agents. Distinct from get_topology (service clusters) and list_agents (inventory). Nodes and edges omit command lines, working directories, prompts and payloads. MCP process roles are inferred; tool calls need a separate activity observer. Optional agent filter uses the same matcher as list_agents.",
+            "inputSchema": {"type": "object", "properties": {
+                "agent": {"type": "string", "description": "Filter by product id, name, vendor, observed folder, running child-tool name or exact agent/child PID. Does not inspect configured MCP or installed skill inventory."}
             }},
             "annotations": {"readOnlyHint": true, "openWorldHint": false}
         },
@@ -278,6 +294,74 @@ fn agents_schema() -> Value {
     )
 }
 
+fn agent_flow_schema() -> Value {
+    let evidence = json!({"type": "string", "enum": ["observed", "inferred", "unknown"]});
+    let mut node = object(
+        json!({
+            "id": {"type": "string"},
+            "kind": {"type": "string", "enum": ["agent", "tool", "process", "listener", "remote", "unknown"]},
+            "label": {"type": "string"},
+            "agent_id": {"type": ["string", "null"]},
+            "pid": {"type": ["integer", "null"], "minimum": 0},
+            "start_token": {"type": ["integer", "null"], "minimum": 0},
+            "entry_id": {"type": ["string", "null"]},
+            "address": {"type": ["string", "null"]},
+            "port": {"type": ["integer", "null"], "minimum": 1, "maximum": 65535},
+            "protocol": {"type": ["string", "null"], "enum": ["tcp", "udp", null]},
+            "tool_kind": {"type": ["string", "null"], "enum": ["mcp_server", "dev_server", "shell", "command", null], "description": "Process classification, never evidence of a tool invocation"},
+            "evidence": evidence.clone()
+        }),
+        &[
+            "id",
+            "kind",
+            "label",
+            "agent_id",
+            "pid",
+            "start_token",
+            "entry_id",
+            "address",
+            "port",
+            "protocol",
+            "tool_kind",
+            "evidence",
+        ],
+    );
+    node["additionalProperties"] = json!(false);
+    let mut edge = object(
+        json!({
+            "id": {"type": "string"}, "from": {"type": "string"}, "to": {"type": "string"},
+            "kind": {"type": "string", "enum": ["parent", "owns_listener", "tcp"]},
+            "evidence": evidence,
+            "connections": count(),
+            "source_pids": array(count())
+        }),
+        &[
+            "id",
+            "from",
+            "to",
+            "kind",
+            "evidence",
+            "connections",
+            "source_pids",
+        ],
+    );
+    edge["additionalProperties"] = json!(false);
+    object(
+        json!({
+            "taken_at_ms": count(), "nodes": array(node), "edges": array(edge),
+            "limits": strings(), "omitted_nodes": count(), "omitted_edges": count()
+        }),
+        &[
+            "taken_at_ms",
+            "nodes",
+            "edges",
+            "limits",
+            "omitted_nodes",
+            "omitted_edges",
+        ],
+    )
+}
+
 fn capabilities_schema() -> Value {
     let scope = json!({"type": "string", "enum": ["user", "project", "local"]});
     let evidence = json!({"type": "string", "enum": ["observed", "inferred", "unknown"]});
@@ -376,6 +460,7 @@ fn output_schema(name: &str) -> Value {
             )
         }
         "list_agents" => agents_schema(),
+        "get_agent_flow" => agent_flow_schema(),
         "find_free_port" => object(json!({"port": port()}), &["port"]),
         "wait_for_port" => object(
             json!({"port": port(), "ready": {"type": "boolean"}, "elapsed_ms": count()}),
@@ -391,7 +476,7 @@ fn output_schema(name: &str) -> Value {
             &["nodes", "edges", "clusters", "stats", "taken_at_ms"],
         ),
         "plan_cluster_stop" => plan_schema(),
-        "explain_port" => object(
+        "explain_port" | "inspect_port" => object(
             json!({
                 "port": port(), "status": {"type": "string", "enum": ["free", "busy", "reserved"]},
                 "headline": {"type": "string"}, "recommendation": {"type": "string"}, "commands": strings(),

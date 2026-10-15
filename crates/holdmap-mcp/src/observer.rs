@@ -111,10 +111,12 @@ pub(super) fn canonical_name(name: &str) -> Option<&'static str> {
     match name {
         "list_ports" => Some("list_ports"),
         "explain_port" => Some("explain_port"),
+        "inspect_port" => Some("inspect_port"),
         "find_free_port" => Some("find_free_port"),
         "wait_for_port" => Some("wait_for_port"),
         "get_topology" => Some("get_topology"),
         "list_agents" => Some("list_agents"),
+        "get_agent_flow" => Some("get_agent_flow"),
         "stop_agent_ports" => Some("stop_agent_ports"),
         "plan_cluster_stop" => Some("plan_cluster_stop"),
         "stop_port" => Some("stop_port"),
@@ -175,7 +177,7 @@ mod tests {
             .iter()
             .map(|tool| tool["name"].as_str().unwrap())
             .collect();
-        assert_eq!(names.len(), 9);
+        assert_eq!(names.len(), 11);
         for name in names {
             assert_eq!(canonical_name(name), Some(name));
         }
@@ -262,6 +264,31 @@ mod tests {
             recorder.completed[0].output_bytes,
             serde_json::to_vec(response).unwrap().len() as u64
         );
+    }
+
+    #[test]
+    fn malformed_argument_envelopes_for_new_tools_record_only_protocol_failure_metadata() {
+        let (recorder, responses, _) = observe(&[
+            json!({"jsonrpc":"2.0","id":"private-inspect-id","method":"tools/call","params":{"name":"inspect_port","arguments":["private-payload"]}}),
+            json!({"jsonrpc":"2.0","id":"private-flow-id","method":"tools/call","params":{"name":"get_agent_flow","arguments":"private-payload"}}),
+        ]);
+        assert_eq!(recorder.started.len(), 2);
+        assert_eq!(recorder.completed.len(), 2);
+        for (index, name) in ["inspect_port", "get_agent_flow"].iter().enumerate() {
+            assert_eq!(&recorder.started[index].tool_name, name);
+            assert_eq!(
+                recorder.completed[index].outcome,
+                ToolCallOutcome::ProtocolError
+            );
+            assert_eq!(recorder.completed[index].error_code, Some(-32602));
+            assert_eq!(responses[index]["error"]["code"], -32602);
+        }
+        let events = format!(
+            "{}{}",
+            serde_json::to_string(&recorder.started).unwrap(),
+            serde_json::to_string(&recorder.completed).unwrap()
+        );
+        assert!(!events.contains("private-"));
     }
 
     #[test]

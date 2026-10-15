@@ -362,6 +362,12 @@ fn call(id: Value, params: &Value, confirmations: &mut confirmation::Confirmatio
     let Some(name) = params["name"].as_str().filter(|name| !name.is_empty()) else {
         return error(id, -32602, "tools/call requires a nonempty string name");
     };
+    if params
+        .get("arguments")
+        .is_some_and(|args| !args.is_object())
+    {
+        return error(id, -32602, "tools/call arguments must be an object");
+    }
     let args = params
         .get("arguments")
         .cloned()

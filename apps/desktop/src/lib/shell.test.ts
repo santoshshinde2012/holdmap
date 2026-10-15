@@ -5,6 +5,14 @@ import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { commandForShell } from "./shell";
 
+// Cold Windows PowerShell/.NET and a newly copied native executable can take
+// longer to launch on a hosted runner. Every launch remains bounded; no retries.
+const NATIVE_LAUNCH_TIMEOUT_MS = 45_000;
+const NATIVE_TEST_TIMEOUT_MS = 4 * NATIVE_LAUNCH_TIMEOUT_MS + 30_000;
+const VERSION_MARKER = "HOLDMAP_SHELL_VERSION:";
+const diagnosticText = (value: string | null | undefined) => (value ?? "").slice(0, 2_000)
+  .replace(/[\p{Cc}\p{Cf}]/gu, (character) => `\\u${character.codePointAt(0)!.toString(16).padStart(4, "0")}`);
+
 describe("copied restart commands", () => {
   it.skipIf(process.platform === "win32")("preserves every argument literally when pasted into a POSIX shell", () => {
     const args = ["", "two words", "'single'", '"double"', "$(printf injected)", "`printf injected`", "semi;colon", "\nnewline", "$HOME", "*", "\\path"];
@@ -53,25 +61,43 @@ describe("copied restart commands", () => {
         const env: NodeJS.ProcessEnv = { ...process.env, HOLDMAP_SHELL_RESULT: report };
         const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
         env[pathKey] = `${bin}${delimiter}${env[pathKey] ?? ""}`;
-        for (const [executable, cwd] of [[process.execPath, folder], [".\\tool.exe", bin], ["..\\bin\\tool.exe", work], ["tool.exe", work]]) {
+        for (const [variant, executable, cwd] of [
+          ["absolute executable", process.execPath, folder],
+          ["current-directory executable", ".\\tool.exe", bin],
+          ["parent-directory executable", "..\\bin\\tool.exe", work],
+          ["PATH executable", "tool.exe", work],
+        ]) {
+          rmSync(report, { force: true });
           const command = commandForShell([executable, fixture, ...args], cwd, "windows");
           // EncodedCommand transports the test script without introducing a second
           // native quoting layer. The helper itself must invoke a real native process.
-          const script = `[ordered]@{ edition = $PSVersionTable.PSEdition; major = $PSVersionTable.PSVersion.Major } | ConvertTo-Json -Compress; ${command}; if ($LASTEXITCODE -ne 17) { throw 'Native exit status was lost' }`;
-          const result = spawnSync(shell, ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { encoding: "utf8", timeout: 20_000, env });
-          expect(result.error).toBeUndefined();
-          expect(result.status, result.stderr).toBe(0);
-          const version = JSON.parse(result.stdout.split(/\r?\n/)[0]);
-          expect(version.edition).toBe(edition);
-          expect(version.major).toBeGreaterThanOrEqual(major);
+          const script = `$holdmapVersion = [ordered]@{ edition = $PSVersionTable.PSEdition; major = $PSVersionTable.PSVersion.Major } | ConvertTo-Json -Compress; Write-Output ('${VERSION_MARKER}' + $holdmapVersion); ${command}; if ($LASTEXITCODE -ne 17) { throw 'Native exit status was lost' }`;
+          const started = performance.now();
+          const result = spawnSync(shell, ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { encoding: "utf8", timeout: NATIVE_LAUNCH_TIMEOUT_MS, env });
+          const stdout = result.stdout ?? "", stderr = result.stderr ?? "";
+          // Do not print result.error or spawn arguments: Node may attach the full
+          // encoded command. These bounded fields identify startup vs native-child waits.
+          const diagnostics = JSON.stringify({
+            shell, variant, elapsedMs: Math.round(performance.now() - started),
+            errorCode: diagnosticText((result.error as NodeJS.ErrnoException | undefined)?.code) || null,
+            signal: result.signal, status: result.status, versionMarkerReached: stdout.includes(VERSION_MARKER),
+            stdout: diagnosticText(stdout), stderr: diagnosticText(stderr),
+          });
+          expect(result.error === undefined, diagnostics).toBe(true);
+          expect(result.status, diagnostics).toBe(0);
+          const versionLine = stdout.split(/\r?\n/)[0];
+          expect(versionLine.startsWith(VERSION_MARKER), diagnostics).toBe(true);
+          const version = JSON.parse(versionLine.slice(VERSION_MARKER.length));
+          expect(version.edition, diagnostics).toBe(edition);
+          expect(version.major, diagnostics).toBeGreaterThanOrEqual(major);
           const observed = JSON.parse(readFileSync(report, "utf8"));
-          expect(observed.argv).toEqual(args);
-          expect(realpathSync(observed.cwd)).toBe(realpathSync(cwd));
-          expect(result.stdout).toContain("stdout inherited");
-          expect(result.stderr).toContain("stderr inherited");
+          expect(observed.argv, diagnostics).toEqual(args);
+          expect(realpathSync(observed.cwd), diagnostics).toBe(realpathSync(cwd));
+          expect(stdout, diagnostics).toContain("stdout inherited");
+          expect(stderr, diagnostics).toContain("stderr inherited");
         }
       } finally { rmSync(folder, { recursive: true, force: true }); }
-    }, 60_000);
+    }, NATIVE_TEST_TIMEOUT_MS);
   }
 
   it("never manufactures a command for an empty argument vector", () => {

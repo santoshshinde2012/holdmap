@@ -18,12 +18,13 @@ Configuration can contain credential bytes; command, URL, environment/header val
 | Task | Tool and arguments |
 | --- | --- |
 | Find a listener, owner or project | `list_ports` with optional `query`, `dev_only` and `protocol` |
-| Diagnose a busy port before changing anything | `explain_port` with `port` |
+| Diagnose a busy port before changing anything | `explain_port` or `inspect_port` with `port` |
 | Choose an available TCP port | `find_free_port` with optional `near` |
 | Check whether a launched server accepts TCP connections | `wait_for_port` with `port` and optional `timeout_s` |
 | Wait for a TCP port to become free | `wait_for_port` with `port` and `until_free: true` |
 | See service dependencies before a stop | `get_topology` with optional `all` and `format` |
 | Inspect running agents, developer tools and child tools | `list_agents` with optional `agent` |
+| See observed agent process ancestry and live TCP sockets | `get_agent_flow` with optional `agent` |
 | Explicitly inspect supported MCP definitions and skill locations | `list_agents` with `include_capabilities: true` and optional `agent` |
 | Preview an agent's unprotected services before an authorized stop | `stop_agent_ports` with a specific `agent` (defaults to `dry_run: true`) |
 | Review a cluster stop order | `plan_cluster_stop` with `cluster` |
@@ -31,8 +32,9 @@ Configuration can contain credential bytes; command, URL, environment/header val
 
 ## Diagnose a port conflict
 
-1. Call `explain_port` for the requested port. It explains ownership, protection, bind exposure,
-   connections and the recommended action. Its optional HTTP probe performs GET / on localhost.
+1. Call `explain_port` or `inspect_port` for the requested port. Either explains ownership,
+   protection, bind exposure, connections and the recommended action. The optional HTTP probe
+   performs GET / on localhost.
 2. If the application can use another port, prefer `find_free_port` to disrupting a listener.
 3. If stopping is requested, inspect `get_topology` with `all: true` for dependents and call
    `stop_port` with `dry_run: true`. Show the plan and obtain the user's authorization before
@@ -74,6 +76,8 @@ does not mean unrestricted access. Resource totals cover all owned processes. `p
 preserves their IDs while display lists are capped; check `more_processes`, `more_tools`,
 `more_folders` and `more_links`, along with report `limits`, before claiming complete visibility.
 Connections are current TCP observations; remote hosts are IP addresses without DNS resolution.
+`get_agent_flow` projects the same scan as process ancestry and live TCP edges without command
+lines, prompts or recorded tool calls. It does not replace Calls recording.
 
 Capability inventory is disabled by default. An explicit include_capabilities request reports
 supported current-account configuration aliases and skill file locations with source/scope and limits.

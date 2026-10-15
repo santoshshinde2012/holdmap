@@ -37,12 +37,13 @@ After connecting, the server advertises its tools, a guide resource and three wo
 Prompt and resource menus depend on the client; clients exposing tools alone can use the same
 workflows below. Holdmap observes the machine where the server runs.
 
-This page describes the MCP interface in **0.7.0**. The guide, prompts,
+This page covers the published **0.7.1** MCP interface and explicitly marked current-source additions. The guide, prompts,
 schemas and mandatory stop confirmations were introduced in **0.4.0**; optional local
 activity recording followed in **0.5.0**.
 Current source adds the opt-in `list_agents` argument `include_capabilities: true` for supported
-MCP configuration aliases and skill locations. It is [Unreleased](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#unreleased)
-and is not accepted by **0.7.1** servers; follow the schema your installed server advertises.
+MCP configuration aliases and skill locations, plus read-only `inspect_port` and `get_agent_flow`.
+These are [Unreleased](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#unreleased)
+and are not accepted by **0.7.1** servers; follow the schema your installed server advertises.
 **Upgrading from 0.3.0 changes the stop protocol:**
 clients must preview first and pass the returned `confirmation_id` to execute. Version 0.3.0
 servers expose the nine tools below with the previous protocol and do not return that handle.
@@ -54,6 +55,8 @@ Older negotiated versions keep their compatible discovery and result shapes; new
 receive structured tool results alongside readable text.
 
 ## Tools
+
+The published **0.7.1** server provides these nine tools:
 
 | Tool | What it does |
 |---|---|
@@ -67,10 +70,20 @@ receive structured tool results alongside readable text.
 | `plan_cluster_stop` | A dry-run, dependency-ordered plan for stopping a cluster. Never executes. |
 | `stop_port` | Preview a port owner's stop plan; execute with a matching one-use `confirmation_id` and verify the port is free. Defaults to `dry_run: true`. |
 
+### Additional current-source tools (Unreleased)
+
+| Tool | What it does |
+| --- | --- |
+| `inspect_port` | The same structured inspection as `explain_port`: connections, process tree, bind risk and bounded local HTTP probing. |
+| `get_agent_flow` | Observed process ancestry and live TCP relationships for agents, with typed nodes, relationships, evidence and collection limits. It does not inspect capability files or report tool invocations. |
+
 Tools publish input and output schemas. Results include a structured JSON object and a readable
 summary with the same JSON for older clients. Invalid argument types, ranges, enum values or
 unknown options return an error before the tool acts. For example, `dry_run` must be the JSON
 boolean `true`, rather than the string `"true"`.
+In current source (Unreleased), a `tools/call` request must omit `arguments` or provide an object; arrays, explicit `null`
+and scalars are malformed request envelopes (`-32602`). A well-formed object that fails a
+tool's input schema or encounters a domain error instead returns a tool error (`isError`).
 
 With a current-source server, explicitly request configuration metadata using
 `{"name":"list_agents","arguments":{"include_capabilities":true}}` inside a `tools/call`
@@ -100,12 +113,14 @@ Clients supporting MCP prompts can discover these templates:
 
 Selecting a prompt returns instructions; it does not run tools, launch servers or stop processes.
 MCP prompt arguments are strings, while tool calls use the types in each tool's input schema.
+The current-source `inspect_agents` template also uses `get_agent_flow` for observed socket relationships.
 
 For clients exposing tools alone, ask for tasks such as:
 
 - “Explain what owns port 3000 and show its dependencies.”
 - “Find a free port near 3000, then check whether my server is ready after I start it.”
 - “Show the agents working in shop-web, including child tools and collection limits.”
+- “Show observed process and socket relationships for the Codex agent.” (Current source.)
 
 A free port is a candidate, not a reservation. TCP readiness does not establish application
 health. Likely MCP servers are inferred from process metadata. Passive inspection does not

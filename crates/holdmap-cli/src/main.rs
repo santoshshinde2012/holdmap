@@ -47,7 +47,7 @@ maps AI coding agents and developer tools (Claude Code, Cursor, Docker Desktop�
 and ports they hold, explains in plain English why a port is busy (dev-server tree, Docker \
 container, systemd/pm2/brew service, OS feature, TIME_WAIT, another user) and stops the correct \
 thing gracefully, verifying the port is free afterwards.\n\nRun without arguments in a terminal \
-to open the interactive TUI (Tab cycles Ports → Graph → Agents).",
+to open the interactive TUI (Tab cycles Ports → Graph → Agents; c toggles MCP/skills in Agents).",
     after_help = "EXAMPLES:\n  holdmap                      Open the interactive TUI\n  holdmap list --dev           Only dev servers\n  holdmap explain 3000         Why is 3000 busy?\n  holdmap stop 3000            Gracefully stop whatever holds 3000\n  holdmap stop 3000 --dry-run  Show the plan only\n  holdmap run -p 3000 -- npm run dev\n  holdmap free-port --near 3000\n  holdmap wait 5432 --timeout 30s\n  holdmap graph                Which services depend on which\n  holdmap agents               Agents & tools: folders, access, ports\n  holdmap agents --stop-ports  Stop the ports they started\n  holdmap stop --cluster shop  Stop a whole stack, dependents first\n  holdmap up                   Start the services in .holdmap.toml\n  eval \"$(holdmap init zsh)\"   Explain port-in-use errors in your shell\n  holdmap watch                Stream new/closed/conflicting listeners\n\nEXIT CODES: 0 ok · 1 busy/not found/timeout · 2 error · 3 blocked by safety policy · 4 needs elevation"
 )]
 struct Cli {

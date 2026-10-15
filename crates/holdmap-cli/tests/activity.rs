@@ -176,6 +176,8 @@ fn real_mcp_requests_keep_protocol_output_and_record_known_tool_metadata() {
     let request = [
         json!({"jsonrpc":"2.0","id":"private-rpc-success","method":"tools/call","params":{"name":"find_free_port","arguments":{}}}),
         json!({"jsonrpc":"2.0","id":"private-rpc-failure","method":"tools/call","params":{"name":"wait_for_port","arguments":{"port":0,"private":"private-argument-fixture"}}}),
+        json!({"jsonrpc":"2.0","id":"private-inspect-id","method":"tools/call","params":{"name":"inspect_port","arguments":["private-argument-fixture"]}}),
+        json!({"jsonrpc":"2.0","id":"private-flow-id","method":"tools/call","params":{"name":"get_agent_flow","arguments":"private-argument-fixture"}}),
     ].iter().map(Value::to_string).collect::<Vec<_>>().join("\n") + "\n";
     let output = command(Some(&credentials))
         .args(["mcp", "--record-activity"])
@@ -189,21 +191,30 @@ fn real_mcp_requests_keep_protocol_output_and_record_known_tool_metadata() {
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
-    assert_eq!(responses.len(), 2);
+    assert_eq!(responses.len(), 4);
     assert_eq!(responses[0]["id"], "private-rpc-success");
     assert_eq!(responses[1]["id"], "private-rpc-failure");
     assert_eq!(responses[1]["result"]["isError"], true);
+    for response in &responses[2..] {
+        assert_eq!(response["error"]["code"], -32602);
+        assert!(response.get("result").is_none());
+    }
     let snapshot = collector.snapshot();
-    assert_eq!(snapshot.spans.len(), 2);
+    assert_eq!(snapshot.spans.len(), 4);
     assert_eq!(snapshot.spans[0].name, "find_free_port");
     assert_eq!(snapshot.spans[0].status, ActivityStatus::Ok);
     assert_eq!(snapshot.spans[1].status, ActivityStatus::Error);
+    assert_eq!(snapshot.spans[2].name, "inspect_port");
+    assert_eq!(snapshot.spans[3].name, "get_agent_flow");
+    assert!(snapshot.spans[2..]
+        .iter()
+        .all(|span| span.status == ActivityStatus::Error));
     assert!(snapshot.spans.iter().all(|span| span.source == Source::Mcp
+        && span.mcp_server.is_none()
         && span.duration_ms.is_some()
         && span.output_bytes.is_some_and(|size| size > 0)));
     let serialized = serde_json::to_string(&snapshot).unwrap();
-    assert!(!serialized.contains("private-rpc"));
-    assert!(!serialized.contains("private-argument-fixture"));
+    assert!(!serialized.contains("private-"));
     collector.stop().unwrap();
 }
 
@@ -216,6 +227,6 @@ fn optional_recording_configuration_cannot_disable_mcp_tools() {
         .unwrap();
     assert!(output.status.success());
     let response: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(response["result"]["tools"].as_array().unwrap().len(), 9);
+    assert_eq!(response["result"]["tools"].as_array().unwrap().len(), 11);
     assert!(!String::from_utf8_lossy(&output.stderr).contains("private-"));
 }

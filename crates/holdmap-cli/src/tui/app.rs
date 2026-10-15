@@ -7,6 +7,7 @@ use holdmap_core::*;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use ratatui::widgets::TableState;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -123,6 +124,11 @@ pub struct App {
     pub scanning: bool,
     scan_again: bool,
     pub paused: bool,
+    /// Explicit Agents-tab opt-in; ordinary refreshes do not read capability files.
+    pub inspect_capabilities: bool,
+    /// Revoked when the user leaves Agents or disables inspection. A collector which is
+    /// still gathering processes must recheck consent before opening capability files.
+    capability_consent: Option<Arc<AtomicBool>>,
     explain_cache: HashMap<String, Arc<Explanation>>,
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
@@ -173,6 +179,8 @@ impl App {
             scanning: false,
             scan_again: false,
             paused: false,
+            inspect_capabilities: false,
+            capability_consent: None,
             explain_cache: HashMap::new(),
             tx,
             rx,
@@ -191,12 +199,20 @@ impl App {
             all_states: self.show_all,
             docker: self.docker,
         };
+        let capability_consent = Arc::new(AtomicBool::new(
+            self.tab == Tab::Agents && self.inspect_capabilities,
+        ));
+        self.capability_consent = Some(Arc::clone(&capability_consent));
         std::thread::spawn(move || {
             let r = Engine::new(&opts)
                 .map(|engine| {
                     // Attribution can read bounded, allowlisted metadata. Keep that work on
                     // the collector thread and give every view one consistent scan.
-                    let agents = engine.agents();
+                    let agents = if capability_consent.load(Ordering::Acquire) {
+                        engine.agents_with_capabilities()
+                    } else {
+                        engine.agents()
+                    };
                     (engine, agents)
                 })
                 .map_err(|e| e.to_string());
@@ -210,25 +226,11 @@ impl App {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
                 Msg::Scanned(r) => {
-                    self.scanning = false;
-                    self.last_scan = Some(Instant::now());
-                    if self.scan_again {
+                    if !self.apply_scan_result(*r) {
                         // An options change or explicit refresh requested a newer scan.
                         // Discard this old response instead of briefly changing ownership.
-                        self.scan_again = false;
                         self.start_scan();
                         continue;
-                    }
-                    match *r {
-                        Ok((e, agents)) => {
-                            self.error = None;
-                            self.engine = Some(Arc::new(e));
-                            self.explain_cache.clear();
-                            self.rebuild();
-                            self.rebuild_graph();
-                            self.set_agents_report(agents);
-                        }
-                        Err(e) => self.error = Some(e),
                     }
                 }
                 Msg::StopLine(l) => {
@@ -328,6 +330,32 @@ impl App {
         }
     }
 
+    /// Apply a completed collection only if its options and consent are still current.
+    /// A false return asks the caller to start the queued replacement collection.
+    fn apply_scan_result(
+        &mut self,
+        result: Result<(Engine, holdmap_core::agents::AgentsReport), String>,
+    ) -> bool {
+        self.scanning = false;
+        self.capability_consent = None;
+        self.last_scan = Some(Instant::now());
+        if std::mem::take(&mut self.scan_again) {
+            return false;
+        }
+        match result {
+            Ok((engine, agents)) => {
+                self.error = None;
+                self.engine = Some(Arc::new(engine));
+                self.explain_cache.clear();
+                self.rebuild();
+                self.rebuild_graph();
+                self.set_agents_report(agents);
+            }
+            Err(error) => self.error = Some(error),
+        }
+        true
+    }
+
     pub fn filter(&self) -> Filter {
         Filter {
             query: self.query.clone(),
@@ -415,6 +443,7 @@ impl App {
                 self.tab = Tab::Agents;
             }
             Tab::Agents => {
+                self.stop_capability_inspection();
                 self.tab = Tab::Ports;
             }
         }
@@ -428,7 +457,10 @@ impl App {
                 self.rebuild_agents();
                 self.tab = Tab::Agents;
             }
-            Tab::Agents => self.tab = Tab::Graph,
+            Tab::Agents => {
+                self.stop_capability_inspection();
+                self.tab = Tab::Graph;
+            }
             Tab::Graph => {
                 self.sync_from_graph();
                 self.tab = Tab::Ports;
@@ -991,12 +1023,21 @@ impl App {
                         self.agent_scroll = 0;
                         self.rebuild_agents();
                     } else {
+                        self.stop_capability_inspection();
                         self.tab = Tab::Ports;
                     }
                 }
                 KeyCode::Char('?') | KeyCode::F(1) => self.modal = Modal::Help,
                 KeyCode::Char('r') | KeyCode::F(5) => self.start_scan_force(),
                 KeyCode::Char(' ') | KeyCode::Char('p') => self.paused = !self.paused,
+                KeyCode::Char('c') => {
+                    if self.inspect_capabilities {
+                        self.stop_capability_inspection();
+                    } else {
+                        self.inspect_capabilities = true;
+                    }
+                    self.start_scan_force();
+                }
                 _ => {}
             }
             return;
@@ -1074,6 +1115,20 @@ impl App {
             self.start_scan();
         }
     }
+
+    fn stop_capability_inspection(&mut self) {
+        if !self.inspect_capabilities {
+            return;
+        }
+        self.inspect_capabilities = false;
+        if let Some(consent) = &self.capability_consent {
+            consent.store(false, Ordering::Release);
+        }
+        // Bounded file work already in progress cannot be interrupted, but its reply
+        // must not reintroduce inventory after consent was revoked.
+        self.scan_again |= self.scanning;
+        self.clear_agent_capabilities();
+    }
 }
 
 fn base64(data: &[u8]) -> String {
@@ -1135,6 +1190,145 @@ mod lifecycle_tests {
         app.paused = true;
         app.scanning = true;
         app
+    }
+
+    fn agent_scan(inspected: bool) -> (Engine, holdmap_core::agents::AgentsReport) {
+        let mut agent = super::super::agents_view::test_agent(42, "Codex");
+        agent.capabilities.inspected = inspected;
+        if inspected {
+            agent
+                .capabilities
+                .skills
+                .push(holdmap_core::agents::SkillCapability {
+                    id: "skill:review".into(),
+                    name: "private-review".into(),
+                    declared_name: None,
+                    description: None,
+                    scope: holdmap_core::agents::CapabilityScope::User,
+                    source_path: "/fixture/.agents/skills/private-review/SKILL.md".into(),
+                    project_path: None,
+                    evidence: holdmap_core::agents::Evidence::Observed,
+                });
+        }
+        let engine = Engine::from_scan(holdmap_core::scan::Scan {
+            snapshot: Snapshot {
+                entries: Vec::new(),
+                hidden_sockets: 0,
+                platform: "fixture".into(),
+                taken_at_ms: 0,
+                scan_ms: 0,
+                docker_available: false,
+                warnings: Vec::new(),
+            },
+            table: Default::default(),
+            published: Vec::new(),
+            raw: Vec::new(),
+        });
+        (
+            engine,
+            holdmap_core::agents::AgentsReport {
+                agents: vec![agent],
+                ..Default::default()
+            },
+        )
+    }
+
+    #[test]
+    fn every_agents_exit_revokes_consent_and_discards_late_inventory() {
+        for exit in [
+            KeyCode::Tab,
+            KeyCode::BackTab,
+            KeyCode::Char('v'),
+            KeyCode::Esc,
+        ] {
+            let mut app = quiet_app();
+            app.tab = Tab::Agents;
+            app.inspect_capabilities = true;
+            let consent = Arc::new(AtomicBool::new(true));
+            app.capability_consent = Some(Arc::clone(&consent));
+            app.set_agents_report(agent_scan(true).1);
+            app.agent_scroll = 5;
+
+            app.on_key(KeyEvent::new(exit, KeyModifiers::NONE));
+            assert_ne!(app.tab, Tab::Agents);
+            assert!(!app.inspect_capabilities);
+            assert!(
+                !consent.load(Ordering::Acquire),
+                "a slow collector loses file-read consent"
+            );
+            assert!(
+                !app.agents.as_ref().unwrap().agents[0]
+                    .capabilities
+                    .inspected
+            );
+            assert!(app.agents.as_ref().unwrap().agents[0]
+                .capabilities
+                .skills
+                .is_empty());
+            assert_eq!(app.agent_scroll, 0);
+
+            // Complete the old inspected collection without launching any host scan.
+            assert!(!app.apply_scan_result(Ok(agent_scan(true))));
+            assert!(
+                app.engine.is_none(),
+                "the obsolete engine and its inventory stay unapplied"
+            );
+            assert!(app.agents.as_ref().unwrap().agents[0]
+                .capabilities
+                .skills
+                .is_empty());
+            assert!(app.apply_scan_result(Ok(agent_scan(false))));
+            assert!(
+                !app.agents.as_ref().unwrap().agents[0]
+                    .capabilities
+                    .inspected
+            );
+            while app.tab != Tab::Agents {
+                app.toggle_tab();
+            }
+            assert!(
+                !app.inspect_capabilities,
+                "returning to Agents requires a fresh opt-in"
+            );
+            assert_eq!(app.selected_agent().unwrap().pid, 42);
+        }
+    }
+
+    #[test]
+    fn c_opt_out_clears_private_search_results_before_a_paused_scan_finishes() {
+        let mut app = quiet_app();
+        app.tab = Tab::Agents;
+        app.inspect_capabilities = true;
+        app.set_agents_report(agent_scan(true).1);
+        app.agent_query = "private-review".into();
+        app.rebuild_agents();
+        assert!(app.selected_agent().is_some());
+
+        app.on_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+        assert!(app.paused);
+        assert!(!app.inspect_capabilities);
+        assert!(app.visible_agent_indices().is_empty());
+        assert!(app.selected_agent().is_none());
+        assert!(!app.apply_scan_result(Ok(agent_scan(true))));
+        assert!(app.visible_agent_indices().is_empty());
+        assert!(matches!(app.modal, Modal::None));
+    }
+
+    #[test]
+    fn rapid_reconsent_does_not_accept_the_previously_cancelled_scan() {
+        let mut app = quiet_app();
+        app.tab = Tab::Agents;
+        app.inspect_capabilities = true;
+        let consent = Arc::new(AtomicBool::new(true));
+        app.capability_consent = Some(Arc::clone(&consent));
+        app.on_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+        assert!(app.inspect_capabilities);
+        assert!(!consent.load(Ordering::Acquire));
+        assert!(!app.apply_scan_result(Ok(agent_scan(true))));
+        assert!(app.agents.is_none());
+        assert!(app.apply_scan_result(Ok(agent_scan(true))));
+        assert!(app.selected_agent().unwrap().capabilities.inspected);
     }
 
     fn report(success: bool, freed: bool, error: Option<&str>) -> StopReport {

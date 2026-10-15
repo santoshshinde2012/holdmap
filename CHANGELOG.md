@@ -18,6 +18,16 @@ by [release-please](https://github.com/googleapis/release-please) from
   groups shared source definitions, and opens source/purpose details on selection. Runtime
   candidates remain separate. Search, filters, keyboard controls and a compact narrow-window
   inspector support exploration; coverage and rendering limits stay explicit.
+- Capability inventory covers supported default and compatibility locations for legacy Windsurf, Gemini CLI,
+  GitHub Copilot, Copilot CLI and Cline in addition to Codex, Claude Code, Cursor and
+  Claude Desktop. Custom homes, Aider `--mcp-servers-file` paths, VS Code profile MCP
+  files and editor globalStorage are not followed. Presence still does not prove loading
+  or use.
+- MCP `inspect_port` returns the same structured inspection as `explain_port`. MCP
+  `get_agent_flow` projects observed process ancestry and live TCP relationships without
+  command lines, prompts or recorded tool calls.
+- The terminal Agents pane toggles inventory with **c**; leaving Agents revokes inspection
+  and clears retained metadata. Ordinary TUI refreshes stay on the process table.
 - Calls labels sanitized reported MCP aliases and explicit Claude skill activations separately
   from tool-call counts. Provider-redacted skill names and unreported outcomes remain unknown;
   documented log-only setup keeps tool-detail/content logging disabled.
@@ -27,6 +37,13 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Browser About identifies the web preview and omits desktop settings and app paths.
 
 ### Fixed
+
+- Parse supported provider formats without inventing transport or enablement: handle VS Code
+  JSONC, Gemini comments, Copilot CLI local/bare project maps and Cline transport declarations.
+- Reject malformed MCP argument envelopes as protocol errors and publish complete typed
+  observed-flow schemas.
+- Keep interactive graph text readable, dismiss nonmodal overlays when focus leaves, and
+  exercise the actual light theme in browser tests.
 
 - Retain native recording ownership across startup acknowledgement and cancellation, so
   cancelling during that handoff discards the acknowledged session instead of leaving

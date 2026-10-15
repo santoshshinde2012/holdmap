@@ -26,6 +26,7 @@ mod fixture {
     };
     use tauri::ipc::InvokeBody;
     use tauri::utils::assets::{AssetKey, AssetsIter, CspHash};
+    use tauri::utils::config::BackgroundThrottlingPolicy;
     use tauri::{AppHandle, Assets, Runtime, State, WebviewWindow};
 
     #[derive(Deserialize)]
@@ -36,6 +37,7 @@ mod fixture {
         identifier: String,
         incognito: bool,
         devtools: Option<bool>,
+        synthetic_media: bool,
     }
 
     struct FixtureAssets(BTreeMap<AssetKey, Vec<u8>>);
@@ -87,6 +89,7 @@ mod fixture {
         root: PathBuf,
         files: Mutex<BTreeMap<String, serde_json::Value>>,
         incognito: bool,
+        background_throttling: Option<BackgroundThrottlingPolicy>,
         native_start_requests: AtomicUsize,
     }
 
@@ -162,6 +165,7 @@ mod fixture {
                 "is_dev": tauri::is_dev(),
                 "incognito": state.incognito,
                 "debug_assertions": cfg!(debug_assertions),
+                "background_throttling": state.background_throttling,
             },
         }))
         .map_err(|error| error.to_string())?;
@@ -224,12 +228,18 @@ mod fixture {
         context.set_assets(Box::new(assets));
         let incognito = fixture.incognito;
         let devtools = fixture.devtools;
+        // This intentionally unfocused canvas fixture needs deterministic timers.
+        // App and capability probes retain the production scheduling defaults.
+        let background_throttling = fixture
+            .synthetic_media
+            .then_some(BackgroundThrottlingPolicy::Disabled);
         tauri::Builder::default()
             .manage(super::screen_recording::ScreenRecordingState::default())
             .manage(FixtureState {
                 root,
                 files: Mutex::new(BTreeMap::new()),
                 incognito,
+                background_throttling: background_throttling.clone(),
                 native_start_requests: AtomicUsize::new(0),
             })
             .invoke_handler(super::local_window::guard(tauri::generate_handler![
@@ -250,6 +260,11 @@ mod fixture {
                 .incognito(incognito);
                 let builder = if let Some(enabled) = devtools {
                     builder.devtools(enabled)
+                } else {
+                    builder
+                };
+                let builder = if let Some(policy) = background_throttling {
+                    builder.background_throttling(policy)
                 } else {
                     builder
                 };

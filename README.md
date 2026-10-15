@@ -215,8 +215,10 @@ to confirmed matching accounts; they do not prove current work by that running i
 
 **MCP & skills in current source (Unreleased).** `holdmap agents --capabilities --json`
 explicitly inspects supported current-account configuration and skill metadata. The desktop's
-**Agents → MCP & skills** workspace and MCP `list_agents(include_capabilities:true)` expose
-the same inventory. It distinguishes configured definitions, skill files, running child tools
+**Agents → MCP & skills** workspace, the terminal Agents **c** toggle and MCP
+`list_agents(include_capabilities:true)` expose the same inventory. The terminal toggle stays
+active only in Agents; press **c** again or leave Agents to turn it off. It distinguishes
+configured definitions, skill files, running child tools
 and recorded usage; loading, trust and effective client policy stay unknown. Ordinary scans
 keep configuration inspection off. The desktop uses an Overview-style map: select an agent,
 MCP definition, skill or runtime card to open its details in the left rail. Close or press
@@ -226,7 +228,8 @@ open only when requested. See the [coverage, privacy and usage guide](site/src/c
 **Terminal agents in 0.5.0.** Start `holdmap` and press **Shift+Tab**
 to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its
 tools, folders, connections and access. Wide terminals show the list beside the details;
-small terminals stack them. **p** pauses refreshes, **r** refreshes, and **?** shows help.
+small terminals stack them. **p** pauses refreshes, **r** refreshes, and **?**
+shows help.
 **x** opens every service-stop plan, including its TCP/UDP protocol; **Enter**, **n** or
 **Esc** cancels and only **y** confirms. The agent session remains protected. Failed or
 changed targets require a new review; completed stops and history-write errors stay visible.
@@ -468,7 +471,8 @@ Unreleased and is separate from the published 0.7.1 interface:
 `holdmap mcp` lets AI coding assistants list ports, explain them, find a free port, wait for a
 server, read the service graph, list agents and developer tools (`list_agents`), stop the ports
 an agent started (`stop_agent_ports`, dry-run by default), and stop their own dev servers
-(never protected processes).
+(never protected processes). Current source also adds read-only `inspect_port` and
+`get_agent_flow`; these are Unreleased and require a matching server build.
 For Claude Desktop or Cursor (`~/.cursor/mcp.json`):
 
 ```json
@@ -492,7 +496,8 @@ Version 0.4.0 also exposes a bundled `holdmap://guide` resource and three workfl
 
 Retrieving a prompt performs no actions. The guide and templates help clients interpret results;
 MCP process identities remain inferred from process metadata and do not prove tool calls or
-transport. Current source's explicit `include_capabilities:true` option separately projects
+transport. The current-source template also uses `get_agent_flow` for observed socket relationships.
+Current source's explicit `include_capabilities:true` option separately projects
 configured server aliases and skill metadata; definitions do not prove activation or use.
 Tool input/output schemas preserve structured data, and malformed arguments are rejected before
 acting, including incorrectly typed stop controls. Both stop tools preview by default; execution
