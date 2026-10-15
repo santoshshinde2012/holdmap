@@ -12,15 +12,11 @@ import {
   recordingFilename,
   stopTracks,
   type CaptureResult,
+  type RecordingListener,
 } from "./screen-record";
 
 const MAX_MP4_BYTES = 128 * 1024 * 1024;
 const FINALIZE_TIMEOUT_MS = 20_000;
-
-export type RecordingListener = {
-  onTick: (elapsedMs: number) => void;
-  onEnded: () => void;
-};
 
 type Mp4Session = {
   close: () => void;

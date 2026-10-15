@@ -62,6 +62,7 @@ Chromium once with `(cd apps/desktop && npm ci && npx playwright install chromiu
 On Linux, use `npx playwright install --with-deps chromium` for its system dependencies,
 and install `xvfb xauth` for the isolated native shortcut regressions.
 On macOS, install FFmpeg (`brew install ffmpeg`) for the synthetic MP4/GIF runtime check.
+Native macOS recording builds also need Xcode's Swift compiler and the macOS 14 or newer SDK.
 The browser suite starts and stops its own preview server; failure traces and screenshots go
 in the ignored `apps/desktop/test-results/` directory. For an existing Chrome installation,
 set `HOLDMAP_E2E_CHROMIUM_EXECUTABLE` to its executable path.
@@ -89,6 +90,8 @@ python3 scripts/test-release-security.py    # isolated release input regressions
 python3 scripts/check-updater-runtime.py    # macOS: real signed scratch install and relaunch
 python3 scripts/check-window-lifecycle-runtime.py # interactive macOS: owned close/fullscreen/reopen regression
 python3 scripts/check-screen-recording-runtime.py # macOS: synthetic MP4/GIF, real WKWebView and binary IPC; needs FFmpeg
+python3 scripts/check-screen-recording-runtime.py --app-ui # macOS: packaged app confirmation and native fallback discovery
+python3 scripts/check-native-screen-recording.py # macOS: native H.264/GIF writer and cancellation, synthetic pixels only
 actionlint
 python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK/Linux test resolution
 python3 scripts/verify-vendored-global-hotkey.py # X11 fixes, original archive and shortcut dependency resolution
@@ -125,7 +128,8 @@ CI runs Rust and native desktop tests/builds on Linux, macOS and Windows. Chromi
 tests run on Linux and gate native builds. Dependency checks include both npm lockfiles and
 the full Cargo workspace, and fail on known advisories at every severity. Gitleaks checks the
 full fetched Git history and current source with redacted findings. CodeQL checks Rust,
-JavaScript/TypeScript, Python and GitHub Actions. A daily workflow checks newly published
+JavaScript/TypeScript, Swift, Python and GitHub Actions. Swift analysis compiles the production
+native capture adapter on macOS without running it. A daily workflow checks newly published
 dependency advisories; Dependabot maintains desktop, website, Rust and workflow updates.
 Repository administrators should enable Dependabot alerts and security updates in GitHub's
 security settings; those settings are separate from the committed update configuration.
@@ -143,6 +147,10 @@ real binary IPC to a fixture-only destination, and checks hashes, permissions, a
 duration and cleanup with FFprobe/FFmpeg. Its capture API tripwire rejects any screen-picker
 request. It never captures the user's screen or opens the production native save chooser;
 save-policy and atomic-write behavior have separate native unit coverage.
+The app UI check uses a hardened release window, checks the real confirmation dialog and
+forces the browser API absent to exercise native capability discovery. The native pixel
+fixture compiles the production Swift writer and validates MP4/GIF media and cancellation.
+Neither check opens a screen picker, requests Screen Recording permission or captures a display.
 
 Run `python3 scripts/check-window-lifecycle-runtime.py` in an interactive macOS desktop session
 for native close changes. It creates a private scratch app, exercises the native fullscreen

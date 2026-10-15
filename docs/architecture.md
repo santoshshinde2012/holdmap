@@ -100,7 +100,18 @@ Screen pixels have a separate, user-initiated lifecycle from agent activity meta
 capture call runs directly from the Choose screen action so the operating system retains
 control of source selection and consent. A generation guard releases late streams after
 cancellation or unmount, and stopping releases capture tracks before finalizing exports.
-No capture permission or screen selection is persisted, and no audio is requested.
+Holdmap does not persist screen selection or a permission decision, and no audio is requested.
+The operating system manages any retained privacy permission separately.
+`screen-record-backend.ts` selects the browser or native session behind one small
+stop/discard/elapsed-time contract. Capability discovery never opens a picker. When
+`getDisplayMedia` is absent, macOS 14+ uses ScreenCaptureKit's public system picker;
+older macOS versions remain launchable through weak framework linking and availability checks.
+The Rust boundary accepts opaque session handles rather than paths, authorizes the local
+main window and owns one private temporary directory. The Swift adapter confines picker
+and stream lifecycle to the main thread, writes H.264 locally and prepares the GIF after
+capture stops. Independent native duration and size bounds survive renderer suspension.
+Cancellation waits for stream/writer/export completion before releasing native files;
+bounded binary IPC copies completed exports into the existing in-memory preview.
 On Linux, a display-only host permission handler applies the same trusted-main-view policy.
 WebKitGTK otherwise denies requests by default. Its display backend independently requires
 the ScreenCast portal's selection and PipeWire stream, including on X11; the host gate
@@ -132,6 +143,10 @@ the [WebKit capture-permission fix](https://bugs.webkit.org/show_bug.cgi?id=2748
 the [gifenc worker guidance](https://github.com/mattdesl/gifenc), and
 [Tauri native dialogs](https://v2.tauri.app/plugin/dialog/). Synthetic owned canvas streams
 validate actual MP4/GIF content without capturing a user's screen or requesting capture permissions.
+The native fallback follows Apple's [ScreenCaptureKit content-sharing picker](https://developer.apple.com/documentation/screencapturekit/sccontentsharingpicker).
+Its synthetic pixel fixture exercises the production native MP4/GIF writer without requesting
+screen permission. The packaged WKWebView check asserts original browser API availability
+before synthetic capture, and separately checks the actual minified app's confirmation dialog.
 
 ## Agent communication visibility (0.5.0)
 
@@ -1183,12 +1198,14 @@ published asset digests and IDs, then publishes the complete `latest.json` index
 ### Desktop UI
 
 - **Screen recording.** `lib/screen-record.ts` owns consent copy, duration bounds, filenames
-  and blob downloads. `lib/screen-record-encode.ts` captures via `getDisplayMedia` (video only),
+  and blob downloads. `lib/screen-record-backend.ts` chooses browser or native capture.
+  `lib/screen-record-encode.ts` processes browser video (video only),
   encodes H.264/MP4 with WebCodecs (`mediabunny`) or `MediaRecorder` when that codec is missing,
   and writes a bounded GIF with `gifenc`. `ScreenRecordDialog.svelte` confirms before the OS
   picker, then the title bar shows Stop + elapsed time so the modal does not cover this window
   while recording. Files stay on the machine (`blob:` / `mediastream:` CSP; macOS Screen Recording
-  usage string). Tests cover helpers, the dialog and a Playwright capture using a fake canvas stream.
+  usage string). `lib/screen-record-native.ts` adapts the bounded native session and binary exports
+  to the same preview. Tests cover helpers, both backends, the dialog and synthetic media.
 - **Folder actions (0.5.0).** Map and card paths share `FolderActions.svelte` rather
   than separate opener flows. `lib/folders.ts` selects an exact-path owner once and revalidates
   that same target during polling; the UI never silently switches agents. The dialog handles
@@ -1424,7 +1441,8 @@ Security regressions cover changed confirmation owners, PID reuse, newly protect
 preview expiry/replay/options, bulk previews, linked files, credential forms, terminal controls
 and bounded MCP input. Gitleaks scans full Git history and current source, including new source
 files while excluding ignored build caches. CI uses immutable action SHAs and least-privilege
-tokens; CodeQL covers JavaScript/TypeScript, Rust, Python and Actions. Dependabot vulnerability
+tokens; CodeQL covers JavaScript/TypeScript, Rust, Swift, Python and Actions. Swift analysis
+compiles the native capture adapter on macOS without opening a picker. Dependabot vulnerability
 alerts/security updates are enabled, and a daily dependency workflow checks new advisories
 without waiting for a source change. These gates supplement review and the platform limits in
 [SECURITY.md](../SECURITY.md).

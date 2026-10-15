@@ -2038,7 +2038,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "holdmap"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2062,7 +2062,7 @@ dependencies = [
 
 [[package]]
 name = "holdmap-activity"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "getrandom 0.3.4",
  "httparse",
@@ -2077,7 +2077,7 @@ dependencies = [
 
 [[package]]
 name = "holdmap-core"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "criterion",
  "libc",
@@ -2094,13 +2094,14 @@ dependencies = [
 
 [[package]]
 name = "holdmap-desktop"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "base64 0.22.1",
  "glib",
  "global-hotkey",
  "holdmap-activity",
  "holdmap-core",
+ "libc",
  "minisign-verify",
  "semver",
  "serde",
@@ -2114,12 +2115,14 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-updater",
  "tempfile",
+ "tokio",
+ "uuid",
  "x11rb",
 ]
 
 [[package]]
 name = "holdmap-mcp"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "holdmap-core",
  "serde",

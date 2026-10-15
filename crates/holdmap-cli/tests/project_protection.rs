@@ -12,6 +12,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const FIXTURE_TIMEOUT: Duration = Duration::from_secs(90);
+// Cold parallel process launches can exceed five seconds on macOS. Keep readiness
+// bounded without retrying policy work; diagnostics distinguish startup stages.
+const READY_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Ready {
@@ -39,21 +42,46 @@ impl Drop for OwnedChild {
 }
 
 fn wait_ready(path: &Path, child: &mut Child) -> Ready {
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let started = Instant::now();
+    let deadline = started + READY_TIMEOUT;
     loop {
         if let Ok(bytes) = std::fs::read(path) {
             if let Ok(ready) = serde_json::from_slice::<Ready>(&bytes) {
                 assert_eq!(ready.pid, child.id());
+                if started.elapsed() >= Duration::from_secs(5) {
+                    eprintln!(
+                        "owned fixture PID {} became ready after {:?}",
+                        child.id(),
+                        started.elapsed()
+                    );
+                }
                 return ready;
             }
         }
+        let status = child.try_wait().unwrap();
         assert!(
-            child.try_wait().unwrap().is_none(),
-            "fixture exited before readiness"
+            status.is_none() && Instant::now() < deadline,
+            "owned fixture PID {} did not become ready after {:?}; status: {status:?}; {}",
+            child.id(),
+            started.elapsed(),
+            fixture_diagnostics(path)
         );
-        assert!(Instant::now() < deadline, "fixture did not become ready");
         std::thread::sleep(Duration::from_millis(10));
     }
+}
+
+fn fixture_diagnostics(path: &Path) -> String {
+    ["stage", "stdout", "stderr"]
+        .into_iter()
+        .map(|extension| {
+            let mut bytes = Vec::new();
+            if let Ok(file) = std::fs::File::open(path.with_extension(extension)) {
+                let _ = file.take(8192).read_to_end(&mut bytes);
+            }
+            format!("{extension}: {:?}", String::from_utf8_lossy(&bytes))
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 fn fixture_command(exe: &Path, cwd: &Path, ready: &Path, count: usize) -> std::process::Command {
@@ -70,8 +98,8 @@ fn fixture_command(exe: &Path, cwd: &Path, ready: &Path, count: usize) -> std::p
         .env_remove("HOLDMAP_POLICY_CHILD")
         .current_dir(cwd)
         .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stdout(holdmap_core::util::create_private(&ready.with_extension("stdout")).unwrap())
+        .stderr(holdmap_core::util::create_private(&ready.with_extension("stderr")).unwrap());
     command
 }
 
@@ -671,6 +699,7 @@ fn vite_listener_fixture() {
     let ready_file = PathBuf::from(
         std::env::var_os("HOLDMAP_POLICY_READY").expect("parent supplied readiness path"),
     );
+    std::fs::write(ready_file.with_extension("stage"), "fixture entered").unwrap();
     let count: usize = std::env::var("HOLDMAP_POLICY_PORT_COUNT")
         .unwrap()
         .parse()
@@ -682,6 +711,7 @@ fn vite_listener_fixture() {
     for listener in &listeners {
         listener.set_nonblocking(true).unwrap();
     }
+    std::fs::write(ready_file.with_extension("stage"), "listeners bound").unwrap();
     let mut child = None;
     let child_ready = if std::env::var_os("HOLDMAP_POLICY_CHILD").is_some() {
         let child_file = ready_file.with_extension("child.json");
@@ -697,6 +727,7 @@ fn vite_listener_fixture() {
     } else {
         None
     };
+    std::fs::write(ready_file.with_extension("stage"), "publishing readiness").unwrap();
     let ready = Ready {
         pid: std::process::id(),
         ports: listeners

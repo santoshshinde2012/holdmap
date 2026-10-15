@@ -8,6 +8,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-15
+
 ### Documentation
 
 - Refresh the README's 0.7.0 features, install/update guidance and development workflow;
@@ -17,6 +19,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Fixed
 
+- Use Apple's native screen picker on macOS 14 or later when the installed desktop
+  window lacks browser screen capture. Native capture keeps the two-minute, video-only
+  limit, local MP4/GIF exports, cancellable preparation and private temporary-file cleanup.
+- Check the actual screen-capture API in hardened, packaged macOS runtime tests before
+  exercising the synthetic encoder, and verify the real app's recording confirmation.
 - Keep credential-redaction regression failures from printing tested secrets or raw HTTP
   metadata in test logs, including JSON, summaries and redirect assertions.
 - Discover draft releases through authenticated release listing and numeric IDs instead
