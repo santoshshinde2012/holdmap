@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mockAgents } from "./mock";
 import { agentMatches } from "./agents";
-import { capabilityItems, capabilityLimits, capabilityMatches, enabledLabel, filterCapabilities, runningMcpItems } from "./agent-capabilities";
+import { capabilityItems, capabilityLabel, capabilityLimits, capabilityMatches, enabledLabel, filterCapabilities, runningMcpItems } from "./agent-capabilities";
 
 const report = () => mockAgents(undefined, true);
 describe("capability inventory projections", () => {
@@ -27,6 +27,14 @@ describe("capability inventory projections", () => {
     expect(runtime[0].tool.pid).toBe(52070);
     expect(rows.every((row) => !row.id.startsWith("running:"))).toBe(true);
     expect(rows.every((row) => !("tool" in row))).toBe(true);
+  });
+
+  it("gives repeated aliases distinct accessible names with full source and owner context", () => {
+    const rows = capabilityItems(report().agents).filter((row) => row.name === "filesystem");
+    const names = rows.map(capabilityLabel);
+    expect(new Set(names).size).toBe(2);
+    expect(names).toContain("Inspect MCP server filesystem, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.cursor/mcp.json");
+    expect(names).toContain("Inspect MCP server filesystem, Project scope. Agents: Claude Code (PID 51200). Project: /Users/dev/code/shop-api. Source: /Users/dev/code/shop-api/.mcp.json");
   });
 
   it("shares exact declarations across agent instances and retains all associations", () => {
@@ -55,6 +63,8 @@ describe("capability inventory projections", () => {
     let rows = capabilityItems(agents).filter((row) => row.name === "code-review");
     expect(rows).toHaveLength(1);
     expect(rows[0].owners.map((owner) => owner.name)).toEqual(["Claude Code", "Cursor"]);
+    expect(capabilityLabel(rows[0])).toContain("Agents: Claude Code (PID 51200), Cursor (PID 52000).");
+    expect(capabilityLabel(rows[0])).toContain("Source: /Users/dev/.agents/skills/code-review/SKILL.md");
     agents[0].capabilities!.skills.at(-1)!.description = "A different observed projection";
     rows = capabilityItems(agents).filter((row) => row.name === "code-review");
     expect(rows).toHaveLength(2);

@@ -12,6 +12,12 @@ export type CapabilitySelection = CapabilityItem | RunningMcpItem;
 export const scopeLabel: Record<CapabilityScope, string> = { user: "User", project: "Project", local: "Local project" };
 export const pathName = (path: string): string => path.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || path;
 
+/** Aliases repeat across sources; expose the same context to assistive technology. */
+export function capabilityLabel(item: CapabilityItem): string {
+  const owners = item.owners.map((owner) => `${owner.name} (PID ${owner.pid})`).join(", ");
+  return `Inspect ${item.kind === "mcp" ? "MCP server" : "skill"} ${item.name}, ${scopeLabel[item.scope]} scope. Agents: ${owners}.${item.projectPath ? ` Project: ${item.projectPath}.` : ""} Source: ${item.sourcePath}`;
+}
+
 /** Share identical declarations across clients; provider-specific IDs alone cannot identify a shared source. */
 export function capabilityItems(agents: Agent[]): CapabilityItem[] {
   const rows = new Map<string, CapabilityItem>();

@@ -171,8 +171,10 @@ adapter owns its bounded delivery queue and worker lifetime separately from acti
 Current source adds an optional sanitized `mcp_server` label to tool records and a separate
 `skill` kind for explicit Claude activation logs. Skill records carry a source event time,
 pseudonymous session/counter identity and unknown workflow outcome; they do not increase tool
-call counts. MCP aliases come only from explicit hook metadata or an unambiguous sanitized
-client label. Neither creates a configuration/process join or action authority. Default Claude
+call counts. Built-in adapters derive MCP aliases only from explicit hook metadata or an
+unambiguous sanitized client label. Explicit normalized tool records can also report the
+optional alias through `/v1/activity`, subject to the shared identifier sanitization and record
+validation. None creates a configuration/process join, authenticated identity or action authority. Default Claude
 setup stays trace-only; the documented alternate log-only recipe receives activation events
 without enabling tool-detail or content flags. These additions are Unreleased after 0.7.1.
 Current decoding accepts older snapshots with an omitted MCP alias. The strict older decoder

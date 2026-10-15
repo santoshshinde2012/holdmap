@@ -36,12 +36,15 @@ the individual compact JSON-RPC envelope. They are not network transfer totals. 
 without size fields show **Unknown**. Recorded identities are pseudonyms and do not authorize
 opening folders, stopping services or any other process action.
 
-An MCP server alias appears only when a Claude hook explicitly supplies `mcp_server.name`,
-or a sanitized `mcp__server__tool` label has an unambiguous split. Ambiguous or redacted names
-remain unknown. This is source-reported usage metadata, not authentication of a server and not
-a match to a configured alias or process. The standard MCP protocol does not require this
-client-specific prefix. A skill activation is a separate record and count, not a tool invocation
-or a workflow result. Hidden custom names show **name not reported**.
+The built-in hook/OTLP adapters derive an MCP server alias only when a Claude hook explicitly
+supplies `mcp_server.name`, or a sanitized `mcp__server__tool` label has an unambiguous split.
+Ambiguous or redacted names remain unknown. An explicit normalized integration can also report
+the optional `ActivitySpan.mcp_server` field on a tool record through `/v1/activity`; the
+collector applies the same bounded identifier sanitization and record validation. Every path
+provides source-reported metadata, not authentication of a server or a match to a configured
+alias or process. The standard MCP protocol does not require this client-specific prefix.
+A skill activation is a separate record and count, not a tool invocation or a workflow result.
+Hidden custom names show **name not reported**.
 
 Search keeps matching relationships in context. Fit, zoom and the accessible participant list
 support navigating larger graphs. The inspector stays readable in narrow windows. **Pause**

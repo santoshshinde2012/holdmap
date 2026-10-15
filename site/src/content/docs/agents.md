@@ -198,9 +198,13 @@ The default `include_capabilities` is false. Inventory does not run in ordinary 
 
 ### Understand explicit usage
 
-Calls can show a sanitized MCP server alias only from explicit Claude hook metadata or an
-unambiguous `mcp__server__tool` label. The standard MCP protocol does not require this naming
-convention. Claude skill activation logs are separate from tool-call counts. Provider-redacted
+The built-in hook/OTLP adapters report sanitized MCP server aliases from explicit Claude hook
+metadata or an unambiguous `mcp__server__tool` label. Explicit normalized integrations can
+also supply the optional `ActivitySpan.mcp_server` field on tool records through the authenticated
+`/v1/activity` route; the collector sanitizes that identifier and validates the record. These
+are unverified source labels, never an automatic inventory/process join or action authority.
+The standard MCP protocol does not require this naming convention. Claude skill activation
+logs are separate from tool-call counts. Provider-redacted
 custom skill names stay **name not reported**, and activation never establishes completion or
 success. See the [recording contract and optional log-only setup](https://github.com/santoshshinde2012/holdmap/blob/main/docs/agent-flow.md#record-skill-activations-current-source).
 

@@ -4,7 +4,7 @@
   import { EVIDENCE_LABEL, monogram } from "../../lib/agents";
   import { humanBytes } from "../../lib/format";
   import type { AgentMcpServer, AgentSkill, AgentsReport, CapabilityScope } from "../../lib/types";
-  import { capabilityItems, capabilityLimits, capabilityMatches, enabledLabel, filterCapabilities, pathName, runningMcpItems, scopeLabel, type CapabilitySelection, type InventoryKind, type InventoryState } from "../../lib/agent-capabilities";
+  import { capabilityItems, capabilityLabel, capabilityLimits, capabilityMatches, enabledLabel, filterCapabilities, pathName, runningMcpItems, scopeLabel, type CapabilitySelection, type InventoryKind, type InventoryState } from "../../lib/agent-capabilities";
   import { tick } from "svelte";
 
   let { report, query = "", selectedAgent = null, loading = false, error = null, demo = false, onselectagent, onclearquery, onretry, onrecordedcalls }: {
@@ -87,7 +87,7 @@
           {#if visible.length}
             <ul class="records" aria-label="Configured MCP and skill files">
               {#each visible as item (item.id)}
-                <li><button class="record" class:chosen={chosen?.id === item.id} aria-pressed={chosen?.id === item.id} aria-label="Inspect {item.kind === 'mcp' ? 'MCP server' : 'skill'} {item.name}, {scopeLabel[item.scope]} scope" onclick={() => select(item.id)}>
+                <li><button class="record" class:chosen={chosen?.id === item.id} aria-pressed={chosen?.id === item.id} aria-label={capabilityLabel(item)} onclick={() => select(item.id)}>
                   <span class="record-icon"><Icon name={item.kind === "mcp" ? "plug" : "sparkles"} size={16} /></span><span class="record-main"><b>{item.name}</b>{#if item.kind === "skill" && (item.definition as AgentSkill).description}<span class="skill-purpose">{(item.definition as AgentSkill).description}</span>{/if}<span>{ownerText(item)} <span aria-hidden="true">→</span> {item.projectPath ? pathName(item.projectPath) : `${scopeLabel[item.scope]} scope`}</span><small>{item.kind === "mcp" ? "Configured MCP" : "Skill file"} · {enabledLabel(item)}</small></span><span class="scope">{scopeLabel[item.scope]}</span><Icon name="chevron" size={13} />
                 </button></li>
               {/each}

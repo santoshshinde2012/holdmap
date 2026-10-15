@@ -292,6 +292,58 @@ fn skill_frontmatter_is_optional_bounded_metadata_and_cannot_replace_folder_iden
 }
 
 #[test]
+fn skill_metadata_respects_complete_lines_at_the_header_and_total_byte_limits() {
+    let fixture = Fixture::new();
+    let mut cut = b"---\nname: review\ndescription: Review code\n#".to_vec();
+    cut.resize(frontmatter::MAX_HEADER_BYTES - 4, b'x');
+    cut.extend_from_slice(b"\n---not-a-delimiter\n");
+    fixture.put("home/.agents/skills/cut/SKILL.md", &cut);
+    let mut complete = cut[..frontmatter::MAX_HEADER_BYTES - 5].to_vec();
+    complete.extend_from_slice(b"\n---\nprivate-body-fixture");
+    fixture.put("home/.agents/skills/complete/SKILL.md", &complete);
+    fixture.put(
+        "home/.agents/skills/eof/SKILL.md",
+        b"---\nname: review\ndescription: Review code\n---",
+    );
+    let out = fixture.discover("codex");
+    assert_eq!(out.skills.len(), 3);
+    for skill in &out.skills {
+        assert_eq!(
+            skill.description.as_deref(),
+            (skill.name != "cut").then_some("Review code")
+        );
+    }
+    assert!(out.limits.iter().any(|limit| limit.contains("frontmatter")));
+
+    // A smaller remaining total budget must not be confused with an EOF under 8 KiB.
+    const REMAINING: usize = 128;
+    let mut short_cut = b"---\nname: review\ndescription: Review code\n#".to_vec();
+    short_cut.resize(REMAINING - 4, b'x');
+    short_cut.extend_from_slice(b"\n---not-a-delimiter\n");
+    let path = fixture.put("home/.agents/skills/budget-cut/SKILL.md", &short_cut);
+    let mut inventory = Inventory {
+        product: "codex",
+        home: &fixture.home,
+        platform: "fixture",
+        out: AgentCapabilities::default(),
+        start: Instant::now(),
+        sources: 0,
+        bytes: MAX_TOTAL_BYTES - REMAINING,
+        entries: 0,
+        seen_sources: HashSet::new(),
+        seen_skills: HashSet::new(),
+        projects: Vec::new(),
+    };
+    let prefix = inventory
+        .read_bytes(&path, frontmatter::MAX_HEADER_BYTES, false)
+        .unwrap();
+    assert_eq!(prefix.bytes.len(), REMAINING);
+    assert_eq!(inventory.bytes, MAX_TOTAL_BYTES);
+    assert!(!prefix.at_eof);
+    assert!(frontmatter::parse(&prefix.bytes, prefix.at_eof).is_none());
+}
+
+#[test]
 fn project_mcp_inventory_is_collected_before_skill_headers_exhaust_the_shared_budget() {
     let fixture = Fixture::new();
     fixture.put(

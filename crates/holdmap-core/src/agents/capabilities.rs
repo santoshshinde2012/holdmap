@@ -225,6 +225,12 @@ struct Inventory<'a> {
     projects: Vec<PathBuf>,
 }
 
+struct ReadBytes {
+    bytes: Vec<u8>,
+    // Filling the read limit leaves EOF unknown, including a smaller total-byte remainder.
+    at_eof: bool,
+}
+
 impl CapabilityDiscovery for HomeCapabilities {
     fn discover(&self, product: &str, projects: &[PathBuf], platform: &str) -> AgentCapabilities {
         if !matches!(
@@ -418,7 +424,7 @@ impl Inventory<'_> {
         }
     }
 
-    fn read_bytes(&mut self, path: &Path, maximum: usize, complete: bool) -> Option<Vec<u8>> {
+    fn read_bytes(&mut self, path: &Path, maximum: usize, complete: bool) -> Option<ReadBytes> {
         if !self.bounded() || !self.safe_path(path) {
             return None;
         }
@@ -460,12 +466,15 @@ impl Inventory<'_> {
                 .limit("Some configuration files exceeded the read bound or could not be read.");
             return None;
         }
-        Some(bytes)
+        Some(ReadBytes {
+            at_eof: bytes.len() < remaining,
+            bytes,
+        })
     }
 
     fn read(&mut self, path: &Path) -> Option<String> {
-        let bytes = self.read_bytes(path, MAX_FILE_BYTES, true)?;
-        match String::from_utf8(bytes) {
+        let contents = self.read_bytes(path, MAX_FILE_BYTES, true)?;
+        match String::from_utf8(contents.bytes) {
             Ok(text) => Some(text),
             Err(_) => {
                 self.out.limit(
@@ -696,7 +705,7 @@ impl Inventory<'_> {
                 }
                 let metadata = self
                     .read_bytes(&file, frontmatter::MAX_HEADER_BYTES, false)
-                    .and_then(|prefix| frontmatter::parse(&prefix));
+                    .and_then(|prefix| frontmatter::parse(&prefix.bytes, prefix.at_eof));
                 if metadata.is_none() {
                     self.out.limit("Some skill frontmatter metadata was unavailable, unsupported, unsafe or exceeded its bounds.");
                 }

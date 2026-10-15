@@ -14,11 +14,13 @@ beforeAll(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const report = () => mockAgents(undefined, true);
 const mount = (r: AgentsReport | null = report(), extras: Partial<ComponentProps<typeof AgentCapabilitiesView>> = {}) => render(AgentCapabilitiesView, { report: r, selectedAgent: "agent:52000", onselectagent: vi.fn(), ...extras });
+const cursorMcp = (name: string) => `Inspect MCP server ${name}, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.cursor/mcp.json`;
+const frontendSkill = (name = "frontend-checks") => `Inspect skill ${name}, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md`;
 
 describe("MCP and skills workspace", () => {
   it("shows a declaration/source/project diagram without claiming activation or calls", async () => {
     const view = mount();
-    await fireEvent.click(view.getByRole("button", { name: "Inspect MCP server filesystem, Project scope" }));
+    await fireEvent.click(view.getByRole("button", { name: cursorMcp("filesystem") }));
     const relationship = view.getByRole("region", { name: "Declared capability relationship" });
     expect(relationship.textContent).toContain("mcp.json");
     expect(relationship.textContent).toContain("filesystem");
@@ -34,7 +36,7 @@ describe("MCP and skills workspace", () => {
 
   it("selects skill file details and navigates to reported calls only on request", async () => {
     const onrecordedcalls = vi.fn(); const view = mount(report(), { onrecordedcalls });
-    await fireEvent.click(view.getByRole("button", { name: "Inspect skill frontend-checks, Project scope" }));
+    await fireEvent.click(view.getByRole("button", { name: frontendSkill() }));
     const detail = view.getByRole("complementary", { name: "Capability details" });
     expect(detail.textContent).toContain("frontend-checks/SKILL.md");
     expect(detail.textContent).toContain("skill instructions are not collected or executed");
@@ -47,7 +49,7 @@ describe("MCP and skills workspace", () => {
 
   it("keeps running processes separate when a definition is disabled", async () => {
     const view = mount();
-    await fireEvent.click(view.getByRole("button", { name: "Inspect MCP server legacy-browser, Project scope" }));
+    await fireEvent.click(view.getByRole("button", { name: cursorMcp("legacy-browser") }));
     expect(view.getByRole("complementary", { name: "Capability details" }).textContent).toContain("Disabled in config");
     await fireEvent.click(view.getByRole("button", { name: "Inspect running process Filesystem MCP, PID 52070" }));
     const detail = view.getByRole("complementary", { name: "Capability details" });
@@ -103,7 +105,7 @@ describe("MCP and skills workspace", () => {
     const r = report(); const server = r.agents[1].capabilities!.mcp_servers[1];
     server.name = '<img src=x onerror="alert(1)">';
     const view = mount(r);
-    await fireEvent.click(view.getByRole("button", { name: `Inspect MCP server ${server.name}, Project scope` }));
+    await fireEvent.click(view.getByRole("button", { name: cursorMcp(server.name) }));
     expect(view.container.querySelector("img")).toBeNull();
     await view.rerender({ report: structuredClone(r), selectedAgent: "agent:52000", onselectagent() {} });
     expect(view.getByRole("complementary", { name: "Capability details" }).textContent).toContain(server.name);
@@ -123,10 +125,25 @@ describe("MCP and skills workspace", () => {
     skill.declared_name = "UI verification";
     skill.description = '<img src=x onerror="alert(1)">';
     const view = mount(r);
-    await fireEvent.click(view.getByRole("button", { name: "Inspect skill UI verification, Project scope" }));
+    await fireEvent.click(view.getByRole("button", { name: frontendSkill("UI verification") }));
     expect(view.container.querySelector("img")).toBeNull();
     const detail = view.getByRole("complementary", { name: "Capability details" });
     expect(detail.textContent).toContain(skill.description);
     expect(detail.textContent).toContain("Skill folder namefrontend-checks");
+  });
+
+  it("lets assistive technology distinguish the same alias from different agents and source files", async () => {
+    const view = mount(report(), { selectedAgent: null });
+    expect(view.getAllByRole("button", { name: /^Inspect MCP server filesystem, Project scope\./ })).toHaveLength(2);
+    const claude = view.getByRole("button", { name: "Inspect MCP server filesystem, Project scope. Agents: Claude Code (PID 51200). Project: /Users/dev/code/shop-api. Source: /Users/dev/code/shop-api/.mcp.json" });
+    const cursor = view.getByRole("button", { name: cursorMcp("filesystem") });
+    const details = view.getByRole("complementary", { name: "Capability details" });
+    await fireEvent.click(claude);
+    expect(claude.getAttribute("aria-pressed")).toBe("true");
+    expect(details.textContent).toContain("/Users/dev/code/shop-api/.mcp.json");
+    await fireEvent.click(cursor);
+    expect(cursor.getAttribute("aria-pressed")).toBe("true");
+    expect(claude.getAttribute("aria-pressed")).toBe("false");
+    expect(details.textContent).toContain("/Users/dev/code/shop-web/.cursor/mcp.json");
   });
 });

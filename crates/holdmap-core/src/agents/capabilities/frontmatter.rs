@@ -10,7 +10,8 @@ type Metadata = (Option<String>, Option<String>);
 
 /// Parse only the strict opening/closing `---` header in this already bounded prefix.
 /// Bytes following its delimiter are not decoded, parsed, retained or executed.
-pub(super) fn parse(prefix: &[u8]) -> Option<Metadata> {
+/// A final line without a newline is complete only when the bounded reader observed EOF.
+pub(super) fn parse(prefix: &[u8], at_eof: bool) -> Option<Metadata> {
     if prefix.len() > MAX_HEADER_BYTES {
         return None;
     }
@@ -23,7 +24,7 @@ pub(super) fn parse(prefix: &[u8]) -> Option<Metadata> {
     let mut end = first.len();
     let mut header = None;
     for current in lines {
-        if line(current) == b"---" {
+        if line(current) == b"---" && (current.ends_with(b"\n") || at_eof) {
             header = Some(std::str::from_utf8(&prefix[first.len()..end]).ok()?);
             break;
         }
@@ -184,7 +185,7 @@ mod tests {
             ),
         ] {
             let input = format!("---\nname: review\n{yaml}---\nprivate-instruction-body-fixture");
-            let metadata = parse(input.as_bytes()).unwrap();
+            let metadata = parse(input.as_bytes(), true).unwrap();
             assert_eq!(metadata.0.as_deref(), Some("review"));
             assert_eq!(metadata.1.as_deref(), Some(expected));
         }
@@ -212,27 +213,59 @@ mod tests {
             &events,
         ] {
             assert!(
-                parse(format!("---\n{header}---\nprivate-body-fixture").as_bytes()).is_none(),
+                parse(
+                    format!("---\n{header}---\nprivate-body-fixture").as_bytes(),
+                    true
+                )
+                .is_none(),
                 "unsafe YAML shape must omit frontmatter metadata"
             );
         }
-        assert!(parse(b"# Heading\nprivate-body-fixture").is_none());
-        assert!(parse(b"---\nname: review\nprivate-body-fixture").is_none());
-        assert!(parse(&vec![b'x'; MAX_HEADER_BYTES + 1]).is_none());
+        assert!(parse(b"# Heading\nprivate-body-fixture", true).is_none());
+        assert!(parse(b"---\nname: review\nprivate-body-fixture", true).is_none());
+        assert!(parse(&vec![b'x'; MAX_HEADER_BYTES + 1], true).is_none());
     }
 
     #[test]
     fn header_only_decoding_preserves_crlf_bom_and_never_uses_body_metadata() {
         let mut input = b"\xef\xbb\xbf---\r\nname: review\r\nmetadata: {category: code}\r\ndescription: Review code\r\n---\r\n".to_vec();
         input.extend_from_slice(b"description: private-body-fixture\n\xff\xfe");
-        let metadata = parse(&input).unwrap();
+        let metadata = parse(&input, true).unwrap();
         assert_eq!(metadata.0.as_deref(), Some("review"));
         assert_eq!(metadata.1.as_deref(), Some("Review code"));
         let no_metadata = parse(
             b"---\nmetadata: {name: private-nested-fixture}\n---\nname: private-body-fixture",
+            true,
         )
         .unwrap();
         assert_eq!(no_metadata, (None, None));
+    }
+
+    #[test]
+    fn closing_delimiters_must_be_complete_at_the_prefix_boundary() {
+        let eof = b"---\nname: review\ndescription: Review code\n---";
+        assert!(parse(eof, true).is_some());
+        assert!(parse(eof, false).is_none());
+        for bom in [false, true] {
+            let mut input = if bom {
+                b"\xef\xbb\xbf".to_vec()
+            } else {
+                Vec::new()
+            };
+            input.extend_from_slice(b"---\nname: review\ndescription: Review code\n#");
+            input.resize(MAX_HEADER_BYTES - 4, b'x');
+            input.extend_from_slice(b"\n---not-a-delimiter\n");
+            assert_eq!(&input[MAX_HEADER_BYTES - 3..MAX_HEADER_BYTES], b"---");
+            assert!(parse(&input[..MAX_HEADER_BYTES], false).is_none());
+
+            // A complete delimiter with its newline at the exact limit remains usable.
+            input.truncate(MAX_HEADER_BYTES - 5);
+            input.extend_from_slice(b"\n---\n");
+            assert_eq!(input.len(), MAX_HEADER_BYTES);
+            let metadata = parse(&input, false).unwrap();
+            assert_eq!(metadata.0.as_deref(), Some("review"));
+            assert_eq!(metadata.1.as_deref(), Some("Review code"));
+        }
     }
 
     #[test]

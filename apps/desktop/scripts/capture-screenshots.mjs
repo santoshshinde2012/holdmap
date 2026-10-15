@@ -176,10 +176,10 @@ async function openCapabilities(page, skill = false) {
   await page.getByRole("button", { name: "Inspect capabilities for Cursor, PID 52000", exact: true }).click();
   if (skill) {
     await page.getByRole("radio", { name: /^Skills/ }).click();
-    await page.getByRole("button", { name: "Inspect skill frontend-checks, Project scope", exact: true }).click();
+    await page.getByRole("button", { name: "Inspect skill frontend-checks, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md", exact: true }).click();
   } else {
     await page.getByRole("radio", { name: /^MCP servers/ }).click();
-    await page.getByRole("button", { name: "Inspect MCP server filesystem, Project scope", exact: true }).click();
+    await page.getByRole("button", { name: "Inspect MCP server filesystem, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.cursor/mcp.json", exact: true }).click();
   }
   const detail = page.getByRole("complementary", { name: "Capability details", exact: true });
   await expect(detail).toContainText(skill ? "frontend-checks/SKILL.md" : "/Users/dev/code/shop-web/.cursor/mcp.json");
