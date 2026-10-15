@@ -11,6 +11,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
+// Match project_protection's bounded allowance for cold, parallel fixture launches.
+// This does not extend the CLI's restart/stop operation timeouts.
+const READY_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_DIAGNOSTIC_BYTES: u64 = 8192;
+
 #[derive(Debug, Deserialize, Serialize)]
 struct Ready {
     pid: u32,
@@ -21,6 +26,7 @@ struct Owned {
     directory: tempfile::TempDir,
     exe: PathBuf,
     children: Vec<Child>,
+    fixture_logs: Vec<PathBuf>,
     restarted: Option<(u32, u64)>,
     // Keep the immutable executable alias until all owned listeners have been cleaned up.
     #[cfg(unix)]
@@ -76,6 +82,7 @@ impl Owned {
             directory,
             exe,
             children: vec![],
+            fixture_logs: vec![],
             restarted: None,
             #[cfg(unix)]
             _executable_directory: executable_directory,
@@ -101,6 +108,10 @@ impl Owned {
         let port_file = self.directory.path().join(format!("{protocol}.port"));
         std::fs::write(&port_file, port.to_string()).unwrap();
         let ready = self.directory.path().join(format!("{protocol}.json"));
+        let log_name = format!("fixture-{}-{protocol}", self.children.len());
+        let stdout = self.directory.path().join(format!("{log_name}.stdout"));
+        let stderr = self.directory.path().join(format!("{log_name}.stderr"));
+        self.fixture_logs.extend([stdout.clone(), stderr.clone()]);
         let child = std::process::Command::new(&self.exe)
             .args([
                 "--ignored",
@@ -115,13 +126,19 @@ impl Owned {
             .arg(self.directory.path().join("quit"))
             .current_dir(self.directory.path())
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stdout(holdmap_core::util::create_private(&stdout).unwrap())
+            .stderr(holdmap_core::util::create_private(&stderr).unwrap())
             .spawn()
             .unwrap();
         let pid = child.id();
         self.children.push(child);
-        wait_ready(&ready, |ready| ready.pid == pid)
+        wait_ready(
+            &ready,
+            &format!("initial {protocol} listener"),
+            self.children.last_mut(),
+            |ready| ready.pid == pid,
+        )
+        .unwrap_or_else(|message| panic!("{message}\n{}", self.fixture_diagnostics()))
     }
 
     fn marker_entry(&self, at_ms: u64, port: u16, protocol: Protocol, pid: u32) -> HistoryEntry {
@@ -209,14 +226,23 @@ impl Owned {
             .map(|path| {
                 format!(
                     "{}:\n{}",
-                    path.display(),
-                    std::fs::File::open(&path)
-                        .and_then(|file| {
-                            let mut bytes = Vec::new();
-                            file.take(64 * 1024).read_to_end(&mut bytes)?;
-                            Ok(String::from_utf8_lossy(&bytes).into_owned())
-                        })
-                        .unwrap_or_else(|error| format!("(could not read: {error})"))
+                    path.file_name().unwrap_or_default().to_string_lossy(),
+                    diagnostic_prefix(&path)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn fixture_diagnostics(&self) -> String {
+        self.fixture_logs
+            .iter()
+            .take(4)
+            .map(|path| {
+                format!(
+                    "{}: {}",
+                    path.file_name().unwrap_or_default().to_string_lossy(),
+                    diagnostic_prefix(path)
                 )
             })
             .collect::<Vec<_>>()
@@ -237,20 +263,57 @@ impl Drop for Owned {
     }
 }
 
-fn wait_ready(path: &Path, matches: impl Fn(&Ready) -> bool) -> Ready {
-    let deadline = Instant::now() + Duration::from_secs(5);
+fn diagnostic_prefix(path: &Path) -> String {
+    let mut bytes = Vec::new();
+    let result = std::fs::File::open(path)
+        .and_then(|file| file.take(MAX_DIAGNOSTIC_BYTES).read_to_end(&mut bytes));
+    if result.is_err() {
+        return "(diagnostics unavailable)".into();
+    }
+    // Only owned fixture logs are eligible, with a fixed byte prefix, shared secret
+    // redaction and escaped control characters. Never dump process-table metadata.
+    format!(
+        "{:?}",
+        holdmap_core::redact::line(&String::from_utf8_lossy(&bytes))
+    )
+}
+
+fn wait_ready(
+    path: &Path,
+    phase: &str,
+    mut child: Option<&mut Child>,
+    matches: impl Fn(&Ready) -> bool,
+) -> Result<Ready, String> {
+    let started = Instant::now();
+    let deadline = started + READY_TIMEOUT;
     loop {
+        if let Some(child) = &mut child {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    return Err(format!(
+                        "{phase}: owned listener exited before readiness after {:?} ({status})",
+                        started.elapsed()
+                    ));
+                }
+                Err(error) => {
+                    return Err(format!("{phase}: could not query owned listener ({error})"));
+                }
+                Ok(None) => {}
+            }
+        }
         if let Some(ready) = std::fs::read(path)
             .ok()
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             .filter(&matches)
         {
-            return ready;
+            return Ok(ready);
         }
-        assert!(
-            Instant::now() < deadline,
-            "owned listener did not become ready"
-        );
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "{phase}: owned listener did not become ready after {:?}",
+                started.elapsed()
+            ));
+        }
         std::thread::sleep(Duration::from_millis(10));
     }
 }
@@ -264,6 +327,60 @@ fn assert_udp_alive(port: u16) {
     let mut bytes = [0u8; 32];
     let (length, _) = probe.recv_from(&mut bytes).unwrap();
     assert_eq!(&bytes[..length], b"owned-probe");
+}
+
+#[test]
+fn initial_readiness_reports_the_phase_and_owned_child_exit() {
+    let mut owned = Owned::new();
+    let marker = owned.directory.path().join("launched.marker");
+    let child = std::process::Command::new(&owned.exe)
+        .args([
+            "--ignored",
+            "--exact",
+            "owned_marker_fixture",
+            "--nocapture",
+            "--",
+        ])
+        .arg(&marker)
+        .current_dir(owned.directory.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    owned.children.push(child);
+    let failure = wait_ready(
+        &owned.directory.path().join("missing.json"),
+        "initial TCP listener",
+        owned.children.last_mut(),
+        |_| true,
+    )
+    .expect_err("an exited child cannot satisfy readiness");
+    assert!(failure.contains("initial TCP listener"));
+    assert!(failure.contains("exited before readiness"));
+    assert!(marker.exists(), "only the owned finite fixture may execute");
+}
+
+#[test]
+fn fixture_diagnostic_prefix_is_bounded_redacted_and_control_safe() {
+    use std::io::Write;
+
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("owned.stderr");
+    let mut log = holdmap_core::util::create_private(&path).unwrap();
+    log.write_all(b"API_TOKEN=private-diagnostic-fixture\n\x1b[31m")
+        .unwrap();
+    log.write_all(&vec![b'x'; MAX_DIAGNOSTIC_BYTES as usize])
+        .unwrap();
+    log.write_all(b"outside-diagnostic-prefix").unwrap();
+    drop(log);
+    let diagnostic = diagnostic_prefix(&path);
+    assert!(
+        !diagnostic.contains("private-diagnostic-fixture"),
+        "fixture diagnostics must redact recognized credentials"
+    );
+    assert!(!diagnostic.contains("outside-diagnostic-prefix"));
+    assert!(!diagnostic.chars().any(char::is_control));
 }
 
 #[test]
@@ -283,8 +400,18 @@ fn restarting_an_owned_tcp_listener_preserves_a_separate_udp_process_on_the_same
         "{output:?}\nStartup logs:\n{}",
         owned.startup_logs()
     );
-    let restarted = wait_ready(&owned.directory.path().join("tcp.json"), |ready| {
-        ready.pid != tcp.pid
+    let restarted = wait_ready(
+        &owned.directory.path().join("tcp.json"),
+        "post-restart TCP listener",
+        None,
+        |ready| ready.pid != tcp.pid,
+    )
+    .unwrap_or_else(|message| {
+        panic!(
+            "{message}\n{}\nRestart logs:\n{}",
+            owned.fixture_diagnostics(),
+            owned.startup_logs()
+        )
     });
     assert_eq!(restarted.port, tcp.port);
     owned.restarted = Some(
