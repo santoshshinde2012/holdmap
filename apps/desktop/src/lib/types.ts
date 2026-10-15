@@ -191,7 +191,13 @@ export interface AppInfo {
   tray: boolean;
   shortcut?: string | null;
   config_dir?: string;
+  /** Missing metadata from an older backend leaves update support unknown. */
+  updater?: boolean;
+  app_path?: string | null;
+  architecture?: string;
 }
+
+export type DesktopHelpDestination = "downloads" | "installation";
 
 // ---- topology (crates/holdmap-core/src/topology/model.rs) ----
 

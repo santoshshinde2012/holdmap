@@ -1,5 +1,41 @@
 import { expect, test } from "./fixtures";
 
+test("About identifies the browser preview and help stays explicit and available from commands", async ({ app }, testInfo) => {
+  await app.evaluate(() => {
+    const calls: string[][] = [];
+    window.open = (url, target, features) => { calls.push([String(url), target ?? "", features ?? ""]); return null; };
+    Object.assign(window, { __desktopHelpOpens: calls });
+  });
+  await app.setViewportSize({ width: 390, height: 900 });
+  await app.getByRole("button", { name: /^Commands/ }).click();
+  let palette = app.getByRole("dialog", { name: "Command palette", exact: true });
+  await palette.getByRole("combobox", { name: "Search commands" }).fill("About holdmap");
+  await expect(palette.getByRole("option", { name: /About holdmap/ })).toContainText("Preview version");
+  await palette.getByRole("option", { name: /About holdmap/ }).click();
+  const settings = app.getByRole("dialog", { name: "Settings", exact: true });
+  await expect(settings.getByRole("tab", { name: "About", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(settings).toContainText("Browser preview");
+  await expect(settings).toContainText("Preview version");
+  await expect(settings).not.toContainText("Settings folder");
+  await expect(settings).not.toContainText("Running app location");
+  await expect(settings).not.toContainText("requires manual desktop updates");
+  expect(await app.evaluate(() => Reflect.get(window, "__desktopHelpOpens"))).toEqual([]);
+  expect(await app.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  await app.screenshot({ path: testInfo.outputPath("about-narrow.png"), animations: "disabled" });
+  await settings.getByRole("button", { name: "Download desktop app", exact: true }).click();
+  await settings.getByRole("button", { name: "Installation guide", exact: true }).click();
+  await settings.getByRole("button", { name: "Done", exact: true }).click();
+  await app.getByRole("button", { name: /^Commands/ }).click();
+  palette = app.getByRole("dialog", { name: "Command palette", exact: true });
+  await palette.getByRole("combobox", { name: "Search commands" }).fill("Download desktop app");
+  await palette.getByRole("option", { name: /Download desktop app/ }).click();
+  await expect.poll(() => app.evaluate(() => Reflect.get(window, "__desktopHelpOpens"))).toEqual([
+    ["https://santoshshinde2012.github.io/holdmap/#install", "_blank", "noopener,noreferrer"],
+    ["https://santoshshinde2012.github.io/holdmap/docs/desktop/#first-open", "_blank", "noopener,noreferrer"],
+    ["https://santoshshinde2012.github.io/holdmap/#install", "_blank", "noopener,noreferrer"],
+  ]);
+});
+
 test("settings preserve composition, modified navigation and the modal tab order", async ({ app }) => {
   await app.getByRole("button", { name: "Settings", exact: true }).click();
   const settings = app.getByRole("dialog", { name: "Settings", exact: true });

@@ -18,7 +18,8 @@
   import { nextIndex } from "../lib/roving";
   import { isComposingKey } from "../lib/keyboard";
   import type { Density } from "../lib/rows";
-  import { SETTINGS_SECTIONS, THEME_ICON, cadenceText, type SettingsActions, type SettingsModel, type SettingsSection, type Theme } from "../lib/settings";
+  import type { DesktopHelpDestination } from "../lib/types";
+  import { SETTINGS_SECTIONS, THEME_ICON, architectureLabel, cadenceText, type SettingsActions, type SettingsModel, type SettingsSection, type Theme } from "../lib/settings";
 
   let { model, actions, onclose, section = $bindable("general") }: { model: SettingsModel; actions: SettingsActions; onclose: () => void; section?: SettingsSection } = $props();
 
@@ -57,6 +58,15 @@
     }
   }
   const idx = $derived(SETTINGS_SECTIONS.findIndex((s) => s.id === section));
+  const browserPreview = $derived(model.platform === "browser");
+  async function openHelp(destination: DesktopHelpDestination) {
+    if (busy[destination] || !actions.openDesktopHelp) return;
+    busy[destination] = true;
+    errors[destination] = null;
+    try { await actions.openDesktopHelp(destination); }
+    catch (cause) { errors[destination] = String(cause); }
+    finally { busy[destination] = false; }
+  }
   function navKey(e: KeyboardEvent) {
     if (isComposingKey(e) || e.altKey || e.ctrlKey || e.metaKey) return;
     const n = nextIndex(idx, e.key, SETTINGS_SECTIONS.length, { orientation: "both" });
@@ -208,13 +218,46 @@
           </SettingsGroup>
         {/if}
       {:else}
-        <SettingsGroup title="holdmap">
-          <SettingRow label="Version" description={`Desktop app on ${model.platform}`}>{#snippet children()}<span class="mono ver">{model.version}</span>{/snippet}</SettingRow>
-          {#if model.configDir}
+        <SettingsGroup title={browserPreview ? "Browser preview" : "holdmap"}>
+          <SettingRow label={browserPreview ? "Preview version" : "Running version"} description={browserPreview ? "Holdmap in your browser, separate from any installed desktop app." : `Desktop app on ${model.platform || "an unknown platform"}`}>
+            {#snippet children()}<span class="mono ver">{model.version || "Unavailable"}</span>{/snippet}
+          </SettingRow>
+          {#if !browserPreview && model.architecture}
+            <SettingRow label="Architecture" description="Match this when choosing a desktop download.">
+              {#snippet children()}<CopyValue value={model.architecture!} display={architectureLabel(model.architecture!, model.platform)} mono what="Architecture" oncopy={actions.copy} />{/snippet}
+            </SettingRow>
+          {/if}
+          {#if !browserPreview && model.appPath}
+            <SettingRow label="Running app location" description="This is the copy currently running. Check it again after installing an update." stack>
+              {#snippet children()}<div class="path"><CopyValue value={model.appPath!} mono wrap what="App location" oncopy={actions.copy} /></div>{/snippet}
+            </SettingRow>
+          {/if}
+          {#if !browserPreview && model.configDir}
             <SettingRow label="Settings folder" description="Pins, preferences and history live here." stack>
               {#snippet children()}<div class="path"><CopyValue value={model.configDir!} mono what="Path" oncopy={actions.copy} /></div>{/snippet}
             </SettingRow>
           {/if}
+        </SettingsGroup>
+        <SettingsGroup title={browserPreview ? "Get the desktop app" : "Desktop updates"}>
+          <div class="updates">
+            {#if browserPreview}
+              <p>The browser preview does not install or update the desktop app. Download and install it separately.</p>
+            {:else if model.updater === false}
+              <p>This build requires manual desktop updates. Save any recording, quit Holdmap completely, install the matching desktop download, then reopen it. Closing the window can leave Holdmap running in the tray.</p>
+              <p>Updating the CLI does not update this desktop app. After reopening, check the running version and app location above.</p>
+            {:else if model.updater === true}
+              <p>This build checks for signed in-app updates after startup. When an update is available, choose Install and restart in the notification or command palette.</p>
+            {:else}
+              <p>In-app update support is unknown. You can download the latest desktop app and follow the installation guide.</p>
+            {/if}
+            {#if actions.openDesktopHelp}
+              <div class="help-actions">
+                <Button size="sm" variant="primary" icon="download" loading={busy.downloads} loadingText="Opening…" onclick={() => openHelp("downloads")}>Download desktop app</Button>
+                <Button size="sm" variant="secondary" icon="external" loading={busy.installation} loadingText="Opening…" onclick={() => openHelp("installation")}>Installation guide</Button>
+              </div>
+            {/if}
+            {#if errors.downloads || errors.installation}<Callout tone="danger" size="sm" title="Couldn't open desktop help">{errors.downloads ?? errors.installation}</Callout>{/if}
+          </div>
         </SettingsGroup>
         <p class="tip">Everything stays on this machine. holdmap has no telemetry.</p>
       {/if}
@@ -223,7 +266,7 @@
 
   {#snippet footer()}
     <span class="status {status?.kind ?? ''}" aria-live="polite">
-      {#if status?.kind === "saving"}<span class="dotspin"></span>{status.text}{:else if status?.kind === "saved"}<Icon name="check" size={13} />{status.text}{:else if status}<Icon name="alert" size={13} />{status.text}{:else if section === "power"}Shutdown requires a separate confirmation.{:else}Changes are saved automatically.{/if}
+      {#if status?.kind === "saving"}<span class="dotspin"></span>{status.text}{:else if status?.kind === "saved"}<Icon name="check" size={13} />{status.text}{:else if status}<Icon name="alert" size={13} />{status.text}{:else if section === "power"}Shutdown requires a separate confirmation.{:else if section === "about"}{browserPreview ? "Browser preview; no desktop installation is changed." : "Version and location describe the app running now."}{:else}Changes are saved automatically.{/if}
     </span>
     <Button variant="secondary" onclick={onclose}>Done</Button>
   {/snippet}
@@ -245,6 +288,9 @@
   .tip { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); margin: var(--sp-4) 0 0; }
   .ver { font-size: var(--fs-body); line-height: var(--lh-body); }
   .path { width: 100%; padding: 6px 10px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--border); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
+  .updates { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); }
+  .updates p { margin: 0; color: var(--text-2); font-size: var(--fs-body); line-height: var(--lh-body); }
+  .help-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
   .power-card { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); padding: var(--sp-4); }
   .power-note { margin: 0; color: var(--text-2); font-size: var(--fs-body); line-height: var(--lh-body); }
   .power-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); max-width: 100%; }

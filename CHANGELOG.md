@@ -8,6 +8,21 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- Settings → About identifies the running desktop copy and architecture, explains manual
+  updates when automatic updates are unavailable, and links to the official desktop
+  downloads and installation guide. The command palette also exposes desktop downloads.
+- Browser About identifies the web preview and omits desktop settings and app paths.
+
+### Fixed
+
+- Retain native recording ownership across startup acknowledgement and cancellation, so
+  cancelling during that handoff discards the acknowledged session instead of leaving
+  its picker or capture active without a frontend owner.
+- Coordinate native recording cleanup with in-flight operations so temporary files remain
+  available until those operations finish.
+
 ## [0.7.1] - 2026-10-15
 
 ### Documentation

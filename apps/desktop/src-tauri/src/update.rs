@@ -2,10 +2,11 @@
 //!
 //! Only release builds made with an update signing key carry a `plugins.updater` section (the
 //! release workflow adds it with `--config`), so local and unsigned builds never register the
-//! plugin and never contact the network. When an update is found the UI is told with an
-//! `update-available` event and installs it only when the user asks.
+//! plugin or check automatically. When an update is found the UI is told with an
+//! `update-available` event and installs it only when the user asks. Explicit manual-update
+//! actions open only the official desktop download or installation page.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,6 +17,35 @@ use crate::state::AppState;
 
 const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// Named help destinations keep native browser access restricted to official pages.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DesktopHelp {
+    Downloads,
+    Installation,
+}
+
+impl DesktopHelp {
+    fn url(self) -> &'static str {
+        match self {
+            Self::Downloads => "https://santoshshinde2012.github.io/holdmap/#install",
+            Self::Installation => {
+                "https://santoshshinde2012.github.io/holdmap/docs/desktop/#first-open"
+            }
+        }
+    }
+}
+
+/// A user-requested route to manual desktop updates. Never downloads or installs a binary.
+#[tauri::command]
+pub async fn open_desktop_help(destination: DesktopHelp) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        holdmap_core::util::open_url(destination.url()).map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| format!("Couldn't open the desktop guide: {error}"))?
+}
 
 /// Whether this build was configured with an updater public key and endpoint.
 pub fn configured<R: tauri::Runtime>(ctx: &tauri::Context<R>) -> bool {
@@ -115,6 +145,29 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manual_update_help_accepts_only_named_official_https_destinations() {
+        for name in ["downloads", "installation"] {
+            let destination: DesktopHelp = serde_json::from_value(serde_json::json!(name)).unwrap();
+            let url = tauri::Url::parse(destination.url()).unwrap();
+            assert_eq!(url.scheme(), "https");
+            assert_eq!(url.host_str(), Some("santoshshinde2012.github.io"));
+            assert!(url.path().starts_with("/holdmap/"));
+            assert!(url.username().is_empty());
+            assert!(url.password().is_none());
+            assert!(url.query().is_none());
+        }
+        for value in [
+            serde_json::json!("https://example.com/"),
+            serde_json::json!("file:///Applications/holdmap.app"),
+            serde_json::json!("javascript:alert(1)"),
+            serde_json::json!({"downloads": "https://example.com/"}),
+            serde_json::Value::Null,
+        ] {
+            assert!(serde_json::from_value::<DesktopHelp>(value).is_err());
+        }
+    }
 
     #[test]
     fn installs_are_serialized_and_failure_or_cancellation_allows_retry() {

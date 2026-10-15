@@ -162,6 +162,7 @@ mod tests {
             "set_preferences",
             "scan",
             "install_update",
+            "open_desktop_help",
             "save_screen_recording",
             "future_command",
         ] {

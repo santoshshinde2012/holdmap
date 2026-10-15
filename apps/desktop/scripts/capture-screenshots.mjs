@@ -178,6 +178,18 @@ async function boundedClip(page, locator, { height, padding = 0 } = {}) {
 }
 
 const captures = [
+  ...["dark", "light"].map((theme) => ({ name: `desktop-about-${theme}.png`, theme, async prepare(page) {
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("tab", { name: "About", exact: true }).click();
+    const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+    await expect(settings).toContainText("Browser preview");
+    await expect(settings.getByRole("button", { name: "Download desktop app", exact: true })).toBeVisible();
+    await expect(settings.getByRole("button", { name: "Installation guide", exact: true })).toBeVisible();
+    await expect(settings.getByText("Running app location", { exact: true })).toHaveCount(0);
+    await expect(settings.getByText("Settings folder", { exact: true })).toHaveCount(0);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, "About must fit the viewport");
+    return settings;
+  } })),
   ...["dark", "light"].flatMap((theme) => [
     { name: `desktop-detail-compact-${theme}.png`, theme, viewport: { width: 1100, height: 900 }, pane: "340", async prepare(page) {
       const details = await selectPort(page);

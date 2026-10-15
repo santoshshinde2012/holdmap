@@ -30,9 +30,15 @@ of a scan took (sockets, processes, containers). `--no-docker` skips container l
 but no prebuilt desktop installer. Choose from [the platform downloads](../../#install).
 
 **The desktop still shows an older version.** Version **0.7.1** requires a manual update.
-Download and install the current release for the same OS and architecture, then reopen it.
+Quit Holdmap, install the current release for the same OS and architecture, then reopen
+the installed copy. Check **Settings → About** in that app, rather than `holdmap --version`.
+An app launched from an older disk image or another folder can still be the old version.
 The CLI installer updates the CLI, TUI and MCP server; it does not update the separate desktop app.
 No signed updater feed is included in 0.7.1.
+
+Current source adds a copyable running-app location, architecture and desktop download
+actions to **Settings → About**. Browser About identifies the web preview separately and does
+not show a desktop settings folder.
 
 **Record screen says “Screen capture unavailable” in the macOS app.** Version **0.7.1**
 adds Apple's native picker when the desktop webview lacks screen sharing, requiring

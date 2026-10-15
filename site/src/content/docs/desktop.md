@@ -185,6 +185,16 @@ your operating system and architecture from [Install](../../#install). Releases 
 a configured signed updater require manual installation. Update the CLI by running its
 installer again.
 
+Quit Holdmap before replacing it, then reopen the installed copy. Check **Settings → About**
+in that app to confirm its version; `holdmap --version` checks the separate CLI. A copy
+opened from a downloaded disk image or another folder can still be an older version.
+
+Current source also shows the running app's location and architecture in About, with
+desktop download and installation-guide actions. Builds without automatic updates explain
+the manual quit/install/reopen steps. These additions are listed under
+[Unreleased](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#unreleased);
+the published **0.7.1** app still needs the manual installation described above.
+
 ## Develop with local data
 
 From **0.7.0**, the browser development server reads live ports, agents, map relationships

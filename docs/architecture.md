@@ -1287,6 +1287,11 @@ The SOLID boundaries are concrete responsibilities and substitutable interfaces:
   override. Desktop and MCP share the engine's process policy without loading CLI stack files.
 - `docs/cli.md`, the man pages and the shell completions are all generated from the clap
   definitions; `cargo test` fails when `docs/cli.md` is stale.
+- Desktop app information reports the running binary's version, architecture, location
+  and actual signed-updater capability. Settings renders that contract; update/help actions
+  stay in the API/native adapters. Manual help accepts named destinations mapped to fixed
+  official HTTPS pages behind the shared local-window guard, rather than arbitrary URLs.
+  Builds without a signed updater perform no automatic update checks.
 
 ### Files, credentials and untrusted output
 
