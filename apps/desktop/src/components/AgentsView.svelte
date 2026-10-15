@@ -13,6 +13,7 @@
   import AutoMiniMap from "./graph/AutoMiniMap.svelte";
   import Icon from "./Icon.svelte";
   import AgentFlowView from "./agents/flow/AgentFlowView.svelte";
+  import AgentCapabilitiesView from "./agents/AgentCapabilitiesView.svelte";
   import FolderActions from "./FolderActions.svelte";
   import type { AgentFlowProps } from "../lib/agent-flow/model";
   import { FIT_PADDING } from "../lib/flow";
@@ -45,6 +46,9 @@
     onstop,
     onstopall,
     platform,
+    capabilitiesLoading = false,
+    capabilitiesError = null,
+    onrefreshcapabilities,
     ...flowProps
   }: {
     /** null while the first report loads. */
@@ -56,7 +60,7 @@
     selectedEntry?: string | null;
     dark: boolean;
     reduced: boolean;
-    section?: "overview" | "flow";
+    section?: "overview" | "flow" | "capabilities";
     flowSource?: "connections" | "calls";
     picture?: Picture;
     projectReady?: boolean;
@@ -71,9 +75,12 @@
     onstopall: (agentId: string) => void;
     /** Local computer platform; remote-view paths still use the native local action boundary. */
     platform?: string;
+    capabilitiesLoading?: boolean;
+    capabilitiesError?: string | null;
+    onrefreshcapabilities?: () => void;
   } & AgentFlowProps = $props();
 
-  $effect(() => { if (section === "overview") untrack(() => flowProps.onflowmodechange?.("overview")); });
+  $effect(() => { if (section !== "flow") untrack(() => flowProps.onflowmodechange?.("overview")); });
 
   let recent = $state(prefGet("agents.recent") !== "0");
   $effect(() => prefSet("agents.recent", recent ? "1" : "0"));
@@ -193,7 +200,9 @@
 </script>
 
 <div class="agents-root" class:reduced>
-  {#if section === "flow"}
+  {#if section === "capabilities"}
+    <AgentCapabilitiesView {report} {query} {selectedAgent} {dark} {reduced} loading={capabilitiesLoading} error={capabilitiesError} demo={flowProps.demo} {onselectagent} onclearquery={flowProps.onclearquery} onretry={onrefreshcapabilities} onrecordedcalls={() => { flowSource = "calls"; section = "flow"; }} />
+  {:else if section === "flow"}
     <div class="flow-body"><AgentFlowView {query} {dark} {reduced} {...flowProps} bind:mode={flowSource} sourceChrome={false} /></div>
   {:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -224,6 +233,7 @@
           <AgentCard agent={a} {report} {entries} color={graph ? agentColor(graph, a.id, agentIds) : "var(--accent)"} selected={a.id === selectedAgent} onselect={() => { picked = null; onselectagent(a.id === selectedAgent ? null : a.id); }} onnavigate={(id) => { picked = null; onselectagent(id); }}
             {onentry} onreveal={(path) => onreveal(a.id, path)} oneditor={(path) => oneditor(a.id, path)}
             onfolder={(path) => { projectPath = path; openFolder(path, a.id); }}
+            oncapabilities={() => { onselectagent(a.id); section = "capabilities"; }}
             onstop={(entry) => onstop(entry, a.id)} onstopall={() => onstopall(a.id)} now={report.taken_at_ms || Date.now()} />
         {:else}
           <div class="no-matches"><Icon name="search" size={20} /><p>No agents match this search</p><span>Search by name, tool, folder, port or process ID.</span></div>

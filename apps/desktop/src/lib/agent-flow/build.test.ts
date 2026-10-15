@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activityRuns, callGraph, duration, graphSignature, graphWindow, isIncomplete, missingParent, observedGraph, payloadSize, spanNodeId } from "./build";
+import { activityMatches, activityName, activityRuns, activityStatus, callGraph, duration, graphSignature, graphWindow, isIncomplete, missingParent, observedGraph, payloadSize, spanNodeId } from "./build";
 import { layoutGraph, toFlow } from "./layout";
 import type { ActivitySpan, AgentFlowNode, AgentFlowReport } from "./model";
 
@@ -46,6 +46,20 @@ describe("observed agent connections", () => {
 });
 
 describe("reported call correlation", () => {
+  it("counts explicit skill activations separately and searches reported MCP aliases without inventing joins", () => {
+    const records = [
+      span({ id: "skill", kind: "skill", name: "Skill", trace_id: "", session_id: "reported", status: "unknown", start_at_ms: null, duration_ms: null }),
+      span({ id: "mcp", kind: "tool", name: "lookup", mcp_server: "filesystem", trace_id: "", session_id: "reported" }),
+    ];
+    const run = activityRuns(records)[0];
+    expect(run).toMatchObject({ calls: 1, skills: 1, errors: 0 });
+    expect(activityName(records[0])).toBe("Skill activation (name not reported)");
+    expect(activityStatus(records[0])).toBe("Activation reported");
+    expect(isIncomplete(records[0])).toBe(false);
+    expect(activityMatches(records[1], "MCP filesystem")).toBe(true);
+    expect(callGraph(run).edges).toEqual([]);
+  });
+
   it("represents nested and parallel calls using only provided parent span IDs", () => {
     const runs = activityRuns([span(), span({ id: "read", parent_id: "root", kind: "tool", name: "Read" }), span({ id: "search", parent_id: "root", kind: "tool", name: "Search", start_at_ms: 1200 }), span({ id: "execution", parent_id: "read", kind: "step", name: "Execution" })]);
     const graph = callGraph(runs[0]);

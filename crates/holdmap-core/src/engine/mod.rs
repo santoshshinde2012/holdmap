@@ -113,6 +113,21 @@ impl Engine {
         }
     }
 
+    /// Explicit read-only capability inventory for observed current-account agents.
+    /// Normal [`Self::agents`] calls do not inspect configuration or skill directories.
+    pub fn agents_with_capabilities(&self) -> crate::agents::AgentsReport {
+        let recent = crate::agents::HomeRecent::current();
+        let capabilities = crate::agents::HomeCapabilities::current();
+        let mut builder = crate::agents::AgentsBuilder::new(&self.scan);
+        if let Some(recent) = &recent {
+            builder = builder.with_recent(recent);
+        }
+        if let Some(capabilities) = &capabilities {
+            builder = builder.with_capabilities(capabilities);
+        }
+        builder.build()
+    }
+
     fn listeners(&self, port: u16, proto: Option<Protocol>) -> Vec<&PortEntry> {
         self.scan
             .snapshot

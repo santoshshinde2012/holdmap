@@ -12,11 +12,14 @@
 //! * **access**: account, sandbox and approval hints, network exposure and macOS privacy areas
 //!   (see [`access`]), each marked observed, inferred or unknown.
 //!
-//! Nothing here reads chats, settings that may hold tokens, or files in privacy-protected
-//! folders.
+//! Ordinary scans do not read chats, capability settings or files in privacy-protected
+//! folders. Explicit capability inspection projects only allowlisted metadata from bounded
+//! configuration files, skill-file presence and bounded header metadata; it never executes skill content or contacts
+//! MCP servers. See [`capabilities`] for scope and coverage limits.
 
 pub mod access;
 mod builder;
+pub mod capabilities;
 pub mod catalog;
 pub mod flow;
 mod footprint;
@@ -27,6 +30,10 @@ pub mod recent;
 pub mod tools;
 
 pub use builder::AgentsBuilder;
+pub use capabilities::{
+    AgentCapabilities, CapabilityDiscovery, CapabilityScope, HomeCapabilities, McpServerCapability,
+    McpTransport, NoCapabilities, SkillCapability,
+};
 pub use catalog::{identify, AgentDetector, AgentKind, AgentProduct, CatalogDetector, CATALOG};
 pub use flow::{
     flow, AgentFlowEdge, AgentFlowEdgeKind, AgentFlowNode, AgentFlowNodeKind, AgentFlowReport,

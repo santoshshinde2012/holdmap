@@ -28,6 +28,8 @@ pub enum ActivityKind {
     Model,
     Handoff,
     Step,
+    /// An explicitly reported skill activation, not a tool call or completed workflow.
+    Skill,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -72,6 +74,9 @@ pub struct ActivitySpan {
     pub kind: ActivityKind,
     /// A bounded sanitized identifier; unsafe source labels are replaced with a generic label.
     pub name: String,
+    /// Sanitized source-reported MCP server alias; never a process or configuration join.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_server: Option<String>,
     /// UTC Unix milliseconds; hook timestamps are receipt times.
     pub start_at_ms: Option<u64>,
     /// UTC Unix milliseconds; completion logs may fall back to observation or receipt time.
@@ -171,5 +176,6 @@ pub(crate) fn visibility_limits() -> Vec<String> {
         "Parents appear only when the source supplies correlation. Input and output sizes describe serialized payloads, not network traffic.".into(),
         "At most 1,000 spans are retained. Records can be lost through sampling, cancelled hooks, export delays, collector limits or incomplete instrumentation.".into(),
         "Only allowlisted metadata is retained; prompt, argument, result and raw error fields are excluded. Names are sanitized source labels; unsafe labels are redacted.".into(),
+        "MCP server aliases and skill activations are reported metadata, not proof that a configured capability belongs to a running process. Missing or redacted names stay unknown; skill activation does not establish workflow success.".into(),
     ]
 }

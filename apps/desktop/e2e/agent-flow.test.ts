@@ -89,6 +89,27 @@ test("full recorded trace shows parallel tools, a failed step and a visible insp
   await expect(details).toHaveCount(0);
 });
 
+test("Calls separates explicit skill activations and reported MCP aliases from installed capabilities", async ({ app }) => {
+  await openFlow(app);
+  const flow = app.getByRole("region", { name: "Agent flow", exact: true });
+  await app.getByRole("radio", { name: "Calls", exact: true }).click();
+  await expect(flow).toContainText("1 skill activation");
+  const run = flow.locator("#agent-flow-run");
+  const skill = await run.locator("option").filter({ hasText: "Skill · recorded session" }).getAttribute("value");
+  await run.selectOption(skill!);
+  const timeline = flow.getByRole("region", { name: "Recorded activity timeline" });
+  await expect(timeline).toContainText("Skill activation (name not reported)");
+  await expect(timeline).toContainText("Activation reported");
+  await timeline.getByRole("button").click();
+  const details = flow.getByRole("region", { name: "Selected relationship details" });
+  await expect(details).toContainText("not completion or success");
+  const trace = await run.locator("option").filter({ hasText: "Planning agent" }).getAttribute("value");
+  await run.selectOption(trace!);
+  await timeline.getByRole("button").filter({ hasText: "mcp__filesystem__read_file" }).click();
+  await expect(details).toContainText("filesystem · reported alias");
+  await expect(details).toContainText("does not establish a connection to a configured MCP server or a running process");
+});
+
 test("Flow keyboard controls cannot act on a previously selected listener", async ({ app }) => {
   await app.getByRole("option", { name: /^Port 3000 tcp,/ }).click();
   await openFlow(app);
@@ -108,8 +129,8 @@ test("the run selector retains its native arrow-key behavior", async ({ app }) =
   const flow = app.getByRole("region", { name: "Agent flow", exact: true });
   await app.getByRole("radio", { name: "Calls", exact: true }).click();
   const run = flow.locator("#agent-flow-run");
-  await expect(run.locator("option")).toHaveCount(2);
-  const target = await run.locator("option").nth(1).getAttribute("value");
+  await expect(run.locator("option")).toHaveCount(3);
+  const target = await run.locator("option").filter({ hasText: "Planning agent" }).getAttribute("value");
   await app.evaluate(() => {
     const picker = document.querySelector<HTMLSelectElement>("#agent-flow-run")!;
     window.addEventListener("keydown", (event) => {

@@ -1,8 +1,8 @@
 //! OTLP wire parsing and source-specific trace/log projection into shared metadata.
 
 use super::metadata::{
-    boolean, id_parts, integer, optional_id, provider_label, pseudonymize_id, safe_name, text,
-    validate_span, Batch,
+    boolean, id_parts, integer, mcp_server_from_tool, optional_id, provider_label, pseudonymize_id,
+    safe_name, text, validate_span, Batch,
 };
 use crate::{
     ActivityError, ActivityKind, ActivitySpan, ActivityStatus, Provider, Source, COLLECTOR_LIMITS,
@@ -213,6 +213,9 @@ fn trace_span(
             Source::Otlp
         },
         kind,
+        mcp_server: (kind == ActivityKind::Tool)
+            .then(|| mcp_server_from_tool(&name))
+            .flatten(),
         name,
         start_at_ms,
         end_at_ms: Some(end_at_ms),
@@ -236,7 +239,11 @@ fn log_span(
     let supported = |event: &&str| {
         matches!(
             *event,
-            "claude_code.tool_result" | "codex.tool_result" | "tool_result"
+            "claude_code.tool_result"
+                | "codex.tool_result"
+                | "tool_result"
+                | "claude_code.skill_activated"
+                | "skill_activated"
         )
     };
     let event = value
@@ -253,9 +260,10 @@ fn log_span(
     } else {
         provider
     };
-    let call = attr_text(&attributes, "tool_use_id")
-        .or_else(|| attr_text(&attributes, "call_id"))
-        .ok_or(ActivityError::InvalidMetadata)?;
+    let skill = matches!(event, "claude_code.skill_activated" | "skill_activated");
+    if skill && provider != Provider::Claude {
+        return Err(ActivityError::InvalidMetadata);
+    }
     let session = attr_text(&attributes, "conversation.id")
         .or_else(|| attr_text(&attributes, "session.id"))
         .or_else(|| attr_text(&attributes, "session_id"))
@@ -275,10 +283,39 @@ fn log_span(
             .try_into()
             .ok()
     });
+    let id = if skill {
+        // The documented per-process event counter plus source time/session
+        // identifies this activation without retaining a prompt or skill path.
+        let sequence =
+            attr_int(&attributes, "event.sequence").ok_or(ActivityError::InvalidMetadata)?;
+        let time = event_time.ok_or(ActivityError::InvalidMetadata)?;
+        if session.is_empty() {
+            return Err(ActivityError::InvalidMetadata);
+        }
+        id_parts(
+            "otel-log-skill",
+            &[
+                provider_label(provider),
+                session,
+                &sequence.to_string(),
+                &time.to_string(),
+                &attr_int(resource, "process.pid")
+                    .unwrap_or_default()
+                    .to_string(),
+            ],
+        )?
+    } else {
+        let call = attr_text(&attributes, "tool_use_id")
+            .or_else(|| attr_text(&attributes, "call_id"))
+            .ok_or(ActivityError::InvalidMetadata)?;
+        id_parts("otel-log-tool", &[provider_label(provider), session, call])?
+    };
     let end = event_time
         .or_else(|| nano_ms(value.get("observedTimeUnixNano")))
         .unwrap_or(received_ms);
-    let duration = attr_int(&attributes, "duration_ms");
+    let duration = (!skill)
+        .then(|| attr_int(&attributes, "duration_ms"))
+        .flatten();
     let raw_trace = wire_id(value.get("traceId"), 32);
     let trace_id = raw_trace
         .as_deref()
@@ -291,13 +328,29 @@ fn log_span(
         .zip(wire_id(value.get("spanId"), 16))
         .map(|(trace, span)| id_parts("otel-span", &[trace, &span]))
         .transpose()?;
-    let status = match attr_bool(&attributes, "success") {
+    let status = match (!skill)
+        .then(|| attr_bool(&attributes, "success"))
+        .flatten()
+    {
         Some(true) => ActivityStatus::Ok,
         Some(false) => ActivityStatus::Error,
         None => ActivityStatus::Unknown,
     };
+    let name = if skill {
+        safe_name(
+            attr_text(&attributes, "skill.name")
+                .filter(|name| !matches!(*name, "custom_skill" | "third-party")),
+            "Skill",
+        )
+    } else {
+        safe_name(
+            attr_text(&attributes, "tool_name_safe")
+                .or_else(|| attr_text(&attributes, "tool_name")),
+            "Tool",
+        )
+    };
     validate_span(ActivitySpan {
-        id: id_parts("otel-log-tool", &[provider_label(provider), session, call])?,
+        id,
         trace_id,
         parent_id,
         session_id: (!session.is_empty())
@@ -317,20 +370,25 @@ fn log_span(
         ),
         provider,
         source: Source::Otlp,
-        kind: ActivityKind::Tool,
-        name: safe_name(
-            attr_text(&attributes, "tool_name_safe")
-                .or_else(|| attr_text(&attributes, "tool_name")),
-            "Tool",
-        ),
+        kind: if skill {
+            ActivityKind::Skill
+        } else {
+            ActivityKind::Tool
+        },
+        mcp_server: (!skill).then(|| mcp_server_from_tool(&name)).flatten(),
+        name,
         start_at_ms: event_time
             .zip(duration)
             .and_then(|(end, duration)| end.checked_sub(duration)),
         end_at_ms: Some(end),
         duration_ms: duration,
         status,
-        input_bytes: attr_int(&attributes, "tool_input_size_bytes"),
-        output_bytes: attr_int(&attributes, "tool_result_size_bytes"),
+        input_bytes: (!skill)
+            .then(|| attr_int(&attributes, "tool_input_size_bytes"))
+            .flatten(),
+        output_bytes: (!skill)
+            .then(|| attr_int(&attributes, "tool_result_size_bytes"))
+            .flatten(),
         pid: attr_int(resource, "process.pid").and_then(|pid| u32::try_from(pid).ok()),
         process_started_at: attr_int(resource, "holdmap.process_started_at"),
     })

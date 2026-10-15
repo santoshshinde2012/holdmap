@@ -43,4 +43,43 @@ describe("agent report polling", () => {
     await load();
     expect(publish).toHaveBeenCalledExactlyOnceWith(report(400));
   });
+
+  it("fetches the requested inventory scope after navigation during an ordinary scan", async () => {
+    let inspect = false, finish!: (r: AgentsReport) => void;
+    const source = vi.fn().mockImplementationOnce(() => new Promise<AgentsReport>((resolve) => { finish = resolve; })).mockResolvedValueOnce(report(101));
+    const publish = vi.fn();
+    const load = createAgentReportLoader(source, () => null, publish, () => inspect);
+    const pending = load();
+    inspect = true;
+    expect(load()).toBe(pending);
+    finish(report(100));
+    await pending;
+    expect(source.mock.calls).toEqual([[false], [true]]);
+    expect(publish).toHaveBeenCalledExactlyOnceWith(report(101));
+  });
+
+  it("never publishes an inspection reply after leaving the workspace", async () => {
+    let inspect = true, finish!: (r: AgentsReport) => void;
+    const source = vi.fn().mockImplementationOnce(() => new Promise<AgentsReport>((resolve) => { finish = resolve; })).mockResolvedValueOnce(report(102));
+    const publish = vi.fn();
+    const load = createAgentReportLoader(source, () => null, publish, () => inspect);
+    const pending = load();
+    inspect = false;
+    finish(report(101));
+    await pending;
+    expect(source.mock.calls).toEqual([[true], [false]]);
+    expect(publish).toHaveBeenCalledExactlyOnceWith(report(102));
+  });
+
+  it("ignores a failed obsolete scope and retries the current one", async () => {
+    let inspect = false, fail!: (error: Error) => void;
+    const source = vi.fn().mockImplementationOnce(() => new Promise<AgentsReport>((_, reject) => { fail = reject; })).mockResolvedValueOnce(report(103));
+    const publish = vi.fn();
+    const load = createAgentReportLoader(source, () => null, publish, () => inspect);
+    const pending = load();
+    inspect = true;
+    fail(new Error("old scan failed"));
+    await pending;
+    expect(publish).toHaveBeenCalledExactlyOnceWith(report(103));
+  });
 });

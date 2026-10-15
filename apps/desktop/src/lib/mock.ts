@@ -303,7 +303,7 @@ export function mockTopology(s: Snapshot = MOCK_SNAPSHOT): Graph {
 /** Browser-preview agents: Cursor running shop-web and docs in its terminal, and Claude Code
  *  (started from that terminal) working on shop-api. Neutral sample projects and documentation
  *  IP ranges; ports the demo has stopped drop out, like the topology. */
-export function mockAgents(s: Snapshot = MOCK_SNAPSHOT): AgentsReport {
+export function mockAgents(s: Snapshot = MOCK_SNAPSHOT, includeCapabilities = false): AgentsReport {
   const byPort = (p: number) => s.entries.find((e) => e.port === p);
   const port = (p: number, role: AgentPort["role"]): AgentPort[] => {
     const e = byPort(p);
@@ -438,6 +438,29 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT): AgentsReport {
   };
 
   // A stopped dev server's process is gone from its agent too.
+  if (includeCapabilities) {
+    cursor.capabilities = {
+      inspected: true,
+      mcp_servers: [
+        { id: "cursor:user:github", name: "github", scope: "user", source_path: "/Users/dev/.cursor/mcp.json", project_path: null, transport: "http", enabled: true, evidence: "observed" },
+        { id: "cursor:project:filesystem", name: "filesystem", scope: "project", source_path: `${shopWeb.root}/.cursor/mcp.json`, project_path: shopWeb.root, transport: "stdio", enabled: true, evidence: "observed" },
+        { id: "cursor:project:legacy-browser", name: "legacy-browser", scope: "project", source_path: `${shopWeb.root}/.cursor/mcp.json`, project_path: shopWeb.root, transport: "stdio", enabled: false, evidence: "observed" },
+      ],
+      skills: [
+        { id: "shared:user:code-review", name: "code-review", declared_name: "code-review", description: "Review changes for correctness, regressions and maintainability.", scope: "user", source_path: "/Users/dev/.agents/skills/code-review/SKILL.md", project_path: null, evidence: "observed" },
+        { id: "shared:project:frontend-checks", name: "frontend-checks", declared_name: "frontend-checks", description: "Check UI behavior, accessibility and responsive layouts before shipping.", scope: "project", source_path: `${shopWeb.root}/.agents/skills/frontend-checks/SKILL.md`, project_path: shopWeb.root, evidence: "observed" },
+      ],
+      more_mcp_servers: 0, more_skills: 0,
+      limits: ["Configuration and skill-file presence do not establish loading, connection or invocation. Commands, URLs, arguments, headers and secret values are not included. Only declared name/description from bounded skill frontmatter are retained; instructions are not collected or executed."],
+    };
+    claude.capabilities = {
+      inspected: true,
+      mcp_servers: [{ id: "claude:project:filesystem", name: "filesystem", scope: "project", source_path: `${shopApi.root}/.mcp.json`, project_path: shopApi.root, transport: "stdio", enabled: null, evidence: "observed" }],
+      skills: [{ id: "claude:project:release-check", name: "release-check", description: "Check release notes, version references and packaging evidence.", scope: "project", source_path: `${shopApi.root}/.claude/skills/release-check/SKILL.md`, project_path: shopApi.root, evidence: "observed" }],
+      more_mcp_servers: 0, more_skills: 0, limits: [],
+    };
+    docker.capabilities = { inspected: false, mcp_servers: [], skills: [], more_mcp_servers: 0, more_skills: 0, limits: ["Capability source discovery is not supported for Docker Desktop."] };
+  }
   const gone = new Set([3000, 3001, 5173].filter((p) => !byPort(p)).map((p) => 40000 + p));
   const live = (a: Agent): Agent => ({
     ...a,
@@ -455,7 +478,7 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT): AgentsReport {
       "Remote hosts are shown by IP address; holdmap doesn't look names up.",
       "MCP server hints come from running executable or package names; transports aren't observed and individual tool calls aren't collected.",
       "Recent projects come from account-wide history and aren't attributed to a particular running instance.",
-      "Chats, settings, tokens and credentials are never read.",
+      includeCapabilities ? "Opt-in inventory includes supported configuration names and skill-file locations; chats and credential stores are not inspected." : "Passive scans do not inspect chats, agent settings or credential stores. Recognized credentials in process arguments are redacted heuristically.",
       "macOS privacy grants (TCC) can't be read without Full Disk Access, and folders it guards aren't inspected.",
     ],
   };

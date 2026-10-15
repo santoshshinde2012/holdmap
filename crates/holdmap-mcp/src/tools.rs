@@ -153,6 +153,57 @@ pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, 
                 tool.kind.label()
             ));
         }
+        if agent.capabilities.inspected {
+            lines.push(format!(
+                "  Local inventory: {} MCP definitions, {} skill folders. Configuration/installation does not establish loading or use.",
+                agent.capabilities.mcp_servers.len(), agent.capabilities.skills.len()
+            ));
+            for server in &agent.capabilities.mcp_servers {
+                lines.push(format!(
+                    "    MCP {}: {} · {} · {}",
+                    server.name,
+                    server.transport.label(),
+                    server.scope.label(),
+                    match server.enabled {
+                        Some(true) => "enabled in configuration",
+                        Some(false) => "disabled in configuration",
+                        None => "enablement unknown",
+                    }
+                ));
+            }
+            for skill in &agent.capabilities.skills {
+                lines.push(format!(
+                    "    Skill folder {}: {}",
+                    skill.name,
+                    skill.scope.label()
+                ));
+                if let Some(name) = skill
+                    .declared_name
+                    .as_ref()
+                    .filter(|name| *name != &skill.name)
+                {
+                    lines.push(format!("      Declared name: {name}"));
+                }
+                if let Some(description) = &skill.description {
+                    lines.push(format!("      Purpose metadata: {description}"));
+                }
+            }
+        }
+        if args["include_capabilities"].as_bool().unwrap_or(false) {
+            lines.extend(
+                agent
+                    .capabilities
+                    .limits
+                    .iter()
+                    .map(|limit| format!("  Inventory note: {limit}")),
+            );
+            if agent.capabilities.more_mcp_servers > 0 || agent.capabilities.more_skills > 0 {
+                lines.push(format!(
+                    "  Inventory omitted: {} MCP definitions, {} skills.",
+                    agent.capabilities.more_mcp_servers, agent.capabilities.more_skills
+                ));
+            }
+        }
         let omitted = [
             (agent.more_tools, "tool", "tools"),
             (agent.more_folders, "folder", "folders"),
@@ -207,7 +258,15 @@ pub(super) fn call(
             };
             Ok((text, serde_json::to_value(&g).unwrap_or_default()))
         }
-        "list_agents" => Ok(agents_result(engine()?.agents(), args)),
+        "list_agents" => {
+            let engine = engine()?;
+            let report = if args["include_capabilities"].as_bool().unwrap_or(false) {
+                engine.agents_with_capabilities()
+            } else {
+                engine.agents()
+            };
+            Ok(agents_result(report, args))
+        }
         "plan_cluster_stop" => {
             let c = args["cluster"]
                 .as_str()

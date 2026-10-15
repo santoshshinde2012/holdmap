@@ -5,7 +5,7 @@
   import type { FlowNode } from "../../../lib/agent-flow/layout";
   let { data }: NodeProps<FlowNode> = $props();
   const n = $derived(data.node);
-  const icons: Record<string, string> = { agent: "bot", tool: "plug", process: "terminal", listener: "server", remote: "globe", unknown: "info", model: "sparkles", handoff: "arrow", step: "activity" };
+  const icons: Record<string, string> = { agent: "bot", tool: "plug", process: "terminal", listener: "server", remote: "globe", unknown: "info", model: "sparkles", handoff: "arrow", step: "activity", skill: "sparkles" };
 </script>
 
 <div class="flow-node" class:chosen={data.chosen} class:inferred={!n.span && n.evidence !== "observed"} class:failed={n.status === "error"}>

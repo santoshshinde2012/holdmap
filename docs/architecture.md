@@ -168,6 +168,20 @@ transport just to generate text. Request bounds come from the collector's limits
 Native recording commands use one authorized, serialized session boundary. The CLI MCP
 adapter owns its bounded delivery queue and worker lifetime separately from activity commands.
 
+Current source adds an optional sanitized `mcp_server` label to tool records and a separate
+`skill` kind for explicit Claude activation logs. Skill records carry a source event time,
+pseudonymous session/counter identity and unknown workflow outcome; they do not increase tool
+call counts. Built-in adapters derive MCP aliases only from explicit hook metadata or an
+unambiguous sanitized client label. Explicit normalized tool records can also report the
+optional alias through `/v1/activity`, subject to the shared identifier sanitization and record
+validation. None creates a configuration/process join, authenticated identity or action authority. Default Claude
+setup stays trace-only; the documented alternate log-only recipe receives activation events
+without enabling tool-detail or content flags. These additions are Unreleased after 0.7.1.
+Current decoding accepts older snapshots with an omitted MCP alias. The strict older decoder
+does not accept newly populated fields or the skill kind, so new usage requires matching
+current-source collector and CLI/desktop builds; `/v1` route names do not promise unknown
+record shapes will be accepted. This preserves rejection of unrecognized normalized fields.
+
 The browser adapter supplies labelled examples. Pure TypeScript builds reported parent edges,
 layout and timeline models; an invalidatable loader prevents stale requests from changing a
 later view. Components present evidence and setup without authority to stop a reported PID.
@@ -1019,6 +1033,53 @@ explicit `port:3000` queries; its layout and rendering remain pure presentation 
 checking exact path membership in the current agent report. `stoppable_ports()` identifies development/service port candidates;
 normal core planning still decides which can be stopped. CLI, TUI, desktop and MCP preserve the
 agent-service stop controls without signalling the agent root merely because it is visible.
+
+### Optional capability inventory (current source)
+
+`CapabilityDiscovery` separates configured metadata from process-derived tools and recorded
+usage. The default `NoCapabilities` strategy performs no configuration inspection. Only explicit
+CLI `agents --capabilities`, desktop **MCP & skills**, or MCP `include_capabilities:true`
+requests select bounded current-account discovery. Desktop/background scans remain on the
+default strategy. The browser dev bridge propagates the same opt-in; the public demo labels
+sample data.
+
+The inventory projects server aliases, declared transport/enablement, scope and source paths
+from supported Codex/Claude Code/Cursor JSON/TOML locations and Claude Desktop's documented
+manual MCP JSON on macOS/Windows. Claude Desktop extensions, connectors and skills are not
+inspected. Whole bounded config bytes can
+contain credentials while parsing; command, URL, environment/header values are not retained.
+Skills retain folder identities and `SKILL.md` file locations. A bounded prefix permits only
+optional sanitized YAML-header `declared_name` and `description` metadata (purpose capped at
+300 characters); instruction bodies are not retained or executed. Unsafe or malformed headers
+leave that metadata absent without turning observed file presence into validity or activation.
+Only observed working folders/project roots are considered. Explicit limits retain unsupported,
+inaccessible and bounded coverage instead of treating an empty inventory as absence.
+Each report inspects at most 16 distinct agent contexts. Each context is limited to eight
+observed projects, 24 existing file/directory sources, 256 candidate entries and 1 MiB of
+configuration/header reads; individual configs are capped at 256 KiB and skill prefixes at
+8 KiB. At most 64 definitions of each kind are retained. The 100 ms context deadline is checked
+cooperatively between operations and cannot interrupt a blocked OS filesystem call. See the
+[detailed source and limit tables](../site/src/content/docs/agents.md#mcp-and-skills-current-source).
+
+Configuration presence establishes neither loading, authorization nor invocation. Reported MCP
+aliases and skill activations stay in Calls without alias-only joins to an inventory or process.
+Metadata identities do not authorize stops, file actions or execution of configured commands.
+See [the usage/source contracts](agent-flow.md#provider-coverage-and-research).
+
+The desktop projects these DTOs through the pure `buildCapabilityMap` layout and a dedicated
+SvelteFlow canvas. Agents sit between configured MCP definitions and skill files; runtime
+candidates occupy a separate lane without inferred configuration edges. Only exact shared
+source identities collapse into one definition, with a connection to each observed owner.
+Resource sampling does not change layout identity. The renderer caps the map at 24 agents,
+64 definitions and 24 runtime candidates, retains explicit selection where possible, and
+reports omitted cards and relationships. These display bounds are separate from discovery
+bounds. Search and filters narrow the map; an explicitly selected empty agent stays visible.
+The left rail becomes an inspector only after selection. Closing it restores focus, and
+coverage notes are available on demand. Narrow canvases start at a readable hub-centered
+zoom; users can pan or explicitly fit the complete graph. Keyboard focus brings offscreen
+cards into view without selecting them. Pointer focus leaves the pressed card in place
+until its click completes. Inventory and runtime cards never resolve reported usage by
+matching names.
 
 ## 4. Project detection
 

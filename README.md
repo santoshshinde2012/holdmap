@@ -59,7 +59,9 @@ screenshots use the shared browser UI with sample data.
   folders each one works in, the ports and apps it started (children grouped as tools & apps),
   the services and hosts it talks to, and access (account, sandbox, approval flags, network
   exposure including debug and model-server ports), each fact marked seen, inferred or unknown.
-  Agent settings files are not read. Reveal a folder, open it in your editor,
+  Default scans do not read agent settings. Current source adds an opt-in **MCP & skills**
+  inventory of configured server aliases and skill locations, separate from recorded usage;
+  see [Unreleased changes](CHANGELOG.md#unreleased). Reveal a folder, open it in your editor,
   or stop only the services that agent started, through the normal safety policy.
 - **Three levels of agent maps.** Computer shows this machine and outside systems;
   Footprint shows agents' folders, tools, ports and hosts; Project focuses on one source tree.
@@ -70,6 +72,8 @@ screenshots use the shared browser UI with sample data.
 - **Agent flow.** Follow observed process/socket relationships, or opt in to
   local recording of reported tools, model calls and delegated agents. Inspect parallel work,
   failures, duration and reported serialized sizes without storing prompts or tool arguments.
+  Current source also labels reported MCP aliases and explicit Claude skill activations;
+  an installed skill or server definition is not proof of use.
 
 ## Install
 
@@ -208,6 +212,16 @@ Search by product, vendor, exact owned PID (`pid:1234`), working folder or tool 
 redacted commands; `--json` preserves evidence, timestamps and collection limits. Command text
 is not searched. Recent folders belong to the current account's history and are attached only
 to confirmed matching accounts; they do not prove current work by that running instance.
+
+**MCP & skills in current source (Unreleased).** `holdmap agents --capabilities --json`
+explicitly inspects supported current-account configuration and skill metadata. The desktop's
+**Agents → MCP & skills** workspace and MCP `list_agents(include_capabilities:true)` expose
+the same inventory. It distinguishes configured definitions, skill files, running child tools
+and recorded usage; loading, trust and effective client policy stay unknown. Ordinary scans
+keep configuration inspection off. The desktop uses an Overview-style map: select an agent,
+MCP definition, skill or runtime card to open its details in the left rail. Close or press
+**Esc** to return to the map without changing the agent scope. **Filters** and **Coverage**
+open only when requested. See the [coverage, privacy and usage guide](site/src/content/docs/agents.md#mcp-and-skills-current-source).
 
 **Terminal agents in 0.5.0.** Start `holdmap` and press **Shift+Tab**
 to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its
@@ -440,6 +454,13 @@ installation-guide actions; see [Unreleased changes](CHANGELOG.md#unreleased).
 | **Sort menu at the right edge, dark theme** | **Sort menu at the right edge, light theme** |
 | ![The Sort menu stays inside the viewport with readable grouping descriptions](docs/screenshots/desktop-sort-right-edge-dark.png) | ![The right-edge Sort menu leaves all choices visible in a compact window](docs/screenshots/desktop-sort-right-edge-light.png) |
 
+Current-source **MCP & skills** captures use labelled sample definitions; this workspace is
+Unreleased and is separate from the published 0.7.1 interface:
+
+| **MCP and skills map** | **Selected skill details** |
+| --- | --- |
+| ![Capability map connects agents to declared MCP and skill sources while runtime candidates remain separate](docs/screenshots/desktop-capabilities-dark.png) | ![Selecting a skill card reveals its source and optional declared purpose in the left inspector](docs/screenshots/desktop-skills-dark.png) |
+
 </details>
 
 ## MCP server
@@ -470,7 +491,9 @@ Version 0.4.0 also exposes a bundled `holdmap://guide` resource and three workfl
 | `inspect_agents` | Summarize child tools, resource use, folders and access with their evidence and collection limits. |
 
 Retrieving a prompt performs no actions. The guide and templates help clients interpret results;
-MCP identities remain inferred from process metadata and do not prove tool calls or transport.
+MCP process identities remain inferred from process metadata and do not prove tool calls or
+transport. Current source's explicit `include_capabilities:true` option separately projects
+configured server aliases and skill metadata; definitions do not prove activation or use.
 Tool input/output schemas preserve structured data, and malformed arguments are rejected before
 acting, including incorrectly typed stop controls. Both stop tools preview by default; execution
 requires the one-use `confirmation_id` returned by a preview in the same session, with unchanged
@@ -507,7 +530,12 @@ and exits with code 2; additional requested targets are not attempted. See the
 - **Credential handling:** recognized secrets in command lines, errors and exported results are
   conservatively redacted, including headers and nested JSON values. Human terminal output
   neutralizes untrusted control sequences. Agent visibility uses process/socket metadata and
-  bounded project-history fields. Optional recording discards prompt, argument and result
+  bounded project-history fields. Explicit capability inspection parses bounded supported
+  configuration files and retains only server aliases, declared transport/enablement and source
+  locations, plus optional sanitized skill-header names and purposes. Command, URL,
+  environment/header values and skill instruction bodies are excluded. Config files
+  may contain credentials, so those bytes can be read while parsing even though their values
+  are not retained. Optional recording discards prompt, argument and result
   fields after accepting explicitly configured local exporter requests; it does not inspect chats
   or credential stores. Redaction
   is heuristic; arbitrary positional secrets may be missed.

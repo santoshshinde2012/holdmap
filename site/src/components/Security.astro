@@ -4,7 +4,7 @@ import { securityUrl } from "../lib/site";
 const items = [
   { icon: "HardDrive", title: "Local inspection", text: "Scans this computer and probes localhost. SSH connects to hosts you choose; desktop update checks use GitHub Releases. Project commands and SSH configuration can make their own network requests." },
   { icon: "EyeOff", title: "No product analytics", text: "No Holdmap account or product analytics. This site has no analytics scripts. Optional screen capture and agent activity recording start only when you choose them." },
-  { icon: "KeyRound", title: "Credential redaction", text: "Recognized credentials in command displays are redacted; arbitrary positional secrets can be missed. Passive scans use process and socket metadata rather than opening agent chats or settings. Optional activity recording excludes payload fields before retention." },
+  { icon: "KeyRound", title: "Credential redaction", text: "Recognized credentials in command displays are redacted; arbitrary positional secrets can be missed. Default scans do not open agent chats or settings. Current-source capability inspection is explicit: bounded config files may contain credentials, whose values are excluded from results. Activity recording excludes payload fields before retention." },
   { icon: "ShieldCheck", title: "Protected by default", text: "Hard protection cannot be overridden. Soft protection needs the CLI's explicit <code>--allow-protected</code> option or a desktop review that permits it. MCP refuses all protected targets." },
 ];
 ---

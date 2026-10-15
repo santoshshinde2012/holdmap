@@ -7,6 +7,7 @@ export interface ActivityRun {
   label: string;
   spans: ActivitySpan[];
   calls: number;
+  skills: number;
   errors: number;
   first_at_ms: number | null;
 }
@@ -56,11 +57,12 @@ export function activityRuns(spans: ActivitySpan[], query = ""): ActivityRun[] {
     const id = `${kind}:${span.trace_id || span.session_id || span.id}`;
     let run = groups.get(id);
     if (!run) {
-      run = { id, kind, label: kind === "trace" ? "Recorded trace" : kind === "session" ? "Recorded session" : "Uncorrelated event", spans: [], calls: 0, errors: 0, first_at_ms: null };
+      run = { id, kind, label: kind === "trace" ? "Recorded trace" : kind === "session" ? "Recorded session" : "Uncorrelated event", spans: [], calls: 0, skills: 0, errors: 0, first_at_ms: null };
       groups.set(id, run);
     }
     run.spans.push(span);
     if (span.kind === "tool") run.calls++;
+    if (span.kind === "skill") run.skills++;
     if (span.status === "error") run.errors++;
     const time = span.start_at_ms ?? span.end_at_ms;
     if (time != null && (run.first_at_ms == null || time < run.first_at_ms)) run.first_at_ms = time;
@@ -71,8 +73,11 @@ export function activityRuns(spans: ActivitySpan[], query = ""): ActivityRun[] {
 
 /** Search the same visible metadata in the run picker and individual activity rows. */
 export function activityMatches(span: ActivitySpan, query: string): boolean {
-  return metadataMatches(query, [span.name, span.kind, PROVIDER_LABEL[span.provider], SOURCE_LABEL[span.source], STATUS_LABEL[span.status]].join(" "), span.pid);
+  return metadataMatches(query, [activityName(span), span.kind, span.mcp_server ? `MCP server ${span.mcp_server}` : "", PROVIDER_LABEL[span.provider], SOURCE_LABEL[span.source], activityStatus(span)].join(" "), span.pid);
 }
+
+export const activityName = (span: ActivitySpan): string => span.kind === "skill" && span.name === "Skill" ? "Skill activation (name not reported)" : span.name;
+export const activityStatus = (span: ActivitySpan): string => span.kind === "skill" ? "Activation reported" : STATUS_LABEL[span.status];
 
 export const spanNodeId = (span: ActivitySpan) => `span:${span.trace_id || span.session_id || "event"}:${span.id}`;
 
@@ -80,8 +85,8 @@ export function callGraph(run: ActivityRun | null): VisualGraph {
   if (!run) return { nodes: [], edges: [] };
   const spans = new Map(run.spans.map((s) => [s.id, s]));
   return {
-    nodes: [...spans.values()].map((s) => ({ id: spanNodeId(s), label: s.name, kind: s.kind, evidence: "unknown", status: s.status, span: s,
-      sub: `${PROVIDER_LABEL[s.provider]} · ${STATUS_LABEL[s.status]}` })),
+    nodes: [...spans.values()].map((s) => ({ id: spanNodeId(s), label: activityName(s), kind: s.kind, evidence: "unknown", status: s.status, span: s,
+      sub: `${PROVIDER_LABEL[s.provider]} · ${activityStatus(s)}` })),
     edges: run.spans.flatMap((s) => {
       const parent = s.parent_id ? spans.get(s.parent_id) : undefined;
       // Session grouping and timestamps describe membership, not communication.

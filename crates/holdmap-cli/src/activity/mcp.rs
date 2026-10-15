@@ -77,6 +77,7 @@ impl holdmap_mcp::ToolCallObserver for McpObserver {
             source: Source::Mcp,
             kind: ActivityKind::Tool,
             name: event.tool_name.clone(),
+            mcp_server: None,
             start_at_ms: Some(event.started_at_ms),
             end_at_ms: None,
             duration_ms: None,

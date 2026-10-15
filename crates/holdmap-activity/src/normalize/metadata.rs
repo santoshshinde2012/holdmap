@@ -69,7 +69,10 @@ pub(super) fn safe_name(value: Option<&str>, fallback: &str) -> String {
     };
     if matches!(
         value,
-        "Tool (name redacted)" | "Agent (name redacted)" | "Activity (name redacted)"
+        "Tool (name redacted)"
+            | "Agent (name redacted)"
+            | "Activity (name redacted)"
+            | "Skill (name redacted)"
     ) {
         return value.to_owned();
     }
@@ -99,6 +102,31 @@ pub(super) fn safe_name(value: Option<&str>, fallback: &str) -> String {
         return format!("{fallback} (name redacted)");
     }
     value.to_owned()
+}
+
+/// Retain an exact identifier only when the shared label policy leaves it unchanged.
+pub(super) fn mcp_server_name(value: Option<&str>) -> Option<String> {
+    let value = value?;
+    (!matches!(value, "custom" | "mcp_tool" | "mcp_other")
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b':'))
+        && value.bytes().any(|byte| byte.is_ascii_alphanumeric())
+        && safe_name(Some(value), "Tool") == value)
+        .then(|| value.to_owned())
+}
+
+/// Claude's documented tool label convention is not a universal MCP wire format.
+/// An extra double separator makes the server/tool split ambiguous, so omit it.
+pub(super) fn mcp_server_from_tool(value: &str) -> Option<String> {
+    if safe_name(Some(value), "Tool") != value {
+        return None;
+    }
+    let (server, tool) = value.strip_prefix("mcp__")?.split_once("__")?;
+    if server.is_empty() || tool.is_empty() || tool.starts_with('_') || tool.contains("__") {
+        return None;
+    }
+    mcp_server_name(Some(server))
 }
 
 pub(super) fn text(value: &Value) -> Option<&str> {
@@ -203,6 +231,14 @@ pub(super) fn validate_span(mut span: ActivitySpan) -> Result<ActivitySpan, Acti
             && !matches!(span.provider, Provider::Codex | Provider::Claude))
         || (span.kind == ActivityKind::Handoff
             && (span.agent_id.is_none() || span.parent_agent_id.is_none()))
+        || (span.mcp_server.is_some() && span.kind != ActivityKind::Tool)
+        || (span.kind == ActivityKind::Skill
+            && (span.status != ActivityStatus::Unknown
+                || span.start_at_ms.is_some()
+                || span.end_at_ms.is_none()
+                || span.duration_ms.is_some()
+                || span.input_bytes.is_some()
+                || span.output_bytes.is_some()))
         || span.start_at_ms.is_some_and(|time| time > MAX_TIMESTAMP_MS)
         || span.end_at_ms.is_some_and(|time| time > MAX_TIMESTAMP_MS)
         || span
@@ -233,6 +269,7 @@ pub(super) fn validate_span(mut span: ActivitySpan) -> Result<ActivitySpan, Acti
         return Err(ActivityError::InvalidMetadata);
     }
     span.name = safe_name(Some(&span.name), "Activity");
+    span.mcp_server = mcp_server_name(span.mcp_server.as_deref());
     Ok(span)
 }
 

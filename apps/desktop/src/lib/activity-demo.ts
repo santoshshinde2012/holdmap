@@ -12,8 +12,9 @@ function span(id: string, name: string, kind: ActivitySpan["kind"], start: numbe
 const examples: ActivitySpan[] = [
   span("agent", "Planning agent", "agent", 0, 9200),
   span("model", "Model request", "model", 40, 720, { parent_id: "agent", input_bytes: 2014, output_bytes: 640 }),
-  span("read", "mcp__filesystem__read_file", "tool", 800, 1420, { parent_id: "agent", input_bytes: 72, output_bytes: 6144 }),
-  span("search", "mcp__search__query", "tool", 840, 1840, { parent_id: "agent", input_bytes: 128, output_bytes: 2560 }),
+  span("read", "mcp__filesystem__read_file", "tool", 800, 1420, { parent_id: "agent", mcp_server: "filesystem", input_bytes: 72, output_bytes: 6144 }),
+  span("search", "mcp__search__query", "tool", 840, 1840, { parent_id: "agent", mcp_server: "search", input_bytes: 128, output_bytes: 2560 }),
+  span("skill", "Skill", "skill", 1850, 1850, { trace_id: "", session_id: "demo-skill-session", provider: "claude", status: "unknown", start_at_ms: null, duration_ms: null }),
   span("delegate", "Delegate to reviewer", "handoff", 1900, 7650, { parent_id: "agent" }),
   span("reviewer", "Review agent", "agent", 2100, 7400, { parent_id: "delegate", agent_id: "demo-reviewer", parent_agent_id: "demo-planner" }),
   span("review-model", "Model request", "model", 2200, 2680, { parent_id: "reviewer", agent_id: "demo-reviewer" }),
@@ -26,7 +27,7 @@ let cleared = false, active = false;
 let started: number | null = null;
 export function demoActivity(): ActivitySnapshot {
   return { spans: cleared ? [] : examples.map((item) => ({ ...item })), received: cleared ? 0 : examples.length, dropped: 0,
-    limits: ["Browser demo: these records are simulated. No local recorder or agent integration runs in the browser.", "Sizes are serialized payload sizes; no message content is included."] };
+    limits: ["Browser demo: these records are simulated. No local recorder or agent integration runs in the browser.", "Sizes are serialized payload sizes; no message content is included.", "Reported MCP aliases do not match configured servers to processes. Skill activation does not establish a name, workflow completion or success."] };
 }
 export function demoRecordingStatus(): RecordingStatus {
   return { active, endpoint: null, started_at_ms: started, received: demoActivity().received, dropped: 0 };

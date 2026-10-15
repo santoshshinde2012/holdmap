@@ -179,10 +179,20 @@ pub async fn scan(
     Ok(snapshot)
 }
 
-/// AI coding agents in a scan no older than one second: folders, ports, connections and access.
+/// Agent footprint from a scan no older than one second, with optional local capability metadata.
 #[tauri::command]
-pub async fn agents(app: AppHandle) -> Result<AgentsReport, String> {
-    with_engine(&app, |e| e.agents()).await
+pub async fn agents(
+    app: AppHandle,
+    include_capabilities: Option<bool>,
+) -> Result<AgentsReport, String> {
+    with_engine(&app, move |engine| {
+        if include_capabilities.unwrap_or(false) {
+            engine.agents_with_capabilities()
+        } else {
+            engine.agents()
+        }
+    })
+    .await
 }
 
 /// Read-only process and socket relationships from one consistent local scan.

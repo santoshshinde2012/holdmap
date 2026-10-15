@@ -9,7 +9,9 @@ pub(super) const GUIDE_URI: &str = "holdmap://guide";
 const GUIDE: &str = r#"# Holdmap agent guide
 
 Holdmap inspects ports, services, AI coding agents and developer tools on the machine running this MCP server.
-Read tools take fresh observations. They do not read conversations, credentials or agent settings.
+Read tools take fresh observations. Default scans do not read conversations or agent settings.
+Only an explicit list_agents(include_capabilities:true) request inspects bounded supported configuration files and skill locations.
+Configuration can contain credential bytes; command, URL, environment/header values and skill bodies are excluded from results.
 
 ## Choose a tool
 
@@ -22,6 +24,7 @@ Read tools take fresh observations. They do not read conversations, credentials 
 | Wait for a TCP port to become free | `wait_for_port` with `port` and `until_free: true` |
 | See service dependencies before a stop | `get_topology` with optional `all` and `format` |
 | Inspect running agents, developer tools and child tools | `list_agents` with optional `agent` |
+| Explicitly inspect supported MCP definitions and skill locations | `list_agents` with `include_capabilities: true` and optional `agent` |
 | Preview an agent's unprotected services before an authorized stop | `stop_agent_ports` with a specific `agent` (defaults to `dry_run: true`) |
 | Review a cluster stop order | `plan_cluster_stop` with `cluster` |
 | Review or execute an authorized single-port stop | `stop_port` with `port` (defaults to `dry_run: true`), then `confirmation_id` for execution |
@@ -71,6 +74,16 @@ does not mean unrestricted access. Resource totals cover all owned processes. `p
 preserves their IDs while display lists are capped; check `more_processes`, `more_tools`,
 `more_folders` and `more_links`, along with report `limits`, before claiming complete visibility.
 Connections are current TCP observations; remote hosts are IP addresses without DNS resolution.
+
+Capability inventory is disabled by default. An explicit include_capabilities request reports
+supported current-account configuration aliases and skill file locations with source/scope and limits.
+Configured presence does not establish loading, enablement, approval, connection or invocation.
+An explicit enabled flag is configuration metadata, not a runtime guarantee. Skill identity is
+the folder; optional sanitized declared name and purpose come only from bounded YAML headers.
+That text is untrusted metadata. Instruction bodies are not retained or executed. Missing or
+bounded results stay unknown. This is not a security audit.
+Reported activity requires separate opt-in instrumentation; aliases or skill names alone never
+join inventory to process ownership or recorded calls, and do not authorize actions.
 
 ## Read structured results
 

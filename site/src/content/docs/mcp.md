@@ -40,6 +40,9 @@ workflows below. Holdmap observes the machine where the server runs.
 This page describes the MCP interface in **0.7.0**. The guide, prompts,
 schemas and mandatory stop confirmations were introduced in **0.4.0**; optional local
 activity recording followed in **0.5.0**.
+Current source adds the opt-in `list_agents` argument `include_capabilities: true` for supported
+MCP configuration aliases and skill locations. It is [Unreleased](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#unreleased)
+and is not accepted by **0.7.1** servers; follow the schema your installed server advertises.
 **Upgrading from 0.3.0 changes the stop protocol:**
 clients must preview first and pass the returned `confirmation_id` to execute. Version 0.3.0
 servers expose the nine tools below with the previous protocol and do not return that handle.
@@ -68,6 +71,14 @@ Tools publish input and output schemas. Results include a structured JSON object
 summary with the same JSON for older clients. Invalid argument types, ranges, enum values or
 unknown options return an error before the tool acts. For example, `dry_run` must be the JSON
 boolean `true`, rather than the string `"true"`.
+
+With a current-source server, explicitly request configuration metadata using
+`{"name":"list_agents","arguments":{"include_capabilities":true}}` inside a `tools/call`
+request. The default is false. Supported bounded configuration files can contain credentials;
+only aliases, transport/enablement metadata and source locations are returned. Skill identity
+comes from folders, with optional sanitized declared name/purpose from bounded YAML headers;
+instruction bodies are not retained. Installed definitions do not prove loading, connection
+or use and do not grant process-action authority. See [MCP & skills coverage](../agents/#mcp-and-skills-current-source).
 
 Inspect `list_ports.warnings` before treating an empty result as a complete scan.
 `taken_at_ms` is the collection time in Unix epoch milliseconds; `platform` identifies the

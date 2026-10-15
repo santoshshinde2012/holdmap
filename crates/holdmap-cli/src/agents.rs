@@ -16,6 +16,9 @@ pub struct AgentsArgs {
     /// Show full agent details, including processes and redacted command lines.
     #[arg(short, long)]
     pub wide: bool,
+    /// Inspect bounded local MCP configuration and installed skill locations; no tool calls.
+    #[arg(long, conflicts_with_all = ["flow", "stop_ports"])]
+    pub capabilities: bool,
     /// Show observed process, listener and TCP relationships; no call or payload inference.
     #[arg(long, conflicts_with_all = ["stop_ports", "wide"])]
     pub flow: bool,
@@ -39,7 +42,11 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
         docker,
     })
     .context("failed to scan processes and sockets")?;
-    let mut report = e.agents();
+    let mut report = if a.capabilities {
+        e.agents_with_capabilities()
+    } else {
+        e.agents()
+    };
     if let Some(q) = &a.agent {
         report.agents.retain(|x| x.matches(q));
     }
@@ -62,7 +69,10 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
     if a.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
-        print!("{}", render(&report, a.wide, a.agent.as_deref()));
+        print!(
+            "{}",
+            render(&report, a.wide || a.capabilities, a.agent.as_deref())
+        );
     }
     Ok(if report.agents.is_empty() {
         crate::exit::BUSY
@@ -488,6 +498,91 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
             );
         }
 
+        if a.capabilities.inspected {
+            out.push_str(&format!(
+                "{}{}\n",
+                label("MCP/skills"),
+                style::dim("Configuration / installation only; loading and use are unknown.")
+            ));
+            for server in &a.capabilities.mcp_servers {
+                let enabled = match server.enabled {
+                    Some(true) => "enabled in configuration",
+                    Some(false) => "disabled in configuration",
+                    None => "enablement unknown",
+                };
+                out.push_str(&format!(
+                    "{}{} · {} · {} · {}\n{}{}\n",
+                    pad,
+                    paint(printable(&server.name), S::Bold),
+                    server.transport.label(),
+                    server.scope.label(),
+                    enabled,
+                    pad,
+                    style::dim(printable(&tilde(&server.source_path))),
+                ));
+            }
+            for skill in &a.capabilities.skills {
+                out.push_str(&format!(
+                    "{}{} · skill folder · {}\n{}{}\n",
+                    pad,
+                    paint(printable(&skill.name), S::Bold),
+                    skill.scope.label(),
+                    pad,
+                    style::dim(printable(&tilde(&skill.source_path))),
+                ));
+                if let Some(name) = skill
+                    .declared_name
+                    .as_ref()
+                    .filter(|name| *name != &skill.name)
+                {
+                    out.push_str(&format!("{}Declared name: {}\n", pad, printable(name)));
+                }
+                if let Some(description) = &skill.description {
+                    out.push_str(&format!(
+                        "{}Purpose metadata: {}\n",
+                        pad,
+                        printable(description)
+                    ));
+                }
+            }
+            if a.capabilities.mcp_servers.is_empty() && a.capabilities.skills.is_empty() {
+                out.push_str(&format!(
+                    "{}{}\n",
+                    pad,
+                    style::dim(
+                        "No MCP definitions or skill files found in the inspected locations."
+                    )
+                ));
+            }
+            if a.capabilities.more_mcp_servers > 0 || a.capabilities.more_skills > 0 {
+                out.push_str(&format!(
+                    "{}{}\n",
+                    pad,
+                    style::dim(format!(
+                        "Not listed: {} MCP definitions, {} skills.",
+                        a.capabilities.more_mcp_servers, a.capabilities.more_skills
+                    ))
+                ));
+            }
+            for limit in &a.capabilities.limits {
+                out.push_str(&format!("{}{}\n", pad, style::dim(printable(limit))));
+            }
+        } else {
+            out.push_str(&format!(
+                "{}{}\n",
+                label("MCP/skills"),
+                style::dim("Not inspected. Use holdmap agents --capabilities for local inventory.")
+            ));
+            for limit in a
+                .capabilities
+                .limits
+                .iter()
+                .filter(|limit| !limit.contains("were not inspected"))
+            {
+                out.push_str(&format!("{}{}\n", pad, style::dim(printable(limit))));
+            }
+        }
+
         let mut first = true;
         let mut row = |out: &mut String, title: &str, text: String| {
             let head = if first { label(title) } else { pad.clone() };
@@ -638,6 +733,7 @@ mod tests {
             process_ids: vec![pid],
             tools: vec![],
             more_tools: 0,
+            capabilities: Default::default(),
             folders: vec![AgentFolder {
                 path: "/srv/shop-web".into(),
                 label: "shop-web".into(),
@@ -809,6 +905,61 @@ mod tests {
         assert!(!compact.contains("--token"));
         assert!(!compact.contains("No sandbox seen right now."));
         assert!(render(&report, false, Some("42")).contains("No sandbox seen right now."));
+    }
+
+    #[test]
+    fn capability_inspection_is_explicit_and_cannot_be_combined_with_stop_or_flow() {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Args {
+            #[command(flatten)]
+            agents: AgentsArgs,
+        }
+        assert!(
+            !Args::try_parse_from(["holdmap"])
+                .unwrap()
+                .agents
+                .capabilities
+        );
+        assert!(
+            Args::try_parse_from(["holdmap", "--capabilities", "--json"])
+                .unwrap()
+                .agents
+                .capabilities
+        );
+        for option in ["--stop-ports", "--flow"] {
+            assert!(Args::try_parse_from(["holdmap", "--capabilities", option]).is_err());
+        }
+    }
+
+    #[test]
+    fn capability_details_keep_configured_disabled_and_installed_distinct_from_use() {
+        style::init(style::ColorChoice::Never);
+        let mut a = agent(42, "claude-code", "Claude Code");
+        a.capabilities = serde_json::from_value(serde_json::json!({
+            "inspected": true,
+            "mcp_servers": [{"id":"design","name":"design","scope":"project","source_path":"/srv/shop-web/.mcp.json","project_path":"/srv/shop-web","transport":"http","enabled":false,"evidence":"observed"}],
+            "skills": [{"id":"review","name":"review","declared_name":"review","description":"Review UI behavior.","scope":"user","source_path":"/home/dev/.claude/skills/review/SKILL.md","project_path":null,"evidence":"observed"}],
+            "more_mcp_servers": 1, "more_skills": 2, "limits":["Coverage is partial."]
+        })).unwrap();
+        let text = render(
+            &AgentsReport {
+                agents: vec![a],
+                ..Default::default()
+            },
+            true,
+            None,
+        );
+        assert!(text.contains("disabled in configuration"));
+        assert!(text.contains("review · skill folder · user"));
+        assert!(text.contains("Purpose metadata: Review UI behavior."));
+        assert!(text.contains("/srv/shop-web/.mcp.json"));
+        assert!(
+            text.contains("Loading and use are unknown.")
+                || text.contains("loading and use are unknown.")
+        );
+        assert!(text.contains("Not listed: 1 MCP definitions, 2 skills."));
+        assert!(text.contains("Coverage is partial."));
     }
 
     #[test]

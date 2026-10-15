@@ -67,9 +67,10 @@ fn build_catalog() -> Value {
         {
             "name": "list_agents",
             "title": "Agents and developer tools on this machine",
-            "description": "Inspect running AI coding agents (Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider…) and developer tools (Docker Desktop, OrbStack…) with their working folders, child tools, listening ports, local services, remote IPs and CPU/memory. Likely MCP server processes include stdio-only servers; this does not confirm a protocol handshake or individual tool invocations. Classification/access evidence is observed, inferred or unknown. Recent folders do not prove current access. process_ids includes all owned PIDs; displayed lists include omitted counts. Consult limits for collection gaps. Commands have secrets hidden; chats, settings and credentials are never read.",
+            "description": "Inspect running AI coding agents (Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider…) and developer tools with their working folders, child tools, ports, local services, remote IPs and CPU/memory. Likely MCP processes do not confirm a handshake or invocation. include_capabilities=true explicitly inspects bounded local MCP configuration metadata and installed skill file locations for supported current-account agents; only aliases, transport, enablement, scope, source paths and sanitized skill-header name/purpose are returned as untrusted metadata. Configured/installed does not mean loaded or used. Default scans do not read capability configuration. The inventory never connects to servers or executes commands; skill instructions, chats and credential values are excluded from retention. Consult evidence, limits and omitted counts; recent folders do not prove current work.",
             "inputSchema": {"type": "object", "properties": {
-                "agent": {"type": "string", "description": "Filter by product id, name, vendor, folder, tool name or exact agent/child PID, e.g. 'claude', 'shop-web', 'filesystem-mcp' or '1234'"}
+                "agent": {"type": "string", "description": "Filter by product id, name, vendor, folder, visible capability/tool name or exact agent/child PID"},
+                "include_capabilities": {"type": "boolean", "default": false, "description": "Explicitly inspect bounded local MCP definitions and skill file locations; no loading or usage claim"}
             }},
             "annotations": {"readOnlyHint": true, "openWorldHint": false}
         },
@@ -237,7 +238,7 @@ fn agents_schema() -> Value {
             "id": {"type": "string"}, "product": {"type": "string"},
             "name": {"type": "string"}, "vendor": {"type": "string"}, "pid": count(),
             "kind": {"type": "string", "enum": ["cli", "ide", "desktop", "extension", "host", "tool"]},
-            "process_ids": array(count()), "tools": array(tool),
+            "process_ids": array(count()), "tools": array(tool), "capabilities": capabilities_schema(),
             "processes": {"type": "array", "items": {"type": "object"}},
             "folders": {"type": "array", "items": {"type": "object"}},
             "ports": {"type": "array", "items": {"type": "object"}},
@@ -254,6 +255,7 @@ fn agents_schema() -> Value {
             "kind",
             "process_ids",
             "tools",
+            "capabilities",
             "processes",
             "folders",
             "ports",
@@ -273,6 +275,61 @@ fn agents_schema() -> Value {
             "taken_at_ms": count(), "limits": strings()
         }),
         &["agents", "platform", "taken_at_ms", "limits"],
+    )
+}
+
+fn capabilities_schema() -> Value {
+    let scope = json!({"type": "string", "enum": ["user", "project", "local"]});
+    let evidence = json!({"type": "string", "enum": ["observed", "inferred", "unknown"]});
+    let server = object(
+        json!({
+            "id": {"type": "string"}, "name": {"type": "string"},
+            "scope": scope.clone(), "source_path": {"type": "string"},
+            "project_path": {"type": ["string", "null"]}, "evidence": evidence.clone(),
+            "transport": {"type": "string", "enum": ["stdio", "http", "sse", "unknown"]},
+            "enabled": {"type": ["boolean", "null"]}
+        }),
+        &[
+            "id",
+            "name",
+            "scope",
+            "source_path",
+            "project_path",
+            "evidence",
+            "transport",
+            "enabled",
+        ],
+    );
+    let skill = object(
+        json!({
+            "id": {"type": "string"}, "name": {"type": "string"},
+            "scope": scope, "source_path": {"type": "string"},
+            "project_path": {"type": ["string", "null"]}, "evidence": evidence,
+            "declared_name": {"type": ["string", "null"]},
+            "description": {"type": ["string", "null"]}
+        }),
+        &[
+            "id",
+            "name",
+            "scope",
+            "source_path",
+            "project_path",
+            "evidence",
+        ],
+    );
+    object(
+        json!({
+            "inspected": {"type": "boolean"}, "mcp_servers": array(server), "skills": array(skill),
+            "more_mcp_servers": count(), "more_skills": count(), "limits": strings()
+        }),
+        &[
+            "inspected",
+            "mcp_servers",
+            "skills",
+            "more_mcp_servers",
+            "more_skills",
+            "limits",
+        ],
     )
 }
 

@@ -3,6 +3,15 @@
 Version 0.5.0 adds **Agents → Flow** in the desktop and shared browser demo.
 Version 0.4.0 downloads predate this view; use 0.5.0 or newer for native recording.
 
+Current source adds explicit MCP server aliases and Claude skill activation records to Calls,
+alongside a separate opt-in **Agents → MCP & skills** inventory. These additions are
+[Unreleased](../CHANGELOG.md#unreleased), not present in the published 0.7.1 binaries.
+Use matching current-source CLI/desktop and collector builds for these records. The new
+decoder accepts older snapshots with no MCP alias. An older 0.7.1 decoder rejects new fields
+or the skill kind, and its collector does not produce this new skill activation projection.
+The `/v1` route names remain unchanged; they do not imply forward-compatible decoding of
+unrecognized metadata. Missing activity from an older collector is not proof of no usage.
+
 ## Read the flow
 
 Start with **Connections**. Nodes represent observed agents, child processes, listeners and
@@ -26,6 +35,16 @@ input/output sizes. These sizes describe the reported serialized value or, for H
 the individual compact JSON-RPC envelope. They are not network transfer totals. Provider events
 without size fields show **Unknown**. Recorded identities are pseudonyms and do not authorize
 opening folders, stopping services or any other process action.
+
+The built-in hook/OTLP adapters derive an MCP server alias only when a Claude hook explicitly
+supplies `mcp_server.name`, or a sanitized `mcp__server__tool` label has an unambiguous split.
+Ambiguous or redacted names remain unknown. An explicit normalized integration can also report
+the optional `ActivitySpan.mcp_server` field on a tool record through `/v1/activity`; the
+collector applies the same bounded identifier sanitization and record validation. Every path
+provides source-reported metadata, not authentication of a server or a match to a configured
+alias or process. The standard MCP protocol does not require this client-specific prefix.
+A skill activation is a separate record and count, not a tool invocation or a workflow result.
+Hidden custom names show **name not reported**.
 
 Search keeps matching relationships in context. Fit, zoom and the accessible participant list
 support navigating larger graphs. The inspector stays readable in narrow windows. **Pause**
@@ -108,6 +127,53 @@ metadata without putting diagnostics into protocol stdout. Missing collector con
 recording failures leave MCP tools operational. Calls to other servers require their own
 instrumentation; this observer cannot see them.
 
+## Record skill activations (current source)
+
+Claude's documented `claude_code.skill_activated` OTLP **log** event reports activation through
+the Skill tool or a user slash command. Holdmap requires the reported session ID, event sequence
+and source timestamp to correlate it. Alongside common pseudonymous source/correlation fields,
+it retains a sanitized name and activation time, with no workflow duration or outcome.
+Custom/third-party names may be the provider's
+`custom_skill` placeholder and stay unknown; do not enable tool-detail logging to uncover them.
+That flag also exports command and argument content.
+
+The ordinary Claude setup recipe remains **trace-only** for hierarchy and execution steps.
+To choose activation/completion logs instead, start an active collector as above, set its real
+endpoint/token in `HOLDMAP_ACTIVITY_ENDPOINT` and `HOLDMAP_ACTIVITY_TOKEN`, then launch a new
+Claude process with this **alternate log-only** configuration (POSIX shell):
+
+```sh
+export CLAUDE_CODE_ENABLE_TELEMETRY=1
+export OTEL_TRACES_EXPORTER=none
+export OTEL_METRICS_EXPORTER=none
+export OTEL_LOGS_EXPORTER=otlp
+export OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/json
+export OTEL_EXPORTER_OTLP_LOGS_ENDPOINT="${HOLDMAP_ACTIVITY_ENDPOINT}/v1/logs"
+export OTEL_EXPORTER_OTLP_LOGS_HEADERS="Authorization=Bearer ${HOLDMAP_ACTIVITY_TOKEN}"
+export OTEL_METRICS_INCLUDE_SESSION_ID=true
+export OTEL_BLRP_MAX_EXPORT_BATCH_SIZE=32
+export ENABLE_BETA_TRACING_DETAILED=0
+export OTEL_LOG_USER_PROMPTS=0
+export OTEL_LOG_ASSISTANT_RESPONSES=0
+export OTEL_LOG_TOOL_DETAILS=0
+export OTEL_LOG_TOOL_CONTENT=0
+unset OTEL_LOG_RAW_API_BODIES OTEL_EXPORTER_OTLP_COMPRESSION OTEL_EXPORTER_OTLP_LOGS_COMPRESSION
+claude
+```
+
+PowerShell uses the same variable names and values through `$env:NAME = 'value'`; use
+`$env:OTEL_EXPORTER_OTLP_LOGS_ENDPOINT = "$env:HOLDMAP_ACTIVITY_ENDPOINT/v1/logs"` and
+`$env:OTEL_EXPORTER_OTLP_LOGS_HEADERS = "Authorization=Bearer $env:HOLDMAP_ACTIVITY_TOKEN"`,
+then remove the three unset variables with `Remove-Item Env:NAME -ErrorAction SilentlyContinue`.
+Keep this configuration/token private and reconfigure after every new recording session.
+Review existing user/managed telemetry settings first: if policy forces content export or a
+different destination, do not use this recipe. Older producers may not emit the activation
+event; missing or unsupported records do not establish that no skill ran.
+
+Choose this stream **instead of** Claude traces or overlapping hooks. Exporting tool logs and
+traces together can count the same call twice. This mode loses trace hierarchy and does not
+observe other MCP servers unless the producer explicitly reports them.
+
 ## Provider coverage and research
 
 The implementation uses provider wire contracts and a synthetic fixture generated by the
@@ -118,6 +184,7 @@ actual Codex OTel exporter, not private conversations or agent logs.
 | OS snapshot | Process ancestry, listeners and observed TCP peers | No tool calls, messages, encrypted payloads or stdio exchanges |
 | Codex OTLP JSON logs | Known tool result events, reported call/session IDs, result and duration | Session grouping is not a parent trace; finished events arrive in batches |
 | Claude enhanced OTLP JSON traces | Agent/model/tool wrappers, execution steps and supplied trace parents | Provider beta; spans arrive after completion, and dropped parents remain missing |
+| Claude OTLP JSON logs (current source) | Tool completions and explicit skill activation records | Log-only recipe; activation names can be redacted and activation never proves workflow success |
 | Codex/Claude hooks | Supported lifecycle events with tool-use IDs | Requested state precedes execution; no guessed causal edges |
 | Holdmap MCP observer | This server's validated catalog calls and outcomes | Does not observe other MCP servers or general agent messages |
 | Generic OTLP JSON traces | Recognized agent, model, tool and execution-step operations with supplied parents | Exporter-specific coverage; no automatic SDK installation or universal capture |
@@ -142,6 +209,15 @@ Code v2.1.212 or newer for Content-Length HTTP export; older chunked exporters a
 or managed raw-body settings must also be disabled; managed policy can override local exporter
 configuration. Review the effective destination before launching. Tool wrappers retain unknown
 outcome when the source leaves it unset; an execution child supplies its own result.
+
+The same [primary monitoring reference](https://code.claude.com/docs/en/monitoring-usage#skill-activated-event)
+defines skill activation logs and name redaction. The
+[Claude hook contract](https://code.claude.com/docs/en/hooks#pretooluse-input) documents explicit
+MCP provenance metadata and its version floor; legacy names follow its
+[MCP tool prefix convention](https://code.claude.com/docs/en/hooks#match-mcp-tools).
+[Agent Skills](https://agentskills.io/specification) defines local `SKILL.md` packaging;
+[activation](https://agentskills.io/client-implementation/adding-skills-support) is a separate
+client operation. File presence is not an activation signal or proof of successful execution.
 
 [MCP transports](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
 and [tools](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) distinguish
