@@ -114,7 +114,7 @@ See [Apple's guidance on native apps and Rosetta](https://support.apple.com/en-g
 
 <!-- release-please updates this source-version marker; download links follow published releases. -->
 <!-- x-release-please-start-version -->
-Source version: **0.7.0**.
+Source version: **0.7.1**.
 <!-- x-release-please-end -->
 
 [dmg-arm64]: https://santoshshinde2012.github.io/holdmap/#install
@@ -391,6 +391,9 @@ or `⇧V`, then select a screen or window in the system chooser. Capture lasts u
 minutes with no microphone or system audio. Stopping ends screen sharing before preparing
 the available MP4/GIF exports; format availability depends on encoding support.
 Save through the native file dialog, or the browser's download manager in the demo.
+On macOS 14 or later, the desktop app uses Apple's native picker if its window lacks
+browser screen capture. Native encoding uses private temporary files, removed after the
+exports are copied into the preview or the recording is discarded.
 Closing the preview keeps it available through **Review recording** for this session;
 **Discard recording**, reload or quitting clears it. Save a file to keep it.
 This is separate from optional agent tool-call metadata recording. See the

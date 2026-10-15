@@ -5,8 +5,10 @@ import type { CaptureResult } from "./lib/screen-record";
 
 const encoder = vi.hoisted(() => ({ start: vi.fn() }));
 const save = vi.hoisted(() => vi.fn());
+const nativeInvoke = vi.hoisted(() => vi.fn());
 vi.mock("./lib/screen-record-encode", () => ({ ScreenRecording: { start: encoder.start } }));
 vi.mock("./lib/screen-record-save", () => ({ saveRecording: save }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: nativeInvoke }));
 import App from "./App.svelte";
 
 const capture = vi.fn();
@@ -47,6 +49,8 @@ afterEach(() => {
   capture.mockReset();
   encoder.start.mockReset();
   save.mockReset();
+  nativeInvoke.mockReset();
+  delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   localStorage.clear();
   if (originalMedia) Object.defineProperty(navigator, "mediaDevices", originalMedia);
   else Reflect.deleteProperty(navigator, "mediaDevices");
@@ -54,11 +58,75 @@ afterEach(() => {
 const mount = () => render(App);
 async function choose(view: ReturnType<typeof mount>) {
   await fireEvent.click(view.getByRole("button", { name: /^Record screen$/ }));
+  await vi.dynamicImportSettled();
+  await vi.advanceTimersByTimeAsync(0);
   await fireEvent.click(view.getByRole("button", { name: "Choose screen…" }));
   await vi.dynamicImportSettled();
 }
 
 describe("screen recording lifecycle", () => {
+  it("waits for native capabilities before declaring a webview unsupported", async () => {
+    Object.assign(window, { __TAURI_INTERNALS__: {} });
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: {} });
+    const capabilities = deferred<{ available: boolean; reason: string | null }>();
+    nativeInvoke.mockReturnValue(capabilities.promise);
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(500);
+    await fireEvent.click(view.getByRole("button", { name: /^Record screen$/ }));
+    expect(view.getByRole("status").textContent).toContain("Checking screen recording support");
+    expect(view.queryByText("Screen capture unavailable")).toBeNull();
+    expect(view.queryByRole("button", { name: "Choose screen…" })).toBeNull();
+    capabilities.resolve({ available: true, reason: null });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(view.getByRole("button", { name: "Choose screen…" })).toBeTruthy();
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it("records through native fallback and retains copied files for review after closing", async () => {
+    Object.assign(window, { __TAURI_INTERNALS__: {} });
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: {} });
+    const status = { sessionId: "ui-session", phase: "capturing", elapsedMs: 1_000, width: 320, height: 180, mp4Bytes: 0, gifBytes: 3, warnings: [], error: null };
+    nativeInvoke.mockImplementation(async (command: string) => {
+      if (command === "screen_recording_capabilities") return { available: true, reason: null };
+      if (command === "start_screen_recording") return status;
+      if (command === "stop_screen_recording") return { ...status, phase: "ready" };
+      if (command === "read_screen_recording") return new ArrayBuffer(3);
+    });
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(500);
+    await choose(view);
+    await fireEvent.click(view.getByRole("button", { name: "Stop screen recording" }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(view.getByRole("dialog", { name: "Download recording" })).toBeTruthy();
+    expect(nativeInvoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "ui-session" });
+    await fireEvent.keyDown(view.getByRole("dialog", { name: "Download recording" }), { key: "Escape" });
+    await vi.advanceTimersByTimeAsync(20);
+    await fireEvent.click(view.getByRole("button", { name: "Review recording" }));
+    expect(view.getByRole("button", { name: "Download GIF" })).toBeTruthy();
+    expect(nativeInvoke.mock.calls.filter(([command]) => command === "start_screen_recording")).toHaveLength(1);
+    expect(capture).not.toHaveBeenCalled();
+    expect(encoder.start).not.toHaveBeenCalled();
+  });
+
+  it("discards a native picker acknowledgement arriving after the user cancels", async () => {
+    Object.assign(window, { __TAURI_INTERNALS__: {} });
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: {} });
+    const started = deferred<unknown>();
+    nativeInvoke.mockImplementation(async (command: string) => {
+      if (command === "screen_recording_capabilities") return { available: true, reason: null };
+      if (command === "start_screen_recording") return started.promise;
+    });
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(500);
+    await choose(view);
+    await fireEvent.click(view.getByRole("button", { name: "Cancel" }));
+    started.resolve({ sessionId: "late-ui", phase: "choosing", elapsedMs: 0, width: 0, height: 0, mp4Bytes: 0, gifBytes: 0, warnings: [], error: null });
+    await vi.advanceTimersByTimeAsync(20);
+    expect(nativeInvoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "late-ui" });
+    expect(view.queryByRole("dialog", { name: "Record screen" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Stop screen recording" })).toBeNull();
+  });
+
   it("releases a picker result that arrives after cancellation", async () => {
     const pending = deferred<MediaStream>();
     const captured = stream();

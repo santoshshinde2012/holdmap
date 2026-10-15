@@ -15,6 +15,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+serde_json.workspace = true
 
 [dependencies]
 holdmap-core.workspace = true
@@ -25,6 +26,9 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-notification = "2"
 tauri-plugin-dialog = "2"
 tempfile.workspace = true
+uuid = { version = "1", features = ["v4"] }
+libc.workspace = true
+tokio = { version = "1", features = ["sync", "time"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"

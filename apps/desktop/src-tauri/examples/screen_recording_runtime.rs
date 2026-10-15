@@ -6,6 +6,12 @@
 mod local_window;
 
 #[cfg(target_os = "macos")]
+#[path = "../src/screen_recording.rs"]
+// Expose capability discovery only; the fixture cannot start native screen capture.
+#[allow(dead_code)]
+mod screen_recording;
+
+#[cfg(target_os = "macos")]
 mod fixture {
     use serde::Deserialize;
     use sha2::{Digest, Sha256};
@@ -14,7 +20,10 @@ mod fixture {
     use std::io::{Read, Write};
     use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
     use std::path::{Path, PathBuf};
-    use std::sync::Mutex;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex,
+    };
     use tauri::ipc::InvokeBody;
     use tauri::utils::assets::{AssetKey, AssetsIter, CspHash};
     use tauri::{AppHandle, Assets, Runtime, State, WebviewWindow};
@@ -25,6 +34,8 @@ mod fixture {
         app: PathBuf,
         assets: PathBuf,
         identifier: String,
+        incognito: bool,
+        devtools: Option<bool>,
     }
 
     struct FixtureAssets(BTreeMap<AssetKey, Vec<u8>>);
@@ -75,6 +86,16 @@ mod fixture {
     struct FixtureState {
         root: PathBuf,
         files: Mutex<BTreeMap<String, serde_json::Value>>,
+        incognito: bool,
+        native_start_requests: AtomicUsize,
+    }
+
+    // The app confirmation check may discover native support, but can never
+    // open a real screen picker even if a future UI regression attempts it.
+    #[tauri::command]
+    fn start_screen_recording(state: State<'_, FixtureState>) -> Result<(), String> {
+        state.native_start_requests.fetch_add(1, Ordering::Relaxed);
+        Err("native screen capture is forbidden in the owned fixture".into())
     }
 
     fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
@@ -136,6 +157,12 @@ mod fixture {
         let result = serde_json::to_vec(&serde_json::json!({
             "browser": report,
             "native_files": *state.files.lock().unwrap(),
+            "native_start_requests": state.native_start_requests.load(Ordering::Relaxed),
+            "native_context": {
+                "is_dev": tauri::is_dev(),
+                "incognito": state.incognito,
+                "debug_assertions": cfg!(debug_assertions),
+            },
         }))
         .map_err(|error| error.to_string())?;
         if result.len() > 64 * 1024 {
@@ -195,17 +222,24 @@ mod fixture {
         context.config_mut().build.dev_url = None;
         context.config_mut().identifier = fixture.identifier;
         context.set_assets(Box::new(assets));
+        let incognito = fixture.incognito;
+        let devtools = fixture.devtools;
         tauri::Builder::default()
+            .manage(super::screen_recording::ScreenRecordingState::default())
             .manage(FixtureState {
                 root,
                 files: Mutex::new(BTreeMap::new()),
+                incognito,
+                native_start_requests: AtomicUsize::new(0),
             })
             .invoke_handler(super::local_window::guard(tauri::generate_handler![
                 save_screen_recording,
+                start_screen_recording,
+                super::screen_recording::screen_recording_capabilities,
                 finish_fixture
             ]))
-            .setup(|app| {
-                tauri::WebviewWindowBuilder::new(
+            .setup(move |app| {
+                let builder = tauri::WebviewWindowBuilder::new(
                     app,
                     "main",
                     tauri::WebviewUrl::App("index.html".into()),
@@ -213,8 +247,13 @@ mod fixture {
                 .title("Owned Holdmap synthetic recording check")
                 .inner_size(480.0, 300.0)
                 .focused(false)
-                .incognito(true)
-                .build()?;
+                .incognito(incognito);
+                let builder = if let Some(enabled) = devtools {
+                    builder.devtools(enabled)
+                } else {
+                    builder
+                };
+                builder.build()?;
                 Ok(())
             })
             .run(context)?;

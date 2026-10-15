@@ -19,6 +19,7 @@ mod local_window;
 mod power;
 mod recording_save;
 mod scheduler;
+mod screen_recording;
 mod shortcuts;
 mod state;
 mod stop_batch;
@@ -66,6 +67,7 @@ pub fn run() {
         .manage(power::PowerState::default())
         .manage(scheduler::SchedulerState::default())
         .manage(recording_save::RecordingSaveState::default())
+        .manage(screen_recording::ScreenRecordingState::default())
         .invoke_handler(local_window::guard(tauri::generate_handler![
             commands::app_info,
             commands::scan,
@@ -112,7 +114,20 @@ pub fn run() {
             scheduler::cancel_schedule,
             update::install_update,
             recording_save::save_screen_recording,
+            screen_recording::screen_recording_capabilities,
+            screen_recording::start_screen_recording,
+            screen_recording::screen_recording_status,
+            screen_recording::stop_screen_recording,
+            screen_recording::read_screen_recording,
+            screen_recording::discard_screen_recording,
         ]))
+        .on_page_load(|webview, payload| {
+            if webview.label() == "main"
+                && payload.event() == tauri::webview::PageLoadEvent::Started
+            {
+                screen_recording::cleanup_lifecycle(webview.app_handle());
+            }
+        })
         .setup(move |app| {
             let handle = app.handle().clone();
             let tray_ok = match tray::setup_tray(&handle) {
@@ -141,6 +156,9 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, WindowEvent::Destroyed) {
+                screen_recording::cleanup_lifecycle(window.app_handle());
+            }
             // With a tray, closing the window keeps holdmap running in the menu bar.
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let tray_available = window
@@ -154,6 +172,9 @@ pub fn run() {
         .build(context)
         .expect("error while building holdmap")
         .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                screen_recording::cleanup_exit(app);
+            }
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
                 // Dock clicks also restore minimized windows, which macOS counts as visible.

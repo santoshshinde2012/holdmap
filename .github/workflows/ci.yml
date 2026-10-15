@@ -266,4 +266,7 @@ jobs:
           fi
       - name: Synthetic MP4 and GIF recording in native WKWebView
         if: runner.os == 'macOS'
-        run: python3 scripts/check-screen-recording-runtime.py
+        run: |
+          python3 scripts/check-screen-recording-runtime.py
+          python3 scripts/check-screen-recording-runtime.py --app-ui
+          python3 scripts/check-native-screen-recording.py

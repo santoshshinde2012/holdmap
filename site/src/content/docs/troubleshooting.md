@@ -34,6 +34,14 @@ Download and install the current release for the same OS and architecture, then 
 The CLI installer updates the CLI, TUI and MCP server; it does not update the separate desktop app.
 No signed updater feed is included in 0.7.0.
 
+**Record screen says “Screen capture unavailable” in the macOS app.** Current source adds
+Apple's native picker when the desktop webview lacks screen sharing, requiring **macOS 14
+or later**. The 0.7.0 installer predates that fallback. Install a release containing the fix
+and reopen the desktop app; updating the CLI does not update it. On older macOS versions,
+try a browser with screen sharing or the system screen recorder. If the picker opens but
+capture is denied, check this app's Screen Recording permission in System Settings.
+See [screen recording](../desktop/#record-the-screen).
+
 **The MCP client can't start holdmap.** Use the full path in its config, see
 [MCP setup](../mcp/#set-it-up).
 

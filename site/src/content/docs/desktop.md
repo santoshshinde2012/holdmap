@@ -81,6 +81,13 @@ there and retry. Unsupported windows explain that capture is unavailable. This i
 from [Agents → Flow recording](../agents/#set-up-optional-recording), which collects optional
 tool-call metadata rather than pixels.
 
+When the macOS desktop window does not offer browser screen capture, current source uses
+Apple's native screen picker on **macOS 14 or later**. Native capture encodes MP4 and GIF in
+a private temporary folder, then removes those files after copying the exports into the
+preview or discarding the recording. The two-minute limit is enforced by the native app
+even while its window is hidden. Older macOS versions can record only when their webview
+provides screen sharing; otherwise use a supporting browser or the system screen recorder.
+
 Linux desktop capture needs PipeWire and a working ScreenCast portal for your desktop
 environment. Its system picker still asks which screen or window to share each time.
 If that service is unavailable, try a browser with screen sharing or the system recorder.

@@ -4,8 +4,11 @@
 No display picker, user-screen capture, native save chooser, user store or OS permission
 is used. The fixture-only binary IPC sink writes inside its private root; production
 save-dialog validation and persistence have separate native unit coverage.
+Use --compare-capabilities to inspect build and webview differences without capturing.
+Use --app-ui to verify the production App's screen-picker entry point without opening it.
 """
 
+import argparse
 import hashlib
 import html
 import json
@@ -16,6 +19,7 @@ import plistlib
 import shutil
 import subprocess
 import tempfile
+import time
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -32,26 +36,39 @@ const report = {
   videoEncoder: typeof VideoEncoder === "function",
   mediaRecorder: typeof MediaRecorder === "function",
   userAgent: navigator.userAgent,
+  url: location.href,
+  secureContext: globalThis.isSecureContext,
+  originalAPIs: {
+    mediaDevices: typeof navigator.mediaDevices,
+    getDisplayMedia: typeof navigator.mediaDevices?.getDisplayMedia,
+    getUserMedia: typeof navigator.mediaDevices?.getUserMedia,
+    canvasCaptureStream: typeof HTMLCanvasElement.prototype.captureStream,
+  },
   screenPickerInvoked: false,
   files: {},
   violations,
 };
 // Defense in depth: an accidental future picker call cannot capture the user's display.
-if (typeof navigator.mediaDevices?.getDisplayMedia === "function") {
-  navigator.mediaDevices.getDisplayMedia = () => {
-    report.screenPickerInvoked = true;
-    return Promise.reject(new Error("The synthetic fixture refuses real display capture."));
-  };
+for (const name of ["getDisplayMedia", "getUserMedia"]) {
+  if (typeof navigator.mediaDevices?.[name] === "function") {
+    navigator.mediaDevices[name] = () => {
+      report.screenPickerInvoked = true;
+      return Promise.reject(new Error("The synthetic fixture refuses real device capture."));
+    };
+  }
 }
 let stream;
 let session;
 let timer;
 try {
   // Load the production capture modules only after the display-picker tripwire is installed.
-  const [{ ScreenRecording }, { captureSupport }, { saveRecording }] = await Promise.all([
-    import(__ENCODER__), import(__CAPTURE__), import(__SAVE__),
-  ]);
+  const { captureSupport } = await import(__CAPTURE__);
   report.support = captureSupport();
+  report.nativeCapabilities = await invoke("screen_recording_capabilities");
+  if (!__CAPABILITIES_ONLY__) {
+  const [{ ScreenRecording }, { saveRecording }] = await Promise.all([
+    import(__ENCODER__), import(__SAVE__),
+  ]);
   const canvas = document.querySelector("canvas");
   const context = canvas.getContext("2d");
   let frame = 0;
@@ -92,6 +109,7 @@ try {
   discarded.discard();
   report.discardTracksEnded = discardStream.getTracks().every(track => track.readyState === "ended");
   report.discardVideosRemoved = document.querySelectorAll("video").length === 0;
+  }
   report.status = "passed";
 } catch (cause) {
   report.status = "failed";
@@ -119,21 +137,32 @@ def command(arguments, timeout=180, env=None):
     return result
 
 
-def run():
+def run(
+    *, custom_protocol=True, incognito=False, capabilities_only=False,
+    release_profile=False, hardened=True, devtools=None, linked_sdk=None, app_ui=False,
+):
+    capabilities_only = capabilities_only or app_ui
     if platform.system() != "Darwin":
         raise SystemExit("This owned synthetic WKWebView check requires macOS.")
-    for tool in ("cargo", "node", "ffprobe", "ffmpeg"):
+    tools = ("cargo", "node") if capabilities_only else ("cargo", "node", "ffprobe", "ffmpeg")
+    for tool in tools:
         if shutil.which(tool) is None:
             raise SystemExit(f"Missing prerequisite: {tool}")
     vite = DESKTOP / "node_modules/vite/bin/vite.js"
     if not vite.is_file():
         raise SystemExit("Run npm ci --prefix apps/desktop first.")
     metadata = json.loads(command(["cargo", "metadata", "--no-deps", "--format-version", "1"]).stdout)
-    command(["cargo", "build", "-p", "holdmap-desktop", "--example", "screen_recording_runtime", "--locked"])
-    harness = Path(metadata["target_directory"]) / "debug/examples/screen_recording_runtime"
+    build = ["cargo", "build", "-p", "holdmap-desktop", "--example", "screen_recording_runtime", "--locked"]
+    if custom_protocol:
+        build.extend(["--features", "tauri/custom-protocol"])
+    if release_profile:
+        build.append("--release")
+    command(build, timeout=600)
+    harness = Path(metadata["target_directory"]) / ("release" if release_profile else "debug") / "examples/screen_recording_runtime"
     csp = json.loads((DESKTOP / "src-tauri/tauri.conf.json").read_text())["app"]["security"]["csp"]
     assert "script-src 'self'" in csp and "worker-src 'self' blob:" in csp
     previous_umask = os.umask(0o077)
+    identifier = None
     try:
         with tempfile.TemporaryDirectory(prefix="holdmap-screen-runtime-") as temporary:
             root = Path(temporary).resolve()
@@ -141,12 +170,17 @@ def run():
             (root / "owned-fixture").write_text("holdmap synthetic screen fixture")
             frontend = root / "frontend"
             frontend.mkdir()
-            source = FRONTEND
+            source = (REPO / "scripts/screen-recording-app-fixture.mjs").read_text() if app_ui else FRONTEND
+            source = source.replace("__CAPABILITIES_ONLY__", json.dumps(capabilities_only))
             for token, filename in {
                 "__ENCODER__": DESKTOP / "src/lib/screen-record-encode.ts",
                 "__CAPTURE__": DESKTOP / "src/lib/screen-record.ts",
                 "__SAVE__": DESKTOP / "src/lib/screen-record-save.ts",
                 "__IPC__": DESKTOP / "node_modules/@tauri-apps/api/core.js",
+                "__APP__": DESKTOP / "src/App.svelte",
+                "__SVELTE__": DESKTOP / "node_modules/svelte/src/index-client.js",
+                "__APP_CSS__": DESKTOP / "src/app.css",
+                "__FONTS_CSS__": DESKTOP / "src/fonts.css",
             }.items():
                 source = source.replace(token, json.dumps(str(filename)))
             (frontend / "fixture.js").write_text(source)
@@ -160,19 +194,38 @@ def run():
             )
             assets = root / "assets"
             config = root / "vite.config.mjs"
-            config.write_text("export default " + json.dumps({
+            vite_config = {
                 "root": str(frontend),
                 "base": "/",
                 "build": {"outDir": str(assets), "emptyOutDir": True, "target": "safari15", "assetsInlineLimit": 0},
                 "worker": {"format": "es"},
-            }))
+            }
+            if app_ui:
+                vite_config["resolve"] = {"conditions": ["browser", "production"]}
+                vite_config["publicDir"] = str(DESKTOP / "public")
+                plugin = json.dumps(str(DESKTOP / "node_modules/@sveltejs/vite-plugin-svelte/src/index.js"))
+                config.write_text(f"import {{ svelte }} from {plugin};\nconst config = " + json.dumps(vite_config)
+                                  + ";\nconfig.plugins = [svelte({compilerOptions: {dev: false}})];\nexport default config;\n")
+            else:
+                config.write_text("export default " + json.dumps(vite_config))
             command(["node", vite, "build", "--config", config], timeout=60)
             app = root / "Scratch.app"
             (app / "Contents/MacOS").mkdir(parents=True)
             executable = app / "Contents/MacOS/screen_recording_runtime"
             shutil.copy2(harness, executable)
-            identifier = f"dev.holdmap.recordingfixture.{os.getpid()}"
-            (app / "Contents/Info.plist").write_bytes(plistlib.dumps({
+            if linked_sdk:
+                patched = executable.with_suffix(".sdk-probe")
+                command(["/usr/bin/xcrun", "vtool", "-set-build-version", "macos", "11.0", linked_sdk,
+                         "-replace", "-output", patched, executable], timeout=30)
+                patched.replace(executable)
+            build_version = command(["/usr/bin/xcrun", "vtool", "-show-build", executable]).stdout.decode()
+            dependencies = command(["/usr/bin/otool", "-L", executable]).stdout.decode()
+            capture_framework = [line for line in dependencies.splitlines() if "ScreenCaptureKit.framework/" in line]
+            assert len(capture_framework) == 1 and "weak" in capture_framework[0], "native fallback must preserve launch on older macOS"
+            assert "libswift_Concurrency" not in dependencies, "native fallback unexpectedly requires Swift concurrency"
+            identifier = f"dev.holdmap.recordingfixture.{os.getpid()}{time.time_ns()}"
+            app_plist = plistlib.loads((DESKTOP / "src-tauri/Info.plist").read_bytes())
+            app_plist.update({
                 "CFBundleExecutable": "screen_recording_runtime",
                 "CFBundleIdentifier": identifier,
                 "CFBundleName": "Owned Holdmap synthetic recording fixture",
@@ -181,10 +234,19 @@ def run():
                 "CFBundleShortVersionString": "1.0.0",
                 "NSHighResolutionCapable": True,
                 "LSUIElement": True,
-            }))
-            command(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", app], timeout=30)
+            })
+            (app / "Contents/Info.plist").write_bytes(plistlib.dumps(app_plist))
+            signing = ["/usr/bin/codesign", "--force", "--deep", "--sign", "-"]
+            if hardened:
+                signing.extend(["--options", "runtime", "--entitlements", DESKTOP / "src-tauri/Entitlements.plist"])
+                if linked_sdk:
+                    signing.extend(["--runtime-version", f"{linked_sdk}.0"])
+            command([*signing, app], timeout=30)
+            signature = command(["/usr/bin/codesign", "--display", "--verbose=4", app]).stderr.decode()
+            code_directory = next(line for line in signature.splitlines() if line.startswith("CodeDirectory "))
+            assert ("runtime" in code_directory) == hardened, "fixture signature did not match requested hardening"
             fixture = root / "fixture.json"
-            fixture.write_text(json.dumps({"root": str(root), "app": str(app), "assets": str(assets), "identifier": identifier}))
+            fixture.write_text(json.dumps({"root": str(root), "app": str(app), "assets": str(assets), "identifier": identifier, "incognito": incognito, "devtools": devtools}))
             environment = os.environ.copy()
             environment["HOLDMAP_HOME"] = str(root / "unused-store")
             child = subprocess.Popen(
@@ -200,13 +262,48 @@ def run():
             if child.returncode:
                 raise AssertionError((child.returncode, stdout[-4000:], stderr[-4000:]))
             result = json.loads((root / "result.json").read_text())
+            result["signature"] = {"hardened_runtime": hardened, "production_entitlements": hardened}
+            result["webview_options"] = {"devtools": devtools}
+            result["linked_build_version"] = build_version.strip()
             print(json.dumps(result, indent=2), flush=True)
             browser = result["browser"]
             assert browser["status"] == "passed", browser.get("error")
+            assert result["native_start_requests"] == 0, "fixture attempted native screen capture"
             assert not browser["screenPickerInvoked"] and not browser["violations"]
+            assert browser["secureContext"] is True, "fixture did not load a secure app context"
+            assert browser["url"].rstrip("/") == "tauri://localhost", "fixture did not load the trusted app origin"
+            assert result["native_context"] == {
+                "is_dev": not custom_protocol, "incognito": incognito,
+                "debug_assertions": not release_profile,
+            }
+            assert not (root / "unused-store").exists(), "fixture unexpectedly accessed a user store"
+            assert browser["support"]["display"] == (browser["originalAPIs"]["getDisplayMedia"] == "function"), "capture helper disagrees with the original browser API"
+            if not app_ui and int(platform.mac_ver()[0].split(".")[0]) >= 14:
+                assert browser["nativeCapabilities"]["available"] is True, "native capture fallback is missing on supported macOS"
+            if app_ui:
+                assert browser["tauri"] is True, "production App did not run in a native webview"
+                assert not browser["errors"], "production App emitted runtime errors"
+                assert browser["closedWithoutCapture"] is True
+                assert browser["fallbackClosedWithoutCapture"] is True
+                assert browser["forcedAPIs"]["getDisplayMedia"] == "undefined"
+                if int(platform.mac_ver()[0].split(".")[0]) >= 14:
+                    assert browser["nativeFallbackSkipped"] is False
+                if browser["support"]["display"] or browser["originalSupportedViaNative"]:
+                    assert browser["ui"]["chooseScreenVisible"] is True
+                    assert browser["ui"]["chooseScreenDisabled"] is False
+                    assert browser["ui"]["unavailableMessage"] is False
+                if not browser["nativeFallbackSkipped"]:
+                    assert browser["fallbackUI"]["chooseScreenVisible"] is True
+                    assert browser["fallbackUI"]["chooseScreenDisabled"] is False
+                    assert browser["fallbackUI"]["unavailableMessage"] is False
+                else:
+                    print("SKIP native fallback on macOS older than 14; unsupported explanation verified", flush=True)
+            if capabilities_only:
+                assert not result["native_files"] and not browser["files"]
+                print("PASS capability-only probe; no display/device request, canvas capture or file export", flush=True)
+                return result
             for check in ("tracksEnded", "hiddenVideosRemoved", "discardTracksEnded", "discardVideosRemoved"):
                 assert browser[check], check
-            assert not (root / "unused-store").exists(), "fixture unexpectedly accessed a user store"
             for format in ("mp4", "gif"):
                 file = root / f"holdmap-runtime.{format}"
                 payload = file.read_bytes()
@@ -235,8 +332,32 @@ def run():
                 print(f"PASS {format.upper()}: {json.dumps(probe, separators=(',', ':'))}; exact binary IPC digest; animated frames", flush=True)
             print("PASS production encoder and save adapter in WKWebView with strict CSP; stop/discard release tracks; owned fixture cleaned up")
     finally:
+        if identifier:
+            # Persistent comparison views must leave none of their uniquely named
+            # WebKit stores behind. Never reuse or remove the real app's identifier.
+            for directory in ("WebKit", "Caches", "HTTPStorages"):
+                path = Path.home() / "Library" / directory / identifier
+                if path.is_symlink():
+                    path.unlink()
+                elif path.exists():
+                    shutil.rmtree(path)
         os.umask(previous_umask)
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser(description=__doc__)
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--compare-capabilities", action="store_true", help="Probe dev/production protocol and private/persistent data stores without capturing anything")
+    modes.add_argument("--app-ui", action="store_true", help="Verify the minified production App's Choose screen gate without capturing")
+    args = parser.parse_args()
+    if args.compare_capabilities:
+        reports = [run(custom_protocol=protocol, incognito=private, capabilities_only=True,
+                       release_profile=release, hardened=hardened)
+                   for protocol, release, hardened in (
+                       (False, False, False), (True, False, False), (True, True, False),
+                       (True, False, True), (True, True, True),
+                   ) for private in (True, False)]
+        reports.append(run(capabilities_only=True, devtools=False))
+        print(json.dumps({"capability_comparison": reports}, indent=2), flush=True)
+    else:
+        run(app_ui=args.app_ui, release_profile=args.app_ui)

@@ -57,6 +57,15 @@ describe("screen record dialog", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
   });
 
+  it("shows capability discovery and the native platform's reason without a false picker", async () => {
+    const view = render(ScreenRecordDialog, { phase: "confirm", supported: false, checkingSupport: true, onstart: vi.fn(), onclose: vi.fn() });
+    expect(screen.getByRole("status").textContent).toContain("Checking screen recording support");
+    expect(screen.queryByText("Screen capture unavailable")).toBeNull();
+    await view.rerender({ phase: "confirm", supported: false, checkingSupport: false, unsupportedReason: "Native recording requires macOS 14 or newer.", onstart: vi.fn(), onclose: vi.fn() });
+    expect(screen.getByText("Native recording requires macOS 14 or newer.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Choose screen…" })).toBeNull();
+  });
+
   it("offers MP4 and GIF downloads from a finished capture", async () => {
     save.mockResolvedValue({ saved: true });
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:file");

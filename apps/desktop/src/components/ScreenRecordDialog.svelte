@@ -14,6 +14,8 @@
     busy = false,
     starting = false,
     supported = captureSupport().display,
+    checkingSupport = false,
+    unsupportedReason = null,
     onstart,
     onclose,
     ondiscard = onclose,
@@ -25,6 +27,8 @@
     busy?: boolean;
     starting?: boolean;
     supported?: boolean;
+    checkingSupport?: boolean;
+    unsupportedReason?: string | null;
     onstart: () => void;
     onclose: () => void;
     ondiscard?: () => void;
@@ -52,7 +56,8 @@
     ? "Files stay on this computer. Nothing is uploaded."
     : phase === "encoding"
       ? "Encoding MP4 and GIF from the capture. This stays on this computer."
-      : supported ? "Choose a screen or window. Microphone and system audio are not captured." : "Screen recording needs screen sharing support in this window.");
+      : checkingSupport ? "Checking screen recording support in this window."
+        : supported ? "Choose a screen or window. Microphone and system audio are not captured." : "Screen recording needs screen sharing support in this window.");
 
   async function download(file: CaptureFile, format: "mp4" | "gif") {
     if (saving) return;
@@ -72,21 +77,23 @@
 
 <Dialog {title} {description} icon="video" size="lg" dismissable={!saving} closeButton={phase !== "encoding"} {onclose} initialFocus={phase === "confirm" && supported ? "[data-primary]" : "self"}>
   {#if phase === "confirm"}
-    {#if supported}
+    {#if checkingSupport}
+      <p class="status" role="status" aria-busy="true">Checking screen recording support…</p>
+    {:else if supported}
       <Callout tone="info" title="Local only">
-        <p>Choose which display to capture in the screen picker. The recording never leaves this machine. Maximum {Math.round(MAX_DURATION_MS / 60_000)} minutes. <strong>MP4</strong> and <strong>GIF</strong> exports depend on this window's encoding support.</p>
+        <p>Choose which display to capture in the screen picker. The recording never leaves this machine. Maximum {Math.round(MAX_DURATION_MS / 60_000)} minutes. <strong>MP4</strong> and <strong>GIF</strong> exports depend on system support.</p>
         <p>Recording continues while Holdmap is hidden or minimized. Reopen Holdmap to stop it, or it stops automatically after {Math.round(MAX_DURATION_MS / 60_000)} minutes.</p>
       </Callout>
     {:else}
       <Callout tone="warn" title="Screen capture unavailable">
-        <p>This window does not offer screen sharing. Try a browser that supports it, or use your operating system's screen recorder.</p>
+        <p>{unsupportedReason || "This window does not offer screen sharing. Try a browser that supports it, or use your operating system's screen recorder."}</p>
       </Callout>
     {/if}
     {#if busy}<p class="waiting" role="status">{starting ? "Preparing recording. Cancel stops sharing and discards this request." : "Choose a screen in the picker. Cancel here to ignore this request; you may still need to dismiss the system picker."}</p>{/if}
     {#if error}<div class="gap"><Callout tone="danger" title={errorTitle}>{error}</Callout></div>{/if}
   {:else if phase === "encoding"}
     <p class="status" role="status" aria-busy="true">Encoding MP4 and GIF…</p>
-    <p class="waiting">Screen sharing has stopped. Discard removes this recording without saving files.</p>
+    <p class="waiting">Finishing capture and preparing local files. Discard removes this recording without saving files.</p>
   {:else if result}
     <div class="preview">
       {#if mp4Url}

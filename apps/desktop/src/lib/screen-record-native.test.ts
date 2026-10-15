@@ -1,0 +1,235 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NativeRecordingSession, type NativeRecordingStatus } from "./screen-record-native";
+import { MAX_DURATION_MS } from "./screen-record";
+
+const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+
+const status = (patch: Partial<NativeRecordingStatus> = {}): NativeRecordingStatus => ({
+  sessionId: "owned-session", phase: "capturing", elapsedMs: 1_500, width: 320, height: 180,
+  mp4Bytes: 4, gifBytes: 3, warnings: [], error: null, ...patch,
+});
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+const sessions: NativeRecordingSession[] = [];
+async function start(controller = new AbortController(), listener = { onTick: vi.fn(), onEnded: vi.fn() }) {
+  const session = await NativeRecordingSession.start(listener, controller.signal, vi.fn());
+  sessions.push(session);
+  return { session, controller, listener };
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  invoke.mockImplementation(async (command: string, args?: { format?: string }) => {
+    if (command === "start_screen_recording") return status();
+    if (command === "stop_screen_recording" || command === "screen_recording_status") return status({ phase: "ready" });
+    if (command === "read_screen_recording") return new ArrayBuffer(args?.format === "mp4" ? 4 : 3);
+  });
+});
+afterEach(() => {
+  for (const session of sessions.splice(0)) session.discard();
+  vi.clearAllTimers();
+  vi.useRealTimers();
+  invoke.mockReset();
+});
+
+describe("native recording session", () => {
+  it("waits for source selection before starting, then reads exports and deletes native files", async () => {
+    let polls = 0;
+    invoke.mockImplementation(async (command: string, args?: { format?: string }) => {
+      if (command === "start_screen_recording") return status({ phase: "choosing" });
+      if (command === "screen_recording_status") return status({ phase: ++polls === 1 ? "capturing" : "ready" });
+      if (command === "stop_screen_recording") return status({ phase: "finalizing" });
+      if (command === "read_screen_recording") return new ArrayBuffer(args?.format === "mp4" ? 4 : 3);
+    });
+    const preparing = vi.fn();
+    const pending = NativeRecordingSession.start({ onTick: vi.fn(), onEnded: vi.fn() }, new AbortController().signal, preparing);
+    await vi.advanceTimersByTimeAsync(249);
+    expect(preparing).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    const session = await pending;
+    sessions.push(session);
+    expect(preparing).toHaveBeenCalledOnce();
+    const stopped = session.stop();
+    await vi.advanceTimersByTimeAsync(250);
+    const result = await stopped;
+    expect(result).toMatchObject({ durationMs: 1_500, width: 320, height: 180, mp4: { bytes: 4 }, gif: { bytes: 3 } });
+    expect(result.mp4?.blob.type).toBe("video/mp4");
+    expect(result.gif?.blob.type).toBe("image/gif");
+    expect(invoke.mock.calls.at(-1)?.[0]).toBe("discard_screen_recording");
+    expect(invoke).toHaveBeenCalledWith("read_screen_recording", { sessionId: "owned-session", format: "mp4" });
+    expect(session.stop()).toBe(stopped);
+  });
+
+  it("discards an immediate start acknowledgement that arrives after cancellation", async () => {
+    const request = deferred<NativeRecordingStatus>();
+    invoke.mockImplementation((command: string) => command === "start_screen_recording" ? request.promise : Promise.resolve());
+    const controller = new AbortController();
+    const pending = NativeRecordingSession.start({ onTick() {}, onEnded() {} }, controller.signal, vi.fn());
+    const rejected = expect(pending).rejects.toThrow("cancelled");
+    controller.abort();
+    await rejected;
+    request.resolve(status({ phase: "choosing" }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(invoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "owned-session" });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("cancels a pending source picker and clears its polling timer", async () => {
+    invoke.mockImplementation(async (command: string) => command === "start_screen_recording" ? status({ phase: "choosing" }) : undefined);
+    const controller = new AbortController();
+    const pending = NativeRecordingSession.start({ onTick() {}, onEnded() {} }, controller.signal, vi.fn());
+    const rejected = expect(pending).rejects.toThrow("cancelled");
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    await rejected;
+    expect(invoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "owned-session" });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("reports a native two-minute completion once and skips a redundant stop command", async () => {
+    const { session, listener } = await start();
+    invoke.mockImplementation(async (command: string, args?: { format?: string }) => {
+      if (command === "screen_recording_status") return status({ phase: "ready", elapsedMs: MAX_DURATION_MS + 100 });
+      if (command === "read_screen_recording") return new ArrayBuffer(args?.format === "mp4" ? 4 : 3);
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(listener.onEnded).toHaveBeenCalledOnce();
+    expect(session.elapsedMs()).toBe(MAX_DURATION_MS);
+    const result = await session.stop();
+    expect(result.durationMs).toBe(MAX_DURATION_MS);
+    expect(invoke.mock.calls.some(([command]) => command === "stop_screen_recording")).toBe(false);
+  });
+
+  it("retains a successful format when the other export cannot be read", async () => {
+    const { session } = await start();
+    invoke.mockImplementation(async (command: string, args?: { format?: string }) => {
+      if (command === "stop_screen_recording") return status({ phase: "ready" });
+      if (command === "read_screen_recording") {
+        if (args?.format === "gif") throw new Error("GIF export failed");
+        return new ArrayBuffer(4);
+      }
+    });
+    expect(await session.stop()).toMatchObject({ mp4: { bytes: 4 }, gif: null, warnings: ["GIF export failed"] });
+    expect(invoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "owned-session" });
+  });
+
+  it("waits for an in-flight capture poll before Stop and ignores its stale metadata", async () => {
+    const poll = deferred<NativeRecordingStatus>();
+    const mp4 = deferred<ArrayBuffer>();
+    const { session } = await start();
+    invoke.mockImplementation((command: string, args?: { format?: string }) => {
+      if (command === "screen_recording_status") return poll.promise;
+      if (command === "stop_screen_recording") return Promise.resolve(status({ phase: "ready" }));
+      if (command === "read_screen_recording") return args?.format === "mp4" ? mp4.promise : Promise.resolve(new ArrayBuffer(3));
+      return Promise.resolve();
+    });
+    await vi.advanceTimersByTimeAsync(250);
+    const stopped = session.stop();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(invoke.mock.calls.some(([command]) => command === "stop_screen_recording")).toBe(false);
+    poll.resolve(status({ phase: "capturing", elapsedMs: 500, mp4Bytes: 0, gifBytes: 0 }));
+    await vi.advanceTimersByTimeAsync(0);
+    mp4.resolve(new ArrayBuffer(4));
+    expect(await stopped).toMatchObject({ durationMs: 1_500, mp4: { bytes: 4 }, gif: { bytes: 3 } });
+  });
+
+  it("rejects oversized and truncated exports before retaining any recording", async () => {
+    const { session } = await start();
+    invoke.mockImplementation(async (command: string) => {
+      if (command === "stop_screen_recording") return status({ phase: "ready", mp4Bytes: 128 * 1024 * 1024 + 1 });
+      if (command === "read_screen_recording") return new ArrayBuffer(2);
+    });
+    await expect(session.stop()).rejects.toThrow("complete native recording");
+    expect(invoke.mock.calls.filter(([command]) => command === "read_screen_recording")).toEqual([
+      ["read_screen_recording", { sessionId: "owned-session", format: "gif" }],
+    ]);
+    expect(invoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "owned-session" });
+  });
+
+  it("discards safely while binary export is pending and ignores its later bytes", async () => {
+    const bytes = deferred<ArrayBuffer>();
+    const { session } = await start();
+    invoke.mockImplementation((command: string) => {
+      if (command === "stop_screen_recording") return Promise.resolve(status({ phase: "ready" }));
+      if (command === "read_screen_recording") return bytes.promise;
+      return Promise.resolve();
+    });
+    const stopped = session.stop();
+    const rejected = expect(stopped).rejects.toThrow("cancelled");
+    await vi.advanceTimersByTimeAsync(0);
+    session.discard();
+    await rejected;
+    bytes.resolve(new ArrayBuffer(4));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(invoke.mock.calls.filter(([command]) => command === "discard_screen_recording")).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("surfaces native permission errors and removes the failed session", async () => {
+    invoke.mockImplementation(async (command: string) => command === "start_screen_recording"
+      ? status({ phase: "error", error: "Allow screen recording in System Settings." }) : undefined);
+    await expect(start()).rejects.toThrow("Allow screen recording");
+    expect(invoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "owned-session" });
+  });
+
+  it.each(["unsupported_os", "picker_failed", "capture_start_failed", "invalid_dimensions", "capture_setup_failed", "missing_writer", "mp4_failed", "gif_failed", "missing_directory"])("translates the native %s failure into actionable copy", async (code) => {
+    invoke.mockImplementation(async (command: string) => command === "start_screen_recording"
+      ? status({ phase: "error", error: code }) : undefined);
+    let failure: unknown;
+    try { await start(); } catch (cause) { failure = cause; }
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).not.toContain(code);
+    expect((failure as Error).message).toMatch(/[ .]/);
+    // Native GIF is derived from a successful MP4; a fatal MP4 failure cannot
+    // promise that another export survived, unlike a browser encoder failure.
+    if (code === "mp4_failed") expect((failure as Error).message).not.toContain("may still be available");
+  });
+
+  it("translates native partial-export warnings", async () => {
+    const { session } = await start();
+    invoke.mockImplementation(async (command: string) => {
+      if (command === "stop_screen_recording") return status({ phase: "ready", gifBytes: 0, warnings: ["gif_failed"] });
+      if (command === "read_screen_recording") return new ArrayBuffer(4);
+    });
+    expect((await session.stop()).warnings).toEqual(["Couldn't finish the GIF. The MP4 may still be available."]);
+  });
+
+  it("bounds an unresponsive start acknowledgement and releases its late session", async () => {
+    const request = deferred<NativeRecordingStatus>();
+    invoke.mockImplementation((command: string) => command === "start_screen_recording" ? request.promise : Promise.resolve());
+    const pending = start();
+    const rejected = expect(pending).rejects.toThrow("too long to respond");
+    await vi.advanceTimersByTimeAsync(15_000);
+    await rejected;
+    request.resolve(status());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(invoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "owned-session" });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("rejects a status from another session and releases the original session", async () => {
+    const { session, listener } = await start();
+    invoke.mockImplementation(async (command: string) => command === "screen_recording_status" ? status({ sessionId: "different" }) : undefined);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(listener.onEnded).toHaveBeenCalledOnce();
+    await expect(session.stop()).rejects.toThrow("native recording status");
+    expect(invoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "owned-session" });
+  });
+
+  it("times out finalization and still deletes native recording resources", async () => {
+    const { session } = await start();
+    invoke.mockImplementation(async (command: string) => command === "stop_screen_recording" || command === "screen_recording_status"
+      ? status({ phase: "finalizing" }) : undefined);
+    const stopped = session.stop();
+    const rejected = expect(stopped).rejects.toThrow("Preparing this recording took too long");
+    await vi.advanceTimersByTimeAsync(120_000);
+    await rejected;
+    expect(invoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "owned-session" });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
