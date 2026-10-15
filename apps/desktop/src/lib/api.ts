@@ -1,7 +1,7 @@
 import type { ActivitySnapshot, AgentFlowReport, RecordingCredentials, RecordingStatus } from "./agent-flow/model";
 import { demoActivity, demoAgentFlow, demoRecordingStatus, startDemoRecording, stopDemoRecording, clearDemoActivity } from "./activity-demo";
 import { liveJson, useLiveCollector } from "./browser-live";
-import type { ActionPlan, AgentsReport, AppInfo, Config, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Protocol, Snapshot, StopReport } from "./types";
+import type { ActionPlan, AgentsReport, AppInfo, Config, DesktopHelpDestination, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Protocol, Snapshot, StopReport } from "./types";
 import { version as pkgVersion } from "../../package.json";
 import type { ShutdownPreview } from "./power";
 import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
@@ -112,8 +112,20 @@ export async function cancelSchedule(id: string): Promise<ScheduledAction> {
 }
 
 export async function appInfo(): Promise<AppInfo> {
-  if (!isTauri) return { version: pkgVersion, platform: "browser", tray: false, shortcut: mockShortcut, config_dir: "~/.config/holdmap" };
+  if (!isTauri) return { version: pkgVersion, platform: "browser", tray: false, shortcut: mockShortcut };
   return call("app_info");
+}
+
+const desktopHelpUrls: Record<DesktopHelpDestination, string> = {
+  downloads: "https://santoshshinde2012.github.io/holdmap/#install",
+  installation: "https://santoshshinde2012.github.io/holdmap/docs/desktop/#first-open",
+};
+
+/** Explicit help actions only; native code independently restricts the destination. */
+export async function openDesktopHelp(destination: DesktopHelpDestination): Promise<void> {
+  if (destination !== "downloads" && destination !== "installation") throw new Error("Choose desktop downloads or the installation guide.");
+  if (isTauri) return call("open_desktop_help", { destination });
+  window.open(desktopHelpUrls[destination], "_blank", "noopener,noreferrer");
 }
 
 /** A snapshot no older than `maxAgeMs` (the app shares a scan that just ran; 0 forces one). */

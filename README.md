@@ -412,6 +412,11 @@ matches your operating system and architecture. **0.7.1 requires manual desktop 
 its published installers have no configured signed updater feed. Run the CLI installer again
 to update the CLI, TUI and MCP server; it does not update the separate desktop app.
 
+After installing, check **Settings → About** in the reopened app. `holdmap --version`
+checks the CLI, so it cannot confirm which desktop copy is running. Current source also
+shows the running app's location and architecture in About, with desktop download and
+installation-guide actions; see [Unreleased changes](CHANGELOG.md#unreleased).
+
 <details>
 <summary>More screenshots</summary>
 
@@ -420,6 +425,8 @@ to update the CLI, TUI and MCP server; it does not update the separate desktop a
 | ![The service graph: a Compose cluster with shop-web, shop-api, db and redis, dark theme](docs/screenshots/desktop-graph-dark.png) | ![The stop confirmation lists every step before anything is sent](docs/screenshots/desktop-stop-confirm-light.png) |
 | **Command palette** | **Settings** |
 | ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) | ![Settings: startup and the global shortcut, dark theme](docs/screenshots/desktop-settings-dark.png) |
+| **About in the browser preview, dark** | **About in the browser preview, light** |
+| ![Current-source browser About identifies the web preview and offers desktop download and installation-guide actions, dark theme](docs/screenshots/desktop-about-dark.png) | ![Current-source browser About identifies the web preview and offers desktop download and installation-guide actions, light theme](docs/screenshots/desktop-about-light.png) |
 | **TUI** | **Agents** |
 | ![The holdmap TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) | ![The agents view: coding agents and developer tools with resource use, folders, ports and access, dark theme](docs/screenshots/desktop-agents-dark.png) |
 | **Agents in light theme** | **Child tools and MCP evidence** |

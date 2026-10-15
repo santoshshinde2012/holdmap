@@ -18,11 +18,30 @@ use tauri::{AppHandle, Emitter, Manager};
 pub struct AppInfo {
     version: &'static str,
     platform: &'static str,
+    architecture: &'static str,
+    /// Whether this running build has the signed updater enabled.
+    updater: bool,
+    /// The running macOS bundle, or executable on other platforms.
+    app_path: Option<String>,
     tray: bool,
     /// Global shortcut that shows the window, when it registered.
     shortcut: Option<String>,
     /// Where config and history live.
     config_dir: String,
+}
+
+fn running_app_path() -> Option<String> {
+    let executable = std::env::current_exe().ok()?;
+    // Show the replaceable .app rather than its internal binary on macOS. Keep
+    // development builds and ordinary executables at their actual location.
+    let bundle = executable
+        .parent()
+        .filter(|path| path.file_name().is_some_and(|name| name == "MacOS"))
+        .and_then(std::path::Path::parent)
+        .filter(|path| path.file_name().is_some_and(|name| name == "Contents"))
+        .and_then(std::path::Path::parent)
+        .filter(|path| path.extension().is_some_and(|extension| extension == "app"));
+    Some(bundle.unwrap_or(&executable).display().to_string())
 }
 
 #[derive(Clone, Serialize)]
@@ -124,6 +143,9 @@ pub async fn app_info(app: AppHandle) -> Result<AppInfo, String> {
         Ok(AppInfo {
             version: env!("CARGO_PKG_VERSION"),
             platform: std::env::consts::OS,
+            architecture: std::env::consts::ARCH,
+            updater: state.updater.load(Ordering::Relaxed),
+            app_path: running_app_path(),
             tray: state.tray_ok.load(Ordering::Relaxed),
             shortcut: crate::shortcuts::registered(),
             config_dir: state.store.dir().display().to_string(),

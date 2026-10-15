@@ -94,18 +94,19 @@ export class NativeRecordingSession implements RecordingSession {
   static async start(listener: RecordingListener, signal: AbortSignal, onPreparing: () => void): Promise<NativeRecordingSession> {
     if (signal.aborted) throw cancelled();
     let abandoned = false;
+    let session: NativeRecordingSession | null = null;
     const request = nativeCall<NativeRecordingStatus>("start_screen_recording").then((value) => {
-      const status = checkedStatus(value);
+      // Own the acknowledged session before another promise turn can cancel
+      // startup. Its abort listener and bounded cleanup must cover the handoff.
+      session = new NativeRecordingSession(checkedStatus(value), listener, signal);
       if (abandoned || signal.aborted) {
-        void nativeCall("discard_screen_recording", { sessionId: status.sessionId }).catch(() => undefined);
+        session.discard();
         throw cancelled();
       }
-      return status;
+      return session;
     });
-    let session: NativeRecordingSession | null = null;
     try {
-      const status = await bounded(request, signal);
-      session = new NativeRecordingSession(status, listener, signal);
+      session = await bounded(request, signal);
       while (session.status.phase === "choosing") {
         await pause(session.controller.signal);
         await session.refresh();

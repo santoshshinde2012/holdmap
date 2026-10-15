@@ -1,7 +1,7 @@
 // Contract between the Settings panel and the app: the panel renders and validates, the app
 // persists (Tauri commands) and applies. Every setter resolves when saved or rejects with a
 // user-facing message.
-import type { Config } from "./types";
+import type { Config, DesktopHelpDestination } from "./types";
 import type { Density } from "./rows";
 
 export type Theme = "system" | "light" | "dark";
@@ -26,6 +26,9 @@ export interface SettingsModel {
   version: string;
   platform: string;
   configDir: string | null;
+  updater?: boolean | null;
+  appPath?: string | null;
+  architecture?: string | null;
   /** Whether this desktop supports shutdown, or the browser can simulate its confirmation. */
   powerAvailable: boolean;
   powerDemo: boolean;
@@ -44,6 +47,7 @@ export interface SettingsActions {
   setHistoryLimit(n: number): Promise<void>;
   clearHistory(): Promise<void>;
   copy(text: string, what: string): void;
+  openDesktopHelp?(destination: DesktopHelpDestination): Promise<void>;
   /** Opens a separate preview and acknowledgement; never shuts down immediately. */
   shutdown(): void;
   /** Opens the scheduled shutdown preview, with a future time and separate acknowledgement. */
@@ -60,6 +64,13 @@ export const SETTINGS_SECTIONS = [
   { id: "about", label: "About", icon: "info" },
 ] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["id"];
+
+/** Match release download labels while retaining the native value for diagnostics. */
+export function architectureLabel(architecture: string, platform: string): string {
+  if (architecture === "aarch64") return platform === "macos" ? "Apple silicon (ARM64)" : "ARM64 (aarch64)";
+  if (architecture === "x86_64") return platform === "macos" ? "Intel (x64)" : "x64 (x86_64)";
+  return architecture;
+}
 
 /** Human summary of the scan cadence, e.g. "every 4 s · every 10 s in the background". */
 export function cadenceText(secs: number): string {

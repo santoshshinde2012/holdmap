@@ -79,6 +79,49 @@ describe("native recording session", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it.each([
+    { phase: "choosing", handoff: 1 },
+    { phase: "choosing", handoff: 2 },
+    { phase: "capturing", handoff: 1 },
+    { phase: "capturing", handoff: 2 },
+  ] as const)("releases an acknowledged $phase session cancelled during handoff $handoff", async ({ phase, handoff }) => {
+    const request = deferred<NativeRecordingStatus>();
+    invoke.mockImplementation((command: string) => command === "start_screen_recording" ? request.promise : Promise.resolve());
+    const controller = new AbortController();
+    const added = vi.spyOn(controller.signal, "addEventListener");
+    const removed = vi.spyOn(controller.signal, "removeEventListener");
+    const listener = { onTick: vi.fn(), onEnded: vi.fn() };
+    const preparing = vi.fn();
+    let outcome: "pending" | "resolved" | "rejected" = "pending";
+    let failure: unknown;
+    const pending = NativeRecordingSession.start(listener, controller.signal, preparing).then(
+      (session) => { sessions.push(session); outcome = "resolved"; },
+      (cause) => { failure = cause; outcome = "rejected"; },
+    );
+    request.resolve(status({ phase }));
+    // Cancel after acknowledgement validation, on either side of the promise
+    // handoff to start(). No real picker or capture is involved.
+    const abortAfter = (turns: number) => queueMicrotask(() => {
+      if (turns) abortAfter(turns - 1);
+      else controller.abort();
+    });
+    abortAfter(handoff);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(outcome).toBe("rejected");
+    await pending;
+    expect(failure).toMatchObject({ name: "AbortError" });
+    expect(preparing).not.toHaveBeenCalled();
+    expect(listener.onTick).not.toHaveBeenCalled();
+    expect(listener.onEnded).not.toHaveBeenCalled();
+    expect(invoke.mock.calls.filter(([command]) => command === "discard_screen_recording")).toEqual([
+      ["discard_screen_recording", { sessionId: "owned-session" }],
+    ]);
+    for (const [event, handler] of added.mock.calls) {
+      if (event === "abort") expect(removed.mock.calls.some(([name, callback]) => name === event && callback === handler)).toBe(true);
+    }
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("cancels a pending source picker and clears its polling timer", async () => {
     invoke.mockImplementation(async (command: string) => command === "start_screen_recording" ? status({ phase: "choosing" }) : undefined);
     const controller = new AbortController();
@@ -210,6 +253,30 @@ describe("native recording session", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(invoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "owned-session" });
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("bounds cleanup when a late acknowledgement follows cancellation and discard never replies", async () => {
+    const request = deferred<NativeRecordingStatus>();
+    invoke.mockImplementation((command: string) => command === "start_screen_recording"
+      ? request.promise : new Promise(() => {}));
+    const controller = new AbortController();
+    const listener = { onTick: vi.fn(), onEnded: vi.fn() };
+    const preparing = vi.fn();
+    const pending = NativeRecordingSession.start(listener, controller.signal, preparing);
+    const rejected = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    controller.abort();
+    await rejected;
+    request.resolve(status({ phase: "choosing" }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(invoke.mock.calls.filter(([command]) => command === "discard_screen_recording")).toEqual([
+      ["discard_screen_recording", { sessionId: "owned-session" }],
+    ]);
+    expect(vi.getTimerCount()).toBe(1);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(preparing).not.toHaveBeenCalled();
+    expect(listener.onTick).not.toHaveBeenCalled();
+    expect(listener.onEnded).not.toHaveBeenCalled();
   });
 
   it("rejects a status from another session and releases the original session", async () => {

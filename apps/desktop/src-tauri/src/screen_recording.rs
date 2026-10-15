@@ -184,6 +184,10 @@ impl Operation {
         {
             return Err("The recording is busy or being discarded. Try again shortly.".into());
         }
+        // Pair with the reaper's fence before reading busy: either this check
+        // observes cleanup or cleanup observes this guard. Acquire/Release alone
+        // allows both threads to miss the other's store to a different atomic.
+        std::sync::atomic::fence(Ordering::SeqCst);
         // Cleanup may have begun while acquiring the operation.
         if session.cleaning.load(Ordering::Acquire) {
             session.busy.store(false, Ordering::Release);
@@ -357,6 +361,9 @@ fn schedule_reap<R: Runtime>(app: &AppHandle<R>, session: Arc<Session>) {
     let task = tauri::async_runtime::spawn(async move {
         let session = job_session;
         while !exiting.load(Ordering::Acquire) {
+            // cleaning was published before spawning this task. Pair with
+            // Operation::acquire so cleanup cannot miss an admitted IO guard.
+            std::sync::atomic::fence(Ordering::SeqCst);
             if !session.busy.load(Ordering::Acquire) {
                 let reply = call_native(
                     &handle,

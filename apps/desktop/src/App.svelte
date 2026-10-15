@@ -30,7 +30,7 @@
   import { createAgentReportLoader } from "./lib/agents-live";
   import { createFlowLoader } from "./lib/agent-flow/live";
   import type { AgentFlowMode, AgentFlowReport, ActivitySnapshot, RecordingStatus } from "./lib/agent-flow/model";
-  import type { AgentsReport, ActionPlan, Cluster, Config, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortDetails, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
+  import type { AgentsReport, ActionPlan, Cluster, Config, DesktopHelpDestination, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortDetails, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
   import { linksLabel, localLinkCounts, nodeForEntry, sectionsByCluster } from "./lib/graph";
   import type { Command } from "./lib/palette";
   import { GROUPS, groupOf, matches, seconds, stopTarget, title, url, canOpen, type Filters, type Group } from "./lib/format";
@@ -72,6 +72,7 @@
   const explainFailed = new Set<number>();
   let update = $state<string | null>(null);
   const installUpdate = () => api.installUpdate().catch((e) => toast("error", "Couldn't install the update", String(e)));
+  const openDesktopHelp = (destination: DesktopHelpDestination) => api.openDesktopHelp(destination).catch((e) => toast("error", "Couldn't open desktop help", String(e)));
   let freePort = $state<Explanation | null>(null);
   let checkingPort = $state<number | null>(null);
   let portCheckError = $state<string | null>(null);
@@ -186,7 +187,7 @@
   let screenCaptureEncoding: RecordingSession | null = null;
   let screenCaptureTrigger: HTMLElement | null = null;
   let hotkeyList = $state<HotkeyPreset[]>([]);
-  let info = $state<{ version: string; platform: string; tray: boolean; configDir: string | null }>({ version: "", platform: "", tray: false, configDir: null });
+  let info = $state<{ version: string; platform: string; tray: boolean; configDir: string | null; updater: boolean | null; appPath: string | null; architecture: string | null }>({ version: "", platform: "", tray: false, configDir: null, updater: null, appPath: null, architecture: null });
   let detailTab = $state<DetailTab>("overview");
   const PANE_DEFAULT = 460;
   let paneWidth = $state(Math.min(680, Math.max(340, Number(prefGet("pane")) || PANE_DEFAULT)));
@@ -579,7 +580,7 @@
   }
   const portHolder = (port: number) => { const e = snapshot?.entries.find((x) => x.port === port); return e ? `${title(e)}${e.process ? ` (PID ${e.process.pid})` : ""}` : null; };
 
-  const settingsModel = $derived<SettingsModel | null>(config ? { theme, density, singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length } : null);
+  const settingsModel = $derived<SettingsModel | null>(config ? { theme, density, singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, updater: info.updater, appPath: info.appPath, architecture: info.architecture, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length } : null);
   const settingsActions: SettingsActions = {
     setTheme: (t) => { theme = t; },
     setDensity: (d) => { density = d; },
@@ -591,6 +592,7 @@
     setHistoryLimit: async (n) => { config = await api.setPreferences({ historyLimit: n }); },
     clearHistory: async () => { await api.clearHistory(); historyItems = []; },
     copy: (t, w) => copy(t, w),
+    openDesktopHelp: api.openDesktopHelp,
     shutdown: () => openShutdown("now"),
     scheduleShutdown: () => openShutdown("schedule"),
     viewSchedules: openSchedules,
@@ -1264,6 +1266,8 @@
       { id: "agents", group: "View", icon: view === "agents" ? "list" : "bot", title: view === "agents" ? "Show the list" : "Show agents, tools and apps", shortcut: ["⇧", "A"], keywords: "ai coding agents tools apps docker claude codex cursor copilot gemini windsurf aider access folders stop", run: () => (view = view === "agents" ? "list" : "agents") },
       { id: "sort-c", group: "View", icon: "layers", title: "Group by cluster (compose, workspace, supervisor…)", run: () => (sort = "cluster") },
       { id: "settings", group: "Settings", icon: "sliders", title: "Open settings", shortcut: [mod, ","], keywords: "preferences options config interval hotkey", run: () => openSettings() },
+      { id: "about", group: "Settings", icon: "info", title: "About holdmap", subtitle: info.version ? `${info.platform === "browser" ? "Preview" : "Running"} version ${info.version}` : undefined, keywords: "version app location architecture updates upgrade installation", run: () => openSettings("about") },
+      { id: "desktop-downloads", group: "Settings", icon: "download", title: "Download desktop app", subtitle: "Open official downloads in your browser", keywords: "update upgrade latest version installer manual", run: () => void openDesktopHelp("downloads") },
       { id: "pin-new", group: "Actions", icon: "star", title: s ? `Pin :${s.port} with a label…` : "Pin a port…", shortcut: s ? ["⇧", "P"] : undefined, keywords: "favourite label watch", run: () => openPin(s) },
       { id: "remote", group: "Actions", icon: "server", title: "Inspect a remote host over SSH…", keywords: "ssh remote server machine", run: () => (showRemote = true) },
       { id: "history", group: "Actions", icon: "history", title: "Recently stopped — restart", shortcut: ["H"], keywords: "history restart undo", run: openHistory },
@@ -1363,7 +1367,7 @@
     }
     refresh();
     loadSchedules();
-    api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, tray: i.tray, configDir: i.config_dir ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; }).catch((e) => toast("error", "Couldn't load app information", String(e)));
+    api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, tray: i.tray, configDir: i.config_dir ?? null, updater: typeof i.updater === "boolean" ? i.updater : null, appPath: i.app_path ?? null, architecture: i.architecture ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; }).catch((e) => toast("error", "Couldn't load app information", String(e)));
     api.hotkeys().then((h) => (hotkeyList = h)).catch(() => {});
     void loadConfig();
     api.autostart().then((v) => (autostartOn = v)).catch(() => {});

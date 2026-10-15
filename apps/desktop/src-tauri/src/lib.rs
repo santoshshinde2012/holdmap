@@ -113,6 +113,7 @@ pub fn run() {
             scheduler::list_schedules,
             scheduler::cancel_schedule,
             update::install_update,
+            update::open_desktop_help,
             recording_save::save_screen_recording,
             screen_recording::screen_recording_capabilities,
             screen_recording::start_screen_recording,
