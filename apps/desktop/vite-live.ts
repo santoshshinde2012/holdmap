@@ -63,7 +63,7 @@ async function runCli(args: string[]): Promise<unknown> {
         /* fall through to a readable error */
       }
     }
-    if (failure.code === "ENOENT") throw new Error(`holdmap CLI not found (${bin}). Build it with cargo build -p holdmap-cli or set HOLDMAP.`);
+    if (failure.code === "ENOENT") throw new Error(`holdmap CLI not found (${bin}). Build it with cargo build -p holdmap or set HOLDMAP.`);
     const detail = (failure.stderr || failure.message || "holdmap CLI failed").trim().split("\n").at(-1) ?? "holdmap CLI failed";
     throw new Error(detail);
   }
