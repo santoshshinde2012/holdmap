@@ -65,6 +65,10 @@ screenshots use the shared browser UI with sample data.
   or stop only the services that agent started, through the normal safety policy.
 - **Three levels of agent maps.** Computer shows this machine and outside systems;
   Footprint shows agents' folders, tools, ports and hosts; Project focuses on one source tree.
+- **Capability explorer (Unreleased).** Read declared skill purposes in Explore, follow source
+  relationships in Map, or Compare exact observed definitions across agent contexts. Matching
+  process contexts group together while retaining their PIDs. The inspector separates Purpose,
+  Source, Evidence and Activity; finding a file or configuration is not proof of loading or use.
 - **Local screen recording.** Choose a screen or window, capture up to two minutes without
   audio, then preview and save the available MP4/GIF exports. Nothing is uploaded.
 - **PNG snapshots (Unreleased).** Capture the visible Holdmap view without screen-sharing
@@ -223,10 +227,18 @@ explicitly inspects supported current-account configuration and skill metadata. 
 active only in Agents; press **c** again or leave Agents to turn it off. It distinguishes
 configured definitions, skill files, running child tools
 and recorded usage; loading, trust and effective client policy stay unknown. Ordinary scans
-keep configuration inspection off. The desktop uses an Overview-style map: select an agent,
-MCP definition, skill or runtime card to open its details in the left rail. Close or press
-**Esc** to return to the map without changing the agent scope. **Filters** and **Coverage**
-open only when requested. See the [coverage, privacy and usage guide](site/src/content/docs/agents.md#mcp-and-skills).
+keep configuration inspection off.
+
+**Capability explorer (Unreleased).** The current desktop source adds **Explore**, **Map** and
+**Compare** over that inventory. Explore leads with each skill's retained, author-declared
+purpose; Map keeps observed source relationships; Compare shows exact definitions reported
+for each context. Matching process contexts group together without becoming a verified agent
+session. The inspector separates **Purpose**, **Source**, **Evidence** and **Activity**.
+The **Tools** view says **Catalog not reported** because file inspection does not enumerate
+individual MCP or built-in tools. Unknown catalogs are not zero tools, and no new client
+adapter or catalog-to-call join is introduced. Runtime candidates and separately recorded
+Calls retain their own evidence. These changes are not included in published 0.8.0 installers.
+See the [coverage, privacy and usage guide](site/src/content/docs/agents.md#mcp-and-skills).
 
 **Terminal agents in 0.5.0.** Start `holdmap` and press **Shift+Tab**
 to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its
@@ -491,11 +503,19 @@ installation-guide actions; see [0.8.0 changes](CHANGELOG.md#080---2026-10-16).
 | **Sort menu at the right edge, dark theme** | **Sort menu at the right edge, light theme** |
 | ![The Sort menu stays inside the viewport with readable grouping descriptions](docs/screenshots/desktop-sort-right-edge-dark.png) | ![The right-edge Sort menu leaves all choices visible in a compact window](docs/screenshots/desktop-sort-right-edge-light.png) |
 
-The **MCP & skills** workspace in 0.8.0 uses labelled sample definitions in these captures:
+These **current-source (Unreleased)** capability explorer captures use labelled sample definitions:
+
+| **Explore, dark theme** | **Explore, light theme** |
+| --- | --- |
+| ![Explore skill cards show declared purposes, source files and file-presence evidence in dark theme](docs/screenshots/desktop-capability-explore-dark.png) | ![Explore keeps skill purposes, scope and exact source files readable in light theme](docs/screenshots/desktop-capability-explore-light.png) |
+
+| **Compare, dark theme** | **Compare, light theme** |
+| --- | --- |
+| ![Compare distinguishes same-name definitions at different sources and labels unreported evidence](docs/screenshots/desktop-capability-compare-dark.png) | ![Light-theme comparison keeps exact paths and independent context observations visible](docs/screenshots/desktop-capability-compare-light.png) |
 
 | **MCP and skills map** | **Selected skill details** |
 | --- | --- |
-| ![Capability map connects agents to declared MCP and skill sources while runtime candidates remain separate](docs/screenshots/desktop-capabilities-dark.png) | ![Selecting a skill card reveals its source and optional declared purpose in the left inspector](docs/screenshots/desktop-skills-dark.png) |
+| ![Capability map connects observed agent contexts to declared MCP and skill sources while runtime candidates remain separate](docs/screenshots/desktop-capabilities-dark.png) | ![The selected skill's Purpose tab explains declared purpose and why file presence does not establish activation](docs/screenshots/desktop-skills-dark.png) |
 
 </details>
 

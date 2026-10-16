@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capabilityItems, runningMcpItems } from "./agent-capabilities";
+import { capabilityContextGroups, capabilityItems, runningMcpItems } from "./agent-capabilities";
 import { buildCapabilityMap, CAPABILITY_MAP_LIMITS, CAPABILITY_MAP_NODE_HEIGHT, CAPABILITY_MAP_NODE_WIDTH } from "./agent-capability-map";
 import { mockAgents } from "./mock";
 import type { Agent } from "./types";
@@ -21,6 +21,86 @@ function runtime(owner: Agent, pid: number, name = "filesystem") {
     evidence: "observed", ports: [], memory_bytes: 1, cpu_percent: 0 });
 }
 const inputFor = (agents: Agent[]) => ({ agents, items: capabilityItems(agents), running: runningMcpItems(agents) });
+
+describe("grouped capability ownership map", () => {
+  function groupedAgents(count: number): Agent[] {
+    const original = agent("root-0");
+    mcp(original, "filesystem", "/config/shared.json");
+    skill(original, "review", "/skills/review/SKILL.md");
+    return Array.from({ length: count }, (_, index) => ({ ...structuredClone(original), id: `root-${index}`, pid: 60_000 + index }));
+  }
+
+  it("draws one exact context card and source edge while retaining every original observation", () => {
+    const agents = groupedAgents(4);
+    runtime(agents[0], 90_001); runtime(agents[3], 90_004, "filesystem");
+    const groups = capabilityContextGroups(agents);
+    const graph = buildCapabilityMap({ ...inputFor(agents), contextGroups: groups });
+    const context = graph.nodes.find(node => node.kind === "agent")!;
+    expect(graph.shown).toEqual({ agents: 1, inventory: 2, running: 2 });
+    expect(context).toMatchObject({ id: groups[0].id, sub: "4 observed processes", agent: agents[0] });
+    expect(context.contextGroup?.agents.map(agent => agent.id)).toEqual(agents.map(agent => agent.id));
+    expect(graph.edges).toHaveLength(2);
+    expect(graph.edges.every(edge => edge.from === context.id && edge.ownerIds.length === 4)).toBe(true);
+    expect(graph.nodes.filter(node => node.kind === "running").map(node => node.ownerIds)).toEqual([[agents[0].id], [agents[3].id]]);
+    expect(graph.edges.every(edge => !edge.to.startsWith("running:") && !edge.from.startsWith("running:"))).toBe(true);
+    expect(graph.omitted).toEqual({ agents: 0, inventory: 0, running: 0, ownerEdges: 0 });
+  });
+
+  it("keeps singleton identity and resolves member selections even with zero filtered definitions", () => {
+    const agents = groupedAgents(3), groups = capabilityContextGroups(agents);
+    const graph = buildCapabilityMap({ ...inputFor(agents), contextGroups: groups, items: [], running: [], filtered: true,
+      selectedAgent: agents[2].id, selectedId: agents[1].id });
+    expect(graph.nodes.map(node => node.id)).toEqual([groups[0].id]);
+    expect(graph.nodes[0].emptyHint).toBe("No matching definitions");
+    const single = buildCapabilityMap({ ...inputFor([agents[0]]), contextGroups: capabilityContextGroups([agents[0]]) });
+    expect(single.nodes.find(node => node.kind === "agent")).toMatchObject({ id: agents[0].id, sub: `PID ${agents[0].pid}` });
+    expect(single.nodes.find(node => node.kind === "agent")?.contextGroup).toBeUndefined();
+    expect(single.edges.every(edge => edge.from === agents[0].id)).toBe(true);
+  });
+
+  it("revalidates changed coverage and omits supplied group members outside the current context", () => {
+    const agents = groupedAgents(3), staleGroups = capabilityContextGroups(agents);
+    agents[1].capabilities!.more_skills = 7;
+    const graph = buildCapabilityMap({ ...inputFor(agents.slice(0, 2)), contextGroups: staleGroups });
+    expect(graph.nodes.filter(node => node.kind === "agent").map(node => node.id)).toEqual([agents[0].id, agents[1].id]);
+    expect(graph.nodes.every(node => !node.ownerIds.includes(agents[2].id))).toBe(true);
+    expect(graph.edges.every(edge => edge.ownerIds.length === 1 && edge.ownerIds[0] !== agents[2].id)).toBe(true);
+    expect(graph.nodes.find(node => node.id === agents[1].id)?.emptyHint).toContain("+7 omitted");
+  });
+
+  it("stays stable across polls and never joins differing source definitions by alias", () => {
+    const agents = groupedAgents(2), other = agent("other");
+    other.name = agents[0].name;
+    mcp(other, "filesystem", "/different/source.json");
+    const all = [...agents, other], groups = capabilityContextGroups(all);
+    const original = buildCapabilityMap({ ...inputFor(all), contextGroups: groups });
+    for (const owner of all) { owner.memory_bytes += 99_000; owner.cpu_percent = 75; }
+    const refreshed = [...all].reverse();
+    const next = buildCapabilityMap({ ...inputFor(refreshed), contextGroups: capabilityContextGroups(refreshed) });
+    expect(next.signature).toBe(original.signature);
+    expect(next.positions).toEqual(original.positions);
+    expect(next.nodes.filter(node => node.kind === "mcp")).toHaveLength(2);
+    const otherDefinition = next.nodes.find(node => node.item?.sourcePath === "/different/source.json")!;
+    expect(next.edges.filter(edge => edge.to === otherDefinition.id).map(edge => edge.ownerIds)).toEqual([[other.id]]);
+  });
+
+  it("bounds context cards and counts original omitted associations while retaining selected members", () => {
+    const agents = Array.from({ length: 30 }, (_, index) => {
+      const members = groupedAgents(2);
+      return members.map((owner, member) => ({ ...owner, id: `context-${String(index).padStart(2, "0")}-${member}`, name: `Context ${String(index).padStart(2, "0")}` }));
+    }).flat();
+    const groups = capabilityContextGroups(agents);
+    const selected = agents.at(-1)!;
+    const graph = buildCapabilityMap({ ...inputFor(agents), contextGroups: groups, selectedAgent: selected.id });
+    expect(graph.total.agents).toBe(30);
+    expect(graph.shown.agents).toBe(24);
+    expect(graph.omitted.agents).toBe(6);
+    expect(graph.omitted.ownerEdges).toBe(24); // Six omitted contexts × two roots × two definitions.
+    expect(graph.nodes.some(node => node.contextGroup?.agents.some(member => member.id === selected.id))).toBe(true);
+    expect(graph.edges.every(edge => edge.ownerIds.length === 2)).toBe(true);
+    expect(graph.nodes.length).toBeLessThanOrEqual(112);
+  });
+});
 
 describe("capability ownership map", () => {
   it("shares an exact declaration and skill file once while connecting every real owner", () => {
