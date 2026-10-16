@@ -4,7 +4,7 @@ import interUrl from "../assets/fonts/inter-site.woff2?url";
 import monoUrl from "../assets/fonts/jetbrains-mono-site.woff2?url";
 import Nav from "../components/Nav.astro";
 import Footer from "../components/Footer.astro";
-import { description as siteDescription, latestUrl, repoUrl, siteUrl } from "../lib/site";
+import { description as siteDescription, latestUrl, releaseHighlightsPublished, repoUrl, siteUrl } from "../lib/site";
 import { serializeJsonLd } from "../lib/seo.mjs";
 
 interface Props {
@@ -49,7 +49,13 @@ const structuredData = {
           "See which process holds a port",
           "Map AI agents to the ports they started",
           "Explore Computer, Footprint and Project agent maps",
+          "Inspect local MCP definitions and skill files with their evidence",
           "Record a chosen screen or window locally as MP4 and GIF",
+          ...(releaseHighlightsPublished ? [
+            "Save local PNG snapshots of Holdmap, a chosen screen or window, or the active recording source",
+            "Explore declared skill purposes, map sources and compare observed capability definitions",
+            "Search a readable service graph while retaining observed neighbors",
+          ] : []),
           "Stop a port after a reviewed plan",
           "CLI, TUI, desktop app and MCP server",
         ],

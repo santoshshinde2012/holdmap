@@ -38,12 +38,30 @@ published release stays the download target while a newer source version is asse
 Local builds can set `HOLDMAP_SITE_OFFLINE=1` for a deterministic `version.txt` fallback;
 combining offline and required-release modes fails. `npm run test:release` checks this policy.
 
+To review the actual publication state, build with the same release requirement as Pages:
+
+```sh
+env -u HOLDMAP_SITE_OFFLINE HOLDMAP_SITE_REQUIRE_RELEASE=1 npm run build
+npm test
+npm run test:demo
+node scripts/capture-screenshots.mjs
+```
+
+This resolves published downloads independently of the checked-out source. During 0.9.0
+preparation it shows published 0.8.0 downloads, pending 0.9.0 highlights, preview wording in
+metadata and the published feature set in structured data. Offline builds instead use the
+source version for downloads and availability, including metadata and feature declarations.
+That preview can show the 0.9.0 published presentation before its installers exist; use the
+required-release build for publication-state evidence and public-site captures.
+
 `npm test` checks the release policy, built links, asset budgets and SEO. `npm run check:seo` checks the static
 HTML without executing page scripts: unique metadata, canonical/social URLs, real social
 image dimensions, page and breadcrumb schemas, sitemap coverage, noindex exclusions and a
 hostile-text JSON-LD regression. It reuses the desktop's locked DOM-parser dependency.
 The existing Pages workflow runs `npm test` on pull requests; publishing follows its deployment
-policy. Building a pull request does not publish it.
+policy. Building a pull request does not publish it. Only `main` pushes and authorized
+`main`-context workflow dispatches can deploy; the release dispatch separately validates
+its published `source_tag`. Updating a release PR leaves the public site in place until merge.
 
 ## Release information
 
@@ -55,14 +73,19 @@ Download labels and commands resolve the published stable release independently 
 Website-only edits published after a release deploy through the normal `main` push workflow,
 and `build-info.json` records their actual source commit. Dispatching with `source_tag` instead
 builds that release tag's website source and intentionally excludes later website edits.
+Pages writes `build-info.json` after the build; a local `npm run build` does not generate
+deployment identity or publish files.
 
 ## Website snapshots
 
-These captures show the current website build at 1440×900, with a 390×900 mobile guide
-view. The homepage's sample-data recording is paused on its first frame; no machine is scanned.
+These captures show a production-mode website build at 1440×900, with a 390×900 mobile guide
+view. Release highlights use 1440×1100 desktop and 390×1800 mobile captures so all three cards
+and the publication note fit in one image. The release examples show 0.9.0 preparation with published
+0.8.0 downloads. The homepage's sample-data recording is paused on its first frame; no machine is scanned.
 After building the site, refresh them with `node scripts/capture-screenshots.mjs` from `site/`.
 The script manages its own preview server and Chromium, waits for content and fonts, and checks
 themes, page errors, overflow and a 600 KB budget for each PNG.
+Focused release captures also assert that the whole highlights section fits in the viewport.
 
 Homepage, dark:
 
@@ -71,6 +94,18 @@ Homepage, dark:
 Homepage, light:
 
 ![Holdmap homepage in light theme](../docs/screenshots/site-home-light.png)
+
+Release highlights and publication status, dark:
+
+![Release highlights show PNG snapshots, the readable graph and capability explorer with pending installer status](../docs/screenshots/site-release-dark.png)
+
+Release highlights and publication status, light:
+
+![Light-theme release highlights keep the pending 0.9.0 status separate from published 0.8.0 downloads](../docs/screenshots/site-release-light.png)
+
+Mobile release highlights, light:
+
+![The full release highlights section at 390 pixels wide, including all three feature cards and the publication note](../docs/screenshots/site-release-mobile-light.png)
 
 Guide and breadcrumb navigation, dark:
 
@@ -83,6 +118,14 @@ Guide and breadcrumb navigation, light:
 Mobile guide and breadcrumb navigation, light:
 
 ![Agents guide on mobile in light theme](../docs/screenshots/site-guide-mobile-light.png)
+
+Guide image layout, light:
+
+![Guide prose and an embedded terminal screenshot fit their desktop content column](../docs/screenshots/site-guide-images-light.png)
+
+Guide image layout on mobile, light:
+
+![Guide screenshot and prose stay within the narrow mobile content column](../docs/screenshots/site-guide-images-mobile-light.png)
 
 Implementation references: [Google titles](https://developers.google.com/search/docs/appearance/title-link),
 [descriptions](https://developers.google.com/search/docs/appearance/snippet),
