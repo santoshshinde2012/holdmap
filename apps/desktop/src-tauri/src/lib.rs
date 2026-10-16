@@ -264,8 +264,8 @@ mod security_tests {
             csp.split(';')
                 .map(str::trim)
                 .find(|d| d.starts_with("connect-src")),
-            Some("connect-src ipc: http://ipc.localhost"),
-            "webview network connections must remain limited to native IPC"
+            Some("connect-src 'self' ipc: http://ipc.localhost"),
+            "webview connections must remain limited to bundled app assets and native IPC"
         );
         assert!(!csp
             .split(';')
