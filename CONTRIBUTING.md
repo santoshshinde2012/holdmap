@@ -100,6 +100,10 @@ cargo deny --all-features check
 (cd site && npm audit)
 ```
 
+The macOS `--app-ui` capture fixture briefly brings its own scratch window to the foreground
+to exercise real dialog dismissal and PNG saving. It never opens the system display picker
+or captures your screen.
+
 `cargo test` also checks the docs: `docs/cli.md` must match the clap definitions, the README must
 mention every command and only real flags, Markdown links and images must resolve, and every
 screenshot must be used. After changing a command or flag, regenerate the reference with

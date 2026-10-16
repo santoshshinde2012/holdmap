@@ -44,7 +44,7 @@ mod fixture {
     use tauri::ipc::InvokeBody;
     use tauri::utils::assets::{AssetKey, AssetsIter, CspHash};
     use tauri::utils::config::BackgroundThrottlingPolicy;
-    use tauri::{AppHandle, Assets, Runtime, State, WebviewWindow};
+    use tauri::{AppHandle, Assets, Manager, Runtime, State, WebviewWindow};
 
     #[derive(Deserialize)]
     struct Fixture {
@@ -109,6 +109,29 @@ mod fixture {
         incognito: bool,
         background_throttling: Option<BackgroundThrottlingPolicy>,
         native_start_requests: AtomicUsize,
+        app_ui: bool,
+        ui_focus_requests: AtomicUsize,
+    }
+
+    // UI interaction needs the same visible/key window a user would operate.
+    // This only activates the owned scratch window, never another installed app.
+    #[tauri::command]
+    fn focus_fixture_ui(
+        window: WebviewWindow,
+        state: State<'_, FixtureState>,
+    ) -> Result<(), String> {
+        super::local_window::authorize(&window, "Fixture UI activation")?;
+        if !state.app_ui {
+            return Err("only the owned App UI fixture may request focus".into());
+        }
+        state.ui_focus_requests.fetch_add(1, Ordering::Relaxed);
+        window
+            .app_handle()
+            .show()
+            .map_err(|error| error.to_string())?;
+        window.show().map_err(|error| error.to_string())?;
+        window.unminimize().map_err(|error| error.to_string())?;
+        window.set_focus().map_err(|error| error.to_string())
     }
 
     // The app confirmation check may discover native support, but can never
@@ -210,6 +233,7 @@ mod fixture {
             "browser": report,
             "native_files": *state.files.lock().unwrap(),
             "native_start_requests": state.native_start_requests.load(Ordering::Relaxed),
+            "ui_focus_requests": state.ui_focus_requests.load(Ordering::Relaxed),
             "native_context": {
                 "is_dev": tauri::is_dev(),
                 "incognito": state.incognito,
@@ -291,11 +315,14 @@ mod fixture {
                 incognito,
                 background_throttling: background_throttling.clone(),
                 native_start_requests: AtomicUsize::new(0),
+                app_ui,
+                ui_focus_requests: AtomicUsize::new(0),
             })
             .invoke_handler(super::local_window::guard(tauri::generate_handler![
                 save_screen_recording,
                 start_screen_recording,
                 start_screen_snapshot,
+                focus_fixture_ui,
                 super::screen_recording::screen_recording_capabilities,
                 finish_fixture
             ]))
@@ -310,7 +337,7 @@ mod fixture {
                     if app_ui { 960.0 } else { 480.0 },
                     if app_ui { 640.0 } else { 300.0 },
                 )
-                .focused(false)
+                .focused(app_ui)
                 .incognito(incognito);
                 let builder = if let Some(enabled) = devtools {
                     builder.devtools(enabled)

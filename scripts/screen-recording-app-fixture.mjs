@@ -17,6 +17,7 @@ const report = {
   violations,
   errors,
   screenPickerInvoked: false,
+  foregroundChecks: [],
   userAgent: navigator.userAgent,
   url: location.href,
   secureContext: globalThis.isSecureContext,
@@ -64,6 +65,13 @@ const waitFor = async (read, description, timeout = 8_000) => {
   }
   throw new Error(`Timed out waiting for ${description}`);
 };
+const foreground = async (stage) => {
+  // Invoke after mount, when the native app is running. Activation in setup alone
+  // can precede application launch and leave WK animations background-suspended.
+  await invoke("focus_fixture_ui");
+  await waitFor(() => document.visibilityState === "visible" && document.hasFocus(), `${stage} foreground fixture window`);
+  report.foregroundChecks.push({ stage, visibility: document.visibilityState, focused: document.hasFocus() });
+};
 const entryReady = async (dialog) => {
   await waitFor(() => [...dialog.querySelectorAll("button")].some((button) => button.textContent.includes("Choose screen"))
     || dialog.textContent.includes("Screen capture unavailable"), "recording capability discovery");
@@ -93,6 +101,7 @@ try {
   report.support = captureSupport();
   app = mount(App, { target });
   await tick();
+  await foreground("original recorder");
   const trigger = await waitFor(() => document.querySelector('button[aria-label="Record screen"]'), "recording trigger");
   report.triggerDisabled = trigger.disabled;
   trigger.click();
@@ -122,6 +131,7 @@ try {
   report.forcedAPIs = { getDisplayMedia: typeof navigator.mediaDevices.getDisplayMedia };
   app = mount(App, { target });
   await tick();
+  await foreground("native fallback");
   const fallbackTrigger = await waitFor(() => document.querySelector('button[aria-label="Record screen"]'), "fallback recording trigger");
   fallbackTrigger.click();
   const fallbackDialog = await waitFor(() => [...document.querySelectorAll('[role="dialog"]')].find((element) => element.textContent.includes("Record screen")), "fallback recording dialog");
@@ -137,6 +147,7 @@ try {
   // Capture this owned App, including its bundled fonts and icon, through the real UI.
   // Native source-start commands remain tripwires and getDisplayMedia is absent.
   report.snapshotStage = "prepare owned App";
+  await foreground("App snapshot");
   const captureRoot = document.getElementById("holdmap-capture-root");
   if (!captureRoot) throw new Error("The production App did not expose its capture viewport");
   await document.fonts.ready;
@@ -187,6 +198,7 @@ try {
   report.error = `${String(cause?.message || cause)}\n${String(cause?.stack || "")}`.slice(0, 4_000);
   report.activeDialog = [...document.querySelectorAll('[role="dialog"]')].map((element) => element.textContent.replace(/\s+/g, " ").trim()).join("\n").slice(0, 4_000);
   report.viewport = { width: innerWidth, height: innerHeight };
+  report.foregroundAtFailure = { visibility: document.visibilityState, focused: document.hasFocus() };
 } finally {
   if (app && unmount) await unmount(app);
   URL.createObjectURL = originalObjectURL;

@@ -6,6 +6,7 @@ is used. The fixture-only binary IPC sink writes inside its private root; produc
 save-dialog validation and persistence have separate native unit coverage.
 Use --compare-capabilities to inspect build and webview differences without capturing.
 Use --app-ui to verify recorder gates and export only the owned App through its PNG UI.
+App UI mode brings only its owned scratch window to the foreground before interacting.
 """
 
 import argparse
@@ -303,6 +304,7 @@ def run(
                     print(f"Owned App PNG diagnostic (private): {diagnostic.name}", flush=True)
             assert browser["status"] == "passed", browser.get("error")
             assert result["native_start_requests"] == 0, "fixture attempted native screen capture"
+            assert result["ui_focus_requests"] == (3 if app_ui else 0), "only the App UI mode should activate its owned window"
             assert not browser["screenPickerInvoked"] and not browser["violations"]
             assert browser["secureContext"] is True, "fixture did not load a secure app context"
             assert browser["url"].rstrip("/") == "tauri://localhost", "fixture did not load the trusted app origin"
@@ -317,6 +319,8 @@ def run(
                 assert browser["nativeCapabilities"]["available"] is True, "native capture fallback is missing on supported macOS"
             if app_ui:
                 assert browser["tauri"] is True, "production App did not run in a native webview"
+                assert len(browser["foregroundChecks"]) == 3
+                assert all(check["visibility"] == "visible" and check["focused"] for check in browser["foregroundChecks"]), "App UI interactions did not run in a foreground window"
                 assert not browser["errors"], "production App emitted runtime errors"
                 assert browser["closedWithoutCapture"] is True
                 assert browser["fallbackClosedWithoutCapture"] is True
