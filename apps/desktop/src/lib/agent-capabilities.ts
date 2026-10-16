@@ -9,8 +9,78 @@ export type CapabilityItem = {
 };
 export type RunningMcpItem = { id: string; kind: "running"; name: string; owners: Agent[]; tool: AgentTool };
 export type CapabilitySelection = CapabilityItem | RunningMcpItem;
+/** Matching observations, not an agent session or a claim about effective loading. */
+export type CapabilityContextGroup = {
+  id: string; agents: Agent[]; representative: Agent; name: string; projectPaths: string[];
+};
 export const scopeLabel: Record<CapabilityScope, string> = { user: "User", project: "Project", local: "Local project" };
 export const pathName = (path: string): string => path.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || path;
+
+const compareText = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
+const sortedUnique = (values: string[]): string[] => [...new Set(values)].sort(compareText);
+
+function definitionId(kind: "mcp" | "skill", definition: AgentMcpServer | AgentSkill): string {
+  const metadata = kind === "mcp"
+    ? [(definition as AgentMcpServer).transport, (definition as AgentMcpServer).enabled ?? null]
+    : [(definition as AgentSkill).declared_name ?? null, (definition as AgentSkill).description ?? null];
+  return `${kind}:${JSON.stringify([definition.source_path, definition.scope, definition.project_path, definition.name, definition.evidence, ...metadata])}`;
+}
+
+function contextKey(agent: Agent): string {
+  const inventory = agent.capabilities;
+  // Recent folders are history, not evidence of this process's current context.
+  const folders = sortedUnique(agent.folders.filter(folder => folder.source !== "recent").map(folder =>
+    JSON.stringify([folder.path, folder.project?.root ?? null, folder.source, folder.evidence, folder.privacy_area, folder.note])));
+  return JSON.stringify([
+    agent.product, agent.vendor, agent.kind, agent.name,
+    [agent.access.uid, agent.access.user, agent.access.root, agent.access.mine],
+    folders, agent.more_folders, agent.more_tools,
+    inventory ? [inventory.inspected,
+      sortedUnique(inventory.mcp_servers.map(definition => definitionId("mcp", definition))),
+      sortedUnique(inventory.skills.map(definition => definitionId("skill", definition))),
+      sortedUnique(inventory.limits), inventory.more_mcp_servers, inventory.more_skills] : null,
+  ]);
+}
+
+/** Compact DOM identity only; grouping equality always uses the complete canonical key. */
+function contextFingerprint(key: string): string {
+  let first = 0x811c9dc5, second = 0x9e3779b9;
+  for (let index = 0; index < key.length; index++) {
+    const code = key.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ code, 0x85ebca6b);
+  }
+  return `${(first >>> 0).toString(16).padStart(8, "0")}${(second >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+/** Exact source/coverage grouping. Runtime observations stay on the original member agents. */
+export function capabilityContextGroups(agents: readonly Agent[]): CapabilityContextGroup[] {
+  const byContext = new Map<string, Map<string, Agent>>();
+  for (const agent of agents) {
+    const key = contextKey(agent);
+    const members = byContext.get(key) ?? new Map<string, Agent>();
+    members.set(agent.id, agent);
+    byContext.set(key, members);
+  }
+  const fingerprints = new Map<string, string[]>();
+  for (const key of byContext.keys()) {
+    const fingerprint = contextFingerprint(key);
+    const keys = fingerprints.get(fingerprint) ?? [];
+    keys.push(key); fingerprints.set(fingerprint, keys);
+  }
+  for (const keys of fingerprints.values()) keys.sort(compareText);
+  return [...byContext].map(([key, members]) => {
+    const sorted = [...members.values()].sort((a, b) => compareText(a.id, b.id));
+    const representative = sorted[0];
+    const fingerprint = contextFingerprint(key), collisions = fingerprints.get(fingerprint)!;
+    const id = `capability-context:${fingerprint}${collisions.length > 1 ? `:${collisions.indexOf(key)}` : ""}`;
+    const projectPaths = sortedUnique(representative.folders
+      .filter(folder => folder.source !== "recent" && folder.evidence === "observed")
+      .map(folder => folder.project?.root ?? folder.path));
+    return { id, agents: sorted, representative, name: representative.name, projectPaths };
+  }).sort((a, b) => compareText(a.name.toLowerCase(), b.name.toLowerCase())
+    || compareText(a.name, b.name) || compareText(a.projectPaths.join("\0"), b.projectPaths.join("\0")) || compareText(a.id, b.id));
+}
 
 /** Aliases repeat across sources; expose the same context to assistive technology. */
 export function capabilityLabel(item: CapabilityItem): string {
@@ -26,10 +96,7 @@ export function capabilityItems(agents: Agent[]): CapabilityItem[] {
     for (const kind of ["mcp", "skill"] as const) {
       const definitions = kind === "mcp" ? agent.capabilities.mcp_servers : agent.capabilities.skills;
       for (const definition of definitions) {
-        const metadata = kind === "mcp"
-          ? [(definition as AgentMcpServer).transport, (definition as AgentMcpServer).enabled ?? null]
-          : [(definition as AgentSkill).declared_name ?? null, (definition as AgentSkill).description ?? null];
-        const id = `${kind}:${JSON.stringify([definition.source_path, definition.scope, definition.project_path, definition.name, definition.evidence, ...metadata])}`;
+        const id = definitionId(kind, definition);
         const existing = rows.get(id);
         if (existing) { if (!existing.owners.some((owner) => owner.id === agent.id)) existing.owners.push(agent); }
         else rows.set(id, { id, kind, name: kind === "skill" ? (definition as AgentSkill).declared_name || definition.name : definition.name, scope: definition.scope, sourcePath: definition.source_path, projectPath: definition.project_path, definition, owners: [agent] });
@@ -61,7 +128,7 @@ export function capabilityMatches(item: CapabilitySelection, query: string): boo
   const identity = item.owners.flatMap((owner) => [owner.id, owner.name, owner.product, `pid:${owner.pid}`, String(owner.pid)]);
   const metadata = item.kind === "running"
     ? ["running MCP process", String(item.tool.pid), `pid:${item.tool.pid}`, item.tool.cwd ?? "", ...item.tool.ports.map((port) => `port:${port} :${port}`)]
-    : [item.kind === "mcp" ? "MCP server configured" : "skill available", item.scope, scopeLabel[item.scope], item.sourcePath, item.projectPath ?? "", enabledLabel(item), item.kind === "mcp" ? (item.definition as AgentMcpServer).transport : ["SKILL.md", item.definition.name, (item.definition as AgentSkill).description ?? ""].join(" ")];
+    : [item.kind === "mcp" ? "MCP server configured" : "skill file found observed", item.scope, scopeLabel[item.scope], item.sourcePath, item.projectPath ?? "", enabledLabel(item), item.kind === "mcp" ? (item.definition as AgentMcpServer).transport : ["SKILL.md", item.definition.name, (item.definition as AgentSkill).description ?? ""].join(" ")];
   const text = [item.name, ...identity, ...metadata].join(" ").toLocaleLowerCase();
   const pids = new Set(item.owners.map((owner) => owner.pid));
   if (item.kind === "running") pids.add(item.tool.pid);

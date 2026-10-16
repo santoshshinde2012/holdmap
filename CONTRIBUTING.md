@@ -116,6 +116,14 @@ lockfile stay untouched, including when a check fails.
 Website checks reject unresolved Markdown image placeholders and missing image sources or
 alt attributes; decorative images may use `alt=""`. Public browser checks load guide screenshots
 at desktop and mobile widths, as well as exercising the app demo.
+The capability workspace loads only after explicit MCP & skills navigation. Keep its renderer
+separate from Agents Overview: the site manifest check enforces that boundary and a 20 KiB gzip
+budget for its unique JavaScript; shared dependencies retain their existing budgets. Capability
+changes should exercise exact-source grouping, missing coverage, refresh/selection recovery and
+same-name definitions with different scope or project context. Presence, declared enablement,
+runtime candidates and recorded calls remain separate evidence; never join them by name.
+Refresh the capability screenshots with the existing capture script's private sample-data build,
+and keep current-source features marked Unreleased until an installer includes them.
 Keyboard changes must preserve input-method composition, native control keys and disabled
 single-key shortcuts. Calls diagnosis operates on metadata projections and retains only reported
 parent context; unknown outcomes and missing completion are distinct. Terminal paste tests must

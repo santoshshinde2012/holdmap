@@ -10,6 +10,13 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- A purpose-led MCP & skills explorer with **Explore**, **Map** and **Compare** views over
+  the existing opt-in inventory. Matching observed process contexts group without losing
+  their original identities; comparisons keep exact source definitions and coverage limits.
+- Capability inspector sections for **Purpose**, **Source**, **Evidence** and **Activity**,
+  with explicit unknowns for loading, approval and use. **Tools** shows **Catalog not reported**;
+  configuration inspection does not enumerate tools or establish an empty catalog. Supported
+  client coverage is unchanged; no client catalog adapter or inventory-to-call join is added.
 - Local PNG snapshots from the camera button or `⇧S`: choose the visible Holdmap view
   without screen-sharing permission, or a screen/window through its system picker.
   During video recording, snapshot the existing source without another picker or stopping it.
@@ -22,6 +29,7 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Changed
 
+- Load the capability explorer on demand, with loading and retry states when it is opened.
 - Use the video icon for screen recording and the camera icon for PNG snapshots.
 - Give the service graph the full canvas until a service is selected. Details open beside
   the graph when space allows, or in a dismissible drawer, without changing List preferences.

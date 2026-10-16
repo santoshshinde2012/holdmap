@@ -1,6 +1,6 @@
 ---
 title: Agents, tools and apps
-description: Use holdmap to inspect AI coding agents, map their MCP definitions and skill files, and review the services they started before stopping them.
+description: Use holdmap to inspect AI agents, explore declared skill purposes and MCP sources, compare observed definitions, and review services before stopping them.
 order: 2
 ---
 
@@ -101,12 +101,17 @@ is `holdmap agents --capabilities`, optionally with `--json`; the terminal Agent
 **c**; MCP clients can call `list_agents` with `include_capabilities: true`. Ordinary scans do
 not inspect those files.
 
+The **current source (Unreleased)** adds an **Explore / Map / Compare** capability explorer
+and an inspector with **Purpose**, **Source**, **Evidence** and **Activity** sections. Published
+0.8.0 installers have the earlier map and source details. The explorer uses the same opt-in
+inventory: it does not add supported discovery locations, client adapters or tool catalogs.
+
 ### Four kinds of evidence
 
 | Evidence | Where to look | What it establishes | What stays unknown |
 | --- | --- | --- | --- |
 | **Configured MCP server** | MCP & skills | A server alias was found in a supported config file, with declared transport, scope, source path and any explicit enabled flag. | Whether this running client loaded it, approved it, connected to it or called a tool. |
-| **Skill file** | MCP & skills | A `SKILL.md` file exists in a supported skill directory. Its folder is the identity; optional declared name and purpose describe the file. | Whether the skill is valid, trusted, enabled, offered to the model or activated. |
+| **Skill file** | MCP & skills | A `SKILL.md` file exists in a supported skill directory. Its source, scope, project relationship and folder name preserve the observed identity; optional declared name and purpose describe the file. | Whether the skill is valid, trusted, enabled, offered to the model or activated. |
 | **Running child tool** | Overview / Connections | The OS observed a process and its parent. A known executable signature can suggest an MCP server. | Its configured alias, negotiated transport and individual calls. |
 | **Recorded usage** | Flow → Calls | A configured integration explicitly reported a tool event, MCP alias or Claude skill activation. | Uninstrumented usage, authenticated process ownership and completion of an activated skill. |
 
@@ -114,52 +119,88 @@ Nothing is launched, connected, installed or enabled by inventory inspection. Ca
 an alias or skill name to an inventory row or process automatically. Matching names across two
 sources are insufficient evidence of ownership or use.
 
-These browser captures use labelled sample definitions and process observations:
+These **current-source (Unreleased)** browser captures use labelled sample definitions and
+process observations:
+
+| Explore declared purposes | Compare exact source observations |
+| --- | --- |
+| ![Explore skill cards show declared purposes, file-presence evidence, scope and exact source paths](../../../../docs/screenshots/desktop-capability-explore-dark.png) | ![Compare keeps two filesystem aliases at different source paths separate and labels missing observations Not reported here](../../../../docs/screenshots/desktop-capability-compare-dark.png) |
 
 | MCP and skills map | Selected skill details |
 | --- | --- |
-| ![Capability map places declared MCP sources left of agents and skill sources to the right, with runtime candidates separate below](../../../../docs/screenshots/desktop-capabilities-dark.png) | ![Selecting a skill card reveals folder identity, optional declared purpose and source in the left inspector](../../../../docs/screenshots/desktop-skills-dark.png) |
+| ![Capability map places declared MCP sources left of observed agent contexts and skill sources to the right, with runtime candidates separate below](../../../../docs/screenshots/desktop-capabilities-dark.png) | ![The selected skill's Purpose tab explains declared purpose and why file presence does not establish activation](../../../../docs/screenshots/desktop-skills-dark.png) |
 
 | Light theme | Narrow window |
 | --- | --- |
 | ![The light-theme capability map preserves declared-source relationships and separates runtime observations](../../../../docs/screenshots/desktop-capabilities-light.png) | ![A narrow capability map opens selected details in a dismissible inspector](../../../../docs/screenshots/desktop-capabilities-narrow-light.png) |
 
-### Inspect supported definitions
+<a id="inspect-supported-definitions"></a>
 
-Open **MCP & skills** for a map with the same visual style as Overview. The left rail starts
-with **All agents** and the running agents. Configured MCP definitions sit to the left of the
-agents; skill files sit to the right. Lines associate an agent's inspected source layout with
-a definition. They do not mean the agent loaded, trusted, connected to or used it. Running MCP
-candidates occupy a separate lane below the agents, with no inferred links to definitions.
+### Explore, map and compare definitions
 
-Select an agent card to focus its map and open agent details. Select an MCP, skill or runtime
-card to replace the left rail with that item's inspector. Nothing is selected automatically,
-and there is no empty details column. **Agents**, the close button or **Esc** returns to the
-agent rail and restores focus, while retaining the selected agent scope; **Show all** returns
-to the combined map. Keyboard users can focus a map card and press **Enter** or **Space**.
-On narrow windows, **Browse agents** opens a dismissible agent drawer. Nonmodal drawers
-and disclosures close when keyboard focus leaves or an outside pointer interaction occurs,
-revealing the newly focused control without returning focus to an old opener. Fit, zoom and the minimap
-help explore larger maps. A bounded map reports omitted definitions and relationships.
-The narrow canvas opens at a readable zoom around an agent; pan the map or choose **Fit all
-capabilities in view** to see the wider layout.
+These views are in the **current source (Unreleased)**:
 
-Use **All**, **MCP servers**, **Skills** or **Running** to choose the evidence on the map.
-**Filters** reveals scope and MCP configuration state. Running candidates have independent
-evidence: definition scope and enablement do not filter them, and **Running** resets/disables
-those selectors. Search matches names, retained purposes, source paths and reported PIDs.
-Filtering or a refresh that removes the inspected item closes its details rather than choosing
-another item. An unchanged definition stays selected across refreshes.
+- **Explore:** read skill cards by name and declared purpose, with source scope and evidence
+  visible. A missing or rejected description stays **Purpose not reported**. An MCP alias
+  does not supply a server description or a list of tools.
+- **Map:** follow relationships between observed agent contexts and their inspected definitions.
+  MCP definitions and skill files remain separate from running MCP candidates. A source edge
+  means a definition was observed in that context's source layout; it does not mean it was
+  loaded, trusted, connected to or used.
+- **Compare:** compare exact observed definitions across contexts. Definitions with the same
+  name but different source paths, scopes or project relationships remain separate. An item
+  reported for one context is not proof that it is absent from another, especially when that
+  context was not inspected or its inventory is partial.
 
-**Coverage** opens the collection notes on request, grouping common notes across agents. An
-empty or unsupported selected agent remains on the map with a compact explanation and actions
-to view all agents or coverage; it does not expand a long list of notes automatically. Source
-paths in the inspector identify where each definition was found.
+Matching process contexts group when their client identity and account, observed folder-source
+context, exact inventory and coverage agree. **Process details** reveals the original agent
+roots and PIDs. The group is
+not a verified conversation, session or effective-policy identity. Shared definitions count
+once in the combined inventory only when their source identity and projected metadata match.
+Counts describe observed definitions and agent roots, not active skills or callable tools.
+
+Choose a context to scope **Explore** and **Map** to its matching process observations.
+**Process details** lets you inspect one original PID instead; **Show all** clears that scope.
+**Compare** has its own **Left context** and **Right context** selectors over all observed
+contexts, even when Explore or Map was scoped to one context. Search, type and definition
+filters still narrow the comparison; selecting a row opens the same exact-source inspector.
+
+Select a card to open its inspector:
+
+| Section | What it explains |
+| --- | --- |
+| **Purpose** | Retained author-declared skill metadata, or why no purpose is reported. A configured MCP alias alone cannot establish a server's purpose. |
+| **Source** | Exact file, scope, folder identity, project relationship and associated observed contexts. |
+| **Evidence** | What file/configuration or process observation establishes, and what loading, approval or use remains unknown. |
+| **Activity** | The boundary between inventory and separately recorded Calls. A matching name is not an authenticated association. |
+
+The **Tools** view shows **Catalog not reported**. File inventory does not call `tools/list`
+or obtain a client's built-in tool catalog. This is unknown, not an empty catalog or zero
+tools. Holdmap does not launch a server, contact its endpoint or invent a tool description
+to fill the view. The existing **Recorded calls** route opens the separate Flow workspace;
+it does not join inventory definitions to events by matching names.
+
+Search includes names, retained purposes, source paths and reported PIDs. Scope and MCP
+configuration-state filters describe definitions; they do not change runtime process evidence.
+Keyboard users can activate a focused card with **Enter** or **Space**. **Esc** or the close
+control dismisses its details and returns focus. Fit and zoom remain available in Map;
+on narrow windows, details remain dismissible without losing the selected context.
+
+**Coverage** explains inspection limits and unsupported or uninspected contexts. Map rendering
+is also bounded to **24 context cards**, **64 inventory definitions** and **24 runtime candidates**,
+with omitted nodes and relationships reported. Rendering limits do not expand filesystem
+inspection or establish that unshown capabilities are absent. An empty inspected list, an
+uninspected context and a missing tool catalog represent different kinds of missing evidence.
+
+### Read source metadata
+
+Source paths identify where each definition was found.
 An explicit enabled/disabled value is a declaration; a missing value stays **Unknown**. Client
 precedence, project trust, approval policy and effective loading are not resolved. Repeated
 aliases from different files remain separate definitions; Holdmap does not choose a winner.
 
-Skill identity stays the folder name even when the optional YAML header declares another name.
+The skill folder name stays part of its source identity even when the optional YAML header
+declares another name.
 Inspection reads a bounded prefix of `SKILL.md` to project only a sanitized declared name and
 one-line purpose, up to 300 characters. Missing, malformed or unsafe metadata is omitted; file
 presence can still be shown. The purpose is author-supplied text, not an instruction for Holdmap
@@ -274,6 +315,9 @@ skill event; absent records do not prove that no skill was used.
   or enabling an unknown server just to make it appear.
 - **Unknown enablement or purpose:** the file may omit an explicit switch or a safe, supported
   YAML header. Holdmap does not resolve client policy or validate skill packages.
+- **Catalog not reported:** expected for file inventory, even when an MCP definition is
+  present. It does not enumerate tools, establish an empty server or diagnose a connection
+  failure. The current-source Tools view explains this boundary; no catalog adapter is included.
 - **Configured server with no Calls:** inventory is independent of recording. Configure a
   supported producer, start a fresh recording and restart that producer with its new endpoint
   and token. Keep private setup credentials out of bug reports.

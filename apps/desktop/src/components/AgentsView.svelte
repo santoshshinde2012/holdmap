@@ -13,17 +13,16 @@
   import AutoMiniMap from "./graph/AutoMiniMap.svelte";
   import Icon from "./Icon.svelte";
   import AgentFlowView from "./agents/flow/AgentFlowView.svelte";
-  import AgentCapabilitiesView from "./agents/AgentCapabilitiesView.svelte";
   import FolderActions from "./FolderActions.svelte";
   import type { AgentFlowProps } from "../lib/agent-flow/model";
   import { FIT_PADDING } from "../lib/flow";
   import { agentColor, filterAgents, layoutPicture, pictureGraph, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Picture, type Positions } from "../lib/agents";
   import type { AgentsReport, PortEntry } from "../lib/types";
   import { prefGet, prefGetBoolean, prefSet } from "../lib/prefs";
-  import { untrack } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import { currentFolderOwner, preferredFolderOwner, resolveFolderTarget, type FolderTarget } from "../lib/folders";
   import { isComposingKey } from "../lib/keyboard";
-  import { ActionDock, ActionPill } from "./ui";
+  import { ActionDock, ActionPill, Button } from "./ui";
 
   let {
     report,
@@ -81,6 +80,33 @@
   } & AgentFlowProps = $props();
 
   $effect(() => { if (section !== "flow") untrack(() => flowProps.onflowmodechange?.("overview")); });
+
+  // The inventory workspace is optional: Overview never fetches this module.
+  let CapabilityWorkspace = $state<typeof import("./agents/AgentCapabilitiesView.svelte").default | null>(null);
+  let capabilityChunkLoading = $state(false);
+  let capabilityChunkError = $state(false);
+  let disposed = false;
+  onDestroy(() => { disposed = true; });
+  async function loadCapabilityWorkspace() {
+    if (disposed || CapabilityWorkspace || capabilityChunkLoading) return;
+    capabilityChunkError = false;
+    capabilityChunkLoading = true;
+    try {
+      const module = await import("./agents/AgentCapabilitiesView.svelte");
+      // Leaving the section may finish caching the module, but never navigates
+      // back or starts inventory reads. A destroyed view receives no updates.
+      if (!disposed) CapabilityWorkspace = module.default;
+    } catch {
+      if (!disposed) capabilityChunkError = true;
+    } finally {
+      if (!disposed) capabilityChunkLoading = false;
+    }
+  }
+  $effect(() => {
+    if (section === "capabilities") untrack(() => {
+      if (!capabilityChunkError) void loadCapabilityWorkspace();
+    });
+  });
 
   let recent = $state(prefGet("agents.recent") !== "0");
   $effect(() => prefSet("agents.recent", recent ? "1" : "0"));
@@ -201,7 +227,13 @@
 
 <div class="agents-root" class:reduced>
   {#if section === "capabilities"}
-    <AgentCapabilitiesView {report} {query} {selectedAgent} {dark} {reduced} loading={capabilitiesLoading} error={capabilitiesError} demo={flowProps.demo} {onselectagent} onclearquery={flowProps.onclearquery} onretry={onrefreshcapabilities} onrecordedcalls={() => { flowSource = "calls"; section = "flow"; }} />
+    {#if CapabilityWorkspace}
+      <CapabilityWorkspace {report} {query} {selectedAgent} {dark} {reduced} loading={capabilitiesLoading} error={capabilitiesError} demo={flowProps.demo} {onselectagent} onclearquery={flowProps.onclearquery} onretry={onrefreshcapabilities} onrecordedcalls={() => { flowSource = "calls"; section = "flow"; }} />
+    {:else if capabilityChunkError}
+      <div class="empty workspace-loading" role="alert"><Icon name="plug" size={28} /><p>Couldn't load MCP &amp; skills</p><span>Try again, or reload the app if the workspace still won't open.</span><div class="load-actions"><Button size="sm" onclick={loadCapabilityWorkspace}>Try again</Button><Button size="sm" variant="ghost" onclick={() => window.location.reload()}>Reload app</Button></div></div>
+    {:else}
+      <div class="empty workspace-loading" role="status" aria-busy="true"><Icon name="plug" size={28} /><p>Loading MCP &amp; skills…</p></div>
+    {/if}
   {:else if section === "flow"}
     <div class="flow-body"><AgentFlowView {query} {dark} {reduced} {...flowProps} bind:mode={flowSource} sourceChrome={false} /></div>
   {:else}
@@ -324,6 +356,8 @@
 
 <style>
   .agents-root { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
+  .workspace-loading { flex: 1; padding: 24px; box-sizing: border-box; }
+  .load-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .agents.rail-off { grid-template-columns: 1fr; }
   .flow-body { flex: 1; min-height: 0; }
   .agents { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 340px) 1fr; background: var(--bg); container-type: inline-size; }

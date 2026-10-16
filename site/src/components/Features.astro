@@ -89,7 +89,9 @@ const widths = (w: number) => [w, w * 2, w * 3];
         <div class="copy">
           <h3>Computer → Footprint → Project</h3>
           <p>Zoom from this computer and its agents to their folders, tools, ports and a single source tree. Inspect memory, CPU, parent processes and access, with each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor, or stop only the services an agent started.</p>
+          <p class="source-note">Current source (Unreleased) adds a capability explorer: read declared skill purposes in Explore, retain source relationships in Map, and Compare observed definitions. File presence does not prove loading, approval or use.</p>
           <a class="link-arrow" href={url("docs/agents/#desktop-and-tui")}>Explore the agent map <Icon name="ArrowRight" size={16} /></a>
+          <a class="link-arrow" href={url("docs/agents/#mcp-and-skills")}>MCP and skills explorer <Icon name="ArrowRight" size={16} /></a>
           <pre class="snippet term inline" tabindex="0" aria-label="Example agents command"><span class="p">$</span> holdmap agents
 <span class="v">Claude Code</span>  pid 51200 · 214 MB · 3% CPU · 1 stoppable
   folders   shop-api  ~/code/shop-api
