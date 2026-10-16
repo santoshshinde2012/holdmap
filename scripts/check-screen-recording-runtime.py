@@ -5,7 +5,8 @@ No display picker, user-screen capture, native save chooser, user store or OS pe
 is used. The fixture-only binary IPC sink writes inside its private root; production
 save-dialog validation and persistence have separate native unit coverage.
 Use --compare-capabilities to inspect build and webview differences without capturing.
-Use --app-ui to verify the production App's screen-picker entry point without opening it.
+Use --app-ui to verify recorder gates and export only the owned App through its PNG UI.
+App UI mode brings only its owned scratch window to the foreground before interacting.
 """
 
 import argparse
@@ -66,7 +67,7 @@ try {
   report.support = captureSupport();
   report.nativeCapabilities = await invoke("screen_recording_capabilities");
   if (!__CAPABILITIES_ONLY__) {
-  const [{ ScreenRecording }, { saveRecording }] = await Promise.all([
+  const [{ ScreenRecording }, { saveRecording, saveSnapshot }] = await Promise.all([
     import(__ENCODER__), import(__SAVE__),
   ]);
   const canvas = document.querySelector("canvas");
@@ -108,6 +109,9 @@ try {
     visibilityAtStart,
     visibilityAtStop: document.visibilityState,
   };
+  const snapshot = await session.captureSnapshot(new AbortController().signal);
+  report.snapshotKeptVideoCapturing = stream.getTracks().every(track => track.readyState === "live");
+  if (!report.snapshotKeptVideoCapturing) throw new Error("Taking a PNG snapshot stopped the recording source");
   const result = await session.stop();
   report.durationMs = result.durationMs;
   report.width = result.width;
@@ -115,13 +119,14 @@ try {
   report.warnings = result.warnings;
   report.tracksEnded = stream.getTracks().every(track => track.readyState === "ended");
   report.hiddenVideosRemoved = document.querySelectorAll("video").length === 0;
-  for (const format of ["mp4", "gif"]) {
-    const file = result[format];
+  for (const format of ["mp4", "gif", "png"]) {
+    const file = format === "png" ? snapshot.png : result[format];
     if (!file) throw new Error(`${format.toUpperCase()} output unavailable: ${result.warnings.join("; ")}`);
     const bytes = await file.blob.arrayBuffer();
     const digest = await crypto.subtle.digest("SHA-256", bytes);
     const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
-    const saved = await saveRecording({ ...file, filename: `holdmap-runtime.${format}` });
+    const named = { ...file, filename: `holdmap-runtime.${format}` };
+    const saved = await (format === "png" ? saveSnapshot(named) : saveRecording(named));
     if (!saved.saved || !saved.path) throw new Error("Native binary IPC did not report a completed fixture save");
     report.files[format] = { bytes: bytes.byteLength, sha256, type: file.blob.type };
   }
@@ -165,7 +170,7 @@ def run(
     capabilities_only = capabilities_only or app_ui
     if platform.system() != "Darwin":
         raise SystemExit("This owned synthetic WKWebView check requires macOS.")
-    tools = ("cargo", "node") if capabilities_only else ("cargo", "node", "ffprobe", "ffmpeg")
+    tools = ("cargo", "node") if capabilities_only and not app_ui else ("cargo", "node", "ffprobe", "ffmpeg")
     for tool in tools:
         if shutil.which(tool) is None:
             raise SystemExit(f"Missing prerequisite: {tool}")
@@ -271,6 +276,7 @@ def run(
                 "root": str(root), "app": str(app), "assets": str(assets),
                 "identifier": identifier, "incognito": incognito, "devtools": devtools,
                 "synthetic_media": not capabilities_only,
+                "app_ui": app_ui,
             }))
             environment = os.environ.copy()
             environment["HOLDMAP_HOME"] = str(root / "unused-store")
@@ -292,8 +298,13 @@ def run(
             result["linked_build_version"] = build_version.strip()
             print(json.dumps(result, indent=2), flush=True)
             browser = result["browser"]
+            if app_ui and browser["status"] != "passed" and (root / "holdmap-runtime.png").is_file():
+                with tempfile.NamedTemporaryFile(prefix="holdmap-owned-app-png-diagnostic-", suffix=".png", delete=False) as diagnostic:
+                    diagnostic.write((root / "holdmap-runtime.png").read_bytes())
+                    print(f"Owned App PNG diagnostic (private): {diagnostic.name}", flush=True)
             assert browser["status"] == "passed", browser.get("error")
             assert result["native_start_requests"] == 0, "fixture attempted native screen capture"
+            assert result["ui_focus_requests"] == (3 if app_ui else 0), "only the App UI mode should activate its owned window"
             assert not browser["screenPickerInvoked"] and not browser["violations"]
             assert browser["secureContext"] is True, "fixture did not load a secure app context"
             assert browser["url"].rstrip("/") == "tauri://localhost", "fixture did not load the trusted app origin"
@@ -308,6 +319,8 @@ def run(
                 assert browser["nativeCapabilities"]["available"] is True, "native capture fallback is missing on supported macOS"
             if app_ui:
                 assert browser["tauri"] is True, "production App did not run in a native webview"
+                assert len(browser["foregroundChecks"]) == 3
+                assert all(check["visibility"] == "visible" and check["focused"] for check in browser["foregroundChecks"]), "App UI interactions did not run in a foreground window"
                 assert not browser["errors"], "production App emitted runtime errors"
                 assert browser["closedWithoutCapture"] is True
                 assert browser["fallbackClosedWithoutCapture"] is True
@@ -324,13 +337,58 @@ def run(
                     assert browser["fallbackUI"]["unavailableMessage"] is False
                 else:
                     print("SKIP native fallback on macOS older than 14; unsupported explanation verified", flush=True)
+                snapshot = browser["appSnapshot"]
+                assert snapshot["closedAfterSave"] and snapshot["missingDisplayAPI"]
+                file = root / "holdmap-runtime.png"
+                payload = file.read_bytes()
+                observed = {"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
+                assert set(result["native_files"]) == {file.name} and set(browser["files"]) == {"png"}
+                assert observed == result["native_files"][file.name]
+                assert observed == {key: browser["files"]["png"][key] for key in observed}
+                assert 0 < len(payload) <= 32 * 1024 * 1024 and payload.startswith(b"\x89PNG\r\n\x1a\n")
+                assert file.stat().st_mode & 0o777 == 0o600
+                width, height = snapshot["width"], snapshot["height"]
+                assert 0 < width <= 3840 and 0 < height <= 2160
+                probe = json.loads(command([
+                    "ffprobe", "-v", "error", "-show_entries", "stream=codec_name,width,height", "-of", "json", file,
+                ], timeout=20).stdout)
+                assert probe["streams"] == [{"codec_name": "png", "width": width, "height": height}], probe
+                rgba = command(["ffmpeg", "-v", "error", "-i", file, "-f", "rawvideo", "-pix_fmt", "rgba", "-"], timeout=20).stdout
+                assert len(rgba) == width * height * 4
+                assert rgba[3::4].count(255) / (width * height) > .95
+                # Decode the actual saved bytes independently; connected-image canvas
+                # readback in an unfocused WKWebView can transiently return all zeros.
+                brightness = lambda: map(sum, zip(rgba[0::4], rgba[1::4], rgba[2::4]))
+                assert max(brightness()) - min(brightness()) > 75, "App PNG is blank"
+                assert {region["name"] for region in snapshot["regions"]} == {"bundled icon", "bundled font"}
+                checked = []
+                for region in snapshot["regions"]:
+                    scale_x, scale_y = width / snapshot["cssBounds"]["width"], height / snapshot["cssBounds"]["height"]
+                    left, top = int(region["x"] * scale_x), int(region["y"] * scale_y)
+                    region_width = max(1, int(region["width"] * scale_x))
+                    region_height = max(1, int(region["height"] * scale_y))
+                    assert 0 <= left < left + region_width <= width and 0 <= top < top + region_height <= height
+                    pixels = [tuple(rgba[offset:offset + 4])
+                              for y in range(top, top + region_height)
+                              for x in range(left, left + region_width)
+                              for offset in [(y * width + x) * 4]]
+                    contrast = (max(sum(pixel[:3]) for pixel in pixels) - min(sum(pixel[:3]) for pixel in pixels)) / 3
+                    opaque = sum(pixel[3] == 255 for pixel in pixels) / len(pixels)
+                    colorful = sum(max(pixel[:3]) - min(pixel[:3]) > 40 for pixel in pixels) / len(pixels)
+                    assert contrast > 25 and opaque > .95, (region["name"], contrast, opaque)
+                    if region["name"] == "bundled icon":
+                        assert colorful > .1, "App PNG lost the bundled icon colors"
+                    checked.append({"name": region["name"], "contrast": contrast, "opaque": opaque, "colorful": colorful})
+                print("PASS independently decoded App PNG regions: " + json.dumps(checked), flush=True)
+                print("PASS production App PNG UI in WKWebView: bundled font/icon pixels, bounded decode, exact binary IPC save; no source picker", flush=True)
+                return result
             if capabilities_only:
                 assert not result["native_files"] and not browser["files"]
                 print("PASS capability-only probe; no display/device request, canvas capture or file export", flush=True)
                 return result
-            for check in ("tracksEnded", "hiddenVideosRemoved", "discardTracksEnded", "discardVideosRemoved"):
+            for check in ("tracksEnded", "hiddenVideosRemoved", "discardTracksEnded", "discardVideosRemoved", "snapshotKeptVideoCapturing"):
                 assert browser[check], check
-            for format in ("mp4", "gif"):
+            for format in ("mp4", "gif", "png"):
                 file = root / f"holdmap-runtime.{format}"
                 payload = file.read_bytes()
                 observed = {"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
@@ -339,8 +397,10 @@ def run(
                 assert file.stat().st_mode & 0o777 == 0o600
                 if format == "mp4":
                     assert payload[4:8] == b"ftyp"
-                else:
+                elif format == "gif":
                     assert payload[:6] in (b"GIF87a", b"GIF89a")
+                else:
+                    assert payload.startswith(b"\x89PNG\r\n\x1a\n")
                 probe = json.loads(command([
                     "ffprobe", "-v", "error", "-count_frames", "-show_entries",
                     "stream=codec_name,codec_type,width,height,nb_read_frames:format=duration", "-of", "json", file,
@@ -348,8 +408,13 @@ def run(
                 assert len(probe["streams"]) == 1, probe
                 video = probe["streams"][0]
                 assert video["codec_type"] == "video"
-                assert video["codec_name"] == ("h264" if format == "mp4" else "gif")
+                assert video["codec_name"] == {"mp4": "h264", "gif": "gif", "png": "png"}[format]
                 assert (video["width"], video["height"]) == (320, 180)
+                if format == "png":
+                    assert int(video["nb_read_frames"]) == 1
+                    command(["ffmpeg", "-v", "error", "-i", file, "-f", "null", "-"], timeout=20)
+                    print("PASS PNG: exact binary IPC digest, dimensions, decode and private save; video continued", flush=True)
+                    continue
                 assert int(video["nb_read_frames"]) >= 3
                 assert 1 <= float(probe["format"]["duration"]) <= 8, probe
                 decoded = command(["ffmpeg", "-v", "error", "-i", file, "-f", "framemd5", "-"], timeout=20).stdout.decode()
@@ -374,7 +439,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--compare-capabilities", action="store_true", help="Probe dev/production protocol and private/persistent data stores without capturing anything")
-    modes.add_argument("--app-ui", action="store_true", help="Verify the minified production App's Choose screen gate without capturing")
+    modes.add_argument("--app-ui", action="store_true", help="Verify production recorder gates and save only the owned App's PNG")
     args = parser.parse_args()
     if args.compare_capabilities:
         reports = [run(custom_protocol=protocol, incognito=private, capabilities_only=True,

@@ -65,8 +65,15 @@ screenshots use the shared browser UI with sample data.
   or stop only the services that agent started, through the normal safety policy.
 - **Three levels of agent maps.** Computer shows this machine and outside systems;
   Footprint shows agents' folders, tools, ports and hosts; Project focuses on one source tree.
+- **Capability explorer (Unreleased).** Read declared skill purposes in Explore, follow source
+  relationships in Map, or Compare exact observed definitions across agent contexts. Matching
+  process contexts group together while retaining their PIDs. The inspector separates Purpose,
+  Source, Evidence and Activity; finding a file or configuration is not proof of loading or use.
 - **Local screen recording.** Choose a screen or window, capture up to two minutes without
   audio, then preview and save the available MP4/GIF exports. Nothing is uploaded.
+- **PNG snapshots (Unreleased).** Capture the visible Holdmap view without screen-sharing
+  permission, choose a screen/window, or borrow the active recording source without another
+  picker or stopping the video. Review and save the image locally.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
   server for AI coding assistants. macOS, Linux and Windows. No product analytics.
 - **Agent flow.** Follow observed process/socket relationships, or opt in to
@@ -220,10 +227,18 @@ explicitly inspects supported current-account configuration and skill metadata. 
 active only in Agents; press **c** again or leave Agents to turn it off. It distinguishes
 configured definitions, skill files, running child tools
 and recorded usage; loading, trust and effective client policy stay unknown. Ordinary scans
-keep configuration inspection off. The desktop uses an Overview-style map: select an agent,
-MCP definition, skill or runtime card to open its details in the left rail. Close or press
-**Esc** to return to the map without changing the agent scope. **Filters** and **Coverage**
-open only when requested. See the [coverage, privacy and usage guide](site/src/content/docs/agents.md#mcp-and-skills).
+keep configuration inspection off.
+
+**Capability explorer (Unreleased).** The current desktop source adds **Explore**, **Map** and
+**Compare** over that inventory. Explore leads with each skill's retained, author-declared
+purpose; Map keeps observed source relationships; Compare shows exact definitions reported
+for each context. Matching process contexts group together without becoming a verified agent
+session. The inspector separates **Purpose**, **Source**, **Evidence** and **Activity**.
+The **Tools** view says **Catalog not reported** because file inspection does not enumerate
+individual MCP or built-in tools. Unknown catalogs are not zero tools, and no new client
+adapter or catalog-to-call join is introduced. Runtime candidates and separately recorded
+Calls retain their own evidence. These changes are not included in published 0.8.0 installers.
+See the [coverage, privacy and usage guide](site/src/content/docs/agents.md#mcp-and-skills).
 
 **Terminal agents in 0.5.0.** Start `holdmap` and press **Shift+Tab**
 to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its
@@ -375,6 +390,13 @@ uses the same UI with sample data.
 Desktop controls preserve composing and modified keys in settings, menus and resize controls.
 Dialog Tab navigation includes only enabled, visible controls in the active tab order.
 
+**Graph improvements in current source (Unreleased).** The map opens at full width until you
+select a service. Disconnected groups pack nearby, cards start at a readable size, and
+**Fit all** offers an overview. Graph search matches services, ports and PIDs while keeping
+their observed neighbours for context; List filters stay separate. **Options** contains
+Traffic, External and Legend. These changes are not in the 0.8.0 installers; see the
+[graph guide](site/src/content/docs/desktop.md#service-graph-and-cluster-grouping).
+
 **Close and reopen.** With a working menu-bar or tray icon, closing the main window keeps
 Holdmap running. Click its icon or use your configured global shortcut to reopen; on macOS,
 the Dock icon also restores it. **0.6.0** hides the application through AppKit so a fullscreen
@@ -404,8 +426,9 @@ the chooser; use 0.5.0 or newer.
 
 </details>
 
-**Screen recording.** Choose the camera button, **Record screen…** in the command palette,
-or `⇧V`, then select a screen or window in the system chooser. Capture lasts up to two
+**Screen recording.** Choose the video button in current source (the camera button in
+0.8.0), **Record screen…** in the command palette, or `⇧V`, then select a screen or window
+in the system chooser. Capture lasts up to two
 minutes with no microphone or system audio. Stopping ends screen sharing before preparing
 the available MP4/GIF exports; format availability depends on encoding support.
 Save through the native file dialog, or the browser's download manager in the demo.
@@ -417,6 +440,27 @@ Closing the preview keeps it available through **Review recording** for this ses
 This is separate from optional agent tool-call metadata recording. See the
 [screen recording guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#record-the-screen)
 for permissions, platform requirements and export limits.
+
+**PNG snapshots — current source (Unreleased).** The camera button, **Take snapshot…** or
+`⇧S` offers **Holdmap view** without screen-sharing permission, or **Screen or window**
+through the system picker. During video capture, **Recording source** borrows that source
+without another picker or stopping the recording. PNGs preserve aspect ratio within
+3840×2160 and 32 MiB. The native selected-source fallback requires macOS 14 or later;
+the app-view choice works without it. Published **0.8.0 installers do not include snapshots**.
+
+Close the preview and reopen it with **Review snapshot**. Cancelled or failed saves keep
+the PNG for retry; **Discard snapshot**, reload or quit clears it. A new capture replaces
+the retained image only after success. Desktop saves use a native file dialog; browser
+saves use the download manager. Nothing is uploaded. See the
+[snapshot guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#take-a-png-snapshot).
+
+<details>
+<summary>Unreleased PNG source choice and preview with sample data</summary>
+
+![Current-source PNG snapshot preview in dark theme](docs/screenshots/desktop-snapshot-dark.png)
+![Current-source PNG source chooser in light theme](docs/screenshots/desktop-snapshot-light.png)
+
+</details>
 
 **First open.** The **0.8.0** macOS app is ad-hoc signed and sealed without Developer-ID
 signing or notarisation; its Windows installers are unsigned. Verify the checksums and
@@ -439,7 +483,7 @@ installation-guide actions; see [0.8.0 changes](CHANGELOG.md#080---2026-10-16).
 
 | Service graph | Stop confirmation |
 |---|---|
-| ![The service graph: a Compose cluster with shop-web, shop-api, db and redis, dark theme](docs/screenshots/desktop-graph-dark.png) | ![The stop confirmation lists every step before anything is sent](docs/screenshots/desktop-stop-confirm-light.png) |
+| ![Current-source service graph uses the full canvas for the shop services and their observed connections, dark theme](docs/screenshots/desktop-graph-dark.png) | ![The stop confirmation lists every step before anything is sent](docs/screenshots/desktop-stop-confirm-light.png) |
 | **Command palette** | **Settings** |
 | ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) | ![Settings: startup and the global shortcut, dark theme](docs/screenshots/desktop-settings-dark.png) |
 | **About in the browser preview, dark** | **About in the browser preview, light** |
@@ -459,11 +503,19 @@ installation-guide actions; see [0.8.0 changes](CHANGELOG.md#080---2026-10-16).
 | **Sort menu at the right edge, dark theme** | **Sort menu at the right edge, light theme** |
 | ![The Sort menu stays inside the viewport with readable grouping descriptions](docs/screenshots/desktop-sort-right-edge-dark.png) | ![The right-edge Sort menu leaves all choices visible in a compact window](docs/screenshots/desktop-sort-right-edge-light.png) |
 
-The **MCP & skills** workspace in 0.8.0 uses labelled sample definitions in these captures:
+These **current-source (Unreleased)** capability explorer captures use labelled sample definitions:
+
+| **Explore, dark theme** | **Explore, light theme** |
+| --- | --- |
+| ![Explore skill cards show declared purposes, source files and file-presence evidence in dark theme](docs/screenshots/desktop-capability-explore-dark.png) | ![Explore keeps skill purposes, scope and exact source files readable in light theme](docs/screenshots/desktop-capability-explore-light.png) |
+
+| **Compare, dark theme** | **Compare, light theme** |
+| --- | --- |
+| ![Compare distinguishes same-name definitions at different sources and labels unreported evidence](docs/screenshots/desktop-capability-compare-dark.png) | ![Light-theme comparison keeps exact paths and independent context observations visible](docs/screenshots/desktop-capability-compare-light.png) |
 
 | **MCP and skills map** | **Selected skill details** |
 | --- | --- |
-| ![Capability map connects agents to declared MCP and skill sources while runtime candidates remain separate](docs/screenshots/desktop-capabilities-dark.png) | ![Selecting a skill card reveals its source and optional declared purpose in the left inspector](docs/screenshots/desktop-skills-dark.png) |
+| ![Capability map connects observed agent contexts to declared MCP and skill sources while runtime candidates remain separate](docs/screenshots/desktop-capabilities-dark.png) | ![The selected skill's Purpose tab explains declared purpose and why file presence does not establish activation](docs/screenshots/desktop-skills-dark.png) |
 
 </details>
 

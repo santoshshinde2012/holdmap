@@ -143,6 +143,20 @@ async function openGraph(page) {
   await expect(page.getByRole("button", { name: "Stop cluster shop", exact: true })).toBeVisible();
 }
 
+async function openSnapshot(page, preview = false) {
+  await openGraph(page);
+  await page.getByRole("button", { name: "Take snapshot", exact: true }).click();
+  const chooser = page.getByRole("dialog", { name: "Take snapshot", exact: true });
+  await expect(chooser.getByRole("radio", { name: "Holdmap view", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(chooser.getByRole("radio", { name: "Screen or window", exact: true })).toBeVisible();
+  if (!preview) return chooser;
+  await chooser.getByRole("button", { name: "Capture PNG", exact: true }).click();
+  const result = page.getByRole("dialog", { name: "Snapshot preview", exact: true });
+  await expect(result.getByRole("img", { name: "PNG snapshot preview", exact: true })).toBeVisible();
+  await expect(result.getByRole("button", { name: "Download PNG", exact: true })).toBeVisible();
+  return result;
+}
+
 async function openAgentFlow(page, calls = false) {
   await openAgents(page);
   await page.getByRole("radio", { name: "Flow", exact: true }).click();
@@ -168,17 +182,44 @@ async function openAgentFlow(page, calls = false) {
   }
 }
 
-async function openCapabilities(page, skill = false) {
+async function openCapabilities(page, mode = "map") {
   await openAgents(page);
   await page.getByRole("radio", { name: "MCP & skills", exact: true }).click();
   const workspace = page.getByRole("region", { name: "MCP and skills workspace", exact: true });
   await expect(workspace.getByText("Example inventory", { exact: true })).toBeVisible();
+  const assertFits = async () => {
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, "Capability workspace must fit the viewport");
+    assert.equal(await workspace.evaluate((element) => element.scrollWidth > element.clientWidth), false, "Capability workspace must not overflow horizontally");
+  };
+  const views = workspace.getByRole("radiogroup", { name: "Capability view", exact: true });
+  if (mode === "explore") {
+    await views.getByRole("radio", { name: "Explore", exact: true }).click();
+    await workspace.getByRole("radio", { name: /^Skills/ }).click();
+    const catalog = workspace.getByRole("region", { name: "Capability catalog", exact: true });
+    await expect(catalog.getByRole("button")).toHaveCount(3);
+    await expect(catalog).toContainText("Check UI behavior, accessibility and responsive layouts");
+    await expect(page.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
+    await assertFits();
+    return;
+  }
+  if (mode === "compare") {
+    await views.getByRole("radio", { name: "Compare", exact: true }).click();
+    const comparison = workspace.getByRole("region", { name: "Capability comparison", exact: true });
+    await expect(comparison.getByRole("heading", { name: "Compare observed sources", exact: true })).toBeVisible();
+    await expect(comparison.getByRole("button", { name: /^Inspect compared / })).toHaveCount(7);
+    await expect(comparison.getByText("Not reported here", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
+    await assertFits();
+    return;
+  }
+  await views.getByRole("radio", { name: "Map", exact: true }).click();
   const graph = workspace.getByRole("region", { name: "Agent capability graph", exact: true });
   await expect(graph.getByRole("button", { name: "Inspect capabilities for Cursor, PID 52000", exact: true })).toBeVisible();
-  if (!skill) {
+  if (mode === "map") {
     await expect(page.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
     await expect(graph.locator(".svelte-flow__edge")).toHaveCount(7);
     await graph.getByRole("button", { name: "Fit all capabilities in view", exact: true }).click();
+    await assertFits();
     return;
   }
   await page.getByRole("button", { name: "Inspect capabilities for Cursor, PID 52000", exact: true }).click();
@@ -187,10 +228,9 @@ async function openCapabilities(page, skill = false) {
   await page.getByRole("radio", { name: /^Skills/ }).click();
   await page.getByRole("button", { name: "Inspect skill frontend-checks, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md", exact: true }).press("Enter");
   const detail = page.getByRole("complementary", { name: "Capability details", exact: true });
-  await expect(detail).toContainText("frontend-checks/SKILL.md");
+  await expect(detail.getByRole("tab", { name: "Purpose", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(detail).toContainText("Check UI behavior, accessibility and responsive layouts");
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, "Capability workspace must fit the viewport");
-  assert.equal(await workspace.evaluate((element) => element.scrollWidth > element.clientWidth), false, "Capability workspace must not overflow horizontally");
+  await assertFits();
 }
 
 // Clip actual DOM bounds; retain all four services when presenting the Compose cluster.
@@ -203,9 +243,15 @@ async function boundedClip(page, locator, { height, padding = 0 } = {}) {
 }
 
 const captures = [
+  { name: "desktop-snapshot-dark.png", theme: "dark", prepare: (page) => openSnapshot(page, true) },
+  { name: "desktop-snapshot-light.png", theme: "light", prepare: (page) => openSnapshot(page) },
   ...["dark", "light"].map((theme) => ({ name: `desktop-capabilities-${theme}.png`, theme, prepare: (page) => openCapabilities(page) })),
-  { name: "desktop-skills-dark.png", theme: "dark", prepare: (page) => openCapabilities(page, true) },
-  { name: "desktop-capabilities-narrow-light.png", theme: "light", viewport: { width: 560, height: 1000 }, prepare: (page) => openCapabilities(page, true) },
+  ...["dark", "light"].flatMap((theme) => [
+    { name: `desktop-capability-explore-${theme}.png`, theme, prepare: (page) => openCapabilities(page, "explore") },
+    { name: `desktop-capability-compare-${theme}.png`, theme, prepare: (page) => openCapabilities(page, "compare") },
+  ]),
+  { name: "desktop-skills-dark.png", theme: "dark", prepare: (page) => openCapabilities(page, "skill") },
+  { name: "desktop-capabilities-narrow-light.png", theme: "light", viewport: { width: 560, height: 1000 }, prepare: (page) => openCapabilities(page, "skill") },
   ...["dark", "light"].map((theme) => ({ name: `desktop-about-${theme}.png`, theme, async prepare(page) {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("tab", { name: "About", exact: true }).click();
@@ -280,12 +326,7 @@ const captures = [
   } })),
   { name: "desktop-overview-dark.png", theme: "dark", async prepare(page) { await selectPort(page); } },
   { name: "desktop-overview-light.png", theme: "light", async prepare(page) { await selectPort(page); } },
-  { name: "desktop-graph-dark.png", theme: "dark", async prepare(page) {
-    await page.getByRole("radio", { name: /^Graph/ }).click();
-    await page.getByRole("button", { name: "shop-web on ports 3000", exact: true }).click();
-    await expect(page.getByRole("complementary", { name: "Port details" }).getByRole("tab", { name: /^Connections/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: "shop-api on ports 3001", exact: true })).toBeVisible();
-  } },
+  { name: "desktop-graph-dark.png", theme: "dark", prepare: openGraph },
   { name: "desktop-agents-dark.png", theme: "dark", prepare: openAgents },
   { name: "desktop-agents-light.png", theme: "light", prepare: openAgents },
   { name: "desktop-agents-computer-dark.png", theme: "dark", prepare: (page) => openAgents(page, "Computer") },
@@ -382,7 +423,8 @@ for (const theme of ["dark", "light"]) {
     { ...ui, name: `ui-graph-${theme}.png`, async prepare(page) {
       await openGraph(page);
       await expect(page.getByRole("button", { name: "db on ports 5432", exact: true })).toBeVisible();
-      return boundedClip(page, page.locator(".hull.kind-compose"), { padding: 8 });
+      // Locator capture waits for the measured viewport to settle before reading its crop.
+      return page.locator(".hull.kind-compose");
     } },
   );
   for (const variant of ["desktop", "mobile"]) {

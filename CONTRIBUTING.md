@@ -89,9 +89,9 @@ scripts/check-secrets.sh                     # full Git history and tracked/new 
 python3 scripts/test-release-security.py    # isolated release input regressions; never publishes
 python3 scripts/check-updater-runtime.py    # macOS: real signed scratch install and relaunch
 python3 scripts/check-window-lifecycle-runtime.py # interactive macOS: owned close/fullscreen/reopen regression
-python3 scripts/check-screen-recording-runtime.py # macOS: synthetic MP4/GIF, real WKWebView and binary IPC; needs FFmpeg
-python3 scripts/check-screen-recording-runtime.py --app-ui # macOS: packaged app confirmation and native fallback discovery
-python3 scripts/check-native-screen-recording.py # macOS: native H.264/GIF writer and cancellation, synthetic pixels only
+python3 scripts/check-screen-recording-runtime.py # macOS: synthetic MP4/GIF/PNG, real WKWebView and binary IPC; needs FFmpeg
+python3 scripts/check-screen-recording-runtime.py --app-ui # macOS: packaged recorder gates + owned app-view PNG; no screen picker
+python3 scripts/check-native-screen-recording.py # macOS: native H.264/GIF/PNG writer and cancellation, synthetic pixels only
 actionlint
 python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK/Linux test resolution
 python3 scripts/verify-vendored-global-hotkey.py # X11 fixes, original archive and shortcut dependency resolution
@@ -99,6 +99,10 @@ cargo deny --all-features check
 (cd apps/desktop && npm audit)
 (cd site && npm audit)
 ```
+
+The macOS `--app-ui` capture fixture briefly brings its own scratch window to the foreground
+to exercise real dialog dismissal and PNG saving. It never opens the system display picker
+or captures your screen.
 
 `cargo test` also checks the docs: `docs/cli.md` must match the clap definitions, the README must
 mention every command and only real flags, Markdown links and images must resolve, and every
@@ -112,6 +116,14 @@ lockfile stay untouched, including when a check fails.
 Website checks reject unresolved Markdown image placeholders and missing image sources or
 alt attributes; decorative images may use `alt=""`. Public browser checks load guide screenshots
 at desktop and mobile widths, as well as exercising the app demo.
+The capability workspace loads only after explicit MCP & skills navigation. Keep its renderer
+separate from Agents Overview: the site manifest check enforces that boundary and a 20 KiB gzip
+budget for its unique JavaScript; shared dependencies retain their existing budgets. Capability
+changes should exercise exact-source grouping, missing coverage, refresh/selection recovery and
+same-name definitions with different scope or project context. Presence, declared enablement,
+runtime candidates and recorded calls remain separate evidence; never join them by name.
+Refresh the capability screenshots with the existing capture script's private sample-data build,
+and keep current-source features marked Unreleased until an installer includes them.
 Keyboard changes must preserve input-method composition, native control keys and disabled
 single-key shortcuts. Calls diagnosis operates on metadata projections and retains only reported
 parent context; unknown outcomes and missing completion are distinct. Terminal paste tests must

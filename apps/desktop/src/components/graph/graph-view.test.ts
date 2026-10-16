@@ -28,20 +28,21 @@ describe("large graph controls", () => {
 });
 
 describe("graph chrome", () => {
-  it("explains an unconnected graph and offers All services", () => {
+  it("explains an unconnected graph without covering it with a large empty state", () => {
     const graph = mockTopology();
     graph.edges = [];
     graph.clusters = [];
     const view = render(GraphView, { graph, selectedNode: null, dark: false, reduced: true, onselect() {}, onstopcluster() {}, all: false, ontoggleall() {} });
-    expect(view.getByRole("status").textContent).toMatch(/aren't connected/i);
-    expect(view.getByRole("button", { name: "Show all services" })).toBeTruthy();
+    expect(view.getByRole("status").textContent).toMatch(/no connections between/i);
+    expect(view.getByRole("button", { name: "All services" })).toBeTruthy();
   });
 
-  it("disables External when there are no remote hosts", () => {
+  it("disables External when there are no remote hosts", async () => {
     const graph = mockTopology();
     graph.nodes = graph.nodes.filter((n) => n.kind !== "external");
     graph.edges = graph.edges.filter((e) => e.kind !== "outbound");
     const view = render(GraphView, { graph, selectedNode: null, dark: false, reduced: true, onselect() {}, onstopcluster() {} });
+    await fireEvent.click(view.getByRole("button", { name: "Graph options" }));
     const ext = view.getByRole("button", { name: "External" }) as HTMLButtonElement;
     expect(ext.disabled).toBe(true);
     expect(ext.getAttribute("aria-pressed")).toBe("false");
@@ -55,13 +56,43 @@ describe("graph chrome", () => {
     expect(view.getByRole("button", { name: "Show all services" })).toBeTruthy();
   });
 
-  it("hides the legend and counts so the canvas can use the full width", async () => {
+  it("keeps the graph counts available when the optional legend is hidden", async () => {
     const view = render(GraphView, { graph: mockTopology(), selectedNode: null, dark: false, reduced: true, onselect() {}, onstopcluster() {} });
     expect(view.container.querySelector(".legend")).toBeTruthy();
     expect(view.container.querySelector(".stats")).toBeTruthy();
+    await fireEvent.click(view.getByRole("button", { name: "Graph options" }));
     await fireEvent.click(view.getByRole("button", { name: "Legend" }));
     expect(view.container.querySelector(".legend")).toBeNull();
-    expect(view.container.querySelector(".stats")).toBeNull();
+    expect(view.container.querySelector(".stats")).toBeTruthy();
     expect(view.getByRole("button", { name: "Legend" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("keeps secondary settings out of the primary toolbar and returns focus on Escape", async () => {
+    const view = render(GraphView, { graph: mockTopology(), selectedNode: null, dark: false, reduced: true, onselect() {}, onstopcluster() {} });
+    expect(view.queryByRole("button", { name: "Traffic" })).toBeNull();
+    const trigger = view.getByRole("button", { name: "Graph options" });
+    await fireEvent.click(trigger);
+    const options = view.getByRole("region", { name: "Graph display options" });
+    expect((view.getByRole("button", { name: "Traffic" }) as HTMLButtonElement).disabled).toBe(true);
+    await fireEvent.keyDown(options, { key: "Escape" });
+    expect(view.queryByRole("region", { name: "Graph display options" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    await fireEvent.click(trigger);
+    await fireEvent.keyDown(trigger, { key: "Escape" });
+    expect(view.queryByRole("region", { name: "Graph display options" })).toBeNull();
+    await fireEvent.click(trigger);
+    await fireEvent.focusOut(trigger, { relatedTarget: view.getByRole("radio", { name: "Force" }) });
+    expect(view.queryByRole("region", { name: "Graph display options" })).toBeNull();
+    await fireEvent.click(trigger);
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(view.queryByRole("region", { name: "Graph display options" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("shows matching services with observed neighbours and offers a scoped empty-state recovery", () => {
+    const view = render(GraphView, { graph: mockTopology(), query: "not-a-service", selectedNode: null, dark: false, reduced: true, onselect() {}, onstopcluster() {}, onclearquery() {} });
+    expect(view.getByText("No services match this search")).toBeTruthy();
+    expect(view.container.querySelectorAll(".svelte-flow__edge")).toHaveLength(0);
+    expect(view.getAllByRole("button", { name: "Clear search" }).length).toBeGreaterThan(0);
   });
 });

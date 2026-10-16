@@ -125,7 +125,7 @@ WebCodecs/Mediabunny has a MediaRecorder MP4 fallback. GIF quantization runs in 
 worker with one RGBA frame in flight and at most 240 indexed frames. Adaptive sampling
 preserves the complete timeline, with cumulative GIF delays avoiding rounding drift.
 Finalization has a deadline and can be discarded. The CSP permits local and blob workers
-without relaxing script execution or network destinations.
+without enabling external scripts or network destinations.
 
 Desktop saves use a trusted-main-window binary command, a 128 MiB payload bound, filename
 and container-header validation, and a serialized native save dialog. JavaScript cannot
@@ -147,6 +147,45 @@ The native fallback follows Apple's [ScreenCaptureKit content-sharing picker](ht
 Its synthetic pixel fixture exercises the production native MP4/GIF writer without requesting
 screen permission. The packaged WKWebView check asserts original browser API availability
 before synthetic capture, and separately checks the actual minified app's confirmation dialog.
+
+## PNG snapshots (current source, Unreleased)
+
+Published 0.8.0 installers predate this feature. The camera action (`⇧S`) separates the
+visible **Holdmap view** from an explicitly selected **Screen or window**. App-view capture
+does not request screen-sharing permission. An active video session can expose a borrowed
+**Recording source**; taking its PNG neither opens another picker nor owns the recording's
+stop/discard lifecycle. A newly selected source is released after the still is captured.
+Browser capture uses its display picker; the native fallback uses Apple's public picker
+on macOS 14 or later. All sources omit audio and return the same bounded PNG result:
+aspect ratio preserved within 3840×2160 and 32 MiB.
+
+The SOLID boundaries keep source acquisition, result ownership and saving independent:
+
+| Boundary | Responsibility |
+|---|---|
+| `screen-snapshot.ts` | Small `SnapshotProvider` contract, dimensions, PNG envelope and result metadata |
+| `app-snapshot.ts` | On-demand DOM rasterization of the app viewport, preserving SVG and scroll state while excluding snapshot controls, embedded frames and hidden media helpers |
+| `screen-snapshot-backend.ts` / `screen-snapshot-native.ts` | Explicit source acquisition and cancellation, or borrowing a recording provider without stopping it |
+| `snapshot-controller.ts` / `SnapshotCapture.svelte` | One retained result, generation/abort guards, source choice, preview and save feedback |
+| Native snapshot and capture modules | Trusted-main-window authorization, opaque handles, private files, bounded reads and operation leases |
+| Shared save adapter and native writer | Save chooser, validated format/size, full native PNG decoding and atomic destination replacement; no JavaScript destination paths |
+
+The controller receives source adapters rather than depending on a particular renderer or
+native session. Closing the preview or cancelling/failing a save preserves its result;
+discard, reload or quit releases it. A failed or cancelled replacement capture keeps the
+previous PNG. Browser downloads report that the download started, not that a disk write
+completed. Snapshot cancellation cannot stop a borrowed video source.
+
+App rendering loads `modern-screenshot` only on demand. Fonts remain separate build assets;
+only the two known bundled WOFF2 files and exact brand SVG enter bounded, credential-free,
+same-origin fetches with redirects rejected. Automatic remote font/style discovery is
+bypassed, and unapproved image resources reject capture. The CSP adds only same-origin
+asset connections; font policy and external destinations remain unchanged. Rendering has
+a bounded result deadline and cooperative checks, with context cleanup and late-result
+rejection after cancellation; this does not preempt synchronous browser rendering work.
+Decoded browser pixel comparisons cover graph text, SVG edges and ordinary dialogs, while
+owned synthetic media/native fixtures exercise PNG capture and saving without sharing a
+real screen. Supplementary WebKit runs do not replace the packaged WKWebView checks.
 
 ## Agent communication visibility (0.5.0)
 
@@ -1336,13 +1375,39 @@ published asset digests and IDs, then publishes the complete `latest.json` index
 ## 6. Graph library
 
 The graph view uses **Svelte Flow (`@xyflow/svelte`) and `@dagrejs/dagre`**. Nodes are real DOM
-(so they reuse the icons, tokens and focus rings), group nodes draw the cluster hulls, and the
-minimap and zoom controls are built in. dagre gives a stable left-to-right layout that matches the
-stop order; the alternative "organic" layout is a small seeded force simulation, so the graph
-doesn't move between refreshes. Unconnected subgraphs explain the empty canvas and offer
-**All services**; External stays idle until there are outbound hosts. Editor-extension nodes
-keep the extension identity, not the inherited project. Details, agent cards, the Flow
-inspector and on-canvas legends can be hidden so Graph and Flow use the full window.
+buttons with the shared icons, tokens and focus rings; group nodes draw existing cluster hulls.
+In current source (**Unreleased**), the pure layout finds components from existing edges and
+cluster membership, lays each one out independently, then packs their bounds, including cluster
+headers. Dagre gives a left-to-right layout inside each connected component. The alternative
+Force layout runs the deterministic simulation inside components only; isolated services do
+not repel unrelated services across a vast canvas. Force remains bounded to 100 visible nodes,
+with Layered as the fallback. Packing and proximity never add edges or infer relationships.
+
+`graphForQuery` projects matched nodes plus their immediate observed neighbors and existing
+edges; the matching predicate uses displayed metadata, exact `port:`/`:port` and `pid:`
+selectors, and AND between terms. It does not inspect process command lines. `App.svelte`
+owns Graph search separately from List filters and resolves Graph selections against the full
+snapshot, so hidden List preferences cannot hide a selected service's details.
+
+Graph opens without the List summary pane. An explicit card click or native button activation
+opens that listener's details; close, hide and Escape clear the Graph selection and restore focus
+to its card or the graph region. Wide canvases dock details, while smaller canvases use the
+existing modal drawer. Structure changes drive layout; viewport adjustment follows explicit
+scope, layout and search changes after fresh topology arrives. Refreshes preserve the user's
+viewport. `GraphViewport.svelte` waits for measured nodes and establishes a readable
+initial scale, with separate actions for fitting the entire graph and restoring readable size.
+On wider canvases, the minimap appears only when graph bounds extend beyond the viewport.
+
+Primary chrome contains compact counts, All services and layout controls. Options discloses
+Traffic, External and Legend. Its Escape handling precedes Graph selection while leaving
+overlaid modal dialogs in control of their keyboard. Reduced motion disables traffic animation.
+External stays idle
+until there are outbound hosts, and a short no-links message explains disconnected graphs.
+Editor-extension nodes keep the extension identity, not the inherited project. The public
+sample's All services mode adds eligible listeners from the same snapshot without inventing
+edges, including the existing bounded `mockPorts` load samples. Published 0.8.0 installers
+predate these graph presentation changes. Agent cards and the Flow inspector retain their
+separate presentation and visibility controls.
 
 ## 7. Design notes
 

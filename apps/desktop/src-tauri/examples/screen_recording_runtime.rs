@@ -6,6 +6,23 @@
 mod local_window;
 
 #[cfg(target_os = "macos")]
+#[path = "../src/capture_bridge.rs"]
+#[allow(dead_code)]
+mod capture_bridge;
+#[cfg(target_os = "macos")]
+#[path = "../src/capture_file.rs"]
+#[allow(dead_code)]
+mod capture_file;
+#[cfg(target_os = "macos")]
+#[path = "../src/capture_lease.rs"]
+#[allow(dead_code)]
+mod capture_lease;
+#[cfg(target_os = "macos")]
+#[path = "../src/snapshot_image.rs"]
+#[allow(dead_code)]
+mod snapshot_image;
+
+#[cfg(target_os = "macos")]
 #[path = "../src/screen_recording.rs"]
 // Expose capability discovery only; the fixture cannot start native screen capture.
 #[allow(dead_code)]
@@ -27,7 +44,7 @@ mod fixture {
     use tauri::ipc::InvokeBody;
     use tauri::utils::assets::{AssetKey, AssetsIter, CspHash};
     use tauri::utils::config::BackgroundThrottlingPolicy;
-    use tauri::{AppHandle, Assets, Runtime, State, WebviewWindow};
+    use tauri::{AppHandle, Assets, Manager, Runtime, State, WebviewWindow};
 
     #[derive(Deserialize)]
     struct Fixture {
@@ -38,6 +55,7 @@ mod fixture {
         incognito: bool,
         devtools: Option<bool>,
         synthetic_media: bool,
+        app_ui: bool,
     }
 
     struct FixtureAssets(BTreeMap<AssetKey, Vec<u8>>);
@@ -91,6 +109,29 @@ mod fixture {
         incognito: bool,
         background_throttling: Option<BackgroundThrottlingPolicy>,
         native_start_requests: AtomicUsize,
+        app_ui: bool,
+        ui_focus_requests: AtomicUsize,
+    }
+
+    // UI interaction needs the same visible/key window a user would operate.
+    // This only activates the owned scratch window, never another installed app.
+    #[tauri::command]
+    fn focus_fixture_ui(
+        window: WebviewWindow,
+        state: State<'_, FixtureState>,
+    ) -> Result<(), String> {
+        super::local_window::authorize(&window, "Fixture UI activation")?;
+        if !state.app_ui {
+            return Err("only the owned App UI fixture may request focus".into());
+        }
+        state.ui_focus_requests.fetch_add(1, Ordering::Relaxed);
+        window
+            .app_handle()
+            .show()
+            .map_err(|error| error.to_string())?;
+        window.show().map_err(|error| error.to_string())?;
+        window.unminimize().map_err(|error| error.to_string())?;
+        window.set_focus().map_err(|error| error.to_string())
     }
 
     // The app confirmation check may discover native support, but can never
@@ -99,6 +140,12 @@ mod fixture {
     fn start_screen_recording(state: State<'_, FixtureState>) -> Result<(), String> {
         state.native_start_requests.fetch_add(1, Ordering::Relaxed);
         Err("native screen capture is forbidden in the owned fixture".into())
+    }
+
+    #[tauri::command]
+    fn start_screen_snapshot(state: State<'_, FixtureState>) -> Result<(), String> {
+        state.native_start_requests.fetch_add(1, Ordering::Relaxed);
+        Err("native source selection is forbidden in the owned fixture".into())
     }
 
     fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
@@ -120,19 +167,44 @@ mod fixture {
         request: tauri::ipc::Request<'_>,
     ) -> Result<Option<String>, String> {
         super::local_window::authorize(&window, "Fixture recording save")?;
-        let filename = request
+        let requested_name = request
             .headers()
             .get("x-holdmap-recording-name")
             .and_then(|value| value.to_str().ok())
             .ok_or("missing recording name")?;
-        if !matches!(filename, "holdmap-runtime.mp4" | "holdmap-runtime.gif") {
+        let snapshot_name = requested_name
+            .strip_prefix("holdmap-snapshot-")
+            .and_then(|name| name.strip_suffix(".png"))
+            .is_some_and(|stamp| {
+                let parts: Vec<_> = stamp.split('-').collect();
+                parts.len() == 3
+                    && parts.iter().zip([8, 6, 3]).all(|(part, length)| {
+                        part.len() == length && part.bytes().all(|byte| byte.is_ascii_digit())
+                    })
+            });
+        if !snapshot_name
+            && !matches!(
+                requested_name,
+                "holdmap-runtime.mp4" | "holdmap-runtime.gif" | "holdmap-runtime.png"
+            )
+        {
             return Err("only owned fixture filenames are permitted".into());
         }
+        // The actual App generates its timestamped name. It still writes to one
+        // fixed owned file; the renderer never supplies a destination path.
+        let filename = if snapshot_name {
+            "holdmap-runtime.png"
+        } else {
+            requested_name
+        };
         let InvokeBody::Raw(bytes) = request.body() else {
             return Err("recording did not arrive as raw binary IPC".into());
         };
         if bytes.is_empty() || bytes.len() > 16 * 1024 * 1024 {
             return Err("fixture recording exceeds its size limit".into());
+        }
+        if filename.ends_with(".png") {
+            super::snapshot_image::validate(bytes)?;
         }
         let path = state.root.join(filename);
         write_private(&path, bytes).map_err(|error| error.to_string())?;
@@ -161,6 +233,7 @@ mod fixture {
             "browser": report,
             "native_files": *state.files.lock().unwrap(),
             "native_start_requests": state.native_start_requests.load(Ordering::Relaxed),
+            "ui_focus_requests": state.ui_focus_requests.load(Ordering::Relaxed),
             "native_context": {
                 "is_dev": tauri::is_dev(),
                 "incognito": state.incognito,
@@ -228,6 +301,7 @@ mod fixture {
         context.set_assets(Box::new(assets));
         let incognito = fixture.incognito;
         let devtools = fixture.devtools;
+        let app_ui = fixture.app_ui;
         // This intentionally unfocused canvas fixture needs deterministic timers.
         // App and capability probes retain the production scheduling defaults.
         let background_throttling = fixture
@@ -241,10 +315,14 @@ mod fixture {
                 incognito,
                 background_throttling: background_throttling.clone(),
                 native_start_requests: AtomicUsize::new(0),
+                app_ui,
+                ui_focus_requests: AtomicUsize::new(0),
             })
             .invoke_handler(super::local_window::guard(tauri::generate_handler![
                 save_screen_recording,
                 start_screen_recording,
+                start_screen_snapshot,
+                focus_fixture_ui,
                 super::screen_recording::screen_recording_capabilities,
                 finish_fixture
             ]))
@@ -255,8 +333,11 @@ mod fixture {
                     tauri::WebviewUrl::App("index.html".into()),
                 )
                 .title("Owned Holdmap synthetic recording check")
-                .inner_size(480.0, 300.0)
-                .focused(false)
+                .inner_size(
+                    if app_ui { 960.0 } else { 480.0 },
+                    if app_ui { 640.0 } else { 300.0 },
+                )
+                .focused(app_ui)
                 .incognito(incognito);
                 let builder = if let Some(enabled) = devtools {
                     builder.devtools(enabled)

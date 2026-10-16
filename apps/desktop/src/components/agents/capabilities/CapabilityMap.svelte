@@ -9,13 +9,14 @@
   import CapabilityViewport from "./CapabilityViewport.svelte";
   import Icon from "../../Icon.svelte";
   import { agentColor } from "../../../lib/agents";
-  import { capabilityLabel, type CapabilityItem, type RunningMcpItem } from "../../../lib/agent-capabilities";
+  import { capabilityLabel, type CapabilityContextGroup, type CapabilityItem, type RunningMcpItem } from "../../../lib/agent-capabilities";
   import { buildCapabilityMap, type CapabilityGraphNode } from "../../../lib/agent-capability-map";
   import { FIT_PADDING } from "../../../lib/flow";
   import type { Agent } from "../../../lib/types";
 
-  let { agents, items, running, agentIds, selectedAgent = null, selectedId = null, filtered = false, dark, reduced, onselect, onselectagent }: {
+  let { agents, items, running, contextGroups, agentIds, selectedAgent = null, selectedId = null, filtered = false, dark, reduced, onselect, onselectagent }: {
     agents: Agent[]; items: CapabilityItem[]; running: RunningMcpItem[];
+    contextGroups?: readonly CapabilityContextGroup[];
     agentIds?: readonly string[];
     selectedAgent?: string | null; selectedId?: string | null; filtered?: boolean;
     dark: boolean; reduced: boolean; onselect: (id: string) => void; onselectagent: (id: string | null) => void;
@@ -24,16 +25,22 @@
   let width = $state(0), height = $state(0);
   let hover = $state<string | null>(null);
   let focusRequest = $state<{ id: string; version: number } | null>(null);
-  const graph = $derived(buildCapabilityMap({ agents, items, running, selectedAgent, selectedId, filtered }));
+  const graph = $derived(buildCapabilityMap({ agents, items, running, contextGroups, selectedAgent, selectedId, filtered }));
+  const resolveNode = (id: string | null | undefined) => graph.nodes.find(node => node.id === id || !!id && node.contextGroup?.agents.some(agent => agent.id === id));
+  const selectedNodeId = $derived(resolveNode(selectedId)?.id ?? null);
   const nodeTypes = { capability: CapabilityNode, agent: CapabilityNode, header: CapabilityLane } as unknown as NodeTypes;
   const edgeTypes = { definition: CapabilityEdge } as unknown as EdgeTypes;
   function requestFocus(id: string) { focusRequest = { id, version: (focusRequest?.version ?? 0) + 1 }; }
   $effect(() => { const id = selectedId; untrack(() => { if (id && focusRequest?.id !== id) requestFocus(id); }); });
-  const palette = $derived(new Map(agents.map((agent) => [agent.id, agentColor(null, agent.id, agentIds ?? agents.map((owner) => owner.id))])));
+  const palette = $derived.by(() => {
+    const colors = new Map(agents.map(agent => [agent.id, agentColor(null, agent.id, agentIds ?? agents.map(owner => owner.id))]));
+    for (const node of graph.nodes) if (node.contextGroup && node.agent) colors.set(node.id, colors.get(node.agent.id) ?? "var(--accent)");
+    return colors;
+  });
   const color = (node: CapabilityGraphNode) => node.kind === "running" ? "var(--muted)" : palette.get(node.ownerIds[0] ?? node.id) ?? "var(--accent)";
   $effect(() => { if (hover && !graph.nodes.some((node) => node.id === hover)) hover = null; });
   const relationship = $derived.by(() => {
-    const id = hover && graph.nodes.some((node) => node.id === hover) ? hover : selectedId;
+    const id = hover && graph.nodes.some((node) => node.id === hover) ? hover : selectedNodeId;
     if (!id || !graph.nodes.some((node) => node.id === id)) return null;
     const nodes = new Set([id]), edges = new Set<string>();
     for (const edge of graph.edges) if (edge.from === id || edge.to === id) { nodes.add(edge.from); nodes.add(edge.to); edges.add(edge.id); }
@@ -41,12 +48,13 @@
   });
   function activate(node: CapabilityGraphNode) { if (node.kind === "agent") onselectagent(node.agent?.id ?? node.id); else onselect(node.id); }
   function accessibleName(node: CapabilityGraphNode): string {
+    if (node.contextGroup) return `Inspect grouped context for ${node.label}, ${node.contextGroup.agents.length} observed processes, PIDs ${node.contextGroup.agents.map(agent => agent.pid).join(", ")}.${node.contextGroup.projectPaths.length ? ` Projects: ${node.contextGroup.projectPaths.join(", ")}.` : ""}`;
     return node.item ? capabilityLabel(node.item) : node.runtime ? `Inspect running process ${node.label}, PID ${node.runtime.tool.pid}` : `Inspect capabilities for ${node.label}, PID ${node.agent?.pid ?? "unknown"}`;
   }
   const flowNodes = $derived<Node[]>([
     ...graph.lanes.map((lane) => ({ id: `capability-lane:${lane.id}`, type: "header", position: { x: lane.x, y: lane.y }, width: lane.width, height: lane.height, data: { lane }, draggable: false, connectable: false, selectable: false, focusable: false, zIndex: -1 })),
     ...graph.nodes.map((node) => ({ id: node.id, type: node.kind === "agent" ? "agent" : "capability", position: node.position, width: node.width, height: node.height, draggable: false, connectable: false, selectable: false, focusable: false, zIndex: 1,
-      data: { node, color: color(node), label: accessibleName(node), selected: node.id === selectedId, dim: !!relationship && !relationship.nodes.has(node.id), highlighted: !!relationship && relationship.nodes.has(node.id),
+      data: { node, color: color(node), label: accessibleName(node), selected: node.id === selectedNodeId, dim: !!relationship && !relationship.nodes.has(node.id), highlighted: !!relationship && relationship.nodes.has(node.id),
         onactivate: () => activate(node), onfocus: (event: FocusEvent) => {
           // Pointer focus happens before mouseup: moving the viewport here would
           // move the pressed card away and cancel its native click.
@@ -59,19 +67,20 @@
   $effect(() => { nodes = flowNodes; edges = flowEdges; });
   const focusCache: { key: string; value: { x: number; y: number } | null } = { key: "", value: null };
   const focus = $derived.by(() => {
-    const node = graph.nodes.find((node) => node.id === focusRequest?.id);
+    const node = resolveNode(focusRequest?.id);
     const key = node ? `${node.id}:${focusRequest?.version}:${node.position.x}:${node.position.y}:${node.width}:${node.height}` : "";
     if (key !== focusCache.key) { focusCache.key = key; focusCache.value = node ? { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 } : null; }
     return focusCache.value;
   });
   const hub = $derived.by(() => {
-    const node = graph.nodes.find((node) => node.id === selectedId) ?? graph.nodes.find((node) => node.kind === "agent");
+    const node = resolveNode(selectedId) ?? graph.nodes.find((node) => node.kind === "agent");
     return node ? { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 } : null;
   });
   const partial = $derived(graph.omitted.agents > 0 || graph.omitted.inventory > 0 || graph.omitted.running > 0 || graph.omitted.ownerEdges > 0);
   const token = $derived(`${graph.signature}:${Math.round(width)}:${Math.round(height)}`);
   export function focusNode(id: string): boolean {
-    const target = [...element?.querySelectorAll<HTMLButtonElement>("button[data-capability-id]") ?? []].find((button) => button.dataset.capabilityId === id);
+    const visualId = resolveNode(id)?.id;
+    const target = [...element?.querySelectorAll<HTMLButtonElement>("button[data-capability-id]") ?? []].find((button) => button.dataset.capabilityId === visualId);
     if (!target) return false;
     target.focus({ preventScroll: true }); requestFocus(id); return true;
   }
@@ -89,7 +98,7 @@
     <AutoMiniMap {dark} />
     <CapabilityViewport {token} {focus} {hub} {width} {height} {reduced} />
   </SvelteFlow>
-  <div class="map-notes"><div class="map-hint"><Icon name="branch" size={12} /><span>Drag to explore · select a card for details</span></div>{#if partial}<div class="map-partial" role="status">Map shows {graph.shown.agents} of {graph.total.agents} agents, {graph.shown.inventory} of {graph.total.inventory} definitions and {graph.shown.running} of {graph.total.running} runtime candidates.{#if graph.omitted.ownerEdges} {graph.omitted.ownerEdges} source relationships not drawn.{/if}</div>{/if}</div>
+  <div class="map-notes"><div class="map-hint"><Icon name="branch" size={12} /><span>Drag to explore · select a card for details</span></div>{#if partial}<div class="map-partial" role="status">Map shows {graph.shown.agents} of {graph.total.agents} {contextGroups ? "contexts" : "agents"}, {graph.shown.inventory} of {graph.total.inventory} definitions and {graph.shown.running} of {graph.total.running} runtime candidates.{#if graph.omitted.ownerEdges} {graph.omitted.ownerEdges} source relationships not drawn.{/if}</div>{/if}</div>
 </div>
 
 <style>

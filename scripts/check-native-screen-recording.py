@@ -61,6 +61,20 @@ def validate(path: Path, duration: float, frame_count: int | None = None) -> Non
                 "GIF lost its first, middle, or final scene"
 
 
+def validate_png(path: Path) -> None:
+    metadata = probe(path)
+    assert len(metadata["streams"]) == 1, "PNG snapshot has unexpected streams"
+    image = metadata["streams"][0]
+    assert image["codec_name"] == "png", "Snapshot is not a PNG"
+    assert (image["width"], image["height"]) == (640, 360), "Snapshot dimensions changed"
+    assert 0 < path.stat().st_size <= 32 * 1024 * 1024, "Snapshot exceeded byte limit"
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600, "Snapshot is not private"
+    pixel = run(["ffmpeg", "-v", "error", "-i", str(path), "-vf", "scale=1:1", "-frames:v", "1",
+                 "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"]).stdout
+    assert len(pixel) == 3 and pixel[0] > pixel[1] + 150 and pixel[0] > pixel[2] + 150, \
+        "PNG snapshot lost its owned red pixels"
+
+
 def main() -> None:
     if sys.platform != "darwin" or int(platform.mac_ver()[0].split(".")[0]) < 14:
         print("SKIP native recording fixture requires macOS 14 or newer")
@@ -98,7 +112,8 @@ def main() -> None:
         validate(output / "rounded.gif", 20, 160)
         validate(output / "capped.mp4", 120)
         validate(output / "capped.gif", 120, 240)
-    print("Native recording fixture passed: real H.264/GIF, full timeline, bounds, privacy and cancellation; no screen capture")
+        validate_png(output / "snapshot.png")
+    print("Native recording fixture passed: real H.264/GIF and PNG, full timeline, bounds, privacy and cancellation; no screen capture")
 
 
 if __name__ == "__main__":
