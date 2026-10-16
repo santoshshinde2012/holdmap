@@ -1336,13 +1336,37 @@ published asset digests and IDs, then publishes the complete `latest.json` index
 ## 6. Graph library
 
 The graph view uses **Svelte Flow (`@xyflow/svelte`) and `@dagrejs/dagre`**. Nodes are real DOM
-(so they reuse the icons, tokens and focus rings), group nodes draw the cluster hulls, and the
-minimap and zoom controls are built in. dagre gives a stable left-to-right layout that matches the
-stop order; the alternative "organic" layout is a small seeded force simulation, so the graph
-doesn't move between refreshes. Unconnected subgraphs explain the empty canvas and offer
-**All services**; External stays idle until there are outbound hosts. Editor-extension nodes
-keep the extension identity, not the inherited project. Details, agent cards, the Flow
-inspector and on-canvas legends can be hidden so Graph and Flow use the full window.
+buttons with the shared icons, tokens and focus rings; group nodes draw existing cluster hulls.
+In current source (**Unreleased**), the pure layout finds components from existing edges and
+cluster membership, lays each one out independently, then packs their bounds, including cluster
+headers. Dagre gives a left-to-right layout inside each connected component. The alternative
+Force layout runs the deterministic simulation inside components only; isolated services do
+not repel unrelated services across a vast canvas. Force remains bounded to 100 visible nodes,
+with Layered as the fallback. Packing and proximity never add edges or infer relationships.
+
+`graphForQuery` projects matched nodes plus their immediate observed neighbors and existing
+edges; the matching predicate uses displayed metadata, exact `port:`/`:port` and `pid:`
+selectors, and AND between terms. It does not inspect process command lines. `App.svelte`
+owns Graph search separately from List filters and resolves Graph selections against the full
+snapshot, so hidden List preferences cannot hide a selected service's details.
+
+Graph opens without the List summary pane. An explicit card click or native button activation
+opens that listener's details; close, hide and Escape clear the Graph selection and restore focus
+to its card or the graph region. Wide canvases dock details, while smaller canvases use the
+existing modal drawer. Structure changes drive layout; viewport adjustment follows explicit
+scope, layout and search changes after fresh topology arrives. Refreshes preserve the user's
+viewport. `GraphViewport.svelte` waits for measured nodes and establishes a readable
+initial scale, with separate actions for fitting the entire graph and restoring readable size.
+On wider canvases, the minimap appears only when graph bounds extend beyond the viewport.
+
+Primary chrome contains compact counts, All services and layout controls. Options discloses
+Traffic, External and Legend; reduced motion disables traffic animation. External stays idle
+until there are outbound hosts, and a short no-links message explains disconnected graphs.
+Editor-extension nodes keep the extension identity, not the inherited project. The public
+sample's All services mode adds eligible listeners from the same snapshot without inventing
+edges, including the existing bounded `mockPorts` load samples. Published 0.8.0 installers
+predate these graph presentation changes. Agent cards and the Flow inspector retain their
+separate presentation and visibility controls.
 
 ## 7. Design notes
 

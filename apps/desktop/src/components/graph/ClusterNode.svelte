@@ -36,7 +36,7 @@
   .kind-supervisor { --hue: var(--tone-amber); }
   .kind-workspace { --hue: var(--tone-green); }
   .kind-git { --hue: var(--tone-gray); }
-  .hull.dim { opacity: 0.5; }
+  .hull.dim { --hue: var(--tone-gray); }
   header { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 12px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .ic { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; color: var(--hue); background: color-mix(in srgb, var(--hue) 14%, transparent); }
   .name { font-weight: var(--fw-semibold); color: var(--text); letter-spacing: var(--ls-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

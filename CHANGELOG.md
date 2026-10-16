@@ -8,6 +8,26 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Changed
+
+- Give the service graph the full canvas until a service is selected. Details open beside
+  the graph when space allows, or in a dismissible drawer, without changing List preferences.
+- Keep service cards readable by default, with a zoom percentage/reset control and an explicit
+  Fit all overview. Move secondary display settings into Options and keep the legend outside
+  the graph viewport.
+- Give Graph its own service/port/PID search with observed neighbour context; keep List-only
+  filters and sorting out of Graph. Native card buttons support keyboard activation and focus
+  returns after details close.
+
+### Fixed
+
+- Pack disconnected graph components and cluster hulls compactly instead of repelling
+  unrelated services across a large Force canvas. Preserve viewport choices during refreshes.
+- Wait for fresh scope data before positioning the graph; centre a readable service card in
+  narrow windows. Clear hidden selections so unrelated port actions cannot remain active.
+- Make browser sample All services include the other listening TCP entries from the same
+  sample snapshot, with matching IDs and no fabricated links.
+
 ## [0.8.0] - 2026-10-16
 
 ### Added

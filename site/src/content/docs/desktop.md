@@ -42,14 +42,38 @@ tightly connected services and is available for up to 100 services; larger graph
 Layered to keep navigation responsive, including when Force was previously selected.
 
 The graph starts with your dev servers and anything they talk to. **All services** adds
-databases, apps and the rest of the machine. **External** shows outbound remote hosts and
-stays idle when there are none. If the canvas has services but no links, it explains that
-and offers All services. Editor-extension listeners keep the extension name, not the
-inherited project — same identity as the [list and Agents view](../agents/).
+databases, apps and other services on this computer. Editor-extension listeners keep the
+extension name, not the inherited project — the same identity as the [list and Agents
+view](../agents/). A card's location is a layout choice; only the displayed links represent
+observed connections.
 
-Hide the details pane (`B`, the toolbar panel control, or the pane's own hide button) so
-the graph uses the full window. **Legend** on the canvas hides the counts and key. Both
-choices persist.
+**Current source (Unreleased):** the graph opens with the full canvas and compact service
+and link counts. Disconnected services and separate clusters are packed into compact
+groups in both layouts. The published **0.8.0** installers retain the previous graph
+toolbar, automatic fit and summary pane.
+
+The new **Search services** field searches displayed names, projects, ports and PIDs.
+Use `port:3000` or `:3000` for an exact port, and `pid:43000` for an exact PID. Multiple
+terms must all match. Results include each match's immediate observed neighbors, so a
+service's connections keep their context; neighbors are not additional search matches.
+Graph search is separate from the List's search, protocol, ownership and dev-server
+filters. Searching never reads process command lines or creates links.
+
+The canvas starts at a readable size. Pan or zoom to explore larger graphs; **Fit all
+services in view** deliberately zooms out to the whole map, and the percentage control,
+**Reset to readable size**, restores a readable view. On wider canvases, a minimap appears
+when part of the graph is outside the viewport.
+
+Click a service card, or focus it and press **Enter** or **Space**, to inspect that service.
+Details appear beside the canvas when there is enough room, or in a dismissible drawer
+in smaller windows. Close or hide details, or press **Esc**, to return to the full map and
+restore focus to the service card. The graph does not open a summary pane automatically.
+
+Open **Options** for the secondary display controls. **External** shows outbound remote
+hosts and is unavailable when there are none. **Traffic** animates observed connections;
+it stays off when reduced motion is enabled. **Legend** toggles the connection key while
+the compact counts stay visible. Disconnected services have no invented edges; a short
+message explains when no connections are present.
 
 ## Record the screen
 
@@ -249,7 +273,9 @@ Screen sharing is separate and always requires your explicit screen or window se
 In 0.5.0, **Settings → General → Single-key shortcuts** lets you disable
 letter and symbol shortcuts, including `/` and `j`/`k`. Arrow navigation and `⌘`/`Ctrl` shortcuts
 remain available. This is useful with speech input or when you want to reserve letter keys.
-Shortcuts respect text composition and native controls; port filters apply only in port views.
+Shortcuts respect text composition and native controls. In current source (**Unreleased**),
+port-filter shortcuts apply only in List; Graph keeps its own search and selection. In Graph,
+`B` acts on a selected listener's details instead of opening a summary pane.
 The command palette keeps its active result valid as running services change.
 
 ## Agents map

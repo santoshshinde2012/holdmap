@@ -280,12 +280,7 @@ const captures = [
   } })),
   { name: "desktop-overview-dark.png", theme: "dark", async prepare(page) { await selectPort(page); } },
   { name: "desktop-overview-light.png", theme: "light", async prepare(page) { await selectPort(page); } },
-  { name: "desktop-graph-dark.png", theme: "dark", async prepare(page) {
-    await page.getByRole("radio", { name: /^Graph/ }).click();
-    await page.getByRole("button", { name: "shop-web on ports 3000", exact: true }).click();
-    await expect(page.getByRole("complementary", { name: "Port details" }).getByRole("tab", { name: /^Connections/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: "shop-api on ports 3001", exact: true })).toBeVisible();
-  } },
+  { name: "desktop-graph-dark.png", theme: "dark", prepare: openGraph },
   { name: "desktop-agents-dark.png", theme: "dark", prepare: openAgents },
   { name: "desktop-agents-light.png", theme: "light", prepare: openAgents },
   { name: "desktop-agents-computer-dark.png", theme: "dark", prepare: (page) => openAgents(page, "Computer") },
@@ -382,7 +377,8 @@ for (const theme of ["dark", "light"]) {
     { ...ui, name: `ui-graph-${theme}.png`, async prepare(page) {
       await openGraph(page);
       await expect(page.getByRole("button", { name: "db on ports 5432", exact: true })).toBeVisible();
-      return boundedClip(page, page.locator(".hull.kind-compose"), { padding: 8 });
+      // Locator capture waits for the measured viewport to settle before reading its crop.
+      return page.locator(".hull.kind-compose");
     } },
   );
   for (const variant of ["desktop", "mobile"]) {

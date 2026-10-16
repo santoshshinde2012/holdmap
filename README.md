@@ -375,6 +375,13 @@ uses the same UI with sample data.
 Desktop controls preserve composing and modified keys in settings, menus and resize controls.
 Dialog Tab navigation includes only enabled, visible controls in the active tab order.
 
+**Graph improvements in current source (Unreleased).** The map opens at full width until you
+select a service. Disconnected groups pack nearby, cards start at a readable size, and
+**Fit all** offers an overview. Graph search matches services, ports and PIDs while keeping
+their observed neighbours for context; List filters stay separate. **Options** contains
+Traffic, External and Legend. These changes are not in the 0.8.0 installers; see the
+[graph guide](site/src/content/docs/desktop.md#service-graph-and-cluster-grouping).
+
 **Close and reopen.** With a working menu-bar or tray icon, closing the main window keeps
 Holdmap running. Click its icon or use your configured global shortcut to reopen; on macOS,
 the Dock icon also restores it. **0.6.0** hides the application through AppKit so a fullscreen
@@ -439,7 +446,7 @@ installation-guide actions; see [0.8.0 changes](CHANGELOG.md#080---2026-10-16).
 
 | Service graph | Stop confirmation |
 |---|---|
-| ![The service graph: a Compose cluster with shop-web, shop-api, db and redis, dark theme](docs/screenshots/desktop-graph-dark.png) | ![The stop confirmation lists every step before anything is sent](docs/screenshots/desktop-stop-confirm-light.png) |
+| ![Current-source service graph uses the full canvas for the shop services and their observed connections, dark theme](docs/screenshots/desktop-graph-dark.png) | ![The stop confirmation lists every step before anything is sent](docs/screenshots/desktop-stop-confirm-light.png) |
 | **Command palette** | **Settings** |
 | ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) | ![Settings: startup and the global shortcut, dark theme](docs/screenshots/desktop-settings-dark.png) |
 | **About in the browser preview, dark** | **About in the browser preview, light** |

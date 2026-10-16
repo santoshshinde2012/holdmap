@@ -300,7 +300,7 @@ export async function onEvent<T>(name: string, cb: (payload: T) => void): Promis
 export async function topology(all: boolean): Promise<Graph> {
   if (isTauri) return call("topology", { all });
   if (liveReads()) return liveJson("topology", { all });
-  const g = mockTopology();
+  const g = mockTopology({ ...MOCK_SNAPSHOT, entries: mockEntries() }, all);
   return { ...g, nodes: g.nodes.map((n) => (n.root_pid ? { ...n, cpu_percent: Math.round((n.cpu_percent + Math.random()) * 10) / 10 } : n)) };
 }
 
