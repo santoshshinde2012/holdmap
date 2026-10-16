@@ -9,6 +9,7 @@ type CaptureFixture = {
   mode: "ready" | "pending" | "denied";
   requests: number;
   pngOverlayPresence: boolean[];
+  pngPalettePresence: boolean[];
   streams: MediaStream[];
   pending: (() => void)[];
 };
@@ -40,11 +41,14 @@ export const test = base.extend<{ app: import("@playwright/test").Page }>({
         requestAnimationFrame(paint);
       };
       requestAnimationFrame(paint);
-      const capture: CaptureFixture = { mode: "ready", requests: 0, pngOverlayPresence: [], streams: [], pending: [] };
+      const capture: CaptureFixture = { mode: "ready", requests: 0, pngOverlayPresence: [], pngPalettePresence: [], streams: [], pending: [] };
       window.__holdmapCapture = capture;
       const toBlob = HTMLCanvasElement.prototype.toBlob;
       HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
-        if (type === "image/png") capture.pngOverlayPresence.push(!!document.querySelector("[data-snapshot-ui]"));
+        if (type === "image/png") {
+          capture.pngOverlayPresence.push(!!document.querySelector("[data-snapshot-ui]"));
+          capture.pngPalettePresence.push(!!document.querySelector('[role="dialog"][aria-label="Command palette"]'));
+        }
         return toBlob.call(this, callback, type, quality);
       };
       Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", {

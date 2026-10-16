@@ -32,7 +32,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup(); document.getElementById("holdmap-capture-root")?.remove();
-  vi.restoreAllMocks(); vi.resetAllMocks();
+  document.querySelector('[role="dialog"][aria-label="Command palette"]')?.remove();
+  vi.restoreAllMocks(); vi.resetAllMocks(); vi.useRealTimers();
 });
 const handle = (view: { component: unknown }) => view.component as SnapshotCaptureHandle;
 
@@ -140,6 +141,40 @@ describe("snapshot capture view", () => {
     await view.rerender({ session: null, blocked: false });
     handle(view).show();
     await view.findByRole("dialog", { name: "Snapshot preview" });
+  });
+  it("waits for an outgoing command palette to be removed before borrowing the video", async () => {
+    const palette = document.createElement("div");
+    palette.setAttribute("role", "dialog"); palette.setAttribute("aria-label", "Command palette"); document.body.append(palette);
+    const session = { elapsedMs: () => 900, stop: vi.fn(), discard: vi.fn(), captureSnapshot: vi.fn().mockResolvedValue(png("recording")) };
+    const view = render(SnapshotCapture, { session });
+    const pending = handle(view).captureRecording();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(session.captureSnapshot).not.toHaveBeenCalled();
+    palette.remove();
+    await pending;
+    await view.findByRole("dialog", { name: "Snapshot preview" });
+    expect(session.captureSnapshot).toHaveBeenCalledOnce();
+  });
+  it.each(["cancel", "timeout"])("cleans up a %s while waiting for the outgoing palette", async (action) => {
+    vi.useFakeTimers();
+    const palette = document.createElement("div");
+    palette.setAttribute("role", "dialog"); palette.setAttribute("aria-label", "Command palette"); document.body.append(palette);
+    const session = { elapsedMs: () => 900, stop: vi.fn(), discard: vi.fn(), captureSnapshot: vi.fn() };
+    const view = render(SnapshotCapture, { session });
+    const pending = handle(view).captureRecording();
+    await vi.advanceTimersByTimeAsync(0);
+    if (action === "cancel") handle(view).cancel();
+    else await vi.advanceTimersByTimeAsync(2_000);
+    await pending;
+    expect(session.captureSnapshot).not.toHaveBeenCalled();
+    // Let Svelte paint the timeout's error dialog before checking pending work.
+    await vi.advanceTimersByTimeAsync(50);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
+    if (action === "timeout") expect((await view.findByRole("alert")).textContent).toContain("Close the command palette");
+    palette.remove();
+    await Promise.resolve();
+    expect(session.captureSnapshot).not.toHaveBeenCalled();
   });
   it("prevents closing or discarding during a native save and treats save cancellation quietly", async () => {
     let resolve!: (value: { saved: boolean }) => void;

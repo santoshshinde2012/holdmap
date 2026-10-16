@@ -191,6 +191,22 @@ for (const cancel of ["Escape", "toolbar"] as const) {
   });
 }
 
+test("the direct recording snapshot command waits for the animated palette to leave the pixels", async ({ app }) => {
+  await app.emulateMedia({ reducedMotion: "no-preference" });
+  await app.getByRole("button", { name: "Record screen", exact: true }).click();
+  await app.getByRole("dialog", { name: "Record screen", exact: true }).getByRole("button", { name: "Choose screen…", exact: true }).click();
+  await expect(app.getByRole("button", { name: "Stop screen recording", exact: true })).toBeVisible();
+  await app.getByRole("button", { name: "Commands", exact: true }).click();
+  const palette = app.getByRole("dialog", { name: "Command palette", exact: true });
+  await palette.getByRole("combobox", { name: "Search commands" }).fill("Snapshot recording source");
+  await palette.getByRole("option", { name: /Snapshot recording source/ }).click();
+  await expect(preview(app)).toBeVisible();
+  expect(await app.evaluate(() => window.__holdmapCapture.pngPalettePresence)).toEqual([false]);
+  expect(await app.evaluate(() => window.__holdmapCapture.pngOverlayPresence)).toEqual([false]);
+  expect(await app.evaluate(() => window.__holdmapCapture.requests)).toBe(1);
+  expect(await app.evaluate(() => window.__holdmapCapture.streams[0].getVideoTracks()[0].readyState)).toBe("live");
+});
+
 test("a recording snapshot reuses the source and leaves advancing video and both exports intact", async ({ app }) => {
   test.setTimeout(45_000);
   await app.getByRole("button", { name: "Record screen", exact: true }).click();

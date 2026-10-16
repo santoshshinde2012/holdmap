@@ -50,6 +50,20 @@
   async function settleView(signal: AbortSignal) {
     await tick();
     if (signal.aborted) throw new DOMException("Snapshot cancelled.", "AbortError");
+    const palette = document.querySelector('[role="dialog"][aria-label="Command palette"]');
+    if (palette) await new Promise<void>((resolve, reject) => {
+      // A command runs before the palette's outro finishes. Observe its actual removal
+      // so a snapshot of this window cannot include the fading command controls.
+      const clean = () => { clearTimeout(timer); observer.disconnect(); signal.removeEventListener("abort", abort); };
+      const ready = () => { if (!palette.isConnected) { clean(); resolve(); } };
+      const abort = () => { clean(); reject(new DOMException("Snapshot cancelled.", "AbortError")); };
+      const observer = new MutationObserver(ready);
+      const timer = setTimeout(() => { clean(); reject(new Error("Close the command palette, then try taking the snapshot again.")); }, 2_000);
+      observer.observe(document.body, { childList: true, subtree: true });
+      signal.addEventListener("abort", abort, { once: true });
+      ready();
+    });
+    if (signal.aborted) throw new DOMException("Snapshot cancelled.", "AbortError");
     await new Promise<void>((resolve, reject) => {
       let frame = 0;
       const clean = () => { clearTimeout(timer); cancelAnimationFrame(frame); signal.removeEventListener("abort", abort); };
