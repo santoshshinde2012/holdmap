@@ -16,8 +16,6 @@ export const issuesUrl = `${repoUrl}/issues`;
 
 export const tagline =
   "See which ports, agents and tools are running — and stop the right thing safely.";
-export const description =
-  "holdmap maps ports, AI agents and projects, stops reviewed services, and records screens locally. CLI, TUI, desktop and MCP for macOS, Linux and Windows.";
 
 /** Stars are only shown once the number says something. */
 const STARS_SHOWN_FROM = 25;
@@ -43,6 +41,12 @@ const [release, repo] = await Promise.all([github<unknown>("/releases/latest"), 
 
 /** Publishing requires a validated stable release; local builds can fall back to version.txt. */
 export const version = publishedReleaseVersion({ sourceVersion: fileVersion, release, repositoryUrl: repoUrl, offline, requireRelease });
+// The current highlights describe 0.9.0. Keep metadata and visible availability in agreement.
+const [publishedMajor, publishedMinor] = version.split(".").map(Number);
+export const releaseHighlightsPublished = publishedMajor > 0 || publishedMinor >= 9;
+export const description = releaseHighlightsPublished
+  ? "holdmap maps ports, agents, MCP and skills. Stop services safely, explore capabilities and save local video or PNGs on macOS, Linux and Windows."
+  : "holdmap maps ports, agents, MCP and skills. Preview 0.9.0's capability explorer and PNG snapshots. Local tools for macOS, Linux and Windows.";
 export const stars = repo?.stargazers_count && repo.stargazers_count >= STARS_SHOWN_FROM ? repo.stargazers_count : null;
 
 // Keep the chosen release label, filenames and checksums together while a new release builds.

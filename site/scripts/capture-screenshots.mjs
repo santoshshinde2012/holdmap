@@ -1,5 +1,6 @@
-// Capture the current built public website. Build it first with HOLDMAP_SITE_OFFLINE=1
-// for stable release/star data. Uses the desktop's managed Chromium and a private preview.
+// Capture the built public website. Use HOLDMAP_SITE_REQUIRE_RELEASE=1 for actual
+// published-release availability, or HOLDMAP_SITE_OFFLINE=1 for a source preview.
+// Uses the desktop's managed Chromium and a private preview; never builds the site.
 import assert from "node:assert/strict";
 import { mkdir, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,9 @@ let browser;
 const captures = [
   { name: "site-home-dark.png", route: "", theme: "dark", width: 1440 },
   { name: "site-home-light.png", route: "", theme: "light", width: 1440 },
+  { name: "site-release-dark.png", route: "", theme: "dark", width: 1440, height: 1100, focusSelector: "#whats-new" },
+  { name: "site-release-light.png", route: "", theme: "light", width: 1440, height: 1100, focusSelector: "#whats-new" },
+  { name: "site-release-mobile-light.png", route: "", theme: "light", width: 390, height: 1800, focusSelector: "#whats-new" },
   { name: "site-guide-dark.png", route: "docs/agents/", theme: "dark", width: 1440 },
   { name: "site-guide-light.png", route: "docs/agents/", theme: "light", width: 1440 },
   { name: "site-guide-mobile-light.png", route: "docs/agents/", theme: "light", width: 390 },
@@ -23,7 +27,7 @@ try {
   browser = await chromium.launch({ executablePath: process.env.CHROME || undefined });
   for (const capture of captures) {
     const context = await browser.newContext({
-      viewport: { width: capture.width, height: 900 }, deviceScaleFactor: 1,
+      viewport: { width: capture.width, height: capture.height ?? 900 }, deviceScaleFactor: 1,
       reducedMotion: "reduce", locale: "en-US", timezoneId: "UTC",
     });
     try {
@@ -40,7 +44,7 @@ try {
       await page.getByRole("heading", { level: 1 }).waitFor();
       if (capture.route) {
         await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).waitFor();
-      } else {
+      } else if (!capture.focusSelector) {
         // The recording uses sample app data. Pause its first frame for stable captures,
         // leaving the poster/video controls in their real public-page state.
         await page.getByRole("button", { name: "Play the tour", exact: true }).click();
@@ -52,11 +56,12 @@ try {
           return video.paused && !video.seeking && video.readyState >= 2;
         });
       }
-      if (capture.focusImage !== undefined) {
-        const image = page.locator(".prose img").nth(capture.focusImage);
-        await image.scrollIntoViewIfNeeded();
-        await image.evaluate((element) => {
-          window.scrollTo(0, window.scrollY + element.getBoundingClientRect().top - 110);
+      const focusTarget = capture.focusSelector ? page.locator(capture.focusSelector)
+        : capture.focusImage !== undefined ? page.locator(".prose img").nth(capture.focusImage) : null;
+      if (focusTarget) {
+        await focusTarget.scrollIntoViewIfNeeded();
+        await focusTarget.evaluate((element) => {
+          window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 110, behavior: "instant" });
         });
       }
       await page.evaluate(async () => {
@@ -69,12 +74,16 @@ try {
       });
       assert.equal(await page.locator("html").getAttribute("data-theme"), capture.theme);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${capture.name}: horizontal overflow`);
+      if (capture.focusSelector) assert.equal(await focusTarget.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return bounds.top >= 0 && bounds.bottom <= innerHeight && bounds.left >= 0 && bounds.right <= innerWidth;
+      }), true, `${capture.name}: focused section must fit completely in the capture`);
       assert.deepEqual(errors, [], `${capture.name}: page errors`);
       const file = fileURLToPath(new URL(capture.name, output));
       await page.screenshot({ path: file, animations: "disabled" });
       const bytes = (await stat(file)).size;
       assert.ok(bytes < 600 * 1024, `${capture.name}: exceeds the 600 KB snapshot budget`);
-      console.log(`${capture.name}: ${capture.width}×900, ${(bytes / 1024).toFixed(1)} KB`);
+      console.log(`${capture.name}: ${capture.width}×${capture.height ?? 900}, ${(bytes / 1024).toFixed(1)} KB`);
     } finally {
       await context.close();
     }

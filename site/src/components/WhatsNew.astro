@@ -1,10 +1,6 @@
 ---
 import Icon from "./Icon.astro";
-import { repoUrl, url, version } from "../lib/site";
-
-// Feature availability belongs to this release, even while a later version is assembling.
-const [publishedMajor, publishedMinor] = version.split(".").map(Number);
-const released = publishedMajor > 0 || publishedMinor >= 9;
+import { releaseHighlightsPublished as released, repoUrl, url, version } from "../lib/site";
 const highlights = [
   { icon: "Camera", title: "Keep a still alongside the video", text: "Capture the Holdmap view, choose a screen or window, or borrow the active recording source without another picker. Review and save the PNG locally while video keeps running.", href: url("docs/desktop/#take-a-png-snapshot"), link: "Take a PNG snapshot" },
   { icon: "Network", title: "Read the service graph at a glance", text: "Compact disconnected services, readable starting zoom and a full canvas make local relationships easier to explore. Search services, ports and PIDs while keeping observed neighbors in context.", href: url("docs/desktop/#service-graph-and-cluster-grouping"), link: "Explore the service graph" },
