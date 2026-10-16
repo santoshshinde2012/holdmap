@@ -101,7 +101,7 @@ is `holdmap agents --capabilities`, optionally with `--json`; the terminal Agent
 **c**; MCP clients can call `list_agents` with `include_capabilities: true`. Ordinary scans do
 not inspect those files.
 
-The **current source (Unreleased)** adds an **Explore / Map / Compare** capability explorer
+Version **0.9.0** adds an **Explore / Map / Compare** capability explorer
 and an inspector with **Purpose**, **Source**, **Evidence** and **Activity** sections. Published
 0.8.0 installers have the earlier map and source details. The explorer uses the same opt-in
 inventory: it does not add supported discovery locations, client adapters or tool catalogs.
@@ -119,7 +119,7 @@ Nothing is launched, connected, installed or enabled by inventory inspection. Ca
 an alias or skill name to an inventory row or process automatically. Matching names across two
 sources are insufficient evidence of ownership or use.
 
-These **current-source (Unreleased)** browser captures use labelled sample definitions and
+These **0.9.0** browser captures use labelled sample definitions and
 process observations:
 
 | Explore declared purposes | Compare exact source observations |
@@ -138,7 +138,8 @@ process observations:
 
 ### Explore, map and compare definitions
 
-These views are in the **current source (Unreleased)**:
+These views require **0.9.0**. During release preparation, the download page still follows
+the latest published release; 0.8.0 installers have the earlier map.
 
 - **Explore:** read skill cards by name and declared purpose, with source scope and evidence
   visible. A missing or rejected description stays **Purpose not reported**. An MCP alias
@@ -317,7 +318,7 @@ skill event; absent records do not prove that no skill was used.
   YAML header. Holdmap does not resolve client policy or validate skill packages.
 - **Catalog not reported:** expected for file inventory, even when an MCP definition is
   present. It does not enumerate tools, establish an empty server or diagnose a connection
-  failure. The current-source Tools view explains this boundary; no catalog adapter is included.
+  failure. The 0.9.0 Tools view explains this boundary; no catalog adapter is included.
 - **Configured server with no Calls:** inventory is independent of recording. Configure a
   supported producer, start a fresh recording and restart that producer with its new endpoint
   and token. Keep private setup credentials out of bug reports.

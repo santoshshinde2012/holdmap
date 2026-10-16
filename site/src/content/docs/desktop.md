@@ -1,6 +1,6 @@
 ---
 title: Desktop app
-description: "Use holdmap's desktop maps, screen recording and Unreleased PNG snapshots, with local save controls and reviewed service stops on macOS, Windows and Linux."
+description: "Use holdmap 0.9.0 desktop maps, PNG snapshots and screen recording, with local saves and reviewed service stops on macOS, Windows and Linux."
 order: 6
 ---
 
@@ -10,8 +10,12 @@ CLI, so process identity checks and process protections are shared. The CLI's pr
 `.holdmap.toml` settings apply to CLI and terminal UI actions.
 [Try it in the browser](../../#demo).
 
-**Version 0.8.0** adds the MCP and skills map, reported usage labels, clearer desktop
-update help and recording startup and cleanup fixes. It retains native screen recording on
+**Version 0.9.0** adds PNG snapshots, a readable service graph and the Explore / Map / Compare
+capability explorer. During release preparation, [Install](../../#install) stays on the latest
+published release; 0.8.0 installers predate these additions.
+
+Version **0.8.0** introduced the MCP and skills inventory map, reported usage labels, clearer
+desktop update help and recording startup and cleanup fixes. The app retains native screen recording on
 macOS 14 or later when the desktop window lacks browser screen sharing, introduced in
 **0.7.1**, and the recorder, Computer / Footprint / Project map zoom and live `npm run dev`
 scans introduced in **0.7.0**. Check the
@@ -47,7 +51,7 @@ extension name, not the inherited project — the same identity as the [list and
 view](../agents/). A card's location is a layout choice; only the displayed links represent
 observed connections.
 
-**Current source (Unreleased):** the graph opens with the full canvas and compact service
+**From 0.9.0:** the graph opens with the full canvas and compact service
 and link counts. Disconnected services and separate clusters are packed into compact
 groups in both layouts. The published **0.8.0** installers retain the previous graph
 toolbar, automatic fit and summary pane.
@@ -82,7 +86,7 @@ Screen recording requires **0.7.0 or newer**, or the browser demo. Version **0.6
 installers do not include it.
 To add it to an existing 0.6.0 installation, download and install the new desktop build.
 
-The video icon in current source (the camera icon in 0.8.0), **Record screen…** in the
+The video icon in 0.9.0 (the camera icon in 0.8.0), **Record screen…** in the
 command palette, or `⇧V` starts a local capture. Holdmap explains that recordings stay on this computer, then the
 operating system asks which display or window to share. Microphone and system audio are
 not captured. A timer in the title bar and **Stop screen recording** replace the dialog so
@@ -130,7 +134,7 @@ Review local capture limits before choosing a screen or window:
 
 ## Take a PNG snapshot
 
-**Current source (Unreleased):** PNG snapshots are separate from video recording.
+**Available from 0.9.0:** PNG snapshots are separate from video recording.
 Published **0.8.0 installers predate this feature**. Open the camera button, choose
 **Take snapshot…** in the command palette, or press `⇧S` with single-key shortcuts enabled.
 
@@ -154,7 +158,7 @@ available to retry. **New snapshot** replaces it only after the new capture succ
 **Discard snapshot** removes the retained image without stopping a video. Reloading or
 quitting clears the preview, so save it first to keep it.
 
-These screenshots show the Unreleased preview with browser sample data:
+These screenshots show 0.9.0 with browser sample data:
 
 ![PNG snapshot review in dark theme, with local save and discard controls](../../../../docs/screenshots/desktop-snapshot-dark.png)
 
@@ -230,7 +234,7 @@ This Linux GTK dependency issue does not affect the CLI, TUI or
 MCP server, or the macOS and Windows desktop builds. See the
 [security policy](https://github.com/santoshshinde2012/holdmap/blob/main/SECURITY.md#linux-glib-dependency-backports).
 
-The **0.8.0** macOS app is ad-hoc signed and sealed, without Developer-ID signing or
+The published **0.8.0** macOS app is ad-hoc signed and sealed, without Developer-ID signing or
 notarisation. Its Windows installers are unsigned. First verify the download using the
 checksums and build provenance linked from [Install](../../#install), then open it:
 
@@ -252,8 +256,9 @@ opened from a downloaded disk image or another folder can still be an older vers
 
 From **0.8.0**, About also shows the running app's location and architecture, with desktop
 download and installation-guide actions. The command palette can open desktop downloads too.
-This release has no configured signed updater feed; follow the manual quit/install/reopen
-steps above. Browser About identifies the web preview and omits desktop app locations.
+Follow the manual quit/install/reopen steps above for releases without a signed updater
+feed. Check the published release's signing
+and updater notes before installing. Browser About identifies the web preview and omits desktop app locations.
 
 ## Develop with local data
 
@@ -299,7 +304,7 @@ Screen sharing is separate and always requires your explicit screen or window se
 | `d` · `m` · `e` · `t` | Filter: dev servers · mine · exposed · TCP/UDP |
 | `⌘R` | Rescan now |
 | `⇧V` | Record the screen, stop capture or review the latest recording |
-| `⇧S` | Take or review a PNG snapshot (Unreleased) |
+| `⇧S` | Take or review a PNG snapshot (0.9.0) |
 | `⇧L` | Cycle the theme |
 | `⌘,` | Settings |
 | `?` | Every shortcut |
@@ -307,7 +312,7 @@ Screen sharing is separate and always requires your explicit screen or window se
 In 0.5.0, **Settings → General → Single-key shortcuts** lets you disable
 letter and symbol shortcuts, including `/` and `j`/`k`. Arrow navigation and `⌘`/`Ctrl` shortcuts
 remain available. This is useful with speech input or when you want to reserve letter keys.
-Shortcuts respect text composition and native controls. In current source (**Unreleased**),
+Shortcuts respect text composition and native controls. From **0.9.0**,
 port-filter shortcuts apply only in List; Graph keeps its own search and selection. In Graph,
 `B` acts on a selected listener's details instead of opening a summary pane.
 The command palette keeps its active result valid as running services change.
@@ -332,15 +337,17 @@ observed process arguments are redacted for display; redaction is heuristic. Rem
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
 `holdmap agents` and `holdmap agents AGENT --stop-ports` do the same in a terminal.
 
-Version **0.8.0** gives **MCP & skills** an Overview-style graphical map. Agent cards sit
-between declared MCP definitions and skill files; running MCP candidates remain separate below.
-Select a card with a click, **Enter** or **Space** to open its source, purpose and evidence in
-the left inspector. Close it or press **Esc** to return to the agent rail without losing the
-agent scope. No inspector opens automatically. **Filters** reveals scope/state controls and
-**Coverage** reveals grouped collection notes only on request. A narrow window uses a
-dismissible **Browse agents** drawer. See the [capability guide](../agents/#mcp-and-skills)
-for supported provider locations and collection limits. Configuration presence does not
-establish that the client loaded a definition or used a skill.
+Version **0.9.0** adds **Explore**, **Map** and **Compare** to **MCP & skills**, using the opt-in
+inventory introduced in 0.8.0. Explore leads with declared skill purposes; Map retains observed
+source relationships; Compare keeps exact definitions and their contexts separate. Matching
+process observations group without becoming a verified session. Select a card with a click,
+**Enter** or **Space** for **Purpose**, **Source**, **Evidence** and **Activity**. Close or press
+**Esc** to return focus without changing the selected context. Nothing is selected automatically.
+**Tools** explains **Catalog not reported** rather than showing zero tools. **Filters** and
+**Coverage** open on request, and narrow windows keep dismissible agent/details drawers.
+See the [capability guide](../agents/#mcp-and-skills) for supported locations and limits.
+File presence does not establish loading, approval or use; no new catalog or activity adapter
+is introduced.
 
 In **Flow → Calls**, approved activity metadata can label a reported MCP server alias or
 explicit Claude skill activation. These labels are separate from configuration inventory;

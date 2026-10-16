@@ -37,7 +37,7 @@ After connecting, the server advertises its tools, a guide resource and three wo
 Prompt and resource menus depend on the client; clients exposing tools alone can use the same
 workflows below. Holdmap observes the machine where the server runs.
 
-This page covers the **0.8.0** MCP interface. The guide, prompts,
+This page covers the **0.9.0** MCP interface, retaining the tools introduced in 0.8.0. The guide, prompts,
 schemas and mandatory stop confirmations were introduced in **0.4.0**; optional local
 activity recording followed in **0.5.0**.
 Version **0.8.0** adds the opt-in `list_agents` argument `include_capabilities: true` for supported
@@ -56,7 +56,7 @@ receive structured tool results alongside readable text.
 
 ## Tools
 
-The **0.8.0** server provides these eleven tools:
+The **0.9.0** server retains these eleven tools:
 
 | Tool | What it does |
 |---|---|

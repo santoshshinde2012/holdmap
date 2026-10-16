@@ -36,6 +36,9 @@ if (!Number.isSafeInteger(release.id) || release.id <= 0 || release.tag_name !==
 if (process.env.CHECK_RELEASE_DRAFT === "true" && !release.draft) {
   throw new Error("Release must remain a draft until verification succeeds");
 }
+if (process.env.CHECK_RELEASE_DRAFT === "false" && release.draft) {
+  throw new Error("Release must be published for public-release verification");
+}
 
 // Explicit pagination keeps the embedded first page in release metadata from
 // accidentally hiding a missing asset, duplicate, or unfinished upload.

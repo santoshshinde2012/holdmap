@@ -33,12 +33,14 @@
 holdmap tells you what's really there — which agent or tool started it — and stops only what
 it should.
 
-Version **0.8.0** adds an interactive **MCP & skills** map, opt-in local capability inventory,
-reported MCP aliases and Claude skill activations, and clearer desktop version/update details.
-It also fixes native recording startup and cleanup on macOS.
-Read [what's new in 0.8.0](https://santoshshinde2012.github.io/holdmap/docs/whats-new/), check the
+**Version 0.9.0** adds local PNG snapshots, a readable service graph and the
+**Explore / Map / Compare** capability explorer. It retains the opt-in MCP/skill inventory,
+reported usage and desktop update help introduced in 0.8.0.
+Read [what's new in 0.9.0](https://santoshshinde2012.github.io/holdmap/docs/whats-new/), check the
 [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
-current installers and see the [changelog](CHANGELOG.md) for release notes. Desktop
+current installers and see the [changelog](CHANGELOG.md) for release notes. During release
+preparation, the source version does not imply installer availability; 0.8.0 installers predate
+these additions. Desktop
 screenshots use the shared browser UI with sample data.
 
 ## Features
@@ -65,13 +67,13 @@ screenshots use the shared browser UI with sample data.
   or stop only the services that agent started, through the normal safety policy.
 - **Three levels of agent maps.** Computer shows this machine and outside systems;
   Footprint shows agents' folders, tools, ports and hosts; Project focuses on one source tree.
-- **Capability explorer (Unreleased).** Read declared skill purposes in Explore, follow source
+- **Capability explorer (0.9.0).** Read declared skill purposes in Explore, follow source
   relationships in Map, or Compare exact observed definitions across agent contexts. Matching
   process contexts group together while retaining their PIDs. The inspector separates Purpose,
   Source, Evidence and Activity; finding a file or configuration is not proof of loading or use.
 - **Local screen recording.** Choose a screen or window, capture up to two minutes without
   audio, then preview and save the available MP4/GIF exports. Nothing is uploaded.
-- **PNG snapshots (Unreleased).** Capture the visible Holdmap view without screen-sharing
+- **PNG snapshots (0.9.0).** Capture the visible Holdmap view without screen-sharing
   permission, choose a screen/window, or borrow the active recording source without another
   picker or stopping the video. Review and save the image locally.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
@@ -126,7 +128,7 @@ See [Apple's guidance on native apps and Rosetta](https://support.apple.com/en-g
 
 <!-- release-please updates this source-version marker; download links follow published releases. -->
 <!-- x-release-please-start-version -->
-Source version: **0.8.0**.
+Source version: **0.9.0**.
 <!-- x-release-please-end -->
 
 [dmg-arm64]: https://santoshshinde2012.github.io/holdmap/#install
@@ -229,7 +231,7 @@ configured definitions, skill files, running child tools
 and recorded usage; loading, trust and effective client policy stay unknown. Ordinary scans
 keep configuration inspection off.
 
-**Capability explorer (Unreleased).** The current desktop source adds **Explore**, **Map** and
+**Capability explorer in 0.9.0.** The desktop adds **Explore**, **Map** and
 **Compare** over that inventory. Explore leads with each skill's retained, author-declared
 purpose; Map keeps observed source relationships; Compare shows exact definitions reported
 for each context. Matching process contexts group together without becoming a verified agent
@@ -390,7 +392,7 @@ uses the same UI with sample data.
 Desktop controls preserve composing and modified keys in settings, menus and resize controls.
 Dialog Tab navigation includes only enabled, visible controls in the active tab order.
 
-**Graph improvements in current source (Unreleased).** The map opens at full width until you
+**Graph improvements in 0.9.0.** The map opens at full width until you
 select a service. Disconnected groups pack nearby, cards start at a readable size, and
 **Fit all** offers an overview. Graph search matches services, ports and PIDs while keeping
 their observed neighbours for context; List filters stay separate. **Options** contains
@@ -426,7 +428,7 @@ the chooser; use 0.5.0 or newer.
 
 </details>
 
-**Screen recording.** Choose the video button in current source (the camera button in
+**Screen recording.** Choose the video button in 0.9.0 (the camera button in
 0.8.0), **Record screen…** in the command palette, or `⇧V`, then select a screen or window
 in the system chooser. Capture lasts up to two
 minutes with no microphone or system audio. Stopping ends screen sharing before preparing
@@ -441,7 +443,7 @@ This is separate from optional agent tool-call metadata recording. See the
 [screen recording guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#record-the-screen)
 for permissions, platform requirements and export limits.
 
-**PNG snapshots — current source (Unreleased).** The camera button, **Take snapshot…** or
+**PNG snapshots in 0.9.0.** The camera button, **Take snapshot…** or
 `⇧S` offers **Holdmap view** without screen-sharing permission, or **Screen or window**
 through the system picker. During video capture, **Recording source** borrows that source
 without another picker or stopping the recording. PNGs preserve aspect ratio within
@@ -455,14 +457,14 @@ saves use the download manager. Nothing is uploaded. See the
 [snapshot guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#take-a-png-snapshot).
 
 <details>
-<summary>Unreleased PNG source choice and preview with sample data</summary>
+<summary>0.9.0 PNG source choice and preview with sample data</summary>
 
-![Current-source PNG snapshot preview in dark theme](docs/screenshots/desktop-snapshot-dark.png)
-![Current-source PNG source chooser in light theme](docs/screenshots/desktop-snapshot-light.png)
+![0.9.0 PNG snapshot preview in dark theme](docs/screenshots/desktop-snapshot-dark.png)
+![0.9.0 PNG source chooser in light theme](docs/screenshots/desktop-snapshot-light.png)
 
 </details>
 
-**First open.** The **0.8.0** macOS app is ad-hoc signed and sealed without Developer-ID
+**First open.** The published **0.8.0** macOS app is ad-hoc signed and sealed without Developer-ID
 signing or notarisation; its Windows installers are unsigned. Verify the checksums and
 build provenance before opening a download. Follow the
 [first-open guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#first-open)
@@ -470,7 +472,8 @@ for OS-specific instructions and policy restrictions.
 
 Update an existing desktop installation by downloading the latest installer above that
 matches your operating system and architecture. **0.8.0 requires manual desktop installation**;
-its published installers have no configured signed updater feed. Run the CLI installer again
+its published installers have no configured signed updater feed. Follow the same manual path
+for later releases without a configured signed feed. Run the CLI installer again
 to update the CLI, TUI and MCP server; it does not update the separate desktop app.
 
 After installing, check **Settings → About** in the reopened app. `holdmap --version`
@@ -483,7 +486,7 @@ installation-guide actions; see [0.8.0 changes](CHANGELOG.md#080---2026-10-16).
 
 | Service graph | Stop confirmation |
 |---|---|
-| ![Current-source service graph uses the full canvas for the shop services and their observed connections, dark theme](docs/screenshots/desktop-graph-dark.png) | ![The stop confirmation lists every step before anything is sent](docs/screenshots/desktop-stop-confirm-light.png) |
+| ![The 0.9.0 service graph uses the full canvas for the shop services and their observed connections, dark theme](docs/screenshots/desktop-graph-dark.png) | ![The stop confirmation lists every step before anything is sent](docs/screenshots/desktop-stop-confirm-light.png) |
 | **Command palette** | **Settings** |
 | ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) | ![Settings: startup and the global shortcut, dark theme](docs/screenshots/desktop-settings-dark.png) |
 | **About in the browser preview, dark** | **About in the browser preview, light** |
@@ -503,7 +506,7 @@ installation-guide actions; see [0.8.0 changes](CHANGELOG.md#080---2026-10-16).
 | **Sort menu at the right edge, dark theme** | **Sort menu at the right edge, light theme** |
 | ![The Sort menu stays inside the viewport with readable grouping descriptions](docs/screenshots/desktop-sort-right-edge-dark.png) | ![The right-edge Sort menu leaves all choices visible in a compact window](docs/screenshots/desktop-sort-right-edge-light.png) |
 
-These **current-source (Unreleased)** capability explorer captures use labelled sample definitions:
+These **0.9.0** capability explorer captures use labelled sample definitions:
 
 | **Explore, dark theme** | **Explore, light theme** |
 | --- | --- |
@@ -774,7 +777,7 @@ dependencies and temporary captures are regenerated; Git history holds earlier v
 ## Learn more
 
 - [Website and guide](https://santoshshinde2012.github.io/holdmap/): the live demo and short how-tos.
-- [What's new in 0.8.0](https://santoshshinde2012.github.io/holdmap/docs/whats-new/): MCP and skills maps, reported usage and upgrade instructions.
+- [What's new in 0.9.0](https://santoshshinde2012.github.io/holdmap/docs/whats-new/): PNG snapshots, the readable service graph, the capability explorer and upgrade instructions.
 - [Website maintenance](site/README.md): SEO checks, deployment and current website snapshots.
 - [Agents, tools and apps](https://santoshshinde2012.github.io/holdmap/docs/agents/): folders, access and stopping what an agent started.
 - [CLI reference](docs/cli.md): every command and flag.

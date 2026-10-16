@@ -4,11 +4,11 @@ import { repoUrl, url, version } from "../lib/site";
 
 // Feature availability belongs to this release, even while a later version is assembling.
 const [publishedMajor, publishedMinor] = version.split(".").map(Number);
-const released = publishedMajor > 0 || publishedMinor >= 8;
+const released = publishedMajor > 0 || publishedMinor >= 9;
 const highlights = [
-  { icon: "Bot", title: "Map local MCP servers and skills", text: "Opt into MCP & skills to explore discovered definitions around their agents. Select a card for its source, evidence and optional skill purpose. Running candidates stay separate.", href: url("docs/agents/#mcp-and-skills"), link: "Explore MCP & skills" },
-  { icon: "Layers", title: "Keep reported usage in context", text: "Calls labels reported MCP server aliases and explicit Claude skill activations. Configuration presence, running processes and recorded activity stay distinct; matching names never prove use.", href: url("docs/agents/#desktop-flow-connections-and-calls"), link: "Understand recorded activity" },
-  { icon: "Monitor", title: "Know which desktop copy is open", text: "Settings → About shows the running app's version, architecture and location, with download and installation help. Update the desktop separately from the CLI.", href: url("docs/desktop/#first-open"), link: "Update the desktop app" },
+  { icon: "Camera", title: "Keep a still alongside the video", text: "Capture the Holdmap view, choose a screen or window, or borrow the active recording source without another picker. Review and save the PNG locally while video keeps running.", href: url("docs/desktop/#take-a-png-snapshot"), link: "Take a PNG snapshot" },
+  { icon: "Network", title: "Read the service graph at a glance", text: "Compact disconnected services, readable starting zoom and a full canvas make local relationships easier to explore. Search services, ports and PIDs while keeping observed neighbors in context.", href: url("docs/desktop/#service-graph-and-cluster-grouping"), link: "Explore the service graph" },
+  { icon: "Layers", title: "Understand each capability", text: "Explore declared skill purposes, retain the source Map and Compare observed definitions. Purpose, Source, Evidence and Activity keep file presence distinct from loading, approval and use.", href: url("docs/agents/#mcp-and-skills"), link: "Explore MCP & skills" },
 ];
 ---
 <section id="whats-new" class="section" aria-labelledby="release-title">
@@ -16,7 +16,7 @@ const highlights = [
     <div class="section-head head-row">
       <div>
         <span class="eyebrow">Release highlights</span>
-        <h2 class="h2" id="release-title">{released ? "0.8.0 is here." : "Coming in 0.8.0."} <span class="soft">MCP and skills, mapped.</span></h2>
+        <h2 class="h2" id="release-title">{released ? "0.9.0 is here." : "0.9.0 release preparation."} <span class="soft">Capture, explore, understand.</span></h2>
       </div>
       <a class="link-arrow" href={url("docs/whats-new/")}>What's new <Icon name="ArrowRight" size={16} /></a>
     </div>
@@ -30,7 +30,7 @@ const highlights = [
         </li>
       ))}
     </ul>
-    <p class="release-note">0.8.0 adds local capability maps, reported usage labels and clearer desktop updates, with recording startup and cleanup fixes. {released ? <a href={`${repoUrl}/releases/tag/v0.8.0`}>Read the full 0.8.0 release notes</a> : <Fragment>The published downloads remain on v{version} while the release is prepared. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
+    <p class="release-note">0.9.0 adds PNG snapshots, the readable service graph and the capability explorer. {released ? <a href={`${repoUrl}/releases/tag/v0.9.0`}>Read the full 0.9.0 release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
   </div>
 </section>
 

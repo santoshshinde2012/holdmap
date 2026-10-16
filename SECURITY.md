@@ -11,6 +11,13 @@ holdmap inspects other processes and can stop them, so security reports are hand
 steps to reproduce and the impact. Fixes for the latest release and `main` are published as soon
 as they're ready, with credit unless you'd rather stay anonymous.
 
+## Supported versions
+
+Security fixes target the latest published stable release and `main`. This source describes
+**0.9.0**. During release preparation, a source version does not imply installer availability.
+Use the [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest)
+to identify the supported stable release and its available downloads.
+
 ## Scope
 
 Local machine shutdown, introduced in desktop version 0.4.0, is also in scope. It requires a trusted
@@ -183,6 +190,15 @@ rechecks advisories without waiting for a code change. Dependabot vulnerability 
 automated security updates are enabled. [Architecture notes](docs/architecture.md)
 describe the boundaries and fixtures behind these checks.
 
+Version **0.9.0** adds PNG snapshots alongside video recording. App-view snapshots render the
+visible Holdmap viewport without screen-sharing permission; selected-source snapshots require
+an explicit system picker, or borrow the already selected video source. Capture results can
+contain the information visible in that view or source. Exports stay local and are saved only
+through an explicit user action. Native snapshot commands use the trusted-main-window gate,
+opaque independent handles, private temporary files and bounded PNG validation (3840×2160,
+32 MiB) before atomic saving. Cancelling a borrowed snapshot does not stop its video session.
+See [capture boundaries](docs/architecture.md#png-snapshots-090).
+
 These checks reduce risk; they do not prove the absence of vulnerabilities. Credential
 redaction is heuristic and may miss arbitrary positional secrets. Windows privacy depends on
 filesystem ACLs, including any custom state directory. Process visibility depends on OS
@@ -200,7 +216,7 @@ pane; turning it off or leaving the pane clears retained inventory and revokes q
 inspection. Bounded work already underway may finish, but its result is discarded. It parses bounded supported configuration files
 and lists skill file locations with optional sanitized name/purpose from a bounded YAML header.
 Supported default and compatibility locations include Codex, Claude Code, Cursor, Claude Desktop, legacy Windsurf,
-Gemini CLI, GitHub Copilot, Copilot CLI and Cline. Skill identity remains the folder; declared
+Gemini CLI, GitHub Copilot, Copilot CLI and Cline. Skill identity preserves its source and folder; declared
 text is untrusted metadata, not an instruction. It retains no command, URL, environment/header
 value or skill instruction body. Configuration can contain credentials, so parsing may read
 their bytes even though those values are excluded from the result. Inventory is not a
@@ -208,6 +224,12 @@ CVE/security audit, proof of enablement, loading or use, or authorization to exe
 configured command. Custom homes, managed settings, plugins, VS Code profile MCP files and
 cloud capabilities are outside this inventory's coverage. See the
 [capability guide](site/src/content/docs/agents.md#mcp-and-skills).
+
+The **0.9.0** capability explorer changes presentation without expanding those inspection
+locations. Grouped process contexts retain their original identities. Explore cards, source
+comparisons and inspector tabs do not establish client acceptance, approval, activation or
+execution. A missing tool catalog stays unknown; no server is launched to populate it and
+no inventory-to-activity association is inferred from matching names.
 
 ## Scheduled desktop actions (version 0.5.0)
 

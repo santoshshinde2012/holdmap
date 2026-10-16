@@ -8,6 +8,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-16
+
 ### Added
 
 - A purpose-led MCP & skills explorer with **Explore**, **Map** and **Compare** views over
@@ -25,7 +27,7 @@ by [release-please](https://github.com/googleapis/release-please) from
   explicit discard, reload or quit clears it. A new capture replaces it only on success.
 - Separate snapshot providers, cancellation/result ownership and native save validation;
   app-view rendering embeds only allowlisted bundled assets. The native selected-source
-  fallback requires macOS 14 or later. Published 0.8.0 installers predate PNG snapshots.
+  fallback requires macOS 14 or later.
 
 ### Changed
 
@@ -42,6 +44,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Fixed
 
+- Require published state when release asset verification explicitly requests
+  `CHECK_RELEASE_DRAFT=false`; a draft can no longer pass that post-publication check.
 - Pack disconnected graph components and cluster hulls compactly instead of repelling
   unrelated services across a large Force canvas. Preserve viewport choices during refreshes.
 - Wait for fresh scope data before positioning the graph; centre a readable service card in
@@ -50,6 +54,19 @@ by [release-please](https://github.com/googleapis/release-please) from
   activation that leaves focus on the canvas. Modal dialogs retain their own Escape handling.
 - Make browser sample All services include the other listening TCP entries from the same
   sample snapshot, with matching IDs and no fabricated links.
+
+### Upgrade
+
+- Install desktop 0.9.0 to get PNG snapshots, the readable service graph and the capability
+  explorer. Published 0.8.0 installers do not contain these changes. Update the CLI/MCP server
+  separately if you use them; the capability and activity contracts introduced in 0.8.0 are
+  unchanged. Older 0.7.x collectors and decoders still lack those 0.8.0 contracts.
+- Desktop installation remains manual when a signed updater is not configured. Quit Holdmap,
+  install the matching OS/architecture package, reopen it and verify Settings → About shows
+  0.9.0. Use the latest published download until the complete 0.9.0 release is available.
+- Snapshot screen/window capture uses the system picker and its permission flow. The
+  Holdmap-view choice does not need screen-sharing permission. Native selected-source capture
+  requires macOS 14 or later; app-view snapshots remain available without that fallback.
 
 ## [0.8.0] - 2026-10-16
 
@@ -809,7 +826,8 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
-[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/santoshshinde2012/holdmap/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.6.0...v0.7.0

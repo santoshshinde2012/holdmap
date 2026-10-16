@@ -148,7 +148,9 @@ Its synthetic pixel fixture exercises the production native MP4/GIF writer witho
 screen permission. The packaged WKWebView check asserts original browser API availability
 before synthetic capture, and separately checks the actual minified app's confirmation dialog.
 
-## PNG snapshots (current source, Unreleased)
+<a id="png-snapshots-current-source-unreleased"></a>
+
+## PNG snapshots (0.9.0)
 
 Published 0.8.0 installers predate this feature. The camera action (`⇧S`) separates the
 visible **Holdmap view** from an explicitly selected **Screen or window**. App-view capture
@@ -537,7 +539,9 @@ holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop ap
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
 coordinate collection and confirmation, and present the returned types.
 
-This guide describes version 0.8.0. Screen recording, C4-style
+This guide describes version 0.9.0, including PNG snapshots, the readable
+service graph and the capability explorer. Published 0.8.0 installers predate those additions.
+Screen recording, C4-style
 agent-map zoom and live browser development scans are included from 0.7.0.
 Editor-extension identity, full-canvas Graph and Flow,
 and schedules started from the empty manager are in [0.6.0](../CHANGELOG.md#060---2026-10-14).
@@ -1111,20 +1115,28 @@ aliases and skill activations stay in Calls without alias-only joins to an inven
 Metadata identities do not authorize stops, file actions or execution of configured commands.
 See [the usage/source contracts](agent-flow.md#provider-coverage-and-research).
 
-The desktop projects these DTOs through the pure `buildCapabilityMap` layout and a dedicated
-SvelteFlow canvas. Agents sit between configured MCP definitions and skill files; runtime
-candidates occupy a separate lane without inferred configuration edges. Only exact shared
-source identities collapse into one definition, with a connection to each observed owner.
-Resource sampling does not change layout identity. The renderer caps the map at 24 agents,
-64 definitions and 24 runtime candidates, retains explicit selection where possible, and
-reports omitted cards and relationships. These display bounds are separate from discovery
-bounds. Search and filters narrow the map; an explicitly selected empty agent stays visible.
-The left rail becomes an inspector only after selection. Closing it restores focus, and
-coverage notes are available on demand. Narrow canvases start at a readable hub-centered
-zoom; users can pan or explicitly fit the complete graph. Keyboard focus brings offscreen
-cards into view without selecting them. Pointer focus leaves the pressed card in place
-until its click completes. Inventory and runtime cards never resolve reported usage by
-matching names.
+In **0.9.0**, pure capability projections feed **Explore**, **Map** and **Compare**. Exact
+client/account, observed folder-source context, inventory and coverage group matching agent
+roots while retaining their original IDs and PIDs. Runtime candidates remain independent
+observations. Purpose cards display bounded author metadata. Comparison keeps exact source,
+scope and project identities, with missing evidence labelled unreported rather than absent.
+The inspector separates Purpose, Source, Evidence and Activity, and never joins recorded usage
+by matching a name. Tools shows a missing-catalog explanation without launching an MCP server.
+
+The retained `buildCapabilityMap` and SvelteFlow canvas put contexts between MCP definitions
+and skill files, with runtime candidates in a separate lane without configuration edges.
+Only exact shared definition identities collapse. Resource sampling does not change layout
+identity. The renderer caps the map at 24 contexts, 64 definitions and 24 runtime candidates,
+preserves explicit selection where possible, and reports omitted cards and relationships.
+These display bounds are separate from discovery bounds. Narrow canvases start at a readable
+hub-centered zoom; users can pan or explicitly fit the graph. Keyboard focus reveals offscreen
+cards without selecting them; pointer focus leaves a pressed card in place until click completes.
+
+The workspace loads dynamically only after explicit navigation, with pending, retry and reload
+states. The site budget verifies its unique JavaScript stays within 20 KiB and is not a static
+dependency of startup or Agents Overview; shared imports keep their existing budgets. Opening
+the explorer retains the same explicit inventory opt-in. No new client catalog or telemetry
+adapter is introduced.
 
 ### Capability discovery audit (2026-10-15)
 
@@ -1376,7 +1388,7 @@ published asset digests and IDs, then publishes the complete `latest.json` index
 
 The graph view uses **Svelte Flow (`@xyflow/svelte`) and `@dagrejs/dagre`**. Nodes are real DOM
 buttons with the shared icons, tokens and focus rings; group nodes draw existing cluster hulls.
-In current source (**Unreleased**), the pure layout finds components from existing edges and
+In **0.9.0**, the pure layout finds components from existing edges and
 cluster membership, lays each one out independently, then packs their bounds, including cluster
 headers. Dagre gives a left-to-right layout inside each connected component. The alternative
 Force layout runs the deterministic simulation inside components only; isolated services do
