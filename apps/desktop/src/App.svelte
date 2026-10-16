@@ -20,6 +20,8 @@
   import ConfirmDialog, { type Phase } from "./components/ConfirmDialog.svelte";
   import ShortcutsDialog from "./components/ShortcutsDialog.svelte";
   import ScreenRecordDialog from "./components/ScreenRecordDialog.svelte";
+  import SnapshotCapture from "./components/SnapshotCapture.svelte";
+  import type { SnapshotCaptureHandle } from "./lib/snapshot-controller";
   import CommandPalette from "./components/CommandPalette.svelte";
   import Onboarding from "./components/Onboarding.svelte";
   import EmptyState from "./components/EmptyState.svelte";
@@ -192,6 +194,8 @@
   let screenCaptureController: AbortController | null = null;
   let screenCaptureEncoding: RecordingSession | null = null;
   let screenCaptureTrigger: HTMLElement | null = null;
+  let snapshotCaptureUi = $state<SnapshotCaptureHandle | undefined>();
+  let snapshotCaptureState = $state({ open: false, busy: false, hasResult: false });
   let hotkeyList = $state<HotkeyPreset[]>([]);
   let info = $state<{ version: string; platform: string; tray: boolean; configDir: string | null; updater: boolean | null; appPath: string | null; architecture: string | null }>({ version: "", platform: "", tray: false, configDir: null, updater: null, appPath: null, architecture: null });
   let detailTab = $state<DetailTab>("overview");
@@ -286,7 +290,8 @@
   // Agents and small graph canvases use the existing modal details drawer.
   const showDrawer = $derived(!!selected && (view === "graph" ? graphDetailsDrawer && graphDetailsOpen : (narrow || view === "agents") && drawerOpen));
   /** Any overlay that owns the keyboard (they stop key events themselves; this is a backstop). */
-  const modalOpen = $derived(!!confirm || !!pendingReview || showHelp || showHistory || showPalette || showSettings || showShutdown || showSchedules || showRemote || !!pinDialog || showDrawer || !!screenCaptureDialog);
+  const otherModalOpen = $derived(!!confirm || !!pendingReview || showHelp || showHistory || showPalette || showSettings || showShutdown || showSchedules || showRemote || !!pinDialog || showDrawer || !!screenCaptureDialog);
+  const modalOpen = $derived(otherModalOpen || snapshotCaptureState.open || snapshotCaptureState.busy);
   const scanMs = $derived(Math.min(60, Math.max(1, config?.scan_interval_secs ?? 3)) * 1000);
 
   /** When the scan in flight started: the header stays "Live" while one is merely running. */
@@ -938,6 +943,7 @@
 
   function openScreenRecord() {
     if (screenCapture) { void finishScreenCapture(); return; }
+    if (snapshotCaptureState.open || snapshotCaptureState.busy) return;
     if (screenCaptureBusy || screenCaptureFinishing || screenCaptureDialog) return;
     screenCaptureTrigger = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     screenCaptureError = null;
@@ -1322,10 +1328,12 @@
       { id: "remote", group: "Actions", icon: "server", title: "Inspect a remote host over SSH…", keywords: "ssh remote server machine", run: () => (showRemote = true) },
       { id: "history", group: "Actions", icon: "history", title: "Recently stopped — restart", shortcut: ["H"], keywords: "history restart undo", run: openHistory },
       screenCapture
-        ? { id: "screen-stop", group: "Actions", icon: "stop", title: "Stop screen recording", subtitle: formatClock(screenCaptureElapsed), keywords: "capture video gif mp4 screenshot stop", shortcut: ["⇧", "V"], run: () => void finishScreenCapture() }
+        ? { id: "screen-stop", group: "Actions", icon: "stop", title: "Stop screen recording", subtitle: formatClock(screenCaptureElapsed), keywords: "capture video gif mp4 stop", shortcut: ["⇧", "V"], run: () => void finishScreenCapture() }
         : screenCaptureResult
-          ? { id: "screen-review", group: "Actions", icon: "video", title: "Review recording", subtitle: "Preview and save the latest recording from this session", keywords: "capture video gif mp4 screenshot download record", shortcut: ["⇧", "V"], run: openScreenRecord }
-          : { id: "screen-record", group: "Actions", icon: "video", title: "Record screen…", subtitle: screenCaptureSupport.pending ? "Checking screen recording support…" : screenCaptureSupport.backend ? `Local MP4 and GIF · up to ${Math.round(MAX_DURATION_MS / 60_000)} min · never uploaded` : "Screen capture is unavailable in this window", keywords: "capture video gif mp4 screenshot download", shortcut: ["⇧", "V"], run: openScreenRecord },
+          ? { id: "screen-review", group: "Actions", icon: "video", title: "Review recording", subtitle: "Preview and save the latest recording from this session", keywords: "capture video gif mp4 download record", shortcut: ["⇧", "V"], run: openScreenRecord }
+          : { id: "screen-record", group: "Actions", icon: "video", title: "Record screen…", subtitle: screenCaptureSupport.pending ? "Checking screen recording support…" : screenCaptureSupport.backend ? `Local MP4 and GIF · up to ${Math.round(MAX_DURATION_MS / 60_000)} min · never uploaded` : "Screen capture is unavailable in this window", keywords: "capture video gif mp4 download", shortcut: ["⇧", "V"], run: openScreenRecord },
+      { id: "snapshot", group: "Actions", icon: "camera", title: snapshotCaptureState.hasResult ? "Review snapshot" : "Take snapshot…", subtitle: "Holdmap view or a selected screen/window · local PNG", keywords: "screenshot capture image png snapshot", shortcut: ["⇧", "S"], run: () => snapshotCaptureUi?.show() },
+      ...(screenCapture ? [{ id: "snapshot-recording", group: "Actions" as const, icon: "camera", title: "Snapshot recording source", subtitle: "Capture a PNG without stopping the video", keywords: "screenshot current recording still png", run: () => void snapshotCaptureUi?.captureRecording() }] : []),
       { id: "notify", group: "Settings", icon: "bell", title: config?.notify ? "Turn notifications off" : "Turn notifications on", keywords: "alert conflict new listener", run: toggleNotify },
       { id: "density", group: "Settings", icon: "list", title: density === "compact" ? "Comfortable rows" : "Compact rows", keywords: "density dense rows height compact comfortable", run: () => { density = density === "compact" ? "comfortable" : "compact"; } },
       { id: "autostart", group: "Settings", icon: "sparkles", title: autostartOn ? "Don't launch at login" : "Launch at login", keywords: "startup boot login", run: toggleAutostart },
@@ -1337,7 +1345,11 @@
 
   function onKey(e: KeyboardEvent) {
     const context = shortcutContext(e, document.activeElement);
-    if (context.blocked || modalOpen) return; // overlays handle their own keys
+    if (context.blocked) return;
+    if (snapshotCaptureState.busy && context.navigation && e.key === "Escape") {
+      snapshotCaptureUi?.cancel(); e.preventDefault(); return;
+    }
+    if (modalOpen) return; // overlays handle their own keys
     const typing = context.editing;
     const control = context.control;
     const flowView = view === "agents" && agentFlowMode !== "overview";
@@ -1347,6 +1359,9 @@
     if (context.command && e.key.toLowerCase() === "r") { refresh(true); e.preventDefault(); return; }
     if (!typing && context.character && singleKeyShortcuts && e.key === "V" && document.activeElement?.matches("[data-screen-record]")) {
       openScreenRecord(); e.preventDefault(); return;
+    }
+    if (!typing && context.character && singleKeyShortcuts && e.key === "S" && document.activeElement?.matches("[data-screen-snapshot]")) {
+      snapshotCaptureUi?.show(); e.preventDefault(); return;
     }
     if (view === "graph" && !typing && context.navigation && e.key === "Escape") {
       if (graphDetailsOpen || selectedNode) closeGraphDetails();
@@ -1417,6 +1432,7 @@
       case "A": view = view === "agents" ? "list" : "agents"; break;
       case "h": openHistory(); break;
       case "V": if (screenCapture) void finishScreenCapture(); else openScreenRecord(); break;
+      case "S": snapshotCaptureUi?.show(); break;
       case "p": if (s) togglePin(s); else return; break;
       case "P": if (s) openPin(s); else return; break;
       case "s": { const n = view === "graph" ? selectedGraphNode : null; const c = n?.cluster ? graph?.clusters.find((x) => x.id === n.cluster) : null; if (c) requestClusterStop(c.name); else return; break; }
@@ -1540,6 +1556,7 @@
 
 <svelte:window onkeydown={onKey} bind:innerWidth={viewportWidth} />
 
+<div id="holdmap-capture-root" class="capture-viewport">
 <div class="app" class:mac={isMac}>
   <header class="titlebar" data-tauri-drag-region>
     <div class="brand" data-tauri-drag-region>
@@ -1616,6 +1633,7 @@
       {/if}
       <div class="cluster">
         <IconButton icon="video" label={screenCapture ? "Recording screen" : screenCaptureResult ? "Review recording" : "Record screen"} data-screen-record kbd={singleKeyShortcuts ? ["⇧", "V"] : undefined} pressed={!!screenCapture || !!screenCaptureResult} onclick={openScreenRecord} />
+        <IconButton icon={snapshotCaptureState.busy ? "x" : "camera"} label={snapshotCaptureState.busy ? "Cancel snapshot capture" : snapshotCaptureState.hasResult ? "Review snapshot" : "Take snapshot"} data-screen-snapshot kbd={singleKeyShortcuts && !snapshotCaptureState.busy ? ["⇧", "S"] : undefined} pressed={snapshotCaptureState.open || snapshotCaptureState.busy || snapshotCaptureState.hasResult} onclick={() => snapshotCaptureState.busy ? snapshotCaptureUi?.cancel() : snapshotCaptureUi?.show()} />
         <IconButton icon="history" label="Recently stopped" kbd={singleKeyShortcuts ? "H" : undefined} onclick={openHistory} />
         <IconButton icon="clock" label={activeSchedules.length ? `Scheduled actions (${activeSchedules.length} active)` : "Scheduled actions"} badge={activeSchedules.length || undefined} onclick={openSchedules} bind:el={schedulesTrigger} />
         <IconButton icon="server" label="Remote host…" onclick={() => (showRemote = true)} />
@@ -1859,9 +1877,13 @@
 {#if screenCaptureDialog}
   <ScreenRecordDialog phase={screenCaptureDialog} error={screenCaptureError} errorTitle={screenCaptureErrorTitle} result={screenCaptureResult} busy={screenCaptureBusy} starting={screenCaptureStarting} supported={!!screenCaptureSupport.backend} checkingSupport={screenCaptureSupport.pending} unsupportedReason={screenCaptureSupport.reason} onstart={() => void beginScreenCapture()} onclose={closeScreenCaptureDialog} ondiscard={discardScreenCaptureDialog} />
 {/if}
+<SnapshotCapture bind:this={snapshotCaptureUi} session={screenCapture} blocked={otherModalOpen} onstatechange={(state) => (snapshotCaptureState = state)} />
+{#if snapshotCaptureState.busy}<span class="sr-only" role="status">Capturing snapshot. Press Escape or use Cancel snapshot capture to cancel.</span>{/if}
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />
+</div>
 
 <style>
+  .capture-viewport { position: relative; width: 100%; height: 100vh; overflow: hidden; }
   .app { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto minmax(0, 1fr) auto; height: 100vh; }
   .notices { min-width: 0; }
   .scan-banner { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-5); background: var(--warn-soft); border-bottom: 1px solid var(--border); color: var(--warn); }
@@ -1928,5 +1950,6 @@
     .app.mac .titlebar { padding-left: var(--sp-4); }
     .search { width: 100%; min-width: 0; }
     .tools { grid-column: 1 / -1; justify-self: end; }
+    .tools { flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
   }
 </style>

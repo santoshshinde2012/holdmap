@@ -67,6 +67,9 @@ screenshots use the shared browser UI with sample data.
   Footprint shows agents' folders, tools, ports and hosts; Project focuses on one source tree.
 - **Local screen recording.** Choose a screen or window, capture up to two minutes without
   audio, then preview and save the available MP4/GIF exports. Nothing is uploaded.
+- **PNG snapshots (Unreleased).** Capture the visible Holdmap view without screen-sharing
+  permission, choose a screen/window, or borrow the active recording source without another
+  picker or stopping the video. Review and save the image locally.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
   server for AI coding assistants. macOS, Linux and Windows. No product analytics.
 - **Agent flow.** Follow observed process/socket relationships, or opt in to
@@ -411,8 +414,9 @@ the chooser; use 0.5.0 or newer.
 
 </details>
 
-**Screen recording.** Choose the camera button, **Record screen…** in the command palette,
-or `⇧V`, then select a screen or window in the system chooser. Capture lasts up to two
+**Screen recording.** Choose the video button in current source (the camera button in
+0.8.0), **Record screen…** in the command palette, or `⇧V`, then select a screen or window
+in the system chooser. Capture lasts up to two
 minutes with no microphone or system audio. Stopping ends screen sharing before preparing
 the available MP4/GIF exports; format availability depends on encoding support.
 Save through the native file dialog, or the browser's download manager in the demo.
@@ -424,6 +428,27 @@ Closing the preview keeps it available through **Review recording** for this ses
 This is separate from optional agent tool-call metadata recording. See the
 [screen recording guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#record-the-screen)
 for permissions, platform requirements and export limits.
+
+**PNG snapshots — current source (Unreleased).** The camera button, **Take snapshot…** or
+`⇧S` offers **Holdmap view** without screen-sharing permission, or **Screen or window**
+through the system picker. During video capture, **Recording source** borrows that source
+without another picker or stopping the recording. PNGs preserve aspect ratio within
+3840×2160 and 32 MiB. The native selected-source fallback requires macOS 14 or later;
+the app-view choice works without it. Published **0.8.0 installers do not include snapshots**.
+
+Close the preview and reopen it with **Review snapshot**. Cancelled or failed saves keep
+the PNG for retry; **Discard snapshot**, reload or quit clears it. A new capture replaces
+the retained image only after success. Desktop saves use a native file dialog; browser
+saves use the download manager. Nothing is uploaded. See the
+[snapshot guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#take-a-png-snapshot).
+
+<details>
+<summary>Unreleased PNG source choice and preview with sample data</summary>
+
+![Current-source PNG snapshot preview in dark theme](docs/screenshots/desktop-snapshot-dark.png)
+![Current-source PNG source chooser in light theme](docs/screenshots/desktop-snapshot-light.png)
+
+</details>
 
 **First open.** The **0.8.0** macOS app is ad-hoc signed and sealed without Developer-ID
 signing or notarisation; its Windows installers are unsigned. Verify the checksums and

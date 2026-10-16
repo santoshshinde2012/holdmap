@@ -4,7 +4,7 @@
   let { onclose, mod = "Ctrl", singleKeyShortcuts = true }: { onclose: () => void; mod?: string; singleKeyShortcuts?: boolean } = $props();
   const allGroups = $derived<[string, [string[], string][]][]>([
     ["Navigate", [[[mod, "K"], "Command palette"], [[mod, "F"], "Search"], [["/"], "Search"], [["↑", "↓"], singleKeyShortcuts ? "Move selection (or J / K)" : "Move selection"], [["←", "→"], "Collapse · expand section"], [["Home", "End"], "First · last port"], [["↵"], "Open details"], [["Esc"], "Clear search · close"]]],
-    ["Act", [[["⌫"], "Stop selected (graceful)"], [["⇧", "⌫"], "Force kill selected"], [["O"], "Open in browser"], [["C"], "Copy URL"], [["P"], "Pin / unpin"], [["⇧", "P"], "Pin with a label…"], [["S"], "Stop the service's cluster"], [["R"], "Refresh now"], [["⇧", "V"], "Record screen (MP4 · GIF)"]]],
+    ["Act", [[["⌫"], "Stop selected (graceful)"], [["⇧", "⌫"], "Force kill selected"], [["O"], "Open in browser"], [["C"], "Copy URL"], [["P"], "Pin / unpin"], [["⇧", "P"], "Pin with a label…"], [["S"], "Stop the service's cluster"], [["R"], "Refresh now"], [["⇧", "S"], "Take snapshot (PNG)"], [["⇧", "V"], "Record screen (MP4 · GIF)"]]],
     ["List filters", [[["A"], "Listening ↔ all sockets"], [["T"], "Protocol: any → TCP → UDP"], [["D"], "Dev servers only"], [["M"], "Mine only"], [["E"], "Network-exposed only"]]],
     ["View", [[["G"], "List ↔ graph"], [["⇧", "A"], "Agents, tools & apps (reveal · stop)"], [["B"], "Hide · show details pane"], [["H"], "Recently stopped"], [[mod, ","], "Settings"], [["⇧", "L"], "Cycle theme"], [["?"], "This help"]]],
   ]);

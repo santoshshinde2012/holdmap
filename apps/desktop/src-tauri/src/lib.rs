@@ -13,6 +13,9 @@
 //! - [`update`]: optional self-update (release builds signed with an update key)
 
 mod activity;
+mod capture_bridge;
+mod capture_file;
+mod capture_lease;
 mod commands;
 mod confirmation;
 mod local_window;
@@ -20,7 +23,9 @@ mod power;
 mod recording_save;
 mod scheduler;
 mod screen_recording;
+mod screen_snapshot;
 mod shortcuts;
+mod snapshot_image;
 mod state;
 mod stop_batch;
 mod tray;
@@ -68,6 +73,7 @@ pub fn run() {
         .manage(scheduler::SchedulerState::default())
         .manage(recording_save::RecordingSaveState::default())
         .manage(screen_recording::ScreenRecordingState::default())
+        .manage(screen_snapshot::ScreenSnapshotState::default())
         .invoke_handler(local_window::guard(tauri::generate_handler![
             commands::app_info,
             commands::scan,
@@ -121,12 +127,17 @@ pub fn run() {
             screen_recording::stop_screen_recording,
             screen_recording::read_screen_recording,
             screen_recording::discard_screen_recording,
+            screen_snapshot::start_screen_snapshot,
+            screen_snapshot::screen_snapshot_status,
+            screen_snapshot::read_screen_snapshot,
+            screen_snapshot::discard_screen_snapshot,
         ]))
         .on_page_load(|webview, payload| {
             if webview.label() == "main"
                 && payload.event() == tauri::webview::PageLoadEvent::Started
             {
                 screen_recording::cleanup_lifecycle(webview.app_handle());
+                screen_snapshot::cleanup_lifecycle(webview.app_handle());
             }
         })
         .setup(move |app| {
@@ -159,6 +170,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if window.label() == "main" && matches!(event, WindowEvent::Destroyed) {
                 screen_recording::cleanup_lifecycle(window.app_handle());
+                screen_snapshot::cleanup_lifecycle(window.app_handle());
             }
             // With a tray, closing the window keeps holdmap running in the menu bar.
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -175,6 +187,7 @@ pub fn run() {
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 screen_recording::cleanup_exit(app);
+                screen_snapshot::cleanup_exit(app);
             }
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {

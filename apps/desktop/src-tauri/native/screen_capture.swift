@@ -12,6 +12,10 @@ private let durationLimit = 120.0
 private let byteLimit: Int64 = 128 * 1024 * 1024
 private let captureQueue = DispatchQueue(label: "holdmap.capture.samples")
 private let exportQueue = DispatchQueue(label: "holdmap.capture.export", qos: .userInitiated)
+private let snapshotQueue = DispatchQueue(label: "holdmap.capture.snapshot", qos: .userInitiated)
+private let snapshotByteLimit = 32 * 1024 * 1024
+private let snapshotWidthLimit = 3840
+private let snapshotHeightLimit = 2160
 private func json(_ object: [String: Any]) -> String {
     guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
           let value = String(data: data, encoding: .utf8) else { return "{\"phase\":\"error\",\"error\":\"encoding_failed\"}" }
@@ -26,6 +30,21 @@ private func validID(_ value: String) -> Bool {
 }
 @available(macOS 14.0, *)
 private var session: CaptureSession?
+@available(macOS 14.0, *)
+private var snapshotJob: SnapshotCapture?
+
+private func privateDirectory(_ request: [String: Any]) -> URL? {
+    guard let path = request["directory"] as? String, path.utf8.count <= 4096,
+          path.hasPrefix("/"), !path.contains("\0") else { return nil }
+    let root = URL(fileURLWithPath: path, isDirectory: true)
+    guard let values = try? root.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
+          values.isDirectory == true, values.isSymbolicLink != true,
+          let attributes = try? FileManager.default.attributesOfItem(atPath: root.path),
+          (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == geteuid(),
+          (attributes[.posixPermissions] as? NSNumber)?.intValue == 0o700,
+          (try? FileManager.default.contentsOfDirectory(atPath: root.path).isEmpty) == true else { return nil }
+    return root
+}
 
 // Rust calls only on the AppKit main thread. The input must be trusted native
 // JSON, never a frontend path/source ID. Returned string is owned; free with API.
@@ -48,21 +67,17 @@ public func command(_ raw: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>
     guard let id = request["session_id"] as? String, validID(id) else {
         return strdup(json(["phase": "error", "error": "invalid_session"]))
     }
+    if op == "start_snapshot" || op == "snapshot_status" || op == "discard_snapshot" {
+        return strdup(json(snapshotCommand(op, request: request, id: id)))
+    }
     if op == "start" {
+        guard snapshotJob?.ownsSelection != true else {
+            return strdup(json(["phase": "error", "error": "snapshot_busy"]))
+        }
         if session?.isDisposed == true { session = nil }
         guard session == nil else { return strdup(json(["phase": "error", "error": "session_exists"])) }
-        guard let path = request["directory"] as? String, path.utf8.count <= 4096,
-              path.hasPrefix("/"), !path.contains("\0") else {
-            return strdup(json(["phase": "error", "error": "invalid_directory"]))
-        }
-        let root = URL(fileURLWithPath: path, isDirectory: true)
         // Rust owns this freshly created 0700 directory for the whole session.
-        guard let values = try? root.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
-              values.isDirectory == true, values.isSymbolicLink != true,
-              let attributes = try? FileManager.default.attributesOfItem(atPath: root.path),
-              (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == geteuid(),
-              (attributes[.posixPermissions] as? NSNumber)?.intValue == 0o700,
-              (try? FileManager.default.contentsOfDirectory(atPath: root.path).isEmpty) == true else {
+        guard let root = privateDirectory(request) else {
             return strdup(json(["phase": "error", "error": "invalid_directory"]))
         }
         let next = CaptureSession(id: id, root: root)
@@ -95,6 +110,7 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
     var startedAt: TimeInterval?
     var elapsed = 0.0
     var stream: SCStream?
+    var selectedFilter: SCContentFilter?
     var sink: WriterSink?
     var mp4Bytes: Int64 = 0, gifBytes: Int64 = 0
     var warnings: [String] = []
@@ -169,6 +185,7 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
     }
     func begin(_ filter: SCContentFilter) {
         do {
+            selectedFilter = filter
             let rect = filter.contentRect
             let scale = Double(filter.pointPixelScale)
             let sourceWidth = rect.width * scale, sourceHeight = rect.height * scale
@@ -281,6 +298,7 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
     }
     func afterStreamStopped() {
         guard !startPending, !writerPending, !exportPending, !cleanupPending else { return }
+        selectedFilter = nil
         if discardRequested || error != nil { cleanup(); return }
         guard let sink else { fail("missing_writer"); return }
         writerPending = true
@@ -385,11 +403,201 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
                 self.mp4Bytes = 0; self.gifBytes = 0
                 self.cleanupPending = false
                 self.sink = nil
+                self.selectedFilter = nil
                 self.isDisposed = self.discardRequested
                 self.phase = self.discardRequested ? "cancelled" : "error"
             }
         }
         if let sink { sink.cancel(done) } else { done() }
+    }
+}
+
+@available(macOS 14.0, *)
+private func snapshotCommand(_ op: String, request: [String: Any], id: String) -> [String: Any] {
+    func failure(_ reason: String) -> [String: Any] { ["session_id": id, "phase": "error", "error": reason] }
+    if op == "start_snapshot" {
+        if snapshotJob?.isDisposed == true { snapshotJob = nil }
+        guard snapshotJob == nil else { return failure("snapshot_busy") }
+        guard let root = privateDirectory(request) else { return failure("invalid_directory") }
+        var filter: SCContentFilter?
+        if let recording = request["recording_id"] as? String {
+            guard validID(recording), let current = session, current.id == recording,
+                  current.phase == "capturing", !current.discardRequested, !current.stopRequested,
+                  let selected = current.selectedFilter else { return failure("recording_unavailable") }
+            filter = selected
+        } else {
+            guard request["recording_id"] == nil || request["recording_id"] is NSNull else { return failure("invalid_request") }
+            // The shared system picker is never reconfigured while a video owns its source.
+            if let current = session, current.phase == "choosing" || current.phase == "capturing"
+                || current.startPending || current.streamStopPending || current.stream != nil {
+                return failure("recording_unavailable")
+            }
+        }
+        let next = SnapshotCapture(id: id, root: root)
+        snapshotJob = next
+        if let filter { next.capture(filter) } else { next.choose() }
+        return next.status()
+    }
+    guard let current = snapshotJob, current.id == id else { return failure("unknown_snapshot") }
+    if op == "discard_snapshot" { current.discard() }
+    return current.status()
+}
+
+// The image workflow owns no AVAssetWriter and never changes CaptureSession's phases.
+@available(macOS 14.0, *)
+private final class SnapshotCapture: NSObject, SCContentSharingPickerObserver {
+    let id: String
+    let root: URL
+    var phase = "choosing"
+    var error: String?
+    var width = 0, height = 0
+    var pngBytes: Int64 = 0
+    var pickerRegistered = false
+    var capturePending = false
+    var encodePending = false
+    var discardRequested = false
+    var isDisposed = false
+    var deadline: DispatchWorkItem?
+    let cancellation = Cancellation()
+    var ownsSelection: Bool { pickerRegistered || capturePending }
+
+    init(id: String, root: URL) { self.id = id; self.root = root }
+    func status() -> [String: Any] {
+        var result: [String: Any] = ["session_id": id, "phase": phase, "width": width,
+            "height": height, "png_bytes": pngBytes]
+        if let error { result["error"] = error }
+        return result
+    }
+    func timeout(_ seconds: Double, _ reason: String) {
+        deadline?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.fail(reason) }
+        deadline = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+    }
+    func choose() {
+        let picker = SCContentSharingPicker.shared
+        var config = SCContentSharingPickerConfiguration()
+        config.allowedPickerModes = [.singleWindow, .singleDisplay]
+        config.allowsChangingSelectedContent = false
+        picker.defaultConfiguration = config
+        picker.maximumStreamCount = 1
+        picker.add(self); pickerRegistered = true; picker.isActive = true
+        timeout(60, "picker_timed_out")
+        picker.present()
+    }
+    func releasePicker() {
+        guard pickerRegistered else { return }
+        SCContentSharingPicker.shared.remove(self)
+        SCContentSharingPicker.shared.isActive = false
+        pickerRegistered = false
+    }
+    func contentSharingPicker(_ picker: SCContentSharingPicker, didCancelFor stream: SCStream?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.phase == "choosing" else { return }
+            self.discard()
+        }
+    }
+    func contentSharingPickerStartDidFailWithError(_ error: Error) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.phase == "choosing" else { return }
+            self.fail("picker_failed")
+        }
+    }
+    func contentSharingPicker(_ picker: SCContentSharingPicker, didUpdateWith filter: SCContentFilter, for stream: SCStream?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.phase == "choosing", !self.discardRequested else { return }
+            self.capture(filter)
+        }
+    }
+    func capture(_ filter: SCContentFilter) {
+        let sourceWidth = filter.contentRect.width * Double(filter.pointPixelScale)
+        let sourceHeight = filter.contentRect.height * Double(filter.pointPixelScale)
+        guard sourceWidth.isFinite, sourceHeight.isFinite, sourceWidth > 0, sourceHeight > 0 else {
+            fail("invalid_dimensions"); return
+        }
+        let scale = min(1, min(Double(snapshotWidthLimit) / sourceWidth, Double(snapshotHeightLimit) / sourceHeight))
+        width = max(1, Int(sourceWidth * scale)); height = max(1, Int(sourceHeight * scale))
+        let config = SCStreamConfiguration()
+        config.width = width; config.height = height
+        config.pixelFormat = kCVPixelFormatType_32BGRA
+        config.capturesAudio = false
+        if #available(macOS 15.0, *) { config.captureMicrophone = false }
+        config.showsCursor = true; config.scalesToFit = true
+        phase = "capturing"; capturePending = true
+        timeout(15, "snapshot_timed_out")
+        SCScreenshotManager.captureImage(contentFilter: filter, configuration: config) { [self, filter] image, failure in
+            // Retain the selected filter and job until this uninterruptible OS callback returns.
+            _ = filter
+            DispatchQueue.main.async {
+                self.capturePending = false
+                self.releasePicker()
+                if self.discardRequested || self.error != nil { self.cleanup(); return }
+                guard failure == nil, let image else { self.fail("snapshot_capture_failed"); return }
+                self.encode(image)
+            }
+        }
+    }
+    func encode(_ image: CGImage) {
+        guard image.width > 0, image.height > 0,
+              image.width <= snapshotWidthLimit, image.height <= snapshotHeightLimit else {
+            fail("invalid_dimensions"); return
+        }
+        width = image.width; height = image.height
+        encodePending = true
+        let output = root.appendingPathComponent("capture.png")
+        let token = cancellation
+        snapshotQueue.async { [self] in
+            let size = autoreleasepool { Self.writePNG(image, to: output, cancellation: token) }
+            DispatchQueue.main.async {
+                self.encodePending = false
+                self.deadline?.cancel()
+                if self.discardRequested || self.error != nil { self.cleanup(); return }
+                guard let size else { self.fail("snapshot_encode_failed"); return }
+                self.pngBytes = size
+                self.phase = "ready"
+            }
+        }
+    }
+    static func writePNG(_ image: CGImage, to output: URL, cancellation: Cancellation) -> Int64? {
+        guard !cancellation.isCancelled, image.width > 0, image.height > 0,
+              image.width <= snapshotWidthLimit, image.height <= snapshotHeightLimit else { return nil }
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination), !cancellation.isCancelled,
+              data.length > 0, data.length <= snapshotByteLimit else { return nil }
+        let descriptor = output.path.withCString { open($0, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600) }
+        guard descriptor >= 0 else { return nil }
+        let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        do {
+            try file.write(contentsOf: data as Data)
+            try file.synchronize()
+            try file.close()
+            guard !cancellation.isCancelled else { return nil }
+            return Int64(data.length)
+        } catch {
+            try? file.close()
+            return nil
+        }
+    }
+    func fail(_ reason: String) {
+        guard !isDisposed else { return }
+        error = reason; phase = "error"
+        cancellation.cancel(); deadline?.cancel(); releasePicker()
+        cleanup()
+    }
+    func discard() {
+        guard !isDisposed else { return }
+        discardRequested = true
+        cancellation.cancel(); deadline?.cancel(); releasePicker()
+        cleanup()
+    }
+    func cleanup() {
+        // A timeout requests cancellation; it never acknowledges an outstanding OS/PNG callback.
+        guard !capturePending, !encodePending else { return }
+        try? FileManager.default.removeItem(at: root.appendingPathComponent("capture.png"))
+        pngBytes = 0
+        if discardRequested { isDisposed = true; phase = "cancelled" }
     }
 }
 

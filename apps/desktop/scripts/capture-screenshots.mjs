@@ -143,6 +143,20 @@ async function openGraph(page) {
   await expect(page.getByRole("button", { name: "Stop cluster shop", exact: true })).toBeVisible();
 }
 
+async function openSnapshot(page, preview = false) {
+  await openGraph(page);
+  await page.getByRole("button", { name: "Take snapshot", exact: true }).click();
+  const chooser = page.getByRole("dialog", { name: "Take snapshot", exact: true });
+  await expect(chooser.getByRole("radio", { name: "Holdmap view", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(chooser.getByRole("radio", { name: "Screen or window", exact: true })).toBeVisible();
+  if (!preview) return chooser;
+  await chooser.getByRole("button", { name: "Capture PNG", exact: true }).click();
+  const result = page.getByRole("dialog", { name: "Snapshot preview", exact: true });
+  await expect(result.getByRole("img", { name: "PNG snapshot preview", exact: true })).toBeVisible();
+  await expect(result.getByRole("button", { name: "Download PNG", exact: true })).toBeVisible();
+  return result;
+}
+
 async function openAgentFlow(page, calls = false) {
   await openAgents(page);
   await page.getByRole("radio", { name: "Flow", exact: true }).click();
@@ -203,6 +217,8 @@ async function boundedClip(page, locator, { height, padding = 0 } = {}) {
 }
 
 const captures = [
+  { name: "desktop-snapshot-dark.png", theme: "dark", prepare: (page) => openSnapshot(page, true) },
+  { name: "desktop-snapshot-light.png", theme: "light", prepare: (page) => openSnapshot(page) },
   ...["dark", "light"].map((theme) => ({ name: `desktop-capabilities-${theme}.png`, theme, prepare: (page) => openCapabilities(page) })),
   { name: "desktop-skills-dark.png", theme: "dark", prepare: (page) => openCapabilities(page, true) },
   { name: "desktop-capabilities-narrow-light.png", theme: "light", viewport: { width: 560, height: 1000 }, prepare: (page) => openCapabilities(page, true) },

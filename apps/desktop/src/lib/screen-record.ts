@@ -71,11 +71,11 @@ export function displayCaptureError(cause: unknown): Error {
   return new Error(typeof error?.message === "string" && error.message.trim() ? error.message : "Couldn't start screen recording.");
 }
 
-export async function requestDisplayStream(): Promise<MediaStream> {
+export async function requestDisplayStream(resolution = { width: 1920, height: 1080 }): Promise<MediaStream> {
   if (!captureSupport().display) throw displayCaptureError({ name: "NotSupportedError" });
   try {
     return await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 30, width: { max: 1920 }, height: { max: 1080 } },
+      video: { frameRate: 30, width: { max: resolution.width }, height: { max: resolution.height } },
       audio: false,
       preferCurrentTab: false,
       selfBrowserSurface: "include",

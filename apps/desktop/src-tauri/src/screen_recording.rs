@@ -1,21 +1,17 @@
 //! Native capture owns one private session; renderer IPC receives opaque handles and bytes.
 //! Source selection and capture are exclusively the native adapter's explicit OS picker.
 
+use crate::capture_bridge::native_command;
+use crate::capture_lease::{lock, Operation, Session};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-#[cfg(unix)]
-use std::io::Read;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
-use tempfile::TempDir;
 
 const MAX_BYTES: u64 = 128 * 1024 * 1024;
-#[cfg(target_os = "macos")]
-const MAX_REPLY: usize = 64 * 1024;
-const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 const DISCARD_TIMEOUT: Duration = Duration::from_secs(5);
 const UNKNOWN_SESSION: &str = "This recording session is no longer available.";
 
@@ -70,10 +66,6 @@ struct NativeStatus {
     error: Option<String>,
 }
 
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|error| error.into_inner())
-}
-
 fn valid_id(id: &str) -> bool {
     id.len() == 36
         && uuid::Uuid::parse_str(id).is_ok_and(|parsed| {
@@ -117,98 +109,6 @@ fn parse_status(value: Value, id: &str) -> Result<Status, String> {
     })
 }
 
-struct Session {
-    id: String,
-    directory: Mutex<Option<TempDir>>,
-    busy: AtomicBool,
-    cleaning: AtomicBool,
-    callbacks: AtomicUsize,
-    reaping: AtomicBool,
-    reaper: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
-}
-
-impl Session {
-    fn new() -> Result<Self, String> {
-        let directory = tempfile::Builder::new()
-            .prefix("holdmap-recording-")
-            .tempdir()
-            .map_err(|_| "Couldn't create a private recording directory.".to_owned())?;
-        holdmap_core::util::create_private_dir(directory.path())
-            .map_err(|_| "Couldn't protect the recording directory.".to_owned())?;
-        directory
-            .path()
-            .to_str()
-            .ok_or("The recording directory needs a valid Unicode path.")?;
-        let id = uuid::Uuid::new_v4().hyphenated().to_string();
-        Ok(Self {
-            id,
-            directory: Mutex::new(Some(directory)),
-            busy: AtomicBool::new(false),
-            cleaning: AtomicBool::new(false),
-            callbacks: AtomicUsize::new(0),
-            reaping: AtomicBool::new(false),
-            reaper: Mutex::new(None),
-        })
-    }
-
-    fn path(&self) -> Result<std::path::PathBuf, String> {
-        lock(&self.directory)
-            .as_ref()
-            .map(|directory| directory.path().to_owned())
-            .ok_or_else(|| UNKNOWN_SESSION.into())
-    }
-
-    fn remove_files(&self) {
-        drop(lock(&self.directory).take());
-    }
-}
-
-impl Drop for Session {
-    fn drop(&mut self) {
-        // Unexpected shutdown cannot prove that native callbacks have stopped. Normal
-        // discard and explicit process-exit cleanup remove files before releasing this slot.
-        if let Some(directory) = lock(&self.directory).take() {
-            let _ = directory.keep();
-        }
-    }
-}
-
-struct Operation(Arc<Session>);
-impl Operation {
-    fn acquire(session: Arc<Session>) -> Result<Self, String> {
-        if session.cleaning.load(Ordering::Acquire)
-            || session
-                .busy
-                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-                .is_err()
-        {
-            return Err("The recording is busy or being discarded. Try again shortly.".into());
-        }
-        // Pair with the reaper's fence before reading busy: either this check
-        // observes cleanup or cleanup observes this guard. Acquire/Release alone
-        // allows both threads to miss the other's store to a different atomic.
-        std::sync::atomic::fence(Ordering::SeqCst);
-        // Cleanup may have begun while acquiring the operation.
-        if session.cleaning.load(Ordering::Acquire) {
-            session.busy.store(false, Ordering::Release);
-            return Err("The recording is being discarded.".into());
-        }
-        Ok(Self(session))
-    }
-}
-impl Drop for Operation {
-    fn drop(&mut self) {
-        self.0.busy.store(false, Ordering::Release);
-    }
-}
-
-struct Callback(Arc<Session>);
-impl Drop for Callback {
-    fn drop(&mut self) {
-        self.0.callbacks.fetch_sub(1, Ordering::Release);
-    }
-}
-
 #[cfg(test)]
 type TestNative = Arc<dyn Fn(Value) -> Result<Value, String> + Send + Sync>;
 
@@ -241,51 +141,10 @@ impl ScreenRecordingState {
         if slot.is_some() || self.exiting.load(Ordering::Acquire) {
             return Err("Discard the current recording before starting another.".into());
         }
-        let session = Arc::new(Session::new()?);
+        let session = Arc::new(Session::new("holdmap-recording-")?);
         *slot = Some(Arc::clone(&session));
         Ok(session)
     }
-}
-
-#[cfg(target_os = "macos")]
-fn native_command(request: Value) -> Result<Value, String> {
-    use std::ffi::{CStr, CString};
-    use std::os::raw::c_char;
-    #[link(name = "holdmap_screen_capture", kind = "static")]
-    extern "C" {
-        fn hm_capture_command(request: *const c_char) -> *mut c_char;
-        fn hm_capture_free_json(reply: *mut c_char);
-    }
-    let text = serde_json::to_vec(&request).map_err(|_| "Invalid recording request.".to_owned())?;
-    if text.len() > 8192 {
-        return Err("Invalid recording request.".into());
-    }
-    let text = CString::new(text).map_err(|_| "Invalid recording request.".to_owned())?;
-    // SAFETY: callers dispatch this adapter to the app's main thread. Swift accepts
-    // a valid NUL-terminated request and returns owned strdup JSON or a null pointer.
-    let pointer = unsafe { hm_capture_command(text.as_ptr()) };
-    if pointer.is_null() {
-        return Err("The native recorder could not respond.".into());
-    }
-    struct Reply(*mut c_char);
-    impl Drop for Reply {
-        fn drop(&mut self) {
-            // SAFETY: this pointer is owned by the matching Swift allocation API.
-            unsafe { hm_capture_free_json(self.0) };
-        }
-    }
-    let reply = Reply(pointer);
-    // SAFETY: the Swift ABI guarantees a NUL-terminated allocation until free_json.
-    let bytes = unsafe { CStr::from_ptr(reply.0) }.to_bytes();
-    if bytes.len() > MAX_REPLY {
-        return Err("The native recorder response is too large.".into());
-    }
-    serde_json::from_slice(bytes).map_err(|_| "The native recorder returned invalid JSON.".into())
-}
-
-#[cfg(not(target_os = "macos"))]
-fn native_command(_: Value) -> Result<Value, String> {
-    Err("Native screen recording requires macOS 14 or newer.".into())
 }
 
 async fn call_native<R: Runtime>(
@@ -293,56 +152,11 @@ async fn call_native<R: Runtime>(
     request: Value,
     session: Option<Arc<Session>>,
 ) -> Result<Value, String> {
-    let state = app.state::<ScreenRecordingState>();
     #[cfg(test)]
-    let native = state.native.clone();
+    let native = app.state::<ScreenRecordingState>().native.clone();
     #[cfg(not(test))]
-    let _ = state;
-    let (sender, receiver) = tokio::sync::oneshot::channel();
-    let pending = if let Some(session) = &session {
-        session.callbacks.fetch_add(1, Ordering::AcqRel);
-        Some(Callback(Arc::clone(session)))
-    } else {
-        None
-    };
-    let callback = move || {
-        let result = if request["op"] == "start"
-            && session
-                .as_ref()
-                .is_some_and(|session| session.cleaning.load(Ordering::Acquire))
-        {
-            Ok(json!({"session_id": request["session_id"], "phase": "cancelled"}))
-        } else {
-            #[cfg(test)]
-            {
-                if let Some(native) = native {
-                    native(request)
-                } else {
-                    native_command(request)
-                }
-            }
-            #[cfg(not(test))]
-            {
-                native_command(request)
-            }
-        };
-        drop(pending);
-        let _ = sender.send(result);
-    };
-    #[cfg(test)]
-    let testing = app.state::<ScreenRecordingState>().native.is_some();
-    #[cfg(not(test))]
-    let testing = false;
-    if testing {
-        callback();
-    } else {
-        app.run_on_main_thread(callback)
-            .map_err(|_| "Couldn't reach the native recorder.".to_owned())?;
-    }
-    tokio::time::timeout(CALL_TIMEOUT, receiver)
-        .await
-        .map_err(|_| "The native recorder did not respond in time.".to_owned())?
-        .map_err(|_| "The native recorder could not respond.".to_owned())?
+    let native = None;
+    crate::capture_bridge::call(app, request, session, native).await
 }
 
 fn schedule_reap<R: Runtime>(app: &AppHandle<R>, session: Arc<Session>) {
@@ -570,64 +384,21 @@ impl Format {
     }
 }
 
-#[cfg(unix)]
 fn read_private(directory: &Path, format: Format, expected: u64) -> Result<Vec<u8>, String> {
-    use std::os::fd::{AsRawFd, FromRawFd};
-    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
-    if expected == 0 || expected > MAX_BYTES {
-        return Err("This recording format is unavailable or too large.".into());
-    }
-    let parent = std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
-        .open(directory)
-        .map_err(|_| "Couldn't verify the private recording directory.".to_owned())?;
-    let parent_meta = parent
-        .metadata()
-        .map_err(|_| "Couldn't verify the recording directory.".to_owned())?;
-    // SAFETY: geteuid has no preconditions.
-    let me = unsafe { libc::geteuid() };
-    if parent_meta.uid() != me || parent_meta.mode() & 0o077 != 0 {
-        return Err("The recording directory is not private.".into());
-    }
-    let name = std::ffi::CString::new(format.filename()).expect("fixed recording filename");
-    // SAFETY: parent owns the directory descriptor; the fixed filename is NUL-terminated.
-    let descriptor = unsafe {
-        libc::openat(
-            parent.as_raw_fd(),
-            name.as_ptr(),
-            libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
-        )
-    };
-    if descriptor < 0 {
-        return Err("Couldn't open the recording safely.".into());
-    }
-    // SAFETY: openat returned this newly owned descriptor.
-    let file = unsafe { std::fs::File::from_raw_fd(descriptor) };
-    let metadata = file
-        .metadata()
-        .map_err(|_| "Couldn't verify the recording file.".to_owned())?;
-    if !metadata.is_file()
-        || metadata.uid() != me
-        || metadata.nlink() != 1
-        || metadata.mode() & 0o077 != 0
-        || metadata.len() != expected
+    #[cfg(unix)]
     {
-        return Err("The recording file is not a private, complete regular file.".into());
+        let bytes =
+            crate::capture_file::read_private(directory, format.filename(), expected, MAX_BYTES)?;
+        if !format.magic(&bytes) {
+            return Err("The recording data is incomplete or invalid.".into());
+        }
+        Ok(bytes)
     }
-    let mut bytes = Vec::with_capacity(expected as usize);
-    file.take(MAX_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|_| "Couldn't read the recording.".to_owned())?;
-    if bytes.len() as u64 != expected || !format.magic(&bytes) {
-        return Err("The recording data is incomplete or invalid.".into());
+    #[cfg(not(unix))]
+    {
+        let _ = (directory, format, expected);
+        Err("Native recording files are unavailable on this platform.".into())
     }
-    Ok(bytes)
-}
-
-#[cfg(not(unix))]
-fn read_private(_: &Path, _: Format, _: u64) -> Result<Vec<u8>, String> {
-    Err("Native recording files are unavailable on this platform.".into())
 }
 
 #[tauri::command]
@@ -687,8 +458,10 @@ pub(crate) async fn discard_screen_recording<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capture_lease::Callback;
     #[cfg(unix)]
     use std::path::PathBuf;
+    use std::sync::atomic::AtomicUsize;
     use std::time::Instant;
     use tauri::test::{
         get_ipc_response, mock_builder, mock_context, noop_assets, MockRuntime, INVOKE_KEY,

@@ -15,8 +15,8 @@ const astro = files(join(dist, "_astro"));
 const images = astro.filter((f) => /\.(avif|webp|png|jpe?g)$/.test(f));
 const fonts = astro.filter((f) => f.endsWith(".woff2"));
 const demoJs = files(join(dist, "demo", "assets")).filter((f) => f.endsWith(".js"));
-// Follow Vite's static import graph: recording encoders load only after choosing a screen.
-// Keep a separate budget for optional chunks so deferred code is still accounted for.
+// Follow Vite's static import graph: capture renderers and encoders load on demand.
+// Budget optional PNG code separately without changing existing feature limits.
 const demoManifest = JSON.parse(readFileSync(join(dist, "demo", "manifest.json"), "utf8"));
 const initialDemoFiles = new Set();
 const visitedDemoEntries = new Set();
@@ -32,7 +32,28 @@ for (const [key, entry] of Object.entries(demoManifest)) {
   if (entry.isEntry) visitDemoEntry(key);
 }
 if (!initialDemoFiles.size) throw new Error("Demo has no entry JavaScript in its manifest.");
-const deferredDemoJs = demoJs.filter((file) => !initialDemoFiles.has(file));
+const snapshotDemoFiles = new Set();
+const visitedSnapshotEntries = new Set();
+function visitSnapshotEntry(key) {
+  if (visitedSnapshotEntries.has(key)) return;
+  visitedSnapshotEntries.add(key);
+  const entry = demoManifest[key];
+  if (!entry) throw new Error(`Missing snapshot manifest entry: ${key}`);
+  const file = join(dist, "demo", entry.file);
+  // A lazy chunk may import shared helpers from the entry. Do not follow the
+  // entry's unrelated dynamic imports back into every optional feature.
+  if (initialDemoFiles.has(file)) return;
+  if (entry.file.endsWith(".js")) snapshotDemoFiles.add(file);
+  for (const imported of [...entry.imports ?? [], ...entry.dynamicImports ?? []]) visitSnapshotEntry(imported);
+}
+// Both paths must remain deferred. Missing manifest entries fail the budget check.
+for (const key of ["src/lib/app-snapshot.ts", "src/lib/screen-snapshot-native.ts"]) {
+  if (!demoManifest[key] || initialDemoFiles.has(join(dist, "demo", demoManifest[key].file))) {
+    throw new Error(`Snapshot renderer must remain deferred: ${key}`);
+  }
+  visitSnapshotEntry(key);
+}
+const deferredDemoJs = demoJs.filter((file) => !initialDemoFiles.has(file) && !snapshotDemoFiles.has(file));
 const videos = files(join(dist, "hero")).filter((f) => /\.(mp4|webm)$/.test(f));
 
 const rows = [
@@ -42,6 +63,7 @@ const rows = [
   ["Largest image", Math.max(...images.map((f) => statSync(f).size)), 260 * 1024],
   ["Open Graph image", statSync(join(dist, "og.png")).size, 300 * 1024],
   ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 220 * 1024],
+  ["Snapshot PNG JS (on capture)", [...snapshotDemoFiles].reduce((n, f) => n + gz(f), 0), 40 * 1024],
   ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 160 * 1024],
   ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];
