@@ -83,6 +83,10 @@ describe("graph chrome", () => {
     await fireEvent.click(trigger);
     await fireEvent.focusOut(trigger, { relatedTarget: view.getByRole("radio", { name: "Force" }) });
     expect(view.queryByRole("region", { name: "Graph display options" })).toBeNull();
+    await fireEvent.click(trigger);
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(view.queryByRole("region", { name: "Graph display options" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 
   it("shows matching services with observed neighbours and offers a scoped empty-state recovery", () => {

@@ -1360,7 +1360,9 @@ initial scale, with separate actions for fitting the entire graph and restoring 
 On wider canvases, the minimap appears only when graph bounds extend beyond the viewport.
 
 Primary chrome contains compact counts, All services and layout controls. Options discloses
-Traffic, External and Legend; reduced motion disables traffic animation. External stays idle
+Traffic, External and Legend. Its Escape handling precedes Graph selection while leaving
+overlaid modal dialogs in control of their keyboard. Reduced motion disables traffic animation.
+External stays idle
 until there are outbound hosts, and a short no-links message explains disconnected graphs.
 Editor-extension nodes keep the extension identity, not the inherited project. The public
 sample's All services mode adds eligible listeners from the same snapshot without inventing

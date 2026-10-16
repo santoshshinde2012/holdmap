@@ -70,7 +70,8 @@ in smaller windows. Close or hide details, or press **Esc**, to return to the fu
 restore focus to the service card. The graph does not open a summary pane automatically.
 
 Open **Options** for the secondary display controls. **External** shows outbound remote
-hosts and is unavailable when there are none. **Traffic** animates observed connections;
+hosts and is unavailable when there are none. Press **Esc** to close Options and keep the
+selected service. **Traffic** animates observed connections;
 it stays off when reduced motion is enabled. **Legend** toggles the connection key while
 the compact counts stay visible. Disconnected services have no invented edges; a short
 message explains when no connections are present.

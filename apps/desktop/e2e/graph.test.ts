@@ -54,6 +54,27 @@ test("Graph uses the full canvas until an explicit service click and returns foc
   await service.click();
   await expect(details(app, 3001).getByRole("heading", { name: /^shop-api/ })).toBeVisible();
   await expect(service).toHaveAttribute("aria-pressed", "true");
+  // WebKit pointer activation can leave focus on the canvas instead of the button.
+  await canvas(app).focus();
+  const options = canvas(app).getByRole("button", { name: "Graph options", exact: true });
+  await options.dispatchEvent("click");
+  await expect(options).toHaveAttribute("aria-expanded", "true");
+  await app.keyboard.press("Escape");
+  await expect(options).toHaveAttribute("aria-expanded", "false");
+  await expect(options).toBeFocused();
+  await expect(service).toHaveAttribute("aria-pressed", "true");
+  await expect(details(app, 3001).getByRole("heading", { name: /^shop-api/ })).toBeVisible();
+  await canvas(app).focus();
+  await options.dispatchEvent("click");
+  await app.keyboard.press("ControlOrMeta+k");
+  const palette = app.getByRole("dialog", { name: "Command palette", exact: true });
+  await expect(palette).toBeVisible();
+  await app.keyboard.press("Escape");
+  await expect(palette).toHaveCount(0);
+  await expect(options).toHaveAttribute("aria-expanded", "true");
+  await app.keyboard.press("Escape");
+  await expect(options).toHaveAttribute("aria-expanded", "false");
+  await expect(service).toHaveAttribute("aria-pressed", "true");
   const viewport = canvas(app).locator(".svelte-flow__viewport");
   const initialTransform = await viewport.evaluate((element) => getComputedStyle(element).transform);
   const pane = canvas(app).locator(".svelte-flow__pane");

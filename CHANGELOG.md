@@ -25,6 +25,8 @@ by [release-please](https://github.com/googleapis/release-please) from
   unrelated services across a large Force canvas. Preserve viewport choices during refreshes.
 - Wait for fresh scope data before positioning the graph; centre a readable service card in
   narrow windows. Clear hidden selections so unrelated port actions cannot remain active.
+- Dismiss Graph Options with Escape before clearing service details, including WebKit pointer
+  activation that leaves focus on the canvas. Modal dialogs retain their own Escape handling.
 - Make browser sample All services include the other listening TCP entries from the same
   sample snapshot, with matching IDs and no fabricated links.
 

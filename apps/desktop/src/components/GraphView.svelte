@@ -117,9 +117,20 @@
     if (optionsOpen && !optionsPanel?.contains(event.target as Node) && !optionsTrigger?.contains(event.target as Node)) closeOptions();
   }
   function optionsKey(event: KeyboardEvent) {
-    if (isComposingKey(event) || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!optionsOpen || isComposingKey(event) || event.altKey || event.ctrlKey || event.metaKey) return;
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeOptions(true); }
   }
+  $effect(() => {
+    if (!optionsOpen) return;
+    // Pointer activation need not focus a button in WebKit. Dismiss the disclosure before
+    // the page's Escape action, while allowing an overlaid modal to own its keyboard.
+    const key = (event: KeyboardEvent) => {
+      if (event.target instanceof Element && event.target.closest('[aria-modal="true"]')) return;
+      optionsKey(event);
+    };
+    window.addEventListener("keydown", key, true);
+    return () => window.removeEventListener("keydown", key, true);
+  });
   function leaveOptions(event: FocusEvent) {
     if (!optionsPanel?.contains(event.relatedTarget as Node) && event.relatedTarget !== optionsTrigger) closeOptions();
   }
