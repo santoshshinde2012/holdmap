@@ -14,6 +14,7 @@ import {
   type CaptureResult,
   type RecordingListener,
 } from "./screen-record";
+import { captureVideoSnapshot, snapshotCancelled, snapshotSignal, type SnapshotResult } from "./screen-snapshot";
 
 const MAX_MP4_BYTES = 128 * 1024 * 1024;
 const FINALIZE_TIMEOUT_MS = 20_000;
@@ -277,6 +278,8 @@ export class ScreenRecording {
   private limit: ReturnType<typeof setTimeout> | null = null;
   private readonly listener: RecordingListener;
   private readonly stamp = new Date();
+  private readonly snapshotAbort = new AbortController();
+  private snapshotBusy = false;
 
   private constructor(stream: MediaStream, listener: RecordingListener) {
     this.stream = stream;
@@ -294,9 +297,25 @@ export class ScreenRecording {
     return Math.max(0, performance.now() - this.startedAt);
   }
 
+  async captureSnapshot(signal: AbortSignal): Promise<SnapshotResult> {
+    if (this.stopped || !this.video) throw new Error("The recording is no longer capturing.");
+    if (this.snapshotBusy) throw new Error("Wait for the current snapshot to finish.");
+    this.snapshotBusy = true;
+    const linked = snapshotSignal(signal, this.snapshotAbort.signal);
+    try {
+      const result = await captureVideoSnapshot(this.video, linked.signal, "recording", Math.min(MAX_DURATION_MS, this.elapsedMs()));
+      if (this.stopped) throw snapshotCancelled();
+      return result;
+    } finally {
+      linked.dispose();
+      this.snapshotBusy = false;
+    }
+  }
+
   async stop(): Promise<CaptureResult> {
     if (this.stopped) throw new Error("This recording has already stopped.");
     this.stopped = true;
+    this.snapshotAbort.abort();
     this.teardownClock();
     const durationMs = Math.min(MAX_DURATION_MS, this.elapsedMs());
     const warnings: string[] = [];
@@ -338,6 +357,7 @@ export class ScreenRecording {
   discard(): void {
     this.discarded = true;
     this.stopped = true;
+    this.snapshotAbort.abort();
     this.teardownClock();
     this.mp4?.cancel();
     this.cleanup();

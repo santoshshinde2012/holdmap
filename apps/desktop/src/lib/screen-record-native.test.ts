@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NativeRecordingSession, type NativeRecordingStatus } from "./screen-record-native";
 import { MAX_DURATION_MS } from "./screen-record";
+import { Blob as NodeBlob } from "node:buffer";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -38,6 +39,60 @@ afterEach(() => {
 });
 
 describe("native recording session", () => {
+  it("takes a PNG without stopping video and waits for an in-flight status operation", async () => {
+    vi.stubGlobal("Blob", NodeBlob);
+    const pixels = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0)).buffer;
+    const readStatus = deferred<NativeRecordingStatus>();
+    const snapshotId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    invoke.mockImplementation(async (command) => {
+      if (command === "start_screen_recording") return status();
+      if (command === "screen_recording_status") return readStatus.promise;
+      if (command === "start_screen_snapshot") return { snapshotId, phase: "ready", width: 1, height: 1, pngBytes: pixels.byteLength, error: null };
+      if (command === "read_screen_snapshot") return pixels;
+    });
+    try {
+      const { session, listener } = await start();
+      await vi.advanceTimersByTimeAsync(250);
+      const snapshot = session.captureSnapshot(new AbortController().signal);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(invoke.mock.calls.some(([command]) => command === "start_screen_snapshot")).toBe(false);
+      readStatus.resolve(status());
+      expect(await snapshot).toMatchObject({ source: "recording", width: 1, height: 1 });
+      expect(invoke).toHaveBeenCalledWith("start_screen_snapshot", { sessionId: "owned-session" });
+      expect(invoke).toHaveBeenCalledWith("discard_screen_snapshot", { snapshotId });
+      expect(invoke.mock.calls.some(([command]) => command === "stop_screen_recording" || command === "discard_screen_recording")).toBe(false);
+      expect(listener.onEnded).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(1); // exactly the resumed video status poll
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it("cancels pending PNG work before Stop without converting a PNG failure into video failure", async () => {
+    const pngRead = deferred<ArrayBuffer>(), cleaned = deferred<void>();
+    const snapshotId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    invoke.mockImplementation(async (command: string, args?: { format?: string }) => {
+      if (command === "start_screen_recording") return status();
+      if (command === "start_screen_snapshot") return { snapshotId, phase: "ready", width: 1, height: 1, pngBytes: 70, error: null };
+      if (command === "read_screen_snapshot") return pngRead.promise;
+      if (command === "discard_screen_snapshot") return cleaned.promise;
+      if (command === "stop_screen_recording" || command === "screen_recording_status") return status({ phase: "ready" });
+      if (command === "read_screen_recording") return new ArrayBuffer(args?.format === "mp4" ? 4 : 3);
+    });
+    const { session } = await start();
+    const snapshot = session.captureSnapshot(new AbortController().signal);
+    const rejected = expect(snapshot).rejects.toMatchObject({ name: "AbortError" });
+    await vi.advanceTimersByTimeAsync(0);
+    const stopped = session.stop();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(invoke).toHaveBeenCalledWith("discard_screen_snapshot", { snapshotId });
+    expect(invoke.mock.calls.some(([command]) => command === "stop_screen_recording")).toBe(false);
+    cleaned.resolve(); await rejected;
+    expect(await stopped).toMatchObject({ mp4: { bytes: 4 }, gif: { bytes: 3 } });
+    expect(invoke).toHaveBeenCalledWith("stop_screen_recording", { sessionId: "owned-session" });
+    pngRead.resolve(new ArrayBuffer(70));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("waits for source selection before starting, then reads exports and deletes native files", async () => {
     let polls = 0;
     invoke.mockImplementation(async (command: string, args?: { format?: string }) => {

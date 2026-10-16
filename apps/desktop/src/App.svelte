@@ -20,6 +20,8 @@
   import ConfirmDialog, { type Phase } from "./components/ConfirmDialog.svelte";
   import ShortcutsDialog from "./components/ShortcutsDialog.svelte";
   import ScreenRecordDialog from "./components/ScreenRecordDialog.svelte";
+  import SnapshotCapture from "./components/SnapshotCapture.svelte";
+  import type { SnapshotCaptureHandle } from "./lib/snapshot-controller";
   import CommandPalette from "./components/CommandPalette.svelte";
   import Onboarding from "./components/Onboarding.svelte";
   import EmptyState from "./components/EmptyState.svelte";
@@ -102,7 +104,9 @@
   let usage = $state.raw<Record<string, number[]>>({});
   let systemDark = $state(matchMedia("(prefers-color-scheme: dark)").matches);
   let narrow = $state(matchMedia("(max-width: 900px)").matches);
+  let viewportWidth = $state(window.innerWidth);
   let drawerOpen = $state(false);
+  let graphDetailsOpen = $state(false);
   let isMac = $state(/Mac/.test(navigator.platform));
   let search = $state<HTMLInputElement | undefined>();
   let listEl = $state<HTMLDivElement | undefined>();
@@ -112,6 +116,7 @@
   /** GraphView (and @xyflow) loads only when the Graph tab is opened — keeps the first paint light. */
   let GraphView = $state<typeof import("./components/GraphView.svelte").default | null>(null);
   let graph = $state.raw<Graph | null>(null);
+  let topologyLoading = $state(false);
   /** AgentsView loads, and agents are looked up, only while the Agents tab is open. */
   let AgentsView = $state<typeof import("./components/AgentsView.svelte").default | null>(null);
   let agentsReport = $state.raw<AgentsReport | null>(null);
@@ -139,6 +144,8 @@
 
   const visibleAgentIds = $derived(filterAgents(agentsReport?.agents ?? [], agentQuery).map((a) => a.id));
   let graphAll = $state(false);
+  let graphQuery = $state("");
+  let graphVisibleIds = $state<string[]>([]);
   const topologyWanted = $derived(view === "graph" || (view === "list" && sort === "cluster"));
   const topologyAll = $derived(view === "graph" ? graphAll : filters.all);
   let selectedNode = $state<string | null>(null);
@@ -187,6 +194,8 @@
   let screenCaptureController: AbortController | null = null;
   let screenCaptureEncoding: RecordingSession | null = null;
   let screenCaptureTrigger: HTMLElement | null = null;
+  let snapshotCaptureUi = $state<SnapshotCaptureHandle | undefined>();
+  let snapshotCaptureState = $state({ open: false, busy: false, hasResult: false });
   let hotkeyList = $state<HotkeyPreset[]>([]);
   let info = $state<{ version: string; platform: string; tray: boolean; configDir: string | null; updater: boolean | null; appPath: string | null; architecture: string | null }>({ version: "", platform: "", tray: false, configDir: null, updater: null, appPath: null, architecture: null });
   let detailTab = $state<DetailTab>("overview");
@@ -198,6 +207,7 @@
     void view;
     // A view change must not reopen the drawer for a listener selected in another view.
     drawerOpen = false;
+    graphDetailsOpen = false;
   });
   $effect(() => {
     const visible = topologyWanted, all = topologyAll, graphVisible = view === "graph";
@@ -262,21 +272,26 @@
   const ordered = $derived(sections.flatMap((s) => (s.title && collapsed.has(s.id) ? [] : s.items)));
   const sectionOf = (id: string) => sections.find((s) => s.items.some((e) => e.id === id));
   function setCollapsed(id: string, on: boolean) { if (collapsed.has(id) !== on) collapsed = toggled(collapsed, id); }
-  const selected = $derived(ordered.find((e) => e.id === selectedId) ?? null);
+  // A graph selection must not depend on hidden List filters or collapsed groups.
+  const selected = $derived((view === "graph" ? snapshot?.entries : ordered)?.find((e) => e.id === selectedId) ?? null);
   const stats = $derived.by(() => {
     const es = snapshot?.entries ?? [];
     return { total: es.length, dev: es.filter((e) => e.is_dev).length, mine: es.filter((e) => e.is_mine).length, exposed: es.filter((e) => e.exposure === "all_interfaces").length };
   });
   const queryPort = $derived.by(() => {
+    if (view !== "list") return null;
     const m = filters.query.trim().match(/^:?(\d{1,5})$/);
     const n = m ? +m[1] : NaN;
     return n > 0 && n < 65536 ? n : null;
   });
   const filtersActive = $derived(filters.query !== "" || filters.dev || filters.mine || filters.exposed || filters.proto !== "any");
-  // The agents map has no side pane: a port picked there opens in the drawer, as on narrow windows.
-  const showDrawer = $derived((narrow || view === "agents") && drawerOpen && !!selected);
+  // Keep at least 600px for the graph even when a wide details pane was saved in List.
+  const graphDetailsDrawer = $derived(narrow || viewportWidth - paneWidth < 600);
+  // Agents and small graph canvases use the existing modal details drawer.
+  const showDrawer = $derived(!!selected && (view === "graph" ? graphDetailsDrawer && graphDetailsOpen : (narrow || view === "agents") && drawerOpen));
   /** Any overlay that owns the keyboard (they stop key events themselves; this is a backstop). */
-  const modalOpen = $derived(!!confirm || !!pendingReview || showHelp || showHistory || showPalette || showSettings || showShutdown || showSchedules || showRemote || !!pinDialog || showDrawer || !!screenCaptureDialog);
+  const otherModalOpen = $derived(!!confirm || !!pendingReview || showHelp || showHistory || showPalette || showSettings || showShutdown || showSchedules || showRemote || !!pinDialog || showDrawer || !!screenCaptureDialog);
+  const modalOpen = $derived(otherModalOpen || snapshotCaptureState.open || snapshotCaptureState.busy);
   const scanMs = $derived(Math.min(60, Math.max(1, config?.scan_interval_secs ?? 3)) * 1000);
 
   /** When the scan in flight started: the header stays "Live" while one is merely running. */
@@ -347,7 +362,10 @@
       explainMeta.prune(keep);
       for (const port of [...explainFailed]) if (!keep(port)) explainFailed.delete(port);
       scanGen++;
-      if (selectedId && !s.entries.some((e) => e.id === selectedId)) selectedId = null;
+      if (selectedId && !s.entries.some((e) => e.id === selectedId)) {
+        selectedId = null;
+        if (view === "graph") graphDetailsOpen = false;
+      }
       // Build topology for the graph or the list's cluster grouping, only while needed.
       if (topologyWanted) loadTopology();
       else graph = null;
@@ -433,10 +451,13 @@
   const topologyLoader = createFlowLoader(() => api.topology(topologyAll),
     (value) => {
       graph = share(graph, value);
-      if (selectedNode && !graph.nodes.some((n) => n.id === selectedNode)) selectedNode = null;
+      if (selectedNode && !graph.nodes.some((n) => n.id === selectedNode)) {
+        selectedNode = null;
+        if (view === "graph") { selectedId = null; graphDetailsOpen = false; }
+      }
     },
     (message) => { if (message && topologyWanted) toast("error", "Couldn't build the service graph", message); },
-    () => {});
+    (loading) => (topologyLoading = loading));
   function loadTopology() {
     return topologyLoader.request();
   }
@@ -452,10 +473,33 @@
   function selectNode(n: GraphNode | null) {
     selectedNode = n?.id ?? null;
     const id = n?.ports[0]?.entry_id;
-    if (!id) { if (!n) selectedId = null; return; }
+    if (view === "graph") {
+      selectedId = id ?? null;
+      graphDetailsOpen = !!id;
+      return;
+    }
+    if (!id) { selectedId = null; return; }
     if (!ordered.some((e) => e.id === id)) clearFilters();
     selectedId = id;
     if (view === "list") requestAnimationFrame(() => document.getElementById("row-" + id)?.scrollIntoView({ block: "nearest" }));
+  }
+
+  function closeGraphDetails() {
+    const id = selectedNode;
+    graphDetailsOpen = false;
+    selectedId = null;
+    selectedNode = null;
+    focusGraphService(id);
+  }
+
+  function focusGraphService(id: string | null) {
+    const expectedSelection = selectedNode;
+    void tick().then(() => {
+      if (view !== "graph" || modalOpen || selectedNode !== expectedSelection) return;
+      const region = document.getElementById("service-graph");
+      const card = [...(region?.querySelectorAll<HTMLButtonElement>("button[data-service-id]") ?? [])].find((button) => button.dataset.serviceId === id);
+      (card ?? region)?.focus({ preventScroll: true });
+    });
   }
 
   /** Every action review shares one generation, including overrides and bulk actions. */
@@ -732,6 +776,7 @@
     showHelp = false;
     pinDialog = null;
     drawerOpen = false;
+    graphDetailsOpen = false;
     shutdownSequence++;
     shutdownLoading = false;
     shutdownPreview = null;
@@ -779,14 +824,16 @@
   /** Graph-view keyboard navigation: services in cluster order. */
   const graphOrder = $derived.by(() => {
     if (!graph) return [] as GraphNode[];
+    const ids = new Set(graphVisibleIds);
     const byCluster = (n: GraphNode) => (n.cluster ? graph!.clusters.findIndex((c) => c.id === n.cluster) : 999);
-    return graph.nodes.filter((n) => n.kind !== "external").slice().sort((a, b) => byCluster(a) - byCluster(b) || a.label.localeCompare(b.label));
+    return graph.nodes.filter((n) => ids.has(n.id)).slice().sort((a, b) => byCluster(a) - byCluster(b) || a.label.localeCompare(b.label));
   });
   function selectGraph(delta: number) {
     if (!graphOrder.length) return;
     const i = graphOrder.findIndex((n) => n.id === selectedNode);
     const next = i < 0 ? (delta > 0 ? 0 : graphOrder.length - 1) : Math.max(0, Math.min(graphOrder.length - 1, i + delta));
     selectNode(graphOrder[next]);
+    focusGraphService(graphOrder[next].id);
   }
   const selectedGraphNode = $derived(graph?.nodes.find((n) => n.id === selectedNode) ?? null);
 
@@ -896,6 +943,7 @@
 
   function openScreenRecord() {
     if (screenCapture) { void finishScreenCapture(); return; }
+    if (snapshotCaptureState.open || snapshotCaptureState.busy) return;
     if (screenCaptureBusy || screenCaptureFinishing || screenCaptureDialog) return;
     screenCaptureTrigger = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     screenCaptureError = null;
@@ -1053,7 +1101,7 @@
       ? `${queue.length + 1} ports`
       : c.entry ? title(c.entry) : c.cluster ? `cluster ${c.cluster.name}` : "All dev servers";
     busy[key] = true;
-    // Keep keyboard flow: after a successful stop, the selection moves to the neighbouring row.
+    // List keeps its row flow; Graph must not inspect a hidden List neighbour after a stop.
     const idx = c.entry ? ordered.findIndex((e) => e.id === c.entry!.id) : -1;
     const neighbour = idx >= 0 ? (ordered[idx + 1] ?? ordered[idx - 1])?.id ?? null : null;
     try {
@@ -1083,8 +1131,11 @@
       }
       if (c.report?.success && c.report.freed) {
         c.phase = "done";
-        if (c.entry && selectedId === c.entry.id) selectedId = neighbour;
-        if (!c.entry) { selectedId = null; selectedNode = null; }
+        if (c.entry && selectedId === c.entry.id) {
+          selectedId = view === "graph" ? null : neighbour;
+          if (view === "graph") { selectedNode = null; graphDetailsOpen = false; }
+        }
+        if (!c.entry) { selectedId = null; selectedNode = null; graphDetailsOpen = false; }
         if (view === "agents") loadAgents();
         const restart = restartCommand(c);
         if (c.restart && c.entry && !queue.length) {
@@ -1228,9 +1279,8 @@
 
   const commands = $derived.by((): Command[] => {
     const cmds: Command[] = [];
-    const portView = view !== "agents";
-    const s = portView ? selected : null;
-    const q = portView ? queryPort : null;
+    const s = view === "list" || view === "graph" && graphDetailsOpen ? selected : null;
+    const q = view === "list" ? queryPort : null;
     for (const c of graph?.clusters ?? []) {
       cmds.push({ id: `stopc-${c.id}`, group: "Actions", icon: "stop", danger: true, title: `Stop cluster ${c.name}`, subtitle: `${c.nodes.length} services · dependency order · asks first`, keywords: `cluster ${c.kind} ${c.name}`, run: () => requestClusterStop(c.name) });
     }
@@ -1267,7 +1317,7 @@
       { id: "sort-p", group: "View", icon: "hash", title: "Sort: by port", run: () => (sort = "port") },
       { id: "sort-n", group: "View", icon: "clock", title: "Sort: newest first", run: () => (sort = "newest") },
       { id: "help", group: "View", icon: "keyboard", title: "Keyboard shortcuts", shortcut: ["?"], run: () => (showHelp = true) },
-      { id: "side", group: "View", icon: "panel", title: sideOpen ? "Hide the details pane" : "Show the details pane", shortcut: ["B"], keywords: "sidebar panel details larger graph canvas hide", run: () => (sideOpen = !sideOpen) },
+      { id: "side", group: "View", icon: "panel", title: view === "graph" ? graphDetailsOpen ? "Close service details" : "Inspect selected service" : sideOpen ? "Hide the details pane" : "Show the details pane", shortcut: ["B"], keywords: "sidebar panel details larger graph canvas hide", run: () => { if (view === "graph") { if (graphDetailsOpen) closeGraphDetails(); else if (selectedGraphNode) selectNode(selectedGraphNode); } else sideOpen = !sideOpen; } },
       { id: "view", group: "View", icon: view === "graph" ? "list" : "graph", title: view === "graph" ? "Show the list" : "Show the service graph", shortcut: ["G"], keywords: "mesh topology network dependencies", run: () => (view = view === "graph" ? "list" : "graph") },
       { id: "agents", group: "View", icon: view === "agents" ? "list" : "bot", title: view === "agents" ? "Show the list" : "Show agents, tools and apps", shortcut: ["⇧", "A"], keywords: "ai coding agents tools apps docker claude codex cursor copilot gemini windsurf aider access folders stop", run: () => (view = view === "agents" ? "list" : "agents") },
       { id: "sort-c", group: "View", icon: "layers", title: "Group by cluster (compose, workspace, supervisor…)", run: () => (sort = "cluster") },
@@ -1278,21 +1328,28 @@
       { id: "remote", group: "Actions", icon: "server", title: "Inspect a remote host over SSH…", keywords: "ssh remote server machine", run: () => (showRemote = true) },
       { id: "history", group: "Actions", icon: "history", title: "Recently stopped — restart", shortcut: ["H"], keywords: "history restart undo", run: openHistory },
       screenCapture
-        ? { id: "screen-stop", group: "Actions", icon: "stop", title: "Stop screen recording", subtitle: formatClock(screenCaptureElapsed), keywords: "capture video gif mp4 screenshot stop", shortcut: ["⇧", "V"], run: () => void finishScreenCapture() }
+        ? { id: "screen-stop", group: "Actions", icon: "stop", title: "Stop screen recording", subtitle: formatClock(screenCaptureElapsed), keywords: "capture video gif mp4 stop", shortcut: ["⇧", "V"], run: () => void finishScreenCapture() }
         : screenCaptureResult
-          ? { id: "screen-review", group: "Actions", icon: "video", title: "Review recording", subtitle: "Preview and save the latest recording from this session", keywords: "capture video gif mp4 screenshot download record", shortcut: ["⇧", "V"], run: openScreenRecord }
-          : { id: "screen-record", group: "Actions", icon: "video", title: "Record screen…", subtitle: screenCaptureSupport.pending ? "Checking screen recording support…" : screenCaptureSupport.backend ? `Local MP4 and GIF · up to ${Math.round(MAX_DURATION_MS / 60_000)} min · never uploaded` : "Screen capture is unavailable in this window", keywords: "capture video gif mp4 screenshot download", shortcut: ["⇧", "V"], run: openScreenRecord },
+          ? { id: "screen-review", group: "Actions", icon: "video", title: "Review recording", subtitle: "Preview and save the latest recording from this session", keywords: "capture video gif mp4 download record", shortcut: ["⇧", "V"], run: openScreenRecord }
+          : { id: "screen-record", group: "Actions", icon: "video", title: "Record screen…", subtitle: screenCaptureSupport.pending ? "Checking screen recording support…" : screenCaptureSupport.backend ? `Local MP4 and GIF · up to ${Math.round(MAX_DURATION_MS / 60_000)} min · never uploaded` : "Screen capture is unavailable in this window", keywords: "capture video gif mp4 download", shortcut: ["⇧", "V"], run: openScreenRecord },
+      { id: "snapshot", group: "Actions", icon: "camera", title: snapshotCaptureState.hasResult ? "Review snapshot" : "Take snapshot…", subtitle: "Holdmap view or a selected screen/window · local PNG", keywords: "screenshot capture image png snapshot", shortcut: ["⇧", "S"], run: () => snapshotCaptureUi?.show() },
+      ...(screenCapture ? [{ id: "snapshot-recording", group: "Actions" as const, icon: "camera", title: "Snapshot recording source", subtitle: "Capture a PNG without stopping the video", keywords: "screenshot current recording still png", run: () => void snapshotCaptureUi?.captureRecording() }] : []),
       { id: "notify", group: "Settings", icon: "bell", title: config?.notify ? "Turn notifications off" : "Turn notifications on", keywords: "alert conflict new listener", run: toggleNotify },
       { id: "density", group: "Settings", icon: "list", title: density === "compact" ? "Comfortable rows" : "Compact rows", keywords: "density dense rows height compact comfortable", run: () => { density = density === "compact" ? "comfortable" : "compact"; } },
       { id: "autostart", group: "Settings", icon: "sparkles", title: autostartOn ? "Don't launch at login" : "Launch at login", keywords: "startup boot login", run: toggleAutostart },
     );
-    return cmds.filter((command) => portView || (command.group !== "Filters" && !command.id.startsWith("sort-")))
+    if (view === "graph" && graphQuery) cmds.push({ id: "graph-clear", group: "View", icon: "x", title: "Clear service search", shortcut: ["Esc"], run: () => (graphQuery = "") });
+    return cmds.filter((command) => (view === "list" || (command.group !== "Filters" && !command.id.startsWith("sort-") && command.id !== "density")) && (view !== "graph" || command.id !== "side" || !!selectedGraphNode?.ports.length))
       .map((command) => !singleKeyShortcuts && command.shortcut && !command.shortcut.includes(mod) && !command.shortcut.includes("Esc") ? { ...command, shortcut: undefined } : command);
   });
 
   function onKey(e: KeyboardEvent) {
     const context = shortcutContext(e, document.activeElement);
-    if (context.blocked || modalOpen) return; // overlays handle their own keys
+    if (context.blocked) return;
+    if (snapshotCaptureState.busy && context.navigation && e.key === "Escape") {
+      snapshotCaptureUi?.cancel(); e.preventDefault(); return;
+    }
+    if (modalOpen) return; // overlays handle their own keys
     const typing = context.editing;
     const control = context.control;
     const flowView = view === "agents" && agentFlowMode !== "overview";
@@ -1302,6 +1359,19 @@
     if (context.command && e.key.toLowerCase() === "r") { refresh(true); e.preventDefault(); return; }
     if (!typing && context.character && singleKeyShortcuts && e.key === "V" && document.activeElement?.matches("[data-screen-record]")) {
       openScreenRecord(); e.preventDefault(); return;
+    }
+    if (!typing && context.character && singleKeyShortcuts && e.key === "S" && document.activeElement?.matches("[data-screen-snapshot]")) {
+      snapshotCaptureUi?.show(); e.preventDefault(); return;
+    }
+    if (view === "graph" && !typing && context.navigation && e.key === "Escape") {
+      if (graphDetailsOpen || selectedNode) closeGraphDetails();
+      else if (graphQuery) graphQuery = "";
+      else return;
+      e.preventDefault(); return;
+    }
+    if (view === "graph" && context.navigation && document.activeElement?.matches("button[data-service-id]") && ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"].includes(e.key)) {
+      selectGraph(e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : -1);
+      e.preventDefault(); return;
     }
     if (control) return; // native/select/button controls retain their own keyboard behavior
     const inSearch = document.activeElement === search || e.target === search;
@@ -1321,6 +1391,7 @@
       if (typing) search?.blur();
       else if (view === "agents" && agentQuery) agentQuery = "";
       else if (view === "agents") selectedAgent = null;
+      else if (view === "graph") graphQuery = "";
       else if (filtersActive) clearFilters();
       else selectedId = null;
       e.preventDefault();
@@ -1330,11 +1401,17 @@
       if (typing) { if (!selectedAgent || !visibleAgentIds.includes(selectedAgent)) selectAgent(1); search?.blur(); }
       return; // buttons and map nodes handle it outside search
     }
+    if (context.navigation && e.key === "Enter" && view === "graph") {
+      const node = graphOrder.find((n) => n.id === selectedNode) ?? graphOrder[0];
+      if (node) { selectNode(node); focusGraphService(node.id); }
+      if (typing) search?.blur();
+      e.preventDefault(); return;
+    }
     if (context.navigation && e.key === "Enter") { if (typing) { if (!selected) select(1); search?.blur(); } else if (selected) drawerOpen = true; return; }
     if (typing || !context.character) return;
     // Only plain keys below; the list (or the page) has focus.
     // Agent metadata must never reuse a listener selection from another view.
-    const s = view === "list" || view === "graph" ? selected : null;
+    const s = view === "list" || view === "graph" && graphDetailsOpen ? selected : null;
     if (e.key === "Backspace" || e.key === "Delete") {
       if (s && (s.process || s.container)) { requestStop(s, e.shiftKey); e.preventDefault(); }
       return;
@@ -1344,17 +1421,18 @@
       case "o": if (s && canOpen(s)) open(s); else return; break;
       case "c": if (s) copy(url(s), "URL"); else return; break;
       case "r": refresh(true); break;
-      case "a": if (view === "agents") return; filters.all = !filters.all; refresh(); break;
-      case "t": if (view === "agents") return; filters.proto = filters.proto === "any" ? "tcp" : filters.proto === "tcp" ? "udp" : "any"; break;
-      case "d": if (view === "agents") return; filters.dev = !filters.dev; break;
-      case "m": if (view === "agents") return; filters.mine = !filters.mine; break;
-      case "e": if (view === "agents") return; filters.exposed = !filters.exposed; break;
+      case "a": if (view !== "list") return; filters.all = !filters.all; refresh(); break;
+      case "t": if (view !== "list") return; filters.proto = filters.proto === "any" ? "tcp" : filters.proto === "tcp" ? "udp" : "any"; break;
+      case "d": if (view !== "list") return; filters.dev = !filters.dev; break;
+      case "m": if (view !== "list") return; filters.mine = !filters.mine; break;
+      case "e": if (view !== "list") return; filters.exposed = !filters.exposed; break;
       case "L": cycleTheme(); break;
-      case "b": sideOpen = !sideOpen; break;
+      case "b": if (view === "graph") { if (graphDetailsOpen) closeGraphDetails(); else if (selectedGraphNode) selectNode(selectedGraphNode); else return; } else sideOpen = !sideOpen; break;
       case "g": view = view === "graph" ? "list" : "graph"; break;
       case "A": view = view === "agents" ? "list" : "agents"; break;
       case "h": openHistory(); break;
       case "V": if (screenCapture) void finishScreenCapture(); else openScreenRecord(); break;
+      case "S": snapshotCaptureUi?.show(); break;
       case "p": if (s) togglePin(s); else return; break;
       case "P": if (s) openPin(s); else return; break;
       case "s": { const n = view === "graph" ? selectedGraphNode : null; const c = n?.cluster ? graph?.clusters.find((x) => x.id === n.cluster) : null; if (c) requestClusterStop(c.name); else return; break; }
@@ -1469,15 +1547,16 @@
   });
   $effect(() => { prefSet("pane", String(paneWidth)); });
   $effect(() => { prefSet("side", sideOpen ? "1" : "0"); });
-  const showSide = $derived(!narrow && view !== "agents" && sideOpen);
+  const showSide = $derived(view === "graph" ? graphDetailsOpen && !!selected && !graphDetailsDrawer : !narrow && view === "list" && sideOpen);
 
   const ago = $derived(dataAge(now, view === "agents" ? agentsReport?.taken_at_ms ?? null : snapshot?.taken_at_ms ?? null, view === "agents" ? agentsRefreshing ? agentsStarted : null : refreshing ? scanStarted : null));
   const fresh = $derived(freshness(ago, scanMs / 1000));
   const themeIcon = $derived(THEME_ICON[theme]);
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} bind:innerWidth={viewportWidth} />
 
+<div id="holdmap-capture-root" class="capture-viewport">
 <div class="app" class:mac={isMac}>
   <header class="titlebar" data-tauri-drag-region>
     <div class="brand" data-tauri-drag-region>
@@ -1501,6 +1580,22 @@
         spellcheck="false"
         autocomplete="off"
         aria-controls={agentSection === "capabilities" ? "agent-capabilities" : "agent-list"}
+      />
+      {:else if view === "graph"}
+      <TextField
+        bind:input={search}
+        bind:value={graphQuery}
+        type="search"
+        variant="filled"
+        icon="search"
+        label="Search services"
+        labelHidden
+        placeholder="Search services, projects, ports, PIDs…"
+        clearable
+        kbdHint={singleKeyShortcuts ? "/" : undefined}
+        spellcheck="false"
+        autocomplete="off"
+        aria-controls="service-graph"
       />
       {:else}
       <TextField
@@ -1538,6 +1633,7 @@
       {/if}
       <div class="cluster">
         <IconButton icon="video" label={screenCapture ? "Recording screen" : screenCaptureResult ? "Review recording" : "Record screen"} data-screen-record kbd={singleKeyShortcuts ? ["⇧", "V"] : undefined} pressed={!!screenCapture || !!screenCaptureResult} onclick={openScreenRecord} />
+        <IconButton icon={snapshotCaptureState.busy ? "x" : "camera"} label={snapshotCaptureState.busy ? "Cancel snapshot capture" : snapshotCaptureState.hasResult ? "Review snapshot" : "Take snapshot"} data-screen-snapshot kbd={singleKeyShortcuts && !snapshotCaptureState.busy ? ["⇧", "S"] : undefined} pressed={snapshotCaptureState.open || snapshotCaptureState.busy || snapshotCaptureState.hasResult} onclick={() => snapshotCaptureState.busy ? snapshotCaptureUi?.cancel() : snapshotCaptureUi?.show()} />
         <IconButton icon="history" label="Recently stopped" kbd={singleKeyShortcuts ? "H" : undefined} onclick={openHistory} />
         <IconButton icon="clock" label={activeSchedules.length ? `Scheduled actions (${activeSchedules.length} active)` : "Scheduled actions"} badge={activeSchedules.length || undefined} onclick={openSchedules} bind:el={schedulesTrigger} />
         <IconButton icon="server" label="Remote host…" onclick={() => (showRemote = true)} />
@@ -1564,7 +1660,7 @@
         <ActionDock label="Flow data source" bind:value={flowSource} options={[{ value: "connections", label: "Connections", icon: "link", title: "Observed process trees, listeners and live sockets" }, { value: "calls", label: "Calls", icon: "activity", title: "Recorded tool calls from configured agents" }]} />
       {/if}
     {/if}
-    {#if view !== "agents"}
+    {#if view === "list"}
       <ActionDock label="Socket states" value={filters.all ? "all" : "listen"} options={[{ value: "listen", label: "Listening" }, { value: "all", label: "All sockets", title: `Include established, TIME_WAIT…${singleKeyShortcuts ? " (A)" : ""}` }]} onchange={(v) => { filters.all = v === "all"; refresh(); }} />
       <ActionDock hinge={false} animate={false} label="Protocol" bind:value={filters.proto} options={[{ value: "any", label: "Any" }, { value: "tcp", label: "TCP" }, { value: "udp", label: "UDP" }]} />
       <span class="divider" aria-hidden="true"></span>
@@ -1575,6 +1671,9 @@
       <div class="spacer"></div>
       {#if !narrow}<IconButton icon="panel" size="sm" pressed={sideOpen} label={sideOpen ? "Hide details pane" : "Show details pane"} kbd={singleKeyShortcuts ? "B" : undefined} onclick={() => (sideOpen = !sideOpen)} />{/if}
       <Select size="sm" prefix="Sort" label="Sort by" labelHidden bind:value={sort} width="168px" options={[{ value: "group", label: "Grouped", description: "By kind: dev, containers, databases…" }, { value: "cluster", label: "Cluster", description: "Compose project, workspace, supervisor" }, { value: "port", label: "Port", description: "Lowest port number first" }, { value: "newest", label: "Newest", description: "Most recently seen first" }, { value: "memory", label: "Memory", description: "Highest memory use first" }]} />
+    {:else if view === "graph"}
+      <div class="spacer"></div>
+      {#if graphQuery}<Button size="sm" variant="ghost" icon="x" onclick={() => (graphQuery = "")}>Clear search</Button>{/if}
     {:else}
       <div class="spacer"></div>
       {#if agentQuery}<Button size="sm" variant="ghost" icon="x" onclick={() => (agentQuery = "")}>Clear search</Button>{/if}
@@ -1611,7 +1710,7 @@
     {#if view === "graph"}
       <div class="graph-wrap">
         {#if GraphView}
-          <GraphView {graph} {selectedNode} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; }} onselect={selectNode} onstopcluster={requestClusterStop} />
+          <GraphView {graph} {selectedNode} loading={topologyLoading} query={graphQuery} onclearquery={() => (graphQuery = "")} onvisiblechange={(ids) => (graphVisibleIds = ids)} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; }} onselect={selectNode} onstopcluster={requestClusterStop} />
         {:else}
           <div class="graph-loading" aria-busy="true">Loading graph…</div>
         {/if}
@@ -1720,13 +1819,13 @@
 
     {#if showSide}
       <div class="pane-wrap">
-        <Splitter bind:width={paneWidth} min={340} max={680} initial={PANE_DEFAULT} />
+        <Splitter bind:width={paneWidth} min={340} max={view === "graph" ? Math.min(680, viewportWidth - 600) : 680} initial={PANE_DEFAULT} />
         <DetailPane entry={selected} {explanation} http={selectedHttp} loading={explaining} busy={selected ? !!busy[selected.id] : false} bind:tab={detailTab} {mod}
-          onstop={() => selected && requestStop(selected, false)} onschedule={() => selected && requestScheduledStop(selected)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onhide={() => (sideOpen = false)}
+          onstop={() => selected && requestStop(selected, false)} onschedule={() => selected && requestScheduledStop(selected)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onhide={() => { if (view === "graph") closeGraphDetails(); else sideOpen = false; }}
           {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)}
           entries={snapshot?.entries ?? []} onselectentry={(e) => selectEntry(e, false)} details={selectedDetails} {cpuTrend} {memTrend} platform={info.platform} onrestart={() => selected && requestRestart(selected)} onreveal={() => selected && reveal(selected)} oneditor={() => selected && openEditor(selected)} />
       </div>
-    {:else if !narrow && view !== "agents"}
+    {:else if !narrow && view === "list"}
       <IconButton class="reveal-side" icon="panel" label="Show details pane" kbd={singleKeyShortcuts ? "B" : undefined} onclick={() => (sideOpen = true)} />
     {/if}
   </main>
@@ -1741,9 +1840,9 @@
 </div>
 
 {#if showDrawer && selected}
-  <Dialog placement="right" bare label="Details for port {selected.port}" onclose={() => (drawerOpen = false)} initialFocus="self">
+  <Dialog placement="right" bare label="Details for port {selected.port}" onclose={() => { if (view === "graph") closeGraphDetails(); else drawerOpen = false; }} initialFocus="self">
     <DetailPane drawer entry={selected} {explanation} http={selectedHttp} loading={explaining} busy={!!busy[selected.id]} bind:tab={detailTab} {mod}
-      onstop={() => selected && requestStop(selected, false)} onschedule={() => selected && requestScheduledStop(selected)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onclose={() => (drawerOpen = false)}
+      onstop={() => selected && requestStop(selected, false)} onschedule={() => selected && requestScheduledStop(selected)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onclose={() => { if (view === "graph") closeGraphDetails(); else drawerOpen = false; }}
       {graph} pinned={pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} details={selectedDetails} {cpuTrend} {memTrend} platform={info.platform} onrestart={() => selected && requestRestart(selected)} onreveal={() => selected && reveal(selected)} oneditor={() => selected && openEditor(selected)} />
   </Dialog>
 {/if}
@@ -1778,9 +1877,13 @@
 {#if screenCaptureDialog}
   <ScreenRecordDialog phase={screenCaptureDialog} error={screenCaptureError} errorTitle={screenCaptureErrorTitle} result={screenCaptureResult} busy={screenCaptureBusy} starting={screenCaptureStarting} supported={!!screenCaptureSupport.backend} checkingSupport={screenCaptureSupport.pending} unsupportedReason={screenCaptureSupport.reason} onstart={() => void beginScreenCapture()} onclose={closeScreenCaptureDialog} ondiscard={discardScreenCaptureDialog} />
 {/if}
+<SnapshotCapture bind:this={snapshotCaptureUi} session={screenCapture} blocked={otherModalOpen} onstatechange={(state) => (snapshotCaptureState = state)} />
+{#if snapshotCaptureState.busy}<span class="sr-only" role="status">Capturing snapshot. Press Escape or use Cancel snapshot capture to cancel.</span>{/if}
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />
+</div>
 
 <style>
+  .capture-viewport { position: relative; width: 100%; height: 100vh; overflow: hidden; }
   .app { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto minmax(0, 1fr) auto; height: 100vh; }
   .notices { min-width: 0; }
   .scan-banner { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-5); background: var(--warn-soft); border-bottom: 1px solid var(--border); color: var(--warn); }
@@ -1847,5 +1950,6 @@
     .app.mac .titlebar { padding-left: var(--sp-4); }
     .search { width: 100%; min-width: 0; }
     .tools { grid-column: 1 / -1; justify-self: end; }
+    .tools { flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
   }
 </style>

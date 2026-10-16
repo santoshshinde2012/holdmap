@@ -29,25 +29,158 @@ export const CLUSTER_LABEL: Record<ClusterKind, string> = {
   git: "Git repo",
 };
 
+/** Search only displayed topology metadata, never process command lines. Explicit numeric
+ *  selectors distinguish :3000 from :30001 and PID 42 from PID 420. Terms combine with AND. */
+export function graphNodeMatches(node: GraphNode, query: string): boolean {
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return true;
+  const pids = new Set([node.root_pid, ...node.pids].filter((pid): pid is number => pid !== null));
+  const ports = new Set(node.ports.map((port) => port.port));
+  const text = [
+    node.label, node.subtitle, node.id, node.project, node.project_root, node.cluster,
+    node.framework?.name, node.framework?.category, node.container?.image, node.container?.name,
+    node.container?.compose_project, node.container?.compose_service,
+    ...node.ports.flatMap((port) => [String(port.port), port.protocol]), ...[...pids].map(String),
+  ].filter(Boolean).join(" ").toLowerCase();
+  return terms.every((term) => {
+    const explicit = /^(pid|port):(\d+)$/.exec(term);
+    const shortPort = /^:(\d+)$/.exec(term);
+    if (explicit || shortPort) {
+      const value = Number(explicit?.[2] ?? shortPort![1]);
+      return Number.isSafeInteger(value) && (explicit?.[1] === "pid" ? pids : ports).has(value);
+    }
+    return text.includes(term);
+  });
+}
+
+/** A search result includes matched services and their immediate observed neighbours, so
+ *  the graph keeps useful context without treating transitive dependencies as matches. */
+export function graphForQuery(graph: Graph | null, query: string): Graph | null {
+  if (!graph || !query.trim()) return graph;
+  const existing = new Set(graph.nodes.map((node) => node.id));
+  const matches = new Set(graph.nodes.filter((node) => graphNodeMatches(node, query)).map((node) => node.id));
+  const retained = new Set(matches);
+  for (const edge of graph.edges) {
+    if (!existing.has(edge.from) || !existing.has(edge.to)) continue;
+    if (matches.has(edge.from) || matches.has(edge.to)) { retained.add(edge.from); retained.add(edge.to); }
+  }
+  const nodes = graph.nodes.filter((node) => retained.has(node.id));
+  const edges = graph.edges.filter((edge) => retained.has(edge.from) && retained.has(edge.to));
+  const clusters = graph.clusters.map((cluster) => ({ ...cluster, nodes: cluster.nodes.filter((id) => retained.has(id)) }))
+    .filter((cluster) => cluster.nodes.length > 0);
+  return { ...graph, nodes, edges, clusters, stats: { nodes: nodes.length, edges: edges.length, clusters: clusters.length,
+    connections: edges.reduce((sum, edge) => sum + edge.connections, 0) } };
+}
+
 /** Nodes with no links and no cluster: laid out in a tidy grid instead of one long rank. */
 export function isolated(g: Graph): Set<string> {
   const linked = new Set(g.edges.flatMap((e) => [e.from, e.to]));
   return new Set(g.nodes.filter((n) => !n.cluster && !linked.has(n.id)).map((n) => n.id));
 }
 
-/** Layered left→right layout (clients on the left, databases on the right); unconnected
- *  services go in a grid underneath. */
+/** Layered left→right layout inside each observed component. Disconnected services and
+ *  clusters are packed together instead of adding long empty ranks to the whole graph. */
 export function layered(g: Graph): Positions {
-  const loose = isolated(g);
-  const out = layeredConnected({ ...g, nodes: g.nodes.filter((n) => !loose.has(n.id)) });
-  const xs = [...out.values()];
-  const minX = xs.length ? Math.min(...xs.map((p) => p.x)) : NODE_W / 2;
-  const maxX = xs.length ? Math.max(...xs.map((p) => p.x)) : NODE_W / 2;
-  const top = xs.length ? Math.max(...xs.map((p) => p.y)) + NODE_H + 70 : NODE_H / 2;
-  const cols = Math.max(3, Math.round((maxX - minX) / (NODE_W + 28)) + 1);
-  [...loose].forEach((id, i) => {
-    out.set(id, { x: minX + (i % cols) * (NODE_W + 28), y: top + Math.floor(i / cols) * (NODE_H + 24) });
+  return packComponents(g, "layered");
+}
+
+const COMPONENT_GAP = 40;
+const compareId = (a: { id: string }, b: { id: string }) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+
+/** Existing edges and existing cluster membership are the only associations used here.
+ *  In particular, a nearby card or a matching label never creates a relationship. */
+function connectedComponents(g: Graph): Graph[] {
+  const parent = new Map(g.nodes.map((n) => [n.id, n.id]));
+  const find = (id: string): string => {
+    let root = id;
+    while (parent.get(root) !== root) root = parent.get(root)!;
+    while (id !== root) { const next = parent.get(id)!; parent.set(id, root); id = next; }
+    return root;
+  };
+  const join = (a: string, b: string) => {
+    if (!parent.has(a) || !parent.has(b)) return;
+    const ar = find(a), br = find(b);
+    if (ar !== br) parent.set(br, ar);
+  };
+  for (const edge of g.edges) join(edge.from, edge.to);
+  const firstByCluster = new Map<string, string>();
+  for (const node of g.nodes) {
+    if (!node.cluster) continue;
+    const first = firstByCluster.get(node.cluster);
+    if (first) join(first, node.id);
+    else firstByCluster.set(node.cluster, node.id);
+  }
+  for (const cluster of g.clusters) {
+    const members = cluster.nodes.filter((id) => parent.has(id));
+    for (const id of members.slice(1)) join(members[0], id);
+  }
+  const groups = new Map<string, Graph>();
+  for (const node of g.nodes) {
+    const root = find(node.id);
+    if (!groups.has(root)) groups.set(root, { ...g, nodes: [], edges: [], clusters: [] });
+    groups.get(root)!.nodes.push(node);
+  }
+  for (const edge of g.edges) {
+    if (parent.has(edge.from) && parent.has(edge.to)) groups.get(find(edge.from))!.edges.push(edge);
+  }
+  for (const cluster of g.clusters) {
+    const first = cluster.nodes.find((id) => parent.has(id));
+    if (first) groups.get(find(first))!.clusters.push(cluster);
+  }
+  for (const group of groups.values()) {
+    group.nodes.sort(compareId);
+    group.edges.sort(compareId);
+    group.clusters.sort(compareId);
+  }
+  return [...groups.values()];
+}
+
+/** Include the actual cluster hull, including its title, when packing a component. */
+function componentBounds(g: Graph, positions: Positions) {
+  const points = [...positions.values()];
+  let x = Math.min(...points.map((p) => p.x)) - NODE_W / 2;
+  let y = Math.min(...points.map((p) => p.y)) - NODE_H / 2;
+  let right = Math.max(...points.map((p) => p.x)) + NODE_W / 2;
+  let bottom = Math.max(...points.map((p) => p.y)) + NODE_H / 2;
+  for (const cluster of g.clusters) {
+    const members = cluster.nodes.map((id) => positions.get(id)).filter((p): p is Point => !!p);
+    if (!members.length) continue;
+    x = Math.min(x, Math.min(...members.map((p) => p.x)) - NODE_W / 2 - PAD);
+    y = Math.min(y, Math.min(...members.map((p) => p.y)) - NODE_H / 2 - PAD - HEADER);
+    right = Math.max(right, Math.max(...members.map((p) => p.x)) + NODE_W / 2 + PAD);
+    bottom = Math.max(bottom, Math.max(...members.map((p) => p.y)) + NODE_H / 2 + PAD);
+  }
+  return { x, y, width: right - x, height: bottom - y };
+}
+
+function packComponents(g: Graph, mode: LayoutMode, iterations = 260): Positions {
+  const blocks = connectedComponents(g).map((component) => {
+    // Avoid a graph engine/simulation per isolated service, including large all-services scans.
+    const positions = component.nodes.length === 1
+      ? new Map([[component.nodes[0].id, { x: NODE_W / 2, y: NODE_H / 2 }]])
+      : mode === "force" ? forceConnected(component, iterations) : layeredConnected(component);
+    return { component, positions, bounds: componentBounds(component, positions) };
   });
+  if (!blocks.length) return new Map();
+  // Tall/wide blocks first makes rows compact; identity breaks ties independently of scan order.
+  blocks.sort((a, b) => b.bounds.height - a.bounds.height || b.bounds.width - a.bounds.width || compareId(a.component.nodes[0], b.component.nodes[0]));
+  const area = blocks.reduce((sum, b) => sum + (b.bounds.width + COMPONENT_GAP) * (b.bounds.height + COMPONENT_GAP), 0);
+  const columns = Math.max(1, Math.round((Math.sqrt(area * 1.6) + COMPONENT_GAP) / (NODE_W + COMPONENT_GAP)));
+  const rowWidth = Math.max(Math.max(...blocks.map((b) => b.bounds.width)), columns * (NODE_W + COMPONENT_GAP) - COMPONENT_GAP);
+  const rows: { x: number; y: number; height: number }[] = [];
+  const out: Positions = new Map();
+  for (const block of blocks) {
+    let row = rows.find((r) => r.height >= block.bounds.height && r.x + block.bounds.width <= rowWidth);
+    if (!row) {
+      const previous = rows.at(-1);
+      row = { x: 0, y: previous ? previous.y + previous.height + COMPONENT_GAP : 0, height: block.bounds.height };
+      rows.push(row);
+    }
+    for (const [id, point] of block.positions) {
+      out.set(id, { x: row.x + point.x - block.bounds.x, y: row.y + point.y - block.bounds.y });
+    }
+    row.x += block.bounds.width + COMPONENT_GAP;
+  }
   return out;
 }
 
@@ -76,7 +209,11 @@ function layeredConnected(g: Graph): Positions {
  *  gravity so unconnected nodes stay on screen. */
 export function force(g: Graph, iterations = 260): Positions {
   if (g.nodes.length > FORCE_NODE_LIMIT) return layered(g);
-  const pos = layered(g);
+  return packComponents(g, "force", iterations);
+}
+
+function forceConnected(g: Graph, iterations: number): Positions {
+  const pos = layeredConnected(g);
   const ids = g.nodes.map((n) => n.id);
   const cluster = new Map(g.nodes.map((n) => [n.id, n.cluster]));
   const k = 280;

@@ -5,7 +5,7 @@
 // Diagnostics: HOLDMAP_DEMO_PLATFORM=Linux HOLDMAP_DEMO_CPU_RATE=6 emulates a Linux
 // navigator and slower CPU locally. HOLDMAP_DEMO_MEASURE_VIEWPORT=1 logs outer clipping;
 // HOLDMAP_DEMO_TRACE=0 measures without tracing. Failures save PNG/JSON/trace.zip by default.
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const playwright = process.env.PLAYWRIGHT ?? new URL("../../apps/desktop/node_modules/playwright/index.mjs", import.meta.url).href;
@@ -214,10 +214,53 @@ try {
     await frame.locator('[id^="row-tcp:3000:"]').waitFor({ timeout: 15000 });
   });
 
+  await check("Holdmap PNG snapshots export from the embedded demo without a display picker", async () => {
+    const body = frame.locator("body");
+    await body.evaluate(() => {
+      window.__holdmapDemoDisplayRequests = 0;
+      const media = navigator.mediaDevices;
+      if (media) {
+        window.__holdmapDemoDisplayDescriptor = Object.getOwnPropertyDescriptor(media, "getDisplayMedia");
+        Object.defineProperty(media, "getDisplayMedia", { configurable: true, value: () => {
+          window.__holdmapDemoDisplayRequests++;
+          throw new Error("The public-demo snapshot check must never request a display.");
+        } });
+      }
+    });
+    try {
+      await frame.getByRole("button", { name: "Take snapshot", exact: true }).click();
+      const chooser = frame.getByRole("dialog", { name: "Take snapshot", exact: true });
+      if (await chooser.getByRole("radio", { name: "Holdmap view", exact: true }).getAttribute("aria-checked") !== "true") throw new Error("App capture must be the default source");
+      await chooser.getByRole("button", { name: "Capture PNG", exact: true }).click();
+      const preview = frame.getByRole("dialog", { name: "Snapshot preview", exact: true });
+      await preview.getByRole("img", { name: "PNG snapshot preview", exact: true }).waitFor({ timeout: 20_000 });
+      const valid = await preview.getByRole("img").evaluate(async (image) => {
+        await image.decode();
+        return image.naturalWidth > 0 && image.naturalWidth <= 3840 && image.naturalHeight > 0 && image.naturalHeight <= 2160;
+      });
+      if (!valid) throw new Error("Embedded demo PNG did not decode within its size limits");
+      await measureViewport("snapshot-preview");
+      const [download] = await Promise.all([page.waitForEvent("download"), preview.getByRole("button", { name: "Download PNG", exact: true }).click()]);
+      const bytes = await readFile(await download.path());
+      if (!download.suggestedFilename().endsWith(".png") || bytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") throw new Error("Embedded demo did not download a PNG");
+      if (await body.evaluate(() => window.__holdmapDemoDisplayRequests) !== 0) throw new Error("App snapshot requested a display picker");
+      await preview.getByRole("button", { name: "Discard snapshot", exact: true }).click();
+    } finally {
+      await body.evaluate(() => {
+        if (navigator.mediaDevices) {
+          if (window.__holdmapDemoDisplayDescriptor) Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", window.__holdmapDemoDisplayDescriptor);
+          else delete navigator.mediaDevices.getDisplayMedia;
+        }
+        delete window.__holdmapDemoDisplayRequests;
+        delete window.__holdmapDemoDisplayDescriptor;
+      });
+    }
+  });
+
   const guideBase = new URL("./", page.url());
   const checkGuideImages = async (viewport) => {
     await page.setViewportSize(viewport);
-    for (const [route, count] of [["agents", 10], ["desktop", 6], ["whats-new", 1]]) {
+    for (const [route, count] of [["agents", 10], ["desktop", 8], ["whats-new", 1]]) {
       await page.goto(new URL(`docs/${route}/`, guideBase).href, { waitUntil: "domcontentloaded" });
       const images = page.locator(".prose img");
       if (await images.count() !== count) throw new Error(`${route}: expected ${count} guide screenshots`);

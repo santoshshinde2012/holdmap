@@ -29,7 +29,8 @@
     "@tauri-apps/api": "^2",
     "@xyflow/svelte": "^1.7.0",
     "gifenc": "^1.0.3",
-    "mediabunny": "^1.61.4"
+    "mediabunny": "^1.61.4",
+    "modern-screenshot": "4.7.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",

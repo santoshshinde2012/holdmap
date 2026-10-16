@@ -89,9 +89,9 @@ scripts/check-secrets.sh                     # full Git history and tracked/new 
 python3 scripts/test-release-security.py    # isolated release input regressions; never publishes
 python3 scripts/check-updater-runtime.py    # macOS: real signed scratch install and relaunch
 python3 scripts/check-window-lifecycle-runtime.py # interactive macOS: owned close/fullscreen/reopen regression
-python3 scripts/check-screen-recording-runtime.py # macOS: synthetic MP4/GIF, real WKWebView and binary IPC; needs FFmpeg
-python3 scripts/check-screen-recording-runtime.py --app-ui # macOS: packaged app confirmation and native fallback discovery
-python3 scripts/check-native-screen-recording.py # macOS: native H.264/GIF writer and cancellation, synthetic pixels only
+python3 scripts/check-screen-recording-runtime.py # macOS: synthetic MP4/GIF/PNG, real WKWebView and binary IPC; needs FFmpeg
+python3 scripts/check-screen-recording-runtime.py --app-ui # macOS: packaged recorder gates + owned app-view PNG; no screen picker
+python3 scripts/check-native-screen-recording.py # macOS: native H.264/GIF/PNG writer and cancellation, synthetic pixels only
 actionlint
 python3 scripts/verify-vendored-glib.py       # source backport, lockfile and GTK/Linux test resolution
 python3 scripts/verify-vendored-global-hotkey.py # X11 fixes, original archive and shortcut dependency resolution
@@ -99,6 +99,10 @@ cargo deny --all-features check
 (cd apps/desktop && npm audit)
 (cd site && npm audit)
 ```
+
+The macOS `--app-ui` capture fixture briefly brings its own scratch window to the foreground
+to exercise real dialog dismissal and PNG saving. It never opens the system display picker
+or captures your screen.
 
 `cargo test` also checks the docs: `docs/cli.md` must match the clap definitions, the README must
 mention every command and only real flags, Markdown links and images must resolve, and every

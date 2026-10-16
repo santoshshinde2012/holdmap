@@ -97,6 +97,61 @@ private enum NativeCaptureFixture {
         expect(success, "Fixture GIF converter failed")
         expect(fileSize(destination) > 0 && fileSize(destination) <= byteLimit, "Fixture GIF exceeded export bound")
     }
+    static func snapshots(_ root: URL) {
+        let color = CGColorSpace(name: CGColorSpace.sRGB)!
+        let context = CGContext(data: nil, width: 640, height: 360, bitsPerComponent: 8,
+            bytesPerRow: 640 * 4, space: color, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 640, height: 360))
+        let image = context.makeImage()!
+        let video = CaptureSession(id: UUID().uuidString, root: directory(root, "snapshot-video"))
+        video.phase = "capturing"
+        session = video
+        let snapshot = SnapshotCapture(id: UUID().uuidString, root: directory(root, "snapshot"))
+        snapshot.phase = "capturing"
+        snapshotJob = snapshot
+        // Only OS image acquisition is bypassed; the actual PNG encoder, native command
+        // boundary and independent cancellation state operate on owned red pixels.
+        snapshot.encode(image)
+        wait("Snapshot PNG encoding timed out") { snapshot.phase == "ready" }
+        expect(video.phase == "capturing" && !video.stopRequested && !video.discardRequested,
+            "Taking a snapshot changed the video's lifecycle")
+        expect(snapshot.width == 640 && snapshot.height == 360 && snapshot.pngBytes > 0,
+            "Snapshot metadata did not match the owned image")
+        expect(api(["op": "snapshot_status", "session_id": snapshot.id])["phase"] as? String == "ready",
+            "Snapshot command did not expose the ready image")
+        let source = snapshot.root.appendingPathComponent("capture.png")
+        let output = root.appendingPathComponent("snapshot.png")
+        try! FileManager.default.copyItem(at: source, to: output)
+        expect(api(["op": "discard_snapshot", "session_id": snapshot.id])["phase"] as? String == "cancelled",
+            "Snapshot discard did not acknowledge the completed encoder")
+        expect(!FileManager.default.fileExists(atPath: source.path), "Snapshot discard retained PNG bytes")
+        expect(video.phase == "capturing", "Snapshot cleanup stopped the video")
+        snapshotJob = nil
+
+        let pending = SnapshotCapture(id: UUID().uuidString, root: directory(root, "pending-snapshot"))
+        pending.capturePending = true; pending.phase = "capturing"
+        pending.fail("snapshot_timed_out"); pending.discard()
+        expect(!pending.isDisposed, "Snapshot timeout acknowledged an outstanding OS callback")
+        pending.capturePending = false; pending.cleanup()
+        expect(pending.isDisposed && pending.phase == "cancelled", "Late snapshot cleanup did not finish")
+        let encoding = SnapshotCapture(id: UUID().uuidString, root: directory(root, "pending-png"))
+        encoding.encodePending = true; encoding.discard()
+        expect(!encoding.isDisposed, "Snapshot discard released a pending PNG encoder")
+        encoding.encodePending = false; encoding.cleanup()
+        expect(encoding.isDisposed, "Snapshot encoder cleanup did not finish")
+        let token = Cancellation(); token.cancel()
+        let cancelled = root.appendingPathComponent("cancelled.png")
+        expect(SnapshotCapture.writePNG(image, to: cancelled, cancellation: token) == nil,
+            "Cancelled PNG encoding produced an image")
+        expect(!FileManager.default.fileExists(atPath: cancelled.path), "Cancelled PNG encoding retained bytes")
+        expect(api(["op":"start_snapshot", "session_id":UUID().uuidString,
+            "recording_id":UUID().uuidString, "directory":directory(root, "foreign-source").path])["error"] as? String == "recording_unavailable",
+            "A foreign recording handle was allowed to select a snapshot source")
+        video.discard()
+        wait("Snapshot fixture video cleanup timed out") { video.isDisposed }
+        session = nil
+    }
     static func lifecycle(_ root: URL, mp4: URL) {
         let pending = CaptureSession(id: UUID().uuidString, root: directory(root, "pending-start"))
         pending.startPending = true
@@ -179,6 +234,7 @@ private enum NativeCaptureFixture {
         gif(rounded, destination: root.appendingPathComponent("rounded.gif"))
         let capped = movie(root, name: "capped", duration: durationLimit)
         gif(capped, destination: root.appendingPathComponent("capped.gif"))
+        snapshots(root)
         lifecycle(root, mp4: short)
         print(json(["ok": true, "fixture": "owned_native_pixels", "capture_invoked": false,
             "short_duration_seconds": 3, "max_duration_seconds": 120]))

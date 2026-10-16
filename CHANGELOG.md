@@ -8,6 +8,41 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- Local PNG snapshots from the camera button or `⇧S`: choose the visible Holdmap view
+  without screen-sharing permission, or a screen/window through its system picker.
+  During video recording, snapshot the existing source without another picker or stopping it.
+- Review and save PNGs up to 3840×2160, scaled with their aspect ratio preserved, and
+  32 MiB. Closing the preview or cancelling/failing a save retains the latest PNG for retry;
+  explicit discard, reload or quit clears it. A new capture replaces it only on success.
+- Separate snapshot providers, cancellation/result ownership and native save validation;
+  app-view rendering embeds only allowlisted bundled assets. The native selected-source
+  fallback requires macOS 14 or later. Published 0.8.0 installers predate PNG snapshots.
+
+### Changed
+
+- Use the video icon for screen recording and the camera icon for PNG snapshots.
+- Give the service graph the full canvas until a service is selected. Details open beside
+  the graph when space allows, or in a dismissible drawer, without changing List preferences.
+- Keep service cards readable by default, with a zoom percentage/reset control and an explicit
+  Fit all overview. Move secondary display settings into Options and keep the legend outside
+  the graph viewport.
+- Give Graph its own service/port/PID search with observed neighbour context; keep List-only
+  filters and sorting out of Graph. Native card buttons support keyboard activation and focus
+  returns after details close.
+
+### Fixed
+
+- Pack disconnected graph components and cluster hulls compactly instead of repelling
+  unrelated services across a large Force canvas. Preserve viewport choices during refreshes.
+- Wait for fresh scope data before positioning the graph; centre a readable service card in
+  narrow windows. Clear hidden selections so unrelated port actions cannot remain active.
+- Dismiss Graph Options with Escape before clearing service details, including WebKit pointer
+  activation that leaves focus on the canvas. Modal dialogs retain their own Escape handling.
+- Make browser sample All services include the other listening TCP entries from the same
+  sample snapshot, with matching IDs and no fabricated links.
+
 ## [0.8.0] - 2026-10-16
 
 ### Added

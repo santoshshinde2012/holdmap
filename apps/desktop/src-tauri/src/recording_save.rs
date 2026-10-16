@@ -59,9 +59,13 @@ fn validate<'a>(filename: &'a str, bytes: &[u8]) -> Result<&'a str, String> {
     }
     let format = filename.rsplit_once('.').map(|(_, ext)| ext);
     match format {
+        Some("png") => {
+            crate::snapshot_image::validate(bytes)?;
+            Ok("png")
+        }
         Some("gif") if bytes.starts_with(b"GIF89a") || bytes.starts_with(b"GIF87a") => Ok("gif"),
         Some("mp4") if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" => Ok("mp4"),
-        _ => Err("Only MP4 video and GIF recordings can be saved.".into()),
+        _ => Err("Only PNG snapshots, MP4 video and GIF recordings can be saved.".into()),
     }
 }
 
@@ -118,10 +122,16 @@ pub(crate) async fn save_screen_recording<R: Runtime>(
             app.dialog()
                 .file()
                 .set_parent(&window)
-                .set_title("Save Holdmap recording")
+                .set_title(if extension == "png" {
+                    "Save Holdmap snapshot"
+                } else {
+                    "Save Holdmap recording"
+                })
                 .set_file_name(&filename)
                 .add_filter(
-                    if extension == "mp4" {
+                    if extension == "png" {
+                        "PNG snapshot"
+                    } else if extension == "mp4" {
                         "MP4 video"
                     } else {
                         "GIF animation"
@@ -214,6 +224,42 @@ mod tests {
     }
 
     #[test]
+    fn ipc_saves_checked_png_bytes_through_the_same_atomic_save_boundary() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("snapshot.png");
+        std::fs::write(&output, b"previous snapshot").unwrap();
+        let chosen = output.clone();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::clone(&calls);
+        let app = test_app(move |name, extension| {
+            assert_eq!(name, "holdmap-snapshot.png");
+            assert_eq!(extension, "png");
+            seen.fetch_add(1, Ordering::SeqCst);
+            Ok(Some(chosen.clone()))
+        });
+        let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .unwrap();
+        let png = include_bytes!("../icons/32x32.png");
+        assert!(
+            get_ipc_response(&window, raw_request("holdmap-snapshot.png", &png[..24])).is_err()
+        );
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            0,
+            "invalid PNG must not open a save chooser"
+        );
+        let saved = get_ipc_response(&window, raw_request("holdmap-snapshot.png", png)).unwrap();
+        assert_eq!(
+            saved.deserialize::<Option<String>>().unwrap(),
+            Some(output.to_string_lossy().into_owned())
+        );
+        assert_eq!(std::fs::read(&output).unwrap(), png);
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
     fn ipc_saves_exact_binary_bytes_and_releases_the_lease_after_cancellation() {
         let directory = tempfile::tempdir().unwrap();
         let output = directory.path().join("chosen.gif");
@@ -276,7 +322,7 @@ mod tests {
             ),
             (
                 raw_request("holdmap-test.mp4", &bytes),
-                "Only MP4 video and GIF",
+                "Only PNG snapshots, MP4 video and GIF",
             ),
             (raw_request("holdmap-test.gif", b""), "must contain data"),
         ] {

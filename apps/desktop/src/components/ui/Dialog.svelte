@@ -23,6 +23,7 @@
     role = "dialog",
     dismissable = true,
     closeButton = true,
+    animate = true,
     bare = false,
     initialFocus,
     label,
@@ -43,6 +44,8 @@
     /** Esc / backdrop close it (off while an action is running). */
     dismissable?: boolean;
     closeButton?: boolean;
+    /** Pixel capture can require immediate removal of the overlay before taking a frame. */
+    animate?: boolean;
     /** No padding, header or footer chrome: the content owns the whole surface. */
     bare?: boolean;
     /** Selector of the element to focus first. */
@@ -58,7 +61,7 @@
 
   const id = fieldId("dlg");
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const dur = reduced ? 0 : 1;
+  const dur = $derived(reduced || !animate ? 0 : 1);
   let downOnBackdrop = false;
 
   function key(e: KeyboardEvent) {

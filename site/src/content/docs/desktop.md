@@ -1,6 +1,6 @@
 ---
 title: Desktop app
-description: "Use holdmap's desktop MCP and skills map, screen recording, update help and reviewed service stops or scheduled shutdown on macOS, Windows and Linux."
+description: "Use holdmap's desktop maps, screen recording and Unreleased PNG snapshots, with local save controls and reviewed service stops on macOS, Windows and Linux."
 order: 6
 ---
 
@@ -42,14 +42,39 @@ tightly connected services and is available for up to 100 services; larger graph
 Layered to keep navigation responsive, including when Force was previously selected.
 
 The graph starts with your dev servers and anything they talk to. **All services** adds
-databases, apps and the rest of the machine. **External** shows outbound remote hosts and
-stays idle when there are none. If the canvas has services but no links, it explains that
-and offers All services. Editor-extension listeners keep the extension name, not the
-inherited project — same identity as the [list and Agents view](../agents/).
+databases, apps and other services on this computer. Editor-extension listeners keep the
+extension name, not the inherited project — the same identity as the [list and Agents
+view](../agents/). A card's location is a layout choice; only the displayed links represent
+observed connections.
 
-Hide the details pane (`B`, the toolbar panel control, or the pane's own hide button) so
-the graph uses the full window. **Legend** on the canvas hides the counts and key. Both
-choices persist.
+**Current source (Unreleased):** the graph opens with the full canvas and compact service
+and link counts. Disconnected services and separate clusters are packed into compact
+groups in both layouts. The published **0.8.0** installers retain the previous graph
+toolbar, automatic fit and summary pane.
+
+The new **Search services** field searches displayed names, projects, ports and PIDs.
+Use `port:3000` or `:3000` for an exact port, and `pid:43000` for an exact PID. Multiple
+terms must all match. Results include each match's immediate observed neighbors, so a
+service's connections keep their context; neighbors are not additional search matches.
+Graph search is separate from the List's search, protocol, ownership and dev-server
+filters. Searching never reads process command lines or creates links.
+
+The canvas starts at a readable size. Pan or zoom to explore larger graphs; **Fit all
+services in view** deliberately zooms out to the whole map, and the percentage control,
+**Reset to readable size**, restores a readable view. On wider canvases, a minimap appears
+when part of the graph is outside the viewport.
+
+Click a service card, or focus it and press **Enter** or **Space**, to inspect that service.
+Details appear beside the canvas when there is enough room, or in a dismissible drawer
+in smaller windows. Close or hide details, or press **Esc**, to return to the full map and
+restore focus to the service card. The graph does not open a summary pane automatically.
+
+Open **Options** for the secondary display controls. **External** shows outbound remote
+hosts and is unavailable when there are none. Press **Esc** to close Options and keep the
+selected service. **Traffic** animates observed connections;
+it stays off when reduced motion is enabled. **Legend** toggles the connection key while
+the compact counts stay visible. Disconnected services have no invented edges; a short
+message explains when no connections are present.
 
 ## Record the screen
 
@@ -57,8 +82,8 @@ Screen recording requires **0.7.0 or newer**, or the browser demo. Version **0.6
 installers do not include it.
 To add it to an existing 0.6.0 installation, download and install the new desktop build.
 
-The camera icon in the title bar, **Record screen…** in the command palette, or `⇧V`
-starts a local capture. Holdmap explains that recordings stay on this computer, then the
+The video icon in current source (the camera icon in 0.8.0), **Record screen…** in the
+command palette, or `⇧V` starts a local capture. Holdmap explains that recordings stay on this computer, then the
 operating system asks which display or window to share. Microphone and system audio are
 not captured. A timer in the title bar and **Stop screen recording** replace the dialog so
 this window can be part of the capture.
@@ -69,7 +94,7 @@ When the recording stops (or after two minutes), preview and download **MP4** an
 The desktop app opens a native save dialog and reports the saved location after writing the
 file. Cancelling the save dialog or a failed write keeps the recording available for retry.
 The browser uses its own download manager. **Close**, `Esc` and clicking outside the preview
-keep the latest recording for this session. Use the camera icon, **Review recording** in the
+keep the latest recording for this session. Use the video icon, **Review recording** in the
 command palette, or `⇧V` to reopen it. **Discard recording** removes it and lets you record again.
 Save a file before reloading or quitting; the preview is kept only in memory.
 
@@ -102,6 +127,38 @@ If that service is unavailable, try a browser with screen sharing or the system 
 Review local capture limits before choosing a screen or window:
 
 ![Screen recording explains local exports, the two-minute limit and permission before choosing a screen](../../../../docs/screenshots/desktop-screen-record-light.png)
+
+## Take a PNG snapshot
+
+**Current source (Unreleased):** PNG snapshots are separate from video recording.
+Published **0.8.0 installers predate this feature**. Open the camera button, choose
+**Take snapshot…** in the command palette, or press `⇧S` with single-key shortcuts enabled.
+
+- **Holdmap view** captures the visible app, its current map and details without
+  screen-sharing permission. The snapshot chooser is excluded.
+- **Screen or window** asks you to choose a source through the system picker. Sharing
+  ends after the PNG is captured, and no audio is requested. Browser screen-sharing
+  support and the platform requirements above apply; the native macOS fallback requires
+  **macOS 14 or later**. An unsupported screen source does not disable Holdmap-view snapshots.
+- During video recording, **Recording source** replaces the new-source choice. It takes
+  a still from the existing source without another picker or stopping the video. The
+  command palette also offers **Snapshot recording source** while that source is available.
+
+Review the PNG before saving. Images preserve their aspect ratio within **3840×2160** and
+**32 MiB**. **Download PNG** opens a native save dialog in the desktop app; the browser
+starts a download without claiming the file was written. Nothing is uploaded.
+
+**Close**, `Esc` or clicking outside keeps the latest PNG for this session. Reopen it with
+the camera button, **Review snapshot** or `⇧S`. Cancelled saves and write failures keep it
+available to retry. **New snapshot** replaces it only after the new capture succeeds;
+**Discard snapshot** removes the retained image without stopping a video. Reloading or
+quitting clears the preview, so save it first to keep it.
+
+These screenshots show the Unreleased preview with browser sample data:
+
+![PNG snapshot review in dark theme, with local save and discard controls](../../../../docs/screenshots/desktop-snapshot-dark.png)
+
+![PNG source chooser in light theme, offering the Holdmap view or a selected screen/window](../../../../docs/screenshots/desktop-snapshot-light.png)
 
 ## Shut down this computer
 
@@ -242,6 +299,7 @@ Screen sharing is separate and always requires your explicit screen or window se
 | `d` · `m` · `e` · `t` | Filter: dev servers · mine · exposed · TCP/UDP |
 | `⌘R` | Rescan now |
 | `⇧V` | Record the screen, stop capture or review the latest recording |
+| `⇧S` | Take or review a PNG snapshot (Unreleased) |
 | `⇧L` | Cycle the theme |
 | `⌘,` | Settings |
 | `?` | Every shortcut |
@@ -249,7 +307,9 @@ Screen sharing is separate and always requires your explicit screen or window se
 In 0.5.0, **Settings → General → Single-key shortcuts** lets you disable
 letter and symbol shortcuts, including `/` and `j`/`k`. Arrow navigation and `⌘`/`Ctrl` shortcuts
 remain available. This is useful with speech input or when you want to reserve letter keys.
-Shortcuts respect text composition and native controls; port filters apply only in port views.
+Shortcuts respect text composition and native controls. In current source (**Unreleased**),
+port-filter shortcuts apply only in List; Graph keeps its own search and selection. In Graph,
+`B` acts on a selected listener's details instead of opening a summary pane.
 The command palette keeps its active result valid as running services change.
 
 ## Agents map

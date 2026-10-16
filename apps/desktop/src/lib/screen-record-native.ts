@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { MAX_DURATION_MS, recordingFilename, type CaptureFile, type CaptureResult, type RecordingListener, type RecordingSession } from "./screen-record";
+import { snapshotSignal, type SnapshotResult } from "./screen-snapshot";
+import { captureNativeSnapshot } from "./screen-snapshot-native";
 
 export type NativeRecordingStatus = {
   sessionId: string;
@@ -85,6 +87,8 @@ export class NativeRecordingSession implements RecordingSession {
   private failure: unknown = null;
   private stopped: Promise<CaptureResult> | null = null;
   private cleanup: Promise<void> | null = null;
+  private snapshotting: Promise<SnapshotResult> | null = null;
+  private snapshotAbort: AbortController | null = null;
   private readonly onAbort = () => this.discard();
 
   private constructor(private status: NativeRecordingStatus, private readonly listener: RecordingListener, private readonly signal: AbortSignal) {
@@ -126,6 +130,30 @@ export class NativeRecordingSession implements RecordingSession {
 
   elapsedMs(): number { return Math.min(MAX_DURATION_MS, this.status.elapsedMs); }
 
+  captureSnapshot(signal: AbortSignal): Promise<SnapshotResult> {
+    if (this.finishing || this.discarded || this.status.phase !== "capturing") return Promise.reject(new Error("The recording is no longer capturing."));
+    if (this.snapshotting) return Promise.reject(new Error("Wait for the current snapshot to finish."));
+    this.clearPoll();
+    const controller = new AbortController();
+    this.snapshotAbort = controller;
+    const linked = snapshotSignal(signal, controller.signal, this.controller.signal);
+    const operation = (async () => {
+      try {
+        await this.polling;
+        this.assertUsable();
+        if (this.finishing || this.status.phase !== "capturing") throw new Error("The recording is no longer capturing.");
+        return await captureNativeSnapshot(linked.signal, this.status.sessionId, this.elapsedMs());
+      } finally {
+        linked.dispose();
+        this.snapshotAbort = null;
+        this.snapshotting = null;
+        if (!this.finishing && !this.discarded && this.status.phase === "capturing") this.schedulePoll();
+      }
+    })();
+    this.snapshotting = operation;
+    return operation;
+  }
+
   stop(): Promise<CaptureResult> {
     this.stopped ??= this.finish();
     return this.stopped;
@@ -135,6 +163,7 @@ export class NativeRecordingSession implements RecordingSession {
     this.discarded = true;
     this.finishing = true;
     this.clearPoll();
+    this.snapshotAbort?.abort();
     this.controller.abort();
     this.signal.removeEventListener("abort", this.onAbort);
     void this.release().catch(() => undefined);
@@ -167,7 +196,7 @@ export class NativeRecordingSession implements RecordingSession {
         this.status = status;
         this.listener.onTick(this.elapsedMs());
         if (this.status.phase !== "capturing" || this.elapsedMs() >= MAX_DURATION_MS) this.notifyEnded();
-        else this.schedulePoll();
+        else if (!this.snapshotting) this.schedulePoll();
       }).catch((cause) => {
         if (this.finishing || this.discarded) return;
         this.failure = cause;
@@ -194,10 +223,12 @@ export class NativeRecordingSession implements RecordingSession {
   private async finish(): Promise<CaptureResult> {
     this.finishing = true;
     this.clearPoll();
+    this.snapshotAbort?.abort();
     const warnings = this.status.warnings.map(friendlyMessage);
     try {
       // The native boundary permits one operation at a time. A status request
       // already in flight must finish before Stop or any export read is sent.
+      await this.snapshotting?.catch(() => undefined);
       await this.polling;
       this.assertUsable();
       if (this.failure) throw this.failure;

@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScreenRecording } from "./screen-record-encode";
 import { GifTimeline, encodeGif } from "./screen-record-gif";
+import { Blob as NodeBlob } from "node:buffer";
 
 vi.mock("mediabunny", async (original) => ({
   ...await original<typeof import("mediabunny")>(),
@@ -131,6 +132,49 @@ describe("recording resources", () => {
     await expect(start).rejects.toThrow(/never started/);
     expect(track.stop).toHaveBeenCalled();
     expect(document.querySelector("video")).toBeNull();
+  });
+
+  it("takes and cancels PNG snapshots while a GIF-only recording keeps capturing", async () => {
+    const { stream, track, listener } = fixture();
+    class FakeWorker {
+      static latest: FakeWorker;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onerror = null;
+      onmessageerror = null;
+      terminate = vi.fn();
+      postMessage = vi.fn();
+      constructor() { FakeWorker.latest = this; }
+    }
+    vi.stubGlobal("Blob", NodeBlob);
+    vi.stubGlobal("Worker", FakeWorker);
+    vi.stubGlobal("MediaRecorder", undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage: vi.fn(), getImageData: () => ({ data: fill(1, 1, 0, 0, 0) }),
+    } as unknown as CanvasRenderingContext2D);
+    const encode = vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => callback(new Blob([
+      Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0)),
+    ], { type: "image/png" })));
+    const started = ScreenRecording.start(stream, listener);
+    const player = document.querySelector("video")!;
+    Object.defineProperties(player, { videoWidth: { value: 1 }, videoHeight: { value: 1 }, readyState: { value: 2 } });
+    player.dispatchEvent(new Event("loadedmetadata"));
+    const recording = await started;
+    try {
+      expect(await recording.captureSnapshot(new AbortController().signal)).toMatchObject({ source: "recording", width: 1, height: 1 });
+      expect(track.stop).not.toHaveBeenCalled();
+      expect(FakeWorker.latest.terminate).not.toHaveBeenCalled();
+      expect(document.querySelector("video")).toBe(player);
+      encode.mockImplementation(() => undefined);
+      const controller = new AbortController();
+      const pending = recording.captureSnapshot(controller.signal);
+      const rejected = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+      await expect(recording.captureSnapshot(new AbortController().signal)).rejects.toThrow(/current snapshot/);
+      controller.abort(); await rejected;
+      expect(track.stop).not.toHaveBeenCalled();
+      expect(listener.onEnded).not.toHaveBeenCalled();
+    } finally { recording.discard(); }
+    expect(FakeWorker.latest.terminate).toHaveBeenCalled();
   });
 
   it("stops capture before waiting for export and discards an in-flight GIF safely", async () => {
