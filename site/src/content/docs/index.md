@@ -32,11 +32,14 @@ package is attached to the GitHub release as a tarball.
 
 After installation, compare `holdmap --version` with the
 [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest).
-[What's new in 0.8.0](whats-new/) covers the MCP and skills map, reported usage labels,
-desktop update help and recording cleanup. Local MP4/GIF capture and Computer / Footprint /
-Project maps remain available. For an existing desktop installation, download the matching
-new installer; **0.8.0** has no configured
-signed updater feed. Rerun the CLI installer to update the command-line tool.
+[What's new in 0.9.0](whats-new/) covers PNG snapshots, the readable service graph and the
+Explore / Map / Compare capability explorer. During release preparation, downloads remain on
+the latest published release; **0.8.0** installers predate these additions. Local MP4/GIF capture,
+Computer / Footprint / Project maps and optional reported usage remain available.
+For a desktop update, quit Holdmap, install the matching OS/architecture download, then reopen
+it and check Settings → About. The published 0.8.0 release has no configured signed updater
+feed. Use manual installation for releases without a signed feed. Rerun the CLI installer separately to
+update the CLI, TUI and MCP server.
 
 ## Your first minute
 

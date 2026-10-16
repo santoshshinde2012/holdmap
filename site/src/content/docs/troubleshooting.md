@@ -38,6 +38,13 @@ An app launched from an older disk image or another folder can still be the old 
 The CLI installer updates the CLI, TUI and MCP server; it does not update the separate desktop app.
 Version **0.7.1** also requires a manual update and includes no signed updater feed.
 
+**0.9.0 features are missing from a 0.8.0 installation.** PNG snapshots, the readable service
+graph and the Explore / Map / Compare capability explorer require the 0.9.0 desktop app.
+During release preparation, the download page remains on the latest published version.
+Install 0.9.0 after its installers are published, or build that source version; updating only
+the CLI does not add desktop features. Existing 0.8.0 CLI/MCP capability and activity support
+does not include the new desktop presentation. [0.9.0 changes](../whats-new/).
+
 Browser About identifies the web preview separately and does
 not show a desktop settings folder.
 

@@ -89,7 +89,7 @@ const widths = (w: number) => [w, w * 2, w * 3];
         <div class="copy">
           <h3>Computer → Footprint → Project</h3>
           <p>Zoom from this computer and its agents to their folders, tools, ports and a single source tree. Inspect memory, CPU, parent processes and access, with each fact marked seen, inferred or unknown. Reveal a folder, open it in your editor, or stop only the services an agent started.</p>
-          <p class="source-note">Current source (Unreleased) adds a capability explorer: read declared skill purposes in Explore, retain source relationships in Map, and Compare observed definitions. File presence does not prove loading, approval or use.</p>
+          <p class="source-note">The 0.9.0 capability explorer leads with declared skill purposes in Explore, retains source relationships in Map, and shows exact observed definitions in Compare. File presence does not prove loading, approval or use.</p>
           <a class="link-arrow" href={url("docs/agents/#desktop-and-tui")}>Explore the agent map <Icon name="ArrowRight" size={16} /></a>
           <a class="link-arrow" href={url("docs/agents/#mcp-and-skills")}>MCP and skills explorer <Icon name="ArrowRight" size={16} /></a>
           <pre class="snippet term inline" tabindex="0" aria-label="Example agents command"><span class="p">$</span> holdmap agents
@@ -109,9 +109,9 @@ const widths = (w: number) => [w, w * 2, w * 3];
           <h3>Record a screen or window</h3>
           <p>Choose what to share, then save available MP4 or GIF exports locally. Record for up to two minutes with no microphone or system audio. Close and reopen the latest preview while Holdmap stays open; nothing is uploaded.</p>
           <p class="source-note">Each new video recording asks for a screen or window. Export formats depend on the encoder available in your app or browser.</p>
-          <p class="source-note">Current source (Unreleased) also adds PNG snapshots of the Holdmap view or a selected screen/window. An active recording can supply the still without another picker or stopping the video. Version 0.8.0 installers predate PNG snapshots.</p>
+          <p class="source-note">Version 0.9.0 adds PNG snapshots of the Holdmap view or a selected screen/window. An active recording can supply the still without another picker or stopping the video. Version 0.8.0 installers predate PNG snapshots.</p>
           <a class="link-arrow" href={url("docs/desktop/#record-the-screen")}>Screen recording and saving <Icon name="ArrowRight" size={16} /></a>
-          <a class="link-arrow" href={url("docs/desktop/#take-a-png-snapshot")}>Unreleased PNG snapshots <Icon name="ArrowRight" size={16} /></a>
+          <a class="link-arrow" href={url("docs/desktop/#take-a-png-snapshot")}>PNG snapshots in 0.9.0 <Icon name="ArrowRight" size={16} /></a>
         </div>
         <div class="visual agents-shot">{["dark", "light"].map((t) => (
           <Picture src={t === "dark" ? screenRecordDark : screenRecordLight} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280]} sizes={`(max-width: 1000px) calc(100vw - 80px), 720px`} alt="Screen recording consent explains local MP4 and GIF exports, the two-minute limit and the screen picker" loading="lazy" pictureAttributes={{ class: `only-${t}` }} />

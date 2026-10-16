@@ -6,11 +6,20 @@ Version 0.4.0 downloads predate this view; use 0.5.0 or newer for native recordi
 Version 0.8.0 adds explicit MCP server aliases and Claude skill activation records to Calls,
 alongside a separate opt-in **Agents → MCP & skills** inventory. See the
 [0.8.0 release notes](../CHANGELOG.md#080---2026-10-16).
-Use matching 0.8.0 CLI/desktop and collector builds for these records. The new
+Use 0.8.0 or newer CLI/desktop and collector builds for these records. The 0.8.0-and-later
 decoder accepts older snapshots with no MCP alias. An older 0.7.1 decoder rejects new fields
 or the skill kind, and its collector does not produce this new skill activation projection.
 The `/v1` route names remain unchanged; they do not imply forward-compatible decoding of
 unrecognized metadata. Missing activity from an older collector is not proof of no usage.
+
+Version **0.9.0** adds **Explore / Map / Compare** and Purpose, Source, Evidence and Activity
+inspection over the existing capability inventory. It adds no recording adapter or name-based
+join: the Activity tab links to separately reported Calls rather than attributing them to a
+similarly named file. [Capability explorer guide](../site/src/content/docs/agents.md#mcp-and-skills).
+Its [PNG snapshots](../site/src/content/docs/desktop.md#take-a-png-snapshot) and MP4/GIF screen
+recordings capture pixels locally; they are separate from the metadata recording described here.
+During 0.9.0 release preparation, use the latest published installers or a matching source build;
+published 0.8.0 installers do not contain the new explorer or PNG snapshots.
 
 ## Read the flow
 

@@ -390,6 +390,20 @@ maintainer pushes its tag.
    unsigned. Without a configured signed updater, desktop users download the new installer
    manually; do not advertise automatic updates.
 
+After publication, run the read-only completeness check with an explicit published-state
+requirement (replace the version with the released tag):
+
+```sh
+GITHUB_REPOSITORY=santoshshinde2012/holdmap TAG=vX.Y.Z CHECK_RELEASE_DRAFT=false \
+  node scripts/check-release-assets.mjs
+```
+
+It verifies required asset uploads, SHA-256 coverage and distribution identity; it does not
+publish, change a tag or substitute for provenance verification. `CHECK_RELEASE_DRAFT=true`
+requires a draft before publication; omitting the flag accepts either state. Confirm separately
+that GitHub's latest stable release and the deployed `build-info.json` match the intended tag
+and tagged source commit. Never reuse an older PR head's green checks after refreshing a release.
+
 If every artifact build succeeded but final publication failed, fix and validate the
 publication code on `main`, then run `gh workflow run release.yml --ref main --field tag=vX.Y.Z --field run_id=RUN_ID`
 with the existing draft's tag and its original tag-build run ID. This recovery path checks

@@ -686,8 +686,11 @@ else:
         environment.update({"PATH": str(self.root) + os.pathsep + environment["PATH"],
                             "GITHUB_REPOSITORY": repository,
                             "TAG": data["release"]["tag_name"] if tag is None else tag,
-                            "CHECK_RELEASE_DRAFT": draft,
                             "HOLDMAP_TEST_GITHUB": str(self.state), "HOLDMAP_TEST_CALLS": str(self.calls)})
+        if draft is None:
+            environment.pop("CHECK_RELEASE_DRAFT", None)
+        else:
+            environment["CHECK_RELEASE_DRAFT"] = draft
         result = subprocess.run(["node", str(ROOT / "scripts/check-release-assets.mjs")],
                                 env=environment, capture_output=True, text=True, check=False, timeout=30)
         calls = [json.loads(line) for line in self.calls.read_text().splitlines()] if self.calls.exists() else []
@@ -705,6 +708,29 @@ else:
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("no release changes made", result.stdout)
                 self.assertEqual(len([call for call in calls if "/releases/assets/" in call[-1]]), 13)
+
+    def test_explicit_draft_state_is_enforced_and_unset_accepts_either_state(self):
+        for requested in ["true", "false", None]:
+            for actual in [True, False]:
+                with self.subTest(requested=requested, actual=actual):
+                    data = self.fixture(draft=actual)
+                    result, calls = self.verify(data, draft=requested)
+                    accepted = requested is None or (requested == "true") == actual
+                    self.assertEqual(result.returncode == 0, accepted, result.stderr)
+                    if accepted:
+                        self.assertIn("no release changes made", result.stdout)
+                    else:
+                        self.assertIn("must remain a draft" if requested == "true" else "must be published", result.stderr)
+                        self.assertFalse(any("/releases/assets/" in call[-1] for call in calls),
+                                         "state mismatch must fail before downloading metadata")
+
+    def test_malformed_draft_flags_fail_before_github_access(self):
+        for requested in ["", "TRUE", "False", " true ", "0", "null"]:
+            with self.subTest(requested=requested):
+                result, calls = self.verify(self.fixture(), draft=requested)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("CHECK_RELEASE_DRAFT must be true or false", result.stderr)
+                self.assertEqual(calls, [])
 
     def test_missing_platform_or_duplicate_asset_fails(self):
         for name in ["holdmap_0.6.0_aarch64.dmg", "holdmap_0.6.0_x64.dmg",

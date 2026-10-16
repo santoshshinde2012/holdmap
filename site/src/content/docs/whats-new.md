@@ -1,79 +1,121 @@
 ---
-title: What's new in 0.8.0
-description: Explore local MCP and skill maps, reported agent usage and clearer desktop updates in holdmap 0.8.0, with recording startup and cleanup fixes.
+title: What's new in 0.9.0
+description: Explore holdmap 0.9.0 PNG snapshots, a readable service graph and the capability explorer, with local capture and separate CLI and desktop upgrades.
 order: 1.5
 ---
 
-**Holdmap 0.8.0** adds a graphical map of local MCP definitions and skill files, clearer
-reported-usage labels, and desktop update help. It also fixes recording startup cancellation
-and native temporary-file cleanup. [Install](../../#install) always links to the latest
-published release; the [changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md)
-records the full changes.
+**Holdmap 0.9.0** brings PNG snapshots, a readable service graph and the
+**Explore / Map / Compare** capability explorer. During release preparation, a source version
+does not imply installer availability. The download section follows the latest published
+release; **0.8.0** installers predate these additions. Check [Install](../../#install) before upgrading; the
+[changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md) records the full changes.
 
-## New in 0.8.0: MCP and skills, mapped
+## PNG snapshots alongside video
 
-Open **Agents → MCP & skills** to explicitly inspect supported local configuration for
-running agents in your account. MCP definitions and skill files sit around their agent cards;
-running MCP candidates occupy a separate lane. Select a card with a click, **Enter** or
-**Space** to inspect its source, scope and evidence, plus optional skill-header name and purpose.
-Close the inspector or press **Esc** to return to the agent rail without losing your scope.
+Use the camera button, **Take snapshot…** or `⇧S` to choose what to capture:
 
-Search and filter by kind, scope or configured state. Shared nodes represent exact discovered
-source definitions, with an association to each observed owner. Matching aliases never join a
-definition to a running process or recorded call. Narrow windows keep a readable map and a
-**Browse agents** drawer; pan to explore, or choose **Fit all capabilities in view**.
+- **Holdmap view:** the visible app viewport, without screen-sharing permission.
+- **Screen or window:** an explicit system picker chooses the source, then sharing ends
+  after the still is captured.
+- **Recording source:** while video is active, take a still from its existing source without
+  another picker or stopping the video.
 
-![Sample MCP and skills map keeps configured definitions, agent owners and running candidates distinct](../../../../docs/screenshots/desktop-capabilities-dark.png)
+Review and save the PNG locally. Images preserve their aspect ratio within **3840×2160**
+and **32 MiB**. Closing the preview or cancelling a save retains it for retry; a new capture
+replaces it only on success. **Discard snapshot**, reload or quit clears the retained image.
+The desktop opens a native save dialog; the browser starts a download. Nothing is uploaded.
 
-The same opt-in is available through `holdmap agents --capabilities`, the terminal Agents
-**c** toggle and MCP `list_agents(include_capabilities:true)`. Leaving the terminal Agents pane
-turns inspection off and clears retained inventory. Ordinary scans do not inspect settings.
+App-view snapshots work separately from display-capture support. The native selected-source
+fallback requires **macOS 14 or later**; other platforms use browser screen-sharing support
+and their system picker. [Snapshot sources and limits](../desktop/#take-a-png-snapshot).
+Video recording retains its two-minute, no-audio MP4/GIF workflow and now uses the video icon.
+
+## A readable service graph
+
+Graph opens with a full canvas until you select a service. Both layouts pack disconnected
+services and separate clusters compactly. Cards start at a readable size; **Fit all services
+in view** offers an overview and **Reset to readable size** restores readable cards.
+
+Search names, projects, exact `port:3000` / `:3000` or `pid:43000`, with every query term
+required to match. Immediate observed neighbors keep connection context without becoming
+extra matches. List filters stay separate. **Options** holds Traffic, External and Legend;
+keyboard activation and focus return work through the selected service's details.
+Layout proximity never invents a connection. [Service graph guide](../desktop/#service-graph-and-cluster-grouping).
+
+## Explore, map and compare capabilities
+
+Open **Agents → MCP & skills** to explicitly inspect the existing supported local sources.
+**Explore** leads with declared skill purposes, **Map** retains source relationships, and
+**Compare** shows exact observed definitions across two contexts. Matching process observations
+group while retaining their original PIDs; a group is not a verified conversation or session.
+
+Select a card for **Purpose**, **Source**, **Evidence** and **Activity**. File presence does not
+establish loading, approval or use. **Tools** explains **Catalog not reported** instead of
+claiming zero tools. No new client catalog, recording adapter or name-based activity join is
+introduced; coverage and privacy limits remain the same as 0.8.0.
+
+![Explore skill cards lead with declared purpose while preserving source paths, scope and file-presence evidence](../../../../docs/screenshots/desktop-capability-explore-dark.png)
+
+The workspace loads only after explicit navigation. Search, scope/state filters, comparison
+selectors and dismissible narrow-window details support the same observed inventory.
+[Capability explorer, supported sources and limits](../agents/#mcp-and-skills).
+
+## Upgrade to 0.9.0
+
+Install 0.9.0 after its release assets are published, or use a checked-out source build with the
+[development prerequisites](https://github.com/santoshshinde2012/holdmap/blob/main/CONTRIBUTING.md#setup).
+
+Update the CLI and desktop separately:
+
+1. Run the current CLI installer from [Install](../../#install), then check `holdmap --version`.
+   This updates the CLI, TUI and MCP server.
+2. Download the published desktop installer for your OS and architecture. Quit Holdmap,
+   install it, reopen the installed copy and check **Settings → About**, including its
+   running-app location. Updating the CLI does not replace the desktop app.
+
+Use manual desktop installation for releases without a signed updater feed. Published 0.8.0
+installers have no configured signed updater feed; their macOS apps are ad-hoc signed without
+Developer-ID signing or notarization, and Windows installers are unsigned. Check the final
+release's signing/updater notes, SHA-256 checksums and build provenance before opening a
+new download. [First open](../desktop/#first-open) explains the platform controls.
+
+Optional activity recording keeps the 0.8.0 metadata contract: use 0.8.0 or newer clients and
+collectors for reported MCP aliases and skill activations. Version 0.7.1 decoders reject those
+fields. Every fresh recording session uses a new local endpoint and token; recopy its producer
+settings and restart the producer. [Recording setup](../agents/#set-up-optional-recording).
+
+## Retained from 0.8.0
+
+<a id="new-in-080-mcp-and-skills-mapped"></a>
+
+### Opt-in MCP and skill inventory
 
 Supported default and compatibility locations cover Codex, Claude Code, Cursor, Claude Desktop,
 legacy Windsurf, Gemini CLI, GitHub Copilot, Copilot CLI and Cline. Skill coverage varies by
-client. Discovery is bounded and skips links, protected locations and unsupported roots;
-presence does not establish loading, trust, enablement or use. Credential values and skill
-instruction bodies are excluded from results. See the [full source and privacy limits](../agents/#mcp-and-skills).
+client. Discovery is bounded and skips links, protected locations and unsupported roots.
+Credential values and skill instruction bodies are excluded from results; presence is not use.
+The CLI uses `holdmap agents --capabilities`, the terminal Agents pane uses **c**, and MCP
+uses `list_agents(include_capabilities:true)`. Ordinary scans do not inspect settings.
 
-## Reported usage keeps its evidence
+<a id="reported-usage-keeps-its-evidence"></a>
 
-**Agents → Flow → Calls** can label a reported MCP server alias and an explicit Claude skill
-activation when the configured integration supplies approved metadata. Unreported or
-provider-redacted names stay unknown. These labels are separate from configured inventory and
-do not establish that a particular agent loaded a server or invoked a skill just because its
-name matches. [Set up optional recording](../agents/#set-up-optional-recording).
+### Reported usage and MCP tools
 
-MCP clients also gain two read tools: `inspect_port` returns the same structured inspection as
-`explain_port`, and `get_agent_flow` returns observed process ancestry and live TCP relationships.
-Observed connections do not establish messages or tool calls. [MCP setup and tools](../mcp/).
+**Agents → Flow → Calls** labels a reported MCP alias or explicit Claude skill activation
+when a configured integration supplies it. Provider-redacted names remain unknown; aliases
+are not verified inventory/process associations. MCP `inspect_port` matches `explain_port`,
+and `get_agent_flow` reports observed process ancestry and live TCP relationships, not messages
+or tool invocations. [MCP setup and tools](../mcp/).
 
-## Clearer updates and recording cleanup
+<a id="clearer-updates-and-recording-cleanup"></a>
+<a id="upgrade-to-080"></a>
 
-**Settings → About** shows the running desktop app's version, architecture and location,
-with desktop download and installation-guide actions. The command palette also opens desktop
-downloads. This helps distinguish an installed copy from one opened from a disk image or
-another folder; `holdmap --version` checks the separate CLI. Browser About identifies a web
-preview and omits desktop app locations.
+### Desktop identity and capture cleanup
 
-Cancelling while native recording starts now discards the acknowledged capture session.
-Native cleanup retains temporary files until pending operations finish. These changes preserve
-the existing local MP4/GIF exports, two-minute limit and explicit source chooser.
-
-## Upgrade to 0.8.0
-
-Run the CLI installer again, then check `holdmap --version`. The CLI installer includes the
-TUI and MCP server. Download the desktop installer separately for your operating system and
-architecture from [Install](../../#install). Quit Holdmap, install the matching download,
-then reopen it and check **Settings → About**. This release requires manual desktop
-installation; its published installers do not include a configured signed updater feed.
-
-The macOS builds are ad-hoc signed without Developer-ID signing or notarization, and Windows
-installers are unsigned. See [first-open instructions](../desktop/#first-open), the SHA-256
-files, and the build-provenance verification commands in [Install](../../#install).
-
-If you use optional agent activity recording, start a recording session and recopy its producer
-configuration when starting a new session. Each session uses a fresh local endpoint and token.
-[Recording setup](../agents/#set-up-optional-recording).
+**Settings → About** identifies the running app's version, architecture and location, with
+desktop download and installation-guide actions. Browser About identifies the web preview.
+Cancelling while native recording starts releases the acknowledged capture session, and
+cleanup waits for pending operations before removing temporary files.
 
 ## Fixed in 0.7.1: native macOS recording
 
@@ -92,13 +134,13 @@ or later; macOS 11–13 need browser screen-sharing support or the system screen
 
 ## Features introduced in 0.7.0
 
-The following features remain available in 0.8.0. Read the
+The following features remain available in 0.9.0. Read the
 [0.7.0 release notes](https://github.com/santoshshinde2012/holdmap/releases/tag/v0.7.0) for their
 original release details.
 
 ### Record a screen or window
 
-Choose the camera button or **Record screen** in the command palette (`⇧V`), then pick a
+Choose the video button in 0.9.0 (the camera button in 0.8.0), or **Record screen** in the command palette (`⇧V`), then pick a
 screen or window in the system chooser. Recordings run for up to **two minutes**, with local
 **MP4** and **GIF** exports when encoding is supported. Microphone and system audio are not captured.
 
