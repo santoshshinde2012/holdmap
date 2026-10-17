@@ -1153,7 +1153,7 @@
     pinned: (port) => pins.has(port), powerAvailable: !!settingsModel?.powerAvailable, native: api.isTauri, activeSchedules: activeSchedules.length, mod,
     filters, sideOpen: prefs.sideOpen, selectedGraphNode, version: info.version, platform: info.platform,
     recording: { active: !!capture.session, elapsedMs: capture.elapsed, hasResult: !!capture.result, checking: capture.support.pending, supported: !!capture.support.backend },
-    snapshotHasResult: snapshotCaptureState.hasResult, notify: !!config?.notify, density: prefs.density, autostart: autostartOn, graphQuery, singleKeys: prefs.singleKeyShortcuts,
+    snapshotHasResult: snapshotCaptureState.hasResult, notify: !!config?.notify, density: prefs.density, autostart: autostartOn, graphQuery, singleKeys: prefs.singleKeyShortcuts, collapsedGroups: prefs.collapsed.size,
   }, {
     stopCluster: (name) => void requestClusterStop(name), stopAllDev: () => void requestStopAllDev(), installUpdate: () => void installUpdate(), togglePin: (e) => void togglePin(e),
     goToPort: (e) => { prefs.view = "list"; clearFilters(); selectEntry(e); }, stop: (e) => void requestStop(e, false), openInBrowser: (e) => void open(e),
@@ -1163,7 +1163,7 @@
     toggleGraph: () => toggleView("graph"), toggleAgents: () => toggleView("agents"), settings: (section) => openSettings(section), downloads: () => void openDesktopHelp("downloads"),
     pinWithLabel: openPin, remote: () => (showRemote = true), history: () => void openHistory(), stopRecording: () => void capture.finish(), openRecording: capture.open,
     snapshot: () => snapshotCaptureUi?.show(), snapshotRecording: () => void snapshotCaptureUi?.captureRecording(), toggleNotify: () => void toggleNotify(),
-    toggleDensity: () => { prefs.density = prefs.density === "compact" ? "comfortable" : "compact"; }, toggleAutostart: () => void toggleAutostart(), clearGraphQuery: () => (graphQuery = ""),
+    toggleDensity: () => { prefs.density = prefs.density === "compact" ? "comfortable" : "compact"; }, toggleAutostart: () => void toggleAutostart(), clearGraphQuery: () => (graphQuery = ""), expandGroups: () => (prefs.collapsed = new Set()),
   }));
 
   function onKey(e: KeyboardEvent) {

@@ -1,17 +1,15 @@
 <script lang="ts">
   // A folder, port, service or remote host in an agent's footprint. Dots show which agents
-  // touch it; recent projects and inferred paths are drawn quieter (dashed).
+  // touch it; recent projects and inferred paths are drawn quieter (dashed). Presentational: the
+  // focusable svelte-flow wrapper carries the accessible name (footNodeLabel).
   import { Handle, Position, type NodeProps, type Node } from "@xyflow/svelte";
   import Icon from "../Icon.svelte";
-  import type { FootFlowData } from "../../lib/agents";
-  import { EVIDENCE_LABEL, folderAction } from "../../lib/agents";
+  import { EVIDENCE_LABEL, footNodeActs, type FootFlowData } from "../../lib/agents";
 
   let { data }: NodeProps<Node<FootFlowData>> = $props();
   const n = $derived(data.node);
   const ICON = { folder: "folder", tool: "plug", port: "server", service: "plug", remote: "globe", more: "more", omitted: "more", agent: "bot", header: "", machine: "monitor" } as const;
-  const WHAT = { folder: "Folder", tool: "MCP server", port: "Port", service: "Service", remote: "Remote host", more: "More remote links", omitted: "Unlisted links", agent: "Agent", header: "", machine: "Computer" } as const;
-  const opens = $derived(!!n.entryId);
-  const interactive = $derived(opens || n.kind === "tool" || n.kind === "folder");
+  const interactive = $derived(footNodeActs(n));
   const title = $derived(n.path ?? n.warning ?? undefined);
 </script>
 
@@ -25,11 +23,10 @@
   class:sel={data.selected}
   class:opens={interactive}
   style="--agent: {data.color}"
-  role={interactive ? "button" : "group"}
-  aria-label="{n.kind === 'machine' ? '' : `${WHAT[n.kind]} `}{n.label}, {n.sub}{n.evidence !== 'observed' ? `, ${EVIDENCE_LABEL[n.evidence]}` : ''}{n.warning ? `, ${n.warning}` : ''}{opens ? '. Opens details' : n.kind === 'tool' ? '. Opens its agent card' : n.kind === 'folder' ? `. ${folderAction(data.picture)}` : ''}"
+  aria-hidden="true"
   {title}
 >
-  <Handle type="target" position={Position.Left} isConnectable={false} aria-hidden="true" />
+  <Handle type="target" position={Position.Left} isConnectable={false} role="presentation" tabindex={undefined} />
   <span class="ic" aria-hidden="true"><Icon name={ICON[n.kind]} size={15} /></span>
   <div class="body">
     <span class="label">{n.label}</span>
@@ -39,7 +36,7 @@
     <span class="dots" aria-hidden="true">{#each data.ownerColors.slice(0, 4) as c}<i style="background: {c}"></i>{/each}</span>
   {/if}
   {#if n.tone === "warn"}<span class="exp" title={n.warning}><Icon name="globe" size={12} /></span>{/if}
-  <Handle type="source" position={Position.Right} isConnectable={false} aria-hidden="true" />
+  <Handle type="source" position={Position.Right} isConnectable={false} role="presentation" tabindex={undefined} />
 </div>
 
 <style>

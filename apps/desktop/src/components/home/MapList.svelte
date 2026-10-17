@@ -38,7 +38,7 @@
           {#each ports as n (n.item.id)}
             {@const t = n.item.target}
             <li><button type="button" class="port" class:warn={n.item.warn} aria-haspopup="menu" onclick={(e) => t.view === "list" && onport(t.entryId, e.currentTarget)}
-              aria-label="Port {n.item.label.slice(1)}{n.item.sub ? ` ${n.item.sub}` : ''}{n.item.warn ? ', open to the network' : ''}"><i></i><span class="pn">{n.item.label}</span>{n.item.sub ?? ""}</button></li>
+              aria-label="Port {n.item.label.slice(1)}{n.item.sub ? ` ${n.item.sub}` : ''}{n.item.warn ? ', open to the network' : ''}"><i></i><span class="pn">{n.item.label}</span>{" "}{n.item.sub ?? ""}</button></li>
           {/each}
         </ul>
       {/if}

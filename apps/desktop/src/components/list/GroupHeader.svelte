@@ -22,21 +22,22 @@
   } = $props();
 </script>
 
-<div class="gh" class:collapsed role="presentation">
-  <button
-    type="button"
+<!-- Lives inside the "Ports in use" listbox, which may only hold groups and options, so the header
+     is a pointer affordance hidden from assistive tech: its group is named by the label below,
+     ←/→ collapse from a row, and the command palette expands every collapsed group. -->
+<div class="gh" class:collapsed aria-hidden="true">
+  <span
     class="toggle"
-    tabindex="-1"
-    aria-expanded={!collapsed}
-    aria-controls="grp-{id}"
+    role="presentation"
+    data-expanded={!collapsed}
     use:tooltip={!showHint && hint ? hint : null}
     onclick={ontoggle}
   >
-    <span class="chev" aria-hidden="true"><Icon name="chevron" size={12} /></span>
-    <span class="label" id="gl-{id}">{title}</span>
-    <span class="count" aria-label="{count} port{count === 1 ? '' : 's'}">{count}</span>
+    <span class="chev"><Icon name="chevron" size={12} /></span>
+    <span class="label" id="gl-{id}">{title}<span class="sr-only">, {count} port{count === 1 ? "" : "s"}{collapsed ? ", collapsed" : ""}</span></span>
+    <span class="count">{count}</span>
     {#if showHint && hint}<span class="hint">{hint}</span>{/if}
-  </button>
+  </span>
 </div>
 
 <style>
@@ -49,7 +50,6 @@
     background: transparent; color: var(--text-2); cursor: pointer; min-width: 0; max-width: 100%; transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
   }
   .toggle:hover { background: var(--row-hover); color: var(--text); }
-  .toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
   .chev { display: inline-grid; place-items: center; width: 16px; color: var(--faint); transform: rotate(90deg); transition: transform var(--dur-2) var(--ease); }
   .collapsed .chev { transform: none; }
   .label { font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); font-weight: var(--fw-medium); text-transform: uppercase; white-space: nowrap; }
