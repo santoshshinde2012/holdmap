@@ -222,7 +222,7 @@ Options:
       --color <COLOR>      When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible
                            values: auto, always, never]
       --no-docker          Don't query Docker/Podman/OrbStack/Colima
-  -h, --help               Print help
+  -h, --help               Print help (see more with '--help')
 ```
 
 ## holdmap kill
@@ -252,7 +252,7 @@ Options:
       --color <COLOR>      When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible
                            values: auto, always, never]
       --no-docker          Don't query Docker/Podman/OrbStack/Colima
-  -h, --help               Print help
+  -h, --help               Print help (see more with '--help')
 ```
 
 ## holdmap free-port
@@ -354,8 +354,9 @@ Arguments:
 
 Options:
   -w, --wide           Show full agent details, including processes and redacted command lines
-      --capabilities   Inspect bounded local MCP configuration and installed skill locations; no
-                       tool calls
+      --capabilities   Opt-in inventory: MCP servers, skills, built-in tools, permission rules and
+                       instruction files. Env/header names only, never values; never runs or
+                       connects to MCP servers
       --flow           Show observed process, listener and TCP relationships; no call or payload
                        inference
       --stop-ports     Stop the unprotected ports each matching agent started (dev servers and

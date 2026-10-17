@@ -80,8 +80,14 @@ enum Command {
     #[command(visible_alias = "why")]
     Explain(PortArgs),
     /// Gracefully stop whatever holds a port (SIGTERM → SIGKILL), then verify it is free.
+    ///
+    /// Shows the stop plan and asks before signalling anything (`--dry-run` only shows it).
+    /// Protected and operating-system processes are refused; `--allow-protected` permits
+    /// soft-protected ones.
     Stop(StopArgs),
     /// Like `stop --force`: kill immediately (SIGKILL / TerminateProcess).
+    ///
+    /// Skips the graceful SIGTERM only: the plan, the confirmation and protection still apply.
     Kill(StopArgs),
     /// Print a free TCP port.
     FreePort(FreePortArgs),
