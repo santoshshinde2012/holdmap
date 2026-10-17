@@ -3,6 +3,7 @@
 // configuration inventory; missing data stays null (shown as "scanning"), never zero.
 import { accessHeadline } from "./agents";
 import { configSummary, isUnpinned, launchLine, riskySettings, type ConfigSummary } from "./agent-config";
+import { uptime } from "./format";
 import type { AccessLevel, Agent, AgentPort, AgentsReport, PortEntry } from "./types";
 
 export interface Overview {
@@ -19,8 +20,13 @@ export interface Overview {
 
 export type AttentionTarget = { view: "agents"; agentId: string } | { view: "list"; entryId: string };
 
+/** A stop to review from the attention list; it always opens the plan first, never stops directly. */
+export type AttentionStop = { kind: "entry"; entryId: string } | { kind: "agent"; agentId: string };
+
 export interface AttentionItem {
   id: string;
+  /** Present when stopping is the usual fix; the app shows the stop plan before anything happens. */
+  stop?: AttentionStop;
   rule: "exposed" | "root" | "elevated" | "settings" | "unpinned" | "exposed-port";
   severity: "high" | "medium";
   title: string;
@@ -68,7 +74,7 @@ function agentItems(agent: Agent): AttentionItem[] {
   const open = agent.ports.filter((p) => p.exposure === "all_interfaces");
   if (open.length) {
     const ports = open.map((p) => `:${p.port}`).join(", ");
-    items.push({ id: `exposed:${agent.id}`, rule: "exposed", severity: "high", title: `${agent.name} is listening on all interfaces`, detail: `${ports} can be reached from other machines on your network.`, target });
+    items.push({ id: `exposed:${agent.id}`, rule: "exposed", severity: "high", stop: { kind: "agent", agentId: agent.id }, title: `${agent.name} is listening on all interfaces`, detail: `${ports} can be reached from other machines on your network.`, target });
   }
   const head = accessHeadline(agent);
   if (agent.access.root) items.push({ id: `root:${agent.id}`, rule: "root", severity: "high", title: `${agent.name} runs as root`, detail: "Everything it starts gets administrator rights.", target });
@@ -92,7 +98,22 @@ export function attention(entries: PortEntry[] | null, report: AgentsReport | nu
   const items = agents.flatMap(agentItems);
   for (const e of entries ?? []) {
     if (e.exposure !== "all_interfaces" || !e.is_dev || owned.has(e.id)) continue;
-    items.push({ id: `exposed-port:${e.id}`, rule: "exposed-port", severity: "medium", title: `${e.label} on :${e.port} is open to the network`, detail: "Dev servers usually only need localhost.", target: { view: "list", entryId: e.id } });
+    items.push({ id: `exposed-port:${e.id}`, rule: "exposed-port", severity: "medium", stop: { kind: "entry", entryId: e.id }, title: `${e.label} on :${e.port} is open to the network`, detail: "Dev servers usually only need localhost.", target: { view: "list", entryId: e.id } });
   }
   return items.sort((a, b) => (a.severity === b.severity ? a.title.localeCompare(b.title) : a.severity === "high" ? -1 : 1));
+}
+
+export const ACCESS_LABEL: Record<AccessLevel, string> = { restricted: "Restricted", standard: "Standard", elevated: "Elevated", unknown: "Unknown" };
+
+export interface ServiceRow { id: string; port: number; name: string; detail: string; exposed: boolean }
+
+/** Dev servers for the overview rail, lowest port first. */
+export function services(entries: PortEntry[] | null, nowMs = Date.now()): ServiceRow[] {
+  return (entries ?? []).filter((e) => e.is_dev).sort((a, b) => a.port - b.port).map((e) => ({
+    id: e.id,
+    port: e.port,
+    name: e.project?.name ?? e.framework?.name ?? e.label,
+    detail: [e.framework?.name && e.project ? e.framework.name : null, e.pid ? `PID ${e.pid}` : null, uptime(e, nowMs) ? `up ${uptime(e, nowMs)}` : null].filter(Boolean).join(" · "),
+    exposed: e.exposure === "all_interfaces",
+  }));
 }

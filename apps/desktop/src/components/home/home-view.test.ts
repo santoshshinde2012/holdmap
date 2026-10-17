@@ -16,33 +16,50 @@ afterEach(cleanup);
 const props = (over: Record<string, unknown> = {}) => ({ entries: MOCK_SNAPSHOT.entries, report: mockAgents(undefined, true), onopenagent: vi.fn(), onopenentry: vi.fn(), onview: vi.fn(), ...over });
 
 describe("HomeView", () => {
-  it("opens an agent, its configuration and its ports in one click", async () => {
+  it("opens an agent and its ports in one click, and expands its MCP servers inline", async () => {
     const p = props();
     const view = render(HomeView, p);
-    const agent = p.report.agents[0];
-    await fireEvent.click(view.getByRole("button", { name: new RegExp(`^${agent.name},`) }));
+    const agent = p.report.agents.find((a) => a.product === "cursor")!;
+    await fireEvent.click(view.getByRole("button", { name: /^Cursor,/ }));
     expect(p.onopenagent).toHaveBeenCalledWith(agent.id, "overview");
-    await fireEvent.click(view.getAllByRole("button", { name: /^MCP servers:/ })[0]);
-    expect(p.onopenagent).toHaveBeenLastCalledWith(expect.any(String), "capabilities");
     const port = agent.ports[0];
     await fireEvent.click(view.getAllByRole("button", { name: new RegExp(`^Port ${port.port}`) })[0]);
     expect(p.onopenentry).toHaveBeenCalledWith(port.entry_id);
+    expect(view.queryByText("legacy-browser")).toBeNull();
+    await fireEvent.click(view.getByRole("button", { name: /^MCP servers: 1 running of 3/ }));
+    expect(view.getByText("legacy-browser")).toBeTruthy();
+    expect(view.getByRole("button", { name: "Hide Cursor MCP servers" }).getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("expands and collapses the focused agent with the arrow keys", async () => {
+    const view = render(HomeView, props());
+    const name = view.getByRole("button", { name: /^Claude Code,/ });
+    await fireEvent.keyDown(name, { key: "ArrowRight" });
+    expect(view.getByRole("button", { name: "Hide Claude Code MCP servers" })).toBeTruthy();
+    await fireEvent.keyDown(name, { key: "ArrowLeft" });
+    expect(view.getByRole("button", { name: "Show Claude Code MCP servers" })).toBeTruthy();
   });
 
   it("says scanning instead of showing zeros or dashes before the first scan", () => {
     const view = render(HomeView, props({ entries: null, report: null }));
     expect(view.getAllByText("scanning…").length).toBeGreaterThan(0);
-    expect(view.queryByText("—")).toBeNull();
-    expect(view.queryByRole("button", { name: /listening/ })).toBeNull();
+    expect(view.container.textContent).not.toContain("—");
+    expect(view.queryByRole("button", { name: /listening ports$/ })).toBeNull();
     expect(view.getByText("Waiting for the first scan…")).toBeTruthy();
   });
 
-  it("makes every summary number open its view and counts running MCP servers", async () => {
+  it("makes every summary figure open its view and counts running MCP servers", async () => {
     const p = props();
     const view = render(HomeView, p);
-    await fireEvent.click(view.getByRole("button", { name: /listening$/ }));
+    await fireEvent.click(view.getByRole("button", { name: /listening ports$/ }));
     expect(p.onview).toHaveBeenCalledWith("list");
-    expect(view.getByRole("button", { name: /MCP running$/ }).textContent).toMatch(/^1\/\d+ MCP running$/);
+    expect(view.getByRole("button", { name: /^1 of \d+ MCP running$/ })).toBeTruthy();
+    expect(view.container.textContent).not.toContain("—");
+  });
+
+  it("explains products whose configuration isn't supported instead of 'not read'", () => {
+    const view = render(HomeView, props());
+    expect(view.getAllByText("Not supported")[0].getAttribute("title")).toMatch(/not supported for Docker Desktop/);
   });
 
   it("offers the inventory opt-in only while configuration isn't read", async () => {
@@ -50,16 +67,28 @@ describe("HomeView", () => {
     const off = render(HomeView, props({ report: mockAgents(), oninventory }));
     await fireEvent.click(off.getByRole("button", { name: "Turn on" }));
     expect(oninventory).toHaveBeenCalled();
+    expect(off.getAllByRole("button", { name: "Read config" }).length).toBeGreaterThan(0);
     cleanup();
     const on = render(HomeView, props({ report: mockAgents(), oninventory, inventory: true }));
     expect(on.queryByRole("button", { name: "Turn on" })).toBeNull();
   });
 
-  it("lists recent changes with relative times and moves between rows with j/k", async () => {
+  it("reviews a stop plan from attention without stopping anything itself", async () => {
+    const onstopagent = vi.fn();
+    const onstopentry = vi.fn();
+    const view = render(HomeView, props({ onstopagent, onstopentry }));
+    const buttons = view.getAllByRole("button", { name: "Review stop plan" });
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const b of buttons) await fireEvent.click(b);
+    expect(onstopagent.mock.calls.length + onstopentry.mock.calls.length).toBe(buttons.length);
+  });
+
+  it("lists activity with relative times and a watching baseline, and moves between rows with j/k", async () => {
     const changes: ChangeEvent[] = [{ id: "c1", at: 1_000, kind: "port_opened", title: ":5173 opened", detail: "web · PID 1", target: { view: "list", entryId: "x" } }];
-    const view = render(HomeView, props({ changes, now: 1_000 + 4 * 60_000 }));
+    const view = render(HomeView, props({ changes, now: 1_000 + 4 * 60_000, since: 1_000 }));
     expect(view.getByText(":5173 opened")).toBeTruthy();
     expect(view.getByText("4m ago")).toBeTruthy();
+    expect(view.getByText(/^Watching since/)).toBeTruthy();
     const region = view.getByRole("region", { name: "Overview" });
     await fireEvent.keyDown(region, { key: "j" });
     const first = document.activeElement as HTMLElement;

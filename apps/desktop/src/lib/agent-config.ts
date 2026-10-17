@@ -72,3 +72,17 @@ export function riskySettings(agent: Agent): { setting: ConfigSetting; why: stri
 }
 
 export const DECISION_LABEL = { allow: "Allowed", ask: "Asks first", deny: "Denied" } as const;
+
+/** Whether an agent's configuration was read, can't be read for its product, or is off. */
+export type ConfigStatus =
+  | { kind: "read"; summary: ConfigSummary }
+  | { kind: "unsupported"; reason: string }
+  | { kind: "off" };
+
+export function configStatus(agent: Agent): ConfigStatus {
+  const summary = configSummary(agent);
+  if (summary) return { kind: "read", summary };
+  const c = agent.capabilities;
+  if (c && !c.inspected) return { kind: "unsupported", reason: c.limits[0] ?? `holdmap doesn't read ${agent.name}'s configuration.` };
+  return { kind: "off" };
+}

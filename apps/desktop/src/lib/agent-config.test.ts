@@ -50,3 +50,15 @@ describe("agent configuration view model", () => {
     expect(riskySettings(a).map((r) => r.why)).toEqual(["runs without a sandbox"]);
   });
 });
+
+describe("configStatus", () => {
+  it("separates read, unsupported and turned off", async () => {
+    const { configStatus } = await import("./agent-config");
+    const { mockAgents } = await import("./mock");
+    const on = mockAgents(undefined, true).agents;
+    expect(configStatus(on.find((a) => a.product === "cursor")!).kind).toBe("read");
+    const docker = configStatus(on.find((a) => a.product === "docker-desktop")!);
+    expect(docker).toEqual({ kind: "unsupported", reason: expect.stringContaining("not supported") });
+    expect(configStatus(mockAgents().agents[0]).kind).toBe("off");
+  });
+});

@@ -55,6 +55,7 @@
   let snapshot = $state.raw<Snapshot | null>(null);
   /** Overview "Recent changes": observed by this window between scans, plus saved stops. */
   let changes = $state.raw<ChangeEvent[]>([]);
+  let watchingSince = $state<number | null>(null);
   let error = $state<string | null>(null);
   let refreshing = $state(false);
   /** Only a refresh the user asked for spins the button; background scans stay quiet. */
@@ -314,6 +315,7 @@
     if (snapshot && next.taken_at_ms < snapshot.taken_at_ms) return;
     {
       const s = share(snapshot, next);
+      watchingSince ??= s.taken_at_ms;
       const opened = diffPorts(snapshot?.entries ?? null, s.entries, s.taken_at_ms);
       if (opened.length) changes = mergeChanges(changes, opened);
       snapshot = s;
@@ -1514,7 +1516,8 @@
         {/if}
       </div>
     {:else if view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} agentsLoading={agentsRefreshing} {changes} inventory={inventoryOn} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} onopenentry={openEntryById} onview={(v) => (view = v)} oninventory={enableInventory} />
+      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} agentsLoading={agentsRefreshing} {changes} inventory={inventoryOn} now={snapshot?.taken_at_ms ?? Date.now()} since={watchingSince} onopenagent={openAgent}
+        onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (view = v)} oninventory={enableInventory} />
     {:else if view === "agents"}
       <div class="graph-wrap agents-wrap">
         {#if AgentsView}

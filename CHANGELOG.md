@@ -10,9 +10,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
-- **Home** overview in the desktop app: a clickable summary line, one dense row per running
-  agent (projects, ports, MCP running/configured, skills, rules, posture), **Needs attention**
-  and **Recent changes**. Keyboard: j/k or ↑/↓. Unknown figures read "scanning…", not zero.
+- **Home** overview in the desktop app: a summary header where every figure opens its view;
+  **Needs attention** with severity, the full message, **Open** and **Review stop plan**; an
+  aligned agents table (projects, ports, MCP, skills and rules, access) whose rows expand to
+  show MCP servers; and an **Activity** and **Dev servers** rail. Keyboard: j/k or ↑/↓, →/←
+  to expand. Unknown figures read "scanning…", not zero.
 - Agent inventory now shows how each MCP server launches (runner, package, pinned or not),
   its remote host, env/header **names**, and whether it is running in that agent's processes;
   plus permission rules, safety settings, instruction files and documented built-in tools.

@@ -77,3 +77,21 @@ describe("configuration rules", () => {
     expect(agentRow(report.agents[0]).config).toBeNull();
   });
 });
+
+describe("overview rail and actions", () => {
+  it("lists dev servers lowest port first and keeps exposure", async () => {
+    const { services } = await import("./home");
+    const rows = services(entries);
+    expect(rows.map((r) => r.port)).toEqual(entries.filter((e) => e.is_dev).map((e) => e.port).sort((a, b) => a - b));
+    expect(rows.some((r) => r.exposed)).toBe(entries.some((e) => e.is_dev && e.exposure === "all_interfaces"));
+    expect(services(null)).toEqual([]);
+  });
+
+  it("offers a stop plan only where stopping is the usual fix", () => {
+    const items = attention(entries, mockAgents(undefined, true));
+    for (const i of items) {
+      if (i.rule === "exposed" || i.rule === "exposed-port") expect(i.stop).toBeTruthy();
+      else expect(i.stop).toBeUndefined();
+    }
+  });
+});
