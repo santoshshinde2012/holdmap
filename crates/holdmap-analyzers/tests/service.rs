@@ -210,8 +210,12 @@ fn report(skill_dir: &Path) -> AgentsReport {
 }
 
 fn assert_no_secrets(label: &str, text: &str) {
-    for secret in SECRETS {
-        assert!(!text.contains(secret), "{label} leaked {secret:?}:\n{text}");
+    // Report only the corpus index: never echo the fake secret or the text that held it.
+    for (index, secret) in SECRETS.iter().enumerate() {
+        assert!(
+            !text.contains(secret),
+            "{label} leaked corpus entry #{index}"
+        );
     }
 }
 
