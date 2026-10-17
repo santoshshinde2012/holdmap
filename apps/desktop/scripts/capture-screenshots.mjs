@@ -472,11 +472,15 @@ for (const theme of ["dark", "light"]) {
       name: `hero-poster-${variant}-${theme}.png`, theme, output: join(siteAssets, "hero"),
       viewport: mobile ? { width: 400, height: 560 } : { width: 1152, height: 720 },
       // Frame 0 of the hero tour (site/scripts/record-hero.mjs): Home in its Cards layout.
-      deviceScaleFactor: mobile ? 2.625 : 1.5, pane: "460", prefs: { view: "home", "home.layout": "cards" },
+      deviceScaleFactor: mobile ? 2.625 : 1.5, pane: "460",
       async prepare(page) {
         if (mobile) await page.addStyleTag({ content: ".app.mac .titlebar{padding-left:16px!important}" });
-        await expect(page.locator("#home-overview")).toBeVisible();
-        await expect(page.getByRole("radio", { name: "Cards", exact: true })).toBeChecked();
+        // Like the live demo the tour records, without the opt-in MCP inventory.
+        await page.getByRole("radio", { name: /^Home/ }).click();
+        const cards = page.getByRole("radiogroup", { name: "Home layout", exact: true }).getByRole("radio", { name: /^Cards/ });
+        await cards.click();
+        await expect(cards).toBeChecked();
+        await expect(page.getByRole("article", { name: "Cursor", exact: true })).toBeVisible();
       },
     });
   }
