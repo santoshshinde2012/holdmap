@@ -2052,7 +2052,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "clap_mangen",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "holdmap-activity",
  "holdmap-core",
  "holdmap-mcp",
@@ -2070,7 +2070,7 @@ dependencies = [
 name = "holdmap-activity"
 version = "0.9.0"
 dependencies = [
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "httparse",
  "humantime",
  "serde",
