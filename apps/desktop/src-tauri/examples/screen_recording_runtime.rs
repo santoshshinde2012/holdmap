@@ -215,7 +215,7 @@ mod fixture {
             filename.to_owned(),
             serde_json::json!({
                 "bytes": bytes.len(),
-                "sha256": format!("{:x}", Sha256::digest(bytes)),
+                "sha256": hex::encode(Sha256::digest(bytes)),
             }),
         );
         Ok(Some(path.to_string_lossy().into_owned()))

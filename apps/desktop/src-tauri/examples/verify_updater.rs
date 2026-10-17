@@ -89,7 +89,7 @@ fn verify_artifact(
     verifier.finalize()?;
     // The comment is authenticated only after both minisign signatures pass.
     signed_version(&signature, version)?;
-    Ok(format!("{:x}", digest.finalize()))
+    Ok(hex::encode(digest.finalize()))
 }
 
 fn installer(name: &str) -> Option<(&'static str, u8)> {
@@ -150,7 +150,7 @@ fn verify_manifest(input: &Path, matrix: &str, version: &str, key: &PublicKey) -
             return Err(invalid("updater artifact belongs to another platform"));
         }
         let signature_bytes = read_small(Path::new(&signed.path), 16 * 1024)?;
-        if format!("{:x}", Sha256::digest(&signature_bytes)) != signed.digest {
+        if hex::encode(Sha256::digest(&signature_bytes)) != signed.digest {
             return Err(invalid("signature digest differs from collected metadata"));
         }
         let signature = std::str::from_utf8(&signature_bytes)?.trim().to_owned();
@@ -229,7 +229,7 @@ mod tests {
         std::fs::write(&artifact, PAYLOAD).unwrap();
         assert_eq!(
             verify_artifact(&artifact, SIGNATURE, &key(), "0.5.0").unwrap(),
-            format!("{:x}", Sha256::digest(PAYLOAD))
+            hex::encode(Sha256::digest(PAYLOAD))
         );
         assert!(verify_artifact(&artifact, SIGNATURE, &key(), "0.5.1").is_err());
         std::fs::write(&artifact, b"tampered installer").unwrap();
@@ -301,8 +301,8 @@ mod tests {
             std::fs::write(&signature, SIGNATURE).unwrap();
             let input = directory.path().join("assets.json");
             let mut assets = serde_json::json!([
-                {"name":name,"path":artifact,"digest":format!("{:x}",Sha256::digest(PAYLOAD))},
-                {"name":format!("{name}.sig"),"path":signature,"digest":format!("{:x}",Sha256::digest(SIGNATURE))}
+                {"name":name,"path":artifact,"digest":hex::encode(Sha256::digest(PAYLOAD))},
+                {"name":format!("{name}.sig"),"path":signature,"digest":hex::encode(Sha256::digest(SIGNATURE))}
             ]);
             std::fs::write(&input, serde_json::to_vec(&assets).unwrap()).unwrap();
             let verified = verify_manifest(&input, matrix, "0.5.0", &key()).unwrap();
@@ -340,7 +340,7 @@ mod tests {
                 ] {
                     let path = directory.path().join(&name);
                     std::fs::write(&path, bytes).unwrap();
-                    assets.push(serde_json::json!({"name":name,"path":path,"digest":format!("{:x}",Sha256::digest(bytes))}));
+                    assets.push(serde_json::json!({"name":name,"path":path,"digest":hex::encode(Sha256::digest(bytes))}));
                 }
             }
             let input = directory.path().join("assets.json");

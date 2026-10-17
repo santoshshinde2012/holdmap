@@ -233,7 +233,7 @@ pub fn fingerprint(
 
 /// Lowercase hex.
 pub fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    hex::encode(bytes)
 }
 
 /// Mask secrets, drop control characters, collapse whitespace and cap at `max` characters.

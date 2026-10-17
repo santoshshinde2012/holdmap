@@ -143,7 +143,8 @@ the full Cargo workspace, and fail on known advisories at every severity. Gitlea
 full fetched Git history and current source with redacted findings. CodeQL checks Rust,
 JavaScript/TypeScript, Swift, Python and GitHub Actions. Swift analysis compiles the production
 native capture adapter on macOS without running it. A daily workflow checks newly published
-dependency advisories; Dependabot maintains desktop, website, Rust and workflow updates.
+dependency advisories; Dependabot maintains desktop, website, Rust and workflow updates as one
+weekly grouped pull request (`all-dependencies` in `.github/dependabot.yml`).
 Repository administrators should enable Dependabot alerts and security updates in GitHub's
 security settings; those settings are separate from the committed update configuration.
 
