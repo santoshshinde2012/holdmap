@@ -31,8 +31,10 @@ pub mod tools;
 
 pub use builder::AgentsBuilder;
 pub use capabilities::{
-    AgentCapabilities, CapabilityDiscovery, CapabilityScope, HomeCapabilities, McpServerCapability,
-    McpTransport, NoCapabilities, SkillCapability,
+    builtin_tools, AgentCapabilities, CapabilityDiscovery, CapabilityScope, ConfigSetting,
+    HomeCapabilities, InstructionFile, InstructionKind, McpLaunch, McpRunState, McpRunner,
+    McpRuntime, McpServerCapability, McpTransport, NoCapabilities, RuleDecision, SkillCapability,
+    ToolRule,
 };
 pub use catalog::{identify, AgentDetector, AgentKind, AgentProduct, CatalogDetector, CATALOG};
 pub use flow::{

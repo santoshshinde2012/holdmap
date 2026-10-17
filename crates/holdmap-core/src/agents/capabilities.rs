@@ -1,6 +1,10 @@
 //! Opt-in, bounded inventory of configuration aliases and skill file locations.
 //!
-//! No command, URL, environment/header value or skill instructions are exported.
+//! Exported: aliases, transports, runner kind with the package/image/executable name and
+//! whether it is pinned, the remote host, environment/header *names*, permission rules,
+//! a few enumerated settings, and instruction-file names with frontmatter descriptions.
+//! Never exported: arguments, environment/header values, URL paths or queries, prompts,
+//! skill or rule bodies, transcripts or credentials.
 //! Inventory is not evidence that a client loaded a definition or invoked a capability.
 
 use super::{access, Evidence};
@@ -11,8 +15,19 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, Instant};
 
+mod builtin;
 mod frontmatter;
+mod instructions;
+mod launch;
+mod policy;
 mod reader;
+mod runtime;
+
+pub use builtin::builtin_tools;
+pub use instructions::{InstructionFile, InstructionKind};
+pub use launch::{McpLaunch, McpRunner};
+pub use policy::{ConfigSetting, RuleDecision, ToolRule};
+pub use runtime::{match_running, McpRunState, McpRuntime};
 
 /// Distinct agent contexts inspected per report; further contexts remain unknown.
 pub const MAX_CAPABILITY_CONTEXTS: usize = 16;
@@ -93,6 +108,31 @@ pub struct McpServerCapability {
     pub enabled: Option<bool>,
     /// The alias was observed in configuration; its use is not established.
     pub evidence: Evidence,
+    /// What a stdio definition starts.
+    #[serde(default)]
+    pub launch: Option<McpLaunch>,
+    /// Host (and port) of a remote endpoint, without credentials, path or query.
+    #[serde(default)]
+    pub remote_host: Option<String>,
+    /// Names of configured environment variables; values are never read out.
+    #[serde(default)]
+    pub env_names: Vec<String>,
+    /// Names of configured HTTP headers; values are never read out.
+    #[serde(default)]
+    pub header_names: Vec<String>,
+    /// Whether one of the agent's processes runs it right now.
+    #[serde(default)]
+    pub runtime: McpRuntime,
+}
+
+/// Configured launch details of one server, already reduced to exportable metadata.
+struct ServerDetails {
+    transport: McpTransport,
+    enabled: Option<bool>,
+    launch: Option<McpLaunch>,
+    remote_host: Option<String>,
+    env_names: Vec<String>,
+    header_names: Vec<String>,
 }
 
 /// A skill file found in a supported directory; only bounded frontmatter metadata is retained.
@@ -128,6 +168,14 @@ pub struct AgentCapabilities {
     pub mcp_servers: Vec<McpServerCapability>,
     /// Skill file locations, separate from recorded activity.
     pub skills: Vec<SkillCapability>,
+    /// Instruction files: rules, commands, prompts, subagents and memory files.
+    pub instructions: Vec<InstructionFile>,
+    /// Configured tool permission rules (allow/ask/deny).
+    pub tool_rules: Vec<ToolRule>,
+    /// Allowlisted safety settings with documented values.
+    pub settings: Vec<ConfigSetting>,
+    /// Documented built-in tools for the product; not observed.
+    pub builtin_tools: Vec<String>,
     /// Additional observed definitions omitted by the display bound, not an unknown total.
     pub more_mcp_servers: usize,
     /// Additional observed skill files omitted by the display bound.
@@ -142,6 +190,10 @@ impl Default for AgentCapabilities {
             inspected: false,
             mcp_servers: Vec::new(),
             skills: Vec::new(),
+            instructions: Vec::new(),
+            tool_rules: Vec::new(),
+            settings: Vec::new(),
+            builtin_tools: Vec::new(),
             more_mcp_servers: 0,
             more_skills: 0,
             limits: vec!["Capability configuration and skill locations were not inspected.".into()],
@@ -328,6 +380,16 @@ impl CapabilityDiscovery for HomeCapabilities {
         for project in &projects {
             inventory.skill_location(project, CapabilityScope::Project, Some(project));
         }
+        inventory.policy_location(&self.home, CapabilityScope::User);
+        inventory.instruction_location(&self.home, CapabilityScope::User);
+        for project in &projects {
+            inventory.policy_location(project, CapabilityScope::Project);
+            inventory.instruction_location(project, CapabilityScope::Project);
+        }
+        inventory.out.builtin_tools = builtin_tools(product)
+            .iter()
+            .map(|tool| (*tool).to_owned())
+            .collect();
         inventory
             .out
             .mcp_servers
@@ -600,6 +662,7 @@ impl Inventory<'_> {
                     );
                     return;
                 };
+                self.toml_policy(&value, scope, path);
                 if let Some(servers) = value.get("mcp_servers").and_then(toml::Value::as_table) {
                     for (name, entry) in servers {
                         if !self.bounded() {
@@ -623,7 +686,12 @@ impl Inventory<'_> {
                             _ => McpTransport::Unknown,
                         };
                         let enabled = entry.get("enabled").and_then(toml::Value::as_bool);
-                        self.server(name, path, scope, project, transport, enabled);
+                        let details = ServerDetails {
+                            transport,
+                            enabled,
+                            ..toml_details(entry)
+                        };
+                        self.server(name, path, scope, project, details);
                     }
                 }
             }
@@ -649,6 +717,9 @@ impl Inventory<'_> {
                 };
                 if let Some(servers) = servers {
                     self.json_servers(servers, path, scope, project, format);
+                }
+                if self.product == "gemini" {
+                    self.json_policy(&value, scope, path);
                 }
                 // Parse the account file once and project only exact observed project aliases.
                 // No unrelated project records or credential values survive this projection.
@@ -716,7 +787,12 @@ impl Inventory<'_> {
                     (enabled, disabled) => enabled.or(disabled),
                 },
             };
-            self.server(name, path, scope, project, transport, enabled);
+            let details = ServerDetails {
+                transport,
+                enabled,
+                ..json_details(entry)
+            };
+            self.server(name, path, scope, project, details);
         }
     }
 
@@ -726,9 +802,9 @@ impl Inventory<'_> {
         path: &Path,
         scope: CapabilityScope,
         project: Option<&Path>,
-        transport: McpTransport,
-        enabled: Option<bool>,
+        details: ServerDetails,
     ) {
+        let (transport, enabled) = (details.transport, details.enabled);
         if !safe_name(name) {
             self.out.limit(
                 "Aliases and folder names with unsupported or recognized sensitive text are omitted.",
@@ -751,6 +827,16 @@ impl Inventory<'_> {
             transport,
             enabled,
             evidence: Evidence::Observed,
+            launch: details.launch.filter(|_| transport == McpTransport::Stdio),
+            remote_host: details.remote_host.filter(|_| {
+                matches!(
+                    transport,
+                    McpTransport::Http | McpTransport::Sse | McpTransport::Unknown
+                )
+            }),
+            env_names: details.env_names,
+            header_names: details.header_names,
+            runtime: McpRuntime::default(),
         });
     }
 
@@ -843,6 +929,71 @@ enum ConfigFormat {
     JsonMcpServers,
     JsonServers,
     JsonCopilot,
+}
+
+fn json_details(entry: &serde_json::Map<String, serde_json::Value>) -> ServerDetails {
+    let text = |key: &str| entry.get(key).and_then(serde_json::Value::as_str);
+    let args: Vec<&str> = entry
+        .get("args")
+        .and_then(serde_json::Value::as_array)
+        .map(|args| args.iter().filter_map(serde_json::Value::as_str).collect())
+        .unwrap_or_default();
+    let keys = |key: &str| -> Vec<&str> {
+        entry
+            .get(key)
+            .and_then(serde_json::Value::as_object)
+            .map(|map| map.keys().map(String::as_str).collect())
+            .unwrap_or_default()
+    };
+    ServerDetails {
+        transport: McpTransport::Unknown,
+        enabled: None,
+        launch: text("command").map(|command| launch::stdio_launch(command, &args)),
+        remote_host: ["url", "httpUrl", "serverUrl"]
+            .iter()
+            .find_map(|key| text(key))
+            .and_then(launch::remote_host),
+        env_names: launch::env_names(keys("env")),
+        header_names: launch::header_names(keys("headers")),
+    }
+}
+
+fn toml_details(entry: &toml::Table) -> ServerDetails {
+    let args: Vec<&str> = entry
+        .get("args")
+        .and_then(toml::Value::as_array)
+        .map(|args| args.iter().filter_map(toml::Value::as_str).collect())
+        .unwrap_or_default();
+    let keys = |key: &str| -> Vec<&str> {
+        entry
+            .get(key)
+            .and_then(toml::Value::as_table)
+            .map(|table| table.keys().map(String::as_str).collect())
+            .unwrap_or_default()
+    };
+    let forwarded: Vec<&str> = entry
+        .get("env_vars")
+        .and_then(toml::Value::as_array)
+        .map(|names| names.iter().filter_map(toml::Value::as_str).collect())
+        .unwrap_or_default();
+    ServerDetails {
+        transport: McpTransport::Unknown,
+        enabled: None,
+        launch: entry
+            .get("command")
+            .and_then(toml::Value::as_str)
+            .map(|command| launch::stdio_launch(command, &args)),
+        remote_host: entry
+            .get("url")
+            .and_then(toml::Value::as_str)
+            .and_then(launch::remote_host),
+        env_names: launch::env_names(keys("env").into_iter().chain(forwarded)),
+        header_names: launch::header_names(
+            keys("http_headers")
+                .into_iter()
+                .chain(keys("env_http_headers")),
+        ),
+    }
 }
 
 fn json_transport(

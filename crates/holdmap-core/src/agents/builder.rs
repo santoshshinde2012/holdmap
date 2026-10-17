@@ -200,6 +200,18 @@ impl<'a> AgentsBuilder<'a> {
                     agent.capabilities.limit("Capability inventory is limited to 16 distinct agent/project contexts per report.");
                 }
             }
+            // Configured is not running: match stdio servers to the agent's own processes.
+            for agent in &mut agents {
+                let processes: Vec<_> = agent
+                    .process_ids
+                    .iter()
+                    .filter_map(|pid| t.get(*pid))
+                    .collect();
+                capabilities::match_running(
+                    &mut agent.capabilities.mcp_servers,
+                    processes.iter().copied(),
+                );
+            }
         }
 
         let mut limits = vec![
