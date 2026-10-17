@@ -66,6 +66,11 @@ const breadcrumbs = [
   </div>
 </Base>
 
+<script>
+  // Wide guide tables scroll sideways; make them focusable so keyboard users can scroll them too.
+  for (const table of document.querySelectorAll<HTMLTableElement>(".prose table")) table.tabIndex = 0;
+</script>
+
 <style>
   .docs { display: grid; grid-template-columns: 220px minmax(0, 1fr) 200px; gap: 48px; padding-block: 48px 96px; align-items: start; }
   .side, .toc { position: sticky; top: calc(var(--nav-h) + 32px); max-height: calc(100vh - var(--nav-h) - 48px); overflow-y: auto; }

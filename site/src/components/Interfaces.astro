@@ -71,7 +71,7 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
     <div class="panel" role="tabpanel" id="if-desktop" aria-labelledby="if-tab-desktop" hidden>
       <div class="text">
         <h3>A desktop and tray app</h3>
-        <p>Ports, service graphs, Computer / Footprint / Project agent maps, opt-in MCP and skill inventories, local screen recording, pins, restart history and remote hosts over SSH. Your configurable global shortcut brings it up from any app.</p>
+        <p>Home (Cards or Map), ports, service graphs, Computer / Footprint / Project agent maps, opt-in MCP and skill inventories, local screen recording, pins, restart history and remote hosts over SSH. Your configurable global shortcut brings it up from any app.</p>
         <ul class="ticks">
           <li>Agents map on <kbd>⇧</kbd><kbd>A</kbd>: zoom into a source tree, inspect access and review its service stops</li>
           <li>MCP &amp; skills shows inspected definitions and skill files; presence does not prove loading, approval or use</li>
@@ -79,7 +79,7 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
           <li>Record a screen or window with <kbd>⇧</kbd><kbd>V</kbd>; save available MP4 and GIF exports locally</li>
           <li>Review local shutdown, or schedule it and service stops. <a href={url("docs/desktop/#schedule-shutdown-or-a-service-stop")}>Desktop power guide</a></li>
         </ul>
-        <p>Version 0.9.0 adds Explore, Map and Compare for capability inventory, alongside local PNG snapshots. Tools says Catalog not reported. <a href={url("docs/agents/#mcp-and-skills")}>Capability explorer guide</a></p>
+        <p>Home shows every agent as Cards or a Map with a Timeline; click a port for Details or Stop…. <a href={url("docs/desktop/#home-and-first-open")}>Home guide</a></p>
         <a class="link-arrow" href={url("#demo")}>Try it live <Icon name="ArrowRight" size={16} /></a>
       </div>
       <figure class="visual window">
@@ -92,7 +92,7 @@ const sizes = "(max-width: 900px) calc(100vw - 40px), 640px";
       <div class="text">
         <h3>An MCP server for AI agents</h3>
         <p><code>holdmap mcp</code> gives coding assistants eleven tools for port inspection, readiness, service graphs, agent inventory and reviewed stops. Protected processes cannot be stopped.</p>
-        <p>Version 0.8.0 adds read-only <code>inspect_port</code> and <code>get_agent_flow</code>, plus opt-in MCP/skill metadata through <code>list_agents</code>. Observed relationships and configured definitions stay separate from recorded calls.</p>
+        <p>Read-only <code>inspect_port</code> and <code>get_agent_flow</code>, and <code>list_agents</code> with <code>include_capabilities</code> for each agent's MCP servers, skills and tools (env names only). Configured definitions stay separate from recorded calls.</p>
         <p>A guide resource and workflow prompts help assistants use the tools. Results label inferred tools, incomplete collection and redacted commands.</p>
         <div class="code term-window">
           <div class="code-bar"><span>~/.cursor/mcp.json</span><button type="button" class="copy" data-copy={mcpJson} aria-label="Copy the MCP configuration"><Icon name="Copy" size={14} class="i-copy" /><Icon name="Check" size={14} class="i-done" /></button></div>

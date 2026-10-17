@@ -1278,9 +1278,10 @@ flowchart TB
     CMD --> CF
   end
   subgraph UI["Svelte 5 front-end"]
-    APP["App.svelte · Presentation root<br/>Home, list, graph, agents + keyboard navigation"]
-    SHELL["components/shell/<br/>TitleBar · ViewToolbar · Notices · StatusBar"]
-    HOME["components/home/<br/>HomeView · AgentCards · MachineMap · AgentLanes · NeedsList<br/>Pure view models: lib/home.ts · agent-card.ts · machine-map.ts · agent-lanes.ts"]
+    APP["App.svelte · Presentation root<br/>wires state, views and dialogs"]
+    APPLIB["App logic (pure / runes)<br/>lib/app-prefs.svelte.ts · app-commands.ts · app-shortcuts.ts"]
+    SHELL["components/shell/<br/>TitleBar · ViewToolbar · SearchBox · Notices · StatusBar"]
+    HOME["components/home/<br/>HomeView · AgentCards · MachineMap · MapList · AgentLanes · NeedsList<br/>Pure view models: lib/home.ts · agent-card.ts · machine-map.ts · agent-lanes.ts"]
     GV["GraphView.svelte<br/>@xyflow/svelte"]
     AV["AgentsView.svelte<br/>agent cards + C4 pictures<br/>(lib/agents.ts: context / footprint / project)"]
     NODES["components/graph/<br/>ServiceNode · ClusterNode · TrafficEdge · FitOnChange"]
@@ -1297,6 +1298,7 @@ flowchart TB
     APP --> LIST --> KIT
     APP --> SHELL --> KIT
     APP --> HOME
+    APP --> APPLIB
     APP --> API
   end
   API -- "Tauri IPC" --> CMD
@@ -1308,7 +1310,7 @@ flowchart TB
   classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
   classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
   classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
-  class LIB,CMD,TR,W,SC,APP,SHELL,HOME,GV,AV,NODES,AGNODES,OTHER,LIST,KIT,API surface
+  class LIB,CMD,TR,W,SC,APP,APPLIB,SHELL,HOME,GV,AV,NODES,AGNODES,OTHER,LIST,KIT,API surface
   class LG domain
   class CF safety
   class ST data
@@ -1320,8 +1322,12 @@ flowchart TB
 state owns freshness and preference handling. View logic such as layout, filtering and ordering
 lives in pure TypeScript modules covered by Vitest. Stateful app-shell behaviour that is not
 view logic (screen recording lifecycle) lives in a controller class
-(`lib/screen-capture.svelte.ts`); `App.svelte` wires state to components and owns no markup
-beyond the main view switch and dialogs.
+(`lib/screen-capture.svelte.ts`). The app shell is split by responsibility: `AppPrefs`
+(`lib/app-prefs.svelte.ts`) owns persisted view preferences, `appCommands`
+(`lib/app-commands.ts`) builds the command palette, and `decideKey` (`lib/app-shortcuts.ts`)
+maps a key and a snapshot of app state to one intent. `App.svelte` wires state to components,
+runs intents, and owns no markup beyond the main view switch and dialogs (`SearchBox`,
+`ReviewPendingDialog`, `SettingsUnavailableDialog`).
 
 `AppState` serializes scans and shares a cache keyed by socket view and Docker collection.
 Agent, topology and explanation commands require a scan no older than one second, even when

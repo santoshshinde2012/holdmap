@@ -1,0 +1,131 @@
+---
+import { Picture } from "astro:assets";
+import type { ImageMetadata } from "astro";
+import Icon from "./Icon.astro";
+import { homePublished, repoUrl, url, version } from "../lib/site";
+import cardsDark from "../../../docs/screenshots/desktop-home-cards-dark.png";
+import cardsLight from "../../../docs/screenshots/desktop-home-cards-light.png";
+import mapDark from "../../../docs/screenshots/desktop-home-map-dark.png";
+import mapLight from "../../../docs/screenshots/desktop-home-map-light.png";
+import portDark from "../../../docs/screenshots/desktop-home-port-menu-dark.png";
+import portLight from "../../../docs/screenshots/desktop-home-port-menu-light.png";
+import planDark from "../../../docs/screenshots/desktop-home-stop-plan-dark.png";
+import planLight from "../../../docs/screenshots/desktop-home-stop-plan-light.png";
+
+// Mock-data captures from apps/desktop/scripts/capture-screenshots.mjs (1440×820 at 2x).
+type Shot = { dark: ImageMetadata; light: ImageMetadata; alt: string };
+const views: { key: string; label: string; icon: string; shot: Shot }[] = [
+  { key: "cards", label: "Cards", icon: "LayoutGrid", shot: { dark: cardsDark, light: cardsLight, alt: "Home as Cards: one card per agent with its projects, ports, MCP servers and skills, and a Needs you list beside them." } },
+  { key: "map", label: "Map", icon: "Network", shot: { dark: mapDark, light: mapLight, alt: "Home as Map: agents around this computer with their ports and MCP servers, and a Timeline of uptime, ports and MCP below." } },
+];
+// Crops (fractions of the 1440×820 capture) that keep the menu and the plan legible.
+type Crop = Shot & { x: number; y: number; w: number; h: number };
+const stops: Crop[] = [
+  { dark: portDark, light: portLight, x: 0.25, y: 0.19, w: 0.27, h: 0.44, alt: "Cursor's card on Home with the menu for port 3000 open: Details and Stop…" },
+  { dark: planDark, light: planLight, x: 0.29, y: 0.26, w: 0.42, h: 0.48, alt: "The stop plan for port 3000: SIGTERM, then SIGKILL after 5 seconds, then a check that the port is free, with Cancel and Stop." },
+];
+const ratio = 1440 / 820;
+const frame = (c: Crop) => `--fw: ${(c.w * ratio / c.h).toFixed(3)}; aspect-ratio: ${(c.w * ratio / c.h).toFixed(3)}; --iw: ${(100 / c.w).toFixed(2)}%; --ix: ${(-100 * c.x / c.w).toFixed(2)}%; --iy: ${(-100 * c.y / c.h).toFixed(2)}%`;
+const wide = "(max-width: 1180px) calc(100vw - 40px), 1100px";
+
+---
+<section id="home" class="section" aria-labelledby="home-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Home</span>
+      <h2 class="h2" id="home-title">Every agent, MCP server, skill and port. <span class="soft">In one view you control.</span></h2>
+      <p class="lede">Home shows what is running on this computer, what each agent is set up with, and what needs you.</p>
+      {!homePublished && <p class="note"><Icon name="Info" size={16} /> On main, not in a published release yet. Downloads stay on <a href={`${repoUrl}/releases/tag/v${version}`}>v{version}</a>.</p>}
+    </div>
+
+    <div class="box card">
+      <div class="tabs" role="tablist" aria-label="Home layout" data-tabs>
+        {views.map((v, i) => (
+          <button type="button" role="tab" id={`home-tab-${v.key}`} aria-controls={`home-${v.key}`} aria-selected={i === 0 ? "true" : "false"} tabindex={i === 0 ? 0 : -1}>
+            <Icon name={v.icon} size={16} /> {v.label}
+          </button>
+        ))}
+      </div>
+      {views.map((v, i) => (
+        <div class="panel" role="tabpanel" id={`home-${v.key}`} aria-labelledby={`home-tab-${v.key}`} hidden={i !== 0}>
+          {(["dark", "light"] as const).map((t) => (
+            <Picture src={v.shot[t]} formats={["avif"]} fallbackFormat="webp" widths={[720, 1100, 2200]} sizes={wide} alt={v.shot.alt} loading="lazy" pictureAttributes={{ class: `only-${t}` }} />
+          ))}
+        </div>
+      ))}
+      <ul class="facts" role="list">
+        <li><strong>Cards or Map.</strong> Toggle at the top right or press <kbd>V</kbd>; the choice is remembered.</li>
+        <li><strong>Timeline.</strong> Map adds uptime, ports and MCP over time; <kbd>j</kbd>/<kbd>k</kbd> step through it.</li>
+        <li><strong>Needs you.</strong> Open-to-network ports, conflicts and protected processes, beside both views.</li>
+      </ul>
+    </div>
+
+    <div class="split">
+      <div class="card copy">
+        <Icon name="Layers" size={20} />
+        <h3>Each agent's capabilities</h3>
+        <p>Opt in once to see each agent's MCP servers (how they launch, pinned or not, remote host, running now), skills, built-in tools, permission rules and instruction files.</p>
+        <ul class="ticks">
+          <li>Env and header <strong>names</strong> only, never values</li>
+          <li>Prompts, chats and file bodies are never read</li>
+          <li>MCP servers are never started or connected to</li>
+        </ul>
+        <p class="cmds"><code>holdmap agents --capabilities</code> · MCP <code>list_agents</code> with <code>include_capabilities</code></p>
+        <a class="link-arrow" href={url("docs/agents/#mcp-and-skills")}>Agents, tools and skills <Icon name="ArrowRight" size={16} /></a>
+      </div>
+      <div class="card copy">
+        <Icon name="ShieldCheck" size={20} />
+        <h3>Stop a port, safely</h3>
+        <p>Click any port on Home — a card chip, a map node or a timeline pin — for <strong>Details</strong> or <strong>Stop…</strong>. Stop always shows the plan first.</p>
+        <div class="stops">
+          {stops.map((c) => (
+            <div class="crop" style={frame(c)}>
+              {(["dark", "light"] as const).map((t) => (
+                <Picture src={c[t]} formats={["avif"]} fallbackFormat="webp" widths={[1440, 2880]} sizes="1440px" alt={c.alt} loading="lazy" pictureAttributes={{ class: `only-${t}` }} />
+              ))}
+            </div>
+          ))}
+        </div>
+        <a class="link-arrow" href={url("docs/desktop/#home-and-first-open")}>Desktop guide <Icon name="ArrowRight" size={16} /></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .note { display: inline-flex; align-items: center; gap: 8px; margin: 20px 0 0; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface-2); color: var(--text-2); font-size: var(--fs-ui); line-height: 20px; }
+  .note a { color: var(--text); }
+  .box { overflow: hidden; }
+  .tabs { display: flex; gap: 24px; padding: 0 32px; border-bottom: 1px solid var(--border); }
+  .tabs button { display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0; margin-bottom: -1px; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--muted); font-size: var(--fs-md); font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .tabs button:hover, .tabs button[aria-selected="true"] { color: var(--text); }
+  .tabs button[aria-selected="true"] { border-bottom-color: var(--text); }
+  .panel { background: var(--surface-2); line-height: 0; }
+  .panel[hidden] { display: none; }
+  .panel :global(img) { display: block; width: 100%; height: auto; aspect-ratio: 2880 / 1640; }
+  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin: 0; padding: 24px 32px; list-style: none; border-top: 1px solid var(--border); }
+  .facts li { color: var(--muted); font-size: var(--fs-ui); line-height: 22px; }
+  .facts strong { color: var(--text); font-weight: 600; }
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 16px; margin-top: 16px; }
+  .copy { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 28px; }
+  .copy > :global(svg) { color: var(--muted); }
+  h3 { margin: 20px 0 12px; font-size: var(--fs-lg); line-height: 28px; font-weight: 600; letter-spacing: -0.012em; }
+  .copy p { margin: 0 0 16px; font-size: var(--fs-md); line-height: 24px; color: var(--muted); }
+  .copy p strong, .ticks strong { color: var(--text); font-weight: 600; }
+  .ticks { margin: 0 0 16px; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .ticks li { position: relative; padding-left: 20px; color: var(--text-2); font-size: var(--fs-ui); line-height: 22px; }
+  .ticks li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .copy .cmds { font-size: var(--fs-ui); line-height: 28px; }
+  .stops { display: flex; gap: 12px; width: 100%; margin: 0 0 20px; }
+  .crop { position: relative; flex: var(--fw) 1 0; min-width: 0; overflow: hidden; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--surface-2); }
+  .crop :global(img) { position: absolute; left: var(--ix); top: var(--iy); width: var(--iw); max-width: none; height: auto; aspect-ratio: 2880 / 1640; }
+  .copy .link-arrow { margin-top: auto; }
+  @media (max-width: 900px) {
+    .split, .facts { grid-template-columns: minmax(0, 1fr); }
+    .stops { flex-direction: column; }
+    .crop { flex: none; }
+    .facts { gap: 12px; padding: 20px; }
+    .tabs { padding: 0 20px; }
+    .copy { padding: 24px; }
+  }
+</style>

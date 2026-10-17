@@ -344,7 +344,7 @@ const captures = [
   ...["dark", "light"].flatMap((theme) => {
     const home = { theme, viewport: { width: 1440, height: 820 }, prefs: { "agents.inventory": "1" } };
     return [
-      { ...home, name: `desktop-home-cards-${theme}.png`, prepare: (page) => openHome(page) },
+      { ...home, name: `desktop-home-cards-${theme}.png`, async prepare(page) { await openHome(page); } },
       { ...home, name: `desktop-home-map-${theme}.png`, async prepare(page) {
         const overview = await openHome(page, "Map");
         await expect(overview.getByRole("table", { name: "Agent lanes", exact: true })).toBeVisible();
@@ -355,7 +355,11 @@ const captures = [
         await menu.getByRole("menuitem", { name: "Stop…", exact: true }).click();
         await expect(page.getByRole("alertdialog").getByRole("button", { name: "Stop :3000", exact: true })).toBeVisible();
       } },
-      { ...home, name: `desktop-home-narrow-${theme}.png`, viewport: { width: 390, height: 844 }, prepare: (page) => openHome(page) },
+      { ...home, name: `desktop-home-narrow-${theme}.png`, viewport: { width: 390, height: 844 }, async prepare(page) { await openHome(page); } },
+      { ...home, name: `desktop-home-narrow-map-${theme}.png`, viewport: { width: 390, height: 844 }, async prepare(page) {
+        const overview = await openHome(page, "Map");
+        await expect(overview.getByRole("list", { name: /ports$/ }).first()).toBeVisible();
+      } },
     ];
   }),
   { name: "desktop-overview-dark.png", theme: "dark", async prepare(page) { await selectPort(page); } },
