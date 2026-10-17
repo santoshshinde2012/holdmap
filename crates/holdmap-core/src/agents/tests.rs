@@ -1165,3 +1165,47 @@ fn configured_servers_are_marked_running_only_from_the_agents_own_processes() {
     );
     assert_eq!(servers[1].runtime.state, McpRunState::NotSeen);
 }
+
+#[test]
+fn configured_agents_are_listed_only_when_asked() {
+    #[derive(Debug)]
+    struct Codex;
+    impl CapabilityDiscovery for Codex {
+        fn discover(&self, product: &str, _: &[PathBuf], _: &str) -> AgentCapabilities {
+            let mut out = AgentCapabilities {
+                inspected: true,
+                ..Default::default()
+            };
+            if product == "codex" {
+                out.skills.push(SkillCapability {
+                    id: "skill:user:x".into(),
+                    name: "x".into(),
+                    declared_name: None,
+                    description: None,
+                    scope: CapabilityScope::User,
+                    source_path: "/home/dev/.codex/skills/x/SKILL.md".into(),
+                    project_path: None,
+                    evidence: Evidence::Observed,
+                });
+            }
+            out
+        }
+    }
+    let scan = scan_of(vec![proc(99, 1, "holdmap", &["holdmap"])], vec![], "linux");
+    let build = |on: bool| {
+        agents_builder(&scan)
+            .with_home(None)
+            .with_project_detection(false)
+            .with_capabilities(&Codex)
+            .with_configured_agents(on)
+            .build()
+    };
+    assert!(build(false).configured.is_empty());
+    let report = build(true);
+    assert_eq!(report.configured.len(), 1);
+    assert_eq!(report.configured[0].product, "codex");
+    assert!(report
+        .limits
+        .iter()
+        .any(|l| l.contains("aren't running are listed from their default configuration")));
+}

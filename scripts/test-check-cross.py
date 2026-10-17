@@ -52,7 +52,8 @@ assert (root / "crates/holdmap-core/src/lib.rs").read_text() == "// uncommitted 
 if args[0] == "metadata":
     print(json.dumps({"packages": [{"name": "netstat2", "manifest_path": os.environ["HOLDMAP_TEST_NETSTAT"]}]}))
 elif args[0] == "clippy":
-    assert "holdmap-activity" in args
+    # Core is checked as a library on its own, then the other crates with all targets.
+    assert "holdmap-activity" in args or ("holdmap-core" in args and "--lib" in args)
     target = args[args.index("--target") + 1]
     if target == "aarch64-apple-darwin":
         override = args[args.index("--config") + 1]
@@ -91,7 +92,7 @@ elif args[0] == "clippy":
     def test_both_targets_use_current_source_and_preserve_existing_patches(self):
         result, calls = self.run_check()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(sum(call["args"][0] == "clippy" for call in calls), 2)
+        self.assertEqual(sum(call["args"][0] == "clippy" for call in calls), 4)
 
     def test_failed_checks_never_restore_over_the_working_checkout(self):
         for target in ["x86_64-pc-windows-gnu", "aarch64-apple-darwin"]:

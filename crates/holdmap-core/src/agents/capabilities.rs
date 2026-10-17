@@ -31,6 +31,20 @@ pub use runtime::{match_running, McpRunState, McpRuntime};
 
 /// Distinct agent contexts inspected per report; further contexts remain unknown.
 pub const MAX_CAPABILITY_CONTEXTS: usize = 16;
+
+/// Products that share one set of default configuration locations, first member inspected.
+/// Used for agents that aren't running, so each configuration is read once.
+pub const CONFIG_FAMILIES: &[&[&str]] = &[
+    &["claude-code"],
+    &["claude-desktop"],
+    &["codex", "codex-desktop"],
+    &["cursor", "cursor-agent"],
+    &["windsurf"],
+    &["gemini"],
+    &["copilot"],
+    &["copilot-cli"],
+    &["cline"],
+];
 /// Definitions of each kind retained per context.
 pub const MAX_CAPABILITIES: usize = 64;
 const MAX_PROJECTS: usize = 8;

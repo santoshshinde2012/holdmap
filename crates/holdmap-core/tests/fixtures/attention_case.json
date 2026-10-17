@@ -1,0 +1,2309 @@
+{
+ "entries": [
+  {
+   "id": "tcp:3000:43000:LISTEN",
+   "protocol": "tcp",
+   "state": "listen",
+   "addresses": [
+    "127.0.0.1",
+    "::1"
+   ],
+   "families": [
+    "v4",
+    "v6"
+   ],
+   "remote": null,
+   "exposure": "loopback",
+   "pid": 43000,
+   "pids": [
+    43000
+   ],
+   "uid": 501,
+   "user": "dev",
+   "process": {
+    "pid": 43000,
+    "ppid": 1,
+    "name": "node",
+    "exe": null,
+    "cmdline": [
+     "node",
+     "/Users/dev/code/shop-web/node_modules/.bin/next",
+     "dev"
+    ],
+    "cwd": "/Users/dev/code/shop-web",
+    "uid": 501,
+    "user": "dev",
+    "start_time": 1792257866,
+    "start_token": 1000,
+    "memory_bytes": 412000000
+   },
+   "project": {
+    "name": "shop-web",
+    "root": "/Users/dev/code/shop-web",
+    "kind": "package.json",
+    "git_branch": "feat/checkout"
+   },
+   "framework": {
+    "name": "Next.js",
+    "category": "dev_server"
+   },
+   "container": null,
+   "label": "Next.js · shop-web (feat/checkout)",
+   "is_dev": true,
+   "is_mine": true,
+   "protected": false,
+   "port": 3000,
+   "app_memory_bytes": 1180000000,
+   "helper_count": 3
+  },
+  {
+   "id": "tcp:3001:43001:LISTEN",
+   "protocol": "tcp",
+   "state": "listen",
+   "addresses": [
+    "127.0.0.1",
+    "::1"
+   ],
+   "families": [
+    "v4",
+    "v6"
+   ],
+   "remote": null,
+   "exposure": "loopback",
+   "pid": 43001,
+   "pids": [
+    43001
+   ],
+   "uid": 501,
+   "user": "dev",
+   "process": {
+    "pid": 43001,
+    "ppid": 1,
+    "name": "node",
+    "exe": null,
+    "cmdline": [
+     "node",
+     "server/index.js"
+    ],
+    "cwd": "/Users/dev/code/shop-api",
+    "uid": 501,
+    "user": "dev",
+    "start_time": 1792257986,
+    "start_token": 1001,
+    "memory_bytes": 96000000
+   },
+   "project": {
+    "name": "shop-api",
+    "root": "/Users/dev/code/shop-api",
+    "kind": "package.json",
+    "git_branch": "main"
+   },
+   "framework": {
+    "name": "Express",
+    "category": "app_server"
+   },
+   "container": null,
+   "label": "Express · shop-api (main)",
+   "is_dev": true,
+   "is_mine": true,
+   "protected": false,
+   "port": 3001
+  },
+  {
+   "id": "tcp:5173:45173:LISTEN",
+   "protocol": "tcp",
+   "state": "listen",
+   "addresses": [
+    "::1"
+   ],
+   "families": [
+    "v6"
+   ],
+   "remote": null,
+   "exposure": "loopback",
+   "pid": 45173,
+   "pids": [
+    45173
+   ],
+   "uid": 501,
+   "user": "dev",
+   "process": {
+    "pid": 45173,
+    "ppid": 1,
+    "name": "node",
+    "exe": null,
+    "cmdline": [
+     "node",
+     "node_modules/.bin/vite",
+     "dev"
+    ],
+    "cwd": "/Users/dev/code/docs",
+    "uid": 501,
+    "user": "dev",
+    "start_time": 1792264386,
+    "start_token": 1002,
+    "memory_bytes": 180000000
+   },
+   "project": {
+    "name": "docs",
+    "root": "/Users/dev/code/docs",
+    "kind": "package.json",
+    "git_branch": "main"
+   },
+   "framework": {
+    "name": "Vite",
+    "category": "dev_server"
+   },
+   "container": null,
+   "label": "Vite · docs (main)",
+   "is_dev": true,
+   "is_mine": true,
+   "protected": false,
+   "port": 5173
+  },
+  {
+   "id": "tcp:8000:48000:LISTEN",
+   "protocol": "tcp",
+   "state": "listen",
+   "addresses": [
+    "0.0.0.0"
+   ],
+   "families": [
+    "v4"
+   ],
+   "remote": null,
+   "exposure": "all_interfaces",
+   "pid": 48000,
+   "pids": [
+    48000
+   ],
+   "uid": 501,
+   "user": "dev",
+   "process": {
+    "pid": 48000,
+    "ppid": 1,
+    "name": "Python",
+    "exe": null,
+    "cmdline": [
+     "python",
+     "manage.py",
+     "runserver",
+     "0.0.0.0:8000"
+    ],
+    "cwd": "/Users/dev/code/ml-service",
+    "uid": 501,
+    "user": "dev",
+    "start_time": 1792092486,
+    "start_token": 1003,
+    "memory_bytes": 140000000
+   },
+   "project": {
+    "name": "ml-service",
+    "root": "/Users/dev/code/ml-service",
+    "kind": "manage.py",
+    "git_branch": "exp/embeddings"
+   },
+   "framework": {
+    "name": "Django",
+    "category": "dev_server"
+   },
+   "container": null,
+   "label": "Django · ml-service (exp/embeddings)",
+   "is_dev": true,
+   "is_mine": true,
+   "protected": false,
+   "port": 8000
+  }
+ ],
+ "report": {
+  "agents": [
+   {
+    "id": "agent:51200",
+    "product": "claude-code",
+    "name": "Claude Code",
+    "vendor": "Anthropic",
+    "kind": "cli",
+    "pid": 51200,
+    "process_name": "claude",
+    "command": "claude --permission-mode acceptEdits",
+    "started_at": 1792259886,
+    "parent": "agent:52000",
+    "memory_bytes": 520000000,
+    "cpu_percent": 3.4,
+    "processes": [
+     {
+      "pid": 51200,
+      "ppid": 52040,
+      "name": "claude",
+      "command": "claude --permission-mode acceptEdits",
+      "role": "agent",
+      "cwd": "/Users/dev/code/shop-api",
+      "memory_bytes": 240000000,
+      "cpu_percent": 2.2
+     },
+     {
+      "pid": 51230,
+      "ppid": 51200,
+      "name": "sandbox-exec",
+      "command": "sandbox-exec -p … npm test",
+      "role": "child",
+      "cwd": "/Users/dev/code/shop-api",
+      "memory_bytes": 3000000,
+      "cpu_percent": 0
+     },
+     {
+      "pid": 43001,
+      "ppid": 51200,
+      "name": "node",
+      "command": "node server/index.js",
+      "role": "child",
+      "cwd": "/Users/dev/code/shop-api",
+      "memory_bytes": 96000000,
+      "cpu_percent": 0.9
+     }
+    ],
+    "process_ids": [
+     51200,
+     51230,
+     43001
+    ],
+    "more_processes": 0,
+    "folders": [
+     {
+      "path": "/Users/dev/code/shop-api",
+      "label": "shop-api",
+      "project": {
+       "name": "shop-api",
+       "root": "/Users/dev/code/shop-api",
+       "kind": "package.json",
+       "git_branch": "main"
+      },
+      "source": "agent",
+      "evidence": "observed",
+      "pids": [
+       51200,
+       51230,
+       43001
+      ],
+      "privacy_area": null,
+      "note": null
+     },
+     {
+      "path": "/Users/dev/code/shop-web",
+      "label": "shop-web",
+      "project": null,
+      "source": "recent",
+      "evidence": "inferred",
+      "pids": [],
+      "privacy_area": null,
+      "note": "Project directory inferred from account-wide history; not attributed to this running instance."
+     }
+    ],
+    "more_folders": 0,
+    "tools": [
+     {
+      "pid": 51230,
+      "ppid": 51200,
+      "name": "sandbox-exec",
+      "kind": "command",
+      "command": "sandbox-exec -p … npm test",
+      "cwd": "/Users/dev/code/shop-api",
+      "evidence": "observed",
+      "ports": [],
+      "memory_bytes": 3000000,
+      "cpu_percent": 0
+     },
+     {
+      "pid": 43001,
+      "ppid": 51200,
+      "name": "Node.js",
+      "kind": "dev_server",
+      "command": "node server/index.js",
+      "cwd": "/Users/dev/code/shop-api",
+      "evidence": "observed",
+      "ports": [
+       3001
+      ],
+      "memory_bytes": 96000000,
+      "cpu_percent": 0.9
+     }
+    ],
+    "more_tools": 0,
+    "ports": [
+     {
+      "entry_id": "tcp:3001:43001:LISTEN",
+      "port": 3001,
+      "protocol": "tcp",
+      "exposure": "loopback",
+      "pid": 43001,
+      "process": "node",
+      "label": "Express · shop-api (main)",
+      "role": "dev_server",
+      "project": "shop-api",
+      "framework": "Express"
+     }
+    ],
+    "links": [
+     {
+      "id": "local:tcp:5432:45432:LISTEN",
+      "kind": "local",
+      "label": "PostgreSQL · container shop-db-1",
+      "address": "127.0.0.1:5432",
+      "port": 5432,
+      "connections": 3,
+      "entry_id": "tcp:5432:45432:LISTEN",
+      "process": "com.docker.backend",
+      "pid": 45432,
+      "service": "PostgreSQL"
+     },
+     {
+      "id": "remote:203.0.113.10:443",
+      "kind": "remote",
+      "label": "203.0.113.10:443",
+      "address": "203.0.113.10:443",
+      "port": 443,
+      "connections": 3,
+      "entry_id": null,
+      "process": null,
+      "pid": null,
+      "service": "HTTPS"
+     }
+    ],
+    "more_links": 0,
+    "access": {
+     "user": "dev",
+     "uid": 501,
+     "root": false,
+     "mine": true,
+     "facts": [
+      {
+       "topic": "user",
+       "level": "standard",
+       "summary": "Runs as you (dev): the same file access as your account.",
+       "evidence": "observed"
+      },
+      {
+       "topic": "sandbox",
+       "level": "restricted",
+       "summary": "A current child command runs inside sandbox-exec (macOS Seatbelt).",
+       "evidence": "observed"
+      },
+      {
+       "topic": "approvals",
+       "level": "standard",
+       "summary": "Started with --permission-mode acceptEdits: file edits are accepted without asking; commands still ask.",
+       "evidence": "observed"
+      },
+      {
+       "topic": "network",
+       "level": "standard",
+       "summary": "Listens on :3001 on this machine only. Talks to 1 remote host.",
+       "evidence": "observed"
+      },
+      {
+       "topic": "privacy",
+       "level": "unknown",
+       "summary": "macOS privacy grants (Full Disk Access, Files and Folders) can't be read without Full Disk Access; holdmap doesn't ask for it.",
+       "evidence": "unknown"
+      }
+     ]
+    },
+    "capabilities": {
+     "inspected": true,
+     "mcp_servers": [
+      {
+       "id": "claude:project:filesystem",
+       "name": "filesystem",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-api/.mcp.json",
+       "project_path": "/Users/dev/code/shop-api",
+       "transport": "stdio",
+       "enabled": null,
+       "evidence": "observed",
+       "launch": {
+        "runner": "npx",
+        "package": "@modelcontextprotocol/server-filesystem@2025.8.21",
+        "pinned": true
+       },
+       "env_names": [],
+       "header_names": [],
+       "runtime": {
+        "state": "not_seen",
+        "pids": []
+       }
+      },
+      {
+       "id": "claude:user:github",
+       "name": "github",
+       "scope": "user",
+       "source_path": "/Users/dev/.claude.json",
+       "project_path": null,
+       "transport": "stdio",
+       "enabled": null,
+       "evidence": "observed",
+       "launch": {
+        "runner": "npx",
+        "package": "@modelcontextprotocol/server-github",
+        "pinned": false
+       },
+       "env_names": [
+        "GITHUB_PERSONAL_ACCESS_TOKEN"
+       ],
+       "header_names": [],
+       "runtime": {
+        "state": "not_seen",
+        "pids": []
+       }
+      },
+      {
+       "id": "claude:user:linear",
+       "name": "linear",
+       "scope": "user",
+       "source_path": "/Users/dev/.claude.json",
+       "project_path": null,
+       "transport": "http",
+       "enabled": null,
+       "evidence": "observed",
+       "remote_host": "mcp.linear.app",
+       "env_names": [],
+       "header_names": [
+        "Authorization"
+       ],
+       "runtime": {
+        "state": "unknown",
+        "pids": []
+       }
+      },
+      {
+       "id": "claude:local:postgres",
+       "name": "postgres",
+       "scope": "local",
+       "source_path": "/Users/dev/.claude.json",
+       "project_path": "/Users/dev/code/shop-api",
+       "transport": "stdio",
+       "enabled": null,
+       "evidence": "observed",
+       "launch": {
+        "runner": "docker",
+        "package": "mcp/postgres:1.2",
+        "pinned": true
+       },
+       "env_names": [
+        "DATABASE_URL"
+       ],
+       "header_names": [],
+       "runtime": {
+        "state": "not_seen",
+        "pids": []
+       }
+      }
+     ],
+     "skills": [
+      {
+       "id": "claude:project:release-check",
+       "name": "release-check",
+       "description": "Check release notes, version references and packaging evidence.",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-api/.claude/skills/release-check/SKILL.md",
+       "project_path": "/Users/dev/code/shop-api",
+       "evidence": "observed"
+      }
+     ],
+     "instructions": [
+      {
+       "id": "claude:command:ship",
+       "kind": "command",
+       "name": "ship",
+       "description": "Run checks and open a pull request.",
+       "scope": "user",
+       "source_path": "/Users/dev/.claude/commands/ship.md",
+       "evidence": "observed"
+      },
+      {
+       "id": "claude:subagent:reviewer",
+       "kind": "subagent",
+       "name": "reviewer",
+       "description": "Reviews diffs for bugs and missing tests.",
+       "scope": "user",
+       "source_path": "/Users/dev/.claude/agents/reviewer.md",
+       "evidence": "observed"
+      },
+      {
+       "id": "claude:memory:claude",
+       "kind": "memory",
+       "name": "CLAUDE.md",
+       "description": null,
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-api/CLAUDE.md",
+       "evidence": "observed"
+      }
+     ],
+     "tool_rules": [
+      {
+       "rule": "Bash(npm run test:*)",
+       "decision": "allow",
+       "scope": "user",
+       "source_path": "/Users/dev/.claude/settings.json"
+      },
+      {
+       "rule": "Bash(git status)",
+       "decision": "allow",
+       "scope": "user",
+       "source_path": "/Users/dev/.claude/settings.json"
+      },
+      {
+       "rule": "WebFetch",
+       "decision": "ask",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-api/.claude/settings.json"
+      },
+      {
+       "rule": "Bash(curl:*)",
+       "decision": "deny",
+       "scope": "user",
+       "source_path": "/Users/dev/.claude/settings.json"
+      },
+      {
+       "rule": "Read(./.env)",
+       "decision": "deny",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-api/.claude/settings.json"
+      }
+     ],
+     "settings": [
+      {
+       "key": "permissions.defaultMode",
+       "value": "acceptEdits",
+       "scope": "user",
+       "source_path": "/Users/dev/.claude/settings.json"
+      },
+      {
+       "key": "permissions.defaultMode",
+       "value": "bypassPermissions",
+       "scope": "user",
+       "source_path": "/Users/dev/.claude/settings.json"
+      }
+     ],
+     "builtin_tools": [
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "MultiEdit",
+      "NotebookEdit",
+      "Read",
+      "Task",
+      "TodoWrite",
+      "WebFetch",
+      "WebSearch",
+      "Write"
+     ],
+     "more_mcp_servers": 0,
+     "more_skills": 0,
+     "limits": []
+    }
+   },
+   {
+    "id": "agent:52000",
+    "product": "cursor",
+    "name": "Cursor",
+    "vendor": "Anysphere",
+    "kind": "ide",
+    "pid": 52000,
+    "process_name": "Cursor",
+    "command": "/Applications/Cursor.app/Contents/MacOS/Cursor",
+    "started_at": 1792178886,
+    "parent": null,
+    "memory_bytes": 2400000000,
+    "cpu_percent": 6.2,
+    "processes": [
+     {
+      "pid": 52000,
+      "ppid": 1,
+      "name": "Cursor",
+      "command": "/Applications/Cursor.app/Contents/MacOS/Cursor",
+      "role": "agent",
+      "cwd": "/",
+      "memory_bytes": 410000000,
+      "cpu_percent": 1.8
+     },
+     {
+      "pid": 52011,
+      "ppid": 52000,
+      "name": "Cursor Helper (Plugin)",
+      "command": "Cursor Helper (Plugin) --type=utility",
+      "role": "helper",
+      "cwd": "/",
+      "memory_bytes": 820000000,
+      "cpu_percent": 2.1
+     },
+     {
+      "pid": 52040,
+      "ppid": 52011,
+      "name": "zsh",
+      "command": "-zsh",
+      "role": "child",
+      "cwd": "/Users/dev/code/shop-web",
+      "memory_bytes": 6000000,
+      "cpu_percent": 0
+     },
+     {
+      "pid": 43000,
+      "ppid": 52040,
+      "name": "node",
+      "command": "node node_modules/.bin/next dev",
+      "role": "child",
+      "cwd": "/Users/dev/code/shop-web",
+      "memory_bytes": 412000000,
+      "cpu_percent": 1.6
+     },
+     {
+      "pid": 52060,
+      "ppid": 52011,
+      "name": "zsh",
+      "command": "-zsh",
+      "role": "child",
+      "cwd": "/Users/dev/code/docs",
+      "memory_bytes": 6000000,
+      "cpu_percent": 0
+     },
+     {
+      "pid": 45173,
+      "ppid": 52060,
+      "name": "node",
+      "command": "node node_modules/.bin/vite dev",
+      "role": "child",
+      "cwd": "/Users/dev/code/docs",
+      "memory_bytes": 180000000,
+      "cpu_percent": 0.7
+     },
+     {
+      "pid": 52070,
+      "ppid": 52011,
+      "name": "node",
+      "command": "node @modelcontextprotocol/server-filesystem",
+      "role": "child",
+      "cwd": "/Users/dev/code/shop-web",
+      "memory_bytes": 32000000,
+      "cpu_percent": 0.1
+     }
+    ],
+    "process_ids": [
+     52000,
+     52011,
+     52040,
+     43000,
+     52060,
+     45173,
+     52070,
+     52080,
+     52081,
+     52082,
+     52083,
+     52084,
+     52085,
+     52086,
+     52087
+    ],
+    "more_processes": 8,
+    "folders": [
+     {
+      "path": "/Users/dev/code/shop-web",
+      "label": "shop-web",
+      "project": {
+       "name": "shop-web",
+       "root": "/Users/dev/code/shop-web",
+       "kind": "package.json",
+       "git_branch": "feat/checkout"
+      },
+      "source": "child",
+      "evidence": "observed",
+      "pids": [
+       52040,
+       43000
+      ],
+      "privacy_area": null,
+      "note": null
+     },
+     {
+      "path": "/Users/dev/code/docs",
+      "label": "docs",
+      "project": {
+       "name": "docs",
+       "root": "/Users/dev/code/docs",
+       "kind": "package.json",
+       "git_branch": "main"
+      },
+      "source": "child",
+      "evidence": "observed",
+      "pids": [
+       52060,
+       45173
+      ],
+      "privacy_area": null,
+      "note": null
+     },
+     {
+      "path": "/Users/dev/code/design-system",
+      "label": "design-system",
+      "project": null,
+      "source": "recent",
+      "evidence": "observed",
+      "pids": [],
+      "privacy_area": null,
+      "note": "Editor window history; account-wide history, not attributed to this running instance."
+     }
+    ],
+    "more_folders": 0,
+    "tools": [
+     {
+      "pid": 52070,
+      "ppid": 52011,
+      "name": "Filesystem MCP",
+      "kind": "mcp_server",
+      "command": "node @modelcontextprotocol/server-filesystem",
+      "cwd": "/Users/dev/code/shop-web",
+      "evidence": "inferred",
+      "ports": [],
+      "memory_bytes": 32000000,
+      "cpu_percent": 0.1
+     },
+     {
+      "pid": 43000,
+      "ppid": 52040,
+      "name": "Next.js",
+      "kind": "dev_server",
+      "command": "node node_modules/.bin/next dev",
+      "cwd": "/Users/dev/code/shop-web",
+      "evidence": "observed",
+      "ports": [
+       3000
+      ],
+      "memory_bytes": 412000000,
+      "cpu_percent": 1.6
+     },
+     {
+      "pid": 45173,
+      "ppid": 52060,
+      "name": "Vite",
+      "kind": "dev_server",
+      "command": "node node_modules/.bin/vite dev",
+      "cwd": "/Users/dev/code/docs",
+      "evidence": "observed",
+      "ports": [
+       5173
+      ],
+      "memory_bytes": 180000000,
+      "cpu_percent": 0.7
+     },
+     {
+      "pid": 52040,
+      "ppid": 52011,
+      "name": "zsh",
+      "kind": "shell",
+      "command": "-zsh",
+      "cwd": "/Users/dev/code/shop-web",
+      "evidence": "observed",
+      "ports": [],
+      "memory_bytes": 6000000,
+      "cpu_percent": 0
+     },
+     {
+      "pid": 52060,
+      "ppid": 52011,
+      "name": "zsh",
+      "kind": "shell",
+      "command": "-zsh",
+      "cwd": "/Users/dev/code/docs",
+      "evidence": "observed",
+      "ports": [],
+      "memory_bytes": 6000000,
+      "cpu_percent": 0
+     }
+    ],
+    "more_tools": 0,
+    "ports": [
+     {
+      "entry_id": "tcp:3000:43000:LISTEN",
+      "port": 3000,
+      "protocol": "tcp",
+      "exposure": "loopback",
+      "pid": 43000,
+      "process": "node",
+      "label": "Next.js · shop-web (feat/checkout)",
+      "role": "dev_server",
+      "project": "shop-web",
+      "framework": "Next.js"
+     },
+     {
+      "entry_id": "tcp:5173:45173:LISTEN",
+      "port": 5173,
+      "protocol": "tcp",
+      "exposure": "loopback",
+      "pid": 45173,
+      "process": "node",
+      "label": "Vite · docs (main)",
+      "role": "dev_server",
+      "project": "docs",
+      "framework": "Vite"
+     }
+    ],
+    "links": [
+     {
+      "id": "local:tcp:3001:43001:LISTEN",
+      "kind": "local",
+      "label": "Express · shop-api (main)",
+      "address": "127.0.0.1:3001",
+      "port": 3001,
+      "connections": 2,
+      "entry_id": "tcp:3001:43001:LISTEN",
+      "process": "node",
+      "pid": 43001,
+      "service": null
+     },
+     {
+      "id": "remote:198.51.100.24:443",
+      "kind": "remote",
+      "label": "198.51.100.24:443",
+      "address": "198.51.100.24:443",
+      "port": 443,
+      "connections": 4,
+      "entry_id": null,
+      "process": null,
+      "pid": null,
+      "service": "HTTPS"
+     },
+     {
+      "id": "remote:203.0.113.40:443",
+      "kind": "remote",
+      "label": "203.0.113.40:443",
+      "address": "203.0.113.40:443",
+      "port": 443,
+      "connections": 1,
+      "entry_id": null,
+      "process": null,
+      "pid": null,
+      "service": "HTTPS"
+     }
+    ],
+    "more_links": 0,
+    "access": {
+     "user": "dev",
+     "uid": 501,
+     "root": false,
+     "mine": true,
+     "facts": [
+      {
+       "topic": "user",
+       "level": "standard",
+       "summary": "Runs as you (dev): the same file access as your account.",
+       "evidence": "observed"
+      },
+      {
+       "topic": "sandbox",
+       "level": "unknown",
+       "summary": "No sandbox seen right now. Its commands may still be sandboxed when they run; agent settings aren't read.",
+       "evidence": "unknown"
+      },
+      {
+       "topic": "approvals",
+       "level": "unknown",
+       "summary": "No approval flags on its command line; its own settings decide (not read).",
+       "evidence": "unknown"
+      },
+      {
+       "topic": "network",
+       "level": "standard",
+       "summary": "Listens on :3000, :5173 on this machine only. Talks to 2 remote hosts.",
+       "evidence": "observed"
+      },
+      {
+       "topic": "privacy",
+       "level": "unknown",
+       "summary": "macOS privacy grants (Full Disk Access, Files and Folders) can't be read without Full Disk Access; holdmap doesn't ask for it.",
+       "evidence": "unknown"
+      }
+     ]
+    },
+    "capabilities": {
+     "inspected": true,
+     "mcp_servers": [
+      {
+       "id": "cursor:user:github",
+       "name": "github",
+       "scope": "user",
+       "source_path": "/Users/dev/.cursor/mcp.json",
+       "project_path": null,
+       "transport": "http",
+       "enabled": true,
+       "evidence": "observed",
+       "remote_host": "api.githubcopilot.com",
+       "header_names": [
+        "Authorization"
+       ],
+       "env_names": [],
+       "runtime": {
+        "state": "unknown",
+        "pids": []
+       }
+      },
+      {
+       "id": "cursor:project:filesystem",
+       "name": "filesystem",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/.cursor/mcp.json",
+       "project_path": "/Users/dev/code/shop-web",
+       "transport": "stdio",
+       "enabled": true,
+       "evidence": "observed",
+       "launch": {
+        "runner": "npx",
+        "package": "@modelcontextprotocol/server-filesystem",
+        "pinned": false
+       },
+       "env_names": [],
+       "header_names": [],
+       "runtime": {
+        "state": "running",
+        "pids": [
+         52070
+        ]
+       }
+      },
+      {
+       "id": "cursor:project:legacy-browser",
+       "name": "legacy-browser",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/.cursor/mcp.json",
+       "project_path": "/Users/dev/code/shop-web",
+       "transport": "stdio",
+       "enabled": false,
+       "evidence": "observed",
+       "launch": {
+        "runner": "npx",
+        "package": "puppeteer-mcp-server@0.7.2",
+        "pinned": true
+       },
+       "env_names": [],
+       "header_names": [],
+       "runtime": {
+        "state": "unknown",
+        "pids": []
+       }
+      }
+     ],
+     "skills": [
+      {
+       "id": "shared:user:code-review",
+       "name": "code-review",
+       "declared_name": "code-review",
+       "description": "Review changes for correctness, regressions and maintainability.",
+       "scope": "user",
+       "source_path": "/Users/dev/.agents/skills/code-review/SKILL.md",
+       "project_path": null,
+       "evidence": "observed"
+      },
+      {
+       "id": "shared:project:frontend-checks",
+       "name": "frontend-checks",
+       "declared_name": "frontend-checks",
+       "description": "Check UI behavior, accessibility and responsive layouts before shipping.",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md",
+       "project_path": "/Users/dev/code/shop-web",
+       "evidence": "observed"
+      }
+     ],
+     "instructions": [
+      {
+       "id": "cursor:rule:react",
+       "kind": "rule",
+       "name": "react-conventions",
+       "description": "TypeScript and React conventions for the storefront.",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/.cursor/rules/react-conventions.mdc",
+       "evidence": "observed"
+      },
+      {
+       "id": "cursor:memory:agents",
+       "kind": "memory",
+       "name": "AGENTS.md",
+       "description": null,
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/AGENTS.md",
+       "evidence": "observed"
+      }
+     ],
+     "tool_rules": [],
+     "settings": [],
+     "builtin_tools": [],
+     "more_mcp_servers": 0,
+     "more_skills": 0,
+     "limits": [
+      "Configuration and skill-file presence do not establish loading, connection or invocation. Arguments, URL paths and queries, and environment or header values are not included. Only declared name/description from bounded skill frontmatter are retained; instructions are not collected or executed."
+     ]
+    }
+   },
+   {
+    "id": "agent:48000",
+    "product": "docker-desktop",
+    "name": "Docker Desktop",
+    "vendor": "Docker",
+    "kind": "tool",
+    "pid": 48000,
+    "process_name": "Docker Desktop",
+    "command": "/Applications/Docker.app/Contents/MacOS/Docker Desktop",
+    "started_at": 1792092486,
+    "parent": null,
+    "memory_bytes": 1100000000,
+    "cpu_percent": 2,
+    "processes": [
+     {
+      "pid": 48000,
+      "ppid": 1,
+      "name": "Docker Desktop",
+      "command": "/Applications/Docker.app/Contents/MacOS/Docker Desktop",
+      "role": "agent",
+      "cwd": "/",
+      "memory_bytes": 180000000,
+      "cpu_percent": 0.4
+     },
+     {
+      "pid": 48020,
+      "ppid": 48000,
+      "name": "com.docker.backend",
+      "command": "com.docker.backend",
+      "role": "helper",
+      "cwd": "/",
+      "memory_bytes": 420000000,
+      "cpu_percent": 1.1
+     }
+    ],
+    "process_ids": [
+     48000,
+     48020,
+     48030,
+     48031,
+     48032,
+     48033
+    ],
+    "more_processes": 4,
+    "folders": [],
+    "more_folders": 0,
+    "tools": [],
+    "more_tools": 0,
+    "ports": [
+     {
+      "entry_id": "tcp:5432:45432:LISTEN",
+      "port": 5432,
+      "protocol": "tcp",
+      "exposure": "all_interfaces",
+      "pid": 45432,
+      "process": "com.docker.backend",
+      "label": "PostgreSQL · container shop-db-1",
+      "role": "service",
+      "project": null,
+      "framework": "PostgreSQL"
+     },
+     {
+      "entry_id": "tcp:6379:46379:LISTEN",
+      "port": 6379,
+      "protocol": "tcp",
+      "exposure": "loopback",
+      "pid": 46379,
+      "process": "redis-server",
+      "label": "Redis",
+      "role": "service",
+      "project": null,
+      "framework": "Redis"
+     }
+    ],
+    "links": [],
+    "more_links": 0,
+    "access": {
+     "user": "dev",
+     "uid": 501,
+     "root": false,
+     "mine": true,
+     "facts": [
+      {
+       "topic": "user",
+       "level": "standard",
+       "summary": "Runs as you (dev): the same file access as your account.",
+       "evidence": "observed"
+      },
+      {
+       "topic": "sandbox",
+       "level": "unknown",
+       "summary": "No sandbox seen right now. Its commands may still be sandboxed when they run; agent settings aren't read.",
+       "evidence": "unknown"
+      },
+      {
+       "topic": "approvals",
+       "level": "unknown",
+       "summary": "No approval flags on its command line; its own settings decide (not read).",
+       "evidence": "unknown"
+      },
+      {
+       "topic": "network",
+       "level": "standard",
+       "summary": "Listens on :5432, :6379 on this machine only.",
+       "evidence": "observed"
+      },
+      {
+       "topic": "privacy",
+       "level": "unknown",
+       "summary": "macOS privacy grants (Full Disk Access, Files and Folders) can't be read without Full Disk Access; holdmap doesn't ask for it.",
+       "evidence": "unknown"
+      }
+     ]
+    },
+    "capabilities": {
+     "inspected": false,
+     "mcp_servers": [],
+     "skills": [],
+     "more_mcp_servers": 0,
+     "more_skills": 0,
+     "limits": [
+      "Capability source discovery is not supported for Docker Desktop."
+     ]
+    }
+   },
+   {
+    "id": "agent:1",
+    "product": "cursor",
+    "name": "Root Agent",
+    "vendor": "Anysphere",
+    "kind": "ide",
+    "pid": 1,
+    "process_name": "Cursor",
+    "command": "/Applications/Cursor.app/Contents/MacOS/Cursor",
+    "started_at": 1792178886,
+    "parent": null,
+    "memory_bytes": 2400000000,
+    "cpu_percent": 6.2,
+    "processes": [
+     {
+      "pid": 52000,
+      "ppid": 1,
+      "name": "Cursor",
+      "command": "/Applications/Cursor.app/Contents/MacOS/Cursor",
+      "role": "agent",
+      "cwd": "/",
+      "memory_bytes": 410000000,
+      "cpu_percent": 1.8
+     },
+     {
+      "pid": 52011,
+      "ppid": 52000,
+      "name": "Cursor Helper (Plugin)",
+      "command": "Cursor Helper (Plugin) --type=utility",
+      "role": "helper",
+      "cwd": "/",
+      "memory_bytes": 820000000,
+      "cpu_percent": 2.1
+     },
+     {
+      "pid": 52040,
+      "ppid": 52011,
+      "name": "zsh",
+      "command": "-zsh",
+      "role": "child",
+      "cwd": "/Users/dev/code/shop-web",
+      "memory_bytes": 6000000,
+      "cpu_percent": 0
+     },
+     {
+      "pid": 43000,
+      "ppid": 52040,
+      "name": "node",
+      "command": "node node_modules/.bin/next dev",
+      "role": "child",
+      "cwd": "/Users/dev/code/shop-web",
+      "memory_bytes": 412000000,
+      "cpu_percent": 1.6
+     },
+     {
+      "pid": 52060,
+      "ppid": 52011,
+      "name": "zsh",
+      "command": "-zsh",
+      "role": "child",
+      "cwd": "/Users/dev/code/docs",
+      "memory_bytes": 6000000,
+      "cpu_percent": 0
+     },
+     {
+      "pid": 45173,
+      "ppid": 52060,
+      "name": "node",
+      "command": "node node_modules/.bin/vite dev",
+      "role": "child",
+      "cwd": "/Users/dev/code/docs",
+      "memory_bytes": 180000000,
+      "cpu_percent": 0.7
+     },
+     {
+      "pid": 52070,
+      "ppid": 52011,
+      "name": "node",
+      "command": "node @modelcontextprotocol/server-filesystem",
+      "role": "child",
+      "cwd": "/Users/dev/code/shop-web",
+      "memory_bytes": 32000000,
+      "cpu_percent": 0.1
+     }
+    ],
+    "process_ids": [
+     52000,
+     52011,
+     52040,
+     43000,
+     52060,
+     45173,
+     52070,
+     52080,
+     52081,
+     52082,
+     52083,
+     52084,
+     52085,
+     52086,
+     52087
+    ],
+    "more_processes": 8,
+    "folders": [
+     {
+      "path": "/Users/dev/code/shop-web",
+      "label": "shop-web",
+      "project": {
+       "name": "shop-web",
+       "root": "/Users/dev/code/shop-web",
+       "kind": "package.json",
+       "git_branch": "feat/checkout"
+      },
+      "source": "child",
+      "evidence": "observed",
+      "pids": [
+       52040,
+       43000
+      ],
+      "privacy_area": null,
+      "note": null
+     },
+     {
+      "path": "/Users/dev/code/docs",
+      "label": "docs",
+      "project": {
+       "name": "docs",
+       "root": "/Users/dev/code/docs",
+       "kind": "package.json",
+       "git_branch": "main"
+      },
+      "source": "child",
+      "evidence": "observed",
+      "pids": [
+       52060,
+       45173
+      ],
+      "privacy_area": null,
+      "note": null
+     },
+     {
+      "path": "/Users/dev/code/design-system",
+      "label": "design-system",
+      "project": null,
+      "source": "recent",
+      "evidence": "observed",
+      "pids": [],
+      "privacy_area": null,
+      "note": "Editor window history; account-wide history, not attributed to this running instance."
+     }
+    ],
+    "more_folders": 0,
+    "tools": [
+     {
+      "pid": 52070,
+      "ppid": 52011,
+      "name": "Filesystem MCP",
+      "kind": "mcp_server",
+      "command": "node @modelcontextprotocol/server-filesystem",
+      "cwd": "/Users/dev/code/shop-web",
+      "evidence": "inferred",
+      "ports": [],
+      "memory_bytes": 32000000,
+      "cpu_percent": 0.1
+     },
+     {
+      "pid": 43000,
+      "ppid": 52040,
+      "name": "Next.js",
+      "kind": "dev_server",
+      "command": "node node_modules/.bin/next dev",
+      "cwd": "/Users/dev/code/shop-web",
+      "evidence": "observed",
+      "ports": [
+       3000
+      ],
+      "memory_bytes": 412000000,
+      "cpu_percent": 1.6
+     },
+     {
+      "pid": 45173,
+      "ppid": 52060,
+      "name": "Vite",
+      "kind": "dev_server",
+      "command": "node node_modules/.bin/vite dev",
+      "cwd": "/Users/dev/code/docs",
+      "evidence": "observed",
+      "ports": [
+       5173
+      ],
+      "memory_bytes": 180000000,
+      "cpu_percent": 0.7
+     },
+     {
+      "pid": 52040,
+      "ppid": 52011,
+      "name": "zsh",
+      "kind": "shell",
+      "command": "-zsh",
+      "cwd": "/Users/dev/code/shop-web",
+      "evidence": "observed",
+      "ports": [],
+      "memory_bytes": 6000000,
+      "cpu_percent": 0
+     },
+     {
+      "pid": 52060,
+      "ppid": 52011,
+      "name": "zsh",
+      "kind": "shell",
+      "command": "-zsh",
+      "cwd": "/Users/dev/code/docs",
+      "evidence": "observed",
+      "ports": [],
+      "memory_bytes": 6000000,
+      "cpu_percent": 0
+     }
+    ],
+    "more_tools": 0,
+    "ports": [],
+    "links": [
+     {
+      "id": "local:tcp:3001:43001:LISTEN",
+      "kind": "local",
+      "label": "Express · shop-api (main)",
+      "address": "127.0.0.1:3001",
+      "port": 3001,
+      "connections": 2,
+      "entry_id": "tcp:3001:43001:LISTEN",
+      "process": "node",
+      "pid": 43001,
+      "service": null
+     },
+     {
+      "id": "remote:198.51.100.24:443",
+      "kind": "remote",
+      "label": "198.51.100.24:443",
+      "address": "198.51.100.24:443",
+      "port": 443,
+      "connections": 4,
+      "entry_id": null,
+      "process": null,
+      "pid": null,
+      "service": "HTTPS"
+     },
+     {
+      "id": "remote:203.0.113.40:443",
+      "kind": "remote",
+      "label": "203.0.113.40:443",
+      "address": "203.0.113.40:443",
+      "port": 443,
+      "connections": 1,
+      "entry_id": null,
+      "process": null,
+      "pid": null,
+      "service": "HTTPS"
+     }
+    ],
+    "more_links": 0,
+    "access": {
+     "user": "root",
+     "uid": 0,
+     "root": true,
+     "mine": false,
+     "facts": [
+      {
+       "topic": "user",
+       "level": "standard",
+       "summary": "Runs as you (dev): the same file access as your account.",
+       "evidence": "observed"
+      },
+      {
+       "topic": "sandbox",
+       "level": "unknown",
+       "summary": "No sandbox seen right now. Its commands may still be sandboxed when they run; agent settings aren't read.",
+       "evidence": "unknown"
+      },
+      {
+       "topic": "approvals",
+       "level": "unknown",
+       "summary": "No approval flags on its command line; its own settings decide (not read).",
+       "evidence": "unknown"
+      },
+      {
+       "topic": "network",
+       "level": "standard",
+       "summary": "Listens on :3000, :5173 on this machine only. Talks to 2 remote hosts.",
+       "evidence": "observed"
+      },
+      {
+       "topic": "privacy",
+       "level": "unknown",
+       "summary": "macOS privacy grants (Full Disk Access, Files and Folders) can't be read without Full Disk Access; holdmap doesn't ask for it.",
+       "evidence": "unknown"
+      }
+     ]
+    },
+    "capabilities": {
+     "inspected": true,
+     "mcp_servers": [
+      {
+       "id": "cursor:user:github",
+       "name": "github",
+       "scope": "user",
+       "source_path": "/Users/dev/.cursor/mcp.json",
+       "project_path": null,
+       "transport": "http",
+       "enabled": true,
+       "evidence": "observed",
+       "remote_host": "api.githubcopilot.com",
+       "header_names": [
+        "Authorization"
+       ],
+       "env_names": [],
+       "runtime": {
+        "state": "unknown",
+        "pids": []
+       }
+      },
+      {
+       "id": "cursor:project:filesystem",
+       "name": "filesystem",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/.cursor/mcp.json",
+       "project_path": "/Users/dev/code/shop-web",
+       "transport": "stdio",
+       "enabled": true,
+       "evidence": "observed",
+       "launch": {
+        "runner": "npx",
+        "package": "@modelcontextprotocol/server-filesystem",
+        "pinned": false
+       },
+       "env_names": [],
+       "header_names": [],
+       "runtime": {
+        "state": "running",
+        "pids": [
+         52070
+        ]
+       }
+      },
+      {
+       "id": "cursor:project:legacy-browser",
+       "name": "legacy-browser",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/.cursor/mcp.json",
+       "project_path": "/Users/dev/code/shop-web",
+       "transport": "stdio",
+       "enabled": false,
+       "evidence": "observed",
+       "launch": {
+        "runner": "npx",
+        "package": "puppeteer-mcp-server@0.7.2",
+        "pinned": true
+       },
+       "env_names": [],
+       "header_names": [],
+       "runtime": {
+        "state": "unknown",
+        "pids": []
+       }
+      }
+     ],
+     "skills": [
+      {
+       "id": "shared:user:code-review",
+       "name": "code-review",
+       "declared_name": "code-review",
+       "description": "Review changes for correctness, regressions and maintainability.",
+       "scope": "user",
+       "source_path": "/Users/dev/.agents/skills/code-review/SKILL.md",
+       "project_path": null,
+       "evidence": "observed"
+      },
+      {
+       "id": "shared:project:frontend-checks",
+       "name": "frontend-checks",
+       "declared_name": "frontend-checks",
+       "description": "Check UI behavior, accessibility and responsive layouts before shipping.",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md",
+       "project_path": "/Users/dev/code/shop-web",
+       "evidence": "observed"
+      }
+     ],
+     "instructions": [
+      {
+       "id": "cursor:rule:react",
+       "kind": "rule",
+       "name": "react-conventions",
+       "description": "TypeScript and React conventions for the storefront.",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/.cursor/rules/react-conventions.mdc",
+       "evidence": "observed"
+      },
+      {
+       "id": "cursor:memory:agents",
+       "kind": "memory",
+       "name": "AGENTS.md",
+       "description": null,
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/AGENTS.md",
+       "evidence": "observed"
+      }
+     ],
+     "tool_rules": [],
+     "settings": [],
+     "builtin_tools": [],
+     "more_mcp_servers": 0,
+     "more_skills": 0,
+     "limits": [
+      "Configuration and skill-file presence do not establish loading, connection or invocation. Arguments, URL paths and queries, and environment or header values are not included. Only declared name/description from bounded skill frontmatter are retained; instructions are not collected or executed."
+     ]
+    }
+   },
+   {
+    "id": "agent:2",
+    "product": "cursor",
+    "name": "Wide Agent",
+    "vendor": "Anysphere",
+    "kind": "ide",
+    "pid": 2,
+    "process_name": "Cursor",
+    "command": "/Applications/Cursor.app/Contents/MacOS/Cursor",
+    "started_at": 1792178886,
+    "parent": null,
+    "memory_bytes": 2400000000,
+    "cpu_percent": 6.2,
+    "processes": [
+     {
+      "pid": 52000,
+      "ppid": 1,
+      "name": "Cursor",
+      "command": "/Applications/Cursor.app/Contents/MacOS/Cursor",
+      "role": "agent",
+      "cwd": "/",
+      "memory_bytes": 410000000,
+      "cpu_percent": 1.8
+     },
+     {
+      "pid": 52011,
+      "ppid": 52000,
+      "name": "Cursor Helper (Plugin)",
+      "command": "Cursor Helper (Plugin) --type=utility",
+      "role": "helper",
+      "cwd": "/",
+      "memory_bytes": 820000000,
+      "cpu_percent": 2.1
+     },
+     {
+      "pid": 52040,
+      "ppid": 52011,
+      "name": "zsh",
+      "command": "-zsh",
+      "role": "child",
+      "cwd": "/Users/dev/code/shop-web",
+      "memory_bytes": 6000000,
+      "cpu_percent": 0
+     },
+     {
+      "pid": 43000,
+      "ppid": 52040,
+      "name": "node",
+      "command": "node node_modules/.bin/next dev",
+      "role": "child",
+      "cwd": "/Users/dev/code/shop-web",
+      "memory_bytes": 412000000,
+      "cpu_percent": 1.6
+     },
+     {
+      "pid": 52060,
+      "ppid": 52011,
+      "name": "zsh",
+      "command": "-zsh",
+      "role": "child",
+      "cwd": "/Users/dev/code/docs",
+      "memory_bytes": 6000000,
+      "cpu_percent": 0
+     },
+     {
+      "pid": 45173,
+      "ppid": 52060,
+      "name": "node",
+      "command": "node node_modules/.bin/vite dev",
+      "role": "child",
+      "cwd": "/Users/dev/code/docs",
+      "memory_bytes": 180000000,
+      "cpu_percent": 0.7
+     },
+     {
+      "pid": 52070,
+      "ppid": 52011,
+      "name": "node",
+      "command": "node @modelcontextprotocol/server-filesystem",
+      "role": "child",
+      "cwd": "/Users/dev/code/shop-web",
+      "memory_bytes": 32000000,
+      "cpu_percent": 0.1
+     }
+    ],
+    "process_ids": [
+     52000,
+     52011,
+     52040,
+     43000,
+     52060,
+     45173,
+     52070,
+     52080,
+     52081,
+     52082,
+     52083,
+     52084,
+     52085,
+     52086,
+     52087
+    ],
+    "more_processes": 8,
+    "folders": [
+     {
+      "path": "/Users/dev/code/shop-web",
+      "label": "shop-web",
+      "project": {
+       "name": "shop-web",
+       "root": "/Users/dev/code/shop-web",
+       "kind": "package.json",
+       "git_branch": "feat/checkout"
+      },
+      "source": "child",
+      "evidence": "observed",
+      "pids": [
+       52040,
+       43000
+      ],
+      "privacy_area": null,
+      "note": null
+     },
+     {
+      "path": "/Users/dev/code/docs",
+      "label": "docs",
+      "project": {
+       "name": "docs",
+       "root": "/Users/dev/code/docs",
+       "kind": "package.json",
+       "git_branch": "main"
+      },
+      "source": "child",
+      "evidence": "observed",
+      "pids": [
+       52060,
+       45173
+      ],
+      "privacy_area": null,
+      "note": null
+     },
+     {
+      "path": "/Users/dev/code/design-system",
+      "label": "design-system",
+      "project": null,
+      "source": "recent",
+      "evidence": "observed",
+      "pids": [],
+      "privacy_area": null,
+      "note": "Editor window history; account-wide history, not attributed to this running instance."
+     }
+    ],
+    "more_folders": 0,
+    "tools": [
+     {
+      "pid": 52070,
+      "ppid": 52011,
+      "name": "Filesystem MCP",
+      "kind": "mcp_server",
+      "command": "node @modelcontextprotocol/server-filesystem",
+      "cwd": "/Users/dev/code/shop-web",
+      "evidence": "inferred",
+      "ports": [],
+      "memory_bytes": 32000000,
+      "cpu_percent": 0.1
+     },
+     {
+      "pid": 43000,
+      "ppid": 52040,
+      "name": "Next.js",
+      "kind": "dev_server",
+      "command": "node node_modules/.bin/next dev",
+      "cwd": "/Users/dev/code/shop-web",
+      "evidence": "observed",
+      "ports": [
+       3000
+      ],
+      "memory_bytes": 412000000,
+      "cpu_percent": 1.6
+     },
+     {
+      "pid": 45173,
+      "ppid": 52060,
+      "name": "Vite",
+      "kind": "dev_server",
+      "command": "node node_modules/.bin/vite dev",
+      "cwd": "/Users/dev/code/docs",
+      "evidence": "observed",
+      "ports": [
+       5173
+      ],
+      "memory_bytes": 180000000,
+      "cpu_percent": 0.7
+     },
+     {
+      "pid": 52040,
+      "ppid": 52011,
+      "name": "zsh",
+      "kind": "shell",
+      "command": "-zsh",
+      "cwd": "/Users/dev/code/shop-web",
+      "evidence": "observed",
+      "ports": [],
+      "memory_bytes": 6000000,
+      "cpu_percent": 0
+     },
+     {
+      "pid": 52060,
+      "ppid": 52011,
+      "name": "zsh",
+      "kind": "shell",
+      "command": "-zsh",
+      "cwd": "/Users/dev/code/docs",
+      "evidence": "observed",
+      "ports": [],
+      "memory_bytes": 6000000,
+      "cpu_percent": 0
+     }
+    ],
+    "more_tools": 0,
+    "ports": [],
+    "links": [
+     {
+      "id": "local:tcp:3001:43001:LISTEN",
+      "kind": "local",
+      "label": "Express · shop-api (main)",
+      "address": "127.0.0.1:3001",
+      "port": 3001,
+      "connections": 2,
+      "entry_id": "tcp:3001:43001:LISTEN",
+      "process": "node",
+      "pid": 43001,
+      "service": null
+     },
+     {
+      "id": "remote:198.51.100.24:443",
+      "kind": "remote",
+      "label": "198.51.100.24:443",
+      "address": "198.51.100.24:443",
+      "port": 443,
+      "connections": 4,
+      "entry_id": null,
+      "process": null,
+      "pid": null,
+      "service": "HTTPS"
+     },
+     {
+      "id": "remote:203.0.113.40:443",
+      "kind": "remote",
+      "label": "203.0.113.40:443",
+      "address": "203.0.113.40:443",
+      "port": 443,
+      "connections": 1,
+      "entry_id": null,
+      "process": null,
+      "pid": null,
+      "service": "HTTPS"
+     }
+    ],
+    "more_links": 0,
+    "access": {
+     "user": "dev",
+     "uid": 501,
+     "root": false,
+     "mine": true,
+     "facts": [
+      {
+       "topic": "approvals",
+       "level": "elevated",
+       "summary": "Auto-approves commands.",
+       "evidence": "observed"
+      }
+     ]
+    },
+    "capabilities": {
+     "inspected": true,
+     "mcp_servers": [
+      {
+       "id": "cursor:user:github",
+       "name": "github",
+       "scope": "user",
+       "source_path": "/Users/dev/.cursor/mcp.json",
+       "project_path": null,
+       "transport": "http",
+       "enabled": true,
+       "evidence": "observed",
+       "remote_host": "api.githubcopilot.com",
+       "header_names": [
+        "Authorization"
+       ],
+       "env_names": [],
+       "runtime": {
+        "state": "unknown",
+        "pids": []
+       }
+      },
+      {
+       "id": "cursor:project:filesystem",
+       "name": "filesystem",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/.cursor/mcp.json",
+       "project_path": "/Users/dev/code/shop-web",
+       "transport": "stdio",
+       "enabled": true,
+       "evidence": "observed",
+       "launch": {
+        "runner": "npx",
+        "package": "@modelcontextprotocol/server-filesystem",
+        "pinned": false
+       },
+       "env_names": [],
+       "header_names": [],
+       "runtime": {
+        "state": "running",
+        "pids": [
+         52070
+        ]
+       }
+      },
+      {
+       "id": "cursor:project:legacy-browser",
+       "name": "legacy-browser",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/.cursor/mcp.json",
+       "project_path": "/Users/dev/code/shop-web",
+       "transport": "stdio",
+       "enabled": false,
+       "evidence": "observed",
+       "launch": {
+        "runner": "npx",
+        "package": "puppeteer-mcp-server@0.7.2",
+        "pinned": true
+       },
+       "env_names": [],
+       "header_names": [],
+       "runtime": {
+        "state": "unknown",
+        "pids": []
+       }
+      }
+     ],
+     "skills": [
+      {
+       "id": "shared:user:code-review",
+       "name": "code-review",
+       "declared_name": "code-review",
+       "description": "Review changes for correctness, regressions and maintainability.",
+       "scope": "user",
+       "source_path": "/Users/dev/.agents/skills/code-review/SKILL.md",
+       "project_path": null,
+       "evidence": "observed"
+      },
+      {
+       "id": "shared:project:frontend-checks",
+       "name": "frontend-checks",
+       "declared_name": "frontend-checks",
+       "description": "Check UI behavior, accessibility and responsive layouts before shipping.",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md",
+       "project_path": "/Users/dev/code/shop-web",
+       "evidence": "observed"
+      }
+     ],
+     "instructions": [
+      {
+       "id": "cursor:rule:react",
+       "kind": "rule",
+       "name": "react-conventions",
+       "description": "TypeScript and React conventions for the storefront.",
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/.cursor/rules/react-conventions.mdc",
+       "evidence": "observed"
+      },
+      {
+       "id": "cursor:memory:agents",
+       "kind": "memory",
+       "name": "AGENTS.md",
+       "description": null,
+       "scope": "project",
+       "source_path": "/Users/dev/code/shop-web/AGENTS.md",
+       "evidence": "observed"
+      }
+     ],
+     "tool_rules": [],
+     "settings": [],
+     "builtin_tools": [],
+     "more_mcp_servers": 0,
+     "more_skills": 0,
+     "limits": [
+      "Configuration and skill-file presence do not establish loading, connection or invocation. Arguments, URL paths and queries, and environment or header values are not included. Only declared name/description from bounded skill frontmatter are retained; instructions are not collected or executed."
+     ]
+    }
+   }
+  ],
+  "configured": [
+   {
+    "product": "codex",
+    "name": "Codex CLI",
+    "capabilities": {
+     "inspected": true,
+     "mcp_servers": [],
+     "skills": [
+      {
+       "id": "shared:user:code-review",
+       "name": "code-review",
+       "declared_name": "code-review",
+       "description": "Review changes for correctness, regressions and maintainability.",
+       "scope": "user",
+       "source_path": "/Users/dev/.agents/skills/code-review/SKILL.md",
+       "project_path": null,
+       "evidence": "observed"
+      },
+      {
+       "id": "codex:user:db-migrations",
+       "name": "db-migrations",
+       "declared_name": "db-migrations",
+       "description": "Write and check database migrations.",
+       "scope": "user",
+       "source_path": "/Users/dev/.codex/skills/db-migrations/SKILL.md",
+       "project_path": null,
+       "evidence": "observed"
+      }
+     ],
+     "more_mcp_servers": 0,
+     "more_skills": 0,
+     "limits": []
+    }
+   }
+  ],
+  "platform": "macos",
+  "taken_at_ms": 1792265286800,
+  "limits": [
+   "Folders are working directories and the agents' recent-project lists; open files aren't collected.",
+   "Remote hosts are shown by IP address; holdmap doesn't look names up.",
+   "MCP server hints come from running executable or package names; transports aren't observed and individual tool calls aren't collected.",
+   "Recent projects come from account-wide history and aren't attributed to a particular running instance.",
+   "Opt-in inventory includes supported configuration names and skill-file locations; chats and credential stores are not inspected.",
+   "macOS privacy grants (TCC) can't be read without Full Disk Access, and folders it guards aren't inspected."
+  ]
+ },
+ "insights": {
+  "results": [
+   {
+    "analyzer": "nvidia.skillspector",
+    "analyzer_version": "2.13.0",
+    "run_at_ms": 1792229400000,
+    "status": "complete",
+    "coverage": 1,
+    "subjects": [
+     {
+      "id": "shared:user:code-review",
+      "kind": "skill",
+      "name": "code-review",
+      "agents": [
+       "cursor",
+       "codex"
+      ]
+     },
+     {
+      "id": "codex:user:db-migrations",
+      "kind": "skill",
+      "name": "db-migrations",
+      "agents": [
+       "codex"
+      ]
+     },
+     {
+      "id": "shared:project:frontend-checks",
+      "kind": "skill",
+      "name": "frontend-checks",
+      "agents": [
+       "cursor"
+      ]
+     },
+     {
+      "id": "claude:project:release-check",
+      "kind": "skill",
+      "name": "release-check",
+      "agents": [
+       "claude-code"
+      ]
+     }
+    ],
+    "findings": [
+     {
+      "fingerprint": "demo-p1",
+      "analyzer": "nvidia.skillspector",
+      "rule_id": "P1",
+      "category": "Prompt Injection",
+      "severity": "high",
+      "title": "Instruction Override",
+      "subject": "claude:project:release-check",
+      "location": {
+       "file": "SKILL.md",
+       "line": 12
+      },
+      "fix": "Remove text that tells the agent to ignore prompts or safety rules.",
+      "refs": [],
+      "state": "open"
+     },
+     {
+      "fingerprint": "demo-e1",
+      "analyzer": "nvidia.skillspector",
+      "rule_id": "E1",
+      "category": "Data Exfiltration",
+      "severity": "medium",
+      "title": "External Transmission",
+      "subject": "claude:project:release-check",
+      "location": {
+       "file": "scripts/publish.sh",
+       "line": 8
+      },
+      "fix": "Verify the destination is trusted and that no secrets or tokens are sent.",
+      "refs": [],
+      "state": "open"
+     },
+     {
+      "fingerprint": "demo-d2",
+      "analyzer": "nvidia.skillspector",
+      "rule_id": "D2",
+      "category": "Dangerous Code",
+      "severity": "medium",
+      "title": "Destructive Shell Command",
+      "subject": "codex:user:db-migrations",
+      "location": {
+       "file": "scripts/reset.sh",
+       "line": 4
+      },
+      "fix": "Ask before running commands that drop or reset a database.",
+      "refs": [],
+      "state": "open"
+     },
+     {
+      "fingerprint": "demo-lp3",
+      "analyzer": "nvidia.skillspector",
+      "rule_id": "LP3",
+      "category": "MCP Least Privilege",
+      "severity": "low",
+      "title": "MCP Least Privilege",
+      "subject": "shared:project:frontend-checks",
+      "location": {
+       "file": "SKILL.md",
+       "line": 1
+      },
+      "fix": "List the tools the skill may use in the allowed-tools frontmatter field.",
+      "refs": [],
+      "state": "open"
+     }
+    ],
+    "details": [
+     {
+      "subject": "claude:project:release-check",
+      "label": "Risk score",
+      "value": "64 / 100"
+     },
+     {
+      "subject": "claude:project:release-check",
+      "label": "Recommendation",
+      "value": "CAUTION"
+     },
+     {
+      "subject": "codex:user:db-migrations",
+      "label": "Risk score",
+      "value": "31 / 100"
+     },
+     {
+      "subject": "codex:user:db-migrations",
+      "label": "Recommendation",
+      "value": "CAUTION"
+     },
+     {
+      "subject": "shared:project:frontend-checks",
+      "label": "Risk score",
+      "value": "8 / 100"
+     },
+     {
+      "subject": "shared:project:frontend-checks",
+      "label": "Recommendation",
+      "value": "SAFE"
+     },
+     {
+      "subject": "shared:user:code-review",
+      "label": "Risk score",
+      "value": "0 / 100"
+     },
+     {
+      "subject": "shared:user:code-review",
+      "label": "Recommendation",
+      "value": "SAFE"
+     }
+    ],
+    "notes": []
+   }
+  ],
+  "open": {
+   "critical": 0,
+   "high": 1,
+   "medium": 2,
+   "low": 1,
+   "info": 0
+  }
+ },
+ "expected": [
+  {
+   "id": "analyzer:claude-code",
+   "rule": "analyzer",
+   "severity": "high",
+   "title": "Claude Code: SkillSpector found 1 high, 1 medium in release-check",
+   "detail": "Instruction Override. Remove text that tells the agent to ignore prompts or safety rules.",
+   "target": {
+    "view": "agents",
+    "agentId": "agent:51200"
+   }
+  },
+  {
+   "id": "exposed:agent:48000",
+   "rule": "exposed",
+   "severity": "high",
+   "stop": {
+    "kind": "agent",
+    "agentId": "agent:48000"
+   },
+   "title": "Docker Desktop is listening on all interfaces",
+   "detail": ":5432 can be reached from other machines on your network.",
+   "target": {
+    "view": "agents",
+    "agentId": "agent:48000"
+   }
+  },
+  {
+   "id": "root:agent:1",
+   "rule": "root",
+   "severity": "high",
+   "title": "Root Agent runs as root",
+   "detail": "Everything it starts gets administrator rights.",
+   "target": {
+    "view": "agents",
+    "agentId": "agent:1"
+   }
+  },
+  {
+   "id": "settings:agent:51200:permissions.defaultMode",
+   "rule": "settings",
+   "severity": "medium",
+   "title": "Claude Code skips every permission prompt",
+   "detail": "permissions.defaultMode = bypassPermissions in .claude/settings.json",
+   "target": {
+    "view": "agents",
+    "agentId": "agent:51200"
+   }
+  },
+  {
+   "id": "unpinned:agent:51200",
+   "rule": "unpinned",
+   "severity": "medium",
+   "title": "Claude Code: 1 MCP server isn't pinned",
+   "detail": "github (npx @modelcontextprotocol/server-github) can change on the next launch.",
+   "target": {
+    "view": "agents",
+    "agentId": "agent:51200"
+   }
+  },
+  {
+   "id": "unpinned:agent:52000",
+   "rule": "unpinned",
+   "severity": "medium",
+   "title": "Cursor: 1 MCP server isn't pinned",
+   "detail": "filesystem (npx @modelcontextprotocol/server-filesystem) can change on the next launch.",
+   "target": {
+    "view": "agents",
+    "agentId": "agent:52000"
+   }
+  },
+  {
+   "id": "exposed-port:tcp:8000:48000:LISTEN",
+   "rule": "exposed-port",
+   "severity": "medium",
+   "stop": {
+    "kind": "entry",
+    "entryId": "tcp:8000:48000:LISTEN"
+   },
+   "title": "Django · ml-service (exp/embeddings) on :8000 is open to the network",
+   "detail": "Dev servers usually only need localhost.",
+   "target": {
+    "view": "list",
+    "entryId": "tcp:8000:48000:LISTEN"
+   }
+  },
+  {
+   "id": "unpinned:agent:1",
+   "rule": "unpinned",
+   "severity": "medium",
+   "title": "Root Agent: 1 MCP server isn't pinned",
+   "detail": "filesystem (npx @modelcontextprotocol/server-filesystem) can change on the next launch.",
+   "target": {
+    "view": "agents",
+    "agentId": "agent:1"
+   }
+  },
+  {
+   "id": "unpinned:agent:2",
+   "rule": "unpinned",
+   "severity": "medium",
+   "title": "Wide Agent: 1 MCP server isn't pinned",
+   "detail": "filesystem (npx @modelcontextprotocol/server-filesystem) can change on the next launch.",
+   "target": {
+    "view": "agents",
+    "agentId": "agent:2"
+   }
+  },
+  {
+   "id": "elevated:agent:2",
+   "rule": "elevated",
+   "severity": "medium",
+   "title": "Wide Agent: Approvals: wider than usual",
+   "detail": "Started with flags that skip approvals or the sandbox.",
+   "target": {
+    "view": "agents",
+    "agentId": "agent:2"
+   }
+  }
+ ]
+}

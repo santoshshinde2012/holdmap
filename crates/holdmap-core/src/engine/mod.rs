@@ -113,8 +113,10 @@ impl Engine {
         }
     }
 
-    /// Explicit read-only capability inventory for observed current-account agents.
-    /// Normal [`Self::agents`] calls do not inspect configuration or skill directories.
+    /// Explicit read-only capability inventory for observed current-account agents, plus
+    /// supported agents that aren't running but are configured in the current account's
+    /// default locations. Normal [`Self::agents`] calls do not inspect configuration or skill
+    /// directories.
     pub fn agents_with_capabilities(&self) -> crate::agents::AgentsReport {
         let recent = crate::agents::HomeRecent::current();
         let capabilities = crate::agents::HomeCapabilities::current();
@@ -123,7 +125,11 @@ impl Engine {
             builder = builder.with_recent(recent);
         }
         if let Some(capabilities) = &capabilities {
-            builder = builder.with_capabilities(capabilities);
+            // The provider reads the current account's own home, so agents that aren't running
+            // are listed from the same default locations.
+            builder = builder
+                .with_capabilities(capabilities)
+                .with_configured_agents(true);
         }
         builder.build()
     }

@@ -17,10 +17,21 @@ default-run = "holdmap"
 name = "holdmap"
 path = "src/main.rs"
 
+[features]
+default = ["osv-http", "keychain", "mcp-runner"]
+# HTTPS for the OSV built-in analyzer (rustls). scripts/check-cross.sh type-checks without it,
+# because ring needs a C cross toolchain.
+osv-http = ["holdmap-analyzers/osv-http"]
+# Analyzer API keys in the OS keychain (`holdmap analyzers key`).
+keychain = ["holdmap-analyzers/keychain"]
+# Run user-registered local MCP analyzers, only when the user runs them.
+mcp-runner = ["holdmap-analyzers/mcp-runner"]
+
 [dependencies]
 holdmap-core.workspace = true
 holdmap-mcp.workspace = true
 holdmap-activity.workspace = true
+holdmap-analyzers = { workspace = true, default-features = false }
 getrandom.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -31,6 +42,7 @@ clap_complete = "4.6"
 clap_mangen = "0.3"
 ratatui = "0.30"
 unicode-width = "0.2"
+rpassword = "7.4"
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

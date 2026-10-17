@@ -6,8 +6,10 @@
 //! core owns process inspection and stop policy; this adapter validates every tool input first.
 //! Protected and other users' processes remain refused, with no agent override.
 
+mod analyzers;
 mod catalog;
 mod confirmation;
+mod needs;
 mod observer;
 mod prompts;
 mod resources;

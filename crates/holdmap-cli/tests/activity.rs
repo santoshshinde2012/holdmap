@@ -227,6 +227,6 @@ fn optional_recording_configuration_cannot_disable_mcp_tools() {
         .unwrap();
     assert!(output.status.success());
     let response: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(response["result"]["tools"].as_array().unwrap().len(), 11);
+    assert_eq!(response["result"]["tools"].as_array().unwrap().len(), 14);
     assert!(!String::from_utf8_lossy(&output.stderr).contains("private-"));
 }

@@ -8,7 +8,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 rustup target add x86_64-pc-windows-gnu aarch64-apple-darwin >/dev/null
-CRATES=(-p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity)
+CRATES=(-p holdmap -p holdmap-mcp -p holdmap-activity -p holdmap-analyzers)
+# holdmap-core's dev-dependency criterion pulls alloca, which also needs a C cross compiler, so
+# core is checked as a library (its platform backends) and the rest with all targets.
+CORE=(-p holdmap-core --lib)
+# Default features add ring (rustls), whose build script needs a C cross compiler and the target
+# SDK. The OSV HTTPS transport is platform-neutral, so cross checks leave it out.
+FEATURES=(--no-default-features)
 
 # Keep the temporary dependency patch and its lockfile out of the working checkout.
 # Copy current source, including uncommitted changes, and reuse only build output.
@@ -24,7 +30,8 @@ export CARGO_TARGET_DIR="$cross_target_dir"
 cd "$cross_dir"
 
 echo "==> Windows (x86_64-pc-windows-gnu)"
-cargo clippy --target x86_64-pc-windows-gnu "${CRATES[@]}" --all-targets --locked -- -D warnings
+cargo clippy --target x86_64-pc-windows-gnu "${CORE[@]}" --locked -- -D warnings
+cargo clippy --target x86_64-pc-windows-gnu "${CRATES[@]}" "${FEATURES[@]}" --all-targets --locked -- -D warnings
 
 echo "==> macOS (aarch64-apple-darwin, stubbed netstat2)"
 cargo fetch -q --locked
@@ -60,5 +67,6 @@ pub fn get_sockets_info(_: AddressFamilyFlags, _: ProtocolFlags) -> Result<Vec<S
 RS
 # Extend the existing patch table through Cargo's configuration, preserving the
 # audited GLib/global-hotkey overrides without creating a duplicate TOML table.
-cargo clippy --config "patch.crates-io.netstat2.path=\"$stub\"" --target aarch64-apple-darwin "${CRATES[@]}" --all-targets -- -D warnings
+cargo clippy --config "patch.crates-io.netstat2.path=\"$stub\"" --target aarch64-apple-darwin "${CORE[@]}" -- -D warnings
+cargo clippy --config "patch.crates-io.netstat2.path=\"$stub\"" --target aarch64-apple-darwin "${CRATES[@]}" "${FEATURES[@]}" --all-targets -- -D warnings
 echo "==> cross checks passed"

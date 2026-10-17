@@ -1,0 +1,21 @@
+# Built-in: look up the exact, pinned package versions MCP definitions launch on OSV.dev.
+schema = 1
+id = "holdmap.osv"
+name = "OSV vulnerability lookup"
+publisher = "holdmap"
+homepage = "https://osv.dev"
+license = "Apache-2.0"
+summary = "Checks pinned npm and PyPI packages that your MCP servers launch against the OSV.dev vulnerability database."
+
+[runner]
+kind = "builtin"
+per_subject = "packages"
+timeout_secs = 30
+
+[permissions]
+network = ["api.osv.dev"]
+network_reason = "OSV.dev is a public vulnerability database run by Google; the lookup happens there."
+sends = ["The ecosystem, name and exact version of each pinned package. Nothing else: no paths, file contents, environment or machine details."]
+
+[output]
+format = "osv"

@@ -1,0 +1,56 @@
+[package]
+name = "holdmap-analyzers"
+description = "Opt-in, consent-gated analyzers for holdmap: run a scanner the user picked on agent skills and packages, and normalise its findings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["osv-http", "keychain", "mcp-runner"]
+# HTTPS transport for the OSV built-in. Without it the built-in reports itself unavailable.
+osv-http = ["dep:ureq"]
+# API keys for analyzers in the OS keychain (macOS Keychain, Windows Credential Manager,
+# Secret Service on Linux). Without it holdmap can't store keys and runs analyzers without them.
+keychain = ["dep:keyring"]
+# Run user-registered local MCP analyzers (started over stdio only for a run). Without it
+# holdmap reports MCP analyzers unavailable.
+mcp-runner = ["dep:rmcp", "dep:tokio"]
+
+[dependencies]
+holdmap-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+sha2.workspace = true
+hex.workspace = true
+tempfile.workspace = true
+minisign-verify = "0.3"
+rmcp = { version = "3.5", default-features = false, features = ["client", "transport-async-rw"], optional = true }
+tokio = { version = "1", default-features = false, features = ["rt", "process", "time", "io-util"], optional = true }
+ureq = { version = "3.4", default-features = false, features = ["rustls"], optional = true }
+keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "async-secret-service", "async-io", "crypto-rust"], optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+# Signing the first-party catalog (examples/sign_catalog.rs); never linked into holdmap.
+minisign = { version = "0.10", default-features = false }
+tokio = { version = "1", default-features = false, features = ["rt", "io-util"] }
+
+[lints]
+workspace = true
+
+[package.metadata.dist]
+dist = false

@@ -4,8 +4,10 @@ mod activity;
 mod agent_actions;
 mod agent_flow;
 mod agents;
+mod analyzers;
 mod commands;
 mod graph;
+mod needs;
 mod project_policy;
 mod remote;
 mod render;
@@ -102,6 +104,12 @@ enum Command {
     Agents(agents::AgentsArgs),
     /// Record and inspect opt-in local agent activity metadata.
     Activity(activity::ActivityArgs),
+    /// Opt-in analyzers (SkillSpector, OSV lookup): see what one gets, approve, run, revoke.
+    Analyzers(analyzers::AnalyzersArgs),
+    /// Findings from approved analyzers, as text, JSON or SARIF.
+    Insights(analyzers::InsightsArgs),
+    /// What needs you: exposed agents, wide access, risky settings, unpinned MCP servers.
+    Needs(needs::NeedsArgs),
     /// Stream port events: new listeners, closed listeners, conflicts.
     Watch(watch::WatchArgs),
     /// Pin a port (favourite): shown first and watched even when free.
@@ -439,6 +447,9 @@ fn main() -> ExitCode {
         Some(Command::Graph(a)) => graph::run(&a, docker),
         Some(Command::Agents(a)) => agents::run(&a, docker),
         Some(Command::Activity(a)) => activity::run(&a),
+        Some(Command::Analyzers(a)) => analyzers::run_analyzers(&a, docker),
+        Some(Command::Insights(a)) => analyzers::run_insights(&a),
+        Some(Command::Needs(a)) => needs::run(&a, docker),
         Some(Command::Watch(a)) => watch::run(&a, docker),
         Some(Command::Pin(a)) => state::pin(&a, true),
         Some(Command::Unpin(a)) => state::pin(

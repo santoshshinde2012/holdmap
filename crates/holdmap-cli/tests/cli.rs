@@ -739,3 +739,80 @@ fn init_project_writes_a_valid_file() {
         .assert()
         .failure();
 }
+
+#[test]
+fn needs_json_is_a_list_of_items() {
+    let out = hm().args(["needs", "--json"]).output().unwrap();
+    assert!(out.status.success());
+    let items: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    for item in items.as_array().expect("a JSON array") {
+        for key in ["id", "rule", "severity", "title", "detail", "target"] {
+            assert!(item.get(key).is_some(), "{key} missing");
+        }
+    }
+}
+
+#[test]
+fn needs_text_runs_read_only() {
+    hm().arg("needs").assert().success();
+}
+
+#[test]
+fn analyzer_keys_must_be_declared_by_the_manifest() {
+    hm().args([
+        "analyzers",
+        "key",
+        "set",
+        "nvidia.skillspector",
+        "NVIDIA_API_KEY",
+    ])
+    .write_stdin("nvapi-should-not-be-stored\n")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("doesn't declare a key"));
+}
+
+#[test]
+fn automatic_runs_need_an_approved_analyzer() {
+    hm().args(["analyzers", "auto", "nvidia.skillspector", "on"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Turn it on first"));
+}
+
+#[test]
+fn the_signed_catalog_is_reported_and_bad_imports_are_refused() {
+    hm().args(["analyzers", "catalog"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("built into holdmap"));
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("analyzers.json");
+    std::fs::write(&file, "{}").unwrap();
+    std::fs::write(dir.path().join("analyzers.json.minisig"), "not a signature").unwrap();
+    hm().args(["analyzers", "catalog", "import"])
+        .arg(&file)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("signature is not valid"));
+    hm().args(["analyzers", "catalog", "accept"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no catalog update is waiting"));
+}
+
+#[test]
+fn registering_an_analyzer_validates_the_manifest() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("bad.toml");
+    std::fs::write(&file, "schema = 1\nid = \"x\"\n").unwrap();
+    hm().args(["analyzers", "add"])
+        .arg(&file)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("manifest"));
+    hm().args(["analyzers", "remove", "nvidia.skillspector"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("catalog"));
+}

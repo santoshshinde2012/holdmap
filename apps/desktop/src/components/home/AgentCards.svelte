@@ -1,6 +1,8 @@
 <script lang="ts">
   // Cards layout of Home: one card per agent in a responsive grid (rows share a height), plus a
   // card for dev servers no agent started. ←/→ move between cards.
+  import { insightsStore } from "../../lib/insights-store.svelte";
+  import { agentCounts } from "../../lib/analyzers";
   import Icon from "../Icon.svelte";
   import HomeAgentCard from "./HomeAgentCard.svelte";
   import { attentionAgent, unownedDevServers, type AttentionItem } from "../../lib/home";
@@ -39,7 +41,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <section class="cards" aria-label="Agents" bind:this={root} {onkeydown}>
   {#each report.agents as a (a.id)}
-    <HomeAgentCard agent={a} model={cardModel(a, entries)} needs={needs.filter((n) => attentionAgent(n, report) === a.id)} color={colors.get(a.id) ?? "var(--accent)"}
+    <HomeAgentCard agent={a} model={cardModel(a, entries)} needs={needs.filter((n) => attentionAgent(n, report) === a.id)} findings={agentCounts(insightsStore.insights, a.product)} color={colors.get(a.id) ?? "var(--accent)"}
       {now} selected={selected === a.id} {active} {onhover} {onselect} {onopen} {onport} {onstop} {oninventory} />
   {/each}
   {#if loose.length}

@@ -13,6 +13,7 @@
   import AutoMiniMap from "./graph/AutoMiniMap.svelte";
   import Icon from "./Icon.svelte";
   import AgentFlowView from "./agents/flow/AgentFlowView.svelte";
+  import InsightsWorkspace from "./analyzers/InsightsWorkspace.svelte";
   import FolderActions from "./FolderActions.svelte";
   import type { AgentFlowProps } from "../lib/agent-flow/model";
   import { FIT_PADDING } from "../lib/flow";
@@ -49,6 +50,8 @@
     capabilitiesError = null,
     onrefreshcapabilities,
     oninventory,
+    inventory = false,
+    onsettings,
     ...flowProps
   }: {
     /** null while the first report loads. */
@@ -60,7 +63,7 @@
     selectedEntry?: string | null;
     dark: boolean;
     reduced: boolean;
-    section?: "overview" | "flow" | "capabilities";
+    section?: "overview" | "flow" | "capabilities" | "insights";
     flowSource?: "connections" | "calls";
     picture?: Picture;
     projectReady?: boolean;
@@ -80,6 +83,10 @@
     capabilitiesLoading?: boolean;
     capabilitiesError?: string | null;
     onrefreshcapabilities?: () => void;
+    /** Whether the opt-in inventory is on. */
+    inventory?: boolean;
+    /** Open Settings at Analyzers. */
+    onsettings?: () => void;
   } & AgentFlowProps = $props();
 
   $effect(() => { if (section !== "flow") untrack(() => flowProps.onflowmodechange?.("overview")); });
@@ -237,6 +244,8 @@
     {:else}
       <div class="empty workspace-loading" role="status" aria-busy="true"><Icon name="plug" size={28} /><p>Loading MCP &amp; skills…</p></div>
     {/if}
+  {:else if section === "insights"}
+    <InsightsWorkspace {report} {selectedAgent} {inventory} {onselectagent} {onsettings} {oninventory} />
   {:else if section === "flow"}
     <div class="flow-body" id="agents-flow"><AgentFlowView {query} {dark} {reduced} {...flowProps} bind:mode={flowSource} sourceChrome={false} /></div>
   {:else}
@@ -268,7 +277,7 @@
           <AgentCard agent={a} {report} {entries} color={graph ? agentColor(graph, a.id, agentIds) : "var(--accent)"} selected={a.id === selectedAgent} onselect={() => { picked = null; onselectagent(a.id === selectedAgent ? null : a.id); }} onnavigate={(id) => { picked = null; onselectagent(id); }}
             {onentry} onreveal={(path) => onreveal(a.id, path)} oneditor={(path) => oneditor(a.id, path)}
             onfolder={(path) => { projectPath = path; openFolder(path, a.id); }}
-            oncapabilities={() => { onselectagent(a.id); section = "capabilities"; }} {oninventory}
+            oncapabilities={() => { onselectagent(a.id); section = "capabilities"; }} oninsights={() => { onselectagent(a.id); section = "insights"; }} {oninventory}
             onstop={(entry) => onstop(entry, a.id)} onstopall={() => onstopall(a.id)} now={report.taken_at_ms || Date.now()} />
         {:else}
           <div class="no-matches"><Icon name="search" size={20} /><p>No agents match this search</p><span>Search by name, tool, folder, port or process ID.</span></div>

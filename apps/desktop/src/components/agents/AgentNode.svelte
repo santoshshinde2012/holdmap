@@ -3,13 +3,13 @@
   // access headline (sandboxed, your account, root…). Presentational: the focusable svelte-flow
   // wrapper carries the accessible name (footNodeLabel).
   import { Handle, Position, type NodeProps, type Node } from "@xyflow/svelte";
-  import { accessHeadline, counts, monogram, resourcesLine, type FootFlowData } from "../../lib/agents";
+  import { accessHeadline, counts, monogram, nodeResources, type FootFlowData } from "../../lib/agents";
 
   let { data }: NodeProps<Node<FootFlowData>> = $props();
   const a = $derived(data.node.agent!);
   const head = $derived(accessHeadline(a));
   const c = $derived(counts(a));
-  const res = $derived(resourcesLine(a));
+  const shown = $derived(nodeResources(a)[0]);
 </script>
 
 <div
@@ -21,11 +21,11 @@
   aria-hidden="true"
 >
   <Handle type="target" position={Position.Left} isConnectable={false} role="presentation" tabindex={undefined} />
-  <span class="mono-tile" aria-hidden="true">{monogram(a.name)}</span>
+  <span class="mono-tile" aria-hidden="true" data-glyph={monogram(a.name)}></span>
   <div class="body">
-    <span class="label">{a.name}{#if c.stoppable > 0}<em class="stop-n">{c.stoppable}</em>{/if}</span>
+    <span class="label">{a.name}{#if c.stoppable > 0}<em class="stop-n" data-glyph={c.stoppable}></em>{/if}</span>
     <span class="sub">{data.node.sub}</span>
-    <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.text} · {res.split(" · ").slice(0, 2).join(" · ")}</span>
+    <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.text} · {shown}</span>
   </div>
   <Handle type="source" position={Position.Right} isConnectable={false} role="presentation" tabindex={undefined} />
 </div>

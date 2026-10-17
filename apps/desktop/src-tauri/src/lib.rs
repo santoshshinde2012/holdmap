@@ -13,12 +13,14 @@
 //! - [`update`]: optional self-update (release builds signed with an update key)
 
 mod activity;
+mod analyzers;
 mod capture_bridge;
 mod capture_file;
 mod capture_lease;
 mod commands;
 mod confirmation;
 mod local_window;
+mod needs;
 mod power;
 mod recording_save;
 mod scheduler;
@@ -69,6 +71,7 @@ pub fn run() {
     builder
         .manage(AppState::default())
         .manage(activity::ActivityState::default())
+        .manage(analyzers::AnalyzersState::default())
         .manage(power::PowerState::default())
         .manage(scheduler::SchedulerState::default())
         .manage(recording_save::RecordingSaveState::default())
@@ -86,6 +89,24 @@ pub fn run() {
             activity::stop_activity,
             activity::clear_activity,
             activity::activity_setup,
+            analyzers::analyzers_list,
+            analyzers::analyzer_preview,
+            analyzers::analyzer_approve,
+            analyzers::analyzer_revoke,
+            analyzers::analyzer_background,
+            analyzers::analyzer_add,
+            analyzers::analyzer_remove,
+            analyzers::analyzer_catalog,
+            analyzers::analyzer_catalog_fetch,
+            analyzers::analyzer_catalog_accept,
+            analyzers::analyzer_catalog_reject,
+            analyzers::analyzer_run,
+            analyzers::analyzers_run_changed,
+            analyzers::insights,
+            needs::needs,
+            analyzers::review_finding,
+            analyzers::analyzer_secret_set,
+            analyzers::analyzer_secret_delete,
             commands::explain,
             commands::http_info,
             commands::plan,

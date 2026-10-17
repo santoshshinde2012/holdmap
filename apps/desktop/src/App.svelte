@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { insightsStore } from "./lib/insights-store.svelte";
   import { onMount, tick, untrack } from "svelte";
   import { dataAge, freshness, pruned, share, shouldPoll, withKey } from "./lib/live";
   import PortList from "./components/list/PortList.svelte";
@@ -338,6 +339,7 @@
   const pullAgents = createAgentReportLoader(api.agents, () => agentsReport, (report) => {
     if (disposed) return;
     agentsReport = share(agentsReport, report);
+    void insightsStore.afterAgents();
     if (selectedAgent && !agentsReport.agents.some((a) => a.id === selectedAgent)) selectedAgent = null;
   }, () => !disposed && (prefs.inventoryOn || prefs.view === "agents" && prefs.agentSection === "capabilities"));
   async function loadAgents() {
@@ -1123,7 +1125,7 @@
   // Home has no list of its own: typing in its search box continues on the port list.
   $effect(() => { if (prefs.view === "home" && filters.query) prefs.view = "list"; });
   /** Home → one agent, in a single click: the Agents view with that agent selected. */
-  function openAgent(id: string, section: "overview" | "capabilities" = "overview") {
+  function openAgent(id: string, section: "overview" | "capabilities" | "insights" = "overview") {
     const a = agentsReport?.agents.find((x) => x.id === id);
     if (a && !agentMatches(a, agentQuery)) agentQuery = "";
     prefs.agentSection = section;
@@ -1245,6 +1247,7 @@
     }
     refresh();
     loadSchedules();
+    void insightsStore.refresh();
     api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, tray: i.tray, configDir: i.config_dir ?? null, updater: typeof i.updater === "boolean" ? i.updater : null, appPath: i.app_path ?? null, architecture: i.architecture ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; }).catch((e) => toast("error", "Couldn't load app information", String(e)));
     api.hotkeys().then((h) => (hotkeyList = h)).catch(() => {});
     void loadConfig();
@@ -1398,7 +1401,7 @@
             paused={flowPaused} onpausechange={(paused) => { flowPaused = paused; }} onflowmodechange={(mode) => { agentFlowMode = mode; }}
             onrefreshflow={() => { void flowLoader.request(); }} onrefreshactivity={() => { void activityLoader.request(); }}
             onstartrecording={startRecording} onstoprecording={stopRecording} onclearactivity={clearRecordedActivity}
-            onactivitysetup={api.activitySetup} onclearquery={() => { agentQuery = ""; }} oninventory={enableInventory} />
+            onactivitysetup={api.activitySetup} onclearquery={() => { agentQuery = ""; }} oninventory={enableInventory} inventory={prefs.inventoryOn} onsettings={() => openSettings("analyzers")} />
         {:else}
           <div class="graph-loading" aria-busy="true">Loading agents…</div>
         {/if}

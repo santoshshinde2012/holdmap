@@ -57,7 +57,7 @@ test("Holdmap-only PNG includes the real Graph cards and SVG without a screen-sh
   await app.evaluate(() => Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", { configurable: true, value: undefined }));
   await app.getByRole("radio", { name: /^Graph/ }).click();
   const graph = app.locator("#service-graph");
-  const card = graph.getByRole("button", { name: "shop-api on ports 3001", exact: true });
+  const card = graph.getByRole("button", { name: /^shop\-api :3001(?!\d)/ });
   await expect(card).toBeVisible();
   await expect(graph.locator(".svelte-flow__edge-path").first()).toBeAttached();
   await expect(graph.locator(".graph-body")).not.toHaveAttribute("aria-busy", "true");

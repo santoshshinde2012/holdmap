@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "version": 1,
+  "published": "2026-10-18",
+  "analyzers": [
+    {
+      "manifest": "# First-party manifest: how holdmap runs SkillSpector (https://github.com/NVIDIA/SkillSpector).\n# holdmap never installs it; the user does, then approves this exact manifest and binary.\nschema = 1\nid = \"nvidia.skillspector\"\nname = \"SkillSpector\"\npublisher = \"NVIDIA\"\nhomepage = \"https://github.com/NVIDIA/SkillSpector\"\nlicense = \"Apache-2.0\"\nsummary = \"Static scan of agent skills for prompt injection, data exfiltration, dangerous code and vulnerable dependencies.\"\ninstall = \"uv tool install git+https://github.com/NVIDIA/skillspector.git@v2.13.0\"\n\n[runner]\nkind = \"cli\"\ncommand = \"skillspector\"\nargs = [\"scan\", \"{subject.dir}\", \"--format\", \"json\", \"--no-llm\", \"--output\", \"{output}\"]\nper_subject = \"skill\"\nversion_args = [\"--version\"]\nversion_prefix = \"SkillSpector v\"\ntimeout_secs = 120\nmax_output_mb = 8\nexit_ok = [0, 1]\n\n[permissions]\nread = [\"{subject.dir}\"]\nnetwork = [\"api.osv.dev\"]\nnetwork_reason = \"SkillSpector looks up dependency versions it finds in the skill on OSV and has no switch to turn that off.\"\nsends = [\"Package names and versions found in the skill go to api.osv.dev.\"]\nspawns_mcp_servers = false\n\n[output]\nformat = \"json-map\"\nitems = \"$.issues[*]\"\nrule_id = \"id\"\ncategory = \"category\"\nseverity = \"severity\"\ntitle = \"pattern\"\nfix = \"remediation\"\nfile = \"location.file\"\nline = \"location.start_line\"\nfingerprint = \"match_fingerprint\"\nstatus = \"analysis_completeness.status\"\ncoverage_percent = \"analysis_completeness.coverage_percent\"\n\n[[output.details]]\nlabel = \"Risk score\"\npath = \"risk_assessment.score\"\nsuffix = \" / 100\"\n\n[[output.details]]\nlabel = \"Recommendation\"\npath = \"risk_assessment.recommendation\"\n"
+    },
+    {
+      "manifest": "# Built-in: look up the exact, pinned package versions MCP definitions launch on OSV.dev.\nschema = 1\nid = \"holdmap.osv\"\nname = \"OSV vulnerability lookup\"\npublisher = \"holdmap\"\nhomepage = \"https://osv.dev\"\nlicense = \"Apache-2.0\"\nsummary = \"Checks pinned npm and PyPI packages that your MCP servers launch against the OSV.dev vulnerability database.\"\n\n[runner]\nkind = \"builtin\"\nper_subject = \"packages\"\ntimeout_secs = 30\n\n[permissions]\nnetwork = [\"api.osv.dev\"]\nnetwork_reason = \"OSV.dev is a public vulnerability database run by Google; the lookup happens there.\"\nsends = [\"The ecosystem, name and exact version of each pinned package. Nothing else: no paths, file contents, environment or machine details.\"]\n\n[output]\nformat = \"osv\"\n"
+    }
+  ]
+}
