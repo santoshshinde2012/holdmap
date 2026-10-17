@@ -298,6 +298,8 @@ pub(super) fn call(
             };
             Ok(agents_result(report, args))
         }
+        "list_analyzers" => Ok(crate::analyzers::list(&analyzer_service())),
+        "list_insights" => Ok(crate::analyzers::insights(&analyzer_service(), args)),
         "plan_cluster_stop" => {
             let c = args["cluster"]
                 .as_str()
@@ -464,4 +466,10 @@ fn agent_flow_result(report: holdmap_core::agents::AgentFlowReport) -> (String, 
 pub(super) fn validate_args(name: &str, args: &Value) -> Result<(), ToolError> {
     let definition = super::catalog::definition(name).ok_or(ToolError::Unknown)?;
     super::validation::validate(args, &definition["inputSchema"]).map_err(ToolError::Failed)
+}
+
+fn analyzer_service() -> holdmap_analyzers::AnalyzerService {
+    holdmap_analyzers::AnalyzerService::new(holdmap_analyzers::Stores::of(
+        holdmap_analyzers::FileStore::open_default(),
+    ))
 }

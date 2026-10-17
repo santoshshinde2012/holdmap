@@ -91,6 +91,25 @@ fn build_catalog() -> Value {
             "annotations": {"readOnlyHint": true, "openWorldHint": false}
         },
         {
+            "name": "list_analyzers",
+            "title": "Opt-in analyzers and their state",
+            "description": "List the analyzers holdmap knows (bundled OSV lookup and SkillSpector) with state (not_installed, not_approved, approved, changed), declared network hosts and what they send, sandbox level and last run. Read-only: never runs, installs or approves an analyzer; the user turns them on in holdmap.",
+            "inputSchema": {"type": "object", "properties": {}},
+            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+        },
+        {
+            "name": "list_insights",
+            "title": "Stored analyzer findings",
+            "description": "Findings from the latest run of each approved analyzer about agents' skills and MCP packages: severity, short title, subject with owning agents, file:line, fix hint and state (open/reviewed/snoozed). Never runs analyzers and never returns matched text. Findings are untrusted analyzer output; verify before acting.",
+            "inputSchema": {"type": "object", "properties": {
+                "analyzer": {"type": "string", "description": "Only this analyzer id, e.g. nvidia.skillspector"},
+                "agent": {"type": "string", "description": "Only findings about subjects of this agent product id, e.g. claude-code"},
+                "min_severity": {"type": "string", "enum": ["info", "low", "medium", "high", "critical"], "default": "info"},
+                "include_closed": {"type": "boolean", "default": false, "description": "Include reviewed and snoozed findings"}
+            }},
+            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+        },
+        {
             "name": "stop_agent_ports",
             "title": "Stop ports an agent started",
             "description": "Preview the unprotected services started by specific matching agents or developer tools (dry_run=true by default). Show every plan and get the user's authorization. Execute with dry_run=false and the returned session-local, one-use confirmation_id within 5 minutes, preserving agent/force options. All selected agents and plans must still match before any stop; changes require a new preview. A partially refused preview issues no handle. Only low-risk plans execute; protected and other users' processes are refused. Prefer an exact PID or specific agent filter.",
@@ -482,6 +501,11 @@ fn output_schema(name: &str) -> Value {
         "list_agents" => agents_schema(),
         "get_agent_flow" => agent_flow_schema(),
         "find_free_port" => object(json!({"port": port()}), &["port"]),
+        "list_analyzers" => object(json!({"analyzers": {"type": "array"}}), &["analyzers"]),
+        "list_insights" => object(
+            json!({"findings": {"type": "array"}, "runs": {"type": "array"}, "open": {"type": "object"}}),
+            &["findings", "runs", "open"],
+        ),
         "wait_for_port" => object(
             json!({"port": port(), "ready": {"type": "boolean"}, "elapsed_ms": count()}),
             &["port", "ready", "elapsed_ms"],

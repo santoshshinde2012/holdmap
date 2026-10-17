@@ -56,7 +56,7 @@ receive structured tool results alongside readable text.
 
 ## Tools
 
-The **0.9.0** server retains these eleven tools:
+The **0.9.0** server has these thirteen tools:
 
 | Tool | What it does |
 |---|---|
@@ -68,6 +68,8 @@ The **0.9.0** server retains these eleven tools:
 | `get_topology` | Which local services talk to which, grouped into clusters. |
 | `list_agents` | Running AI coding agents, child tools and likely MCP servers, folders, ports, connections, CPU, memory and access facts. Filter by agent, owned PID, folder or tool name. In 0.8.0, explicitly set `include_capabilities: true` to inspect supported MCP definitions and skill locations. Read-only. |
 | `get_agent_flow` | Observed process ancestry and live TCP relationships for agents, with typed nodes, relationships, evidence and collection limits. It does not inspect capability files or report tool invocations. Added in 0.8.0. |
+| `list_analyzers` | Opt-in analyzers (OSV lookup, SkillSpector), their state, declared network use and last run. Never runs, installs or approves one. New after 0.9.0. |
+| `list_insights` | Stored findings from approved analyzers about agents' skills and MCP packages, filtered by analyzer, agent, severity or state. Never runs analyzers. New after 0.9.0. |
 | `stop_agent_ports` | Preview the unprotected ports started by matching agents; execute the retained plans with a one-use `confirmation_id`. Defaults to `dry_run: true`. |
 | `plan_cluster_stop` | A dry-run, dependency-ordered plan for stopping a cluster. Never executes. |
 | `stop_port` | Preview a port owner's stop plan; execute with a matching one-use `confirmation_id` and verify the port is free. Defaults to `dry_run: true`. |

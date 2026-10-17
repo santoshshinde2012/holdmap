@@ -2148,6 +2148,7 @@ dependencies = [
 name = "holdmap-mcp"
 version = "0.9.0"
 dependencies = [
+ "holdmap-analyzers",
  "holdmap-core",
  "serde",
  "serde_json",

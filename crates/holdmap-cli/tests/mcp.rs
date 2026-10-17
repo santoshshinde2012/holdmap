@@ -291,6 +291,8 @@ fn cli_mcp_discovers_tools_context_and_workflows_and_calls_typed_read_tools() {
             "wait_for_port",
             "get_topology",
             "list_agents",
+            "list_analyzers",
+            "list_insights",
             "get_agent_flow",
             "stop_agent_ports",
             "plan_cluster_stop",
@@ -416,7 +418,7 @@ fn cli_mcp_negotiates_every_supported_version_without_mixed_error_results() {
         let mut client = McpClient::start(version);
         let discovery = client.request("tools/list", json!({}));
         let tools = discovery["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 11);
+        assert_eq!(tools.len(), 13);
         for tool in tools {
             assert_eq!(tool.get("outputSchema").is_some(), version >= "2025-06-18");
             assert_eq!(tool.get("title").is_some(), version >= "2025-06-18");
