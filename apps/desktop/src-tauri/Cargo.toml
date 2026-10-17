@@ -38,7 +38,7 @@ tauri-plugin-updater = "2"
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
 # Release verification uses the same minisign implementation as the updater.
-minisign-verify = "=0.2.5"
+minisign-verify = "=0.3.0"
 base64 = "0.23"
 semver = "1"
 sha2.workspace = true
