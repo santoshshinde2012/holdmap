@@ -1,6 +1,6 @@
 ---
 title: Analyzers
-description: Opt-in scanners for agent skills and MCP packages. Nothing runs until you approve exactly what each one gets.
+description: Opt-in holdmap analyzers scan agent skills and MCP packages. Nothing runs until you approve exactly what each one gets.
 order: 5
 ---
 
