@@ -355,7 +355,7 @@ impl AnalyzerService {
                 ENV_NAMES.iter().map(|n| n.to_string()).collect()
             },
             sandbox: if builtin {
-                "Runs inside holdmap. Only the request shown below is sent.".into()
+                "Runs inside holdmap. Only the exact request shown here is sent.".into()
             } else {
                 self.sandbox.describe().into()
             },

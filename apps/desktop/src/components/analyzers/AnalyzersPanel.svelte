@@ -10,7 +10,7 @@
   import { STATE_LABEL, ago, countsText, total, type AnalyzerView, type Preview } from "../../lib/analyzers";
   import { insightsStore } from "../../lib/insights-store.svelte";
 
-  let { demo = false }: { demo?: boolean } = $props();
+  const demo = api.usesSampleData();
   let preview = $state<Preview | null>(null);
   let busy = $state<Record<string, boolean>>({});
   let errors = $state<Record<string, string | null>>({});
@@ -40,7 +40,7 @@
     const r = a.last_run;
     if (!r) return "Not run yet";
     const open = total(r.open);
-    return `Last run ${ago(r.run_at_ms)} · ${r.subjects} ${r.subjects === 1 ? "item" : "items"} · ${open ? `${countsText(r.open)} open` : "no open findings"}${r.status !== "complete" ? ` · ${r.status}` : ""}`;
+    return `Last run ${ago(r.run_at_ms)} · ${r.subjects} ${r.subjects === 1 ? "item" : "items"} · ${open ? `${countsText(r.open, 5)} open` : "no open findings"}${r.status !== "complete" ? ` · ${r.status}` : ""}`;
   };
 </script>
 
@@ -50,6 +50,7 @@
   <p class="intro">Analyzers are scanners you choose. They look at your agents' skills and MCP packages and report findings on Home and on each agent. Each one is off until you review exactly what it gets.</p>
   {#if demo}<Callout tone="info" size="sm">Browser demo: results are sample data; nothing is installed, run or sent.</Callout>{/if}
   {#if insightsStore.error}<Callout tone="danger" size="sm">{insightsStore.error}</Callout>{/if}
+  {#if !insightsStore.analyzers.length && !insightsStore.error}<Callout tone="info" size="sm">Analyzers run in the holdmap desktop app. This browser view is read-only.</Callout>{/if}
   <ul class="list">
     {#each insightsStore.analyzers as a (a.id)}
       <li class="st-{a.state}">

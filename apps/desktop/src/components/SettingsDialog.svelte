@@ -192,7 +192,7 @@
         </SettingsGroup>
         {#if errors.clear}<div class="err"><Callout tone="danger" size="sm">{errors.clear}</Callout></div>{/if}
       {:else if section === "analyzers"}
-        <AnalyzersPanel demo={browserPreview} />
+        <AnalyzersPanel />
       {:else if section === "power"}
         <SettingsGroup title="This computer" description="Power controls always apply to the computer running the desktop app, including while viewing remote hosts.">
           <div class="power-card">

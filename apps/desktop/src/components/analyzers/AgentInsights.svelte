@@ -40,8 +40,7 @@
     <ul>
       {#each rows as { finding: f, subject } (f.fingerprint)}
         <li class="sev-{f.severity}" class:closed={f.state !== "open"}>
-          <span class="sev">{f.severity}</span>
-          <span class="t">{f.title}</span>
+          <span class="t"><span class="sev">{f.severity}</span> {f.title}</span>
           <span class="where">{subject?.name ?? f.subject}{#if findingWhere(f)} · <code>{findingWhere(f)}</code>{/if}</span>
           {#if f.fix}<span class="fix">{f.fix}</span>{/if}
           <span class="acts">
@@ -69,18 +68,18 @@
 <style>
   .insights { display: grid; gap: var(--sp-2); }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-  li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px var(--sp-2); padding: 6px 8px; border: 1px solid var(--border); border-left: 3px solid var(--warn); border-radius: var(--r-md); background: var(--surface); }
+  li { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 6px 8px; border: 1px solid var(--border); border-left: 3px solid var(--warn); border-radius: var(--r-md); background: var(--surface); }
   li.sev-high, li.sev-critical { border-left-color: var(--danger); }
   li.sev-low, li.sev-info { border-left-color: var(--border-strong); }
   li.closed { opacity: 0.7; }
-  .sev { font-size: var(--fs-caption); font-weight: var(--fw-semibold); text-transform: capitalize; color: var(--text-2); }
+  .sev { margin-right: 4px; font-size: var(--fs-caption); font-weight: var(--fw-semibold); text-transform: capitalize; color: var(--text-2); }
   .t { font-size: var(--fs-body-sm); font-weight: var(--fw-medium); }
-  .where, .fix, .acts { grid-column: 2; font-size: var(--fs-caption); color: var(--muted); overflow-wrap: anywhere; }
+  .where, .fix, .acts { font-size: var(--fs-caption); color: var(--muted); overflow-wrap: anywhere; }
   .fix { color: var(--text-2); }
   .acts { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
   code { font-family: var(--mono); }
   .details { margin: 0; display: grid; gap: 2px; font-size: var(--fs-caption); }
-  .details div { display: flex; gap: var(--sp-2); }
+  .details div { display: grid; gap: 0; }
   .details dt { color: var(--text-2); font-weight: var(--fw-medium); }
   .details dd { margin: 0; color: var(--muted); }
   .muted { margin: 0; color: var(--muted); font-size: var(--fs-caption); }

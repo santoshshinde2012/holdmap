@@ -127,7 +127,7 @@ export class DemoAnalyzers {
       payload: builtin ? [JSON.stringify({ queries: packages.map((p) => ({ package: { ecosystem: p.ecosystem, name: p.name }, version: p.version })) })] : [],
       env: builtin ? [] : ["PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "NO_COLOR"],
       sandbox: builtin
-        ? "Runs inside holdmap. Only the request shown below is sent."
+        ? "Runs inside holdmap. Only the exact request shown here is sent."
         : "Basic: it gets a copy of the folder, a cleared environment and a private temporary home, and is stopped at the time limit. The operating system does not block it from reading other files or using the network.",
       schedule: "When you click Run now, and while holdmap is open when the analysed items change.",
     };
