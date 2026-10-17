@@ -4,6 +4,8 @@
   // tree. Figures come from the OS; anything not observed is labelled as such.
   import Icon from "../Icon.svelte";
   import AgentTools from "./AgentTools.svelte";
+  import { EvidenceChip } from "../ui";
+  import { evidenceChip } from "../../lib/evidence";
   import { humanBytes, humanDuration, tildify } from "../../lib/format";
   import { EVIDENCE_LABEL, KIND_LABEL, LEVEL_LABEL, TOPIC_LABEL, accessFacts, accessHeadline, counts, countsLine, folderSourceLabel, stoppableEntries, monogram, processRows, startedFrom } from "../../lib/agents";
   import type { Agent, AgentProcess, AgentsReport, PortEntry } from "../../lib/types";
@@ -66,7 +68,9 @@
   const childAgents = $derived(startedFrom(report, agent.id));
   const tree = $derived(processRows(agent));
   const up = $derived(agent.started_at ? humanDuration(now / 1000 - agent.started_at) : null);
-  const meta = $derived([KIND_LABEL[agent.kind], agent.vendor !== "unknown" ? agent.vendor : null, `pid ${agent.pid}`, up ? `up ${up}` : null].filter(Boolean).join(" · "));
+  // Segments wrap as whole units, so a narrow rail never cuts a PID or count in half.
+  const meta = $derived([KIND_LABEL[agent.kind], agent.vendor !== "unknown" ? agent.vendor : null, `pid ${agent.pid}`, up ? `up ${up}` : null].filter((part): part is string => !!part));
+  const nums = $derived([...countsLine(c).split(" · "), `${c.processes} ${c.processes === 1 ? "process" : "processes"}`, `${c.tools} ${c.tools === 1 ? "tool" : "tools"}`]);
   const entry = (id: string | null) => entries.find((e) => e.id === id) ?? null;
   const stoppable = $derived(stoppableEntries(agent, entries));
   const children = $derived(tree.filter(({ process }) => process.role === "child").map(({ process }) => process));
@@ -75,6 +79,8 @@
     return p.role === "helper" ? "helper" : p.role === "child" ? "tool / app it started" : "agent";
   }
 </script>
+
+{#snippet segments(parts: string[])}{#each parts as part, i}{#if i}{" "}{/if}<span class="seg">{i ? "· " : ""}{part}</span>{/each}{/snippet}
 
 {#snippet rowBody(icon: string, label: string, sub: string)}
   <span class="ic"><Icon name={icon} size={13} /></span>
@@ -86,10 +92,10 @@
     <span class="tile" aria-hidden="true">{monogram(agent.name)}</span>
     <span class="who">
       <span class="name">{agent.name}</span>
-      <span class="meta">{meta}</span>
+      <span class="meta">{@render segments(meta)}</span>
     </span>
     <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.text}</span>
-    <span class="nums">{countsLine(c)} · {c.processes} {c.processes === 1 ? "process" : "processes"} · {c.tools} {c.tools === 1 ? "tool" : "tools"}</span>
+    <span class="nums">{@render segments(nums)}</span>
     <span class="resources mono">{agent.cpu_percent.toFixed(agent.cpu_percent < 10 ? 1 : 0)}% CPU · {humanBytes(agent.memory_bytes)} total memory</span>
   </button>
 
@@ -112,8 +118,7 @@
             <dd>
               <span class="lv">{LEVEL_LABEL[f.level]}</span>
               <span class="sum">{f.summary}</span>
-              {#if f.evidence === "inferred"}<span class="ev">{EVIDENCE_LABEL[f.evidence]}</span>{/if}
-              {#if f.evidence === "unknown"}<span class="ev muted">{EVIDENCE_LABEL[f.evidence]}</span>{/if}
+              {#if f.evidence !== "observed"}<EvidenceChip {...evidenceChip(f.evidence)} />{/if}
             </dd>
           </div>
         {/each}
@@ -225,7 +230,8 @@
   .tile { grid-area: tile; width: 36px; height: 36px; margin-top: 2px; display: grid; place-items: center; border-radius: 10px; background: color-mix(in srgb, var(--agent) 16%, var(--surface)); color: var(--agent); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-semibold); letter-spacing: var(--ls-body); }
   .who { grid-area: who; min-width: 0; display: grid; }
   .name { font-weight: var(--fw-semibold); font-size: var(--fs-body); line-height: var(--lh-body); letter-spacing: var(--ls-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { display: flex; flex-wrap: wrap; column-gap: 0.3em; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
+  .seg { white-space: nowrap; }
   .acc { grid-area: acc; display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-2); }
   .acc i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
   .lv-restricted i { background: var(--ok); }
@@ -233,7 +239,7 @@
   .lv-elevated i { background: var(--danger); }
   .acc.lv-elevated { color: var(--danger); }
   .lv-unknown i { background: var(--muted); }
-  .nums { grid-area: nums; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .nums { grid-area: nums; display: flex; flex-wrap: wrap; column-gap: 0.3em; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
   .resources { grid-area: resources; font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--text-2); }
   .relations { padding: 0 12px 8px; display: grid; gap: 2px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .relations button { padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-2); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
@@ -250,9 +256,7 @@
   .fact.lv-elevated .lv { color: var(--danger); }
   .fact.lv-restricted .lv { color: var(--ok); }
   .fact.lv-unknown .lv { color: var(--muted); }
-  .sum, .ev { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-2); }
-  .ev { color: var(--warn); }
-  .ev.muted { color: var(--muted); }
+  .sum { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-2); }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
   .folder, .port-row { display: grid; gap: 2px; }
   .row-btn { width: 100%; display: flex; gap: 8px; align-items: flex-start; padding: 4px 6px; margin: 0 -6px; border: 0; border-radius: 8px; background: transparent; text-align: left; color: var(--text); font: inherit; }

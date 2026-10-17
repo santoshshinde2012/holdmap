@@ -27,6 +27,16 @@ inspector, grouped title-bar actions, schedules started from the empty manager, 
 macOS fullscreen close that returns to the previous app. See the
 [0.6.0 changes](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#060---2026-10-14).
 
+## Home and first open
+
+On `main` (not yet in a published release), **Home** summarises agents and tools, dev
+servers, listening ports and listeners open to the network, with a short **Needs a look**
+list: agents on all interfaces, agents running as root or with elevated access, and exposed
+dev servers. Click any agent to open it on Agents. Counts read **—** until the first scan.
+
+The first open asks where to start and shows notifications, launch at login and single-key
+shortcuts with their current settings. **Skip** changes nothing.
+
 ## Close, reopen and quit
 
 When the menu-bar or tray icon is available, closing the desktop window keeps Holdmap
@@ -86,8 +96,8 @@ Screen recording requires **0.7.0 or newer**, or the browser demo. Version **0.6
 installers do not include it.
 To add it to an existing 0.6.0 installation, download and install the new desktop build.
 
-The video icon in 0.9.0 (the camera icon in 0.8.0), **Record screen…** in the
-command palette, or `⇧V` starts a local capture. Holdmap explains that recordings stay on this computer, then the
+The video icon (in the status bar on `main`, the title bar in 0.9.0, the camera icon in 0.8.0),
+**Record screen…** in the command palette, or `⇧V` starts a local capture. Holdmap explains that recordings stay on this computer, then the
 operating system asks which display or window to share. Microphone and system audio are
 not captured. A timer in the title bar and **Stop screen recording** replace the dialog so
 this window can be part of the capture.

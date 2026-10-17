@@ -8,6 +8,22 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- **Home** overview in the desktop app: counts, a **Needs a look** list and one-click agent
+  details. Unknown counts read as unknown, not zero.
+- A first-open welcome to choose the start view and review notifications, launch at login
+  and single-key shortcuts. Skipping changes nothing.
+
+### Changed
+
+- Screen recording and snapshots moved from the title bar to the status bar; the recording
+  timer and **Stop screen recording** stay in the title bar.
+- Evidence caveats show once, as a chip with a tooltip, instead of repeated notes.
+- Flow keeps source, refresh and pause in its toolbar; inspector, limits and recording
+  controls moved to **View options**.
+- Agent cards wrap PIDs and counts whole instead of cutting them off.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added

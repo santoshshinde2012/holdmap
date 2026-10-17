@@ -1253,14 +1253,16 @@ flowchart TB
     CMD --> CF
   end
   subgraph UI["Svelte 5 front-end"]
-    APP["App.svelte · Presentation root<br/>List, graph, agents + keyboard navigation"]
+    APP["App.svelte · Presentation root<br/>Home, list, graph, agents + keyboard navigation"]
+    SHELL["components/shell/<br/>TitleBar · ViewToolbar · Notices · StatusBar"]
+    HOME["components/home/HomeView<br/>Pure view model: lib/home.ts"]
     GV["GraphView.svelte<br/>@xyflow/svelte"]
     AV["AgentsView.svelte<br/>agent cards + C4 pictures<br/>(lib/agents.ts: context / footprint / project)"]
     NODES["components/graph/<br/>ServiceNode · ClusterNode · TrafficEdge · FitOnChange"]
     AGNODES["components/agents/<br/>AgentNode · FootNode · AgentTools"]
     LG["lib/graph.ts<br/>dagre layered · force · toFlow · related · sections"]
     OTHER["Feature panels + dialogs<br/>Detail, settings, history + confirmation"]
-    LIST["components/list/<br/>Rows, groups, badges + sparklines<br/>Pure view model: lib/rows.ts"]
+    LIST["components/list/<br/>PortList, rows, groups, badges + sparklines<br/>Pure view models: lib/rows.ts · lib/port-list.ts"]
     KIT["components/ui/<br/>UI kit (see below)"]
     API["lib/api.ts: Tauri IPC, live CLI in vite, or lib/mock.ts demo data"]
     APP --> GV --> NODES
@@ -1268,6 +1270,8 @@ flowchart TB
     GV --> LG
     APP --> OTHER --> KIT
     APP --> LIST --> KIT
+    APP --> SHELL --> KIT
+    APP --> HOME
     APP --> API
   end
   API -- "Tauri IPC" --> CMD
@@ -1279,7 +1283,7 @@ flowchart TB
   classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
   classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
   classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
-  class LIB,CMD,TR,W,SC,APP,GV,AV,NODES,AGNODES,OTHER,LIST,KIT,API surface
+  class LIB,CMD,TR,W,SC,APP,SHELL,HOME,GV,AV,NODES,AGNODES,OTHER,LIST,KIT,API surface
   class LG domain
   class CF safety
   class ST data
@@ -1289,7 +1293,10 @@ flowchart TB
 
 `commands.rs` validates action targets, schedules blocking work and calls the core. Native
 state owns freshness and preference handling. View logic such as layout, filtering and ordering
-lives in pure TypeScript modules covered by Vitest.
+lives in pure TypeScript modules covered by Vitest. Stateful app-shell behaviour that is not
+view logic (screen recording lifecycle) lives in a controller class
+(`lib/screen-capture.svelte.ts`); `App.svelte` wires state to components and owns no markup
+beyond the main view switch and dialogs.
 
 `AppState` serializes scans and shares a cache keyed by socket view and Docker collection.
 Agent, topology and explanation commands require a scan no older than one second, even when

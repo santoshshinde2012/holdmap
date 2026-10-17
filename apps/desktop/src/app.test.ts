@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Regression for the blinking details pane: every scan used to throw the explanations away, so
 // the selected port's Overview fell back to its skeleton until `explain` answered again.
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import type { ActionPlan, Explanation, HttpInfo, Snapshot, StopReport } from "./lib/types";
 import type { ScheduledStopRequest } from "./lib/schedules";
@@ -107,6 +107,8 @@ beforeAll(() => {
   Element.prototype.scrollIntoView ??= () => {};
   window.requestAnimationFrame ??= (f) => setTimeout(() => f(0), 16) as unknown as number;
 });
+// The first-run welcome is covered on its own; other tests start as a returning user.
+beforeEach(() => localStorage.setItem("holdmap.onboarded", "1"));
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -615,5 +617,47 @@ describe("App live polling", () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(container.querySelector("aside.pane")?.textContent).toContain("Current service");
     expect(container.querySelector("aside.pane")?.textContent).not.toContain("Replaced service");
+  });
+});
+
+describe("App overview and first run", () => {
+  it("answers which agent is running in two clicks from the overview", async () => {
+    vi.useFakeTimers();
+    const { mockAgents } = await import("./lib/mock");
+    const agent = mockAgents().agents[0];
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    await fireEvent.click(view.getByRole("radio", { name: /^Home/ }));
+    await vi.advanceTimersByTimeAsync(300);
+    const overview = view.getByRole("region", { name: "Overview" });
+    const row = [...overview.querySelectorAll<HTMLButtonElement>("button.agent")].find((b) => b.textContent?.includes(agent.name))!;
+    await fireEvent.click(row);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(view.getByRole("radio", { name: /^Agents/ }).getAttribute("aria-checked")).toBe("true");
+    expect(localStorage.getItem("holdmap.view")).toBe("agents");
+  });
+
+  it("offers the welcome once, and skipping changes nothing else", async () => {
+    vi.useFakeTimers();
+    localStorage.removeItem("holdmap.onboarded");
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    const dialog = view.getByRole("dialog", { name: "Welcome to holdmap" });
+    expect(dialog).toBeTruthy();
+    await fireEvent.click(view.getByRole("button", { name: "Skip" }));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(view.queryByRole("dialog", { name: "Welcome to holdmap" })).toBeNull();
+    expect(localStorage.getItem("holdmap.onboarded")).toBe("1");
+    expect(view.container.querySelector("#port-list")).not.toBeNull();
+  });
+
+  it("starts on the chosen view after the welcome", async () => {
+    vi.useFakeTimers();
+    localStorage.removeItem("holdmap.onboarded");
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    await fireEvent.click(view.getByRole("button", { name: "Start" }));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(view.getByRole("region", { name: "Overview" })).toBeTruthy();
   });
 });
