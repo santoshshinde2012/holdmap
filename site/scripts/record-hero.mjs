@@ -24,10 +24,11 @@ const p = await ctx.newPage();
 const errors = [];
 p.on("pageerror", (error) => errors.push(error.message));
 await p.clock.install();
-await p.goto(`${base}demo/?theme=${theme}&view=list`, { waitUntil: "networkidle" });
+await p.goto(`${base}demo/?theme=${theme}`, { waitUntil: "networkidle" });
 if (await p.evaluate(() => "__TAURI_INTERNALS__" in window)) throw new Error("Hero capture requires the browser demo with simulated stops.");
 await p.addStyleTag({ content: `a[style*="position:fixed"]{display:none!important} *{cursor:none!important;caret-color:transparent!important} ::-webkit-scrollbar{display:none}${M ? " .app.mac .titlebar{padding-left:16px!important}" : ""}` });
-await p.locator('[id^="row-tcp:3000:"]').waitFor();
+await p.locator("#home-overview").waitFor();
+await p.getByRole("button", { name: "Port 3000 Next.js", exact: true }).first().waitFor();
 await p.waitForTimeout(600);
 await p.evaluate(({ M, dark }) => {
   const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -93,102 +94,107 @@ const center = async (loc) => { const r = await loc.boundingBox(); if (!r) throw
 const move = async (xy, ms) => { await p.evaluate(([x, y, ms]) => window.__cur.move(x, y, ms), [...xy, ms]); await hold(ms); await p.mouse.move(...xy); };
 const click = async (xy) => { await p.evaluate(() => window.__cur.click()); if (M) { await p.touchscreen.tap(...xy); await p.mouse.move(-1, -1); } else await p.mouse.click(...xy); }; // touch leaves no hover
 const keys = (k, ms = 900) => p.evaluate(([k, ms]) => window.__keys(k, ms), [k, ms]);
-const type = async (s, d = 130) => { for (const ch of s) { await p.keyboard.type(ch); await hold(d); } };
 const show = (xy) => p.evaluate(([x, y]) => window.__cur.show(x, y), xy);
 const t0 = Date.now();
 
-mark("find");
-await hold(1000);
-const sxy = await center(p.locator('input[type="search"]').first());
-const at = M ? [sxy[0] - 40, sxy[1]] : [sxy[0] - 120, sxy[1]];
-await show(M ? [VW * 0.62, VH * 0.62] : [VW * 0.68, VH * 0.62]);
-await hold(300);
-await move(at, 850);
-await click(at);
-await hold(300);
-await type("shop", 150);
-await hold(700);
-const rxy = await center(p.locator('[id^="row-tcp:3000:"]').first());
-const rowAt = M ? [rxy[0] - 60, rxy[1]] : [rxy[0] - 250, rxy[1]];
-await move(rowAt, 750);
-await hold(120);
-mark("explain");
-await click(rowAt);
-await hold(700);
-if (!M) {
-  await move(await center(p.locator("aside.pane").getByText("1.1 GB").first()), 900);
-  await hold(2500);
-  mark("stop");
-  await p.evaluate(() => window.__cur.hide());
-  await keys(["⌘", "K"], 1000);
-  await hold(250);
-  await p.keyboard.press("Meta+k");
-  await hold(650);
-  await type("stop", 140);
-  await hold(900);
-  await keys(["↵"], 800);
-  await hold(250);
-  await p.keyboard.press("Enter");
-  await hold(2700);
-  const bxy = await center(p.locator('[role="alertdialog"] [data-primary]').first());
-  await show([bxy[0] - 170, bxy[1] - 110]);
-  await hold(250);
-  await move(bxy, 800);
-  await hold(150);
-  mark("free");
-  await click(bxy);
-} else {
-  await hold(1600);
-  const bxy = await center(p.getByRole("button", { name: /^Stop/ }).last());
-  await move(bxy, 800);
-  await hold(150);
-  mark("stop");
-  await click(bxy);
-  await hold(2700);
-  const cxy = await center(p.locator('[role="alertdialog"] [data-primary]').first());
-  await move(cxy, 800);
-  await hold(150);
-  mark("free");
-  await click(cxy);
+// Home Cards → Map → a port's menu → Stop… → the reviewed plan → the port freed → Agents' MCP &
+// skills, then back to Home Cards so encode-hero.sh can dissolve the last frame into the first.
+const portNode = () => M
+  ? p.getByRole("button", { name: "Port 3000 Next.js", exact: true }).first()
+  : p.locator('svg[aria-label="Machine map"] [role="button"][aria-label*=":3000"]').first();
+// Bring the target into view by easing its scrollers over `ms` on the fake clock, so the video
+// shows the movement (the toolbar scrolls sideways on narrow windows, the page vertically).
+const reveal = async (loc, ms = 600) => {
+  const plan = await loc.evaluate((el) => {
+    const out = [];
+    const r = el.getBoundingClientRect();
+    for (let s = el.parentElement; s; s = s.parentElement) {
+      const cs = getComputedStyle(s), v = s.getBoundingClientRect();
+      const top = s === document.documentElement ? 0 : v.top, bottom = s === document.documentElement ? innerHeight : v.bottom;
+      const left = s === document.documentElement ? 0 : v.left, right = s === document.documentElement ? innerWidth : v.right;
+      const dx = s.scrollWidth > s.clientWidth + 1 && /auto|scroll/.test(cs.overflowX) && (r.left < left + 8 || r.right > right - 8) ? Math.round(r.left + r.width / 2 - (left + right) / 2) : 0;
+      const dy = s.scrollHeight > s.clientHeight + 1 && /auto|scroll/.test(cs.overflowY) && (r.top < top + 40 || r.bottom > bottom - 90) ? Math.round(r.top + r.height / 2 - (top + bottom) / 2) : 0;
+      if (dx || dy) { s.dataset.heroScroll = String(out.length); out.push([dx, dy]); }
+    }
+    return out;
+  });
+  if (!plan.length) return;
+  const ease = (t) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
+  const n = Math.max(1, Math.round((ms * FPS) / 1000));
+  for (let i = 1; i <= n; i++) {
+    const k = ease(i / n) - ease((i - 1) / n);
+    await p.evaluate(([plan, k]) => plan.forEach(([dx, dy], j) => document.querySelector(`[data-hero-scroll="${j}"]`)?.scrollBy(dx * k, dy * k)), [plan, k]);
+    await step();
+  }
+  await p.evaluate(() => document.querySelectorAll("[data-hero-scroll]").forEach((s) => delete s.dataset.heroScroll));
+};
+const choose = async (loc, ms = 750) => { await reveal(loc); await move(await center(loc), ms); await hold(120); await click(await center(loc)); };
+
+mark("home");
+await hold(1500);
+// The first card in view: Cursor's :3000 beside the map on desktop, Claude Code's :3001 on phones.
+const chip = p.getByRole("article", { name: M ? "Claude Code" : "Cursor", exact: true }).getByRole("button", { name: M ? "Port 3001 Express" : "Port 3000 Next.js", exact: true });
+await show(M ? [VW * 0.62, VH * 0.6] : [VW * 0.66, VH * 0.62]);
+await hold(250);
+await move(await center(chip), 900);
+await hold(1300);
+
+mark("map");
+const layout = p.getByRole("radiogroup", { name: "Home layout", exact: true });
+if (M) await choose(layout.getByRole("radio", { name: "Map", exact: true }));
+else {
+  await keys(["V"], 900);
+  await hold(200);
+  await p.keyboard.press("v");
 }
-// Land on the freed state (no details pane, search cleared, the toast saying so), then tidy up so
-// the last frame is the opening list minus :3000, which encode-hero.sh dissolves back into frame 0.
+await until(async () => (await layout.getByRole("radio", { name: "Map", exact: true }).getAttribute("aria-checked")) === "true");
+await hold(1700);
+await choose(portNode());
+const menu = p.getByRole("menu");
+await until(async () => (await menu.count()) > 0);
+await hold(900);
+
+mark("stop");
+await choose(menu.getByRole("menuitem", { name: "Stop…", exact: true }), 650);
+const plan = p.locator('[role="alertdialog"]');
+await until(async () => (await plan.count()) > 0);
+await hold(2600);
+await choose(plan.locator("[data-primary]").first(), 800);
 const dismiss = p.getByRole("button", { name: "Dismiss notification" });
 await until(async () => (await dismiss.count()) > 0, 6000);
-await until(async () => (await p.locator('[id^="row-tcp:3000:"]').count()) === 0);
-await hold(500);
-if (M) {
-  await move(await center(p.getByRole("button", { name: "Close details" })), 650);
-  await hold(100);
-  await click(await center(p.getByRole("button", { name: "Close details" })));
-  await hold(450);
-  const clear = await center(p.getByRole("button", { name: /^Clear search/ }));
-  await move(clear, 650);
-  await hold(100);
-  await click(clear);
-  await hold(150);
-  await p.keyboard.press("Escape"); // leaves the search field
-  await hold(100);
-  await p.keyboard.press("Escape"); // drops the row selection
-} else {
-  await keys(["esc"], 900);
-  await hold(250);
-  await p.keyboard.press("Escape"); // clears the search
-  await hold(300);
-  await p.keyboard.press("Escape"); // closes the details pane
+await until(async () => (await p.getByRole("button", { name: /^Port 3000 / }).count()) === 0 && (await plan.count()) === 0, 6000);
+await hold(1800);
+await choose(dismiss.first(), 650);
+await until(async () => (await dismiss.count()) === 0);
+await hold(300);
+
+mark("agents");
+const views = p.getByRole("radiogroup", { name: "View", exact: true });
+if (M) await choose(views.getByRole("radio", { name: /^Agents/ }));
+else {
+  await p.evaluate(() => window.__cur.hide());
+  await keys(["⇧", "A"], 900);
+  await hold(200);
+  await p.keyboard.press("Shift+A");
 }
-await hold(1700);
-const x = await center(dismiss.first());
-await move(x, 700);
-await hold(100);
-await click(x);
-await p.mouse.move(-1, -1); // no hover left on whatever was under the toast
-await hold(250);
-await p.evaluate(() => window.__cur.hide());
+await until(async () => (await views.getByRole("radio", { name: /^Agents/ }).getAttribute("aria-checked")) === "true");
 await hold(700);
+await choose(p.getByRole("radio", { name: "MCP & skills", exact: true }));
+await until(async () => (await p.locator("#agent-capabilities").count()) > 0);
+await hold(2800);
+
+// Back to the opening frame: Home, Cards and no hover.
+await choose(views.getByRole("radio", { name: "Home", exact: true }), 700);
+await until(async () => (await p.locator("#home-overview").count()) > 0);
+await hold(300);
+await choose(layout.getByRole("radio", { name: "Cards", exact: true }), 650);
+await hold(300);
+await p.mouse.move(-1, -1);
+await p.evaluate(() => { window.__cur.hide(); for (const s of document.querySelectorAll("*")) if (s.scrollTop || s.scrollLeft) s.scrollTo(0, 0); });
+await hold(900);
 mark("end");
 if (await p.locator('[role="alertdialog"]').count()) throw new Error("The simulated stop dialog remained open.");
-if (await p.locator('input[type="search"]').first().inputValue()) throw new Error("The final search was not cleared.");
+if ((await p.getByRole("radiogroup", { name: "Home layout", exact: true }).getByRole("radio", { name: "Cards", exact: true }).getAttribute("aria-checked")) !== "true") throw new Error("The tour must end on Home Cards.");
 if (errors.length) throw new Error(`Browser errors during the tour: ${errors.join("; ")}`);
 writeFileSync(`${dir}/meta.json`, JSON.stringify({ variant, theme, VW, VH, DPR, FPS, frames: frame, marks }, null, 1));
 console.log(variant, theme, frame, "frames in", ((Date.now() - t0) / 1000).toFixed(0), "s", JSON.stringify(marks));

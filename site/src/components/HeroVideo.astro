@@ -15,8 +15,8 @@ import mobLight from "../assets/hero/hero-poster-mobile-light.png";
 
 // Chapter start times (seconds) per cut: the "marks" in the meta.json that scripts/record-hero.mjs writes.
 const cuts = {
-  desktop: { duration: 21.3, starts: [0, 4.617, 8.717, 15.2] },
-  mobile: { duration: 19.267, starts: [0, 4.617, 7.867, 11.517] },
+  desktop: { duration: 24.983, starts: [0, 3.95, 7.617, 16.717] },
+  mobile: { duration: 28.117, starts: [0, 3.95, 8.883, 18.583] },
 };
 
 const MOBILE = "(max-width: 640px)";
@@ -36,7 +36,7 @@ async function poster(desk: ImageMetadata, mob: ImageMetadata) {
 const posters = { dark: await poster(deskDark, mobDark), light: await poster(deskLight, mobLight) };
 const sizes = `${MOBILE} calc(100vw - 72px), (max-width: 1023px) calc(78vw - 52px), 640px`;
 const files = { base: url("hero/") };
-const alt = "A tour of holdmap with sample data: finding shop-web on port 3000, inspecting its owner and memory use, reviewing a stop plan, and simulating the port becoming free.";
+const alt = "A tour of holdmap with sample data: the Home overview of agents and their ports, the machine map, a stop plan for shop-web on port 3000, the port becoming free, and the MCP servers and skills each agent can use.";
 ---
 <figure class="hero-video" data-hero-video data-base={files.base} data-cuts={JSON.stringify(cuts)} data-mobile={MOBILE}>
   <div class="device">
