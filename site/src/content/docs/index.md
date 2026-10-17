@@ -32,8 +32,8 @@ package is attached to the GitHub release as a tarball.
 
 After installation, compare `holdmap --version` with the
 [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest).
-[What's new](whats-new/) covers Home (Cards or Map), the richer agent inventory and port stops
-on `main`, and 0.9.0's PNG snapshots, readable service graph and capability explorer. During release preparation, downloads remain on
+[What's new](whats-new/) covers 0.9.0: Home (Cards or Map), the richer agent inventory, port stops
+from Home, PNG snapshots, a readable service graph and the capability explorer. During release preparation, downloads remain on
 the latest published release; **0.8.0** installers predate these additions. Local MP4/GIF capture,
 Computer / Footprint / Project maps and optional reported usage remain available.
 For a desktop update, quit Holdmap, install the matching OS/architecture download, then reopen

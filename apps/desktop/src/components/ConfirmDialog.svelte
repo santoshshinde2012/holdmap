@@ -140,14 +140,14 @@
 <Dialog role="alertdialog" size="md" label={heading} dismissable={!busy} onclose={oncancel} initialFocus="[data-primary]">
   {#snippet header()}
     {#if phase !== "done"}
-      <header class="top">
+      <div class="top">
         {#if entry && !cluster}<FrameworkIcon {entry} size={40} />{:else}<span class="ctile"><Icon name="layers" size={20} /></span>{/if}
         <div class="tt">
           <h2>{heading}</h2>
           {#if sub}<div class="sub" class:mono={!cluster}>{sub}</div>{/if}
         </div>
         {#if !blocked}<span class="badge risk-{plan.risk}">{plan.risk} risk</span>{/if}
-      </header>
+      </div>
     {/if}
   {/snippet}
 

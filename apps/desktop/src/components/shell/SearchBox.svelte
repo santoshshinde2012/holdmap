@@ -3,8 +3,10 @@
   import { TextField } from "../ui";
   import type { View } from "./ViewToolbar.svelte";
 
-  let { view, capabilities, singleKeys, input = $bindable(), agentQuery = $bindable(), graphQuery = $bindable(), portQuery = $bindable() }: {
+  let { view, capabilities, singleKeys, controls, input = $bindable(), agentQuery = $bindable(), graphQuery = $bindable(), portQuery = $bindable() }: {
     view: View;
+    /** Id of the results this field filters, when they are on screen (aria-controls must resolve). */
+    controls?: string;
     /** Agents is showing MCP & skills. */
     capabilities: boolean;
     singleKeys: boolean;
@@ -19,11 +21,11 @@
 {#if view === "agents"}
   <TextField bind:input bind:value={agentQuery} type="search" variant="filled" icon="search" label="Search agents" labelHidden
     placeholder={capabilities ? "Search MCP, skills, sources, PIDs…" : "Search agents, tools, folders, PIDs…"} clearable kbdHint={hint}
-    spellcheck="false" autocomplete="off" aria-controls={capabilities ? "agent-capabilities" : "agent-list"} />
+    spellcheck="false" autocomplete="off" aria-controls={controls} />
 {:else if view === "graph"}
   <TextField bind:input bind:value={graphQuery} type="search" variant="filled" icon="search" label="Search services" labelHidden
-    placeholder="Search services, projects, ports, PIDs…" clearable kbdHint={hint} spellcheck="false" autocomplete="off" aria-controls="service-graph" />
+    placeholder="Search services, projects, ports, PIDs…" clearable kbdHint={hint} spellcheck="false" autocomplete="off" aria-controls={controls} />
 {:else}
   <TextField bind:input bind:value={portQuery} type="search" variant="filled" icon="search" label="Search ports" labelHidden
-    placeholder="Search ports, projects, processes…" clearable kbdHint={hint} spellcheck="false" autocomplete="off" aria-controls="port-list" />
+    placeholder="Search ports, projects, processes…" clearable kbdHint={hint} spellcheck="false" autocomplete="off" aria-controls={controls} />
 {/if}

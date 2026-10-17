@@ -21,8 +21,8 @@ agent PID. The Graph capture verifies every matching node and connection belongs
 to the four fixture listeners before publishing the filtered frame. ANSI output
 is held in memory, not saved as an unfiltered transcript. For published images,
 the current account name is replaced with `devuser`, truncated/padded to its
-original width; all other terminal cells and styles are retained. The renderer uses a fixed dark
-terminal palette and font; it does not reconstruct or manually edit app output.
+original width; all other terminal cells and styles are retained. Each screen is rendered with
+fixed dark and light terminal palettes and font; it does not reconstruct or edit app output.
 """
 
 from __future__ import annotations
@@ -63,15 +63,40 @@ except ImportError as error:
 
 
 ROOT = Path(__file__).resolve().parent.parent
-BACKGROUND = "#0c1117"
-FOREGROUND = "#c6d3de"
-PALETTE = {
-    "black": "#151b23", "red": "#ff757f", "green": "#9ece6a",
-    "brown": "#e0af68", "blue": "#7aa2f7", "magenta": "#bb9af7",
-    "cyan": "#7dcfff", "white": "#c6d3de", "brightblack": "#788a9b",
-    "brightred": "#ff9eab", "brightgreen": "#b9f27c", "brightbrown": "#ffdb8e",
-    "brightblue": "#9ac5ff", "brightmagenta": "#d4b6ff",
-    "brightcyan": "#b4f9f8", "brightwhite": "#f4f7fb",
+FAINT = "788a9b"  # SGR 2 marker; each theme renders it as its muted foreground.
+# pyte reports 256-colour indices 0-15 (how ratatui writes named colours) as xterm hex values.
+XTERM16 = dict(zip(
+    ["000000", "cd0000", "00cd00", "cdcd00", "0000ee", "cd00cd", "00cdcd", "e5e5e5",
+     "7f7f7f", "ff0000", "00ff00", "ffff00", "5c5cff", "ff00ff", "00ffff", "ffffff"],
+    ["black", "red", "green", "brown", "blue", "magenta", "cyan", "white", "brightblack",
+     "brightred", "brightgreen", "brightbrown", "brightblue", "brightmagenta", "brightcyan", "brightwhite"],
+))
+THEMES = {
+    "dark": {
+        "background": "#0c1117", "foreground": "#c6d3de", "faint": "#788a9b", "on_color": None, "greys": {}, "named_xterm": False,
+        "palette": {
+            "black": "#151b23", "red": "#ff757f", "green": "#9ece6a",
+            "brown": "#e0af68", "blue": "#7aa2f7", "magenta": "#bb9af7",
+            "cyan": "#7dcfff", "white": "#c6d3de", "brightblack": "#788a9b",
+            "brightred": "#ff9eab", "brightgreen": "#b9f27c", "brightbrown": "#ffdb8e",
+            "brightblue": "#9ac5ff", "brightmagenta": "#d4b6ff",
+            "brightcyan": "#b4f9f8", "brightwhite": "#f4f7fb",
+        },
+    },
+    # A white-background terminal: ANSI colours darkened for contrast, xterm greys 236-238 used
+    # as selection backgrounds lightened, and text on a coloured background drawn in white.
+    "light": {
+        "background": "#ffffff", "foreground": "#1f2328", "faint": "#6e7781", "on_color": "#ffffff", "named_xterm": True,
+        "greys": {"303030": "#eef1f4", "3a3a3a": "#e4e8ec", "444444": "#d8dee4"},
+        "palette": {
+            "black": "#1f2328", "red": "#cf222e", "green": "#1a7f37",
+            "brown": "#9a6700", "blue": "#0969da", "magenta": "#8250df",
+            "cyan": "#0a6e8a", "white": "#1f2328", "brightblack": "#59636e",
+            "brightred": "#a40e26", "brightgreen": "#116329", "brightbrown": "#7d4e00",
+            "brightblue": "#0550ae", "brightmagenta": "#6639ba",
+            "brightcyan": "#0a5c73", "brightwhite": "#1f2328",
+        },
+    },
 }
 
 
@@ -90,7 +115,7 @@ class CaptureScreen(pyte.Screen):
                 index += 2 if mode == 5 else 4 if mode == 2 else 0
             index += 1
         if faint:
-            self.cursor.attrs = self.cursor.attrs._replace(fg="788a9b")
+            self.cursor.attrs = self.cursor.attrs._replace(fg=FAINT)
 
 
 class Terminal:
@@ -603,17 +628,33 @@ def find_font(requested: str | None) -> Path:
     raise RuntimeError("No supported monospace font found; pass --font /path/to/font.ttf")
 
 
-def color(value: str, default: str) -> str:
+def named(value: str, theme: dict) -> str:
+    return XTERM16.get(value.lower(), value) if theme["named_xterm"] else value
+
+
+def color(value: str, default: str, theme: dict) -> str:
+    value = named(value, theme)
     if value == "default":
         return default
-    if value in PALETTE:
-        return PALETTE[value]
+    if value == FAINT:
+        return theme["faint"]
+    if value in theme["palette"]:
+        return theme["palette"][value]
+    if value.lower() in theme["greys"]:
+        return theme["greys"][value.lower()]
     if len(value) == 6 and all(char in "0123456789abcdef" for char in value.lower()):
         return "#" + value
     return default
 
 
 def render(screen, path: Path, font_path: Path, size: int, crop: bool = False) -> None:
+    """Render one captured screen as `<name>-dark.png` and its `<name>-light.png` twin."""
+    for name, theme in THEMES.items():
+        render_theme(screen, path.with_name(path.name.replace("-dark.png", f"-{name}.png")), font_path, size, crop, theme)
+
+
+def render_theme(screen, path: Path, font_path: Path, size: int, crop: bool, theme: dict) -> None:
+    background, foreground = theme["background"], theme["foreground"]
     # Supersampling improves small text while preserving the terminal's cell geometry.
     scale, padding = 2, 18
     font = ImageFont.truetype(str(font_path), size * scale)
@@ -632,16 +673,18 @@ def render(screen, path: Path, font_path: Path, size: int, crop: bool = False) -
         rows = max(index + 1 for index, line in enumerate(screen.display) if line.strip()) + 1
     width = screen.columns * cell_width + padding * 2 * scale
     height = rows * line_height + padding * 2 * scale
-    output = Image.new("RGB", (width, height), BACKGROUND)
+    output = Image.new("RGB", (width, height), background)
     draw = ImageDraw.Draw(output)
     for y in range(rows):
         for x in range(screen.columns):
             cell = screen.buffer[y][x]
-            fg, bg = color(cell.fg, FOREGROUND), color(cell.bg, BACKGROUND)
+            fg, bg = color(cell.fg, foreground, theme), color(cell.bg, background, theme)
             if cell.reverse:
                 fg, bg = bg, fg
+            if theme["on_color"] and bg != background and named(cell.bg, theme) in theme["palette"]:
+                fg = theme["on_color"]
             left, top = padding * scale + x * cell_width, padding * scale + y * line_height
-            if bg != BACKGROUND:
+            if bg != background:
                 draw.rectangle((left, top, left + cell_width - 1, top + line_height - 1), fill=bg)
             if cell.data.strip():
                 selected_font = bold if cell.bold else font

@@ -39,6 +39,33 @@ describe("dialog tab order", () => {
   });
 });
 
+describe("dialog focus when a control removes itself", () => {
+  it("moves focus to the surface so Esc and Tab still reach the dialog", async () => {
+    const { root, button } = surface();
+    root.tabIndex = -1;
+    const trap = focusTrap(root);
+    await Promise.resolve();
+    button.focus();
+    button.remove();
+    await Promise.resolve();
+    expect(document.activeElement).toBe(root);
+    trap.destroy();
+  });
+  it("leaves focus alone when it already moved somewhere else", async () => {
+    const { root, button } = surface();
+    const other = document.createElement("button");
+    root.append(other);
+    const trap = focusTrap(root);
+    await Promise.resolve();
+    button.focus();
+    other.focus();
+    button.remove();
+    await Promise.resolve();
+    expect(document.activeElement).toBe(other);
+    trap.destroy();
+  });
+});
+
 describe("dialog focus restoration", () => {
   it("returns to the original trigger after replacing a loading dialog with its review", async () => {
     const trigger = document.createElement("button");

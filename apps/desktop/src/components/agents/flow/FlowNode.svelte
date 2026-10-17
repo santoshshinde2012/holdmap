@@ -9,13 +9,13 @@
 </script>
 
 <div class="flow-node" class:chosen={data.chosen} class:inferred={!n.span && n.evidence !== "observed"} class:failed={n.status === "error"}>
-  <Handle type="target" position={Position.Left} isConnectable={false} />
+  <Handle type="target" position={Position.Left} isConnectable={false} aria-hidden="true" />
   <span class="icon"><Icon name={icons[n.kind] ?? "info"} size={17} /></span>
   <div class="copy"><strong title={n.label}>{n.label}</strong><span title={n.sub}>{n.sub}</span>
     <small>{n.span ? `${n.kind} · reported` : `${n.kind} · ${n.evidence}`}</small>
   </div>
   {#if n.status === "error"}<span class="error" title={STATUS_LABEL.error}><Icon name="alert" size={13} /></span>{/if}
-  <Handle type="source" position={Position.Right} isConnectable={false} />
+  <Handle type="source" position={Position.Right} isConnectable={false} aria-hidden="true" />
 </div>
 
 <style>

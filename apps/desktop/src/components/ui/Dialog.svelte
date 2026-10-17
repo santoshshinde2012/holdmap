@@ -4,6 +4,7 @@
   // - Esc and a backdrop click close it when `dismissable`; both are swallowed so nothing
   //   behind the dialog reacts
   // - `placement`: "center" (dialog), "right" (sheet/drawer), "top" (palette)
+  import { scrollFocus } from "../../lib/scrollable";
   import type { Snippet } from "svelte";
   import { fade, fly } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
@@ -102,17 +103,17 @@
     {#if header}
       {@render header()}
     {:else if title && !bare}
-      <header class="dh">
+      <div class="dh">
         {#if icon}<span class="tile {iconTone}" aria-hidden="true"><Icon name={icon} size={18} /></span>{/if}
         <div class="tt">
           <h2 id="{id}-title">{title}</h2>
           {#if description}<p id="{id}-desc">{description}</p>{/if}
         </div>
         {#if closeButton && dismissable}<IconButton icon="x" label="Close" kbd="Esc" size="sm" onclick={onclose} />{/if}
-      </header>
+      </div>
     {/if}
-    <div class="db">{@render children()}</div>
-    {#if footer}<footer class="df">{@render footer()}</footer>{/if}
+    <div class="db" use:scrollFocus>{@render children()}</div>
+    {#if footer}<div class="df">{@render footer()}</div>{/if}
   </div>
 </div>
 

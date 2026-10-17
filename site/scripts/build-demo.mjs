@@ -22,15 +22,15 @@ execFileSync("npx", ["vite", "build", "--base", base, "--outDir", out, "--emptyO
   env: { ...process.env, TAURI_ENV_PLATFORM: "" },
 });
 
-// Demo defaults before the app mounts: skip onboarding, start on the list, follow the site's
-// theme (?theme=dark|light), keep "Open in browser" from opening localhost, and offer a way
+// Demo defaults before the app mounts: skip onboarding, start on Home like the app (or ?view=),
+// follow the site's theme (?theme=dark|light), keep "Open in browser" from opening localhost, and offer a way
 // back to the site when the demo is opened on its own.
 const boot = `<script>
 (function () {
-  var q = new URLSearchParams(location.search), t = q.get("theme");
+  var q = new URLSearchParams(location.search), t = q.get("theme"), v = q.get("view");
   try {
     localStorage.setItem("holdmap.onboarded", "1");
-    localStorage.setItem("holdmap.view", "list");
+    localStorage.setItem("holdmap.view", /^(home|list|graph|agents)$/.test(v || "") ? v : "home");
     localStorage.setItem("holdmap.sort", "group");
     if (t === "light" || t === "dark") localStorage.setItem("holdmap.theme", t);
   } catch (e) {}

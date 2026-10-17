@@ -1,12 +1,19 @@
 ---
 title: What's new
-description: What's new in holdmap - Home as Cards or Map, a richer agent inventory and safe port stops on main, plus 0.9.0 snapshots and the capability explorer.
+description: What's new in holdmap 0.9.0 - Home as Cards or Map, a richer agent inventory, safe port stops, PNG snapshots and the capability explorer.
 order: 1.5
 ---
 
-## On main: Home, agent inventory and port stops
+## 0.9.0
 
-Not in a published release yet; [Install](../../#install) follows the latest published release.
+**Holdmap 0.9.0** brings Home, a richer agent inventory and port stops from Home, plus PNG
+snapshots, a readable service graph and the **Explore / Map / Compare** capability explorer.
+During release preparation, a source version does not imply installer availability. The
+download section follows the latest published release; check [Install](../../#install) before
+upgrading. The [changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md)
+records the full changes.
+
+### Home, agent inventory and port stops
 
 - **Home** shows every agent as **Cards** or a **Map** with a **Timeline** of uptime, ports
   and MCP, plus a **Needs you** list. Press `V` to switch. [Home](../desktop/#home-and-first-open).
@@ -17,14 +24,6 @@ Not in a published release yet; [Install](../../#install) follows the latest pub
   read. [Launch, run state and permissions](../agents/#launch-run-state-and-permissions).
 - **Stop a port from Home:** click a card chip, map node or timeline pin for **Details** or
   **Stop…**; the stop plan opens first. Narrow windows list each agent's ports with the same menu.
-
-## 0.9.0
-
-**Holdmap 0.9.0** brings PNG snapshots, a readable service graph and the
-**Explore / Map / Compare** capability explorer. During release preparation, a source version
-does not imply installer availability. The download section follows the latest published
-release; **0.8.0** installers predate these additions. Check [Install](../../#install) before upgrading; the
-[changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md) records the full changes.
 
 ### PNG snapshots alongside video
 

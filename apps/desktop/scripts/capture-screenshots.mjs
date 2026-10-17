@@ -222,7 +222,7 @@ async function openCapabilities(page, mode = "map") {
     await views.getByRole("radio", { name: "Compare", exact: true }).click();
     const comparison = workspace.getByRole("region", { name: "Capability comparison", exact: true });
     await expect(comparison.getByRole("heading", { name: "Compare observed sources", exact: true })).toBeVisible();
-    await expect(comparison.getByRole("button", { name: /^Inspect compared / })).toHaveCount(7);
+    await expect(comparison.getByRole("button", { name: /^Inspect compared / })).toHaveCount(10);
     await expect(comparison.getByText("Not reported here", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
     await assertFits();
@@ -233,7 +233,7 @@ async function openCapabilities(page, mode = "map") {
   await expect(graph.getByRole("button", { name: "Inspect capabilities for Cursor, PID 52000", exact: true })).toBeVisible();
   if (mode === "map") {
     await expect(page.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
-    await expect(graph.locator(".svelte-flow__edge")).toHaveCount(7);
+    await expect(graph.locator(".svelte-flow__edge")).toHaveCount(10);
     await graph.getByRole("button", { name: "Fit all capabilities in view", exact: true }).click();
     await assertFits();
     return;
@@ -365,6 +365,7 @@ const captures = [
   { name: "desktop-overview-dark.png", theme: "dark", async prepare(page) { await selectPort(page); } },
   { name: "desktop-overview-light.png", theme: "light", async prepare(page) { await selectPort(page); } },
   { name: "desktop-graph-dark.png", theme: "dark", prepare: openGraph },
+  { name: "desktop-graph-light.png", theme: "light", prepare: openGraph },
   { name: "desktop-agents-dark.png", theme: "dark", prepare: openAgents },
   { name: "desktop-agents-light.png", theme: "light", prepare: openAgents },
   { name: "desktop-agents-computer-dark.png", theme: "dark", prepare: (page) => openAgents(page, "Computer") },

@@ -73,9 +73,21 @@ export function focusTrap(node: HTMLElement, opts: TrapOptions = {}) {
   queueMicrotask(() => { if (!node.contains(document.activeElement)) pick().focus(); });
   const onKey = (e: KeyboardEvent) => trapTab(e, node);
   node.addEventListener("keydown", onKey);
+  // A focused control that removes itself (a row's Cancel button, say) drops focus to <body>,
+  // where Esc and the Tab trap no longer reach this surface. Keep focus on the surface instead.
+  let focused: Element | null = null;
+  const onFocus = (e: FocusEvent) => { focused = e.target as Element; };
+  node.addEventListener("focusin", onFocus);
+  const removed = new MutationObserver(() => {
+    const active = document.activeElement;
+    if (focused && !focused.isConnected && (!active || active === document.body)) { focused = null; node.focus(); }
+  });
+  removed.observe(node, { childList: true, subtree: true });
   return {
     destroy() {
       node.removeEventListener("keydown", onKey);
+      node.removeEventListener("focusin", onFocus);
+      removed.disconnect();
       outgoingTargets = targets;
       if (opts.restore !== false) queueMicrotask(() => {
         if (outgoingTargets === targets) outgoingTargets = null;

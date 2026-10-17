@@ -110,14 +110,14 @@
   {#if graph.nodes.length || (mode === "calls" && run)}
     <div class="workspace" class:full={!inspector}>
       {#if graph.nodes.length}<FlowCanvas {graph} calls={mode === "calls"} chosen={selected} {dark} {reduced} onselect={(id) => chosen = id} />
-      {:else}<div class="empty"><Icon name="activity" size={28} /><h3>No activity matches this view</h3><p>Reset the filters or clear your search to see this recorded run.</p></div>{/if}
+      {:else}<div class="empty"><Icon name="activity" size={28} /><h2>No activity matches this view</h2><p>Reset the filters or clear your search to see this recorded run.</p></div>{/if}
       {#if inspector}
       <aside class="companion" aria-label={mode === "calls" ? "Recorded activity details" : "Connection details"}>
         <FlowInspector {graph} chosen={selected} onclose={() => chosen = null} />
         {#if mode === "calls" && run}<ActivityTimeline {run} {rows} chosen={selected} onselect={(id) => chosen = id} />
         {:else}
-          <section class="participants" aria-label="Flow participants"><h3>Participants <span>{graph.nodes.length}</span></h3><ul>{#each graph.nodes as n (n.id)}<li><button type="button" class:chosen={selected === n.id} aria-label={nodeDescription(n)} onclick={() => chosen = n.id}><strong>{n.label}</strong><span>{n.sub}</span><small>{n.kind} · {n.evidence}</small></button></li>{/each}</ul></section>
-          <section class="relationships" aria-label="Flow relationships"><h3>Relationships <span>{graph.edges.length}</span></h3><ul>{#each graph.edges as e (e.id)}<li><button type="button" class:chosen={selected === e.id} onclick={() => chosen = e.id}><strong>{graph.nodes.find((n) => n.id === e.from)?.label} {e.kind === "tcp" ? "↔" : "→"} {graph.nodes.find((n) => n.id === e.to)?.label}</strong><span>{e.label} · {e.evidence}</span></button></li>{/each}</ul></section>
+          <section class="participants" aria-label="Flow participants"><h2>Participants <span>{graph.nodes.length}</span></h2><ul>{#each graph.nodes as n (n.id)}<li><button type="button" class:chosen={selected === n.id} aria-label={nodeDescription(n)} onclick={() => chosen = n.id}><strong>{n.label}</strong><span>{n.sub}</span><small>{n.kind} · {n.evidence}</small></button></li>{/each}</ul></section>
+          <section class="relationships" aria-label="Flow relationships"><h2>Relationships <span>{graph.edges.length}</span></h2><ul>{#each graph.edges as e (e.id)}<li><button type="button" class:chosen={selected === e.id} onclick={() => chosen = e.id}><strong>{graph.nodes.find((n) => n.id === e.from)?.label} {e.kind === "tcp" ? "↔" : "→"} {graph.nodes.find((n) => n.id === e.to)?.label}</strong><span>{e.label} · {e.evidence}</span></button></li>{/each}</ul></section>
         {/if}
       </aside>
       {/if}
@@ -125,7 +125,7 @@
   {:else}
     <div class="empty" aria-busy={loading}>
       <Icon name={mode === "calls" ? "activity" : "link"} size={28} />
-      <h3>{loading ? "Loading flow…" : query.trim() ? "No flow matches this search" : mode === "calls" ? "No recorded activity yet" : "No observed connections yet"}</h3>
+      <h2>{loading ? "Loading flow…" : query.trim() ? "No flow matches this search" : mode === "calls" ? "No recorded activity yet" : "No observed connections yet"}</h2>
       <p>{query.trim() ? "Search by agent or tool name, process ID, address or port. Clear your search to see all available data." : mode === "calls" ? "Start recording and connect an integration to see reported calls. Running agents alone do not provide call telemetry." : "Start an agent or tool. Its observed process tree, listeners and live socket relationships appear after a scan."}</p>
       {#if query.trim() && onclearquery}<ActionPill label="Clear search" onclick={onclearquery} />
       {:else if mode === "calls" && !query.trim() && !recordingControls?.setupVisible()}<ActionPill label="Set up recording" onclick={() => { showRecording = true; recordingControls?.openSetup(); }} />{/if}
@@ -156,13 +156,13 @@
   .workspace.full { grid-template-columns: minmax(0, 1fr); }
   .failed-count { color: var(--danger) !important; }
   .companion { overflow: auto; min-height: 0; border-left: 1px solid var(--border); background: var(--surface); }
-  .participants h3, .relationships h3 { margin: 0; padding: 12px 14px 6px; font-size: var(--fs-body-sm); } h3 span { color: var(--muted); font-weight: var(--fw-regular); }
+  .participants h2, .relationships h2 { margin: 0; padding: 12px 14px 6px; font-size: var(--fs-body-sm); } h2 span { color: var(--muted); font-weight: var(--fw-regular); }
   .participants ul, .relationships ul { list-style: none; margin: 0; padding: 0 8px 10px; }
   .participants button, .relationships button { display: grid; width: 100%; gap: 3px; padding: 9px 6px; border-color: transparent; border-bottom-color: var(--border); border-radius: 7px; background: transparent; text-align: left; justify-content: stretch; }
   .participants strong, .relationships strong { font-size: var(--fs-body-sm); font-weight: var(--fw-medium); overflow-wrap: anywhere; } .participants span, .relationships span, .participants small { color: var(--muted); font-size: var(--fs-caption); overflow-wrap: anywhere; }
   .participants button.chosen, .relationships button.chosen { border-color: var(--accent); background: var(--accent-soft); }
   .empty { flex: 1; min-height: 120px; padding: 25px 18px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 9px; text-align: center; color: var(--muted); }
-  .empty h3 { margin: 0; color: var(--text); font-size: var(--fs-heading); } .empty p { max-width: 440px; margin: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body); }
+  .empty h2 { margin: 0; color: var(--text); font-size: var(--fs-heading); } .empty p { max-width: 440px; margin: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body); }
   .limits { border-top: 1px solid var(--border); padding: 8px 14px; font-size: var(--fs-caption); color: var(--muted); } .limits summary { display: flex; gap: 6px; align-items: center; color: var(--text-2); cursor: pointer; } .limits ul { margin: 8px 0; padding-left: 18px; max-height: 110px; overflow: auto; }
   @container (max-width: 940px) {
     .workspace:not(.full) { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 42%) minmax(0, 1fr); overflow: hidden; }

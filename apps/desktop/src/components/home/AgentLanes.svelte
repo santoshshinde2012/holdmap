@@ -61,6 +61,7 @@
     <!-- svelte-ignore a11y_interactive_supports_focus (hover is a convenience; the gutter button carries focus) -->
     <div class="row lane" role="row" style="--agent: {c}" class:active={active !== null && active === l.id} class:dim={active !== null && active !== l.id}
       onmouseenter={() => l.agent && onhover(l.id)} onmouseleave={() => l.agent && onhover(null)}>
+      <div class="lead" role="rowheader">
       {#if l.agent}
         <button type="button" class="gutter who" data-lane aria-label="{l.agent.name}, up {l.uptime}, {head ? ACCESS_LABEL[head.level] : ''}"
           onfocus={() => onhover(l.id)} onblur={() => onhover(null)} onclick={() => onselect(l.id)} ondblclick={() => onopenagent(l.id)}
@@ -71,6 +72,7 @@
       {:else}
         <span class="gutter who"><span class="mono"><Icon name="server" size={12} /></span><span class="nm"><b>Unowned</b><small>{l.bars.length} dev</small></span></span>
       {/if}
+      </div>
       <div class="track" role="cell">
         {#each scale.ticks as t (t.label)}<span class="grid" style="left: {(t.x * 100).toFixed(3)}%"></span>{/each}
         {#if l.start !== null}
@@ -130,6 +132,7 @@
   .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); }
   .who { display: flex; align-items: center; gap: var(--sp-2); padding: 6px var(--sp-4); border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; min-width: 0; }
   span.who { cursor: default; }
+  .lead { display: grid; min-width: 0; }
   .who:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
   .mono { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 8px; background: color-mix(in srgb, var(--agent) 16%, var(--surface)); color: var(--agent); font-size: var(--fs-caption); font-weight: var(--fw-semibold); }
   .nm { display: grid; min-width: 0; }
