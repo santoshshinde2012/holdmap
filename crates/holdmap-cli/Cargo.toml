@@ -36,7 +36,7 @@ unicode-width = "0.2"
 libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-base64 = "0.22"
+base64 = "0.23"
 
 [dev-dependencies]
 assert_cmd = "2.2"
