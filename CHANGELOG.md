@@ -8,6 +8,33 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- **Analyzers (opt-in).** Run scanners you choose on your agents' skills and MCP packages:
+  NVIDIA SkillSpector (installed by you), a built-in OSV.dev lookup for pinned npm/PyPI
+  packages, or a local CLI or MCP scanner you add from a manifest. Each one is off until you
+  approve a permissions sheet built from your real inventory. Approval is pinned to the
+  manifest and program, and any change asks again. Runs get a copy of each folder, a cleared
+  environment and a time limit. Only short findings are kept. Use **Settings → Analyzers**,
+  `holdmap analyzers` and `holdmap insights` (`--format sarif`).
+- OS sandboxes for analyzer runs: bubblewrap on Linux, Seatbelt on macOS (best effort) and a
+  Job Object on Windows, falling back to Basic. The sheet states what each one does and doesn't
+  block.
+- Analyzers that use the network run when items change only if you allow it
+  (`holdmap analyzers auto ID on`, or **Also run when items change**).
+- Analyzer API keys are stored in the OS keychain and passed only to the analyzer that declares
+  them (`holdmap analyzers key set|delete`).
+- A minisign-signed analyzer catalog ships with holdmap. You fetch updates yourself, review them
+  as a diff, then accept or reject them (`holdmap analyzers catalog`).
+- Add your own analyzers with `holdmap analyzers add|remove`. holdmap starts an MCP analyzer's
+  local server only for a run you start, and stops it afterwards. It warns you if the server
+  looks like one an agent is configured to use.
+- **Agents → Insights** collects every agent's findings in one place. Analyzers also cover
+  configured agents that aren't running.
+- `holdmap needs` and the MCP tool `list_needs` show the same **Needs you** list as the desktop
+  app, now including analyzer findings. The MCP tools `list_analyzers` and `list_insights` are
+  read-only. holdmap's MCP server now has 14 tools.
+
 ## [0.9.0] - 2026-10-17
 
 ### Added

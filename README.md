@@ -197,13 +197,16 @@ never read; MCP servers are never started. The desktop, the TUI (**c** in Agents
 loaded or used. See [MCP and skills](site/src/content/docs/agents.md#mcp-and-skills).
 
 **Analyzers (opt-in).** Run a scanner you pick on your agents' skills and MCP packages:
-[NVIDIA SkillSpector](https://github.com/NVIDIA/SkillSpector) (installed by you) or the built-in
-OSV.dev lookup for pinned npm/PyPI packages. Every analyzer is off until you approve it.
+[NVIDIA SkillSpector](https://github.com/NVIDIA/SkillSpector) (installed by you), the built-in
+OSV.dev lookup for pinned npm/PyPI packages, or a local CLI or MCP scanner you register with
+`holdmap analyzers add`. Every analyzer is off until you approve it.
 `holdmap analyzers show ID` prints exactly what it gets: the folders or package versions, the
-command, the network hosts, the cleared environment. Approval is pinned to that manifest and
-program; any change asks again. Runs get a copy of each folder, no environment values and a
-time limit. Only capped findings are kept, never matched text. holdmap never starts MCP
-servers for this. `holdmap insights --format sarif` exports the findings.
+command, the network hosts, the cleared environment and the sandbox (bubblewrap, Seatbelt or a
+Job Object where available). Approval is pinned to that manifest and program; any change asks
+again. Keys go in the OS keychain. Catalog updates are signed and applied only after you review
+the diff. holdmap never starts MCP servers on its own; an MCP analyzer's server runs only for a
+run you start. Only capped findings are kept, never matched text;
+`holdmap insights --format sarif` exports them. See [Analyzers](site/src/content/docs/analyzers.md).
 
 **Terminal agents.** Start `holdmap` and press **Shift+Tab**
 to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its
