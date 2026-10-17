@@ -86,10 +86,116 @@ try {
     console.log(`VIEWPORT ${label}: ${JSON.stringify(state)}`);
   };
 
-  await check("iframe loads the app with sample ports", async () => {
-    await frame.locator('[id^="row-tcp:3000:"]').waitFor({ timeout: 15000 });
+  await check("iframe loads the app on Home with sample agents and ports", async () => {
+    await frame.locator("#home-overview").waitFor({ timeout: 15000 });
+    await frame.getByRole("button", { name: "Port 3000 Next.js", exact: true }).waitFor({ timeout: 5000 });
     await page.locator(".try:not([disabled])").first().waitFor({ timeout: 5000 });
     await measureViewport("loaded");
+  });
+  await check("Home switches Cards and Map and folds the Map timeline", async () => {
+    const layout = frame.getByRole("radiogroup", { name: "Home layout", exact: true });
+    await layout.getByRole("radio", { name: "Map", exact: true }).click();
+    await frame.getByRole("article", { name: "Cursor", exact: true }).waitFor({ state: "detached" });
+    const timeline = frame.locator("#lanes-title");
+    await timeline.click();
+    if (await timeline.getAttribute("aria-expanded") !== "false") throw new Error("Timeline must fold");
+    await frame.locator("#agent-lanes").waitFor({ state: "detached" });
+    await timeline.click();
+    if (await timeline.getAttribute("aria-expanded") !== "true") throw new Error("Timeline must reopen");
+    await frame.locator("#agent-lanes").waitFor();
+    await layout.getByRole("radio", { name: "Cards", exact: true }).click();
+    await frame.getByRole("article", { name: "Cursor", exact: true }).waitFor();
+  });
+  await check("Home port menu offers Details and a simulated stop plan that asks first", async () => {
+    const chip = frame.getByRole("button", { name: "Port 3000 Next.js", exact: true });
+    await chip.click();
+    await frame.getByRole("menuitem", { name: "Details" }).click();
+    await frame.getByText("shop-web").first().waitFor({ timeout: 5000 });
+    await page.keyboard.press("Escape");
+    await frame.getByRole("radio", { name: "Home", exact: true }).click();
+    await chip.click();
+    await frame.getByRole("menuitem", { name: /^Stop/ }).click();
+    const plan = frame.locator('[role="alertdialog"]');
+    await plan.waitFor({ timeout: 5000 });
+    await page.keyboard.press("Escape");
+    await plan.waitFor({ state: "detached" });
+    await frame.getByRole("button", { name: "Review stop plan: Cursor", exact: true }).click();
+    await frame.getByRole("alertdialog", { name: /^Stop Cursor/ }).waitFor();
+    await page.keyboard.press("Escape");
+    await plan.waitFor({ state: "detached" });
+    await frame.getByRole("button", { name: "Port 3000 Next.js", exact: true }).waitFor();
+  });
+  await check("Every header control opens its surface, closes with Escape and restores focus", async () => {
+    for (const [button, dialog] of [["Commands", "Command palette"], ["Recently stopped", "Recently stopped"], [/^Scheduled actions/, "Scheduled actions"], ["Remote host…", "Remote host"], ["Settings", "Settings"]]) {
+      const control = frame.getByRole("button", { name: button, exact: true });
+      await control.click();
+      const surface = frame.getByRole("dialog", { name: dialog, exact: true });
+      await surface.waitFor({ timeout: 5000 });
+      await page.keyboard.press("Escape");
+      await surface.waitFor({ state: "detached", timeout: 5000 });
+      if (!(await control.evaluate((element) => element === document.activeElement))) throw new Error(`${dialog} must return focus to its header button`);
+    }
+    const refresh = frame.getByRole("button", { name: "Refresh", exact: true });
+    await refresh.click();
+    await frame.getByRole("button", { name: "Refresh", exact: true, disabled: false }).waitFor({ timeout: 5000 });
+    const html = frame.locator("html");
+    const start = await html.getAttribute("data-theme");
+    const themeButton = frame.getByRole("button", { name: /^Theme/ });
+    await themeButton.click();
+    if (await html.getAttribute("data-theme") === start) throw new Error("Theme must change");
+    for (let i = 0; i < 3 && await html.getAttribute("data-theme") !== start; i++) await themeButton.click();
+    if (await html.getAttribute("data-theme") !== start) throw new Error("Theme must cycle back");
+    // Single-key shortcuts leave focused buttons alone, so press ? from the page itself.
+    await frame.locator("body").evaluate(() => (document.activeElement)?.blur());
+    await page.keyboard.press("?");
+    const shortcuts = frame.getByRole("dialog", { name: "Keyboard shortcuts", exact: true });
+    await shortcuts.waitFor({ timeout: 5000 });
+    await page.keyboard.press("Escape");
+    await shortcuts.waitFor({ state: "detached" });
+  });
+  await check("Scheduling a simulated port stop shows a countdown and cancels without changing ports", async () => {
+    await frame.getByRole("radio", { name: "List", exact: true }).click();
+    await frame.getByRole("option", { name: /^Port 3000 tcp,/ }).click();
+    const details = frame.getByRole("complementary", { name: "Port details", exact: true });
+    await details.getByRole("button", { name: "Schedule stop…", exact: true }).click({ timeout: 5000 });
+    const review = frame.getByRole("alertdialog");
+    await frame.getByRole("alertdialog", { name: "Schedule stop :3000?", exact: true }).waitFor();
+    await review.getByRole("button", { name: /^Schedule simulation/ }).click();
+    await review.getByText("Simulation scheduled", { exact: true }).waitFor();
+    await review.getByRole("button", { name: "Done", exact: true }).click();
+    const banner = frame.getByRole("region", { name: "Active scheduled actions", exact: true });
+    await banner.getByText("Stop :3000/tcp").waitFor({ timeout: 5000 });
+    await frame.getByRole("button", { name: /^Scheduled actions \(1 active\)$/ }).waitFor();
+    await banner.getByRole("button", { name: "View / cancel", exact: true }).click();
+    const manager = frame.getByRole("dialog", { name: "Scheduled actions", exact: true });
+    await manager.getByRole("button", { name: "Cancel Stop :3000/tcp", exact: true }).click();
+    await manager.getByText("Cancellation confirmed for Stop :3000/tcp.").waitFor();
+    await page.keyboard.press("Escape");
+    await manager.waitFor({ state: "detached" });
+    await banner.waitFor({ state: "detached", timeout: 5000 });
+    await frame.getByRole("option", { name: /^Port 3000 tcp,/ }).waitFor();
+  });
+  await check("List, Graph, Agents and MCP & skills each render their view", async () => {
+    const views = frame.getByRole("radiogroup", { name: "View", exact: true });
+    await views.getByRole("radio", { name: "List", exact: true }).click();
+    await frame.locator("#port-list").waitFor();
+    await views.getByRole("radio", { name: /^Graph/ }).click();
+    await frame.locator("#service-graph").waitFor();
+    await views.getByRole("radio", { name: /^Agents/ }).click();
+    await frame.locator("#agents-overview").waitFor();
+    await frame.getByRole("radio", { name: "MCP & skills", exact: true }).click();
+    await frame.locator("#agent-capabilities").waitFor();
+    await frame.getByRole("radio", { name: "Overview", exact: true }).click();
+    await views.getByRole("radio", { name: "Home", exact: true }).click();
+    await frame.getByRole("button", { name: /^\d+ listening$/ }).click();
+    await frame.locator("#port-list").waitFor();
+  });
+  await check("Status bar recording asks before capturing and cancels cleanly", async () => {
+    await frame.getByRole("button", { name: "Record screen", exact: true }).click();
+    const recorder = frame.getByRole("dialog", { name: "Record screen", exact: true });
+    await recorder.waitFor();
+    await page.keyboard.press("Escape");
+    await recorder.waitFor({ state: "detached" });
   });
   await check("Inspect :3000 selects the port and shows its details", async () => {
     await try_("Inspect :3000");
@@ -209,9 +315,25 @@ try {
     await frame.locator('[id^="row-tcp:3000:"]').waitFor({ state: "detached", timeout: 10000 });
     await measureViewport("after-stop");
   });
-  await check("Reset brings :3000 back", async () => {
+  await check("Reset reloads Home with :3000 back", async () => {
     await try_("Reset");
-    await frame.locator('[id^="row-tcp:3000:"]').waitFor({ timeout: 15000 });
+    await frame.locator("#home-overview").waitFor({ timeout: 15000 });
+    await frame.getByRole("button", { name: "Port 3000 Next.js", exact: true }).waitFor({ timeout: 15000 });
+  });
+  await check("Every Try button drives the app", async () => {
+    await page.locator(".try:not([disabled])").first().waitFor({ timeout: 15000 });
+    await try_("Shortcuts");
+    const shortcuts = frame.getByRole("dialog", { name: "Keyboard shortcuts", exact: true });
+    await shortcuts.waitFor({ timeout: 5000 });
+    await try_("Service graph");
+    await shortcuts.waitFor({ state: "detached" });
+    await frame.locator("#service-graph").waitFor({ timeout: 8000 });
+    await try_("Home");
+    await frame.locator("#home-overview").waitFor({ timeout: 5000 });
+    const labels = await page.locator(".try").allInnerTexts();
+    const covered = ["Home", "Inspect :3000", "Command palette", "Service graph", "Agents map", "Stop :3000", "Shortcuts", "Reset"];
+    const missing = labels.map((label) => label.trim()).filter((label) => !covered.some((name) => label.startsWith(name)));
+    if (missing.length) throw new Error(`Untested Try buttons: ${missing.join(", ")}`);
   });
 
   await check("Holdmap PNG snapshots export from the embedded demo without a display picker", async () => {
@@ -255,6 +377,21 @@ try {
         delete window.__holdmapDemoDisplayDescriptor;
       });
     }
+  });
+
+  await check("Demo Try buttons never overlap Full screen at any desktop width", async () => {
+    for (const width of [1440, 1201, 1200, 1100, 1000, 800]) {
+      await page.setViewportSize({ width, height: 900 });
+      const overlap = await page.evaluate(() => {
+        const full = document.querySelector("#demo .full")?.getBoundingClientRect();
+        return [...document.querySelectorAll("#demo .try")].some((button) => {
+          const box = button.getBoundingClientRect();
+          return full && box.width && box.right > full.left + 1 && box.left < full.right - 1 && box.bottom > full.top + 1 && box.top < full.bottom - 1;
+        });
+      });
+      if (overlap) throw new Error(`Try buttons overlap Full screen at ${width}px`);
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
   });
 
   const guideBase = new URL("./", page.url());

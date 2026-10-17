@@ -24,7 +24,7 @@ const p = await ctx.newPage();
 const errors = [];
 p.on("pageerror", (error) => errors.push(error.message));
 await p.clock.install();
-await p.goto(`${base}demo/?theme=${theme}`, { waitUntil: "networkidle" });
+await p.goto(`${base}demo/?theme=${theme}&view=list`, { waitUntil: "networkidle" });
 if (await p.evaluate(() => "__TAURI_INTERNALS__" in window)) throw new Error("Hero capture requires the browser demo with simulated stops.");
 await p.addStyleTag({ content: `a[style*="position:fixed"]{display:none!important} *{cursor:none!important;caret-color:transparent!important} ::-webkit-scrollbar{display:none}${M ? " .app.mac .titlebar{padding-left:16px!important}" : ""}` });
 await p.locator('[id^="row-tcp:3000:"]').waitFor();

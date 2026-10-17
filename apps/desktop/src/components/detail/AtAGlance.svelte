@@ -15,7 +15,7 @@
 
 <div class="glance">
   <div class="head">
-    <h3>At a glance</h3>
+    <h2>At a glance</h2>
     {#if onhide}<IconButton icon="panel" size="sm" label="Hide details pane" kbd="B" onclick={onhide} />{/if}
   </div>
   <div class="counts">
@@ -26,7 +26,7 @@
 
   {#if g.exposed.length}
     <section aria-labelledby="glance-exposed">
-      <h4 id="glance-exposed"><Icon name="globe" size={12} />Reachable from your network</h4>
+      <h3 id="glance-exposed"><Icon name="globe" size={12} />Reachable from your network</h3>
       <ul>
         {#each g.exposed as e (e.id)}
           <li><button type="button" onclick={() => onselect(e)}>
@@ -49,13 +49,13 @@
 <style>
   .glance { padding: var(--sp-6) var(--sp-5); display: grid; gap: var(--sp-5); color: var(--muted); }
   .head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
-  h3 { margin: 0; color: var(--text); font-size: var(--fs-title); font-weight: var(--fw-semibold); letter-spacing: var(--ls-title); line-height: var(--lh-title); }
+  h2 { margin: 0; color: var(--text); font-size: var(--fs-title); font-weight: var(--fw-semibold); letter-spacing: var(--ls-title); line-height: var(--lh-title); }
   .counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--surface-2); }
   .counts div { display: grid; gap: 2px; padding: 12px; box-shadow: -1px 0 0 var(--border); }
   .n { color: var(--text); font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
   .counts .warn .n { color: var(--warn); }
   .l { font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); text-transform: uppercase; font-weight: var(--fw-medium); }
-  h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--sp-2); font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); text-transform: uppercase; font-weight: var(--fw-medium); }
+  h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--sp-2); font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); text-transform: uppercase; font-weight: var(--fw-medium); }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
   button { width: 100%; display: flex; align-items: center; gap: var(--sp-2); height: 34px; padding: 0 var(--sp-2); border: 0; border-radius: var(--r-md); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: background var(--dur-1) var(--ease); }
   button:hover { background: var(--row-hover); }

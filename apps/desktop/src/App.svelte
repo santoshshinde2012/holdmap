@@ -50,6 +50,7 @@
   import { portHolderKeys } from "./lib/port-live";
   import { shortcutContext } from "./lib/keyboard";
   import { decideKey, type KeyIntent } from "./lib/app-shortcuts";
+  import { searchControls } from "./lib/search-target";
   import { ScreenCaptureController } from "./lib/screen-capture.svelte";
 
   interface Confirm { entry: PortEntry | null; /** Reviewed plans for more ports after `entry` (Agents "Stop all"). */ queue?: { entry: PortEntry; plan: ActionPlan }[]; agentName?: string; agentId?: string; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; completedPortCount?: number; attemptedPortCount?: number; restart?: boolean; timingIntent?: "combined" | "now" | "schedule"; scheduled?: ScheduledAction; schedulingBusy?: boolean; schedulingError?: string }
@@ -241,7 +242,7 @@
   /** Any overlay that owns the keyboard (they stop key events themselves; this is a backstop). */
   const otherModalOpen: boolean = $derived(!!confirm || !!pendingReview || showHelp || showHistory || showPalette || showSettings || showShutdown || showSchedules || showRemote || !!pinDialog || showDrawer || !!capture.dialog);
   const modalOpen: boolean = $derived(otherModalOpen || snapshotCaptureState.open || snapshotCaptureState.busy);
-  const scanMs = $derived(Math.min(60, Math.max(1, config?.scan_interval_secs ?? 3)) * 1000);
+  const scanMs = $derived(Math.min(60, Math.max(1, config?.scan_interval_secs ?? 4)) * 1000);
 
   /** When the scan in flight started: the header stays "Live" while one is merely running. */
   let scanStarted = $state(0);
@@ -1341,6 +1342,8 @@
   const showSide = $derived(prefs.view === "graph" ? graphDetailsOpen && !!selected && !graphDetailsDrawer : !narrow && prefs.view === "list" && prefs.sideOpen);
 
   const ago = $derived(dataAge(now, prefs.view === "agents" ? agentsReport?.taken_at_ms ?? null : snapshot?.taken_at_ms ?? null, prefs.view === "agents" ? agentsRefreshing ? agentsStarted : null : refreshing ? scanStarted : null));
+  /** What the title-bar search filters, only while it is rendered. */
+  const searchTarget = $derived(searchControls(prefs.view, prefs.agentSection));
   const fresh = $derived(freshness(ago, scanMs / 1000));
   const themeIcon = $derived(THEME_ICON[prefs.theme]);
 </script>
@@ -1360,7 +1363,7 @@
     onpalette={() => (showPalette = true)} onrefresh={() => refresh(true)} onstoprecording={() => void capture.finish()}
     onhistory={openHistory} onschedules={openSchedules} onremote={() => (showRemote = true)} ontheme={cycleTheme} onsettings={() => openSettings()}>
     {#snippet searchbox()}
-      <SearchBox view={prefs.view} capabilities={prefs.agentSection === "capabilities"} singleKeys={prefs.singleKeyShortcuts} bind:input={search} bind:agentQuery bind:graphQuery bind:portQuery={filters.query} />
+      <SearchBox view={prefs.view} capabilities={prefs.agentSection === "capabilities"} controls={searchTarget} singleKeys={prefs.singleKeyShortcuts} bind:input={search} bind:agentQuery bind:graphQuery bind:portQuery={filters.query} />
     {/snippet}
   </TitleBar>
 

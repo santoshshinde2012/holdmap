@@ -8,6 +8,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-17
+
 ### Added
 
 - **Home** in the desktop app, as **Cards** or **Map** (toggle at the top right, or press V;
@@ -25,36 +27,6 @@ by [release-please](https://github.com/googleapis/release-please) from
   single-key shortcuts and the agent inventory. Skipping changes nothing.
 - On a narrow window the Home Map lists each agent's ports, with the same **Details** /
   **Stop…** menu as the wide map.
-
-### Changed
-
-- Screen recording and snapshots moved from the title bar to the status bar; the recording
-  timer and **Stop screen recording** stay in the title bar.
-- Evidence caveats show once, as a chip with a tooltip, instead of repeated notes.
-- Flow keeps source, refresh and pause in its toolbar; inspector, limits and recording
-  controls moved to **View options**.
-- Agent cards wrap PIDs and counts whole instead of cutting them off.
-- `holdmap agents --capabilities`, `stop` and `kill` help describe the inventory, the stop
-  plan and protection; MCP docs list the full `include_capabilities` metadata.
-- The website and README lead with Home, the per-agent inventory and safe port stops, and show
-  the latest published release rather than the source version. The README badge now reads the
-  latest release; the source-version SVG badge is gone.
-- The desktop shell is split into preferences, commands, shortcuts and dialogs, with no
-  behaviour change.
-
-### Fixed
-
-- On narrow windows the Home summary and layout toggle no longer run under **Needs you**.
-
-### Security
-
-- cargo-deny ignores the three `zip` advisories (RUSTSEC-2026-0367/0368/0369), reached only
-  through `tauri-plugin-updater` on already signature-verified updates; see CONTRIBUTING.
-
-## [0.9.0] - 2026-10-16
-
-### Added
-
 - A purpose-led MCP & skills explorer with **Explore**, **Map** and **Compare** views over
   the existing opt-in inventory. Matching observed process contexts group without losing
   their original identities; comparisons keep exact source definitions and coverage limits.
@@ -74,6 +46,20 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Changed
 
+- Screen recording and snapshots moved from the title bar to the status bar; the recording
+  timer and **Stop screen recording** stay in the title bar.
+- Evidence caveats show once, as a chip with a tooltip, instead of repeated notes.
+- Flow keeps source, refresh and pause in its toolbar; inspector, limits and recording
+  controls moved to **View options**.
+- Agent cards wrap PIDs and counts whole instead of cutting them off.
+- `holdmap agents --capabilities`, `stop` and `kill` help describe the inventory, the stop
+  plan and protection; MCP docs list the full `include_capabilities` metadata.
+- The website and README lead with Home, the per-agent inventory and safe port stops, and show
+  the latest published release rather than the source version. The README badge now reads the
+  latest release; the source-version SVG badge is gone.
+- The desktop shell is split into preferences, commands, shortcuts and dialogs, with no
+  behaviour change.
+- README screenshots are light-theme only; CLI and TUI captures now have light versions.
 - Load the capability explorer on demand, with loading and retry states when it is opened.
 - Use the video icon for screen recording and the camera icon for PNG snapshots.
 - Give the service graph the full canvas until a service is selected. Details open beside
@@ -87,6 +73,17 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Fixed
 
+- On narrow windows the Home summary and layout toggle no longer run under **Needs you**.
+- Esc closes **Scheduled actions** after you cancel a schedule; focus no longer drops behind
+  any dialog when the focused control removes itself.
+- Accessibility: the title-bar search names the view it filters, dialogs no longer add
+  duplicate banner/footer landmarks, scrollable dialog bodies take keyboard focus, the window
+  has one top-level heading, the Live indicator has a tooltip and a spoken name on narrow
+  windows, **Needs you** buttons meet the 24px target size, timeline rows have row headers and
+  map connection handles are hidden from screen readers.
+- The default scan interval matches Settings (4s).
+- Website demo: starts on Home like the app, each **Try** button closes any open dialog
+  first, and the buttons no longer overlap **Full screen** at medium widths.
 - Require published state when release asset verification explicitly requests
   `CHECK_RELEASE_DRAFT=false`; a draft can no longer pass that post-publication check.
 - Pack disconnected graph components and cluster hulls compactly instead of repelling
@@ -98,12 +95,18 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Make browser sample All services include the other listening TCP entries from the same
   sample snapshot, with matching IDs and no fabricated links.
 
+### Security
+
+- cargo-deny ignores the three `zip` advisories (RUSTSEC-2026-0367/0368/0369), reached only
+  through `tauri-plugin-updater` on already signature-verified updates; see CONTRIBUTING.
+
 ### Upgrade
 
-- Install desktop 0.9.0 to get PNG snapshots, the readable service graph and the capability
-  explorer. Published 0.8.0 installers do not contain these changes. Update the CLI/MCP server
-  separately if you use them; the capability and activity contracts introduced in 0.8.0 are
-  unchanged. Older 0.7.x collectors and decoders still lack those 0.8.0 contracts.
+- Install desktop 0.9.0 to get Home, port stops from Home, PNG snapshots, the readable service
+  graph and the capability explorer. Published 0.8.0 installers do not contain these changes.
+  Update the CLI/MCP server separately for the richer agent inventory in
+  `holdmap agents --capabilities` and MCP `list_agents`; use matching 0.9.0 clients for its new
+  fields. Older 0.7.x collectors and decoders still lack the 0.8.0 contracts.
 - Desktop installation remains manual when a signed updater is not configured. Quit Holdmap,
   install the matching OS/architecture package, reopen it and verify Settings → About shows
   0.9.0. Use the latest published download until the complete 0.9.0 release is available.

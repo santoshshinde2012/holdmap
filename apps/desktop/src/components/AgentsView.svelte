@@ -238,10 +238,10 @@
       <div class="empty workspace-loading" role="status" aria-busy="true"><Icon name="plug" size={28} /><p>Loading MCP &amp; skills…</p></div>
     {/if}
   {:else if section === "flow"}
-    <div class="flow-body"><AgentFlowView {query} {dark} {reduced} {...flowProps} bind:mode={flowSource} sourceChrome={false} /></div>
+    <div class="flow-body" id="agents-flow"><AgentFlowView {query} {dark} {reduced} {...flowProps} bind:mode={flowSource} sourceChrome={false} /></div>
   {:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="agents" class:rail-off={!rail} {onkeydown}>
+<div class="agents" id="agents-overview" class:rail-off={!rail} {onkeydown}>
   {#if !report}
     <div class="empty" aria-busy="true"><Icon name="bot" size={28} /><p>Looking for agents…</p></div>
   {:else if report.agents.length === 0}

@@ -29,7 +29,7 @@ macOS fullscreen close that returns to the previous app. See the
 
 ## Home and first open
 
-On `main` (not yet in a published release), **Home** shows agents, listening ports, dev
+Since 0.9.0, **Home** shows agents, listening ports, dev
 servers, exposed listeners and running MCP servers, as **Cards** or a **Map** (toggle at the
 top right or press `V`; the choice is remembered). Cards list each agent's projects, ports,
 MCP servers and skills; Map draws the same footprint around this computer with a collapsible
@@ -108,7 +108,7 @@ Screen recording requires **0.7.0 or newer**, or the browser demo. Version **0.6
 installers do not include it.
 To add it to an existing 0.6.0 installation, download and install the new desktop build.
 
-The video icon (in the status bar on `main`, the title bar in 0.9.0, the camera icon in 0.8.0),
+The video icon in the status bar (a camera icon in the title bar in 0.8.0),
 **Record screen…** in the command palette, or `⇧V` starts a local capture. Holdmap explains that recordings stay on this computer, then the
 operating system asks which display or window to share. Microphone and system audio are
 not captured. A timer in the title bar and **Stop screen recording** replace the dialog so

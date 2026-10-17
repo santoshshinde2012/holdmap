@@ -20,14 +20,14 @@
   role="button"
   aria-label="{a.name}, {data.node.sub}. {head.text}. {countsLine(c)}. {res}"
 >
-  <Handle type="target" position={Position.Left} isConnectable={false} />
+  <Handle type="target" position={Position.Left} isConnectable={false} aria-hidden="true" />
   <span class="mono-tile" aria-hidden="true">{monogram(a.name)}</span>
   <div class="body">
     <span class="label">{a.name}{#if c.stoppable > 0}<em class="stop-n">{c.stoppable}</em>{/if}</span>
     <span class="sub">{data.node.sub}</span>
     <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.text} · {res.split(" · ").slice(0, 2).join(" · ")}</span>
   </div>
-  <Handle type="source" position={Position.Right} isConnectable={false} />
+  <Handle type="source" position={Position.Right} isConnectable={false} aria-hidden="true" />
 </div>
 
 <style>

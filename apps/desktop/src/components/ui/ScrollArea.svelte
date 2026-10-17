@@ -1,6 +1,7 @@
 <script lang="ts">
   // Scroll container with edge shadows that appear only when there is more content that way.
   import type { Snippet } from "svelte";
+  import { scrollFocus } from "../../lib/scrollable";
 
   let { children, label, el = $bindable(), class: cls = "", padded = true }: { children: Snippet; label?: string; el?: HTMLDivElement; class?: string; padded?: boolean } = $props();
   let top = $state(false);
@@ -23,7 +24,7 @@
 
 <div class="sa" class:top class:bottom>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <div class="vp {cls}" class:padded bind:this={el} onscroll={update} role={label ? "region" : undefined} aria-label={label} tabindex={label ? 0 : undefined}>
+  <div class="vp {cls}" class:padded bind:this={el} onscroll={update} role={label ? "region" : undefined} aria-label={label} tabindex={label ? 0 : undefined} use:scrollFocus>
     <div class="content">{@render children()}</div>
   </div>
 </div>

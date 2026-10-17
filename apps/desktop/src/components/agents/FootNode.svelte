@@ -29,7 +29,7 @@
   aria-label="{n.kind === 'machine' ? '' : `${WHAT[n.kind]} `}{n.label}, {n.sub}{n.evidence !== 'observed' ? `, ${EVIDENCE_LABEL[n.evidence]}` : ''}{n.warning ? `, ${n.warning}` : ''}{opens ? '. Opens details' : n.kind === 'tool' ? '. Opens its agent card' : n.kind === 'folder' ? `. ${folderAction(data.picture)}` : ''}"
   {title}
 >
-  <Handle type="target" position={Position.Left} isConnectable={false} />
+  <Handle type="target" position={Position.Left} isConnectable={false} aria-hidden="true" />
   <span class="ic" aria-hidden="true"><Icon name={ICON[n.kind]} size={15} /></span>
   <div class="body">
     <span class="label">{n.label}</span>
@@ -39,7 +39,7 @@
     <span class="dots" aria-hidden="true">{#each data.ownerColors.slice(0, 4) as c}<i style="background: {c}"></i>{/each}</span>
   {/if}
   {#if n.tone === "warn"}<span class="exp" title={n.warning}><Icon name="globe" size={12} /></span>{/if}
-  <Handle type="source" position={Position.Right} isConnectable={false} />
+  <Handle type="source" position={Position.Right} isConnectable={false} aria-hidden="true" />
 </div>
 
 <style>

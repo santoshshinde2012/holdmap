@@ -52,9 +52,9 @@ export function atLeast(have: string, want: string): boolean {
 }
 /** The release highlights describe the source version; true once installers for it are published. */
 export const releaseHighlightsPublished = atLeast(version, sourceVersion);
-/** Home (Cards / Map), the richer per-agent inventory (launch, env names, rules) and stopping ports from Home are on main
- *  and not in a published release yet. Set this to the release that first ships them. */
-export const homeRelease: string | null = null;
+/** The release that first ships Home (Cards / Map), the richer per-agent inventory and stopping ports from Home.
+ *  Until it is the published release, the site keeps its "not in a published release yet" note. */
+export const homeRelease: string | null = "0.9.0";
 export const homePublished = homeRelease !== null && atLeast(version, homeRelease);
 export const description = releaseHighlightsPublished
   ? "holdmap shows your agents, MCP servers, skills, tools, apps and ports, and stops services safely after a reviewed plan. macOS, Linux and Windows."

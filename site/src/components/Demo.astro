@@ -3,11 +3,12 @@ import { Picture } from "astro:assets";
 import Icon from "./Icon.astro";
 import Terminal from "./Terminal.astro";
 import { url } from "../lib/site";
-import posterDark from "../../../docs/screenshots/desktop-overview-dark.png";
-import posterLight from "../../../docs/screenshots/desktop-overview-light.png";
+import posterDark from "../../../docs/screenshots/desktop-home-cards-dark.png";
+import posterLight from "../../../docs/screenshots/desktop-home-cards-light.png";
 
 const demo = url("demo/");
 const tries: { act: string; label: string; keys: string[] }[] = [
+  { act: "home", label: "Home", keys: [] },
   { act: "inspect", label: "Inspect :3000", keys: [] },
   { act: "palette", label: "Command palette", keys: ["⌘", "K"] },
   { act: "graph", label: "Service graph", keys: ["G"] },
@@ -112,7 +113,7 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
   .cli-title { margin: 0 0 12px; font-size: var(--fs-xl); line-height: 28px; font-weight: 600; letter-spacing: -0.015em; }
   .cli-text { margin: 0 0 16px; color: var(--muted); font-size: var(--fs-md); line-height: 24px; }
 
-  @media (max-width: 1000px) {
+  @media (max-width: 1200px) {
     .device .window-bar { flex-wrap: wrap; height: auto; padding: 6px 8px 6px 16px; row-gap: 4px; }
     .tries { order: 3; flex-basis: 100%; flex-wrap: wrap; margin-left: -8px; }
     .reset { margin-left: 0; }
@@ -258,6 +259,13 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
       frame!.contentWindow!.focus();
       doc.body.dispatchEvent(new KeyboardEvent("keydown", { key: k, metaKey: mod && isMac, ctrlKey: mod && !isMac, shiftKey: shift, bubbles: true, cancelable: true }));
     };
+    // Close whatever the visitor left open (a dialog, menu or palette) before the next Try. Clicking
+    // out here blurs the frame, so Esc goes to the topmost surface itself, where it listens. One Esc
+    // per click, as from a keyboard: the app settles the close before any further key.
+    const dismiss = () => {
+      const open = frame?.contentDocument?.querySelectorAll<HTMLElement>('[aria-modal="true"], [role="menu"]');
+      open?.[open.length - 1]?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    };
     const select = (port: number) => {
       const doc = frame?.contentDocument;
       const row = doc?.querySelector<HTMLElement>(`[id^="row-tcp:${port}:"]`);
@@ -267,18 +275,21 @@ const sizes = "(max-width: 1184px) calc(100vw - 40px), 1120px";
       row.scrollIntoView({ block: "nearest" });
       return true;
     };
-    const toList = () => {
+    const toView = (name: string, present: string) => {
       const doc = frame?.contentDocument;
-      if (!doc || doc.getElementById("port-list")) return;
+      if (!doc || doc.getElementById(present)) return;
       const options = doc.querySelectorAll<HTMLButtonElement>('[role="radiogroup"][aria-label="View"] [role="radio"]');
-      Array.from(options).find((option) => option.textContent?.trim() === "List")?.click();
+      Array.from(options).find((option) => option.textContent?.trim() === name)?.click();
     };
+    const toList = () => toView("List", "port-list");
 
     document.querySelector(".tries")?.addEventListener("click", (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>(".try");
       if (!b || !frame) return;
+      dismiss();
       key("Escape");
       switch (b.dataset.act) {
+        case "home": toView("Home", "home-overview"); break;
         case "inspect": toList(); setTimeout(() => select(3000), 120); break;
         case "palette": key("k", true); break;
         case "graph": key("g"); break;

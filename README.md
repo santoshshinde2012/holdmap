@@ -23,10 +23,7 @@
 </p>
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/desktop-home-cards-dark.png" />
-    <img src="docs/screenshots/desktop-home-cards-light.png" width="860" alt="holdmap Home as Cards: each agent with its projects, ports, MCP servers and skills, and a Needs you list" />
-  </picture>
+  <img src="docs/screenshots/desktop-home-cards-light.png" width="860" alt="holdmap Home as Cards: each agent with its projects, ports, MCP servers and skills, and a Needs you list" />
 </p>
 
 `EADDRINUSE: address already in use :::3000`? Most tools hand you a PID and a `kill -9`.
@@ -42,7 +39,7 @@ sample data.
 ## Features
 
 - **Home.** Every agent as **Cards** or a **Map** with a **Timeline** of uptime, ports and MCP,
-  plus a **Needs you** list. Click any port for **Details** or **Stop…** (on `main`).
+  plus a **Needs you** list. Click any port for **Details** or **Stop…**.
 - **Who owns the port.** Process, user, command, folder, project, git branch and framework, or
   the Docker / Podman / OrbStack container — in plain English, with why it's busy.
 - **A safe stop.** Preview the plan, stop the dev-server tree gracefully (SIGTERM, then SIGKILL)
@@ -144,7 +141,7 @@ holdmap run -p 3000 -- npm run dev   # free 3000 safely, then start your server 
 holdmap                      # interactive TUI (Shift+Tab opens Agents)
 ```
 
-<img src="docs/screenshots/cli-explain-dark.png" width="720" alt="holdmap explain: fixture listener ownership and the recommended plan" />
+<img src="docs/screenshots/cli-explain-light.png" width="720" alt="holdmap explain: fixture listener ownership and the recommended plan" />
 
 **Project stacks.** Describe a project's services once in `.holdmap.toml` (`holdmap init` writes
 one from what's running) and start them in dependency order with `holdmap up`:
@@ -209,12 +206,12 @@ across refreshes, and pasted text never triggers an action.
 <details>
 <summary>Current terminal agent overview, small-screen details and service review</summary>
 
-![CLI agent details with inferred child-tool evidence](docs/screenshots/cli-agents-dark.png)
-![Terminal agent list and selected details](docs/screenshots/tui-agents-dark.png)
-![Terminal agents in an 80-column window](docs/screenshots/tui-agents-narrow-dark.png)
-![Terminal service review keeps explicit confirmation and cancellation visible](docs/screenshots/tui-agent-stop-confirm-dark.png)
+![CLI agent details with inferred child-tool evidence](docs/screenshots/cli-agents-light.png)
+![Terminal agent list and selected details](docs/screenshots/tui-agents-light.png)
+![Terminal agents in an 80-column window](docs/screenshots/tui-agents-narrow-light.png)
+![Terminal service review keeps explicit confirmation and cancellation visible](docs/screenshots/tui-agent-stop-confirm-light.png)
 
-![Terminal graph search keeps the selected service and observed connection evidence visible](docs/screenshots/tui-graph-dark.png)
+![Terminal graph search keeps the selected service and observed connection evidence visible](docs/screenshots/tui-graph-light.png)
 
 </details>
 
@@ -252,12 +249,9 @@ holdmap mcp --record-activity        # optional recording of this server's known
 <details>
 <summary>Observed connections, reported calls and a narrow-screen inspector</summary>
 
-![Observed agent connections in dark theme](docs/screenshots/desktop-agent-connections-dark.png)
-![Observed agent connections in light theme](docs/screenshots/desktop-agent-connections-light.png)
-![Reported tools, a delegated agent and a failed execution in dark theme](docs/screenshots/desktop-agent-flow-dark.png)
-![Reported tools, a delegated agent and a failed execution in light theme](docs/screenshots/desktop-agent-flow-light.png)
-![Narrow dark flow with a readable inspector](docs/screenshots/desktop-agent-flow-narrow-dark.png)
-![Narrow light flow with a readable inspector](docs/screenshots/desktop-agent-flow-narrow-light.png)
+![Observed agent connections](docs/screenshots/desktop-agent-connections-light.png)
+![Reported tools, a delegated agent and a failed execution](docs/screenshots/desktop-agent-flow-light.png)
+![A narrow flow with a readable inspector](docs/screenshots/desktop-agent-flow-narrow-light.png)
 
 </details>
 
@@ -272,7 +266,7 @@ app; `⌘K` / `Ctrl+K` opens the command palette; `?` lists every shortcut.
 - **Home** shows every agent as **Cards** or a **Map** (press `V`), with a **Timeline** of
   uptime, ports and MCP and a **Needs you** list. Click any port — a card chip, a map node or a
   timeline pin — for **Details** or **Stop…**; Stop always opens the stop plan first. Narrow
-  windows list each agent's ports with the same menu. (On `main`, not yet in a published release.)
+  windows list each agent's ports with the same menu.
 - **List** and **Graph** (`G`): ports with project, branch and memory; the service graph with
   clusters. From a port's details: open, restart, open its folder (`HOLDMAP_EDITOR`), copy a URL.
 - **Agents** (`⇧A`): Computer / Footprint / Project maps, **MCP & skills** with Explore / Map /
@@ -286,20 +280,20 @@ data. Details: [desktop guide](site/src/content/docs/desktop.md).
 
 | Home as Map | Stop from Home |
 |---|---|
-| ![Home as Map: agents around this computer with ports and MCP servers, and the Timeline](docs/screenshots/desktop-home-map-dark.png) | ![The stop plan for port 3000 opened from a port's menu on Home](docs/screenshots/desktop-home-stop-plan-light.png) |
+| ![Home as Map: agents around this computer with ports and MCP servers, and the Timeline](docs/screenshots/desktop-home-map-light.png) | ![The stop plan for port 3000 opened from a port's menu on Home](docs/screenshots/desktop-home-stop-plan-light.png) |
 
 <details>
 <summary>More screenshots</summary>
 
 | Narrow Map with ports | Port menu |
 |---|---|
-| ![On a narrow window the Map lists each agent with its ports](docs/screenshots/desktop-home-narrow-map-dark.png) | ![A port's menu on Home with Details and Stop…](docs/screenshots/desktop-home-port-menu-light.png) |
+| ![On a narrow window the Map lists each agent with its ports](docs/screenshots/desktop-home-narrow-map-light.png) | ![A port's menu on Home with Details and Stop…](docs/screenshots/desktop-home-port-menu-light.png) |
 | **Agents** | **Service graph** |
-| ![The Agents Footprint map: folders, agents, tools, ports and remote hosts](docs/screenshots/desktop-agents-dark.png) | ![The service graph with the shop services and their observed connections](docs/screenshots/desktop-graph-dark.png) |
+| ![The Agents Footprint map: folders, agents, tools, ports and remote hosts](docs/screenshots/desktop-agents-light.png) | ![The service graph with the shop services and their observed connections](docs/screenshots/desktop-graph-light.png) |
 | **Capability explorer** | **Command palette** |
 | ![Explore skill cards show declared purposes, source files and file-presence evidence](docs/screenshots/desktop-capability-explore-light.png) | ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) |
 | **Screen recording** | **TUI** |
-| ![Screen recording setup explains local exports and the source chooser](docs/screenshots/desktop-screen-record-dark.png) | ![The holdmap TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) |
+| ![Screen recording setup explains local exports and the source chooser](docs/screenshots/desktop-screen-record-light.png) | ![The holdmap TUI: port table with the details pane](docs/screenshots/tui-list-light.png) |
 
 </details>
 

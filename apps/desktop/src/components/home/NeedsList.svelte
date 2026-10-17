@@ -2,6 +2,7 @@
   // Compact "Needs you": severity, title and actions; the detail opens on expand.
   // Stop always opens the stop plan for review first.
   import Icon from "../Icon.svelte";
+  import { tooltip } from "../../lib/tooltip";
   import type { AttentionItem } from "../../lib/home";
 
   let { items, lit = null, onopen, onstop, onhover }: {
@@ -25,7 +26,7 @@
       </button>
       <span class="acts">
         {#if item.stop}<button type="button" class="act" onclick={() => onstop(item)} aria-label="Review stop plan: {item.title}"><Icon name="stop" size={11} />Stop…</button>{/if}
-        <button type="button" class="act icon" onclick={() => onopen(item)} aria-label="Open: {item.title}"><Icon name="chevron" size={12} /></button>
+        <button type="button" class="act icon" onclick={() => onopen(item)} aria-label="Open: {item.title}" use:tooltip={{ text: "Open details", placement: "bottom" }}><Icon name="chevron" size={12} /></button>
       </span>
       {#if expanded}<p class="detail" id="need-{item.id}">{item.detail}</p>{/if}
     </li>
@@ -45,8 +46,8 @@
   .t { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
   .title[aria-expanded="true"] .t { color: var(--text); }
   .acts { display: flex; gap: 4px; }
-  .act { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); color: var(--text-2); font: inherit; font-size: var(--fs-caption); cursor: pointer; white-space: nowrap; }
-  .act.icon { width: 22px; padding: 0; justify-content: center; }
+  .act { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); color: var(--text-2); font: inherit; font-size: var(--fs-caption); cursor: pointer; white-space: nowrap; }
+  .act.icon { width: 24px; padding: 0; justify-content: center; }
   .act:hover { color: var(--text); border-color: var(--border-strong); }
   button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-radius: var(--r-sm); }
   .detail { grid-column: 1 / -1; margin: 2px 0 0 15px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); overflow-wrap: anywhere; }
