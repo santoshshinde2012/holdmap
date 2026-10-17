@@ -9,7 +9,7 @@ import { SORTS, type Sort } from "./port-list";
 import type { Theme } from "./settings";
 
 export const VIEWS: readonly View[] = ["home", "list", "graph", "agents"];
-export const AGENT_SECTIONS = ["overview", "flow", "capabilities"] as const;
+export const AGENT_SECTIONS = ["overview", "flow", "capabilities", "insights"] as const;
 export type AgentSection = (typeof AGENT_SECTIONS)[number];
 export const FLOW_SOURCES = ["connections", "calls"] as const;
 export type FlowSource = (typeof FLOW_SOURCES)[number];

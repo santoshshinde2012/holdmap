@@ -7,5 +7,6 @@ export function searchControls(view: View, section: AgentSection): string {
   if (view === "graph") return "service-graph";
   if (view === "list") return "port-list";
   if (section === "capabilities") return "agent-capabilities";
+  if (section === "insights") return "agent-insights";
   return section === "flow" ? "agents-flow" : "agents-overview";
 }

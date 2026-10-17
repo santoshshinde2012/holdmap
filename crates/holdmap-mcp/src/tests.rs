@@ -1083,3 +1083,23 @@ fn malformed_wire_controls_preserve_confirmation_and_reinitialize_invalidates_it
     session.handle(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}})).unwrap();
     assert!(session.confirmations.take(&id, &request).is_err());
 }
+
+#[test]
+fn configured_agents_that_are_not_running_are_listed_and_filtered() {
+    let mut report = agents_fixture();
+    report
+        .configured
+        .push(holdmap_core::agents::ConfiguredAgent {
+            product: "gemini".into(),
+            name: "Gemini CLI".into(),
+            capabilities: holdmap_core::agents::AgentCapabilities {
+                inspected: true,
+                ..Default::default()
+            },
+        });
+    let (text, data) = agents_result(report.clone(), &json!({}));
+    assert!(text.contains("Gemini CLI (not running): configured with 0 MCP definitions"));
+    assert_eq!(data["configured"][0]["product"], "gemini");
+    let (_, other) = agents_result(report, &json!({"agent": "shop-web"}));
+    assert!(other.get("configured").is_none());
+}

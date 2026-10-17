@@ -1,6 +1,6 @@
 // Labelled sample data for the public website demo, Playwright, unit tests, and `npm run dev ?demo=1`.
 // `npm run dev` without that flag reads this machine through the holdmap CLI.
-import type { AccessFact, ActionPlan, Agent, AgentLink, AgentPort, AgentsReport, BindRisk, Cluster, Explanation, Graph, GraphEdge, GraphNode, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
+import type { AccessFact, ActionPlan, Agent, AgentLink, AgentPort, AgentsReport, BindRisk, ConfiguredAgent, Cluster, Explanation, Graph, GraphEdge, GraphNode, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
 import { title } from "./format";
 
 const now = Math.floor(Date.now() / 1000);
@@ -505,8 +505,21 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT, includeCapabilities = fa
     tools: a.tools.filter((tool) => !gone.has(tool.pid)),
     folders: a.folders.map((f) => ({ ...f, pids: f.pids.filter((p) => !gone.has(p)) })),
   });
+  // Codex isn't running; its default configuration declares two skills (opt-in inventory only).
+  const configured: ConfiguredAgent[] = includeCapabilities ? [{
+    product: "codex", name: "Codex CLI",
+    capabilities: {
+      inspected: true, mcp_servers: [],
+      skills: [
+        { id: "shared:user:code-review", name: "code-review", declared_name: "code-review", description: "Review changes for correctness, regressions and maintainability.", scope: "user", source_path: "/Users/dev/.agents/skills/code-review/SKILL.md", project_path: null, evidence: "observed" },
+        { id: "codex:user:db-migrations", name: "db-migrations", declared_name: "db-migrations", description: "Write and check database migrations.", scope: "user", source_path: "/Users/dev/.codex/skills/db-migrations/SKILL.md", project_path: null, evidence: "observed" },
+      ],
+      more_mcp_servers: 0, more_skills: 0, limits: [],
+    },
+  }] : [];
   return {
     agents: [claude, cursor, docker].map(live),
+    ...(configured.length ? { configured } : {}),
     platform: "macos",
     taken_at_ms: s.taken_at_ms,
     limits: [

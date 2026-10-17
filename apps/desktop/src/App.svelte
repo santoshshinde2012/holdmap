@@ -1125,7 +1125,7 @@
   // Home has no list of its own: typing in its search box continues on the port list.
   $effect(() => { if (prefs.view === "home" && filters.query) prefs.view = "list"; });
   /** Home → one agent, in a single click: the Agents view with that agent selected. */
-  function openAgent(id: string, section: "overview" | "capabilities" = "overview") {
+  function openAgent(id: string, section: "overview" | "capabilities" | "insights" = "overview") {
     const a = agentsReport?.agents.find((x) => x.id === id);
     if (a && !agentMatches(a, agentQuery)) agentQuery = "";
     prefs.agentSection = section;
@@ -1401,7 +1401,7 @@
             paused={flowPaused} onpausechange={(paused) => { flowPaused = paused; }} onflowmodechange={(mode) => { agentFlowMode = mode; }}
             onrefreshflow={() => { void flowLoader.request(); }} onrefreshactivity={() => { void activityLoader.request(); }}
             onstartrecording={startRecording} onstoprecording={stopRecording} onclearactivity={clearRecordedActivity}
-            onactivitysetup={api.activitySetup} onclearquery={() => { agentQuery = ""; }} oninventory={enableInventory} />
+            onactivitysetup={api.activitySetup} onclearquery={() => { agentQuery = ""; }} oninventory={enableInventory} inventory={prefs.inventoryOn} onsettings={() => openSettings("analyzers")} />
         {:else}
           <div class="graph-loading" aria-busy="true">Loading agents…</div>
         {/if}

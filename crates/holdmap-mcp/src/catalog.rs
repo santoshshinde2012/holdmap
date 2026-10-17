@@ -314,7 +314,11 @@ fn agents_schema() -> Value {
     object(
         json!({
             "agents": array(agent), "platform": {"type": "string"},
-            "taken_at_ms": count(), "limits": strings()
+            "taken_at_ms": count(), "limits": strings(),
+            "configured": array(object(
+                json!({"product": {"type": "string"}, "name": {"type": "string"}, "capabilities": capabilities_schema()}),
+                &["product", "name", "capabilities"],
+            ))
         }),
         &["agents", "platform", "taken_at_ms", "limits"],
     )

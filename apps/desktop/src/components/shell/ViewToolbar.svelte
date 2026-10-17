@@ -8,7 +8,7 @@
   import type { PortStats, Sort } from "../../lib/port-list";
 
   export type View = "home" | "list" | "graph" | "agents";
-  export type AgentSection = "overview" | "flow" | "capabilities";
+  export type AgentSection = "overview" | "flow" | "capabilities" | "insights";
 
   let {
     view = $bindable(),
@@ -63,7 +63,7 @@
   {#if view !== "home"}
   <div class="row">
     {#if view === "agents"}
-      <ActionDock size={dock} hinge={!narrow} label="Agents workspace" bind:value={agentSection} options={[{ value: "overview", label: "Overview", icon: "bot", title: "Agents, resources and access" }, { value: "capabilities", label: "MCP & skills", icon: "plug", title: "Inspect local MCP configuration and installed skill locations" }, { value: "flow", label: "Flow", icon: "branch", title: "Connections and recorded calls" }]} />
+      <ActionDock size={dock} hinge={!narrow} label="Agents workspace" bind:value={agentSection} options={[{ value: "overview", label: "Overview", icon: "bot", title: "Agents, resources and access" }, { value: "capabilities", label: "MCP & skills", icon: "plug", title: "Inspect local MCP configuration and installed skill locations" }, { value: "flow", label: "Flow", icon: "branch", title: "Connections and recorded calls" }, { value: "insights", label: "Insights", icon: "shield", title: "Findings from analyzers you turned on" }]} />
       {#if agentSection === "overview"}
         <ActionDock size={dock} hinge={!narrow} label="Map picture" bind:value={picture} options={[
           { value: "context", label: "Computer", icon: "monitor", title: "Context: this computer, the agents on it, and systems they talk to" },

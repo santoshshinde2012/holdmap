@@ -4,7 +4,7 @@
 
 use crate::finding::{Subject, SubjectKind};
 use crate::manifest::{AnalyzerManifest, PerSubject};
-use holdmap_core::agents::{AgentsReport, McpRunner};
+use holdmap_core::agents::{AgentCapabilities, AgentsReport, McpRunner};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -66,10 +66,24 @@ impl InputProjector for InventoryProjector {
     }
 }
 
+/// Every inventory in the report: running agents, then configured agents that aren't running.
+fn inventories(report: &AgentsReport) -> impl Iterator<Item = (&str, &AgentCapabilities)> {
+    report
+        .agents
+        .iter()
+        .map(|a| (a.product.as_str(), &a.capabilities))
+        .chain(
+            report
+                .configured
+                .iter()
+                .map(|c| (c.product.as_str(), &c.capabilities)),
+        )
+}
+
 fn skills(report: &AgentsReport) -> AnalyzerInput {
     let mut by_dir: BTreeMap<PathBuf, InputSubject> = BTreeMap::new();
-    for agent in &report.agents {
-        for skill in &agent.capabilities.skills {
+    for (product, capabilities) in inventories(report) {
+        for skill in &capabilities.skills {
             let Some(dir) = skill.source_path.parent().map(PathBuf::from) else {
                 continue;
             };
@@ -83,8 +97,8 @@ fn skills(report: &AgentsReport) -> AnalyzerInput {
                 dir: Some(dir),
                 package: None,
             });
-            if !entry.subject.agents.contains(&agent.product) {
-                entry.subject.agents.push(agent.product.clone());
+            if !entry.subject.agents.iter().any(|a| a == product) {
+                entry.subject.agents.push(product.to_string());
             }
         }
     }
@@ -97,8 +111,8 @@ fn skills(report: &AgentsReport) -> AnalyzerInput {
 fn packages(report: &AgentsReport) -> AnalyzerInput {
     let mut by_coord: BTreeMap<PackageCoord, InputSubject> = BTreeMap::new();
     let mut skipped = Vec::new();
-    for agent in &report.agents {
-        for server in &agent.capabilities.mcp_servers {
+    for (product, capabilities) in inventories(report) {
+        for server in &capabilities.mcp_servers {
             let Some(launch) = &server.launch else {
                 continue;
             };
@@ -132,8 +146,8 @@ fn packages(report: &AgentsReport) -> AnalyzerInput {
                     dir: None,
                     package: Some(coord),
                 });
-            if !entry.subject.agents.contains(&agent.product) {
-                entry.subject.agents.push(agent.product.clone());
+            if !entry.subject.agents.iter().any(|a| a == product) {
+                entry.subject.agents.push(product.to_string());
             }
         }
     }

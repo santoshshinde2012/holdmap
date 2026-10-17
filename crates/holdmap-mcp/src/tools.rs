@@ -79,6 +79,10 @@ pub(super) fn ports_result(snapshot: &Snapshot, args: &Value) -> (String, Value)
 pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, Value) {
     if let Some(query) = args["agent"].as_str() {
         report.agents.retain(|agent| agent.matches(query));
+        let q = query.trim().to_lowercase();
+        report.configured.retain(|c| {
+            c.product.to_lowercase().contains(&q) || c.name.to_lowercase().contains(&q)
+        });
     }
     let mut lines = Vec::new();
     for agent in &report.agents {
@@ -248,6 +252,14 @@ pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, 
         if !omitted.is_empty() {
             lines.push(format!("  Not listed: {}.", omitted.join(", ")));
         }
+    }
+    for c in &report.configured {
+        lines.push(format!(
+            "{} (not running): configured with {} MCP definitions, {} skill folders in its default locations.",
+            c.name,
+            c.capabilities.mcp_servers.len(),
+            c.capabilities.skills.len()
+        ));
     }
     if lines.is_empty() {
         lines.push(

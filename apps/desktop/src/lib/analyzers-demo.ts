@@ -2,6 +2,7 @@
 // are simulated in memory; nothing is installed, executed or sent anywhere.
 import type { AnalyzerResult, AnalyzerView, FindingState, Insights, Preview, Subject } from "./analyzers";
 import { emptyCounts } from "./analyzers";
+import { inventories } from "./agent-config";
 import type { AgentsReport } from "./types";
 
 const SKILLSPECTOR = "nvidia.skillspector";
@@ -29,20 +30,24 @@ const skill = (id: string, name: string, agents: string[]): Subject => ({ id, ki
 function skillspectorResult(): AnalyzerResult {
   const releaseCheck = skill("claude:project:release-check", "release-check", ["claude-code"]);
   const frontend = skill("shared:project:frontend-checks", "frontend-checks", ["cursor"]);
-  const review = skill("shared:user:code-review", "code-review", ["cursor"]);
+  const review = skill("shared:user:code-review", "code-review", ["cursor", "codex"]);
+  const migrations = skill("codex:user:db-migrations", "db-migrations", ["codex"]);
   const f = (fingerprint: string, rule_id: string, category: string, severity: AnalyzerResult["findings"][number]["severity"], title: string, subject: string, file: string, line: number, fix: string) =>
     ({ fingerprint, analyzer: SKILLSPECTOR, rule_id, category, severity, title, subject, location: { file, line }, fix, refs: [], state: "open" as FindingState });
   return {
     analyzer: SKILLSPECTOR, analyzer_version: "2.13.0", run_at_ms: RUN_AT, status: "complete", coverage: 1,
-    subjects: [review, frontend, releaseCheck],
+    subjects: [review, migrations, frontend, releaseCheck],
     findings: [
       f("demo-p1", "P1", "Prompt Injection", "high", "Instruction Override", releaseCheck.id, "SKILL.md", 12, "Remove text that tells the agent to ignore prompts or safety rules."),
       f("demo-e1", "E1", "Data Exfiltration", "medium", "External Transmission", releaseCheck.id, "scripts/publish.sh", 8, "Verify the destination is trusted and that no secrets or tokens are sent."),
+      f("demo-d2", "D2", "Dangerous Code", "medium", "Destructive Shell Command", migrations.id, "scripts/reset.sh", 4, "Ask before running commands that drop or reset a database."),
       f("demo-lp3", "LP3", "MCP Least Privilege", "low", "MCP Least Privilege", frontend.id, "SKILL.md", 1, "List the tools the skill may use in the allowed-tools frontmatter field."),
     ],
     details: [
       { subject: releaseCheck.id, label: "Risk score", value: "64 / 100" },
       { subject: releaseCheck.id, label: "Recommendation", value: "CAUTION" },
+      { subject: migrations.id, label: "Risk score", value: "31 / 100" },
+      { subject: migrations.id, label: "Recommendation", value: "CAUTION" },
       { subject: frontend.id, label: "Risk score", value: "8 / 100" },
       { subject: frontend.id, label: "Recommendation", value: "SAFE" },
       { subject: review.id, label: "Risk score", value: "0 / 100" },
@@ -65,7 +70,7 @@ function osvResult(report: AgentsReport): AnalyzerResult {
 
 function osvPackages(report: AgentsReport) {
   const out = new Map<string, { ecosystem: string; name: string; version: string; agents: string[] }>();
-  for (const a of report.agents) {
+  for (const a of inventories(report)) {
     for (const s of a.capabilities?.mcp_servers ?? []) {
       const spec = s.launch?.package;
       if (!spec || !s.launch?.pinned || s.launch.runner !== "npx") continue;
@@ -108,7 +113,7 @@ export class DemoAnalyzers {
     const builtin = id === OSV;
     const packages = osvPackages(report);
     const skills = new Map<string, { subject: Subject; input: string }>();
-    for (const a of report.agents) {
+    for (const a of inventories(report)) {
       for (const s of a.capabilities?.skills ?? []) {
         const dir = s.source_path.replace(/\/SKILL\.md$/, "");
         const entry = skills.get(dir) ?? { subject: skill(s.id, s.name, []), input: dir };
@@ -116,7 +121,7 @@ export class DemoAnalyzers {
         skills.set(dir, entry);
       }
     }
-    const unpinned = report.agents.flatMap((a) => (a.capabilities?.mcp_servers ?? []).filter((s) => s.launch && s.launch.pinned === false && s.launch.runner === "npx").map((s) => `${s.name} (${s.launch?.package}) is not pinned to a version, so it was not checked.`));
+    const unpinned = inventories(report).flatMap((a) => (a.capabilities?.mcp_servers ?? []).filter((s) => s.launch && s.launch.pinned === false && s.launch.runner === "npx").map((s) => `${s.name} (${s.launch?.package}) is not pinned to a version, so it was not checked.`));
     return {
       analyzer: this.view(id),
       command: builtin ? null : ["skillspector", "scan", "<copy of the skill folder>", "--format", "json", "--no-llm", "--output", "<private report file>"],

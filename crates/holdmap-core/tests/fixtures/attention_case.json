@@ -33,7 +33,7 @@
     "cwd": "/Users/dev/code/shop-web",
     "uid": 501,
     "user": "dev",
-    "start_time": 1792257150,
+    "start_time": 1792257866,
     "start_token": 1000,
     "memory_bytes": 412000000
    },
@@ -88,7 +88,7 @@
     "cwd": "/Users/dev/code/shop-api",
     "uid": 501,
     "user": "dev",
-    "start_time": 1792257270,
+    "start_time": 1792257986,
     "start_token": 1001,
     "memory_bytes": 96000000
    },
@@ -140,7 +140,7 @@
     "cwd": "/Users/dev/code/docs",
     "uid": 501,
     "user": "dev",
-    "start_time": 1792263670,
+    "start_time": 1792264386,
     "start_token": 1002,
     "memory_bytes": 180000000
    },
@@ -193,7 +193,7 @@
     "cwd": "/Users/dev/code/ml-service",
     "uid": 501,
     "user": "dev",
-    "start_time": 1792091770,
+    "start_time": 1792092486,
     "start_token": 1003,
     "memory_bytes": 140000000
    },
@@ -226,7 +226,7 @@
     "pid": 51200,
     "process_name": "claude",
     "command": "claude --permission-mode acceptEdits",
-    "started_at": 1792259170,
+    "started_at": 1792259886,
     "parent": "agent:52000",
     "memory_bytes": 520000000,
     "cpu_percent": 3.4,
@@ -612,7 +612,7 @@
     "pid": 52000,
     "process_name": "Cursor",
     "command": "/Applications/Cursor.app/Contents/MacOS/Cursor",
-    "started_at": 1792178170,
+    "started_at": 1792178886,
     "parent": null,
     "memory_bytes": 2400000000,
     "cpu_percent": 6.2,
@@ -1053,7 +1053,7 @@
     "pid": 48000,
     "process_name": "Docker Desktop",
     "command": "/Applications/Docker.app/Contents/MacOS/Docker Desktop",
-    "started_at": 1792091770,
+    "started_at": 1792092486,
     "parent": null,
     "memory_bytes": 1100000000,
     "cpu_percent": 2,
@@ -1178,7 +1178,7 @@
     "pid": 1,
     "process_name": "Cursor",
     "command": "/Applications/Cursor.app/Contents/MacOS/Cursor",
-    "started_at": 1792178170,
+    "started_at": 1792178886,
     "parent": null,
     "memory_bytes": 2400000000,
     "cpu_percent": 6.2,
@@ -1594,7 +1594,7 @@
     "pid": 2,
     "process_name": "Cursor",
     "command": "/Applications/Cursor.app/Contents/MacOS/Cursor",
-    "started_at": 1792178170,
+    "started_at": 1792178886,
     "parent": null,
     "memory_bytes": 2400000000,
     "cpu_percent": 6.2,
@@ -1978,8 +1978,43 @@
     }
    }
   ],
+  "configured": [
+   {
+    "product": "codex",
+    "name": "Codex CLI",
+    "capabilities": {
+     "inspected": true,
+     "mcp_servers": [],
+     "skills": [
+      {
+       "id": "shared:user:code-review",
+       "name": "code-review",
+       "declared_name": "code-review",
+       "description": "Review changes for correctness, regressions and maintainability.",
+       "scope": "user",
+       "source_path": "/Users/dev/.agents/skills/code-review/SKILL.md",
+       "project_path": null,
+       "evidence": "observed"
+      },
+      {
+       "id": "codex:user:db-migrations",
+       "name": "db-migrations",
+       "declared_name": "db-migrations",
+       "description": "Write and check database migrations.",
+       "scope": "user",
+       "source_path": "/Users/dev/.codex/skills/db-migrations/SKILL.md",
+       "project_path": null,
+       "evidence": "observed"
+      }
+     ],
+     "more_mcp_servers": 0,
+     "more_skills": 0,
+     "limits": []
+    }
+   }
+  ],
   "platform": "macos",
-  "taken_at_ms": 1792264570834,
+  "taken_at_ms": 1792265286800,
   "limits": [
    "Folders are working directories and the agents' recent-project lists; open files aren't collected.",
    "Remote hosts are shown by IP address; holdmap doesn't look names up.",
@@ -2003,7 +2038,16 @@
       "kind": "skill",
       "name": "code-review",
       "agents": [
-       "cursor"
+       "cursor",
+       "codex"
+      ]
+     },
+     {
+      "id": "codex:user:db-migrations",
+      "kind": "skill",
+      "name": "db-migrations",
+      "agents": [
+       "codex"
       ]
      },
      {
@@ -2057,6 +2101,22 @@
       "state": "open"
      },
      {
+      "fingerprint": "demo-d2",
+      "analyzer": "nvidia.skillspector",
+      "rule_id": "D2",
+      "category": "Dangerous Code",
+      "severity": "medium",
+      "title": "Destructive Shell Command",
+      "subject": "codex:user:db-migrations",
+      "location": {
+       "file": "scripts/reset.sh",
+       "line": 4
+      },
+      "fix": "Ask before running commands that drop or reset a database.",
+      "refs": [],
+      "state": "open"
+     },
+     {
       "fingerprint": "demo-lp3",
       "analyzer": "nvidia.skillspector",
       "rule_id": "LP3",
@@ -2081,6 +2141,16 @@
      },
      {
       "subject": "claude:project:release-check",
+      "label": "Recommendation",
+      "value": "CAUTION"
+     },
+     {
+      "subject": "codex:user:db-migrations",
+      "label": "Risk score",
+      "value": "31 / 100"
+     },
+     {
+      "subject": "codex:user:db-migrations",
       "label": "Recommendation",
       "value": "CAUTION"
      },
@@ -2111,7 +2181,7 @@
   "open": {
    "critical": 0,
    "high": 1,
-   "medium": 1,
+   "medium": 2,
    "low": 1,
    "info": 0
   }

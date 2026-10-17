@@ -1,7 +1,7 @@
 // Per-agent configuration view model: MCP servers (configured vs running), skills, instruction
 // files, permission rules and safety settings. Everything comes from the opt-in inventory; when
 // it wasn't inspected the summary is null, never zero.
-import type { Agent, AgentMcpServer, ConfigSetting } from "./types";
+import type { Agent, AgentCapabilities, AgentMcpServer, AgentsReport, ConfigSetting } from "./types";
 
 export interface ConfigSummary {
   mcp: number;
@@ -85,4 +85,13 @@ export function configStatus(agent: Agent): ConfigStatus {
   const c = agent.capabilities;
   if (c && !c.inspected) return { kind: "unsupported", reason: c.limits[0] ?? `holdmap doesn't read ${agent.name}'s configuration.` };
   return { kind: "off" };
+}
+
+/** Every inventory in a report: running agents first, then configured agents that aren't running. */
+export function inventories(report: AgentsReport | null): { product: string; name: string; capabilities?: AgentCapabilities; running: boolean; id: string | null }[] {
+  if (!report) return [];
+  return [
+    ...report.agents.map((a) => ({ product: a.product, name: a.name, capabilities: a.capabilities, running: true, id: a.id })),
+    ...(report.configured ?? []).map((c) => ({ product: c.product, name: c.name, capabilities: c.capabilities, running: false, id: null })),
+  ];
 }

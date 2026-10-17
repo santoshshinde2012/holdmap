@@ -20,7 +20,7 @@
   import { HOME_LAYOUTS, HOME_LAYOUT_LABEL, type HomeLayout } from "../../lib/home-layout";
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
-  type Section = "overview" | "capabilities";
+  type Section = "overview" | "capabilities" | "insights";
   let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, onopenagent, onopenentry, onview, oninventory, onstopentry, onstopagent }: {
     entries: PortEntry[] | null;
     report: AgentsReport | null;
@@ -79,7 +79,8 @@
   const showInventory = $derived(!inventory && !!oninventory && (report?.agents ?? []).some((a) => !a.capabilities));
 
   function open(t: FootprintNode["target"]) { if (t.view === "list") onopenentry(t.entryId); else onopenagent(t.agentId); }
-  function openItem(i: AttentionItem) { open(i.target); }
+  // Analyzer findings open the agent's Insights tab; everything else opens the agent or port.
+  function openItem(i: AttentionItem) { if (i.rule === "analyzer" && i.target.view === "agents") onopenagent(i.target.agentId, "insights"); else open(i.target); }
   function stopItem(i: AttentionItem) { if (i.stop?.kind === "entry") onstopentry?.(i.stop.entryId); else if (i.stop) onstopagent?.(i.stop.agentId); }
   let portMenu = $state<{ entry: PortEntry; anchor: HTMLElement | SVGElement } | null>(null);
   function port(entryId: string, anchor: HTMLElement | SVGElement) {

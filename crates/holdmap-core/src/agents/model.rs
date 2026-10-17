@@ -18,6 +18,21 @@ pub struct AgentsReport {
     pub taken_at_ms: u64,
     /// What holdmap can't see or deliberately doesn't read, for the whole report.
     pub limits: Vec<String>,
+    /// Agents that aren't running but whose default configuration was readable (explicit
+    /// capability inventory only). Empty otherwise.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub configured: Vec<ConfiguredAgent>,
+}
+
+/// An agent that isn't running, known only from its default configuration locations.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ConfiguredAgent {
+    /// Catalog id, e.g. `claude-code`.
+    pub product: String,
+    /// Display name.
+    pub name: String,
+    /// What its default configuration declares (never values or instruction bodies).
+    pub capabilities: super::AgentCapabilities,
 }
 
 /// How a fact was established.

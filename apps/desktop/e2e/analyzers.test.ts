@@ -27,7 +27,7 @@ test("an analyzer turns on only after its permissions sheet, and runs on demand"
   await expect(osv).toContainText("Off");
 });
 
-test("findings reach Needs you, the agent card and the agent's Insights, and can be reviewed", async ({ app }) => {
+test("findings reach Needs you, the agent card and the Insights tab, and can be reviewed", async ({ app }) => {
   await app.getByRole("radio", { name: /^Home/ }).click();
   await expect(app.getByText(/Claude Code: SkillSpector found 1 high, 1 medium in release-check/)).toBeVisible();
   await expect(agentCard(app, "Claude Code").getByText("Analyzer findings:", { exact: false })).toBeAttached();
@@ -36,12 +36,31 @@ test("findings reach Needs you, the agent card and the agent's Insights, and can
   await agentHeading(app, "Claude Code").click();
   const card = agentCard(app, "Claude Code");
   await expect(card.getByRole("heading", { name: "Insights", exact: true })).toBeVisible();
-  await expect(card).toContainText("Instruction Override");
-  await expect(card).toContainText("Risk score: 64 / 100");
-  const high = card.getByRole("listitem").filter({ hasText: "Instruction Override" });
+  await expect(card).toContainText("Open findings: 1 high, 1 medium");
+  await card.getByRole("button", { name: "Open Insights", exact: true }).click();
+
+  const tab = app.getByRole("region", { name: "Insights workspace" });
+  await expect(tab.getByRole("heading", { level: 3 })).toContainText("Claude Code");
+  await expect(tab).toContainText("Instruction Override");
+  await expect(tab).toContainText("Risk score: 64 / 100");
+  const high = tab.getByRole("listitem").filter({ hasText: "Instruction Override" });
   await high.getByRole("button", { name: "Mark reviewed", exact: true }).click();
-  await expect(card.getByRole("listitem").filter({ hasText: "Instruction Override" })).toHaveCount(0);
-  await card.getByRole("checkbox", { name: "Show reviewed and snoozed" }).check();
-  await card.getByRole("listitem").filter({ hasText: "Instruction Override" }).getByRole("button", { name: "Reopen", exact: true }).click();
-  await expect(card.getByRole("listitem").filter({ hasText: "Instruction Override" }).getByRole("button", { name: "Mark reviewed" })).toBeVisible();
+  await expect(tab.getByRole("listitem").filter({ hasText: "Instruction Override" })).toHaveCount(0);
+  await tab.getByRole("checkbox", { name: "Show reviewed and snoozed" }).check();
+  await tab.getByRole("listitem").filter({ hasText: "Instruction Override" }).getByRole("button", { name: "Reopen", exact: true }).click();
+  await expect(tab.getByRole("listitem").filter({ hasText: "Instruction Override" }).getByRole("button", { name: "Mark reviewed" })).toBeVisible();
+});
+
+test("the Insights tab is an agent workspace tab and covers agents that aren't running", async ({ app }) => {
+  await openAgents(app);
+  await app.getByRole("radio", { name: "Insights", exact: true }).click();
+  const tab = app.getByRole("region", { name: "Insights workspace" });
+  await expect(tab).toBeVisible();
+  const list = tab.getByRole("navigation", { name: "Agents with insights" });
+  await expect(list).toContainText("Claude Code");
+  await expect(list).not.toContainText("Codex CLI");
+  await tab.getByRole("button", { name: "Turn on inventory", exact: true }).click();
+  await list.getByRole("button", { name: /^Codex CLI/ }).click();
+  await expect(tab.getByRole("heading", { level: 3 })).toContainText("not running");
+  await expect(tab).toContainText("Destructive Shell Command");
 });

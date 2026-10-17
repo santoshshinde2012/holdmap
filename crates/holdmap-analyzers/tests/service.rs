@@ -574,3 +574,40 @@ fn sarif_from_trivy_reads_string_scores_and_execution_failures() {
     );
     assert_eq!(parsed.status, Some(RunStatus::Partial));
 }
+
+#[test]
+fn configured_agents_that_are_not_running_are_covered_too() {
+    let h = harness();
+    let mut r = report(&h.skill_dir);
+    let other = h.skill_dir.parent().unwrap().join("review-helper");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::write(other.join("SKILL.md"), "---\nname: review-helper\n---\n").unwrap();
+    let mut caps = r.agents[0].capabilities.clone();
+    caps.mcp_servers.clear();
+    caps.skills[0].id = "skill:user:review-helper".into();
+    caps.skills[0].name = "review-helper".into();
+    caps.skills[0].source_path = other.join("SKILL.md");
+    // The same folder as the running agent's skill is listed once, owned by both.
+    let mut shared = r.agents[0].capabilities.skills[0].clone();
+    shared.id = "skill:user:deploy-helper".into();
+    caps.skills.push(shared);
+    r.configured.push(holdmap_core::agents::ConfiguredAgent {
+        product: "codex".into(),
+        name: "Codex".into(),
+        capabilities: caps,
+    });
+    let p = h.service.preview(SKILLSPECTOR, &r).unwrap();
+    assert_eq!(p.subjects.len(), 2);
+    let deploy = p
+        .subjects
+        .iter()
+        .find(|s| s.subject.name == "deploy-helper")
+        .unwrap();
+    assert_eq!(deploy.subject.agents, ["claude-code", "codex"]);
+    let review = p
+        .subjects
+        .iter()
+        .find(|s| s.subject.name == "review-helper")
+        .unwrap();
+    assert_eq!(review.subject.agents, ["codex"]);
+}
