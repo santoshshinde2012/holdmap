@@ -1,0 +1,51 @@
+# First-party manifest: how holdmap runs SkillSpector (https://github.com/NVIDIA/SkillSpector).
+# holdmap never installs it; the user does, then approves this exact manifest and binary.
+schema = 1
+id = "nvidia.skillspector"
+name = "SkillSpector"
+publisher = "NVIDIA"
+homepage = "https://github.com/NVIDIA/SkillSpector"
+license = "Apache-2.0"
+summary = "Static scan of agent skills for prompt injection, data exfiltration, dangerous code and vulnerable dependencies."
+install = "uv tool install git+https://github.com/NVIDIA/skillspector.git@v2.13.0"
+
+[runner]
+kind = "cli"
+command = "skillspector"
+args = ["scan", "{subject.dir}", "--format", "json", "--no-llm", "--output", "{output}"]
+per_subject = "skill"
+version_args = ["--version"]
+version_prefix = "SkillSpector v"
+timeout_secs = 120
+max_output_mb = 8
+exit_ok = [0, 1]
+
+[permissions]
+read = ["{subject.dir}"]
+network = ["api.osv.dev"]
+network_reason = "SkillSpector looks up dependency versions it finds in the skill on OSV and has no switch to turn that off."
+sends = ["Package names and versions found in the skill go to api.osv.dev."]
+spawns_mcp_servers = false
+
+[output]
+format = "json-map"
+items = "$.issues[*]"
+rule_id = "id"
+category = "category"
+severity = "severity"
+title = "pattern"
+fix = "remediation"
+file = "location.file"
+line = "location.start_line"
+fingerprint = "match_fingerprint"
+status = "analysis_completeness.status"
+coverage_percent = "analysis_completeness.coverage_percent"
+
+[[output.details]]
+label = "Risk score"
+path = "risk_assessment.score"
+suffix = " / 100"
+
+[[output.details]]
+label = "Recommendation"
+path = "risk_assessment.recommendation"

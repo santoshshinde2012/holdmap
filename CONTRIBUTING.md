@@ -35,6 +35,7 @@ The repository root is the Rust workspace; each surface keeps its source and too
 | `crates/holdmap-cli/` | CLI and TUI, with integration tests |
 | `crates/holdmap-mcp/` | MCP adapter over the shared core |
 | `crates/holdmap-activity/` | Optional local recording, source adapters, metadata policy and bounded transport |
+| `crates/holdmap-analyzers/` | Opt-in analyzers: manifests, consent and pins, CLI runner, OSV built-in, parsers, findings |
 | `apps/desktop/src/` | Svelte and TypeScript desktop UI, including browser demo data |
 | `apps/desktop/e2e/` | Browser tests against the built desktop UI in demo mode |
 | `apps/desktop/src-tauri/` | Native desktop integration, Tauri configuration and icons |
@@ -79,7 +80,7 @@ cargo fmt --all --check
 (cd apps/desktop && npm run check && npm test && npm run test:e2e) # builds the UI before native checks
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap-activity -p holdmap
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap-activity -p holdmap-analyzers -p holdmap
 cargo build --locked -p holdmap-desktop
 scripts/check-cross.sh                       # type-checks the macOS and Windows backends from Linux
 python3 scripts/test-check-cross.py          # cross-check isolation without installing targets

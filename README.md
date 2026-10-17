@@ -171,6 +171,7 @@ per service (default 60); `holdmap status` runs at most 32 HTTP checks concurren
 | Ports | `holdmap free-port --near 3000`, `holdmap wait 5432 --timeout 30s` |
 | Projects | `holdmap up`, `holdmap down`, `holdmap status`, `holdmap init` |
 | Remember | `holdmap pin`, `holdmap unpin`, `holdmap pins`, `holdmap history` |
+| Analyze (opt-in) | `holdmap analyzers list`, `holdmap analyzers show`, `holdmap analyzers approve`, `holdmap analyzers revoke`, `holdmap analyzers run`, `holdmap insights`, `holdmap insights review`, `holdmap insights snooze`, `holdmap insights reopen` |
 | Integrate | `holdmap activity serve`, `holdmap activity setup`, `holdmap activity snapshot`, `holdmap activity hook`, `holdmap tui`, `holdmap mcp`, `holdmap completions zsh`, `holdmap man` |
 
 Every read command takes `--json`. Exit codes: `0` ok, `1` busy / not found / timed out, `2`
@@ -194,6 +195,15 @@ built-in tools, permission rules and instruction files. Values, prompts and file
 never read; MCP servers are never started. The desktop, the TUI (**c** in Agents) and MCP
 `list_agents` with `include_capabilities` show the same inventory. Configured does not mean
 loaded or used. See [MCP and skills](site/src/content/docs/agents.md#mcp-and-skills).
+
+**Analyzers (opt-in).** Run a scanner you pick on your agents' skills and MCP packages:
+[NVIDIA SkillSpector](https://github.com/NVIDIA/SkillSpector) (installed by you) or the built-in
+OSV.dev lookup for pinned npm/PyPI packages. Every analyzer is off until you approve it.
+`holdmap analyzers show ID` prints exactly what it gets: the folders or package versions, the
+command, the network hosts, the cleared environment. Approval is pinned to that manifest and
+program; any change asks again. Runs get a copy of each folder, no environment values and a
+time limit. Only capped findings are kept, never matched text. holdmap never starts MCP
+servers for this. `holdmap insights --format sarif` exports the findings.
 
 **Terminal agents.** Start `holdmap` and press **Shift+Tab**
 to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its

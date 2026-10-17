@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 rustup target add x86_64-pc-windows-gnu aarch64-apple-darwin >/dev/null
-CRATES=(-p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity)
+CRATES=(-p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity -p holdmap-analyzers)
 
 # Keep the temporary dependency patch and its lockfile out of the working checkout.
 # Copy current source, including uncommitted changes, and reuse only build output.

@@ -41,7 +41,7 @@ jobs:
       - name: Placeholder frontend for native compilation
         run: mkdir -p apps/desktop/dist && echo '<html></html>' > apps/desktop/dist/index.html
       - run: cargo check --workspace --all-targets --locked --features tauri/custom-protocol
-      - run: cargo test -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity --locked --no-fail-fast
+      - run: cargo test -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity -p holdmap-analyzers --locked --no-fail-fast
 
   lint:
     name: fmt + clippy + docs
@@ -65,7 +65,7 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Rust docs (no missing docs, no broken intra-doc links)
-        run: cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap-activity -p holdmap
+        run: cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap-activity -p holdmap-analyzers -p holdmap
         env:
           RUSTDOCFLAGS: -D warnings
       - name: Versions agree (Cargo, npm, Tauri, release-please)
@@ -90,11 +90,11 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       # The desktop crate has its own job; these libraries also run on all three platforms.
       - name: Clippy (platform-specific code)
-        run: cargo clippy -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity --all-targets --locked -- -D warnings
+        run: cargo clippy -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity -p holdmap-analyzers --all-targets --locked -- -D warnings
       # Includes the docs checks: docs/cli.md vs clap, README commands and flags, Markdown links
       # and anchors, orphaned screenshots and file-naming conventions.
       - name: Test
-        run: cargo test -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity --locked --no-fail-fast
+        run: cargo test -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity -p holdmap-analyzers --locked --no-fail-fast
       - name: Smoke test the CLI against the real OS
         shell: bash
         run: |

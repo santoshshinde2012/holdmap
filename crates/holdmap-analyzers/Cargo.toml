@@ -1,0 +1,39 @@
+[package]
+name = "holdmap-analyzers"
+description = "Opt-in, consent-gated analyzers for holdmap: run a scanner the user picked on agent skills and packages, and normalise its findings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["osv-http"]
+# HTTPS transport for the OSV built-in. Without it the built-in reports itself unavailable.
+osv-http = ["dep:ureq"]
+
+[dependencies]
+holdmap-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+ureq = { version = "3.4", default-features = false, features = ["rustls"], optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.dist]
+dist = false
