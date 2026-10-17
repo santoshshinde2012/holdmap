@@ -69,6 +69,14 @@ for (const layout of ["cards", "map"] as const) for (const width of [390, 1024, 
       .filter((el) => el.offsetParent !== null && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== "visible" && !el.matches(".stage, .needs-scroll, .sr-only"))
       .map((el) => `${el.className}: ${el.textContent?.slice(0, 60)}`));
     expect(clipped).toEqual([]);
+    // Stacked blocks (summary, body, timeline) never run into each other, even when the summary wraps.
+    const overlaps = await app.evaluate(() => {
+      // Each block's real extent includes descendants that spill out of it.
+      const kids = [...document.querySelector(".home")!.children].filter((el) => (el as HTMLElement).offsetParent !== null)
+        .map((el) => ({ top: el.getBoundingClientRect().top, bottom: Math.max(...[el, ...el.querySelectorAll("*")].filter((d) => !d.closest(".stage")).map((d) => d.getBoundingClientRect().bottom)) }));
+      return kids.slice(1).filter((r, i) => r.top < kids[i].bottom - 0.5).length;
+    });
+    expect(overlaps).toBe(0);
     if (layout === "cards") {
       // Cards in a row share one height.
       const uneven = await overview.evaluate((root) => {
