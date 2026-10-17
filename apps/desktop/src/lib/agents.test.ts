@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MOCK_SNAPSHOT, mockAgents } from "./mock";
-import {
+import { footNodeActs, footNodeLabel,
   AGENT_W, FOOT_W, MACHINE_ID, accessFacts, accessHeadline, agentColor, agentMatches, column, columnX, contextGraph, counts, countsLine, edgeGeometry, filterAgents, folderAction, footprintGraph, folderSourceLabel, guessHome, headers,
   layoutContext, layoutFootprint, layoutPicture, layoutProject, monogram, neighbours, parentName, pathContains, pictureColumn, pictureGraph, platformLabel, processRows, projectGraph, resourcesLine, shortLabel, signature, sizeOf, step, stoppableEntries, stoppablePorts, tildePath, toFootFlow,
 } from "./agents";
@@ -158,6 +158,24 @@ describe("flow conversion", () => {
     const e = edges.find((x) => x.source === "agent:51200" && x.target.startsWith("remote:"))!;
     expect(e.data.color).toBe(agentColor(g, "agent:51200"));
     expect(e.data.hl).toBe(true);
+  });
+
+  it("names each map node once, on the focusable wrapper, with a button role only where a click acts", () => {
+    const g = footprintGraph(report());
+    const { nodes } = toFootFlow(g, layoutFootprint(g));
+    const agent = nodes.find((n) => n.id === "agent:51200")!;
+    expect(agent.ariaRole).toBe("button");
+    expect(agent.ariaLabel).toBe(footNodeLabel(agent.data.node, g.picture));
+    expect(agent.ariaLabel).toMatch(new RegExp(`^${agent.data.node.agent!.name}, `));
+    for (const n of nodes.filter((x) => x.type === "foot")) {
+      expect(n.ariaRole).toBe(footNodeActs(n.data.node) ? "button" : "group");
+      expect(n.ariaLabel).toContain(n.data.node.label);
+    }
+    const folder = nodes.find((n) => n.data.node.kind === "folder")!;
+    expect(folder.ariaLabel).toMatch(/^Folder .*\. Zooms into this project$/);
+    const remote = nodes.find((n) => n.data.node.kind === "remote")!;
+    expect(remote.ariaRole).toBe("group");
+    expect(nodes.filter((n) => n.type === "header").every((n) => n.ariaLabel === undefined && n.focusable === false)).toBe(true);
   });
 
   it("keeps the agent colour when searching removes another agent", () => {

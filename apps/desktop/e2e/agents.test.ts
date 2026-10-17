@@ -99,7 +99,7 @@ const shopFolderPath = "/Users/dev/code/shop-web";
 test("folder map actions copy the original path and preserve listeners", async ({ app }) => {
   await app.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   const folder = await openProject(app);
-  const mapNode = app.locator(".svelte-flow__node").filter({ has: folder });
+  const mapNode = folder; // the focusable svelte-flow wrapper is the named control
   await mapNode.focus();
   await folder.click();
   const dialog = app.getByRole("dialog", { name: "Folder actions", exact: true });
@@ -143,7 +143,7 @@ test("agent card folders offer editor and file-manager previews without native e
 
 test("folder map keyboard actions retain focus and survive background scans", async ({ app }) => {
   const folder = await openProject(app);
-  const mapNode = app.locator(".svelte-flow__node").filter({ has: folder });
+  const mapNode = folder; // the focusable svelte-flow wrapper is the named control
   const dialog = app.getByRole("dialog", { name: "Folder actions", exact: true });
   await mapNode.focus();
   for (const key of ["Enter", "Space"]) {

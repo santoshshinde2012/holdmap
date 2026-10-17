@@ -48,10 +48,10 @@
       <ul>
         {#each loose as e (e.id)}
           <li><button type="button" class="row" class:warn={e.exposure === "all_interfaces"} aria-haspopup="menu" onclick={(ev) => onport(e.id, ev.currentTarget)}
-            aria-label="Port {e.port} {e.project?.name ?? e.framework?.name ?? e.label}{e.exposure === 'all_interfaces' ? ', open to the network' : ''}">
-            <i></i><span class="port">:{e.port}</span><span class="nm">{e.project?.name ?? e.framework?.name ?? e.label}</span>
-            {#if e.framework?.name && e.project?.name}<span class="fw">{e.framework.name}</span>{/if}
-            {#if e.exposure === "all_interfaces"}<span class="exp">exposed</span>{/if}
+            aria-label="Port {e.port} {e.project?.name ?? e.framework?.name ?? e.label}{e.framework?.name && e.project?.name ? ` ${e.framework.name}` : ''}{e.exposure === 'all_interfaces' ? ', exposed: open to the network' : ''}">
+            <i></i><span class="port">:{e.port}</span>{" "}<span class="nm">{e.project?.name ?? e.framework?.name ?? e.label}</span>
+            {#if e.framework?.name && e.project?.name}{" "}<span class="fw">{e.framework.name}</span>{/if}
+            {#if e.exposure === "all_interfaces"}{" "}<span class="exp">exposed</span>{/if}
           </button></li>
         {/each}
       </ul>

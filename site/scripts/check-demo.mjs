@@ -234,7 +234,7 @@ try {
   await check("Agent folders offer keyboard-accessible choices with honest browser previews", async () => {
     await frame.getByRole("button", { name: /^Folder shop-web,.*Zooms into this project/ }).click();
     const folder = frame.getByRole("button", { name: /^Folder shop-web,.*\. Opens folder actions$/ });
-    const mapNode = folder.locator("xpath=ancestor::div[contains(@class, 'svelte-flow__node')][1]");
+    const mapNode = folder; // the focusable svelte-flow wrapper is the named control
     const dialog = frame.getByRole("dialog", { name: "Folder actions", exact: true });
     await mapNode.focus();
     await mapNode.press("Enter");

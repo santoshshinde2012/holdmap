@@ -21,7 +21,7 @@
       <span class="stat" aria-busy="true"><b class="pending">…</b><span>{s.label}</span></span>
     {:else}
       <button type="button" class="stat tone-{s.tone ?? 'plain'}" onclick={s.go} aria-label="{s.value}{s.of != null ? ` of ${s.of}` : ''} {s.label}">
-        <b>{s.value}{#if s.of != null}<small>/{s.of}</small>{/if}</b><span>{s.label}</span>
+        <b>{s.value}{#if s.of != null}<small>/{s.of}</small>{/if}</b>{" "}<span>{s.label}</span>
       </button>
     {/if}
   {/each}

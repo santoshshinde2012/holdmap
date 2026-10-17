@@ -85,3 +85,47 @@ test("Esc still closes Scheduled actions after a schedule is cancelled with the 
   await app.keyboard.press("Escape");
   await expect(manager).toHaveCount(0);
 });
+
+test("port rows and group headers nest no controls inside the listbox", async ({ app }) => {
+  const list = app.getByRole("listbox", { name: "Ports in use" });
+  await expect(list.getByRole("option").first()).toBeVisible();
+  await list.getByRole("option").first().click();
+  const nested = await list.evaluate((el) => el.querySelectorAll(":is([role=option], .gh) :is(button, a[href], input, select, textarea, [tabindex]), [role=group] > :not([role=option], .lrows, .gh)").length);
+  expect(nested).toBe(0);
+  // The hover actions still work with a pointer.
+  const row = list.getByRole("option").first();
+  await row.hover();
+  await expect(row.locator('[data-action="pin"]')).toBeVisible();
+  // A collapsed group can always be expanded again from the command palette.
+  await app.locator(".gh .toggle").first().click();
+  await app.keyboard.press("Control+k");
+  const palette = app.getByRole("dialog", { name: "Command palette", exact: true });
+  await palette.getByRole("combobox").fill("expand collapsed");
+  await palette.getByRole("option", { name: /Expand collapsed port groups/ }).click();
+  await expect(app.locator(".gh.collapsed")).toHaveCount(0);
+});
+
+test("agents map nodes are single named controls with nothing focusable inside", async ({ app }) => {
+  await app.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: /^Agents/ }).click();
+  const node = app.locator('.svelte-flow__node[data-id^="agent:"]').first();
+  await expect(node).toHaveAttribute("role", "button");
+  await expect(node).toHaveAttribute("aria-label", /\S+, /);
+  expect(await node.evaluate((el) => el.querySelectorAll("button, a[href], [tabindex], [role=button]").length)).toBe(0);
+});
+
+test("phone width: view controls wrap onto rows instead of scrolling sideways", async ({ app }) => {
+  await app.setViewportSize({ width: 390, height: 844 });
+  await app.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: /^Agents/ }).click();
+  const toolbar = app.getByRole("toolbar", { name: "View and filters" });
+  for (const name of ["View", "Agents workspace", "Map picture"]) {
+    const box = await toolbar.getByRole("radiogroup", { name, exact: true }).boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390, `${name} fits the window`).toBe(true);
+  }
+  expect(await toolbar.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+  // The agent cards stack above the map instead of squeezing it into a sliver.
+  const rail = await app.getByRole("complementary", { name: "Agents" }).boundingBox();
+  const map = await app.locator("#agents-overview .map").boundingBox();
+  expect(rail && map && map.y >= rail.y + rail.height - 1 && map.width > 300).toBe(true);
+  await app.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: /^List/ }).click();
+  expect(await toolbar.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+});

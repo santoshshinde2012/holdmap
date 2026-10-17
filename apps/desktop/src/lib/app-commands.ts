@@ -35,6 +35,8 @@ export interface CommandState {
   autostart: boolean;
   graphQuery: string;
   singleKeys: boolean;
+  /** Port-list groups the user collapsed (their rows are out of keyboard reach). */
+  collapsedGroups?: number;
 }
 
 export interface CommandActions {
@@ -73,6 +75,7 @@ export interface CommandActions {
   toggleDensity: () => void;
   toggleAutostart: () => void;
   clearGraphQuery: () => void;
+  expandGroups?: () => void;
 }
 
 /** Ports beyond this many are reachable by search, not listed one by one. */
@@ -123,6 +126,7 @@ export function appCommands(st: CommandState, act: CommandActions): Command[] {
     { id: "side", group: "View", icon: "panel", title: st.view === "graph" ? st.graphDetailsOpen ? "Close service details" : "Inspect selected service" : st.sideOpen ? "Hide the details pane" : "Show the details pane", shortcut: ["B"], keywords: "sidebar panel details larger graph canvas hide", run: act.toggleSide },
     { id: "view", group: "View", icon: st.view === "graph" ? "list" : "graph", title: st.view === "graph" ? "Show the list" : "Show the service graph", shortcut: ["G"], keywords: "mesh topology network dependencies", run: act.toggleGraph },
     { id: "agents", group: "View", icon: st.view === "agents" ? "list" : "bot", title: st.view === "agents" ? "Show the list" : "Show agents, tools and apps", shortcut: ["⇧", "A"], keywords: "ai coding agents tools apps docker claude codex cursor copilot gemini windsurf aider access folders stop", run: act.toggleAgents },
+    ...(st.view === "list" && st.collapsedGroups && act.expandGroups ? [{ id: "expand-groups", group: "View" as const, icon: "layers", title: "Expand collapsed port groups", keywords: "collapse expand section group list show rows", run: act.expandGroups }] : []),
     { id: "sort-c", group: "View", icon: "layers", title: "Group by cluster (compose, workspace, supervisor…)", run: () => act.setSort("cluster") },
     { id: "settings", group: "Settings", icon: "sliders", title: "Open settings", shortcut: [st.mod, ","], keywords: "preferences options config interval hotkey", run: () => act.settings() },
     { id: "about", group: "Settings", icon: "info", title: "About holdmap", subtitle: st.version ? `${st.platform === "browser" ? "Preview" : "Running"} version ${st.version}` : undefined, keywords: "version app location architecture updates upgrade installation", run: () => act.settings("about") },

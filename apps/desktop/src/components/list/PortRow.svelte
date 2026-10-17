@@ -3,7 +3,6 @@
   // container queries) so ports, names, badges and usage line up down the whole list:
   //   status · port · tile + name · meta · badges · usage · age      [actions overlay on hover]
   import Icon from "../Icon.svelte";
-  import IconButton from "../ui/IconButton.svelte";
   import FrameworkIcon from "../FrameworkIcon.svelte";
   import StatusDot from "./StatusDot.svelte";
   import RowBadges from "./RowBadges.svelte";
@@ -55,7 +54,6 @@
   const cpu = $derived(entry.process?.cpu_percent);
   const usageTip = $derived([cpu !== undefined ? `CPU ${cpu.toFixed(1)}%` : null, memTip ? `Memory ${memTip}` : mem ? `Memory ${mem}` : null].filter(Boolean).join(" · "));
   const tile = $derived(density === "compact" ? 18 : 22);
-  const stop = (e: MouseEvent, fn?: () => void) => { e.stopPropagation(); fn?.(); };
 </script>
 
 <div
@@ -102,16 +100,16 @@
 
   <span class="age" use:tooltip={meta.uptime ? `Up ${meta.uptime}` : null}>{meta.uptime ?? ""}</span>
 
-  <span class="actions" class:visible={selected || busy}>
-    {#if canOpen(entry)}
-      <IconButton icon="external" size="sm" label="Open in browser" kbd="O" tabindex={-1} onclick={(e) => stop(e, onopen)} />
-    {/if}
-    {#if onpin}
-      <IconButton icon="star" size="sm" label={pinned ? "Unpin" : "Pin"} kbd="P" pressed={pinned} class="pin" tabindex={-1} onclick={(e) => stop(e, onpin)} />
-    {/if}
-    {#if stoppable}
-      <IconButton icon="stop" size="sm" label={busy ? "Stopping…" : `Stop port ${entry.port}`} kbd="⌫" class="danger" disabled={busy} tabindex={-1} onclick={(e) => stop(e, onstop)} />
-    {/if}
+  <!-- Pointer shortcuts for O, P and ⌫; the details pane has the same actions as real buttons.
+       Plain, unfocusable elements hidden from assistive tech, so the option nests no controls. -->
+  <span class="actions" class:visible={selected || busy} aria-hidden="true">
+    {#snippet act(icon: string, tip: string, kbd: string, name: string, fn: () => void, extra = "", disabled = false)}
+      <span class="act {extra}" class:disabled data-action={name} use:tooltip={{ text: tip, kbd }}
+        onclick={(e) => { e.stopPropagation(); if (!disabled) fn(); }} ondblclick={(e) => e.stopPropagation()} role="presentation"><Icon name={icon} size={14} /></span>
+    {/snippet}
+    {#if canOpen(entry)}{@render act("external", "Open in browser", "O", "open", onopen)}{/if}
+    {#if onpin}{@render act("star", pinned ? "Unpin" : "Pin", "P", "pin", onpin, pinned ? "pin on" : "pin")}{/if}
+    {#if stoppable}{@render act("stop", busy ? "Stopping…" : `Stop port ${entry.port}`, "⌫", "stop", onstop, "danger", busy)}{/if}
   </span>
 </div>
 
@@ -184,9 +182,13 @@
   /* The trailing data columns fade out under the actions instead of showing through them. */
   .usage, .age { transition: opacity var(--dur-1) var(--ease); }
   .row:hover .usage, .row:hover .age, .row.selected .usage, .row.selected .age, .row.busy .usage, .row.busy .age { opacity: 0; }
-  .actions :global(.ib.danger:hover:not(:disabled)) { color: var(--danger); background: var(--danger-soft); }
-  .actions :global(.ib.pin.on) { color: var(--warn); }
-  .actions :global(.ib.pin.on svg) { fill: currentColor; }
+  .act { display: inline-grid; place-items: center; width: var(--h-sm); height: var(--h-sm); border-radius: var(--r-full); color: var(--muted); cursor: pointer; transition: background var(--dur-1), color var(--dur-1); }
+  .act:hover:not(.disabled) { background: var(--row-hover); color: var(--text); }
+  .act:active:not(.disabled) { background: var(--surface-3); }
+  .act.disabled { opacity: 0.45; cursor: not-allowed; }
+  .act.danger:hover:not(.disabled) { color: var(--danger); background: var(--danger-soft); }
+  .act.pin.on { color: var(--warn); }
+  .act.pin.on :global(svg) { fill: currentColor; }
 
   /* Columns drop as the list narrows (the list is the container, so this tracks the pane, not the window). */
   @container portlist (max-width: 900px) { .row { grid-template-columns: 8px 48px minmax(150px, 1.2fr) minmax(0, 1fr) 160px 84px; } .age { display: none; } }
