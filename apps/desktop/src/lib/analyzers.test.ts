@@ -81,7 +81,7 @@ describe("home attention with analyzer findings", () => {
 describe("demo analyzers", () => {
   it("start with SkillSpector on and OSV off; runs need approval", () => {
     const demo = new DemoAnalyzers();
-    expect(demo.list().map((a) => [a.id, a.state])).toEqual([["holdmap.osv", "not_approved"], ["nvidia.skillspector", "approved"]]);
+    expect(demo.list().map((a) => [a.id, a.state])).toEqual([["nvidia.skillspector", "approved"], ["holdmap.osv", "not_approved"]]);
     expect(() => demo.run("holdmap.osv", report)).toThrow(/off/);
     demo.approve("holdmap.osv");
     expect(demo.run("holdmap.osv", report).analyzer).toBe("holdmap.osv");

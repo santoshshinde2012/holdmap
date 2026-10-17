@@ -10,7 +10,25 @@ pub(super) fn list(service: &AnalyzerService) -> (String, Value) {
     let mut lines: Vec<String> = views.iter().map(line).collect();
     lines.push("Analyzers only run after the user turns them on in holdmap (Settings → Analyzers) or with `holdmap analyzers approve`; this tool never runs them.".into());
     let rows: Vec<Value> = views.iter().map(row).collect();
-    (lines.join("\n"), json!({ "analyzers": rows }))
+    let c = service.catalog_status();
+    lines.push(format!(
+        "Catalog version {} ({}){}.",
+        c.version,
+        c.published,
+        if c.pending.is_some() {
+            "; a signed update is waiting for the user's review"
+        } else {
+            ""
+        }
+    ));
+    let catalog = json!({
+        "version": c.version, "published": c.published, "accepted": c.accepted,
+        "update_waiting": c.pending.is_some(),
+    });
+    (
+        lines.join("\n"),
+        json!({ "analyzers": rows, "catalog": catalog }),
+    )
 }
 
 fn line(v: &AnalyzerView) -> String {

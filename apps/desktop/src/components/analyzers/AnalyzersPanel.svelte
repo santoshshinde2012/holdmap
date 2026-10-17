@@ -8,6 +8,7 @@
   import CopyValue from "../ui/CopyValue.svelte";
   import PermissionsSheet from "./PermissionsSheet.svelte";
   import AnalyzerKeys from "./AnalyzerKeys.svelte";
+  import CatalogUpdate from "./CatalogUpdate.svelte";
   import * as api from "../../lib/api";
   import { SANDBOX_LABEL, STATE_LABEL, ago, countsText, total, type AnalyzerView, type Preview } from "../../lib/analyzers";
   import { insightsStore } from "../../lib/insights-store.svelte";
@@ -93,6 +94,7 @@
       </li>
     {/each}
   </ul>
+  <CatalogUpdate onchange={() => insightsStore.refresh()} />
   <p class="foot">holdmap never starts MCP servers for analyzers. Runs get a copy of each folder, a cleared environment and a time limit. Only short findings are kept.</p>
 {/if}
 

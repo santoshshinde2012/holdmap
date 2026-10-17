@@ -779,3 +779,24 @@ fn automatic_runs_need_an_approved_analyzer() {
         .failure()
         .stderr(predicate::str::contains("Turn it on first"));
 }
+
+#[test]
+fn the_signed_catalog_is_reported_and_bad_imports_are_refused() {
+    hm().args(["analyzers", "catalog"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("built into holdmap"));
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("analyzers.json");
+    std::fs::write(&file, "{}").unwrap();
+    std::fs::write(dir.path().join("analyzers.json.minisig"), "not a signature").unwrap();
+    hm().args(["analyzers", "catalog", "import"])
+        .arg(&file)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("signature is not valid"));
+    hm().args(["analyzers", "catalog", "accept"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no catalog update is waiting"));
+}

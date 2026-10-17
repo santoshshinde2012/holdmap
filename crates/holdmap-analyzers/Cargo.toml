@@ -27,6 +27,7 @@ thiserror.workspace = true
 toml.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
+minisign-verify = "0.2"
 ureq = { version = "3.4", default-features = false, features = ["rustls"], optional = true }
 keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "async-secret-service", "async-io", "crypto-rust"], optional = true }
 
@@ -38,6 +39,8 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 
 [dev-dependencies]
 tempfile.workspace = true
+# Signing the first-party catalog (examples/sign_catalog.rs); never linked into holdmap.
+minisign = { version = "0.10", default-features = false }
 
 [lints]
 workspace = true

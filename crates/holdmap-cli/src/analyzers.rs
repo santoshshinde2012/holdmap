@@ -6,6 +6,7 @@ use crate::commands::confirm;
 use crate::style::{self, bold, dim, paint, S};
 use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
+use holdmap_analyzers::catalog::{CatalogDiff, SignedCatalog};
 use holdmap_analyzers::secrets::Secret;
 use holdmap_analyzers::service::{AnalyzerView, Preview, ServiceError};
 use holdmap_analyzers::FileStore;
@@ -47,6 +48,11 @@ pub enum AnalyzerAction {
         #[command(subcommand)]
         action: KeyAction,
     },
+    /// The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject.
+    Catalog {
+        #[command(subcommand)]
+        action: Option<CatalogAction>,
+    },
     /// Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer
     /// that uses the network. Analyzers without network access run automatically once on.
     Auto {
@@ -61,6 +67,20 @@ pub enum AnalyzerAction {
         #[arg(long, conflicts_with = "id")]
         changed: bool,
     },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CatalogAction {
+    /// Which catalog is in use and whether an update waits for review (the default).
+    Status,
+    /// Download the newest signed catalog from the holdmap repository and stage it for review.
+    Fetch,
+    /// Stage a catalog file (its signature is read from FILE.minisig) for review.
+    Import { file: std::path::PathBuf },
+    /// Apply the staged update. Analyzers whose manifest changed ask for approval again.
+    Accept,
+    /// Discard the staged update.
+    Reject,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -221,6 +241,13 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
             }
         }
         AnalyzerAction::Key { action } => return run_key(&svc, action, a.json),
+        AnalyzerAction::Catalog { action } => {
+            return run_catalog(
+                &svc,
+                action.as_ref().unwrap_or(&CatalogAction::Status),
+                a.json,
+            )
+        }
         AnalyzerAction::Auto { id, setting } => {
             let view = match svc.set_background(id, *setting == Toggle::On) {
                 Ok(v) => v,
@@ -282,6 +309,131 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
         }
     }
     Ok(crate::exit::OK)
+}
+
+fn run_catalog(svc: &AnalyzerService, action: &CatalogAction, json: bool) -> Result<u8> {
+    let staged = |r: Result<CatalogDiff, ServiceError>| -> Result<u8> {
+        match r {
+            Ok(diff) => {
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&diff)?);
+                } else {
+                    print!("{}", style::terminal_text(&render_diff(&diff)));
+                    println!("Apply it with: holdmap analyzers catalog accept");
+                }
+                Ok(crate::exit::OK)
+            }
+            Err(ServiceError::Catalog(e)) => {
+                eprintln!("{} {e}", style::err_mark());
+                Ok(crate::exit::BLOCKED)
+            }
+            Err(e) => Err(e.into()),
+        }
+    };
+    match action {
+        CatalogAction::Status => {
+            let status = svc.catalog_status();
+            if json {
+                println!("{}", serde_json::to_string_pretty(&status)?);
+            } else {
+                println!(
+                    "Catalog version {} ({}), {}.",
+                    status.version,
+                    status.published,
+                    if status.accepted {
+                        "an update you accepted"
+                    } else {
+                        "built into holdmap"
+                    }
+                );
+                if let Some(diff) = &status.pending {
+                    print!("{}", style::terminal_text(&render_diff(diff)));
+                    println!("Apply it with: holdmap analyzers catalog accept (or reject)");
+                }
+            }
+            Ok(crate::exit::OK)
+        }
+        CatalogAction::Fetch => staged(svc.fetch_catalog()),
+        CatalogAction::Import { file } => {
+            let mut sig = file.clone().into_os_string();
+            sig.push(".minisig");
+            let offered = SignedCatalog {
+                json: std::fs::read_to_string(file)
+                    .with_context(|| format!("couldn't read {}", file.display()))?,
+                signature: std::fs::read_to_string(&sig).with_context(|| {
+                    format!("couldn't read the signature {}", sig.to_string_lossy())
+                })?,
+            };
+            staged(svc.stage_catalog(&offered))
+        }
+        CatalogAction::Accept => match svc.accept_catalog() {
+            Ok(status) => {
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&status)?);
+                } else {
+                    println!(
+                        "{} Catalog version {} is in use. Analyzers that changed ask for approval again.",
+                        style::ok_mark(),
+                        status.version
+                    );
+                }
+                Ok(crate::exit::OK)
+            }
+            Err(ServiceError::Catalog(e)) => {
+                eprintln!("{} {e}", style::err_mark());
+                Ok(crate::exit::BLOCKED)
+            }
+            Err(e) => Err(e.into()),
+        },
+        CatalogAction::Reject => {
+            svc.reject_catalog()?;
+            if json {
+                println!("{}", json!({ "rejected": true }));
+            } else {
+                println!("Discarded the staged catalog update.");
+            }
+            Ok(crate::exit::OK)
+        }
+    }
+}
+
+fn render_diff(d: &CatalogDiff) -> String {
+    let mut out = format!(
+        "{} Signed catalog update: version {} → {} ({})\n",
+        style::warn_mark(),
+        d.from_version,
+        d.to_version,
+        d.published
+    );
+    if d.is_empty() {
+        out.push_str("  No analyzer changes.\n");
+    }
+    for a in &d.added {
+        out.push_str(&format!("  + {a}\n"));
+    }
+    for r in &d.removed {
+        out.push_str(&format!("  - {r}\n"));
+    }
+    for c in &d.changed {
+        out.push_str(&format!("  ~ {}\n", bold(&c.id)));
+        for f in &c.fields {
+            out.push_str(&format!(
+                "      {}: {} → {}\n",
+                f.field,
+                if f.before.is_empty() {
+                    dim("(none)")
+                } else {
+                    f.before.clone()
+                },
+                if f.after.is_empty() {
+                    dim("(none)")
+                } else {
+                    f.after.clone()
+                }
+            ));
+        }
+    }
+    out
 }
 
 fn run_key(svc: &AnalyzerService, action: &KeyAction, json: bool) -> Result<u8> {

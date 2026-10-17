@@ -105,6 +105,25 @@ pub struct MemoryStore {
     results: Mutex<BTreeMap<String, AnalyzerResult>>,
     reviews: Mutex<BTreeMap<String, Review>>,
     secrets: Mutex<BTreeMap<String, Vec<String>>>,
+    catalogs: Mutex<BTreeMap<u8, crate::catalog::SignedCatalog>>,
+}
+
+impl crate::catalog::CatalogStore for MemoryStore {
+    fn catalog(&self, slot: crate::catalog::CatalogSlot) -> Option<crate::catalog::SignedCatalog> {
+        self.catalogs.lock().unwrap().get(&(slot as u8)).cloned()
+    }
+    fn set_catalog(
+        &self,
+        slot: crate::catalog::CatalogSlot,
+        catalog: Option<&crate::catalog::SignedCatalog>,
+    ) -> io::Result<()> {
+        let mut all = self.catalogs.lock().unwrap();
+        match catalog {
+            Some(c) => all.insert(slot as u8, c.clone()),
+            None => all.remove(&(slot as u8)),
+        };
+        Ok(())
+    }
 }
 
 impl SecretIndex for MemoryStore {

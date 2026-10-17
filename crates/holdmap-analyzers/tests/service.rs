@@ -247,8 +247,8 @@ fn nothing_runs_until_approved_and_list_never_runs_anything() {
     assert_eq!(
         states,
         vec![
-            (OSV.into(), AnalyzerState::NotApproved),
-            (SKILLSPECTOR.into(), AnalyzerState::NotApproved)
+            (SKILLSPECTOR.into(), AnalyzerState::NotApproved),
+            (OSV.into(), AnalyzerState::NotApproved)
         ]
     );
     assert!(matches!(
@@ -572,7 +572,7 @@ fn the_preview_shows_the_real_folders_and_a_cleared_environment() {
 }
 
 fn sarif(fixture: &str) -> holdmap_analyzers::parse::Parsed {
-    let manifest = catalog::bundled().remove(1);
+    let manifest = catalog::bundled().remove(0);
     let raw = RawOutput {
         subjects: vec![],
         exit_code: Some(0),
@@ -697,7 +697,7 @@ fn api_keys_go_to_the_keychain_and_only_into_that_analyzer_s_run() {
         "spawns_mcp_servers = false\nsecrets = [\"NVIDIA_API_KEY\"]",
     );
     let mut catalog = catalog::bundled();
-    catalog[1] = holdmap_analyzers::AnalyzerManifest::parse(&text).unwrap();
+    catalog[0] = holdmap_analyzers::AnalyzerManifest::parse(&text).unwrap();
     let keychain = StdArc::new(MemorySecrets::default());
     let store_dir = dir.path().join("analyzers");
     let probe = Arc::new(FakeProbe::default());
@@ -800,7 +800,7 @@ fn a_run_gets_its_stored_keys_and_notes_missing_ones() {
         "spawns_mcp_servers = false\nsecrets = [\"NVIDIA_API_KEY\", \"SECOND_KEY\"]",
     );
     let mut catalog = catalog::bundled();
-    catalog[1] = holdmap_analyzers::AnalyzerManifest::parse(&text).unwrap();
+    catalog[0] = holdmap_analyzers::AnalyzerManifest::parse(&text).unwrap();
     let probe = Arc::new(FakeProbe::default());
     *probe.info.lock().unwrap() = Some(BinaryInfo {
         path: "/opt/bin/skillspector".into(),

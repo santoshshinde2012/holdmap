@@ -3,6 +3,9 @@
 //! binary, runs only approved and unchanged analyzers, normalises their output and applies
 //! review states.
 
+use crate::catalog::{
+    Catalog, CatalogDiff, CatalogError, CatalogSource, CatalogStatus, CatalogStore, SignedCatalog,
+};
 use crate::cli_runner::CliRunner;
 use crate::consent::{ConsentStore, Grant, ResultStore, Review, ReviewStore, SecretIndex};
 use crate::finding::{
@@ -23,7 +26,7 @@ use holdmap_core::agents::AgentsReport;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
@@ -198,6 +201,9 @@ pub enum ServiceError {
     /// A store write failed.
     #[error("could not save: {0}")]
     Io(#[from] std::io::Error),
+    /// A catalog update was refused.
+    #[error(transparent)]
+    Catalog(#[from] CatalogError),
     /// An API key could not be stored, read or deleted.
     #[error(transparent)]
     Secret(#[from] SecretError),
@@ -214,11 +220,15 @@ pub struct Stores {
     pub reviews: Arc<dyn ReviewStore>,
     /// Which secret names are stored.
     pub secrets: Arc<dyn SecretIndex>,
+    /// Staged and accepted catalogs.
+    pub catalog: Arc<dyn CatalogStore>,
 }
 
 impl Stores {
     /// One object implementing all three.
-    pub fn of<T: ConsentStore + ResultStore + ReviewStore + SecretIndex + 'static>(
+    pub fn of<
+        T: ConsentStore + ResultStore + ReviewStore + SecretIndex + CatalogStore + 'static,
+    >(
         store: T,
     ) -> Self {
         let store = Arc::new(store);
@@ -226,14 +236,34 @@ impl Stores {
             consent: store.clone(),
             results: store.clone(),
             reviews: store.clone(),
-            secrets: store,
+            secrets: store.clone(),
+            catalog: store,
+        }
+    }
+}
+
+/// The catalog in use and where it came from.
+struct ActiveCatalog {
+    catalog: Catalog,
+    accepted: bool,
+    manifests: Arc<Vec<AnalyzerManifest>>,
+}
+
+impl ActiveCatalog {
+    fn new(catalog: Catalog, accepted: bool) -> Self {
+        Self {
+            manifests: Arc::new(catalog.manifests.clone()),
+            catalog,
+            accepted,
         }
     }
 }
 
 /// The orchestrator.
 pub struct AnalyzerService {
-    catalog: Vec<AnalyzerManifest>,
+    catalog: RwLock<ActiveCatalog>,
+    catalog_key: String,
+    catalog_source: Box<dyn CatalogSource>,
     stores: Stores,
     probe: Box<dyn BinaryProbe>,
     projector: Box<dyn InputProjector>,
@@ -250,15 +280,20 @@ impl AnalyzerService {
     pub fn new(stores: Stores) -> Self {
         let sandbox = crate::sandbox::best_available();
         let level = sandbox.level();
-        Self::with_parts(
-            crate::catalog::bundled(),
+        let (active, accepted) =
+            crate::catalog::load_active(stores.catalog.as_ref(), crate::catalog::PUBLIC_KEY);
+        let manifests = active.manifests.clone();
+        let mut service = Self::with_parts(
+            manifests,
             stores,
             Box::new(SystemProbe::from_env()),
             Box::new(CliRunner::new(sandbox)),
             Box::new(OsvRunner::with_default_transport()),
         )
         .with_sandbox_level(level)
-        .with_secrets(crate::secrets::default_store())
+        .with_secrets(crate::secrets::default_store());
+        service.catalog = RwLock::new(ActiveCatalog::new(active, accepted));
+        service
     }
 
     /// State this sandbox level on views and previews (it must match the CLI runner's).
@@ -275,8 +310,17 @@ impl AnalyzerService {
         cli: Box<dyn AnalyzerRunner>,
         builtin: Box<dyn AnalyzerRunner>,
     ) -> Self {
+        let bundled = crate::catalog::bundled_catalog();
         Self {
-            catalog,
+            catalog: RwLock::new(ActiveCatalog::new(
+                Catalog {
+                    manifests: catalog,
+                    ..bundled
+                },
+                false,
+            )),
+            catalog_key: crate::catalog::PUBLIC_KEY.into(),
+            catalog_source: Box::new(crate::catalog::HttpsCatalogSource),
             stores,
             probe,
             projector: Box::new(InventoryProjector),
@@ -286,6 +330,71 @@ impl AnalyzerService {
             keychain: Box::new(crate::secrets::NoSecrets),
             now: now_ms,
         }
+    }
+
+    /// Verify catalogs with this key and download them from `source` (tests).
+    pub fn with_catalog_source(mut self, key: &str, source: Box<dyn CatalogSource>) -> Self {
+        self.catalog_key = key.into();
+        self.catalog_source = source;
+        self
+    }
+
+    /// Which catalog is in use, and any verified update waiting for review.
+    pub fn catalog_status(&self) -> CatalogStatus {
+        let active = self.catalog.read().unwrap_or_else(|e| e.into_inner());
+        CatalogStatus {
+            version: active.catalog.version,
+            published: active.catalog.published.clone(),
+            accepted: active.accepted,
+            pending: crate::catalog::pending(
+                self.stores.catalog.as_ref(),
+                &self.catalog_key,
+                &active.catalog,
+            ),
+        }
+    }
+
+    /// Download the newest catalog (only when the user asks), verify it and stage it for
+    /// review. Nothing changes until [`Self::accept_catalog`].
+    pub fn fetch_catalog(&self) -> Result<CatalogDiff, ServiceError> {
+        let offered = self
+            .catalog_source
+            .fetch()
+            .map_err(CatalogError::Unavailable)?;
+        self.stage_catalog(&offered)
+    }
+
+    /// Verify a catalog file the user supplied and stage it for review.
+    pub fn stage_catalog(&self, offered: &SignedCatalog) -> Result<CatalogDiff, ServiceError> {
+        let active = self.catalog.read().unwrap_or_else(|e| e.into_inner());
+        Ok(crate::catalog::stage(
+            self.stores.catalog.as_ref(),
+            &self.catalog_key,
+            &active.catalog,
+            offered,
+        )?)
+    }
+
+    /// Apply the staged catalog. Analyzers whose manifest changed ask for approval again.
+    pub fn accept_catalog(&self) -> Result<CatalogStatus, ServiceError> {
+        {
+            let mut active = self.catalog.write().unwrap_or_else(|e| e.into_inner());
+            let new = crate::catalog::accept(
+                self.stores.catalog.as_ref(),
+                &self.catalog_key,
+                &active.catalog,
+            )?;
+            *active = ActiveCatalog::new(new, true);
+        }
+        Ok(self.catalog_status())
+    }
+
+    /// Discard the staged catalog.
+    pub fn reject_catalog(&self) -> Result<(), ServiceError> {
+        Ok(self
+            .stores
+            .catalog
+            .set_catalog(crate::catalog::CatalogSlot::Pending, None)?)
     }
 
     /// Where API keys are kept (the OS keychain in production).
@@ -322,7 +431,7 @@ impl AnalyzerService {
 
     /// Store an API key the analyzer's manifest declares. The value goes to the keychain only.
     pub fn set_secret(&self, id: &str, name: &str, value: &Secret) -> Result<(), ServiceError> {
-        let m = self.manifest(id)?;
+        let m = &self.manifest(id)?;
         let name = self.declared(m, name)?;
         check_value(value)?;
         self.keychain.set(&m.id, name, value)?;
@@ -332,7 +441,7 @@ impl AnalyzerService {
 
     /// Delete a stored API key. `true` when one existed.
     pub fn delete_secret(&self, id: &str, name: &str) -> Result<bool, ServiceError> {
-        let m = self.manifest(id)?;
+        let m = &self.manifest(id)?;
         let name = self.declared(m, name)?;
         let existed = self.keychain.delete(&m.id, name)?;
         self.stores.secrets.mark_secret(&m.id, name, false)?;
@@ -374,21 +483,30 @@ impl AnalyzerService {
         self
     }
 
-    fn manifest(&self, id: &str) -> Result<&AnalyzerManifest, ServiceError> {
+    fn catalog(&self) -> Arc<Vec<AnalyzerManifest>> {
         self.catalog
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .manifests
+            .clone()
+    }
+
+    fn manifest(&self, id: &str) -> Result<AnalyzerManifest, ServiceError> {
+        self.catalog()
             .iter()
             .find(|m| m.id == id)
+            .cloned()
             .ok_or_else(|| ServiceError::Unknown(id.into()))
     }
 
     /// Every analyzer with its state. Never runs anything.
     pub fn list(&self) -> Vec<AnalyzerView> {
-        self.catalog.iter().map(|m| self.view(m)).collect()
+        self.catalog().iter().map(|m| self.view(m)).collect()
     }
 
     /// One analyzer.
     pub fn get(&self, id: &str) -> Result<AnalyzerView, ServiceError> {
-        Ok(self.view(self.manifest(id)?))
+        Ok(self.view(&self.manifest(id)?))
     }
 
     fn view(&self, m: &AnalyzerManifest) -> AnalyzerView {
@@ -436,7 +554,7 @@ impl AnalyzerService {
 
     /// The exact data preview for the permissions sheet.
     pub fn preview(&self, id: &str, report: &AgentsReport) -> Result<Preview, ServiceError> {
-        let m = self.manifest(id)?;
+        let m = &self.manifest(id)?;
         let input = self.projector.project(report, m);
         let builtin = m.runner.kind == RunnerKind::Builtin;
         Ok(Preview {
@@ -497,7 +615,7 @@ impl AnalyzerService {
 
     /// Approve exactly the current manifest and program.
     pub fn approve(&self, id: &str) -> Result<AnalyzerView, ServiceError> {
-        let m = self.manifest(id)?;
+        let m = &self.manifest(id)?;
         let mut grant = Grant {
             analyzer: m.id.clone(),
             manifest_sha256: m.sha256.clone(),
@@ -523,7 +641,7 @@ impl AnalyzerService {
     /// Allow or stop automatic runs, when items change, for an approved analyzer that uses the
     /// network. Analyzers without network access always run automatically once approved.
     pub fn set_background(&self, id: &str, allow: bool) -> Result<AnalyzerView, ServiceError> {
-        let m = self.manifest(id)?;
+        let m = &self.manifest(id)?;
         let mut grant = self.stores.consent.grant(&m.id).ok_or_else(|| {
             RunError::NotApproved(format!("{} is off. Turn it on first.", m.name))
         })?;
@@ -537,21 +655,22 @@ impl AnalyzerService {
 
     /// Turn an analyzer off and forget its results.
     pub fn revoke(&self, id: &str) -> Result<bool, ServiceError> {
-        let m = self.manifest(id)?;
+        let m = &self.manifest(id)?;
         self.stores.results.forget(&m.id)?;
         Ok(self.stores.consent.revoke(&m.id)?)
     }
 
     /// Hash of the input an analyzer would get now.
     pub fn input_signature(&self, id: &str, report: &AgentsReport) -> Result<String, ServiceError> {
-        let m = self.manifest(id)?;
+        let m = &self.manifest(id)?;
         Ok(signature(&self.projector.project(report, m)))
     }
 
     /// Run approved analyzers whose input changed since their last result. Returns the ids run.
     pub fn run_changed(&self, report: &AgentsReport) -> Vec<String> {
         let mut ran = Vec::new();
-        for m in &self.catalog {
+        let catalog = self.catalog();
+        for m in catalog.iter() {
             let view = self.view(m);
             if view.state != AnalyzerState::Approved || !view.background {
                 continue;
@@ -576,7 +695,7 @@ impl AnalyzerService {
 
     /// Run one approved, unchanged analyzer now.
     pub fn run(&self, id: &str, report: &AgentsReport) -> Result<AnalyzerResult, ServiceError> {
-        let m = self.manifest(id)?;
+        let m = &self.manifest(id)?;
         let grant = self.stores.consent.grant(&m.id);
         let mut cx = RunContext::default();
         let mut version = grant.as_ref().and_then(|g| g.version.clone());
@@ -635,7 +754,7 @@ impl AnalyzerService {
     /// Latest results with review states applied.
     pub fn insights(&self) -> Insights {
         let results: Vec<AnalyzerResult> = self
-            .catalog
+            .catalog()
             .iter()
             .filter(|m| self.stores.consent.grant(&m.id).is_some())
             .filter_map(|m| self.stores.results.latest(&m.id))

@@ -34,6 +34,12 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`holdmap analyzers key`](#holdmap-analyzers-key) | Store or delete an API key an analyzer declares, in the OS keychain |
 | [`holdmap analyzers key set`](#holdmap-analyzers-key-set) | Store a key: paste it when asked (not echoed), or pipe it on standard input |
 | [`holdmap analyzers key delete`](#holdmap-analyzers-key-delete) | Delete a stored key |
+| [`holdmap analyzers catalog`](#holdmap-analyzers-catalog) | The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject |
+| [`holdmap analyzers catalog status`](#holdmap-analyzers-catalog-status) | Which catalog is in use and whether an update waits for review (the default) |
+| [`holdmap analyzers catalog fetch`](#holdmap-analyzers-catalog-fetch) | Download the newest signed catalog from the holdmap repository and stage it for review |
+| [`holdmap analyzers catalog import`](#holdmap-analyzers-catalog-import) | Stage a catalog file (its signature is read from FILE.minisig) for review |
+| [`holdmap analyzers catalog accept`](#holdmap-analyzers-catalog-accept) | Apply the staged update. Analyzers whose manifest changed ask for approval again |
+| [`holdmap analyzers catalog reject`](#holdmap-analyzers-catalog-reject) | Discard the staged update |
 | [`holdmap analyzers auto`](#holdmap-analyzers-auto) | Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that uses the network. Analyzers without network access run automatically once on |
 | [`holdmap analyzers run`](#holdmap-analyzers-run) | Run an approved analyzer now (or, with --changed, every approved one whose input changed) |
 | [`holdmap insights`](#holdmap-insights) | Findings from approved analyzers, as text, JSON or SARIF |
@@ -484,6 +490,7 @@ Commands:
   approve  Review an analyzer's permissions and turn it on
   revoke   Turn an analyzer off and delete its results
   key      Store or delete an API key an analyzer declares, in the OS keychain
+  catalog  The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject
   auto     Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that
            uses the network. Analyzers without network access run automatically once on
   run      Run an approved analyzer now (or, with --changed, every approved one whose input changed)
@@ -616,6 +623,107 @@ Usage: holdmap analyzers key delete [OPTIONS] <ID> <NAME>
 Arguments:
   <ID>
   <NAME>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers catalog
+
+```text
+The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject
+
+Usage: holdmap analyzers catalog [OPTIONS] [COMMAND]
+
+Commands:
+  status  Which catalog is in use and whether an update waits for review (the default)
+  fetch   Download the newest signed catalog from the holdmap repository and stage it for review
+  import  Stage a catalog file (its signature is read from FILE.minisig) for review
+  accept  Apply the staged update. Analyzers whose manifest changed ask for approval again
+  reject  Discard the staged update
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers catalog status
+
+```text
+Which catalog is in use and whether an update waits for review (the default)
+
+Usage: holdmap analyzers catalog status [OPTIONS]
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers catalog fetch
+
+```text
+Download the newest signed catalog from the holdmap repository and stage it for review
+
+Usage: holdmap analyzers catalog fetch [OPTIONS]
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers catalog import
+
+```text
+Stage a catalog file (its signature is read from FILE.minisig) for review
+
+Usage: holdmap analyzers catalog import [OPTIONS] <FILE>
+
+Arguments:
+  <FILE>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers catalog accept
+
+```text
+Apply the staged update. Analyzers whose manifest changed ask for approval again
+
+Usage: holdmap analyzers catalog accept [OPTIONS]
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers catalog reject
+
+```text
+Discard the staged update
+
+Usage: holdmap analyzers catalog reject [OPTIONS]
 
 Options:
       --json           Machine-readable JSON output

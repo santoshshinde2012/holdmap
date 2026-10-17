@@ -67,6 +67,13 @@ impl FileStore {
         result
     }
 
+    fn catalog_name(slot: crate::catalog::CatalogSlot) -> &'static str {
+        match slot {
+            crate::catalog::CatalogSlot::Pending => "catalog/pending.json",
+            crate::catalog::CatalogSlot::Accepted => "catalog/accepted.json",
+        }
+    }
+
     fn result_name(analyzer: &str) -> Option<String> {
         analyzer
             .chars()
@@ -94,6 +101,26 @@ fn private_file(path: &Path) -> io::Result<fs::File> {
         options.mode(0o600);
     }
     options.open(path)
+}
+
+impl crate::catalog::CatalogStore for FileStore {
+    fn catalog(&self, slot: crate::catalog::CatalogSlot) -> Option<crate::catalog::SignedCatalog> {
+        self.read::<Option<crate::catalog::SignedCatalog>>(Self::catalog_name(slot))
+    }
+    fn set_catalog(
+        &self,
+        slot: crate::catalog::CatalogSlot,
+        catalog: Option<&crate::catalog::SignedCatalog>,
+    ) -> io::Result<()> {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        match catalog {
+            Some(c) => self.write(Self::catalog_name(slot), c),
+            None => match fs::remove_file(self.dir.join(Self::catalog_name(slot))) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+                _ => Ok(()),
+            },
+        }
+    }
 }
 
 impl ConsentStore for FileStore {

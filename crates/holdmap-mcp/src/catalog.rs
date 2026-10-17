@@ -512,7 +512,10 @@ fn output_schema(name: &str) -> Value {
         "list_agents" => agents_schema(),
         "get_agent_flow" => agent_flow_schema(),
         "find_free_port" => object(json!({"port": port()}), &["port"]),
-        "list_analyzers" => object(json!({"analyzers": {"type": "array"}}), &["analyzers"]),
+        "list_analyzers" => object(
+            json!({"analyzers": {"type": "array"}, "catalog": {"type": "object"}}),
+            &["analyzers"],
+        ),
         "list_insights" => object(
             json!({"findings": {"type": "array"}, "runs": {"type": "array"}, "open": {"type": "object"}}),
             &["findings", "runs", "open"],

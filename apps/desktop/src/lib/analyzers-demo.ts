@@ -1,6 +1,6 @@
 // Browser demo for analyzers: labelled sample results over the mock agents. Approval and runs
 // are simulated in memory; nothing is installed, executed or sent anywhere.
-import type { AnalyzerResult, AnalyzerView, FindingState, Insights, Preview, Subject } from "./analyzers";
+import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, FindingState, Insights, Preview, Subject } from "./analyzers";
 import { emptyCounts } from "./analyzers";
 import { inventories } from "./agent-config";
 import type { AgentsReport } from "./types";
@@ -91,9 +91,37 @@ export class DemoAnalyzers {
   private results = new Map<string, AnalyzerResult>([[SKILLSPECTOR, skillspectorResult()]]);
   private reviews = new Map<string, FindingState>();
   private background = new Set<string>();
+  private catalogState: CatalogStatus = { version: 1, published: "2026-10-18", accepted: false, pending: null };
+
+  catalog(): CatalogStatus {
+    return structuredClone(this.catalogState);
+  }
+
+  /** Sample update for the browser demo; nothing is downloaded. */
+  fetchCatalog(): CatalogDiff {
+    const diff: CatalogDiff = {
+      from_version: this.catalogState.version, to_version: this.catalogState.version + 1, published: "2026-11-02",
+      added: [],
+      removed: [],
+      changed: [{ id: SKILLSPECTOR, fields: [{ field: "runner.timeout_secs", before: "120", after: "300" }] }],
+    };
+    this.catalogState.pending = diff;
+    return diff;
+  }
+
+  acceptCatalog(): CatalogStatus {
+    const p = this.catalogState.pending;
+    if (!p) throw new Error("the catalog file is malformed: no catalog update is waiting");
+    this.catalogState = { version: p.to_version, published: p.published, accepted: true, pending: null };
+    return this.catalog();
+  }
+
+  rejectCatalog(): void {
+    this.catalogState.pending = null;
+  }
 
   list(): AnalyzerView[] {
-    return [OSV, SKILLSPECTOR].map((id) => this.view(id));
+    return [SKILLSPECTOR, OSV].map((id) => this.view(id));
   }
 
   private view(id: string): AnalyzerView {

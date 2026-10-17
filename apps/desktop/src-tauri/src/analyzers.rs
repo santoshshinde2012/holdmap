@@ -3,6 +3,7 @@
 //! overlapping. Approval is only possible from the main window's permissions sheet.
 
 use crate::state::AppState;
+use holdmap_analyzers::catalog::{CatalogDiff, CatalogStatus};
 use holdmap_analyzers::service::{AnalyzerView, Preview};
 use holdmap_analyzers::{
     AnalyzerResult, AnalyzerService, FileStore, FindingState, Insights, Stores,
@@ -185,4 +186,28 @@ pub async fn analyzer_background(
             .map_err(|e| e.to_string())
     })
     .await
+}
+
+/// Which signed catalog is in use and any update waiting for review.
+#[tauri::command]
+pub async fn analyzer_catalog(app: AppHandle) -> Result<CatalogStatus, String> {
+    blocking(move || Ok(service(&app).catalog_status())).await
+}
+
+/// Download the newest signed catalog (only when the user clicks) and stage it for review.
+#[tauri::command]
+pub async fn analyzer_catalog_fetch(app: AppHandle) -> Result<CatalogDiff, String> {
+    blocking(move || service(&app).fetch_catalog().map_err(|e| e.to_string())).await
+}
+
+/// Apply the staged catalog update.
+#[tauri::command]
+pub async fn analyzer_catalog_accept(app: AppHandle) -> Result<CatalogStatus, String> {
+    blocking(move || service(&app).accept_catalog().map_err(|e| e.to_string())).await
+}
+
+/// Discard the staged catalog update.
+#[tauri::command]
+pub async fn analyzer_catalog_reject(app: AppHandle) -> Result<(), String> {
+    blocking(move || service(&app).reject_catalog().map_err(|e| e.to_string())).await
 }

@@ -78,6 +78,17 @@ export interface Preview {
   sandbox: string;
   schedule: string;
 }
+/** What a signed catalog update changes (reviewed before it applies). */
+export interface CatalogDiff {
+  from_version: number;
+  to_version: number;
+  published: string;
+  added: string[];
+  removed: string[];
+  changed: { id: string; fields: { field: string; before: string; after: string }[] }[];
+}
+export interface CatalogStatus { version: number; published: string; accepted: boolean; pending: CatalogDiff | null }
+
 export interface Insights { results: AnalyzerResult[]; open: SeverityCounts }
 
 export const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low", "info"];

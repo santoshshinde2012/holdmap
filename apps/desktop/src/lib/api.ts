@@ -5,7 +5,7 @@ import type { ActionPlan, AgentsReport, AppInfo, Config, DesktopHelpDestination,
 import { version as pkgVersion } from "../../package.json";
 import type { ShutdownPreview } from "./power";
 import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
-import type { AnalyzerResult, AnalyzerView, FindingState, Insights, Preview } from "./analyzers";
+import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, FindingState, Insights, Preview } from "./analyzers";
 import { DemoAnalyzers } from "./analyzers-demo";
 import { attention, type AttentionItem } from "./home";
 import { MOCK_SNAPSHOT, mockAgents, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
@@ -507,6 +507,32 @@ export async function revokeAnalyzer(id: string): Promise<boolean> {
   if (isTauri) return call("analyzer_revoke", { id });
   if (liveReads()) liveWrites();
   return demoAnalyzers.revoke(id);
+}
+
+/** The signed analyzer catalog in use and any update waiting for review. */
+export async function analyzerCatalog(): Promise<CatalogStatus | null> {
+  if (isTauri) return call("analyzer_catalog");
+  if (liveReads()) return null;
+  return demoAnalyzers.catalog();
+}
+
+/** Download the newest signed catalog (user-initiated) and stage it for review. */
+export async function fetchAnalyzerCatalog(): Promise<CatalogDiff> {
+  if (isTauri) return call("analyzer_catalog_fetch");
+  if (liveReads()) liveWrites();
+  return demoAnalyzers.fetchCatalog();
+}
+
+export async function acceptAnalyzerCatalog(): Promise<CatalogStatus> {
+  if (isTauri) return call("analyzer_catalog_accept");
+  if (liveReads()) liveWrites();
+  return demoAnalyzers.acceptCatalog();
+}
+
+export async function rejectAnalyzerCatalog(): Promise<void> {
+  if (isTauri) return call("analyzer_catalog_reject");
+  if (liveReads()) liveWrites();
+  demoAnalyzers.rejectCatalog();
 }
 
 /** Allow or stop automatic runs (when items change) for an approved network analyzer. */
