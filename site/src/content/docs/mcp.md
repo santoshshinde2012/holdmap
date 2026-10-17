@@ -71,6 +71,8 @@ The **0.9.0** server retains these eleven tools:
 | `stop_agent_ports` | Preview the unprotected ports started by matching agents; execute the retained plans with a one-use `confirmation_id`. Defaults to `dry_run: true`. |
 | `plan_cluster_stop` | A dry-run, dependency-ordered plan for stopping a cluster. Never executes. |
 | `stop_port` | Preview a port owner's stop plan; execute with a matching one-use `confirmation_id` and verify the port is free. Defaults to `dry_run: true`. |
+| `list_leftovers` | Processes an agent started that kept running after it exited or detached: who left them, when, ports and footprint. Only processes Holdmap saw while the agent ran. Read-only. Unreleased. |
+| `stop_leftover` | Preview stopping one leftover by `pid` and `start_token`; execute with a one-use `confirmation_id`. Low-risk plans only. Defaults to `dry_run: true`. Unreleased. |
 
 Tools publish input and output schemas. Results include a structured JSON object and a readable
 summary with the same JSON for older clients. Invalid argument types, ranges, enum values or

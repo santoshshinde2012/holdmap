@@ -203,6 +203,15 @@ pub fn human_duration(secs: u64) -> String {
     }
 }
 
+/// "just now", "12 min ago", "3h 5m ago", "2d 4h ago": a coarse, human elapsed time.
+pub fn human_ago(secs: u64) -> String {
+    match secs {
+        0..=59 => "just now".into(),
+        60..=3599 => format!("{} min ago", secs / 60),
+        _ => format!("{} ago", human_duration(secs - secs % 60)),
+    }
+}
+
 /// `1 process`, `2 processes`: a count with the right noun form.
 pub fn count(n: usize, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
@@ -1265,6 +1274,15 @@ pub(crate) fn retained_detached(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn human_ago_is_coarse() {
+        use super::human_ago;
+        assert_eq!(human_ago(5), "just now");
+        assert_eq!(human_ago(12 * 60 + 40), "12 min ago");
+        assert_eq!(human_ago(3 * 3600 + 5 * 60 + 9), "3h 5m ago");
+        assert_eq!(human_ago(2 * 86_400 + 4 * 3600), "2d 4h ago");
+    }
+
     #[test]
     fn trace_topics() {
         assert!(!trace_wants(None, "scan"));

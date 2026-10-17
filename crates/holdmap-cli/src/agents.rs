@@ -4,8 +4,11 @@
 
 use crate::style::{self, paint, S};
 use anyhow::{bail, Context, Result};
-use holdmap_core::agents::{AccessLevel, AgentsReport, Evidence, FolderSource, LinkKind, PortRole};
+use holdmap_core::agents::{
+    AccessLevel, AgentsReport, Evidence, FolderSource, LeftReason, Leftover, LinkKind, PortRole,
+};
 use holdmap_core::engine::tilde;
+use holdmap_core::store::Store;
 use holdmap_core::util::{count, human_bytes, printable};
 use holdmap_core::{execute, Engine, Exposure, ScanOptions};
 
@@ -31,6 +34,10 @@ pub struct AgentsArgs {
     /// Don't ask for confirmation before stopping.
     #[arg(long, requires = "stop_ports")]
     pub yes: bool,
+    /// List processes agents started that outlived them (or were detached); cleanup is a
+    /// reviewed `holdmap stop pid:<n>`. Only processes holdmap saw while the agent ran.
+    #[arg(long, conflicts_with_all = ["capabilities", "flow", "stop_ports", "wide"])]
+    pub leftovers: bool,
     /// Machine-readable JSON output.
     #[arg(long)]
     pub json: bool,
@@ -42,6 +49,11 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
         docker,
     })
     .context("failed to scan processes and sockets")?;
+    let now = holdmap_core::util::now_ms();
+    let found = holdmap_core::agents::refresh_leftovers(&Store::open_default(), &e.scan, now);
+    if a.leftovers {
+        return print_leftovers(found, a, now);
+    }
     let mut report = if a.capabilities {
         e.agents_with_capabilities()
     } else {
@@ -79,6 +91,72 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
     } else {
         crate::exit::OK
     })
+}
+
+fn print_leftovers(mut found: Vec<Leftover>, a: &AgentsArgs, now_ms: u64) -> Result<u8> {
+    if let Some(q) = &a.agent {
+        let q = q.to_lowercase();
+        found.retain(|l| {
+            l.agent_product.to_lowercase() == q
+                || l.agent_name.to_lowercase().contains(&q)
+                || l.pid.to_string() == q
+                || l.agent_pid.to_string() == q
+        });
+    }
+    if a.json {
+        println!("{}", serde_json::to_string_pretty(&found)?);
+    } else {
+        print!("{}", render_leftovers(&found, now_ms));
+    }
+    Ok(if found.is_empty() {
+        crate::exit::BUSY
+    } else {
+        crate::exit::OK
+    })
+}
+
+/// Human list of leftovers, each with the reviewed command that cleans it up.
+fn render_leftovers(found: &[Leftover], now_ms: u64) -> String {
+    if found.is_empty() {
+        return style::terminal_text(&style::dim(
+            "No leftovers: nothing an agent started is still running without it.\n",
+        ));
+    }
+    let mut out = format!(
+        "{}\n",
+        paint(format!("Left behind by agents ({})", found.len()), S::Bold)
+    );
+    for l in found {
+        let ago = holdmap_core::util::human_ago(now_ms.saturating_sub(l.left_ms) / 1000);
+        let why = match l.reason {
+            LeftReason::AgentExited => format!("left by {} {ago}", printable(&l.agent_name)),
+            LeftReason::Detached => format!("detached from {} {ago}", printable(&l.agent_name)),
+        };
+        let mut facts = vec![
+            count(l.processes, "process", "processes"),
+            human_bytes(l.memory_bytes),
+        ];
+        if !l.ports.is_empty() {
+            let ports: Vec<String> = l
+                .ports
+                .iter()
+                .map(|p| format!("{}/{}", p.port, p.protocol.to_string().to_lowercase()))
+                .collect();
+            facts.insert(0, ports.join(", "));
+        }
+        out.push_str(&format!(
+            "  {} {} {}  {}\n    {}\n",
+            paint(printable(&l.name), S::Bold),
+            style::dim(format!("pid {}", l.pid)),
+            paint(why, S::Yellow),
+            style::dim(facts.join(" · ")),
+            style::dim(printable(&l.command)),
+        ));
+    }
+    out.push_str(&style::dim(
+        "Clean up after review: holdmap stop pid:<PID> --dry-run\n",
+    ));
+    style::terminal_text(&out)
 }
 
 /// Stop every unprotected port the matching agents started.
@@ -710,6 +788,47 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn leftover(reason: LeftReason) -> Leftover {
+        Leftover {
+            id: "leftover:42:7".into(),
+            pid: 42,
+            start_token: 7,
+            name: "node".into(),
+            command: "node server.js --token=<redacted>".into(),
+            cwd: None,
+            ppid: Some(1),
+            agent_name: "Claude Code".into(),
+            agent_product: "claude-code".into(),
+            agent_pid: 10,
+            reason,
+            left_ms: 1_000_000,
+            ports: vec![holdmap_core::agents::LeftoverPort {
+                port: 3000,
+                protocol: holdmap_core::Protocol::Tcp,
+                exposure: Exposure::Loopback,
+                entry_id: "tcp:3000".into(),
+            }],
+            processes: 2,
+            memory_bytes: 2 << 20,
+        }
+    }
+
+    #[test]
+    fn leftovers_render_who_left_them_how_long_ago_and_the_reviewed_cleanup() {
+        let out = render_leftovers(
+            &[leftover(LeftReason::AgentExited)],
+            1_000_000 + 12 * 60_000,
+        );
+        assert!(out.contains("Left behind by agents (1)"), "{out}");
+        assert!(out.contains("pid 42"), "{out}");
+        assert!(out.contains("left by Claude Code 12 min ago"), "{out}");
+        assert!(out.contains("3000/tcp"), "{out}");
+        assert!(out.contains("holdmap stop pid:<PID> --dry-run"), "{out}");
+        let detached = render_leftovers(&[leftover(LeftReason::Detached)], 1_000_000);
+        assert!(detached.contains("detached from Claude Code"), "{detached}");
+        assert!(render_leftovers(&[], 0).contains("No leftovers"));
+    }
     use holdmap_core::agents::{
         AccessFact, AccessTopic, Agent, AgentAccess, AgentFolder, AgentKind, AgentTool, ToolKind,
     };

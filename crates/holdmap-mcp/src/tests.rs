@@ -50,7 +50,7 @@ fn notifications_get_no_response() {
 fn lists_tools_with_annotations() {
     let r = call(json!({"jsonrpc":"2.0","id":3,"method":"tools/list"}));
     let tools = r["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 11);
+    assert_eq!(tools.len(), 13);
     let stop = tools.iter().find(|t| t["name"] == "stop_port").unwrap();
     assert_eq!(stop["annotations"]["destructiveHint"], true);
     assert_eq!(stop["annotations"]["idempotentHint"], false);
@@ -547,6 +547,13 @@ fn discovery_schemas_are_closed_and_describe_real_result_fields() {
                     .is_some_and(|keys| keys.contains(&json!("agent")))
                 {
                     arguments["agent"] = json!("codex");
+                }
+                if tool["inputSchema"]["required"]
+                    .as_array()
+                    .is_some_and(|keys| keys.contains(&json!("start_token")))
+                {
+                    arguments["pid"] = json!(4242);
+                    arguments["start_token"] = json!(7);
                 }
                 validation::validate(&arguments, &tool["inputSchema"])
                     .expect("published defaults are valid");
@@ -1082,4 +1089,30 @@ fn malformed_wire_controls_preserve_confirmation_and_reinitialize_invalidates_it
     let id = session.confirmations.issue(fixture).unwrap();
     session.handle(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}})).unwrap();
     assert!(session.confirmations.take(&id, &request).is_err());
+}
+
+#[test]
+fn leftovers_output_matches_its_published_contract() {
+    let leftover: holdmap_core::agents::Leftover = serde_json::from_value(json!({
+        "id": "leftover:42:7", "pid": 42, "start_token": 7, "name": "node",
+        "command": "node server.js", "cwd": null, "ppid": 1,
+        "agent_name": "Claude Code", "agent_product": "claude-code", "agent_pid": 10,
+        "reason": "agent_exited", "left_ms": 1,
+        "ports": [{"port": 3000, "protocol": "tcp", "exposure": "loopback", "entry_id": "tcp:3000"}],
+        "processes": 1, "memory_bytes": 0
+    }))
+    .unwrap();
+    let (text, data) = crate::tools::leftovers_result(vec![leftover]);
+    assert!(
+        text.contains("node (pid 42, start_token 7) left by Claude Code"),
+        "{text}"
+    );
+    validation::validate(
+        &data,
+        &catalog::definition("list_leftovers").unwrap()["outputSchema"],
+    )
+    .unwrap();
+    let (empty, data) = crate::tools::leftovers_result(vec![]);
+    assert!(empty.starts_with("No leftovers"));
+    assert_eq!(data, json!({"leftovers": []}));
 }

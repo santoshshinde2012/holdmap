@@ -1557,7 +1557,8 @@ supporting those MCP capabilities can discover tool-selection guidance and the `
 `prepare_dev_server` and `inspect_agents` workflows. A retrieved prompt is context for the client,
 not an executing workflow. Clients exposing tools alone can use the same tools directly:
 `list_ports`, `explain_port`, `inspect_port`, `find_free_port`, `wait_for_port`, `get_topology`,
-`list_agents`, `get_agent_flow`, `stop_agent_ports`, `plan_cluster_stop` and `stop_port`.
+`list_agents`, `get_agent_flow`, `stop_agent_ports`, `plan_cluster_stop`, `stop_port`,
+`list_leftovers` and `stop_leftover`.
 `inspect_port` shares `explain_port`'s structured inspection. `get_agent_flow` is process
 ancestry and live TCP edges, not recorded tool calls. `stop_agent_ports` uses the shared agent
 matcher and previews by default. Tools preserve collection warnings alongside returned data;

@@ -231,12 +231,38 @@ pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, 
     (text, serde_json::to_value(&report).unwrap_or_default())
 }
 
+pub(super) fn leftovers_result(leftovers: Vec<holdmap_core::agents::Leftover>) -> (String, Value) {
+    let text = if leftovers.is_empty() {
+        "No leftovers: nothing an agent was seen starting is still running without it.".to_string()
+    } else {
+        leftovers
+            .iter()
+            .map(|l| {
+                let verb = match l.reason {
+                    holdmap_core::agents::LeftReason::AgentExited => "left by",
+                    holdmap_core::agents::LeftReason::Detached => "detached from",
+                };
+                format!(
+                    "{} (pid {}, start_token {}) {verb} {}; {} port(s)",
+                    holdmap_core::util::printable(&l.name),
+                    l.pid,
+                    l.start_token,
+                    holdmap_core::util::printable(&l.agent_name),
+                    l.ports.len()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    (text, json!({ "leftovers": leftovers }))
+}
+
 pub(super) fn call(
     name: &str,
     args: &Value,
     confirmations: &mut crate::confirmation::Confirmations,
 ) -> Result<(String, Value), ToolError> {
-    if matches!(name, "stop_port" | "stop_agent_ports") {
+    if matches!(name, "stop_port" | "stop_agent_ports" | "stop_leftover") {
         return crate::stops::call(name, args, confirmations);
     }
     validate_args(name, args)?;
@@ -267,6 +293,11 @@ pub(super) fn call(
             };
             Ok(agents_result(report, args))
         }
+        "list_leftovers" => Ok(leftovers_result(holdmap_core::agents::refresh_leftovers(
+            &holdmap_core::store::Store::open_default(),
+            &engine()?.scan,
+            holdmap_core::util::now_ms(),
+        ))),
         "plan_cluster_stop" => {
             let c = args["cluster"]
                 .as_str()

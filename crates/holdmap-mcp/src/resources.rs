@@ -28,6 +28,8 @@ Configuration can contain credential bytes; command, URL, environment/header val
 | Explicitly inspect supported MCP definitions and skill locations | `list_agents` with `include_capabilities: true` and optional `agent` |
 | Preview an agent's unprotected services before an authorized stop | `stop_agent_ports` with a specific `agent` (defaults to `dry_run: true`) |
 | Review a cluster stop order | `plan_cluster_stop` with `cluster` |
+| See processes an agent left running after it exited | `list_leftovers` |
+| Review or execute an authorized stop of one leftover | `stop_leftover` with `pid` and `start_token` (defaults to `dry_run: true`) |
 | Review or execute an authorized single-port stop | `stop_port` with `port` (defaults to `dry_run: true`), then `confirmation_id` for execution |
 
 ## Diagnose a port conflict

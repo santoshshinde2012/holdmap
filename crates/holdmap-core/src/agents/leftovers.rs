@@ -266,6 +266,15 @@ pub struct Leftover {
     pub memory_bytes: u64,
 }
 
+/// Observe `scan` into the stored ledger (best effort) and list the current leftovers.
+/// A store that cannot be written still answers from what it last remembered.
+pub fn refresh(store: &crate::store::Store, scan: &Scan, now_ms: u64) -> Vec<Leftover> {
+    let ledger = store
+        .update_leftovers(|l| l.observe(scan, now_ms))
+        .unwrap_or_else(|_| store.leftovers());
+    leftovers(&ledger, scan)
+}
+
 /// The current user's leftovers, newest first. Processes of other accounts are omitted.
 pub fn leftovers(ledger: &LeftoverLedger, scan: &Scan) -> Vec<Leftover> {
     let t = &scan.table;

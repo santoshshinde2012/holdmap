@@ -2,6 +2,7 @@
 
 use crate::confirmation::{self, Confirmations, Observation, Request};
 use crate::tools::{engine, port_arg, ToolError};
+use holdmap_core::agents::Leftover;
 use holdmap_core::exec::CompletedSupervisorStops;
 use holdmap_core::{ActionPlan, Engine, ProcRef, Step, StopOptions, StopReport, Target};
 use serde::Serialize;
@@ -38,7 +39,13 @@ struct LocalBackend {
 impl Backend for LocalBackend {
     fn observe(&mut self, request: &Request) -> Result<Observation, ToolError> {
         let current = engine()?;
-        let observation = observe(&current, request)?;
+        let observation = observe_with(&current, request, |engine| {
+            holdmap_core::agents::refresh_leftovers(
+                &holdmap_core::store::Store::open_default(),
+                &engine.scan,
+                holdmap_core::util::now_ms(),
+            )
+        })?;
         self.engine = Some(current);
         Ok(observation)
     }
@@ -117,7 +124,9 @@ fn call_with(
         backend.execute(original, execution)
     })?;
     let data = match &request {
-        Request::Port { .. } => serde_json::to_value(&reports[0]).unwrap_or_default(),
+        Request::Port { .. } | Request::Leftover { .. } => {
+            serde_json::to_value(&reports[0]).unwrap_or_default()
+        }
         Request::Agents { .. } => json!({
             "agents": confirmed.agents.iter().map(|(id, _)| id).collect::<Vec<_>>(),
             "plans": confirmed.plans, "reports": reports
@@ -149,8 +158,12 @@ fn call_with(
             data,
         ));
     }
-    if let Request::Port { port, .. } = request {
-        return Ok((format!("Port {port} is free."), data));
+    match request {
+        Request::Port { port, .. } => return Ok((format!("Port {port} is free."), data)),
+        Request::Leftover { pid, .. } => {
+            return Ok((format!("Leftover process {pid} stopped."), data))
+        }
+        Request::Agents { .. } => {}
     }
     Ok((
         "Confirmed agent ports stopped; no new target was added to the reviewed plans.".into(),
@@ -179,13 +192,39 @@ fn request(name: &str, args: &Value) -> Result<Request, ToolError> {
             }
             Ok(Request::Agents { query, force })
         }
+        "stop_leftover" => Ok(Request::Leftover {
+            pid: args["pid"]
+                .as_u64()
+                .and_then(|pid| u32::try_from(pid).ok())
+                .filter(|pid| *pid > 1)
+                .ok_or_else(|| ToolError::Failed("`pid` must be a process ID above 1".into()))?,
+            start_token: args["start_token"]
+                .as_u64()
+                .filter(|token| *token > 0)
+                .ok_or_else(|| {
+                    ToolError::Failed("`start_token` from list_leftovers is required".into())
+                })?,
+            force,
+        }),
         _ => Err(ToolError::Unknown),
     }
 }
 
+#[cfg(test)]
 fn observe(engine: &Engine, request: &Request) -> Result<Observation, ToolError> {
+    observe_with(engine, request, |_| Vec::new())
+}
+
+/// `leftovers` lists the current leftovers; it is consulted only for leftover requests.
+fn observe_with(
+    engine: &Engine,
+    request: &Request,
+    leftovers: impl FnOnce(&Engine) -> Vec<Leftover>,
+) -> Result<Observation, ToolError> {
     let force = match request {
-        Request::Port { force, .. } | Request::Agents { force, .. } => *force,
+        Request::Port { force, .. }
+        | Request::Agents { force, .. }
+        | Request::Leftover { force, .. } => *force,
     };
     let options = StopOptions {
         force,
@@ -240,6 +279,29 @@ fn observe(engine: &Engine, request: &Request) -> Result<Observation, ToolError>
             }
             (agents, ports.into_values().collect())
         }
+        Request::Leftover {
+            pid, start_token, ..
+        } => {
+            let leftover = leftovers(engine)
+                .into_iter()
+                .find(|l| l.pid == *pid && l.start_token == *start_token)
+                .ok_or_else(|| {
+                    ToolError::Failed(format!(
+                        "Process {pid} is not a current leftover (it exited, was replaced, or no agent was seen starting it). Call list_leftovers again."
+                    ))
+                })?;
+            let plan = engine.plan(&Target::Pid(*pid), &options);
+            if let Some(blocked) = &plan.blocked {
+                return Err(ToolError::Failed(format!("Refused: {}", blocked.message)));
+            }
+            if !request.permits(&plan) {
+                return Err(ToolError::Failed(format!(
+                    "Refused by agent safety policy (risk: {:?}). Only low-risk leftovers can be stopped here; ask the user to review `holdmap stop pid:{pid}`.",
+                    plan.risk
+                )));
+            }
+            (vec![(leftover.id, leftover.start_token)], vec![plan])
+        }
     };
     validate_ownership(engine, &plans)?;
     Ok(Observation {
@@ -283,7 +345,9 @@ fn validate_ownership(engine: &Engine, plans: &[ActionPlan]) -> Result<(), ToolE
 
 fn preview_data(observation: &Observation) -> Value {
     match observation.request {
-        Request::Port { .. } => serde_json::to_value(&observation.plans[0]).unwrap_or_default(),
+        Request::Port { .. } | Request::Leftover { .. } => {
+            serde_json::to_value(&observation.plans[0]).unwrap_or_default()
+        }
         Request::Agents { .. } => json!({
             "agents": observation.agents.iter().map(|(id, _)| id).collect::<Vec<_>>(),
             "plans": observation.plans, "reports": []
@@ -1197,5 +1261,109 @@ mod tests {
             &crate::catalog::definition("stop_agent_ports").unwrap()["outputSchema"],
         )
         .unwrap();
+    }
+
+    fn fixture_leftover(pid: u32, start_token: u64) -> Leftover {
+        Leftover {
+            id: format!("leftover:{pid}:{start_token}"),
+            pid,
+            start_token,
+            name: "node".into(),
+            command: "node vite".into(),
+            cwd: None,
+            ppid: Some(1),
+            agent_name: "Codex".into(),
+            agent_product: "codex".into(),
+            agent_pid: AGENT_PID,
+            reason: holdmap_core::agents::LeftReason::AgentExited,
+            left_ms: 1,
+            ports: vec![],
+            processes: 1,
+            memory_bytes: 0,
+        }
+    }
+
+    #[test]
+    fn leftover_stop_previews_only_a_current_leftover_and_binds_its_identity() {
+        let engine = protocol_engine(&[Protocol::Tcp], None, 20);
+        let request = |start_token| Request::Leftover {
+            pid: OWNED_PID,
+            start_token,
+            force: false,
+        };
+        assert!(observe(&engine, &request(20)).is_err(), "not a leftover");
+        let listed = || vec![fixture_leftover(OWNED_PID, 20)];
+        assert!(
+            observe_with(&engine, &request(21), |_| listed()).is_err(),
+            "pid reused"
+        );
+        let observed = observe_with(&engine, &request(20), |_| listed())
+            .ok()
+            .unwrap();
+        assert_eq!(signalled_pids(&observed.plans), [OWNED_PID]);
+        assert_eq!(observed.agents, [(format!("leftover:{OWNED_PID}:20"), 20)]);
+        let foreign = reassign_owner(&engine, OWNED_PID, Some(1001), Some("other"));
+        assert!(observe_with(&foreign, &request(20), |_| listed()).is_err());
+    }
+
+    #[test]
+    fn leftover_stop_needs_the_previews_confirmation_and_executes_once() {
+        struct LeftoverBackend {
+            current: Engine,
+            listed: bool,
+            executed: usize,
+        }
+        impl Backend for LeftoverBackend {
+            fn observe(&mut self, request: &Request) -> Result<Observation, ToolError> {
+                let listed = self.listed;
+                observe_with(&self.current, request, |_| {
+                    if listed {
+                        vec![fixture_leftover(OWNED_PID, 20)]
+                    } else {
+                        vec![]
+                    }
+                })
+            }
+            fn execute(&mut self, _: &ActionPlan, _: &ActionPlan) -> Stopped {
+                self.executed += 1;
+                stopped(StopReport {
+                    success: true,
+                    freed: true,
+                    ..Default::default()
+                })
+            }
+        }
+        let mut backend = LeftoverBackend {
+            current: protocol_engine(&[Protocol::Tcp], None, 20),
+            listed: true,
+            executed: 0,
+        };
+        let mut cache = Confirmations::default();
+        let args = json!({"pid": OWNED_PID, "start_token": 20});
+        let unconfirmed = json!({"pid": OWNED_PID, "start_token": 20, "dry_run": false});
+        assert!(call_with("stop_leftover", &unconfirmed, &mut cache, &mut backend).is_err());
+        let (summary, preview) = call_with("stop_leftover", &args, &mut cache, &mut backend)
+            .ok()
+            .unwrap();
+        assert!(summary.starts_with("Plan (dry run)"), "{summary}");
+        let execute = json!({"pid": OWNED_PID, "start_token": 20, "dry_run": false, "confirmation_id": preview["confirmation_id"]});
+        backend.listed = false;
+        assert!(
+            call_with("stop_leftover", &execute, &mut cache, &mut backend).is_err(),
+            "no longer a leftover"
+        );
+        assert_eq!(backend.executed, 0);
+        backend.listed = true;
+        let (_, preview) = call_with("stop_leftover", &args, &mut cache, &mut backend)
+            .ok()
+            .unwrap();
+        let execute = json!({"pid": OWNED_PID, "start_token": 20, "dry_run": false, "confirmation_id": preview["confirmation_id"]});
+        let (summary, _) = call_with("stop_leftover", &execute, &mut cache, &mut backend)
+            .ok()
+            .unwrap();
+        assert_eq!(summary, format!("Leftover process {OWNED_PID} stopped."));
+        assert_eq!(backend.executed, 1);
+        assert!(call_with("stop_leftover", &execute, &mut cache, &mut backend).is_err());
+        assert_eq!(backend.executed, 1, "a confirmation is single use");
     }
 }

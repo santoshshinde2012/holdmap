@@ -25,6 +25,11 @@ pub(super) enum Request {
         query: String,
         force: bool,
     },
+    Leftover {
+        pid: u32,
+        start_token: u64,
+        force: bool,
+    },
 }
 
 impl Request {

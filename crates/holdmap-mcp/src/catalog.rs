@@ -3,7 +3,7 @@
 use serde_json::{json, Value};
 use std::sync::OnceLock;
 
-pub(super) const INSTRUCTIONS: &str = "Inspect local state before acting: list_ports finds occupied ports; explain_port or inspect_port explains a conflict with connections and bind risk; get_topology with all=true shows service dependents and cluster names before a stop; get_agent_flow shows observed process ancestry and live TCP relationships for agents, not tool calls. Prefer find_free_port to stopping an unrelated process, and use wait_for_port after starting a service. list_agents shows observed process ownership, likely child tools and access evidence, not chats or confirmed MCP invocations; inspect limits and omitted counts. Read holdmap://guide for workflows, or use the diagnose_port, inspect_agents and prepare_dev_server prompts. Both stop_port and stop_agent_ports default to dry_run=true. Show all returned plans and obtain the user's authorization before executing. Execution requires dry_run=false and the preview's one-use confirmation_id in this session within 5 minutes, with identical target/options. Every selected agent and stop effect is rechecked before any plan executes; changes require a new preview. Only the user's own dev servers/containers are stopped by default; protected and other users' processes are always refused. Requests must fit within 1 MiB; legacy batches are limited to 64 messages and are rejected as a whole when larger.";
+pub(super) const INSTRUCTIONS: &str = "Inspect local state before acting: list_ports finds occupied ports; explain_port or inspect_port explains a conflict with connections and bind risk; get_topology with all=true shows service dependents and cluster names before a stop; get_agent_flow shows observed process ancestry and live TCP relationships for agents, not tool calls. Prefer find_free_port to stopping an unrelated process, and use wait_for_port after starting a service. list_agents shows observed process ownership, likely child tools and access evidence, not chats or confirmed MCP invocations; inspect limits and omitted counts. Read holdmap://guide for workflows, or use the diagnose_port, inspect_agents and prepare_dev_server prompts. list_leftovers shows processes an agent started that outlived it (only ones holdmap saw while the agent ran); stop_leftover stops one reviewed leftover. stop_port, stop_agent_ports and stop_leftover default to dry_run=true. Show all returned plans and obtain the user's authorization before executing. Execution requires dry_run=false and the preview's one-use confirmation_id in this session within 5 minutes, with identical target/options. Every selected agent and stop effect is rechecked before any plan executes; changes require a new preview. Only the user's own dev servers/containers are stopped by default; protected and other users' processes are always refused. Requests must fit within 1 MiB; legacy batches are limited to 64 messages and are rejected as a whole when larger.";
 
 pub(super) fn list() -> Value {
     catalog().clone()
@@ -103,6 +103,26 @@ fn build_catalog() -> Value {
             "annotations": {"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false}
         },
         {
+            "name": "list_leftovers",
+            "title": "Processes agents left behind",
+            "description": "List the current user's processes that an agent started and that outlived it or were detached from it, with who left them, when, their ports and footprint. Attribution comes only from earlier holdmap observations while the agent ran, so leftovers from unobserved sessions are unknown, not absent. Commands are redacted. Read-only; clean up one with stop_leftover.",
+            "inputSchema": {"type": "object", "properties": {}},
+            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+        },
+        {
+            "name": "stop_leftover",
+            "title": "Stop a process an agent left behind",
+            "description": "Preview stopping one leftover from list_leftovers (dry_run=true by default), identified by pid and start_token. Show the plan and get the user's authorization. Execute with dry_run=false and the returned session-local, one-use confirmation_id within 5 minutes with identical options. The process must still be the same current-account leftover and the plan unchanged. Only low-risk plans execute; protected, high-risk and other users' processes are refused, with no override.",
+            "inputSchema": {"type": "object", "properties": {
+                "pid": {"type": "integer", "minimum": 2, "maximum": 4294967295u64},
+                "start_token": {"type": "integer", "minimum": 1, "description": "From list_leftovers; binds the review to this exact process"},
+                "dry_run": {"type": "boolean", "default": true, "description": "Only return the plan; false requires a matching confirmation_id after user authorization"},
+                "confirmation_id": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Required with dry_run=false: one-use handle from this session's preview; expires after 5 minutes"},
+                "force": {"type": "boolean", "default": false, "description": "SIGKILL immediately"}
+            }, "required": ["pid", "start_token"]},
+            "annotations": {"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false}
+        },
+        {
             "name": "plan_cluster_stop",
             "title": "Plan stopping a cluster",
             "description": "Dry-run only: the dependency-ordered plan (dependents first) for stopping every service in a cluster, with warnings about outside dependents. Never executes; ask the user to run `holdmap stop --cluster NAME`.",
@@ -130,7 +150,7 @@ fn build_catalog() -> Value {
         tool["inputSchema"]["additionalProperties"] = json!(false);
         if matches!(
             tool["name"].as_str(),
-            Some("stop_port" | "stop_agent_ports")
+            Some("stop_port" | "stop_agent_ports" | "stop_leftover")
         ) {
             tool["inputSchema"]["if"] =
                 json!({"required": ["dry_run"], "properties": {"dry_run": {"enum": [false]}}});
@@ -224,6 +244,33 @@ fn preview_schema() -> Value {
         .unwrap()
         .extend([json!("confirmation_id"), json!("confirmation_expires_in_s")]);
     schema
+}
+
+fn leftover_schema() -> Value {
+    object(
+        json!({
+            "id": {"type": "string"}, "pid": count(), "start_token": count(), "name": {"type": "string"},
+            "command": {"type": "string"}, "cwd": {"type": ["string", "null"]}, "ppid": {"type": ["integer", "null"]},
+            "agent_name": {"type": "string"}, "agent_product": {"type": "string"}, "agent_pid": count(),
+            "reason": {"type": "string", "enum": ["agent_exited", "detached"]}, "left_ms": count(),
+            "ports": array(object(
+                json!({"port": port(), "protocol": {"type": "string"}, "exposure": {"type": "string"}, "entry_id": {"type": "string"}}),
+                &["port", "protocol", "exposure", "entry_id"],
+            )),
+            "processes": count(), "memory_bytes": count()
+        }),
+        &[
+            "id",
+            "pid",
+            "start_token",
+            "name",
+            "agent_name",
+            "agent_product",
+            "reason",
+            "left_ms",
+            "ports",
+        ],
+    )
 }
 
 fn agents_schema() -> Value {
@@ -506,9 +553,13 @@ fn output_schema(name: &str) -> Value {
             }),
             &["plans", "reports"],
         ),
-        "stop_port" => {
+        "stop_port" | "stop_leftover" => {
             json!({"type": "object", "anyOf": [preview_schema(), stop_report_schema()]})
         }
+        "list_leftovers" => object(
+            json!({"leftovers": array(leftover_schema())}),
+            &["leftovers"],
+        ),
         _ => unreachable!("every published tool has an output contract"),
     }
 }

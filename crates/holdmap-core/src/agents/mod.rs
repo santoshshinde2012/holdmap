@@ -39,7 +39,9 @@ pub use catalog::{identify, AgentDetector, AgentKind, AgentProduct, CatalogDetec
 pub use flow::{
     flow, AgentFlowEdge, AgentFlowEdgeKind, AgentFlowNode, AgentFlowNodeKind, AgentFlowReport,
 };
-pub use leftovers::{leftovers, LeftReason, Leftover, LeftoverLedger, LeftoverPort};
+pub use leftovers::{
+    leftovers, refresh as refresh_leftovers, LeftReason, Leftover, LeftoverLedger, LeftoverPort,
+};
 pub use model::*;
 pub use recent::{HomeRecent, NoRecent, RecentProjects};
 pub use tools::{DefaultToolClassifier, ToolClassification, ToolClassifier};
