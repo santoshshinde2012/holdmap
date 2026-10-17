@@ -11,6 +11,8 @@ use std::io::{self, BufRead, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 const MAX_CONFIG_BYTES: usize = 1024 * 1024;
+const MAX_LEFTOVER_BYTES: usize = 256 * 1024;
+const LEFTOVERS_FILE: &str = "leftovers.json";
 const MAX_HISTORY_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_HISTORY_ENTRY_BYTES: usize = 1024 * 1024;
 
@@ -670,6 +672,47 @@ impl Store {
         Ok(first)
     }
 
+    /// Which agent started which long-lived process (see [`crate::agents::leftovers`]).
+    /// A missing, oversized or unreadable ledger reads as empty: it is a cache, never a
+    /// source of authority, and a later observation rebuilds it.
+    pub fn leftovers(&self) -> crate::agents::LeftoverLedger {
+        self.try_leftovers().unwrap_or_default()
+    }
+
+    fn try_leftovers(&self) -> io::Result<crate::agents::LeftoverLedger> {
+        let file = self.read_file(LEFTOVERS_FILE)?;
+        let mut text = String::new();
+        file.take(MAX_LEFTOVER_BYTES as u64 + 1)
+            .read_to_string(&mut text)?;
+        if text.len() > MAX_LEFTOVER_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "leftover ledger too large",
+            ));
+        }
+        serde_json::from_str(&text)
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "leftover ledger is invalid"))
+    }
+
+    /// Load, change and, only when `f` reports a change, save the ledger (private, atomic).
+    pub fn update_leftovers(
+        &self,
+        f: impl FnOnce(&mut crate::agents::LeftoverLedger) -> bool,
+    ) -> io::Result<crate::agents::LeftoverLedger> {
+        let _transaction = self.transaction()?;
+        let mut ledger = self.try_leftovers().unwrap_or_default();
+        if f(&mut ledger) {
+            let mut text = BoundedBuffer {
+                bytes: Vec::new(),
+                limit: MAX_LEFTOVER_BYTES,
+            };
+            serde_json::to_writer(&mut text, &ledger)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            self.write_atomic(&self.dir.join(LEFTOVERS_FILE), &text.bytes)?;
+        }
+        Ok(ledger)
+    }
+
     /// Forget the stop history.
     pub fn clear_history(&self) -> io::Result<()> {
         if !self.dir.exists() {
@@ -726,6 +769,53 @@ fn next_temp_id() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn leftover_ledger_round_trips_privately_and_skips_unchanged_writes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let s = Store::new(tmp.path().join("hm"));
+        assert!(s.leftovers().entries.is_empty());
+        s.update_leftovers(|l| {
+            l.version = 1;
+            l.entries.push(crate::agents::leftovers::Attribution {
+                process: crate::agents::leftovers::ProcessKey {
+                    pid: 7,
+                    start_token: 9,
+                },
+                name: "node".into(),
+                agent_product: "claude-code".into(),
+                agent_name: "Claude Code".into(),
+                agent: crate::agents::leftovers::ProcessKey {
+                    pid: 1,
+                    start_token: 2,
+                },
+                seen_ms: 1,
+                left_ms: None,
+                reason: None,
+            });
+            true
+        })
+        .unwrap();
+        assert_eq!(s.leftovers().entries[0].process.pid, 7);
+        let path = tmp.path().join("hm").join(LEFTOVERS_FILE);
+        let before = fs::metadata(&path).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        s.update_leftovers(|_| false).unwrap();
+        assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), before);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+        fs::write(&path, "{nope").unwrap();
+        assert!(
+            s.leftovers().entries.is_empty(),
+            "a corrupt cache reads as empty"
+        );
+    }
     use crate::model::Protocol;
 
     fn h(port: u16, at: u64) -> HistoryEntry {

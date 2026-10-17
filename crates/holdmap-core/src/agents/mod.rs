@@ -23,6 +23,7 @@ pub mod capabilities;
 pub mod catalog;
 pub mod flow;
 mod footprint;
+pub mod leftovers;
 mod model;
 mod network;
 mod ownership;
@@ -38,6 +39,7 @@ pub use catalog::{identify, AgentDetector, AgentKind, AgentProduct, CatalogDetec
 pub use flow::{
     flow, AgentFlowEdge, AgentFlowEdgeKind, AgentFlowNode, AgentFlowNodeKind, AgentFlowReport,
 };
+pub use leftovers::{leftovers, LeftReason, Leftover, LeftoverLedger, LeftoverPort};
 pub use model::*;
 pub use recent::{HomeRecent, NoRecent, RecentProjects};
 pub use tools::{DefaultToolClassifier, ToolClassification, ToolClassifier};
