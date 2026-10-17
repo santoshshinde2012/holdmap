@@ -66,7 +66,7 @@ for (const layout of ["cards", "map"] as const) for (const width of [390, 1024, 
     expect(await box()).toEqual(before);
     expect(await app.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     const clipped = await overview.evaluate((root) => [...root.querySelectorAll<HTMLElement>("*")]
-      .filter((el) => el.offsetParent !== null && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== "visible" && !el.matches(".stage, .needs-scroll"))
+      .filter((el) => el.offsetParent !== null && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== "visible" && !el.matches(".stage, .needs-scroll, .sr-only"))
       .map((el) => `${el.className}: ${el.textContent?.slice(0, 60)}`));
     expect(clipped).toEqual([]);
     if (layout === "cards") {
@@ -107,4 +107,37 @@ test("first open shows the welcome once", async ({ page }) => {
   await page.reload();
   await expect(page.getByRole("region", { name: "Overview" })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Welcome to holdmap" })).toHaveCount(0);
+});
+
+test("a port chip on a Home card stops through the stop plan, and Cancel stops nothing", async ({ app }) => {
+  const overview = await home(app);
+  const chip = overview.locator("[data-card]").filter({ hasText: "Cursor" }).locator("xpath=ancestor::article[1]").getByRole("button", { name: /^Port 3000 / });
+  await chip.click();
+  const menu = app.getByRole("menu", { name: /^:3000 / });
+  await expect(menu.getByRole("menuitem", { name: "Details", exact: true })).toBeFocused();
+  await app.keyboard.press("ArrowDown");
+  await expect(menu.getByRole("menuitem", { name: "Stop…", exact: true })).toBeFocused();
+  await app.keyboard.press("Enter");
+  const review = app.getByRole("alertdialog");
+  await expect(review.getByRole("button", { name: "Stop :3000", exact: true })).toBeFocused();
+  await review.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(review).toHaveCount(0);
+  await expect(chip).toBeVisible();
+});
+
+test("a port node on the Home map stops through the stop plan, and Esc closes its menu", async ({ app }) => {
+  const overview = await home(app);
+  await overview.getByRole("radiogroup", { name: "Home layout" }).getByRole("radio", { name: /^Map/ }).click();
+  const node = overview.locator(".map g.sat[aria-label^='Port :3000']").first();
+  await node.click();
+  const menu = app.getByRole("menu", { name: /^:3000 / });
+  await expect(menu).toBeVisible();
+  await app.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await node.click();
+  await menu.getByRole("menuitem", { name: "Stop…", exact: true }).click();
+  const review = app.getByRole("alertdialog");
+  await expect(review.getByRole("button", { name: "Stop :3000", exact: true })).toBeVisible();
+  await review.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(review).toHaveCount(0);
 });

@@ -3,11 +3,11 @@
   // card for dev servers no agent started. ←/→ move between cards.
   import Icon from "../Icon.svelte";
   import HomeAgentCard from "./HomeAgentCard.svelte";
-  import { attentionAgent, type AttentionItem } from "../../lib/home";
+  import { attentionAgent, unownedDevServers, type AttentionItem } from "../../lib/home";
   import { cardModel } from "../../lib/agent-card";
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
-  let { report, entries, needs, colors, now, selected, active, onhover, onselect, onopen, onopenentry, onstop, oninventory }: {
+  let { report, entries, needs, colors, now, selected, active, onhover, onselect, onopen, onport, onstop, oninventory }: {
     report: AgentsReport;
     entries: PortEntry[] | null;
     needs: AttentionItem[];
@@ -18,13 +18,13 @@
     onhover: (id: string | null) => void;
     onselect: (id: string) => void;
     onopen: (id: string) => void;
-    onopenentry: (id: string) => void;
+    /** Opens the port's actions (Details, Stop…) anchored to the clicked element. */
+    onport: (entryId: string, anchor: HTMLElement | SVGElement) => void;
     onstop?: (id: string) => void;
     oninventory?: () => void;
   } = $props();
 
-  const owned = $derived(new Set(report.agents.flatMap((a) => a.ports.map((p) => p.entry_id))));
-  const loose = $derived((entries ?? []).filter((e) => e.is_dev && !owned.has(e.id)));
+  const loose = $derived(unownedDevServers(entries, report));
   let root = $state<HTMLElement>();
   function onkeydown(e: KeyboardEvent) {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -40,14 +40,14 @@
 <section class="cards" aria-label="Agents" bind:this={root} {onkeydown}>
   {#each report.agents as a (a.id)}
     <HomeAgentCard agent={a} model={cardModel(a, entries)} needs={needs.filter((n) => attentionAgent(n, report) === a.id)} color={colors.get(a.id) ?? "var(--accent)"}
-      {now} selected={selected === a.id} {active} {onhover} {onselect} {onopen} {onopenentry} {onstop} {oninventory} />
+      {now} selected={selected === a.id} {active} {onhover} {onselect} {onopen} {onport} {onstop} {oninventory} />
   {/each}
   {#if loose.length}
     <article class="loose" aria-label="Unowned dev servers">
       <header><span class="tile"><Icon name="server" size={14} /></span><span class="ttl"><b>Unowned</b><small>{`${loose.length} dev`}</small></span></header>
       <ul>
         {#each loose as e (e.id)}
-          <li><button type="button" class="row" class:warn={e.exposure === "all_interfaces"} onclick={() => onopenentry(e.id)}
+          <li><button type="button" class="row" class:warn={e.exposure === "all_interfaces"} aria-haspopup="menu" onclick={(ev) => onport(e.id, ev.currentTarget)}
             aria-label="Port {e.port} {e.project?.name ?? e.framework?.name ?? e.label}{e.exposure === 'all_interfaces' ? ', open to the network' : ''}">
             <i></i><span class="port">:{e.port}</span><span class="nm">{e.project?.name ?? e.framework?.name ?? e.label}</span>
             {#if e.framework?.name && e.project?.name}<span class="fw">{e.framework.name}</span>{/if}

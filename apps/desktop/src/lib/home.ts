@@ -68,13 +68,17 @@ function agentItems(agent: Agent): AttentionItem[] {
   return items;
 }
 
+/** Dev servers no agent started (shared by attention, the cards and the timeline). */
+export function unownedDevServers(entries: PortEntry[] | null, report: AgentsReport | null): PortEntry[] {
+  const owned = new Set((report?.agents ?? []).flatMap((a) => a.ports.map((p) => p.entry_id)));
+  return (entries ?? []).filter((e) => e.is_dev && !owned.has(e.id));
+}
+
 /** Ports that agents own are reported once, on the agent; the rest are listed per port. */
 export function attention(entries: PortEntry[] | null, report: AgentsReport | null): AttentionItem[] {
-  const agents = report?.agents ?? [];
-  const owned = new Set(agents.flatMap((a) => a.ports.map((p) => p.entry_id)));
-  const items = agents.flatMap(agentItems);
-  for (const e of entries ?? []) {
-    if (e.exposure !== "all_interfaces" || !e.is_dev || owned.has(e.id)) continue;
+  const items = (report?.agents ?? []).flatMap(agentItems);
+  for (const e of unownedDevServers(entries, report)) {
+    if (e.exposure !== "all_interfaces") continue;
     items.push({ id: `exposed-port:${e.id}`, rule: "exposed-port", severity: "medium", stop: { kind: "entry", entryId: e.id }, title: `${e.label} on :${e.port} is open to the network`, detail: "Dev servers usually only need localhost.", target: { view: "list", entryId: e.id } });
   }
   return items.sort((a, b) => (a.severity === b.severity ? a.title.localeCompare(b.title) : a.severity === "high" ? -1 : 1));

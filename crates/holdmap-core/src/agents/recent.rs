@@ -8,8 +8,9 @@
 //! * **VS Code-based editors** (Cursor, Windsurf, Kiro) record their open windows in
 //!   `User/globalStorage/storage.json`. Only the folder URIs are taken from it.
 //!
-//! Settings files that may also hold tokens (`~/.claude.json`, `~/.codex/config.toml`) are not
-//! read at all.
+//! This module never reads settings files that may also hold tokens (`~/.claude.json`,
+//! `~/.codex/config.toml`). The separate, opt-in capability inventory (`capabilities`) reads
+//! only allowlisted keys from them and never exports values; see that module.
 
 use super::model::Evidence;
 use std::collections::HashSet;

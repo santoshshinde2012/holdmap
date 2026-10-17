@@ -1280,7 +1280,7 @@ flowchart TB
   subgraph UI["Svelte 5 front-end"]
     APP["App.svelte · Presentation root<br/>Home, list, graph, agents + keyboard navigation"]
     SHELL["components/shell/<br/>TitleBar · ViewToolbar · Notices · StatusBar"]
-    HOME["components/home/HomeView<br/>Pure view model: lib/home.ts"]
+    HOME["components/home/<br/>HomeView · AgentCards · MachineMap · AgentLanes · NeedsList<br/>Pure view models: lib/home.ts · agent-card.ts · machine-map.ts · agent-lanes.ts"]
     GV["GraphView.svelte<br/>@xyflow/svelte"]
     AV["AgentsView.svelte<br/>agent cards + C4 pictures<br/>(lib/agents.ts: context / footprint / project)"]
     NODES["components/graph/<br/>ServiceNode · ClusterNode · TrafficEdge · FitOnChange"]

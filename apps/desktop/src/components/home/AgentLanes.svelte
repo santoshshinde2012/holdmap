@@ -7,7 +7,7 @@
   import { accessHeadline, monogram } from "../../lib/agents";
   import { oldest, timeScale, type Lane } from "../../lib/agent-lanes";
 
-  let { lanes, now, colors, active, open = true, ontoggle, onhover, onselect, onopenagent, onopenentry }: {
+  let { lanes, now, colors, active, open = true, ontoggle, onhover, onselect, onopenagent, onport }: {
     lanes: Lane[];
     /** Collapsible band; the header stays so the toggle never moves. */
     open?: boolean;
@@ -19,7 +19,8 @@
     onhover: (id: string | null) => void;
     onselect: (id: string) => void;
     onopenagent: (id: string) => void;
-    onopenentry: (id: string) => void;
+    /** Opens the port's actions (Details, Stop…) anchored to the clicked element. */
+    onport: (entryId: string, anchor: HTMLElement | SVGElement) => void;
   } = $props();
 
   const scale = $derived(timeScale(now, oldest(lanes, now)));
@@ -79,7 +80,7 @@
           {@const x = scale.x(b.start)}
           <div class="sub">
             <span class="bar thin" class:warn={b.warn} style="left: {pct(b.start)}"></span>
-            <button type="button" class="pin" class:warn={b.warn} class:short={x > 0.7} style="--x: {pct(b.start)}" onclick={() => onopenentry(b.entryId)} aria-label="Port {b.port} {b.label}{b.warn ? ', open to the network' : ''}">
+            <button type="button" class="pin" class:warn={b.warn} class:short={x > 0.7} style="--x: {pct(b.start)}" aria-haspopup="menu" onclick={(e) => onport(b.entryId, e.currentTarget)} aria-label="Port {b.port} {b.label}{b.warn ? ', open to the network' : ''}">
               <i></i><span>:{b.port} {b.label}</span>
             </button>
           </div>
@@ -87,7 +88,7 @@
       </div>
       <div class="edge" role="cell">
         {#each l.mcp as m (m.id)}
-          <button type="button" class="mcp" class:on={m.running} class:warn={m.warn} onclick={() => l.agent && onopenagent(l.agent.id)} aria-label="MCP {m.name}, {m.running ? 'running' : 'not seen running'}{m.warn ? ', unpinned' : ''}"><i></i>{m.name}</button>
+          <button type="button" class="mcp" class:on={m.running} class:warn={m.warn} onclick={() => l.agent && onopenagent(l.agent.id)} aria-label="MCP {m.name}, {m.running ? 'running' : 'not running'}{m.warn ? ', unpinned' : ''}"><i></i>{m.name}</button>
         {/each}
       </div>
     </div>

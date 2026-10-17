@@ -35,7 +35,7 @@ describe("HomeView cards", () => {
   it("marks unreadable configuration unknown with its reason, never zero", () => {
     const view = render(HomeView, props({ layout: "cards" }));
     const docker = card(view, "Docker Desktop");
-    expect(within(docker).getAllByLabelText("unknown")).toHaveLength(2);
+    expect(within(docker).getAllByText("unknown")).toHaveLength(2);
     expect(docker.querySelector("[title*='not supported']")).not.toBeNull();
     expect(docker.textContent).not.toMatch(/Not supported|No project folder/);
   });
@@ -61,7 +61,37 @@ describe("HomeView cards", () => {
     await fireEvent.click(view.getByRole("button", { name: "Review stop plan: Docker Desktop" }));
     expect(onstopagent).toHaveBeenCalledWith(docker.id);
     await fireEvent.click(within(card(view, "Docker Desktop")).getAllByRole("button", { name: /^Port / })[0]);
+    await fireEvent.click(within(view.getByRole("menu")).getByRole("menuitem", { name: "Details" }));
     expect(p.onopenentry).toHaveBeenCalled();
+  });
+
+  it("stops a port from a card chip through the stop plan, never directly", async () => {
+    const onstopentry = vi.fn();
+    const p = props({ layout: "cards", onstopentry });
+    const view = render(HomeView, p);
+    const cursor = p.report.agents.find((a) => a.product === "cursor")!;
+    const port = cursor.ports[0];
+    const chip = within(card(view, "Cursor")).getByRole("button", { name: new RegExp(`^Port ${port.port} `) });
+    expect(chip.getAttribute("aria-haspopup")).toBe("menu");
+    await fireEvent.click(chip);
+    const menu = view.getByRole("menu", { name: new RegExp(`^:${port.port} `) });
+    await fireEvent.click(within(menu).getByRole("menuitem", { name: "Stop…" }));
+    expect(onstopentry).toHaveBeenCalledWith(port.entry_id);
+    expect(view.queryByRole("menu")).toBeNull();
+  });
+
+  it("stops an unowned dev server from its card and offers no stop without an owner", async () => {
+    const onstopentry = vi.fn();
+    const entries = MOCK_SNAPSHOT.entries.map((e) => (e.port === 8125 ? { ...e, process: null, container: null, pid: null } : e));
+    const view = render(HomeView, props({ layout: "cards", onstopentry, entries }));
+    const loose = view.getByRole("article", { name: "Unowned dev servers" });
+    await fireEvent.click(within(loose).getByRole("button", { name: /^Port 8125 / }));
+    expect((within(view.getByRole("menu")).getByRole("menuitem", { name: /^Stop…/ }) as HTMLButtonElement).disabled).toBe(true);
+    await fireEvent.keyDown(view.getByRole("menu"), { key: "Escape" });
+    expect(view.queryByRole("menu")).toBeNull();
+    await fireEvent.click(within(loose).getByRole("button", { name: /^Port 8000 / }));
+    await fireEvent.click(within(view.getByRole("menu")).getByRole("menuitem", { name: "Stop…" }));
+    expect(onstopentry).toHaveBeenCalledWith(entries.find((e) => e.port === 8000)!.id);
   });
 
   it("offers the layout toggle as a radio group", async () => {
@@ -96,15 +126,22 @@ describe("HomeView map", () => {
     expect(items.some((li) => li.classList.contains("dim") && li.textContent!.includes("Cursor"))).toBe(true);
   });
 
-  it("opens ports from the map and the lanes", async () => {
-    const p = props();
+  it("gives map port nodes and timeline pins Details and Stop…, both through the plan", async () => {
+    const onstopentry = vi.fn();
+    const p = props({ onstopentry });
     const view = render(HomeView, p);
     const cursor = p.report.agents.find((a) => a.product === "cursor")!;
     const port = cursor.ports[0];
     await fireEvent.click(view.container.querySelector(`.map g.sat[aria-label^="Port :${port.port}"]`)!);
+    await fireEvent.click(within(view.getByRole("menu")).getByRole("menuitem", { name: "Details" }));
     expect(p.onopenentry).toHaveBeenCalledWith(port.entry_id);
-    await fireEvent.click(view.getAllByRole("button", { name: new RegExp(`^Port ${port.port} `) })[0]);
-    expect(p.onopenentry).toHaveBeenCalledTimes(2);
+    await fireEvent.keyDown(view.container.querySelector(`.map g.sat[aria-label^="Port :${port.port}"]`)!, { key: "Enter" });
+    await fireEvent.click(within(view.getByRole("menu")).getByRole("menuitem", { name: "Stop…" }));
+    expect(onstopentry).toHaveBeenCalledWith(port.entry_id);
+    const pin = within(view.getByRole("table", { name: "Agent lanes" })).getByRole("button", { name: new RegExp(`^Port ${port.port} `) });
+    await fireEvent.click(pin);
+    await fireEvent.click(within(view.getByRole("menu")).getByRole("menuitem", { name: "Stop…" }));
+    expect(onstopentry).toHaveBeenCalledTimes(2);
   });
 
   it("keeps Needs you compact: detail only on expand, and stop always goes through the plan", async () => {
@@ -152,15 +189,16 @@ describe("HomeView map", () => {
     expect(view.container.querySelector('.map g.agent[aria-pressed="true"]')).toBeNull();
   });
 
-  it("collapses the timeline band and remembers it", async () => {
-    localStorage.removeItem("holdmap.home.timeline");
-    const view = render(HomeView, props());
+  it("collapses the timeline band through its toggle", async () => {
+    const ontimeline = vi.fn();
+    const p = props({ ontimeline });
+    const view = render(HomeView, p);
     const toggle = view.getByRole("button", { name: /^Timeline/ });
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     await fireEvent.click(toggle);
+    expect(ontimeline).toHaveBeenCalledWith(false);
+    await view.rerender({ ...p, timeline: false });
     expect(view.queryByRole("table", { name: "Agent lanes" })).toBeNull();
-    expect(localStorage.getItem("holdmap.home.timeline")).toBe("0");
-    await fireEvent.click(toggle);
-    expect(view.getByRole("table", { name: "Agent lanes" })).toBeTruthy();
+    expect(view.getByRole("button", { name: /^Timeline/ }).getAttribute("aria-expanded")).toBe("false");
   });
 });

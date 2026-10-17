@@ -1,5 +1,6 @@
 // Machine map view model: each agent's footprint (observed project folders, listening ports,
 // configured MCP servers, remote hosts) and a radial layout that fans it out in the agent's sector.
+import { isUnpinned } from "./agent-config";
 import type { Agent } from "./types";
 
 export type FootprintKind = "project" | "port" | "mcp" | "remote";
@@ -24,7 +25,7 @@ export function footprint(agent: Agent, max = 14): FootprintNode[] {
   for (const p of agent.ports) out.push({ id: `${agent.id}:port:${p.entry_id}`, kind: "port", label: `:${p.port}`, sub: p.framework ?? p.label, warn: p.exposure === "all_interfaces", live: true, target: { view: "list", entryId: p.entry_id } });
   for (const s of agent.capabilities?.mcp_servers ?? []) {
     if (s.enabled === false) continue;
-    out.push({ id: `${agent.id}:mcp:${s.id}`, kind: "mcp", label: s.name, sub: s.remote_host ?? s.launch?.runner, warn: s.launch?.pinned === false && ["npx", "uvx", "docker"].includes(s.launch.runner), live: s.runtime?.state === "running", target: toAgent });
+    out.push({ id: `${agent.id}:mcp:${s.id}`, kind: "mcp", label: s.name, sub: s.remote_host ?? s.launch?.runner, warn: isUnpinned(s), live: s.runtime?.state === "running", target: toAgent });
   }
   for (const l of agent.links.filter((l) => l.kind === "remote")) out.push({ id: `${agent.id}:r:${l.id}`, kind: "remote", label: l.service ?? l.address, sub: l.service ? l.address : `${l.connections} conn`, warn: false, live: true, target: toAgent });
   return out.slice(0, max);

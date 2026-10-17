@@ -15,7 +15,7 @@ by [release-please](https://github.com/googleapis/release-please) from
   with an attention badge; Map shows the same footprint around this computer with a
   collapsible **Timeline** of uptime, ports and MCP. A compact **Needs you** list sits beside
   both. Selection is shared across views. Keyboard: ←/→ between agents, j/k in the timeline,
-  Esc to clear.
+  Esc to clear. Click any port on Home for **Details** or **Stop…**, which opens the usual stop plan.
 - Agent inventory now shows how each MCP server launches (runner, package, pinned or not),
   its remote host, env/header **names**, and whether it is running in that agent's processes;
   plus permission rules, safety settings, instruction files and documented built-in tools.
@@ -32,6 +32,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Flow keeps source, refresh and pause in its toolbar; inspector, limits and recording
   controls moved to **View options**.
 - Agent cards wrap PIDs and counts whole instead of cutting them off.
+
+### Security
+
+- cargo-deny ignores the three `zip` advisories (RUSTSEC-2026-0367/0368/0369), reached only
+  through `tauri-plugin-updater` on already signature-verified updates; see CONTRIBUTING.
 
 ## [0.9.0] - 2026-10-16
 

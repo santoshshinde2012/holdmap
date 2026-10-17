@@ -29,10 +29,15 @@ macOS fullscreen close that returns to the previous app. See the
 
 ## Home and first open
 
-On `main` (not yet in a published release), **Home** summarises agents and tools, dev
-servers, listening ports and listeners open to the network, with a short **Needs a look**
-list: agents on all interfaces, agents running as root or with elevated access, and exposed
-dev servers. Click any agent to open it on Agents. Counts read **—** until the first scan.
+On `main` (not yet in a published release), **Home** shows agents, listening ports, dev
+servers, exposed listeners and running MCP servers, as **Cards** or a **Map** (toggle at the
+top right or press `V`; the choice is remembered). Cards list each agent's projects, ports,
+MCP servers and skills; Map draws the same footprint around this computer with a collapsible
+**Timeline**. **Needs you** lists agents on all interfaces, root or elevated access, risky
+safety settings, unpinned MCP servers and exposed dev servers. Click any port (a card chip, a
+map node or a timeline pin) for **Details** or **Stop…**; every **Stop…** opens the stop plan
+first. Select an agent once to highlight it everywhere; select it again to open it on
+Agents. Counts read **…** until the first scan.
 
 The first open asks where to start and shows notifications, launch at login and single-key
 shortcuts with their current settings. **Skip** changes nothing.

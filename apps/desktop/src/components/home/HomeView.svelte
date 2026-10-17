@@ -10,16 +10,16 @@
   import MapList from "./MapList.svelte";
   import NeedsList from "./NeedsList.svelte";
   import AgentLanes from "./AgentLanes.svelte";
+  import PortMenu from "./PortMenu.svelte";
   import { attention, attentionAgent, hotAgents, overview, type AttentionItem } from "../../lib/home";
   import { radialLayout, type FootprintNode } from "../../lib/machine-map";
   import { lanes } from "../../lib/agent-lanes";
-  import { AGENT_COLORS } from "../../lib/agents";
+  import { agentColors } from "../../lib/agents";
   import { HOME_LAYOUTS, HOME_LAYOUT_LABEL, type HomeLayout } from "../../lib/home-layout";
-  import { prefGetBoolean, prefSet } from "../../lib/prefs";
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
   type Section = "overview" | "capabilities";
-  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, onopenagent, onopenentry, onview, oninventory, onstopentry, onstopagent }: {
+  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, onopenagent, onopenentry, onview, oninventory, onstopentry, onstopagent }: {
     entries: PortEntry[] | null;
     report: AgentsReport | null;
     /** Whether reading agents' MCP/skills/permission files is turned on. */
@@ -29,6 +29,9 @@
     /** Cards or Map; the app shell persists it and binds the V shortcut. */
     layout?: HomeLayout;
     onlayout?: (l: HomeLayout) => void;
+    /** Whether the Map's timeline band is open; also persisted by the app shell. */
+    timeline?: boolean;
+    ontimeline?: (open: boolean) => void;
     onopenagent: (id: string, section?: Section) => void;
     onopenentry: (id: string) => void;
     onview: (view: "list" | "agents" | "graph") => void;
@@ -43,13 +46,12 @@
   const groups = $derived(radialLayout(report?.agents ?? []));
   const rows = $derived(lanes(report, entries, now));
   const hot = $derived(hotAgents(needs));
-  const colors = $derived(new Map((report?.agents ?? []).map((a, i) => [a.id, AGENT_COLORS[i % AGENT_COLORS.length]])));
+  const colors = $derived(agentColors(report?.agents ?? []));
   const LAYOUT_ICON: Record<HomeLayout, string> = { cards: "layers", map: "radar" };
   const layoutOptions = HOME_LAYOUTS.map((l) => ({ value: l, label: HOME_LAYOUT_LABEL[l], icon: LAYOUT_ICON[l], title: `${HOME_LAYOUT_LABEL[l]} · V` }));
 
   let hovered = $state<string | null>(null);
   let selected = $state<string | null>(null);
-  let lanesOpen = $state(prefGetBoolean("home.timeline", true));
   const active = $derived(hovered ?? selected);
   const activeNeeds = $derived(active ? new Set(needs.filter((n) => attentionAgent(n, report) === active).map((n) => n.id)) : null);
 
@@ -65,8 +67,12 @@
   function open(t: FootprintNode["target"]) { if (t.view === "list") onopenentry(t.entryId); else onopenagent(t.agentId); }
   function openItem(i: AttentionItem) { open(i.target); }
   function stopItem(i: AttentionItem) { if (i.stop?.kind === "entry") onstopentry?.(i.stop.entryId); else if (i.stop) onstopagent?.(i.stop.agentId); }
+  let portMenu = $state<{ entry: PortEntry; anchor: HTMLElement | SVGElement } | null>(null);
+  function port(entryId: string, anchor: HTMLElement | SVGElement) {
+    const entry = entries?.find((e) => e.id === entryId);
+    if (entry) portMenu = { entry, anchor }; else onopenentry(entryId);
+  }
   function select(id: string) { selected = selected === id ? null : id; }
-  function toggleLanes() { lanesOpen = !lanesOpen; prefSet("home.timeline", lanesOpen ? "1" : "0"); }
   function onkeydown(e: KeyboardEvent) { if (e.key === "Escape" && selected) { selected = null; e.stopPropagation(); } }
 </script>
 
@@ -91,16 +97,16 @@
         {#if layout === "cards"}
           {#if report}
             <AgentCards {report} {entries} {needs} {colors} {now} {selected} {active} onhover={(id) => (hovered = id)} onselect={select}
-              onopen={(id) => onopenagent(id)} {onopenentry} onstop={onstopagent} oninventory={inventory ? undefined : oninventory} />
+              onopen={(id) => onopenagent(id)} onport={port} onstop={onstopagent} oninventory={inventory ? undefined : oninventory} />
           {:else}
             <p class="clear wait" aria-busy="true">…</p>
           {/if}
         {:else}
           <div class="stage">
             <div class="map-wrap">
-              <MachineMap {groups} platform={report?.platform ?? ""} ports={o.ports} {active} {selected} {hot} onhover={(id) => (hovered = id)} onselect={select} onopen={open} />
+              <MachineMap {groups} {colors} platform={report?.platform ?? ""} ports={o.ports} {active} {selected} {hot} onhover={(id) => (hovered = id)} onselect={select} onopen={open} onport={port} />
             </div>
-            <div class="map-list"><MapList {groups} {active} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} /></div>
+            <div class="map-list"><MapList {groups} {colors} {active} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} /></div>
           </div>
         {/if}
       </div>
@@ -121,11 +127,14 @@
 
   {#if layout === "map"}
     {#if rows.length}
-      <AgentLanes lanes={rows} {now} {colors} {active} open={lanesOpen} ontoggle={toggleLanes} onhover={(id) => (hovered = id)} onselect={select} onopenagent={(id) => onopenagent(id)} {onopenentry} />
+      <AgentLanes lanes={rows} {now} {colors} {active} open={timeline} ontoggle={() => ontimeline?.(!timeline)} onhover={(id) => (hovered = id)} onselect={select} onopenagent={(id) => onopenagent(id)} onport={port} />
     {:else}
       <p class="clear lanes-empty" aria-busy={!report}>{report ? "No agents" : "…"}</p>
     {/if}
   {/if}
+  {#each portMenu ? [portMenu] : [] as m (m.entry.id)}
+    <PortMenu entry={m.entry} anchor={m.anchor} ondetails={() => onopenentry(m.entry.id)} onstop={() => onstopentry?.(m.entry.id)} onclose={() => (portMenu = null)} />
+  {/each}
 </div>
 
 <style>

@@ -3,12 +3,14 @@
   // own sector. Attention glows on the exact node. The active agent (hovered or selected, shared
   // with the lanes) stays lit while the others dim. ←/→ move between agents.
   import { ACCESS_LABEL } from "../../lib/home";
-  import { AGENT_COLORS, accessHeadline, monogram } from "../../lib/agents";
+  import { accessHeadline, monogram } from "../../lib/agents";
   import { MAP_RINGS, MAP_STRETCH, mapBounds, type FootprintNode, type radialLayout } from "../../lib/machine-map";
 
   type Group = ReturnType<typeof radialLayout>[number];
-  let { groups, platform, ports, active, selected, hot, onhover, onselect, onopen }: {
+  let { groups, colors, platform, ports, active, selected, hot, onhover, onselect, onopen, onport }: {
     groups: Group[];
+    /** Agent colour by id, shared with cards and timeline. */
+    colors: Map<string, string>;
     platform: string;
     ports: number | null;
     /** Hovered or selected agent; null shows everything. */
@@ -19,6 +21,8 @@
     onhover: (id: string | null) => void;
     onselect: (id: string) => void;
     onopen: (target: FootprintNode["target"]) => void;
+    /** Opens the port's actions (Details, Stop…) anchored to the clicked element. */
+    onport: (entryId: string, anchor: HTMLElement | SVGElement) => void;
   } = $props();
 
   const KIND: Record<FootprintNode["kind"], string> = { project: "Project", port: "Port", mcp: "MCP server", remote: "Remote host" };
@@ -37,7 +41,9 @@
   const base = $derived(mapBounds(groups, 1));
   const k = $derived(w && h ? Math.min(1.8, Math.max(1, Math.sqrt(1 / Math.min(w / base.w, h / base.h)))) : 1);
   const box = $derived(mapBounds(groups, k));
-  const nodeKey = (e: KeyboardEvent, t: FootprintNode["target"]) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onopen(t); } };
+  // Port nodes open the port's actions (so Stop… is one step away); other nodes open their target.
+  function activate(t: FootprintNode["target"], el: SVGElement) { if (t.view === "list") onport(t.entryId, el); else onopen(t); }
+  const nodeKey = (e: KeyboardEvent, t: FootprintNode["target"]) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(t, e.currentTarget as SVGElement); } };
 </script>
 
 <div class="fit" bind:clientWidth={w} bind:clientHeight={h}>
@@ -48,8 +54,8 @@
   <ellipse rx={330 * MAP_STRETCH.x} ry={330 * MAP_STRETCH.y} fill="url(#map-glow)" />
   <ellipse rx={MAP_RINGS.inner * MAP_STRETCH.x} ry={MAP_RINGS.inner * MAP_STRETCH.y} class="orbit" />
   <ellipse rx={MAP_RINGS.outer * MAP_STRETCH.x} ry={MAP_RINGS.outer * MAP_STRETCH.y} class="orbit faint" />
-  {#each groups as g, i (g.agent.id)}
-    <g class="cluster" class:dim={active !== null && active !== g.agent.id} style="--agent: {AGENT_COLORS[i % AGENT_COLORS.length]}">
+  {#each groups as g (g.agent.id)}
+    <g class="cluster" class:dim={active !== null && active !== g.agent.id} style="--agent: {colors.get(g.agent.id)}">
       <line class="spoke" x1="0" y1="0" x2={g.x} y2={g.y} />
       {#each g.nodes as n (n.item.id)}<path class="edge" class:live={n.item.live} d={curve(g.x, g.y, n.x, n.y)} />{/each}
     </g>
@@ -61,13 +67,13 @@
   </g></g>
   {#each groups as g, i (g.agent.id)}
     {@const head = accessHeadline(g.agent)}
-    <g class="cluster" class:dim={active !== null && active !== g.agent.id} style="--agent: {AGENT_COLORS[i % AGENT_COLORS.length]}">
+    <g class="cluster" class:dim={active !== null && active !== g.agent.id} style="--agent: {colors.get(g.agent.id)}">
       {#each g.nodes as n (n.item.id)}
         {@const right = Math.cos(n.angle) >= -0.01}
         <g class="sat k-{n.item.kind}" class:warn={n.item.warn} class:idle={!n.item.live} transform="translate({n.x},{n.y})" role="button" tabindex="0"
           aria-label="{KIND[n.item.kind]} {n.item.label}{n.item.sub ? `, ${n.item.sub}` : ''}{n.item.warn ? ', needs attention' : ''}, {g.agent.name}"
           onmouseenter={() => onhover(g.agent.id)} onmouseleave={() => onhover(null)} onfocus={() => onhover(g.agent.id)} onblur={() => onhover(null)}
-          onclick={() => onopen(n.item.target)} onkeydown={(e) => nodeKey(e, n.item.target)}><g class="body">
+          aria-haspopup={n.item.target.view === "list" ? "menu" : undefined} onclick={(e) => activate(n.item.target, e.currentTarget)} onkeydown={(e) => nodeKey(e, n.item.target)}><g class="body">
           <circle r="16" class="hit" />
           {#if n.item.warn}<circle class="halo" r="12" />{/if}
           {#if n.item.kind === "project"}<rect x="-5.5" y="-5.5" width="11" height="11" rx="3" />

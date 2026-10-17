@@ -649,6 +649,10 @@ describe("App overview and first run", () => {
     expect(within(group).getByRole("radio", { name: /^Map/ }).getAttribute("aria-checked")).toBe("true");
     expect(localStorage.getItem("holdmap.home.layout")).toBe("map");
     expect(view.getByRole("table", { name: "Agent lanes" })).toBeTruthy();
+    await fireEvent.click(view.getByRole("button", { name: /^Timeline/ }));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(localStorage.getItem("holdmap.home.timeline")).toBe("0");
+    expect(view.queryByRole("table", { name: "Agent lanes" })).toBeNull();
     await fireEvent.click(within(group).getByRole("radio", { name: /^Cards/ }));
     expect(localStorage.getItem("holdmap.home.layout")).toBe("cards");
   });

@@ -118,6 +118,8 @@
   let view = $state<View>(prefGetChoice("view", ["home", "list", "graph", "agents"], "list"));
   let homeLayout = $state<HomeLayout>(prefGetChoice("home.layout", HOME_LAYOUTS, "cards"));
   $effect(() => prefSet("home.layout", homeLayout));
+  let homeTimeline = $state(prefGetBoolean("home.timeline", true));
+  $effect(() => prefSet("home.timeline", homeTimeline ? "1" : "0"));
   /** GraphView (and @xyflow) loads only when the Graph tab is opened — keeps the first paint light. */
   let GraphView = $state<typeof import("./components/GraphView.svelte").default | null>(null);
   let graph = $state.raw<Graph | null>(null);
@@ -1510,7 +1512,7 @@
         {/if}
       </div>
     {:else if view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={inventoryOn} layout={homeLayout} onlayout={(l) => (homeLayout = l)} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent}
+      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={inventoryOn} layout={homeLayout} onlayout={(l) => (homeLayout = l)} timeline={homeTimeline} ontimeline={(open) => (homeTimeline = open)} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent}
         onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (view = v)} oninventory={enableInventory} />
     {:else if view === "agents"}
       <div class="graph-wrap agents-wrap">

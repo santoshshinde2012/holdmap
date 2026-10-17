@@ -2,18 +2,18 @@
   // The map on narrow screens: one row per agent with what it reaches, by kind.
   import Icon from "../Icon.svelte";
   import { ACCESS_LABEL } from "../../lib/home";
-  import { AGENT_COLORS, accessHeadline, monogram } from "../../lib/agents";
+  import { accessHeadline, monogram } from "../../lib/agents";
   import type { radialLayout } from "../../lib/machine-map";
 
   type Group = ReturnType<typeof radialLayout>[number];
-  let { groups, active, onhover, onopenagent }: { groups: Group[]; active: string | null; onhover: (id: string | null) => void; onopenagent: (id: string) => void } = $props();
+  let { groups, colors, active, onhover, onopenagent }: { groups: Group[]; colors: Map<string, string>; active: string | null; onhover: (id: string | null) => void; onopenagent: (id: string) => void } = $props();
   const KINDS = [{ k: "project", icon: "folder" }, { k: "port", icon: "plug" }, { k: "mcp", icon: "server" }, { k: "remote", icon: "globe" }] as const;
 </script>
 
 <ul class="list" aria-label="Machine map">
-  {#each groups as g, i (g.agent.id)}
+  {#each groups as g (g.agent.id)}
     {@const head = accessHeadline(g.agent)}
-    <li style="--agent: {AGENT_COLORS[i % AGENT_COLORS.length]}" class:active={active === g.agent.id}>
+    <li style="--agent: {colors.get(g.agent.id)}" class:active={active === g.agent.id}>
       <button type="button" onclick={() => onopenagent(g.agent.id)} onfocus={() => onhover(g.agent.id)} onblur={() => onhover(null)} aria-label="{g.agent.name}, {ACCESS_LABEL[head.level]}">
         <span class="mono">{monogram(g.agent.name)}</span>
         <span class="nm"><b>{g.agent.name}</b><small class="lv-{head.level}">{ACCESS_LABEL[head.level]}</small></span>

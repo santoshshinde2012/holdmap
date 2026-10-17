@@ -243,7 +243,7 @@ An empty list does not prove that no capabilities exist.
 
 ### Launch, run state and permissions
 
-With the inventory turned on (first run, **Home → Turn on**, or `--capabilities`), each MCP server
+With the inventory turned on (first run, **Read MCP config** on Home, or `--capabilities`), each MCP server
 also shows how it starts (`npx`, `uvx`, `docker`, script or binary, with the package and whether
 its version is pinned), the remote host for HTTP servers, and the **names** of its environment
 variables and headers. **Running** means the package was seen in that agent's own processes;

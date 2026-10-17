@@ -93,3 +93,16 @@ describe("overview rail and actions", () => {
     }
   });
 });
+
+describe("unowned dev servers", () => {
+  it("lists dev servers no agent started, once", async () => {
+    const { unownedDevServers } = await import("./home");
+    const { MOCK_SNAPSHOT, mockAgents } = await import("./mock");
+    const report = mockAgents(undefined, true);
+    const owned = new Set(report.agents.flatMap((a) => a.ports.map((p) => p.entry_id)));
+    const loose = unownedDevServers(MOCK_SNAPSHOT.entries, report);
+    expect(loose.length).toBeGreaterThan(0);
+    expect(loose.every((e) => e.is_dev && !owned.has(e.id))).toBe(true);
+    expect(unownedDevServers(null, report)).toEqual([]);
+  });
+});

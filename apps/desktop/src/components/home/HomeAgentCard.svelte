@@ -10,7 +10,7 @@
   import { humanDuration } from "../../lib/format";
   import type { Agent } from "../../lib/types";
 
-  let { agent, model, needs, color, now, selected, active, onhover, onselect, onopen, onopenentry, onstop, oninventory }: {
+  let { agent, model, needs, color, now, selected, active, onhover, onselect, onopen, onport, onstop, oninventory }: {
     agent: Agent;
     model: CardModel;
     /** Attention items about this agent. */
@@ -23,7 +23,8 @@
     onhover: (id: string | null) => void;
     onselect: (id: string) => void;
     onopen: (id: string) => void;
-    onopenentry: (id: string) => void;
+    /** Opens the port's actions (Details, Stop…) anchored to the clicked element. */
+    onport: (entryId: string, anchor: HTMLElement | SVGElement) => void;
     /** Opens the stop plan for review. */
     onstop?: (id: string) => void;
     oninventory?: () => void;
@@ -37,6 +38,8 @@
   const label = $derived(`${agent.name}, ${ACCESS_LABEL[head.level]}${needs.length ? `, ${needs.length} need you` : ""}`);
   function headKey(e: KeyboardEvent) { if (e.key === "Enter" && selected) { e.preventDefault(); onopen(agent.id); } }
 </script>
+
+{#snippet unknown()}<span class="unk"><span aria-hidden="true">?</span><span class="sr-only">unknown</span></span>{/snippet}
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <article class="card" style="--agent: {color}" aria-label={agent.name} class:selected class:active={active === agent.id} class:dim={active !== null && active !== agent.id}
@@ -72,19 +75,19 @@
       <div><dt><Icon name="folder" size={12} />Projects</dt><dd>{model.projects.length}</dd></div>
       <div class:warn={exposed > 0}><dt><Icon name="plug" size={12} />Ports</dt><dd>{model.ports.length}{#if exposed}<small>{`${exposed} exposed`}</small>{/if}</dd></div>
       <div title={model.unknownReason ?? undefined}><dt><Icon name="server" size={12} />MCP</dt>
-        <dd>{#if model.mcp}<span class="of" title="{model.mcp.running} of {model.mcp.total} running" aria-label="{model.mcp.running} of {model.mcp.total} running">{model.mcp.running}<small>{`/${model.mcp.total}`}</small></span>{:else}<span class="unk" aria-label="unknown">?</span>{/if}</dd></div>
+        <dd>{#if model.mcp}<span class="of" title="{model.mcp.running} of {model.mcp.total} running"><span aria-hidden="true">{model.mcp.running}<small>{`/${model.mcp.total}`}</small></span><span class="sr-only">{`${model.mcp.running} of ${model.mcp.total} running`}</span></span>{:else}{@render unknown()}{/if}</dd></div>
       <div title={model.unknownReason ?? undefined}><dt><Icon name="sparkles" size={12} />Skills</dt>
-        <dd>{#if model.skills !== null}{model.skills}{:else}<span class="unk" aria-label="unknown">?</span>{/if}</dd></div>
+        <dd>{#if model.skills !== null}{model.skills}{:else}{@render unknown()}{/if}</dd></div>
     </dl>
   </div>
 
   <ul class="chips" aria-label="{agent.name} footprint">
     {#each model.ports as p (p.entryId)}
-      <li><button type="button" class="chip port" class:warn={p.warn} onclick={() => onopenentry(p.entryId)} aria-label="Port {p.port} {p.label}{p.warn ? ', open to the network' : ''}"><i></i><span class="mono-t">:{p.port}</span>{p.label}</button></li>
+      <li><button type="button" class="chip port" class:warn={p.warn} aria-haspopup="menu" onclick={(e) => onport(p.entryId, e.currentTarget)} aria-label="Port {p.port} {p.label}{p.warn ? ', open to the network' : ''}"><i></i><span class="mono-t">:{p.port}</span>{p.label}</button></li>
     {/each}
     {#each model.mcp?.servers ?? [] as s (s.id)}
       <li><button type="button" class="chip mcp" class:on={s.running} class:warn={s.warn} onclick={() => onopen(agent.id)} title={s.names.length ? s.names.join(", ") : undefined}
-        aria-label="MCP {s.name}, {s.running ? 'running' : 'not seen running'}{s.warn ? ', unpinned' : ''}"><i></i>{s.name}</button></li>
+        aria-label="MCP {s.name}, {s.running ? 'running' : 'not running'}{s.warn ? ', unpinned' : ''}"><i></i>{s.name}</button></li>
     {/each}
     {#each model.projects as p (p)}<li><span class="chip proj"><Icon name="folder" size={11} />{p}</span></li>{/each}
   </ul>

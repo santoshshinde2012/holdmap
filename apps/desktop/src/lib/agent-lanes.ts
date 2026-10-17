@@ -2,6 +2,8 @@
 // port from its process start time and the agent's MCP servers at the live edge. Time uses a
 // log scale so a 2-day-old app and a 5-minute-old dev server are both readable.
 import { humanDuration } from "./format";
+import { isUnpinned } from "./agent-config";
+import { unownedDevServers } from "./home";
 import type { Agent, AgentsReport, PortEntry } from "./types";
 
 export interface LaneBar { id: string; entryId: string; start: number; port: number; label: string; warn: boolean }
@@ -42,9 +44,7 @@ function bar(e: PortEntry | undefined, id: string, port: number, label: string, 
 
 export function lanes(report: AgentsReport | null, entries: PortEntry[] | null, now: number): Lane[] {
   const byId = new Map((entries ?? []).map((e) => [e.id, e]));
-  const owned = new Set<string>();
   const out: Lane[] = (report?.agents ?? []).map((agent) => {
-    agent.ports.forEach((p) => owned.add(p.entry_id));
     const start = agent.started_at * 1000;
     return {
       id: agent.id,
@@ -54,11 +54,11 @@ export function lanes(report: AgentsReport | null, entries: PortEntry[] | null, 
       bars: agent.ports.flatMap((p) => bar(byId.get(p.entry_id), p.entry_id, p.port, p.framework ?? p.label, p.exposure === "all_interfaces")).sort((a, b) => a.start - b.start),
       mcp: (agent.capabilities?.mcp_servers ?? []).filter((s) => s.enabled !== false).map((s) => ({
         id: s.id, name: s.name, running: s.runtime?.state === "running",
-        warn: s.launch?.pinned === false && ["npx", "uvx", "docker"].includes(s.launch.runner),
+        warn: isUnpinned(s),
       })),
     };
   }).sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
-  const loose = (entries ?? []).filter((e) => e.is_dev && !owned.has(e.id));
+  const loose = unownedDevServers(entries, report);
   if (loose.length) {
     out.push({ id: "unowned", agent: null, start: null, uptime: null, mcp: [],
       bars: loose.flatMap((e) => bar(e, e.id, e.port, e.project?.name ?? e.framework?.name ?? e.label, e.exposure === "all_interfaces")).sort((a, b) => a.start - b.start) });
