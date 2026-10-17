@@ -1,10 +1,9 @@
-// The overview's view model: headline counts, one dense row per running agent and the
-// "needs attention" list. Every figure comes from the latest scan, agents report and opt-in
+// The overview's view model: headline counts and the "needs you" list, with the agent each
+// item belongs to. Every figure comes from the latest scan, agents report and opt-in
 // configuration inventory; missing data stays null (shown as "scanning"), never zero.
 import { accessHeadline } from "./agents";
 import { configSummary, isUnpinned, launchLine, riskySettings, type ConfigSummary } from "./agent-config";
-import { uptime } from "./format";
-import type { AccessLevel, Agent, AgentPort, AgentsReport, PortEntry } from "./types";
+import type { AccessLevel, Agent, AgentsReport, PortEntry } from "./types";
 
 export interface Overview {
   agents: number | null;
@@ -46,28 +45,6 @@ export function overview(entries: PortEntry[] | null, report: AgentsReport | nul
   };
 }
 
-export interface AgentRow {
-  agent: Agent;
-  /** Observed working folders (not account history), most relevant first. */
-  projects: string[];
-  moreProjects: number;
-  ports: AgentPort[];
-  config: ConfigSummary | null;
-  posture: { level: AccessLevel; text: string };
-}
-
-export function agentRow(agent: Agent): AgentRow {
-  const labels = [...new Set(agent.folders.filter((f) => f.source !== "recent").map((f) => f.project?.name ?? f.label))];
-  return {
-    agent,
-    projects: labels.slice(0, 2),
-    moreProjects: Math.max(0, labels.length - 2) + (agent.more_folders ?? 0),
-    ports: agent.ports,
-    config: configSummary(agent),
-    posture: accessHeadline(agent),
-  };
-}
-
 function agentItems(agent: Agent): AttentionItem[] {
   const items: AttentionItem[] = [];
   const target: AttentionTarget = { view: "agents", agentId: agent.id };
@@ -105,15 +82,14 @@ export function attention(entries: PortEntry[] | null, report: AgentsReport | nu
 
 export const ACCESS_LABEL: Record<AccessLevel, string> = { restricted: "Restricted", standard: "Standard", elevated: "Elevated", unknown: "Unknown" };
 
-export interface ServiceRow { id: string; port: number; name: string; detail: string; exposed: boolean }
+/** The agent an attention item is about: its target agent, or the agent holding its port. */
+export function attentionAgent(item: AttentionItem, report: AgentsReport | null): string | null {
+  if (item.target.view === "agents") return item.target.agentId;
+  const entryId = item.target.entryId;
+  return report?.agents.find((a) => a.ports.some((p) => p.entry_id === entryId))?.id ?? null;
+}
 
-/** Dev servers for the overview rail, lowest port first. */
-export function services(entries: PortEntry[] | null, nowMs = Date.now()): ServiceRow[] {
-  return (entries ?? []).filter((e) => e.is_dev).sort((a, b) => a.port - b.port).map((e) => ({
-    id: e.id,
-    port: e.port,
-    name: e.project?.name ?? e.framework?.name ?? e.label,
-    detail: [e.framework?.name && e.project ? e.framework.name : null, e.pid ? `PID ${e.pid}` : null, uptime(e, nowMs) ? `up ${uptime(e, nowMs)}` : null].filter(Boolean).join(" · "),
-    exposed: e.exposure === "all_interfaces",
-  }));
+/** Agents whose attention concerns the agent itself; port and MCP issues belong to their node. */
+export function hotAgents(items: AttentionItem[]): Set<string> {
+  return new Set(items.flatMap((i) => (i.target.view === "agents" && (i.rule === "root" || i.rule === "elevated" || i.rule === "settings") ? [i.target.agentId] : [])));
 }

@@ -1,36 +1,25 @@
 import { expect, test } from "./fixtures";
 
-test("the overview answers what is running and opens an agent in one more click", async ({ app }) => {
+test("home combines the machine map and agent lanes, synced, and opens an agent", async ({ app }) => {
   await app.getByRole("radio", { name: /^Home/ }).click();
   const overview = app.getByRole("region", { name: "Overview" });
-  await expect(overview.getByRole("navigation", { name: "Summary" })).toBeVisible();
-  await expect(overview.getByRole("heading", { name: "Running agents" })).toBeVisible();
-  await expect(overview.getByRole("heading", { name: "Needs attention" })).toBeVisible();
-  await expect(overview.getByRole("heading", { name: "Activity" })).toBeVisible();
-  await expect(overview.getByRole("heading", { name: "Dev servers" })).toBeVisible();
-  await overview.getByRole("button", { name: /^Cursor,/ }).click();
+  await expect(overview.getByRole("group", { name: "Machine map" })).toBeVisible();
+  await expect(overview.getByRole("table", { name: "Agent lanes" })).toBeVisible();
+  await expect(overview.getByRole("heading", { name: /^Needs you/ })).toBeVisible();
+  const cursor = overview.getByRole("button", { name: /^Cursor, (Standard|Restricted|Elevated|Unknown)/ });
+  await cursor.click();
+  await expect(cursor).toHaveAttribute("aria-pressed", "true");
+  await expect(overview.locator(".lane.active")).toContainText("Cursor");
+  await cursor.click();
   await expect(app.getByRole("radio", { name: /^Agents/ })).toHaveAttribute("aria-checked", "true");
-  await expect(app.getByRole("article", { name: "Cursor", exact: true }).getByRole("button", { name: /^Cursor /, pressed: true })).toBeVisible();
 });
 
-test("the overview opt-in shows each agent's MCP servers, and j/k moves between rows", async ({ app }) => {
+test("the inventory button adds MCP servers to the map and lanes", async ({ app }) => {
   await app.getByRole("radio", { name: /^Home/ }).click();
   const overview = app.getByRole("region", { name: "Overview" });
-  await overview.getByRole("button", { name: "Turn on" }).click();
-  await expect(overview.getByRole("button", { name: /^MCP servers: 1 running of 3 configured/ })).toBeVisible();
-  await expect(overview.getByRole("button", { name: "Turn on" })).toHaveCount(0);
-  await overview.getByRole("button", { name: /^Cursor,/ }).focus();
-  await app.keyboard.press("j");
-  await expect(overview.getByRole("button", { name: /^Cursor,/ })).not.toBeFocused();
-  await app.keyboard.press("k");
-  await expect(overview.getByRole("button", { name: /^Cursor,/ })).toBeFocused();
-  await overview.getByRole("button", { name: /^MCP servers: 1 running/ }).click();
-  await expect(overview.getByText("legacy-browser")).toBeVisible();
-  await overview.getByRole("button", { name: "Open Cursor" }).click();
-  await expect(app.getByRole("radio", { name: /^Agents/ })).toHaveAttribute("aria-checked", "true");
-  const config = app.getByRole("article", { name: "Cursor", exact: true }).getByRole("region", { name: "Cursor configuration" });
-  await expect(config).toContainText("filesystem");
-  await expect(config).toContainText("unpinned");
+  await overview.getByRole("button", { name: "Read MCP config" }).click();
+  await expect(overview.getByRole("button", { name: "MCP filesystem, running, unpinned" })).toBeVisible();
+  await expect(overview.getByRole("button", { name: "Read MCP config" })).toHaveCount(0);
 });
 
 test("typing in the overview search continues on the port list", async ({ app }) => {
@@ -40,25 +29,35 @@ test("typing in the overview search continues on the port list", async ({ app })
 });
 
 for (const width of [390, 1024, 1280, 1440]) {
-  test(`${width}px overview has no horizontal overflow and cuts no text off`, async ({ app }) => {
+  test(`${width}px home has no overflow, no clipped text and no layout jump`, async ({ app }) => {
     await app.evaluate(() => localStorage.setItem("holdmap.agents.inventory", "1"));
     await app.reload();
     await app.setViewportSize({ width, height: 900 });
     await app.getByRole("radio", { name: /^Home/ }).click();
     const overview = app.getByRole("region", { name: "Overview" });
-    await expect(overview.getByRole("button", { name: /^MCP servers:/ }).first()).toBeVisible();
-    for (const agent of ["Claude Code", "Cursor"]) await overview.getByRole("button", { name: `Show ${agent} MCP servers`, exact: true }).click();
-    const overflow = await app.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expect(overview.getByRole("table", { name: "Agent lanes" })).toBeVisible();
+    await expect(overview.getByRole("button", { name: /^MCP filesystem/ }).first()).toBeVisible();
+    const box = async () => (await overview.getByRole("table", { name: "Agent lanes" }).boundingBox())!;
+    const before = await box();
+    // Hover and select an agent: highlighting must not move anything.
+    const lane = overview.getByRole("button", { name: /^Claude Code, up / });
+    await lane.hover();
+    await lane.click();
+    await overview.getByRole("button", { name: "Docker Desktop is listening on all interfaces", exact: true }).hover();
+    expect(await box()).toEqual(before);
+    expect(await app.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     const clipped = await overview.evaluate((root) => [...root.querySelectorAll<HTMLElement>("*")]
-      .filter((el) => el.offsetParent !== null && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== "visible")
+      .filter((el) => el.offsetParent !== null && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== "visible" && !el.matches(".stage, .needs-scroll"))
       .map((el) => `${el.className}: ${el.textContent?.slice(0, 60)}`));
     expect(clipped).toEqual([]);
-    // Key fields (access text, attention messages, MCP package names) are present in full.
-    const full = await overview.locator("[data-full]").allTextContents();
-    expect(full.some((t) => t.includes("sandbox-exec (macOS Seatbelt)"))).toBe(true);
-    expect(full.some((t) => t.includes("@modelcontextprotocol/server-github"))).toBe(true);
-    expect(full.some((t) => /can be reached from other machines on your network\.$/.test(t))).toBe(true);
+    // Lane labels stay inside their lane.
+    const outside = await overview.evaluate((root) => [...root.querySelectorAll<HTMLElement>(".lane .pin span")].filter((s) => {
+      const lane = s.closest(".lane")!.getBoundingClientRect(); const r = s.getBoundingClientRect();
+      return r.left < lane.left - 0.5 || r.right > lane.right + 0.5;
+    }).map((s) => s.textContent));
+    expect(outside).toEqual([]);
+    if (width <= 760) await expect(overview.getByRole("list", { name: "Machine map" })).toBeVisible();
+    else await expect(overview.getByRole("group", { name: "Machine map" })).toBeVisible();
   });
 }
 

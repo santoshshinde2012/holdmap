@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentRow, attention, overview } from "./home";
+import { attention, attentionAgent, hotAgents, overview } from "./home";
 import { MOCK_SNAPSHOT, mockAgents } from "./mock";
 import type { Agent, AgentsReport, PortEntry } from "./types";
 
@@ -68,25 +68,23 @@ describe("configuration rules", () => {
     expect(items.find((i) => i.rule === "unpinned")!.detail).toBe("github (npx @modelcontextprotocol/server-github) can change on the next launch.");
     expect(items.find((i) => i.rule === "settings")!.detail).toBe("permissions.defaultMode = bypassPermissions in .claude/settings.json");
   });
+});
 
-  it("builds a row with observed projects, ports and posture", () => {
-    const row = agentRow(inspected.agents[0]);
-    expect(row.projects.length).toBeLessThanOrEqual(2);
-    expect(row.config).not.toBeNull();
-    expect(row.posture.text).toBeTruthy();
-    expect(agentRow(report.agents[0]).config).toBeNull();
+describe("attention ownership", () => {
+  it("ties port items to the agent holding the port and keeps hot agents to agent-level rules", () => {
+    const r = mockAgents(undefined, true);
+    const items = attention(entries, r);
+    const docker = r.agents.find((a) => a.product === "docker-desktop")!;
+    const exposed = items.find((i) => i.rule === "exposed")!;
+    expect(attentionAgent(exposed, r)).toBe(docker.id);
+    expect(attentionAgent({ ...exposed, target: { view: "list", entryId: docker.ports[0].entry_id } }, r)).toBe(docker.id);
+    expect(attentionAgent({ ...exposed, target: { view: "list", entryId: "nobody" } }, r)).toBeNull();
+    expect(hotAgents(items).size).toBe(0);
+    expect(hotAgents([{ ...exposed, rule: "root" }]).has(docker.id)).toBe(true);
   });
 });
 
 describe("overview rail and actions", () => {
-  it("lists dev servers lowest port first and keeps exposure", async () => {
-    const { services } = await import("./home");
-    const rows = services(entries);
-    expect(rows.map((r) => r.port)).toEqual(entries.filter((e) => e.is_dev).map((e) => e.port).sort((a, b) => a - b));
-    expect(rows.some((r) => r.exposed)).toBe(entries.some((e) => e.is_dev && e.exposure === "all_interfaces"));
-    expect(services(null)).toEqual([]);
-  });
-
   it("offers a stop plan only where stopping is the usual fix", () => {
     const items = attention(entries, mockAgents(undefined, true));
     for (const i of items) {

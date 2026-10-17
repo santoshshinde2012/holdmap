@@ -630,7 +630,7 @@ describe("App overview and first run", () => {
     await fireEvent.click(view.getByRole("radio", { name: /^Home/ }));
     await vi.advanceTimersByTimeAsync(300);
     const overview = view.getByRole("region", { name: "Overview" });
-    const row = [...overview.querySelectorAll<HTMLButtonElement>("button.name")].find((b) => b.textContent?.includes(agent.name))!;
+    const row = [...overview.querySelectorAll<HTMLButtonElement>(".map-list button")].find((b) => b.textContent?.includes(agent.name))!;
     await fireEvent.click(row);
     await vi.advanceTimersByTimeAsync(300);
     expect(view.getByRole("radio", { name: /^Agents/ }).getAttribute("aria-checked")).toBe("true");

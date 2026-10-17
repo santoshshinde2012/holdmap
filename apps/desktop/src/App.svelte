@@ -7,7 +7,6 @@
   import Notices from "./components/shell/Notices.svelte";
   import StatusBar from "./components/shell/StatusBar.svelte";
   import HomeView from "./components/home/HomeView.svelte";
-  import { diffAgents, diffPorts, mergeChanges, stopEvents, type ChangeEvent } from "./lib/changes";
   import FirstRun from "./components/FirstRun.svelte";
   import { firstRunPlan, type FirstRunChoices } from "./lib/onboarding";
   import { UsageHistory, parseCollapsed, parseDensity, toggled, usageRecord, type Density } from "./lib/rows";
@@ -53,9 +52,6 @@
   // Live data is replaced wholesale on every poll, so it is raw state run through `share`:
   // unchanged entries keep their identity and nothing downstream re-renders or re-fetches.
   let snapshot = $state.raw<Snapshot | null>(null);
-  /** Overview "Recent changes": observed by this window between scans, plus saved stops. */
-  let changes = $state.raw<ChangeEvent[]>([]);
-  let watchingSince = $state<number | null>(null);
   let error = $state<string | null>(null);
   let refreshing = $state(false);
   /** Only a refresh the user asked for spins the button; background scans stay quiet. */
@@ -315,9 +311,6 @@
     if (snapshot && next.taken_at_ms < snapshot.taken_at_ms) return;
     {
       const s = share(snapshot, next);
-      watchingSince ??= s.taken_at_ms;
-      const opened = diffPorts(snapshot?.entries ?? null, s.entries, s.taken_at_ms);
-      if (opened.length) changes = mergeChanges(changes, opened);
       snapshot = s;
       usageHist.push(s.entries);
       usage = share(usage, usageRecord(usageHist, s.entries.map((e) => e.id)));
@@ -361,8 +354,6 @@
 
   const pullAgents = createAgentReportLoader(api.agents, () => agentsReport, (report) => {
     if (disposed) return;
-    const moved = diffAgents(agentsReport?.agents ?? null, report.agents, report.taken_at_ms || Date.now());
-    if (moved.length) changes = mergeChanges(changes, moved);
     agentsReport = share(agentsReport, report);
     if (selectedAgent && !agentsReport.agents.some((a) => a.id === selectedAgent)) selectedAgent = null;
   }, () => !disposed && (inventoryOn || view === "agents" && agentSection === "capabilities"));
@@ -1328,7 +1319,6 @@
     }
     refresh();
     loadSchedules();
-    api.history(20).then((h) => { changes = mergeChanges(changes, stopEvents(h)); }).catch(() => {});
     api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, tray: i.tray, configDir: i.config_dir ?? null, updater: typeof i.updater === "boolean" ? i.updater : null, appPath: i.app_path ?? null, architecture: i.architecture ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; }).catch((e) => toast("error", "Couldn't load app information", String(e)));
     api.hotkeys().then((h) => (hotkeyList = h)).catch(() => {});
     void loadConfig();
@@ -1516,7 +1506,7 @@
         {/if}
       </div>
     {:else if view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} agentsLoading={agentsRefreshing} {changes} inventory={inventoryOn} now={snapshot?.taken_at_ms ?? Date.now()} since={watchingSince} onopenagent={openAgent}
+      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={inventoryOn} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent}
         onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (view = v)} oninventory={enableInventory} />
     {:else if view === "agents"}
       <div class="graph-wrap agents-wrap">
