@@ -60,6 +60,7 @@ export const SETTINGS_SECTIONS = [
   { id: "appearance", label: "Appearance", icon: "sun" },
   { id: "notifications", label: "Notifications", icon: "bell" },
   { id: "scanning", label: "Scanning & data", icon: "radar" },
+  { id: "analyzers", label: "Analyzers", icon: "shield" },
   { id: "power", label: "Power", icon: "monitor" },
   { id: "about", label: "About", icon: "info" },
 ] as const;

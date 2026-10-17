@@ -9,12 +9,15 @@
   import { miniLayout, type CardModel } from "../../lib/agent-card";
   import { humanDuration } from "../../lib/format";
   import type { Agent } from "../../lib/types";
+  import { countsText, total, worst, type SeverityCounts } from "../../lib/analyzers";
 
-  let { agent, model, needs, color, now, selected, active, onhover, onselect, onopen, onport, onstop, oninventory }: {
+  let { agent, model, needs, findings = null, color, now, selected, active, onhover, onselect, onopen, onport, onstop, oninventory }: {
     agent: Agent;
     model: CardModel;
     /** Attention items about this agent. */
     needs: AttentionItem[];
+    /** Open analyzer findings about this agent's skills and packages. */
+    findings?: SeverityCounts | null;
     color: string;
     now: number;
     selected: boolean;
@@ -35,6 +38,7 @@
   const mini = $derived(miniLayout(footprint(agent, 16), 44));
   const high = $derived(needs.some((n) => n.severity === "high"));
   const exposed = $derived(model.ports.filter((p) => p.warn).length);
+  const found = $derived(findings && total(findings) ? findings : null);
   const label = $derived(`${agent.name}, ${ACCESS_LABEL[head.level]}${needs.length ? `, ${needs.length} need you` : ""}`);
   function headKey(e: KeyboardEvent) { if (e.key === "Enter" && selected) { e.preventDefault(); onopen(agent.id); } }
 </script>
@@ -51,6 +55,7 @@
     <small class="meta"><span>{KIND_LABEL[agent.kind]}</span><span>{`up ${up}`}</span></small>
     <span class="tags">
       {#if needs.length}<span class="badge" class:high title={needs.map((n) => n.title).join("\n")}><Icon name="alert" size={11} />{needs.length}</span>{/if}
+      {#if found}<span class="badge find sev-{worst(found)}" title="Open analyzer findings: {countsText(found, 5)}"><Icon name="shield" size={11} /><span class="sr-only">Analyzer findings: </span>{total(found)}</span>{/if}
       <span class="lv lv-{head.level}" title={head.text}>{ACCESS_LABEL[head.level]}</span>
     </span>
   </header>
@@ -123,6 +128,8 @@
   .lv-unknown { color: var(--muted); }
   .badge { background: var(--warn-soft); color: var(--warn); font-variant-numeric: tabular-nums; }
   .badge.high { background: var(--danger-soft); color: var(--danger); }
+  .badge.find.sev-low, .badge.find.sev-info { background: var(--surface-2); color: var(--text-2); }
+  .badge.find.sev-high, .badge.find.sev-critical { background: var(--danger-soft); color: var(--danger); }
   .mid { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: var(--sp-4); align-items: center; padding: var(--sp-2) 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
   .fp { width: 128px; height: 117px; display: block; }
   .ring { fill: none; stroke: var(--border); stroke-dasharray: 2 4; }

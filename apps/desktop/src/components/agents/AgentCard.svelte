@@ -4,6 +4,8 @@
   // tree. Figures come from the OS; anything not observed is labelled as such.
   import Icon from "../Icon.svelte";
   import AgentTools from "./AgentTools.svelte";
+  import AgentInsights from "../analyzers/AgentInsights.svelte";
+  import { insightsStore } from "../../lib/insights-store.svelte";
   import AgentConfigPanel from "./AgentConfigPanel.svelte";
   import { configSummary } from "../../lib/agent-config";
   import { EvidenceChip } from "../ui";
@@ -207,6 +209,11 @@
       {/if}
 
       <AgentTools tools={agent.tools ?? []} more={agent.more_tools ?? 0} />
+
+      {#if insightsStore.analyzers.some((a) => a.state === "approved") || insightsStore.insights?.results.length}
+        <h3>Insights</h3>
+        <AgentInsights product={agent.product} />
+      {/if}
 
       <h3>Processes · {c.processes}</h3>
       <code class="cmd" title={agent.command}>{agent.command}</code>

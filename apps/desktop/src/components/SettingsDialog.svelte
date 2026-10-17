@@ -19,6 +19,7 @@
   import { isComposingKey } from "../lib/keyboard";
   import type { Density } from "../lib/rows";
   import type { DesktopHelpDestination } from "../lib/types";
+  import AnalyzersPanel from "./analyzers/AnalyzersPanel.svelte";
   import { SETTINGS_SECTIONS, THEME_ICON, architectureLabel, cadenceText, type SettingsActions, type SettingsModel, type SettingsSection, type Theme } from "../lib/settings";
 
   let { model, actions, onclose, section = $bindable("general") }: { model: SettingsModel; actions: SettingsActions; onclose: () => void; section?: SettingsSection } = $props();
@@ -190,6 +191,8 @@
           </SettingRow>
         </SettingsGroup>
         {#if errors.clear}<div class="err"><Callout tone="danger" size="sm">{errors.clear}</Callout></div>{/if}
+      {:else if section === "analyzers"}
+        <AnalyzersPanel demo={browserPreview} />
       {:else if section === "power"}
         <SettingsGroup title="This computer" description="Power controls always apply to the computer running the desktop app, including while viewing remote hosts.">
           <div class="power-card">
@@ -266,7 +269,7 @@
 
   {#snippet footer()}
     <span class="status {status?.kind ?? ''}" aria-live="polite">
-      {#if status?.kind === "saving"}<span class="dotspin"></span>{status.text}{:else if status?.kind === "saved"}<Icon name="check" size={13} />{status.text}{:else if status}<Icon name="alert" size={13} />{status.text}{:else if section === "power"}Shutdown requires a separate confirmation.{:else if section === "about"}{browserPreview ? "Browser preview; no desktop installation is changed." : "Version and location describe the app running now."}{:else}Changes are saved automatically.{/if}
+      {#if status?.kind === "saving"}<span class="dotspin"></span>{status.text}{:else if status?.kind === "saved"}<Icon name="check" size={13} />{status.text}{:else if status}<Icon name="alert" size={13} />{status.text}{:else if section === "analyzers"}Nothing runs until you turn an analyzer on.{:else if section === "power"}Shutdown requires a separate confirmation.{:else if section === "about"}{browserPreview ? "Browser preview; no desktop installation is changed." : "Version and location describe the app running now."}{:else}Changes are saved automatically.{/if}
     </span>
     <Button variant="secondary" onclick={onclose}>Done</Button>
   {/snippet}

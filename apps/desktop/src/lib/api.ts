@@ -5,6 +5,8 @@ import type { ActionPlan, AgentsReport, AppInfo, Config, DesktopHelpDestination,
 import { version as pkgVersion } from "../../package.json";
 import type { ShutdownPreview } from "./power";
 import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
+import type { AnalyzerResult, AnalyzerView, FindingState, Insights, Preview } from "./analyzers";
+import { DemoAnalyzers } from "./analyzers-demo";
 import { MOCK_SNAPSHOT, mockAgents, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
 /** True inside the Tauri webview. */
@@ -477,4 +479,55 @@ function mockUsage(e: PortEntry): PortEntry {
   const t = Date.now() / 4000 + e.port;
   const cpu = Math.max(0, base * (1 + 0.55 * Math.sin(t) + 0.3 * Math.sin(t * 2.7)) + Math.random() * 0.6);
   return { ...e, process: { ...e.process, cpu_percent: Math.round(cpu * 10) / 10 } };
+}
+
+// Opt-in analyzers. The desktop runs them; the browser demo simulates approval and runs.
+const demoAnalyzers = new DemoAnalyzers();
+
+export async function analyzers(): Promise<AnalyzerView[]> {
+  if (isTauri) return call("analyzers_list");
+  if (liveReads()) return [];
+  return demoAnalyzers.list();
+}
+
+export async function analyzerPreview(id: string): Promise<Preview> {
+  if (isTauri) return call("analyzer_preview", { id });
+  if (liveReads()) liveWrites();
+  return demoAnalyzers.preview(id, await agents(true));
+}
+
+export async function approveAnalyzer(id: string): Promise<AnalyzerView> {
+  if (isTauri) return call("analyzer_approve", { id });
+  if (liveReads()) liveWrites();
+  return demoAnalyzers.approve(id);
+}
+
+export async function revokeAnalyzer(id: string): Promise<boolean> {
+  if (isTauri) return call("analyzer_revoke", { id });
+  if (liveReads()) liveWrites();
+  return demoAnalyzers.revoke(id);
+}
+
+export async function runAnalyzer(id: string): Promise<AnalyzerResult> {
+  if (isTauri) return call("analyzer_run", { id });
+  if (liveReads()) liveWrites();
+  await delay(600);
+  return demoAnalyzers.run(id, await agents(true));
+}
+
+export async function runChangedAnalyzers(): Promise<string[]> {
+  if (isTauri) return call("analyzers_run_changed");
+  return [];
+}
+
+export async function insights(): Promise<Insights> {
+  if (isTauri) return call("insights");
+  if (liveReads()) return { results: [], open: { critical: 0, high: 0, medium: 0, low: 0, info: 0 } };
+  return demoAnalyzers.insights();
+}
+
+export async function reviewFinding(fingerprint: string, state: FindingState, days?: number): Promise<void> {
+  if (isTauri) return call("review_finding", { fingerprint, state, days: days ?? null });
+  if (liveReads()) liveWrites();
+  demoAnalyzers.review(fingerprint, state);
 }

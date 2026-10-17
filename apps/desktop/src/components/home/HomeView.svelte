@@ -2,6 +2,7 @@
   // Home: the same agents as Cards or as a Map (radial footprint plus a collapsible timeline),
   // with "Needs you" beside both. Hover and selection are shared across cards, map, timeline and
   // attention items, and survive a layout switch. Esc clears the selection.
+  import { insightsStore } from "../../lib/insights-store.svelte";
   import Icon from "../Icon.svelte";
   import { SegmentedControl } from "../ui";
   import HomeSummary, { type SummaryStat } from "./HomeSummary.svelte";
@@ -42,7 +43,7 @@
   } = $props();
 
   const o = $derived(overview(entries, report));
-  const needs = $derived(attention(entries, report));
+  const needs = $derived(attention(entries, report, insightsStore.insights));
   const groups = $derived(radialLayout(report?.agents ?? []));
   const rows = $derived(lanes(report, entries, now));
   const hot = $derived(hotAgents(needs));

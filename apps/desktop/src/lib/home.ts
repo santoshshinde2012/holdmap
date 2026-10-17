@@ -3,6 +3,7 @@
 // configuration inventory; missing data stays null (shown as "scanning"), never zero.
 import { accessHeadline } from "./agents";
 import { configSummary, isUnpinned, launchLine, riskySettings, type ConfigSummary } from "./agent-config";
+import { insightNeeds, type Insights } from "./analyzers";
 import type { AccessLevel, Agent, AgentsReport, PortEntry } from "./types";
 
 export interface Overview {
@@ -26,7 +27,7 @@ export interface AttentionItem {
   id: string;
   /** Present when stopping is the usual fix; the app shows the stop plan before anything happens. */
   stop?: AttentionStop;
-  rule: "exposed" | "root" | "elevated" | "settings" | "unpinned" | "exposed-port";
+  rule: "exposed" | "root" | "elevated" | "settings" | "unpinned" | "exposed-port" | "analyzer";
   severity: "high" | "medium";
   title: string;
   detail: string;
@@ -74,9 +75,13 @@ export function unownedDevServers(entries: PortEntry[] | null, report: AgentsRep
   return (entries ?? []).filter((e) => e.is_dev && !owned.has(e.id));
 }
 
-/** Ports that agents own are reported once, on the agent; the rest are listed per port. */
-export function attention(entries: PortEntry[] | null, report: AgentsReport | null): AttentionItem[] {
+/** Ports that agents own are reported once, on the agent; the rest are listed per port.
+ *  Open medium-or-worse findings from approved analyzers add one item per agent. */
+export function attention(entries: PortEntry[] | null, report: AgentsReport | null, insights: Insights | null = null): AttentionItem[] {
   const items = (report?.agents ?? []).flatMap(agentItems);
+  for (const need of insightNeeds(insights, report)) {
+    items.push({ id: need.id, rule: "analyzer", severity: need.severity, title: need.title, detail: need.detail, target: { view: "agents", agentId: need.agentId } });
+  }
   for (const e of unownedDevServers(entries, report)) {
     if (e.exposure !== "all_interfaces") continue;
     items.push({ id: `exposed-port:${e.id}`, rule: "exposed-port", severity: "medium", stop: { kind: "entry", entryId: e.id }, title: `${e.label} on :${e.port} is open to the network`, detail: "Dev servers usually only need localhost.", target: { view: "list", entryId: e.id } });
@@ -95,5 +100,5 @@ export function attentionAgent(item: AttentionItem, report: AgentsReport | null)
 
 /** Agents whose attention concerns the agent itself; port and MCP issues belong to their node. */
 export function hotAgents(items: AttentionItem[]): Set<string> {
-  return new Set(items.flatMap((i) => (i.target.view === "agents" && (i.rule === "root" || i.rule === "elevated" || i.rule === "settings") ? [i.target.agentId] : [])));
+  return new Set(items.flatMap((i) => (i.target.view === "agents" && (i.rule === "root" || i.rule === "elevated" || i.rule === "settings" || (i.rule === "analyzer" && i.severity === "high")) ? [i.target.agentId] : [])));
 }

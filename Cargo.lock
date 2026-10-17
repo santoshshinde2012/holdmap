@@ -2123,6 +2123,7 @@ dependencies = [
  "glib",
  "global-hotkey",
  "holdmap-activity",
+ "holdmap-analyzers",
  "holdmap-core",
  "libc",
  "minisign-verify",
