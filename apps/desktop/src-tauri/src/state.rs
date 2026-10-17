@@ -57,9 +57,12 @@ impl AppState {
     /// the wrong kind). One scan runs at a time; a caller that arrives mid-scan waits for it
     /// and, being fresh, reuses it. Blocking: call it off the main thread.
     pub fn snapshot(&self, all: bool, max_age: Duration) -> Result<Snapshot, String> {
-        self.read_engine(Some(all), max_age, scan_now, |engine| {
-            engine.snapshot().clone()
-        })
+        self.read_engine(
+            Some(all),
+            max_age,
+            |all, docker| self.scan_and_observe(all, docker),
+            |engine| engine.snapshot().clone(),
+        )
     }
 
     /// Read a derived report from a fresh engine, retaining the latest socket-view setting.
@@ -70,7 +73,23 @@ impl AppState {
         max_age: Duration,
         read: impl FnOnce(&Engine) -> T,
     ) -> Result<T, String> {
-        self.read_engine(None, max_age, scan_now, read)
+        self.read_engine(
+            None,
+            max_age,
+            |all, docker| self.scan_and_observe(all, docker),
+            read,
+        )
+    }
+
+    /// Scan, then note which agent started which long-lived process so a process can still
+    /// be attributed after its agent exits. Best effort: the ledger is a cache, and a scan
+    /// never fails because it could not be saved.
+    fn scan_and_observe(&self, all: bool, docker: bool) -> Result<Engine, String> {
+        let engine = scan_now(all, docker)?;
+        let _ = self.store.update_leftovers(|ledger| {
+            ledger.observe(&engine.scan, holdmap_core::util::now_ms())
+        });
+        Ok(engine)
     }
 
     fn read_engine<T>(

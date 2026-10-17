@@ -80,6 +80,7 @@ pub fn run() {
             commands::topology,
             commands::agents,
             commands::agent_flow,
+            commands::leftovers,
             activity::activity_status,
             activity::activity_snapshot,
             activity::start_activity,

@@ -195,6 +195,16 @@ pub async fn agents(
     .await
 }
 
+/// The current user's processes that outlived the agent that started them, newest first.
+#[tauri::command]
+pub async fn leftovers(app: AppHandle) -> Result<Vec<holdmap_core::agents::Leftover>, String> {
+    let store = app.state::<AppState>().store.clone();
+    with_engine(&app, move |engine| {
+        holdmap_core::agents::leftovers(&store.leftovers(), &engine.scan)
+    })
+    .await
+}
+
 /// Read-only process and socket relationships from one consistent local scan.
 #[tauri::command]
 pub async fn agent_flow(
