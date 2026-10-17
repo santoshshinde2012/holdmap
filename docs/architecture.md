@@ -1161,6 +1161,31 @@ These checks establish the tested contracts; they do not establish runtime clien
 certify every accessibility or operating-system interaction. Upstream source links are moving
 references checked on the date above; client format changes require another adapter review.
 
+### Launch, run state, permissions and instructions (Unreleased)
+
+`agents/capabilities/` splits the inventory by responsibility: `launch` (runner and package),
+`runtime` (configured vs running), `policy` (permission rules and allowlisted settings),
+`instructions` (rules, commands, prompts, subagents, memory files) and `builtin` (documented
+tool names). Each module is pure over parsed input; `capabilities.rs` only reads files.
+
+- **Launch**: runner (`npx`, `uvx`, `docker`, script, binary), package or image basename and
+  whether an exact version or digest is named. HTTP servers keep `host[:port]` only. Arguments,
+  URL paths and queries, and env/header values are never exported; env and header **names** are.
+  Package names that look like secrets are dropped.
+- **Run state**: a local stdio server is `running` only when its package identity appears in
+  that agent's own process tree; otherwise `not_seen`. Remote, disabled or unparsed servers stay
+  `unknown`. This supersedes the "no inventory/process join" note above, scoped to one agent.
+- **Policy**: allow/ask/deny rules from Claude, Cursor CLI and Gemini settings (≤64, ≤200 chars,
+  secret-looking rules dropped) and three allowlisted keys: Codex `approval_policy`,
+  `sandbox_mode` and Claude `permissions.defaultMode`, accepted only with documented values.
+- **Instructions**: names and front-matter descriptions only; bodies are never retained.
+- **Built-in tools** are the documented list for Claude Code, Codex and Gemini, labelled
+  "documented, not observed".
+
+Holdmap never starts, connects to or queries an MCP server. The desktop reads this inventory
+only after the **agents.inventory** opt-in (first run, Home or an agent card) or when the
+**MCP & skills** section is open.
+
 ## 4. Project detection
 
 ![Extensible project detection](diagrams/project-detection.svg)

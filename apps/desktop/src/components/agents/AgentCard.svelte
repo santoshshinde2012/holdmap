@@ -4,6 +4,8 @@
   // tree. Figures come from the OS; anything not observed is labelled as such.
   import Icon from "../Icon.svelte";
   import AgentTools from "./AgentTools.svelte";
+  import AgentConfigPanel from "./AgentConfigPanel.svelte";
+  import { configSummary } from "../../lib/agent-config";
   import { EvidenceChip } from "../ui";
   import { evidenceChip } from "../../lib/evidence";
   import { humanBytes, humanDuration, tildify } from "../../lib/format";
@@ -25,6 +27,7 @@
     onstopall,
     onnavigate,
     oncapabilities,
+    oninventory,
     now = Date.now(),
   }: {
     agent: Agent;
@@ -45,6 +48,8 @@
     onnavigate?: (id: string) => void;
     /** Opts into the separate, read-only configuration inventory workspace. */
     oncapabilities?: () => void;
+    /** Turns on reading configuration for every agent (the onboarding opt-in). */
+    oninventory?: () => void;
     now?: number;
   } = $props();
 
@@ -64,6 +69,7 @@
   const head = $derived(accessHeadline(agent));
   const c = $derived(counts(agent));
   const facts = $derived(accessFacts(agent));
+  const cfg = $derived(configSummary(agent));
   const parent = $derived(report.agents.find((a) => a.id === agent.parent) ?? null);
   const childAgents = $derived(startedFrom(report, agent.id));
   const tree = $derived(processRows(agent));
@@ -191,6 +197,15 @@
         </ul>
       {/if}
 
+      {#if cfg}
+        <details class="cfg" open={selected}>
+          <summary>Configuration <span>{cfg.running}/{cfg.mcp} MCP running · {cfg.skills + cfg.instructions} skills · {cfg.rules} rules</span></summary>
+          <AgentConfigPanel {agent} />
+        </details>
+      {:else}
+        <AgentConfigPanel {agent} oninspect={oninventory ?? oncapabilities} />
+      {/if}
+
       <AgentTools tools={agent.tools ?? []} more={agent.more_tools ?? 0} />
 
       <h3>Processes · {c.processes}</h3>
@@ -223,6 +238,9 @@
 </article>
 
 <style>
+  .cfg summary { cursor: pointer; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--text-2); }
+  .cfg summary span { font-weight: var(--fw-regular); color: var(--muted); }
+  .cfg summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
   .card { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: hidden; }
   .card.on { border-color: var(--agent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent) 16%, transparent); }
   .head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 14px; }

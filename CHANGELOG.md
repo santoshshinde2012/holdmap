@@ -10,10 +10,16 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
-- **Home** overview in the desktop app: counts, a **Needs a look** list and one-click agent
-  details. Unknown counts read as unknown, not zero.
-- A first-open welcome to choose the start view and review notifications, launch at login
-  and single-key shortcuts. Skipping changes nothing.
+- **Home** overview in the desktop app: a clickable summary line, one dense row per running
+  agent (projects, ports, MCP running/configured, skills, rules, posture), **Needs attention**
+  and **Recent changes**. Keyboard: j/k or ↑/↓. Unknown figures read "scanning…", not zero.
+- Agent inventory now shows how each MCP server launches (runner, package, pinned or not),
+  its remote host, env/header **names**, and whether it is running in that agent's processes;
+  plus permission rules, safety settings, instruction files and documented built-in tools.
+  Available in `holdmap agents --capabilities`, MCP `list_agents` and the desktop agent cards.
+  Opt in from the welcome or Home. Values, prompts and file bodies are never read.
+- A first-open welcome to choose the start view and review notifications, launch at login,
+  single-key shortcuts and the agent inventory. Skipping changes nothing.
 
 ### Changed
 

@@ -7,6 +7,7 @@
   import Notices from "./components/shell/Notices.svelte";
   import StatusBar from "./components/shell/StatusBar.svelte";
   import HomeView from "./components/home/HomeView.svelte";
+  import { diffAgents, diffPorts, mergeChanges, stopEvents, type ChangeEvent } from "./lib/changes";
   import FirstRun from "./components/FirstRun.svelte";
   import { firstRunPlan, type FirstRunChoices } from "./lib/onboarding";
   import { UsageHistory, parseCollapsed, parseDensity, toggled, usageRecord, type Density } from "./lib/rows";
@@ -52,6 +53,8 @@
   // Live data is replaced wholesale on every poll, so it is raw state run through `share`:
   // unchanged entries keep their identity and nothing downstream re-renders or re-fetches.
   let snapshot = $state.raw<Snapshot | null>(null);
+  /** Overview "Recent changes": observed by this window between scans, plus saved stops. */
+  let changes = $state.raw<ChangeEvent[]>([]);
   let error = $state<string | null>(null);
   let refreshing = $state(false);
   /** Only a refresh the user asked for spins the button; background scans stay quiet. */
@@ -130,6 +133,11 @@
   let agentFlowMode = $state<AgentFlowMode>("overview");
   let agentSection = $state<"overview" | "flow" | "capabilities">(prefGetChoice("agents.section", ["overview", "flow", "capabilities"], "overview"));
   $effect(() => prefSet("agents.section", agentSection));
+  /** Opt-in: read agents' MCP, skills and permission files on every agents scan. */
+  let inventoryOn = $state(prefGetBoolean("agents.inventory", false));
+  $effect(() => prefSet("agents.inventory", inventoryOn ? "1" : "0"));
+  function enableInventory() { enableInventoryChoice(true); }
+  function enableInventoryChoice(on: boolean) { inventoryOn = on; if (on) void loadAgents(); }
   let flowSource = $state<"connections" | "calls">(prefGetChoice("flow.source", ["connections", "calls"], "connections"));
   $effect(() => prefSet("flow.source", flowSource));
   const savedPicture = prefGetChoice("agents.picture", ["context", "footprint", "project"] as const, "context");
@@ -306,6 +314,8 @@
     if (snapshot && next.taken_at_ms < snapshot.taken_at_ms) return;
     {
       const s = share(snapshot, next);
+      const opened = diffPorts(snapshot?.entries ?? null, s.entries, s.taken_at_ms);
+      if (opened.length) changes = mergeChanges(changes, opened);
       snapshot = s;
       usageHist.push(s.entries);
       usage = share(usage, usageRecord(usageHist, s.entries.map((e) => e.id)));
@@ -349,9 +359,11 @@
 
   const pullAgents = createAgentReportLoader(api.agents, () => agentsReport, (report) => {
     if (disposed) return;
+    const moved = diffAgents(agentsReport?.agents ?? null, report.agents, report.taken_at_ms || Date.now());
+    if (moved.length) changes = mergeChanges(changes, moved);
     agentsReport = share(agentsReport, report);
     if (selectedAgent && !agentsReport.agents.some((a) => a.id === selectedAgent)) selectedAgent = null;
-  }, () => !disposed && view === "agents" && agentSection === "capabilities");
+  }, () => !disposed && (inventoryOn || view === "agents" && agentSection === "capabilities"));
   async function loadAgents() {
     if (agentsRefreshing) return;
     agentsRefreshing = true;
@@ -1113,11 +1125,12 @@
   /** Applies only what the user chose in the welcome dialog; each integration stays opt-in. */
   async function applyFirstRun(choices: FirstRunChoices) {
     finishOnboarding();
-    const current = { notify: config?.notify ?? false, autostart: autostartOn, singleKeys: singleKeyShortcuts };
+    const current = { notify: config?.notify ?? false, autostart: autostartOn, singleKeys: singleKeyShortcuts, inventory: inventoryOn };
     for (const change of firstRunPlan(choices, current, api.isTauri)) {
       try {
         if (change.kind === "view") view = change.view;
         else if (change.kind === "singleKeys") singleKeyShortcuts = change.on;
+        else if (change.kind === "inventory") enableInventoryChoice(change.on);
         else if (change.kind === "notify") config = await api.setNotify(change.on, config?.notify_dev_only ?? false);
         else autostartOn = await api.autostart(change.on);
       } catch (e) { toast("error", "Couldn't apply a setting", String(e)); }
@@ -1126,10 +1139,10 @@
   // Home has no list of its own: typing in its search box continues on the port list.
   $effect(() => { if (view === "home" && filters.query) view = "list"; });
   /** Home → one agent, in a single click: the Agents view with that agent selected. */
-  function openAgent(id: string) {
+  function openAgent(id: string, section: "overview" | "capabilities" = "overview") {
     const a = agentsReport?.agents.find((x) => x.id === id);
     if (a && !agentMatches(a, agentQuery)) agentQuery = "";
-    agentSection = "overview";
+    agentSection = section;
     view = "agents";
     selectedAgent = id;
   }
@@ -1313,6 +1326,7 @@
     }
     refresh();
     loadSchedules();
+    api.history(20).then((h) => { changes = mergeChanges(changes, stopEvents(h)); }).catch(() => {});
     api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, tray: i.tray, configDir: i.config_dir ?? null, updater: typeof i.updater === "boolean" ? i.updater : null, appPath: i.app_path ?? null, architecture: i.architecture ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; }).catch((e) => toast("error", "Couldn't load app information", String(e)));
     api.hotkeys().then((h) => (hotkeyList = h)).catch(() => {});
     void loadConfig();
@@ -1500,7 +1514,7 @@
         {/if}
       </div>
     {:else if view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} agentsLoading={agentsRefreshing} onopenagent={openAgent} onopenentry={openEntryById} onview={(v) => (view = v)} />
+      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} agentsLoading={agentsRefreshing} {changes} inventory={inventoryOn} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} onopenentry={openEntryById} onview={(v) => (view = v)} oninventory={enableInventory} />
     {:else if view === "agents"}
       <div class="graph-wrap agents-wrap">
         {#if AgentsView}
@@ -1513,7 +1527,7 @@
             paused={flowPaused} onpausechange={(paused) => { flowPaused = paused; }} onflowmodechange={(mode) => { agentFlowMode = mode; }}
             onrefreshflow={() => { void flowLoader.request(); }} onrefreshactivity={() => { void activityLoader.request(); }}
             onstartrecording={startRecording} onstoprecording={stopRecording} onclearactivity={clearRecordedActivity}
-            onactivitysetup={api.activitySetup} onclearquery={() => { agentQuery = ""; }} />
+            onactivitysetup={api.activitySetup} onclearquery={() => { agentQuery = ""; }} oninventory={enableInventory} />
         {:else}
           <div class="graph-loading" aria-busy="true">Loading agents…</div>
         {/if}
@@ -1561,7 +1575,7 @@
     oncopyrestart={confirm.entry && !confirm.queue?.length && restartCommand(confirm) ? () => { const command = confirm && restartCommand(confirm); if (command) void copy(command, "Restart command"); } : undefined}
     onconfirm={runStop} oncancel={closeConfirm} onoverride={() => confirm?.entry && requestStop(confirm.entry, confirm.force, true, { agentId: confirm.agentId, intent: "now" })} />
 {/if}
-{#if snapshot && !onboarded && !modalOpen}<FirstRun current={{ notify: config?.notify ?? false, autostart: autostartOn, singleKeys: singleKeyShortcuts }} canAutostart={api.isTauri} tray={api.isTauri && info.tray} platform={info.platform} {shortcut} {mod} onapply={(c) => void applyFirstRun(c)} onskip={finishOnboarding} />{/if}
+{#if snapshot && !onboarded && !modalOpen}<FirstRun current={{ notify: config?.notify ?? false, autostart: autostartOn, singleKeys: singleKeyShortcuts, inventory: inventoryOn }} canAutostart={api.isTauri} tray={api.isTauri && info.tray} platform={info.platform} {shortcut} {mod} onapply={(c) => void applyFirstRun(c)} onskip={finishOnboarding} />{/if}
 {#if showPalette}<CommandPalette {commands} onclose={() => { showPalette = false; }} />{/if}
 {#if showHistory}<HistoryPanel items={historyItems} platform={info.platform} onrestart={restartEntry} oncopy={copy} onclose={() => (showHistory = false)} onclear={async () => { await api.clearHistory(); historyItems = []; }} />{/if}
 {#if showHelp}<ShortcutsDialog {mod} {singleKeyShortcuts} onclose={() => (showHelp = false)} />{/if}

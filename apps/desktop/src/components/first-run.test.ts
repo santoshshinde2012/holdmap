@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import FirstRun from "./FirstRun.svelte";
 
-const props = { current: { notify: false, autostart: false, singleKeys: true }, canAutostart: true, tray: false, platform: "linux", shortcut: null, mod: "Ctrl" };
+const props = { current: { notify: false, autostart: false, singleKeys: true, inventory: false }, canAutostart: true, tray: false, platform: "linux", shortcut: null, mod: "Ctrl" };
 
 beforeAll(() => {
   window.matchMedia ??= ((media: string) => ({ matches: true, media, addEventListener() {}, removeEventListener() {} })) as unknown as typeof matchMedia;
@@ -22,7 +22,7 @@ describe("FirstRun", () => {
     await fireEvent.click(view.getByRole("radio", { name: "Agents" }));
     await fireEvent.click(view.getByRole("switch", { name: /Notify me/ }));
     await fireEvent.click(view.getByRole("button", { name: "Start" }));
-    expect(onapply).toHaveBeenCalledWith({ start: "agents", notify: true, autostart: false, singleKeys: true });
+    expect(onapply).toHaveBeenCalledWith({ start: "agents", notify: true, autostart: false, singleKeys: true, inventory: false });
   });
 
   it("skips without applying anything", async () => {

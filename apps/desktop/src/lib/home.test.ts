@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attention, overview } from "./home";
+import { agentRow, attention, overview } from "./home";
 import { MOCK_SNAPSHOT, mockAgents } from "./mock";
 import type { Agent, AgentsReport, PortEntry } from "./types";
 
@@ -20,7 +20,7 @@ describe("overview", () => {
   });
 
   it("keeps missing data unknown instead of zero", () => {
-    expect(overview(null, null)).toEqual({ agents: null, devServers: null, ports: null, exposed: null });
+    expect(overview(null, null)).toEqual({ agents: null, devServers: null, ports: null, exposed: null, mcpConfigured: null, mcpRunning: null });
   });
 });
 
@@ -43,5 +43,37 @@ describe("attention", () => {
 
   it("ignores loopback listeners and missing reports", () => {
     expect(attention([{ ...entries[0], exposure: "loopback" }], null)).toEqual([]);
+  });
+});
+
+describe("configuration rules", () => {
+  const inspected = mockAgents(undefined, true);
+
+  it("counts configured and running MCP servers only from inspected agents", () => {
+    const o = overview(entries, inspected);
+    expect(o.mcpConfigured).toBeGreaterThan(0);
+    expect(o.mcpRunning).toBeLessThanOrEqual(o.mcpConfigured!);
+    expect(overview(entries, report).mcpConfigured).toBeNull();
+  });
+
+  it("flags unpinned fetching servers and settings that skip approvals", () => {
+    const first = inspected.agents[0];
+    const caps = first.capabilities!;
+    const r = withAgent({ capabilities: { ...caps,
+      mcp_servers: [{ id: "g", name: "github", scope: "user", source_path: "/h/.claude.json", project_path: null, transport: "stdio", enabled: null, evidence: "observed", launch: { runner: "npx", package: "@modelcontextprotocol/server-github", pinned: false } }],
+      settings: [{ key: "permissions.defaultMode", value: "bypassPermissions", scope: "user", source_path: "/Users/dev/.claude/settings.json" }],
+    } }, inspected);
+    const items = attention([], r).filter((i) => i.target.view === "agents" && i.target.agentId === first.id);
+    expect(items.map((i) => i.rule).sort()).toEqual(["settings", "unpinned"]);
+    expect(items.find((i) => i.rule === "unpinned")!.detail).toBe("github (npx @modelcontextprotocol/server-github) can change on the next launch.");
+    expect(items.find((i) => i.rule === "settings")!.detail).toBe("permissions.defaultMode = bypassPermissions in .claude/settings.json");
+  });
+
+  it("builds a row with observed projects, ports and posture", () => {
+    const row = agentRow(inspected.agents[0]);
+    expect(row.projects.length).toBeLessThanOrEqual(2);
+    expect(row.config).not.toBeNull();
+    expect(row.posture.text).toBeTruthy();
+    expect(agentRow(report.agents[0]).config).toBeNull();
   });
 });

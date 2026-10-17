@@ -37,6 +37,7 @@
       <Switch bind:checked={choices.notify} label="Notify me about new and conflicting ports" />
       {#if canAutostart}<Switch bind:checked={choices.autostart} label="Launch holdmap at login" />{/if}
       <Switch bind:checked={choices.singleKeys} label="Single-key shortcuts" description="G graph · ⇧A agents · ⌫ stop (always asks first)" />
+      <Switch bind:checked={choices.inventory} label="Read agents' MCP, skills and permission settings" description="Names, launch commands' package names and rules only. Never secret values, prompts or chats; never starts a server." />
     </section>
     <p class="tips"><kbd>{mod}</kbd><kbd>K</kbd> opens every command.{#if tray} Closing the window keeps holdmap in the {platform === "macos" ? "menu bar" : "system tray"}{#if shortcut}; <kbd>{shortcut}</kbd> brings it back{/if}.{/if}</p>
   </div>
