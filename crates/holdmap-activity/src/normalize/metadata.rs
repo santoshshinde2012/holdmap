@@ -23,7 +23,7 @@ pub fn pseudonymize_id(namespace: &str, raw: &str) -> Result<String, ActivityErr
     digest.update(namespace.as_bytes());
     digest.update([0]);
     digest.update(raw.as_bytes());
-    Ok(format!("hm1_{:x}", digest.finalize()))
+    Ok(format!("hm1_{}", hex::encode(digest.finalize())))
 }
 
 fn valid_raw_id(raw: &str) -> bool {
@@ -168,7 +168,7 @@ pub(super) fn id_parts(domain: &str, parts: &[&str]) -> Result<String, ActivityE
     digest.update(domain.as_bytes());
     digest.update([0]);
     digest.update(joined.as_bytes());
-    Ok(format!("hm1_{:x}", digest.finalize()))
+    Ok(format!("hm1_{}", hex::encode(digest.finalize())))
 }
 
 pub(super) fn provider_label(provider: Provider) -> &'static str {

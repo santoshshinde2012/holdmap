@@ -35,8 +35,10 @@ libc = "0.2"
 humantime = "2"
 tempfile = "3"
 toml = { version = "1", default-features = false, features = ["parse", "serde", "std"] }
-sha2 = "0.10"
-getrandom = "0.3"
+sha2 = "0.11"
+# sha2 0.11 digests no longer implement LowerHex; encode them explicitly.
+hex = "0.4"
+getrandom = "0.4"
 subtle = "2"
 httparse = "1"
 
