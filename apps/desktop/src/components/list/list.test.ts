@@ -45,22 +45,34 @@ describe("PortRow", () => {
     const { container } = render(PortRow, { entry: byPort(3000), pinned: true, selected: false, busy: false, ...h });
     const actions = container.querySelector(".actions")!;
     expect(actions.parentElement!.classList.contains("row")).toBe(true);
-    await fireEvent.click(screen.getByRole("button", { name: "Stop port 3000" }));
-    await fireEvent.click(screen.getByRole("button", { name: "Unpin" }));
-    await fireEvent.click(screen.getByRole("button", { name: "Open in browser" }));
+    const act = (name: string) => actions.querySelector<HTMLElement>(`[data-action="${name}"]`)!;
+    await fireEvent.click(act("stop"));
+    await fireEvent.click(act("pin"));
+    await fireEvent.click(act("open"));
     expect(h.onstop).toHaveBeenCalledOnce();
     expect(h.onpin).toHaveBeenCalledOnce();
     expect(h.onopen).toHaveBeenCalledOnce();
     expect(h.onselect).not.toHaveBeenCalled();
-    for (const b of actions.querySelectorAll("button")) expect(b.getAttribute("tabindex")).toBe("-1");
   });
 
-  it("hides Stop for protected ports and disables it while stopping", () => {
-    render(PortRow, { entry: byPort(5000), selected: false, busy: false, ...handlers() });
-    expect(screen.queryByRole("button", { name: /Stop port/ })).toBeNull();
+  it("nests no controls in the option: actions are unfocusable and hidden from assistive tech", () => {
+    const { container } = render(PortRow, { entry: byPort(3000), pinned: true, selected: true, busy: false, ...handlers() });
+    const option = screen.getByRole("option");
+    expect(option.querySelectorAll("button, a[href], input, select, textarea, [tabindex]")).toHaveLength(0);
+    expect(container.querySelector(".actions")!.getAttribute("aria-hidden")).toBe("true");
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("hides Stop for protected ports and disables it while stopping", async () => {
+    const h = handlers();
+    const { container } = render(PortRow, { entry: byPort(5000), selected: false, busy: false, ...h });
+    expect(container.querySelector('[data-action="stop"]')).toBeNull();
     cleanup();
-    render(PortRow, { entry: byPort(3001), selected: false, busy: true, ...handlers() });
-    expect((screen.getByRole("button", { name: "Stopping…" }) as HTMLButtonElement).disabled).toBe(true);
+    const busy = render(PortRow, { entry: byPort(3001), selected: false, busy: true, ...h });
+    const stop = busy.container.querySelector<HTMLElement>('[data-action="stop"]')!;
+    expect(stop.classList.contains("disabled")).toBe(true);
+    await fireEvent.click(stop);
+    expect(h.onstop).not.toHaveBeenCalled();
     expect(screen.getByRole("img", { name: "Stopping…" })).toBeTruthy();
   });
 
@@ -71,18 +83,17 @@ describe("PortRow", () => {
 });
 
 describe("GroupHeader", () => {
-  it("toggles with aria-expanded, names its count, and controls the group", async () => {
+  it("is a pointer affordance inside the listbox: names its group with count and state, no nested control", async () => {
     const ontoggle = vi.fn();
-    const { rerender } = render(GroupHeader, { id: "dev", title: "Dev servers", count: 4, hint: "Your running projects", ontoggle });
-    const btn = screen.getByRole("button");
-    expect(btn.getAttribute("aria-expanded")).toBe("true");
-    expect(btn.getAttribute("aria-controls")).toBe("grp-dev");
-    expect(screen.getByLabelText("4 ports")).toBeTruthy();
+    const { container, rerender } = render(GroupHeader, { id: "dev", title: "Dev servers", count: 4, hint: "Your running projects", ontoggle });
+    expect(screen.queryAllByRole("button", { hidden: true })).toHaveLength(0);
+    expect(container.querySelector(".gh")!.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector("#gl-dev")!.textContent).toBe("Dev servers, 4 ports");
     expect(screen.queryByText("Your running projects")).toBeNull(); // generic blurb is a tooltip, not clutter
-    await fireEvent.click(btn);
+    await fireEvent.click(container.querySelector(".toggle")!);
     expect(ontoggle).toHaveBeenCalledOnce();
     await rerender({ id: "dev", title: "Dev servers", count: 4, collapsed: true, ontoggle });
-    expect(screen.getByRole("button").getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector("#gl-dev")!.textContent).toBe("Dev servers, 4 ports, collapsed");
   });
   it("shows cluster detail inline", () => {
     render(GroupHeader, { id: "c1", title: "shop", count: 3, hint: "Compose · docker compose", showHint: true, ontoggle: () => {} });

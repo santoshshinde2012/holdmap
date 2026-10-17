@@ -83,7 +83,7 @@
 
   <ul class="chips" aria-label="{agent.name} footprint">
     {#each model.ports as p (p.entryId)}
-      <li><button type="button" class="chip port" class:warn={p.warn} aria-haspopup="menu" onclick={(e) => onport(p.entryId, e.currentTarget)} aria-label="Port {p.port} {p.label}{p.warn ? ', open to the network' : ''}"><i></i><span class="mono-t">:{p.port}</span>{p.label}</button></li>
+      <li><button type="button" class="chip port" class:warn={p.warn} aria-haspopup="menu" onclick={(e) => onport(p.entryId, e.currentTarget)} aria-label="Port {p.port} {p.label}{p.warn ? ', open to the network' : ''}"><i></i><span class="mono-t">:{p.port}</span>{" "}{p.label}</button></li>
     {/each}
     {#each model.mcp?.servers ?? [] as s (s.id)}
       <li><button type="button" class="chip mcp" class:on={s.running} class:warn={s.warn} onclick={() => onopen(agent.id)} title={s.names.length ? s.names.join(", ") : undefined}

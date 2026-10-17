@@ -659,6 +659,27 @@ export interface FootFlowNode {
   selectable?: boolean;
   focusable?: boolean;
   draggable?: boolean;
+  /** Accessible name of the focusable node wrapper; the drawn card inside stays presentational. */
+  ariaLabel?: string;
+  ariaRole?: "button" | "group";
+}
+
+/** Agents, ports with an entry, MCP servers and folders act on click (and Enter). */
+export function footNodeActs(n: FootNode): boolean {
+  return n.kind === "agent" || !!n.entryId || n.kind === "tool" || n.kind === "folder";
+}
+
+const NODE_WHAT: Record<FootNode["kind"], string> = { folder: "Folder", tool: "MCP server", port: "Port", service: "Service", remote: "Remote host", more: "More remote links", omitted: "Unlisted links", agent: "Agent", header: "", machine: "Computer" };
+
+/** Map nodes are one focus stop each: the svelte-flow wrapper carries this name, and nothing
+ *  inside it is a control, so screen readers get one item per node instead of nested buttons. */
+export function footNodeLabel(n: FootNode, picture: Picture): string {
+  if (n.kind === "agent" && n.agent) {
+    const a = n.agent;
+    return `${a.name}, ${n.sub}. ${accessHeadline(a).text}. ${countsLine(counts(a))}. ${resourcesLine(a)}`;
+  }
+  const action = n.entryId ? ". Opens details" : n.kind === "tool" ? ". Opens its agent card" : n.kind === "folder" ? `. ${folderAction(picture)}` : "";
+  return `${n.kind === "machine" ? "" : `${NODE_WHAT[n.kind]} `}${n.label}, ${n.sub}${n.evidence !== "observed" ? `, ${EVIDENCE_LABEL[n.evidence]}` : ""}${n.warning ? `, ${n.warning}` : ""}${action}`;
 }
 
 export interface EdgeGeometry {
@@ -742,6 +763,8 @@ export function toFootFlow(g: FootGraph, pos: Positions, opts: FootFlowOptions =
       width: w,
       height: h,
       draggable: false,
+      ariaLabel: footNodeLabel(n, g.picture),
+      ariaRole: footNodeActs(n) ? "button" : "group",
       data: { node: n, color: agentColor(g, n.kind === "agent" ? n.id : n.owners[0], opts.agentIds), ownerColors: n.owners.map((o) => agentColor(g, o, opts.agentIds)), dim: !!rel && !rel.nodes.has(n.id), hl: !!rel && rel.nodes.has(n.id) && n.id !== opts.focus, selected: opts.selectedId === n.id, picture: g.picture },
     });
   }

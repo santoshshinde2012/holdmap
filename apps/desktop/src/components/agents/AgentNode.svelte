@@ -1,8 +1,9 @@
 <script lang="ts">
   // An agent in the footprint graph: monogram in the agent's colour, name, kind and pid, and the
-  // access headline (sandboxed, your account, root…).
+  // access headline (sandboxed, your account, root…). Presentational: the focusable svelte-flow
+  // wrapper carries the accessible name (footNodeLabel).
   import { Handle, Position, type NodeProps, type Node } from "@xyflow/svelte";
-  import { accessHeadline, counts, countsLine, monogram, resourcesLine, type FootFlowData } from "../../lib/agents";
+  import { accessHeadline, counts, monogram, resourcesLine, type FootFlowData } from "../../lib/agents";
 
   let { data }: NodeProps<Node<FootFlowData>> = $props();
   const a = $derived(data.node.agent!);
@@ -17,17 +18,16 @@
   class:hl={data.hl}
   class:sel={data.selected}
   style="--agent: {data.color}"
-  role="button"
-  aria-label="{a.name}, {data.node.sub}. {head.text}. {countsLine(c)}. {res}"
+  aria-hidden="true"
 >
-  <Handle type="target" position={Position.Left} isConnectable={false} aria-hidden="true" />
+  <Handle type="target" position={Position.Left} isConnectable={false} role="presentation" tabindex={undefined} />
   <span class="mono-tile" aria-hidden="true">{monogram(a.name)}</span>
   <div class="body">
     <span class="label">{a.name}{#if c.stoppable > 0}<em class="stop-n">{c.stoppable}</em>{/if}</span>
     <span class="sub">{data.node.sub}</span>
     <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.text} · {res.split(" · ").slice(0, 2).join(" · ")}</span>
   </div>
-  <Handle type="source" position={Position.Right} isConnectable={false} aria-hidden="true" />
+  <Handle type="source" position={Position.Right} isConnectable={false} role="presentation" tabindex={undefined} />
 </div>
 
 <style>

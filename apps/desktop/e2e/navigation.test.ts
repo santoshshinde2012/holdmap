@@ -128,13 +128,13 @@ test.describe("compact windows", () => {
     await expect(app.getByRole("listbox", { name: "Ports in use" })).toBeVisible();
   });
 
-  test("the filter toolbar scrolls without widening the document", async ({ app }) => {
+  test("the filter toolbar wraps without widening the document", async ({ app }) => {
     const dimensions = await app.getByRole("toolbar", { name: "View and filters" }).evaluate((toolbar) => ({
       document: document.documentElement.scrollWidth, viewport: innerWidth,
       toolbar: toolbar.scrollWidth, visibleToolbar: toolbar.clientWidth,
     }));
     expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport + 1);
-    expect(dimensions.toolbar).toBeGreaterThan(dimensions.visibleToolbar);
+    expect(dimensions.toolbar).toBeLessThanOrEqual(dimensions.visibleToolbar + 1);
     const sort = app.getByRole("combobox", { name: /^Sort:/ });
     await sort.focus();
     await expect(sort).toBeFocused();
@@ -147,7 +147,7 @@ for (const width of [390, 760]) {
   test.describe(`${width}px windows`, () => {
     test.use({ viewport: { width, height: 900 } });
 
-    test("macOS header actions fit while filters scroll within the viewport", async ({ app }) => {
+    test("macOS header actions fit and filters wrap within the viewport", async ({ app }) => {
       await app.addInitScript(() => {
         Object.defineProperty(navigator, "platform", { configurable: true, get: () => "MacIntel" });
       });
@@ -171,7 +171,9 @@ for (const width of [390, 760]) {
       }));
       expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport + 1);
       expect(dimensions.visibleToolbar).toBeLessThanOrEqual(dimensions.viewport);
-      expect(dimensions.toolbar).toBeGreaterThan(dimensions.visibleToolbar);
+      expect(dimensions.toolbar, "no sideways scrolling").toBeLessThanOrEqual(dimensions.visibleToolbar + 1);
+      const sort = await app.getByRole("combobox", { name: /^Sort:/ }).boundingBox();
+      expect(sort && sort.x + sort.width <= width, "the last control is reachable without scrolling").toBe(true);
     });
   });
 }

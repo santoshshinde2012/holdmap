@@ -31,6 +31,16 @@ describe("palette commands", () => {
     expect(ids(state({ view: "graph" }))).not.toContain("density");
   });
 
+  it("offers expanding collapsed port groups on the list only (their rows are out of keyboard reach)", () => {
+    expect(ids(state())).not.toContain("expand-groups");
+    expect(ids(state({ view: "home", collapsedGroups: 2 }))).not.toContain("expand-groups");
+    const act = actions();
+    const cmd = appCommands(state({ collapsedGroups: 2 }), act).find((c) => c.id === "expand-groups")!;
+    expect(cmd.title).toBe("Expand collapsed port groups");
+    cmd.run();
+    expect(act.expandGroups).toHaveBeenCalledOnce();
+  });
+
   it("only shows modifier and Esc hints when single keys are off", () => {
     const cmds = appCommands(state({ singleKeys: false }), actions());
     expect(cmds.find((c) => c.id === "dev")?.shortcut).toBeUndefined();

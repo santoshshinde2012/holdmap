@@ -296,17 +296,24 @@ describe("App partial stop outcomes", () => {
   });
 });
 
+/** Row hover actions are pointer shortcuts hidden from assistive tech (the details pane has the buttons). */
+function rowAction(root: HTMLElement, port: number, action: "stop" | "pin" | "open"): HTMLElement {
+  const el = root.querySelector<HTMLElement>(`[id^="row-tcp:${port}:"] [data-action="${action}"]`);
+  if (!el) throw new Error(`No ${action} action on the :${port} row`);
+  return el;
+}
+
 describe("App action review freshness", () => {
   it("allows cancelling a pending review and never replaces its newer review with an old reply", async () => {
     vi.useFakeTimers();
     calls.deferPlan = true;
     const view = render(App);
     await vi.advanceTimersByTimeAsync(600);
-    await fireEvent.click(view.getByRole("button", { name: "Stop port 3000" }));
+    await fireEvent.click(rowAction(view.container, 3000, "stop"));
     await vi.advanceTimersByTimeAsync(100);
     expect(view.getByRole("dialog", { name: "Reviewing stop for :3000…" })).toBeTruthy();
     await fireEvent.click(view.getByRole("button", { name: "Cancel" }));
-    await fireEvent.click(view.getByRole("button", { name: "Stop port 3001" }));
+    await fireEvent.click(rowAction(view.container, 3001, "stop"));
     await vi.advanceTimersByTimeAsync(100);
     expect(calls.planPending).toHaveLength(2);
     const [older, current] = calls.planPending;
@@ -326,7 +333,7 @@ describe("App action review freshness", () => {
     calls.deferPlan = true;
     const view = render(App);
     await vi.advanceTimersByTimeAsync(600);
-    await fireEvent.click(view.getByRole("button", { name: "Stop port 3000" }));
+    await fireEvent.click(rowAction(view.container, 3000, "stop"));
     await vi.advanceTimersByTimeAsync(100);
     await fireEvent.keyDown(view.getByRole("dialog"), { key: "Escape" });
     calls.planPending[0].resolve(calls.planPending[0].result);
@@ -341,7 +348,7 @@ describe("App action review freshness", () => {
     calls.deferPlan = true;
     const view = render(App);
     await vi.advanceTimersByTimeAsync(600);
-    await fireEvent.click(view.getByRole("button", { name: "Stop port 3000" }));
+    await fireEvent.click(rowAction(view.container, 3000, "stop"));
     await vi.advanceTimersByTimeAsync(100);
     const replacement = structuredClone(MOCK_SNAPSHOT);
     replacement.taken_at_ms = Date.now();
