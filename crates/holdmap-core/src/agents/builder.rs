@@ -218,7 +218,7 @@ impl<'a> AgentsBuilder<'a> {
             "Folders are working directories and the agents' recent-project lists; open files aren't collected.".to_string(),
             "Remote hosts are shown by IP address; holdmap doesn't look names up.".to_string(),
             if self.capabilities.is_some() {
-                "Capability inventory retains only aliases, switches, transport kinds, file locations and sanitized skill-header names/descriptions; other configuration values and skill instruction bodies are not exported.".to_string()
+                "Capability inventory keeps aliases, switches, transports, runner and package names, remote hosts, environment/header names, permission rules, documented settings, file locations and frontmatter names/descriptions; values, arguments, prompts and instruction bodies are not exported.".to_string()
             } else {
                 "Chats, settings, tokens and credentials are never read.".to_string()
             },
