@@ -159,8 +159,25 @@ pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, 
                 agent.capabilities.mcp_servers.len(), agent.capabilities.skills.len()
             ));
             for server in &agent.capabilities.mcp_servers {
+                let launch = server
+                    .launch
+                    .as_ref()
+                    .map(|launch| {
+                        format!(
+                            " · {} {}{}",
+                            launch.runner.label(),
+                            launch.package.as_deref().unwrap_or("?"),
+                            match launch.pinned {
+                                Some(true) => " (pinned)",
+                                Some(false) => " (unpinned)",
+                                None => "",
+                            }
+                        )
+                    })
+                    .or_else(|| server.remote_host.as_ref().map(|host| format!(" · {host}")))
+                    .unwrap_or_default();
                 lines.push(format!(
-                    "    MCP {}: {} · {} · {}",
+                    "    MCP {}: {}{launch} · {} · {} · {}",
                     server.name,
                     server.transport.label(),
                     server.scope.label(),
@@ -168,7 +185,21 @@ pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, 
                         Some(true) => "enabled in configuration",
                         Some(false) => "disabled in configuration",
                         None => "enablement unknown",
+                    },
+                    match server.runtime.state {
+                        holdmap_core::agents::McpRunState::Running => "running now",
+                        holdmap_core::agents::McpRunState::NotSeen => "not seen running",
+                        holdmap_core::agents::McpRunState::Unknown => "running unknown",
                     }
+                ));
+            }
+            let c = &agent.capabilities;
+            if !c.instructions.is_empty() || !c.tool_rules.is_empty() || !c.settings.is_empty() {
+                lines.push(format!(
+                    "    {} instruction files, {} permission rules, {} settings.",
+                    c.instructions.len(),
+                    c.tool_rules.len(),
+                    c.settings.len()
                 ));
             }
             for skill in &agent.capabilities.skills {
