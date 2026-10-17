@@ -45,7 +45,7 @@ fn codex_projects_only_allowed_metadata_and_never_exports_skill_instructions() {
     fixture.put("home/.codex/config.toml", br#"
 model = "private-model-fixture"
 [mcp_servers.docs]
-command = "private-command-fixture"
+command = "server-command-fixture"
 args = ["private-argument-fixture"]
 enabled = false
 env = { SECRET = "private-environment-fixture" }
@@ -56,7 +56,7 @@ http_headers = { Authorization = "private-header-fixture" }
     fixture.put(
         "project/.codex/config.toml",
         br#"[mcp_servers.docs]
-url = "https://private-project-endpoint-fixture.invalid/"
+url = "https://project-endpoint-host.invalid/"
 enabled = true
 "#,
     );
@@ -116,15 +116,15 @@ fn claude_private_project_aliases_stay_bound_to_exact_observed_project() {
     let fixture = Fixture::new();
     let unrelated = fixture.project.with_file_name("unobserved-project");
     let user = serde_json::json!({
-        "mcpServers": {"shared": {"command": "private-command-fixture"}},
+        "mcpServers": {"shared": {"command": "server-command-fixture"}},
         "projects": {
-            fixture.project.to_str().unwrap(): {"mcpServers": {"shared": {"type":"http", "url":"https://private-local-fixture.invalid/"}}},
-            unrelated.to_str().unwrap(): {"mcpServers": {"must-not-appear": {"command":"private-unrelated-fixture"}}}
+            fixture.project.to_str().unwrap(): {"mcpServers": {"shared": {"type":"http", "url":"https://local-host.invalid/"}}},
+            unrelated.to_str().unwrap(): {"mcpServers": {"must-not-appear": {"command":"server-unrelated-fixture"}}}
         },
         "oauthAccount": {"token":"private-token-fixture"}
     });
     fixture.put("home/.claude.json", user.to_string().as_bytes());
-    fixture.put("project/.mcp.json", br#"{"mcpServers":{"shared":{"type":"sse","url":"https://private-project-fixture.invalid/"},"invalid-transport":{"url":"https://private-untyped-fixture.invalid/"}}}"#);
+    fixture.put("project/.mcp.json", br#"{"mcpServers":{"shared":{"type":"sse","url":"https://project-host.invalid/"},"invalid-transport":{"url":"https://untyped-host.invalid/"}}}"#);
     fixture.put(
         "home/.claude/skills/review/SKILL.md",
         b"private-skill-body-fixture",
@@ -163,8 +163,11 @@ fn claude_private_project_aliases_stay_bound_to_exact_observed_project() {
 #[test]
 fn cursor_supports_fixed_compatibility_roots_and_one_category_level() {
     let fixture = Fixture::new();
-    fixture.put("home/.cursor/mcp.json", br#"{"mcpServers":{"remote":{"url":"https://private-remote-fixture.invalid/"},"off":{"command":"private-command-fixture","disabled":true}}}"#);
-    fixture.put("project/.cursor/mcp.json", br#"{"mcpServers":{"remote":{"type":"http","url":"https://private-project-fixture.invalid/"}}}"#);
+    fixture.put("home/.cursor/mcp.json", br#"{"mcpServers":{"remote":{"url":"https://remote-host.invalid/"},"off":{"command":"server-command-fixture","disabled":true}}}"#);
+    fixture.put(
+        "project/.cursor/mcp.json",
+        br#"{"mcpServers":{"remote":{"type":"http","url":"https://project-host.invalid/"}}}"#,
+    );
     for directory in [".cursor", ".agents", ".claude", ".codex"] {
         fixture.put(
             &format!("home/{directory}/skills/review/SKILL.md"),
@@ -209,7 +212,7 @@ fn cursor_supports_fixed_compatibility_roots_and_one_category_level() {
 #[test]
 fn claude_desktop_reads_only_documented_user_mcp_file_not_code_settings_or_skills() {
     let fixture = Fixture::new();
-    let config = br#"{"mcpServers":{"local server":{"command":"private-command-fixture","args":["private-argument-fixture"]}},"preferences":{"token":"private-token-fixture"}}"#;
+    let config = br#"{"mcpServers":{"local server":{"command":"server-command-fixture","args":["private-argument-fixture"]}},"preferences":{"token":"private-token-fixture"}}"#;
     let mac = fixture.put(
         "home/Library/Application Support/Claude/claude_desktop_config.json",
         config,
@@ -217,7 +220,7 @@ fn claude_desktop_reads_only_documented_user_mcp_file_not_code_settings_or_skill
     let windows = fixture.put("roaming/Claude/claude_desktop_config.json", config);
     fixture.put(
         "home/.claude.json",
-        br#"{"mcpServers":{"code-only":{"command":"private-code-fixture"}}}"#,
+        br#"{"mcpServers":{"code-only":{"command":"server-code-fixture"}}}"#,
     );
     fixture.put(
         "home/.claude/skills/review/SKILL.md",
@@ -348,7 +351,7 @@ fn project_mcp_inventory_is_collected_before_skill_headers_exhaust_the_shared_bu
     let fixture = Fixture::new();
     fixture.put(
         "project/.cursor/mcp.json",
-        br#"{"mcpServers":{"project-server":{"command":"private-command-fixture"}}}"#,
+        br#"{"mcpServers":{"project-server":{"command":"server-command-fixture"}}}"#,
     );
     for index in 0..MAX_SOURCES + 4 {
         fixture.put(
@@ -374,14 +377,14 @@ fn contradictory_switches_remain_unknown_and_sensitive_aliases_or_folders_are_no
     fixture.put(
         "home/.cursor/mcp.json",
         br#"{"mcpServers":{
-        "both-on":{"command":"private-command-fixture","enabled":true,"disabled":true},
-        "both-off":{"command":"private-command-fixture","enabled":false,"disabled":false},
-        "agree-on":{"command":"private-command-fixture","enabled":true,"disabled":false},
-        "agree-off":{"command":"private-command-fixture","enabled":false,"disabled":true},
-        "single":{"command":"private-command-fixture","disabled":true},
-        "Bearer fixturecredential":{"command":"private-command-fixture"},
-        "sk-fixturecredential":{"command":"private-command-fixture"},
-        "github_pat_fixturecredential":{"command":"private-command-fixture"}
+        "both-on":{"command":"server-command-fixture","enabled":true,"disabled":true},
+        "both-off":{"command":"server-command-fixture","enabled":false,"disabled":false},
+        "agree-on":{"command":"server-command-fixture","enabled":true,"disabled":false},
+        "agree-off":{"command":"server-command-fixture","enabled":false,"disabled":true},
+        "single":{"command":"server-command-fixture","disabled":true},
+        "Bearer fixturecredential":{"command":"server-command-fixture"},
+        "sk-fixturecredential":{"command":"server-command-fixture"},
+        "github_pat_fixturecredential":{"command":"server-command-fixture"}
     }}"#,
     );
     fixture.put(
@@ -440,7 +443,7 @@ fn malformed_oversized_nonregular_and_unsafe_names_report_limits_without_content
     let out = fixture.discover("codex");
     assert!(out.mcp_servers.is_empty());
     assert!(out.limits.iter().any(|limit| limit.contains("oversized")));
-    fixture.put("home/.cursor/mcp.json", br#"{"mcpServers":{"bad\nname":{"command":"private-fixture"},"good":{"command":"private-fixture"}}}"#);
+    fixture.put("home/.cursor/mcp.json", br#"{"mcpServers":{"bad\nname":{"command":"server-fixture"},"good":{"command":"server-fixture"}}}"#);
     let out = fixture.discover("cursor");
     assert_eq!(
         out.mcp_servers
@@ -465,7 +468,7 @@ fn links_and_fifo_configs_are_skipped_without_opening_targets_or_waiting_for_wri
     let fixture = Fixture::new();
     let outside = fixture.put(
         "outside/config.toml",
-        b"[mcp_servers.must-not-appear]\ncommand='private-fixture'\n",
+        b"[mcp_servers.must-not-appear]\ncommand='server-fixture'\n",
     );
     fs::create_dir_all(fixture.home.join(".codex")).unwrap();
     symlink(&outside, fixture.home.join(".codex/config.toml")).unwrap();
@@ -500,7 +503,7 @@ fn protected_projects_traversal_and_unsupported_products_are_explicitly_unknown(
     fs::create_dir_all(protected.join(".codex")).unwrap();
     fs::write(
         protected.join(".codex/config.toml"),
-        b"[mcp_servers.must-not-appear]\ncommand='private-fixture'\n",
+        b"[mcp_servers.must-not-appear]\ncommand='server-fixture'\n",
     )
     .unwrap();
     let provider = HomeCapabilities::new(fixture.home.clone());
@@ -535,7 +538,7 @@ fn capacity_and_entry_bounds_retain_coverage_limits_and_stable_ordering() {
     for index in 0..80 {
         servers.insert(
             format!("server-{index:03}"),
-            serde_json::json!({"command":"private-fixture"}),
+            serde_json::json!({"command":"server-fixture"}),
         );
     }
     fixture.put(
@@ -584,29 +587,29 @@ fn windsurf_gemini_copilot_and_cline_project_only_allowed_metadata() {
         "home/.codeium/windsurf/mcp_config.json",
         br#"{
             "mcpServers": {
-                "local": {"command": "private-windsurf-command", "env": {"TOKEN": "private-windsurf-token"}},
-                "hosted": {"serverUrl": "https://private-windsurf-endpoint.invalid/mcp"}
+                "local": {"command": "server-windsurf-command", "env": {"TOKEN": "private-windsurf-token"}},
+                "hosted": {"serverUrl": "https://windsurf-endpoint-host.invalid/mcp"}
             }
         }"#,
     );
     fixture.put(
         "project/.codeium/windsurf/mcp_config.json",
-        br#"{"mcpServers":{"must-not-appear":{"command":"private-project-windsurf"}}}"#,
+        br#"{"mcpServers":{"must-not-appear":{"command":"server-project-windsurf"}}}"#,
     );
     fixture.put(
         "home/.gemini/settings.json",
         br#"{
             "security": {"auth": {"apiKey": "private-gemini-key-fixture"}},
             "mcpServers": {
-                "local": {"command": "private-gemini-command"},
-                "http": {"httpUrl": "https://private-gemini-http.invalid/mcp"},
-                "events": {"url": "https://private-gemini-sse.invalid/sse"}
+                "local": {"command": "server-gemini-command"},
+                "http": {"httpUrl": "https://gemini-http-host.invalid/mcp"},
+                "events": {"url": "https://gemini-sse-host.invalid/sse"}
             }
         }"#,
     );
     fixture.put(
         "project/.gemini/settings.json",
-        br#"{"mcpServers":{"workspace":{"command":"private-gemini-project"}}}"#,
+        br#"{"mcpServers":{"workspace":{"command":"server-gemini-project"}}}"#,
     );
     fixture.put(
         "home/.gemini/mcp-server-enablement.json",
@@ -614,19 +617,19 @@ fn windsurf_gemini_copilot_and_cline_project_only_allowed_metadata() {
     );
     fixture.put(
         "home/.copilot/mcp-config.json",
-        br#"{"mcpServers":{"cli":{"command":"private-copilot-cli"}},"token":"private-copilot-home"}"#,
+        br#"{"mcpServers":{"cli":{"command":"server-copilot-cli"}},"token":"private-copilot-home"}"#,
     );
     fixture.put(
         "project/.mcp.json",
-        br#"{"mcpServers":{"portable":{"type":"stdio","command":"private-portable"}}}"#,
+        br#"{"mcpServers":{"portable":{"type":"stdio","command":"server-portable"}}}"#,
     );
     fixture.put(
         "project/.vscode/mcp.json",
-        br#"{"inputs":[{"id":"token","password":true}],"servers":{"workspace":{"type":"http","url":"https://private-vscode-mcp.invalid/"}}}"#,
+        br#"{"inputs":[{"id":"token","password":true}],"servers":{"workspace":{"type":"http","url":"https://vscode-mcp-host.invalid/"}}}"#,
     );
     fixture.put(
         "home/.cline/data/settings/cline_mcp_settings.json",
-        br#"{"mcpServers":{"docs":{"command":"private-cline-command","disabled":true,"env":{"API_KEY":"private-cline-env"}}}}"#,
+        br#"{"mcpServers":{"docs":{"command":"server-cline-command","disabled":true,"env":{"API_KEY":"private-cline-env"}}}}"#,
     );
     fixture.put(
         "home/.cline/skills/review/SKILL.md",
@@ -638,7 +641,7 @@ fn windsurf_gemini_copilot_and_cline_project_only_allowed_metadata() {
     );
     fixture.put(
         "home/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-        br#"{"mcpServers":{"must-not-appear":{"command":"private-globalstorage"}}}"#,
+        br#"{"mcpServers":{"must-not-appear":{"command":"server-globalstorage"}}}"#,
     );
 
     let windsurf = fixture.discover("windsurf");
@@ -756,7 +759,7 @@ fn gemini_does_not_resolve_overlapping_transport_keys() {
     let fixture = Fixture::new();
     fixture.put(
         "home/.gemini/settings.json",
-        br#"{"mcpServers":{"both":{"command":"private-command","httpUrl":"https://private-http.invalid/"}}}"#,
+        br#"{"mcpServers":{"both":{"command":"server-command","httpUrl":"https://http-host.invalid/"}}}"#,
     );
     let out = fixture.discover("gemini");
     assert_eq!(out.mcp_servers.len(), 1);
@@ -769,15 +772,15 @@ fn copilot_cli_accepts_documented_local_and_bare_project_maps_without_resolving_
     let fixture = Fixture::new();
     fixture.put(
         "home/.copilot/mcp-config.json",
-        br#"{"mcpServers":{"shared":{"type":"local","command":"private-command","env":{"TOKEN":"private-token"}}}}"#,
+        br#"{"mcpServers":{"shared":{"type":"local","command":"server-command","env":{"TOKEN":"private-token"}}}}"#,
     );
     fixture.put(
         "project/.mcp.json",
-        br#"{"shared":{"type":"local","command":"private-command"}}"#,
+        br#"{"shared":{"type":"local","command":"server-command"}}"#,
     );
     fixture.put(
         "project/.github/mcp.json",
-        br#"{"mcpServers":{"shared":{"type":"http","url":"https://private-endpoint.invalid/mcp","headers":{"Authorization":"private-header"}}}}"#,
+        br#"{"mcpServers":{"shared":{"type":"http","url":"https://endpoint-host.invalid/mcp","headers":{"Authorization":"private-header"}}}}"#,
     );
     let out = fixture.discover("copilot-cli");
     assert_eq!(out.mcp_servers.len(), 3);
@@ -814,12 +817,12 @@ fn cline_http_and_legacy_sse_follow_its_own_schema() {
     fixture.put(
         "home/.cline/data/settings/cline_mcp_settings.json",
         br#"{"mcpServers":{
-            "http":{"type":"streamableHttp","url":"https://private-http.invalid/","disabled":false},
-            "legacy":{"url":"https://private-sse.invalid/","disabled":true},
-            "events":{"type":"sse","url":"https://private-events.invalid/"},
-            "other-client-key":{"httpUrl":"https://private-other.invalid/"},
-            "overlap":{"type":"streamableHttp","command":"private-command","url":"https://private-both.invalid/"},
-            "malformed-type":{"type":false,"command":"private-command"}
+            "http":{"type":"streamableHttp","url":"https://http-host.invalid/","disabled":false},
+            "legacy":{"url":"https://sse-host.invalid/","disabled":true},
+            "events":{"type":"sse","url":"https://events-host.invalid/"},
+            "other-client-key":{"httpUrl":"https://other-host.invalid/"},
+            "overlap":{"type":"streamableHttp","command":"server-command","url":"https://both-host.invalid/"},
+            "malformed-type":{"type":false,"command":"server-command"}
         }}"#,
     );
     let out = fixture.discover("cline");
@@ -848,15 +851,15 @@ fn jsonc_settings_preserve_strings_and_omit_comments_endpoints_and_other_private
         br#"{
             // private-comment
             "servers": {
-                "local": {"command":"private-command","args":["private-argument",],},
-                "remote": {"type":"http","url":"https://private-endpoint.invalid/a/*x*/?q=//","headers":{"Authorization":"private-header"}},
+                "local": {"command":"server-command","args":["private-argument",],},
+                "remote": {"type":"http","url":"https://endpoint-host.invalid/a/*x*/?q=//","headers":{"Authorization":"private-header"}},
             },
             "inputs": [{"id":"private-input","password":true},],
         }"#,
     );
     fixture.put(
         "project/.mcp.json",
-        br#"{"mcpServers":{"portable":{"type":"local","command":"private-command"}}, /* private-comment */}"#,
+        br#"{"mcpServers":{"portable":{"type":"local","command":"server-command"}}, /* private-comment */}"#,
     );
     let vscode = fixture.discover("copilot");
     assert_eq!(vscode.mcp_servers.len(), 3);
@@ -868,7 +871,7 @@ fn jsonc_settings_preserve_strings_and_omit_comments_endpoints_and_other_private
 
     fixture.put(
         "home/.gemini/settings.json",
-        br#"{/* private-comment */"mcpServers":{"remote":{"httpUrl":"https://private-endpoint.invalid/a/*x*/?q=//"}}}// private-tail"#,
+        br#"{/* private-comment */"mcpServers":{"remote":{"httpUrl":"https://endpoint-host.invalid/a/*x*/?q=//"}}}// private-tail"#,
     );
     let gemini = fixture.discover("gemini");
     assert_eq!(gemini.mcp_servers.len(), 1);
@@ -876,7 +879,7 @@ fn jsonc_settings_preserve_strings_and_omit_comments_endpoints_and_other_private
     assert!(!serde_json::to_string(&gemini).unwrap().contains("private-"));
     fixture.put(
         "home/.gemini/settings.json",
-        br#"{"mcpServers":{"remote":{"httpUrl":"https://private-endpoint.invalid/"},}}"#,
+        br#"{"mcpServers":{"remote":{"httpUrl":"https://endpoint-host.invalid/"},}}"#,
     );
     let invalid = fixture.discover("gemini");
     assert!(invalid.mcp_servers.is_empty());
@@ -910,7 +913,7 @@ fn jsonc_lexer_keeps_json_grammar_and_strict_formats_fail_closed() {
     let fixture = Fixture::new();
     fixture.put(
         "home/.cursor/mcp.json",
-        br#"{/* private-comment */"mcpServers":{"must-not-appear":{"command":"private-command"}}}"#,
+        br#"{/* private-comment */"mcpServers":{"must-not-appear":{"command":"server-command"}}}"#,
     );
     let strict = fixture.discover("cursor");
     assert!(strict.mcp_servers.is_empty());
@@ -923,10 +926,10 @@ fn json_transport_does_not_apply_another_clients_fields_or_infer_from_malformed_
     fixture.put(
         "project/.mcp.json",
         br#"{"mcpServers":{
-            "other-client":{"type":"http","httpUrl":"https://private-http.invalid/"},
-            "extra-field":{"type":"http","url":"https://private-http.invalid/","serverUrl":"https://private-other.invalid/"},
-            "malformed-type":{"type":false,"command":"private-command"},
-            "empty-command":{"type":"http","url":"https://private-http.invalid/","command":""}
+            "other-client":{"type":"http","httpUrl":"https://http-host.invalid/"},
+            "extra-field":{"type":"http","url":"https://http-host.invalid/","serverUrl":"https://other-host.invalid/"},
+            "malformed-type":{"type":false,"command":"server-command"},
+            "empty-command":{"type":"http","url":"https://http-host.invalid/","command":""}
         }}"#,
     );
     let out = fixture.discover("claude-code");
@@ -942,10 +945,10 @@ fn json_transport_does_not_apply_another_clients_fields_or_infer_from_malformed_
 fn gemini_and_cursor_untyped_urls_do_not_prove_a_remote_transport() {
     let fixture = Fixture::new();
     let config = br#"{"mcpServers":{
-        "http":{"type":"http","url":"https://private-http.invalid/"},
-        "events":{"type":"sse","url":"https://private-events.invalid/"},
-        "negotiated":{"url":"https://private-negotiated.invalid/"},
-        "malformed":{"type":true,"url":"https://private-malformed.invalid/"}
+        "http":{"type":"http","url":"https://http-host.invalid/"},
+        "events":{"type":"sse","url":"https://events-host.invalid/"},
+        "negotiated":{"url":"https://negotiated-host.invalid/"},
+        "malformed":{"type":true,"url":"https://malformed-host.invalid/"}
     }}"#;
     for (product, path) in [
         ("gemini", "home/.gemini/settings.json"),
@@ -974,8 +977,8 @@ fn gemini_and_cursor_untyped_urls_do_not_prove_a_remote_transport() {
 fn clients_with_separate_enablement_settings_do_not_reinterpret_arbitrary_server_booleans() {
     let fixture = Fixture::new();
     let config = br#"{"mcpServers":{
-        "on":{"command":"private-command","enabled":true,"disabled":false},
-        "off":{"command":"private-command","enabled":false,"disabled":true}
+        "on":{"command":"server-command","enabled":true,"disabled":false},
+        "off":{"command":"server-command","enabled":false,"disabled":true}
     }}"#;
     for (product, path) in [
         ("gemini", "home/.gemini/settings.json"),
@@ -991,9 +994,222 @@ fn clients_with_separate_enablement_settings_do_not_reinterpret_arbitrary_server
     }
     fixture.put(
         "home/.cline/data/settings/cline_mcp_settings.json",
-        br#"{"mcpServers":{"unsupported":{"command":"private-command","enabled":false}}}"#,
+        br#"{"mcpServers":{"unsupported":{"command":"server-command","enabled":false}}}"#,
     );
     let out = fixture.discover("cline");
     assert_eq!(out.mcp_servers.len(), 1);
     assert_eq!(out.mcp_servers[0].enabled, None);
+}
+
+#[test]
+fn realistic_claude_code_config_reports_launch_policy_and_instruction_metadata_only() {
+    let fixture = Fixture::new();
+    let project = fixture.project.to_str().unwrap().to_owned();
+    // Shapes follow ~/.claude.json, .mcp.json and settings.json as Claude Code writes them.
+    let user = serde_json::json!({
+        "numStartups": 12,
+        "oauthAccount": {"emailAddress": "private-email-fixture"},
+        "mcpServers": {
+            "github": {"type": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"],
+                        "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "private-pat-fixture"}},
+            "playwright": {"command": "npx", "args": ["@playwright/mcp@0.0.41"]},
+            "linear": {"type": "http", "url": "https://mcp.linear.app/mcp?key=private-query-fixture",
+                        "headers": {"Authorization": "Bearer private-header-fixture"}}
+        },
+        "projects": {project.clone(): {"mcpServers": {
+            "postgres": {"command": "docker", "args": ["run", "-i", "--rm", "-e", "DATABASE_URL", "mcp/postgres:1.2"],
+                          "env": {"DATABASE_URL": "postgres://private-user:private-pass@db/x"}}
+        }, "history": [{"display": "private-prompt-fixture"}]}}
+    });
+    fixture.put("home/.claude.json", user.to_string().as_bytes());
+    fixture.put(
+        "project/.mcp.json",
+        br#"{"mcpServers":{"fetch":{"command":"uvx","args":["mcp-server-fetch"]}}}"#,
+    );
+    fixture.put("home/.claude/settings.json", br#"{"permissions":{"allow":["Bash(npm run test:*)","Read(~/.zshrc)"],"deny":["Bash(curl:*)","Bash(export TOKEN=private-token-fixture)"],"defaultMode":"acceptEdits"},"env":{"ANTHROPIC_API_KEY":"private-env-fixture"}}"#);
+    fixture.put(
+        "project/.claude/settings.local.json",
+        br#"{"permissions":{"ask":["WebFetch"],"defaultMode":"private-unknown-mode"}}"#,
+    );
+    fixture.put(
+        "home/.claude/commands/ship.md",
+        b"---\ndescription: Run checks and open a PR\n---\nprivate-command-body-fixture",
+    );
+    fixture.put("home/.claude/agents/reviewer.md", b"---\nname: reviewer\ndescription: Reviews diffs for bugs\ntools: Read, Grep\n---\nprivate-agent-body-fixture");
+    fixture.put("project/CLAUDE.md", b"private-memory-body-fixture");
+    let out = fixture.discover("claude-code");
+
+    let server = |name: &str| out.mcp_servers.iter().find(|s| s.name == name).unwrap();
+    let github = server("github");
+    assert_eq!(github.launch.as_ref().unwrap().runner, McpRunner::Npx);
+    assert_eq!(
+        github.launch.as_ref().unwrap().package.as_deref(),
+        Some("@modelcontextprotocol/server-github")
+    );
+    assert_eq!(github.launch.as_ref().unwrap().pinned, Some(false));
+    assert_eq!(github.env_names, ["GITHUB_PERSONAL_ACCESS_TOKEN"]);
+    assert_eq!(
+        server("playwright").launch.as_ref().unwrap().pinned,
+        Some(true)
+    );
+    let linear = server("linear");
+    assert_eq!(
+        (linear.transport, linear.remote_host.as_deref()),
+        (McpTransport::Http, Some("mcp.linear.app"))
+    );
+    assert_eq!(linear.header_names, ["Authorization"]);
+    assert!(linear.launch.is_none());
+    let postgres = server("postgres");
+    assert_eq!(postgres.scope, CapabilityScope::Local);
+    assert_eq!(postgres.launch.as_ref().unwrap().runner, McpRunner::Docker);
+    assert_eq!(postgres.launch.as_ref().unwrap().pinned, Some(true));
+    assert_eq!(
+        server("fetch").launch.as_ref().unwrap().runner,
+        McpRunner::Uvx
+    );
+
+    let rules: Vec<_> = out
+        .tool_rules
+        .iter()
+        .map(|r| (r.rule.as_str(), r.decision))
+        .collect();
+    assert_eq!(
+        rules,
+        [
+            ("Bash(npm run test:*)", RuleDecision::Allow),
+            ("Read(~/.zshrc)", RuleDecision::Allow),
+            ("Bash(curl:*)", RuleDecision::Deny),
+            ("WebFetch", RuleDecision::Ask),
+        ]
+    );
+    assert_eq!(out.settings.len(), 1, "unknown values are not exported");
+    assert_eq!(
+        (out.settings[0].key.as_str(), out.settings[0].value.as_str()),
+        ("permissions.defaultMode", "acceptEdits")
+    );
+
+    let instructions: Vec<_> = out
+        .instructions
+        .iter()
+        .map(|i| (i.kind, i.name.as_str(), i.description.as_deref()))
+        .collect();
+    assert_eq!(
+        instructions,
+        [
+            (
+                InstructionKind::Command,
+                "ship",
+                Some("Run checks and open a PR")
+            ),
+            (
+                InstructionKind::Subagent,
+                "reviewer",
+                Some("Reviews diffs for bugs")
+            ),
+            (InstructionKind::Memory, "CLAUDE.md", None),
+        ]
+    );
+    assert!(out.builtin_tools.contains(&"Bash".to_owned()));
+    let encoded = serde_json::to_string(&out).unwrap();
+    assert!(!encoded.contains("private-"), "{encoded}");
+}
+
+#[test]
+fn realistic_codex_cursor_and_gemini_configs_report_settings_rules_and_prompts() {
+    let fixture = Fixture::new();
+    fixture.put(
+        "home/.codex/config.toml",
+        br#"
+model = "private-model-fixture"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp@1.0.14"]
+env_vars = ["CONTEXT7_API_KEY"]
+[mcp_servers.figma]
+url = "http://127.0.0.1:3845/mcp"
+env_http_headers = { "X-Figma-Token" = "FIGMA_TOKEN" }
+"#,
+    );
+    fixture.put(
+        "home/.codex/prompts/release.md",
+        b"---\ndescription: Draft release notes\n---\nprivate-prompt-body",
+    );
+    fixture.put("project/AGENTS.md", b"private-agents-body");
+    let codex = fixture.discover("codex");
+    let context7 = codex
+        .mcp_servers
+        .iter()
+        .find(|s| s.name == "context7")
+        .unwrap();
+    assert_eq!(context7.env_names, ["CONTEXT7_API_KEY"]);
+    assert_eq!(context7.launch.as_ref().unwrap().pinned, Some(true));
+    let figma = codex
+        .mcp_servers
+        .iter()
+        .find(|s| s.name == "figma")
+        .unwrap();
+    assert_eq!(figma.remote_host.as_deref(), Some("127.0.0.1:3845"));
+    assert_eq!(figma.header_names, ["X-Figma-Token"]);
+    let settings: Vec<_> = codex
+        .settings
+        .iter()
+        .map(|s| (s.key.as_str(), s.value.as_str()))
+        .collect();
+    assert_eq!(
+        settings,
+        [
+            ("approval_policy", "on-request"),
+            ("sandbox_mode", "workspace-write")
+        ]
+    );
+    let names: Vec<_> = codex
+        .instructions
+        .iter()
+        .map(|i| (i.kind, i.name.as_str()))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            (InstructionKind::Prompt, "release"),
+            (InstructionKind::Memory, "AGENTS.md")
+        ]
+    );
+
+    fixture.put("project/.cursor/rules/style.mdc", b"---\ndescription: TypeScript style\nglobs: src/**/*.ts\nalwaysApply: false\n---\nprivate-rule-body");
+    fixture.put("home/.cursor/cli-config.json", br#"{"permissions":{"allow":["Shell(git)"],"deny":["Shell(rm)"]},"private":"private-cursor"}"#);
+    let cursor = fixture.discover("cursor");
+    assert!(cursor
+        .instructions
+        .iter()
+        .any(|i| i.kind == InstructionKind::Rule
+            && i.name == "style"
+            && i.description.as_deref() == Some("TypeScript style")));
+    assert_eq!(cursor.tool_rules.len(), 2);
+
+    fixture.put("home/.gemini/settings.json", br#"{"mcpServers":{"local":{"command":"node","args":["/srv/private-dir/server.js"]}},"tools":{"exclude":["run_shell_command(rm)"]}}"#);
+    fixture.put(
+        "home/.gemini/commands/plan.toml",
+        b"description = \"Plan a change\"\nprompt = \"private-gemini-prompt\"\n",
+    );
+    let gemini = fixture.discover("gemini");
+    assert_eq!(
+        gemini.mcp_servers[0]
+            .launch
+            .as_ref()
+            .unwrap()
+            .package
+            .as_deref(),
+        Some("server.js")
+    );
+    assert_eq!(gemini.tool_rules[0].decision, RuleDecision::Deny);
+    assert!(gemini
+        .instructions
+        .iter()
+        .any(|i| i.name == "plan" && i.description.as_deref() == Some("Plan a change")));
+    for out in [codex, cursor, gemini] {
+        let encoded = serde_json::to_string(&out).unwrap();
+        assert!(!encoded.contains("private-"), "{encoded}");
+    }
 }

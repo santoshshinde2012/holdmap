@@ -314,9 +314,27 @@ export interface AgentAccess { user: string | null; uid: number | null; root: bo
 export interface AgentTool { pid: number; ppid: number | null; name: string; kind: AgentToolKind; command: string; cwd: string | null; evidence: Evidence; ports: number[]; memory_bytes: number; cpu_percent: number }
 
 export type CapabilityScope = "user" | "project" | "local";
-export interface AgentMcpServer { id: string; name: string; scope: CapabilityScope; source_path: string; project_path: string | null; transport: "stdio" | "http" | "sse" | "unknown"; enabled: boolean | null; evidence: Evidence }
+export type McpRunner = "npx" | "uvx" | "docker" | "interpreter" | "binary";
+/** What a stdio server starts: never its arguments. `pinned` is null when it doesn't apply. */
+export interface McpLaunch { runner: McpRunner; package: string | null; pinned: boolean | null }
+/** running: one of the agent's processes runs it now; not_seen: local but not running under it. */
+export interface McpRuntime { state: "running" | "not_seen" | "unknown"; pids: number[] }
+export interface AgentMcpServer {
+  id: string; name: string; scope: CapabilityScope; source_path: string; project_path: string | null;
+  transport: "stdio" | "http" | "sse" | "unknown"; enabled: boolean | null; evidence: Evidence;
+  launch?: McpLaunch | null; remote_host?: string | null; env_names?: string[]; header_names?: string[]; runtime?: McpRuntime;
+}
+export type InstructionKind = "rule" | "command" | "prompt" | "subagent" | "memory";
+export interface InstructionFile { id: string; kind: InstructionKind; name: string; description: string | null; scope: CapabilityScope; source_path: string; evidence: Evidence }
+export interface ToolRule { rule: string; decision: "allow" | "ask" | "deny"; scope: CapabilityScope; source_path: string }
+export interface ConfigSetting { key: string; value: string; scope: CapabilityScope; source_path: string }
 export interface AgentSkill { id: string; name: string; declared_name?: string | null; description?: string | null; scope: CapabilityScope; source_path: string; project_path: string | null; evidence: Evidence }
-export interface AgentCapabilities { inspected: boolean; mcp_servers: AgentMcpServer[]; skills: AgentSkill[]; limits: string[]; more_mcp_servers: number; more_skills: number }
+export interface AgentCapabilities {
+  inspected: boolean; mcp_servers: AgentMcpServer[]; skills: AgentSkill[]; limits: string[]; more_mcp_servers: number; more_skills: number;
+  instructions?: InstructionFile[]; tool_rules?: ToolRule[]; settings?: ConfigSetting[];
+  /** Documented built-ins for the product; not observed. */
+  builtin_tools?: string[];
+}
 
 export interface Agent {
   id: string;

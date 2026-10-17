@@ -152,26 +152,29 @@ describe("flow UI evidence and recording", () => {
       edges: [{ id: "socket", from: "a", to: "b", kind: "tcp", evidence: "observed", connections: 3, source_pids: [99] }] };
     const view = render(AgentFlowView, { ...base, flowReport: report });
     expect(view.getByRole("complementary", { name: "Connection details" })).toBeTruthy();
-    await fireEvent.click(view.getByRole("button", { name: "Hide inspector" }));
+    await fireEvent.click(view.getByRole("button", { name: "View options" }));
+    await fireEvent.click(view.getByRole("menuitemcheckbox", { name: "Inspector", checked: true }));
     expect(view.queryByRole("complementary", { name: "Connection details" })).toBeNull();
-    expect(view.getByRole("button", { name: "Show inspector" })).toBeTruthy();
+    await fireEvent.click(view.getByRole("button", { name: "View options" }));
+    expect(view.getByRole("menuitemcheckbox", { name: "Inspector", checked: false })).toBeTruthy();
   });
   it("hides visibility limits so the graph can stay in focus", async () => {
     const { container, getByRole } = render(AgentFlowView, { ...base, flowReport: emptyReport });
     expect(container.querySelector(".limits")).toBeTruthy();
-    await fireEvent.click(getByRole("button", { name: "Hide limits" }));
+    await fireEvent.click(getByRole("button", { name: "View options" }));
+    await fireEvent.click(getByRole("menuitemcheckbox", { name: "Visibility limits", checked: true }));
     expect(container.querySelector(".limits")).toBeNull();
-    expect(getByRole("button", { name: "Show limits" })).toBeTruthy();
-    await fireEvent.click(getByRole("button", { name: "Show limits" }));
+    await fireEvent.click(getByRole("button", { name: "View options" }));
+    await fireEvent.click(getByRole("menuitemcheckbox", { name: "Visibility limits", checked: false }));
     expect(container.querySelector(".limits")).toBeTruthy();
   });
   it("hides recording controls on Calls without dropping setup", async () => {
     const { getByRole, queryByRole } = render(AgentFlowView, { ...base, demo: true, onstartrecording: vi.fn() });
     await fireEvent.click(getByRole("radio", { name: "Calls" }));
     expect(getByRole("button", { name: "Start recording" })).toBeTruthy();
-    await fireEvent.click(getByRole("button", { name: "Hide recording" }));
+    await fireEvent.click(getByRole("button", { name: "View options" }));
+    await fireEvent.click(getByRole("menuitemcheckbox", { name: "Recording controls", checked: true }));
     expect(queryByRole("button", { name: "Start recording" })).toBeNull();
-    expect(getByRole("button", { name: "Show recording" })).toBeTruthy();
     await fireEvent.click(getByRole("button", { name: "Set up recording" }));
     expect(getByRole("region", { name: "Recording setup" })).toBeTruthy();
     expect(getByRole("button", { name: "Start recording" })).toBeTruthy();

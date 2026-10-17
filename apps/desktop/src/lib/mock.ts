@@ -454,21 +454,45 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT, includeCapabilities = fa
     cursor.capabilities = {
       inspected: true,
       mcp_servers: [
-        { id: "cursor:user:github", name: "github", scope: "user", source_path: "/Users/dev/.cursor/mcp.json", project_path: null, transport: "http", enabled: true, evidence: "observed" },
-        { id: "cursor:project:filesystem", name: "filesystem", scope: "project", source_path: `${shopWeb.root}/.cursor/mcp.json`, project_path: shopWeb.root, transport: "stdio", enabled: true, evidence: "observed" },
-        { id: "cursor:project:legacy-browser", name: "legacy-browser", scope: "project", source_path: `${shopWeb.root}/.cursor/mcp.json`, project_path: shopWeb.root, transport: "stdio", enabled: false, evidence: "observed" },
+        { id: "cursor:user:github", name: "github", scope: "user", source_path: "/Users/dev/.cursor/mcp.json", project_path: null, transport: "http", enabled: true, evidence: "observed", remote_host: "api.githubcopilot.com", header_names: ["Authorization"], env_names: [], runtime: { state: "unknown", pids: [] } },
+        { id: "cursor:project:filesystem", name: "filesystem", scope: "project", source_path: `${shopWeb.root}/.cursor/mcp.json`, project_path: shopWeb.root, transport: "stdio", enabled: true, evidence: "observed", launch: { runner: "npx", package: "@modelcontextprotocol/server-filesystem", pinned: false }, env_names: [], header_names: [], runtime: { state: "running", pids: [52070] } },
+        { id: "cursor:project:legacy-browser", name: "legacy-browser", scope: "project", source_path: `${shopWeb.root}/.cursor/mcp.json`, project_path: shopWeb.root, transport: "stdio", enabled: false, evidence: "observed", launch: { runner: "npx", package: "puppeteer-mcp-server@0.7.2", pinned: true }, env_names: [], header_names: [], runtime: { state: "unknown", pids: [] } },
       ],
       skills: [
         { id: "shared:user:code-review", name: "code-review", declared_name: "code-review", description: "Review changes for correctness, regressions and maintainability.", scope: "user", source_path: "/Users/dev/.agents/skills/code-review/SKILL.md", project_path: null, evidence: "observed" },
         { id: "shared:project:frontend-checks", name: "frontend-checks", declared_name: "frontend-checks", description: "Check UI behavior, accessibility and responsive layouts before shipping.", scope: "project", source_path: `${shopWeb.root}/.agents/skills/frontend-checks/SKILL.md`, project_path: shopWeb.root, evidence: "observed" },
       ],
+      instructions: [
+        { id: "cursor:rule:react", kind: "rule", name: "react-conventions", description: "TypeScript and React conventions for the storefront.", scope: "project", source_path: `${shopWeb.root}/.cursor/rules/react-conventions.mdc`, evidence: "observed" },
+        { id: "cursor:memory:agents", kind: "memory", name: "AGENTS.md", description: null, scope: "project", source_path: `${shopWeb.root}/AGENTS.md`, evidence: "observed" },
+      ],
+      tool_rules: [], settings: [], builtin_tools: [],
       more_mcp_servers: 0, more_skills: 0,
-      limits: ["Configuration and skill-file presence do not establish loading, connection or invocation. Commands, URLs, arguments, headers and secret values are not included. Only declared name/description from bounded skill frontmatter are retained; instructions are not collected or executed."],
+      limits: ["Configuration and skill-file presence do not establish loading, connection or invocation. Arguments, URL paths and queries, and environment or header values are not included. Only declared name/description from bounded skill frontmatter are retained; instructions are not collected or executed."],
     };
     claude.capabilities = {
       inspected: true,
-      mcp_servers: [{ id: "claude:project:filesystem", name: "filesystem", scope: "project", source_path: `${shopApi.root}/.mcp.json`, project_path: shopApi.root, transport: "stdio", enabled: null, evidence: "observed" }],
+      mcp_servers: [
+        { id: "claude:project:filesystem", name: "filesystem", scope: "project", source_path: `${shopApi.root}/.mcp.json`, project_path: shopApi.root, transport: "stdio", enabled: null, evidence: "observed", launch: { runner: "npx", package: "@modelcontextprotocol/server-filesystem@2025.8.21", pinned: true }, env_names: [], header_names: [], runtime: { state: "not_seen", pids: [] } },
+        { id: "claude:user:github", name: "github", scope: "user", source_path: "/Users/dev/.claude.json", project_path: null, transport: "stdio", enabled: null, evidence: "observed", launch: { runner: "npx", package: "@modelcontextprotocol/server-github", pinned: false }, env_names: ["GITHUB_PERSONAL_ACCESS_TOKEN"], header_names: [], runtime: { state: "not_seen", pids: [] } },
+        { id: "claude:user:linear", name: "linear", scope: "user", source_path: "/Users/dev/.claude.json", project_path: null, transport: "http", enabled: null, evidence: "observed", remote_host: "mcp.linear.app", env_names: [], header_names: ["Authorization"], runtime: { state: "unknown", pids: [] } },
+        { id: "claude:local:postgres", name: "postgres", scope: "local", source_path: "/Users/dev/.claude.json", project_path: shopApi.root, transport: "stdio", enabled: null, evidence: "observed", launch: { runner: "docker", package: "mcp/postgres:1.2", pinned: true }, env_names: ["DATABASE_URL"], header_names: [], runtime: { state: "not_seen", pids: [] } },
+      ],
       skills: [{ id: "claude:project:release-check", name: "release-check", description: "Check release notes, version references and packaging evidence.", scope: "project", source_path: `${shopApi.root}/.claude/skills/release-check/SKILL.md`, project_path: shopApi.root, evidence: "observed" }],
+      instructions: [
+        { id: "claude:command:ship", kind: "command", name: "ship", description: "Run checks and open a pull request.", scope: "user", source_path: "/Users/dev/.claude/commands/ship.md", evidence: "observed" },
+        { id: "claude:subagent:reviewer", kind: "subagent", name: "reviewer", description: "Reviews diffs for bugs and missing tests.", scope: "user", source_path: "/Users/dev/.claude/agents/reviewer.md", evidence: "observed" },
+        { id: "claude:memory:claude", kind: "memory", name: "CLAUDE.md", description: null, scope: "project", source_path: `${shopApi.root}/CLAUDE.md`, evidence: "observed" },
+      ],
+      tool_rules: [
+        { rule: "Bash(npm run test:*)", decision: "allow", scope: "user", source_path: "/Users/dev/.claude/settings.json" },
+        { rule: "Bash(git status)", decision: "allow", scope: "user", source_path: "/Users/dev/.claude/settings.json" },
+        { rule: "WebFetch", decision: "ask", scope: "project", source_path: `${shopApi.root}/.claude/settings.json` },
+        { rule: "Bash(curl:*)", decision: "deny", scope: "user", source_path: "/Users/dev/.claude/settings.json" },
+        { rule: "Read(./.env)", decision: "deny", scope: "project", source_path: `${shopApi.root}/.claude/settings.json` },
+      ],
+      settings: [{ key: "permissions.defaultMode", value: "acceptEdits", scope: "user", source_path: "/Users/dev/.claude/settings.json" }],
+      builtin_tools: ["Bash", "Edit", "Glob", "Grep", "MultiEdit", "NotebookEdit", "Read", "Task", "TodoWrite", "WebFetch", "WebSearch", "Write"],
       more_mcp_servers: 0, more_skills: 0, limits: [],
     };
     docker.capabilities = { inspected: false, mcp_servers: [], skills: [], more_mcp_servers: 0, more_skills: 0, limits: ["Capability source discovery is not supported for Docker Desktop."] };

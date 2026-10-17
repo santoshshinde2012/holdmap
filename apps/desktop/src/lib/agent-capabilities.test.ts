@@ -143,7 +143,9 @@ describe("capability inventory projections", () => {
     expect(enabledLabel(unknown)).toBe("Enablement unknown");
     expect(filterCapabilities(rows, "", "all", "all", "enabled")).toHaveLength(2);
     expect(filterCapabilities(rows, "", "all", "all", "disabled").map((row) => row.name)).toEqual(["legacy-browser"]);
-    expect(filterCapabilities(rows, "", "all", "all", "unknown")).toEqual([unknown]);
+    const unknownRows = filterCapabilities(rows, "", "all", "all", "unknown");
+    expect(unknownRows[0]).toEqual(unknown);
+    expect(unknownRows.every((row) => row.owners[0].name === "Claude Code" && row.kind === "mcp")).toBe(true);
     expect(filterCapabilities(rows, "", "skill", "project", "all").map((row) => row.name)).toEqual(["frontend-checks", "release-check"]);
   });
 

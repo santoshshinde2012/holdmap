@@ -128,7 +128,7 @@ fn safe_name(value: &str) -> Option<String> {
     (super::safe_name(value) && crate::redact::line(value) == value).then(|| value.to_owned())
 }
 
-fn safe_description(value: &str) -> Option<String> {
+pub(super) fn safe_description(value: &str) -> Option<String> {
     if value.chars().count() > 1024 || value.chars().any(|character| {
         character.is_control() && !matches!(character, '\n' | '\r' | '\t')
             || matches!(character, '\u{061c}' | '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{206f}' | '\u{feff}')

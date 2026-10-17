@@ -92,7 +92,12 @@ def verify(root):
     require(len(glib) == 1 and glib[0]["version"] == "0.18.5" and "source" not in glib[0], "Cargo.lock must contain only the local GLib backport")
     config = tomllib.loads((root / "deny.toml").read_text())
     require(config["advisories"]["unsound"] == "all", "cargo-deny must check transitive soundness advisories")
-    require(config["advisories"].get("ignore", []) == [], "GLib remediation must not ignore advisories")
+    # Only the tracked zip advisories (reached through tauri-plugin-updater) may be ignored,
+    # each with a reason; GLib or any other advisory must never be silenced here.
+    tracked = {"RUSTSEC-2026-0367", "RUSTSEC-2026-0368", "RUSTSEC-2026-0369"}
+    ignores = config["advisories"].get("ignore", [])
+    require(all(isinstance(entry, dict) and entry.get("reason") for entry in ignores), "every advisory ignore needs a reason")
+    require({entry["id"] for entry in ignores} <= tracked, "GLib remediation must not ignore advisories")
 
     result = subprocess.run(
         ["cargo", "metadata", "--locked", "--all-features", "--format-version", "1", "--manifest-path", str(root / "Cargo.toml")],

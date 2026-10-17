@@ -241,6 +241,23 @@ reparse points and macOS privacy-protected locations are skipped. File, byte, en
 context and time limits bound inspection; the report preserves omissions and coverage limits.
 An empty list does not prove that no capabilities exist.
 
+### Launch, run state and permissions
+
+With the inventory turned on (first run, **Read MCP config** on Home, or `--capabilities`), each MCP server
+also shows how it starts (`npx`, `uvx`, `docker`, script or binary, with the package and whether
+its version is pinned), the remote host for HTTP servers, and the **names** of its environment
+variables and headers. **Running** means the package was seen in that agent's own processes;
+**Not running** means it wasn't; remote and disabled servers stay **Unknown**. Holdmap never
+starts or connects to a server.
+
+Agents also list permission rules (allowed, asks first, denied) and safety settings from
+`~/.claude/settings.json`, `<project>/.claude/settings*.json`, `~/.cursor/cli-config.json`,
+Gemini `settings.json` and Codex `config.toml` (`approval_policy`, `sandbox_mode`), plus rules,
+commands, prompts and memory files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules`,
+`.claude/commands`, `~/.codex/prompts`, `.github/prompts` and similar) by name and description
+only. Built-in tool names are documented lists, not observations. Secret values, prompts and
+file bodies are never read into the report.
+
 Parsing follows each source format: VS Code JSONC accepts comments and trailing commas;
 Gemini settings accept comments but reject trailing commas. Other supported JSON files remain
 strict JSON. URL-only Cursor, legacy Windsurf and Gemini definitions do not establish HTTP

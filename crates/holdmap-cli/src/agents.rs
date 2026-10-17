@@ -81,6 +81,130 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
     })
 }
 
+/// One configured MCP server: transport, launch, where it points, and whether it runs now.
+fn capability_server(server: &holdmap_core::agents::McpServerCapability, pad: &str) -> String {
+    use holdmap_core::agents::McpRunState;
+    let enabled = match server.enabled {
+        Some(true) => "enabled in configuration",
+        Some(false) => "disabled in configuration",
+        None => "enablement unknown",
+    };
+    let mut facts = vec![server.transport.label().to_owned()];
+    if let Some(launch) = &server.launch {
+        let mut what = launch.runner.label().to_owned();
+        if let Some(package) = &launch.package {
+            what.push(' ');
+            what.push_str(&printable(package));
+        }
+        match launch.pinned {
+            Some(true) => what.push_str(" (pinned)"),
+            Some(false) => what.push_str(" (unpinned)"),
+            None => {}
+        }
+        facts.push(what);
+    }
+    if let Some(host) = &server.remote_host {
+        facts.push(printable(host).into_owned());
+    }
+    facts.push(server.scope.label().to_owned());
+    facts.push(enabled.to_owned());
+    let state = match server.runtime.state {
+        McpRunState::Running => paint(
+            format!(
+                "running (PID {})",
+                server
+                    .runtime
+                    .pids
+                    .iter()
+                    .map(u32::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            S::Green,
+        ),
+        McpRunState::NotSeen => style::dim("not seen running"),
+        McpRunState::Unknown => style::dim("running unknown"),
+    };
+    let mut out = format!(
+        "{pad}{} · {} · {state}\n",
+        paint(printable(&server.name), S::Bold),
+        facts.join(" · "),
+    );
+    let names: Vec<String> = server
+        .env_names
+        .iter()
+        .map(|name| format!("env {name}"))
+        .chain(
+            server
+                .header_names
+                .iter()
+                .map(|name| format!("header {name}")),
+        )
+        .collect();
+    if !names.is_empty() {
+        out.push_str(&format!(
+            "{pad}{}\n",
+            style::dim(format!("Names only: {}", printable(&names.join(", "))))
+        ));
+    }
+    out.push_str(&format!(
+        "{pad}{}\n",
+        style::dim(printable(&tilde(&server.source_path)))
+    ));
+    out
+}
+
+/// Instruction files, permission rules, safety settings and documented built-in tools.
+fn capability_config(c: &holdmap_core::agents::AgentCapabilities, pad: &str) -> String {
+    use holdmap_core::agents::RuleDecision;
+    let mut out = String::new();
+    for file in &c.instructions {
+        out.push_str(&format!(
+            "{pad}{} · {} · {}{}\n",
+            paint(printable(&file.name), S::Bold),
+            file.kind.label(),
+            file.scope.label(),
+            file.description
+                .as_ref()
+                .map(|d| format!(" · {}", printable(d)))
+                .unwrap_or_default(),
+        ));
+    }
+    for (decision, word) in [
+        (RuleDecision::Allow, "Allowed"),
+        (RuleDecision::Ask, "Asks first"),
+        (RuleDecision::Deny, "Denied"),
+    ] {
+        let rules: Vec<String> = c
+            .tool_rules
+            .iter()
+            .filter(|rule| rule.decision == decision)
+            .map(|rule| printable(&rule.rule).into_owned())
+            .collect();
+        if !rules.is_empty() {
+            out.push_str(&format!("{pad}{word}: {}\n", rules.join(", ")));
+        }
+    }
+    for setting in &c.settings {
+        out.push_str(&format!(
+            "{pad}Setting {} = {} {}\n",
+            printable(&setting.key),
+            printable(&setting.value),
+            style::dim(format!("({})", printable(&tilde(&setting.source_path))))
+        ));
+    }
+    if !c.builtin_tools.is_empty() {
+        out.push_str(&format!(
+            "{pad}{}\n",
+            style::dim(format!(
+                "Built-in tools (documented, not observed): {}",
+                c.builtin_tools.join(", ")
+            ))
+        ));
+    }
+    out
+}
+
 /// Stop every unprotected port the matching agents started.
 fn stop_ports(e: &Engine, report: &AgentsReport, a: &AgentsArgs, docker: bool) -> Result<u8> {
     if a.json && !a.yes && !a.dry_run {
@@ -501,25 +625,11 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
         if a.capabilities.inspected {
             out.push_str(&format!(
                 "{}{}\n",
-                label("MCP/skills"),
-                style::dim("Configuration / installation only; loading and use are unknown.")
+                label("config"),
+                style::dim("Configured on disk; \"running\" means one of this agent's processes runs it now. Otherwise loading and use are unknown.")
             ));
             for server in &a.capabilities.mcp_servers {
-                let enabled = match server.enabled {
-                    Some(true) => "enabled in configuration",
-                    Some(false) => "disabled in configuration",
-                    None => "enablement unknown",
-                };
-                out.push_str(&format!(
-                    "{}{} · {} · {} · {}\n{}{}\n",
-                    pad,
-                    paint(printable(&server.name), S::Bold),
-                    server.transport.label(),
-                    server.scope.label(),
-                    enabled,
-                    pad,
-                    style::dim(printable(&tilde(&server.source_path))),
-                ));
+                out.push_str(&capability_server(server, &pad));
             }
             for skill in &a.capabilities.skills {
                 out.push_str(&format!(
@@ -545,6 +655,7 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
                     ));
                 }
             }
+            out.push_str(&capability_config(&a.capabilities, &pad));
             if a.capabilities.mcp_servers.is_empty() && a.capabilities.skills.is_empty() {
                 out.push_str(&format!(
                     "{}{}\n",
@@ -570,7 +681,7 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
         } else {
             out.push_str(&format!(
                 "{}{}\n",
-                label("MCP/skills"),
+                label("config"),
                 style::dim("Not inspected. Use holdmap agents --capabilities for local inventory.")
             ));
             for limit in a
@@ -938,7 +1049,15 @@ mod tests {
         let mut a = agent(42, "claude-code", "Claude Code");
         a.capabilities = serde_json::from_value(serde_json::json!({
             "inspected": true,
-            "mcp_servers": [{"id":"design","name":"design","scope":"project","source_path":"/srv/shop-web/.mcp.json","project_path":"/srv/shop-web","transport":"http","enabled":false,"evidence":"observed"}],
+            "mcp_servers": [
+                {"id":"design","name":"design","scope":"project","source_path":"/srv/shop-web/.mcp.json","project_path":"/srv/shop-web","transport":"http","enabled":false,"evidence":"observed","remote_host":"mcp.example.com"},
+                {"id":"github","name":"github","scope":"user","source_path":"/home/dev/.claude.json","project_path":null,"transport":"stdio","enabled":null,"evidence":"observed",
+                 "launch":{"runner":"npx","package":"@modelcontextprotocol/server-github","pinned":false},"env_names":["GITHUB_TOKEN"],"runtime":{"state":"running","pids":[77]}}
+            ],
+            "instructions": [{"id":"ship","kind":"command","name":"ship","description":"Run checks","scope":"user","source_path":"/home/dev/.claude/commands/ship.md","evidence":"observed"}],
+            "tool_rules": [{"rule":"Bash(npm test)","decision":"allow","scope":"user","source_path":"/home/dev/.claude/settings.json"},{"rule":"Bash(curl:*)","decision":"deny","scope":"user","source_path":"/home/dev/.claude/settings.json"}],
+            "settings": [{"key":"permissions.defaultMode","value":"plan","scope":"user","source_path":"/home/dev/.claude/settings.json"}],
+            "builtin_tools": ["Bash","Read"],
             "skills": [{"id":"review","name":"review","declared_name":"review","description":"Review UI behavior.","scope":"user","source_path":"/home/dev/.claude/skills/review/SKILL.md","project_path":null,"evidence":"observed"}],
             "more_mcp_servers": 1, "more_skills": 2, "limits":["Coverage is partial."]
         })).unwrap();
@@ -951,6 +1070,30 @@ mod tests {
             None,
         );
         assert!(text.contains("disabled in configuration"));
+        assert!(
+            text.contains("design · HTTP · mcp.example.com · project"),
+            "{text}"
+        );
+        assert!(
+            text.contains("github · stdio · npx @modelcontextprotocol/server-github (unpinned)"),
+            "{text}"
+        );
+        assert!(text.contains("running (PID 77)"), "{text}");
+        assert!(text.contains("Names only: env GITHUB_TOKEN"), "{text}");
+        assert!(
+            text.contains("ship · command · user · Run checks"),
+            "{text}"
+        );
+        assert!(text.contains("Allowed: Bash(npm test)"), "{text}");
+        assert!(text.contains("Denied: Bash(curl:*)"), "{text}");
+        assert!(
+            text.contains("Setting permissions.defaultMode = plan"),
+            "{text}"
+        );
+        assert!(
+            text.contains("Built-in tools (documented, not observed): Bash, Read"),
+            "{text}"
+        );
         assert!(text.contains("review · skill folder · user"));
         assert!(text.contains("Purpose metadata: Review UI behavior."));
         assert!(text.contains("/srv/shop-web/.mcp.json"));

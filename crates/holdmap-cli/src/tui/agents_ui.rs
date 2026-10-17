@@ -934,6 +934,11 @@ mod tests {
                 transport: McpTransport::Stdio,
                 enabled: Some(true),
                 evidence: Evidence::Observed,
+                launch: None,
+                remote_host: None,
+                env_names: Vec::new(),
+                header_names: Vec::new(),
+                runtime: Default::default(),
             }],
             skills: vec![SkillCapability {
                 id: "skill-review".into(),
@@ -948,6 +953,7 @@ mod tests {
             more_mcp_servers: 1,
             more_skills: 0,
             limits: vec!["Configuration and skill file presence do not prove loading.".into()],
+            ..Default::default()
         };
         let report = AgentsReport {
             agents: vec![agent],
@@ -1041,6 +1047,11 @@ mod tests {
                 transport: McpTransport::Http,
                 enabled: None,
                 evidence: Evidence::Observed,
+                launch: None,
+                remote_host: None,
+                env_names: Vec::new(),
+                header_names: Vec::new(),
+                runtime: Default::default(),
             });
         }
         let lines = capability_lines(&agent, true)

@@ -711,6 +711,11 @@ export interface FootFlowOptions {
   agentIds?: readonly string[];
 }
 
+/** Every agent's colour by id, in report order: one source for cards, map and timeline. */
+export function agentColors(agents: readonly { id: string }[]): Map<string, string> {
+  return new Map(agents.map((a, i) => [a.id, AGENT_COLORS[i % AGENT_COLORS.length]]));
+}
+
 /** The agent's colour, by its position in the report. */
 export function agentColor(g: FootGraph | null, agentId: string, agentIds?: readonly string[]): string {
   const i = (agentIds ?? g?.nodes.filter((n) => n.kind === "agent").map((n) => n.id) ?? []).indexOf(agentId);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { ActionDock, ActionPill } from "../../ui";
+  import { ActionDock, ActionMenu, ActionPill, EvidenceChip, type MenuItem } from "../../ui";
   import Icon from "../../Icon.svelte";
   import FlowCanvas from "./FlowCanvas.svelte";
   import FlowInspector from "./FlowInspector.svelte";
@@ -10,7 +10,6 @@
   import { activityContext, activityRows, type ActivityFilter, type ActivityOrder } from "../../../lib/agent-flow/triage";
   import type { AgentFlowProps } from "../../../lib/agent-flow/model";
   import { prefGetBoolean, prefSet } from "../../../lib/prefs";
-  import { tooltip } from "../../../lib/tooltip";
 
   let { query = "", dark, reduced, flowReport = null, activity = null, recording = null, flowLoading = false, activityLoading = false,
     flowError = null, activityError = null, demo = false, paused = false, onpausechange, onflowmodechange, onrefreshflow, onrefreshactivity,
@@ -50,6 +49,12 @@
   const sourceHint = $derived(mode === "connections"
     ? "See which processes own tools and listeners, and which endpoints have live sockets. Sockets do not reveal messages or data direction."
     : "See reported tool calls, skill activations and parent spans. Session membership and event order do not imply communication or a match to configured capabilities.");
+  // Secondary view toggles live in one overflow menu so the toolbar keeps to source, refresh and pause.
+  const viewItems = $derived<MenuItem[]>([
+    ...(canInspect ? [{ id: "inspector", icon: "panel", label: "Inspector", checked: inspector, run: () => (inspector = !inspector) }] : []),
+    ...(canLimit ? [{ id: "limits", icon: "info", label: "Visibility limits", checked: showLimits, run: () => (showLimits = !showLimits) }] : []),
+    ...(mode === "calls" ? [{ id: "recording", icon: "activity", label: "Recording controls", checked: showRecording, run: () => (showRecording = !showRecording) }] : []),
+  ]);
   const sourceTotals = $derived(mode === "connections" ? `${graph.nodes.length} participants · ${graph.edges.length} relationships` : `${calls} tool calls${skills ? ` · ${skills} skill ${skills === 1 ? "activation" : "activations"}` : ""} · ${activity?.spans.length ?? 0} spans`);
   const runName = (r: typeof runs[number]) => `${r.spans.find((s) => s.kind === "agent")?.name ?? r.spans[0]?.name ?? r.label} · ${r.label.toLowerCase()} · ${r.calls} tool ${r.calls === 1 ? "call" : "calls"}${r.skills ? ` · ${r.skills} skill ${r.skills === 1 ? "activation" : "activations"}` : ""}`;
   $effect(() => { if (!allRuns.some((r) => r.id === runId)) runId = runs[0]?.id ?? null; });
@@ -71,8 +76,7 @@
       <ActionDock label="Flow data source" value={mode} options={[{ value: "connections", label: "Connections", icon: "link" }, { value: "calls", label: "Calls", icon: "activity" }]} onchange={change} />
     {/if}
     <div class="source">
-      <strong>{sourceLabel}</strong>
-      <span class="hint" use:tooltip={{ text: sourceHint, placement: "bottom", onlyIfTruncated: true }}>{sourceHint}</span>
+      <EvidenceChip tone={demo ? "unknown" : mode === "connections" ? "seen" : "configured"} label={sourceLabel} detail={sourceHint} />
       <span class="totals">{sourceTotals}</span>
     </div>
     {#if paused}<span class="paused">View paused</span>{/if}
@@ -84,9 +88,7 @@
     <div class="toolbar-actions">
       {#if onpausechange}<ActionPill icon={paused ? "play" : "stop"} label={paused ? "Resume view" : "Pause view"} name={paused ? "Resume flow updates" : "Pause flow updates"} toggle pressed={paused} onclick={() => onpausechange(!paused)} />{/if}
       <ActionPill icon="refresh" label="Refresh" name={mode === "calls" ? "Refresh recorded activity" : "Refresh connections"} disabled={loading} onclick={() => mode === "calls" ? onrefreshactivity?.() : onrefreshflow?.()} />
-      {#if canInspect}<ActionPill icon="panel" toggle pressed={inspector} label={inspector ? "Hide inspector" : "Show inspector"} title={inspector ? "Hide the inspector so the graph uses the full width" : "Show connection and activity details"} onclick={() => (inspector = !inspector)} />{/if}
-      {#if canLimit}<ActionPill icon="info" toggle pressed={showLimits} label={showLimits ? "Hide limits" : "Show limits"} title={showLimits ? "Hide visibility limits" : "Show what this view can and cannot see"} onclick={() => (showLimits = !showLimits)} />{/if}
-      {#if mode === "calls"}<ActionPill icon="activity" toggle pressed={showRecording} label={showRecording ? "Hide recording" : "Show recording"} title={showRecording ? "Hide recording controls" : "Show recording controls"} onclick={() => (showRecording = !showRecording)} />{/if}
+      {#if viewItems.length}<ActionMenu label="View options" size="sm" placement="down" items={viewItems} />{/if}
     </div>
   </header>
   {#if error}<div class="load-error" role="status">Updates unavailable. {graph.nodes.length ? "Showing the last available data." : "Refresh to try again."}</div>{/if}
@@ -139,9 +141,7 @@
   .toolbar, .run-picker, .activity-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
   .toolbar { gap: 10px; }
   .toolbar > :global(.dock) { order: 0; }
-  .source { order: 1; display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1 1 160px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
-  .source strong { color: var(--text-2); font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
-  .source .hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .source { order: 1; display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 160px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
   .paused { order: 2; }
   .toolbar > :global(.recording-bar) { order: 3; padding: 0; border: 0; flex: none; }
   .toolbar-actions { order: 4; display: flex; align-items: center; gap: 6px; margin-left: auto; }

@@ -1,5 +1,6 @@
 <script lang="ts" module>
-  export interface MenuItem { id: string; label: string; icon: string; hint?: string; run: () => void }
+  /** `checked` makes the item a toggle (menuitemcheckbox). */
+  export interface MenuItem { id: string; label: string; icon: string; hint?: string; checked?: boolean; run: () => void }
 </script>
 
 <script lang="ts">
@@ -9,13 +10,13 @@
   import IconButton from "./IconButton.svelte";
   import { isComposingKey } from "../../lib/keyboard";
 
-  let { items, label = "More actions", size = "md" }: { items: MenuItem[]; label?: string; size?: "sm" | "md" } = $props();
+  let { items, label = "More actions", size = "md", placement = "up" }: { items: MenuItem[]; label?: string; size?: "sm" | "md"; placement?: "up" | "down" } = $props();
   let open = $state(false);
   let btn: HTMLButtonElement | undefined = $state();
   let menu: HTMLDivElement | undefined = $state();
   const id = `menu-${Math.random().toString(36).slice(2, 8)}`;
 
-  const buttons = () => [...(menu?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
+  const buttons = () => [...(menu?.querySelectorAll<HTMLButtonElement>("[role^=menuitem]") ?? [])];
   function show() {
     open = true;
     requestAnimationFrame(() => buttons()[0]?.focus());
@@ -50,10 +51,10 @@
   <IconButton bind:el={btn} icon="more" {label} {size} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} onclick={() => (open ? close() : show())} />
   {#if open}
     <!-- svelte-ignore a11y_interactive_supports_focus -->
-    <div class="menu" role="menu" {id} aria-label={label} tabindex="-1" bind:this={menu} onkeydown={onkey}>
+    <div class="menu" class:down={placement === "down"} role="menu" {id} aria-label={label} tabindex="-1" bind:this={menu} onkeydown={onkey}>
       {#each items as item (item.id)}
-        <button type="button" role="menuitem" tabindex="-1" onclick={() => run(item)}>
-          <Icon name={item.icon} size={14} /><span class="l">{item.label}</span>{#if item.hint}<span class="h">{item.hint}</span>{/if}
+        <button type="button" role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"} aria-checked={item.checked} tabindex="-1" onclick={() => run(item)}>
+          <Icon name={item.checked === undefined ? item.icon : item.checked ? "check" : item.icon} size={14} /><span class="l">{item.label}</span>{#if item.hint}<span class="h">{item.hint}</span>{/if}
         </button>
       {/each}
     </div>
@@ -66,6 +67,7 @@
   button { display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 10px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--text); font: inherit; font-size: var(--fs-body); text-align: left; cursor: pointer; white-space: nowrap; }
   button :global(svg) { color: var(--muted); flex: none; }
   button:hover, button:focus-visible { background: var(--row-hover); outline: none; }
+  .menu.down { bottom: auto; top: calc(100% + 6px); }
   .l { flex: 1; }
   .h { color: var(--faint); font-family: var(--mono); font-size: var(--fs-mono-sm); }
 </style>

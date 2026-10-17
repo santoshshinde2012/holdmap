@@ -48,6 +48,7 @@
     capabilitiesLoading = false,
     capabilitiesError = null,
     onrefreshcapabilities,
+    oninventory,
     ...flowProps
   }: {
     /** null while the first report loads. */
@@ -72,6 +73,8 @@
     oneditor: (agentId: string, path: string) => void | Promise<void | boolean>;
     onstop: (e: PortEntry, agentId: string) => void;
     onstopall: (agentId: string) => void;
+    /** Opt in to reading every agent's configuration files. */
+    oninventory?: () => void;
     /** Local computer platform; remote-view paths still use the native local action boundary. */
     platform?: string;
     capabilitiesLoading?: boolean;
@@ -265,7 +268,7 @@
           <AgentCard agent={a} {report} {entries} color={graph ? agentColor(graph, a.id, agentIds) : "var(--accent)"} selected={a.id === selectedAgent} onselect={() => { picked = null; onselectagent(a.id === selectedAgent ? null : a.id); }} onnavigate={(id) => { picked = null; onselectagent(id); }}
             {onentry} onreveal={(path) => onreveal(a.id, path)} oneditor={(path) => oneditor(a.id, path)}
             onfolder={(path) => { projectPath = path; openFolder(path, a.id); }}
-            oncapabilities={() => { onselectagent(a.id); section = "capabilities"; }}
+            oncapabilities={() => { onselectagent(a.id); section = "capabilities"; }} {oninventory}
             onstop={(entry) => onstop(entry, a.id)} onstopall={() => onstopall(a.id)} now={report.taken_at_ms || Date.now()} />
         {:else}
           <div class="no-matches"><Icon name="search" size={20} /><p>No agents match this search</p><span>Search by name, tool, folder, port or process ID.</span></div>

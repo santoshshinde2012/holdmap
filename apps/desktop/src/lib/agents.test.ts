@@ -349,3 +349,11 @@ describe("pictures", () => {
     expect(host.data.color).toBe(agentColor(g, "agent:52000"));
   });
 });
+
+describe("agent colours", () => {
+  it("assigns one stable colour per agent in report order", async () => {
+    const { agentColors, AGENT_COLORS } = await import("./agents");
+    const m = agentColors([{ id: "a" }, { id: "b" }]);
+    expect([m.get("a"), m.get("b")]).toEqual([AGENT_COLORS[0], AGENT_COLORS[1]]);
+  });
+});

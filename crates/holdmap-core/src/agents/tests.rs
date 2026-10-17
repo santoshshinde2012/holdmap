@@ -50,6 +50,11 @@ fn capabilities_are_opt_in_old_agent_json_defaults_to_unknown_and_names_are_sear
         transport: McpTransport::Unknown,
         enabled: None,
         evidence: Evidence::Observed,
+        launch: None,
+        remote_host: None,
+        env_names: Vec::new(),
+        header_names: Vec::new(),
+        runtime: Default::default(),
     });
     assert!(agent.matches("CAPABILITY-ALIAS"));
     agent.capabilities.skills.push(SkillCapability {
@@ -1092,4 +1097,71 @@ fn an_agent_port_names_its_owned_secondary_holder() {
     let port = &report.agents[0].ports[0];
     assert_eq!(port.pid, Some(210));
     assert_eq!(port.process.as_deref(), Some("owned-worker"));
+}
+
+#[test]
+fn configured_servers_are_marked_running_only_from_the_agents_own_processes() {
+    #[derive(Debug)]
+    struct Configured;
+    impl CapabilityDiscovery for Configured {
+        fn discover(&self, _: &str, _: &[PathBuf], _: &str) -> AgentCapabilities {
+            let server = |name: &str, package: &str| McpServerCapability {
+                id: name.into(),
+                name: name.into(),
+                scope: CapabilityScope::User,
+                source_path: "/fixture/.codex/config.toml".into(),
+                project_path: None,
+                transport: McpTransport::Stdio,
+                enabled: None,
+                evidence: Evidence::Observed,
+                launch: Some(McpLaunch {
+                    runner: McpRunner::Npx,
+                    package: Some(package.into()),
+                    pinned: Some(false),
+                }),
+                remote_host: None,
+                env_names: Vec::new(),
+                header_names: Vec::new(),
+                runtime: Default::default(),
+            };
+            AgentCapabilities {
+                inspected: true,
+                mcp_servers: vec![
+                    server("github", "@modelcontextprotocol/server-github"),
+                    server("playwright", "@playwright/mcp"),
+                ],
+                ..Default::default()
+            }
+        }
+    }
+    let scan = scan_of(
+        vec![
+            proc(99, 1, "holdmap", &["holdmap"]),
+            proc(100, 1, "codex", &["codex"]),
+            proc(
+                101,
+                100,
+                "node",
+                &["npm", "exec", "@modelcontextprotocol/server-github"],
+            ),
+            // The same package outside the agent is not evidence for it.
+            proc(200, 1, "node", &["npx", "@playwright/mcp"]),
+        ],
+        vec![],
+        "fixture",
+    );
+    let report = agents_builder(&scan)
+        .with_home(None)
+        .with_project_detection(false)
+        .with_capabilities(&Configured)
+        .build();
+    let servers = &report.agents[0].capabilities.mcp_servers;
+    assert_eq!(
+        servers[0].runtime,
+        McpRuntime {
+            state: McpRunState::Running,
+            pids: vec![101]
+        }
+    );
+    assert_eq!(servers[1].runtime.state, McpRunState::NotSeen);
 }

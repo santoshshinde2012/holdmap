@@ -8,6 +8,36 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- **Home** in the desktop app, as **Cards** or **Map** (toggle at the top right, or press V;
+  the choice is remembered). Cards show each agent's projects, ports, MCP servers and skills
+  with an attention badge; Map shows the same footprint around this computer with a
+  collapsible **Timeline** of uptime, ports and MCP. A compact **Needs you** list sits beside
+  both. Selection is shared across views. Keyboard: ←/→ between agents, j/k in the timeline,
+  Esc to clear. Click any port on Home for **Details** or **Stop…**, which opens the usual stop plan.
+- Agent inventory now shows how each MCP server launches (runner, package, pinned or not),
+  its remote host, env/header **names**, and whether it is running in that agent's processes;
+  plus permission rules, safety settings, instruction files and documented built-in tools.
+  Available in `holdmap agents --capabilities`, MCP `list_agents` and the desktop agent cards.
+  Opt in from the welcome or Home. Values, prompts and file bodies are never read.
+- A first-open welcome to choose the start view and review notifications, launch at login,
+  single-key shortcuts and the agent inventory. Skipping changes nothing.
+
+### Changed
+
+- Screen recording and snapshots moved from the title bar to the status bar; the recording
+  timer and **Stop screen recording** stay in the title bar.
+- Evidence caveats show once, as a chip with a tooltip, instead of repeated notes.
+- Flow keeps source, refresh and pause in its toolbar; inspector, limits and recording
+  controls moved to **View options**.
+- Agent cards wrap PIDs and counts whole instead of cutting them off.
+
+### Security
+
+- cargo-deny ignores the three `zip` advisories (RUSTSEC-2026-0367/0368/0369), reached only
+  through `tauri-plugin-updater` on already signature-verified updates; see CONTRIBUTING.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added

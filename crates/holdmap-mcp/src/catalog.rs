@@ -74,7 +74,7 @@ fn build_catalog() -> Value {
         {
             "name": "list_agents",
             "title": "Agents and developer tools on this machine",
-            "description": "Inspect running AI coding agents (Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider…) and developer tools with their working folders, child tools, ports, local services, remote IPs and CPU/memory. Likely MCP processes do not confirm a handshake or invocation. include_capabilities=true explicitly inspects bounded local MCP configuration metadata and installed skill file locations for supported current-account agents; only aliases, transport, enablement, scope, source paths and sanitized skill-header name/purpose are returned as untrusted metadata. Configured/installed does not mean loaded or used. Default scans do not read capability configuration. The inventory never connects to servers or executes commands; skill instructions, chats and credential values are excluded from retention. Consult evidence, limits and omitted counts; recent folders do not prove current work.",
+            "description": "Inspect running AI coding agents (Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider…) and developer tools with their working folders, child tools, ports, local services, remote IPs and CPU/memory. Likely MCP processes do not confirm a handshake or invocation. include_capabilities=true explicitly inspects bounded local MCP configuration metadata and installed skill file locations for supported current-account agents; returned as untrusted metadata: aliases, transport, enablement, scope, source paths, runner and package name with pinning, remote host, environment/header names (never values), whether one of the agent's processes runs each stdio server now, permission allow/ask/deny rules, documented safety settings, instruction-file (rules, commands, prompts, subagents, AGENTS.md) names and frontmatter descriptions, sanitized skill names/purposes and documented built-in tools. Configured/installed does not mean loaded or used. Default scans do not read capability configuration. The inventory never connects to servers or executes commands; skill instructions, chats and credential values are excluded from retention. Consult evidence, limits and omitted counts; recent folders do not prove current work.",
             "inputSchema": {"type": "object", "properties": {
                 "agent": {"type": "string", "description": "Filter by product id, name, vendor, folder, visible capability/tool name or exact agent/child PID"},
                 "include_capabilities": {"type": "boolean", "default": false, "description": "Explicitly inspect bounded local MCP definitions and skill file locations; no loading or usage claim"}
@@ -371,7 +371,14 @@ fn capabilities_schema() -> Value {
             "scope": scope.clone(), "source_path": {"type": "string"},
             "project_path": {"type": ["string", "null"]}, "evidence": evidence.clone(),
             "transport": {"type": "string", "enum": ["stdio", "http", "sse", "unknown"]},
-            "enabled": {"type": ["boolean", "null"]}
+            "enabled": {"type": ["boolean", "null"]},
+            "launch": {"type": ["object", "null"], "description": "Runner kind, package/image/executable name and whether an exact version or digest is named; never arguments",
+                "properties": {"runner": {"type": "string", "enum": ["npx", "uvx", "docker", "interpreter", "binary"]},
+                               "package": {"type": ["string", "null"]}, "pinned": {"type": ["boolean", "null"]}}},
+            "remote_host": {"type": ["string", "null"], "description": "Endpoint host and port only"},
+            "env_names": strings(), "header_names": strings(),
+            "runtime": {"type": "object", "description": "running = one of this agent's processes runs it now (process-table evidence); not_seen = local server not running under it; unknown = remote, disabled or unidentifiable",
+                "properties": {"state": {"type": "string", "enum": ["running", "not_seen", "unknown"]}, "pids": array(count())}}
         }),
         &[
             "id",
@@ -404,6 +411,19 @@ fn capabilities_schema() -> Value {
     object(
         json!({
             "inspected": {"type": "boolean"}, "mcp_servers": array(server), "skills": array(skill),
+            "instructions": array(object(json!({
+                "id": {"type": "string"}, "name": {"type": "string"},
+                "kind": {"type": "string", "enum": ["rule", "command", "prompt", "subagent", "memory"]},
+                "description": {"type": ["string", "null"]}, "scope": {"type": "string"}, "source_path": {"type": "string"}
+            }), &["id", "name", "kind", "scope", "source_path"])),
+            "tool_rules": array(object(json!({
+                "rule": {"type": "string"}, "decision": {"type": "string", "enum": ["allow", "ask", "deny"]},
+                "scope": {"type": "string"}, "source_path": {"type": "string"}
+            }), &["rule", "decision", "scope", "source_path"])),
+            "settings": array(object(json!({
+                "key": {"type": "string"}, "value": {"type": "string"}, "scope": {"type": "string"}, "source_path": {"type": "string"}
+            }), &["key", "value", "scope", "source_path"])),
+            "builtin_tools": strings(),
             "more_mcp_servers": count(), "more_skills": count(), "limits": strings()
         }),
         &[
