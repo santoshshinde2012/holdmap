@@ -166,7 +166,7 @@ per service (default 60); `holdmap status` runs at most 32 HTTP checks concurren
 
 | Purpose | Commands |
 |---|---|
-| Look | `holdmap list`, `holdmap inspect`, `holdmap explain`, `holdmap graph`, `holdmap agents`, `holdmap watch`, `holdmap ssh HOST` (read-only, nothing to install remotely) |
+| Look | `holdmap list`, `holdmap inspect`, `holdmap explain`, `holdmap graph`, `holdmap agents`, `holdmap needs`, `holdmap watch`, `holdmap ssh HOST` (read-only, nothing to install remotely) |
 | Act | `holdmap stop`, `holdmap kill`, `holdmap restart`, `holdmap run`, `holdmap open`, `holdmap agents AGENT --stop-ports` |
 | Ports | `holdmap free-port --near 3000`, `holdmap wait 5432 --timeout 30s` |
 | Projects | `holdmap up`, `holdmap down`, `holdmap status`, `holdmap init` |
@@ -317,9 +317,10 @@ installers are unsigned: verify checksums and provenance first
 
 ## MCP server
 
-`holdmap mcp` gives AI coding assistants thirteen tools to list, explain and inspect ports, find a
+`holdmap mcp` gives AI coding assistants fourteen tools to list, explain and inspect ports, find a
 free port, wait for a server, read the service graph, list agents (`list_agents`, with
-`include_capabilities` for the opt-in inventory), follow agent flow (`get_agent_flow`), read opt-in analyzer findings (`list_analyzers`, `list_insights`) and stop
+`include_capabilities` for the opt-in inventory), follow agent flow (`get_agent_flow`), read opt-in analyzer findings (`list_analyzers`, `list_insights`), read the "needs you" list
+(`list_needs`) and stop
 ports. For Claude Desktop or Cursor (`~/.cursor/mcp.json`):
 
 ```json

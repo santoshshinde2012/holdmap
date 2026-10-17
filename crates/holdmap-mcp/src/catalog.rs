@@ -110,6 +110,13 @@ fn build_catalog() -> Value {
             "annotations": {"readOnlyHint": true, "openWorldHint": false}
         },
         {
+            "name": "list_needs",
+            "title": "What needs the user's attention",
+            "description": "The short \"needs you\" list holdmap shows on Home: agents listening on all interfaces, agents running as root or with wider access than usual, documented settings that skip approvals or the sandbox, unpinned MCP servers, dev servers open to the network and open medium-or-worse findings from approved analyzers. Each item has a rule, severity (high/medium), title, detail, target and, where stopping is the usual fix, a stop to preview with stop_port or stop_agent_ports. Read-only: never stops, runs or changes anything.",
+            "inputSchema": {"type": "object", "properties": {}},
+            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+        },
+        {
             "name": "stop_agent_ports",
             "title": "Stop ports an agent started",
             "description": "Preview the unprotected services started by specific matching agents or developer tools (dry_run=true by default). Show every plan and get the user's authorization. Execute with dry_run=false and the returned session-local, one-use confirmation_id within 5 minutes, preserving agent/force options. All selected agents and plans must still match before any stop; changes require a new preview. A partially refused preview issues no handle. Only low-risk plans execute; protected and other users' processes are refused. Prefer an exact PID or specific agent filter.",
@@ -506,6 +513,7 @@ fn output_schema(name: &str) -> Value {
             json!({"findings": {"type": "array"}, "runs": {"type": "array"}, "open": {"type": "object"}}),
             &["findings", "runs", "open"],
         ),
+        "list_needs" => object(json!({"items": {"type": "array"}}), &["items"]),
         "wait_for_port" => object(
             json!({"port": port(), "ready": {"type": "boolean"}, "elapsed_ms": count()}),
             &["port", "ready", "elapsed_ms"],

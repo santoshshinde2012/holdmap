@@ -112,7 +112,7 @@ export function agentFindings(insights: Insights | null, product: string, includ
       out.push({ finding, subject, result });
     }
   }
-  return out.sort((a, b) => RANK[b.finding.severity] - RANK[a.finding.severity] || a.finding.title.localeCompare(b.finding.title));
+  return out.sort((a, b) => RANK[b.finding.severity] - RANK[a.finding.severity] || (a.finding.title < b.finding.title ? -1 : a.finding.title > b.finding.title ? 1 : 0));
 }
 
 /** Open finding counts for one agent. */

@@ -12,6 +12,7 @@ pub mod consent;
 pub mod finding;
 pub mod input;
 pub mod manifest;
+pub mod needs;
 pub mod osv;
 pub mod parse;
 pub mod probe;

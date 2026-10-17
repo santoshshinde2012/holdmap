@@ -739,3 +739,20 @@ fn init_project_writes_a_valid_file() {
         .assert()
         .failure();
 }
+
+#[test]
+fn needs_json_is_a_list_of_items() {
+    let out = hm().args(["needs", "--json"]).output().unwrap();
+    assert!(out.status.success());
+    let items: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    for item in items.as_array().expect("a JSON array") {
+        for key in ["id", "rule", "severity", "title", "detail", "target"] {
+            assert!(item.get(key).is_some(), "{key} missing");
+        }
+    }
+}
+
+#[test]
+fn needs_text_runs_read_only() {
+    hm().arg("needs").assert().success();
+}

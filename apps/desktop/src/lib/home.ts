@@ -86,7 +86,8 @@ export function attention(entries: PortEntry[] | null, report: AgentsReport | nu
     if (e.exposure !== "all_interfaces") continue;
     items.push({ id: `exposed-port:${e.id}`, rule: "exposed-port", severity: "medium", stop: { kind: "entry", entryId: e.id }, title: `${e.label} on :${e.port} is open to the network`, detail: "Dev servers usually only need localhost.", target: { view: "list", entryId: e.id } });
   }
-  return items.sort((a, b) => (a.severity === b.severity ? a.title.localeCompare(b.title) : a.severity === "high" ? -1 : 1));
+  // Code-unit order, the same as the Rust rules (holdmap-core attention), so both lists match.
+  return items.sort((a, b) => (a.severity === b.severity ? (a.title < b.title ? -1 : a.title > b.title ? 1 : 0) : a.severity === "high" ? -1 : 1));
 }
 
 export const ACCESS_LABEL: Record<AccessLevel, string> = { restricted: "Restricted", standard: "Standard", elevated: "Elevated", unknown: "Unknown" };

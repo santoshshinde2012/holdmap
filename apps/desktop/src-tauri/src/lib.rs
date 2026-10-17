@@ -20,6 +20,7 @@ mod capture_lease;
 mod commands;
 mod confirmation;
 mod local_window;
+mod needs;
 mod power;
 mod recording_save;
 mod scheduler;
@@ -95,6 +96,7 @@ pub fn run() {
             analyzers::analyzer_run,
             analyzers::analyzers_run_changed,
             analyzers::insights,
+            needs::needs,
             analyzers::review_finding,
             commands::explain,
             commands::http_info,

@@ -300,6 +300,18 @@ pub(super) fn call(
         }
         "list_analyzers" => Ok(crate::analyzers::list(&analyzer_service())),
         "list_insights" => Ok(crate::analyzers::insights(&analyzer_service(), args)),
+        "list_needs" => {
+            let e = engine()?;
+            let report = e.agents_with_capabilities();
+            let extra =
+                holdmap_analyzers::needs::insight_items(&analyzer_service().insights(), &report);
+            let items = holdmap_core::attention::attention(
+                Some(&e.snapshot().entries),
+                Some(&report),
+                extra,
+            );
+            Ok(crate::needs::result(&items))
+        }
         "plan_cluster_stop" => {
             let c = args["cluster"]
                 .as_str()

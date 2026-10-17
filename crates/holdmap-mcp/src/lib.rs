@@ -9,6 +9,7 @@
 mod analyzers;
 mod catalog;
 mod confirmation;
+mod needs;
 mod observer;
 mod prompts;
 mod resources;

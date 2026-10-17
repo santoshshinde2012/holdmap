@@ -119,6 +119,7 @@ pub(super) fn canonical_name(name: &str) -> Option<&'static str> {
         "get_agent_flow" => Some("get_agent_flow"),
         "list_analyzers" => Some("list_analyzers"),
         "list_insights" => Some("list_insights"),
+        "list_needs" => Some("list_needs"),
         "stop_agent_ports" => Some("stop_agent_ports"),
         "plan_cluster_stop" => Some("plan_cluster_stop"),
         "stop_port" => Some("stop_port"),
@@ -179,7 +180,7 @@ mod tests {
             .iter()
             .map(|tool| tool["name"].as_str().unwrap())
             .collect();
-        assert_eq!(names.len(), 13);
+        assert_eq!(names.len(), 14);
         for name in names {
             assert_eq!(canonical_name(name), Some(name));
         }

@@ -7,6 +7,7 @@ import type { ShutdownPreview } from "./power";
 import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
 import type { AnalyzerResult, AnalyzerView, FindingState, Insights, Preview } from "./analyzers";
 import { DemoAnalyzers } from "./analyzers-demo";
+import { attention, type AttentionItem } from "./home";
 import { MOCK_SNAPSHOT, mockAgents, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
 /** True inside the Tauri webview. */
@@ -524,6 +525,13 @@ export async function insights(): Promise<Insights> {
   if (isTauri) return call("insights");
   if (liveReads()) return { results: [], open: { critical: 0, high: 0, medium: 0, low: 0, info: 0 } };
   return demoAnalyzers.insights();
+}
+
+/** The "needs you" list. In the app the Rust rules decide (shared with `holdmap needs` and
+ *  MCP `list_needs`); the browser demo uses the TypeScript mirror, kept equal by a parity test. */
+export async function needs(entries: PortEntry[] | null, report: AgentsReport | null, insights: Insights | null): Promise<AttentionItem[]> {
+  if (isTauri) return call("needs", { entries, report, insights });
+  return attention(entries, report, insights);
 }
 
 export async function reviewFinding(fingerprint: string, state: FindingState, days?: number): Promise<void> {

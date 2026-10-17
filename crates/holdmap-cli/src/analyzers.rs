@@ -113,7 +113,7 @@ impl From<MinSeverity> for Severity {
     }
 }
 
-fn service() -> AnalyzerService {
+pub(crate) fn service() -> AnalyzerService {
     AnalyzerService::new(Stores::of(FileStore::open_default()))
 }
 

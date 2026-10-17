@@ -3,6 +3,7 @@
   // with "Needs you" beside both. Hover and selection are shared across cards, map, timeline and
   // attention items, and survive a layout switch. Esc clears the selection.
   import { insightsStore } from "../../lib/insights-store.svelte";
+  import * as api from "../../lib/api";
   import Icon from "../Icon.svelte";
   import { SegmentedControl } from "../ui";
   import HomeSummary, { type SummaryStat } from "./HomeSummary.svelte";
@@ -43,7 +44,19 @@
   } = $props();
 
   const o = $derived(overview(entries, report));
-  const needs = $derived(attention(entries, report, insightsStore.insights));
+  // The TypeScript mirror paints instantly; in the app the Rust rules then replace it.
+  const quick = $derived(attention(entries, report, insightsStore.insights));
+  let decided = $state<{ from: AttentionItem[]; items: AttentionItem[] } | null>(null);
+  const needs = $derived(decided && decided.from === quick ? decided.items : quick);
+  $effect(() => {
+    const from = quick;
+    let live = true;
+    api.needs(entries, report, insightsStore.insights).then(
+      (items) => { if (live) decided = { from, items }; },
+      () => {},
+    );
+    return () => { live = false; };
+  });
   const groups = $derived(radialLayout(report?.agents ?? []));
   const rows = $derived(lanes(report, entries, now));
   const hot = $derived(hotAgents(needs));

@@ -36,6 +36,7 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`holdmap insights review`](#holdmap-insights-review) | Mark a finding reviewed; it stays hidden while it is unchanged |
 | [`holdmap insights snooze`](#holdmap-insights-snooze) | Hide a finding for some days |
 | [`holdmap insights reopen`](#holdmap-insights-reopen) | Show a reviewed or snoozed finding again |
+| [`holdmap needs`](#holdmap-needs) | What needs you: exposed agents, wide access, risky settings, unpinned MCP servers |
 | [`holdmap watch`](#holdmap-watch) | Stream port events: new listeners, closed listeners, conflicts |
 | [`holdmap pin`](#holdmap-pin) | Pin a port (favourite): shown first and watched even when free |
 | [`holdmap unpin`](#holdmap-unpin) | Remove a pin |
@@ -82,6 +83,7 @@ Commands:
   activity     Record and inspect opt-in local agent activity metadata
   analyzers    Opt-in analyzers (SkillSpector, OSV lookup): see what one gets, approve, run, revoke
   insights     Findings from approved analyzers, as text, JSON or SARIF
+  needs        What needs you: exposed agents, wide access, risky settings, unpinned MCP servers
   watch        Stream port events: new listeners, closed listeners, conflicts
   pin          Pin a port (favourite): shown first and watched even when free
   unpin        Remove a pin
@@ -660,6 +662,22 @@ Options:
                          auto, always, never]
       --no-docker        Don't query Docker/Podman/OrbStack/Colima
   -h, --help             Print help
+```
+
+## holdmap needs
+
+```text
+What needs you: exposed agents, wide access, risky settings, unpinned MCP servers
+
+Usage: holdmap needs [OPTIONS]
+
+Options:
+      --json           Machine-readable JSON output
+      --fail           Exit with status 1 when any item is listed
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
 ```
 
 ## holdmap watch

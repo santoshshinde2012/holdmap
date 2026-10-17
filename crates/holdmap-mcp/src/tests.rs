@@ -50,7 +50,7 @@ fn notifications_get_no_response() {
 fn lists_tools_with_annotations() {
     let r = call(json!({"jsonrpc":"2.0","id":3,"method":"tools/list"}));
     let tools = r["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 13);
+    assert_eq!(tools.len(), 14);
     let stop = tools.iter().find(|t| t["name"] == "stop_port").unwrap();
     assert_eq!(stop["annotations"]["destructiveHint"], true);
     assert_eq!(stop["annotations"]["idempotentHint"], false);

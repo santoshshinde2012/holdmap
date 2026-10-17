@@ -56,7 +56,7 @@ receive structured tool results alongside readable text.
 
 ## Tools
 
-The **0.9.0** server has these thirteen tools:
+The **0.9.0** server has these fourteen tools:
 
 | Tool | What it does |
 |---|---|
@@ -70,6 +70,7 @@ The **0.9.0** server has these thirteen tools:
 | `get_agent_flow` | Observed process ancestry and live TCP relationships for agents, with typed nodes, relationships, evidence and collection limits. It does not inspect capability files or report tool invocations. Added in 0.8.0. |
 | `list_analyzers` | Opt-in analyzers (OSV lookup, SkillSpector), their state, declared network use and last run. Never runs, installs or approves one. New after 0.9.0. |
 | `list_insights` | Stored findings from approved analyzers about agents' skills and MCP packages, filtered by analyzer, agent, severity or state. Never runs analyzers. New after 0.9.0. |
+| `list_needs` | The "needs you" list from Home: exposed agents, root or wider access, risky settings, unpinned MCP servers, open dev servers and analyzer findings, with a stop to preview where that's the usual fix. Read-only. New after 0.9.0. |
 | `stop_agent_ports` | Preview the unprotected ports started by matching agents; execute the retained plans with a one-use `confirmation_id`. Defaults to `dry_run: true`. |
 | `plan_cluster_stop` | A dry-run, dependency-ordered plan for stopping a cluster. Never executes. |
 | `stop_port` | Preview a port owner's stop plan; execute with a matching one-use `confirmation_id` and verify the port is free. Defaults to `dry_run: true`. |
