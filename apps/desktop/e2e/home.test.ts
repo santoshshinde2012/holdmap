@@ -69,6 +69,14 @@ for (const layout of ["cards", "map"] as const) for (const width of [390, 1024, 
       .filter((el) => el.offsetParent !== null && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== "visible" && !el.matches(".stage, .needs-scroll, .sr-only"))
       .map((el) => `${el.className}: ${el.textContent?.slice(0, 60)}`));
     expect(clipped).toEqual([]);
+    // Stacked blocks (summary, body, timeline) never run into each other, even when the summary wraps.
+    const overlaps = await app.evaluate(() => {
+      // Each block's real extent includes descendants that spill out of it.
+      const kids = [...document.querySelector(".home")!.children].filter((el) => (el as HTMLElement).offsetParent !== null)
+        .map((el) => ({ top: el.getBoundingClientRect().top, bottom: Math.max(...[el, ...el.querySelectorAll("*")].filter((d) => !d.closest(".stage")).map((d) => d.getBoundingClientRect().bottom)) }));
+      return kids.slice(1).filter((r, i) => r.top < kids[i].bottom - 0.5).length;
+    });
+    expect(overlaps).toBe(0);
     if (layout === "cards") {
       // Cards in a row share one height.
       const uneven = await overview.evaluate((root) => {
@@ -135,6 +143,23 @@ test("a port node on the Home map stops through the stop plan, and Esc closes it
   await app.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await node.click();
+  await menu.getByRole("menuitem", { name: "Stop…", exact: true }).click();
+  const review = app.getByRole("alertdialog");
+  await expect(review.getByRole("button", { name: "Stop :3000", exact: true })).toBeVisible();
+  await review.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(review).toHaveCount(0);
+});
+
+test("on a narrow screen the map lists each agent's ports, and Stop… still opens the stop plan", async ({ app }) => {
+  await app.setViewportSize({ width: 390, height: 844 });
+  const overview = await home(app);
+  await overview.getByRole("radiogroup", { name: "Home layout" }).getByRole("radio", { name: /^Map/ }).click();
+  const chip = overview.getByRole("list", { name: "Cursor ports" }).getByRole("button", { name: /^Port 3000/ });
+  await expect(chip).toBeVisible();
+  await chip.click();
+  const menu = app.getByRole("menu", { name: /^:3000 / });
+  const box = await menu.boundingBox();
+  expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
   await menu.getByRole("menuitem", { name: "Stop…", exact: true }).click();
   const review = app.getByRole("alertdialog");
   await expect(review.getByRole("button", { name: "Stop :3000", exact: true })).toBeVisible();

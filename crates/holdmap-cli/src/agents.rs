@@ -16,7 +16,8 @@ pub struct AgentsArgs {
     /// Show full agent details, including processes and redacted command lines.
     #[arg(short, long)]
     pub wide: bool,
-    /// Inspect bounded local MCP configuration and installed skill locations; no tool calls.
+    /// Opt-in inventory: MCP servers, skills, built-in tools, permission rules and instruction
+    /// files. Env/header names only, never values; never runs or connects to MCP servers.
     #[arg(long, conflicts_with_all = ["flow", "stop_ports"])]
     pub capabilities: bool,
     /// Show observed process, listener and TCP relationships; no call or payload inference.

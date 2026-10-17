@@ -83,7 +83,11 @@ tool's input schema or encounters a domain error instead returns a tool error (`
 With a **0.8.0 or newer** server, explicitly request configuration metadata using
 `{"name":"list_agents","arguments":{"include_capabilities":true}}` inside a `tools/call`
 request. The default is false. Supported bounded configuration files can contain credentials;
-only aliases, transport/enablement metadata and source locations are returned. Skill identity
+only metadata is returned: aliases, transport, enablement, scope and source paths; for each MCP
+server its runner and package (pinned or not), remote host, environment/header **names** (never
+values) and whether one of the agent's processes runs it now (on `main`, not yet in a published
+release); plus permission rules, documented safety settings, instruction-file names and
+documented built-in tools. Holdmap never starts or connects to an MCP server. Skill identity
 comes from folders, with optional sanitized declared name/purpose from bounded YAML headers;
 instruction bodies are not retained. Installed definitions do not prove loading, connection
 or use and do not grant process-action authority. See [MCP & skills coverage](../agents/#mcp-and-skills).

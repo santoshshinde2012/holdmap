@@ -126,6 +126,22 @@ async function openAgents(page, picture = "Footprint") {
   if (picture === "Computer") await expect(page.getByRole("group", { name: /^This computer,/ })).toBeVisible();
 }
 
+async function openHome(page, layout = "Cards") {
+  await page.getByRole("radio", { name: /^Home/ }).click();
+  const overview = page.getByRole("region", { name: "Overview", exact: true });
+  await overview.getByRole("radiogroup", { name: "Home layout", exact: true }).getByRole("radio", { name: new RegExp(`^${layout}`) }).click();
+  await expect(overview.getByRole("button", { name: /^MCP filesystem/ }).first()).toBeAttached();
+  return overview;
+}
+
+async function openPortMenu(page) {
+  const overview = await openHome(page);
+  await card(page, "Cursor").getByRole("button", { name: /^Port 3000 / }).click();
+  const menu = page.getByRole("menu", { name: /^:3000 / });
+  await expect(menu.getByRole("menuitem", { name: "Stop…", exact: true })).toBeVisible();
+  return { overview, menu };
+}
+
 async function openFolderActions(page) {
   await openAgents(page);
   await page.getByRole("button", { name: /^Folder shop-web,.*Zooms into this project/ }).click();
@@ -324,6 +340,28 @@ const captures = [
     await expect(dialog.getByRole("button", { name: "Simulate shutdown", exact: true })).toBeDisabled();
     return dialog;
   } })),
+  // Home reads the opt-in MCP inventory so cards show sample MCP servers; values are never shown.
+  ...["dark", "light"].flatMap((theme) => {
+    const home = { theme, viewport: { width: 1440, height: 820 }, prefs: { "agents.inventory": "1" } };
+    return [
+      { ...home, name: `desktop-home-cards-${theme}.png`, async prepare(page) { await openHome(page); } },
+      { ...home, name: `desktop-home-map-${theme}.png`, async prepare(page) {
+        const overview = await openHome(page, "Map");
+        await expect(overview.getByRole("table", { name: "Agent lanes", exact: true })).toBeVisible();
+      } },
+      { ...home, name: `desktop-home-port-menu-${theme}.png`, async prepare(page) { await openPortMenu(page); } },
+      { ...home, name: `desktop-home-stop-plan-${theme}.png`, async prepare(page) {
+        const { menu } = await openPortMenu(page);
+        await menu.getByRole("menuitem", { name: "Stop…", exact: true }).click();
+        await expect(page.getByRole("alertdialog").getByRole("button", { name: "Stop :3000", exact: true })).toBeVisible();
+      } },
+      { ...home, name: `desktop-home-narrow-${theme}.png`, viewport: { width: 390, height: 844 }, async prepare(page) { await openHome(page); } },
+      { ...home, name: `desktop-home-narrow-map-${theme}.png`, viewport: { width: 390, height: 844 }, async prepare(page) {
+        const overview = await openHome(page, "Map");
+        await expect(overview.getByRole("list", { name: /ports$/ }).first()).toBeVisible();
+      } },
+    ];
+  }),
   { name: "desktop-overview-dark.png", theme: "dark", async prepare(page) { await selectPort(page); } },
   { name: "desktop-overview-light.png", theme: "light", async prepare(page) { await selectPort(page); } },
   { name: "desktop-graph-dark.png", theme: "dark", prepare: openGraph },
@@ -452,7 +490,7 @@ try {
     if (requested.size && !requested.has(capture.name)) continue;
     const context = await browser.newContext({ viewport: capture.viewport ?? viewport, deviceScaleFactor: capture.deviceScaleFactor ?? 2, colorScheme: capture.theme, reducedMotion: "reduce", locale: "en-US", timezoneId: "UTC" });
     try {
-      await context.addInitScript(({ theme, pane }) => {
+      await context.addInitScript(({ theme, pane, prefs }) => {
         Object.defineProperty(Navigator.prototype, "platform", { get: () => "MacIntel" });
         Math.random = () => 0.5;
         window.__holdmapScreenshotCaptureRequests = 0;
@@ -460,8 +498,8 @@ try {
           window.__holdmapScreenshotCaptureRequests++;
           throw new Error("Screenshot fixtures must never request a real display capture.");
         } });
-        for (const [name, value] of Object.entries({ onboarded: "1", theme, view: "list", sort: "group", density: "comfortable", collapsed: "[]", pane, animate: "0", layout: "layered" })) localStorage.setItem(`holdmap.${name}`, value);
-      }, { theme: capture.theme, pane: capture.pane ?? "520" });
+        for (const [name, value] of Object.entries({ onboarded: "1", theme, view: "list", sort: "group", density: "comfortable", collapsed: "[]", pane, animate: "0", layout: "layered", ...prefs })) localStorage.setItem(`holdmap.${name}`, value);
+      }, { theme: capture.theme, pane: capture.pane ?? "520", prefs: capture.prefs ?? {} });
       const page = await context.newPage();
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));

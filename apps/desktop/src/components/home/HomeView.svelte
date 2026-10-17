@@ -106,7 +106,7 @@
             <div class="map-wrap">
               <MachineMap {groups} {colors} platform={report?.platform ?? ""} ports={o.ports} {active} {selected} {hot} onhover={(id) => (hovered = id)} onselect={select} onopen={open} onport={port} />
             </div>
-            <div class="map-list"><MapList {groups} {colors} {active} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} /></div>
+            <div class="map-list"><MapList {groups} {colors} {active} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} onport={port} /></div>
           </div>
         {/if}
       </div>
@@ -138,7 +138,9 @@
 </div>
 
 <style>
-  .home { overflow-y: auto; min-height: 0; padding: var(--sp-4) var(--sp-5) var(--sp-6); display: grid; gap: var(--sp-4); align-content: start; width: 100%; max-width: 1680px; margin: 0 auto; }
+  /* max-content rows: the header sets a min-height, and auto rows would hold it to that once the
+     body overflows, letting a wrapped summary run under the panel on narrow screens. */
+  .home { overflow-y: auto; min-height: 0; padding: var(--sp-4) var(--sp-5) var(--sp-6); display: grid; grid-auto-rows: max-content; gap: var(--sp-4); align-content: start; width: 100%; max-width: 1680px; margin: 0 auto; }
   .top { display: flex; align-items: center; gap: var(--sp-2) var(--sp-4); flex-wrap: wrap; min-height: 30px; }
   .tools { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; justify-content: flex-end; }
   .legend { display: flex; gap: var(--sp-3); flex-wrap: wrap; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }

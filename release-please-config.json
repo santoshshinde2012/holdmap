@@ -38,8 +38,7 @@
         { "type": "json", "path": "apps/desktop/package-lock.json", "jsonpath": "$.version" },
         { "type": "json", "path": "apps/desktop/package-lock.json", "jsonpath": "$.packages[''].version" },
         { "type": "json", "path": "apps/desktop/src-tauri/tauri.conf.json", "jsonpath": "$.version" },
-        { "type": "generic", "path": "README.md" },
-        { "type": "generic", "path": "docs/badges/version.svg" }
+        { "type": "generic", "path": "README.md" }
       ]
     }
   }

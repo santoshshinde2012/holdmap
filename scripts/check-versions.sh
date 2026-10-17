@@ -28,18 +28,6 @@ marker = re.fullmatch(r"Source version: \*\*(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\
 if not marker:
     sys.exit("README.md source-version marker block must contain exactly one field: Source version: **X.Y.Z**.")
 versions["README.md source version marker"] = marker.group(1)
-badge = open("docs/badges/version.svg").read()
-badge_versions = {}
-for n, line in enumerate(badge.splitlines()):
-    found = re.findall(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", line)
-    if not found:
-        continue
-    if len(found) != 1 or "x-release-please-version" not in line:
-        sys.exit(f"version badge line {n + 1} needs one version and its release-please annotation")
-    badge_versions[f"docs/badges/version.svg line {n + 1}"] = found[0]
-if len(badge_versions) != 2:
-    sys.exit("version badge must identify its version in both the accessible title and visible text")
-versions.update(badge_versions)
 for p in lock["package"]:
     if p["name"] in ("holdmap", "holdmap-core", "holdmap-mcp", "holdmap-desktop", "holdmap-activity"):
         versions[f"Cargo.lock {p['name']}"] = p["version"]

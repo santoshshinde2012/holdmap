@@ -1,8 +1,24 @@
 ---
-title: What's new in 0.9.0
-description: Explore holdmap 0.9.0 PNG snapshots, a readable service graph and the capability explorer, with local capture and separate CLI and desktop upgrades.
+title: What's new
+description: What's new in holdmap - Home as Cards or Map, a richer agent inventory and safe port stops on main, plus 0.9.0 snapshots and the capability explorer.
 order: 1.5
 ---
+
+## On main: Home, agent inventory and port stops
+
+Not in a published release yet; [Install](../../#install) follows the latest published release.
+
+- **Home** shows every agent as **Cards** or a **Map** with a **Timeline** of uptime, ports
+  and MCP, plus a **Needs you** list. Press `V` to switch. [Home](../desktop/#home-and-first-open).
+- **Agent inventory** adds how each MCP server launches (runner, package, pinned or not), its
+  remote host, env/header **names**, whether it runs now, permission rules, safety settings,
+  instruction files and built-in tools: `holdmap agents --capabilities`, MCP `list_agents`
+  with `include_capabilities`, and the desktop cards. Values, prompts and file bodies are never
+  read. [Launch, run state and permissions](../agents/#launch-run-state-and-permissions).
+- **Stop a port from Home:** click a card chip, map node or timeline pin for **Details** or
+  **Stop…**; the stop plan opens first. Narrow windows list each agent's ports with the same menu.
+
+## 0.9.0
 
 **Holdmap 0.9.0** brings PNG snapshots, a readable service graph and the
 **Explore / Map / Compare** capability explorer. During release preparation, a source version
@@ -10,7 +26,7 @@ does not imply installer availability. The download section follows the latest p
 release; **0.8.0** installers predate these additions. Check [Install](../../#install) before upgrading; the
 [changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md) records the full changes.
 
-## PNG snapshots alongside video
+### PNG snapshots alongside video
 
 Use the camera button, **Take snapshot…** or `⇧S` to choose what to capture:
 
@@ -30,7 +46,7 @@ fallback requires **macOS 14 or later**; other platforms use browser screen-shar
 and their system picker. [Snapshot sources and limits](../desktop/#take-a-png-snapshot).
 Video recording retains its two-minute, no-audio MP4/GIF workflow and now uses the video icon.
 
-## A readable service graph
+### A readable service graph
 
 Graph opens with a full canvas until you select a service. Both layouts pack disconnected
 services and separate clusters compactly. Cards start at a readable size; **Fit all services
@@ -42,7 +58,7 @@ extra matches. List filters stay separate. **Options** holds Traffic, External a
 keyboard activation and focus return work through the selected service's details.
 Layout proximity never invents a connection. [Service graph guide](../desktop/#service-graph-and-cluster-grouping).
 
-## Explore, map and compare capabilities
+### Explore, map and compare capabilities
 
 Open **Agents → MCP & skills** to explicitly inspect the existing supported local sources.
 **Explore** leads with declared skill purposes, **Map** retains source relationships, and

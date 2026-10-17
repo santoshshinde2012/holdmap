@@ -23,6 +23,8 @@ by [release-please](https://github.com/googleapis/release-please) from
   Opt in from the welcome or Home. Values, prompts and file bodies are never read.
 - A first-open welcome to choose the start view and review notifications, launch at login,
   single-key shortcuts and the agent inventory. Skipping changes nothing.
+- On a narrow window the Home Map lists each agent's ports, with the same **Details** /
+  **Stop…** menu as the wide map.
 
 ### Changed
 
@@ -32,6 +34,17 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Flow keeps source, refresh and pause in its toolbar; inspector, limits and recording
   controls moved to **View options**.
 - Agent cards wrap PIDs and counts whole instead of cutting them off.
+- `holdmap agents --capabilities`, `stop` and `kill` help describe the inventory, the stop
+  plan and protection; MCP docs list the full `include_capabilities` metadata.
+- The website and README lead with Home, the per-agent inventory and safe port stops, and show
+  the latest published release rather than the source version. The README badge now reads the
+  latest release; the source-version SVG badge is gone.
+- The desktop shell is split into preferences, commands, shortcuts and dialogs, with no
+  behaviour change.
+
+### Fixed
+
+- On narrow windows the Home summary and layout toggle no longer run under **Needs you**.
 
 ### Security
 

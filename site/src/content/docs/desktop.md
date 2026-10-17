@@ -37,7 +37,14 @@ MCP servers and skills; Map draws the same footprint around this computer with a
 safety settings, unpinned MCP servers and exposed dev servers. Click any port (a card chip, a
 map node or a timeline pin) for **Details** or **Stop…**; every **Stop…** opens the stop plan
 first. Select an agent once to highlight it everywhere; select it again to open it on
-Agents. Counts read **…** until the first scan.
+Agents. Counts read **…** until the first scan. On a narrow window the Map becomes a list
+of agents, each with its ports and the same **Details** / **Stop…** menu.
+
+![Home as Cards in dark theme: agent cards with projects, ports, MCP servers and skills, and Needs you](../../../../docs/screenshots/desktop-home-cards-dark.png)
+
+![Home as Map in light theme: agents around this computer with the Timeline below](../../../../docs/screenshots/desktop-home-map-light.png)
+
+![A port's menu on Home in dark theme, with Details and Stop…](../../../../docs/screenshots/desktop-home-port-menu-dark.png)
 
 The first open asks where to start and shows notifications, launch at login and single-key
 shortcuts with their current settings. **Skip** changes nothing.

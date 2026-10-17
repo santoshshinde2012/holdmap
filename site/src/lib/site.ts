@@ -41,12 +41,24 @@ const [release, repo] = await Promise.all([github<unknown>("/releases/latest"), 
 
 /** Publishing requires a validated stable release; local builds can fall back to version.txt. */
 export const version = publishedReleaseVersion({ sourceVersion: fileVersion, release, repositoryUrl: repoUrl, offline, requireRelease });
-// The current highlights describe 0.9.0. Keep metadata and visible availability in agreement.
-const [publishedMajor, publishedMinor] = version.split(".").map(Number);
-export const releaseHighlightsPublished = publishedMajor > 0 || publishedMinor >= 9;
+/** The version on main (version.txt). It can be ahead of the latest published release. */
+export const sourceVersion = fileVersion;
+const parts = (v: string) => v.split(".").map(Number);
+/** Whether published version `have` is at least `want` (both `x.y.z`). */
+export function atLeast(have: string, want: string): boolean {
+  const [a, b] = [parts(have), parts(want)];
+  for (let i = 0; i < 3; i++) if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0);
+  return true;
+}
+/** The release highlights describe the source version; true once installers for it are published. */
+export const releaseHighlightsPublished = atLeast(version, sourceVersion);
+/** Home (Cards / Map), the richer per-agent inventory (launch, env names, rules) and stopping ports from Home are on main
+ *  and not in a published release yet. Set this to the release that first ships them. */
+export const homeRelease: string | null = null;
+export const homePublished = homeRelease !== null && atLeast(version, homeRelease);
 export const description = releaseHighlightsPublished
-  ? "holdmap maps ports, agents, MCP and skills. Stop services safely, explore capabilities and save local video or PNGs on macOS, Linux and Windows."
-  : "holdmap maps ports, agents, MCP and skills. Preview 0.9.0's capability explorer and PNG snapshots. Local tools for macOS, Linux and Windows.";
+  ? "holdmap shows your agents, MCP servers, skills, tools, apps and ports, and stops services safely after a reviewed plan. macOS, Linux and Windows."
+  : `holdmap shows your agents, MCP servers, skills, tools, apps and ports, and stops services safely. Latest release v${version}; ${sourceVersion} is in preparation.`;
 export const stars = repo?.stargazers_count && repo.stargazers_count >= STARS_SHOWN_FROM ? repo.stargazers_count : null;
 
 // Keep the chosen release label, filenames and checksums together while a new release builds.

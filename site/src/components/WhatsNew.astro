@@ -1,6 +1,6 @@
 ---
 import Icon from "./Icon.astro";
-import { releaseHighlightsPublished as released, repoUrl, url, version } from "../lib/site";
+import { releaseHighlightsPublished as released, repoUrl, sourceVersion, url, version } from "../lib/site";
 const highlights = [
   { icon: "Camera", title: "Keep a still alongside the video", text: "Capture the Holdmap view, choose a screen or window, or borrow the active recording source without another picker. Review and save the PNG locally while video keeps running.", href: url("docs/desktop/#take-a-png-snapshot"), link: "Take a PNG snapshot" },
   { icon: "Network", title: "Read the service graph at a glance", text: "Compact disconnected services, readable starting zoom and a full canvas make local relationships easier to explore. Search services, ports and PIDs while keeping observed neighbors in context.", href: url("docs/desktop/#service-graph-and-cluster-grouping"), link: "Explore the service graph" },
@@ -12,7 +12,7 @@ const highlights = [
     <div class="section-head head-row">
       <div>
         <span class="eyebrow">Release highlights</span>
-        <h2 class="h2" id="release-title">{released ? "0.9.0 is here." : "0.9.0 release preparation."} <span class="soft">Capture, explore, understand.</span></h2>
+        <h2 class="h2" id="release-title">{released ? `${sourceVersion} is here.` : `${sourceVersion} release preparation.`} <span class="soft">Capture, explore, understand.</span></h2>
       </div>
       <a class="link-arrow" href={url("docs/whats-new/")}>What's new <Icon name="ArrowRight" size={16} /></a>
     </div>
@@ -26,7 +26,7 @@ const highlights = [
         </li>
       ))}
     </ul>
-    <p class="release-note">0.9.0 adds PNG snapshots, the readable service graph and the capability explorer. {released ? <a href={`${repoUrl}/releases/tag/v0.9.0`}>Read the full 0.9.0 release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
+    <p class="release-note">{sourceVersion} adds PNG snapshots, the readable service graph and the capability explorer. {released ? <a href={`${repoUrl}/releases/tag/v${sourceVersion}`}>Read the full {sourceVersion} release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
   </div>
 </section>
 

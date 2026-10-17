@@ -5,7 +5,7 @@
 <h1 align="center">holdmap</h1>
 
 <p align="center">
-  <b>See which ports, agents and tools are running — and stop the right thing safely.</b><br/>
+  <b>Full visibility and control over your agents, MCP servers, skills, tools, apps and ports.</b><br/>
   CLI · TUI · desktop and tray app · MCP server, all on one Rust core.
 </p>
 
@@ -17,79 +17,50 @@
 
 <p align="center">
   <a href="https://github.com/santoshshinde2012/holdmap/actions/workflows/ci.yml"><img src="https://github.com/santoshshinde2012/holdmap/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
-  <a href="https://github.com/santoshshinde2012/holdmap/releases/latest"><img src="docs/badges/version.svg" alt="Holdmap version; open the latest release" /></a>
+  <a href="https://github.com/santoshshinde2012/holdmap/releases/latest"><img src="https://img.shields.io/github/v/release/santoshshinde2012/holdmap?label=latest%20release" alt="Latest published release" /></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License: MIT OR Apache-2.0" /></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platforms: macOS, Linux, Windows" />
 </p>
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/desktop-overview-dark.png" />
-    <img src="docs/screenshots/desktop-overview-light.png" width="860" alt="The holdmap desktop app: ports grouped by kind, port 3000 selected with project, branch, memory, connections and what Stop will signal" />
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/desktop-home-cards-dark.png" />
+    <img src="docs/screenshots/desktop-home-cards-light.png" width="860" alt="holdmap Home as Cards: each agent with its projects, ports, MCP servers and skills, and a Needs you list" />
   </picture>
 </p>
 
 `EADDRINUSE: address already in use :::3000`? Most tools hand you a PID and a `kill -9`.
-holdmap tells you what's really there — which agent or tool started it — and stops only what
-it should.
+holdmap shows which agent or tool holds it, what each agent is set up with, and stops only what
+it should, after a plan you review.
 
-**Version 0.9.0** adds local PNG snapshots, a readable service graph and the
-**Explore / Map / Compare** capability explorer. It retains the opt-in MCP/skill inventory,
-reported usage and desktop update help introduced in 0.8.0.
-Read [what's new in 0.9.0](https://santoshshinde2012.github.io/holdmap/docs/whats-new/), check the
-[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
-current installers and see the [changelog](CHANGELOG.md) for release notes. During release
-preparation, the source version does not imply installer availability; 0.8.0 installers predate
-these additions. Desktop
-screenshots use the shared browser UI with sample data.
+Download installers from the
+[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest); `main`
+can be ahead of it ([changelog](CHANGELOG.md),
+[what's new](https://santoshshinde2012.github.io/holdmap/docs/whats-new/)). Screenshots use
+sample data.
 
 ## Features
 
-- **Who owns the port.** Process, user, command, folder, plus the project, git branch and
-  framework (Next.js, Vite, Django, Postgres…) or the Docker / Podman / OrbStack container.
-- **Why it's busy, in plain English.** A dev-server tree, a container, a systemd / pm2 / Homebrew
-  service, an OS feature like AirPlay Receiver, `TIME_WAIT`, or another user.
-- **A safe stop.** Preview the plan, stop the whole dev-server tree gracefully (SIGTERM, then
-  SIGKILL), and check the port is free afterwards. System processes and IDEs are protected.
-- **What's behind it.** Who is connected right now, the full process tree, uptime, CPU and
-  memory (the whole app, helpers included), the HTTP status and title, and what the bind address
-  means for your safety.
-- **The service graph.** Which local services talk to which, grouped into clusters (Compose,
-  Kubernetes, workspaces). Stop a whole stack in dependency order.
+- **Home.** Every agent as **Cards** or a **Map** with a **Timeline** of uptime, ports and MCP,
+  plus a **Needs you** list. Click any port for **Details** or **Stop…** (on `main`).
+- **Who owns the port.** Process, user, command, folder, project, git branch and framework, or
+  the Docker / Podman / OrbStack container — in plain English, with why it's busy.
+- **A safe stop.** Preview the plan, stop the dev-server tree gracefully (SIGTERM, then SIGKILL)
+  and check the port is free. System processes and IDEs are protected.
 - **Your agents, tools and apps.** Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf,
-  Aider, Docker Desktop, OrbStack and more: memory, CPU, stoppable ports, parent process, the
-  folders each one works in, the ports and apps it started (children grouped as tools & apps),
-  the services and hosts it talks to, and access (account, sandbox, approval flags, network
-  exposure including debug and model-server ports), each fact marked seen, inferred or unknown.
-  Default scans do not read agent settings. Version 0.8.0 adds an opt-in **MCP & skills**
-  inventory of configured server aliases and skill locations, separate from recorded usage;
-  see [0.8.0 changes](CHANGELOG.md#080---2026-10-16). Reveal a folder, open it in your editor,
-  or stop only the services that agent started, through the normal safety policy.
-- **Three levels of agent maps.** Computer shows this machine and outside systems;
-  Footprint shows agents' folders, tools, ports and hosts; Project focuses on one source tree.
-- **Capability explorer (0.9.0).** Read declared skill purposes in Explore, follow source
-  relationships in Map, or Compare exact observed definitions across agent contexts. Matching
-  process contexts group together while retaining their PIDs. The inspector separates Purpose,
-  Source, Evidence and Activity; finding a file or configuration is not proof of loading or use.
-- **Local screen recording.** Choose a screen or window, capture up to two minutes without
-  audio, then preview and save the available MP4/GIF exports. Nothing is uploaded.
-- **PNG snapshots (0.9.0).** Capture the visible Holdmap view without screen-sharing
-  permission, choose a screen/window, or borrow the active recording source without another
-  picker or stopping the video. Review and save the image locally.
+  Aider, Docker Desktop and more: folders, child tools, ports, connections, CPU, memory and
+  access, each fact marked seen, inferred or unknown. Stop only the services an agent started.
+- **Each agent's capabilities (opt-in).** MCP servers (how they launch, pinned or not, remote
+  host, running now), skills, built-in tools, permission rules and instruction files. Env and
+  header **names** only; values, prompts and file bodies are never read, and MCP servers are
+  never started.
+- **Maps and graphs.** Computer / Footprint / Project agent maps, the service graph with
+  clusters (Compose, Kubernetes, workspaces), and the Explore / Map / Compare capability explorer.
+- **Local capture.** Screen or window recording to MP4/GIF and PNG snapshots. Nothing is uploaded.
 - **Everywhere you work.** A scriptable CLI (`--json`), a TUI, a desktop and tray app, and an MCP
   server for AI coding assistants. macOS, Linux and Windows. No product analytics.
-- **Agent flow.** Follow observed process/socket relationships, or opt in to
-  local recording of reported tools, model calls and delegated agents. Inspect parallel work,
-  failures, duration and reported serialized sizes without storing prompts or tool arguments.
-  Version 0.8.0 also labels reported MCP aliases and explicit Claude skill activations;
-  an installed skill or server definition is not proof of use.
 
 ## Install
-
-**Linux desktop 0.3.0 downloads predate the GLib security fixes.** Use version **0.4.0 or newer**,
-or build the desktop from current source. CLI, TUI, MCP and macOS/Windows
-desktop are unaffected by this Linux dependency issue. See the
-[security policy](SECURITY.md#linux-glib-dependency-backports).
 
 **macOS and Linux**
 
@@ -214,48 +185,26 @@ verify TCP/UDP listeners held by every included descendant in a PID/name tree st
 Supervisor commands must match the planned service or app; systemd service stops recheck
 protection for other members of the same service before running.
 
-**Agent visibility in 0.4.0.** `holdmap agents` includes child MCP candidates even when
-no port listens, resource totals for all owned processes, and counts for omitted display rows.
-Search by product, vendor, exact owned PID (`pid:1234`), working folder or tool name:
-`holdmap agents claude` or `holdmap agents filesystem`. `--wide` shows listed processes and
-redacted commands; `--json` preserves evidence, timestamps and collection limits. Command text
-is not searched. Recent folders belong to the current account's history and are attached only
-to confirmed matching accounts; they do not prove current work by that running instance.
+**Agents.** `holdmap agents` lists running agents and developer tools with child tools
+(including likely MCP processes), folders, ports, connections and resource totals. Filter by
+product, vendor, owned PID (`pid:1234`), folder or tool name: `holdmap agents claude`.
+`--wide` adds processes and redacted commands; `--json` keeps evidence and collection limits.
+Recent folders are account history, not proof of current work.
 
-**MCP & skills in 0.8.0.** `holdmap agents --capabilities --json`
-explicitly inspects supported current-account configuration and skill metadata. The desktop's
-**Agents → MCP & skills** workspace, the terminal Agents **c** toggle and MCP
-`list_agents(include_capabilities:true)` expose the same inventory. The terminal toggle stays
-active only in Agents; press **c** again or leave Agents to turn it off. It distinguishes
-configured definitions, skill files, running child tools
-and recorded usage; loading, trust and effective client policy stay unknown. Ordinary scans
-keep configuration inspection off.
+**Capabilities (opt-in).** `holdmap agents --capabilities` adds each agent's MCP servers
+(runner, package, pinned or not, remote host, env/header **names**, running now), skills,
+built-in tools, permission rules and instruction files. Values, prompts and file bodies are
+never read; MCP servers are never started. The desktop, the TUI (**c** in Agents) and MCP
+`list_agents` with `include_capabilities` show the same inventory. Configured does not mean
+loaded or used. See [MCP and skills](site/src/content/docs/agents.md#mcp-and-skills).
 
-**Capability explorer in 0.9.0.** The desktop adds **Explore**, **Map** and
-**Compare** over that inventory. Explore leads with each skill's retained, author-declared
-purpose; Map keeps observed source relationships; Compare shows exact definitions reported
-for each context. Matching process contexts group together without becoming a verified agent
-session. The inspector separates **Purpose**, **Source**, **Evidence** and **Activity**.
-The **Tools** view says **Catalog not reported** because file inspection does not enumerate
-individual MCP or built-in tools. Unknown catalogs are not zero tools, and no new client
-adapter or catalog-to-call join is introduced. Runtime candidates and separately recorded
-Calls retain their own evidence. These changes are not included in published 0.8.0 installers.
-See the [coverage, privacy and usage guide](site/src/content/docs/agents.md#mcp-and-skills).
-
-**Terminal agents in 0.5.0.** Start `holdmap` and press **Shift+Tab**
+**Terminal agents.** Start `holdmap` and press **Shift+Tab**
 to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its
 tools, folders, connections and access. Wide terminals show the list beside the details;
 small terminals stack them. **p** pauses refreshes, **r** refreshes, and **?**
 shows help.
-**x** opens every service-stop plan, including its TCP/UDP protocol; **Enter**, **n** or
-**Esc** cancels and only **y** confirms. The agent session remains protected. Failed or
-changed targets require a new review; completed stops and history-write errors stay visible.
-`holdmap agents` now gives a compact overview; a query expands matching footprints and
-`--wide` adds redacted process commands. Version 0.4.0 downloads predate these terminal changes.
-The service graph now searches its visible services and keeps selection attached to the same
-node across refreshes. In terminals that support bracketed paste, pasted text is accepted only
-inside search; pasted action keys cannot open or confirm a stop. Mouse-wheel scrolling is enabled
-while the TUI runs, and terminal input modes are restored on exit.
+**x** opens every service-stop plan; only **y** confirms. Graph search keeps the selection
+across refreshes, and pasted text never triggers an action.
 
 <details>
 <summary>Current terminal agent overview, small-screen details and service review</summary>
@@ -269,25 +218,13 @@ while the TUI runs, and terminal input modes are restored on exit.
 
 </details>
 
-**Agent flow in 0.5.0.** Open **Agents → Flow**. **Connections** shows
-observed processes, listeners and sockets, with evidence for each relationship. **Calls** shows
-reported tool/model work and agent handoffs after you enable local recording. Only reported
-trace parents create call edges; an ordered list of session events does not prove communication.
-Parallel calls remain separate. Unknown results, missing parents, dropped data and exporter
-limitations stay visible. Selecting a call shows status, duration and available serialized sizes.
-Use **All**, **Failed** or **No completion** to narrow the timeline, and sort by time or longest
-reported duration. Search matches individual records; the graph retains their reported parents
-and the inspected record. A finished call with an unknown outcome stays distinct from a call
-without completion data.
-For OTLP spans, an explicit final status takes precedence over a conflicting custom
-`success` attribute. An optional MCP observer that panics is disabled for that session,
-and protocol responses continue; blocking or aborting callbacks remain unsupported.
+**Agent flow.** Open **Agents → Flow**. **Connections** shows observed processes, listeners and
+sockets with evidence for each relationship. **Calls** shows reported tool/model work and agent
+handoffs once you enable local recording; only reported trace parents create call edges, and
+unknowns stay visible.
 
-Version 0.5.0 also has **Settings → General → Single-key shortcuts**. Turn it off to use
-speech input or reserve letter keys; arrow navigation and modifier shortcuts remain available.
-Port filters and selected-port commands apply to the port views, and native controls keep their
-own keyboard behavior. The command palette names its search and keeps its active result valid
-as live commands change.
+**Single-key shortcuts** can be turned off in **Settings → General** for speech input; arrows
+and modifier shortcuts still work.
 
 Recording is off by default, local-only and memory-only. Start it in the local desktop, review
 **Setup**, then explicitly configure a supported agent. Pause freezes the view; **Stop recording**
@@ -329,207 +266,57 @@ When a command fails with "port in use", it prints who holds the port and how to
 
 ## Desktop app
 
-Open **Settings → Power → Shut down now…** to shut down this computer. Review the local
-computer, save work, and explicitly acknowledge that all apps, agents and local services
-will stop. Confirmation expires after 60 seconds; this is not a scheduled shutdown.
-Operating-system permissions and inhibitors still apply. The browser demo only simulates
-the action. Local shutdown was introduced in 0.4.0; version 0.3.0 binaries predate it.
+A tray and menu-bar app on the same core as the CLI. `⌘⌥P` (`Ctrl+Alt+P`) brings it up from any
+app; `⌘K` / `Ctrl+K` opens the command palette; `?` lists every shortcut.
 
-<details>
-<summary>Shutdown confirmation in dark and light themes</summary>
+- **Home** shows every agent as **Cards** or a **Map** (press `V`), with a **Timeline** of
+  uptime, ports and MCP and a **Needs you** list. Click any port — a card chip, a map node or a
+  timeline pin — for **Details** or **Stop…**; Stop always opens the stop plan first. Narrow
+  windows list each agent's ports with the same menu. (On `main`, not yet in a published release.)
+- **List** and **Graph** (`G`): ports with project, branch and memory; the service graph with
+  clusters. From a port's details: open, restart, open its folder (`HOLDMAP_EDITOR`), copy a URL.
+- **Agents** (`⇧A`): Computer / Footprint / Project maps, **MCP & skills** with Explore / Map /
+  Compare, and **Flow**. Stop only the services an agent started.
+- **Local capture:** screen or window recording (`⇧V`) to MP4/GIF and PNG snapshots (`⇧S`).
+  Nothing is uploaded.
+- **Power:** shut down now or schedule a shutdown or a service stop, each after a review.
 
-![Dark shutdown confirmation](docs/screenshots/desktop-shutdown-dark.png)
-![Light shutdown confirmation](docs/screenshots/desktop-shutdown-light.png)
+The [live demo](https://santoshshinde2012.github.io/holdmap/#demo) runs the same UI with sample
+data. Details: [desktop guide](site/src/content/docs/desktop.md).
 
-</details>
-
-**Scheduling:** Power settings separate **Shut down now…** from **Schedule
-shutdown…**. The scheduled review, **Schedule computer shutdown?**, starts at **In 1 hour**
-and excludes **Now**; immediate shutdown has no timing controls. In the browser, the entries
-are **Simulate shutdown now…** and **Schedule simulation…**, with **Schedule shutdown
-simulation?** clearly identifying the scheduled review. For a local port, **Schedule stop…**
-opens the one-hour review separately from **Stop…**. Choose another preset, a custom delay
-or **At a time** as needed; agent service reviews also support delays. **Scheduled actions**
-shows each deadline, countdown, reviewed port and cancellation result. When nothing is
-scheduled, **0.6.0** can start a shutdown or a reviewed service stop from that dialog.
-Schedules run while Holdmap stays open, including in the tray; quitting clears them. Keep the computer awake.
-Missed deadlines or clock changes require a fresh review. Agent schedules stop only the
-reviewed services and ports, preserving the agent session. Use **0.6.0 or newer** (scheduling
-itself landed in 0.5.0).
-
-<details>
-<summary>Scheduled shutdown, agent services and cancellation in dark and light themes</summary>
-
-![Dark scheduled shutdown](docs/screenshots/desktop-shutdown-schedule-dark.png)
-![Light scheduled shutdown](docs/screenshots/desktop-shutdown-schedule-light.png)
-![Dark scheduled agent services](docs/screenshots/desktop-agent-schedule-dark.png)
-![Light scheduled agent services](docs/screenshots/desktop-agent-schedule-light.png)
-![Dark scheduled action manager](docs/screenshots/desktop-schedules-dark.png)
-![Light scheduled action manager](docs/screenshots/desktop-schedules-light.png)
-
-</details>
-
-The screen recorder and Computer / Footprint / Project map zoom described below require
-**0.7.0 or newer**. Version **0.6.0** installers predate these features.
-To add them to an existing **0.6.0** installation, download and install the new desktop build.
-
-A tray and menu-bar app with the port list, details, the service graph (`G`), the agents map
-(`⇧A`), pins, history with one-click restart, local screen recording (`⇧V`), remote hosts over
-SSH and a command palette (`⌘K` /
-`Ctrl+K`). `⌘⌥P` (`Ctrl+Alt+P`) brings it up from any app; press `?` for every shortcut. `B`
-hides the details pane so Graph uses the full window; Agents and Flow have matching Hide
-cards / Hide inspector / Hide limits / Hide recording controls. On the
-Agents map, Computer / Footprint / Project zoom over the same observed processes (C4-style:
-this machine, folders/tools/ports/hosts across agents, then one source tree). Expand a card
-to reveal a folder, open it in your editor, or stop the unprotected
-ports that agent started. From a port’s details pane you can open it in a browser, restart a
-dev server, open its folder (`HOLDMAP_EDITOR`, else Cursor, VS Code, Zed…) or Finder, and copy
-its URL, a `curl` or the kill command. Version 0.4.0 also adds agent search, expanded child-tool
-details, inferred MCP nodes and explicit omission counts. Native reports refresh independently
-of the window's poll; the browser [live demo](https://santoshshinde2012.github.io/holdmap/#demo)
-uses the same UI with sample data.
-
-Desktop controls preserve composing and modified keys in settings, menus and resize controls.
-Dialog Tab navigation includes only enabled, visible controls in the active tab order.
-
-**Graph improvements in 0.9.0.** The map opens at full width until you
-select a service. Disconnected groups pack nearby, cards start at a readable size, and
-**Fit all** offers an overview. Graph search matches services, ports and PIDs while keeping
-their observed neighbours for context; List filters stay separate. **Options** contains
-Traffic, External and Legend. These changes are not in the 0.8.0 installers; see the
-[graph guide](site/src/content/docs/desktop.md#service-graph-and-cluster-grouping).
-
-**Close and reopen.** With a working menu-bar or tray icon, closing the main window keeps
-Holdmap running. Click its icon or use your configured global shortcut to reopen; on macOS,
-the Dock icon also restores it. **0.6.0** hides the application through AppKit so a fullscreen
-close returns to the previous app and retains the window's state for reopening. Choose
-**Quit** to exit. If the tray is unavailable, closing the main window exits normally.
-
-**Folder actions.** The chooser was added in **0.5.0**. In the **0.7.0** map, click a folder
-on Footprint to zoom into that source tree; click it
-again (or its name/path in a card) for folder actions. **Enter** or **Space** activates a focused folder. The shared chooser shows
-the full path and offers **Open in Finder** (macOS), **Open in Explorer** (Windows) or
-**Open in file manager**, **Open in editor**, and **Copy path**. **Esc** closes it and returns
-focus to the folder. Clipboard copying preserves the original path.
-
-Editor opening uses `HOLDMAP_EDITOR`, then a known installed editor. Set an executable name or absolute path, without shell arguments. A missing
-explicitly configured editor shows an error instead of opening another app. Native actions
-recheck the chosen agent and exact folder against a fresh scan; stale folders remain copyable
-but cannot be opened. Recent folders remain account history, not proof of current work.
-Browser file-manager/editor actions are labelled simulations. Version 0.4.0 downloads predate
-the chooser; use 0.5.0 or newer.
-
-<details>
-<summary>Current folder actions with sample data</summary>
-
-![Folder actions show the full path, file-manager, editor and clipboard choices in dark theme](docs/screenshots/desktop-folder-actions-dark.png)
-![Folder actions with clear browser simulation guidance in light theme](docs/screenshots/desktop-folder-actions-light.png)
-![Folder actions retain readable paths and controls in a narrow window](docs/screenshots/desktop-folder-actions-narrow-light.png)
-
-</details>
-
-**Screen recording.** Choose the video button in 0.9.0 (the camera button in
-0.8.0), **Record screen…** in the command palette, or `⇧V`, then select a screen or window
-in the system chooser. Capture lasts up to two
-minutes with no microphone or system audio. Stopping ends screen sharing before preparing
-the available MP4/GIF exports; format availability depends on encoding support.
-Save through the native file dialog, or the browser's download manager in the demo.
-On macOS 14 or later, the desktop app uses Apple's native picker if its window lacks
-browser screen capture. Native encoding uses private temporary files, removed after the
-exports are copied into the preview or the recording is discarded.
-Closing the preview keeps it available through **Review recording** for this session;
-**Discard recording**, reload or quitting clears it. Save a file to keep it.
-This is separate from optional agent tool-call metadata recording. See the
-[screen recording guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#record-the-screen)
-for permissions, platform requirements and export limits.
-
-**PNG snapshots in 0.9.0.** The camera button, **Take snapshot…** or
-`⇧S` offers **Holdmap view** without screen-sharing permission, or **Screen or window**
-through the system picker. During video capture, **Recording source** borrows that source
-without another picker or stopping the recording. PNGs preserve aspect ratio within
-3840×2160 and 32 MiB. The native selected-source fallback requires macOS 14 or later;
-the app-view choice works without it. Published **0.8.0 installers do not include snapshots**.
-
-Close the preview and reopen it with **Review snapshot**. Cancelled or failed saves keep
-the PNG for retry; **Discard snapshot**, reload or quit clears it. A new capture replaces
-the retained image only after success. Desktop saves use a native file dialog; browser
-saves use the download manager. Nothing is uploaded. See the
-[snapshot guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#take-a-png-snapshot).
-
-<details>
-<summary>0.9.0 PNG source choice and preview with sample data</summary>
-
-![0.9.0 PNG snapshot preview in dark theme](docs/screenshots/desktop-snapshot-dark.png)
-![0.9.0 PNG source chooser in light theme](docs/screenshots/desktop-snapshot-light.png)
-
-</details>
-
-**First open.** The published **0.8.0** macOS app is ad-hoc signed and sealed without Developer-ID
-signing or notarisation; its Windows installers are unsigned. Verify the checksums and
-build provenance before opening a download. Follow the
-[first-open guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#first-open)
-for OS-specific instructions and policy restrictions.
-
-Update an existing desktop installation by downloading the latest installer above that
-matches your operating system and architecture. **0.8.0 requires manual desktop installation**;
-its published installers have no configured signed updater feed. Follow the same manual path
-for later releases without a configured signed feed. Run the CLI installer again
-to update the CLI, TUI and MCP server; it does not update the separate desktop app.
-
-After installing, check **Settings → About** in the reopened app. `holdmap --version`
-checks the CLI, so it cannot confirm which desktop copy is running. Version 0.8.0 also
-shows the running app's location and architecture in About, with desktop download and
-installation-guide actions; see [0.8.0 changes](CHANGELOG.md#080---2026-10-16).
+| Home as Map | Stop from Home |
+|---|---|
+| ![Home as Map: agents around this computer with ports and MCP servers, and the Timeline](docs/screenshots/desktop-home-map-dark.png) | ![The stop plan for port 3000 opened from a port's menu on Home](docs/screenshots/desktop-home-stop-plan-light.png) |
 
 <details>
 <summary>More screenshots</summary>
 
-| Service graph | Stop confirmation |
+| Narrow Map with ports | Port menu |
 |---|---|
-| ![The 0.9.0 service graph uses the full canvas for the shop services and their observed connections, dark theme](docs/screenshots/desktop-graph-dark.png) | ![The stop confirmation lists every step before anything is sent](docs/screenshots/desktop-stop-confirm-light.png) |
-| **Command palette** | **Settings** |
-| ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) | ![Settings: startup and the global shortcut, dark theme](docs/screenshots/desktop-settings-dark.png) |
-| **About in the browser preview, dark** | **About in the browser preview, light** |
-| ![Browser About identifies the web preview and offers desktop download and installation-guide actions, dark theme](docs/screenshots/desktop-about-dark.png) | ![Browser About identifies the web preview and offers desktop download and installation-guide actions, light theme](docs/screenshots/desktop-about-light.png) |
-| **Screen recording, dark** | **Screen recording, light** |
-| ![Screen recording setup explains local exports and the source chooser, dark theme](docs/screenshots/desktop-screen-record-dark.png) | ![Screen recording setup explains local exports and the source chooser, light theme](docs/screenshots/desktop-screen-record-light.png) |
-| **TUI** | **Agents** |
-| ![The holdmap TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) | ![The agents view: coding agents and developer tools with resource use, folders, ports and access, dark theme](docs/screenshots/desktop-agents-dark.png) |
-| **Agents in light theme** | **Child tools and MCP evidence** |
-| ![The agents map in light theme with sample data](docs/screenshots/desktop-agents-light.png) | ![Expanded child-tool details show an inferred Filesystem MCP process with no listening port](docs/screenshots/desktop-agent-tools-dark.png) |
-| **Agent bulk stop, dark theme** | **Agent bulk stop, light theme** |
-| ![A bulk stop previews all four steps for the agent's two ports, dark theme](docs/screenshots/desktop-agent-stop-confirm-dark.png) | ![A bulk stop previews all four steps for the agent's two ports, light theme](docs/screenshots/desktop-agent-stop-confirm-light.png) |
-| **Compact port details, dark theme** | **Compact port details, light theme** |
-| ![A 340-pixel details pane keeps tabs, activity and separate Stop and Schedule stop actions readable](docs/screenshots/desktop-detail-compact-dark.png) | ![Compact details retain clear port scope and actions in a 1100-pixel window](docs/screenshots/desktop-detail-compact-light.png) |
-| **Separate Power actions, dark theme** | **Separate Power actions, light theme** |
-| ![Power settings distinguish immediate shutdown from scheduled shutdown simulations](docs/screenshots/desktop-settings-power-dark.png) | ![Power settings keep the local scope, save-work warning and open-app schedule requirement visible](docs/screenshots/desktop-settings-power-light.png) |
-| **Sort menu at the right edge, dark theme** | **Sort menu at the right edge, light theme** |
-| ![The Sort menu stays inside the viewport with readable grouping descriptions](docs/screenshots/desktop-sort-right-edge-dark.png) | ![The right-edge Sort menu leaves all choices visible in a compact window](docs/screenshots/desktop-sort-right-edge-light.png) |
-
-These **0.9.0** capability explorer captures use labelled sample definitions:
-
-| **Explore, dark theme** | **Explore, light theme** |
-| --- | --- |
-| ![Explore skill cards show declared purposes, source files and file-presence evidence in dark theme](docs/screenshots/desktop-capability-explore-dark.png) | ![Explore keeps skill purposes, scope and exact source files readable in light theme](docs/screenshots/desktop-capability-explore-light.png) |
-
-| **Compare, dark theme** | **Compare, light theme** |
-| --- | --- |
-| ![Compare distinguishes same-name definitions at different sources and labels unreported evidence](docs/screenshots/desktop-capability-compare-dark.png) | ![Light-theme comparison keeps exact paths and independent context observations visible](docs/screenshots/desktop-capability-compare-light.png) |
-
-| **MCP and skills map** | **Selected skill details** |
-| --- | --- |
-| ![Capability map connects observed agent contexts to declared MCP and skill sources while runtime candidates remain separate](docs/screenshots/desktop-capabilities-dark.png) | ![The selected skill's Purpose tab explains declared purpose and why file presence does not establish activation](docs/screenshots/desktop-skills-dark.png) |
+| ![On a narrow window the Map lists each agent with its ports](docs/screenshots/desktop-home-narrow-map-dark.png) | ![A port's menu on Home with Details and Stop…](docs/screenshots/desktop-home-port-menu-light.png) |
+| **Agents** | **Service graph** |
+| ![The Agents Footprint map: folders, agents, tools, ports and remote hosts](docs/screenshots/desktop-agents-dark.png) | ![The service graph with the shop services and their observed connections](docs/screenshots/desktop-graph-dark.png) |
+| **Capability explorer** | **Command palette** |
+| ![Explore skill cards show declared purposes, source files and file-presence evidence](docs/screenshots/desktop-capability-explore-light.png) | ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) |
+| **Screen recording** | **TUI** |
+| ![Screen recording setup explains local exports and the source chooser](docs/screenshots/desktop-screen-record-dark.png) | ![The holdmap TUI: port table with the details pane](docs/screenshots/tui-list-dark.png) |
 
 </details>
 
+Every capture: [screenshots](docs/screenshots.md).
+
+**Install and update.** Download the installer for your OS and architecture from the latest
+release; desktop updates are manual unless a signed updater feed is configured. Check
+**Settings → About** after reopening. Published macOS builds are ad-hoc signed and Windows
+installers are unsigned: verify checksums and provenance first
+([first-open guide](https://santoshshinde2012.github.io/holdmap/docs/desktop/#first-open)).
+
 ## MCP server
 
-`holdmap mcp` lets AI coding assistants list ports, explain them, find a free port, wait for a
-server, read the service graph, list agents and developer tools (`list_agents`), stop the ports
-an agent started (`stop_agent_ports`, dry-run by default), and stop their own dev servers
-(never protected processes). Version 0.8.0 also adds read-only `inspect_port` and
-`get_agent_flow`; update the CLI/MCP installation to use these tools.
-For Claude Desktop or Cursor (`~/.cursor/mcp.json`):
+`holdmap mcp` gives AI coding assistants eleven tools to list, explain and inspect ports, find a
+free port, wait for a server, read the service graph, list agents (`list_agents`, with
+`include_capabilities` for the opt-in inventory), follow agent flow (`get_agent_flow`) and stop
+ports. For Claude Desktop or Cursor (`~/.cursor/mcp.json`):
 
 ```json
 {
@@ -542,40 +329,19 @@ For Claude Desktop or Cursor (`~/.cursor/mcp.json`):
 VS Code (`.vscode/mcp.json`) uses `"servers"` with `"type": "stdio"`. If the client can't find
 `holdmap`, use the full path, for example `/Users/you/.local/bin/holdmap`.
 
-Version 0.4.0 also exposes a bundled `holdmap://guide` resource and three workflow prompts:
-
-| Prompt | Purpose |
-|---|---|
-| `diagnose_port` | Explain ownership, inspect topology with `all: true`, then choose another port or preview an authorized stop. |
-| `prepare_dev_server` | Find a candidate port and check TCP readiness after the project's authorized launch. |
-| `inspect_agents` | Summarize child tools, resource use, folders and access with their evidence and collection limits. |
-
-Retrieving a prompt performs no actions. The guide and templates help clients interpret results;
-MCP process identities remain inferred from process metadata and do not prove tool calls or
-transport. The 0.8.0 template also uses `get_agent_flow` for observed socket relationships.
-The explicit `include_capabilities:true` option separately projects
-configured server aliases and skill metadata; definitions do not prove activation or use.
-Tool input/output schemas preserve structured data, and malformed arguments are rejected before
-acting, including incorrectly typed stop controls. Both stop tools preview by default; execution
-requires the one-use `confirmation_id` returned by a preview in the same session, with unchanged
-target/options and fresh matching effects. The MCP client must show the plans and obtain user
-authorization for their effects; the handle binds the preview but does not establish consent.
-The session keeps at most 32 previews for five minutes.
-Frames are capped at 1 MiB and legacy batches at 64 messages, with oversized input rejected before
-dispatch. `list_ports` reports collection warnings even
-for empty results. See the [MCP guide](site/src/content/docs/mcp.md) and
-[0.4.0 changes](CHANGELOG.md#040---2026-10-10). Clients upgrading from 0.3.0 must adopt
-the preview and confirmation flow before executing stops.
+Stops preview by default; executing one needs the one-use `confirmation_id` from a preview in the
+same session, and protected processes are never stopped. A `holdmap://guide` resource and the
+`diagnose_port`, `prepare_dev_server` and `inspect_agents` prompts help clients; retrieving a
+prompt does nothing. See the [MCP guide](site/src/content/docs/mcp.md).
 
 ## Safety model
 
 holdmap stops processes, so one set of rules in `holdmap-core` applies to every surface:
 
-**In 0.6.0:** state-read/write failures stay visible and preserve existing files.
+State-read/write failures stay visible and preserve existing files.
 If a stop completes but its history cannot be saved, the desktop preserves the actual result
 and blocks automatic restart or later queued stops. CLI `stop --json` includes `history_error`
-and exits with code 2; additional requested targets are not attempted. See the
-[0.6.0 changes](CHANGELOG.md#060---2026-10-14).
+and exits with code 2; additional requested targets are not attempted.
 
 - **Graceful first:** SIGTERM (`taskkill` on Windows), then a force kill after `--timeout` (5 s).
 - **The right target:** the dev-server tree root (`npm`, `nodemon`, `uvicorn --reload`…) so nothing
@@ -777,7 +543,7 @@ dependencies and temporary captures are regenerated; Git history holds earlier v
 ## Learn more
 
 - [Website and guide](https://santoshshinde2012.github.io/holdmap/): the live demo and short how-tos.
-- [What's new in 0.9.0](https://santoshshinde2012.github.io/holdmap/docs/whats-new/): PNG snapshots, the readable service graph, the capability explorer and upgrade instructions.
+- [What's new](https://santoshshinde2012.github.io/holdmap/docs/whats-new/): Home, the agent inventory, port stops and upgrade notes.
 - [Website maintenance](site/README.md): SEO checks, deployment and current website snapshots.
 - [Agents, tools and apps](https://santoshshinde2012.github.io/holdmap/docs/agents/): folders, access and stopping what an agent started.
 - [CLI reference](docs/cli.md): every command and flag.
