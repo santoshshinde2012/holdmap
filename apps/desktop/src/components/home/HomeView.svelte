@@ -106,7 +106,7 @@
             <div class="map-wrap">
               <MachineMap {groups} {colors} platform={report?.platform ?? ""} ports={o.ports} {active} {selected} {hot} onhover={(id) => (hovered = id)} onselect={select} onopen={open} onport={port} />
             </div>
-            <div class="map-list"><MapList {groups} {colors} {active} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} /></div>
+            <div class="map-list"><MapList {groups} {colors} {active} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} onport={port} /></div>
           </div>
         {/if}
       </div>

@@ -126,6 +126,20 @@ describe("HomeView map", () => {
     expect(items.some((li) => li.classList.contains("dim") && li.textContent!.includes("Cursor"))).toBe(true);
   });
 
+  it("lists each agent's ports in the narrow-screen map with the same Details and Stop…", async () => {
+    const onstopentry = vi.fn();
+    const p = props({ onstopentry });
+    const view = render(HomeView, p);
+    const cursor = p.report.agents.find((a) => a.product === "cursor")!;
+    const port = cursor.ports[0];
+    const list = view.getByRole("list", { name: `${cursor.name} ports` });
+    const chip = within(list).getByRole("button", { name: new RegExp(`^Port ${port.port}`) });
+    expect(chip.getAttribute("aria-haspopup")).toBe("menu");
+    await fireEvent.click(chip);
+    await fireEvent.click(within(view.getByRole("menu")).getByRole("menuitem", { name: "Stop…" }));
+    expect(onstopentry).toHaveBeenCalledWith(port.entry_id);
+  });
+
   it("gives map port nodes and timeline pins Details and Stop…, both through the plan", async () => {
     const onstopentry = vi.fn();
     const p = props({ onstopentry });

@@ -3,14 +3,14 @@
   import { dataAge, freshness, pruned, share, shouldPoll, withKey } from "./lib/live";
   import PortList from "./components/list/PortList.svelte";
   import TitleBar from "./components/shell/TitleBar.svelte";
-  import ViewToolbar, { type View } from "./components/shell/ViewToolbar.svelte";
+  import ViewToolbar from "./components/shell/ViewToolbar.svelte";
   import Notices from "./components/shell/Notices.svelte";
   import StatusBar from "./components/shell/StatusBar.svelte";
   import HomeView from "./components/home/HomeView.svelte";
-  import { HOME_LAYOUTS, nextLayout, type HomeLayout } from "./lib/home-layout";
+  import { nextLayout } from "./lib/home-layout";
   import FirstRun from "./components/FirstRun.svelte";
   import { firstRunPlan, type FirstRunChoices } from "./lib/onboarding";
-  import { UsageHistory, parseCollapsed, parseDensity, toggled, usageRecord, type Density } from "./lib/rows";
+  import { UsageHistory, toggled, usageRecord } from "./lib/rows";
   import { DETAILS_CACHE_MAX, LruMap, STAMP_CACHE_MAX } from "./lib/cache";
   import DetailPane from "./components/detail/DetailPane.svelte";
   import SettingsDialog from "./components/SettingsDialog.svelte";
@@ -20,9 +20,9 @@
   import type { ShutdownPreview } from "./lib/power";
   import PinDialog from "./components/PinDialog.svelte";
   import RemoteDialog from "./components/RemoteDialog.svelte";
-  import { Button, Dialog, IconButton, Splitter, TextField } from "./components/ui";
+  import { Dialog, IconButton, Splitter } from "./components/ui";
   import { restartRootPid, type DetailTab } from "./lib/detail";
-  import { THEME_ICON, THEME_LABEL, type SettingsActions, type SettingsModel, type SettingsSection, type HotkeyPreset, type Theme } from "./lib/settings";
+  import { THEME_ICON, THEME_LABEL, type SettingsActions, type SettingsModel, type SettingsSection, type HotkeyPreset } from "./lib/settings";
   import ConfirmDialog, { type Phase } from "./components/ConfirmDialog.svelte";
   import ShortcutsDialog from "./components/ShortcutsDialog.svelte";
   import ScreenRecordDialog from "./components/ScreenRecordDialog.svelte";
@@ -31,34 +31,38 @@
   import CommandPalette from "./components/CommandPalette.svelte";
   import Toasts, { type Toast } from "./components/Toasts.svelte";
   import HistoryPanel from "./components/HistoryPanel.svelte";
+  import SearchBox from "./components/shell/SearchBox.svelte";
+  import ReviewPendingDialog from "./components/ReviewPendingDialog.svelte";
+  import SettingsUnavailableDialog from "./components/SettingsUnavailableDialog.svelte";
   import * as api from "./lib/api";
-  import { agentMatches, filterAgents, step, stoppableEntries, type Picture } from "./lib/agents";
+  import { agentMatches, filterAgents, step, stoppableEntries } from "./lib/agents";
   import { createAgentReportLoader } from "./lib/agents-live";
   import { createFlowLoader } from "./lib/agent-flow/live";
   import type { AgentFlowMode, AgentFlowReport, ActivitySnapshot, RecordingStatus } from "./lib/agent-flow/model";
   import type { AgentsReport, ActionPlan, Cluster, Config, DesktopHelpDestination, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortDetails, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
   import { localLinkCounts, nodeForEntry } from "./lib/graph";
-  import type { Command } from "./lib/palette";
+  import { appCommands, nextProto } from "./lib/app-commands";
   import { seconds, stopTarget, title, url, canOpen, type Filters } from "./lib/format";
-  import { clearedFilters, filtersActive as isFiltering, portSections, portStats, queryPort as parseQueryPort, reachablePorts, SORTS, visiblePorts, type Sort } from "./lib/port-list";
-  import { prefGet, prefGetBoolean, prefGetChoice, prefSet } from "./lib/prefs";
+  import { clearedFilters, filtersActive as isFiltering, portSections, portStats, queryPort as parseQueryPort, reachablePorts, visiblePorts } from "./lib/port-list";
+  import { prefGet, prefSet } from "./lib/prefs";
+  import { AppPrefs, PANE_DEFAULT, PANE_MAX, PANE_MIN } from "./lib/app-prefs.svelte";
   import { commandForShell } from "./lib/shell";
   import { portHolderKeys } from "./lib/port-live";
   import { shortcutContext } from "./lib/keyboard";
-  import { formatClock, MAX_DURATION_MS } from "./lib/screen-record";
+  import { decideKey, type KeyIntent } from "./lib/app-shortcuts";
   import { ScreenCaptureController } from "./lib/screen-capture.svelte";
 
   interface Confirm { entry: PortEntry | null; /** Reviewed plans for more ports after `entry` (Agents "Stop all"). */ queue?: { entry: PortEntry; plan: ActionPlan }[]; agentName?: string; agentId?: string; cluster: Cluster | null; plan: ActionPlan; force: boolean; allowProtected: boolean; phase: Phase; log: string[]; report: StopReport | null; completedPortCount?: number; attemptedPortCount?: number; restart?: boolean; timingIntent?: "combined" | "now" | "schedule"; scheduled?: ScheduledAction; schedulingBusy?: boolean; schedulingError?: string }
 
   // Live data is replaced wholesale on every poll, so it is raw state run through `share`:
   // unchanged entries keep their identity and nothing downstream re-renders or re-fetches.
+  const prefs = new AppPrefs();
   let snapshot = $state.raw<Snapshot | null>(null);
   let error = $state<string | null>(null);
   let refreshing = $state(false);
   /** Only a refresh the user asked for spins the button; background scans stay quiet. */
   let manualRefresh = $state(false);
   let filters = $state<Filters>({ query: "", all: false, proto: "any", dev: false, mine: false, exposed: false });
-  let sort = $state<Sort>(prefGetChoice("sort", SORTS, "group"));
   let selectedId = $state<string | null>(null);
   // Details are stale-while-revalidate: the last value stays on screen while each scan
   // refreshes it in the background, and the skeleton only shows on a port's first load.
@@ -92,10 +96,6 @@
   let showHelp = $state(false);
   let showPalette = $state(false);
   let onboarded = $state(prefGet("onboarded") === "1");
-  let theme = $state<Theme>(prefGetChoice("theme", ["system", "light", "dark"], "system"));
-  let density = $state<Density>(parseDensity(prefGet("density")));
-  let singleKeyShortcuts = $state(prefGetBoolean("singleKeyShortcuts", true));
-  let collapsed = $state<Set<string>>(parseCollapsed(prefGet("collapsed")));
   const usageHist = new UsageHistory(24);
   /** Memory samples for the details pane's trend line (one per scan, like CPU). */
   const memHist = new UsageHistory(24, (e) => e.app_memory_bytes || e.process?.memory_bytes);
@@ -115,11 +115,6 @@
   let listEl = $state<HTMLDivElement | undefined>();
   let now = $state(Date.now());
   let toastSeq = 0;
-  let view = $state<View>(prefGetChoice("view", ["home", "list", "graph", "agents"], "list"));
-  let homeLayout = $state<HomeLayout>(prefGetChoice("home.layout", HOME_LAYOUTS, "cards"));
-  $effect(() => prefSet("home.layout", homeLayout));
-  let homeTimeline = $state(prefGetBoolean("home.timeline", true));
-  $effect(() => prefSet("home.timeline", homeTimeline ? "1" : "0"));
   /** GraphView (and @xyflow) loads only when the Graph tab is opened — keeps the first paint light. */
   let GraphView = $state<typeof import("./components/GraphView.svelte").default | null>(null);
   let graph = $state.raw<Graph | null>(null);
@@ -133,18 +128,9 @@
   let agentsError = $state<string | null>(null);
   let agentsStarted = $state(0);
   let agentFlowMode = $state<AgentFlowMode>("overview");
-  let agentSection = $state<"overview" | "flow" | "capabilities">(prefGetChoice("agents.section", ["overview", "flow", "capabilities"], "overview"));
-  $effect(() => prefSet("agents.section", agentSection));
   /** Opt-in: read agents' MCP, skills and permission files on every agents scan. */
-  let inventoryOn = $state(prefGetBoolean("agents.inventory", false));
-  $effect(() => prefSet("agents.inventory", inventoryOn ? "1" : "0"));
   function enableInventory() { enableInventoryChoice(true); }
-  function enableInventoryChoice(on: boolean) { inventoryOn = on; if (on) void loadAgents(); }
-  let flowSource = $state<"connections" | "calls">(prefGetChoice("flow.source", ["connections", "calls"], "connections"));
-  $effect(() => prefSet("flow.source", flowSource));
-  const savedPicture = prefGetChoice("agents.picture", ["context", "footprint", "project"] as const, "context");
-  let picture = $state<Picture>(savedPicture === "project" ? "context" : savedPicture);
-  $effect(() => prefSet("agents.picture", picture));
+  function enableInventoryChoice(on: boolean) { prefs.inventoryOn = on; if (on) void loadAgents(); }
   let projectReady = $state(false);
   let projectCaption = $state("");
   let flowPaused = $state(false);
@@ -158,8 +144,8 @@
   let graphAll = $state(false);
   let graphQuery = $state("");
   let graphVisibleIds = $state<string[]>([]);
-  const topologyWanted = $derived(view === "graph" || (view === "list" && sort === "cluster"));
-  const topologyAll = $derived(view === "graph" ? graphAll : filters.all);
+  const topologyWanted = $derived(prefs.view === "graph" || (prefs.view === "list" && prefs.sort === "cluster"));
+  const topologyAll = $derived(prefs.view === "graph" ? graphAll : filters.all);
   let selectedNode = $state<string | null>(null);
   let config = $state<Config | null>(null);
   let configError = $state<string | null>(null);
@@ -197,18 +183,14 @@
   let hotkeyList = $state<HotkeyPreset[]>([]);
   let info = $state<{ version: string; platform: string; tray: boolean; configDir: string | null; updater: boolean | null; appPath: string | null; architecture: string | null }>({ version: "", platform: "", tray: false, configDir: null, updater: null, appPath: null, architecture: null });
   let detailTab = $state<DetailTab>("overview");
-  const PANE_DEFAULT = 460;
-  let paneWidth = $state(Math.min(680, Math.max(340, Number(prefGet("pane")) || PANE_DEFAULT)));
-  let sideOpen = $state(prefGetBoolean("side", true));
-  $effect(() => { prefSet("view", view); });
   $effect(() => {
-    void view;
+    void prefs.view;
     // A view change must not reopen the drawer for a listener selected in another view.
     drawerOpen = false;
     graphDetailsOpen = false;
   });
   $effect(() => {
-    const visible = topologyWanted, all = topologyAll, graphVisible = view === "graph";
+    const visible = topologyWanted, all = topologyAll, graphVisible = prefs.view === "graph";
     untrack(() => topologyLoader.invalidate());
     if (!visible) return;
     // untrack: loadTopology reads `graph` before its await; tracking it re-ran this effect on
@@ -223,9 +205,9 @@
     return () => topologyLoader.invalidate();
   });
   $effect(() => {
-    if (view !== "agents") return;
+    if (prefs.view !== "agents") return;
     // Opening MCP & skills explicitly includes bounded local configuration metadata.
-    agentSection;
+    prefs.agentSection;
     untrack(loadAgents); // same reason as above: loadAgents reads agentsReport
     if (!AgentsView) {
       import("./components/AgentsView.svelte").then((m) => { AgentsView = m.default; }).catch((e) => console.error("Couldn't load the agents map", e));
@@ -236,31 +218,26 @@
   const mod = $derived(isMac ? "⌘" : "Ctrl");
   const modK = $derived(isMac ? "⌘K" : "Ctrl K");
 
-  const resolvedTheme = $derived(theme === "system" ? (systemDark ? "dark" : "light") : theme);
+  const resolvedTheme = $derived(prefs.theme === "system" ? (systemDark ? "dark" : "light") : prefs.theme);
   $effect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
-    prefSet("theme", theme);
   });
-  $effect(() => { prefSet("sort", sort); });
-  $effect(() => { prefSet("density", density); });
-  $effect(() => { prefSet("singleKeyShortcuts", singleKeyShortcuts ? "1" : "0"); });
-  $effect(() => { prefSet("collapsed", JSON.stringify([...collapsed])); });
 
-  const visible = $derived(visiblePorts(snapshot?.entries ?? [], filters, sort));
-  const sections = $derived(portSections(visible, pins, sort, graph));
+  const visible = $derived(visiblePorts(snapshot?.entries ?? [], filters, prefs.sort));
+  const sections = $derived(portSections(visible, pins, prefs.sort, graph));
   /** Rows the keyboard can reach: everything except collapsed sections (untitled sections never collapse). */
-  const ordered = $derived(reachablePorts(sections, collapsed));
+  const ordered = $derived(reachablePorts(sections, prefs.collapsed));
   const sectionOf = (id: string) => sections.find((s) => s.items.some((e) => e.id === id));
-  function setCollapsed(id: string, on: boolean) { if (collapsed.has(id) !== on) collapsed = toggled(collapsed, id); }
+  function setCollapsed(id: string, on: boolean) { if (prefs.collapsed.has(id) !== on) prefs.collapsed = toggled(prefs.collapsed, id); }
   // A graph selection must not depend on hidden List filters or collapsed groups.
-  const selected = $derived((view === "graph" ? snapshot?.entries : ordered)?.find((e) => e.id === selectedId) ?? null);
+  const selected = $derived((prefs.view === "graph" ? snapshot?.entries : ordered)?.find((e) => e.id === selectedId) ?? null);
   const stats = $derived(portStats(snapshot?.entries ?? []));
-  const queryPort = $derived(view === "list" ? parseQueryPort(filters.query) : null);
+  const queryPort = $derived(prefs.view === "list" ? parseQueryPort(filters.query) : null);
   const filtersActive = $derived(isFiltering(filters));
   // Keep at least 600px for the graph even when a wide details pane was saved in List.
-  const graphDetailsDrawer = $derived(narrow || viewportWidth - paneWidth < 600);
+  const graphDetailsDrawer = $derived(narrow || viewportWidth - prefs.paneWidth < 600);
   // Agents and small graph canvases use the existing modal details drawer.
-  const showDrawer = $derived(!!selected && (view === "graph" ? graphDetailsDrawer && graphDetailsOpen : (narrow || view === "agents") && drawerOpen));
+  const showDrawer = $derived(!!selected && (prefs.view === "graph" ? graphDetailsDrawer && graphDetailsOpen : (narrow || prefs.view === "agents") && drawerOpen));
   /** Any overlay that owns the keyboard (they stop key events themselves; this is a backstop). */
   const otherModalOpen: boolean = $derived(!!confirm || !!pendingReview || showHelp || showHistory || showPalette || showSettings || showShutdown || showSchedules || showRemote || !!pinDialog || showDrawer || !!capture.dialog);
   const modalOpen: boolean = $derived(otherModalOpen || snapshotCaptureState.open || snapshotCaptureState.busy);
@@ -336,12 +313,12 @@
       scanGen++;
       if (selectedId && !s.entries.some((e) => e.id === selectedId)) {
         selectedId = null;
-        if (view === "graph") graphDetailsOpen = false;
+        if (prefs.view === "graph") graphDetailsOpen = false;
       }
       // Build topology for the graph or the list's cluster grouping, only while needed.
       if (topologyWanted) loadTopology();
       else graph = null;
-      if (view === "agents" || view === "home") loadAgents();
+      if (prefs.view === "agents" || prefs.view === "home") loadAgents();
       else if (!agentsReport) loadAgents(); // badge count without opening the tab
     }
   }
@@ -361,7 +338,7 @@
     if (disposed) return;
     agentsReport = share(agentsReport, report);
     if (selectedAgent && !agentsReport.agents.some((a) => a.id === selectedAgent)) selectedAgent = null;
-  }, () => !disposed && (inventoryOn || view === "agents" && agentSection === "capabilities"));
+  }, () => !disposed && (prefs.inventoryOn || prefs.view === "agents" && prefs.agentSection === "capabilities"));
   async function loadAgents() {
     if (agentsRefreshing) return;
     agentsRefreshing = true;
@@ -371,7 +348,7 @@
       agentsError = null;
     } catch (e) {
       agentsError = String(e);
-      if (view === "agents" && agentSection !== "capabilities") toast("error", "Couldn't look up the agents", String(e));
+      if (prefs.view === "agents" && prefs.agentSection !== "capabilities") toast("error", "Couldn't look up the agents", String(e));
     } finally { agentsRefreshing = false; }
   }
   const flowLoader = createFlowLoader(api.agentFlow,
@@ -386,7 +363,7 @@
 
   $effect(() => {
     const mode = agentFlowMode;
-    const visible = view === "agents" && mode !== "overview" && !flowPaused;
+    const visible = prefs.view === "agents" && mode !== "overview" && !flowPaused;
     const interval = Math.max(1_000, scanMs);
     untrack(() => { flowLoader.invalidate(); activityLoader.invalidate(); });
     if (!visible) return;
@@ -400,7 +377,7 @@
     await action();
     // An explicit action refreshes the status even when following the view is paused.
     activityLoader.invalidate();
-    if (view === "agents" && agentFlowMode === "calls") await activityLoader.request();
+    if (prefs.view === "agents" && agentFlowMode === "calls") await activityLoader.request();
   }
   const startRecording = () => mutateRecording(api.startActivity);
   const stopRecording = () => mutateRecording(api.stopActivity);
@@ -411,7 +388,7 @@
     if (!ordered.some((x) => x.id === e.id)) {
       clearFilters();
       const sec = sections.find((x) => x.items.some((i) => i.id === e.id));
-      if (sec?.title && collapsed.has(sec.id)) setCollapsed(sec.id, false);
+      if (sec?.title && prefs.collapsed.has(sec.id)) setCollapsed(sec.id, false);
     }
     selectedId = e.id;
     drawerOpen = true;
@@ -425,7 +402,7 @@
       graph = share(graph, value);
       if (selectedNode && !graph.nodes.some((n) => n.id === selectedNode)) {
         selectedNode = null;
-        if (view === "graph") { selectedId = null; graphDetailsOpen = false; }
+        if (prefs.view === "graph") { selectedId = null; graphDetailsOpen = false; }
       }
     },
     (message) => { if (message && topologyWanted) toast("error", "Couldn't build the service graph", message); },
@@ -445,7 +422,7 @@
   function selectNode(n: GraphNode | null) {
     selectedNode = n?.id ?? null;
     const id = n?.ports[0]?.entry_id;
-    if (view === "graph") {
+    if (prefs.view === "graph") {
       selectedId = id ?? null;
       graphDetailsOpen = !!id;
       return;
@@ -453,7 +430,7 @@
     if (!id) { selectedId = null; return; }
     if (!ordered.some((e) => e.id === id)) clearFilters();
     selectedId = id;
-    if (view === "list") requestAnimationFrame(() => document.getElementById("row-" + id)?.scrollIntoView({ block: "nearest" }));
+    if (prefs.view === "list") requestAnimationFrame(() => document.getElementById("row-" + id)?.scrollIntoView({ block: "nearest" }));
   }
 
   function closeGraphDetails() {
@@ -467,7 +444,7 @@
   function focusGraphService(id: string | null) {
     const expectedSelection = selectedNode;
     void tick().then(() => {
-      if (view !== "graph" || modalOpen || selectedNode !== expectedSelection) return;
+      if (prefs.view !== "graph" || modalOpen || selectedNode !== expectedSelection) return;
       const region = document.getElementById("service-graph");
       const card = [...(region?.querySelectorAll<HTMLButtonElement>("button[data-service-id]") ?? [])].find((button) => button.dataset.serviceId === id);
       (card ?? region)?.focus({ preventScroll: true });
@@ -602,11 +579,11 @@
   }
   const portHolder = (port: number) => { const e = snapshot?.entries.find((x) => x.port === port); return e ? `${title(e)}${e.process ? ` (PID ${e.process.pid})` : ""}` : null; };
 
-  const settingsModel = $derived<SettingsModel | null>(config ? { theme, density, singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, updater: info.updater, appPath: info.appPath, architecture: info.architecture, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length } : null);
+  const settingsModel = $derived<SettingsModel | null>(config ? { theme: prefs.theme, density: prefs.density, singleKeyShortcuts: prefs.singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, updater: info.updater, appPath: info.appPath, architecture: info.architecture, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length } : null);
   const settingsActions: SettingsActions = {
-    setTheme: (t) => { theme = t; },
-    setDensity: (d) => { density = d; },
-    setSingleKeyShortcuts: (on) => { singleKeyShortcuts = on; },
+    setTheme: (t) => { prefs.theme = t; },
+    setDensity: (d) => { prefs.density = d; },
+    setSingleKeyShortcuts: (on) => { prefs.singleKeyShortcuts = on; },
     setAutostart: async (on) => { autostartOn = await api.autostart(on); },
     setHotkey: async (id) => { shortcut = await api.setHotkey(id); config = await api.getConfig(); },
     setNotify: async (on, devOnly) => { config = await api.setNotify(on, devOnly); },
@@ -715,7 +692,7 @@
         } else if (item.status === "completed") {
           toast("ok", api.isTauri ? `${item.label}: complete` : "Scheduled simulation complete", item.message ?? undefined);
           refresh();
-          if (view === "agents") loadAgents();
+          if (prefs.view === "agents") loadAgents();
         }
       }
     }
@@ -864,6 +841,14 @@
   const cpuTrend = $derived(selected ? usage[selected.id] ?? [] : []);
   const memTrend = $derived(selected ? memUsage[selected.id] ?? [] : []);
   const explaining = $derived(selPort !== null && explainingPort === selPort);
+  /** What the details pane and the details drawer share; each adds its own close and list wiring. */
+  const detailProps = $derived({
+    entry: selected, explanation, http: selectedHttp, loading: explaining, busy: selected ? !!busy[selected.id] : false, mod, graph,
+    pinned: !!selected && pins.has(selected.port), details: selectedDetails, cpuTrend, memTrend, platform: info.platform,
+    onstop: () => selected && requestStop(selected, false), onschedule: () => selected && requestScheduledStop(selected), onkill: () => selected && requestStop(selected, true),
+    onopen: () => selected && open(selected), oncopy: copy, onpin: () => selected && togglePin(selected), onstopcluster: requestClusterStop, onselectnode: (n: GraphNode) => selectNode(n),
+    onrestart: () => selected && requestRestart(selected), onreveal: () => selected && reveal(selected), oneditor: () => selected && openEditor(selected),
+  });
 
   /** A slow native check owns one request; only the latest follow-up is retained. */
   async function runPortCheck(check: () => Promise<void>) {
@@ -979,11 +964,11 @@
       if (c.report?.success && c.report.freed) {
         c.phase = "done";
         if (c.entry && selectedId === c.entry.id) {
-          selectedId = view === "graph" ? null : neighbour;
-          if (view === "graph") { selectedNode = null; graphDetailsOpen = false; }
+          selectedId = prefs.view === "graph" ? null : neighbour;
+          if (prefs.view === "graph") { selectedNode = null; graphDetailsOpen = false; }
         }
         if (!c.entry) { selectedId = null; selectedNode = null; graphDetailsOpen = false; }
-        if (view === "agents") loadAgents();
+        if (prefs.view === "agents") loadAgents();
         const restart = restartCommand(c);
         if (c.restart && c.entry && !queue.length) {
           const port = c.entry.port;
@@ -1115,7 +1100,7 @@
   }
 
   function clearFilters() { filters = clearedFilters(filters); }
-  function cycleTheme() { theme = theme === "system" ? "light" : theme === "light" ? "dark" : "system"; }
+  function cycleTheme() { prefs.theme = prefs.theme === "system" ? "light" : prefs.theme === "light" ? "dark" : "system"; }
   function finishOnboarding() {
     onboarded = true;
     prefSet("onboarded", "1");
@@ -1123,11 +1108,11 @@
   /** Applies only what the user chose in the welcome dialog; each integration stays opt-in. */
   async function applyFirstRun(choices: FirstRunChoices) {
     finishOnboarding();
-    const current = { notify: config?.notify ?? false, autostart: autostartOn, singleKeys: singleKeyShortcuts, inventory: inventoryOn };
+    const current = { notify: config?.notify ?? false, autostart: autostartOn, singleKeys: prefs.singleKeyShortcuts, inventory: prefs.inventoryOn };
     for (const change of firstRunPlan(choices, current, api.isTauri)) {
       try {
-        if (change.kind === "view") view = change.view;
-        else if (change.kind === "singleKeys") singleKeyShortcuts = change.on;
+        if (change.kind === "view") prefs.view = change.view;
+        else if (change.kind === "singleKeys") prefs.singleKeyShortcuts = change.on;
         else if (change.kind === "inventory") enableInventoryChoice(change.on);
         else if (change.kind === "notify") config = await api.setNotify(change.on, config?.notify_dev_only ?? false);
         else autostartOn = await api.autostart(change.on);
@@ -1135,185 +1120,119 @@
     }
   }
   // Home has no list of its own: typing in its search box continues on the port list.
-  $effect(() => { if (view === "home" && filters.query) view = "list"; });
+  $effect(() => { if (prefs.view === "home" && filters.query) prefs.view = "list"; });
   /** Home → one agent, in a single click: the Agents view with that agent selected. */
   function openAgent(id: string, section: "overview" | "capabilities" = "overview") {
     const a = agentsReport?.agents.find((x) => x.id === id);
     if (a && !agentMatches(a, agentQuery)) agentQuery = "";
-    agentSection = section;
-    view = "agents";
+    prefs.agentSection = section;
+    prefs.view = "agents";
     selectedAgent = id;
   }
   function openEntryById(id: string) {
     const e = snapshot?.entries.find((x) => x.id === id);
-    view = "list";
+    prefs.view = "list";
     if (e) openEntry(e);
   }
 
-  const commands = $derived.by((): Command[] => {
-    const cmds: Command[] = [];
-    const s = view === "list" || view === "graph" && graphDetailsOpen ? selected : null;
-    const q = view === "list" ? queryPort : null;
-    for (const c of graph?.clusters ?? []) {
-      cmds.push({ id: `stopc-${c.id}`, group: "Actions", icon: "stop", danger: true, title: `Stop cluster ${c.name}`, subtitle: `${c.nodes.length} services · dependency order · asks first`, keywords: `cluster ${c.kind} ${c.name}`, run: () => requestClusterStop(c.name) });
-    }
-    const dev = (snapshot?.entries ?? []).filter((e) => e.is_dev && e.is_mine && !e.protected && !e.container && e.process);
-    if (dev.length > 1) cmds.push({ id: "stop-dev", group: "Actions", icon: "stop", danger: true, title: "Stop all dev servers", subtitle: `${dev.length} running · asks first`, keywords: "kill every dev server all", run: requestStopAllDev });
-    if (update) cmds.push({ id: "update", group: "Actions", icon: "sparkles", title: `Install holdmap ${update} and restart`, keywords: "update upgrade new version", run: installUpdate });
-    if (s) cmds.push({ id: "pin", group: "Actions", icon: "star", title: pins.has(s.port) ? `Unpin :${s.port}` : `Pin :${s.port}`, shortcut: ["P"], run: () => togglePin(s) });
-    for (const e of (snapshot?.entries ?? []).slice(0, 60)) {
-      const boost = (s?.id === e.id ? 12 : 0) + (e.is_dev ? 3 : 0);
-      const sub = `${e.framework?.name ?? e.process?.name ?? ""}${e.project ? ` · ${e.project.name}` : ""}`;
-      cmds.push({ id: `go-${e.id}`, group: "Ports", icon: "hash", title: `:${e.port}  ${title(e)}`, subtitle: sub, boost, keywords: `${e.port} ${e.label} ${e.process?.name ?? ""}`, run: () => { view = "list"; clearFilters(); selectEntry(e); } });
-      if ((e.process || e.container) && !e.protected && e.is_mine)
-        cmds.push({ id: `stop-${e.id}`, group: "Actions", icon: "stop", danger: true, title: `Stop :${e.port}  ${title(e)}`, subtitle: s?.id === e.id ? "selected · asks first" : "asks first", boost, keywords: `kill ${e.port} ${e.label}`, run: () => requestStop(e, false) });
-      if (canOpen(e))
-        cmds.push({ id: `open-${e.id}`, group: "Actions", icon: "external", title: `Open :${e.port} in browser`, subtitle: title(e), boost, keywords: `browser ${e.port}`, run: () => open(e) });
-    }
-    if (settingsModel?.powerAvailable) cmds.push({ id: "schedule-shutdown", group: "Actions", icon: "clock", title: api.isTauri ? "Schedule computer shutdown…" : "Schedule shutdown simulation…", subtitle: "This computer · review first", keywords: "power shutdown schedule timer hour", run: () => openShutdown("schedule") });
-    if (q) cmds.unshift({ id: "check", group: "Ports", icon: "search", title: `Check port ${q}`, subtitle: "who's using it?", keywords: `${q} why explain`, run: () => { filters.query = String(q); } });
-    cmds.push(
-      { id: "refresh", group: "Actions", icon: "refresh", title: "Refresh now", shortcut: [mod, "R"], run: () => refresh(true) },
-      { id: "schedules", group: "Actions", icon: "clock", title: "Scheduled actions", subtitle: `${activeSchedules.length} active · review or cancel`, keywords: "schedule timer countdown shutdown stop port agent", run: openSchedules },
-      { id: "free", group: "Actions", icon: "sparkles", title: "Find a free port near 3000", keywords: "available unused", run: () => findFree(3000) },
-      { id: "free8", group: "Actions", icon: "sparkles", title: "Find a free port near 8000", keywords: "available unused", run: () => findFree(8000) },
-      { id: "dev", group: "Filters", icon: "filter", title: filters.dev ? "Show all processes" : "Only dev servers", shortcut: ["D"], run: () => (filters.dev = !filters.dev) },
-      { id: "mine", group: "Filters", icon: "filter", title: filters.mine ? "Include other users" : "Only my processes", shortcut: ["M"], run: () => (filters.mine = !filters.mine) },
-      { id: "exposed", group: "Filters", icon: "globe", title: filters.exposed ? "Show local ports too" : "Only network-exposed ports", shortcut: ["E"], run: () => (filters.exposed = !filters.exposed) },
-      { id: "all", group: "Filters", icon: "radar", title: filters.all ? "Listening sockets only" : "Show all sockets (established, TIME_WAIT…)", shortcut: ["A"], run: () => { filters.all = !filters.all; refresh(); } },
-      { id: "proto", group: "Filters", icon: "filter", title: "Cycle protocol (any → TCP → UDP)", shortcut: ["T"], run: () => (filters.proto = filters.proto === "any" ? "tcp" : filters.proto === "tcp" ? "udp" : "any") },
-      { id: "clear", group: "Filters", icon: "x", title: "Clear search and filters", shortcut: ["Esc"], run: clearFilters },
-      { id: "t-light", group: "View", icon: "sun", title: "Theme: light", run: () => (theme = "light") },
-      { id: "t-dark", group: "View", icon: "moon", title: "Theme: dark", run: () => (theme = "dark") },
-      { id: "t-sys", group: "View", icon: THEME_ICON.system, title: "Theme: match system", run: () => (theme = "system") },
-      { id: "sort-g", group: "View", icon: "filter", title: "Sort: grouped by kind", run: () => (sort = "group") },
-      { id: "sort-p", group: "View", icon: "hash", title: "Sort: by port", run: () => (sort = "port") },
-      { id: "sort-n", group: "View", icon: "clock", title: "Sort: newest first", run: () => (sort = "newest") },
-      { id: "help", group: "View", icon: "keyboard", title: "Keyboard shortcuts", shortcut: ["?"], run: () => (showHelp = true) },
-      { id: "side", group: "View", icon: "panel", title: view === "graph" ? graphDetailsOpen ? "Close service details" : "Inspect selected service" : sideOpen ? "Hide the details pane" : "Show the details pane", shortcut: ["B"], keywords: "sidebar panel details larger graph canvas hide", run: () => { if (view === "graph") { if (graphDetailsOpen) closeGraphDetails(); else if (selectedGraphNode) selectNode(selectedGraphNode); } else sideOpen = !sideOpen; } },
-      { id: "view", group: "View", icon: view === "graph" ? "list" : "graph", title: view === "graph" ? "Show the list" : "Show the service graph", shortcut: ["G"], keywords: "mesh topology network dependencies", run: () => (view = view === "graph" ? "list" : "graph") },
-      { id: "agents", group: "View", icon: view === "agents" ? "list" : "bot", title: view === "agents" ? "Show the list" : "Show agents, tools and apps", shortcut: ["⇧", "A"], keywords: "ai coding agents tools apps docker claude codex cursor copilot gemini windsurf aider access folders stop", run: () => (view = view === "agents" ? "list" : "agents") },
-      { id: "sort-c", group: "View", icon: "layers", title: "Group by cluster (compose, workspace, supervisor…)", run: () => (sort = "cluster") },
-      { id: "settings", group: "Settings", icon: "sliders", title: "Open settings", shortcut: [mod, ","], keywords: "preferences options config interval hotkey", run: () => openSettings() },
-      { id: "about", group: "Settings", icon: "info", title: "About holdmap", subtitle: info.version ? `${info.platform === "browser" ? "Preview" : "Running"} version ${info.version}` : undefined, keywords: "version app location architecture updates upgrade installation", run: () => openSettings("about") },
-      { id: "desktop-downloads", group: "Settings", icon: "download", title: "Download desktop app", subtitle: "Open official downloads in your browser", keywords: "update upgrade latest version installer manual", run: () => void openDesktopHelp("downloads") },
-      { id: "pin-new", group: "Actions", icon: "star", title: s ? `Pin :${s.port} with a label…` : "Pin a port…", shortcut: s ? ["⇧", "P"] : undefined, keywords: "favourite label watch", run: () => openPin(s) },
-      { id: "remote", group: "Actions", icon: "server", title: "Inspect a remote host over SSH…", keywords: "ssh remote server machine", run: () => (showRemote = true) },
-      { id: "history", group: "Actions", icon: "history", title: "Recently stopped — restart", shortcut: ["H"], keywords: "history restart undo", run: openHistory },
-      capture.session
-        ? { id: "screen-stop", group: "Actions", icon: "stop", title: "Stop screen recording", subtitle: formatClock(capture.elapsed), keywords: "capture video gif mp4 stop", shortcut: ["⇧", "V"], run: () => void capture.finish() }
-        : capture.result
-          ? { id: "screen-review", group: "Actions", icon: "video", title: "Review recording", subtitle: "Preview and save the latest recording from this session", keywords: "capture video gif mp4 download record", shortcut: ["⇧", "V"], run: capture.open }
-          : { id: "screen-record", group: "Actions", icon: "video", title: "Record screen…", subtitle: capture.support.pending ? "Checking screen recording support…" : capture.support.backend ? `Local MP4 and GIF · up to ${Math.round(MAX_DURATION_MS / 60_000)} min · never uploaded` : "Screen capture is unavailable in this window", keywords: "capture video gif mp4 download", shortcut: ["⇧", "V"], run: capture.open },
-      { id: "snapshot", group: "Actions", icon: "camera", title: snapshotCaptureState.hasResult ? "Review snapshot" : "Take snapshot…", subtitle: "Holdmap view or a selected screen/window · local PNG", keywords: "screenshot capture image png snapshot", shortcut: ["⇧", "S"], run: () => snapshotCaptureUi?.show() },
-      ...(capture.session ? [{ id: "snapshot-recording", group: "Actions" as const, icon: "camera", title: "Snapshot recording source", subtitle: "Capture a PNG without stopping the video", keywords: "screenshot current recording still png", run: () => void snapshotCaptureUi?.captureRecording() }] : []),
-      { id: "notify", group: "Settings", icon: "bell", title: config?.notify ? "Turn notifications off" : "Turn notifications on", keywords: "alert conflict new listener", run: toggleNotify },
-      { id: "density", group: "Settings", icon: "list", title: density === "compact" ? "Comfortable rows" : "Compact rows", keywords: "density dense rows height compact comfortable", run: () => { density = density === "compact" ? "comfortable" : "compact"; } },
-      { id: "autostart", group: "Settings", icon: "sparkles", title: autostartOn ? "Don't launch at login" : "Launch at login", keywords: "startup boot login", run: toggleAutostart },
-    );
-    if (view === "graph" && graphQuery) cmds.push({ id: "graph-clear", group: "View", icon: "x", title: "Clear service search", shortcut: ["Esc"], run: () => (graphQuery = "") });
-    return cmds.filter((command) => (view === "list" || (command.group !== "Filters" && !command.id.startsWith("sort-") && command.id !== "density")) && (view !== "graph" || command.id !== "side" || !!selectedGraphNode?.ports.length))
-      .map((command) => !singleKeyShortcuts && command.shortcut && !command.shortcut.includes(mod) && !command.shortcut.includes("Esc") ? { ...command, shortcut: undefined } : command);
-  });
+  /** B: the graph's service details, or the list's details pane. False when there is nothing to show. */
+  function toggleSide(): boolean {
+    if (prefs.view !== "graph") { prefs.sideOpen = !prefs.sideOpen; return true; }
+    if (graphDetailsOpen) closeGraphDetails();
+    else if (selectedGraphNode) selectNode(selectedGraphNode);
+    else return false;
+    return true;
+  }
+  const toggleView = (target: "graph" | "agents") => { prefs.view = prefs.view === target ? "list" : target; };
+
+  const commands = $derived(appCommands({
+    view: prefs.view, graphDetailsOpen, selected, queryPort, clusters: graph?.clusters ?? [], entries: snapshot?.entries ?? [], update,
+    pinned: (port) => pins.has(port), powerAvailable: !!settingsModel?.powerAvailable, native: api.isTauri, activeSchedules: activeSchedules.length, mod,
+    filters, sideOpen: prefs.sideOpen, selectedGraphNode, version: info.version, platform: info.platform,
+    recording: { active: !!capture.session, elapsedMs: capture.elapsed, hasResult: !!capture.result, checking: capture.support.pending, supported: !!capture.support.backend },
+    snapshotHasResult: snapshotCaptureState.hasResult, notify: !!config?.notify, density: prefs.density, autostart: autostartOn, graphQuery, singleKeys: prefs.singleKeyShortcuts,
+  }, {
+    stopCluster: (name) => void requestClusterStop(name), stopAllDev: () => void requestStopAllDev(), installUpdate: () => void installUpdate(), togglePin: (e) => void togglePin(e),
+    goToPort: (e) => { prefs.view = "list"; clearFilters(); selectEntry(e); }, stop: (e) => void requestStop(e, false), openInBrowser: (e) => void open(e),
+    scheduleShutdown: () => void openShutdown("schedule"), checkPort: (port) => { filters.query = String(port); }, refresh: () => void refresh(true), schedules: openSchedules,
+    findFree: (near) => void findFree(near), setFilters: (patch) => Object.assign(filters, patch), toggleAllSockets: () => { filters.all = !filters.all; void refresh(); }, clearFilters,
+    setTheme: (t) => (prefs.theme = t), setSort: (s) => (prefs.sort = s), help: () => (showHelp = true), toggleSide: () => void toggleSide(),
+    toggleGraph: () => toggleView("graph"), toggleAgents: () => toggleView("agents"), settings: (section) => openSettings(section), downloads: () => void openDesktopHelp("downloads"),
+    pinWithLabel: openPin, remote: () => (showRemote = true), history: () => void openHistory(), stopRecording: () => void capture.finish(), openRecording: capture.open,
+    snapshot: () => snapshotCaptureUi?.show(), snapshotRecording: () => void snapshotCaptureUi?.captureRecording(), toggleNotify: () => void toggleNotify(),
+    toggleDensity: () => { prefs.density = prefs.density === "compact" ? "comfortable" : "compact"; }, toggleAutostart: () => void toggleAutostart(), clearGraphQuery: () => (graphQuery = ""),
+  }));
 
   function onKey(e: KeyboardEvent) {
-    const context = shortcutContext(e, document.activeElement);
-    if (context.blocked) return;
-    if (snapshotCaptureState.busy && context.navigation && e.key === "Escape") {
-      snapshotCaptureUi?.cancel(); e.preventDefault(); return;
+    const active = document.activeElement;
+    const s = prefs.view === "list" || prefs.view === "graph" && graphDetailsOpen ? selected : null;
+    const n = prefs.view === "graph" ? selectedGraphNode : null;
+    const decision = decideKey(e.key, e.shiftKey, shortcutContext(e, active), {
+      view: prefs.view, singleKeys: prefs.singleKeyShortcuts, modalOpen, snapshotBusy: snapshotCaptureState.busy,
+      flowView: prefs.view === "agents" && agentFlowMode !== "overview",
+      focus: { inSearch: active === search || e.target === search, recordButton: !!active?.matches("[data-screen-record]"), snapshotButton: !!active?.matches("[data-screen-snapshot]"), graphService: !!active?.matches("button[data-service-id]") },
+      graph: { detailsOrSelection: graphDetailsOpen || !!selectedNode, query: !!graphQuery },
+      agents: { query: !!agentQuery },
+      list: { selected: !!selectedId, filtersActive, hasRows: ordered.length > 0 },
+      selection: { present: !!s, stoppable: !!s && !!(s.process || s.container), openable: !!s && canOpen(s) },
+      graphCluster: !!n?.cluster && !!graph?.clusters.some((x) => x.id === n.cluster),
+    });
+    if (!decision) return;
+    const done = decision.intent ? runKey(decision.intent, s) : true;
+    if (decision.prevent && done) e.preventDefault();
+  }
+
+  /** Performs a keyboard intent; false when there turned out to be nothing to do. */
+  function runKey(intent: KeyIntent, s: PortEntry | null): boolean {
+    switch (intent.do) {
+      case "cancel-snapshot": snapshotCaptureUi?.cancel(); break;
+      case "palette": showPalette = true; break;
+      case "settings": openSettings(); break;
+      case "search": search?.focus(); search?.select(); break;
+      case "refresh": void refresh(true); break;
+      case "record": capture.open(); break;
+      case "toggle-record": if (capture.session) void capture.finish(); else capture.open(); break;
+      case "snapshot": snapshotCaptureUi?.show(); break;
+      case "graph-close-details": closeGraphDetails(); break;
+      case "graph-clear-query": graphQuery = ""; break;
+      case "graph-step": selectGraph(intent.delta); break;
+      case "graph-open-selected": {
+        const node = graphOrder.find((x) => x.id === selectedNode) ?? graphOrder[0];
+        if (node) { selectNode(node); focusGraphService(node.id); }
+        if (intent.blur) search?.blur();
+        break;
+      }
+      case "list-collapse": { const sec = selectedId ? sectionOf(selectedId) : null; if (sec?.title) setCollapsed(sec.id, intent.collapse); break; }
+      case "list-edge": selectEntry(ordered[intent.end ? ordered.length - 1 : 0], false); break;
+      case "move": (prefs.view === "graph" ? selectGraph : prefs.view === "agents" ? selectAgent : select)(intent.delta); break;
+      case "blur-search": search?.blur(); break;
+      case "agents-clear-query": agentQuery = ""; break;
+      case "agents-deselect": selectedAgent = null; break;
+      case "clear-filters": clearFilters(); break;
+      case "list-deselect": selectedId = null; break;
+      case "agents-pick-from-search": if (!selectedAgent || !visibleAgentIds.includes(selectedAgent)) selectAgent(1); search?.blur(); break;
+      case "list-pick-from-search": if (!selected) select(1); search?.blur(); break;
+      case "open-drawer": if (selected) drawerOpen = true; break;
+      case "stop": if (s) void requestStop(s, intent.force); break;
+      case "open": if (s) void open(s); break;
+      case "copy-url": if (s) void copy(url(s), "URL"); break;
+      case "toggle-all-sockets": filters.all = !filters.all; void refresh(); break;
+      case "cycle-proto": filters.proto = nextProto(filters.proto); break;
+      case "toggle-dev": filters.dev = !filters.dev; break;
+      case "toggle-mine": filters.mine = !filters.mine; break;
+      case "toggle-exposed": filters.exposed = !filters.exposed; break;
+      case "cycle-theme": cycleTheme(); break;
+      case "toggle-side": return toggleSide();
+      case "toggle-graph": toggleView("graph"); break;
+      case "toggle-home-layout": prefs.homeLayout = nextLayout(prefs.homeLayout); break;
+      case "toggle-agents": toggleView("agents"); break;
+      case "history": void openHistory(); break;
+      case "pin": if (s) void togglePin(s); break;
+      case "pin-label": openPin(s); break;
+      case "stop-cluster": { const n = selectedGraphNode; const c = n?.cluster ? graph?.clusters.find((x) => x.id === n.cluster) : null; if (c) void requestClusterStop(c.name); break; }
+      case "help": showHelp = true; break;
     }
-    if (modalOpen) return; // overlays handle their own keys
-    const typing = context.editing;
-    const control = context.control;
-    const flowView = view === "agents" && agentFlowMode !== "overview";
-    if (context.command && e.key.toLowerCase() === "k") { showPalette = true; e.preventDefault(); return; }
-    if (context.command && e.key === ",") { openSettings(); e.preventDefault(); return; }
-    if ((context.command && e.key.toLowerCase() === "f") || (!typing && !control && context.character && singleKeyShortcuts && e.key === "/")) { search?.focus(); search?.select(); e.preventDefault(); return; }
-    if (context.command && e.key.toLowerCase() === "r") { refresh(true); e.preventDefault(); return; }
-    if (!typing && context.character && singleKeyShortcuts && e.key === "V" && document.activeElement?.matches("[data-screen-record]")) {
-      capture.open(); e.preventDefault(); return;
-    }
-    if (!typing && context.character && singleKeyShortcuts && e.key === "S" && document.activeElement?.matches("[data-screen-snapshot]")) {
-      snapshotCaptureUi?.show(); e.preventDefault(); return;
-    }
-    if (view === "graph" && !typing && context.navigation && e.key === "Escape") {
-      if (graphDetailsOpen || selectedNode) closeGraphDetails();
-      else if (graphQuery) graphQuery = "";
-      else return;
-      e.preventDefault(); return;
-    }
-    if (view === "graph" && context.navigation && document.activeElement?.matches("button[data-service-id]") && ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"].includes(e.key)) {
-      selectGraph(e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : -1);
-      e.preventDefault(); return;
-    }
-    if (control) return; // native/select/button controls retain their own keyboard behavior
-    const inSearch = document.activeElement === search || e.target === search;
-    if (typing && !inSearch) return;
-    const move = view === "graph" && !typing ? selectGraph : view === "agents" ? selectAgent : select;
-    if (view === "list" && !typing && context.navigation && (e.key === "ArrowLeft" || e.key === "ArrowRight") && selectedId) {
-      // Tree-style: ← collapses the selected row's section, → expands it.
-      const sec = sectionOf(selectedId);
-      if (sec?.title) setCollapsed(sec.id, e.key === "ArrowLeft");
-      e.preventDefault(); return;
-    }
-    if (view === "list" && !typing && context.navigation && (e.key === "Home" || e.key === "End") && ordered.length) { selectEntry(ordered[e.key === "Home" ? 0 : ordered.length - 1], false); e.preventDefault(); return; }
-    if (view === "list" && !typing && context.navigation && (e.key === "PageDown" || e.key === "PageUp")) { select(e.key === "PageDown" ? 10 : -10); e.preventDefault(); return; }
-    if (!typing && !flowView && ((context.navigation && (e.key === "ArrowDown" || e.key === "ArrowRight" && view === "graph")) || (context.character && singleKeyShortcuts && e.key === "j"))) { move(1); e.preventDefault(); return; }
-    if (!typing && !flowView && ((context.navigation && (e.key === "ArrowUp" || e.key === "ArrowLeft" && view === "graph")) || (context.character && singleKeyShortcuts && e.key === "k"))) { move(-1); e.preventDefault(); return; }
-    if (context.navigation && e.key === "Escape") {
-      if (typing) search?.blur();
-      else if (view === "agents" && agentQuery) agentQuery = "";
-      else if (view === "agents") selectedAgent = null;
-      else if (view === "graph") graphQuery = "";
-      else if (filtersActive) clearFilters();
-      else selectedId = null;
-      e.preventDefault();
-      return;
-    }
-    if (context.navigation && e.key === "Enter" && view === "agents") {
-      if (typing) { if (!selectedAgent || !visibleAgentIds.includes(selectedAgent)) selectAgent(1); search?.blur(); }
-      return; // buttons and map nodes handle it outside search
-    }
-    if (context.navigation && e.key === "Enter" && view === "graph") {
-      const node = graphOrder.find((n) => n.id === selectedNode) ?? graphOrder[0];
-      if (node) { selectNode(node); focusGraphService(node.id); }
-      if (typing) search?.blur();
-      e.preventDefault(); return;
-    }
-    if (context.navigation && e.key === "Enter") { if (typing) { if (!selected) select(1); search?.blur(); } else if (selected) drawerOpen = true; return; }
-    if (typing || !context.character) return;
-    // Only plain keys below; the list (or the page) has focus.
-    // Agent metadata must never reuse a listener selection from another view.
-    const s = view === "list" || view === "graph" && graphDetailsOpen ? selected : null;
-    if (e.key === "Backspace" || e.key === "Delete") {
-      if (s && (s.process || s.container)) { requestStop(s, e.shiftKey); e.preventDefault(); }
-      return;
-    }
-    if (!singleKeyShortcuts) return;
-    switch (e.key) {
-      case "o": if (s && canOpen(s)) open(s); else return; break;
-      case "c": if (s) copy(url(s), "URL"); else return; break;
-      case "r": refresh(true); break;
-      case "a": if (view !== "list") return; filters.all = !filters.all; refresh(); break;
-      case "t": if (view !== "list") return; filters.proto = filters.proto === "any" ? "tcp" : filters.proto === "tcp" ? "udp" : "any"; break;
-      case "d": if (view !== "list") return; filters.dev = !filters.dev; break;
-      case "m": if (view !== "list") return; filters.mine = !filters.mine; break;
-      case "e": if (view !== "list") return; filters.exposed = !filters.exposed; break;
-      case "L": cycleTheme(); break;
-      case "b": if (view === "graph") { if (graphDetailsOpen) closeGraphDetails(); else if (selectedGraphNode) selectNode(selectedGraphNode); else return; } else sideOpen = !sideOpen; break;
-      case "g": view = view === "graph" ? "list" : "graph"; break;
-      case "v": if (view !== "home") return; homeLayout = nextLayout(homeLayout); break;
-      case "A": view = view === "agents" ? "list" : "agents"; break;
-      case "h": openHistory(); break;
-      case "V": if (capture.session) void capture.finish(); else capture.open(); break;
-      case "S": snapshotCaptureUi?.show(); break;
-      case "p": if (s) togglePin(s); else return; break;
-      case "P": if (s) openPin(s); else return; break;
-      case "s": { const n = view === "graph" ? selectedGraphNode : null; const c = n?.cluster ? graph?.clusters.find((x) => x.id === n.cluster) : null; if (c) requestClusterStop(c.name); else return; break; }
-      case "?": showHelp = true; break;
-      default: return;
-    }
-    e.preventDefault();
+    return true;
   }
 
   onMount(() => {
@@ -1419,13 +1338,11 @@
     }, ms);
     return () => clearInterval(t);
   });
-  $effect(() => { prefSet("pane", String(paneWidth)); });
-  $effect(() => { prefSet("side", sideOpen ? "1" : "0"); });
-  const showSide = $derived(view === "graph" ? graphDetailsOpen && !!selected && !graphDetailsDrawer : !narrow && view === "list" && sideOpen);
+  const showSide = $derived(prefs.view === "graph" ? graphDetailsOpen && !!selected && !graphDetailsDrawer : !narrow && prefs.view === "list" && prefs.sideOpen);
 
-  const ago = $derived(dataAge(now, view === "agents" ? agentsReport?.taken_at_ms ?? null : snapshot?.taken_at_ms ?? null, view === "agents" ? agentsRefreshing ? agentsStarted : null : refreshing ? scanStarted : null));
+  const ago = $derived(dataAge(now, prefs.view === "agents" ? agentsReport?.taken_at_ms ?? null : snapshot?.taken_at_ms ?? null, prefs.view === "agents" ? agentsRefreshing ? agentsStarted : null : refreshing ? scanStarted : null));
   const fresh = $derived(freshness(ago, scanMs / 1000));
-  const themeIcon = $derived(THEME_ICON[theme]);
+  const themeIcon = $derived(THEME_ICON[prefs.theme]);
 </script>
 
 <svelte:window onkeydown={onKey} bind:innerWidth={viewportWidth} />
@@ -1433,77 +1350,29 @@
 <div id="holdmap-capture-root" class="capture-viewport">
 <div class="app" class:mac={isMac}>
   <TitleBar
-    liveText={view !== "agents" && view !== "home" && error ? refreshing ? "Retrying…" : "Scan failed" : fresh.text}
-    liveStale={fresh.stale || (view !== "agents" && view !== "home" && !!error)}
-    livePulse={view === "agents" ? agentsRefreshing : refreshing}
-    {modK} {mod} singleKeys={singleKeyShortcuts} {refreshing} {manualRefresh}
+    liveText={prefs.view !== "agents" && prefs.view !== "home" && error ? refreshing ? "Retrying…" : "Scan failed" : fresh.text}
+    liveStale={fresh.stale || (prefs.view !== "agents" && prefs.view !== "home" && !!error)}
+    livePulse={prefs.view === "agents" ? agentsRefreshing : refreshing}
+    {modK} {mod} singleKeys={prefs.singleKeyShortcuts} {refreshing} {manualRefresh}
     recordingMs={capture.session ? capture.elapsed : null}
-    scheduleCount={activeSchedules.length} {themeIcon} themeLabel={THEME_LABEL[theme]}
+    scheduleCount={activeSchedules.length} {themeIcon} themeLabel={THEME_LABEL[prefs.theme]}
     bind:schedulesTrigger
     onpalette={() => (showPalette = true)} onrefresh={() => refresh(true)} onstoprecording={() => void capture.finish()}
     onhistory={openHistory} onschedules={openSchedules} onremote={() => (showRemote = true)} ontheme={cycleTheme} onsettings={() => openSettings()}>
     {#snippet searchbox()}
-      {#if view === "agents"}
-      <TextField
-        bind:input={search}
-        bind:value={agentQuery}
-        type="search"
-        variant="filled"
-        icon="search"
-        label="Search agents"
-        labelHidden
-        placeholder={agentSection === "capabilities" ? "Search MCP, skills, sources, PIDs…" : "Search agents, tools, folders, PIDs…"}
-        clearable
-        kbdHint={singleKeyShortcuts ? "/" : undefined}
-        spellcheck="false"
-        autocomplete="off"
-        aria-controls={agentSection === "capabilities" ? "agent-capabilities" : "agent-list"}
-      />
-      {:else if view === "graph"}
-      <TextField
-        bind:input={search}
-        bind:value={graphQuery}
-        type="search"
-        variant="filled"
-        icon="search"
-        label="Search services"
-        labelHidden
-        placeholder="Search services, projects, ports, PIDs…"
-        clearable
-        kbdHint={singleKeyShortcuts ? "/" : undefined}
-        spellcheck="false"
-        autocomplete="off"
-        aria-controls="service-graph"
-      />
-      {:else}
-      <TextField
-        bind:input={search}
-        bind:value={filters.query}
-        type="search"
-        variant="filled"
-        icon="search"
-        label="Search ports"
-        labelHidden
-        placeholder="Search ports, projects, processes…"
-        clearable
-        kbdHint={singleKeyShortcuts ? "/" : undefined}
-        spellcheck="false"
-        autocomplete="off"
-        aria-controls="port-list"
-      />
-      {/if}
-        {/snippet}
+      <SearchBox view={prefs.view} capabilities={prefs.agentSection === "capabilities"} singleKeys={prefs.singleKeyShortcuts} bind:input={search} bind:agentQuery bind:graphQuery bind:portQuery={filters.query} />
+    {/snippet}
   </TitleBar>
 
-  <ViewToolbar bind:view bind:agentSection bind:picture bind:flowSource bind:filters bind:sort bind:sideOpen bind:graphQuery bind:agentQuery
-    graphEdges={graph?.stats.edges ?? 0} agentCount={agentsReport ? agentsReport.agents.length : null} {stats} {filtersActive} {narrow} singleKeys={singleKeyShortcuts}
+  <ViewToolbar bind:view={prefs.view} bind:agentSection={prefs.agentSection} bind:picture={prefs.picture} bind:flowSource={prefs.flowSource} bind:filters bind:sort={prefs.sort} bind:sideOpen={prefs.sideOpen} bind:graphQuery bind:agentQuery
+    graphEdges={graph?.stats.edges ?? 0} agentCount={agentsReport ? agentsReport.agents.length : null} {stats} {filtersActive} {narrow} singleKeys={prefs.singleKeyShortcuts}
     {projectReady} {projectCaption} onsocketschange={() => refresh()} onclearfilters={clearFilters} />
 
-  <Notices {error} retrying={refreshing} showError={!!error && (!!snapshot || view !== "list")} hasSnapshot={!!snapshot}
+  <Notices {error} retrying={refreshing} showError={!!error && (!!snapshot || prefs.view !== "list")} hasSnapshot={!!snapshot}
     next={nextSchedule} activeCount={activeSchedules.length} {now} demo={!api.isTauri} onretry={() => refresh(true)} onschedules={openSchedules} />
 
-  <main class="content" class:narrow class:wide={view === "agents" || view === "home" || !showSide} style="--pane-w: {paneWidth}px">
-    {#if view === "graph"}
+  <main class="content" class:narrow class:wide={prefs.view === "agents" || prefs.view === "home" || !showSide} style="--pane-w: {prefs.paneWidth}px">
+    {#if prefs.view === "graph"}
       <div class="graph-wrap">
         {#if GraphView}
           <GraphView {graph} {selectedNode} loading={topologyLoading} query={graphQuery} onclearquery={() => (graphQuery = "")} onvisiblechange={(ids) => (graphVisibleIds = ids)} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; }} onselect={selectNode} onstopcluster={requestClusterStop} />
@@ -1511,13 +1380,13 @@
           <div class="graph-loading" aria-busy="true">Loading graph…</div>
         {/if}
       </div>
-    {:else if view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={inventoryOn} layout={homeLayout} onlayout={(l) => (homeLayout = l)} timeline={homeTimeline} ontimeline={(open) => (homeTimeline = open)} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent}
-        onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (view = v)} oninventory={enableInventory} />
-    {:else if view === "agents"}
+    {:else if prefs.view === "home"}
+      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent}
+        onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (prefs.view = v)} oninventory={enableInventory} />
+    {:else if prefs.view === "agents"}
       <div class="graph-wrap agents-wrap">
         {#if AgentsView}
-          <AgentsView bind:section={agentSection} bind:flowSource bind:picture bind:projectReady bind:projectCaption pictureChrome={false} report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
+          <AgentsView bind:section={prefs.agentSection} bind:flowSource={prefs.flowSource} bind:picture={prefs.picture} bind:projectReady bind:projectCaption pictureChrome={false} report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
             capabilitiesLoading={agentsRefreshing} capabilitiesError={agentsError} onrefreshcapabilities={() => { void loadAgents(); }}
             onselectagent={(id) => { const a = agentsReport?.agents.find((a) => a.id === id); if (a && !agentMatches(a, agentQuery)) agentQuery = ""; selectedAgent = id; }} onentry={openEntry}
             onreveal={revealAgentFolder} oneditor={openAgentFolder}
@@ -1532,7 +1401,7 @@
         {/if}
       </div>
     {:else}
-    <PortList bind:listEl {snapshot} {error} {refreshing} {sections} {ordered} {collapsed} {sort} {density} {pins} links={linkCount} {usage} {selectedId} {busy}
+    <PortList bind:listEl {snapshot} {error} {refreshing} {sections} {ordered} collapsed={prefs.collapsed} sort={prefs.sort} density={prefs.density} {pins} links={linkCount} {usage} {selectedId} {busy}
       query={filters.query} {queryPort} {filtersActive} {stats} {checkingPort} {freePort} {portCheckError}
       onretry={() => refresh(true)} oncheckagain={() => portCheckRetry++} onclearfilters={clearFilters} onfindfree={findFree} oncopy={copy} onpinfree={() => openPin(null)}
       ontogglesection={setCollapsed} onselect={(e) => selectEntry(e)} onstop={(e) => requestStop(e, false)} onopen={open} onpin={togglePin} />
@@ -1540,54 +1409,39 @@
 
     {#if showSide}
       <div class="pane-wrap">
-        <Splitter bind:width={paneWidth} min={340} max={view === "graph" ? Math.min(680, viewportWidth - 600) : 680} initial={PANE_DEFAULT} />
-        <DetailPane entry={selected} {explanation} http={selectedHttp} loading={explaining} busy={selected ? !!busy[selected.id] : false} bind:tab={detailTab} {mod}
-          onstop={() => selected && requestStop(selected, false)} onschedule={() => selected && requestScheduledStop(selected)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onhide={() => { if (view === "graph") closeGraphDetails(); else sideOpen = false; }}
-          {graph} pinned={!!selected && pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)}
-          entries={snapshot?.entries ?? []} onselectentry={(e) => selectEntry(e, false)} details={selectedDetails} {cpuTrend} {memTrend} platform={info.platform} onrestart={() => selected && requestRestart(selected)} onreveal={() => selected && reveal(selected)} oneditor={() => selected && openEditor(selected)} />
+        <Splitter bind:width={prefs.paneWidth} min={PANE_MIN} max={prefs.view === "graph" ? Math.min(PANE_MAX, viewportWidth - 600) : PANE_MAX} initial={PANE_DEFAULT} />
+        <DetailPane {...detailProps} bind:tab={detailTab} entries={snapshot?.entries ?? []} onselectentry={(e) => selectEntry(e, false)}
+          onhide={() => { if (prefs.view === "graph") closeGraphDetails(); else prefs.sideOpen = false; }} />
       </div>
-    {:else if !narrow && view === "list"}
-      <IconButton class="reveal-side" icon="panel" label="Show details pane" kbd={singleKeyShortcuts ? "B" : undefined} onclick={() => (sideOpen = true)} />
+    {:else if !narrow && prefs.view === "list"}
+      <IconButton class="reveal-side" icon="panel" label="Show details pane" kbd={prefs.singleKeyShortcuts ? "B" : undefined} onclick={() => (prefs.sideOpen = true)} />
     {/if}
   </main>
 
-  <StatusBar stats={snapshot ? stats : null} hints={view === "agents" ? agentFlowMode !== "overview" ? "flow" : "agents" : view === "home" ? "home" : "list"} {mod} singleKeys={singleKeyShortcuts} {shortcut}
+  <StatusBar stats={snapshot ? stats : null} hints={prefs.view === "agents" ? agentFlowMode !== "overview" ? "flow" : "agents" : prefs.view === "home" ? "home" : "list"} {mod} singleKeys={prefs.singleKeyShortcuts} {shortcut}
     recording={!!capture.session} recordingResult={!!capture.result} snapshot={snapshotCaptureState} onrecord={capture.open}
     onsnapshot={() => snapshotCaptureState.busy ? snapshotCaptureUi?.cancel() : snapshotCaptureUi?.show()} />
 </div>
 
 {#if showDrawer && selected}
-  <Dialog placement="right" bare label="Details for port {selected.port}" onclose={() => { if (view === "graph") closeGraphDetails(); else drawerOpen = false; }} initialFocus="self">
-    <DetailPane drawer entry={selected} {explanation} http={selectedHttp} loading={explaining} busy={!!busy[selected.id]} bind:tab={detailTab} {mod}
-      onstop={() => selected && requestStop(selected, false)} onschedule={() => selected && requestScheduledStop(selected)} onkill={() => selected && requestStop(selected, true)} onopen={() => selected && open(selected)} oncopy={copy} onclose={() => { if (view === "graph") closeGraphDetails(); else drawerOpen = false; }}
-      {graph} pinned={pins.has(selected.port)} onpin={() => selected && togglePin(selected)} onstopcluster={requestClusterStop} onselectnode={(n) => selectNode(n)} details={selectedDetails} {cpuTrend} {memTrend} platform={info.platform} onrestart={() => selected && requestRestart(selected)} onreveal={() => selected && reveal(selected)} oneditor={() => selected && openEditor(selected)} />
+  <Dialog placement="right" bare label="Details for port {selected.port}" onclose={() => { if (prefs.view === "graph") closeGraphDetails(); else drawerOpen = false; }} initialFocus="self">
+    <DetailPane drawer {...detailProps} bind:tab={detailTab} onclose={() => { if (prefs.view === "graph") closeGraphDetails(); else drawerOpen = false; }} />
   </Dialog>
 {/if}
 {#if pendingReview}
-  <Dialog title="Reviewing {pendingReview}…" size="sm" onclose={cancelReview} initialFocus="[data-primary]">
-    <p role="status" aria-busy="true">Checking the current owners and the steps this action would take.</p>
-    {#snippet footer()}<Button onclick={cancelReview} data-primary>Cancel</Button>{/snippet}
-  </Dialog>
+  <ReviewPendingDialog subject={pendingReview} oncancel={cancelReview} />
 {:else if confirm}
   <ConfirmDialog intent={confirm.timingIntent ?? "combined"} entry={confirm.entry} cluster={confirm.cluster} plan={confirm.plan} portCount={(confirm.queue?.length ?? 0) + 1} completedPortCount={confirm.completedPortCount} attemptedPortCount={confirm.attemptedPortCount} agentName={confirm.agentName} restart={!!confirm.restart} phase={confirm.phase} log={confirm.log} report={confirm.report}
     onschedule={confirm.entry && !confirm.force && !confirm.allowProtected && !confirm.restart ? scheduleStop : undefined} schedulingBusy={!!confirm.schedulingBusy} schedulingError={confirm.schedulingError ?? null} scheduled={confirm.scheduled ?? null} onviewschedules={openSchedules} onreview={reviewStop} demo={!api.isTauri}
     oncopyrestart={confirm.entry && !confirm.queue?.length && restartCommand(confirm) ? () => { const command = confirm && restartCommand(confirm); if (command) void copy(command, "Restart command"); } : undefined}
     onconfirm={runStop} oncancel={closeConfirm} onoverride={() => confirm?.entry && requestStop(confirm.entry, confirm.force, true, { agentId: confirm.agentId, intent: "now" })} />
 {/if}
-{#if snapshot && !onboarded && !modalOpen}<FirstRun current={{ notify: config?.notify ?? false, autostart: autostartOn, singleKeys: singleKeyShortcuts, inventory: inventoryOn }} canAutostart={api.isTauri} tray={api.isTauri && info.tray} platform={info.platform} {shortcut} {mod} onapply={(c) => void applyFirstRun(c)} onskip={finishOnboarding} />{/if}
+{#if snapshot && !onboarded && !modalOpen}<FirstRun current={{ notify: config?.notify ?? false, autostart: autostartOn, singleKeys: prefs.singleKeyShortcuts, inventory: prefs.inventoryOn }} canAutostart={api.isTauri} tray={api.isTauri && info.tray} platform={info.platform} {shortcut} {mod} onapply={(c) => void applyFirstRun(c)} onskip={finishOnboarding} />{/if}
 {#if showPalette}<CommandPalette {commands} onclose={() => { showPalette = false; }} />{/if}
 {#if showHistory}<HistoryPanel items={historyItems} platform={info.platform} onrestart={restartEntry} oncopy={copy} onclose={() => (showHistory = false)} onclear={async () => { await api.clearHistory(); historyItems = []; }} />{/if}
-{#if showHelp}<ShortcutsDialog {mod} {singleKeyShortcuts} onclose={() => (showHelp = false)} />{/if}
+{#if showHelp}<ShortcutsDialog {mod} singleKeyShortcuts={prefs.singleKeyShortcuts} onclose={() => (showHelp = false)} />{/if}
 {#if showSettings && settingsModel}<SettingsDialog model={settingsModel} actions={settingsActions} bind:section={settingsSection} onclose={() => (showSettings = false)} />{/if}
-{#if showSettings && !settingsModel}
-  <Dialog title="Settings unavailable" size="sm" onclose={() => (showSettings = false)} initialFocus="[data-primary]">
-    <p role={configError ? "alert" : "status"}>{configError ?? "Loading your settings…"}</p>
-    {#snippet footer()}
-      <Button onclick={() => (showSettings = false)}>Close</Button>
-      <Button variant="primary" icon="refresh" loading={configLoading} loadingText="Loading…" onclick={() => loadConfig()} data-primary>Try again</Button>
-    {/snippet}
-  </Dialog>
-{/if}
+{#if showSettings && !settingsModel}<SettingsUnavailableDialog error={configError} loading={configLoading} onretry={() => loadConfig()} onclose={() => (showSettings = false)} />{/if}
 {#if showShutdown}<ShutdownDialog intent={shutdownIntent} preview={shutdownPreview} loading={shutdownLoading} busy={shutdownBusy} requested={shutdownRequested} error={shutdownError} demo={!api.isTauri} onconfirm={confirmShutdown} onclose={closeShutdown} onretry={() => openShutdown(shutdownIntent)} onschedule={scheduleShutdown} scheduled={shutdownScheduled} onviewschedules={openSchedules} />{/if}
 {#if showSchedules && !confirm && !showShutdown}<SchedulesDialog {schedules} loading={schedulesLoading} error={schedulesError} demo={!api.isTauri} powerAvailable={!api.isTauri || ["macos", "linux", "windows"].includes(info.platform)} entries={snapshot?.entries ?? []} onclose={closeSchedules} onrefresh={() => loadSchedules(true)} oncancel={cancelSchedule} onschedulepower={() => openShutdown("schedule", "schedules")} onscheduleport={(entry) => { closeSchedules(); requestScheduledStop(entry); }} />{/if}
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}

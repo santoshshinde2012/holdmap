@@ -141,3 +141,20 @@ test("a port node on the Home map stops through the stop plan, and Esc closes it
   await review.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(review).toHaveCount(0);
 });
+
+test("on a narrow screen the map lists each agent's ports, and Stop… still opens the stop plan", async ({ app }) => {
+  await app.setViewportSize({ width: 390, height: 844 });
+  const overview = await home(app);
+  await overview.getByRole("radiogroup", { name: "Home layout" }).getByRole("radio", { name: /^Map/ }).click();
+  const chip = overview.getByRole("list", { name: "Cursor ports" }).getByRole("button", { name: /^Port 3000/ });
+  await expect(chip).toBeVisible();
+  await chip.click();
+  const menu = app.getByRole("menu", { name: /^:3000 / });
+  const box = await menu.boundingBox();
+  expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  await menu.getByRole("menuitem", { name: "Stop…", exact: true }).click();
+  const review = app.getByRole("alertdialog");
+  await expect(review.getByRole("button", { name: "Stop :3000", exact: true })).toBeVisible();
+  await review.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(review).toHaveCount(0);
+});
