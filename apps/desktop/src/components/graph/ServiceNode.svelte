@@ -3,7 +3,7 @@
   import { Handle, Position, type NodeProps, type Node } from "@xyflow/svelte";
   import FrameworkIcon from "../FrameworkIcon.svelte";
   import Icon from "../Icon.svelte";
-  import { nodeSubtitle, type FlowNodeData } from "../../lib/graph";
+  import { nodeSubtitle, serviceLabel, type FlowNodeData } from "../../lib/graph";
   import { humanBytes as bytes } from "../../lib/format";
   import { getContext } from "svelte";
 
@@ -11,6 +11,7 @@
   const n = $derived(data.node!);
   const sub = $derived(nodeSubtitle(n));
   const exposed = $derived(n.ports.some((p) => p.exposure === "all_interfaces"));
+  const usage = $derived(n.kind !== "external" && n.pids.length ? { cpu: `${n.cpu_percent.toFixed(n.cpu_percent < 10 ? 1 : 0)}%`, memory: bytes(n.memory_bytes) } : null);
   const actions = getContext<{ select: (node: typeof n) => void; focus: (id: string) => void }>("service-graph-actions");
 </script>
 
@@ -25,7 +26,7 @@
   class:dev={n.is_dev}
   data-service-id={n.id}
   aria-pressed={data.selected}
-  aria-label="{n.label}{n.ports.length ? ' on ports ' + n.ports.map((p) => p.port).join(', ') : ''}"
+  aria-label={serviceLabel(n, usage)}
   onclick={(event) => { event.stopPropagation(); actions.select(n); }}
   onfocus={(event) => { if ((event.currentTarget as HTMLElement).matches(":focus-visible")) actions.focus(n.id); }}
 >
@@ -42,10 +43,10 @@
       {#if sub}<span class="sub">{sub}</span>{/if}
     </span>
   </span>
-  {#if n.kind !== "external" && n.pids.length}
+  {#if usage}
     <span class="usage mono" title="CPU · memory of the whole process tree">
-      <span>{n.cpu_percent.toFixed(n.cpu_percent < 10 ? 1 : 0)}%</span>
-      <span>{bytes(n.memory_bytes)}</span>
+      <span data-glyph={usage.cpu}></span>
+      <span data-glyph={usage.memory}></span>
     </span>
   {/if}
   </button>

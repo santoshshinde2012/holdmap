@@ -17,11 +17,17 @@ default-run = "holdmap"
 name = "holdmap"
 path = "src/main.rs"
 
+[features]
+default = ["osv-http"]
+# HTTPS for the OSV built-in analyzer (rustls). scripts/check-cross.sh type-checks without it,
+# because ring needs a C cross toolchain.
+osv-http = ["holdmap-analyzers/osv-http"]
+
 [dependencies]
 holdmap-core.workspace = true
 holdmap-mcp.workspace = true
 holdmap-activity.workspace = true
-holdmap-analyzers.workspace = true
+holdmap-analyzers = { workspace = true, default-features = false }
 getrandom.workspace = true
 serde.workspace = true
 serde_json.workspace = true

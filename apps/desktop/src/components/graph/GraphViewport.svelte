@@ -73,7 +73,7 @@
 </script>
 
 <Controls showLock={false} showFitView={false} orientation="horizontal" position="bottom-left">
-  <ControlButton class="readable-zoom" aria-label="Reset to readable size" title="Reset to readable size" onclick={() => readable(true)}>
+  <ControlButton class="readable-zoom" aria-label="{Math.round(viewport.current.zoom * 100)}%, reset to readable size" title="Reset to readable size" onclick={() => readable(true)}>
     {Math.round(viewport.current.zoom * 100)}%
   </ControlButton>
   <ControlButton aria-label="Fit all services in view" title="Fit all services in view" onclick={() => void flow.fitView({ padding, minZoom: .08, maxZoom: 1.1, duration: reduced ? 0 : 250 })}>

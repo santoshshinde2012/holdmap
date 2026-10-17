@@ -18,7 +18,7 @@
   {:else if b.glyph === ""}
     <Icon name="shield" size={Math.round(size * 0.45)} />
   {:else}
-    {b.glyph}
+    <span data-glyph={b.glyph}></span>
   {/if}
   {#if b.kind === "container"}<span class="corner" class:sm={size < 28}><Icon name="box" size={size < 28 ? 7 : 9} /></span>{/if}
 </span>

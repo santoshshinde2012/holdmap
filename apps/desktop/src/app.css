@@ -178,6 +178,9 @@ p code, li code, .prose code { line-height: inherit; }
 .pw-tooltip.on { opacity: 1; transform: none; }
 .pw-tooltip.mono { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); }
 .pw-tooltip kbd { background: transparent; color: inherit; border-color: color-mix(in srgb, var(--tooltip-fg) 30%, transparent); opacity: 0.8; height: 16px; }
+/* Decorative glyphs (monograms, counts beside a full label) drawn by CSS: seen, but not part of
+   a control's visible label, so names can start with the words people actually read. */
+[data-glyph]::before { content: attr(data-glyph); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 kbd {

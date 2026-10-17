@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeLabel, fitEdgeLabel, graphForQuery, graphNodeMatches, linksLabel, localLinkCounts, needsMiniMap, force, FORCE_NODE_LIMIT, groupId, layered, layoutModeFor, NODE_H, NODE_W, nodeForEntry, nodeSubtitle, orderFromSummary, related, sectionsByCluster, separate, toFlow, trafficDots } from "./graph";
+import { edgeLabel, fitEdgeLabel, graphForQuery, graphNodeMatches, linksLabel, localLinkCounts, needsMiniMap, force, FORCE_NODE_LIMIT, groupId, layered, layoutModeFor, NODE_H, NODE_W, nodeForEntry, nodeSubtitle, serviceLabel, orderFromSummary, related, sectionsByCluster, separate, toFlow, trafficDots } from "./graph";
 import { MOCK_SNAPSHOT, mockTopology } from "./mock";
 import type { Graph } from "./types";
 
@@ -319,5 +319,17 @@ describe("disconnected services", () => {
     const empty = { ...g, nodes: [], edges: [], clusters: [] };
     expect(layered(empty).size).toBe(0);
     expect(force(empty).size).toBe(0);
+  });
+});
+
+describe("service card names", () => {
+  // WCAG 2.5.3: the name contains the card's words in reading order, then icon-only facts.
+  it("reads the visible words first, then protection, exposure and usage", () => {
+    const web = g.nodes.find((n) => n.label === "shop-web")!;
+    const name = serviceLabel(web, { cpu: "3.9%", memory: "1.1 GB" });
+    expect(name.startsWith(`shop-web :3000 ${nodeSubtitle(web)}`)).toBe(true);
+    expect(name.endsWith("CPU 3.9%, memory 1.1 GB")).toBe(true);
+    const many = { ...web, ports: [1, 2, 3, 4, 5].map((port) => ({ ...web.ports[0], port, exposure: "all_interfaces" as const })), protected: true };
+    expect(serviceLabel(many, null)).toBe(`shop-web :1 :2 :3 +2 ${nodeSubtitle(many)}, protected, reachable from the network`);
   });
 });

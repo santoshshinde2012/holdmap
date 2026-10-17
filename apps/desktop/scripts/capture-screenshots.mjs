@@ -155,7 +155,7 @@ async function openFolderActions(page) {
 
 async function openGraph(page) {
   await page.getByRole("radio", { name: /^Graph/ }).click();
-  await expect(page.getByRole("button", { name: "shop-web on ports 3000", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^shop-web :3000(?!\d)/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Stop cluster shop", exact: true })).toBeVisible();
 }
 
@@ -461,7 +461,7 @@ for (const theme of ["dark", "light"]) {
     } },
     { ...ui, name: `ui-graph-${theme}.png`, async prepare(page) {
       await openGraph(page);
-      await expect(page.getByRole("button", { name: "db on ports 5432", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^db :5432(?!\d)/ })).toBeVisible();
       // Locator capture waits for the measured viewport to settle before reading its crop.
       return page.locator(".hull.kind-compose");
     } },

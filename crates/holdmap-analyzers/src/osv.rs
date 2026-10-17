@@ -10,6 +10,7 @@ use crate::runner::{AnalyzerRunner, RawOutput, RunContext, RunError};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::io;
+#[cfg(feature = "osv-http")]
 use std::time::Duration;
 
 /// OSV's API root.
