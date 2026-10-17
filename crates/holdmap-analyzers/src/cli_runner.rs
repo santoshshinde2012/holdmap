@@ -54,6 +54,7 @@ impl CliRunner {
         &self,
         manifest: &AnalyzerManifest,
         binary: &Path,
+        secrets: &[(String, crate::secrets::Secret)],
         subject: &InputSubject,
     ) -> RawOutput {
         let mut out = RawOutput {
@@ -107,6 +108,12 @@ impl CliRunner {
         cmd.args(&args).current_dir(work.path());
         self.sandbox
             .prepare(&mut cmd, &home, manifest.uses_network());
+        // Only names the approved manifest declares, only for this analyzer's own process.
+        for (name, value) in secrets {
+            if manifest.permissions.secrets.contains(name) {
+                cmd.env(name, value.expose());
+            }
+        }
         if let Some(parent) = binary.parent() {
             let path = std::env::join_paths(
                 std::iter::once(parent.to_path_buf()).chain(std::env::split_paths(
@@ -188,7 +195,7 @@ impl AnalyzerRunner for CliRunner {
         Ok(input
             .subjects
             .iter()
-            .map(|s| self.run_one(manifest, binary, s))
+            .map(|s| self.run_one(manifest, binary, &cx.secrets, s))
             .collect())
     }
 }
@@ -385,7 +392,10 @@ mod tests {
             .run(
                 &manifest(10),
                 &input(&skill),
-                &RunContext { binary: Some(bin) },
+                &RunContext {
+                    binary: Some(bin),
+                    ..Default::default()
+                },
             )
             .unwrap();
         assert_eq!(out.len(), 1);
@@ -409,6 +419,34 @@ mod tests {
     }
 
     #[test]
+    fn only_declared_keys_reach_the_analyzer() {
+        let root = tempfile::tempdir().unwrap();
+        let skill = skill(root.path());
+        let bin = script(
+            root.path(),
+            r#"out="$7"; printf '{"declared":"%s","other":"%s"}' "$NVIDIA_API_KEY" "$OTHER_KEY" > "$out""#,
+        );
+        let mut m = manifest(10);
+        m.permissions.secrets = vec!["NVIDIA_API_KEY".into()];
+        let cx = RunContext {
+            binary: Some(bin),
+            secrets: vec![
+                (
+                    "NVIDIA_API_KEY".into(),
+                    crate::secrets::Secret::new("k-123"),
+                ),
+                ("OTHER_KEY".into(), crate::secrets::Secret::new("nope")),
+            ],
+        };
+        let out = CliRunner::new(Box::new(BasicSandbox))
+            .run(&m, &input(&skill), &cx)
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&out[0].bytes).unwrap();
+        assert_eq!(v["declared"], "k-123");
+        assert_eq!(v["other"], "", "an undeclared name is never set");
+    }
+
+    #[test]
     fn the_time_limit_kills_the_run() {
         let root = tempfile::tempdir().unwrap();
         let skill = skill(root.path());
@@ -418,7 +456,10 @@ mod tests {
             .run(
                 &manifest(1),
                 &input(&skill),
-                &RunContext { binary: Some(bin) },
+                &RunContext {
+                    binary: Some(bin),
+                    ..Default::default()
+                },
             )
             .unwrap();
         assert!(started.elapsed() < Duration::from_secs(10));
@@ -435,7 +476,10 @@ mod tests {
             .run(
                 &manifest(10),
                 &input(&skill),
-                &RunContext { binary: Some(big) },
+                &RunContext {
+                    binary: Some(big),
+                    ..Default::default()
+                },
             )
             .unwrap();
         assert!(out[0].failed && out[0].bytes.is_empty());
@@ -444,7 +488,10 @@ mod tests {
             .run(
                 &manifest(10),
                 &input(&skill),
-                &RunContext { binary: Some(bad) },
+                &RunContext {
+                    binary: Some(bad),
+                    ..Default::default()
+                },
             )
             .unwrap();
         assert!(out[0].failed);

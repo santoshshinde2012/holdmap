@@ -534,6 +534,18 @@ export async function needs(entries: PortEntry[] | null, report: AgentsReport | 
   return attention(entries, report, insights);
 }
 
+/** Store an API key an analyzer declares in the OS keychain (desktop app only). */
+export async function setAnalyzerSecret(id: string, name: string, value: string): Promise<void> {
+  if (isTauri) return call("analyzer_secret_set", { id, name, value });
+  throw new Error("API keys are stored by the holdmap desktop app; this browser view can't keep them.");
+}
+
+/** Delete a stored API key. */
+export async function deleteAnalyzerSecret(id: string, name: string): Promise<boolean> {
+  if (isTauri) return call("analyzer_secret_delete", { id, name });
+  return false;
+}
+
 export async function reviewFinding(fingerprint: string, state: FindingState, days?: number): Promise<void> {
   if (isTauri) return call("review_finding", { fingerprint, state, days: days ?? null });
   if (liveReads()) liveWrites();

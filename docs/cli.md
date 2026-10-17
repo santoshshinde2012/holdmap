@@ -31,6 +31,9 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`holdmap analyzers show`](#holdmap-analyzers-show) | Show what an analyzer would get: folders or packages, command, network and environment |
 | [`holdmap analyzers approve`](#holdmap-analyzers-approve) | Review an analyzer's permissions and turn it on |
 | [`holdmap analyzers revoke`](#holdmap-analyzers-revoke) | Turn an analyzer off and delete its results |
+| [`holdmap analyzers key`](#holdmap-analyzers-key) | Store or delete an API key an analyzer declares, in the OS keychain |
+| [`holdmap analyzers key set`](#holdmap-analyzers-key-set) | Store a key: paste it when asked (not echoed), or pipe it on standard input |
+| [`holdmap analyzers key delete`](#holdmap-analyzers-key-delete) | Delete a stored key |
 | [`holdmap analyzers run`](#holdmap-analyzers-run) | Run an approved analyzer now (or, with --changed, every approved one whose input changed) |
 | [`holdmap insights`](#holdmap-insights) | Findings from approved analyzers, as text, JSON or SARIF |
 | [`holdmap insights review`](#holdmap-insights-review) | Mark a finding reviewed; it stays hidden while it is unchanged |
@@ -479,6 +482,7 @@ Commands:
   show     Show what an analyzer would get: folders or packages, command, network and environment
   approve  Review an analyzer's permissions and turn it on
   revoke   Turn an analyzer off and delete its results
+  key      Store or delete an API key an analyzer declares, in the OS keychain
   run      Run an approved analyzer now (or, with --changed, every approved one whose input changed)
   help     Print this message or the help of the given subcommand(s)
 
@@ -551,6 +555,64 @@ Usage: holdmap analyzers revoke [OPTIONS] <ID>
 
 Arguments:
   <ID>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers key
+
+```text
+Store or delete an API key an analyzer declares, in the OS keychain
+
+Usage: holdmap analyzers key [OPTIONS] <COMMAND>
+
+Commands:
+  set     Store a key: paste it when asked (not echoed), or pipe it on standard input
+  delete  Delete a stored key
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers key set
+
+```text
+Store a key: paste it when asked (not echoed), or pipe it on standard input
+
+Usage: holdmap analyzers key set [OPTIONS] <ID> <NAME>
+
+Arguments:
+  <ID>
+  <NAME>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers key delete
+
+```text
+Delete a stored key
+
+Usage: holdmap analyzers key delete [OPTIONS] <ID> <NAME>
+
+Arguments:
+  <ID>
+  <NAME>
 
 Options:
       --json           Machine-readable JSON output

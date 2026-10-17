@@ -6,6 +6,7 @@
   import Callout from "../ui/Callout.svelte";
   import CopyValue from "../ui/CopyValue.svelte";
   import PermissionsSheet from "./PermissionsSheet.svelte";
+  import AnalyzerKeys from "./AnalyzerKeys.svelte";
   import * as api from "../../lib/api";
   import { STATE_LABEL, ago, countsText, total, type AnalyzerView, type Preview } from "../../lib/analyzers";
   import { insightsStore } from "../../lib/insights-store.svelte";
@@ -65,6 +66,7 @@
         {#if a.state === "not_installed" && a.install}
           <div class="install"><span class="meta">Install it yourself, then come back:</span><CopyValue value={a.install} mono wrap what="Install command" oncopy={(t) => navigator.clipboard?.writeText(t)} /></div>
         {/if}
+        {#if a.secrets?.length && !demo}<AnalyzerKeys id={a.id} name={a.name} secrets={a.secrets} onchange={() => insightsStore.refresh()} />{/if}
         <div class="acts">
           {#if a.state === "approved"}
             <Button size="sm" variant="primary" icon="play" loading={busy[`run:${a.id}`]} onclick={() => act(`run:${a.id}`, () => api.runAnalyzer(a.id))}>Run now</Button>

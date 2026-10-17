@@ -35,7 +35,7 @@ export interface AnalyzerResult {
   input_signature?: string | null;
 }
 export interface SeverityCounts { critical: number; high: number; medium: number; low: number; info: number }
-export interface Permissions { read: string[]; network: string[]; network_reason: string | null; sends: string[]; spawns_mcp_servers: boolean }
+export interface Permissions { read: string[]; network: string[]; network_reason: string | null; sends: string[]; spawns_mcp_servers: boolean; secrets?: string[] }
 export interface AnalyzerView {
   id: string;
   name: string;
@@ -53,6 +53,8 @@ export interface AnalyzerView {
   version: string | null;
   approved_at_ms: number | null;
   last_run: { run_at_ms: number; status: RunStatus; subjects: number; open: SeverityCounts } | null;
+  /** Declared API keys and whether one is stored (names only; values never leave the keychain). */
+  secrets?: { name: string; stored: boolean }[];
 }
 export interface Preview {
   analyzer: AnalyzerView;

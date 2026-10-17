@@ -4,7 +4,7 @@
 //! review states.
 
 use crate::cli_runner::CliRunner;
-use crate::consent::{ConsentStore, Grant, ResultStore, Review, ReviewStore};
+use crate::consent::{ConsentStore, Grant, ResultStore, Review, ReviewStore, SecretIndex};
 use crate::finding::{
     clean_id, clean_refs, clean_relative_path, clean_text, fingerprint, hex, AnalyzerResult,
     Detail, Finding, FindingState, Location, RunStatus, Severity, Subject, MAX_DETAIL,
@@ -20,6 +20,7 @@ use crate::probe::{BinaryProbe, SystemProbe};
 use crate::runner::{
     AnalyzerRunner, BasicSandbox, RawOutput, RunContext, RunError, SandboxLevel, ENV_NAMES,
 };
+use crate::secrets::{check_value, Secret, SecretError, SecretStore};
 use holdmap_core::agents::AgentsReport;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -130,6 +131,18 @@ pub struct AnalyzerView {
     pub approved_at_ms: Option<u64>,
     /// Last run.
     pub last_run: Option<RunSummary>,
+    /// Declared API keys and whether one is stored (names only).
+    #[serde(default)]
+    pub secrets: Vec<SecretStatus>,
+}
+
+/// One declared API key: its environment variable name and whether the user stored a value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecretStatus {
+    /// Environment variable name.
+    pub name: String,
+    /// Whether a value is in the keychain (as recorded by holdmap; the keychain isn't opened).
+    pub stored: bool,
 }
 
 /// One subject on the permissions sheet.
@@ -183,6 +196,9 @@ pub enum ServiceError {
     /// A store write failed.
     #[error("could not save: {0}")]
     Io(#[from] std::io::Error),
+    /// An API key could not be stored, read or deleted.
+    #[error(transparent)]
+    Secret(#[from] SecretError),
 }
 
 /// The stores the service needs.
@@ -194,16 +210,21 @@ pub struct Stores {
     pub results: Arc<dyn ResultStore>,
     /// Reviews.
     pub reviews: Arc<dyn ReviewStore>,
+    /// Which secret names are stored.
+    pub secrets: Arc<dyn SecretIndex>,
 }
 
 impl Stores {
     /// One object implementing all three.
-    pub fn of<T: ConsentStore + ResultStore + ReviewStore + 'static>(store: T) -> Self {
+    pub fn of<T: ConsentStore + ResultStore + ReviewStore + SecretIndex + 'static>(
+        store: T,
+    ) -> Self {
         let store = Arc::new(store);
         Self {
             consent: store.clone(),
             results: store.clone(),
-            reviews: store,
+            reviews: store.clone(),
+            secrets: store,
         }
     }
 }
@@ -217,6 +238,7 @@ pub struct AnalyzerService {
     cli: Box<dyn AnalyzerRunner>,
     builtin: Box<dyn AnalyzerRunner>,
     sandbox: SandboxLevel,
+    keychain: Box<dyn SecretStore>,
     now: fn() -> u64,
 }
 
@@ -230,6 +252,7 @@ impl AnalyzerService {
             Box::new(CliRunner::new(Box::new(BasicSandbox))),
             Box::new(OsvRunner::with_default_transport()),
         )
+        .with_secrets(crate::secrets::default_store())
     }
 
     /// Explicit wiring (tests, other front ends).
@@ -248,8 +271,89 @@ impl AnalyzerService {
             cli,
             builtin,
             sandbox: SandboxLevel::Basic,
+            keychain: Box::new(crate::secrets::NoSecrets),
             now: now_ms,
         }
+    }
+
+    /// Where API keys are kept (the OS keychain in production).
+    pub fn with_secrets(mut self, keychain: Box<dyn SecretStore>) -> Self {
+        self.keychain = keychain;
+        self
+    }
+
+    fn secret_status(&self, m: &AnalyzerManifest) -> Vec<SecretStatus> {
+        let stored = self.stores.secrets.secret_names(&m.id);
+        m.permissions
+            .secrets
+            .iter()
+            .map(|name| SecretStatus {
+                name: name.clone(),
+                stored: stored.contains(name),
+            })
+            .collect()
+    }
+
+    fn declared<'m>(&self, m: &'m AnalyzerManifest, name: &str) -> Result<&'m str, ServiceError> {
+        m.permissions
+            .secrets
+            .iter()
+            .find(|n| *n == name)
+            .map(String::as_str)
+            .ok_or_else(|| {
+                ServiceError::Secret(SecretError::Invalid(format!(
+                    "{} doesn't declare a key called {name:?}",
+                    m.name
+                )))
+            })
+    }
+
+    /// Store an API key the analyzer's manifest declares. The value goes to the keychain only.
+    pub fn set_secret(&self, id: &str, name: &str, value: &Secret) -> Result<(), ServiceError> {
+        let m = self.manifest(id)?;
+        let name = self.declared(m, name)?;
+        check_value(value)?;
+        self.keychain.set(&m.id, name, value)?;
+        self.stores.secrets.mark_secret(&m.id, name, true)?;
+        Ok(())
+    }
+
+    /// Delete a stored API key. `true` when one existed.
+    pub fn delete_secret(&self, id: &str, name: &str) -> Result<bool, ServiceError> {
+        let m = self.manifest(id)?;
+        let name = self.declared(m, name)?;
+        let existed = self.keychain.delete(&m.id, name)?;
+        self.stores.secrets.mark_secret(&m.id, name, false)?;
+        Ok(existed)
+    }
+
+    /// The keys a run gets, plus plain notes about any that are missing.
+    fn run_secrets(&self, m: &AnalyzerManifest) -> (Vec<(String, Secret)>, Vec<String>) {
+        let mut found = Vec::new();
+        let mut notes = Vec::new();
+        for status in self.secret_status(m) {
+            if !status.stored {
+                notes.push(format!(
+                    "{} is not stored, so it ran without it.",
+                    status.name
+                ));
+                continue;
+            }
+            match self.keychain.get(&m.id, &status.name) {
+                Ok(Some(v)) => found.push((status.name, v)),
+                Ok(None) => notes.push(format!(
+                    "{} is no longer in the {}, so it ran without it.",
+                    status.name,
+                    self.keychain.label()
+                )),
+                Err(_) => notes.push(format!(
+                    "{} could not be read from the {}, so it ran without it.",
+                    status.name,
+                    self.keychain.label()
+                )),
+            }
+        }
+        (found, notes)
     }
 
     /// Fix the clock (tests).
@@ -313,6 +417,7 @@ impl AnalyzerService {
             version: grant.as_ref().and_then(|g| g.version.clone()),
             approved_at_ms: grant.map(|g| g.approved_at_ms),
             last_run,
+            secrets: self.secret_status(m),
         }
     }
 
@@ -352,7 +457,21 @@ impl AnalyzerService {
             env: if builtin {
                 Vec::new()
             } else {
-                ENV_NAMES.iter().map(|n| n.to_string()).collect()
+                ENV_NAMES
+                    .iter()
+                    .map(|n| n.to_string())
+                    .chain(self.secret_status(m).into_iter().map(|s| {
+                        if s.stored {
+                            format!(
+                                "{} (from your {}; value not shown)",
+                                s.name,
+                                self.keychain.label()
+                            )
+                        } else {
+                            format!("{} (not stored; runs without it)", s.name)
+                        }
+                    }))
+                    .collect()
             },
             sandbox: if builtin {
                 "Runs inside holdmap. Only the exact request shown here is sent.".into()
@@ -465,6 +584,8 @@ impl AnalyzerService {
                 )
             }
         }
+        let (secrets, secret_notes) = self.run_secrets(m);
+        cx.secrets = secrets;
         let input = self.projector.project(report, m);
         let runner = if m.runner.kind == RunnerKind::Builtin {
             &self.builtin
@@ -478,6 +599,7 @@ impl AnalyzerService {
         };
         let mut result = assemble(m, version, &input, &outputs, parser.as_ref(), (self.now)());
         result.input_signature = Some(signature(&input));
+        result.notes.extend(secret_notes);
         self.stores.results.save(&result)?;
         Ok(self.with_reviews(result))
     }

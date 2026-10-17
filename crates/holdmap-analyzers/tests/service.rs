@@ -611,3 +611,174 @@ fn configured_agents_that_are_not_running_are_covered_too() {
         .unwrap();
     assert_eq!(review.subject.agents, ["codex"]);
 }
+
+#[test]
+fn api_keys_go_to_the_keychain_and_only_into_that_analyzer_s_run() {
+    use holdmap_analyzers::secrets::{MemorySecrets, Secret, SecretStore};
+    use std::sync::Arc as StdArc;
+    #[derive(Default)]
+    struct SharedSecrets(StdArc<MemorySecrets>);
+    impl SecretStore for SharedSecrets {
+        fn get(
+            &self,
+            a: &str,
+            n: &str,
+        ) -> Result<Option<Secret>, holdmap_analyzers::secrets::SecretError> {
+            self.0.get(a, n)
+        }
+        fn set(
+            &self,
+            a: &str,
+            n: &str,
+            v: &Secret,
+        ) -> Result<(), holdmap_analyzers::secrets::SecretError> {
+            self.0.set(a, n, v)
+        }
+        fn delete(
+            &self,
+            a: &str,
+            n: &str,
+        ) -> Result<bool, holdmap_analyzers::secrets::SecretError> {
+            self.0.delete(a, n)
+        }
+        fn label(&self) -> &'static str {
+            "test keychain"
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let text = include_str!("../manifests/nvidia.skillspector.toml").replace(
+        "spawns_mcp_servers = false",
+        "spawns_mcp_servers = false\nsecrets = [\"NVIDIA_API_KEY\"]",
+    );
+    let mut catalog = catalog::bundled();
+    catalog[1] = holdmap_analyzers::AnalyzerManifest::parse(&text).unwrap();
+    let keychain = StdArc::new(MemorySecrets::default());
+    let store_dir = dir.path().join("analyzers");
+    let probe = Arc::new(FakeProbe::default());
+    *probe.info.lock().unwrap() = Some(BinaryInfo {
+        path: "/opt/bin/skillspector".into(),
+        sha256: "a".repeat(64),
+    });
+    let service = AnalyzerService::with_parts(
+        catalog,
+        Stores::of(FileStore::new(&store_dir)),
+        Box::new(Shared(probe)),
+        Box::new(Shared(Arc::new(FakeCli::default()))),
+        Box::new(OsvRunner::new(None)),
+    )
+    .with_secrets(Box::new(SharedSecrets(keychain.clone())));
+    let skill_dir = dir.path().join("skills/deploy-helper");
+    std::fs::create_dir_all(&skill_dir).unwrap();
+    let r = report(&skill_dir);
+
+    let view = service.get(SKILLSPECTOR).unwrap();
+    assert_eq!(view.secrets.len(), 1);
+    assert!(!view.secrets[0].stored);
+    let p = service.preview(SKILLSPECTOR, &r).unwrap();
+    assert!(p
+        .env
+        .iter()
+        .any(|e| e == "NVIDIA_API_KEY (not stored; runs without it)"));
+
+    // Undeclared names and bad values are refused; nothing reaches the keychain.
+    assert!(service
+        .set_secret(SKILLSPECTOR, "OTHER_KEY", &Secret::new("x"))
+        .is_err());
+    assert!(service
+        .set_secret(SKILLSPECTOR, "NVIDIA_API_KEY", &Secret::new("a\nb"))
+        .is_err());
+    assert!(service
+        .set_secret(OSV, "NVIDIA_API_KEY", &Secret::new("x"))
+        .is_err());
+    assert_eq!(keychain.get(SKILLSPECTOR, "NVIDIA_API_KEY").unwrap(), None);
+
+    service
+        .set_secret(
+            SKILLSPECTOR,
+            "NVIDIA_API_KEY",
+            &Secret::new("nvapi-test-value"),
+        )
+        .unwrap();
+    assert!(service.get(SKILLSPECTOR).unwrap().secrets[0].stored);
+    let p = service.preview(SKILLSPECTOR, &r).unwrap();
+    assert!(p
+        .env
+        .iter()
+        .any(|e| e.starts_with("NVIDIA_API_KEY (from your test keychain")));
+    // The value never appears in anything holdmap writes or returns.
+    let listed = serde_json::to_string(&(service.list(), &p)).unwrap();
+    assert!(!listed.contains("nvapi-test-value"));
+    assert!(!store_corpus(&store_dir).contains("nvapi-test-value"));
+
+    assert!(service
+        .delete_secret(SKILLSPECTOR, "NVIDIA_API_KEY")
+        .unwrap());
+    assert!(!service.get(SKILLSPECTOR).unwrap().secrets[0].stored);
+    assert_eq!(keychain.get(SKILLSPECTOR, "NVIDIA_API_KEY").unwrap(), None);
+}
+
+#[test]
+fn a_run_gets_its_stored_keys_and_notes_missing_ones() {
+    use holdmap_analyzers::secrets::{MemorySecrets, Secret};
+    #[derive(Default)]
+    struct Recording(Mutex<Vec<Vec<String>>>);
+    impl AnalyzerRunner for Shared<Recording> {
+        fn run(
+            &self,
+            _: &AnalyzerManifest,
+            input: &AnalyzerInput,
+            cx: &RunContext,
+        ) -> Result<Vec<RawOutput>, RunError> {
+            self.0 .0.lock().unwrap().push(
+                cx.secrets
+                    .iter()
+                    .map(|(n, v)| format!("{n}={}", v.expose()))
+                    .collect(),
+            );
+            Ok(input
+                .subjects
+                .iter()
+                .map(|s| RawOutput {
+                    subjects: vec![s.subject.clone()],
+                    exit_code: Some(0),
+                    bytes: REPORT.as_bytes().to_vec(),
+                    notes: vec![],
+                    failed: false,
+                })
+                .collect())
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let text = include_str!("../manifests/nvidia.skillspector.toml").replace(
+        "spawns_mcp_servers = false",
+        "spawns_mcp_servers = false\nsecrets = [\"NVIDIA_API_KEY\", \"SECOND_KEY\"]",
+    );
+    let mut catalog = catalog::bundled();
+    catalog[1] = holdmap_analyzers::AnalyzerManifest::parse(&text).unwrap();
+    let probe = Arc::new(FakeProbe::default());
+    *probe.info.lock().unwrap() = Some(BinaryInfo {
+        path: "/opt/bin/skillspector".into(),
+        sha256: "a".repeat(64),
+    });
+    let cli = Arc::new(Recording::default());
+    let service = AnalyzerService::with_parts(
+        catalog,
+        Stores::of(FileStore::new(dir.path().join("analyzers"))),
+        Box::new(Shared(probe)),
+        Box::new(Shared(cli.clone())),
+        Box::new(OsvRunner::new(None)),
+    )
+    .with_secrets(Box::new(MemorySecrets::default()));
+    let skill_dir = dir.path().join("skills/deploy-helper");
+    std::fs::create_dir_all(&skill_dir).unwrap();
+    service
+        .set_secret(SKILLSPECTOR, "NVIDIA_API_KEY", &Secret::new("v1"))
+        .unwrap();
+    service.approve(SKILLSPECTOR).unwrap();
+    let result = service.run(SKILLSPECTOR, &report(&skill_dir)).unwrap();
+    assert_eq!(cli.0.lock().unwrap()[0], ["NVIDIA_API_KEY=v1"]);
+    assert!(result
+        .notes
+        .iter()
+        .any(|n| n == "SECOND_KEY is not stored, so it ran without it."));
+}

@@ -36,6 +36,8 @@ fn row(v: &AnalyzerView) -> Value {
         "id": v.id, "name": v.name, "publisher": v.publisher, "kind": v.kind, "state": v.state,
         "changes": v.changes, "network": v.permissions.network, "sends": v.permissions.sends,
         "sandbox": v.sandbox, "version": v.version, "last_run": v.last_run,
+        // Names and whether one is stored only; values never leave the keychain.
+        "keys": v.secrets,
     })
 }
 

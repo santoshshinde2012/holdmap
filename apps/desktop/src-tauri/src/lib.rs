@@ -98,6 +98,8 @@ pub fn run() {
             analyzers::insights,
             needs::needs,
             analyzers::review_finding,
+            analyzers::analyzer_secret_set,
+            analyzers::analyzer_secret_delete,
             commands::explain,
             commands::http_info,
             commands::plan,

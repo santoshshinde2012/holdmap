@@ -756,3 +756,18 @@ fn needs_json_is_a_list_of_items() {
 fn needs_text_runs_read_only() {
     hm().arg("needs").assert().success();
 }
+
+#[test]
+fn analyzer_keys_must_be_declared_by_the_manifest() {
+    hm().args([
+        "analyzers",
+        "key",
+        "set",
+        "nvidia.skillspector",
+        "NVIDIA_API_KEY",
+    ])
+    .write_stdin("nvapi-should-not-be-stored\n")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("doesn't declare a key"));
+}

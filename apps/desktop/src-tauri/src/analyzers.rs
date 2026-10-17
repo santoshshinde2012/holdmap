@@ -25,6 +25,7 @@ fn service(app: &AppHandle) -> Arc<AnalyzerService> {
         .service
         .get_or_init(|| {
             let dir = app.state::<AppState>().store.dir().join("analyzers");
+            // Production wiring includes the OS keychain for API keys.
             Arc::new(AnalyzerService::new(Stores::of(FileStore::new(dir))))
         })
         .clone()
@@ -134,6 +135,37 @@ pub async fn review_finding(
                 state,
                 days.map(|d| d.min(365).saturating_mul(86_400_000)),
             )
+            .map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// Store an API key the analyzer declares, in the OS keychain. The value is never returned.
+#[tauri::command]
+pub async fn analyzer_secret_set(
+    app: AppHandle,
+    id: String,
+    name: String,
+    value: String,
+) -> Result<(), String> {
+    blocking(move || {
+        service(&app)
+            .set_secret(&id, &name, &holdmap_analyzers::secrets::Secret::new(value))
+            .map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// Delete a stored API key.
+#[tauri::command]
+pub async fn analyzer_secret_delete(
+    app: AppHandle,
+    id: String,
+    name: String,
+) -> Result<bool, String> {
+    blocking(move || {
+        service(&app)
+            .delete_secret(&id, &name)
             .map_err(|e| e.to_string())
     })
     .await

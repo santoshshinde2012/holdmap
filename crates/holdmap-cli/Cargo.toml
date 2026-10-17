@@ -18,10 +18,12 @@ name = "holdmap"
 path = "src/main.rs"
 
 [features]
-default = ["osv-http"]
+default = ["osv-http", "keychain"]
 # HTTPS for the OSV built-in analyzer (rustls). scripts/check-cross.sh type-checks without it,
 # because ring needs a C cross toolchain.
 osv-http = ["holdmap-analyzers/osv-http"]
+# Analyzer API keys in the OS keychain (`holdmap analyzers key`).
+keychain = ["holdmap-analyzers/keychain"]
 
 [dependencies]
 holdmap-core.workspace = true
@@ -38,6 +40,7 @@ clap_complete = "4.6"
 clap_mangen = "0.3"
 ratatui = "0.30"
 unicode-width = "0.2"
+rpassword = "7.4"
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

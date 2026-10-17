@@ -29,6 +29,8 @@ pub struct RawOutput {
 pub struct RunContext {
     /// The approved, pinned executable (CLI analyzers).
     pub binary: Option<PathBuf>,
+    /// API keys from the keychain for this analyzer only, set after the environment is cleared.
+    pub secrets: Vec<(String, crate::secrets::Secret)>,
 }
 
 /// Why a run could not start.

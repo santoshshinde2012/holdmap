@@ -136,6 +136,21 @@ impl ResultStore for FileStore {
     }
 }
 
+impl crate::consent::SecretIndex for FileStore {
+    fn secret_names(&self, analyzer: &str) -> Vec<String> {
+        self.read::<BTreeMap<String, Vec<String>>>("secret-names.json")
+            .remove(analyzer)
+            .unwrap_or_default()
+    }
+    fn mark_secret(&self, analyzer: &str, name: &str, stored: bool) -> io::Result<()> {
+        let _guard = self.lock.lock().unwrap();
+        let mut all: BTreeMap<String, Vec<String>> = self.read("secret-names.json");
+        crate::consent::mark_in(all.entry(analyzer.into()).or_default(), name, stored);
+        all.retain(|_, names| !names.is_empty());
+        self.write("secret-names.json", &all)
+    }
+}
+
 impl ReviewStore for FileStore {
     fn reviews(&self) -> BTreeMap<String, Review> {
         self.read("reviews.json")

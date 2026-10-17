@@ -148,6 +148,10 @@ pub struct Permissions {
     /// Whether it starts MCP servers. Must be false in this version.
     #[serde(default)]
     pub spawns_mcp_servers: bool,
+    /// Environment variable names of API keys it may receive from the OS keychain, e.g.
+    /// `NVIDIA_API_KEY`. Only names are declared; values never appear in a manifest.
+    #[serde(default)]
+    pub secrets: Vec<String>,
 }
 
 /// Output format.
@@ -386,6 +390,23 @@ impl AnalyzerManifest {
         if !p.network.is_empty() && p.network_reason.as_deref().unwrap_or("").trim().is_empty() {
             return Err(rule("network_reason is required when network is not empty"));
         }
+        if p.secrets.len() > crate::secrets::MAX_SECRETS {
+            return Err(rule(&format!(
+                "secrets may list at most {} names",
+                crate::secrets::MAX_SECRETS
+            )));
+        }
+        if let Some(name) = p.secrets.iter().find(|n| !crate::secrets::valid_name(n)) {
+            return Err(rule(&format!(
+                "secret {name:?} must be an upper-case environment variable name that holdmap doesn't set itself"
+            )));
+        }
+        let mut names = p.secrets.clone();
+        names.sort();
+        names.dedup();
+        if names.len() != p.secrets.len() {
+            return Err(rule("secrets must not repeat a name"));
+        }
         if !p.network.is_empty() && p.sends.is_empty() {
             return Err(rule(
                 "sends must say what leaves the machine when network is not empty",
@@ -532,5 +553,29 @@ mod tests {
         assert!(!valid_id("SkillSpector"));
         assert!(!valid_id("a..b"));
         assert!(!valid_id("x"));
+    }
+
+    #[test]
+    fn secrets_are_declared_by_name_only() {
+        let m = with(
+            "spawns_mcp_servers = false",
+            "spawns_mcp_servers = false\nsecrets = [\"NVIDIA_API_KEY\"]",
+        )
+        .unwrap();
+        assert_eq!(m.permissions.secrets, ["NVIDIA_API_KEY"]);
+        for bad in [
+            "\"PATH\"",
+            "\"lower\"",
+            "\"LD_PRELOAD\"",
+            "\"A\", \"A\"",
+            "\"A\",\"B\",\"C\",\"D\",\"E\"",
+        ] {
+            let err = with(
+                "spawns_mcp_servers = false",
+                &format!("spawns_mcp_servers = false\nsecrets = [{bad}]"),
+            )
+            .unwrap_err();
+            assert!(err.to_string().contains("secret"), "{bad}: {err}");
+        }
     }
 }

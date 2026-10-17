@@ -76,12 +76,47 @@ pub trait ReviewStore: Send + Sync {
     fn set_review(&self, fingerprint: &str, review: Option<Review>) -> io::Result<()>;
 }
 
+/// Which secret names the user stored for each analyzer (names only, never values), so lists
+/// and previews don't have to open the keychain.
+pub trait SecretIndex: Send + Sync {
+    /// Names stored for `analyzer`.
+    fn secret_names(&self, analyzer: &str) -> Vec<String>;
+    /// Record that `name` is stored (`true`) or deleted (`false`).
+    fn mark_secret(&self, analyzer: &str, name: &str, stored: bool) -> io::Result<()>;
+}
+
+/// Add or remove `name` in a sorted list.
+pub(crate) fn mark_in(names: &mut Vec<String>, name: &str, stored: bool) {
+    names.retain(|n| n != name);
+    if stored {
+        names.push(name.into());
+        names.sort();
+    }
+}
+
 /// In-memory stores for tests and the browser demo.
 #[derive(Debug, Default)]
 pub struct MemoryStore {
     grants: Mutex<BTreeMap<String, Grant>>,
     results: Mutex<BTreeMap<String, AnalyzerResult>>,
     reviews: Mutex<BTreeMap<String, Review>>,
+    secrets: Mutex<BTreeMap<String, Vec<String>>>,
+}
+
+impl SecretIndex for MemoryStore {
+    fn secret_names(&self, analyzer: &str) -> Vec<String> {
+        self.secrets
+            .lock()
+            .unwrap()
+            .get(analyzer)
+            .cloned()
+            .unwrap_or_default()
+    }
+    fn mark_secret(&self, analyzer: &str, name: &str, stored: bool) -> io::Result<()> {
+        let mut all = self.secrets.lock().unwrap();
+        mark_in(all.entry(analyzer.into()).or_default(), name, stored);
+        Ok(())
+    }
 }
 
 impl ConsentStore for MemoryStore {

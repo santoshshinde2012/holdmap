@@ -12,9 +12,12 @@ keywords.workspace = true
 categories.workspace = true
 
 [features]
-default = ["osv-http"]
+default = ["osv-http", "keychain"]
 # HTTPS transport for the OSV built-in. Without it the built-in reports itself unavailable.
 osv-http = ["dep:ureq"]
+# API keys for analyzers in the OS keychain (macOS Keychain, Windows Credential Manager,
+# Secret Service on Linux). Without it holdmap can't store keys and runs analyzers without them.
+keychain = ["dep:keyring"]
 
 [dependencies]
 holdmap-core.workspace = true
@@ -25,6 +28,7 @@ toml.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 ureq = { version = "3.4", default-features = false, features = ["rustls"], optional = true }
+keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "async-secret-service", "async-io", "crypto-rust"], optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

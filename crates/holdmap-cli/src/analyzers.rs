@@ -6,6 +6,7 @@ use crate::commands::confirm;
 use crate::style::{self, bold, dim, paint, S};
 use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
+use holdmap_analyzers::secrets::Secret;
 use holdmap_analyzers::service::{AnalyzerView, Preview, ServiceError};
 use holdmap_analyzers::FileStore;
 use holdmap_analyzers::{
@@ -41,6 +42,11 @@ pub enum AnalyzerAction {
     },
     /// Turn an analyzer off and delete its results.
     Revoke { id: String },
+    /// Store or delete an API key an analyzer declares, in the OS keychain.
+    Key {
+        #[command(subcommand)]
+        action: KeyAction,
+    },
     /// Run an approved analyzer now (or, with --changed, every approved one whose input changed).
     Run {
         #[arg(required_unless_present = "changed")]
@@ -48,6 +54,14 @@ pub enum AnalyzerAction {
         #[arg(long, conflicts_with = "id")]
         changed: bool,
     },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum KeyAction {
+    /// Store a key: paste it when asked (not echoed), or pipe it on standard input.
+    Set { id: String, name: String },
+    /// Delete a stored key.
+    Delete { id: String, name: String },
 }
 
 #[derive(Args, Debug)]
@@ -193,6 +207,7 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
                 println!("It was not on.");
             }
         }
+        AnalyzerAction::Key { action } => return run_key(&svc, action, a.json),
         AnalyzerAction::Run { id: Some(id), .. } => {
             let result = match svc.run(id, &inventory(docker)?) {
                 Ok(r) => r,
@@ -223,6 +238,67 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
         }
     }
     Ok(crate::exit::OK)
+}
+
+fn run_key(svc: &AnalyzerService, action: &KeyAction, json: bool) -> Result<u8> {
+    match action {
+        KeyAction::Set { id, name } => {
+            let view = svc.get(id)?;
+            if !view.secrets.iter().any(|s| &s.name == name) {
+                bail!(
+                    "{} doesn't declare a key called {name:?}. It declares: {}",
+                    view.name,
+                    if view.secrets.is_empty() {
+                        "none".to_string()
+                    } else {
+                        view.secrets
+                            .iter()
+                            .map(|s| s.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    }
+                );
+            }
+            let value = read_secret(&format!("{name} for {}: ", view.name))?;
+            svc.set_secret(id, name, &value)?;
+            if json {
+                println!("{}", json!({ "stored": true, "name": name }));
+            } else {
+                println!(
+                    "{} Stored {name} in your keychain. Only {} gets it, when it runs.",
+                    style::ok_mark(),
+                    view.name
+                );
+            }
+        }
+        KeyAction::Delete { id, name } => {
+            let existed = svc.delete_secret(id, name)?;
+            if json {
+                println!("{}", json!({ "deleted": existed, "name": name }));
+            } else if existed {
+                println!("{} Deleted {name} from your keychain.", style::ok_mark());
+            } else {
+                println!("{name} was not stored.");
+            }
+        }
+    }
+    Ok(crate::exit::OK)
+}
+
+/// Read one line without echoing it on a terminal, or from a pipe.
+fn read_secret(prompt: &str) -> Result<Secret> {
+    use std::io::{BufRead, IsTerminal};
+    let line = if std::io::stdin().is_terminal() {
+        rpassword::prompt_password(prompt).context("couldn't read the key")?
+    } else {
+        let mut line = String::new();
+        std::io::stdin()
+            .lock()
+            .read_line(&mut line)
+            .context("couldn't read the key from standard input")?;
+        line
+    };
+    Ok(Secret::new(line.trim_end_matches(['\r', '\n'])))
 }
 
 pub fn run_insights(a: &InsightsArgs) -> Result<u8> {
@@ -330,6 +406,20 @@ fn render_list(list: &[AnalyzerView]) -> String {
                     std::time::UNIX_EPOCH + std::time::Duration::from_millis(run.run_at_ms)
                 )
                 .to_string())
+            ));
+        }
+        for key in &a.secrets {
+            out.push_str(&format!(
+                "  key {}: {}\n",
+                key.name,
+                if key.stored {
+                    "stored in your keychain".to_string()
+                } else {
+                    dim(format!(
+                        "not stored (holdmap analyzers key set {} {})",
+                        a.id, key.name
+                    ))
+                }
             ));
         }
         if a.state == AnalyzerState::NotInstalled {

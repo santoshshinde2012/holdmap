@@ -17,10 +17,13 @@ pub mod osv;
 pub mod parse;
 pub mod probe;
 pub mod runner;
+pub mod secrets;
 pub mod service;
 pub mod store;
 
-pub use consent::{ConsentStore, Grant, MemoryStore, ResultStore, Review, ReviewStore};
+pub use consent::{
+    ConsentStore, Grant, MemoryStore, ResultStore, Review, ReviewStore, SecretIndex,
+};
 pub use finding::{
     AnalyzerResult, Detail, Finding, FindingState, Location, RunStatus, Severity, Subject,
     SubjectKind,
