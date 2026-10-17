@@ -471,10 +471,12 @@ for (const theme of ["dark", "light"]) {
     captures.push({
       name: `hero-poster-${variant}-${theme}.png`, theme, output: join(siteAssets, "hero"),
       viewport: mobile ? { width: 400, height: 560 } : { width: 1152, height: 720 },
-      deviceScaleFactor: mobile ? 2.625 : 1.5, pane: "460",
+      // Frame 0 of the hero tour (site/scripts/record-hero.mjs): Home in its Cards layout.
+      deviceScaleFactor: mobile ? 2.625 : 1.5, pane: "460", prefs: { view: "home", "home.layout": "cards" },
       async prepare(page) {
         if (mobile) await page.addStyleTag({ content: ".app.mac .titlebar{padding-left:16px!important}" });
-        else await expect(page.getByRole("heading", { name: "At a glance", exact: true })).toBeVisible();
+        await expect(page.locator("#home-overview")).toBeVisible();
+        await expect(page.getByRole("radio", { name: "Cards", exact: true })).toBeChecked();
       },
     });
   }
