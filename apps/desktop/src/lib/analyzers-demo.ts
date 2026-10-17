@@ -20,7 +20,7 @@ const BASE: Record<string, Omit<AnalyzerView, "state" | "approved_at_ms" | "last
     id: SKILLSPECTOR, name: "SkillSpector", publisher: "NVIDIA", license: "Apache-2.0", homepage: "https://github.com/NVIDIA/SkillSpector", kind: "cli",
     install: "uv tool install git+https://github.com/NVIDIA/skillspector.git@v2.13.0",
     summary: "Static scan of agent skills for prompt injection, data exfiltration, dangerous code and vulnerable dependencies.",
-    changes: [], sandbox: "basic", binary: "/Users/dev/.local/bin/skillspector",
+    changes: [], sandbox: "macos_seatbelt", binary: "/Users/dev/.local/bin/skillspector",
     permissions: { read: ["{subject.dir}"], network: ["api.osv.dev"], network_reason: "SkillSpector looks up dependency versions it finds in the skill on OSV and has no switch to turn that off.", sends: ["Package names and versions found in the skill go to api.osv.dev."], spawns_mcp_servers: false },
   },
 };
@@ -90,6 +90,7 @@ export class DemoAnalyzers {
   private approved = new Map<string, number>([[SKILLSPECTOR, RUN_AT - 3_600_000]]);
   private results = new Map<string, AnalyzerResult>([[SKILLSPECTOR, skillspectorResult()]]);
   private reviews = new Map<string, FindingState>();
+  private background = new Set<string>();
 
   list(): AnalyzerView[] {
     return [OSV, SKILLSPECTOR].map((id) => this.view(id));
@@ -103,6 +104,7 @@ export class DemoAnalyzers {
     return {
       ...BASE[id],
       state: approvedAt ? "approved" : "not_approved",
+      background: this.background.has(id),
       approved_at_ms: approvedAt,
       version: approvedAt && id === SKILLSPECTOR ? "2.13.0" : null,
       last_run: result ? { run_at_ms: result.run_at_ms, status: result.status, subjects: result.subjects.length, open } : null,
@@ -133,17 +135,28 @@ export class DemoAnalyzers {
       env: builtin ? [] : ["PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "NO_COLOR"],
       sandbox: builtin
         ? "Runs inside holdmap. Only the exact request shown here is sent."
-        : "Basic: it gets a copy of the folder, a cleared environment and a private temporary home, and is stopped at the time limit. The operating system does not block it from reading other files or using the network.",
-      schedule: "When you click Run now, and while holdmap is open when the analysed items change.",
+        : "macOS sandbox (best effort): it gets a copy of the folder, a cleared environment and a private temporary home, and is stopped at the time limit. It can only write inside its private folder and can't read common credential folders (.ssh, .aws, Keychains and similar). It may use the network, as its permissions say. It can still read your other files. Apple has deprecated the sandbox-exec tool this uses.",
+      schedule: this.background.has(id)
+        ? "When you click Run now, and while holdmap is open when the analysed items change (you allowed automatic runs that use the network)."
+        : "Only when you click Run now. It uses the network, so it doesn't run on its own unless you allow automatic runs.",
     };
   }
 
   approve(id: string): AnalyzerView {
     this.approved.set(id, Date.now());
+    this.background.delete(id);
+    return this.view(id);
+  }
+
+  setBackground(id: string, allow: boolean): AnalyzerView {
+    if (!this.approved.has(id)) throw new Error(`${BASE[id]?.name ?? id} is off. Turn it on first.`);
+    if (allow) this.background.add(id);
+    else this.background.delete(id);
     return this.view(id);
   }
 
   revoke(id: string): boolean {
+    this.background.delete(id);
     this.results.delete(id);
     return this.approved.delete(id);
   }

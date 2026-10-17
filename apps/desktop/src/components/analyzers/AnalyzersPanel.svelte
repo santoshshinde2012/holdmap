@@ -4,11 +4,12 @@
   import { onMount } from "svelte";
   import Button from "../ui/Button.svelte";
   import Callout from "../ui/Callout.svelte";
+  import Checkbox from "../ui/Checkbox.svelte";
   import CopyValue from "../ui/CopyValue.svelte";
   import PermissionsSheet from "./PermissionsSheet.svelte";
   import AnalyzerKeys from "./AnalyzerKeys.svelte";
   import * as api from "../../lib/api";
-  import { STATE_LABEL, ago, countsText, total, type AnalyzerView, type Preview } from "../../lib/analyzers";
+  import { SANDBOX_LABEL, STATE_LABEL, ago, countsText, total, type AnalyzerView, type Preview } from "../../lib/analyzers";
   import { insightsStore } from "../../lib/insights-store.svelte";
 
   const demo = api.usesSampleData();
@@ -61,7 +62,19 @@
           <span class="state" data-state={a.state}>{STATE_LABEL[a.state]}</span>
         </div>
         <p class="sum">{a.summary}</p>
-        {#if a.state === "approved"}<p class="meta">{lastRun(a)}</p>{/if}
+        {#if a.state === "approved"}
+          <p class="meta">{lastRun(a)}</p>
+          {#if a.kind !== "builtin"}<p class="meta">Sandbox: {SANDBOX_LABEL[a.sandbox] ?? a.sandbox}</p>{/if}
+          {#if a.permissions.network.length}
+            <Checkbox
+              checked={a.background ?? false}
+              disabled={busy[`auto:${a.id}`]}
+              label="Also run when items change"
+              description={`Runs on its own while holdmap is open, which contacts ${a.permissions.network.join(", ")}. Off: it runs only when you click Run now.`}
+              onchange={(on) => act(`auto:${a.id}`, () => api.setAnalyzerBackground(a.id, on))}
+            />
+          {/if}
+        {/if}
         {#if a.state === "changed"}<p class="meta warn">{a.changes.join("; ")}</p>{/if}
         {#if a.state === "not_installed" && a.install}
           <div class="install"><span class="meta">Install it yourself, then come back:</span><CopyValue value={a.install} mono wrap what="Install command" oncopy={(t) => navigator.clipboard?.writeText(t)} /></div>
@@ -76,7 +89,7 @@
             <Button size="sm" variant={a.state === "changed" ? "primary" : "secondary"} icon="shield" loading={busy[a.id]} onclick={() => review(a)}>{a.state === "changed" ? "Review again…" : "Review and turn on…"}</Button>
           {/if}
         </div>
-        {#each [errors[a.id], errors[`run:${a.id}`], errors[`off:${a.id}`]].filter(Boolean) as e}<Callout tone="danger" size="sm">{e}</Callout>{/each}
+        {#each [errors[a.id], errors[`run:${a.id}`], errors[`off:${a.id}`], errors[`auto:${a.id}`]].filter(Boolean) as e}<Callout tone="danger" size="sm">{e}</Callout>{/each}
       </li>
     {/each}
   </ul>

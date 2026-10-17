@@ -17,6 +17,7 @@ pub mod osv;
 pub mod parse;
 pub mod probe;
 pub mod runner;
+pub mod sandbox;
 pub mod secrets;
 pub mod service;
 pub mod store;
@@ -31,7 +32,7 @@ pub use finding::{
 pub use input::{AnalyzerInput, InputProjector, InventoryProjector, PackageCoord};
 pub use manifest::{AnalyzerManifest, ManifestError};
 pub use parse::OutputParser;
-pub use runner::{AnalyzerRunner, BasicSandbox, Sandbox, SandboxLevel};
+pub use runner::{AnalyzerRunner, BasicSandbox, Containment, Sandbox, SandboxLevel};
 pub use service::{
     AnalyzerService, AnalyzerState, AnalyzerView, Insights, Preview, SeverityCounts, Stores,
 };

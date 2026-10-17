@@ -17,9 +17,7 @@ use crate::manifest::{
 use crate::osv::{request_bodies, OsvParser, OsvRunner};
 use crate::parse::{for_format, OutputParser, Parsed};
 use crate::probe::{BinaryProbe, SystemProbe};
-use crate::runner::{
-    AnalyzerRunner, BasicSandbox, RawOutput, RunContext, RunError, SandboxLevel, ENV_NAMES,
-};
+use crate::runner::{AnalyzerRunner, RawOutput, RunContext, RunError, SandboxLevel, ENV_NAMES};
 use crate::secrets::{check_value, Secret, SecretError, SecretStore};
 use holdmap_core::agents::AgentsReport;
 use serde::{Deserialize, Serialize};
@@ -131,6 +129,10 @@ pub struct AnalyzerView {
     pub approved_at_ms: Option<u64>,
     /// Last run.
     pub last_run: Option<RunSummary>,
+    /// Whether it runs on its own when the analysed items change (always for analyzers
+    /// without network access; network analyzers only when the user allows it).
+    #[serde(default)]
+    pub background: bool,
     /// Declared API keys and whether one is stored (names only).
     #[serde(default)]
     pub secrets: Vec<SecretStatus>,
@@ -243,16 +245,26 @@ pub struct AnalyzerService {
 }
 
 impl AnalyzerService {
-    /// Production wiring: bundled catalog, system probe, basic sandbox, OSV over HTTPS.
+    /// Production wiring: bundled catalog, system probe, the best OS sandbox available, OSV over
+    /// HTTPS.
     pub fn new(stores: Stores) -> Self {
+        let sandbox = crate::sandbox::best_available();
+        let level = sandbox.level();
         Self::with_parts(
             crate::catalog::bundled(),
             stores,
             Box::new(SystemProbe::from_env()),
-            Box::new(CliRunner::new(Box::new(BasicSandbox))),
+            Box::new(CliRunner::new(sandbox)),
             Box::new(OsvRunner::with_default_transport()),
         )
+        .with_sandbox_level(level)
         .with_secrets(crate::secrets::default_store())
+    }
+
+    /// State this sandbox level on views and previews (it must match the CLI runner's).
+    pub fn with_sandbox_level(mut self, level: SandboxLevel) -> Self {
+        self.sandbox = level;
+        self
     }
 
     /// Explicit wiring (tests, other front ends).
@@ -413,6 +425,7 @@ impl AnalyzerService {
             changes,
             permissions: m.permissions.clone(),
             sandbox: self.sandbox,
+            background: !m.uses_network() || grant.as_ref().is_some_and(|g| g.background_network),
             binary: binary.map(|b| b.path.display().to_string()),
             version: grant.as_ref().and_then(|g| g.version.clone()),
             approved_at_ms: grant.map(|g| g.approved_at_ms),
@@ -476,11 +489,9 @@ impl AnalyzerService {
             sandbox: if builtin {
                 "Runs inside holdmap. Only the exact request shown here is sent.".into()
             } else {
-                self.sandbox.describe().into()
+                self.sandbox.describe(m.uses_network())
             },
-            schedule:
-                "When you click Run now, and while holdmap is open when the analysed items change."
-                    .into(),
+            schedule: schedule(m, self.view(m).background),
         })
     }
 
@@ -494,6 +505,7 @@ impl AnalyzerService {
             binary_sha256: None,
             version: None,
             approved_at_ms: (self.now)(),
+            background_network: false,
         };
         if m.runner.kind == RunnerKind::Cli {
             let info = self
@@ -504,6 +516,21 @@ impl AnalyzerService {
             grant.binary = Some(info.path);
             grant.binary_sha256 = Some(info.sha256);
         }
+        self.stores.consent.record(grant)?;
+        self.get(id)
+    }
+
+    /// Allow or stop automatic runs, when items change, for an approved analyzer that uses the
+    /// network. Analyzers without network access always run automatically once approved.
+    pub fn set_background(&self, id: &str, allow: bool) -> Result<AnalyzerView, ServiceError> {
+        let m = self.manifest(id)?;
+        let mut grant = self.stores.consent.grant(&m.id).ok_or_else(|| {
+            RunError::NotApproved(format!("{} is off. Turn it on first.", m.name))
+        })?;
+        if !m.uses_network() {
+            return self.get(id);
+        }
+        grant.background_network = allow;
         self.stores.consent.record(grant)?;
         self.get(id)
     }
@@ -525,7 +552,8 @@ impl AnalyzerService {
     pub fn run_changed(&self, report: &AgentsReport) -> Vec<String> {
         let mut ran = Vec::new();
         for m in &self.catalog {
-            if self.view(m).state != AnalyzerState::Approved {
+            let view = self.view(m);
+            if view.state != AnalyzerState::Approved || !view.background {
                 continue;
             }
             let input = self.projector.project(report, m);
@@ -669,6 +697,14 @@ fn refuse(m: &AnalyzerManifest, state: AnalyzerState, changes: &[String]) -> Res
             m.name,
             changes.join("; ")
         ))),
+    }
+}
+
+fn schedule(m: &AnalyzerManifest, background: bool) -> String {
+    match (m.uses_network(), background) {
+        (false, _) => "When you click Run now, and while holdmap is open when the analysed items change.".into(),
+        (true, true) => "When you click Run now, and while holdmap is open when the analysed items change (you allowed automatic runs that use the network).".into(),
+        (true, false) => "Only when you click Run now. It uses the network, so it doesn't run on its own unless you allow automatic runs.".into(),
     }
 }
 

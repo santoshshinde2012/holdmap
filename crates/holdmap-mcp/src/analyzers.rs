@@ -38,6 +38,7 @@ fn row(v: &AnalyzerView) -> Value {
         "sandbox": v.sandbox, "version": v.version, "last_run": v.last_run,
         // Names and whether one is stored only; values never leave the keychain.
         "keys": v.secrets,
+        "runs_on_change": v.background,
     })
 }
 
@@ -162,6 +163,7 @@ mod tests {
                     binary_sha256: None,
                     version: None,
                     approved_at_ms: 1,
+                    background_network: false,
                 })
                 .unwrap();
         }

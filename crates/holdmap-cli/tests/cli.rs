@@ -771,3 +771,11 @@ fn analyzer_keys_must_be_declared_by_the_manifest() {
     .failure()
     .stderr(predicate::str::contains("doesn't declare a key"));
 }
+
+#[test]
+fn automatic_runs_need_an_approved_analyzer() {
+    hm().args(["analyzers", "auto", "nvidia.skillspector", "on"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Turn it on first"));
+}

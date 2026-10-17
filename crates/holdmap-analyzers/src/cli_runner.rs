@@ -4,7 +4,7 @@
 
 use crate::input::{AnalyzerInput, InputSubject};
 use crate::manifest::{AnalyzerManifest, OUTPUT, SUBJECT_DIR};
-use crate::runner::{AnalyzerRunner, RawOutput, RunContext, RunError, Sandbox};
+use crate::runner::{AnalyzerRunner, Containment, RawOutput, RunContext, RunError, Sandbox};
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -104,10 +104,16 @@ impl CliRunner {
                     .replace(OUTPUT, &report.to_string_lossy())
             })
             .collect();
-        let mut cmd = Command::new(binary);
-        cmd.args(&args).current_dir(work.path());
-        self.sandbox
-            .prepare(&mut cmd, &home, manifest.uses_network());
+        let mut cmd = self.sandbox.command(
+            binary,
+            &args,
+            &Containment {
+                work: work.path(),
+                home: &home,
+                network: manifest.uses_network(),
+            },
+        );
+        cmd.current_dir(work.path());
         // Only names the approved manifest declares, only for this analyzer's own process.
         for (name, value) in secrets {
             if manifest.permissions.secrets.contains(name) {
@@ -129,12 +135,18 @@ impl CliRunner {
         }
         let cap = (manifest.runner.max_output_mb * 1024 * 1024) as usize;
         let timeout = Duration::from_secs(manifest.runner.timeout_secs);
-        let ran = run_capped(cmd, timeout, cap);
+        let ran = run_contained(cmd, timeout, cap, self.sandbox.as_ref());
         let Ok(ran) = ran else {
             out.notes.push("The analyzer could not be started.".into());
             return out;
         };
         out.exit_code = ran.code;
+        if ran.uncontained {
+            out.notes.push(
+                "The operating system sandbox could not be applied; it ran with basic containment."
+                    .into(),
+            );
+        }
         if ran.timed_out {
             out.notes.push(format!(
                 "Stopped after the {}-second time limit.",
@@ -257,11 +269,23 @@ pub struct Ran {
     pub stdout_truncated: bool,
     /// Whether the time limit stopped it.
     pub timed_out: bool,
+    /// Whether the OS sandbox this level promises could not be applied.
+    pub uncontained: bool,
 }
 
 /// Run `cmd`, capturing at most `cap` bytes of stdout, killing its whole process group at
 /// `timeout`. stderr is discarded: it is logging, and may echo inputs.
-pub fn run_capped(mut cmd: Command, timeout: Duration, cap: usize) -> io::Result<Ran> {
+pub fn run_capped(cmd: Command, timeout: Duration, cap: usize) -> io::Result<Ran> {
+    run_contained(cmd, timeout, cap, &crate::runner::BasicSandbox)
+}
+
+/// [`run_capped`], handing the started child to `sandbox` (a Windows job) for the whole run.
+pub fn run_contained(
+    mut cmd: Command,
+    timeout: Duration,
+    cap: usize,
+    sandbox: &dyn Sandbox,
+) -> io::Result<Ran> {
     cmd.stdout(Stdio::piped()).stderr(Stdio::null());
     #[cfg(unix)]
     {
@@ -269,6 +293,7 @@ pub fn run_capped(mut cmd: Command, timeout: Duration, cap: usize) -> io::Result
         cmd.process_group(0);
     }
     let mut child = cmd.spawn()?;
+    let guard = sandbox.contain(&child);
     let mut stdout = child.stdout.take().expect("piped");
     let reader = std::thread::spawn(move || {
         let mut buf = Vec::new();
@@ -284,7 +309,10 @@ pub fn run_capped(mut cmd: Command, timeout: Duration, cap: usize) -> io::Result
         (buf, truncated)
     });
     let started = Instant::now();
-    let mut ran = Ran::default();
+    let mut ran = Ran {
+        uncontained: guard.is_none() && sandbox.level() == crate::runner::SandboxLevel::WindowsJob,
+        ..Ran::default()
+    };
     loop {
         if let Some(status) = child.try_wait()? {
             ran.code = status.code();
@@ -297,6 +325,8 @@ pub fn run_capped(mut cmd: Command, timeout: Duration, cap: usize) -> io::Result
         }
         std::thread::sleep(Duration::from_millis(25));
     }
+    // Ends anything the run left behind in its job (Windows).
+    drop(guard);
     let (stdout, truncated) = reader.join().unwrap_or_default();
     ran.stdout = stdout;
     ran.stdout_truncated = truncated;
@@ -444,6 +474,53 @@ mod tests {
         let v: serde_json::Value = serde_json::from_slice(&out[0].bytes).unwrap();
         assert_eq!(v["declared"], "k-123");
         assert_eq!(v["other"], "", "an undeclared name is never set");
+    }
+
+    /// End to end through bubblewrap, where it works: the report is written inside the private
+    /// folder, the original skill folder can't be touched and the time limit still applies.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn bubblewrap_runs_contain_writes_and_still_time_out() {
+        let Some(bwrap) = crate::sandbox::Bubblewrap::detect() else {
+            eprintln!("bubblewrap not usable here; skipped");
+            return;
+        };
+        let root = tempfile::tempdir().unwrap();
+        let skill = skill(root.path());
+        let target = skill.join("SKILL.md");
+        let bin = script(
+            root.path(),
+            &format!(
+                r#"out="$7"; if echo x >> "{}" 2>/dev/null; then w=leaked; else w=blocked; fi; printf '{{"write":"%s"}}' "$w" > "$out""#,
+                target.display()
+            ),
+        );
+        let cx = RunContext {
+            binary: Some(bin.clone()),
+            ..Default::default()
+        };
+        let out = CliRunner::new(Box::new(bwrap.clone()))
+            .run(&manifest(10), &input(&skill), &cx)
+            .unwrap();
+        assert!(!out[0].failed, "{:?}", out[0].notes);
+        let v: serde_json::Value = serde_json::from_slice(&out[0].bytes).unwrap();
+        assert_eq!(v["write"], "blocked");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "---\nname: a\n---\n");
+
+        let slow = script(root.path(), "sleep 30");
+        let started = Instant::now();
+        let out = CliRunner::new(Box::new(bwrap))
+            .run(
+                &manifest(1),
+                &input(&skill),
+                &RunContext {
+                    binary: Some(slow),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(out[0].failed);
+        assert!(started.elapsed() < Duration::from_secs(10));
     }
 
     #[test]

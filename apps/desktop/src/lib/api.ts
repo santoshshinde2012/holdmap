@@ -509,6 +509,13 @@ export async function revokeAnalyzer(id: string): Promise<boolean> {
   return demoAnalyzers.revoke(id);
 }
 
+/** Allow or stop automatic runs (when items change) for an approved network analyzer. */
+export async function setAnalyzerBackground(id: string, allow: boolean): Promise<AnalyzerView> {
+  if (isTauri) return call("analyzer_background", { id, allow });
+  if (liveReads()) liveWrites();
+  return demoAnalyzers.setBackground(id, allow);
+}
+
 export async function runAnalyzer(id: string): Promise<AnalyzerResult> {
   if (isTauri) return call("analyzer_run", { id });
   if (liveReads()) liveWrites();

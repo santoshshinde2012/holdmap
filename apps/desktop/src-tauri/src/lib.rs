@@ -93,6 +93,7 @@ pub fn run() {
             analyzers::analyzer_preview,
             analyzers::analyzer_approve,
             analyzers::analyzer_revoke,
+            analyzers::analyzer_background,
             analyzers::analyzer_run,
             analyzers::analyzers_run_changed,
             analyzers::insights,

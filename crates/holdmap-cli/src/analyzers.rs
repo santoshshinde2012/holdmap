@@ -10,8 +10,8 @@ use holdmap_analyzers::secrets::Secret;
 use holdmap_analyzers::service::{AnalyzerView, Preview, ServiceError};
 use holdmap_analyzers::FileStore;
 use holdmap_analyzers::{
-    AnalyzerResult, AnalyzerService, AnalyzerState, Finding, FindingState, Insights, Severity,
-    Stores,
+    AnalyzerResult, AnalyzerService, AnalyzerState, Finding, FindingState, Insights, SandboxLevel,
+    Severity, Stores,
 };
 use holdmap_core::agents::AgentsReport;
 use holdmap_core::util::printable;
@@ -47,6 +47,13 @@ pub enum AnalyzerAction {
         #[command(subcommand)]
         action: KeyAction,
     },
+    /// Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer
+    /// that uses the network. Analyzers without network access run automatically once on.
+    Auto {
+        id: String,
+        #[arg(value_enum)]
+        setting: Toggle,
+    },
     /// Run an approved analyzer now (or, with --changed, every approved one whose input changed).
     Run {
         #[arg(required_unless_present = "changed")]
@@ -54,6 +61,12 @@ pub enum AnalyzerAction {
         #[arg(long, conflicts_with = "id")]
         changed: bool,
     },
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Toggle {
+    On,
+    Off,
 }
 
 #[derive(Subcommand, Debug)]
@@ -208,6 +221,37 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
             }
         }
         AnalyzerAction::Key { action } => return run_key(&svc, action, a.json),
+        AnalyzerAction::Auto { id, setting } => {
+            let view = match svc.set_background(id, *setting == Toggle::On) {
+                Ok(v) => v,
+                Err(ServiceError::Run(e)) => {
+                    eprintln!("{} {e}", style::err_mark());
+                    return Ok(crate::exit::BLOCKED);
+                }
+                Err(e) => return Err(e.into()),
+            };
+            if a.json {
+                println!("{}", serde_json::to_string_pretty(&view)?);
+            } else if !view.permissions.network.is_empty() && *setting == Toggle::On {
+                println!(
+                    "{} {} will also run when the analysed items change, using the network.",
+                    style::ok_mark(),
+                    view.name
+                );
+            } else if view.background {
+                println!(
+                    "{} {} doesn't use the network; it always runs when items change.",
+                    style::ok_mark(),
+                    view.name
+                );
+            } else {
+                println!(
+                    "{} {} runs only when you run it.",
+                    style::ok_mark(),
+                    view.name
+                );
+            }
+        }
         AnalyzerAction::Run { id: Some(id), .. } => {
             let result = match svc.run(id, &inventory(docker)?) {
                 Ok(r) => r,
@@ -384,6 +428,15 @@ fn state_label(state: AnalyzerState) -> String {
     }
 }
 
+fn sandbox_label(level: SandboxLevel) -> &'static str {
+    match level {
+        SandboxLevel::Basic => "basic (no OS sandbox)",
+        SandboxLevel::MacosSeatbelt => "macOS sandbox-exec (best effort)",
+        SandboxLevel::LinuxBubblewrap => "Linux bubblewrap",
+        SandboxLevel::WindowsJob => "Windows Job Object",
+    }
+}
+
 fn render_list(list: &[AnalyzerView]) -> String {
     let mut out = String::new();
     for a in list {
@@ -407,6 +460,20 @@ fn render_list(list: &[AnalyzerView]) -> String {
                 )
                 .to_string())
             ));
+        }
+        if a.state == AnalyzerState::Approved {
+            out.push_str(&format!(
+                "  runs: {}\n",
+                if a.background {
+                    "on demand and when items change".to_string()
+                } else {
+                    dim(format!(
+                        "on demand only (uses the network; holdmap analyzers auto {} on)",
+                        a.id
+                    ))
+                }
+            ));
+            out.push_str(&format!("  sandbox: {}\n", dim(sandbox_label(a.sandbox))));
         }
         for key in &a.secrets {
             out.push_str(&format!(

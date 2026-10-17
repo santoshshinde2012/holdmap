@@ -182,6 +182,7 @@ mod tests {
             binary_sha256: None,
             version: None,
             approved_at_ms: 1,
+            background_network: false,
         };
         store.record(grant.clone()).unwrap();
         assert_eq!(store.grant("a.b"), Some(grant));

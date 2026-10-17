@@ -495,11 +495,57 @@ fn run_changed_runs_only_when_the_subjects_change() {
     let h = harness();
     let r = report(&h.skill_dir);
     h.service.approve(SKILLSPECTOR).unwrap();
+    h.service.set_background(SKILLSPECTOR, true).unwrap();
     assert_eq!(h.service.run_changed(&r), vec![SKILLSPECTOR.to_string()]);
     assert!(h.service.run_changed(&r).is_empty());
     std::fs::write(h.skill_dir.join("extra.md"), "new file").unwrap();
     assert_eq!(h.service.run_changed(&r), vec![SKILLSPECTOR.to_string()]);
     assert_eq!(*h.cli.runs.lock().unwrap(), 2);
+}
+
+#[test]
+fn network_analyzers_run_on_their_own_only_when_allowed() {
+    let h = harness();
+    let r = report(&h.skill_dir);
+    assert!(
+        h.service.set_background(SKILLSPECTOR, true).is_err(),
+        "needs approval first"
+    );
+    let view = h.service.approve(SKILLSPECTOR).unwrap();
+    assert!(!view.background, "network analyzers start manual-only");
+    assert!(h
+        .service
+        .preview(SKILLSPECTOR, &r)
+        .unwrap()
+        .schedule
+        .starts_with("Only when you click Run now"));
+    assert!(h.service.run_changed(&r).is_empty());
+    assert_eq!(*h.cli.runs.lock().unwrap(), 0);
+    // Run now still works.
+    h.service.run(SKILLSPECTOR, &r).unwrap();
+    std::fs::write(h.skill_dir.join("extra.md"), "new file").unwrap();
+    assert!(
+        h.service
+            .set_background(SKILLSPECTOR, true)
+            .unwrap()
+            .background
+    );
+    assert_eq!(h.service.run_changed(&r), vec![SKILLSPECTOR.to_string()]);
+    assert!(h
+        .service
+        .preview(SKILLSPECTOR, &r)
+        .unwrap()
+        .schedule
+        .contains("you allowed"));
+    // A new approval resets it.
+    h.service.approve(SKILLSPECTOR).unwrap();
+    assert!(!h.service.get(SKILLSPECTOR).unwrap().background);
+    assert!(
+        !h.service
+            .set_background(SKILLSPECTOR, false)
+            .unwrap()
+            .background
+    );
 }
 
 #[test]

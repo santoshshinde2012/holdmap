@@ -170,3 +170,19 @@ pub async fn analyzer_secret_delete(
     })
     .await
 }
+
+/// Allow or stop automatic runs, when items change, for an approved analyzer that uses the
+/// network.
+#[tauri::command]
+pub async fn analyzer_background(
+    app: AppHandle,
+    id: String,
+    allow: bool,
+) -> Result<AnalyzerView, String> {
+    blocking(move || {
+        service(&app)
+            .set_background(&id, allow)
+            .map_err(|e| e.to_string())
+    })
+    .await
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { agentCounts, agentFindings, ago, canRun, countsText, emptyCounts, findingWhere, flaggedAgents, insightNeeds, total, worst, type Insights } from "./analyzers";
+import { SANDBOX_LABEL, agentCounts, agentFindings, ago, canRun, countsText, emptyCounts, findingWhere, flaggedAgents, insightNeeds, total, worst, type Insights } from "./analyzers";
 import { DemoAnalyzers } from "./analyzers-demo";
 import { attention, hotAgents } from "./home";
 import { mockAgents } from "./mock";
@@ -103,7 +103,21 @@ describe("demo analyzers", () => {
     const p = new DemoAnalyzers().preview("nvidia.skillspector", report);
     expect(p.command).toContain("--no-llm");
     expect(p.env).not.toContain("OPENAI_API_KEY");
-    expect(p.sandbox).toMatch(/does not block/);
+    expect(p.sandbox).toMatch(/best effort/);
+    expect(p.sandbox).toMatch(/can still read your other files/);
+    expect(p.schedule).toMatch(/^Only when you click Run now/);
+  });
+
+  it("runs network analyzers on change only when allowed, and a new approval resets it", () => {
+    const d = new DemoAnalyzers();
+    expect(() => d.setBackground("holdmap.osv", true)).toThrow(/Turn it on first/);
+    expect(d.setBackground("nvidia.skillspector", true).background).toBe(true);
+    expect(d.preview("nvidia.skillspector", report).schedule).toMatch(/you allowed/);
+    expect(d.approve("nvidia.skillspector").background).toBe(false);
+  });
+
+  it("labels every sandbox level", () => {
+    expect(Object.keys(SANDBOX_LABEL).sort()).toEqual(["basic", "linux_bubblewrap", "macos_seatbelt", "windows_job"]);
   });
 });
 

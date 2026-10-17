@@ -48,7 +48,10 @@ export interface AnalyzerView {
   state: AnalyzerState;
   changes: string[];
   permissions: Permissions;
-  sandbox: "basic";
+  /** How runs are contained; the permissions sheet states exactly what each level enforces. */
+  sandbox: SandboxLevel;
+  /** Runs on its own when analysed items change (network analyzers only if the user allowed it). */
+  background?: boolean;
   binary: string | null;
   version: string | null;
   approved_at_ms: number | null;
@@ -56,6 +59,15 @@ export interface AnalyzerView {
   /** Declared API keys and whether one is stored (names only; values never leave the keychain). */
   secrets?: { name: string; stored: boolean }[];
 }
+export type SandboxLevel = "basic" | "macos_seatbelt" | "linux_bubblewrap" | "windows_job";
+
+export const SANDBOX_LABEL: Record<SandboxLevel, string> = {
+  basic: "Basic (no OS sandbox)",
+  macos_seatbelt: "macOS sandbox (best effort)",
+  linux_bubblewrap: "Linux bubblewrap",
+  windows_job: "Windows Job Object",
+};
+
 export interface Preview {
   analyzer: AnalyzerView;
   command: string[] | null;

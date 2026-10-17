@@ -26,6 +26,10 @@ pub struct Grant {
     pub version: Option<String>,
     /// When it was approved (Unix epoch ms).
     pub approved_at_ms: u64,
+    /// Whether it may also run on its own when the analysed items change even though it uses
+    /// the network. Off until the user turns it on; reset by every new approval.
+    #[serde(default)]
+    pub background_network: bool,
 }
 
 /// A user's decision about one finding.

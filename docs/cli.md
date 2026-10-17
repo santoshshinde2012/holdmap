@@ -34,6 +34,7 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`holdmap analyzers key`](#holdmap-analyzers-key) | Store or delete an API key an analyzer declares, in the OS keychain |
 | [`holdmap analyzers key set`](#holdmap-analyzers-key-set) | Store a key: paste it when asked (not echoed), or pipe it on standard input |
 | [`holdmap analyzers key delete`](#holdmap-analyzers-key-delete) | Delete a stored key |
+| [`holdmap analyzers auto`](#holdmap-analyzers-auto) | Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that uses the network. Analyzers without network access run automatically once on |
 | [`holdmap analyzers run`](#holdmap-analyzers-run) | Run an approved analyzer now (or, with --changed, every approved one whose input changed) |
 | [`holdmap insights`](#holdmap-insights) | Findings from approved analyzers, as text, JSON or SARIF |
 | [`holdmap insights review`](#holdmap-insights-review) | Mark a finding reviewed; it stays hidden while it is unchanged |
@@ -483,6 +484,8 @@ Commands:
   approve  Review an analyzer's permissions and turn it on
   revoke   Turn an analyzer off and delete its results
   key      Store or delete an API key an analyzer declares, in the OS keychain
+  auto     Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that
+           uses the network. Analyzers without network access run automatically once on
   run      Run an approved analyzer now (or, with --changed, every approved one whose input changed)
   help     Print this message or the help of the given subcommand(s)
 
@@ -613,6 +616,26 @@ Usage: holdmap analyzers key delete [OPTIONS] <ID> <NAME>
 Arguments:
   <ID>
   <NAME>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers auto
+
+```text
+Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that uses the
+network. Analyzers without network access run automatically once on
+
+Usage: holdmap analyzers auto [OPTIONS] <ID> <SETTING>
+
+Arguments:
+  <ID>
+  <SETTING>  [possible values: on, off]
 
 Options:
       --json           Machine-readable JSON output
