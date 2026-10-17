@@ -509,6 +509,19 @@ export async function revokeAnalyzer(id: string): Promise<boolean> {
   return demoAnalyzers.revoke(id);
 }
 
+/** Register an analyzer from manifest text (desktop app only). */
+export async function addAnalyzer(manifest: string): Promise<AnalyzerView> {
+  if (isTauri) return call("analyzer_add", { manifest });
+  throw new Error("Adding analyzers needs the holdmap desktop app; this browser view can't run them.");
+}
+
+/** Remove an analyzer the user registered. */
+export async function removeAnalyzer(id: string): Promise<boolean> {
+  if (isTauri) return call("analyzer_remove", { id });
+  if (liveReads()) liveWrites();
+  return false;
+}
+
 /** The signed analyzer catalog in use and any update waiting for review. */
 export async function analyzerCatalog(): Promise<CatalogStatus | null> {
   if (isTauri) return call("analyzer_catalog");

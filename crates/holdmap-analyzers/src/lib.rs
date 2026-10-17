@@ -4,7 +4,8 @@
 //! lookup). Nothing runs until the user approves it on a permissions sheet that shows exactly
 //! what it gets; approval is pinned to the manifest and program, and any change asks again.
 //! Runs get a staged copy of the subject, a cleared environment and hard limits; output is
-//! reduced to capped, secret-masked findings. holdmap never starts MCP servers for this.
+//! reduced to capped, secret-masked findings. holdmap never starts MCP servers on its own: an
+//! MCP analyzer the user registered starts its server only for a run the user started.
 
 pub mod catalog;
 pub mod cli_runner;
@@ -12,6 +13,7 @@ pub mod consent;
 pub mod finding;
 pub mod input;
 pub mod manifest;
+pub mod mcp_runner;
 pub mod needs;
 pub mod osv;
 pub mod parse;

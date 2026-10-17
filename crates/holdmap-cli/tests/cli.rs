@@ -800,3 +800,19 @@ fn the_signed_catalog_is_reported_and_bad_imports_are_refused() {
         .failure()
         .stderr(predicate::str::contains("no catalog update is waiting"));
 }
+
+#[test]
+fn registering_an_analyzer_validates_the_manifest() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("bad.toml");
+    std::fs::write(&file, "schema = 1\nid = \"x\"\n").unwrap();
+    hm().args(["analyzers", "add"])
+        .arg(&file)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("manifest"));
+    hm().args(["analyzers", "remove", "nvidia.skillspector"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("catalog"));
+}

@@ -74,7 +74,8 @@ pub enum RunnerKind {
     Builtin,
     /// A local command-line program.
     Cli,
-    /// An MCP server the user picked (not supported in this version).
+    /// A local MCP server the user registered: started over stdio only for a run, asked to
+    /// call one tool per skill, then stopped.
     Mcp,
 }
 
@@ -117,6 +118,12 @@ pub struct RunnerSpec {
     /// Exit codes that mean the report is valid.
     #[serde(default = "default_exit_ok")]
     pub exit_ok: Vec<i32>,
+    /// MCP analyzers: the tool called once per skill.
+    #[serde(default)]
+    pub tool: Option<String>,
+    /// MCP analyzers: the tool's arguments; only [`SUBJECT_DIR`] is substituted.
+    #[serde(default)]
+    pub tool_args: std::collections::BTreeMap<String, String>,
 }
 
 fn default_timeout() -> u64 {
@@ -145,7 +152,7 @@ pub struct Permissions {
     /// Plain-language list of what leaves the machine.
     #[serde(default)]
     pub sends: Vec<String>,
-    /// Whether it starts MCP servers. Must be false in this version.
+    /// Whether it starts an MCP server. Required (and only allowed) for MCP analyzers.
     #[serde(default)]
     pub spawns_mcp_servers: bool,
     /// Environment variable names of API keys it may receive from the OS keychain, e.g.
@@ -325,13 +332,13 @@ impl AnalyzerManifest {
     fn validate_runner(&self) -> Result<(), ManifestError> {
         let r = &self.runner;
         match r.kind {
-            RunnerKind::Mcp => {
-                return Err(rule(
-                    "MCP analyzers are not supported in this version of holdmap",
-                ))
-            }
             RunnerKind::Builtin => return Ok(()),
-            RunnerKind::Cli => {}
+            RunnerKind::Mcp => self.validate_mcp()?,
+            RunnerKind::Cli => {
+                if r.tool.is_some() || !r.tool_args.is_empty() {
+                    return Err(rule("tool and tool_args are for MCP analyzers only"));
+                }
+            }
         }
         let command = r.command.as_deref().unwrap_or("");
         if command.is_empty()
@@ -357,7 +364,10 @@ impl AnalyzerManifest {
                 return Err(rule(&format!("unknown placeholder in argument {arg:?}")));
             }
         }
-        if r.per_subject != PerSubject::Skill || !r.args.iter().any(|a| a.contains(SUBJECT_DIR)) {
+        if r.kind == RunnerKind::Cli
+            && (r.per_subject != PerSubject::Skill
+                || !r.args.iter().any(|a| a.contains(SUBJECT_DIR)))
+        {
             return Err(rule(
                 "a CLI analyzer runs once per skill and must pass {subject.dir}",
             ));
@@ -374,10 +384,53 @@ impl AnalyzerManifest {
         Ok(())
     }
 
+    fn validate_mcp(&self) -> Result<(), ManifestError> {
+        let r = &self.runner;
+        if r.per_subject != PerSubject::Skill {
+            return Err(rule("an MCP analyzer runs once per skill"));
+        }
+        if let Some(arg) = r.args.iter().find(|a| a.contains('{') || a.contains('}')) {
+            return Err(rule(&format!(
+                "MCP server arguments take no placeholders (found {arg:?}); pass {SUBJECT_DIR} in tool_args"
+            )));
+        }
+        let tool = r.tool.as_deref().unwrap_or("");
+        if tool.is_empty()
+            || tool.len() > 64
+            || !tool
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+        {
+            return Err(rule("tool must name one MCP tool (letters, digits, _ - .)"));
+        }
+        if r.tool_args.len() > 8 {
+            return Err(rule("tool_args may have at most 8 entries"));
+        }
+        for (key, value) in &r.tool_args {
+            if key.is_empty()
+                || key.len() > 64
+                || value.replace(SUBJECT_DIR, "").contains(['{', '}'])
+            {
+                return Err(rule(&format!(
+                    "tool_args {key:?}: only {SUBJECT_DIR} is substituted"
+                )));
+            }
+        }
+        if !r.tool_args.values().any(|v| v.contains(SUBJECT_DIR)) {
+            return Err(rule("an MCP analyzer must pass {subject.dir} in tool_args"));
+        }
+        if !self.permissions.spawns_mcp_servers {
+            return Err(rule(
+                "an MCP analyzer starts a server: set permissions.spawns_mcp_servers = true",
+            ));
+        }
+        Ok(())
+    }
+
     fn validate_permissions(&self) -> Result<(), ManifestError> {
         let p = &self.permissions;
-        if p.spawns_mcp_servers {
-            return Err(rule("analyzers that start MCP servers are not supported"));
+        if p.spawns_mcp_servers && self.runner.kind != RunnerKind::Mcp {
+            return Err(rule("only MCP analyzers may start an MCP server"));
         }
         if p.read.iter().any(|r| r != SUBJECT_DIR) {
             return Err(rule("read may only list {subject.dir}"));

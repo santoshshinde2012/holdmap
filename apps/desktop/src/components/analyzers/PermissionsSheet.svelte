@@ -25,6 +25,9 @@
   {#if changed}
     <Callout tone="warn" size="sm" title="Changed since you approved it">{a.changes.join("; ")}</Callout>
   {/if}
+  {#each preview.notices ?? [] as n}
+    <Callout tone={n.startsWith("Warning:") ? "warn" : "info"} size="sm">{n}</Callout>
+  {/each}
 
   <dl>
     <div>
@@ -59,7 +62,7 @@
     {/if}
     <div><dt>Sandbox</dt><dd>{preview.sandbox}</dd></div>
     <div><dt>When</dt><dd>{preview.schedule}</dd></div>
-    <div><dt>Never</dt><dd>holdmap never starts MCP servers for analyzers and keeps only short findings, never matched text.</dd></div>
+    <div><dt>Never</dt><dd>{a.kind === "mcp" ? "holdmap starts this MCP server only while you run it and never starts your agents' servers. It keeps only short findings, never matched text." : "This analyzer starts no MCP servers. holdmap keeps only short findings, never matched text."}</dd></div>
   </dl>
 
   {#if error}<Callout tone="danger" size="sm">{error}</Callout>{/if}

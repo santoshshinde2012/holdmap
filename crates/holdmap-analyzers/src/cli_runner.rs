@@ -114,25 +114,7 @@ impl CliRunner {
             },
         );
         cmd.current_dir(work.path());
-        // Only names the approved manifest declares, only for this analyzer's own process.
-        for (name, value) in secrets {
-            if manifest.permissions.secrets.contains(name) {
-                cmd.env(name, value.expose());
-            }
-        }
-        if let Some(parent) = binary.parent() {
-            let path = std::env::join_paths(
-                std::iter::once(parent.to_path_buf()).chain(std::env::split_paths(
-                    &cmd.get_envs()
-                        .find(|(k, _)| *k == "PATH")
-                        .and_then(|(_, v)| v)
-                        .unwrap_or_default(),
-                )),
-            );
-            if let Ok(path) = path {
-                cmd.env("PATH", path);
-            }
-        }
+        finish_env(&mut cmd, manifest, binary, secrets);
         let cap = (manifest.runner.max_output_mb * 1024 * 1024) as usize;
         let timeout = Duration::from_secs(manifest.runner.timeout_secs);
         let ran = run_contained(cmd, timeout, cap, self.sandbox.as_ref());
@@ -209,6 +191,34 @@ impl AnalyzerRunner for CliRunner {
             .iter()
             .map(|s| self.run_one(manifest, binary, &cx.secrets, s))
             .collect())
+    }
+}
+
+/// After the sandbox cleared the environment: the keys the approved manifest declares (only
+/// for this analyzer's own process) and the program's own folder first on PATH.
+pub(crate) fn finish_env(
+    cmd: &mut Command,
+    manifest: &AnalyzerManifest,
+    binary: &Path,
+    secrets: &[(String, crate::secrets::Secret)],
+) {
+    for (name, value) in secrets {
+        if manifest.permissions.secrets.contains(name) {
+            cmd.env(name, value.expose());
+        }
+    }
+    if let Some(parent) = binary.parent() {
+        let path = std::env::join_paths(
+            std::iter::once(parent.to_path_buf()).chain(std::env::split_paths(
+                &cmd.get_envs()
+                    .find(|(k, _)| *k == "PATH")
+                    .and_then(|(_, v)| v)
+                    .unwrap_or_default(),
+            )),
+        );
+        if let Ok(path) = path {
+            cmd.env("PATH", path);
+        }
     }
 }
 
@@ -293,7 +303,7 @@ pub fn run_contained(
         cmd.process_group(0);
     }
     let mut child = cmd.spawn()?;
-    let guard = sandbox.contain(&child);
+    let guard = sandbox.contain(crate::runner::ProcessRef::of(&child));
     let mut stdout = child.stdout.take().expect("piped");
     let reader = std::thread::spawn(move || {
         let mut buf = Vec::new();

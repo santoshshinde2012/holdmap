@@ -67,6 +67,12 @@ impl FileStore {
         result
     }
 
+    fn manifest_name(id: &str) -> io::Result<String> {
+        Self::result_name(id)
+            .map(|_| format!("{id}.toml"))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "not an analyzer id"))
+    }
+
     fn catalog_name(slot: crate::catalog::CatalogSlot) -> &'static str {
         match slot {
             crate::catalog::CatalogSlot::Pending => "catalog/pending.json",
@@ -122,6 +128,57 @@ impl crate::catalog::CatalogStore for FileStore {
         }
     }
 }
+
+impl crate::consent::UserManifestStore for FileStore {
+    fn user_manifests(&self) -> Vec<String> {
+        let Ok(entries) = fs::read_dir(self.dir.join("manifests")) else {
+            return Vec::new();
+        };
+        let mut paths: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "toml"))
+            .collect();
+        paths.sort();
+        paths
+            .iter()
+            .filter(|p| {
+                fs::symlink_metadata(p).is_ok_and(|m| m.is_file() && m.len() <= MAX_MANIFEST_BYTES)
+            })
+            .filter_map(|p| fs::read_to_string(p).ok())
+            .collect()
+    }
+    fn add_user_manifest(&self, id: &str, text: &str) -> io::Result<()> {
+        let name = Self::manifest_name(id)?;
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = self.dir.join("manifests");
+        private_dir(&self.dir)?;
+        private_dir(&dir)?;
+        let tmp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
+        let result = (|| {
+            let mut file = private_file(&tmp)?;
+            file.write_all(text.as_bytes())?;
+            file.sync_all()?;
+            fs::rename(&tmp, dir.join(&name))
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&tmp);
+        }
+        result
+    }
+    fn remove_user_manifest(&self, id: &str) -> io::Result<bool> {
+        let name = Self::manifest_name(id)?;
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        match fs::remove_file(self.dir.join("manifests").join(name)) {
+            Ok(()) => Ok(true),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+/// Largest user manifest read back from disk.
+pub const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
 
 impl ConsentStore for FileStore {
     fn grant(&self, analyzer: &str) -> Option<Grant> {

@@ -94,6 +94,8 @@ pub fn run() {
             analyzers::analyzer_approve,
             analyzers::analyzer_revoke,
             analyzers::analyzer_background,
+            analyzers::analyzer_add,
+            analyzers::analyzer_remove,
             analyzers::analyzer_catalog,
             analyzers::analyzer_catalog_fetch,
             analyzers::analyzer_catalog_accept,

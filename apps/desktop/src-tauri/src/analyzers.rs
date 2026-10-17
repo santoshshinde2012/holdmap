@@ -211,3 +211,25 @@ pub async fn analyzer_catalog_accept(app: AppHandle) -> Result<CatalogStatus, St
 pub async fn analyzer_catalog_reject(app: AppHandle) -> Result<(), String> {
     blocking(move || service(&app).reject_catalog().map_err(|e| e.to_string())).await
 }
+
+/// Register an analyzer from manifest text the user pasted. It stays off until approved.
+#[tauri::command]
+pub async fn analyzer_add(app: AppHandle, manifest: String) -> Result<AnalyzerView, String> {
+    blocking(move || {
+        service(&app)
+            .add_manifest(&manifest)
+            .map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// Remove an analyzer the user registered.
+#[tauri::command]
+pub async fn analyzer_remove(app: AppHandle, id: String) -> Result<bool, String> {
+    blocking(move || {
+        service(&app)
+            .remove_manifest(&id)
+            .map_err(|e| e.to_string())
+    })
+    .await
+}

@@ -57,6 +57,7 @@ fn row(v: &AnalyzerView) -> Value {
         // Names and whether one is stored only; values never leave the keychain.
         "keys": v.secrets,
         "runs_on_change": v.background,
+        "source": v.source,
     })
 }
 

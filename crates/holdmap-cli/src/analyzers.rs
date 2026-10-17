@@ -48,6 +48,11 @@ pub enum AnalyzerAction {
         #[command(subcommand)]
         action: KeyAction,
     },
+    /// Register your own analyzer from a manifest file (a local CLI or MCP scanner). It stays
+    /// off until you approve it.
+    Add { file: std::path::PathBuf },
+    /// Remove an analyzer you registered, with its approval, results and stored keys.
+    Remove { id: String },
     /// The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject.
     Catalog {
         #[command(subcommand)]
@@ -241,6 +246,46 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
             }
         }
         AnalyzerAction::Key { action } => return run_key(&svc, action, a.json),
+        AnalyzerAction::Add { file } => {
+            let text = std::fs::read_to_string(file)
+                .with_context(|| format!("couldn't read {}", file.display()))?;
+            let view = match svc.add_manifest(&text) {
+                Ok(v) => v,
+                Err(ServiceError::Manifest(e)) => {
+                    eprintln!("{} {e}", style::err_mark());
+                    return Ok(crate::exit::BLOCKED);
+                }
+                Err(e) => return Err(e.into()),
+            };
+            if a.json {
+                println!("{}", serde_json::to_string_pretty(&view)?);
+            } else {
+                println!(
+                    "{} Registered {} ({}). It is off: review it with `holdmap analyzers show {}`, then `holdmap analyzers approve {}`.",
+                    style::ok_mark(),
+                    view.name,
+                    view.id,
+                    view.id,
+                    view.id
+                );
+            }
+        }
+        AnalyzerAction::Remove { id } => match svc.remove_manifest(id) {
+            Ok(existed) => {
+                if a.json {
+                    println!("{}", json!({ "removed": existed }));
+                } else if existed {
+                    println!("{} Removed {id}.", style::ok_mark());
+                } else {
+                    println!("{id} was not registered.");
+                }
+            }
+            Err(ServiceError::Manifest(e)) => {
+                eprintln!("{} {e}", style::err_mark());
+                return Ok(crate::exit::BLOCKED);
+            }
+            Err(e) => return Err(e.into()),
+        },
         AnalyzerAction::Catalog { action } => {
             return run_catalog(
                 &svc,
@@ -662,6 +707,17 @@ fn render_preview(p: &Preview) -> String {
         a.license,
         a.summary
     );
+    for n in &p.notices {
+        let mark = if n.starts_with("Warning:") {
+            style::warn_mark()
+        } else {
+            dim("i")
+        };
+        out.push_str(&format!("{mark} {n}\n"));
+    }
+    if !p.notices.is_empty() {
+        out.push('\n');
+    }
     out.push_str(&format!("{}\n", bold("It gets")));
     if p.subjects.is_empty() {
         out.push_str("  nothing right now (no matching items found)\n");

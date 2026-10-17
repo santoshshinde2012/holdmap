@@ -52,6 +52,16 @@ impl Review {
     }
 }
 
+/// Manifests the user registered themselves (`holdmap analyzers add`), as their exact text.
+pub trait UserManifestStore: Send + Sync {
+    /// Every registered manifest's text.
+    fn user_manifests(&self) -> Vec<String>;
+    /// Save (or replace) the manifest for `id`.
+    fn add_user_manifest(&self, id: &str, text: &str) -> io::Result<()>;
+    /// Remove it; `true` when one existed.
+    fn remove_user_manifest(&self, id: &str) -> io::Result<bool>;
+}
+
 /// Approvals.
 pub trait ConsentStore: Send + Sync {
     /// The approval for `analyzer`, if any.
@@ -106,6 +116,23 @@ pub struct MemoryStore {
     reviews: Mutex<BTreeMap<String, Review>>,
     secrets: Mutex<BTreeMap<String, Vec<String>>>,
     catalogs: Mutex<BTreeMap<u8, crate::catalog::SignedCatalog>>,
+    manifests: Mutex<BTreeMap<String, String>>,
+}
+
+impl UserManifestStore for MemoryStore {
+    fn user_manifests(&self) -> Vec<String> {
+        self.manifests.lock().unwrap().values().cloned().collect()
+    }
+    fn add_user_manifest(&self, id: &str, text: &str) -> io::Result<()> {
+        self.manifests
+            .lock()
+            .unwrap()
+            .insert(id.into(), text.into());
+        Ok(())
+    }
+    fn remove_user_manifest(&self, id: &str) -> io::Result<bool> {
+        Ok(self.manifests.lock().unwrap().remove(id).is_some())
+    }
 }
 
 impl crate::catalog::CatalogStore for MemoryStore {

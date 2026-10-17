@@ -9,6 +9,7 @@
   import PermissionsSheet from "./PermissionsSheet.svelte";
   import AnalyzerKeys from "./AnalyzerKeys.svelte";
   import CatalogUpdate from "./CatalogUpdate.svelte";
+  import AddAnalyzer from "./AddAnalyzer.svelte";
   import * as api from "../../lib/api";
   import { SANDBOX_LABEL, STATE_LABEL, ago, countsText, total, type AnalyzerView, type Preview } from "../../lib/analyzers";
   import { insightsStore } from "../../lib/insights-store.svelte";
@@ -59,7 +60,7 @@
       <li class="st-{a.state}">
         <div class="top">
           <span class="name">{a.name}</span>
-          <span class="pub">{a.publisher}</span>
+          <span class="pub">{a.publisher}{a.source === "user" ? " · added by you" : ""}{a.kind === "mcp" ? " · MCP server" : ""}</span>
           <span class="state" data-state={a.state}>{STATE_LABEL[a.state]}</span>
         </div>
         <p class="sum">{a.summary}</p>
@@ -89,13 +90,17 @@
           {:else if a.state !== "not_installed"}
             <Button size="sm" variant={a.state === "changed" ? "primary" : "secondary"} icon="shield" loading={busy[a.id]} onclick={() => review(a)}>{a.state === "changed" ? "Review again…" : "Review and turn on…"}</Button>
           {/if}
+          {#if a.source === "user"}
+            <Button size="sm" variant="ghost" loading={busy[`rm:${a.id}`]} onclick={() => act(`rm:${a.id}`, () => api.removeAnalyzer(a.id))}>Remove</Button>
+          {/if}
         </div>
-        {#each [errors[a.id], errors[`run:${a.id}`], errors[`off:${a.id}`], errors[`auto:${a.id}`]].filter(Boolean) as e}<Callout tone="danger" size="sm">{e}</Callout>{/each}
+        {#each [errors[a.id], errors[`run:${a.id}`], errors[`off:${a.id}`], errors[`auto:${a.id}`], errors[`rm:${a.id}`]].filter(Boolean) as e}<Callout tone="danger" size="sm">{e}</Callout>{/each}
       </li>
     {/each}
   </ul>
+  {#if !demo}<AddAnalyzer onadded={() => insightsStore.refresh()} />{/if}
   <CatalogUpdate onchange={() => insightsStore.refresh()} />
-  <p class="foot">holdmap never starts MCP servers for analyzers. Runs get a copy of each folder, a cleared environment and a time limit. Only short findings are kept.</p>
+  <p class="foot">holdmap never starts MCP servers on its own: an MCP analyzer you add starts its server only when you run it. Runs get a copy of each folder, a cleared environment and a time limit. Only short findings are kept.</p>
 {/if}
 
 <style>

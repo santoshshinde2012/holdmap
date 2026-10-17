@@ -34,6 +34,8 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`holdmap analyzers key`](#holdmap-analyzers-key) | Store or delete an API key an analyzer declares, in the OS keychain |
 | [`holdmap analyzers key set`](#holdmap-analyzers-key-set) | Store a key: paste it when asked (not echoed), or pipe it on standard input |
 | [`holdmap analyzers key delete`](#holdmap-analyzers-key-delete) | Delete a stored key |
+| [`holdmap analyzers add`](#holdmap-analyzers-add) | Register your own analyzer from a manifest file (a local CLI or MCP scanner). It stays off until you approve it |
+| [`holdmap analyzers remove`](#holdmap-analyzers-remove) | Remove an analyzer you registered, with its approval, results and stored keys |
 | [`holdmap analyzers catalog`](#holdmap-analyzers-catalog) | The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject |
 | [`holdmap analyzers catalog status`](#holdmap-analyzers-catalog-status) | Which catalog is in use and whether an update waits for review (the default) |
 | [`holdmap analyzers catalog fetch`](#holdmap-analyzers-catalog-fetch) | Download the newest signed catalog from the holdmap repository and stage it for review |
@@ -490,6 +492,9 @@ Commands:
   approve  Review an analyzer's permissions and turn it on
   revoke   Turn an analyzer off and delete its results
   key      Store or delete an API key an analyzer declares, in the OS keychain
+  add      Register your own analyzer from a manifest file (a local CLI or MCP scanner). It stays
+           off until you approve it
+  remove   Remove an analyzer you registered, with its approval, results and stored keys
   catalog  The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject
   auto     Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that
            uses the network. Analyzers without network access run automatically once on
@@ -623,6 +628,43 @@ Usage: holdmap analyzers key delete [OPTIONS] <ID> <NAME>
 Arguments:
   <ID>
   <NAME>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers add
+
+```text
+Register your own analyzer from a manifest file (a local CLI or MCP scanner). It stays off until you
+approve it
+
+Usage: holdmap analyzers add [OPTIONS] <FILE>
+
+Arguments:
+  <FILE>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers remove
+
+```text
+Remove an analyzer you registered, with its approval, results and stored keys
+
+Usage: holdmap analyzers remove [OPTIONS] <ID>
+
+Arguments:
+  <ID>
 
 Options:
       --json           Machine-readable JSON output

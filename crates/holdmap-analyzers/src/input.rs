@@ -67,7 +67,9 @@ impl InputProjector for InventoryProjector {
 }
 
 /// Every inventory in the report: running agents, then configured agents that aren't running.
-fn inventories(report: &AgentsReport) -> impl Iterator<Item = (&str, &AgentCapabilities)> {
+pub(crate) fn inventories(
+    report: &AgentsReport,
+) -> impl Iterator<Item = (&str, &AgentCapabilities)> {
     report
         .agents
         .iter()

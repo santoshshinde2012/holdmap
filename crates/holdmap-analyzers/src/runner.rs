@@ -132,8 +132,29 @@ pub trait Sandbox: Send + Sync {
     }
 
     /// Called right after the child starts (Windows puts it in a job object here).
-    fn contain(&self, _child: &std::process::Child) -> Option<ContainGuard> {
+    fn contain(&self, _process: ProcessRef) -> Option<ContainGuard> {
         None
+    }
+}
+
+/// A started child process, as a sandbox needs to see it.
+#[derive(Debug, Clone, Copy)]
+pub struct ProcessRef {
+    /// Process id.
+    pub id: u32,
+    /// Its process handle.
+    #[cfg(windows)]
+    pub handle: std::os::windows::io::RawHandle,
+}
+
+impl ProcessRef {
+    /// A child started with `std::process`.
+    pub fn of(child: &std::process::Child) -> Self {
+        Self {
+            id: child.id(),
+            #[cfg(windows)]
+            handle: std::os::windows::io::AsRawHandle::as_raw_handle(child),
+        }
     }
 }
 

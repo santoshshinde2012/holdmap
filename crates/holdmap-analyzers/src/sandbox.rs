@@ -2,7 +2,7 @@
 //! ([`SandboxLevel::describe`]). [`best_available`] picks the strongest one this machine can
 //! really use and falls back to [`BasicSandbox`] rather than claiming more than it does.
 
-use crate::runner::{BasicSandbox, ContainGuard, Containment, Sandbox, SandboxLevel};
+use crate::runner::{BasicSandbox, ContainGuard, Containment, ProcessRef, Sandbox, SandboxLevel};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -254,14 +254,14 @@ impl Sandbox for JobSandbox {
         SandboxLevel::WindowsJob
     }
 
-    fn contain(&self, child: &std::process::Child) -> Option<ContainGuard> {
+    fn contain(&self, process: ProcessRef) -> Option<ContainGuard> {
         #[cfg(windows)]
         {
-            job::contain(child).map(|j| Box::new(j) as ContainGuard)
+            job::contain(process).map(|j| Box::new(j) as ContainGuard)
         }
         #[cfg(not(windows))]
         {
-            let _ = child;
+            let _ = process;
             None
         }
     }
@@ -269,8 +269,7 @@ impl Sandbox for JobSandbox {
 
 #[cfg(windows)]
 mod job {
-    use super::{JOB_MEMORY_BYTES, JOB_PROCESSES};
-    use std::os::windows::io::AsRawHandle;
+    use super::{ProcessRef, JOB_MEMORY_BYTES, JOB_PROCESSES};
     use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
@@ -289,8 +288,9 @@ mod job {
         }
     }
 
-    pub fn contain(child: &std::process::Child) -> Option<Job> {
-        // SAFETY: plain Win32 calls on a handle we own and the live child's process handle;
+    pub fn contain(process: ProcessRef) -> Option<Job> {
+        // SAFETY: plain Win32 calls on a handle we own and the live child's process handle
+        // (the caller keeps the child alive while this runs);
         // the info struct is zero-initialised (valid for this POD type) and sized correctly.
         unsafe {
             let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
@@ -311,7 +311,7 @@ mod job {
                 (&info as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
                 std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
             );
-            if ok == 0 || AssignProcessToJobObject(job.0, child.as_raw_handle() as HANDLE) == 0 {
+            if ok == 0 || AssignProcessToJobObject(job.0, process.handle as HANDLE) == 0 {
                 return None;
             }
             Some(job)
@@ -514,7 +514,7 @@ mod tests {
             .args(["/C", "ping -n 2 127.0.0.1 >NUL"])
             .spawn()
             .unwrap();
-        let guard = JobSandbox.contain(&child);
+        let guard = JobSandbox.contain(ProcessRef::of(&child));
         assert!(guard.is_some());
         drop(guard);
         // Closing the job ends the child.

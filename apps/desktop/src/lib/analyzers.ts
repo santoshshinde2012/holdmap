@@ -52,6 +52,8 @@ export interface AnalyzerView {
   sandbox: SandboxLevel;
   /** Runs on its own when analysed items change (network analyzers only if the user allowed it). */
   background?: boolean;
+  /** holdmap's signed catalog, or registered by the user. */
+  source?: "catalog" | "user";
   binary: string | null;
   version: string | null;
   approved_at_ms: number | null;
@@ -77,6 +79,8 @@ export interface Preview {
   env: string[];
   sandbox: string;
   schedule: string;
+  /** Things to know before approving; ones starting "Warning:" are shown as warnings. */
+  notices?: string[];
 }
 /** What a signed catalog update changes (reviewed before it applies). */
 export interface CatalogDiff {
