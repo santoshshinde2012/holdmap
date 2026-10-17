@@ -4,7 +4,7 @@
   // with the lanes) stays lit while the others dim. ←/→ move between agents.
   import { ACCESS_LABEL } from "../../lib/home";
   import { AGENT_COLORS, accessHeadline, monogram } from "../../lib/agents";
-  import { MAP_STRETCH, type FootprintNode, type radialLayout } from "../../lib/machine-map";
+  import { MAP_RINGS, MAP_STRETCH, mapBounds, type FootprintNode, type radialLayout } from "../../lib/machine-map";
 
   type Group = ReturnType<typeof radialLayout>[number];
   let { groups, platform, ports, active, selected, hot, onhover, onselect, onopen }: {
@@ -32,19 +32,22 @@
     }
   }
   // Keep labels legible when the stage is small: counter-scale node bodies (not positions).
+  // The view box is then fitted to nodes and labels at that scale, so nothing clips at the edges.
   let w = $state(0), h = $state(0);
-  const k = $derived(w && h ? Math.min(1.8, Math.max(1, Math.sqrt(1 / Math.min(w / 1320, h / 636)))) : 1);
+  const base = $derived(mapBounds(groups, 1));
+  const k = $derived(w && h ? Math.min(1.8, Math.max(1, Math.sqrt(1 / Math.min(w / base.w, h / base.h)))) : 1);
+  const box = $derived(mapBounds(groups, k));
   const nodeKey = (e: KeyboardEvent, t: FootprintNode["target"]) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onopen(t); } };
 </script>
 
 <div class="fit" bind:clientWidth={w} bind:clientHeight={h}>
-<svg viewBox="-660 -318 1320 636" class="map" role="group" aria-label="Machine map" style="--k: {k}">
+<svg viewBox="{box.x} {box.y} {box.w} {box.h}" class="map" role="group" aria-label="Machine map" style="--k: {k}">
   <defs>
     <radialGradient id="map-glow"><stop offset="0" stop-color="var(--accent)" stop-opacity="0.10" /><stop offset="1" stop-color="var(--accent)" stop-opacity="0" /></radialGradient>
   </defs>
   <ellipse rx={330 * MAP_STRETCH.x} ry={330 * MAP_STRETCH.y} fill="url(#map-glow)" />
-  <ellipse rx={150 * MAP_STRETCH.x} ry={150 * MAP_STRETCH.y} class="orbit" />
-  <ellipse rx={300 * MAP_STRETCH.x} ry={300 * MAP_STRETCH.y} class="orbit faint" />
+  <ellipse rx={MAP_RINGS.inner * MAP_STRETCH.x} ry={MAP_RINGS.inner * MAP_STRETCH.y} class="orbit" />
+  <ellipse rx={MAP_RINGS.outer * MAP_STRETCH.x} ry={MAP_RINGS.outer * MAP_STRETCH.y} class="orbit faint" />
   {#each groups as g, i (g.agent.id)}
     <g class="cluster" class:dim={active !== null && active !== g.agent.id} style="--agent: {AGENT_COLORS[i % AGENT_COLORS.length]}">
       <line class="spoke" x1="0" y1="0" x2={g.x} y2={g.y} />

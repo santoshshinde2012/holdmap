@@ -13,12 +13,67 @@ beforeAll(() => {
 });
 afterEach(cleanup);
 
-const props = (over: Record<string, unknown> = {}) => ({ entries: MOCK_SNAPSHOT.entries, report: mockAgents(undefined, true), onopenagent: vi.fn(), onopenentry: vi.fn(), onview: vi.fn(), ...over });
+const props = (over: Record<string, unknown> = {}) => ({ entries: MOCK_SNAPSHOT.entries, report: mockAgents(undefined, true), layout: "map" as "map" | "cards", onopenagent: vi.fn(), onopenentry: vi.fn(), onview: vi.fn(), ...over });
+const card = (view: View, name: string) => within(view.container).getByRole("button", { name: new RegExp(`^${name}, `) }).closest("article")!;
 type View = { container: HTMLElement };
 const mapAgent = (view: View, name: string) => view.container.querySelector<SVGGElement>(`.map g.agent[aria-label^="${name},"]`)!;
 const lane = (view: View, name: string) => within(view.container).getAllByRole("button", { name: new RegExp(`^${name}, up `) })[0];
 
-describe("HomeView", () => {
+describe("HomeView cards", () => {
+  it("shows one card per agent with fixed counters, chips and an inline attention badge", () => {
+    const p = props({ layout: "cards" });
+    const view = render(HomeView, p);
+    expect(view.container.querySelectorAll("section[aria-label='Agents'] article.card")).toHaveLength(p.report.agents.length);
+    const cursor = card(view, "Cursor");
+    expect(within(cursor).getByText("Projects")).toBeTruthy();
+    expect(within(cursor).getByRole("button", { name: /^MCP filesystem, running, unpinned$/ })).toBeTruthy();
+    expect(within(cursor).getByRole("button", { name: /^Cursor, Standard, 1 need you$/ })).toBeTruthy();
+    expect(view.container.querySelector(".map")).toBeNull();
+    expect(view.queryByRole("table", { name: "Agent lanes" })).toBeNull();
+  });
+
+  it("marks unreadable configuration unknown with its reason, never zero", () => {
+    const view = render(HomeView, props({ layout: "cards" }));
+    const docker = card(view, "Docker Desktop");
+    expect(within(docker).getAllByLabelText("unknown")).toHaveLength(2);
+    expect(docker.querySelector("[title*='not supported']")).not.toBeNull();
+    expect(docker.textContent).not.toMatch(/Not supported|No project folder/);
+  });
+
+  it("keeps the selection when switching between cards and map", async () => {
+    const p = props({ layout: "cards" });
+    const view = render(HomeView, p);
+    await fireEvent.click(within(view.container).getByRole("button", { name: /^Claude Code, / }));
+    expect(card(view, "Claude Code").classList.contains("selected")).toBe(true);
+    expect(card(view, "Cursor").classList.contains("dim")).toBe(true);
+    await view.rerender({ ...p, layout: "map" });
+    expect(mapAgent(view, "Claude Code").getAttribute("aria-pressed")).toBe("true");
+    expect(lane(view, "Claude Code").closest(".lane")!.classList.contains("active")).toBe(true);
+  });
+
+  it("opens agents and ports from cards and sends stop through the plan", async () => {
+    const onstopagent = vi.fn();
+    const p = props({ layout: "cards", onstopagent });
+    const view = render(HomeView, p);
+    const docker = p.report.agents.find((a) => a.product === "docker-desktop")!;
+    await fireEvent.click(view.getByRole("button", { name: "Open Docker Desktop" }));
+    expect(p.onopenagent).toHaveBeenCalledWith(docker.id);
+    await fireEvent.click(view.getByRole("button", { name: "Review stop plan: Docker Desktop" }));
+    expect(onstopagent).toHaveBeenCalledWith(docker.id);
+    await fireEvent.click(within(card(view, "Docker Desktop")).getAllByRole("button", { name: /^Port / })[0]);
+    expect(p.onopenentry).toHaveBeenCalled();
+  });
+
+  it("offers the layout toggle as a radio group", async () => {
+    const onlayout = vi.fn();
+    const view = render(HomeView, props({ layout: "cards", onlayout }));
+    const group = view.getByRole("radiogroup", { name: "Home layout" });
+    await fireEvent.click(within(group).getByRole("radio", { name: /^Map/ }));
+    expect(onlayout).toHaveBeenCalledWith("map");
+  });
+});
+
+describe("HomeView map", () => {
   it("selects an agent in the map and lights it in the lanes; a second click opens it", async () => {
     const p = props();
     const view = render(HomeView, p);
@@ -95,5 +150,17 @@ describe("HomeView", () => {
     expect(view.container.querySelector('.map g.agent[aria-pressed="true"]')).not.toBeNull();
     await fireEvent.keyDown(view.getByRole("region", { name: "Overview" }), { key: "Escape" });
     expect(view.container.querySelector('.map g.agent[aria-pressed="true"]')).toBeNull();
+  });
+
+  it("collapses the timeline band and remembers it", async () => {
+    localStorage.removeItem("holdmap.home.timeline");
+    const view = render(HomeView, props());
+    const toggle = view.getByRole("button", { name: /^Timeline/ });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    await fireEvent.click(toggle);
+    expect(view.queryByRole("table", { name: "Agent lanes" })).toBeNull();
+    expect(localStorage.getItem("holdmap.home.timeline")).toBe("0");
+    await fireEvent.click(toggle);
+    expect(view.getByRole("table", { name: "Agent lanes" })).toBeTruthy();
   });
 });

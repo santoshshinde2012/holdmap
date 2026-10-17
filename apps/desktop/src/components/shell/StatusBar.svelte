@@ -34,7 +34,7 @@
   {#if stats}
     <span><b>{stats.total}</b> ports</span><span class="g"><b>{stats.dev}</b> dev</span>{#if stats.exposed}<span class="w"><b>{stats.exposed}</b> exposed</span>{/if}
     <span class="sp"></span>
-    <span class="hints">{#if hints === "flow"}<span><Kbd keys="Tab" size="sm" />flow controls</span>{:else}<span><Kbd keys={["↑", "↓"]} size="sm" />move</span>{#if hints === "list"}<span><Kbd keys="⌫" size="sm" />stop</span>{/if}{/if}{#if singleKeys}<span><Kbd keys="G" size="sm" />graph</span><span><Kbd keys={["⇧", "A"]} size="sm" />agents</span>{/if}<span><Kbd keys={[mod, "K"]} size="sm" />commands</span>{#if singleKeys}<span><Kbd keys="?" size="sm" />shortcuts</span>{/if}{#if shortcut}<span class="gs"><Kbd keys={shortcut} size="sm" />from anywhere</span>{/if}</span>
+    <span class="hints">{#if hints === "flow"}<span><Kbd keys="Tab" size="sm" />flow controls</span>{:else if hints === "home" && singleKeys}<span><Kbd keys="V" size="sm" />cards ↔ map</span>{:else}<span><Kbd keys={["↑", "↓"]} size="sm" />move</span>{#if hints === "list"}<span><Kbd keys="⌫" size="sm" />stop</span>{/if}{/if}{#if singleKeys}<span><Kbd keys="G" size="sm" />graph</span><span><Kbd keys={["⇧", "A"]} size="sm" />agents</span>{/if}<span><Kbd keys={[mod, "K"]} size="sm" />commands</span>{#if singleKeys}<span><Kbd keys="?" size="sm" />shortcuts</span>{/if}{#if shortcut}<span class="gs"><Kbd keys={shortcut} size="sm" />from anywhere</span>{/if}</span>
   {:else}
     <span class="sp"></span>
   {/if}

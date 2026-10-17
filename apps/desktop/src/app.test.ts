@@ -2,7 +2,7 @@
 // Regression for the blinking details pane: every scan used to throw the explanations away, so
 // the selected port's Overview fell back to its skeleton until `explain` answered again.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, within } from "@testing-library/svelte";
 import type { ActionPlan, Explanation, HttpInfo, Snapshot, StopReport } from "./lib/types";
 import type { ScheduledStopRequest } from "./lib/schedules";
 import { MOCK_SNAPSHOT } from "./lib/mock";
@@ -630,11 +630,27 @@ describe("App overview and first run", () => {
     await fireEvent.click(view.getByRole("radio", { name: /^Home/ }));
     await vi.advanceTimersByTimeAsync(300);
     const overview = view.getByRole("region", { name: "Overview" });
-    const row = [...overview.querySelectorAll<HTMLButtonElement>(".map-list button")].find((b) => b.textContent?.includes(agent.name))!;
-    await fireEvent.click(row);
+    await fireEvent.click(within(overview).getByRole("button", { name: `Open ${agent.name}` }));
     await vi.advanceTimersByTimeAsync(300);
     expect(view.getByRole("radio", { name: /^Agents/ }).getAttribute("aria-checked")).toBe("true");
     expect(localStorage.getItem("holdmap.view")).toBe("agents");
+  });
+
+  it("flips Home between cards and map with V and remembers the choice", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem("holdmap.view", "home");
+    localStorage.removeItem("holdmap.home.layout");
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    const group = view.getByRole("radiogroup", { name: "Home layout" });
+    expect(within(group).getByRole("radio", { name: /^Cards/ }).getAttribute("aria-checked")).toBe("true");
+    await fireEvent.keyDown(window, { key: "v" });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(within(group).getByRole("radio", { name: /^Map/ }).getAttribute("aria-checked")).toBe("true");
+    expect(localStorage.getItem("holdmap.home.layout")).toBe("map");
+    expect(view.getByRole("table", { name: "Agent lanes" })).toBeTruthy();
+    await fireEvent.click(within(group).getByRole("radio", { name: /^Cards/ }));
+    expect(localStorage.getItem("holdmap.home.layout")).toBe("cards");
   });
 
   it("offers the welcome once, and skipping changes nothing else", async () => {

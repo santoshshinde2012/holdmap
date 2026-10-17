@@ -10,10 +10,12 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
-- **Home** in the desktop app: a **machine map** of each agent's projects, ports, MCP servers
-  and remote hosts, **agent lanes** showing uptime with port and MCP markers, and a compact
-  **Needs you** list with **Review stop plan**. Hover or select an agent to highlight it
-  everywhere. Keyboard: ←/→ on the map, j/k in the lanes, Esc to clear.
+- **Home** in the desktop app, as **Cards** or **Map** (toggle at the top right, or press V;
+  the choice is remembered). Cards show each agent's projects, ports, MCP servers and skills
+  with an attention badge; Map shows the same footprint around this computer with a
+  collapsible **Timeline** of uptime, ports and MCP. A compact **Needs you** list sits beside
+  both. Selection is shared across views. Keyboard: ←/→ between agents, j/k in the timeline,
+  Esc to clear.
 - Agent inventory now shows how each MCP server launches (runner, package, pinned or not),
   its remote host, env/header **names**, and whether it is running in that agent's processes;
   plus permission rules, safety settings, instruction files and documented built-in tools.

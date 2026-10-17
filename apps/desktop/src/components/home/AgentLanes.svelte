@@ -7,8 +7,11 @@
   import { accessHeadline, monogram } from "../../lib/agents";
   import { oldest, timeScale, type Lane } from "../../lib/agent-lanes";
 
-  let { lanes, now, colors, active, onhover, onselect, onopenagent, onopenentry }: {
+  let { lanes, now, colors, active, open = true, ontoggle, onhover, onselect, onopenagent, onopenentry }: {
     lanes: Lane[];
+    /** Collapsible band; the header stays so the toggle never moves. */
+    open?: boolean;
+    ontoggle?: () => void;
     now: number;
     /** Agent colour by id, shared with the map. */
     colors: Map<string, string>;
@@ -33,8 +36,16 @@
   }
 </script>
 
+<section class="band" aria-labelledby="lanes-title">
+<h2 class="band-head">
+  <button type="button" id="lanes-title" aria-expanded={open} aria-controls="agent-lanes" onclick={() => ontoggle?.()}>
+    <span class="chev" class:open><Icon name="chevron" size={12} /></span>Timeline<span class="n">{lanes.length}</span>
+  </button>
+  {#if open}<span class="key" aria-hidden="true"><span><i class="k up"></i>Uptime</span><span><i class="k pt"></i>Port</span><span><i class="k mc"></i>MCP</span></span>{/if}
+</h2>
+{#if open}
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="lanes" role="table" aria-label="Agent lanes" bind:this={root} {onkeydown}>
+<div class="lanes" id="agent-lanes" role="table" aria-label="Agent lanes" bind:this={root} {onkeydown}>
   <div class="row axis" role="row">
     <span class="gutter" role="columnheader">Agent</span>
     <div class="track" role="columnheader" aria-label="Time">
@@ -68,7 +79,7 @@
           {@const x = scale.x(b.start)}
           <div class="sub">
             <span class="bar thin" class:warn={b.warn} style="left: {pct(b.start)}"></span>
-            <button type="button" class="pin" class:warn={b.warn} class:flip={x > 0.72} style="left: {pct(b.start)}" onclick={() => onopenentry(b.entryId)} aria-label="Port {b.port} {b.label}{b.warn ? ', open to the network' : ''}">
+            <button type="button" class="pin" class:warn={b.warn} class:short={x > 0.7} style="--x: {pct(b.start)}" onclick={() => onopenentry(b.entryId)} aria-label="Port {b.port} {b.label}{b.warn ? ', open to the network' : ''}">
               <i></i><span>:{b.port} {b.label}</span>
             </button>
           </div>
@@ -82,11 +93,28 @@
     </div>
   {/each}
 </div>
+{/if}
+</section>
 
 <style>
-  .lanes { --gutter: 196px; --edge: 280px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
+  .band { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: clip; }
+  .band-head { margin: 0; display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-4) 0 var(--sp-2); height: 38px; font: inherit; }
+  .band-head button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 0; border-radius: var(--r-md); background: none; font: inherit; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-semibold); color: var(--text); cursor: pointer; }
+  .band-head button:hover { background: var(--row-hover); }
+  .band-head button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .chev { display: inline-flex; color: var(--muted); transition: transform 160ms ease; }
+  .chev.open { transform: rotate(90deg); }
+  @media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
+  .n { padding: 0 6px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
+  .key { margin-left: auto; display: flex; gap: var(--sp-3); color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .key span { display: inline-flex; align-items: center; gap: 5px; }
+  .k { display: inline-block; }
+  .k.up { width: 14px; height: 5px; border-radius: 3px; background: var(--text-2); opacity: 0.6; }
+  .k.pt { width: 8px; height: 8px; border-radius: 50%; background: var(--text-2); }
+  .k.mc { width: 7px; height: 7px; transform: rotate(45deg); border-radius: 1.5px; border: 1.5px solid var(--text-2); }
+  .lanes { --gutter: 200px; --edge: 240px; border-top: 1px solid var(--border); }
   .row { display: grid; grid-template-columns: var(--gutter) minmax(0, 1fr) var(--edge); }
-  .axis { height: 30px; align-items: center; border-bottom: 1px solid var(--border); color: var(--faint); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .axis { height: 28px; align-items: center; border-bottom: 1px solid var(--border); color: var(--faint); font-size: var(--fs-caption); line-height: var(--lh-caption); }
   .axis .gutter, .axis .edge { padding: 0 var(--sp-4); }
   .track { position: relative; margin: 0 36px 0 14px; min-width: 0; }
   .axis .track { height: 100%; }
@@ -96,10 +124,10 @@
   .lane:last-child { border-bottom: 0; }
   .lane.active { background: color-mix(in srgb, var(--agent) 6%, var(--surface)); }
   .lane.dim { opacity: 0.4; }
-  .lane .track { padding: 10px 0; display: grid; align-content: center; gap: 4px; }
+  .lane .track { padding: 6px 0; display: grid; align-content: center; gap: 1px; }
   .lane .track::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 1.5px; background: color-mix(in srgb, var(--ok) 60%, transparent); }
   .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); }
-  .who { display: flex; align-items: center; gap: var(--sp-2); padding: 10px var(--sp-4); border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; min-width: 0; }
+  .who { display: flex; align-items: center; gap: var(--sp-2); padding: 6px var(--sp-4); border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; min-width: 0; }
   span.who { cursor: default; }
   .who:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
   .mono { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 8px; background: color-mix(in srgb, var(--agent) 16%, var(--surface)); color: var(--agent); font-size: var(--fs-caption); font-weight: var(--fw-semibold); }
@@ -108,15 +136,17 @@
   .nm small span { white-space: nowrap; }
   .nm small { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
   .lv-elevated { color: var(--danger); } .lv-restricted { color: var(--ok); }
-  .sub { position: relative; height: 20px; }
+  .sub { position: relative; height: 18px; }
   .sub.main { height: 12px; }
   .bar { position: absolute; right: 0; top: calc(50% - 3px); height: 6px; border-radius: 3px 0 0 3px; background: linear-gradient(to right, color-mix(in srgb, var(--agent) 55%, transparent), color-mix(in srgb, var(--agent) 30%, transparent)); }
   .bar.thin { top: calc(50% - 1px); height: 2px; background: color-mix(in srgb, var(--agent) 45%, transparent); }
   .bar.thin.warn { background: color-mix(in srgb, var(--warn) 55%, transparent); }
   .dot { position: absolute; top: 50%; width: 10px; height: 10px; border-radius: 50%; transform: translate(-50%, -50%); background: var(--surface); border: 2px solid var(--agent); }
-  .pin { position: absolute; top: 50%; transform: translate(-5px, -50%); display: flex; align-items: center; gap: 6px; border: 0; background: none; padding: 0; font: inherit; color: var(--text-2); cursor: pointer; white-space: nowrap; }
-  .pin.flip { flex-direction: row-reverse; transform: translate(calc(-100% + 5px), -50%); }
-  .pin i { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--agent); box-shadow: 0 0 0 2px var(--surface); }
+  /* Dot at the port's start; label right-aligned at the live edge, or left of the dot on short bars. */
+  .pin { position: absolute; inset: 0 0 0 var(--x); border: 0; background: none; padding: 0; font: inherit; color: var(--text-2); cursor: pointer; }
+  .pin i { position: absolute; left: 0; top: 50%; transform: translate(-50%, -50%); width: 9px; height: 9px; border-radius: 50%; background: var(--agent); box-shadow: 0 0 0 2px var(--surface); }
+  .pin span { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); white-space: nowrap; }
+  .pin.short span { right: auto; left: -10px; transform: translate(-100%, -50%); }
   .pin span { font-family: var(--mono); font-size: var(--fs-caption); line-height: var(--lh-caption); padding: 0 4px; border-radius: 4px; background: var(--surface); }
   .pin.warn i { background: var(--warn); box-shadow: 0 0 0 2px var(--surface), 0 0 0 5px var(--warn-soft); }
   .pin.warn span { color: var(--warn); }

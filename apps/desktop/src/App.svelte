@@ -7,6 +7,7 @@
   import Notices from "./components/shell/Notices.svelte";
   import StatusBar from "./components/shell/StatusBar.svelte";
   import HomeView from "./components/home/HomeView.svelte";
+  import { HOME_LAYOUTS, nextLayout, type HomeLayout } from "./lib/home-layout";
   import FirstRun from "./components/FirstRun.svelte";
   import { firstRunPlan, type FirstRunChoices } from "./lib/onboarding";
   import { UsageHistory, parseCollapsed, parseDensity, toggled, usageRecord, type Density } from "./lib/rows";
@@ -115,6 +116,8 @@
   let now = $state(Date.now());
   let toastSeq = 0;
   let view = $state<View>(prefGetChoice("view", ["home", "list", "graph", "agents"], "list"));
+  let homeLayout = $state<HomeLayout>(prefGetChoice("home.layout", HOME_LAYOUTS, "cards"));
+  $effect(() => prefSet("home.layout", homeLayout));
   /** GraphView (and @xyflow) loads only when the Graph tab is opened — keeps the first paint light. */
   let GraphView = $state<typeof import("./components/GraphView.svelte").default | null>(null);
   let graph = $state.raw<Graph | null>(null);
@@ -1297,6 +1300,7 @@
       case "L": cycleTheme(); break;
       case "b": if (view === "graph") { if (graphDetailsOpen) closeGraphDetails(); else if (selectedGraphNode) selectNode(selectedGraphNode); else return; } else sideOpen = !sideOpen; break;
       case "g": view = view === "graph" ? "list" : "graph"; break;
+      case "v": if (view !== "home") return; homeLayout = nextLayout(homeLayout); break;
       case "A": view = view === "agents" ? "list" : "agents"; break;
       case "h": openHistory(); break;
       case "V": if (capture.session) void capture.finish(); else capture.open(); break;
@@ -1506,7 +1510,7 @@
         {/if}
       </div>
     {:else if view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={inventoryOn} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent}
+      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={inventoryOn} layout={homeLayout} onlayout={(l) => (homeLayout = l)} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent}
         onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (view = v)} oninventory={enableInventory} />
     {:else if view === "agents"}
       <div class="graph-wrap agents-wrap">
