@@ -136,6 +136,8 @@
   $effect(() => prefSet("agents.section", agentSection));
   /** Opt-in: read agents' MCP, skills and permission files on every agents scan. */
   let inventoryOn = $state(prefGetBoolean("agents.inventory", false));
+  /** Dev flag for reviewing Home concept prototypes; unset in normal use. */
+  const homeConcept = (() => { const c = prefGetChoice("home.concept", ["map", "lanes", "brief", "none"] as const, "none"); return c === "none" ? null : c; })();
   $effect(() => prefSet("agents.inventory", inventoryOn ? "1" : "0"));
   function enableInventory() { enableInventoryChoice(true); }
   function enableInventoryChoice(on: boolean) { inventoryOn = on; if (on) void loadAgents(); }
@@ -1516,7 +1518,7 @@
         {/if}
       </div>
     {:else if view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} agentsLoading={agentsRefreshing} {changes} inventory={inventoryOn} now={snapshot?.taken_at_ms ?? Date.now()} since={watchingSince} onopenagent={openAgent}
+      <HomeView concept={homeConcept} entries={snapshot?.entries ?? null} report={agentsReport} agentsLoading={agentsRefreshing} {changes} inventory={inventoryOn} now={snapshot?.taken_at_ms ?? Date.now()} since={watchingSince} onopenagent={openAgent}
         onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (view = v)} oninventory={enableInventory} />
     {:else if view === "agents"}
       <div class="graph-wrap agents-wrap">

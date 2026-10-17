@@ -3,6 +3,9 @@
   // table, and a rail with recent activity and dev servers. Figures come from the latest scan;
   // anything not loaded yet reads "scanning…", never zero. j/k or ↑/↓ move between rows.
   import Icon from "../Icon.svelte";
+  import MachineMap from "./concepts/MachineMap.svelte";
+  import AgentLanes from "./concepts/AgentLanes.svelte";
+  import Briefing from "./concepts/Briefing.svelte";
   import HomeSummary, { type SummaryStat } from "./HomeSummary.svelte";
   import AgentsTable from "./AgentsTable.svelte";
   import AttentionList from "./AttentionList.svelte";
@@ -12,7 +15,9 @@
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
   type Section = "overview" | "capabilities";
-  let { entries, report, agentsLoading = false, changes = [], inventory = false, now = Date.now(), since = null, onopenagent, onopenentry, onview, oninventory, onstopentry, onstopagent }: {
+  let { concept = null, entries, report, agentsLoading = false, changes = [], inventory = false, now = Date.now(), since = null, onopenagent, onopenentry, onview, oninventory, onstopentry, onstopagent }: {
+    /** Dev flag `holdmap.home.concept`: render a Home concept prototype instead. */
+    concept?: "map" | "lanes" | "brief" | null;
     entries: PortEntry[] | null;
     report: AgentsReport | null;
     agentsLoading?: boolean;
@@ -80,6 +85,13 @@
   }
 </script>
 
+{#if concept === "map"}
+  <MachineMap {entries} {report} onopenagent={(id) => onopenagent(id)} {onopenentry} {onstopentry} {onstopagent} />
+{:else if concept === "lanes"}
+  <AgentLanes {entries} {report} {changes} {now} onopenagent={(id) => onopenagent(id)} {onopenentry} {onstopentry} {onstopagent} />
+{:else if concept === "brief"}
+  <Briefing {entries} {report} {now} {inventory} onopenagent={(id) => onopenagent(id)} {onopenentry} {onstopentry} {onstopagent} {oninventory} />
+{:else}
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div class="home" role="region" aria-label="Overview" bind:this={root} {onkeydown}>
   <HomeSummary {stats} updated={entries ? ago(now, Date.now()) : null} />
@@ -148,6 +160,7 @@
     </aside>
   </div>
 </div>
+{/if}
 
 <style>
   .home { overflow-y: auto; min-height: 0; padding: var(--sp-5) var(--sp-6) var(--sp-8); display: grid; gap: var(--sp-5); align-content: start; width: 100%; max-width: 1680px; margin: 0 auto; }
