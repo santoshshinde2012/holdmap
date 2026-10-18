@@ -623,6 +623,18 @@ impl AnalyzerService {
         self.get(&m.id)
     }
 
+    /// The quick-select presets, marking those already added.
+    pub fn presets(&self) -> Vec<crate::presets::PresetView> {
+        let catalog = self.catalog();
+        crate::presets::views(|id| catalog.iter().any(|m| m.id == id))
+    }
+
+    /// Register a preset as the user's own analyzer. Like any added manifest it stays off
+    /// until the user approves its permissions.
+    pub fn add_preset(&self, id: &str) -> Result<AnalyzerView, ServiceError> {
+        self.add_manifest(crate::presets::source(id)?)
+    }
+
     /// Remove a user-registered analyzer: its approval, results and stored keys go too.
     pub fn remove_manifest(&self, id: &str) -> Result<bool, ServiceError> {
         if !self.is_user(id) {
@@ -1315,6 +1327,10 @@ fn assemble(
         notes.extend(out.notes.iter().map(|n| prefix(n)));
         if out.failed {
             failed += 1;
+            continue;
+        }
+        if out.nothing_to_check {
+            notes.push(prefix("nothing to check here."));
             continue;
         }
         let parsed = match parser.parse(out, m) {

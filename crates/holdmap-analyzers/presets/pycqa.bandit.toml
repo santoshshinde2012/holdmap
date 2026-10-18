@@ -1,0 +1,26 @@
+# Preset: Bandit (https://github.com/PyCQA/bandit). --ini /dev/null ignores a .bandit file the
+# skill ships, so a skill can't skip checks on itself.
+schema = 1
+id = "pycqa.bandit"
+name = "Bandit"
+publisher = "PyCQA"
+homepage = "https://github.com/PyCQA/bandit"
+license = "Apache-2.0"
+summary = "Finds risky Python in a skill's scripts: shell=True, eval, unsafe deserialization, weak crypto."
+install = "uv tool install 'bandit[sarif]==1.9.4'"
+
+[runner]
+kind = "cli"
+command = "bandit"
+args = ["--recursive", "{subject.dir}", "--ini", "/dev/null", "--quiet", "--format", "sarif", "--output", "{output}"]
+per_subject = "skill"
+version_args = ["--version"]
+version_prefix = "bandit "
+timeout_secs = 120
+exit_ok = [0, 1]
+
+[permissions]
+read = ["{subject.dir}"]
+
+[output]
+format = "sarif"

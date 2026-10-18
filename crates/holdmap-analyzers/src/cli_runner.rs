@@ -66,6 +66,7 @@ impl CliRunner {
             notes: Vec::new(),
             failed: true,
             tool: None,
+            nothing_to_check: false,
         };
         let Some(dir) = subject.dir.as_deref() else {
             out.notes.push("No folder to analyse.".into());
@@ -147,7 +148,20 @@ impl CliRunner {
             ));
             return out;
         }
-        let bytes = match read_capped(&report, cap) {
+        let report_bytes = read_capped(&report, cap);
+        let no_report = report_bytes
+            .as_ref()
+            .is_none_or(|(b, t)| b.is_empty() && !t);
+        if no_report
+            && ran
+                .code
+                .is_some_and(|c| manifest.runner.exit_no_findings.contains(&c))
+        {
+            out.nothing_to_check = true;
+            out.failed = false;
+            return out;
+        }
+        let bytes = match report_bytes {
             Some((bytes, truncated)) => {
                 if truncated {
                     out.notes.push(
@@ -582,6 +596,34 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(10));
         assert!(out[0].failed);
         assert!(out[0].notes[0].contains("time limit"), "{:?}", out[0].notes);
+    }
+
+    #[test]
+    fn an_exit_no_findings_code_without_a_report_is_a_clean_run() {
+        let root = tempfile::tempdir().unwrap();
+        let skill = skill(root.path());
+        let text = include_str!("../presets/google.osv-scanner.toml");
+        let m = AnalyzerManifest::parse(text).unwrap();
+        let run = |body: &str| {
+            CliRunner::new(Box::new(BasicSandbox))
+                .run(
+                    &m,
+                    &input(&skill),
+                    &RunContext {
+                        binary: Some(script(root.path(), body)),
+                        ..Default::default()
+                    },
+                )
+                .unwrap()
+                .remove(0)
+        };
+        let none = run("echo 'No package sources found'; exit 128");
+        assert!(none.nothing_to_check && !none.failed && none.bytes.is_empty());
+        // A report written alongside that code is not trusted as "clean".
+        let wrote = run(r#"echo '{}' > "${10}"; exit 128"#);
+        assert!(!wrote.nothing_to_check && wrote.failed);
+        let other = run("exit 2");
+        assert!(!other.nothing_to_check && other.failed);
     }
 
     #[test]

@@ -12,6 +12,7 @@ running agents and add short findings to Home, the map, **Needs you** and each a
 | --- | --- | --- |
 | **SkillSpector** (NVIDIA, install it yourself) | Skills, statically, for prompt injection, exfiltration, dangerous code and vulnerable dependencies. Runs with `--no-llm`. | `api.osv.dev` for dependency lookups |
 | **OSV lookup** (built in) | Pinned npm and PyPI packages your MCP servers launch, against OSV.dev. Unpinned ones are listed as skipped. | `api.osv.dev`: ecosystem, name and version only |
+| **Presets** (Cisco, Google, Aqua Security, PyCQA; install them yourself) | One click adds a ready-made manifest for a well-known local scanner. See [Presets](#presets). | Only OSV-Scanner: `api.osv.dev` |
 | **Your own** | A local command-line or MCP scanner you register from a manifest. | Only what its manifest declares |
 
 ## Turning one on
@@ -73,6 +74,25 @@ signature. Nothing changes until you review the field-by-field diff and accept i
 (`holdmap analyzers catalog accept`, or `reject`). An analyzer whose manifest changed asks you
 to approve it again.
 
+## Presets
+
+**Add your own analyzer… → Presets** (`holdmap analyzers presets`, then
+`holdmap analyzers add --preset ID`) lists scanners from established publishers that run on this
+computer with no LLM and no API key. You install the tool. holdmap adds its manifest as your own
+analyzer: off, with the same permissions sheet, sandbox and pin as any other.
+
+| Preset | Id | What it checks | Network |
+| --- | --- | --- | --- |
+| [Cisco Skill Scanner](https://github.com/cisco-ai-defense/skill-scanner) | `cisco.skill-scanner` | Skill instructions and scripts: prompt injection, exfiltration, command injection. Rules only (YARA, patterns, AST); its LLM judge, VirusTotal and AI Defense options stay off. | None |
+| [OSV-Scanner](https://github.com/google/osv-scanner) (Google) | `google.osv-scanner` | Lockfiles and manifests in a skill, in many ecosystems, for known vulnerabilities. A skill without packages shows "nothing to check". | `api.osv.dev`: ecosystem, name and version |
+| [Trivy](https://github.com/aquasecurity/trivy) secret scan (Aqua Security) | `aquasecurity.trivy-secrets` | Hard-coded credentials: cloud keys, tokens, private keys. Telemetry and version checks are off. | None |
+| [Bandit](https://github.com/PyCQA/bandit) (PyCQA) | `pycqa.bandit` | Risky Python in a skill's scripts: `shell=True`, `eval`, unsafe deserialization, weak crypto. | None |
+
+Each preset ignores config files a skill could ship to hide its own findings (`.bandit`,
+`osv-scanner.toml`). Rules-only scanners miss things an LLM review might catch; treat no
+findings as "nothing matched", not "safe". Presets ship with holdmap but are not part of the
+signed catalog.
+
 ## Your own analyzers
 
 **Add your own analyzer…** takes any MCP server, not only ones written for holdmap. Choose how
@@ -84,7 +104,9 @@ to reach it:
   (`--url http://127.0.0.1:8765/mcp`).
 - **From your agents**: copy a server an agent is configured to use (`--from AGENT/NAME`,
   `holdmap analyzers servers`). holdmap warns that it's the same program your agent uses.
-- **Manifest**: paste a TOML manifest, or run `holdmap analyzers add scanner.toml`.
+- **Manifest**: paste a TOML manifest, or run `holdmap analyzers add scanner.toml`. A
+  command-line manifest can list `exit_no_findings` codes: with no report written, that exit
+  means "nothing to check" rather than a failure.
 
 The browser demo does all of this with sample tools, and installs and starts nothing.
 

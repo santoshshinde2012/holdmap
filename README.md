@@ -52,7 +52,8 @@ sample data.
   header **names** only; values, prompts and file bodies are never read, and MCP servers are
   never started.
 - **Analyzers (opt-in).** Scan your agents' skills and MCP packages with NVIDIA SkillSpector, a
-  built-in OSV.dev lookup or any MCP server you plug in. Each one is off until you review exactly
+  built-in OSV.dev lookup, presets for Cisco Skill Scanner, OSV-Scanner, Trivy and Bandit, or any
+  MCP server you plug in. Each one is off until you review exactly
   what it gets; runs use a private copy, a cleared environment and a sandbox. MCP tool lists are
   pinned, and **How it works** draws each analyzer's pipeline and which agents it covers.
 - **Maps and graphs.** Computer / Footprint / Project agent maps, the service graph with
@@ -175,7 +176,7 @@ per service (default 60); `holdmap status` runs at most 32 HTTP checks concurren
 | Ports | `holdmap free-port --near 3000`, `holdmap wait 5432 --timeout 30s` |
 | Projects | `holdmap up`, `holdmap down`, `holdmap status`, `holdmap init` |
 | Remember | `holdmap pin`, `holdmap unpin`, `holdmap pins`, `holdmap history` |
-| Analyze (opt-in) | `holdmap analyzers list`, `holdmap analyzers show`, `holdmap analyzers approve`, `holdmap analyzers revoke`, `holdmap analyzers run`, `holdmap analyzers auto`, `holdmap analyzers add`, `holdmap analyzers servers`, `holdmap analyzers tools`, `holdmap analyzers map`, `holdmap analyzers remove`, `holdmap analyzers catalog`, `holdmap analyzers catalog status`, `holdmap analyzers catalog fetch`, `holdmap analyzers catalog import`, `holdmap analyzers catalog accept`, `holdmap analyzers catalog reject`, `holdmap analyzers key set`, `holdmap analyzers key delete`, `holdmap insights`, `holdmap insights review`, `holdmap insights snooze`, `holdmap insights reopen` |
+| Analyze (opt-in) | `holdmap analyzers list`, `holdmap analyzers show`, `holdmap analyzers approve`, `holdmap analyzers revoke`, `holdmap analyzers run`, `holdmap analyzers auto`, `holdmap analyzers add`, `holdmap analyzers presets`, `holdmap analyzers servers`, `holdmap analyzers tools`, `holdmap analyzers map`, `holdmap analyzers remove`, `holdmap analyzers catalog`, `holdmap analyzers catalog status`, `holdmap analyzers catalog fetch`, `holdmap analyzers catalog import`, `holdmap analyzers catalog accept`, `holdmap analyzers catalog reject`, `holdmap analyzers key set`, `holdmap analyzers key delete`, `holdmap insights`, `holdmap insights review`, `holdmap insights snooze`, `holdmap insights reopen` |
 | Integrate | `holdmap activity serve`, `holdmap activity setup`, `holdmap activity snapshot`, `holdmap activity hook`, `holdmap tui`, `holdmap mcp`, `holdmap completions zsh`, `holdmap man` |
 
 Every read command takes `--json`. Exit codes: `0` ok, `1` busy / not found / timed out, `2`
@@ -202,7 +203,8 @@ loaded or used. See [MCP and skills](site/src/content/docs/agents.md#mcp-and-ski
 
 **Analyzers (opt-in).** Run a scanner you pick on your agents' skills and MCP packages:
 [NVIDIA SkillSpector](https://github.com/NVIDIA/SkillSpector) (installed by you), the built-in
-OSV.dev lookup for pinned npm/PyPI packages, a local CLI scanner, or any MCP server
+OSV.dev lookup for pinned npm/PyPI packages, a preset (`holdmap analyzers presets`: Cisco Skill
+Scanner, Google OSV-Scanner, Trivy secrets, Bandit), a local CLI scanner, or any MCP server
 (`holdmap analyzers add --mcp` from a command, a local URL or one of your agents' servers;
 `holdmap analyzers tools` and `holdmap analyzers map` pick its tools and map inputs from their
 schemas). Every analyzer is off until you approve it. An MCP analyzer's tool list is pinned:

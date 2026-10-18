@@ -1,18 +1,21 @@
 <script lang="ts">
-  // Add your own analyzer: any MCP server (a command holdmap starts, a URL it connects to, or
-  // one of your agents' configured servers), or a manifest file. holdmap validates it and keeps
-  // it off. For MCP servers the next step lists the tools and maps their inputs.
+  // Add your own analyzer: a preset for a well-known local scanner, any MCP server (a command
+  // holdmap starts, a URL it connects to, or one of your agents' configured servers), or a
+  // manifest file. holdmap validates it and keeps it off until its permissions are approved.
+  // For MCP servers the next step lists the tools and maps their inputs.
   import Button from "../ui/Button.svelte";
   import Callout from "../ui/Callout.svelte";
   import SegmentedControl from "../ui/SegmentedControl.svelte";
   import McpTools from "./McpTools.svelte";
   import * as api from "../../lib/api";
   import type { ConfiguredServer, McpDraft } from "../../lib/analyzers";
+  import type { PresetView } from "../../lib/analyzer-presets";
 
   let { onadded, demo = false }: { onadded?: (id: string) => void; demo?: boolean } = $props();
-  type Mode = "command" | "url" | "agents" | "manifest";
+  type Mode = "preset" | "command" | "url" | "agents" | "manifest";
   let open = $state(false);
-  let mode = $state<Mode>("command");
+  let mode = $state<Mode>("preset");
+  let presets = $state<PresetView[] | null>(null);
   let id = $state("local.");
   let name = $state("");
   let command = $state("");
@@ -33,6 +36,9 @@
   const server = $derived(servers?.find((s) => s.id === picked) ?? null);
   const names = (s: string) => s.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
 
+  $effect(() => {
+    if (open && mode === "preset" && presets === null) api.analyzerPresets().then((p) => (presets = p), (e) => { presets = []; error = String(e); });
+  });
   $effect(() => {
     if (mode === "agents" && servers === null) api.configuredMcpServers().then((s) => (servers = s), (e) => { servers = []; error = String(e); });
   });
@@ -67,6 +73,18 @@
     } catch (e) { error = String(e); }
     finally { busy = false; }
   }
+  async function addPreset(p: PresetView) {
+    if (busy) return;
+    busy = true;
+    error = null;
+    try {
+      const view = await api.addAnalyzerPreset(p.id);
+      presets = null;
+      open = false;
+      onadded?.(view.id);
+    } catch (e) { error = String(e); }
+    finally { busy = false; }
+  }
   function done() {
     const a = added;
     added = null;
@@ -80,28 +98,47 @@
   {#if !open}
     <Button size="sm" variant="ghost" icon="plus" onclick={() => (open = true)}>Add your own analyzer…</Button>
   {:else if added}
-    <h4>Choose {added.name}'s tools</h4>
+    <h3>Choose {added.name}'s tools</h3>
     <McpTools id={added.id} name={added.name} onsaved={done} oncancel={done} />
   {:else}
-    <h4>Add your own analyzer</h4>
+    <h3>Add your own analyzer</h3>
     <SegmentedControl bind:value={mode} label="How to add it" options={[
-      { value: "command", label: "Command" }, { value: "url", label: "Local URL" },
+      { value: "preset", label: "Presets" }, { value: "command", label: "Command" }, { value: "url", label: "Local URL" },
       { value: "agents", label: "From your agents" }, { value: "manifest", label: "Manifest" },
     ]} />
     <p class="meta">
-      {#if mode === "command"}Any MCP server that speaks stdio. holdmap starts it in the sandbox with a cleared environment, only for runs you start, and stops it afterwards.
+      {#if mode === "preset"}Well-known scanners that run on this computer without an LLM or API key. You install the tool; holdmap adds its manifest, off until you review and approve its permissions.
+      {:else if mode === "command"}Any MCP server that speaks stdio. holdmap starts it in the sandbox with a cleared environment, only for runs you start, and stops it afterwards.
       {:else if mode === "url"}An MCP server you run that speaks Streamable HTTP. holdmap connects only for runs you start and doesn't sandbox it.
       {:else if mode === "agents"}One of your agents' configured MCP servers. holdmap starts its own copy: it gets none of your agent's settings or keys.
       {:else}A manifest for a local command-line or MCP scanner (TOML).{/if}
       {demo ? " Browser demo: it's checked and listed, but nothing is installed, started or contacted." : ""}
     </p>
-    {#if mode !== "manifest"}
+    {#if mode !== "manifest" && mode !== "preset"}
       <div class="grid">
         <label>Id<input bind:value={id} placeholder="local.my-scanner" spellcheck="false" /></label>
         <label>Name<input bind:value={name} placeholder="My scanner" /></label>
       </div>
     {/if}
-    {#if mode === "command"}
+    {#if mode === "preset"}
+      {#if presets === null}<p class="meta">Loading presets…</p>
+      {:else}
+        <ul class="presets" aria-label="Analyzer presets">
+          {#each presets as p (p.id)}
+            <li>
+              <div class="ph"><span class="nm">{p.name}</span><span class="meta">{p.publisher} · {p.license} · {p.network.length ? `contacts ${p.network.join(", ")}` : "no network"}</span></div>
+              <p class="meta">{p.summary}</p>
+              {#if p.install}<p class="meta">Install: <code>{p.install}</code></p>{/if}
+              <div class="acts">
+                {#if p.added}<span class="meta">Added</span>
+                {:else}<Button size="sm" variant="secondary" loading={busy} onclick={() => addPreset(p)} aria-label="Add {p.name}">Add</Button>{/if}
+                {#if p.homepage}<a class="meta" href={p.homepage} target="_blank" rel="noopener noreferrer">Project page<span class="sr-only"> for {p.name} (opens in a new tab)</span></a>{/if}
+              </div>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    {:else if mode === "command"}
       <label class="wide">Command<input bind:value={command} placeholder="/usr/local/bin/my-mcp-scanner" spellcheck="false" /></label>
       <label class="wide">Arguments (one per line)<textarea rows="2" bind:value={args} spellcheck="false" placeholder="--stdio"></textarea></label>
       <label class="wide">API key names it may get from your keychain (optional)<input bind:value={keys} placeholder="SCANNER_TOKEN" spellcheck="false" /></label>
@@ -125,7 +162,7 @@
       <textarea id="analyzer-manifest" rows="8" spellcheck="false" bind:value={text} placeholder={'schema = 1\nid = "example.scanner"\n…'}></textarea>
     {/if}
     <div class="acts">
-      <Button size="sm" variant="primary" loading={busy} disabled={!ready} onclick={add}>{mode === "manifest" ? "Add analyzer" : "Add and choose tools…"}</Button>
+      {#if mode !== "preset"}<Button size="sm" variant="primary" loading={busy} disabled={!ready} onclick={add}>{mode === "manifest" ? "Add analyzer" : "Add and choose tools…"}</Button>{/if}
       <Button size="sm" variant="ghost" onclick={() => { open = false; error = null; }}>Cancel</Button>
     </div>
   {/if}
@@ -134,7 +171,7 @@
 
 <style>
   .add { display: grid; gap: var(--sp-2); margin-top: var(--sp-3); }
-  h4 { margin: 0; font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
+  h3 { margin: 0; font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
   label { display: grid; gap: 2px; font-size: var(--fs-caption); color: var(--text-2); font-weight: var(--fw-medium); }
   .meta { margin: 0; font-size: var(--fs-caption); color: var(--muted); font-weight: var(--fw-regular); }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--sp-2); }
@@ -144,5 +181,9 @@
   .servers label { display: flex; align-items: center; gap: 6px; }
   .nm { color: var(--text); font-size: var(--fs-body-sm); }
   .note { padding-left: 22px; }
-  .acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+  .acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+  .presets { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+  .presets li { display: grid; gap: 2px; padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .ph { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+  code { font-family: var(--mono); font-size: var(--fs-caption); overflow-wrap: anywhere; }
 </style>

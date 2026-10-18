@@ -6,6 +6,7 @@ use crate::state::AppState;
 use holdmap_analyzers::catalog::{CatalogDiff, CatalogStatus};
 use holdmap_analyzers::manifest::ToolSpec;
 use holdmap_analyzers::mcp_map::OutputMapping;
+use holdmap_analyzers::presets::PresetView;
 use holdmap_analyzers::service::{AnalyzerView, ConfiguredServer, McpDraft, Preview, ToolReport};
 use holdmap_analyzers::{
     AnalyzerResult, AnalyzerService, FileStore, FindingState, Insights, Stores,
@@ -240,6 +241,18 @@ pub async fn analyzer_add(app: AppHandle, manifest: String) -> Result<AnalyzerVi
             .map_err(|e| e.to_string())
     })
     .await
+}
+
+/// Ready-made manifests for well-known local analyzers.
+#[tauri::command]
+pub async fn analyzer_presets(app: AppHandle) -> Result<Vec<PresetView>, String> {
+    blocking(move || Ok(service(&app).presets())).await
+}
+
+/// Register a preset as the user's own analyzer; it stays off until approved.
+#[tauri::command]
+pub async fn analyzer_add_preset(app: AppHandle, id: String) -> Result<AnalyzerView, String> {
+    blocking(move || service(&app).add_preset(&id).map_err(|e| e.to_string())).await
 }
 
 /// Remove an analyzer the user registered.
