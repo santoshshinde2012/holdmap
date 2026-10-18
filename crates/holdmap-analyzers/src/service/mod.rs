@@ -8,21 +8,26 @@ use crate::catalog::{
 };
 use crate::cli_runner::CliRunner;
 use crate::consent::{
-    ConsentStore, Grant, ResultStore, Review, ReviewStore, SecretIndex, UserManifestStore,
+    ConsentStore, Grant, ResultStore, Review, ReviewStore, SecretIndex, ToolPinStore, ToolSlot,
+    UserManifestStore,
 };
 use crate::finding::{
     clean_id, clean_refs, clean_relative_path, clean_text, fingerprint, hex, AnalyzerResult,
-    Detail, Finding, FindingState, Location, RunStatus, Severity, Subject, MAX_DETAIL,
+    Detail, Finding, FindingState, Location, RunStatus, Severity, Subject, ToolCalls, MAX_DETAIL,
     MAX_FINDINGS_PER_SUBJECT, MAX_FIX, MAX_TITLE,
 };
 use crate::input::{AnalyzerInput, InputProjector, InventoryProjector};
 use crate::manifest::{
-    AnalyzerManifest, ManifestError, OutputFormat, Permissions, RunnerKind, OUTPUT, SUBJECT_DIR,
+    AnalyzerManifest, ManifestError, OutputFormat, Permissions, RunnerKind, Transport, OUTPUT,
+    SUBJECT_DIR,
 };
+use crate::mcp_runner::McpAnalyzerRunner;
 use crate::osv::{request_bodies, OsvParser, OsvRunner};
 use crate::parse::{for_format, OutputParser, Parsed};
 use crate::probe::{BinaryProbe, SystemProbe};
-use crate::runner::{AnalyzerRunner, RawOutput, RunContext, RunError, SandboxLevel, ENV_NAMES};
+use crate::runner::{
+    AnalyzerRunner, CancelFlag, RawOutput, RunContext, RunError, SandboxLevel, ENV_NAMES,
+};
 use crate::secrets::{check_value, Secret, SecretError, SecretStore};
 use holdmap_core::agents::AgentsReport;
 use serde::{Deserialize, Serialize};
@@ -31,6 +36,9 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
+
+mod mcp;
+pub use mcp::{ConfiguredServer, McpDraft, McpView, ToolListing, ToolReport};
 
 /// Where an analyzer stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,6 +152,9 @@ pub struct AnalyzerView {
     /// Whether it comes from holdmap's signed catalog or the user registered it.
     #[serde(default)]
     pub source: ManifestSource,
+    /// MCP analyzers: transport, endpoint, chosen tools and the tool-list pin.
+    #[serde(default)]
+    pub mcp: Option<McpView>,
 }
 
 /// Where a manifest comes from.
@@ -198,6 +209,26 @@ pub struct Preview {
     /// looks like a server one of your agents is configured with).
     #[serde(default)]
     pub notices: Vec<String>,
+    /// Exactly which inventory fields reach the analyzer, in plain words.
+    #[serde(default)]
+    pub projection: Vec<String>,
+    /// MCP analyzers: the exact arguments of each call for the first few subjects.
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCallPreview>,
+}
+
+/// One tool call as it will be made.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolCallPreview {
+    /// Tool name.
+    pub tool: String,
+    /// Subject name.
+    pub subject: String,
+    /// Arguments as JSON (the folder path shown is an example of the private copy).
+    pub arguments: serde_json::Value,
+    /// Problems against the tool's input schema.
+    #[serde(default)]
+    pub problems: Vec<String>,
 }
 
 /// All current findings.
@@ -247,6 +278,8 @@ pub struct Stores {
     pub catalog: Arc<dyn CatalogStore>,
     /// User-registered manifests.
     pub manifests: Arc<dyn UserManifestStore>,
+    /// MCP tool listings.
+    pub tools: Arc<dyn ToolPinStore>,
 }
 
 impl Stores {
@@ -258,6 +291,7 @@ impl Stores {
             + SecretIndex
             + CatalogStore
             + UserManifestStore
+            + ToolPinStore
             + 'static,
     >(
         store: T,
@@ -269,7 +303,8 @@ impl Stores {
             reviews: store.clone(),
             secrets: store.clone(),
             catalog: store.clone(),
-            manifests: store,
+            manifests: store.clone(),
+            tools: store,
         }
     }
 }
@@ -301,8 +336,9 @@ pub struct AnalyzerService {
     projector: Box<dyn InputProjector>,
     cli: Box<dyn AnalyzerRunner>,
     builtin: Box<dyn AnalyzerRunner>,
-    mcp: Box<dyn AnalyzerRunner>,
+    mcp: Box<dyn McpAnalyzerRunner>,
     sandbox: SandboxLevel,
+    cancel: CancelFlag,
     keychain: Box<dyn SecretStore>,
     now: fn() -> u64,
 }
@@ -366,15 +402,21 @@ impl AnalyzerService {
                 Box::new(crate::runner::BasicSandbox),
             )),
             sandbox: SandboxLevel::Basic,
+            cancel: CancelFlag::default(),
             keychain: Box::new(crate::secrets::NoSecrets),
             now: now_ms,
         }
     }
 
     /// The runner for MCP analyzers (tests use an in-process fake).
-    pub fn with_mcp_runner(mut self, runner: Box<dyn AnalyzerRunner>) -> Self {
+    pub fn with_mcp_runner(mut self, runner: Box<dyn McpAnalyzerRunner>) -> Self {
         self.mcp = runner;
         self
+    }
+
+    /// Stop the run in progress (MCP analyzers stop between and during calls).
+    pub fn cancel_runs(&self) {
+        self.cancel.cancel();
     }
 
     /// Verify catalogs with this key and download them from `source` (tests).
@@ -594,6 +636,9 @@ impl AnalyzerService {
             }
             self.stores.results.forget(&m.id)?;
             self.stores.consent.revoke(&m.id)?;
+            for slot in [ToolSlot::Latest, ToolSlot::Approved] {
+                self.stores.tools.set_tool_snapshot(&m.id, slot, None)?;
+            }
         }
         Ok(self.stores.manifests.remove_user_manifest(id)?)
     }
@@ -618,16 +663,15 @@ impl AnalyzerService {
 
     fn view(&self, m: &AnalyzerManifest) -> AnalyzerView {
         let grant = self.stores.consent.grant(&m.id);
-        let binary = (m.runner.kind != RunnerKind::Builtin)
-            .then(|| self.probe.locate(m))
-            .flatten();
-        let (state, changes) = state(
+        let binary = needs_binary(m).then(|| self.probe.locate(m)).flatten();
+        let (state, changes) = self.state_of(
             m,
             grant.as_ref(),
             binary
                 .as_ref()
                 .map(|b| (b.path.as_path(), b.sha256.as_str())),
         );
+        let mcp = self.mcp_view(m, grant.as_ref());
         let last_run = self.stores.results.latest(&m.id).map(|r| {
             let r = self.with_reviews(r);
             RunSummary {
@@ -662,7 +706,25 @@ impl AnalyzerService {
             approved_at_ms: grant.map(|g| g.approved_at_ms),
             last_run,
             secrets: self.secret_status(m),
+            mcp,
         }
+    }
+
+    /// Consent state, including the MCP tool-list pin.
+    fn state_of(
+        &self,
+        m: &AnalyzerManifest,
+        grant: Option<&Grant>,
+        binary: Option<(&std::path::Path, &str)>,
+    ) -> (AnalyzerState, Vec<String>) {
+        let (mut state, mut changes) = state(m, grant, binary);
+        if m.runner.kind == RunnerKind::Mcp && state == AnalyzerState::Approved {
+            if let Some(why) = self.tool_pin_change(m, grant) {
+                state = AnalyzerState::Changed;
+                changes.extend(why);
+            }
+        }
+        (state, changes)
     }
 
     /// The exact data preview for the permissions sheet.
@@ -673,6 +735,12 @@ impl AnalyzerService {
         Ok(Preview {
             analyzer: self.view(m),
             command: (!builtin).then(|| {
+                if let Some(url) = m.endpoint().and(m.runner.url.as_ref()) {
+                    return vec![
+                        format!("connects to {url}"),
+                        format!("then calls {} once per skill", tool_names(m)),
+                    ];
+                }
                 let mut line: Vec<String> =
                     std::iter::once(m.runner.command.clone().unwrap_or_default())
                         .chain(m.runner.args.iter().map(|a| {
@@ -681,26 +749,13 @@ impl AnalyzerService {
                         }))
                         .collect();
                 if m.runner.kind == RunnerKind::Mcp {
-                    let args: Vec<String> = m
-                        .runner
-                        .tool_args
-                        .iter()
-                        .map(|(k, v)| {
-                            format!(
-                                "{k}={}",
-                                v.replace(SUBJECT_DIR, "<copy of the skill folder>")
-                            )
-                        })
-                        .collect();
-                    line.push(format!(
-                        "then calls tool {}({}) once per skill",
-                        m.runner.tool.as_deref().unwrap_or_default(),
-                        args.join(", ")
-                    ));
+                    line.push(format!("then calls {} once per skill", tool_names(m)));
                 }
                 line
             }),
             notices: notices(m, report),
+            projection: projection(m),
+            tool_calls: self.tool_call_preview(m, &input),
             subjects: input
                 .subjects
                 .iter()
@@ -719,7 +774,7 @@ impl AnalyzerService {
             } else {
                 Vec::new()
             },
-            env: if builtin {
+            env: if builtin || m.endpoint().is_some() {
                 Vec::new()
             } else {
                 ENV_NAMES
@@ -740,6 +795,12 @@ impl AnalyzerService {
             },
             sandbox: if builtin {
                 "Runs inside holdmap. Only the exact request shown here is sent.".into()
+            } else if let Some(e) = m.endpoint() {
+                if e.loopback {
+                    "holdmap doesn't start this server: it connects to a server you run on this computer, so holdmap's sandbox doesn't apply to it. Only the arguments shown here are sent.".into()
+                } else {
+                    format!("holdmap connects to a server on another machine ({}). Only the metadata shown here is sent; holdmap's sandbox doesn't apply to it.", e.host)
+                }
             } else {
                 self.sandbox.describe(m.uses_network())
             },
@@ -749,7 +810,13 @@ impl AnalyzerService {
 
     /// Approve exactly the current manifest and program.
     pub fn approve(&self, id: &str) -> Result<AnalyzerView, ServiceError> {
+        self.approve_with(id, false)
+    }
+
+    /// Approve, with `allow_remote` for an MCP server on another machine (metadata only).
+    pub fn approve_with(&self, id: &str, allow_remote: bool) -> Result<AnalyzerView, ServiceError> {
         let m = &self.manifest(id)?;
+        let tools_sha256 = self.check_mcp_approval(m, allow_remote)?;
         let mut grant = Grant {
             analyzer: m.id.clone(),
             manifest_sha256: m.sha256.clone(),
@@ -758,8 +825,10 @@ impl AnalyzerService {
             version: None,
             approved_at_ms: (self.now)(),
             background_network: false,
+            tools_sha256,
+            remote_opt_in: allow_remote && m.is_remote(),
         };
-        if m.runner.kind != RunnerKind::Builtin {
+        if needs_binary(m) {
             let info = self
                 .probe
                 .locate(m)
@@ -841,9 +910,20 @@ impl AnalyzerService {
         let mut cx = RunContext::default();
         let mut version = grant.as_ref().and_then(|g| g.version.clone());
         match m.runner.kind {
+            RunnerKind::Mcp if !needs_binary(m) => {
+                let (state, changes) = self.state_of(m, grant.as_ref(), None);
+                refuse(m, state, &changes)?;
+                if m.is_remote() && !grant.as_ref().is_some_and(|g| g.remote_opt_in) {
+                    return Err(RunError::NotApproved(format!(
+                        "{} is on another machine. Approve it again and allow sending metadata there.",
+                        m.name
+                    ))
+                    .into());
+                }
+            }
             RunnerKind::Cli | RunnerKind::Mcp => {
                 let info = self.probe.locate(m);
-                let (state, changes) = state(
+                let (state, changes) = self.state_of(
                     m,
                     grant.as_ref(),
                     info.as_ref().map(|b| (b.path.as_path(), b.sha256.as_str())),
@@ -869,19 +949,31 @@ impl AnalyzerService {
         }
         let (secrets, secret_notes) = self.run_secrets(m);
         cx.secrets = secrets;
+        cx.tools_sha256 = grant.as_ref().and_then(|g| g.tools_sha256.clone());
+        self.cancel.reset();
+        cx.cancel = self.cancel.clone();
         let input = self.projector.project(report, m);
-        let runner = match m.runner.kind {
-            RunnerKind::Builtin => &self.builtin,
-            RunnerKind::Cli => &self.cli,
-            RunnerKind::Mcp => &self.mcp,
+        let started = std::time::Instant::now();
+        let outputs = match m.runner.kind {
+            RunnerKind::Builtin => self.builtin.run(m, &input, &cx),
+            RunnerKind::Cli => self.cli.run(m, &input, &cx),
+            RunnerKind::Mcp => self.mcp.run(m, &input, &cx),
         };
-        let outputs = runner.run(m, &input, &cx)?;
+        let outputs = match outputs {
+            Err(RunError::ToolsChanged(mut changed)) => {
+                changed.changes = self.record_changed_tools(m, &changed.snapshot)?;
+                return Err(RunError::ToolsChanged(changed).into());
+            }
+            other => other?,
+        };
+        let duration_ms = started.elapsed().as_millis() as u64;
         let parser: Box<dyn OutputParser> = match m.output.format {
             OutputFormat::Osv => Box::new(OsvParser),
             other => for_format(other).expect("parser for every non-builtin format"),
         };
         let mut result = assemble(m, version, &input, &outputs, parser.as_ref(), (self.now)());
         result.input_signature = Some(signature(&input));
+        result.duration_ms = Some(duration_ms);
         result.notes.extend(secret_notes);
         self.stores.results.save(&result)?;
         Ok(self.with_reviews(result))
@@ -961,8 +1053,20 @@ fn notices(m: &AnalyzerManifest, report: &AgentsReport) -> Vec<String> {
     if m.runner.kind != RunnerKind::Mcp {
         return out;
     }
+    match m.endpoint() {
+        None => out.push(
+            "This starts a local MCP server. holdmap starts it only when you run this analyzer, with a cleared environment and the same sandbox as other analyzers, and stops it when the run ends. It never runs on its own.".into(),
+        ),
+        Some(e) if e.loopback => out.push(
+            "This connects to an MCP server you run on this computer. holdmap only connects when you run this analyzer, and never on its own.".into(),
+        ),
+        Some(e) => out.push(format!(
+            "Warning: this sends skill names, file names and agent ids to a server on another machine ({}). Never file contents. holdmap only connects when you run it, and only if you allowed this when approving.",
+            e.host
+        )),
+    }
     out.push(
-        "This starts a local MCP server. holdmap starts it only when you run this analyzer, with a cleared environment and the same sandbox as other analyzers, and stops it when the run ends. It never runs on its own.".into(),
+        "holdmap lists the server's tools and pins them. If the server changes any tool, name, description or input, the analyzer stops until you review and approve it again. holdmap gives the server no way to ask you questions or reach an AI model.".into(),
     );
     for (agent, server) in configured_matches(m, report) {
         out.push(format!(
@@ -994,8 +1098,19 @@ fn configured_matches(m: &AnalyzerManifest, report: &AgentsReport) -> Vec<(Strin
         .collect();
     programs.dedup();
     let mut out = Vec::new();
+    let host = m.runner.url.as_deref().and_then(|u| {
+        let rest = u.split("://").nth(1)?;
+        Some(rest.split(['/', '?']).next()?.to_ascii_lowercase())
+    });
     for (product, caps) in crate::input::inventories(report) {
         for server in &caps.mcp_servers {
+            if let (Some(h), Some(r)) = (&host, &server.remote_host) {
+                let pair = (product.to_string(), server.name.clone());
+                if h.eq_ignore_ascii_case(r) && !out.contains(&pair) {
+                    out.push(pair);
+                }
+                continue;
+            }
             let Some(package) = server.launch.as_ref().and_then(|l| l.package.as_deref()) else {
                 continue;
             };
@@ -1014,7 +1129,11 @@ fn configured_matches(m: &AnalyzerManifest, report: &AgentsReport) -> Vec<(Strin
 
 fn schedule(m: &AnalyzerManifest, background: bool) -> String {
     if m.runner.kind == RunnerKind::Mcp {
-        return "Only when you click Run now. holdmap starts the MCP server for that run and stops it afterwards.".into();
+        return if m.endpoint().is_some() {
+            "Only when you click Run now. holdmap connects to the server for that run.".into()
+        } else {
+            "Only when you click Run now. holdmap starts the MCP server for that run and stops it afterwards.".into()
+        };
     }
     match (m.uses_network(), background) {
         (false, _) => "When you click Run now, and while holdmap is open when the analysed items change.".into(),
@@ -1023,12 +1142,68 @@ fn schedule(m: &AnalyzerManifest, background: bool) -> String {
     }
 }
 
+/// Whether the analyzer runs a local program holdmap must find and pin.
+fn needs_binary(m: &AnalyzerManifest) -> bool {
+    match m.runner.kind {
+        RunnerKind::Builtin => false,
+        RunnerKind::Cli => true,
+        RunnerKind::Mcp => m.runner.transport == Transport::Stdio,
+    }
+}
+
+fn tool_names(m: &AnalyzerManifest) -> String {
+    if m.runner.tools.is_empty() {
+        return "no tools yet (choose them first)".into();
+    }
+    m.runner
+        .tools
+        .iter()
+        .map(|t| {
+            format!(
+                "{}({})",
+                t.name,
+                t.args.keys().cloned().collect::<Vec<_>>().join(", ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Exactly which inventory fields reach the analyzer.
+fn projection(m: &AnalyzerManifest) -> Vec<String> {
+    match (m.runner.kind, m.output.format) {
+        (RunnerKind::Builtin, OutputFormat::Osv) => {
+            vec!["package ecosystem, name and exact version (pinned packages only)".into()]
+        }
+        (RunnerKind::Builtin, _) => Vec::new(),
+        (RunnerKind::Cli, _) => vec!["path of a private copy of the skill folder".into()],
+        (RunnerKind::Mcp, _) => {
+            let mut used: Vec<crate::mcp_map::Placeholder> = Vec::new();
+            for p in m
+                .runner
+                .tools
+                .iter()
+                .flat_map(|t| t.args.values().flat_map(crate::mcp_map::used))
+            {
+                if !used.contains(&p) {
+                    used.push(p);
+                }
+            }
+            if used.is_empty() {
+                vec!["nothing from your inventory (constant arguments only)".into()]
+            } else {
+                used.iter().map(|p| p.label().to_string()).collect()
+            }
+        }
+    }
+}
+
 fn state(
     m: &AnalyzerManifest,
     grant: Option<&Grant>,
     binary: Option<(&std::path::Path, &str)>,
 ) -> (AnalyzerState, Vec<String>) {
-    if m.runner.kind != RunnerKind::Builtin && binary.is_none() {
+    if needs_binary(m) && binary.is_none() {
         return (AnalyzerState::NotInstalled, Vec::new());
     }
     let Some(grant) = grant else {
@@ -1105,6 +1280,24 @@ fn assemble(
     let mut failed = 0;
     let mut partial = false;
     let mut coverage: Vec<f32> = Vec::new();
+    let mut calls: Vec<ToolCalls> = Vec::new();
+    for out in outputs.iter() {
+        if let Some(tool) = &out.tool {
+            let i = calls
+                .iter()
+                .position(|c| &c.tool == tool)
+                .unwrap_or_else(|| {
+                    calls.push(ToolCalls {
+                        tool: tool.clone(),
+                        calls: 0,
+                        failed: 0,
+                    });
+                    calls.len() - 1
+                });
+            calls[i].calls += 1;
+            calls[i].failed += usize::from(out.failed);
+        }
+    }
     for out in outputs {
         let label = out
             .subjects
@@ -1172,6 +1365,8 @@ fn assemble(
         details,
         notes: notes.iter().map(|n| clean_text(n, 200)).collect(),
         input_signature: None,
+        duration_ms: None,
+        tool_calls: calls,
     }
 }
 
@@ -1253,13 +1448,21 @@ fn normalise(m: &AnalyzerManifest, out: &RawOutput, parsed: Parsed) -> (Vec<Find
 /// Make a path inside the staged copy relative to the subject.
 fn unstage(file: &str) -> String {
     let file = file.strip_prefix("file://").unwrap_or(file);
-    match file.find("holdmap-analyzer-") {
-        Some(i) => match file[i..].find("/subject/") {
-            Some(j) => file[i + j + "/subject/".len()..].to_string(),
-            None => file.to_string(),
-        },
-        None => file.to_string(),
+    let Some(i) = file.find("holdmap-analyzer-") else {
+        return file.to_string();
+    };
+    let rest = &file[i..];
+    if let Some(j) = rest.find("/subject/") {
+        return rest[j + "/subject/".len()..].to_string();
     }
+    // MCP runs stage each subject under subjects/<n>/.
+    if let Some(j) = rest.find("/subjects/") {
+        let after = &rest[j + "/subjects/".len()..];
+        if let Some(k) = after.find('/') {
+            return after[k + 1..].to_string();
+        }
+    }
+    file.to_string()
 }
 
 fn now_ms() -> u64 {
@@ -1277,6 +1480,10 @@ mod tests {
         assert_eq!(
             unstage("file:///tmp/holdmap-analyzer-ab12/subject/scripts/x.sh"),
             "scripts/x.sh"
+        );
+        assert_eq!(
+            unstage("/tmp/holdmap-analyzer-ab12/subjects/3/SKILL.md"),
+            "SKILL.md"
         );
         assert_eq!(unstage("SKILL.md"), "SKILL.md");
     }

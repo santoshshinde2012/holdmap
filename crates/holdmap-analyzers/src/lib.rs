@@ -15,7 +15,11 @@ pub mod input;
 #[cfg(target_os = "linux")]
 pub mod landlock;
 pub mod manifest;
+#[cfg(feature = "mcp-http")]
+pub mod mcp_http;
+pub mod mcp_map;
 pub mod mcp_runner;
+pub mod mcp_tools;
 pub mod needs;
 pub mod osv;
 pub mod parse;

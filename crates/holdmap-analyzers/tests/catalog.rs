@@ -84,6 +84,7 @@ fn service(key: &Key, store: Arc<MemoryStore>, fetched: SignedCatalog) -> Analyz
         reviews: store.clone(),
         secrets: store.clone(),
         catalog: store.clone(),
+        tools: store.clone(),
         manifests: store,
     };
     AnalyzerService::with_parts(

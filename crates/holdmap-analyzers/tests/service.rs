@@ -84,6 +84,7 @@ impl AnalyzerRunner for Shared<FakeCli> {
             .subjects
             .iter()
             .map(|s| RawOutput {
+                tool: None,
                 subjects: vec![s.subject.clone()],
                 exit_code: Some(0),
                 bytes: bytes.clone(),
@@ -574,6 +575,7 @@ fn the_preview_shows_the_real_folders_and_a_cleared_environment() {
 fn sarif(fixture: &str) -> holdmap_analyzers::parse::Parsed {
     let manifest = catalog::bundled().remove(0);
     let raw = RawOutput {
+        tool: None,
         subjects: vec![],
         exit_code: Some(0),
         bytes: fixture.as_bytes().to_vec(),
@@ -785,6 +787,7 @@ fn a_run_gets_its_stored_keys_and_notes_missing_ones() {
                 .subjects
                 .iter()
                 .map(|s| RawOutput {
+                    tool: None,
                     subjects: vec![s.subject.clone()],
                     exit_code: Some(0),
                     bytes: REPORT.as_bytes().to_vec(),

@@ -95,13 +95,15 @@ jobs:
       # and anchors, orphaned screenshots and file-naming conventions.
       - name: Test
         run: cargo test -p holdmap-core -p holdmap -p holdmap-mcp -p holdmap-activity -p holdmap-analyzers --locked --no-fail-fast
-      # A real MCP server process (the python3 fixture in the analyzers tests), started and
-      # stopped by the production connector inside the platform sandbox.
-      - name: MCP analyzer against a real local fixture server
+      # A real MCP server (the python3 fixture in the analyzers tests) with several tools:
+      # over stdio, started and stopped by the production connector inside the platform
+      # sandbox (listing, mapping, pinning, a rug pull); and over Streamable HTTP on loopback
+      # (JSON and SSE replies, a bearer token).
+      - name: MCP analyzers against a real local fixture server
         if: runner.os != 'Windows'
         env:
           HOLDMAP_MCP_FIXTURE: "1"
-        run: cargo test -p holdmap-analyzers --locked --test mcp_analyzers a_real_local_mcp_server -- --nocapture
+        run: cargo test -p holdmap-analyzers --locked --test mcp_analyzers real_server:: -- --nocapture
       - name: Smoke test the CLI against the real OS
         shell: bash
         run: |
