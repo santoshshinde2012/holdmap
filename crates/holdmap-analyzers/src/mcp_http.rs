@@ -1,9 +1,9 @@
 //! Streamable HTTP for MCP analyzers: rmcp's client transport (sessions, protocol-version
 //! header, JSON or SSE replies) on top of holdmap's existing `ureq` HTTPS client, so no
 //! second HTTP and TLS stack is linked. Each message is one POST; replies are read whole,
-//! capped and parsed. No redirects are followed, server text is never kept, and the bearer
-//! token goes only to the approved URL. The optional standalone GET stream isn't opened:
-//! analyzers only need replies to their own requests.
+//! capped and parsed. No redirects or environment proxies are followed, server text is never
+//! kept, and the bearer token goes only to the approved URL. The optional standalone GET
+//! stream isn't opened: analyzers only need replies to their own requests.
 
 use crate::secrets::Secret;
 use bytes::Bytes;
@@ -41,6 +41,9 @@ impl UreqClient {
         let agent: ureq::Agent = ureq::Agent::config_builder()
             .http_status_as_error(false)
             .max_redirects(0)
+            // Connect to the endpoint itself: an HTTP(S)_PROXY from the environment would
+            // otherwise receive what holdmap sends to a local server.
+            .proxy(None)
             .timeout_global(Some(timeout))
             .user_agent(concat!("holdmap/", env!("CARGO_PKG_VERSION")))
             .build()
@@ -241,5 +244,18 @@ impl StreamableHttpClient for UreqClient {
         _custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<BoxStream<'static, Result<Sse, SseError>>, StreamableHttpError<Self::Error>> {
         Err(StreamableHttpError::ServerDoesNotSupportSse)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_client_follows_no_redirects_or_environment_proxies() {
+        let client = UreqClient::new(Duration::from_secs(5), 1024);
+        let config = client.agent.config();
+        assert!(config.proxy().is_none());
+        assert_eq!(config.max_redirects(), 0);
     }
 }

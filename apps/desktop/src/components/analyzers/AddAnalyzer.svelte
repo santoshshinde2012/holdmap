@@ -113,11 +113,11 @@
       {#if servers === null}<p class="meta">Reading your agents' configuration…</p>
       {:else if !servers.length}<p class="meta">No configured MCP servers were found.</p>
       {:else}
-        <ul class="servers" role="radiogroup" aria-label="Configured MCP servers">
-          {#each servers as s (s.id + s.agent)}
-            <li><label><input type="radio" name="server" checked={picked === s.id} disabled={!s.draft} onchange={() => pick(s)} /><span class="nm">{s.name}</span><span class="meta">{s.agent} · {s.transport}{s.draft ? "" : " · can't be added"}</span></label>{#if s.note}<p class="meta note">{s.note}</p>{/if}</li>
+        <div class="servers" role="radiogroup" aria-label="Configured MCP servers">
+          {#each servers as s, i (s.id + s.agent)}
+            <div><label><input type="radio" name="server" checked={picked === s.id} disabled={!s.draft} aria-describedby={s.note ? `server-note-${i}` : undefined} onchange={() => pick(s)} /><span class="nm">{s.name}</span><span class="meta">{s.agent} · {s.transport}{s.draft ? "" : " · can't be added"}</span></label>{#if s.note}<p class="meta note" id={`server-note-${i}`}>{s.note}</p>{/if}</div>
           {/each}
-        </ul>
+        </div>
         {#if server?.draft}<Callout tone="warn" size="sm">Warning: {server.name} is also {server.agent}'s server. As an analyzer holdmap starts a separate copy for each run you start; anything it does when it starts (signing in, syncing) happens again.</Callout>{/if}
       {/if}
     {:else}
@@ -140,7 +140,7 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--sp-2); }
   input, textarea { font: inherit; font-size: var(--fs-caption); padding: 4px 8px; border: 1px solid var(--input-border, var(--border)); border-radius: var(--r-md); background: var(--input-bg, var(--surface)); color: var(--text); }
   textarea { font-family: var(--mono); resize: vertical; padding: var(--sp-2); }
-  .servers { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .servers { display: grid; gap: 4px; }
   .servers label { display: flex; align-items: center; gap: 6px; }
   .nm { color: var(--text); font-size: var(--fs-body-sm); }
   .note { padding-left: 22px; }

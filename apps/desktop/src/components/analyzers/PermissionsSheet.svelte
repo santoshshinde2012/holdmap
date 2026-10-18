@@ -23,7 +23,7 @@
 <section class="sheet" aria-labelledby="sheet-title">
   <header>
     <h3 id="sheet-title">{changed ? "Review again:" : "Turn on"} {a.name}?</h3>
-    <p class="by">{a.publisher} · {a.license} · <a href={a.homepage} target="_blank" rel="noreferrer">{a.homepage.replace(/^https:\/\//, "")}</a></p>
+    <p class="by">{a.publisher} · {a.license} · {#if a.homepage}<a href={a.homepage} target="_blank" rel="noreferrer">{a.homepage.replace(/^https:\/\//, "")}</a>{:else}homepage unknown{/if}</p>
     <p>{a.summary}</p>
   </header>
   {#if changed}
