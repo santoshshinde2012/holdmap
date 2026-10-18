@@ -88,10 +88,20 @@ analyzer: off, with the same permissions sheet, sandbox and pin as any other.
 | [Trivy](https://github.com/aquasecurity/trivy) secret scan (Aqua Security) | `aquasecurity.trivy-secrets` | Hard-coded credentials: cloud keys, tokens, private keys. Telemetry and version checks are off. | None |
 | [Bandit](https://github.com/PyCQA/bandit) (PyCQA) | `pycqa.bandit` | Risky Python in a skill's scripts: `shell=True`, `eval`, unsafe deserialization, weak crypto. | None |
 
-Each preset ignores config files a skill could ship to hide its own findings (`.bandit`,
-`osv-scanner.toml`). Rules-only scanners miss things an LLM review might catch; treat no
-findings as "nothing matched", not "safe". Presets ship with holdmap but are not part of the
-signed catalog.
+The list shows whether each tool is **Installed** (found on your `PATH` or a usual install
+folder) and the install command for those that aren't. Rules-only scanners miss things an LLM
+review might catch; treat no findings as "nothing matched", not "safe". Presets ship with
+holdmap but are not part of the signed catalog.
+
+### Settings files a skill ships
+
+A skill could ship a scanner's own settings to switch checks off or hide its findings. Every
+analyzer, presets and your own, runs on a copy that leaves these files out, at any depth and in
+any letter case: `.bandit`, `osv-scanner.toml`, `.trivyignore`, `.trivyignore.yaml`,
+`trivy.yaml`, `trivy-secret.yaml`, `.gitleaks.toml`, `.gitleaksignore`, `.semgrepignore`,
+`.secrets.baseline`, `.snyk` and `.skillspector-baseline.yaml`. The run notes how many were left
+out. The Bandit and OSV-Scanner presets also point their settings option at an empty file, so
+nothing else is read either.
 
 ## Your own analyzers
 
@@ -106,7 +116,10 @@ to reach it:
   `holdmap analyzers servers`). holdmap warns that it's the same program your agent uses.
 - **Manifest**: paste a TOML manifest, or run `holdmap analyzers add scanner.toml`. A
   command-line manifest can list `exit_no_findings` codes: with no report written, that exit
-  means "nothing to check" rather than a failure.
+  means "nothing to check" rather than a failure. Its arguments can use `{subject.dir}` (the
+  private copy), `{output}` (the report file) and `{empty.file}` (an empty file holdmap creates
+  for the run: use it instead of `/dev/null`, which doesn't exist on Windows, for options such as
+  `--config`).
 
 The browser demo does all of this with sample tools, and installs and starts nothing.
 
@@ -130,7 +143,10 @@ arguments for one real skill and checks them against the schema
 
 ### Reading the output
 
-SARIF and holdmap JSON are recognised on their own. For other JSON, say where the findings are,
+SARIF and holdmap JSON are recognised on their own. From SARIF, holdmap takes the rule's
+short description as the title (or a readable form of its name), and its help as the fix,
+turned into plain text. Help that only repeats the title and the match is dropped. The result
+message is never read, because scanners often quote the matched code or secret there. For other JSON, say where the findings are,
 in JSONPath style: `--items '$.issues[*]' --rule-id code --severity level --title msg --file file`,
 or `--auto-output` to take the suggestion from the tool's output schema. `structuredContent` is
 read first. Anything else is kept only as a short excerpt, never as findings.

@@ -3,7 +3,7 @@
 //! read at most the declared amount of output.
 
 use crate::input::{AnalyzerInput, InputSubject};
-use crate::manifest::{AnalyzerManifest, OUTPUT, SUBJECT_DIR};
+use crate::manifest::{AnalyzerManifest, EMPTY_FILE, OUTPUT, SUBJECT_DIR};
 use crate::runner::{
     AnalyzerRunner, CancelFlag, Containment, RawOutput, RunContext, RunError, Sandbox, CANCELLED,
 };
@@ -87,22 +87,35 @@ impl CliRunner {
                 return out;
             }
         };
-        let staged = work.path().join("subject");
+        let staged = work.path().join(STAGED_SUBJECT);
         let home = work.path().join("home");
         let report = work.path().join("report.out");
         match stage(dir, &staged, self.limits) {
-            Ok(Staged {
-                truncated: true, ..
-            }) => out.notes.push(
-                "The folder is larger than the staging limit; only part of it was analysed.".into(),
-            ),
-            Ok(_) => {}
+            Ok(st) => {
+                if st.truncated {
+                    out.notes.push(
+                        "The folder is larger than the staging limit; only part of it was analysed."
+                            .into(),
+                    );
+                }
+                if st.settings_left_out > 0 {
+                    out.notes.push(settings_note(st.settings_left_out));
+                }
+            }
             Err(_) => {
                 out.notes.push("The folder could not be read.".into());
                 return out;
             }
         }
         let _ = fs::create_dir_all(&home);
+        let empty = work.path().join("empty");
+        if manifest.runner.args.iter().any(|a| a.contains(EMPTY_FILE))
+            && fs::write(&empty, b"").is_err()
+        {
+            out.notes
+                .push("Could not create a private staging folder.".into());
+            return out;
+        }
         let args: Vec<String> = manifest
             .runner
             .args
@@ -110,6 +123,7 @@ impl CliRunner {
             .map(|a| {
                 a.replace(SUBJECT_DIR, &staged.to_string_lossy())
                     .replace(OUTPUT, &report.to_string_lossy())
+                    .replace(EMPTY_FILE, &empty.to_string_lossy())
             })
             .collect();
         let mut cmd = self.sandbox.command(
@@ -247,6 +261,11 @@ pub(crate) fn finish_env(
     }
 }
 
+/// The staged copy's folder inside a CLI run's private folder, which is also the working
+/// directory. A tool that prints paths relative to its working directory (Cisco Skill Scanner)
+/// gives `holdmap-subject/…`; the name is unusual so that prefix can be removed safely.
+pub const STAGED_SUBJECT: &str = "holdmap-subject";
+
 /// What staging copied.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Staged {
@@ -256,10 +275,45 @@ pub struct Staged {
     pub bytes: u64,
     /// Whether a limit stopped the copy.
     pub truncated: bool,
+    /// Scanner settings files left out (see [`TOOL_SETTINGS`]).
+    pub settings_left_out: usize,
+}
+
+/// Settings and ignore files that scanners read from the folder they scan. A skill could ship
+/// one to switch checks off or hide its own findings, so staging leaves them out for every
+/// analyzer, not just the presets. Matched by file name at any depth, ignoring ASCII case
+/// (macOS and Windows file systems do).
+pub const TOOL_SETTINGS: &[&str] = &[
+    ".bandit",                     // Bandit
+    "osv-scanner.toml",            // OSV-Scanner
+    ".trivyignore",                // Trivy
+    ".trivyignore.yaml",           // Trivy
+    "trivy.yaml",                  // Trivy
+    "trivy-secret.yaml",           // Trivy secret rules
+    ".gitleaks.toml",              // Gitleaks
+    ".gitleaksignore",             // Gitleaks
+    ".semgrepignore",              // Semgrep
+    ".secrets.baseline",           // detect-secrets
+    ".snyk",                       // Snyk
+    ".skillspector-baseline.yaml", // SkillSpector (applied only on request, left out anyway)
+];
+
+/// The note shown when staging left settings files out.
+pub fn settings_note(count: usize) -> String {
+    format!(
+        "Left out {count} scanner settings file{} the folder ships (such as .bandit or \
+         osv-scanner.toml), so it can't change how it is checked.",
+        if count == 1 { "" } else { "s" }
+    )
+}
+
+fn is_tool_settings(name: &std::ffi::OsStr) -> bool {
+    name.to_str()
+        .is_some_and(|n| TOOL_SETTINGS.iter().any(|t| t.eq_ignore_ascii_case(n)))
 }
 
 /// Copy regular files under `from` into `to`. Symlinks, devices and `.git` are skipped, so a
-/// link inside a skill can't pull in files outside it.
+/// link inside a skill can't pull in files outside it, and so are [`TOOL_SETTINGS`] files.
 pub fn stage(from: &Path, to: &Path, limits: StagingLimits) -> io::Result<Staged> {
     if !fs::symlink_metadata(from)?.is_dir() {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "not a folder"));
@@ -278,6 +332,10 @@ pub fn stage(from: &Path, to: &Path, limits: StagingLimits) -> io::Result<Staged
                     stack.push((entry.path(), dst.join(&name)));
                 }
             } else if meta.is_file() {
+                if is_tool_settings(&name) {
+                    staged.settings_left_out += 1;
+                    continue;
+                }
                 if staged.files + 1 > limits.max_files
                     || staged.bytes + meta.len() > limits.max_bytes
                 {
@@ -657,6 +715,51 @@ mod tests {
         assert_eq!(
             out[0].notes,
             vec!["The analyzer exited with code 2.".to_string()]
+        );
+    }
+
+    /// Every analyzer, not just the presets, gets a copy without the settings files a skill could
+    /// ship to hide findings, and `{empty.file}` is a real empty file (a portable /dev/null).
+    #[test]
+    fn runs_leave_out_tool_settings_and_get_an_empty_file() {
+        let root = tempfile::tempdir().unwrap();
+        let skill = skill(root.path());
+        fs::write(skill.join(".bandit"), "[bandit]\nskips = B602\n").unwrap();
+        fs::write(skill.join("scripts/OSV-Scanner.toml"), "[[IgnoredVulns]]\n").unwrap();
+        fs::write(skill.join("requirements.txt"), "requests==2.19.0\n").unwrap();
+        let m =
+            AnalyzerManifest::parse(include_str!("../presets/google.osv-scanner.toml")).unwrap();
+        // $6 is {empty.file}, $10 is {output}, $11 is {subject.dir}.
+        let bin = script(
+            root.path(),
+            r#"[ -f "$6" ] && [ ! -s "$6" ] || exit 9
+[ -e "${11}/.bandit" ] && exit 8
+[ -e "${11}/scripts/OSV-Scanner.toml" ] && exit 7
+[ -f "${11}/requirements.txt" ] || exit 6
+echo '{"version":"2.1.0","runs":[]}' > "${10}""#,
+        );
+        let out = CliRunner::new(Box::new(BasicSandbox))
+            .run(
+                &m,
+                &input(&skill),
+                &RunContext {
+                    binary: Some(bin),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .remove(0);
+        assert!(!out.failed, "{:?} {:?}", out.exit_code, out.notes);
+        assert!(
+            out.notes
+                .iter()
+                .any(|n| n.starts_with("Left out 2 scanner settings files")),
+            "{:?}",
+            out.notes
+        );
+        assert!(
+            skill.join(".bandit").exists(),
+            "the original folder is untouched"
         );
     }
 

@@ -37,8 +37,8 @@ async function openMode(label: string) {
 describe("adding your own analyzer", () => {
   it("opens on presets and adds one by id, off until approved", async () => {
     api.analyzerPresets.mockResolvedValue([
-      { id: "pycqa.bandit", name: "Bandit", publisher: "PyCQA", summary: "Risky Python.", homepage: "https://github.com/PyCQA/bandit", license: "Apache-2.0", install: "uv tool install bandit", network: [], added: false },
-      { id: "google.osv-scanner", name: "OSV-Scanner", publisher: "Google", summary: "Vulnerable deps.", homepage: "https://github.com/google/osv-scanner", license: "Apache-2.0", install: null, network: ["api.osv.dev"], added: true },
+      { id: "pycqa.bandit", name: "Bandit", publisher: "PyCQA", summary: "Risky Python.", homepage: "https://github.com/PyCQA/bandit", license: "Apache-2.0", install: "uv tool install bandit", network: [], added: false, installed: false },
+      { id: "google.osv-scanner", name: "OSV-Scanner", publisher: "Google", summary: "Vulnerable deps.", homepage: "https://github.com/google/osv-scanner", license: "Apache-2.0", install: "go install osv", network: ["api.osv.dev"], added: true, installed: true },
     ]);
     api.addAnalyzerPreset.mockResolvedValue({ id: "pycqa.bandit", kind: "cli" });
     const onadded = vi.fn();
@@ -48,6 +48,11 @@ describe("adding your own analyzer", () => {
     expect(screen.getByText(/no network/)).toBeTruthy();
     expect(screen.getByText(/contacts api\.osv\.dev/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add OSV-Scanner" })).toBeNull();
+    // Installed or not, with the install command only where it's still needed.
+    expect(screen.getByText("Not installed")).toBeTruthy();
+    expect(screen.getByText("Installed")).toBeTruthy();
+    expect(screen.getByText("uv tool install bandit")).toBeTruthy();
+    expect(screen.queryByText("go install osv")).toBeNull();
     await fireEvent.click(screen.getByRole("button", { name: "Add Bandit" }));
     expect(api.addAnalyzerPreset).toHaveBeenCalledWith("pycqa.bandit");
     await vi.waitFor(() => expect(onadded).toHaveBeenCalledWith("pycqa.bandit"));

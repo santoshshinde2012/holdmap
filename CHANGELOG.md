@@ -19,8 +19,13 @@ by [release-please](https://github.com/googleapis/release-please) from
   `holdmap analyzers` and `holdmap insights` (`--format sarif`).
 - Analyzer presets: one click (or `holdmap analyzers add --preset ID`) adds a manifest for Cisco
   Skill Scanner, Google OSV-Scanner, Trivy's secret scan or Bandit. They run locally with no LLM
-  or key, ignore config files a skill could use to hide findings, and stay off until approved.
-  Command-line manifests can declare `exit_no_findings` codes for "nothing to check".
+  or key and stay off until approved; the list shows which tools are installed.
+  Command-line manifests can declare `exit_no_findings` codes for "nothing to check" and use
+  `{empty.file}`, a portable stand-in for `/dev/null`.
+- Every analyzer runs on a copy without scanner settings files a skill could ship to hide its
+  findings (`.bandit`, `osv-scanner.toml`, `.trivyignore`, `.gitleaksignore`, `.semgrepignore`,
+  `.secrets.baseline` and others). SARIF fixes are plain text, and help that only repeats the
+  match is dropped.
 - OS sandboxes for analyzer runs:
   - Linux: bubblewrap, or Landlock when bubblewrap isn't installed.
   - macOS: Seatbelt (best effort).

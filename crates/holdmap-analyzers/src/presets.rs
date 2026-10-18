@@ -35,6 +35,8 @@ pub struct PresetView {
     pub network: Vec<String>,
     /// Whether the user already added it.
     pub added: bool,
+    /// Whether its program was found (on PATH or a usual install folder).
+    pub installed: bool,
 }
 
 /// Every preset manifest, parsed with the same rules as a manifest the user adds.
@@ -63,12 +65,16 @@ pub fn source(id: &str) -> Result<&'static str, ManifestError> {
         })
 }
 
-/// The views, marking those whose id is in `added`.
-pub fn views(added: impl Fn(&str) -> bool) -> Vec<PresetView> {
+/// The views, marking those `added` reports as registered and `installed` finds.
+pub fn views(
+    added: impl Fn(&str) -> bool,
+    installed: impl Fn(&AnalyzerManifest) -> bool,
+) -> Vec<PresetView> {
     manifests()
         .into_iter()
         .map(|(m, _)| PresetView {
             added: added(&m.id),
+            installed: installed(&m),
             network: m.permissions.network.clone(),
             id: m.id,
             name: m.name,
@@ -102,6 +108,11 @@ mod tests {
             assert_eq!(m.output.format, OutputFormat::Sarif, "{}", m.id);
             assert!(m.homepage.starts_with("https://github.com/"), "{}", m.id);
             assert!(m.install.is_some(), "{}", m.id);
+            assert!(
+                !m.runner.args.iter().any(|a| a.contains("/dev/null")),
+                "{}: use {{empty.file}}, which works on Windows too",
+                m.id
+            );
             assert_eq!(
                 m.uses_network(),
                 !m.permissions.sends.is_empty(),
@@ -123,8 +134,8 @@ mod tests {
                 .args
                 .join(" ")
         };
-        assert!(args("pycqa.bandit").contains("--ini /dev/null"));
-        assert!(args("google.osv-scanner").contains("--config /dev/null"));
+        assert!(args("pycqa.bandit").contains("--ini {empty.file}"));
+        assert!(args("google.osv-scanner").contains("--config {empty.file}"));
         assert!(args("google.osv-scanner").contains("--no-resolve"));
         let trivy = args("aquasecurity.trivy-secrets");
         assert!(trivy.contains("--disable-telemetry") && trivy.contains("--skip-version-check"));

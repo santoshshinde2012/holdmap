@@ -626,7 +626,10 @@ impl AnalyzerService {
     /// The quick-select presets, marking those already added.
     pub fn presets(&self) -> Vec<crate::presets::PresetView> {
         let catalog = self.catalog();
-        crate::presets::views(|id| catalog.iter().any(|m| m.id == id))
+        crate::presets::views(
+            |id| catalog.iter().any(|m| m.id == id),
+            |m| self.probe.installed(m),
+        )
     }
 
     /// Register a preset as the user's own analyzer. Like any added manifest it stays off
@@ -1467,12 +1470,25 @@ fn normalise(m: &AnalyzerManifest, out: &RawOutput, parsed: Parsed) -> (Vec<Find
 /// Make a path inside the staged copy relative to the subject.
 fn unstage(file: &str) -> String {
     let file = file.strip_prefix("file://").unwrap_or(file);
+    let staged = crate::cli_runner::STAGED_SUBJECT;
+    // Relative to a CLI run's working directory, which holds the staged copy.
+    if let Some(rest) = file
+        .strip_prefix("./")
+        .unwrap_or(file)
+        .strip_prefix(staged)
+        .and_then(|r| r.strip_prefix(['/', '\\']))
+    {
+        return rest.to_string();
+    }
     let Some(i) = file.find("holdmap-analyzer-") else {
         return file.to_string();
     };
     let rest = &file[i..];
-    if let Some(j) = rest.find("/subject/") {
-        return rest[j + "/subject/".len()..].to_string();
+    for folder in [staged, "subject"] {
+        let marker = format!("/{folder}/");
+        if let Some(j) = rest.find(&marker) {
+            return rest[j + marker.len()..].to_string();
+        }
     }
     // MCP runs stage each subject under subjects/<n>/.
     if let Some(j) = rest.find("/subjects/") {
@@ -1505,5 +1521,14 @@ mod tests {
             "SKILL.md"
         );
         assert_eq!(unstage("SKILL.md"), "SKILL.md");
+        assert_eq!(
+            unstage("/tmp/holdmap-analyzer-ab12/holdmap-subject/scripts/x.sh"),
+            "scripts/x.sh"
+        );
+        // Relative to the run's working directory (Cisco Skill Scanner).
+        assert_eq!(unstage("holdmap-subject/SKILL.md"), "SKILL.md");
+        assert_eq!(unstage("./holdmap-subject/a/b.py"), "a/b.py");
+        // A skill's own folder named "subject" is left alone.
+        assert_eq!(unstage("subject/notes.md"), "subject/notes.md");
     }
 }

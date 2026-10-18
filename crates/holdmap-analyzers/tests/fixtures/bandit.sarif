@@ -1,0 +1,134 @@
+{
+ "runs": [
+  {
+   "tool": {
+    "driver": {
+     "name": "Bandit",
+     "organization": "PyCQA",
+     "rules": [
+      {
+       "id": "B105",
+       "name": "hardcoded_password_string",
+       "properties": {
+        "tags": [
+         "security",
+         "external/cwe/cwe-259"
+        ],
+        "precision": "medium"
+       },
+       "helpUri": "https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html"
+      },
+      {
+       "id": "B404",
+       "name": "blacklist",
+       "properties": {
+        "tags": [
+         "security",
+         "external/cwe/cwe-78"
+        ],
+        "precision": "high"
+       },
+       "helpUri": "https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess"
+      },
+      {
+       "id": "B602",
+       "name": "subprocess_popen_with_shell_equals_true",
+       "properties": {
+        "tags": [
+         "security",
+         "external/cwe/cwe-78"
+        ],
+        "precision": "high"
+       },
+       "helpUri": "https://bandit.readthedocs.io/en/1.9.4/plugins/b602_subprocess_popen_with_shell_equals_true.html"
+      }
+     ],
+     "version": "1.9.4",
+     "semanticVersion": "1.9.4"
+    }
+   },
+   "results": [
+    {
+     "message": {
+      "text": "message text is never read: SECRET-IN-MESSAGE"
+     },
+     "level": "note",
+     "locations": [
+      {
+       "physicalLocation": {
+        "region": {
+         "endColumn": 51,
+         "endLine": 1,
+         "startColumn": 9,
+         "startLine": 1
+        },
+        "artifactLocation": {
+         "uri": "scripts/config.py"
+        }
+       }
+      }
+     ],
+     "properties": {
+      "issue_confidence": "MEDIUM",
+      "issue_severity": "LOW"
+     },
+     "ruleId": "B105"
+    },
+    {
+     "message": {
+      "text": "message text is never read: SECRET-IN-MESSAGE"
+     },
+     "level": "note",
+     "locations": [
+      {
+       "physicalLocation": {
+        "region": {
+         "endColumn": 18,
+         "endLine": 1,
+         "startColumn": 1,
+         "startLine": 1
+        },
+        "artifactLocation": {
+         "uri": "scripts/fetch.py"
+        }
+       }
+      }
+     ],
+     "properties": {
+      "issue_confidence": "HIGH",
+      "issue_severity": "LOW"
+     },
+     "ruleId": "B404"
+    },
+    {
+     "message": {
+      "text": "message text is never read: SECRET-IN-MESSAGE"
+     },
+     "level": "error",
+     "locations": [
+      {
+       "physicalLocation": {
+        "region": {
+         "endColumn": 35,
+         "endLine": 3,
+         "startColumn": 5,
+         "startLine": 3
+        },
+        "artifactLocation": {
+         "uri": "scripts/fetch.py"
+        }
+       }
+      }
+     ],
+     "properties": {
+      "issue_confidence": "HIGH",
+      "issue_severity": "HIGH"
+     },
+     "ruleId": "B602"
+    }
+   ]
+  }
+ ],
+ "version": "2.1.0",
+ "$schema": "https://json.schemastore.org/sarif-2.1.0.json"
+}
