@@ -61,12 +61,13 @@ export interface AnalyzerView {
   /** Declared API keys and whether one is stored (names only; values never leave the keychain). */
   secrets?: { name: string; stored: boolean }[];
 }
-export type SandboxLevel = "basic" | "macos_seatbelt" | "linux_bubblewrap" | "windows_job";
+export type SandboxLevel = "basic" | "macos_seatbelt" | "linux_bubblewrap" | "linux_landlock" | "windows_job";
 
 export const SANDBOX_LABEL: Record<SandboxLevel, string> = {
   basic: "Basic (no OS sandbox)",
   macos_seatbelt: "macOS sandbox (best effort)",
   linux_bubblewrap: "Linux bubblewrap",
+  linux_landlock: "Linux Landlock",
   windows_job: "Windows Job Object",
 };
 

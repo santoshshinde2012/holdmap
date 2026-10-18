@@ -40,11 +40,23 @@ pub fn best_available() -> Box<dyn Sandbox> {
     if let Some(s) = Bubblewrap::detect() {
         return Box::new(s);
     }
+    #[cfg(target_os = "linux")]
+    if let Some(s) = crate::landlock::Landlock::detect() {
+        return Box::new(s);
+    }
     if cfg!(windows) {
         Box::new(JobSandbox)
     } else {
         Box::new(BasicSandbox)
     }
+}
+
+/// Whether Landlock can deny TCP on this kernel (always false off Linux).
+pub fn landlock_blocks_tcp() -> bool {
+    #[cfg(target_os = "linux")]
+    return crate::landlock::blocks_tcp();
+    #[cfg(not(target_os = "linux"))]
+    false
 }
 
 fn real_home() -> Option<PathBuf> {
@@ -530,7 +542,7 @@ mod tests {
         #[cfg(target_os = "linux")]
         assert!(matches!(
             level,
-            SandboxLevel::Basic | SandboxLevel::LinuxBubblewrap
+            SandboxLevel::Basic | SandboxLevel::LinuxBubblewrap | SandboxLevel::LinuxLandlock
         ));
         #[cfg(target_os = "macos")]
         assert!(matches!(

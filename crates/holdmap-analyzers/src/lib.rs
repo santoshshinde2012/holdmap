@@ -12,6 +12,8 @@ pub mod cli_runner;
 pub mod consent;
 pub mod finding;
 pub mod input;
+#[cfg(target_os = "linux")]
+pub mod landlock;
 pub mod manifest;
 pub mod mcp_runner;
 pub mod needs;

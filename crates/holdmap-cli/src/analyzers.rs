@@ -630,6 +630,7 @@ fn sandbox_label(level: SandboxLevel) -> &'static str {
         SandboxLevel::Basic => "basic (no OS sandbox)",
         SandboxLevel::MacosSeatbelt => "macOS sandbox-exec (best effort)",
         SandboxLevel::LinuxBubblewrap => "Linux bubblewrap",
+        SandboxLevel::LinuxLandlock => "Linux Landlock",
         SandboxLevel::WindowsJob => "Windows Job Object",
     }
 }

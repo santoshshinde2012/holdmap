@@ -72,6 +72,10 @@ pub enum SandboxLevel {
     /// [`SandboxLevel::Basic`] inside bubblewrap: read-only system, writes only in its private
     /// folder, common credential folders hidden, own process tree, no network unless declared.
     LinuxBubblewrap,
+    /// [`SandboxLevel::Basic`] under Linux Landlock (when bubblewrap is missing): writes only
+    /// in its private folder, common credential paths unreadable, TCP denied unless declared
+    /// (Linux 6.7+). Other reads and non-TCP traffic are allowed.
+    LinuxLandlock,
     /// [`SandboxLevel::Basic`] inside a Windows Job Object: the whole process tree is stopped
     /// at the time limit and memory is capped. It does not limit files or network.
     WindowsJob,
@@ -91,6 +95,15 @@ impl SandboxLevel {
             Self::Basic => format!("Basic: {BASIC} The operating system does not block it from reading other files or using the network."),
             Self::MacosSeatbelt => format!("macOS sandbox (best effort): {BASIC} It can only write inside its private folder and can't read common credential folders (.ssh, .aws, Keychains and similar). {net} It can still read your other files. Apple has deprecated the sandbox-exec tool this uses."),
             Self::LinuxBubblewrap => format!("Linux sandbox (bubblewrap): {BASIC} The system is read-only, it can only write inside its private folder, common credential folders (.ssh, .aws, .gnupg and similar) are hidden and it gets its own process tree. {net} It can still read your other files."),
+            Self::LinuxLandlock => {
+                let tcp = cfg!(target_os = "linux") && crate::sandbox::landlock_blocks_tcp();
+                let net = match (network, tcp) {
+                    (true, _) => "It may use the network, as its permissions say.",
+                    (false, true) => "The operating system blocks its TCP connections; other network traffic (such as UDP) isn't blocked.",
+                    (false, false) => "This Linux version can't block its network access.",
+                };
+                format!("Linux sandbox (Landlock): {BASIC} It can only write inside its private folder and can't read common credential folders (.ssh, .aws, .gnupg and similar) or signal other programs. {net} It can still read your other files.")
+            }
             Self::WindowsJob => format!("Windows Job Object: {BASIC} Its whole process tree is stopped at the time limit and its memory is capped. Windows does not block it from reading other files or using the network."),
         }
     }
