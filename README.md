@@ -201,7 +201,7 @@ loaded or used. See [MCP and skills](site/src/content/docs/agents.md#mcp-and-ski
 OSV.dev lookup for pinned npm/PyPI packages, or a local CLI or MCP scanner you register with
 `holdmap analyzers add`. Every analyzer is off until you approve it.
 `holdmap analyzers show ID` prints exactly what it gets: the folders or package versions, the
-command, the network hosts, the cleared environment and the sandbox (bubblewrap, Seatbelt or a
+command, the network hosts, the cleared environment and the sandbox (bubblewrap or Landlock, Seatbelt or a
 Job Object where available). Approval is pinned to that manifest and program; any change asks
 again. Keys go in the OS keychain. Catalog updates are signed and applied only after you review
 the diff. holdmap never starts MCP servers on its own; an MCP analyzer's server runs only for a

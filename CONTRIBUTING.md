@@ -422,6 +422,17 @@ succeeded and only the website dispatch failed, run
 published stable tag and run only from `main`; annotated tags are resolved before checkout,
 and the checked-out commit is verified before dependencies or selected release source code execute.
 
+## Analyzer tests that need real programs
+
+Two analyzer tests are opt-in.
+
+- `HOLDMAP_MCP_FIXTURE=1 cargo test -p holdmap-analyzers --test mcp_analyzers` starts the
+  test-only MCP server `tests/fixtures/mcp_scan_server.py` (needs python3) through the real
+  connector and sandbox. CI runs it on Linux and macOS.
+- `HOLDMAP_REAL_SKILLSPECTOR=1 cargo test -p holdmap-analyzers --test real_skillspector` runs
+  an installed SkillSpector against a sample skill, under the default sandbox and under
+  Landlock.
+
 ## Analyzer catalog signing
 
 `crates/holdmap-analyzers/catalog/analyzers.json` is signed with minisign. holdmap embeds

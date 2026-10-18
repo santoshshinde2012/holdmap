@@ -17,9 +17,13 @@ by [release-please](https://github.com/googleapis/release-please) from
   manifest and program, and any change asks again. Runs get a copy of each folder, a cleared
   environment and a time limit. Only short findings are kept. Use **Settings → Analyzers**,
   `holdmap analyzers` and `holdmap insights` (`--format sarif`).
-- OS sandboxes for analyzer runs: bubblewrap on Linux, Seatbelt on macOS (best effort) and a
-  Job Object on Windows, falling back to Basic. The sheet states what each one does and doesn't
-  block.
+- OS sandboxes for analyzer runs:
+  - Linux: bubblewrap, or Landlock when bubblewrap isn't installed.
+  - macOS: Seatbelt (best effort).
+  - Windows: a Job Object.
+  - Anywhere else: Basic.
+
+  The permissions sheet says what each one does and doesn't block.
 - Analyzers that use the network run when items change only if you allow it
   (`holdmap analyzers auto ID on`, or **Also run when items change**).
 - Analyzer API keys are stored in the OS keychain and passed only to the analyzer that declares
@@ -28,7 +32,7 @@ by [release-please](https://github.com/googleapis/release-please) from
   as a diff, then accept or reject them (`holdmap analyzers catalog`).
 - Add your own analyzers with `holdmap analyzers add|remove`. holdmap starts an MCP analyzer's
   local server only for a run you start, and stops it afterwards. It warns you if the server
-  looks like one an agent is configured to use.
+  looks like one an agent is configured to use. The browser demo simulates adding one.
 - **Agents → Insights** collects every agent's findings in one place. Analyzers also cover
   configured agents that aren't running.
 - `holdmap needs` and the MCP tool `list_needs` show the same **Needs you** list as the desktop

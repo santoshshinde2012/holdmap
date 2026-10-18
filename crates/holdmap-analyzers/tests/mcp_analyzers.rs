@@ -7,7 +7,7 @@ use holdmap_analyzers::finding::RunStatus;
 use holdmap_analyzers::mcp_runner::{McpConnector, McpRunner, McpSession, ToolOutput};
 use holdmap_analyzers::probe::{BinaryInfo, BinaryProbe};
 use holdmap_analyzers::runner::{
-    AnalyzerRunner, BasicSandbox, RawOutput, RunContext, RunError, Sandbox, SandboxLevel,
+    AnalyzerRunner, BasicSandbox, RawOutput, RunContext, RunError, Sandbox,
 };
 use holdmap_analyzers::secrets::Secret;
 use holdmap_analyzers::service::{ManifestSource, ServiceError};
@@ -595,7 +595,7 @@ fn fixture_run(sandbox: Box<dyn Sandbox>) {
         .unwrap();
     assert_eq!(hit.location.line, Some(2));
     assert!(!rules.contains(&"env-leak"), "env not cleared: {rules:?}");
-    if level != SandboxLevel::Basic {
+    if level != holdmap_analyzers::SandboxLevel::Basic {
         assert!(
             !rules.contains(&"wrote-outside"),
             "{level:?} let it write outside its folder"

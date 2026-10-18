@@ -47,13 +47,17 @@ names the one in use.
 
 | System | Sandbox | It adds |
 | --- | --- | --- |
-| Linux | bubblewrap if installed, otherwise Basic | Read-only system, writes only to its own folder, credential folders hidden, no network unless declared |
+| Linux | bubblewrap, if installed | Read-only system, writes only to its own folder, credential folders hidden, no network unless declared |
+| Linux without bubblewrap | Landlock (Linux 5.13+) | Writes only to its own folder, credential folders unreadable, can't signal other programs. On Linux 6.7+, no TCP unless declared (UDP isn't blocked) |
 | macOS | Seatbelt (`sandbox-exec`, best effort) | Writes only to its own folder, credential folders unreadable, no network unless declared |
 | Windows | Job Object | Whole process tree stopped at the time limit, memory capped |
 | Other | Basic | Nothing more |
 
 No sandbox stops an analyzer from reading your other files. Windows doesn't block file reads or
-network access. Only approve analyzers you trust.
+network access. holdmap doesn't use a Windows AppContainer. Rust can't start a process in one
+without unstable APIs. An analyzer in an AppContainer also couldn't read its own program files
+unless holdmap changed the permissions on them, and holdmap never changes files it doesn't own.
+Only approve analyzers you trust.
 
 ## API keys
 
@@ -72,6 +76,7 @@ to approve it again.
 ## Your own analyzers
 
 Paste a manifest under **Add your own analyzer…**, or run `holdmap analyzers add scanner.toml`.
+The browser demo checks it and lists it the same way, but installs and starts nothing.
 holdmap validates it, and it stays off until you approve it like any other analyzer. To remove
 it, along with its approval, results and keys, run `holdmap analyzers remove ID`.
 
