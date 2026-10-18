@@ -67,6 +67,10 @@ Every capture in `docs/screenshots/`, all with sample data, never a real screen.
 | View | Dark | Light |
 |---|---|---|
 | agents | [dark](screenshots/cli-agents-dark.png) | — |
+| analyzer overview | [dark](screenshots/desktop-analyzer-overview-dark.png) | [light](screenshots/desktop-analyzer-overview-light.png) |
+| analyzer pipeline | [dark](screenshots/desktop-analyzer-pipeline-dark.png) | [light](screenshots/desktop-analyzer-pipeline-light.png) |
+| analyzer pipeline narrow | — | [light](screenshots/desktop-analyzer-pipeline-narrow-light.png) |
+| analyzer tools | [dark](screenshots/desktop-analyzer-tools-dark.png) | [light](screenshots/desktop-analyzer-tools-light.png) |
 | explain | [dark](screenshots/cli-explain-dark.png) | — |
 
 ## Website

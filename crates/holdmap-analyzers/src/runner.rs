@@ -22,7 +22,38 @@ pub struct RawOutput {
     pub notes: Vec<String>,
     /// Whether the run is unusable.
     pub failed: bool,
+    /// The MCP tool that produced it (MCP analyzers).
+    pub tool: Option<String>,
 }
+
+/// The note on work a user stopped.
+pub const CANCELLED: &str = "Stopped: the run was cancelled.";
+
+/// Set to stop a run early; checked between calls and while waiting for one.
+#[derive(Debug, Clone, Default)]
+pub struct CancelFlag(std::sync::Arc<std::sync::atomic::AtomicBool>);
+
+impl CancelFlag {
+    /// Ask the run to stop.
+    pub fn cancel(&self) {
+        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    /// Whether it was asked to stop.
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    /// Clear it before a new run.
+    pub fn reset(&self) {
+        self.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+impl PartialEq for CancelFlag {
+    fn eq(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+impl Eq for CancelFlag {}
 
 /// Facts about the run shared by every subject.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -31,6 +62,10 @@ pub struct RunContext {
     pub binary: Option<PathBuf>,
     /// API keys from the keychain for this analyzer only, set after the environment is cleared.
     pub secrets: Vec<(String, crate::secrets::Secret)>,
+    /// The approved MCP tool-list pin; a different listing stops the run.
+    pub tools_sha256: Option<String>,
+    /// Stops the run early.
+    pub cancel: CancelFlag,
 }
 
 /// Why a run could not start.
@@ -45,6 +80,18 @@ pub enum RunError {
     /// Nothing to analyse.
     #[error("nothing to analyse: {0}")]
     NoSubjects(String),
+    /// The MCP server's tools differ from the approved ones; nothing was called.
+    #[error("its MCP tools changed since you approved it ({}). Review and approve it again.", .0.changes.join("; "))]
+    ToolsChanged(Box<ToolsChanged>),
+}
+
+/// What an MCP server listed instead of the approved tools.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolsChanged {
+    /// The new listing.
+    pub snapshot: crate::mcp_tools::ToolSnapshot,
+    /// What changed, in plain words (filled in by the service).
+    pub changes: Vec<String>,
 }
 
 /// Runs one kind of analyzer.

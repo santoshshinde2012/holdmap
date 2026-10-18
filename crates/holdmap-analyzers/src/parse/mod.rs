@@ -1,10 +1,12 @@
 //! Output parsers: turn one [`RawOutput`] into findings using only the fields the manifest
 //! names. Producer text that isn't mapped (snippets, evidence, explanations) is never read.
 
+mod auto;
 mod holdmap_json;
 mod json_map;
 mod sarif;
 
+pub use auto::AutoParser;
 pub use holdmap_json::HoldmapJsonParser;
 pub use json_map::JsonMapParser;
 pub use sarif::SarifParser;
@@ -84,6 +86,7 @@ pub trait OutputParser: Send + Sync {
 /// The parser for a manifest's declared format (`None` for formats a built-in parses itself).
 pub fn for_format(format: OutputFormat) -> Option<Box<dyn OutputParser>> {
     match format {
+        OutputFormat::Auto => Some(Box::new(AutoParser)),
         OutputFormat::JsonMap => Some(Box::new(JsonMapParser)),
         OutputFormat::Sarif => Some(Box::new(SarifParser)),
         OutputFormat::HoldmapJson => Some(Box::new(HoldmapJsonParser)),
@@ -95,9 +98,13 @@ pub(crate) fn json(bytes: &[u8]) -> Result<Value, ParseError> {
     serde_json::from_slice(bytes).map_err(|_| ParseError::NotJson)
 }
 
-/// Read a dotted path (`a.b.0.c`, with an optional leading `$.`).
+/// Read a dotted path (`a.b.0.c` or `$.a.b[0].c`).
 pub(crate) fn at<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
-    let path = path.strip_prefix("$.").unwrap_or(path);
+    let path = path
+        .strip_prefix('$')
+        .unwrap_or(path)
+        .replace('[', ".")
+        .replace(']', "");
     path.split('.')
         .filter(|p| !p.is_empty())
         .try_fold(value, |v, key| match v {
@@ -135,6 +142,7 @@ mod tests {
     fn dotted_paths_read_objects_and_arrays() {
         let v = json!({"a": {"b": [{"c": 3}]}});
         assert_eq!(at(&v, "$.a.b.0.c"), Some(&json!(3)));
+        assert_eq!(at(&v, "$.a.b[0].c"), Some(&json!(3)));
         assert_eq!(at(&v, "a.x"), None);
         assert_eq!(text(at(&v, "a.b.0.c")).as_deref(), Some("3"));
         assert_eq!(text(Some(&json!({}))), None);

@@ -30,6 +30,12 @@ pub struct Grant {
     /// the network. Off until the user turns it on; reset by every new approval.
     #[serde(default)]
     pub background_network: bool,
+    /// MCP analyzers: the pin of the tool list the user reviewed.
+    #[serde(default)]
+    pub tools_sha256: Option<String>,
+    /// MCP analyzers on another machine: the user explicitly allowed sending metadata there.
+    #[serde(default)]
+    pub remote_opt_in: bool,
 }
 
 /// A user's decision about one finding.
@@ -60,6 +66,33 @@ pub trait UserManifestStore: Send + Sync {
     fn add_user_manifest(&self, id: &str, text: &str) -> io::Result<()>;
     /// Remove it; `true` when one existed.
     fn remove_user_manifest(&self, id: &str) -> io::Result<bool>;
+}
+
+/// The latest tool listing of each MCP analyzer (what the user reviews before approving, and
+/// what a changed server listed instead).
+pub trait ToolPinStore: Send + Sync {
+    /// The listing in `slot` for `analyzer`.
+    fn tool_snapshot(
+        &self,
+        analyzer: &str,
+        slot: ToolSlot,
+    ) -> Option<crate::mcp_tools::ToolSnapshot>;
+    /// Replace (or with `None`, forget) it.
+    fn set_tool_snapshot(
+        &self,
+        analyzer: &str,
+        slot: ToolSlot,
+        snapshot: Option<&crate::mcp_tools::ToolSnapshot>,
+    ) -> io::Result<()>;
+}
+
+/// Which tool listing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ToolSlot {
+    /// The most recent listing.
+    Latest,
+    /// The listing the user approved.
+    Approved,
 }
 
 /// Approvals.
@@ -117,6 +150,35 @@ pub struct MemoryStore {
     secrets: Mutex<BTreeMap<String, Vec<String>>>,
     catalogs: Mutex<BTreeMap<u8, crate::catalog::SignedCatalog>>,
     manifests: Mutex<BTreeMap<String, String>>,
+    tools: Mutex<BTreeMap<(String, ToolSlot), crate::mcp_tools::ToolSnapshot>>,
+}
+
+impl ToolPinStore for MemoryStore {
+    fn tool_snapshot(
+        &self,
+        analyzer: &str,
+        slot: ToolSlot,
+    ) -> Option<crate::mcp_tools::ToolSnapshot> {
+        self.tools
+            .lock()
+            .unwrap()
+            .get(&(analyzer.to_string(), slot))
+            .cloned()
+    }
+    fn set_tool_snapshot(
+        &self,
+        analyzer: &str,
+        slot: ToolSlot,
+        snapshot: Option<&crate::mcp_tools::ToolSnapshot>,
+    ) -> io::Result<()> {
+        let mut all = self.tools.lock().unwrap();
+        let key = (analyzer.to_string(), slot);
+        match snapshot {
+            Some(s) => all.insert(key, s.clone()),
+            None => all.remove(&key),
+        };
+        Ok(())
+    }
 }
 
 impl UserManifestStore for MemoryStore {

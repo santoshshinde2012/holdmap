@@ -70,6 +70,7 @@ test("the browser demo simulates adding, approving and removing your own MCP ana
   const settings = app.getByRole("dialog", { name: "Settings", exact: true });
   await settings.getByRole("tab", { name: "Analyzers", exact: true }).click();
   await settings.getByRole("button", { name: "Add your own analyzer…" }).click();
+  await settings.getByRole("radio", { name: "Manifest", exact: true }).click();
   const box = settings.getByLabel("Analyzer manifest (TOML)");
   await box.fill('schema = 1\nid = "nvidia.skillspector"\n');
   await settings.getByRole("button", { name: "Add analyzer", exact: true }).click();
@@ -96,4 +97,90 @@ test("the browser demo simulates adding, approving and removing your own MCP ana
   await expect(row).toContainText("Last run");
   await row.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(settings.getByRole("listitem").filter({ hasText: "Example MCP Scan" })).toHaveCount(0);
+});
+
+test("any MCP server is added from a command, its tools listed and mapped, approved, run and explained as a graph", async ({ app }) => {
+  await app.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = app.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.getByRole("tab", { name: "Analyzers", exact: true }).click();
+  await settings.getByRole("button", { name: "Add your own analyzer…" }).click();
+  await settings.getByLabel("Id", { exact: true }).fill("local.skill-lint");
+  await settings.getByLabel("Name", { exact: true }).fill("Skill lint (sample)");
+  await settings.getByLabel("Command", { exact: true }).fill("/usr/local/bin/skill-lint-mcp");
+  await settings.getByLabel("Arguments (one per line)").fill("--stdio");
+  await settings.getByRole("button", { name: "Add and choose tools…" }).click();
+  await settings.getByRole("button", { name: "List tools", exact: true }).click();
+  const tools = settings.getByRole("region", { name: "Tools of Skill lint (sample)" });
+  await expect(tools).toContainText("mentions credential or configuration files");
+  await expect(tools.getByRole("checkbox", { name: "helper" })).not.toBeChecked();
+  await expect(tools.getByLabel("Example arguments for list_files")).toContainText("scripts/run.sh");
+  await tools.getByRole("button", { name: "Use the mapping suggested by list_files" }).click();
+  await tools.getByRole("button", { name: "Save tools", exact: true }).click();
+
+  const row = settings.getByRole("listitem").filter({ hasText: "Skill lint (sample)" });
+  await expect(row).toContainText("tools: list_files, scan_skill, word_count");
+  await row.getByRole("button", { name: "Review and turn on…" }).click();
+  const sheet = settings.getByRole("region", { name: /Turn on Skill lint/ });
+  await expect(sheet).toContainText("Exact tool calls");
+  await expect(sheet).toContainText("pins them");
+  await settings.getByRole("button", { name: "Turn on Skill lint (sample)", exact: true }).click();
+  await expect(row).toContainText("On");
+  await row.getByRole("button", { name: "Run now", exact: true }).click();
+  await expect(row).toContainText("Last run");
+
+  // Settings is narrow, so the pipeline is the stacked list; the arrow keys still move between steps.
+  await row.getByRole("button", { name: "How it works", exact: true }).click();
+  const graph = row.getByRole("group", { name: "How Skill lint (sample) works" });
+  const steps = graph.getByRole("list", { name: "How Skill lint (sample) works (list)" });
+  await expect(steps.locator("[data-graph-node]")).toHaveCount(9);
+  await expect(steps.locator('[data-graph-node="analyzer"]')).toContainText("3 tools");
+  await steps.locator('[data-graph-node="sources"]').focus();
+  await app.keyboard.press("ArrowRight");
+  await expect(steps.locator('[data-graph-node="projection"]')).toBeFocused();
+  await steps.locator('[data-graph-node="findings"]').click();
+  await expect(steps).toContainText("Took");
+  await expect(steps).toContainText("1.8 s");
+});
+
+test("Insights explains which analyzer covers which agent, as a graph", async ({ app }) => {
+  await openAgents(app);
+  await app.getByRole("radio", { name: "Insights", exact: true }).click();
+  const tab = app.getByRole("region", { name: "Insights workspace" });
+  await tab.getByRole("radio", { name: "How it works" }).click();
+  const overview = tab.getByRole("group", { name: "Analyzers and the agents they cover" });
+  await expect(overview.locator(".svelte-flow")).toBeVisible();
+  await expect(overview.locator('[data-graph-node="analyzer:nvidia.skillspector"]')).toContainText("SkillSpector");
+  await expect(overview.locator('[data-graph-node="agent:claude-code"]')).toBeVisible();
+  await overview.locator('[data-graph-node="analyzer:nvidia.skillspector"]').click();
+  await expect(overview.getByRole("complementary", { name: "Details: SkillSpector" })).toContainText("Last run");
+  await overview.getByRole("button", { name: "How SkillSpector works" }).click();
+  const pipeline = tab.getByRole("group", { name: "How SkillSpector works" });
+  await expect(pipeline.locator(".svelte-flow")).toBeVisible();
+  await expect(pipeline.locator('[data-graph-node="parser"]')).toContainText("JSON field mapping");
+  await pipeline.locator('[data-graph-node="sandbox"]').focus();
+  await app.keyboard.press("Enter");
+  await expect(pipeline.getByRole("complementary", { name: "Details: Sandbox" })).toContainText("api.osv.dev");
+  await app.keyboard.press("Escape");
+  await expect(pipeline.getByRole("complementary")).toHaveCount(0);
+});
+
+test("narrow windows get the analyzer graphs as a stacked list", async ({ app }) => {
+  await app.setViewportSize({ width: 560, height: 900 });
+  await openAgents(app);
+  await app.getByRole("radio", { name: "Insights", exact: true }).click();
+  const tab = app.getByRole("region", { name: "Insights workspace" });
+  await tab.getByRole("radio", { name: "How it works" }).click();
+  const list = tab.getByRole("list", { name: "Analyzers and the agents they cover (list)" });
+  await expect(list).toBeVisible();
+  await list.getByRole("button", { name: /SkillSpector/ }).click();
+  await tab.getByRole("button", { name: "How SkillSpector works" }).click();
+  const steps = tab.getByRole("list", { name: "How SkillSpector works (list)" });
+  await steps.getByRole("button", { name: /^Findings/ }).click();
+  await expect(steps).toContainText("Took");
+  // Widening switches to the graph in place, without the app remounting.
+  await app.setViewportSize({ width: 1280, height: 900 });
+  await expect(tab.getByRole("group", { name: "How SkillSpector works" }).locator(".svelte-flow")).toBeVisible();
+  await app.setViewportSize({ width: 560, height: 900 });
+  await expect(tab.getByRole("list", { name: "How SkillSpector works (list)" })).toBeVisible();
+  await expect(app.getByText("holdmap recovered from a UI glitch")).toHaveCount(0);
 });

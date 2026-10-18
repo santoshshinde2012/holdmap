@@ -54,28 +54,26 @@ for (const key of ["src/lib/app-snapshot.ts", "src/lib/screen-snapshot-native.ts
   }
   visitSnapshotEntry(key);
 }
-// Opening Agents Overview must not load the capability explorer. Count only its
-// unique static chunks here; dependencies shared with other entry points retain
-// their existing initial, snapshot or optional-feature budget.
-const capabilityKey = "src/components/agents/AgentCapabilitiesView.svelte";
-const agentsKey = "src/components/AgentsView.svelte";
-const capabilityEntry = demoManifest[capabilityKey];
-if (!capabilityEntry?.isDynamicEntry || !demoManifest[agentsKey]) {
-  throw new Error("Capability workspace and Agents must have separate manifest entries.");
+// Opening Agents Overview must not load the capability explorer, and opening Settings or
+// Insights must not load the analyzer graphs. Count only each feature's unique static chunks;
+// dependencies shared with other entry points retain their initial, snapshot or
+// optional-feature budget.
+function onDemandFeature(key, name) {
+  const entry = demoManifest[key];
+  if (!entry?.isDynamicEntry) throw new Error(`${name} must be a separate, dynamically imported manifest entry.`);
+  const file = join(dist, "demo", entry.file);
+  const otherEntryFiles = staticDemoFiles(Object.entries(demoManifest)
+    .filter(([other, e]) => other !== key && (e.isEntry || e.isDynamicEntry))
+    .map(([other]) => other));
+  if (initialDemoFiles.has(file) || otherEntryFiles.has(file)) {
+    throw new Error(`${name} must remain deferred and must not be a static dependency of another entry point.`);
+  }
+  return new Set([...staticDemoFiles([key])].filter((f) => !otherEntryFiles.has(f)));
 }
-const capabilityFile = join(dist, "demo", capabilityEntry.file);
-const agentsStaticFiles = staticDemoFiles([agentsKey]);
-if (initialDemoFiles.has(capabilityFile) || agentsStaticFiles.has(capabilityFile)) {
-  throw new Error("Capability workspace must remain deferred until explicit inspection.");
-}
-const otherEntryFiles = staticDemoFiles(Object.entries(demoManifest)
-  .filter(([key, entry]) => key !== capabilityKey && (entry.isEntry || entry.isDynamicEntry))
-  .map(([key]) => key));
-const capabilityDemoFiles = new Set([...staticDemoFiles([capabilityKey])].filter((file) => !otherEntryFiles.has(file)));
-if (!capabilityDemoFiles.has(capabilityFile)) {
-  throw new Error("Capability workspace must not be a static dependency of another entry point.");
-}
-const deferredDemoJs = demoJs.filter((file) => !initialDemoFiles.has(file) && !snapshotDemoFiles.has(file) && !capabilityDemoFiles.has(file));
+if (!demoManifest["src/components/AgentsView.svelte"]) throw new Error("Agents must have its own manifest entry.");
+const capabilityDemoFiles = onDemandFeature("src/components/agents/AgentCapabilitiesView.svelte", "Capability workspace");
+const analyzerGraphFiles = onDemandFeature("src/components/analyzers/graph/analyzer-graphs.ts", "Analyzer graphs");
+const deferredDemoJs = demoJs.filter((file) => !initialDemoFiles.has(file) && !snapshotDemoFiles.has(file) && !capabilityDemoFiles.has(file) && !analyzerGraphFiles.has(file));
 const videos = files(join(dist, "hero")).filter((f) => /\.(mp4|webm)$/.test(f));
 
 const rows = [
@@ -87,6 +85,7 @@ const rows = [
   ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 220 * 1024],
   ["Snapshot PNG JS (on capture)", [...snapshotDemoFiles].reduce((n, f) => n + gz(f), 0), 40 * 1024],
   ["Capability workspace JS (on inspection)", [...capabilityDemoFiles].reduce((n, f) => n + gz(f), 0), 20 * 1024],
+  ["Analyzer graphs JS (on How it works)", [...analyzerGraphFiles].reduce((n, f) => n + gz(f), 0), 12 * 1024],
   ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 160 * 1024],
   ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];

@@ -33,6 +33,17 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Add your own analyzers with `holdmap analyzers add|remove`. holdmap starts an MCP analyzer's
   local server only for a run you start, and stops it afterwards. It warns you if the server
   looks like one an agent is configured to use. The browser demo simulates adding one.
+- **Any MCP server as an analyzer.** Add one from a command, a local Streamable HTTP URL or a
+  server your agents already use. holdmap lists its tools, suggests an argument mapping from each
+  input schema, previews the exact calls and maps custom JSON output. It pins the tool list and
+  asks again when it changes, and flags descriptions that look like tool poisoning. Remote
+  servers need an explicit opt-in and get metadata only (`holdmap analyzers add --mcp`,
+  `servers`, `tools`, `map`).
+- Analyzer graphs: each analyzer's pipeline from inventory to findings, and which analyzer
+  covers which agent, with last-run details, keyboard navigation and a narrow list layout.
+- Stop an analyzer run (`notifications/cancelled` for MCP, the process group for CLI).
+- The website's home page has an Analyzers section (pipeline, coverage and any-MCP screenshots in
+  light and dark, consent and pinning explained), and the README lists analyzers as a feature.
 - **Agents → Insights** collects every agent's findings in one place. Analyzers also cover
   configured agents that aren't running.
 - `holdmap needs` and the MCP tool `list_needs` show the same **Needs you** list as the desktop

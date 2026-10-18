@@ -5,7 +5,7 @@ import type { ActionPlan, AgentsReport, AppInfo, Config, DesktopHelpDestination,
 import { version as pkgVersion } from "../../package.json";
 import type { ShutdownPreview } from "./power";
 import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
-import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, FindingState, Insights, Preview } from "./analyzers";
+import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, ConfiguredServer, FindingState, Insights, McpDraft, OutputMapping, Preview, ToolReport, ToolSpec } from "./analyzers";
 import { DemoAnalyzers } from "./analyzers-demo";
 import { attention, type AttentionItem } from "./home";
 import { MOCK_SNAPSHOT, mockAgents, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
@@ -497,10 +497,60 @@ export async function analyzerPreview(id: string): Promise<Preview> {
   return demoAnalyzers.preview(id, await agents(true));
 }
 
-export async function approveAnalyzer(id: string): Promise<AnalyzerView> {
-  if (isTauri) return call("analyzer_approve", { id });
+/** Approve what the sheet showed; a remote MCP server also needs `allowRemote`. */
+export async function approveAnalyzer(id: string, allowRemote = false): Promise<AnalyzerView> {
+  if (isTauri) return call("analyzer_approve", { id, allowRemote });
   if (liveReads()) liveWrites();
-  return demoAnalyzers.approve(id);
+  return demoAnalyzers.approve(id, allowRemote);
+}
+
+/** Stop the run in progress (the MCP call is cancelled; CLI analyzers are stopped). */
+export async function cancelAnalyzerRun(): Promise<void> {
+  if (isTauri) return call("analyzer_cancel");
+  demoAnalyzers.cancel();
+}
+
+/** Register any MCP server as an analyzer (simulated in the browser demo). It stays off. */
+export async function addMcpAnalyzer(draft: McpDraft): Promise<AnalyzerView> {
+  if (isTauri) return call("analyzer_add_mcp", { draft });
+  if (liveReads()) liveWrites();
+  return demoAnalyzers.addMcp(draft);
+}
+
+/** The agents' configured MCP servers that can become analyzers. Starts nothing. */
+export async function configuredMcpServers(): Promise<ConfiguredServer[]> {
+  if (isTauri) return call("analyzer_configured_servers");
+  if (liveReads()) return [];
+  return demoAnalyzers.configuredServers(await agents(true));
+}
+
+/** Start (or contact) the server once and list its tools; no tool is called. */
+export async function listAnalyzerTools(id: string): Promise<ToolReport> {
+  if (isTauri) return call("analyzer_list_tools", { id });
+  if (liveReads()) liveWrites();
+  await delay(400);
+  return demoAnalyzers.listTools(id);
+}
+
+/** The saved tool listing. Starts nothing. */
+export async function analyzerTools(id: string): Promise<ToolReport> {
+  if (isTauri) return call("analyzer_tools", { id });
+  if (liveReads()) liveWrites();
+  return demoAnalyzers.tools(id);
+}
+
+/** Save the chosen tools and their input mapping (approval is needed again). */
+export async function mapAnalyzerTools(id: string, tools: ToolSpec[]): Promise<AnalyzerView> {
+  if (isTauri) return call("analyzer_map_tools", { id, tools });
+  if (liveReads()) liveWrites();
+  return demoAnalyzers.mapTools(id, tools);
+}
+
+/** Save where findings sit in the tools' output (approval is needed again). */
+export async function mapAnalyzerOutput(id: string, output: OutputMapping): Promise<AnalyzerView> {
+  if (isTauri) return call("analyzer_map_output", { id, output });
+  if (liveReads()) liveWrites();
+  return demoAnalyzers.mapOutput(id, output);
 }
 
 export async function revokeAnalyzer(id: string): Promise<boolean> {

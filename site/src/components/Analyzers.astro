@@ -1,0 +1,115 @@
+---
+import { Picture } from "astro:assets";
+import type { ImageMetadata } from "astro";
+import Icon from "./Icon.astro";
+import { analyzersPublished, repoUrl, url, version } from "../lib/site";
+import pipelineDark from "../../../docs/screenshots/desktop-analyzer-pipeline-dark.png";
+import pipelineLight from "../../../docs/screenshots/desktop-analyzer-pipeline-light.png";
+import overviewDark from "../../../docs/screenshots/desktop-analyzer-overview-dark.png";
+import overviewLight from "../../../docs/screenshots/desktop-analyzer-overview-light.png";
+import toolsDark from "../../../docs/screenshots/desktop-analyzer-tools-dark.png";
+import toolsLight from "../../../docs/screenshots/desktop-analyzer-tools-light.png";
+
+// Sample-data captures from apps/desktop/scripts/capture-screenshots.mjs (1440×1000 at 2x).
+type Shot = { dark: ImageMetadata; light: ImageMetadata; alt: string };
+const views: { key: string; label: string; icon: string; shot: Shot }[] = [
+  { key: "pipeline", label: "How it works", icon: "Workflow", shot: { dark: pipelineDark, light: pipelineLight, alt: "SkillSpector's pipeline: inventory, the fields it gets, the sandbox, the analyzer, the parser, findings by severity, and where they show: Home, Needs you and Insights. The last run's details are open below." } },
+  { key: "coverage", label: "Coverage", icon: "Network", shot: { dark: overviewDark, light: overviewLight, alt: "Analyzers on the left linked to the agents they cover on the right, with open findings on each link." } },
+  { key: "mcp", label: "Any MCP server", icon: "Plug", shot: { dark: toolsDark, light: toolsLight, alt: "Choosing an MCP server's tools: each argument mapped to an inventory field with example arguments, and a tool flagged for hidden instructions and credential files." } },
+];
+const wide = "(max-width: 1180px) calc(100vw - 40px), 1100px";
+const demo = url("demo/");
+---
+<section id="analyzers" class="section" aria-labelledby="analyzers-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Analyzers</span>
+      <h2 class="h2" id="analyzers-title">Scan your agents' skills. <span class="soft">See exactly how.</span></h2>
+      <p class="lede">Run scanners you choose on your agents' skills and MCP packages: NVIDIA SkillSpector, a built-in OSV.dev lookup, or any MCP server. Every analyzer is drawn as a graph, from what it reads to where its findings show up.</p>
+      {!analyzersPublished && <p class="note"><Icon name="Info" size={16} /> On main, not in a published release yet. Downloads stay on <a href={`${repoUrl}/releases/tag/v${version}`}>v{version}</a>.</p>}
+    </div>
+
+    <div class="box card">
+      <div class="tabs" role="tablist" aria-label="Analyzer views" data-tabs>
+        {views.map((v, i) => (
+          <button type="button" role="tab" id={`analyzers-tab-${v.key}`} aria-controls={`analyzers-${v.key}`} aria-selected={i === 0 ? "true" : "false"} tabindex={i === 0 ? 0 : -1}>
+            <Icon name={v.icon} size={16} /> {v.label}
+          </button>
+        ))}
+      </div>
+      {views.map((v, i) => (
+        <div class="panel" role="tabpanel" id={`analyzers-${v.key}`} aria-labelledby={`analyzers-tab-${v.key}`} hidden={i !== 0}>
+          {(["dark", "light"] as const).map((t) => (
+            <Picture src={v.shot[t]} formats={["avif"]} fallbackFormat="webp" widths={[720, 1100, 2200]} sizes={wide} alt={v.shot.alt} loading="lazy" pictureAttributes={{ class: `only-${t}` }} />
+          ))}
+        </div>
+      ))}
+      <ul class="facts" role="list">
+        <li><strong>Pipeline.</strong> Inventory, fields sent, sandbox and hosts, tools, parser, findings and where they appear, with the last run's numbers.</li>
+        <li><strong>Coverage.</strong> Which analyzer looked at which agent and skill, and what it found.</li>
+        <li><strong>Any MCP server.</strong> Add a command, a local URL or one your agents use; pick its tools and map their inputs from each schema.</li>
+      </ul>
+    </div>
+
+    <div class="split">
+      <div class="card copy">
+        <Icon name="ShieldCheck" size={20} />
+        <h3>Nothing runs without your OK</h3>
+        <p>Each analyzer is off until you review a sheet built from your real inventory: the folders, the exact fields and tool calls, the network hosts and the sandbox.</p>
+        <ul class="ticks">
+          <li>A private copy of each folder, a <strong>cleared environment</strong> and a time limit</li>
+          <li>Your environment, tokens and secrets are <strong>never passed</strong>; keys live in the OS keychain</li>
+          <li>Your agents' MCP servers are <strong>never started or connected to</strong> on their own</li>
+          <li>Only a short title, location, fix and severity are kept, locally</li>
+        </ul>
+      </div>
+      <div class="card copy">
+        <Icon name="Fingerprint" size={20} />
+        <h3>Pinned, so a server can't change behind your back</h3>
+        <p>holdmap pins an MCP server's tool list and descriptions. If any tool changes, the next run stops before calling anything and asks you to review the difference. Descriptions that look like tool poisoning are flagged.</p>
+        <ul class="ticks">
+          <li>No elicitation, sampling or roots offered to servers</li>
+          <li>A server on another machine needs an explicit opt-in and gets <strong>names only</strong>, never paths or file contents</li>
+        </ul>
+        <p class="cmds"><code>holdmap analyzers add --mcp</code> · <code>tools</code> · <code>map</code> · <code>holdmap insights --format sarif</code></p>
+        <div class="links">
+          <a class="link-arrow" href={url("docs/analyzers/")}>Analyzers guide <Icon name="ArrowRight" size={16} /></a>
+          <a class="link-arrow" href={demo}>Try it in the live demo: Agents → Insights <Icon name="ArrowRight" size={16} /></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .note { display: inline-flex; align-items: center; gap: 8px; margin: 20px 0 0; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface-2); color: var(--text-2); font-size: var(--fs-ui); line-height: 20px; }
+  .note a { color: var(--text); }
+  .box { overflow: hidden; }
+  .tabs { display: flex; gap: 24px; padding: 0 32px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .tabs button { display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0; margin-bottom: -1px; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--muted); font-size: var(--fs-md); font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .tabs button:hover, .tabs button[aria-selected="true"] { color: var(--text); }
+  .tabs button[aria-selected="true"] { border-bottom-color: var(--text); }
+  .panel { background: var(--surface-2); line-height: 0; }
+  .panel[hidden] { display: none; }
+  .panel :global(img) { display: block; width: 100%; height: auto; aspect-ratio: 2880 / 2000; }
+  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin: 0; padding: 24px 32px; list-style: none; border-top: 1px solid var(--border); }
+  .facts li { color: var(--muted); font-size: var(--fs-ui); line-height: 22px; }
+  .facts strong { color: var(--text); font-weight: 600; }
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
+  .copy { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 28px; }
+  .copy > :global(svg) { color: var(--muted); }
+  h3 { margin: 20px 0 12px; font-size: var(--fs-lg); line-height: 28px; font-weight: 600; letter-spacing: -0.012em; }
+  .copy p { margin: 0 0 16px; font-size: var(--fs-md); line-height: 24px; color: var(--muted); }
+  .copy p strong, .ticks strong { color: var(--text); font-weight: 600; }
+  .ticks { margin: 0 0 16px; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .ticks li { position: relative; padding-left: 20px; color: var(--text-2); font-size: var(--fs-ui); line-height: 22px; }
+  .ticks li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .copy .cmds { font-size: var(--fs-ui); line-height: 28px; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: auto; }
+  @media (max-width: 900px) {
+    .split, .facts { grid-template-columns: minmax(0, 1fr); }
+    .facts { gap: 12px; padding: 20px; }
+    .tabs { padding: 0 20px; }
+    .copy { padding: 24px; }
+  }
+</style>

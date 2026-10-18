@@ -1,58 +1,98 @@
-//! Runs a user-registered local MCP analyzer: copy each skill into a private run folder,
-//! start the approved server over stdio (cleared environment, same sandbox as CLI analyzers)
-//! only for this run, call the declared tool once per skill, then stop the server.
+//! Runs a user-registered MCP analyzer. A stdio server is started from its approved command
+//! only for this run (cleared environment, same sandbox as CLI analyzers) and stopped after;
+//! an HTTP server is reached at its approved URL. Before any call holdmap lists the server's
+//! tools and compares them with the approved pin; any difference stops the run. Each chosen
+//! tool is then called once per skill with arguments built from the mapping, checked against
+//! the tool's input schema first. Calls have a time limit, can be cancelled, and their output
+//! is capped.
 //!
 //! The MCP client sits behind [`McpConnector`] so the runner is tested with an in-process
-//! fake; production uses [`RmcpConnector`] (feature `mcp-runner`). Server error text is never
-//! kept: notes are written by holdmap.
+//! fake; production uses [`RmcpConnector`] (feature `mcp-runner`, HTTP with `mcp-http`).
+//! Server error text is never kept: notes are written by holdmap.
 
 use crate::cli_runner::{finish_env, stage, StagingLimits};
+use crate::finding::Subject;
 use crate::input::AnalyzerInput;
-use crate::manifest::{AnalyzerManifest, SUBJECT_DIR};
-use crate::runner::{AnalyzerRunner, Containment, RawOutput, RunContext, RunError, Sandbox};
+use crate::manifest::{AnalyzerManifest, Transport};
+use crate::mcp_map::{self, Placeholder, SubjectData};
+use crate::mcp_tools::{ServerInfo, ToolInfo, ToolSnapshot};
+use crate::runner::{
+    AnalyzerRunner, CancelFlag, Containment, RawOutput, RunContext, RunError, Sandbox, ToolsChanged,
+};
+use crate::secrets::Secret;
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// What one tool call returned.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ToolOutput {
     /// Structured content as JSON, else the text blocks joined by newlines (capped).
     pub bytes: Vec<u8>,
+    /// Whether `bytes` is the tool's structured content.
+    pub structured: bool,
     /// The tool flagged its result as an error.
     pub is_error: bool,
     /// The result was larger than the output limit and was dropped.
     pub truncated: bool,
 }
 
-/// A running MCP server, for the length of one analyzer run.
+/// How to reach a server.
+pub enum McpEndpoint {
+    /// Start this prepared command (sandboxed, environment cleared) and speak over stdio.
+    Stdio(Command),
+    /// Connect to a Streamable HTTP endpoint.
+    Http {
+        /// The approved URL.
+        url: String,
+        /// Sent as `Authorization: Bearer` when set.
+        bearer: Option<Secret>,
+        /// Largest response body read.
+        cap: usize,
+    },
+}
+
+/// A connected MCP server, for the length of one run or listing.
 pub trait McpSession {
-    /// Tool names the server lists.
-    fn tools(&self) -> Vec<String>;
-    /// Call `tool` with `args`, waiting at most `timeout` and keeping at most `cap` bytes.
-    /// Errors are holdmap's own words, never server text.
+    /// Server identity from the handshake.
+    fn server(&self) -> Option<ServerInfo>;
+    /// Every tool the server lists (all pages).
+    fn tools(&self) -> Vec<ToolInfo>;
+    /// Call `tool` with `args`, waiting at most `timeout`, keeping at most `cap` bytes and
+    /// giving up when `cancel` is set (the server is told). Errors are holdmap's own words.
     fn call(
         &mut self,
         tool: &str,
         args: Map<String, Value>,
         timeout: Duration,
         cap: usize,
+        cancel: &CancelFlag,
     ) -> Result<ToolOutput, String>;
-    /// Stop the server and everything it started.
+    /// Disconnect, and stop the server and everything it started (stdio).
     fn close(self: Box<Self>);
 }
 
-/// Starts an MCP server from a prepared command.
+/// Connects to an MCP server.
 pub trait McpConnector: Send + Sync {
-    /// Start `cmd` (already sandboxed, environment cleared) and complete the handshake within
-    /// `timeout`. Errors are holdmap's own words.
+    /// Connect and complete the handshake and tool listing within `timeout`. Errors are
+    /// holdmap's own words.
     fn connect(
         &self,
-        cmd: Command,
+        endpoint: McpEndpoint,
         sandbox: &dyn Sandbox,
         timeout: Duration,
     ) -> Result<Box<dyn McpSession>, String>;
+}
+
+/// An analyzer runner that can also list an MCP server's tools.
+pub trait McpAnalyzerRunner: AnalyzerRunner {
+    /// Start or reach the server, list and pin its tools, and stop it. Nothing is called.
+    fn list_tools(
+        &self,
+        manifest: &AnalyzerManifest,
+        cx: &RunContext,
+    ) -> Result<ToolSnapshot, RunError>;
 }
 
 /// The MCP runner.
@@ -63,7 +103,7 @@ pub struct McpRunner {
 }
 
 impl McpRunner {
-    /// A runner starting servers through `connector`, contained by `sandbox`.
+    /// A runner reaching servers through `connector`, contained by `sandbox` (stdio).
     pub fn new(sandbox: Box<dyn Sandbox>, connector: Box<dyn McpConnector>) -> Self {
         Self {
             sandbox,
@@ -80,6 +120,76 @@ impl McpRunner {
         let connector: Box<dyn McpConnector> = Box::new(Unsupported);
         Self::new(sandbox, connector)
     }
+
+    fn connect(
+        &self,
+        manifest: &AnalyzerManifest,
+        cx: &RunContext,
+        work: &Path,
+        timeout: Duration,
+    ) -> Result<Box<dyn McpSession>, RunError> {
+        let cap = (manifest.runner.max_output_mb * 1024 * 1024) as usize;
+        let endpoint = match manifest.runner.transport {
+            Transport::Stdio => {
+                let binary = cx.binary.as_deref().ok_or_else(|| {
+                    RunError::Unavailable(format!("{} is not installed.", manifest.name))
+                })?;
+                let home = work.join("home");
+                let _ = std::fs::create_dir_all(&home);
+                let mut cmd = self.sandbox.command(
+                    binary,
+                    &manifest.runner.args,
+                    &Containment {
+                        work,
+                        home: &home,
+                        network: manifest.uses_network(),
+                    },
+                );
+                cmd.current_dir(work);
+                finish_env(&mut cmd, manifest, binary, &cx.secrets);
+                McpEndpoint::Stdio(cmd)
+            }
+            Transport::Http => McpEndpoint::Http {
+                url: manifest.runner.url.clone().unwrap_or_default(),
+                bearer: manifest.runner.auth_secret.as_ref().and_then(|name| {
+                    cx.secrets
+                        .iter()
+                        .find(|(n, _)| n == name)
+                        .map(|(_, v)| v.clone())
+                }),
+                cap,
+            },
+        };
+        self.connector
+            .connect(endpoint, self.sandbox.as_ref(), timeout)
+            .map_err(|why| {
+                RunError::Unavailable(format!("The MCP server could not be reached: {why}."))
+            })
+    }
+}
+
+/// The endpoint as pinned: the command line or URL (never secrets).
+pub fn endpoint_label(manifest: &AnalyzerManifest) -> String {
+    match manifest.runner.transport {
+        Transport::Stdio => std::iter::once(manifest.runner.command.clone().unwrap_or_default())
+            .chain(manifest.runner.args.iter().cloned())
+            .collect::<Vec<_>>()
+            .join(" "),
+        Transport::Http => manifest.runner.url.clone().unwrap_or_default(),
+    }
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
+}
+
+fn private_folder() -> Result<tempfile::TempDir, RunError> {
+    tempfile::Builder::new()
+        .prefix("holdmap-analyzer-")
+        .tempdir()
+        .map_err(|_| RunError::Unavailable("Could not create a private staging folder.".into()))
 }
 
 #[cfg(not(feature = "mcp-runner"))]
@@ -89,7 +199,7 @@ struct Unsupported;
 impl McpConnector for Unsupported {
     fn connect(
         &self,
-        _: Command,
+        _: McpEndpoint,
         _: &dyn Sandbox,
         _: Duration,
     ) -> Result<Box<dyn McpSession>, String> {
@@ -97,28 +207,34 @@ impl McpConnector for Unsupported {
     }
 }
 
-/// The tool arguments for one staged subject.
-pub fn tool_arguments(manifest: &AnalyzerManifest, staged: &Path) -> Map<String, Value> {
-    manifest
-        .runner
-        .tool_args
-        .iter()
-        .map(|(k, v)| {
-            (
-                k.clone(),
-                Value::String(v.replace(SUBJECT_DIR, &staged.to_string_lossy())),
-            )
-        })
-        .collect()
-}
-
-fn failed(subject: &crate::finding::Subject, note: &str) -> RawOutput {
+fn output(subject: &Subject, tool: Option<&str>, note: Option<&str>, failed: bool) -> RawOutput {
     RawOutput {
         subjects: vec![subject.clone()],
         exit_code: None,
         bytes: Vec::new(),
-        notes: vec![note.to_string()],
-        failed: true,
+        notes: note.map(|n| vec![n.to_string()]).unwrap_or_default(),
+        failed,
+        tool: tool.map(str::to_string),
+    }
+}
+
+impl McpAnalyzerRunner for McpRunner {
+    fn list_tools(
+        &self,
+        manifest: &AnalyzerManifest,
+        cx: &RunContext,
+    ) -> Result<ToolSnapshot, RunError> {
+        let work = private_folder()?;
+        let timeout = Duration::from_secs(manifest.runner.timeout_secs.min(60));
+        let session = self.connect(manifest, cx, work.path(), timeout)?;
+        let snapshot = ToolSnapshot::new(
+            &endpoint_label(manifest),
+            session.server(),
+            session.tools(),
+            now_ms(),
+        );
+        session.close();
+        Ok(snapshot)
     }
 }
 
@@ -129,62 +245,45 @@ impl AnalyzerRunner for McpRunner {
         input: &AnalyzerInput,
         cx: &RunContext,
     ) -> Result<Vec<RawOutput>, RunError> {
-        let binary = cx
-            .binary
-            .as_deref()
-            .ok_or_else(|| RunError::Unavailable(format!("{} is not installed.", manifest.name)))?;
         if input.subjects.is_empty() {
             return Err(RunError::NoSubjects("no skills were found".into()));
         }
-        let tool = manifest.runner.tool.as_deref().unwrap_or_default();
-        let work = tempfile::Builder::new()
-            .prefix("holdmap-analyzer-")
-            .tempdir()
-            .map_err(|_| {
-                RunError::Unavailable("Could not create a private staging folder.".into())
-            })?;
-        let home = work.path().join("home");
-        let _ = std::fs::create_dir_all(&home);
+        let Some(pin) = cx.tools_sha256.as_deref() else {
+            return Err(RunError::NotApproved(format!(
+                "{} has no approved tool list. List its tools and approve it first.",
+                manifest.name
+            )));
+        };
+        let tools = &manifest.runner.tools;
+        let needs: Vec<Placeholder> = tools
+            .iter()
+            .flat_map(|t| t.args.values().flat_map(mcp_map::used))
+            .collect();
+        let work = private_folder()?;
 
-        // Stage every subject first; the server only ever sees these copies.
-        let mut outputs: Vec<Option<RawOutput>> = Vec::new();
-        let mut staged: Vec<Option<PathBuf>> = Vec::new();
+        // Stage every subject first; a stdio server only ever sees these copies.
+        let mut staged: Vec<Result<PathBuf, &'static str>> = Vec::new();
+        let mut pre_notes: Vec<Option<&'static str>> = Vec::new();
         for (i, s) in input.subjects.iter().enumerate() {
             let Some(dir) = s.dir.as_deref() else {
-                outputs.push(Some(failed(&s.subject, "No folder to analyse.")));
-                staged.push(None);
+                staged.push(Err("No folder to analyse."));
+                pre_notes.push(None);
                 continue;
             };
             let to = work.path().join("subjects").join(i.to_string());
             match stage(dir, &to, self.limits) {
                 Ok(st) => {
-                    outputs.push(st.truncated.then(|| RawOutput {
-                        subjects: vec![s.subject.clone()],
-                        exit_code: None,
-                        bytes: Vec::new(),
-                        notes: vec!["The folder is larger than the staging limit; only part of it was analysed.".into()],
-                        failed: false,
-                    }));
-                    staged.push(Some(to));
+                    pre_notes.push(st.truncated.then_some(
+                        "The folder is larger than the staging limit; only part of it was analysed.",
+                    ));
+                    staged.push(Ok(to));
                 }
                 Err(_) => {
-                    outputs.push(Some(failed(&s.subject, "The folder could not be read.")));
-                    staged.push(None);
+                    staged.push(Err("The folder could not be read."));
+                    pre_notes.push(None);
                 }
             }
         }
-
-        let mut cmd = self.sandbox.command(
-            binary,
-            &manifest.runner.args,
-            &Containment {
-                work: work.path(),
-                home: &home,
-                network: manifest.uses_network(),
-            },
-        );
-        cmd.current_dir(work.path());
-        finish_env(&mut cmd, manifest, binary, &cx.secrets);
 
         let timeout = Duration::from_secs(manifest.runner.timeout_secs);
         let deadline = Instant::now() + timeout;
@@ -193,61 +292,107 @@ impl AnalyzerRunner for McpRunner {
             input
                 .subjects
                 .iter()
-                .map(|s| failed(&s.subject, note))
+                .map(|s| output(&s.subject, None, Some(note), true))
                 .collect()
         };
-        let mut session = match self.connector.connect(cmd, self.sandbox.as_ref(), timeout) {
+        let mut session = match self.connect(manifest, cx, work.path(), timeout) {
             Ok(s) => s,
-            Err(why) => {
-                return Ok(all_failed(&format!(
-                    "The MCP server could not be started: {why}."
-                )))
-            }
+            Err(RunError::Unavailable(why)) => return Ok(all_failed(&why)),
+            Err(other) => return Err(other),
         };
-        if !session.tools().iter().any(|t| t == tool) {
+        let snapshot = ToolSnapshot::new(
+            &endpoint_label(manifest),
+            session.server(),
+            session.tools(),
+            now_ms(),
+        );
+        if snapshot.sha256 != pin {
             session.close();
-            return Ok(all_failed(&format!(
-                "The MCP server doesn't offer the tool {tool:?}."
-            )));
+            return Err(RunError::ToolsChanged(Box::new(ToolsChanged {
+                snapshot,
+                changes: Vec::new(),
+            })));
         }
+
         let mut result = Vec::new();
-        for ((s, pre), dir) in input.subjects.iter().zip(outputs).zip(staged) {
-            let mut out = pre.unwrap_or_else(|| RawOutput {
-                subjects: vec![s.subject.clone()],
-                exit_code: None,
-                bytes: Vec::new(),
-                notes: Vec::new(),
-                failed: true,
-            });
-            let Some(dir) = dir else {
-                result.push(out);
-                continue;
+        'subjects: for ((s, dir), pre) in input.subjects.iter().zip(staged).zip(pre_notes) {
+            let dir = match dir {
+                Ok(d) => d,
+                Err(note) => {
+                    result.push(output(&s.subject, None, Some(note), true));
+                    continue;
+                }
             };
-            out.failed = true;
-            let left = deadline.saturating_duration_since(Instant::now());
-            if left.is_zero() {
-                out.notes.push(format!(
-                    "Stopped after the {}-second time limit.",
-                    manifest.runner.timeout_secs
-                ));
+            if let Some(note) = pre {
+                result.push(output(&s.subject, None, Some(note), false));
+            }
+            let data = SubjectData::read(&dir, &s.subject.name, &s.subject.agents, &needs);
+            for spec in tools {
+                let mut out = output(&s.subject, Some(&spec.name), None, true);
+                if cx.cancel.is_cancelled() {
+                    out.notes.push(crate::runner::CANCELLED.into());
+                    result.push(out);
+                    continue;
+                }
+                let Some(tool) = snapshot.tool(&spec.name) else {
+                    out.notes.push(format!(
+                        "The server no longer offers the tool {:?}.",
+                        spec.name
+                    ));
+                    result.push(out);
+                    continue;
+                };
+                let args = mcp_map::build(&spec.args, &data, &tool.input_schema);
+                let problems = mcp_map::check(&args, &tool.input_schema);
+                if !problems.is_empty() {
+                    out.notes.push(format!(
+                        "{}: the mapped arguments don't fit its inputs ({}).",
+                        spec.name,
+                        problems.join("; ")
+                    ));
+                    result.push(out);
+                    continue;
+                }
+                let left = deadline.saturating_duration_since(Instant::now());
+                if left.is_zero() {
+                    out.notes.push(format!(
+                        "Stopped after the {}-second time limit.",
+                        manifest.runner.timeout_secs
+                    ));
+                    result.push(out);
+                    continue 'subjects;
+                }
+                match session.call(&spec.name, args, left, cap, &cx.cancel) {
+                    Ok(t) if t.is_error => out
+                        .notes
+                        .push(format!("{}: the tool reported an error.", spec.name)),
+                    Ok(t) if t.truncated => out.notes.push(format!(
+                        "{}: the output was larger than the output limit and was not read.",
+                        spec.name
+                    )),
+                    Ok(t) if t.bytes.is_empty() => out
+                        .notes
+                        .push(format!("{}: the tool returned no report.", spec.name)),
+                    Ok(t) => {
+                        if let (true, Some(schema)) = (t.structured, tool.output_schema.as_ref()) {
+                            let fits = serde_json::from_slice::<Value>(&t.bytes)
+                                .ok()
+                                .and_then(|v| v.as_object().cloned())
+                                .is_some_and(|o| mcp_map::check(&o, schema).is_empty());
+                            if !fits {
+                                out.notes.push(format!(
+                                    "{}: its output doesn't match the output schema it declares.",
+                                    spec.name
+                                ));
+                            }
+                        }
+                        out.bytes = t.bytes;
+                        out.failed = false;
+                    }
+                    Err(why) => out.notes.push(format!("{}: {why}", spec.name)),
+                }
                 result.push(out);
-                continue;
             }
-            match session.call(tool, tool_arguments(manifest, &dir), left, cap) {
-                Ok(t) if t.is_error => out.notes.push("The tool reported an error.".into()),
-                Ok(t) if t.truncated => out
-                    .notes
-                    .push("The output was larger than the output limit and was not read.".into()),
-                Ok(t) if t.bytes.is_empty() => {
-                    out.notes.push("The tool returned no report.".into())
-                }
-                Ok(t) => {
-                    out.bytes = t.bytes;
-                    out.failed = false;
-                }
-                Err(why) => out.notes.push(why),
-            }
-            result.push(out);
         }
         session.close();
         Ok(result)
@@ -259,52 +404,79 @@ pub use rmcp_client::{RmcpConnector, RmcpSession};
 
 #[cfg(feature = "mcp-runner")]
 mod rmcp_client {
-    use super::{McpConnector, McpSession, ToolOutput};
-    use crate::runner::{ContainGuard, ProcessRef, Sandbox};
-    use rmcp::model::CallToolRequestParams;
-    use rmcp::service::RunningService;
+    use super::{McpConnector, McpEndpoint, McpSession, ToolOutput};
+    use crate::mcp_tools::{ServerInfo, ToolInfo};
+    use crate::runner::{CancelFlag, ContainGuard, ProcessRef, Sandbox};
+    use rmcp::model::{
+        CallToolRequest, CallToolRequestParams, CancelledNotificationParam, ClientRequest,
+        ServerResult,
+    };
+    use rmcp::service::{PeerRequestOptions, RunningService};
     use rmcp::{RoleClient, ServiceExt};
     use serde_json::{Map, Value};
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
     use std::time::Duration;
     use tokio::io::{AsyncRead, AsyncWrite};
 
-    /// Starts the server as a child process speaking MCP over stdio (rmcp client).
+    /// Starts a stdio server as a child process, or connects over Streamable HTTP (rmcp
+    /// client). holdmap declares no client capabilities: no sampling, elicitation or roots.
     #[derive(Debug, Default, Clone, Copy)]
     pub struct RmcpConnector;
 
     impl McpConnector for RmcpConnector {
         fn connect(
             &self,
-            cmd: Command,
+            endpoint: McpEndpoint,
             sandbox: &dyn Sandbox,
             timeout: Duration,
         ) -> Result<Box<dyn McpSession>, String> {
             let rt = runtime()?;
-            let mut cmd = tokio::process::Command::from(cmd);
-            cmd.stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::null())
-                .kill_on_drop(true);
-            #[cfg(unix)]
-            cmd.process_group(0);
-            let mut child = {
-                let _enter = rt.enter();
-                cmd.spawn()
-                    .map_err(|_| "the program could not be started".to_string())?
-            };
-            let guard = sandbox.contain(ProcessRef {
-                id: child.id().unwrap_or(0),
-                #[cfg(windows)]
-                handle: child.raw_handle().unwrap_or(std::ptr::null_mut()),
-            });
-            let (Some(stdout), Some(stdin)) = (child.stdout.take(), child.stdin.take()) else {
-                return Err("its input and output could not be connected".into());
-            };
-            let mut session = RmcpSession::handshake(rt, stdout, stdin, timeout)?;
-            session.child = Some(child);
-            session._guard = guard;
-            Ok(Box::new(session))
+            match endpoint {
+                McpEndpoint::Stdio(cmd) => {
+                    let mut cmd = tokio::process::Command::from(cmd);
+                    cmd.stdin(Stdio::piped())
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::null())
+                        .kill_on_drop(true);
+                    #[cfg(unix)]
+                    cmd.process_group(0);
+                    let mut child = {
+                        let _enter = rt.enter();
+                        cmd.spawn()
+                            .map_err(|_| "the program could not be started".to_string())?
+                    };
+                    let guard = sandbox.contain(ProcessRef {
+                        id: child.id().unwrap_or(0),
+                        #[cfg(windows)]
+                        handle: child.raw_handle().unwrap_or(std::ptr::null_mut()),
+                    });
+                    let (Some(stdout), Some(stdin)) = (child.stdout.take(), child.stdin.take())
+                    else {
+                        return Err("its input and output could not be connected".into());
+                    };
+                    let mut session = RmcpSession::handshake(rt, stdout, stdin, timeout)?;
+                    session.child = Some(child);
+                    session._guard = guard;
+                    Ok(Box::new(session))
+                }
+                #[cfg(feature = "mcp-http")]
+                McpEndpoint::Http { url, bearer, cap } => {
+                    // rmcp's HTTP worker spawns onto the runtime when it is created.
+                    let _enter = rt.enter();
+                    let transport = crate::mcp_http::transport(&url, bearer.as_ref(), cap, timeout);
+                    let client = rt
+                        .block_on(tokio::time::timeout(timeout, ().serve(transport)))
+                        .map_err(|_| "it didn't answer within the time limit".to_string())?
+                        .map_err(|_| "it didn't complete the MCP handshake".to_string())?;
+                    drop(_enter);
+                    Ok(Box::new(RmcpSession::listed(rt, client, timeout)?))
+                }
+                #[cfg(not(feature = "mcp-http"))]
+                McpEndpoint::Http { .. } => {
+                    let _ = (rt, sandbox);
+                    Err("this build of holdmap can't reach MCP servers over HTTP".into())
+                }
+            }
         }
     }
 
@@ -319,7 +491,8 @@ mod rmcp_client {
     pub struct RmcpSession {
         rt: tokio::runtime::Runtime,
         client: Option<RunningService<RoleClient, ()>>,
-        tools: Vec<String>,
+        server: Option<ServerInfo>,
+        tools: Vec<ToolInfo>,
         child: Option<tokio::process::Child>,
         _guard: Option<ContainGuard>,
     }
@@ -342,17 +515,41 @@ mod rmcp_client {
                 .block_on(tokio::time::timeout(timeout, ().serve((read, write))))
                 .map_err(|_| "it didn't finish starting within the time limit".to_string())?
                 .map_err(|_| "it didn't complete the MCP handshake".to_string())?;
+            drop(_enter);
+            Self::listed(rt, client, timeout)
+        }
+
+        fn listed(
+            rt: tokio::runtime::Runtime,
+            client: RunningService<RoleClient, ()>,
+            timeout: Duration,
+        ) -> Result<Self, String> {
+            let _enter = rt.enter();
             let tools = rt
                 .block_on(tokio::time::timeout(timeout, client.list_all_tools()))
                 .map_err(|_| "it didn't list its tools within the time limit".to_string())?
                 .map_err(|_| "it didn't list its tools".to_string())?
-                .into_iter()
-                .map(|t| t.name.into_owned())
+                .iter()
+                .filter_map(|t| serde_json::to_value(t).ok())
+                .filter_map(|v| ToolInfo::from_json(&v))
                 .collect();
+            let server = client.peer_info().and_then(|info| {
+                let v = serde_json::to_value(&*info).ok()?;
+                let s = v.get("serverInfo")?;
+                Some(ServerInfo {
+                    name: s.get("name")?.as_str()?.to_string(),
+                    version: s.get("version").and_then(Value::as_str).map(str::to_string),
+                    instructions: v
+                        .get("instructions")
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                })
+            });
             drop(_enter);
             Ok(Self {
                 rt,
                 client: Some(client),
+                server,
                 tools,
                 child: None,
                 _guard: None,
@@ -388,7 +585,11 @@ mod rmcp_client {
     }
 
     impl McpSession for RmcpSession {
-        fn tools(&self) -> Vec<String> {
+        fn server(&self) -> Option<ServerInfo> {
+            self.server.clone()
+        }
+
+        fn tools(&self) -> Vec<ToolInfo> {
             self.tools.clone()
         }
 
@@ -398,6 +599,7 @@ mod rmcp_client {
             args: Map<String, Value>,
             timeout: Duration,
             cap: usize,
+            cancel: &CancelFlag,
         ) -> Result<ToolOutput, String> {
             let client = self
                 .client
@@ -406,24 +608,61 @@ mod rmcp_client {
             let _enter = self.rt.enter();
             let mut params = CallToolRequestParams::new(tool.to_string());
             params.arguments = Some(args);
-            let result = self
-                .rt
-                .block_on(tokio::time::timeout(timeout, client.call_tool(params)))
-                .map_err(|_| "Stopped at the time limit.".to_string())?
-                .map_err(|_| "The MCP server failed to answer the tool call.".to_string())?;
-            let bytes = match &result.structured_content {
-                Some(v) if !v.is_null() => serde_json::to_vec(v).unwrap_or_default(),
-                _ => result
-                    .content
-                    .iter()
-                    .filter_map(|c| c.as_text().map(|t| t.text.as_str()))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-                    .into_bytes(),
+            let request = ClientRequest::CallToolRequest(CallToolRequest::new(params));
+            let mut options = PeerRequestOptions::no_options();
+            // rmcp tells the server (notifications/cancelled) when this expires.
+            options.timeout = Some(timeout);
+            let peer = client.peer().clone();
+            let cancel = cancel.clone();
+            let result = self.rt.block_on(async move {
+                let handle = peer
+                    .send_cancellable_request(request, options)
+                    .await
+                    .map_err(|_| "The MCP server failed to answer the tool call.".to_string())?;
+                let id = handle.id.clone();
+                let watch = async {
+                    while !cancel.is_cancelled() {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                };
+                tokio::select! {
+                    r = handle.await_response() => r.map_err(|e| match e {
+                        rmcp::ServiceError::Timeout { .. } => "Stopped at the time limit.".to_string(),
+                        _ => "The MCP server failed to answer the tool call.".to_string(),
+                    }),
+                    () = watch => {
+                        let _ = peer
+                            .notify_cancelled(CancelledNotificationParam::new(
+                                Some(id),
+                                Some("cancelled in holdmap".into()),
+                            ))
+                            .await;
+                        Err(crate::runner::CANCELLED.to_string())
+                    }
+                }
+            })?;
+            let ServerResult::CallToolResult(result) = result else {
+                return Err(
+                    "The MCP server answered with something other than a tool result.".into(),
+                );
+            };
+            let (bytes, structured) = match &result.structured_content {
+                Some(v) if !v.is_null() => (serde_json::to_vec(v).unwrap_or_default(), true),
+                _ => (
+                    result
+                        .content
+                        .iter()
+                        .filter_map(|c| c.as_text().map(|t| t.text.as_str()))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                        .into_bytes(),
+                    false,
+                ),
             };
             let truncated = bytes.len() > cap;
             Ok(ToolOutput {
                 bytes: if truncated { Vec::new() } else { bytes },
+                structured,
                 is_error: result.is_error == Some(true),
                 truncated,
             })

@@ -195,6 +195,23 @@ pub struct AnalyzerResult {
     /// Hash of the input this result covers; a different hash means the subjects changed.
     #[serde(default)]
     pub input_signature: Option<String>,
+    /// How long the run took, in milliseconds.
+    #[serde(default)]
+    pub duration_ms: Option<u64>,
+    /// MCP analyzers: calls per tool.
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCalls>,
+}
+
+/// How often one MCP tool was called in a run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolCalls {
+    /// Tool name.
+    pub tool: String,
+    /// Calls made.
+    pub calls: usize,
+    /// Calls that failed.
+    pub failed: usize,
 }
 
 impl AnalyzerResult {

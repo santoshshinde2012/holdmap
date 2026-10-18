@@ -1,6 +1,8 @@
 // Browser demo for analyzers: labelled sample results over the mock agents. Approval and runs
 // are simulated in memory; nothing is installed, executed or sent anywhere.
-import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, FindingState, Insights, Preview, Subject } from "./analyzers";
+import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, ConfiguredServer, FindingState, Insights, McpDraft, OutputMapping, Preview, Subject, ToolReport, ToolSpec } from "./analyzers";
+import * as mcp from "./analyzers-demo-mcp";
+import { checkArguments, previewArguments } from "./mcp-mapping";
 import { emptyCounts } from "./analyzers";
 import { inventories } from "./agent-config";
 import { readManifest, type DemoManifest } from "./analyzer-manifest";
@@ -14,14 +16,14 @@ const BASE: Record<string, Omit<AnalyzerView, "state" | "approved_at_ms" | "last
   [OSV]: {
     id: OSV, name: "OSV vulnerability lookup", publisher: "holdmap", license: "Apache-2.0", homepage: "https://osv.dev", install: null, kind: "builtin",
     summary: "Checks pinned npm and PyPI packages that your MCP servers launch against the OSV.dev vulnerability database.",
-    changes: [], sandbox: "basic", binary: null,
+    changes: [], sandbox: "basic", binary: null, output_format: "osv",
     permissions: { read: [], network: ["api.osv.dev"], network_reason: "OSV.dev is a public vulnerability database run by Google; the lookup happens there.", sends: ["The ecosystem, name and exact version of each pinned package. Nothing else: no paths, file contents, environment or machine details."], spawns_mcp_servers: false },
   },
   [SKILLSPECTOR]: {
     id: SKILLSPECTOR, name: "SkillSpector", publisher: "NVIDIA", license: "Apache-2.0", homepage: "https://github.com/NVIDIA/SkillSpector", kind: "cli",
     install: "uv tool install git+https://github.com/NVIDIA/skillspector.git@v2.13.0",
     summary: "Static scan of agent skills for prompt injection, data exfiltration, dangerous code and vulnerable dependencies.",
-    changes: [], sandbox: "macos_seatbelt", binary: "/Users/dev/.local/bin/skillspector",
+    changes: [], sandbox: "macos_seatbelt", binary: "/Users/dev/.local/bin/skillspector", output_format: "json-map",
     permissions: { read: ["{subject.dir}"], network: ["api.osv.dev"], network_reason: "SkillSpector looks up dependency versions it finds in the skill on OSV and has no switch to turn that off.", sends: ["Package names and versions found in the skill go to api.osv.dev."], spawns_mcp_servers: false },
   },
 };
@@ -55,6 +57,7 @@ function skillspectorResult(): AnalyzerResult {
       { subject: review.id, label: "Recommendation", value: "SAFE" },
     ],
     notes: [],
+    duration_ms: 8400,
   };
 }
 
@@ -66,6 +69,7 @@ function osvResult(report: AgentsReport): AnalyzerResult {
     findings: [],
     details: packages.map((p) => ({ subject: `package:${p.ecosystem}/${p.name}@${p.version}`, label: "Known advisories", value: "none (sample data)" })),
     notes: ["Browser demo: no request was sent; results are sample data."],
+    duration_ms: 620,
   };
 }
 
@@ -93,6 +97,7 @@ export class DemoAnalyzers {
   private reviews = new Map<string, FindingState>();
   private background = new Set<string>();
   private user = new Map<string, DemoManifest>();
+  private mcp = new Map<string, mcp.DemoMcp>();
   private catalogState: CatalogStatus = { version: 1, published: "2026-10-18", accepted: false, pending: null };
 
   catalog(): CatalogStatus {
@@ -123,13 +128,13 @@ export class DemoAnalyzers {
   }
 
   list(): AnalyzerView[] {
-    return [SKILLSPECTOR, OSV, ...this.user.keys()].map((id) => this.view(id));
+    return [SKILLSPECTOR, OSV, ...this.user.keys(), ...this.mcp.keys()].map((id) => this.view(id));
   }
 
   /** Simulated "Add your own analyzer": checks the manifest like holdmap; nothing is installed. */
   add(text: string): AnalyzerView {
     const m = readManifest(text, Object.keys(BASE));
-    if (this.user.has(m.id)) throw new Error(`invalid manifest: ${m.id} is already registered; remove it first`);
+    if (this.user.has(m.id) || this.mcp.has(m.id)) throw new Error(`invalid manifest: ${m.id} is already registered; remove it first`);
     this.user.set(m.id, m);
     return this.view(m.id);
   }
@@ -138,10 +143,66 @@ export class DemoAnalyzers {
   remove(id: string): boolean {
     if (BASE[id]) throw new Error(`${BASE[id].name} is in holdmap's catalog and can't be removed; turn it off instead`);
     this.revoke(id);
-    return this.user.delete(id);
+    return this.user.delete(id) || this.mcp.delete(id);
   }
 
+  /** Simulated "Add an MCP server": checked like holdmap; nothing is started. */
+  addMcp(draft: McpDraft): AnalyzerView {
+    mcp.checkDraft(draft, [...Object.keys(BASE), ...this.user.keys(), ...this.mcp.keys()]);
+    this.mcp.set(draft.id, { draft: structuredClone(draft), tools: [], output: {}, listed: null, approvedSha: null, remoteOptIn: false });
+    return this.view(draft.id);
+  }
+
+  configuredServers(report: AgentsReport): ConfiguredServer[] {
+    return mcp.configuredServers(report);
+  }
+
+  private mcpEntry(id: string): mcp.DemoMcp {
+    const m = this.mcp.get(id);
+    if (!m) throw new Error(`${BASE[id]?.name ?? this.user.get(id)?.name ?? id} is not an MCP analyzer you added`);
+    return m;
+  }
+
+  /** Sample tool list: nothing is started. */
+  listTools(id: string): ToolReport {
+    const m = this.mcpEntry(id);
+    m.listed = mcp.snapshot(m.draft);
+    return mcp.report(m);
+  }
+
+  tools(id: string): ToolReport {
+    return mcp.report(this.mcpEntry(id));
+  }
+
+  mapTools(id: string, tools: ToolSpec[]): AnalyzerView {
+    mcp.mapTools(this.mcpEntry(id), tools);
+    return this.view(id);
+  }
+
+  mapOutput(id: string, output: OutputMapping): AnalyzerView {
+    const m = this.mcpEntry(id);
+    if (output.items && !output.rule_id) throw new Error("manifest rejected: output.items needs output.rule_id");
+    if (output.items && !/^\$\.[A-Za-z0-9_-]+\[\*\]$/.test(output.items)) throw new Error("manifest rejected: output.items must look like $.name[*]");
+    m.output = output.items ? structuredClone(output) : {};
+    m.approvedSha = null;
+    return this.view(id);
+  }
+
+  cancel(): void { /* demo runs finish at once */ }
+
   private base(id: string): Omit<AnalyzerView, "state" | "approved_at_ms" | "last_run" | "version"> {
+    const d = this.mcp.get(id);
+    if (d) {
+      const http = d.draft.transport === "http";
+      const host = http && mcp.isRemote(d.draft) ? [new URL(d.draft.url!).hostname] : [];
+      return {
+        id, name: d.draft.name, publisher: "unknown", license: "unknown", homepage: "", install: null, kind: "mcp", output_format: "auto",
+        summary: d.draft.summary ?? "An MCP server you added as an analyzer.", changes: [], sandbox: "macos_seatbelt", source: "user",
+        binary: http ? null : `/Users/dev/.local/bin/${(d.draft.command ?? "").split("/").pop()}`,
+        permissions: { read: http ? [] : ["{subject.dir}"], network: host, network_reason: host.length ? "It is the MCP server you chose to connect to." : null, sends: host.length ? [`Skill names, file names and agent ids go to ${host[0]}.`] : [], spawns_mcp_servers: !http },
+        mcp: mcp.view(d),
+      };
+    }
     const m = this.user.get(id);
     if (!m) return BASE[id];
     return {
@@ -156,10 +217,13 @@ export class DemoAnalyzers {
     const result = this.results.get(id);
     const open = emptyCounts();
     for (const f of this.withReviews(result)?.findings ?? []) if (f.state === "open") open[f.severity]++;
+    const d = this.mcp.get(id);
+    const changed = !!approvedAt && !!d && d.approvedSha !== d.listed?.sha256;
     return {
       source: "catalog",
       ...this.base(id),
-      state: approvedAt ? "approved" : "not_approved",
+      state: changed ? "changed" : approvedAt ? "approved" : "not_approved",
+      changes: changed ? ["The tools or their mapping changed since you approved it"] : [],
       background: this.background.has(id),
       approved_at_ms: approvedAt,
       version: approvedAt && id === SKILLSPECTOR ? "2.13.0" : null,
@@ -168,6 +232,8 @@ export class DemoAnalyzers {
   }
 
   preview(id: string, report: AgentsReport): Preview {
+    const d = this.mcp.get(id);
+    if (d) return this.mcpPreview(id, d, report);
     const user = this.user.get(id);
     if (user) return this.userPreview(user, report);
     const builtin = id === OSV;
@@ -240,14 +306,52 @@ export class DemoAnalyzers {
     };
   }
 
-  approve(id: string): AnalyzerView {
+  private mcpPreview(id: string, d: mcp.DemoMcp, report: AgentsReport): Preview {
+    const http = d.draft.transport === "http";
+    const remote = mcp.isRemote(d.draft);
+    const subjects = this.skills(report);
+    const tools = d.tools.map((t) => t.name);
+    const used = mcp.PLACEHOLDERS.filter((p) => d.tools.some((t) => Object.values(t.args).some((v) => typeof v === "string" && v.includes(p.token))));
+    const notices = [
+      http ? (remote ? `Warning: this server is on another machine (${new URL(d.draft.url!).hostname}). It gets only skill names, file names and agent ids, and holdmap can't sandbox it. You must allow it explicitly.` : "This connects to an MCP server on this computer over HTTP. holdmap doesn't start or sandbox it; it only connects for runs you start.")
+        : "This starts a local MCP server. holdmap starts it only when you run this analyzer, with a cleared environment and the same sandbox as other analyzers, and stops it when the run ends. It never runs on its own.",
+      "holdmap lists the server's tools and pins them. If the server changes any tool, name, description or input, the analyzer stops until you review and approve it again. holdmap gives the server no way to ask you questions or reach an AI model.",
+    ];
+    return {
+      analyzer: this.view(id),
+      command: [http ? `connects to ${d.draft.url}` : mcp.endpoint(d.draft), tools.length ? `then calls ${tools.join(", ")} once per skill` : "then calls no tool yet: choose its tools first"],
+      subjects,
+      skipped: [],
+      payload: [],
+      env: http ? [] : ["PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "NO_COLOR"],
+      sandbox: http ? (remote ? "Not sandboxed by holdmap: the server runs on another machine. It gets only the metadata shown here." : "holdmap doesn't start this server, so it can't sandbox it. It gets the fields shown here.") : "macOS sandbox (best effort): it gets a copy of the folder, a cleared environment and a private temporary home, and is stopped at the time limit. The operating system blocks its network access. It can still read your other files.",
+      schedule: "Only when you click Run now. MCP analyzers never run on their own.",
+      notices,
+      projection: used.length ? used.map((p) => p.label) : ["nothing from your inventory (constant arguments only)"],
+      tool_calls: subjects.slice(0, 3).flatMap((s) => d.tools.map((t) => {
+        const schema = d.listed?.tools.find((x) => x.name === t.name)?.input_schema;
+        const args = previewArguments(t.args, schema, { dir: `<private copy of ${s.subject.name}>`, skill_md: "<text of SKILL.md, 1,204 characters>", files: ["SKILL.md", "scripts/run.sh"], name: s.subject.name, agents: s.subject.agents });
+        return { tool: t.name, subject: s.subject.name, arguments: args, problems: checkArguments(args, schema) };
+      })),
+    };
+  }
+
+  approve(id: string, allowRemote = false): AnalyzerView {
+    const d = this.mcp.get(id);
+    if (d) {
+      if (!d.tools.length) throw new Error(`${d.draft.name} has no tools chosen. List its tools and choose which to call first.`);
+      if (!d.listed) throw new Error(`${d.draft.name}'s tools haven't been listed yet.`);
+      if (mcp.isRemote(d.draft) && !allowRemote) throw new Error(`${d.draft.name} is on another machine. Tick "Allow this server on another machine" to turn it on.`);
+      d.approvedSha = d.listed.sha256;
+      d.remoteOptIn = allowRemote && mcp.isRemote(d.draft);
+    }
     this.approved.set(id, Date.now());
     this.background.delete(id);
     return this.view(id);
   }
 
   setBackground(id: string, allow: boolean): AnalyzerView {
-    const m = this.user.get(id);
+    const m = this.user.get(id) ?? (this.mcp.has(id) ? { kind: "mcp" as const, name: this.mcp.get(id)!.draft.name } : undefined);
     if (m?.kind === "mcp") throw new Error(`${m.name} starts an MCP server, so it runs only when you click Run now.`);
     if (!this.approved.has(id)) throw new Error(`${m?.name ?? BASE[id]?.name ?? id} is off. Turn it on first.`);
     if (allow) this.background.add(id);
@@ -263,6 +367,13 @@ export class DemoAnalyzers {
 
   run(id: string, report: AgentsReport): AnalyzerResult {
     if (!this.approved.has(id)) throw new Error(`${BASE[id]?.name ?? id} is off. Review its permissions and turn it on first.`);
+    const d = this.mcp.get(id);
+    if (d) {
+      if (d.approvedSha !== d.listed?.sha256) throw new Error(`${d.draft.name} changed since you approved it. Review it again.`);
+      const result = mcp.sampleRun(id, d, this.skills(report).map((s) => s.subject));
+      this.results.set(id, result);
+      return this.withReviews(result)!;
+    }
     const user = this.user.get(id);
     const result = user
       ? { analyzer: id, analyzer_version: null, run_at_ms: Date.now(), status: "complete" as const, coverage: null, subjects: this.skills(report).map((s) => s.subject), findings: [], details: [], notes: [`Browser demo: ${user.kind === "mcp" ? "no MCP server was started" : "nothing was run"}; this is a sample result.`] }

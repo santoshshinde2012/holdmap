@@ -1,3 +1,9 @@
+<script lang="ts" module>
+  // Remembered across remounts (the Agents layout swaps when the window narrows).
+  let lastTab: "findings" | "graph" = "findings";
+  let lastPipeline: string | null = null;
+</script>
+
 <script lang="ts">
   // The Insights tab: findings from approved analyzers for every agent, including agents that
   // aren't running when the opt-in inventory has read their default configuration. Pick an agent
@@ -5,6 +11,8 @@
   import Icon from "../Icon.svelte";
   import Button from "../ui/Button.svelte";
   import AgentInsights from "./AgentInsights.svelte";
+  import SegmentedControl from "../ui/SegmentedControl.svelte";
+  import { loadAnalyzerGraphs, type AnalyzerGraphs } from "./graph/load-graphs";
   import { insightsStore } from "../../lib/insights-store.svelte";
   import { inventories } from "../../lib/agent-config";
   import { agentCounts, ago, countsText, total, worst } from "../../lib/analyzers";
@@ -41,6 +49,18 @@
   const lastRun = $derived(Math.max(0, ...(insightsStore.insights?.results ?? []).map((r) => r.run_at_ms)));
   const open = $derived(insightsStore.insights ? total(insightsStore.insights.open) : 0);
 
+  let tab = $state<"findings" | "graph">(lastTab);
+  let pipeline = $state<string | null>(lastPipeline);
+  $effect(() => { lastTab = tab; lastPipeline = pipeline; });
+  let graphs = $state<AnalyzerGraphs | null>(null);
+  let graphError = $state(false);
+  $effect(() => {
+    if (tab !== "graph" || graphs) return;
+    graphError = false;
+    loadAnalyzerGraphs().then((g) => (graphs = g), (e) => { console.error("Couldn't load the analyzer graphs", e); graphError = true; });
+  });
+  const pipelineView = $derived(insightsStore.analyzers.find((a) => a.id === pipeline) ?? null);
+
   function pick(r: { product: string; id: string | null }) {
     picked = r.product;
     if (r.id) onselectagent?.(r.id);
@@ -56,14 +76,29 @@
         {:else}{open ? `${open} open ${open === 1 ? "finding" : "findings"}` : "No open findings"} from {approved.length} {approved.length === 1 ? "analyzer" : "analyzers"}{#if lastRun} · last run {ago(lastRun)}{/if}{/if}
       </p>
     </div>
-    {#if onsettings}<Button size="sm" variant="ghost" onclick={onsettings}>Analyzers…</Button>{/if}
+    <div class="tools">
+      <SegmentedControl bind:value={tab} label="Insights view" options={[{ value: "findings", label: "Findings" }, { value: "graph", label: "How it works", icon: "branch" }]} />
+      {#if onsettings}<Button size="sm" variant="ghost" onclick={onsettings}>Analyzers…</Button>{/if}
+    </div>
   </header>
 
   {#if !inventory}
     <p class="note"><Icon name="info" size={12} />Analyzers look at skills and MCP packages from the agent inventory, which is off. {#if oninventory}<button type="button" class="link" onclick={oninventory}>Turn on inventory</button> to include skills and agents that aren't running.{/if}</p>
   {/if}
 
-  {#if !rows.length}
+  {#if tab === "graph"}
+    <div class="graphs">
+      {#if !graphs}
+        <p class="sub" role="status">{graphError ? "Couldn't load the graphs. Reopen this tab to try again." : "Loading the graphs…"}</p>
+      {:else if pipelineView}
+        <div class="ghead"><h3>How {pipelineView.name} works</h3><Button size="sm" variant="ghost" icon="arrow-left" onclick={() => (pipeline = null)}>All analyzers</Button></div>
+        <graphs.AnalyzerPipeline view={pipelineView} height={420} />
+      {:else}
+        <p class="sub">Which analyzer covers which agent, from each one's last run. Select an analyzer for its pipeline.</p>
+        <graphs.AnalyzerOverview {report} height={440} onpipeline={(id) => (pipeline = id)} />
+      {/if}
+    </div>
+  {:else if !rows.length}
     <div class="empty"><Icon name="bot" size={28} /><p>No agents to show</p><span>Running agents, and agents with readable configuration, appear here.</span></div>
   {:else}
     <div class="body">
@@ -93,6 +128,9 @@
 
 <style>
   .insights-ws { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: var(--sp-3); height: 100%; min-height: 0; padding: var(--sp-4); box-sizing: border-box; overflow: auto; }
+  .tools { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+  .graphs { display: grid; align-content: start; gap: var(--sp-2); min-width: 0; }
+  .ghead { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-3); }
   h2 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-title); font-weight: var(--fw-semibold); }
   .sub { margin: 2px 0 0; color: var(--muted); font-size: var(--fs-caption); }

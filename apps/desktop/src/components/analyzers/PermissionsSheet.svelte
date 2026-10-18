@@ -3,23 +3,27 @@
   // sandbox stated honestly. Nothing is approved until "Turn on" is pressed.
   import Button from "../ui/Button.svelte";
   import Callout from "../ui/Callout.svelte";
+  import Checkbox from "../ui/Checkbox.svelte";
   import type { Preview } from "../../lib/analyzers";
 
   let { preview, busy = false, error = null, onapprove, oncancel }: {
     preview: Preview;
     busy?: boolean;
     error?: string | null;
-    onapprove: () => void;
+    /** `allowRemote`: the user ticked the opt-in for a server on another machine. */
+    onapprove: (allowRemote: boolean) => void;
     oncancel: () => void;
   } = $props();
   const a = $derived(preview.analyzer);
   const changed = $derived(a.state === "changed");
+  const remote = $derived(!!a.mcp?.remote);
+  let allowRemote = $state(false);
 </script>
 
 <section class="sheet" aria-labelledby="sheet-title">
   <header>
     <h3 id="sheet-title">{changed ? "Review again:" : "Turn on"} {a.name}?</h3>
-    <p class="by">{a.publisher} · {a.license} · <a href={a.homepage} target="_blank" rel="noreferrer">{a.homepage.replace(/^https:\/\//, "")}</a></p>
+    <p class="by">{a.publisher} · {a.license} · {#if a.homepage}<a href={a.homepage} target="_blank" rel="noreferrer">{a.homepage.replace(/^https:\/\//, "")}</a>{:else}homepage unknown{/if}</p>
     <p>{a.summary}</p>
   </header>
   {#if changed}
@@ -54,6 +58,21 @@
         {:else}<span>None declared</span>{/if}
       </dd>
     </div>
+    {#if preview.projection?.length}
+      <div><dt>Fields it gets</dt><dd><ul class="items">{#each preview.projection as f}<li>{f}</li>{/each}</ul></dd></div>
+    {/if}
+    {#if preview.tool_calls?.length}
+      <div>
+        <dt>Exact tool calls</dt>
+        <dd>
+          {#each preview.tool_calls as c, i (i)}
+            <p class="call"><span class="nm">{c.tool}</span> <span class="muted">for {c.subject}</span></p>
+            <pre aria-label={`Arguments for ${c.tool} on ${c.subject}`}>{JSON.stringify(c.arguments, null, 2)}</pre>
+            {#each c.problems as p}<p class="bad">✕ {p}</p>{/each}
+          {/each}
+        </dd>
+      </div>
+    {/if}
     {#each preview.payload as body, i}
       <div><dt>{preview.payload.length > 1 ? `Exact request ${i + 1}` : "Exact request"}</dt><dd><pre aria-label="Exact request body">{body}</pre></dd></div>
     {/each}
@@ -65,10 +84,14 @@
     <div><dt>Never</dt><dd>{a.kind === "mcp" ? "holdmap starts this MCP server only while you run it and never starts your agents' servers. It keeps only short findings, never matched text." : "This analyzer starts no MCP servers. holdmap keeps only short findings, never matched text."}</dd></div>
   </dl>
 
+  {#if remote}
+    <Checkbox checked={allowRemote} onchange={(on) => (allowRemote = on)} label="Allow this server on another machine"
+      description={`It gets only skill names, file names and agent ids, sent to ${a.permissions.network.join(", ")}. holdmap can't sandbox it.`} />
+  {/if}
   {#if error}<Callout tone="danger" size="sm">{error}</Callout>{/if}
   <footer>
     <Button variant="ghost" onclick={oncancel} disabled={busy}>Cancel</Button>
-    <Button variant="primary" icon="shield" loading={busy} onclick={onapprove}>Turn on {a.name}</Button>
+    <Button variant="primary" icon="shield" loading={busy} disabled={remote && !allowRemote} onclick={() => onapprove(allowRemote)}>Turn on {a.name}</Button>
   </footer>
 </section>
 
@@ -87,6 +110,8 @@
   .muted { color: var(--muted); }
   .items { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
   .nm { font-weight: var(--fw-medium); }
+  .call { margin: 4px 0 2px !important; }
+  .bad { color: var(--danger-text, var(--danger)); }
   code { font-family: var(--mono); font-size: var(--fs-caption); color: var(--text-2); }
   code.block { display: block; }
   pre { margin: 0; padding: 6px 8px; border-radius: var(--r-md); background: var(--surface-2, var(--bg)); font-family: var(--mono); font-size: var(--fs-caption); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow: auto; }

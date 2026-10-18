@@ -56,6 +56,9 @@ export const releaseHighlightsPublished = atLeast(version, sourceVersion);
  *  Until it is the published release, the site keeps its "not in a published release yet" note. */
 export const homeRelease: string | null = "0.9.0";
 export const homePublished = homeRelease !== null && atLeast(version, homeRelease);
+/** The release that first ships analyzers. null until one is published; the site says they're on main. */
+export const analyzersRelease: string | null = null;
+export const analyzersPublished = analyzersRelease !== null && atLeast(version, analyzersRelease);
 export const description = releaseHighlightsPublished
   ? "holdmap shows your agents, MCP servers, skills, tools, apps and ports, and stops services safely after a reviewed plan. macOS, Linux and Windows."
   : `holdmap shows your agents, MCP servers, skills, tools, apps and ports, and stops services safely. Latest release v${version}; ${sourceVersion} is in preparation.`;

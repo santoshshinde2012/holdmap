@@ -190,6 +190,22 @@ try {
     await frame.getByRole("button", { name: /^\d+ listening$/ }).click();
     await frame.locator("#port-list").waitFor();
   });
+  await check("Agents → Insights → How it works loads the analyzer graphs on demand", async () => {
+    await frame.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: /^Agents/ }).click();
+    await frame.getByRole("radio", { name: "Insights", exact: true }).click();
+    const insights = frame.getByRole("region", { name: "Insights workspace", exact: true });
+    await insights.getByRole("radio", { name: "How it works", exact: true }).click();
+    const overview = insights.getByRole("group", { name: "Analyzers and the agents they cover", exact: true });
+    await overview.locator(".svelte-flow").waitFor({ timeout: 8000 });
+    await overview.locator('[data-graph-node="analyzer:nvidia.skillspector"]').click();
+    await overview.getByRole("button", { name: "How SkillSpector works", exact: true }).click();
+    await insights.getByRole("group", { name: "How SkillSpector works", exact: true }).locator('[data-graph-node="findings"]').waitFor();
+    await insights.getByRole("button", { name: "All analyzers", exact: true }).click();
+    await insights.getByRole("radio", { name: "Findings", exact: true }).click();
+    await frame.getByRole("radio", { name: "Overview", exact: true }).click();
+    await try_("Home");
+    await frame.locator("#home-overview").waitFor();
+  });
   await check("Status bar recording asks before capturing and cancels cleanly", async () => {
     await frame.getByRole("button", { name: "Record screen", exact: true }).click();
     const recorder = frame.getByRole("dialog", { name: "Record screen", exact: true });

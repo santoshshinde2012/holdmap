@@ -40,6 +40,9 @@ pub enum AnalyzerAction {
         /// Don't ask; approve what `holdmap analyzers show ID` prints.
         #[arg(long)]
         yes: bool,
+        /// Allow an MCP analyzer on another machine (it gets metadata only).
+        #[arg(long)]
+        allow_remote: bool,
     },
     /// Turn an analyzer off and delete its results.
     Revoke { id: String },
@@ -48,9 +51,29 @@ pub enum AnalyzerAction {
         #[command(subcommand)]
         action: KeyAction,
     },
-    /// Register your own analyzer from a manifest file (a local CLI or MCP scanner). It stays
-    /// off until you approve it.
-    Add { file: std::path::PathBuf },
+    /// Register your own analyzer from a manifest file, or any MCP server with --mcp (from a
+    /// command, a URL or one of your agents' servers). It stays off until you approve it.
+    Add {
+        #[arg(required_unless_present = "mcp")]
+        file: Option<std::path::PathBuf>,
+        #[command(flatten)]
+        mcp: crate::analyzers_mcp::McpAddArgs,
+    },
+    /// Your agents' configured MCP servers that can be added as analyzers.
+    Servers,
+    /// An MCP analyzer's tools: descriptions, warnings, suggested inputs and pin. Lists them
+    /// from the server (after you confirm) the first time or with --refresh.
+    Tools {
+        id: String,
+        /// Ask the server again.
+        #[arg(long)]
+        refresh: bool,
+        /// Don't ask before starting or contacting the server.
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Choose an MCP analyzer's tools and map their inputs and output.
+    Map(crate::analyzers_mcp::MapArgs),
     /// Remove an analyzer you registered, with its approval, results and stored keys.
     Remove { id: String },
     /// The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject.
@@ -197,7 +220,11 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
                 print!("{}", style::terminal_text(&render_preview(&preview)));
             }
         }
-        AnalyzerAction::Approve { id, yes } => {
+        AnalyzerAction::Approve {
+            id,
+            yes,
+            allow_remote,
+        } => {
             let preview = svc.preview(id, &inventory(docker)?)?;
             if preview.analyzer.state == AnalyzerState::NotInstalled {
                 bail!(
@@ -223,7 +250,14 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
                 eprintln!("Not approved; nothing changed.");
                 return Ok(crate::exit::BUSY);
             }
-            let view = svc.approve(id)?;
+            let view = match svc.approve_with(id, *allow_remote) {
+                Ok(v) => v,
+                Err(e @ (ServiceError::Run(_) | ServiceError::Manifest(_))) => {
+                    eprintln!("{} {e}", style::err_mark());
+                    return Ok(crate::exit::BLOCKED);
+                }
+                Err(e) => return Err(e.into()),
+            };
             if a.json {
                 println!("{}", serde_json::to_string_pretty(&view)?);
             } else {
@@ -246,7 +280,19 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
             }
         }
         AnalyzerAction::Key { action } => return run_key(&svc, action, a.json),
-        AnalyzerAction::Add { file } => {
+        AnalyzerAction::Add { file: None, mcp } => {
+            return crate::analyzers_mcp::add(&svc, mcp, || inventory(docker), a.json)
+        }
+        AnalyzerAction::Servers => {
+            return crate::analyzers_mcp::servers(&svc, &inventory(docker)?, a.json)
+        }
+        AnalyzerAction::Tools { id, refresh, yes } => {
+            return crate::analyzers_mcp::tools(&svc, id, *refresh, *yes, a.json)
+        }
+        AnalyzerAction::Map(m) => return crate::analyzers_mcp::map(&svc, m, a.json),
+        AnalyzerAction::Add {
+            file: Some(file), ..
+        } => {
             let text = std::fs::read_to_string(file)
                 .with_context(|| format!("couldn't read {}", file.display()))?;
             let view = match svc.add_manifest(&text) {
@@ -757,6 +803,30 @@ fn render_preview(p: &Preview) -> String {
     for body in &p.payload {
         out.push_str(&format!("{}\n  {body}\n", bold("Exact request")));
     }
+    if !p.projection.is_empty() {
+        out.push_str(&format!("{}\n", bold("Fields it gets")));
+        for f in &p.projection {
+            out.push_str(&format!("  {}\n", printable(f)));
+        }
+    }
+    if !p.tool_calls.is_empty() {
+        out.push_str(&format!("{}\n", bold("Exact tool calls")));
+        for c in &p.tool_calls {
+            out.push_str(&format!(
+                "  {}  {}  {}\n",
+                bold(printable(&c.tool)),
+                dim(printable(&c.subject)),
+                printable(&c.arguments.to_string())
+            ));
+            for problem in &c.problems {
+                out.push_str(&format!(
+                    "    {} {}\n",
+                    style::warn_mark(),
+                    printable(problem)
+                ));
+            }
+        }
+    }
     if !p.env.is_empty() {
         out.push_str(&format!(
             "{}\n  {} (set by holdmap; none of your variables or secrets are passed)\n",
@@ -937,6 +1007,10 @@ mod tests {
             details: vec![],
             notes: vec![],
             input_signature: None,
+
+            duration_ms: None,
+
+            tool_calls: Vec::new(),
         }
     }
 

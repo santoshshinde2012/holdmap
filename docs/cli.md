@@ -34,7 +34,10 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`holdmap analyzers key`](#holdmap-analyzers-key) | Store or delete an API key an analyzer declares, in the OS keychain |
 | [`holdmap analyzers key set`](#holdmap-analyzers-key-set) | Store a key: paste it when asked (not echoed), or pipe it on standard input |
 | [`holdmap analyzers key delete`](#holdmap-analyzers-key-delete) | Delete a stored key |
-| [`holdmap analyzers add`](#holdmap-analyzers-add) | Register your own analyzer from a manifest file (a local CLI or MCP scanner). It stays off until you approve it |
+| [`holdmap analyzers add`](#holdmap-analyzers-add) | Register your own analyzer from a manifest file, or any MCP server with --mcp (from a command, a URL or one of your agents' servers). It stays off until you approve it |
+| [`holdmap analyzers servers`](#holdmap-analyzers-servers) | Your agents' configured MCP servers that can be added as analyzers |
+| [`holdmap analyzers tools`](#holdmap-analyzers-tools) | An MCP analyzer's tools: descriptions, warnings, suggested inputs and pin. Lists them from the server (after you confirm) the first time or with --refresh |
+| [`holdmap analyzers map`](#holdmap-analyzers-map) | Choose an MCP analyzer's tools and map their inputs and output |
 | [`holdmap analyzers remove`](#holdmap-analyzers-remove) | Remove an analyzer you registered, with its approval, results and stored keys |
 | [`holdmap analyzers catalog`](#holdmap-analyzers-catalog) | The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject |
 | [`holdmap analyzers catalog status`](#holdmap-analyzers-catalog-status) | Which catalog is in use and whether an update waits for review (the default) |
@@ -492,8 +495,12 @@ Commands:
   approve  Review an analyzer's permissions and turn it on
   revoke   Turn an analyzer off and delete its results
   key      Store or delete an API key an analyzer declares, in the OS keychain
-  add      Register your own analyzer from a manifest file (a local CLI or MCP scanner). It stays
-           off until you approve it
+  add      Register your own analyzer from a manifest file, or any MCP server with --mcp (from a
+           command, a URL or one of your agents' servers). It stays off until you approve it
+  servers  Your agents' configured MCP servers that can be added as analyzers
+  tools    An MCP analyzer's tools: descriptions, warnings, suggested inputs and pin. Lists them
+           from the server (after you confirm) the first time or with --refresh
+  map      Choose an MCP analyzer's tools and map their inputs and output
   remove   Remove an analyzer you registered, with its approval, results and stored keys
   catalog  The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject
   auto     Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that
@@ -554,6 +561,7 @@ Arguments:
 
 Options:
       --yes            Don't ask; approve what `holdmap analyzers show ID` prints
+      --allow-remote   Allow an MCP analyzer on another machine (it gets metadata only)
       --json           Machine-readable JSON output
       --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
                        auto, always, never]
@@ -640,13 +648,43 @@ Options:
 ## holdmap analyzers add
 
 ```text
-Register your own analyzer from a manifest file (a local CLI or MCP scanner). It stays off until you
-approve it
+Register your own analyzer from a manifest file, or any MCP server with --mcp (from a command, a URL
+or one of your agents' servers). It stays off until you approve it
 
-Usage: holdmap analyzers add [OPTIONS] <FILE>
+Usage: holdmap analyzers add [OPTIONS] [FILE]
 
 Arguments:
-  <FILE>
+  [FILE]
+
+Options:
+      --mcp                Register an MCP server (with --command, --url or --from) instead of a
+                           manifest file
+      --id <ID>            Id for it, e.g. local.my-scanner
+      --name <NAME>        Display name
+      --command <COMMAND>  Program that starts a stdio MCP server (holdmap starts it, sandboxed,
+                           only for runs)
+      --arg <ARGS>         An argument for --command (repeat for several)
+      --url <URL>          A Streamable HTTP endpoint. Servers on another machine need
+                           --allow-remote when you approve and only get metadata (names, file names,
+                           agents)
+      --from <FROM>        One of your agents' configured servers, as listed by `holdmap analyzers
+                           servers`
+      --secret <SECRETS>   An API key name the server may get from your keychain (repeat for
+                           several)
+      --auth <AUTH>        The key sent as a bearer token to an HTTP server
+      --json               Machine-readable JSON output
+      --color <COLOR>      When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible
+                           values: auto, always, never]
+      --no-docker          Don't query Docker/Podman/OrbStack/Colima
+  -h, --help               Print help
+```
+
+## holdmap analyzers servers
+
+```text
+Your agents' configured MCP servers that can be added as analyzers
+
+Usage: holdmap analyzers servers [OPTIONS]
 
 Options:
       --json           Machine-readable JSON output
@@ -654,6 +692,61 @@ Options:
                        auto, always, never]
       --no-docker      Don't query Docker/Podman/OrbStack/Colima
   -h, --help           Print help
+```
+
+## holdmap analyzers tools
+
+```text
+An MCP analyzer's tools: descriptions, warnings, suggested inputs and pin. Lists them from the
+server (after you confirm) the first time or with --refresh
+
+Usage: holdmap analyzers tools [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+
+Options:
+      --refresh        Ask the server again
+      --yes            Don't ask before starting or contacting the server
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers map
+
+```text
+Choose an MCP analyzer's tools and map their inputs and output
+
+Usage: holdmap analyzers map [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+
+Options:
+      --tool <TOOLS>         A tool to call (repeat to choose several, in call order)
+      --arg <ARGS>           An input for the single --tool: NAME=VALUE. VALUE is a placeholder such
+                             as {subject.dir}, plain text, or JSON (numbers, true/false, lists)
+      --auto                 Use holdmap's suggested inputs for each --tool (without --tool: every
+                             tool it can fill in completely that has no warnings and isn't marked
+                             destructive)
+      --remove               Remove the --tool(s) instead
+      --items <ITEMS>        Where findings sit in JSON output, e.g. $.issues[*] (needs --rule-id)
+      --rule-id <RULE_ID>    Rule id field inside one item
+      --severity <SEVERITY>  Severity field
+      --title <TITLE>        Title field
+      --file <FILE>          File field
+      --line <LINE>          Line field
+      --auto-output          Use the output mapping suggested from a tool's output schema
+      --clear-output         Forget the output mapping (SARIF and holdmap JSON are still recognised;
+                             anything else becomes a short excerpt)
+      --json                 Machine-readable JSON output
+      --color <COLOR>        When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible
+                             values: auto, always, never]
+      --no-docker            Don't query Docker/Podman/OrbStack/Colima
+  -h, --help                 Print help
 ```
 
 ## holdmap analyzers remove
