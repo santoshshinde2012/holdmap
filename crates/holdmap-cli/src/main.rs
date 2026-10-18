@@ -5,6 +5,7 @@ mod agent_actions;
 mod agent_flow;
 mod agents;
 mod analyzers;
+mod analyzers_mcp;
 mod commands;
 mod graph;
 mod needs;
