@@ -19,6 +19,7 @@ pub struct AgentsBuilder<'a> {
     detector: &'a dyn AgentDetector,
     tool_classifier: &'a dyn ToolClassifier,
     capabilities: Option<&'a dyn CapabilityDiscovery>,
+    configured: bool,
     project_cache: Arc<ProjectCache>,
     home: Option<PathBuf>,
     detect_projects: bool,
@@ -37,6 +38,7 @@ impl<'a> AgentsBuilder<'a> {
             detector: &CATALOG,
             tool_classifier: &TOOLS,
             capabilities: None,
+            configured: false,
             project_cache: ProjectCache::global(),
             home: std::env::var_os("HOME")
                 .or_else(|| std::env::var_os("USERPROFILE"))
@@ -69,6 +71,14 @@ impl<'a> AgentsBuilder<'a> {
     /// The default never invokes a provider or reads these sources.
     pub fn with_capabilities(mut self, capabilities: &'a dyn CapabilityDiscovery) -> Self {
         self.capabilities = Some(capabilities);
+        self
+    }
+
+    /// Also list supported agents that aren't running but declare skills or MCP servers in
+    /// their default configuration (needs [`Self::with_capabilities`]; the provider should
+    /// read the current account's home only). Off by default.
+    pub fn with_configured_agents(mut self, on: bool) -> Self {
+        self.configured = on;
         self
     }
 
@@ -259,11 +269,19 @@ impl<'a> AgentsBuilder<'a> {
                 self.scan.snapshot.hidden_sockets
             ));
         }
+        let configured = match self.capabilities {
+            Some(provider) if self.configured => configured_agents(provider, &agents, platform),
+            _ => Vec::new(),
+        };
+        if !configured.is_empty() {
+            limits.push("Agents that aren't running are listed from their default configuration locations only; project files aren't inspected for them.".into());
+        }
         AgentsReport {
             agents,
             platform: platform.to_string(),
             taken_at_ms: self.scan.snapshot.taken_at_ms,
             limits,
+            configured,
         }
     }
 
@@ -431,5 +449,115 @@ impl<'a> AgentsBuilder<'a> {
                 facts,
             },
         }
+    }
+}
+
+/// Supported agents that aren't running but declare skills or MCP servers in their default
+/// configuration locations (current account only, no project folders).
+pub(crate) fn configured_agents(
+    provider: &dyn CapabilityDiscovery,
+    running: &[Agent],
+    platform: &str,
+) -> Vec<ConfiguredAgent> {
+    let running: HashSet<&str> = running.iter().map(|a| a.product.as_str()).collect();
+    capabilities::CONFIG_FAMILIES
+        .iter()
+        .filter(|family| !family.iter().any(|p| running.contains(p)))
+        .filter_map(|family| {
+            let product = family[0];
+            let found = provider.discover(product, &[], platform);
+            if !found.inspected || (found.skills.is_empty() && found.mcp_servers.is_empty()) {
+                return None;
+            }
+            let name = CATALOG
+                .iter()
+                .find(|p| p.id == product)
+                .map_or(product, |p| p.name);
+            Some(ConfiguredAgent {
+                product: product.to_string(),
+                name: name.to_string(),
+                capabilities: found,
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod configured_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    /// Declares one skill for Codex and nothing for anyone else; records what was asked.
+    #[derive(Debug, Default)]
+    struct Fake(Mutex<Vec<(String, usize)>>);
+
+    impl CapabilityDiscovery for Fake {
+        fn discover(&self, product: &str, projects: &[PathBuf], _: &str) -> AgentCapabilities {
+            self.0
+                .lock()
+                .unwrap()
+                .push((product.into(), projects.len()));
+            let mut out = AgentCapabilities {
+                inspected: product != "cline",
+                ..Default::default()
+            };
+            if product == "codex" || product == "cline" {
+                out.skills.push(SkillCapability {
+                    id: "skill:user:x".into(),
+                    name: "x".into(),
+                    declared_name: None,
+                    description: None,
+                    scope: CapabilityScope::User,
+                    source_path: "/home/dev/.codex/skills/x/SKILL.md".into(),
+                    project_path: None,
+                    evidence: Evidence::Observed,
+                });
+            }
+            out
+        }
+    }
+
+    #[test]
+    fn lists_configured_agents_that_are_not_running() {
+        let fake = Fake::default();
+        let found = configured_agents(&fake, &[], "linux");
+        assert_eq!(
+            found.len(),
+            1,
+            "only inspected inventories with something in them"
+        );
+        assert_eq!(found[0].product, "codex");
+        assert_eq!(found[0].name, "Codex CLI");
+        let asked = fake.0.lock().unwrap();
+        assert!(
+            asked.iter().all(|(_, projects)| *projects == 0),
+            "no project folders"
+        );
+        assert!(
+            !asked.iter().any(|(p, _)| p == "codex-desktop"),
+            "one read per family"
+        );
+    }
+
+    #[test]
+    fn skips_a_family_when_any_member_is_running() {
+        let fake = Fake::default();
+        let running = Agent {
+            product: "codex-desktop".into(),
+            ..test_agent()
+        };
+        assert!(configured_agents(&fake, &[running], "linux").is_empty());
+        assert!(!fake.0.lock().unwrap().iter().any(|(p, _)| p == "codex"));
+    }
+
+    fn test_agent() -> Agent {
+        serde_json::from_value(serde_json::json!({
+            "id": "agent:1", "product": "x", "name": "X", "vendor": "v", "kind": "cli", "pid": 1,
+            "process_name": "x", "command": "", "started_at": 0, "parent": null, "memory_bytes": 0,
+            "cpu_percent": 0.0, "processes": [], "more_processes": 0, "folders": [], "ports": [],
+            "links": [], "more_links": 0,
+            "access": {"user": null, "uid": null, "root": false, "mine": true, "facts": []}
+        }))
+        .unwrap()
     }
 }

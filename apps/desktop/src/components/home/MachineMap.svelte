@@ -80,7 +80,7 @@
           {:else if n.item.kind === "mcp"}<rect x="-5" y="-5" width="10" height="10" rx="2" transform="rotate(45)" />
           {:else}<circle r="5.5" class:ring={n.item.kind === "remote"} />{/if}
           <text x={right ? 12 : -12} y="-1" text-anchor={right ? "start" : "end"} class="l">{n.item.label}</text>
-          {#if n.item.sub}<text x={right ? 12 : -12} y="12" text-anchor={right ? "start" : "end"} class="s">{n.item.sub}</text>{/if}
+          {#if n.item.sub}{" "}<text x={right ? 12 : -12} y="12" text-anchor={right ? "start" : "end"} class="s">{n.item.sub}</text>{/if}
         </g></g>
       {/each}
       <g class="agent" class:hot={hot.has(g.agent.id)} class:selected={selected === g.agent.id} transform="translate({g.x},{g.y})" role="button" tabindex="0" id="map-agent-{g.agent.id}"
@@ -90,10 +90,11 @@
         {#if hot.has(g.agent.id)}<circle class="halo hot" r="38" />{/if}
         <circle class="ring-sel" r="33" />
         <circle class="disc" r="26" />
-        <text y="5" class="mono">{monogram(g.agent.name)}</text>
-        <text y={g.y < 0 ? -55 : 46} class="an">{g.agent.name}</text>
+        <text y={g.y < 0 ? -55 : 46} class="an">{g.agent.name}</text>{" "}
         <text y={g.y < 0 ? -40 : 61} class="as lv-{head.level}">{ACCESS_LABEL[head.level]}</text>
       </g></g>
+      <!-- The monogram sits outside the button so its name starts with the words shown under it. -->
+      <g class="agent-mono" transform="translate({g.x},{g.y})" aria-hidden="true"><g class="body"><text y="5" class="mono">{monogram(g.agent.name)}</text></g></g>
     </g>
   {/each}
 </svg>
@@ -120,7 +121,8 @@
   .ring-sel { fill: none; stroke: transparent; stroke-width: 2; }
   .agent.selected .ring-sel, .agent:focus-visible .ring-sel { stroke: var(--agent); stroke-dasharray: 3 3; }
   .agent:hover .disc { stroke-width: 2.5; }
-  .agent text { text-anchor: middle; }
+  .agent text, .agent-mono text { text-anchor: middle; }
+  .agent-mono { pointer-events: none; }
   .mono { font-size: var(--fs-heading); font-weight: var(--fw-semibold); fill: var(--agent); }
   .an { font-size: var(--fs-body); font-weight: var(--fw-semibold); fill: var(--text); }
   .as { font-size: var(--fs-caption); fill: var(--muted); }

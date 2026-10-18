@@ -2,7 +2,7 @@
 //! access, ports and the services they talk to. With `--stop-ports`, stop the unprotected
 //! tools and apps they started (never the agent's own protected listeners).
 
-use crate::style::{self, paint, S};
+use crate::style::{self, bold, paint, S};
 use anyhow::{bail, Context, Result};
 use holdmap_core::agents::{AccessLevel, AgentsReport, Evidence, FolderSource, LinkKind, PortRole};
 use holdmap_core::engine::tilde;
@@ -455,6 +455,7 @@ fn render_overview(r: &AgentsReport) -> String {
         }
         out.push_str("\n\n");
     }
+    out.push_str(&configured_lines(r));
     out.push_str(&style::dim("Details: holdmap agents <PID> · Processes: holdmap agents --wide\nStop services: holdmap agents <PID> --stop-ports --dry-run\nAgent sessions stay running; chats and tool invocations are never read.\n"));
     for limit in &r.limits {
         out.push_str(&style::dim(format!("note: {}\n", printable(limit))));
@@ -463,6 +464,24 @@ fn render_overview(r: &AgentsReport) -> String {
 }
 
 /// The human report.
+/// Agents that aren't running but whose default configuration was read (`--capabilities`).
+fn configured_lines(r: &AgentsReport) -> String {
+    let mut out = String::new();
+    for c in &r.configured {
+        out.push_str(&format!(
+            "{} {}: {} MCP definitions, {} skill folders in its default configuration\n",
+            bold(printable(&c.name)),
+            style::dim("(not running)"),
+            c.capabilities.mcp_servers.len(),
+            c.capabilities.skills.len()
+        ));
+    }
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    out
+}
+
 pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
     let mut out = String::new();
     if r.agents.is_empty() {
@@ -471,6 +490,7 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
             None => "No agents or developer tools running.\n".to_string(),
         };
         out.push_str(&style::dim(message));
+        out.push_str(&configured_lines(r));
         for limit in &r.limits {
             out.push_str(&style::dim(format!("note: {}\n", printable(limit))));
         }
@@ -812,6 +832,7 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
         paint("▾", S::Green),
         "narrower than your account · ! wider · ? unknown"
     )));
+    out.push_str(&configured_lines(r));
     for l in &r.limits {
         out.push_str(&style::dim(format!("note: {}\n", printable(l))));
     }
@@ -881,6 +902,7 @@ mod tests {
         let mut child = agent(7, "codex", "Codex CLI");
         child.parent = Some("agent:42".into());
         let r = AgentsReport {
+            configured: Vec::new(),
             agents: vec![agent(42, "claude-code", "Claude Code"), child],
             platform: "linux".into(),
             taken_at_ms: 0,
@@ -915,6 +937,7 @@ mod tests {
         });
         let text = render(
             &AgentsReport {
+                configured: Vec::new(),
                 agents: vec![a],
                 platform: "linux".into(),
                 taken_at_ms: 0,
@@ -1125,5 +1148,22 @@ mod tests {
             assert!(!text.contains('\x07'));
             assert!(!text.contains("\nforged row"));
         }
+    }
+
+    #[test]
+    fn configured_agents_that_are_not_running_are_listed() {
+        let r = AgentsReport {
+            configured: vec![holdmap_core::agents::ConfiguredAgent {
+                product: "codex".into(),
+                name: "Codex CLI".into(),
+                capabilities: holdmap_core::agents::AgentCapabilities {
+                    inspected: true,
+                    ..Default::default()
+                },
+            }],
+            ..AgentsReport::default()
+        };
+        let text = render(&r, false, None);
+        assert!(text.contains("Codex CLI (not running): 0 MCP definitions, 0 skill folders"));
     }
 }

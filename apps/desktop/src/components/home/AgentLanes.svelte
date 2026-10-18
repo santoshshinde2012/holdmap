@@ -66,8 +66,8 @@
         <button type="button" class="gutter who" data-lane aria-label="{l.agent.name}, up {l.uptime}, {head ? ACCESS_LABEL[head.level] : ''}"
           onfocus={() => onhover(l.id)} onblur={() => onhover(null)} onclick={() => onselect(l.id)} ondblclick={() => onopenagent(l.id)}
           onkeydown={(e) => { if (e.key === "Enter" && active === l.id) { e.preventDefault(); onopenagent(l.id); } }}>
-          <span class="mono">{monogram(l.agent.name)}</span>
-          <span class="nm"><b>{l.agent.name}</b><small><span>{l.uptime}</span>{#if head}<span class="lv-{head.level}">{` · ${ACCESS_LABEL[head.level]}`}</span>{/if}</small></span>
+          <span class="mono" aria-hidden="true" data-glyph={monogram(l.agent.name)}></span>
+          <span class="nm"><b>{l.agent.name}</b>{" "}<small><span>{`up ${l.uptime}`}</span>{#if head}<span class="lv-{head.level}">{` · ${ACCESS_LABEL[head.level]}`}</span>{/if}</small></span>
         </button>
       {:else}
         <span class="gutter who"><span class="mono"><Icon name="server" size={12} /></span><span class="nm"><b>Unowned</b><small>{l.bars.length} dev</small></span></span>

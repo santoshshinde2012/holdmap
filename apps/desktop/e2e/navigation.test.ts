@@ -22,7 +22,7 @@ test("Graph selection opens the corresponding listener and survives layout chang
   const graph = app.getByRole("radio", { name: /^Graph/ });
   await graph.click();
   await expect(graph).toHaveAttribute("aria-checked", "true");
-  const service = app.getByRole("button", { name: "shop-api on ports 3001", exact: true });
+  const service = app.getByRole("button", { name: /^shop\-api :3001(?!\d)/ });
   await expect(service).toBeVisible();
   const wrappedUsage = await app.locator(".node .usage > span").evaluateAll((spans) => spans
     .map((span) => ({ text: span.textContent, height: parseFloat(getComputedStyle(span).height), lineHeight: parseFloat(getComputedStyle(span).lineHeight) }))

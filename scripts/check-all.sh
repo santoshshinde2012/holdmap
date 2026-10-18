@@ -64,7 +64,7 @@ elif [[ "$(uname -s)" == Darwin ]]; then
   python3 scripts/check-screen-recording-runtime.py --app-ui
   python3 scripts/check-native-screen-recording.py
 fi
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap-activity -p holdmap
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked -p holdmap-core -p holdmap-mcp -p holdmap-activity -p holdmap-analyzers -p holdmap
 # Embed the built frontend, matching the production Tauri build's feature selection.
 cargo build --locked -p holdmap-desktop --features tauri/custom-protocol
 cargo deny --all-features check

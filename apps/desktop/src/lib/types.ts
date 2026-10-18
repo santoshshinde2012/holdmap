@@ -365,4 +365,10 @@ export interface Agent {
   access: AgentAccess;
 }
 
-export interface AgentsReport { agents: Agent[]; platform: string; taken_at_ms: number; limits: string[] }
+/** An agent that isn't running, known only from its default configuration locations. */
+export interface ConfiguredAgent { product: string; name: string; capabilities: AgentCapabilities }
+export interface AgentsReport {
+  agents: Agent[]; platform: string; taken_at_ms: number; limits: string[];
+  /** Agents that aren't running but whose default configuration was readable (opt-in inventory only). */
+  configured?: ConfiguredAgent[];
+}

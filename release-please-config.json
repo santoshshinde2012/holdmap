@@ -29,10 +29,11 @@
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies['holdmap-core'].version" },
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies['holdmap-mcp'].version" },
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies['holdmap-activity'].version" },
+        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies['holdmap-analyzers'].version" },
         {
           "type": "toml",
           "path": "Cargo.lock",
-          "jsonpath": "$.package[?(@.name.value == 'holdmap' || @.name.value == 'holdmap-core' || @.name.value == 'holdmap-mcp' || @.name.value == 'holdmap-desktop' || @.name.value == 'holdmap-activity')].version"
+          "jsonpath": "$.package[?(@.name.value == 'holdmap' || @.name.value == 'holdmap-core' || @.name.value == 'holdmap-mcp' || @.name.value == 'holdmap-desktop' || @.name.value == 'holdmap-activity' || @.name.value == 'holdmap-analyzers')].version"
         },
         { "type": "json", "path": "apps/desktop/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "apps/desktop/package-lock.json", "jsonpath": "$.version" },

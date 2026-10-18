@@ -673,10 +673,18 @@ const NODE_WHAT: Record<FootNode["kind"], string> = { folder: "Folder", tool: "M
 
 /** Map nodes are one focus stop each: the svelte-flow wrapper carries this name, and nothing
  *  inside it is a control, so screen readers get one item per node instead of nested buttons. */
+/** The resources line split into what the agent node shows (first two parts) and the rest. */
+export function nodeResources(a: Agent): [string, string] {
+  const parts = resourcesLine(a).split(" · ");
+  return [parts.slice(0, 2).join(" · "), parts.slice(2).join(" · ")];
+}
+
 export function footNodeLabel(n: FootNode, picture: Picture): string {
   if (n.kind === "agent" && n.agent) {
     const a = n.agent;
-    return `${a.name}, ${n.sub}. ${accessHeadline(a).text}. ${countsLine(counts(a))}. ${resourcesLine(a)}`;
+    // The words on the node first, in order (name, kind, access · memory · CPU), then the rest.
+    const [shown, rest] = nodeResources(a);
+    return `${a.name}, ${n.sub}. ${accessHeadline(a).text} · ${shown}. ${countsLine(counts(a))}${rest ? `. ${rest}` : ""}`;
   }
   const action = n.entryId ? ". Opens details" : n.kind === "tool" ? ". Opens its agent card" : n.kind === "folder" ? `. ${folderAction(picture)}` : "";
   return `${n.kind === "machine" ? "" : `${NODE_WHAT[n.kind]} `}${n.label}, ${n.sub}${n.evidence !== "observed" ? `, ${EVIDENCE_LABEL[n.evidence]}` : ""}${n.warning ? `, ${n.warning}` : ""}${action}`;

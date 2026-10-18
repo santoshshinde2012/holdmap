@@ -4,8 +4,10 @@
   // tree. Figures come from the OS; anything not observed is labelled as such.
   import Icon from "../Icon.svelte";
   import AgentTools from "./AgentTools.svelte";
+  import { insightsStore } from "../../lib/insights-store.svelte";
   import AgentConfigPanel from "./AgentConfigPanel.svelte";
   import { configSummary } from "../../lib/agent-config";
+  import { agentCounts, countsText, total } from "../../lib/analyzers";
   import { EvidenceChip } from "../ui";
   import { evidenceChip } from "../../lib/evidence";
   import { humanBytes, humanDuration, tildify } from "../../lib/format";
@@ -27,6 +29,7 @@
     onstopall,
     onnavigate,
     oncapabilities,
+    oninsights,
     oninventory,
     now = Date.now(),
   }: {
@@ -48,6 +51,8 @@
     onnavigate?: (id: string) => void;
     /** Opts into the separate, read-only configuration inventory workspace. */
     oncapabilities?: () => void;
+    /** Open this agent in the Insights tab. */
+    oninsights?: () => void;
     /** Turns on reading configuration for every agent (the onboarding opt-in). */
     oninventory?: () => void;
     now?: number;
@@ -208,6 +213,12 @@
 
       <AgentTools tools={agent.tools ?? []} more={agent.more_tools ?? 0} />
 
+      {#if insightsStore.analyzers.some((a) => a.state === "approved") || insightsStore.insights?.results.length}
+        {@const found = agentCounts(insightsStore.insights, agent.product)}
+        <h3>Insights</h3>
+        <p class="insight-line">{total(found) ? `Open findings: ${countsText(found, 5)}` : "No open findings"}{#if oninsights}{" "}<button type="button" class="link" onclick={oninsights}>Open Insights</button>{/if}</p>
+      {/if}
+
       <h3>Processes · {c.processes}</h3>
       <code class="cmd" title={agent.command}>{agent.command}</code>
       {#if children.length}
@@ -305,4 +316,6 @@
   .pname { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); }
   .prole, .more { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .pfig { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .insight-line { margin: 0; color: var(--text-2); font-size: var(--fs-caption); }
+  .insight-line .link { border: 0; background: none; padding: 0; color: var(--accent-text, var(--accent)); font: inherit; cursor: pointer; text-decoration: underline; }
 </style>

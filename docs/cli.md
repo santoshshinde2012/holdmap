@@ -26,6 +26,29 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`holdmap activity snapshot`](#holdmap-activity-snapshot) | Read metadata from the recorder named by HOLDMAP_ACTIVITY_ENDPOINT and TOKEN |
 | [`holdmap activity setup`](#holdmap-activity-setup) | Print a reviewable exporter example; never edit agent configuration automatically |
 | [`holdmap activity hook`](#holdmap-activity-hook) | Project one Codex/Claude hook from stdin to metadata and forward it locally |
+| [`holdmap analyzers`](#holdmap-analyzers) | Opt-in analyzers (SkillSpector, OSV lookup): see what one gets, approve, run, revoke |
+| [`holdmap analyzers list`](#holdmap-analyzers-list) | List analyzers and whether each is on (the default) |
+| [`holdmap analyzers show`](#holdmap-analyzers-show) | Show what an analyzer would get: folders or packages, command, network and environment |
+| [`holdmap analyzers approve`](#holdmap-analyzers-approve) | Review an analyzer's permissions and turn it on |
+| [`holdmap analyzers revoke`](#holdmap-analyzers-revoke) | Turn an analyzer off and delete its results |
+| [`holdmap analyzers key`](#holdmap-analyzers-key) | Store or delete an API key an analyzer declares, in the OS keychain |
+| [`holdmap analyzers key set`](#holdmap-analyzers-key-set) | Store a key: paste it when asked (not echoed), or pipe it on standard input |
+| [`holdmap analyzers key delete`](#holdmap-analyzers-key-delete) | Delete a stored key |
+| [`holdmap analyzers add`](#holdmap-analyzers-add) | Register your own analyzer from a manifest file (a local CLI or MCP scanner). It stays off until you approve it |
+| [`holdmap analyzers remove`](#holdmap-analyzers-remove) | Remove an analyzer you registered, with its approval, results and stored keys |
+| [`holdmap analyzers catalog`](#holdmap-analyzers-catalog) | The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject |
+| [`holdmap analyzers catalog status`](#holdmap-analyzers-catalog-status) | Which catalog is in use and whether an update waits for review (the default) |
+| [`holdmap analyzers catalog fetch`](#holdmap-analyzers-catalog-fetch) | Download the newest signed catalog from the holdmap repository and stage it for review |
+| [`holdmap analyzers catalog import`](#holdmap-analyzers-catalog-import) | Stage a catalog file (its signature is read from FILE.minisig) for review |
+| [`holdmap analyzers catalog accept`](#holdmap-analyzers-catalog-accept) | Apply the staged update. Analyzers whose manifest changed ask for approval again |
+| [`holdmap analyzers catalog reject`](#holdmap-analyzers-catalog-reject) | Discard the staged update |
+| [`holdmap analyzers auto`](#holdmap-analyzers-auto) | Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that uses the network. Analyzers without network access run automatically once on |
+| [`holdmap analyzers run`](#holdmap-analyzers-run) | Run an approved analyzer now (or, with --changed, every approved one whose input changed) |
+| [`holdmap insights`](#holdmap-insights) | Findings from approved analyzers, as text, JSON or SARIF |
+| [`holdmap insights review`](#holdmap-insights-review) | Mark a finding reviewed; it stays hidden while it is unchanged |
+| [`holdmap insights snooze`](#holdmap-insights-snooze) | Hide a finding for some days |
+| [`holdmap insights reopen`](#holdmap-insights-reopen) | Show a reviewed or snoozed finding again |
+| [`holdmap needs`](#holdmap-needs) | What needs you: exposed agents, wide access, risky settings, unpinned MCP servers |
 | [`holdmap watch`](#holdmap-watch) | Stream port events: new listeners, closed listeners, conflicts |
 | [`holdmap pin`](#holdmap-pin) | Pin a port (favourite): shown first and watched even when free |
 | [`holdmap unpin`](#holdmap-unpin) | Remove a pin |
@@ -70,6 +93,9 @@ Commands:
                Mermaid [alias: mesh]
   agents       Show AI coding agents and developer tools: folders, access, ports and connections
   activity     Record and inspect opt-in local agent activity metadata
+  analyzers    Opt-in analyzers (SkillSpector, OSV lookup): see what one gets, approve, run, revoke
+  insights     Findings from approved analyzers, as text, JSON or SARIF
+  needs        What needs you: exposed agents, wide access, risky settings, unpinned MCP servers
   watch        Stream port events: new listeners, closed listeners, conflicts
   pin          Pin a port (favourite): shown first and watched even when free
   unpin        Remove a pin
@@ -451,6 +477,442 @@ Options:
                              values: auto, always, never]
       --no-docker            Don't query Docker/Podman/OrbStack/Colima
   -h, --help                 Print help
+```
+
+## holdmap analyzers
+
+```text
+Opt-in analyzers (SkillSpector, OSV lookup): see what one gets, approve, run, revoke
+
+Usage: holdmap analyzers [OPTIONS] [COMMAND]
+
+Commands:
+  list     List analyzers and whether each is on (the default)
+  show     Show what an analyzer would get: folders or packages, command, network and environment
+  approve  Review an analyzer's permissions and turn it on
+  revoke   Turn an analyzer off and delete its results
+  key      Store or delete an API key an analyzer declares, in the OS keychain
+  add      Register your own analyzer from a manifest file (a local CLI or MCP scanner). It stays
+           off until you approve it
+  remove   Remove an analyzer you registered, with its approval, results and stored keys
+  catalog  The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject
+  auto     Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that
+           uses the network. Analyzers without network access run automatically once on
+  run      Run an approved analyzer now (or, with --changed, every approved one whose input changed)
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers list
+
+```text
+List analyzers and whether each is on (the default)
+
+Usage: holdmap analyzers list [OPTIONS]
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers show
+
+```text
+Show what an analyzer would get: folders or packages, command, network and environment
+
+Usage: holdmap analyzers show [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers approve
+
+```text
+Review an analyzer's permissions and turn it on
+
+Usage: holdmap analyzers approve [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+
+Options:
+      --yes            Don't ask; approve what `holdmap analyzers show ID` prints
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers revoke
+
+```text
+Turn an analyzer off and delete its results
+
+Usage: holdmap analyzers revoke [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers key
+
+```text
+Store or delete an API key an analyzer declares, in the OS keychain
+
+Usage: holdmap analyzers key [OPTIONS] <COMMAND>
+
+Commands:
+  set     Store a key: paste it when asked (not echoed), or pipe it on standard input
+  delete  Delete a stored key
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers key set
+
+```text
+Store a key: paste it when asked (not echoed), or pipe it on standard input
+
+Usage: holdmap analyzers key set [OPTIONS] <ID> <NAME>
+
+Arguments:
+  <ID>
+  <NAME>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers key delete
+
+```text
+Delete a stored key
+
+Usage: holdmap analyzers key delete [OPTIONS] <ID> <NAME>
+
+Arguments:
+  <ID>
+  <NAME>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers add
+
+```text
+Register your own analyzer from a manifest file (a local CLI or MCP scanner). It stays off until you
+approve it
+
+Usage: holdmap analyzers add [OPTIONS] <FILE>
+
+Arguments:
+  <FILE>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers remove
+
+```text
+Remove an analyzer you registered, with its approval, results and stored keys
+
+Usage: holdmap analyzers remove [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers catalog
+
+```text
+The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject
+
+Usage: holdmap analyzers catalog [OPTIONS] [COMMAND]
+
+Commands:
+  status  Which catalog is in use and whether an update waits for review (the default)
+  fetch   Download the newest signed catalog from the holdmap repository and stage it for review
+  import  Stage a catalog file (its signature is read from FILE.minisig) for review
+  accept  Apply the staged update. Analyzers whose manifest changed ask for approval again
+  reject  Discard the staged update
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers catalog status
+
+```text
+Which catalog is in use and whether an update waits for review (the default)
+
+Usage: holdmap analyzers catalog status [OPTIONS]
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers catalog fetch
+
+```text
+Download the newest signed catalog from the holdmap repository and stage it for review
+
+Usage: holdmap analyzers catalog fetch [OPTIONS]
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers catalog import
+
+```text
+Stage a catalog file (its signature is read from FILE.minisig) for review
+
+Usage: holdmap analyzers catalog import [OPTIONS] <FILE>
+
+Arguments:
+  <FILE>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers catalog accept
+
+```text
+Apply the staged update. Analyzers whose manifest changed ask for approval again
+
+Usage: holdmap analyzers catalog accept [OPTIONS]
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers catalog reject
+
+```text
+Discard the staged update
+
+Usage: holdmap analyzers catalog reject [OPTIONS]
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers auto
+
+```text
+Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that uses the
+network. Analyzers without network access run automatically once on
+
+Usage: holdmap analyzers auto [OPTIONS] <ID> <SETTING>
+
+Arguments:
+  <ID>
+  <SETTING>  [possible values: on, off]
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers run
+
+```text
+Run an approved analyzer now (or, with --changed, every approved one whose input changed)
+
+Usage: holdmap analyzers run [OPTIONS] [ID]
+
+Arguments:
+  [ID]
+
+Options:
+      --changed
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap insights
+
+```text
+Findings from approved analyzers, as text, JSON or SARIF
+
+Usage: holdmap insights [OPTIONS] [COMMAND]
+
+Commands:
+  review  Mark a finding reviewed; it stays hidden while it is unchanged
+  snooze  Hide a finding for some days
+  reopen  Show a reviewed or snoozed finding again
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>    Output format [default: text] [possible values: text, json, sarif]
+      --json               Shorthand for --format json
+      --min <MIN>          Only findings at or above this severity [default: info] [possible values:
+                           info, low, medium, high, critical]
+      --all                Include reviewed and snoozed findings
+      --fail-on <FAIL_ON>  Exit with status 1 when an open finding at or above this severity exists
+                           [possible values: info, low, medium, high, critical]
+      --color <COLOR>      When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible
+                           values: auto, always, never]
+      --no-docker          Don't query Docker/Podman/OrbStack/Colima
+  -h, --help               Print help
+```
+
+## holdmap insights review
+
+```text
+Mark a finding reviewed; it stays hidden while it is unchanged
+
+Usage: holdmap insights review [OPTIONS] <FINGERPRINT>
+
+Arguments:
+  <FINGERPRINT>
+
+Options:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json, sarif]
+      --json             Shorthand for --format json
+      --color <COLOR>    When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                         auto, always, never]
+      --no-docker        Don't query Docker/Podman/OrbStack/Colima
+  -h, --help             Print help
+```
+
+## holdmap insights snooze
+
+```text
+Hide a finding for some days
+
+Usage: holdmap insights snooze [OPTIONS] <FINGERPRINT>
+
+Arguments:
+  <FINGERPRINT>
+
+Options:
+      --days <DAYS>      [default: 7]
+      --format <FORMAT>  Output format [default: text] [possible values: text, json, sarif]
+      --json             Shorthand for --format json
+      --color <COLOR>    When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                         auto, always, never]
+      --no-docker        Don't query Docker/Podman/OrbStack/Colima
+  -h, --help             Print help
+```
+
+## holdmap insights reopen
+
+```text
+Show a reviewed or snoozed finding again
+
+Usage: holdmap insights reopen [OPTIONS] <FINGERPRINT>
+
+Arguments:
+  <FINGERPRINT>
+
+Options:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json, sarif]
+      --json             Shorthand for --format json
+      --color <COLOR>    When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                         auto, always, never]
+      --no-docker        Don't query Docker/Podman/OrbStack/Colima
+  -h, --help             Print help
+```
+
+## holdmap needs
+
+```text
+What needs you: exposed agents, wide access, risky settings, unpinned MCP servers
+
+Usage: holdmap needs [OPTIONS]
+
+Options:
+      --json           Machine-readable JSON output
+      --fail           Exit with status 1 when any item is listed
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
 ```
 
 ## holdmap watch

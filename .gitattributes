@@ -7,3 +7,6 @@ vendor/global-hotkey/.github/workflows/covector-version-or-publish.yml whitespac
 vendor/glib-provenance.json -text
 vendor/global-hotkey-provenance.json -text
 vendor/global-hotkey-x11.patch -text whitespace=-blank-at-eol
+# Signed analyzer catalog and the manifests it is built from: exact bytes on every platform.
+crates/holdmap-analyzers/catalog/** -text
+crates/holdmap-analyzers/manifests/** -text

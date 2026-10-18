@@ -50,7 +50,7 @@ fn notifications_get_no_response() {
 fn lists_tools_with_annotations() {
     let r = call(json!({"jsonrpc":"2.0","id":3,"method":"tools/list"}));
     let tools = r["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 11);
+    assert_eq!(tools.len(), 14);
     let stop = tools.iter().find(|t| t["name"] == "stop_port").unwrap();
     assert_eq!(stop["annotations"]["destructiveHint"], true);
     assert_eq!(stop["annotations"]["idempotentHint"], false);
@@ -1082,4 +1082,24 @@ fn malformed_wire_controls_preserve_confirmation_and_reinitialize_invalidates_it
     let id = session.confirmations.issue(fixture).unwrap();
     session.handle(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}})).unwrap();
     assert!(session.confirmations.take(&id, &request).is_err());
+}
+
+#[test]
+fn configured_agents_that_are_not_running_are_listed_and_filtered() {
+    let mut report = agents_fixture();
+    report
+        .configured
+        .push(holdmap_core::agents::ConfiguredAgent {
+            product: "gemini".into(),
+            name: "Gemini CLI".into(),
+            capabilities: holdmap_core::agents::AgentCapabilities {
+                inspected: true,
+                ..Default::default()
+            },
+        });
+    let (text, data) = agents_result(report.clone(), &json!({}));
+    assert!(text.contains("Gemini CLI (not running): configured with 0 MCP definitions"));
+    assert_eq!(data["configured"][0]["product"], "gemini");
+    let (_, other) = agents_result(report, &json!({"agent": "shop-web"}));
+    assert!(other.get("configured").is_none());
 }

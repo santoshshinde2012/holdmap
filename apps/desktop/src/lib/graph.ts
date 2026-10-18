@@ -540,3 +540,18 @@ export function trafficDots(connections: number): { count: number; duration: num
   const count = Math.max(1, Math.min(4, Math.ceil(Math.log2(connections + 1))));
   return { count, duration: Math.max(1.4, 3.2 - connections * 0.2) };
 }
+
+/** A service card's accessible name: the words on the card in reading order (name, up to three
+ *  ports, overflow, subtitle), then facts shown only as icons or figures. */
+export function serviceLabel(n: GraphNode, usage: { cpu: string; memory: string } | null): string {
+  const ports = n.ports.slice(0, 3).map((p) => `:${p.port}`);
+  if (n.ports.length > 3) ports.push(`+${n.ports.length - 3}`);
+  const sub = nodeSubtitle(n);
+  const shown = [n.label, ...ports, ...(sub ? [sub] : [])].join(" ");
+  const facts = [
+    n.protected ? "protected" : null,
+    n.ports.some((p) => p.exposure === "all_interfaces") ? "reachable from the network" : null,
+    usage ? `CPU ${usage.cpu}, memory ${usage.memory}` : null,
+  ].filter(Boolean);
+  return [shown, ...facts].join(", ");
+}

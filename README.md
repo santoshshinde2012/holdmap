@@ -166,11 +166,12 @@ per service (default 60); `holdmap status` runs at most 32 HTTP checks concurren
 
 | Purpose | Commands |
 |---|---|
-| Look | `holdmap list`, `holdmap inspect`, `holdmap explain`, `holdmap graph`, `holdmap agents`, `holdmap watch`, `holdmap ssh HOST` (read-only, nothing to install remotely) |
+| Look | `holdmap list`, `holdmap inspect`, `holdmap explain`, `holdmap graph`, `holdmap agents`, `holdmap needs`, `holdmap watch`, `holdmap ssh HOST` (read-only, nothing to install remotely) |
 | Act | `holdmap stop`, `holdmap kill`, `holdmap restart`, `holdmap run`, `holdmap open`, `holdmap agents AGENT --stop-ports` |
 | Ports | `holdmap free-port --near 3000`, `holdmap wait 5432 --timeout 30s` |
 | Projects | `holdmap up`, `holdmap down`, `holdmap status`, `holdmap init` |
 | Remember | `holdmap pin`, `holdmap unpin`, `holdmap pins`, `holdmap history` |
+| Analyze (opt-in) | `holdmap analyzers list`, `holdmap analyzers show`, `holdmap analyzers approve`, `holdmap analyzers revoke`, `holdmap analyzers run`, `holdmap analyzers auto`, `holdmap analyzers add`, `holdmap analyzers remove`, `holdmap analyzers catalog`, `holdmap analyzers catalog status`, `holdmap analyzers catalog fetch`, `holdmap analyzers catalog import`, `holdmap analyzers catalog accept`, `holdmap analyzers catalog reject`, `holdmap analyzers key set`, `holdmap analyzers key delete`, `holdmap insights`, `holdmap insights review`, `holdmap insights snooze`, `holdmap insights reopen` |
 | Integrate | `holdmap activity serve`, `holdmap activity setup`, `holdmap activity snapshot`, `holdmap activity hook`, `holdmap tui`, `holdmap mcp`, `holdmap completions zsh`, `holdmap man` |
 
 Every read command takes `--json`. Exit codes: `0` ok, `1` busy / not found / timed out, `2`
@@ -194,6 +195,18 @@ built-in tools, permission rules and instruction files. Values, prompts and file
 never read; MCP servers are never started. The desktop, the TUI (**c** in Agents) and MCP
 `list_agents` with `include_capabilities` show the same inventory. Configured does not mean
 loaded or used. See [MCP and skills](site/src/content/docs/agents.md#mcp-and-skills).
+
+**Analyzers (opt-in).** Run a scanner you pick on your agents' skills and MCP packages:
+[NVIDIA SkillSpector](https://github.com/NVIDIA/SkillSpector) (installed by you), the built-in
+OSV.dev lookup for pinned npm/PyPI packages, or a local CLI or MCP scanner you register with
+`holdmap analyzers add`. Every analyzer is off until you approve it.
+`holdmap analyzers show ID` prints exactly what it gets: the folders or package versions, the
+command, the network hosts, the cleared environment and the sandbox (bubblewrap or Landlock, Seatbelt or a
+Job Object where available). Approval is pinned to that manifest and program; any change asks
+again. Keys go in the OS keychain. Catalog updates are signed and applied only after you review
+the diff. holdmap never starts MCP servers on its own; an MCP analyzer's server runs only for a
+run you start. Only capped findings are kept, never matched text;
+`holdmap insights --format sarif` exports them. See [Analyzers](site/src/content/docs/analyzers.md).
 
 **Terminal agents.** Start `holdmap` and press **Shift+Tab**
 to open Agents. Use **↑/↓** to choose an agent, **/** to search, and **PgUp/PgDn** to read its
@@ -307,9 +320,10 @@ installers are unsigned: verify checksums and provenance first
 
 ## MCP server
 
-`holdmap mcp` gives AI coding assistants eleven tools to list, explain and inspect ports, find a
+`holdmap mcp` gives AI coding assistants fourteen tools to list, explain and inspect ports, find a
 free port, wait for a server, read the service graph, list agents (`list_agents`, with
-`include_capabilities` for the opt-in inventory), follow agent flow (`get_agent_flow`) and stop
+`include_capabilities` for the opt-in inventory), follow agent flow (`get_agent_flow`), read opt-in analyzer findings (`list_analyzers`, `list_insights`), read the "needs you" list
+(`list_needs`) and stop
 ports. For Claude Desktop or Cursor (`~/.cursor/mcp.json`):
 
 ```json

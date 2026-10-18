@@ -15,6 +15,13 @@
     onopenagent: (id: string) => void;
     onport: (entryId: string, anchor: HTMLElement) => void;
   } = $props();
+  const NOUN: Record<string, [string, string]> = { project: ["project", "projects"], port: ["port", "ports"], mcp: ["MCP server", "MCP servers"], remote: ["remote host", "remote hosts"] };
+  /** Visible words first (name, access), then the counts the icons show. */
+  function mapListLabel(g: Group): string {
+    const counts = KINDS.map(({ k }) => g.nodes.filter((n) => n.item.kind === k).length)
+      .flatMap((n, i) => (n ? [`${n} ${NOUN[KINDS[i].k][n === 1 ? 0 : 1]}`] : []));
+    return [g.agent.name, ACCESS_LABEL[accessHeadline(g.agent).level], ...counts].join(", ");
+  }
   const KINDS = [{ k: "project", icon: "folder" }, { k: "port", icon: "plug" }, { k: "mcp", icon: "server" }, { k: "remote", icon: "globe" }] as const;
 </script>
 
@@ -23,13 +30,13 @@
     {@const head = accessHeadline(g.agent)}
     {@const ports = g.nodes.filter((n) => n.item.target.view === "list")}
     <li style="--agent: {colors.get(g.agent.id)}" class:active={active === g.agent.id}>
-      <button type="button" onclick={() => onopenagent(g.agent.id)} onfocus={() => onhover(g.agent.id)} onblur={() => onhover(null)} aria-label="{g.agent.name}, {ACCESS_LABEL[head.level]}">
-        <span class="mono">{monogram(g.agent.name)}</span>
-        <span class="nm"><b>{g.agent.name}</b><small class="lv-{head.level}">{ACCESS_LABEL[head.level]}</small></span>
+      <button type="button" onclick={() => onopenagent(g.agent.id)} onfocus={() => onhover(g.agent.id)} onblur={() => onhover(null)} aria-label={mapListLabel(g)}>
+        <span class="mono" aria-hidden="true" data-glyph={monogram(g.agent.name)}></span>
+        <span class="nm"><b>{g.agent.name}</b>{" "}<small class="lv-{head.level}">{ACCESS_LABEL[head.level]}</small></span>
         <span class="counts">
           {#each KINDS as { k, icon }}
             {@const nodes = g.nodes.filter((n) => n.item.kind === k)}
-            {#if nodes.length}<span class:warn={nodes.some((n) => n.item.warn)}><Icon name={icon} size={11} />{nodes.length}</span>{/if}
+            {#if nodes.length}<span class:warn={nodes.some((n) => n.item.warn)}><Icon name={icon} size={11} /><span data-glyph={nodes.length}></span></span>{/if}
           {/each}
         </span>
       </button>

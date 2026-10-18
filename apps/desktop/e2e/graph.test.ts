@@ -8,7 +8,7 @@ const details = (page: Page, port: number) => page.getByRole("complementary", { 
 async function openGraph(page: Page) {
   await page.getByRole("radio", { name: /^Graph/ }).click();
   await expect(canvas(page)).toBeVisible();
-  await expect(canvas(page).getByRole("button", { name: "shop-api on ports 3001", exact: true })).toBeAttached();
+  await expect(canvas(page).getByRole("button", { name: /^shop\-api :3001(?!\d)/ })).toBeAttached();
 }
 
 async function expectReadableCards(page: Page) {
@@ -50,7 +50,7 @@ test("Graph uses the full canvas until an explicit service click and returns foc
   await expect(app.getByRole("heading", { name: "At a glance", exact: true })).toHaveCount(0);
   const bounds = await canvas(app).boundingBox();
   expect(bounds!.width).toBeGreaterThan(1440 * .9);
-  const service = canvas(app).getByRole("button", { name: "shop-api on ports 3001", exact: true });
+  const service = canvas(app).getByRole("button", { name: /^shop\-api :3001(?!\d)/ });
   await service.click();
   await expect(details(app, 3001).getByRole("heading", { name: /^shop-api/ })).toBeVisible();
   await expect(service).toHaveAttribute("aria-pressed", "true");
@@ -112,16 +112,16 @@ test("Graph search is independent of hidden List filters and keeps observed neig
   await expect(search).toHaveValue("");
   await canvas(app).getByRole("button", { name: "All services", exact: true }).click();
   await search.fill("11434");
-  const ollama = canvas(app).getByRole("button", { name: "Ollama on ports 11434", exact: true });
+  const ollama = canvas(app).getByRole("button", { name: /^Ollama :11434(?!\d)/ });
   await expect(ollama).toBeVisible();
   await ollama.click();
   await expect(details(app, 11434).getByRole("heading", { name: /^Ollama/ })).toBeVisible();
   await search.fill("shop-api");
   await expect(details(app, 11434)).toHaveCount(0);
   await expect(search).toBeFocused();
-  await expect(canvas(app).getByRole("button", { name: "shop-api on ports 3001", exact: true })).toBeVisible();
-  await expect(canvas(app).getByRole("button", { name: "db on ports 5432", exact: true })).toBeAttached();
-  await expect(canvas(app).getByRole("button", { name: "shop-web on ports 3000", exact: true })).toBeAttached();
+  await expect(canvas(app).getByRole("button", { name: /^shop\-api :3001(?!\d)/ })).toBeVisible();
+  await expect(canvas(app).getByRole("button", { name: /^db :5432(?!\d)/ })).toBeAttached();
+  await expect(canvas(app).getByRole("button", { name: /^shop\-web :3000(?!\d)/ })).toBeAttached();
   await search.press("Enter");
   await expect(details(app, 3001).getByRole("heading", { name: /^shop-api/ })).toBeVisible();
   await details(app, 3001).getByRole("button", { name: "Hide details pane", exact: true }).click();
@@ -135,14 +135,14 @@ test("Graph search is independent of hidden List filters and keeps observed neig
   await expect(canvas(app).getByRole("heading", { name: "No services match this search", exact: true })).toBeVisible();
   await canvas(app).locator(".empty").getByRole("button", { name: "Clear search", exact: true }).click();
   await expect(search).toHaveValue("");
-  await expect(canvas(app).getByRole("button", { name: "Ollama on ports 11434", exact: true })).toBeAttached();
+  await expect(canvas(app).getByRole("button", { name: /^Ollama :11434(?!\d)/ })).toBeAttached();
 });
 
 test("External search selects only its read-only peer and hiding hosts clears that selection", async ({ app }) => {
   await openGraph(app);
   const search = app.getByLabel("Search services", { exact: true });
   await search.fill("External");
-  await expect(canvas(app).getByRole("button", { name: "External", exact: true })).toBeVisible();
+  await expect(canvas(app).getByRole("button", { name: "External Internet & remote hosts", exact: true })).toBeVisible();
   await search.press("Enter");
   const peer = canvas(app).getByRole("complementary", { name: "Details for External", exact: true });
   await expect(peer).toBeVisible();
@@ -172,7 +172,7 @@ for (const width of [390, 820, 1440]) for (const theme of ["dark", "light"]) {
     await expect(canvas(app).getByRole("radio", { name: "Force", exact: true })).toHaveAttribute("aria-checked", "true");
     await expect(canvas(app).locator(".svelte-flow__edge")).toHaveCount(6);
     await expectReadableCards(app);
-    await expect.poll(() => canvas(app).getByRole("button", { name: "shop-web on ports 3000", exact: true }).evaluate((node) => {
+    await expect.poll(() => canvas(app).getByRole("button", { name: /^shop\-web :3000(?!\d)/ }).evaluate((node) => {
       const card = node.getBoundingClientRect(), bounds = node.closest(".graph-body")!.getBoundingClientRect();
       return card.left >= bounds.left && card.right <= bounds.right && card.top >= bounds.top && card.bottom <= bounds.bottom;
     }), { message: "Start on a complete development service card, including on mobile" }).toBe(true);
@@ -197,7 +197,7 @@ for (const width of [390, 820, 1440]) for (const theme of ["dark", "light"]) {
     await options.press("Shift+Tab");
     await expect(displayOptions).toHaveCount(0);
     await canvas(app).getByRole("button", { name: "Fit all services in view", exact: true }).click();
-    await canvas(app).getByRole("button", { name: "Reset to readable size", exact: true }).click();
+    await canvas(app).getByRole("button", { name: /^\d+%, reset to readable size$/ }).click();
     await expectReadableCards(app);
     expect(await app.evaluate(() => "__TAURI_INTERNALS__" in window)).toBe(false);
   });
@@ -207,7 +207,7 @@ for (const key of ["Enter", "Space"]) {
   test(`390px native ${key} selects the exact service and drawer dismissal restores its focus`, async ({ app }) => {
     await app.setViewportSize({ width: 390, height: 844 });
     await openGraph(app);
-    const service = canvas(app).getByRole("button", { name: "shop-api on ports 3001", exact: true });
+    const service = canvas(app).getByRole("button", { name: /^shop\-api :3001(?!\d)/ });
     await service.focus();
     await service.press(key);
     const drawer = app.getByRole("dialog", { name: "Details for port 3001", exact: true });

@@ -1,0 +1,7 @@
+{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"fullName":"Trivy Vulnerability Scanner","name":"Trivy","version":"0.67.0","rules":[
+ {"id":"CVE-2024-21538","name":"LanguageSpecificPackageVulnerability","shortDescription":{"text":"cross-spawn: regular expression denial of service"},"helpUri":"https://avd.aquasec.com/nvd/cve-2024-21538","properties":{"precision":"very-high","security-severity":"7.5","tags":["vulnerability","security","HIGH"]}}
+]}},
+"results":[{"ruleId":"CVE-2024-21538","ruleIndex":0,"level":"error","message":{"text":"Package: cross-spawn\nInstalled Version: 7.0.3"},
+ "locations":[{"physicalLocation":{"artifactLocation":{"uri":"package-lock.json","uriBaseId":"ROOTPATH"},"region":{"startLine":1}}}]}],
+"invocations":[{"executionSuccessful":false}],
+"originalUriBaseIds":{"ROOTPATH":{"uri":"file:///tmp/holdmap-analyzer-q/subject/"}}}]}

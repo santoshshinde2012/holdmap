@@ -1,0 +1,15 @@
+{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Semgrep OSS","version":"1.140.0","rules":[
+ {"id":"python.lang.security.audit.subprocess-shell-true","name":"subprocess-shell-true","shortDescription":{"text":"subprocess call with shell=True"},"help":{"text":"Pass a list of arguments and shell=False."},"helpUri":"https://semgrep.dev/r/python.lang.security.audit.subprocess-shell-true","defaultConfiguration":{"level":"warning"},"properties":{"tags":["security"],"security-severity":7.5}},
+ {"id":"generic.secrets.gitleaks.github-pat","shortDescription":{"text":"GitHub personal access token"},"defaultConfiguration":{"level":"error"}}
+]}},
+"invocations":[{"executionSuccessful":true,"toolExecutionNotifications":[]}],
+"results":[
+ {"ruleId":"python.lang.security.audit.subprocess-shell-true","level":"warning","message":{"text":"Found subprocess.run('rm -rf ' + ghp_LEAKLEAKLEAKLEAKLEAKLEAKLEAKLEAKLEAK01, shell=True)"},
+  "locations":[{"physicalLocation":{"artifactLocation":{"uri":"file:///tmp/holdmap-analyzer-z9/subject/scripts/run.py"},"region":{"startLine":12,"snippet":{"text":"subprocess.run(cmd, shell=True)"}}}}],
+  "fingerprints":{"matchBasedId/v1":"abc123"}},
+ {"ruleId":"generic.secrets.gitleaks.github-pat","level":"error","message":{"text":"ghp_LEAKLEAKLEAKLEAKLEAKLEAKLEAKLEAKLEAK01"},
+  "locations":[{"physicalLocation":{"artifactLocation":{"uri":"config.env"},"region":{"startLine":2}}}],
+  "suppressions":[{"kind":"inSource","status":"accepted"}]},
+ {"ruleId":"generic.secrets.gitleaks.github-pat","message":{"text":"x"},
+  "locations":[{"physicalLocation":{"artifactLocation":{"uri":"notes.md"},"region":{"startLine":4}}}]}
+]}]}

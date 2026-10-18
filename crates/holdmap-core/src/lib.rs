@@ -23,6 +23,7 @@
 //! ```
 
 pub mod agents;
+pub mod attention;
 pub mod details;
 pub mod docker;
 pub mod engine;

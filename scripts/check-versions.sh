@@ -12,6 +12,7 @@ versions = {
     "Cargo.toml holdmap-core dep": cargo["workspace"]["dependencies"]["holdmap-core"]["version"],
     "Cargo.toml holdmap-mcp dep": cargo["workspace"]["dependencies"]["holdmap-mcp"]["version"],
     "Cargo.toml holdmap-activity dep": cargo["workspace"]["dependencies"]["holdmap-activity"]["version"],
+    "Cargo.toml holdmap-analyzers dep": cargo["workspace"]["dependencies"]["holdmap-analyzers"]["version"],
     "apps/desktop/package.json": json.load(open("apps/desktop/package.json"))["version"],
     "apps/desktop/package-lock.json": pkg_lock["version"],
     "apps/desktop/package-lock.json packages['']": pkg_lock["packages"][""]["version"],
@@ -29,7 +30,7 @@ if not marker:
     sys.exit("README.md source-version marker block must contain exactly one field: Source version: **X.Y.Z**.")
 versions["README.md source version marker"] = marker.group(1)
 for p in lock["package"]:
-    if p["name"] in ("holdmap", "holdmap-core", "holdmap-mcp", "holdmap-desktop", "holdmap-activity"):
+    if p["name"] in ("holdmap", "holdmap-core", "holdmap-mcp", "holdmap-desktop", "holdmap-activity", "holdmap-analyzers"):
         versions[f"Cargo.lock {p['name']}"] = p["version"]
 want = versions["Cargo.toml [workspace.package]"]
 bad = {k: v for k, v in versions.items() if v != want}

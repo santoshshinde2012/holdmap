@@ -20,7 +20,7 @@ test.describe("narrow docked details", () => {
   test("tabs, resource metrics and separate stop actions fit the sidebar", async ({ app }) => {
     // Connections is available while the live service graph is loaded.
     await app.getByRole("radio", { name: "Graph", exact: true }).click();
-    await app.getByRole("button", { name: "shop-web on ports 3000", exact: true }).click();
+    await app.getByRole("button", { name: /^shop\-web :3000(?!\d)/ }).click();
     const details = app.getByRole("complementary", { name: "Port details", exact: true });
     const tabs = details.getByRole("tablist", { name: "Details sections", exact: true });
     await expect(tabs.getByRole("tab")).toHaveCount(5);
@@ -70,7 +70,7 @@ test.describe("narrow docked details", () => {
     await expect(review.getByRole("button", { name: "Stop :3000", exact: true })).toBeFocused();
     await expect(review.getByRole("combobox", { name: "When", exact: true })).toHaveCount(0);
     await review.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(app.getByRole("button", { name: "shop-web on ports 3000", exact: true })).toBeVisible();
+    await expect(app.getByRole("button", { name: /^shop\-web :3000(?!\d)/ })).toBeVisible();
     await expect(stop).toBeFocused();
   });
 
