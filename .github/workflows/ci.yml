@@ -103,7 +103,7 @@ jobs:
         if: runner.os != 'Windows'
         env:
           HOLDMAP_MCP_FIXTURE: "1"
-        run: cargo test -p holdmap-analyzers --locked --test mcp_analyzers real_server:: -- --nocapture
+        run: "cargo test -p holdmap-analyzers --locked --test mcp_analyzers real_server:: -- --nocapture"
       - name: Smoke test the CLI against the real OS
         shell: bash
         run: |
