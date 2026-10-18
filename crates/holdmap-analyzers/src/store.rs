@@ -97,7 +97,16 @@ impl FileStore {
 }
 
 fn private_dir(dir: &Path) -> io::Result<()> {
-    fs::create_dir_all(dir)?;
+    // Every folder this creates is private, including the holdmap folder itself when an
+    // analyzer command runs first: holdmap refuses to read state from a folder others can list.
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(dir)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -346,6 +355,28 @@ mod tests {
             assert_eq!(mode(&dir.path().join("analyzers/reviews.json")), 0o600);
             assert_eq!(mode(&dir.path().join("analyzers")), 0o700);
         }
+    }
+
+    /// When an analyzer command is the first thing to run, the holdmap folder it creates must be
+    /// private too, or every other holdmap command refuses to read its state.
+    #[cfg(unix)]
+    #[test]
+    fn the_folders_it_creates_are_private_including_the_holdmap_folder() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("holdmap");
+        let store = FileStore::new(home.join("analyzers"));
+        crate::consent::UserManifestStore::add_user_manifest(&store, "a.b", "schema = 1\n")
+            .unwrap();
+        for d in [
+            &home,
+            &home.join("analyzers"),
+            &home.join("analyzers/manifests"),
+        ] {
+            let mode = fs::metadata(d).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o700, "{}", d.display());
+        }
+        holdmap_core::util::create_private_dir(&home).unwrap();
     }
 
     #[test]

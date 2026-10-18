@@ -851,3 +851,47 @@ fn analyzers_added_by_url_are_reachable_over_http() {
         "{text}"
     );
 }
+
+/// Adding a preset registers it off; re-adding the exact manifest after approval keeps the
+/// approval and says so instead of claiming it is off.
+#[cfg(unix)]
+#[test]
+fn re_adding_an_approved_manifest_keeps_it_approved_and_the_list_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = dir.path().join("store");
+    hm().env("HOLDMAP_HOME", &store)
+        .args(["analyzers", "add", "--preset", "pycqa.bandit"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("It is off"));
+    let file = dir.path().join("t.toml");
+    std::fs::write(
+        &file,
+        "schema = 1\nid = \"local.true\"\nname = \"True\"\npublisher = \"me\"\n\
+         homepage = \"https://example.com\"\nlicense = \"MIT\"\nsummary = \"Does nothing.\"\n\
+         [runner]\nkind = \"cli\"\ncommand = \"true\"\nargs = [\"{subject.dir}\"]\nper_subject = \"skill\"\n\
+         [permissions]\nread = [\"{subject.dir}\"]\n[output]\nformat = \"sarif\"\n",
+    )
+    .unwrap();
+    let add = || {
+        hm().env("HOLDMAP_HOME", &store)
+            .args(["analyzers", "add"])
+            .arg(&file)
+            .assert()
+            .success()
+    };
+    add().stdout(predicate::str::contains("It is off"));
+    hm().env("HOLDMAP_HOME", &store)
+        .args(["analyzers", "approve", "local.true", "--yes"])
+        .assert()
+        .success();
+    add().stdout(predicate::str::contains("already registered and approved"));
+    hm().env("HOLDMAP_HOME", &store)
+        .args(["analyzers", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Analyzers are off until you approve one").not())
+        .stdout(predicate::str::contains(
+            "Each analyzer stays off until you approve it",
+        ));
+}

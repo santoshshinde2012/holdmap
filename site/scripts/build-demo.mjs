@@ -41,7 +41,11 @@ const boot = `<script>
     a.href = "../";
     a.textContent = "← holdmap · sample data";
     a.setAttribute("style", "position:fixed;left:12px;bottom:12px;z-index:9999;padding:6px 10px;border-radius:8px;font:500 12px/1.2 system-ui,sans-serif;background:#5048e5;color:#fff;text-decoration:none;box-shadow:0 4px 16px rgb(0 0 0/.25)");
-    document.body.append(a);
+    // A landmark of its own, so the link isn't stray content outside the app's regions.
+    var nav = document.createElement("nav");
+    nav.setAttribute("aria-label", "Back to the holdmap site");
+    nav.append(a);
+    document.body.append(nav);
   });
 })();
 </script>`;

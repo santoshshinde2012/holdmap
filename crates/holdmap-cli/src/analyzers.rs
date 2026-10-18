@@ -556,6 +556,14 @@ fn registered(added: Result<AnalyzerView, ServiceError>, json: bool) -> Result<u
     };
     if json {
         println!("{}", serde_json::to_string_pretty(&view)?);
+    } else if view.state == AnalyzerState::Approved {
+        // Re-adding the exact manifest that was approved keeps the approval pin.
+        println!(
+            "{} {} ({}) is already registered and approved; its manifest is unchanged.",
+            style::ok_mark(),
+            view.name,
+            view.id
+        );
     } else {
         println!(
             "{} Registered {} ({}). It is off: review it with `holdmap analyzers show {}`, then `holdmap analyzers approve {}`.",
@@ -781,10 +789,17 @@ fn render_list(list: &[AnalyzerView]) -> String {
             }
         }
     }
-    out.push_str(&dim(
-        "Analyzers are off until you approve one: holdmap analyzers show <id>\n",
-    ));
+    out.push_str(&dim(list_footer(list)));
     out
+}
+
+/// The hint under the list: the "all off" line only while nothing is approved.
+fn list_footer(list: &[AnalyzerView]) -> &'static str {
+    if list.iter().any(|a| a.state == AnalyzerState::Approved) {
+        "Each analyzer stays off until you approve it: holdmap analyzers show <id>\n"
+    } else {
+        "Analyzers are off until you approve one: holdmap analyzers show <id>\n"
+    }
 }
 
 fn render_preview(p: &Preview) -> String {
