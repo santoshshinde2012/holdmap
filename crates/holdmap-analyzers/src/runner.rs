@@ -24,6 +24,9 @@ pub struct RawOutput {
     pub failed: bool,
     /// The MCP tool that produced it (MCP analyzers).
     pub tool: Option<String>,
+    /// The program exited with one of its `exit_no_findings` codes and wrote no report: it
+    /// found nothing it could check (e.g. no dependencies), which is a clean run.
+    pub nothing_to_check: bool,
 }
 
 /// The note on work a user stopped.

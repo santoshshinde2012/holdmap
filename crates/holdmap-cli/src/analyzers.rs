@@ -51,14 +51,20 @@ pub enum AnalyzerAction {
         #[command(subcommand)]
         action: KeyAction,
     },
-    /// Register your own analyzer from a manifest file, or any MCP server with --mcp (from a
-    /// command, a URL or one of your agents' servers). It stays off until you approve it.
+    /// Register your own analyzer from a manifest file, a preset (--preset), or any MCP server
+    /// with --mcp (from a command, a URL or one of your agents' servers). It stays off until you
+    /// approve it.
     Add {
-        #[arg(required_unless_present = "mcp")]
+        #[arg(required_unless_present_any = ["mcp", "preset"])]
         file: Option<std::path::PathBuf>,
+        /// A ready-made manifest for a well-known local analyzer (see `holdmap analyzers presets`).
+        #[arg(long, conflicts_with_all = ["file", "mcp"])]
+        preset: Option<String>,
         #[command(flatten)]
         mcp: crate::analyzers_mcp::McpAddArgs,
     },
+    /// Ready-made manifests for well-known local analyzers; add one with `add --preset ID`.
+    Presets,
     /// Your agents' configured MCP servers that can be added as analyzers.
     Servers,
     /// An MCP analyzer's tools: descriptions, warnings, suggested inputs and pin. Lists them
@@ -280,9 +286,39 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
             }
         }
         AnalyzerAction::Key { action } => return run_key(&svc, action, a.json),
-        AnalyzerAction::Add { file: None, mcp } => {
-            return crate::analyzers_mcp::add(&svc, mcp, || inventory(docker), a.json)
+        AnalyzerAction::Presets => {
+            let presets = svc.presets();
+            if a.json {
+                println!("{}", serde_json::to_string_pretty(&presets)?);
+            } else {
+                for p in presets {
+                    let net = if p.network.is_empty() {
+                        "no network".to_string()
+                    } else {
+                        format!("contacts {}", p.network.join(", "))
+                    };
+                    println!(
+                        "{}  {}  {}{}\n  {}\n  {} · {} · {}\n  install: {}\n",
+                        p.name,
+                        p.id,
+                        p.publisher,
+                        if p.added { "  (added)" } else { "" },
+                        p.summary,
+                        p.license,
+                        net,
+                        p.homepage,
+                        p.install.as_deref().unwrap_or("unknown")
+                    );
+                }
+                println!("Add one with: holdmap analyzers add --preset ID (it stays off until you approve it)");
+            }
         }
+        AnalyzerAction::Add {
+            preset: Some(id), ..
+        } => return registered(svc.add_preset(id), a.json),
+        AnalyzerAction::Add {
+            file: None, mcp, ..
+        } => return crate::analyzers_mcp::add(&svc, mcp, || inventory(docker), a.json),
         AnalyzerAction::Servers => {
             return crate::analyzers_mcp::servers(&svc, &inventory(docker)?, a.json)
         }
@@ -295,26 +331,7 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
         } => {
             let text = std::fs::read_to_string(file)
                 .with_context(|| format!("couldn't read {}", file.display()))?;
-            let view = match svc.add_manifest(&text) {
-                Ok(v) => v,
-                Err(ServiceError::Manifest(e)) => {
-                    eprintln!("{} {e}", style::err_mark());
-                    return Ok(crate::exit::BLOCKED);
-                }
-                Err(e) => return Err(e.into()),
-            };
-            if a.json {
-                println!("{}", serde_json::to_string_pretty(&view)?);
-            } else {
-                println!(
-                    "{} Registered {} ({}). It is off: review it with `holdmap analyzers show {}`, then `holdmap analyzers approve {}`.",
-                    style::ok_mark(),
-                    view.name,
-                    view.id,
-                    view.id,
-                    view.id
-                );
-            }
+            return registered(svc.add_manifest(&text), a.json);
         }
         AnalyzerAction::Remove { id } => match svc.remove_manifest(id) {
             Ok(existed) => {
@@ -525,6 +542,31 @@ fn render_diff(d: &CatalogDiff) -> String {
         }
     }
     out
+}
+
+/// Report a newly registered analyzer, or why its manifest was refused.
+fn registered(added: Result<AnalyzerView, ServiceError>, json: bool) -> Result<u8> {
+    let view = match added {
+        Ok(v) => v,
+        Err(ServiceError::Manifest(e)) => {
+            eprintln!("{} {e}", style::err_mark());
+            return Ok(crate::exit::BLOCKED);
+        }
+        Err(e) => return Err(e.into()),
+    };
+    if json {
+        println!("{}", serde_json::to_string_pretty(&view)?);
+    } else {
+        println!(
+            "{} Registered {} ({}). It is off: review it with `holdmap analyzers show {}`, then `holdmap analyzers approve {}`.",
+            style::ok_mark(),
+            view.name,
+            view.id,
+            view.id,
+            view.id
+        );
+    }
+    Ok(crate::exit::OK)
 }
 
 fn run_key(svc: &AnalyzerService, action: &KeyAction, json: bool) -> Result<u8> {

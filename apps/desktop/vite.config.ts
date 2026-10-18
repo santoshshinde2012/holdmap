@@ -14,6 +14,8 @@ export default defineConfig({
     host: host || false,
     hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
     watch: { ignored: ["**/src-tauri/**"] },
+    // The browser demo reads the analyzer presets the Rust crate compiles in.
+    fs: { allow: [".", "../../crates/holdmap-analyzers/presets"] },
   },
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {

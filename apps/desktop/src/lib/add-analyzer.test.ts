@@ -5,7 +5,7 @@ import type { Preview, ToolReport } from "./analyzers";
 import { SAMPLE_TOOLS, PLACEHOLDERS } from "./analyzers-demo-mcp";
 
 const api = {
-  addAnalyzer: vi.fn(), addMcpAnalyzer: vi.fn(), configuredMcpServers: vi.fn(), analyzerTools: vi.fn(),
+  addAnalyzer: vi.fn(), addMcpAnalyzer: vi.fn(), analyzerPresets: vi.fn(), addAnalyzerPreset: vi.fn(), configuredMcpServers: vi.fn(), analyzerTools: vi.fn(),
   listAnalyzerTools: vi.fn(), mapAnalyzerTools: vi.fn(), mapAnalyzerOutput: vi.fn(),
 };
 vi.mock("./api", () => api);
@@ -29,11 +29,30 @@ const report: ToolReport = {
 };
 
 async function openMode(label: string) {
+  api.analyzerPresets.mockResolvedValue([]);
   await fireEvent.click(screen.getByRole("button", { name: "Add your own analyzer…" }));
   await fireEvent.click(screen.getByRole("radio", { name: label }));
 }
 
 describe("adding your own analyzer", () => {
+  it("opens on presets and adds one by id, off until approved", async () => {
+    api.analyzerPresets.mockResolvedValue([
+      { id: "pycqa.bandit", name: "Bandit", publisher: "PyCQA", summary: "Risky Python.", homepage: "https://github.com/PyCQA/bandit", license: "Apache-2.0", install: "uv tool install bandit", network: [], added: false },
+      { id: "google.osv-scanner", name: "OSV-Scanner", publisher: "Google", summary: "Vulnerable deps.", homepage: "https://github.com/google/osv-scanner", license: "Apache-2.0", install: null, network: ["api.osv.dev"], added: true },
+    ]);
+    api.addAnalyzerPreset.mockResolvedValue({ id: "pycqa.bandit", kind: "cli" });
+    const onadded = vi.fn();
+    render(AddAnalyzer, { onadded });
+    await fireEvent.click(screen.getByRole("button", { name: "Add your own analyzer…" }));
+    expect(await screen.findByText("Bandit")).toBeTruthy();
+    expect(screen.getByText(/no network/)).toBeTruthy();
+    expect(screen.getByText(/contacts api\.osv\.dev/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add OSV-Scanner" })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Add Bandit" }));
+    expect(api.addAnalyzerPreset).toHaveBeenCalledWith("pycqa.bandit");
+    await vi.waitFor(() => expect(onadded).toHaveBeenCalledWith("pycqa.bandit"));
+  });
+
   it("sends the pasted manifest and reports the new id", async () => {
     api.addAnalyzer.mockResolvedValue({ id: "me.scanner", kind: "cli" });
     const onadded = vi.fn();

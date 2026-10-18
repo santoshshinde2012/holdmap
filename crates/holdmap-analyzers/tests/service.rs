@@ -65,6 +65,8 @@ impl BinaryProbe for Shared<FakeProbe> {
 #[derive(Default)]
 struct FakeCli {
     runs: Mutex<usize>,
+    /// Answer like OSV-Scanner on a skill without packages: exit 128, no report.
+    nothing: Mutex<bool>,
 }
 
 impl AnalyzerRunner for Shared<FakeCli> {
@@ -77,6 +79,7 @@ impl AnalyzerRunner for Shared<FakeCli> {
         assert!(cx.binary.is_some(), "runs only the pinned binary");
         let mut runs = self.runs.lock().unwrap();
         *runs += 1;
+        let nothing = *self.nothing.lock().unwrap();
         let bytes = REPORT
             .replace("8f6b8c1e", &format!("run{runs:05}"))
             .into_bytes();
@@ -85,9 +88,10 @@ impl AnalyzerRunner for Shared<FakeCli> {
             .iter()
             .map(|s| RawOutput {
                 tool: None,
+                nothing_to_check: nothing,
                 subjects: vec![s.subject.clone()],
-                exit_code: Some(0),
-                bytes: bytes.clone(),
+                exit_code: Some(if nothing { 128 } else { 0 }),
+                bytes: if nothing { vec![] } else { bytes.clone() },
                 notes: vec![],
                 failed: false,
             })
@@ -576,6 +580,7 @@ fn sarif(fixture: &str) -> holdmap_analyzers::parse::Parsed {
     let manifest = catalog::bundled().remove(0);
     let raw = RawOutput {
         tool: None,
+        nothing_to_check: false,
         subjects: vec![],
         exit_code: Some(0),
         bytes: fixture.as_bytes().to_vec(),
@@ -788,6 +793,7 @@ fn a_run_gets_its_stored_keys_and_notes_missing_ones() {
                 .iter()
                 .map(|s| RawOutput {
                     tool: None,
+                    nothing_to_check: false,
                     subjects: vec![s.subject.clone()],
                     exit_code: Some(0),
                     bytes: REPORT.as_bytes().to_vec(),
@@ -830,4 +836,50 @@ fn a_run_gets_its_stored_keys_and_notes_missing_ones() {
         .notes
         .iter()
         .any(|n| n == "SECOND_KEY is not stored, so it ran without it."));
+}
+
+#[test]
+fn a_preset_is_added_as_the_users_own_analyzer_and_stays_off_until_approved() {
+    let h = harness();
+    let r = report(&h.skill_dir);
+    let presets = h.service.presets();
+    assert!(presets.iter().all(|p| !p.added));
+    assert!(presets
+        .iter()
+        .any(|p| p.id == "google.osv-scanner" && p.network == ["api.osv.dev"]));
+    let added = h.service.add_preset("google.osv-scanner").unwrap();
+    assert_eq!(added.state, AnalyzerState::NotApproved);
+    assert_eq!(
+        added.source,
+        holdmap_analyzers::service::ManifestSource::User
+    );
+    assert!(h
+        .service
+        .presets()
+        .iter()
+        .any(|p| p.id == "google.osv-scanner" && p.added));
+    assert!(matches!(
+        h.service.run("google.osv-scanner", &r),
+        Err(ServiceError::Run(RunError::NotApproved(_)))
+    ));
+    assert_eq!(
+        *h.cli.runs.lock().unwrap(),
+        0,
+        "nothing ran before approval"
+    );
+    assert!(h.service.add_preset("nope").is_err());
+
+    h.service.approve("google.osv-scanner").unwrap();
+    *h.cli.nothing.lock().unwrap() = true;
+    let result = h.service.run("google.osv-scanner", &r).unwrap();
+    assert!(result.findings.is_empty());
+    assert_ne!(result.status, holdmap_analyzers::finding::RunStatus::Failed);
+    assert!(
+        result.notes.iter().any(|n| n.contains("nothing to check")),
+        "{:?}",
+        result.notes
+    );
+
+    assert!(h.service.remove_manifest("google.osv-scanner").unwrap());
+    assert!(h.service.presets().iter().all(|p| !p.added));
 }

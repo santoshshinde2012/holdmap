@@ -156,6 +156,7 @@ impl AnalyzerRunner for OsvRunner {
             notes,
             failed,
             tool: None,
+            nothing_to_check: false,
         }])
     }
 }

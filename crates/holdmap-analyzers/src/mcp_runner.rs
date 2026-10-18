@@ -215,6 +215,7 @@ fn output(subject: &Subject, tool: Option<&str>, note: Option<&str>, failed: boo
         notes: note.map(|n| vec![n.to_string()]).unwrap_or_default(),
         failed,
         tool: tool.map(str::to_string),
+        nothing_to_check: false,
     }
 }
 

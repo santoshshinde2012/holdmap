@@ -1,0 +1,31 @@
+# Preset: OSV-Scanner (https://github.com/google/osv-scanner). Lockfiles and manifests in a skill
+# are checked against OSV.dev. --no-resolve skips deps.dev; --config /dev/null ignores any
+# osv-scanner.toml the skill ships, so a skill can't hide its own vulnerabilities.
+schema = 1
+id = "google.osv-scanner"
+name = "OSV-Scanner"
+publisher = "Google"
+homepage = "https://github.com/google/osv-scanner"
+license = "Apache-2.0"
+summary = "Checks the dependencies a skill declares (lockfiles and manifests, many ecosystems) for known vulnerabilities."
+install = "go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.7.0 (or a release binary from GitHub)"
+
+[runner]
+kind = "cli"
+command = "osv-scanner"
+args = ["scan", "source", "--recursive", "--no-resolve", "--config", "/dev/null", "--format", "sarif", "--output-file", "{output}", "{subject.dir}"]
+per_subject = "skill"
+version_args = ["--version"]
+version_prefix = "osv-scanner version: "
+timeout_secs = 120
+exit_ok = [0, 1]
+exit_no_findings = [128]
+
+[permissions]
+read = ["{subject.dir}"]
+network = ["api.osv.dev"]
+network_reason = "OSV-Scanner looks up each declared package version on OSV.dev, Google's public vulnerability database."
+sends = ["The ecosystem, name and version of each package the skill declares. No file contents."]
+
+[output]
+format = "sarif"

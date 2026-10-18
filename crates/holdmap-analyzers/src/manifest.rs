@@ -144,6 +144,10 @@ pub struct RunnerSpec {
     /// Exit codes that mean the report is valid.
     #[serde(default = "default_exit_ok")]
     pub exit_ok: Vec<i32>,
+    /// Exit codes that, with no report written, mean the program found nothing it could check
+    /// (OSV-Scanner exits 128 when a folder declares no packages): a clean run, not a failure.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exit_no_findings: Vec<i32>,
     /// MCP analyzers: `stdio` (default) or `http`.
     #[serde(default)]
     pub transport: Transport,
@@ -450,6 +454,15 @@ impl AnalyzerManifest {
         }
         if r.exit_ok.is_empty() {
             return Err(rule("exit_ok must list at least one exit code"));
+        }
+        if !r.exit_no_findings.is_empty() && r.kind != RunnerKind::Cli {
+            return Err(rule("exit_no_findings is for command-line analyzers"));
+        }
+        if r.exit_no_findings.len() > 8 || r.exit_no_findings.iter().any(|c| r.exit_ok.contains(c))
+        {
+            return Err(rule(
+                "exit_no_findings lists up to 8 exit codes, none of them also in exit_ok",
+            ));
         }
         Ok(())
     }
@@ -765,6 +778,29 @@ mod tests {
         assert_eq!(m.sha256.len(), 64);
         let changed = AnalyzerManifest::parse(&SKILLSPECTOR.replace("120", "121")).unwrap();
         assert_ne!(m.sha256, changed.sha256);
+    }
+
+    #[test]
+    fn exit_no_findings_codes_are_few_and_never_also_valid_report_codes() {
+        let ok = with(
+            "exit_ok = [0, 1]",
+            "exit_ok = [0, 1]\nexit_no_findings = [128]",
+        )
+        .unwrap();
+        assert_eq!(ok.runner.exit_no_findings, vec![128]);
+        let overlap = with(
+            "exit_ok = [0, 1]",
+            "exit_ok = [0, 1]\nexit_no_findings = [1]",
+        );
+        assert!(overlap
+            .unwrap_err()
+            .to_string()
+            .contains("exit_no_findings"));
+        let many = with(
+            "exit_ok = [0, 1]",
+            "exit_ok = [0, 1]\nexit_no_findings = [2, 3, 4, 5, 6, 7, 8, 9, 10]",
+        );
+        assert!(many.is_err());
     }
 
     #[test]

@@ -34,7 +34,8 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`holdmap analyzers key`](#holdmap-analyzers-key) | Store or delete an API key an analyzer declares, in the OS keychain |
 | [`holdmap analyzers key set`](#holdmap-analyzers-key-set) | Store a key: paste it when asked (not echoed), or pipe it on standard input |
 | [`holdmap analyzers key delete`](#holdmap-analyzers-key-delete) | Delete a stored key |
-| [`holdmap analyzers add`](#holdmap-analyzers-add) | Register your own analyzer from a manifest file, or any MCP server with --mcp (from a command, a URL or one of your agents' servers). It stays off until you approve it |
+| [`holdmap analyzers add`](#holdmap-analyzers-add) | Register your own analyzer from a manifest file, a preset (--preset), or any MCP server with --mcp (from a command, a URL or one of your agents' servers). It stays off until you approve it |
+| [`holdmap analyzers presets`](#holdmap-analyzers-presets) | Ready-made manifests for well-known local analyzers; add one with `add --preset ID` |
 | [`holdmap analyzers servers`](#holdmap-analyzers-servers) | Your agents' configured MCP servers that can be added as analyzers |
 | [`holdmap analyzers tools`](#holdmap-analyzers-tools) | An MCP analyzer's tools: descriptions, warnings, suggested inputs and pin. Lists them from the server (after you confirm) the first time or with --refresh |
 | [`holdmap analyzers map`](#holdmap-analyzers-map) | Choose an MCP analyzer's tools and map their inputs and output |
@@ -495,8 +496,10 @@ Commands:
   approve  Review an analyzer's permissions and turn it on
   revoke   Turn an analyzer off and delete its results
   key      Store or delete an API key an analyzer declares, in the OS keychain
-  add      Register your own analyzer from a manifest file, or any MCP server with --mcp (from a
-           command, a URL or one of your agents' servers). It stays off until you approve it
+  add      Register your own analyzer from a manifest file, a preset (--preset), or any MCP server
+           with --mcp (from a command, a URL or one of your agents' servers). It stays off until you
+           approve it
+  presets  Ready-made manifests for well-known local analyzers; add one with `add --preset ID`
   servers  Your agents' configured MCP servers that can be added as analyzers
   tools    An MCP analyzer's tools: descriptions, warnings, suggested inputs and pin. Lists them
            from the server (after you confirm) the first time or with --refresh
@@ -648,8 +651,8 @@ Options:
 ## holdmap analyzers add
 
 ```text
-Register your own analyzer from a manifest file, or any MCP server with --mcp (from a command, a URL
-or one of your agents' servers). It stays off until you approve it
+Register your own analyzer from a manifest file, a preset (--preset), or any MCP server with --mcp
+(from a command, a URL or one of your agents' servers). It stays off until you approve it
 
 Usage: holdmap analyzers add [OPTIONS] [FILE]
 
@@ -657,6 +660,8 @@ Arguments:
   [FILE]
 
 Options:
+      --preset <PRESET>    A ready-made manifest for a well-known local analyzer (see `holdmap
+                           analyzers presets`)
       --mcp                Register an MCP server (with --command, --url or --from) instead of a
                            manifest file
       --id <ID>            Id for it, e.g. local.my-scanner
@@ -677,6 +682,21 @@ Options:
                            values: auto, always, never]
       --no-docker          Don't query Docker/Podman/OrbStack/Colima
   -h, --help               Print help
+```
+
+## holdmap analyzers presets
+
+```text
+Ready-made manifests for well-known local analyzers; add one with `add --preset ID`
+
+Usage: holdmap analyzers presets [OPTIONS]
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
 ```
 
 ## holdmap analyzers servers
