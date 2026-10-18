@@ -177,4 +177,10 @@ test("narrow windows get the analyzer graphs as a stacked list", async ({ app })
   const steps = tab.getByRole("list", { name: "How SkillSpector works (list)" });
   await steps.getByRole("button", { name: /^Findings/ }).click();
   await expect(steps).toContainText("Took");
+  // Widening switches to the graph in place, without the app remounting.
+  await app.setViewportSize({ width: 1280, height: 900 });
+  await expect(tab.getByRole("group", { name: "How SkillSpector works" }).locator(".svelte-flow")).toBeVisible();
+  await app.setViewportSize({ width: 560, height: 900 });
+  await expect(tab.getByRole("list", { name: "How SkillSpector works (list)" })).toBeVisible();
+  await expect(app.getByText("holdmap recovered from a UI glitch")).toHaveCount(0);
 });

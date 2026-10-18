@@ -4,6 +4,7 @@ import "./app.css";
 import App from "./App.svelte";
 import Gallery from "./dev/Gallery.svelte";
 import { prefGet } from "./lib/prefs";
+import { isBenignError } from "./lib/recover";
 
 const target = document.getElementById("app")!;
 
@@ -60,7 +61,9 @@ function recover(why: string): void {
   }, 3_000);
 }
 
-window.addEventListener("error", (e) => recover(e.message || "error"));
+window.addEventListener("error", (e) => {
+  if (!isBenignError(e.message ?? "")) recover(e.message || "error");
+});
 window.addEventListener("unhandledrejection", (e) =>
   recover(e.reason instanceof Error ? e.reason.message : String(e.reason ?? "rejection")),
 );
