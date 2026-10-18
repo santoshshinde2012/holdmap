@@ -11,7 +11,8 @@ const chapters = [
 <ol class="steps" data-hero-chapters aria-label="Video chapters">
   {chapters.map((c, i) => (
     <li>
-      <button type="button" data-chapter={i} aria-label={`Play from “${c.title}”: ${c.text}`}>
+      <button type="button" data-chapter={i}>
+        <span class="sr-only">Play from chapter </span>
         <span class="bar" aria-hidden="true"><i></i></span>
         <span class="n">0{i + 1}</span>
         <span class="t">{c.title}</span>

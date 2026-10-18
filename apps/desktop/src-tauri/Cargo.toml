@@ -20,7 +20,7 @@ serde_json.workspace = true
 [dependencies]
 holdmap-core.workspace = true
 holdmap-activity.workspace = true
-holdmap-analyzers = { workspace = true, features = ["osv-http", "keychain", "mcp-runner"] }
+holdmap-analyzers = { workspace = true, features = ["osv-http", "keychain", "mcp-runner", "mcp-http"] }
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2", features = ["tray-icon", "image-png"] }

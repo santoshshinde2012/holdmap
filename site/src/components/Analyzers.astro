@@ -112,4 +112,8 @@ const demo = url("demo/");
     .tabs { padding: 0 20px; }
     .copy { padding: 24px; }
   }
+  @media (max-width: 480px) {
+    .tabs { flex-wrap: wrap; gap: 0 20px; overflow-x: visible; }
+    .tabs button { height: 44px; }
+  }
 </style>
