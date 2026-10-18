@@ -155,6 +155,8 @@ pub struct AnalyzerView {
     /// MCP analyzers: transport, endpoint, chosen tools and the tool-list pin.
     #[serde(default)]
     pub mcp: Option<McpView>,
+    /// How its output is read (`sarif`, `json-map`, `auto`, ...), for the pipeline graph.
+    pub output_format: crate::manifest::OutputFormat,
 }
 
 /// Where a manifest comes from.
@@ -707,6 +709,7 @@ impl AnalyzerService {
             last_run,
             secrets: self.secret_status(m),
             mcp,
+            output_format: m.output.format,
         }
     }
 

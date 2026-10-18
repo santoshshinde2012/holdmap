@@ -10,6 +10,8 @@
   import AnalyzerKeys from "./AnalyzerKeys.svelte";
   import CatalogUpdate from "./CatalogUpdate.svelte";
   import AddAnalyzer from "./AddAnalyzer.svelte";
+  import McpTools from "./McpTools.svelte";
+  import AnalyzerPipeline from "./graph/AnalyzerPipeline.svelte";
   import * as api from "../../lib/api";
   import { SANDBOX_LABEL, STATE_LABEL, ago, countsText, total, type AnalyzerView, type Preview } from "../../lib/analyzers";
   import { insightsStore } from "../../lib/insights-store.svelte";
@@ -19,6 +21,9 @@
   let busy = $state<Record<string, boolean>>({});
   let errors = $state<Record<string, string | null>>({});
   let sheetError = $state<string | null>(null);
+  /** The analyzer whose pipeline graph or tool editor is open. */
+  let graphFor = $state<string | null>(null);
+  let toolsFor = $state<string | null>(null);
 
   onMount(() => { void insightsStore.refresh(); });
 
@@ -31,12 +36,12 @@
     finally { busy[key] = false; }
   }
   const review = (a: AnalyzerView) => act(a.id, async () => { sheetError = null; preview = await api.analyzerPreview(a.id); });
-  async function approve() {
+  async function approve(allowRemote: boolean) {
     if (!preview) return;
     const id = preview.analyzer.id;
     busy.sheet = true;
     sheetError = null;
-    try { await api.approveAnalyzer(id); preview = null; await insightsStore.refresh(); }
+    try { await api.approveAnalyzer(id, allowRemote); preview = null; await insightsStore.refresh(); }
     catch (e) { sheetError = String(e); }
     finally { busy.sheet = false; }
   }
@@ -78,6 +83,7 @@
           {/if}
         {/if}
         {#if a.state === "changed"}<p class="meta warn">{a.changes.join("; ")}</p>{/if}
+        {#if a.mcp}<p class="meta">{a.mcp.transport === "http" ? "Connects to" : "Starts"} <code>{a.mcp.endpoint}</code> · {a.mcp.tools.length ? `tools: ${a.mcp.tools.join(", ")}` : "no tools chosen yet"}{a.mcp.listing ? ` · pin ${a.mcp.listing.pin}` : ""}</p>{/if}
         {#if a.state === "not_installed" && a.install}
           <div class="install"><span class="meta">Install it yourself, then come back:</span><CopyValue value={a.install} mono wrap what="Install command" oncopy={(t) => navigator.clipboard?.writeText(t)} /></div>
         {/if}
@@ -85,15 +91,24 @@
         <div class="acts">
           {#if a.state === "approved"}
             <Button size="sm" variant="primary" icon="play" loading={busy[`run:${a.id}`]} onclick={() => act(`run:${a.id}`, () => api.runAnalyzer(a.id))}>Run now</Button>
+            {#if busy[`run:${a.id}`]}<Button size="sm" variant="ghost" icon="stop" onclick={() => api.cancelAnalyzerRun()}>Stop</Button>{/if}
             <Button size="sm" variant="ghost" onclick={() => review(a)} loading={busy[a.id]}>Permissions</Button>
             <Button size="sm" variant="danger-outline" loading={busy[`off:${a.id}`]} onclick={() => act(`off:${a.id}`, () => api.revokeAnalyzer(a.id))}>Turn off</Button>
           {:else if a.state !== "not_installed"}
             <Button size="sm" variant={a.state === "changed" ? "primary" : "secondary"} icon="shield" loading={busy[a.id]} onclick={() => review(a)}>{a.state === "changed" ? "Review again…" : "Review and turn on…"}</Button>
           {/if}
+          {#if a.mcp && a.source === "user"}
+            <Button size="sm" variant="ghost" aria-expanded={toolsFor === a.id} onclick={() => (toolsFor = toolsFor === a.id ? null : a.id)}>Tools…</Button>
+          {/if}
+          {#if a.state !== "not_installed"}
+            <Button size="sm" variant="ghost" icon="branch" aria-expanded={graphFor === a.id} onclick={() => (graphFor = graphFor === a.id ? null : a.id)}>How it works</Button>
+          {/if}
           {#if a.source === "user"}
             <Button size="sm" variant="ghost" loading={busy[`rm:${a.id}`]} onclick={() => act(`rm:${a.id}`, () => api.removeAnalyzer(a.id))}>Remove</Button>
           {/if}
         </div>
+        {#if toolsFor === a.id}<McpTools id={a.id} name={a.name} onsaved={() => { toolsFor = null; void insightsStore.refresh(); }} oncancel={() => (toolsFor = null)} />{/if}
+        {#if graphFor === a.id}<AnalyzerPipeline view={a} height={300} />{/if}
         {#each [errors[a.id], errors[`run:${a.id}`], errors[`off:${a.id}`], errors[`auto:${a.id}`], errors[`rm:${a.id}`]].filter(Boolean) as e}<Callout tone="danger" size="sm">{e}</Callout>{/each}
       </li>
     {/each}
@@ -120,4 +135,5 @@
   .install { display: grid; gap: 4px; }
   .acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: 2px; }
   .acts:empty { display: none; }
+  code { font-family: var(--mono); font-size: var(--fs-caption); overflow-wrap: anywhere; }
 </style>

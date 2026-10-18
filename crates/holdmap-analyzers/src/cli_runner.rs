@@ -4,7 +4,9 @@
 
 use crate::input::{AnalyzerInput, InputSubject};
 use crate::manifest::{AnalyzerManifest, OUTPUT, SUBJECT_DIR};
-use crate::runner::{AnalyzerRunner, Containment, RawOutput, RunContext, RunError, Sandbox};
+use crate::runner::{
+    AnalyzerRunner, CancelFlag, Containment, RawOutput, RunContext, RunError, Sandbox, CANCELLED,
+};
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -54,7 +56,7 @@ impl CliRunner {
         &self,
         manifest: &AnalyzerManifest,
         binary: &Path,
-        secrets: &[(String, crate::secrets::Secret)],
+        cx: &RunContext,
         subject: &InputSubject,
     ) -> RawOutput {
         let mut out = RawOutput {
@@ -69,6 +71,10 @@ impl CliRunner {
             out.notes.push("No folder to analyse.".into());
             return out;
         };
+        if cx.cancel.is_cancelled() {
+            out.notes.push(CANCELLED.into());
+            return out;
+        }
         let work = match tempfile::Builder::new()
             .prefix("holdmap-analyzer-")
             .tempdir()
@@ -115,10 +121,10 @@ impl CliRunner {
             },
         );
         cmd.current_dir(work.path());
-        finish_env(&mut cmd, manifest, binary, secrets);
+        finish_env(&mut cmd, manifest, binary, &cx.secrets);
         let cap = (manifest.runner.max_output_mb * 1024 * 1024) as usize;
         let timeout = Duration::from_secs(manifest.runner.timeout_secs);
-        let ran = run_contained(cmd, timeout, cap, self.sandbox.as_ref());
+        let ran = run_until(cmd, timeout, cap, self.sandbox.as_ref(), &cx.cancel);
         let Ok(ran) = ran else {
             out.notes.push("The analyzer could not be started.".into());
             return out;
@@ -129,6 +135,10 @@ impl CliRunner {
                 "The operating system sandbox could not be applied; it ran with basic containment."
                     .into(),
             );
+        }
+        if ran.cancelled {
+            out.notes.push(CANCELLED.into());
+            return out;
         }
         if ran.timed_out {
             out.notes.push(format!(
@@ -190,7 +200,7 @@ impl AnalyzerRunner for CliRunner {
         Ok(input
             .subjects
             .iter()
-            .map(|s| self.run_one(manifest, binary, &cx.secrets, s))
+            .map(|s| self.run_one(manifest, binary, cx, s))
             .collect())
     }
 }
@@ -280,6 +290,8 @@ pub struct Ran {
     pub stdout_truncated: bool,
     /// Whether the time limit stopped it.
     pub timed_out: bool,
+    /// Whether the user stopped it.
+    pub cancelled: bool,
     /// Whether the OS sandbox this level promises could not be applied.
     pub uncontained: bool,
 }
@@ -292,10 +304,21 @@ pub fn run_capped(cmd: Command, timeout: Duration, cap: usize) -> io::Result<Ran
 
 /// [`run_capped`], handing the started child to `sandbox` (a Windows job) for the whole run.
 pub fn run_contained(
+    cmd: Command,
+    timeout: Duration,
+    cap: usize,
+    sandbox: &dyn Sandbox,
+) -> io::Result<Ran> {
+    run_until(cmd, timeout, cap, sandbox, &CancelFlag::default())
+}
+
+/// [`run_contained`], also killing the process group when `cancel` is set.
+pub fn run_until(
     mut cmd: Command,
     timeout: Duration,
     cap: usize,
     sandbox: &dyn Sandbox,
+    cancel: &CancelFlag,
 ) -> io::Result<Ran> {
     cmd.stdout(Stdio::piped()).stderr(Stdio::null());
     #[cfg(unix)]
@@ -332,6 +355,11 @@ pub fn run_contained(
         if started.elapsed() >= timeout {
             kill_tree(&mut child);
             ran.timed_out = true;
+            break;
+        }
+        if cancel.is_cancelled() {
+            kill_tree(&mut child);
+            ran.cancelled = true;
             break;
         }
         std::thread::sleep(Duration::from_millis(25));
@@ -625,5 +653,29 @@ mod tests {
             )
             .unwrap_err();
         assert!(matches!(err, RunError::Unavailable(_)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cancelling_kills_the_process_group() {
+        let cancel = CancelFlag::default();
+        let flag = cancel.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(150));
+            flag.cancel();
+        });
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "sleep 30"]);
+        let started = Instant::now();
+        let ran = run_until(
+            cmd,
+            Duration::from_secs(30),
+            1024,
+            &crate::runner::BasicSandbox,
+            &cancel,
+        )
+        .unwrap();
+        assert!(ran.cancelled && !ran.timed_out);
+        assert!(started.elapsed() < Duration::from_secs(5));
     }
 }

@@ -330,7 +330,7 @@ impl AnalyzerRunner for McpRunner {
             for spec in tools {
                 let mut out = output(&s.subject, Some(&spec.name), None, true);
                 if cx.cancel.is_cancelled() {
-                    out.notes.push("Stopped: the run was cancelled.".into());
+                    out.notes.push(crate::runner::CANCELLED.into());
                     result.push(out);
                     continue;
                 }
@@ -637,7 +637,7 @@ mod rmcp_client {
                                 Some("cancelled in holdmap".into()),
                             ))
                             .await;
-                        Err("Stopped: the run was cancelled.".to_string())
+                        Err(crate::runner::CANCELLED.to_string())
                     }
                 }
             })?;

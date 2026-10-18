@@ -1,55 +1,124 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
-import type { Preview } from "./analyzers";
+import type { Preview, ToolReport } from "./analyzers";
+import { SAMPLE_TOOLS, PLACEHOLDERS } from "./analyzers-demo-mcp";
 
-const addSpy = vi.fn();
-vi.mock("./api", () => ({ addAnalyzer: (m: string) => addSpy(m) }));
+const api = {
+  addAnalyzer: vi.fn(), addMcpAnalyzer: vi.fn(), configuredMcpServers: vi.fn(), analyzerTools: vi.fn(),
+  listAnalyzerTools: vi.fn(), mapAnalyzerTools: vi.fn(), mapAnalyzerOutput: vi.fn(),
+};
+vi.mock("./api", () => api);
 const { default: AddAnalyzer } = await import("../components/analyzers/AddAnalyzer.svelte");
 const { default: PermissionsSheet } = await import("../components/analyzers/PermissionsSheet.svelte");
 
-afterEach(() => { cleanup(); addSpy.mockReset(); });
+afterEach(() => { cleanup(); for (const f of Object.values(api)) f.mockReset(); });
+
+const report: ToolReport = {
+  snapshot: { endpoint: "my-mcp --stdio", server: { name: "sample", version: "1", instructions: null }, tools: SAMPLE_TOOLS, sha256: "ab".repeat(32), listed_at_ms: 1, truncated: false },
+  flags: { helper: ["mentions credential or configuration files"] },
+  server_flags: [],
+  suggestions: [
+    { tool: "list_files", args: { files: "{subject.files}", skill_name: "{subject.name}" }, missing: [] },
+    { tool: "scan_skill", args: { path: "{subject.dir}" }, missing: [] },
+    { tool: "word_count", args: { content: "{subject.skill_md}" }, missing: [] },
+    { tool: "helper", args: {}, missing: [] },
+  ],
+  changes: [], approved: false, chosen: [], placeholders: PLACEHOLDERS,
+  output: {}, output_suggestions: { list_files: { items: "$.issues[*]", rule_id: "code", severity: "level", title: "msg", file: "file" } },
+};
+
+async function openMode(label: string) {
+  await fireEvent.click(screen.getByRole("button", { name: "Add your own analyzer…" }));
+  await fireEvent.click(screen.getByRole("radio", { name: label }));
+}
 
 describe("adding your own analyzer", () => {
   it("sends the pasted manifest and reports the new id", async () => {
-    addSpy.mockResolvedValue({ id: "me.scanner" });
+    api.addAnalyzer.mockResolvedValue({ id: "me.scanner", kind: "cli" });
     const onadded = vi.fn();
     render(AddAnalyzer, { onadded });
-    await fireEvent.click(screen.getByRole("button", { name: "Add your own analyzer…" }));
+    await openMode("Manifest");
     const add = screen.getByRole("button", { name: "Add analyzer" }) as HTMLButtonElement;
     expect(add.disabled).toBe(true);
     await fireEvent.input(screen.getByLabelText("Analyzer manifest (TOML)"), { target: { value: "schema = 1" } });
     await fireEvent.click(add);
-    expect(addSpy).toHaveBeenCalledWith("schema = 1");
+    expect(api.addAnalyzer).toHaveBeenCalledWith("schema = 1");
     await vi.waitFor(() => expect(onadded).toHaveBeenCalledWith("me.scanner"));
   });
 
   it("shows holdmap's validation error", async () => {
-    addSpy.mockRejectedValue("invalid manifest: missing runner");
+    api.addAnalyzer.mockRejectedValue("invalid manifest: missing runner");
     render(AddAnalyzer, {});
-    await fireEvent.click(screen.getByRole("button", { name: "Add your own analyzer…" }));
+    await openMode("Manifest");
     await fireEvent.input(screen.getByLabelText("Analyzer manifest (TOML)"), { target: { value: "x" } });
     await fireEvent.click(screen.getByRole("button", { name: "Add analyzer" }));
     expect(await screen.findByText(/missing runner/)).toBeTruthy();
   });
 
-  it("the permissions sheet shows MCP notices and the configured-server warning", () => {
+  it("adds any MCP server from a command, lists its tools only when asked and saves the suggested mapping", async () => {
+    api.addMcpAnalyzer.mockResolvedValue({ id: "local.scan", name: "Scan", kind: "mcp" });
+    api.analyzerTools.mockRejectedValue("Scan's tools haven't been listed yet.");
+    api.listAnalyzerTools.mockResolvedValue(report);
+    api.mapAnalyzerTools.mockResolvedValue({});
+    api.mapAnalyzerOutput.mockResolvedValue({});
+    const onadded = vi.fn();
+    render(AddAnalyzer, { onadded });
+    await openMode("Command");
+    await fireEvent.input(screen.getByLabelText("Id"), { target: { value: "local.scan" } });
+    await fireEvent.input(screen.getByLabelText("Name"), { target: { value: "Scan" } });
+    await fireEvent.input(screen.getByLabelText("Command"), { target: { value: "/opt/bin/my-mcp" } });
+    await fireEvent.input(screen.getByLabelText("Arguments (one per line)"), { target: { value: "--stdio\n\n--quiet" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Add and choose tools…" }));
+    expect(api.addMcpAnalyzer).toHaveBeenCalledWith({ id: "local.scan", name: "Scan", transport: "stdio", command: "/opt/bin/my-mcp", args: ["--stdio", "--quiet"], secrets: [] });
+    const list = await screen.findByRole("button", { name: "List tools" });
+    expect(api.listAnalyzerTools).not.toHaveBeenCalled();
+    await fireEvent.click(list);
+    expect(await screen.findByText("mentions credential or configuration files", { exact: false })).toBeTruthy();
+    // Fully suggested, unflagged tools are preselected; the flagged one isn't.
+    expect((screen.getByRole("checkbox", { name: "List scripts (list_files)" }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("checkbox", { name: "helper" }) as HTMLInputElement).checked).toBe(false);
+    const args = screen.getByLabelText("Example arguments for list_files").textContent ?? "";
+    expect(JSON.parse(args)).toEqual({ files: ["SKILL.md", "scripts/run.sh"], skill_name: "example-skill" });
+    await fireEvent.click(screen.getByRole("button", { name: "Use the mapping suggested by list_files" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save tools" }));
+    await vi.waitFor(() => expect(onadded).toHaveBeenCalledWith("local.scan"));
+    const saved = api.mapAnalyzerTools.mock.calls[0][1].map((t: { name: string }) => t.name);
+    expect(saved).toEqual(["list_files", "scan_skill", "word_count"]);
+    expect(api.mapAnalyzerOutput).toHaveBeenCalledWith("local.scan", expect.objectContaining({ items: "$.issues[*]", rule_id: "code" }));
+  });
+
+  it("warns that a URL on another machine is metadata only and needs an opt-in", async () => {
+    render(AddAnalyzer, {});
+    await openMode("Local URL");
+    await fireEvent.input(screen.getByLabelText("URL"), { target: { value: "https://scan.example.com/mcp" } });
+    expect(screen.getByText(/another machine/)).toBeTruthy();
+  });
+
+  it("the permissions sheet shows MCP notices, exact tool calls and the remote opt-in", async () => {
     const preview = {
       analyzer: {
         id: "me.mcp", name: "My MCP scanner", publisher: "me", license: "MIT", homepage: "https://example.com",
-        summary: "s", kind: "mcp", state: "off", changes: [], source: "user",
-        permissions: { network: [], sends: [] },
+        summary: "s", kind: "mcp", state: "not_approved", changes: [], source: "user",
+        permissions: { network: ["scan.example.com"], sends: [] },
+        mcp: { transport: "http", endpoint: "https://scan.example.com/mcp", remote: true, remote_opt_in: false, tools: ["list_files"], listing: null, needs_tools: false },
       },
-      subjects: [], skipped: [], payload: [], env: [], command: ["my-mcp"],
-      sandbox: "Basic", schedule: "Only when you press Run.",
-      notices: [
-        "holdmap starts this MCP server when you press Run and stops it when the run ends.",
-        "Warning: this looks like the MCP server Claude Code is configured to use (scanner).",
-      ],
+      subjects: [], skipped: [], payload: [], env: [], command: ["connects to https://scan.example.com/mcp"],
+      sandbox: "Not sandboxed", schedule: "Only when you press Run.",
+      notices: ["Warning: this looks like the MCP server Claude Code is configured to use (scanner)."],
+      projection: ["file names in the skill folder"],
+      tool_calls: [{ tool: "list_files", subject: "deploy", arguments: { files: ["SKILL.md"] }, problems: [] }],
     } as unknown as Preview;
-    render(PermissionsSheet, { preview, onapprove: () => {}, oncancel: () => {} });
-    expect(screen.getByText(/starts this MCP server when you press Run/)).toBeTruthy();
+    const onapprove = vi.fn();
+    render(PermissionsSheet, { preview, onapprove, oncancel: () => {} });
     expect(screen.getByText(/Warning: this looks like/)).toBeTruthy();
-    expect(screen.getByText(/never starts your agents' servers/)).toBeTruthy();
+    expect(screen.getByText("file names in the skill folder")).toBeTruthy();
+    expect(screen.getByLabelText("Arguments for list_files on deploy").textContent).toContain("SKILL.md");
+    const on = screen.getByRole("button", { name: /Turn on My MCP scanner/ }) as HTMLButtonElement;
+    expect(on.disabled).toBe(true);
+    await fireEvent.click(screen.getByRole("checkbox", { name: /Allow this server on another machine/ }));
+    expect(on.disabled).toBe(false);
+    await fireEvent.click(on);
+    expect(onapprove).toHaveBeenCalledWith(true);
   });
 });
