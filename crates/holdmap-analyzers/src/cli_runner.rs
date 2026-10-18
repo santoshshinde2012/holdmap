@@ -63,6 +63,7 @@ impl CliRunner {
             bytes: Vec::new(),
             notes: Vec::new(),
             failed: true,
+            tool: None,
         };
         let Some(dir) = subject.dir.as_deref() else {
             out.notes.push("No folder to analyse.".into());
@@ -477,6 +478,7 @@ mod tests {
                 ),
                 ("OTHER_KEY".into(), crate::secrets::Secret::new("nope")),
             ],
+            ..RunContext::default()
         };
         let out = CliRunner::new(Box::new(BasicSandbox))
             .run(&m, &input(&skill), &cx)

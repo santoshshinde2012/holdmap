@@ -80,6 +80,14 @@ impl FileStore {
         }
     }
 
+    fn tools_name(analyzer: &str, slot: crate::consent::ToolSlot) -> Option<String> {
+        let folder = match slot {
+            crate::consent::ToolSlot::Latest => "tools/latest/",
+            crate::consent::ToolSlot::Approved => "tools/approved/",
+        };
+        Self::result_name(analyzer).map(|n| n.replacen("results/", folder, 1))
+    }
+
     fn result_name(analyzer: &str) -> Option<String> {
         analyzer
             .chars()
@@ -107,6 +115,33 @@ fn private_file(path: &Path) -> io::Result<fs::File> {
         options.mode(0o600);
     }
     options.open(path)
+}
+
+impl crate::consent::ToolPinStore for FileStore {
+    fn tool_snapshot(
+        &self,
+        analyzer: &str,
+        slot: crate::consent::ToolSlot,
+    ) -> Option<crate::mcp_tools::ToolSnapshot> {
+        self.read::<Option<crate::mcp_tools::ToolSnapshot>>(&Self::tools_name(analyzer, slot)?)
+    }
+    fn set_tool_snapshot(
+        &self,
+        analyzer: &str,
+        slot: crate::consent::ToolSlot,
+        snapshot: Option<&crate::mcp_tools::ToolSnapshot>,
+    ) -> io::Result<()> {
+        let name = Self::tools_name(analyzer, slot)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "not an analyzer id"))?;
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        match snapshot {
+            Some(s) => self.write(&name, s),
+            None => match fs::remove_file(self.dir.join(&name)) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+                _ => Ok(()),
+            },
+        }
+    }
 }
 
 impl crate::catalog::CatalogStore for FileStore {
@@ -267,6 +302,8 @@ mod tests {
             version: None,
             approved_at_ms: 1,
             background_network: false,
+            tools_sha256: None,
+            remote_opt_in: false,
         };
         store.record(grant.clone()).unwrap();
         assert_eq!(store.grant("a.b"), Some(grant));
@@ -283,6 +320,10 @@ mod tests {
             details: vec![],
             notes: vec![],
             input_signature: None,
+
+            duration_ms: None,
+
+            tool_calls: Vec::new(),
         };
         store.save(&result).unwrap();
         assert_eq!(store.latest("a.b"), Some(result));

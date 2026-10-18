@@ -14,6 +14,8 @@ pub const SUBJECT_DIR: &str = "{subject.dir}";
 pub const OUTPUT: &str = "{output}";
 const MAX_TIMEOUT_SECS: u64 = 600;
 const MAX_OUTPUT_MB: u64 = 32;
+/// Tools one MCP analyzer may call.
+pub const MAX_TOOLS: usize = 8;
 const SHELLS: &[&str] = &[
     "sh",
     "bash",
@@ -46,7 +48,8 @@ pub struct AnalyzerManifest {
     pub name: String,
     /// Who publishes the analyzer.
     pub publisher: String,
-    /// Project page.
+    /// Project page (`https`), or empty when unknown.
+    #[serde(default)]
     pub homepage: String,
     /// SPDX licence.
     pub license: String,
@@ -74,9 +77,32 @@ pub enum RunnerKind {
     Builtin,
     /// A local command-line program.
     Cli,
-    /// A local MCP server the user registered: started over stdio only for a run, asked to
-    /// call one tool per skill, then stopped.
+    /// An MCP server the user registered: a local command started over stdio only for a run
+    /// (then stopped), or a Streamable HTTP endpoint. Its chosen tools are called per skill.
     Mcp,
+}
+
+/// How holdmap reaches an MCP analyzer.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Transport {
+    /// holdmap starts `command` for the run, sandboxed, and talks over stdin/stdout.
+    #[default]
+    Stdio,
+    /// holdmap connects to a server that is already running at `url` (Streamable HTTP).
+    Http,
+}
+
+/// One MCP tool an analyzer calls once per subject, with its argument mapping.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ToolSpec {
+    /// Tool name as the server lists it.
+    pub name: String,
+    /// Arguments: constants (strings, numbers, booleans, lists) and templates using the
+    /// placeholders in [`crate::mcp_map::Placeholder`].
+    #[serde(default)]
+    pub args: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 /// What one run covers.
@@ -118,11 +144,23 @@ pub struct RunnerSpec {
     /// Exit codes that mean the report is valid.
     #[serde(default = "default_exit_ok")]
     pub exit_ok: Vec<i32>,
-    /// MCP analyzers: the tool called once per skill.
+    /// MCP analyzers: `stdio` (default) or `http`.
     #[serde(default)]
+    pub transport: Transport,
+    /// MCP analyzers over HTTP: the Streamable HTTP endpoint.
+    #[serde(default)]
+    pub url: Option<String>,
+    /// MCP analyzers over HTTP: the declared secret sent as `Authorization: Bearer`.
+    #[serde(default)]
+    pub auth_secret: Option<String>,
+    /// MCP analyzers: the tools called once per skill, in order. Empty until mapped.
+    #[serde(default)]
+    pub tools: Vec<ToolSpec>,
+    /// Older single-tool form; folded into `tools` when parsed.
+    #[serde(default, skip_serializing)]
     pub tool: Option<String>,
-    /// MCP analyzers: the tool's arguments; only [`SUBJECT_DIR`] is substituted.
-    #[serde(default)]
+    /// Older single-tool form; folded into `tools` when parsed.
+    #[serde(default, skip_serializing)]
     pub tool_args: std::collections::BTreeMap<String, String>,
 }
 
@@ -165,6 +203,9 @@ pub struct Permissions {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum OutputFormat {
+    /// Recognise SARIF or holdmap JSON; else apply the field mapping when `items` is set;
+    /// else keep a short excerpt of the text as one detail.
+    Auto,
     /// Arbitrary JSON mapped by field paths.
     JsonMap,
     /// SARIF 2.1.0.
@@ -272,6 +313,7 @@ impl AnalyzerManifest {
             id: String,
             name: String,
             publisher: String,
+            #[serde(default)]
             homepage: String,
             license: String,
             summary: String,
@@ -281,8 +323,20 @@ impl AnalyzerManifest {
             permissions: Permissions,
             output: OutputSpec,
         }
-        let raw: Raw =
+        let mut raw: Raw =
             toml::from_str(text).map_err(|e| ManifestError::Syntax(e.message().into()))?;
+        if let Some(tool) = raw.runner.tool.take() {
+            if !raw.runner.tools.is_empty() {
+                return Err(rule("use either tool or [[runner.tools]], not both"));
+            }
+            let args = std::mem::take(&mut raw.runner.tool_args)
+                .into_iter()
+                .map(|(k, v)| (k, serde_json::Value::String(v)))
+                .collect();
+            raw.runner.tools.push(ToolSpec { name: tool, args });
+        } else if !raw.runner.tool_args.is_empty() {
+            return Err(rule("tool_args needs tool"));
+        }
         Ok(Self {
             schema: raw.schema,
             id: raw.id,
@@ -321,7 +375,7 @@ impl AnalyzerManifest {
                 return Err(rule(&format!("{field} must be 1–{max} characters")));
             }
         }
-        if !self.homepage.starts_with("https://") {
+        if !self.homepage.is_empty() && !self.homepage.starts_with("https://") {
             return Err(rule("homepage must be an https URL"));
         }
         self.validate_runner()?;
@@ -333,10 +387,21 @@ impl AnalyzerManifest {
         let r = &self.runner;
         match r.kind {
             RunnerKind::Builtin => return Ok(()),
-            RunnerKind::Mcp => self.validate_mcp()?,
+            RunnerKind::Mcp => {
+                self.validate_mcp()?;
+                if r.transport == Transport::Http {
+                    return self.validate_limits();
+                }
+            }
             RunnerKind::Cli => {
-                if r.tool.is_some() || !r.tool_args.is_empty() {
-                    return Err(rule("tool and tool_args are for MCP analyzers only"));
+                if !r.tools.is_empty()
+                    || r.url.is_some()
+                    || r.auth_secret.is_some()
+                    || r.transport != Transport::Stdio
+                {
+                    return Err(rule(
+                        "tools, transport, url and auth_secret are for MCP analyzers only",
+                    ));
                 }
             }
         }
@@ -372,6 +437,11 @@ impl AnalyzerManifest {
                 "a CLI analyzer runs once per skill and must pass {subject.dir}",
             ));
         }
+        self.validate_limits()
+    }
+
+    fn validate_limits(&self) -> Result<(), ManifestError> {
+        let r = &self.runner;
         if r.timeout_secs == 0 || r.timeout_secs > MAX_TIMEOUT_SECS {
             return Err(rule(&format!("timeout_secs must be 1–{MAX_TIMEOUT_SECS}")));
         }
@@ -389,42 +459,116 @@ impl AnalyzerManifest {
         if r.per_subject != PerSubject::Skill {
             return Err(rule("an MCP analyzer runs once per skill"));
         }
-        if let Some(arg) = r.args.iter().find(|a| a.contains('{') || a.contains('}')) {
+        let remote = match r.transport {
+            Transport::Stdio => {
+                if r.url.is_some() || r.auth_secret.is_some() {
+                    return Err(rule("url and auth_secret are for transport = \"http\""));
+                }
+                if let Some(arg) = r.args.iter().find(|a| a.contains('{') || a.contains('}')) {
+                    return Err(rule(&format!(
+                        "MCP server arguments take no placeholders (found {arg:?}); map inputs in [[runner.tools]]"
+                    )));
+                }
+                if !self.permissions.spawns_mcp_servers {
+                    return Err(rule(
+                        "an MCP analyzer started from a command starts a server: set permissions.spawns_mcp_servers = true",
+                    ));
+                }
+                false
+            }
+            Transport::Http => self.validate_http()?,
+        };
+        if r.tools.len() > MAX_TOOLS {
             return Err(rule(&format!(
-                "MCP server arguments take no placeholders (found {arg:?}); pass {SUBJECT_DIR} in tool_args"
+                "an MCP analyzer may call at most {MAX_TOOLS} tools"
             )));
         }
-        let tool = r.tool.as_deref().unwrap_or("");
-        if tool.is_empty()
-            || tool.len() > 64
-            || !tool
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
-        {
-            return Err(rule("tool must name one MCP tool (letters, digits, _ - .)"));
-        }
-        if r.tool_args.len() > 8 {
-            return Err(rule("tool_args may have at most 8 entries"));
-        }
-        for (key, value) in &r.tool_args {
-            if key.is_empty()
-                || key.len() > 64
-                || value.replace(SUBJECT_DIR, "").contains(['{', '}'])
-            {
+        let mut names: Vec<&str> = Vec::new();
+        for t in &r.tools {
+            if !valid_tool_name(&t.name) {
+                return Err(rule("tool names must be 1–128 letters, digits, _ - or ."));
+            }
+            if names.contains(&t.name.as_str()) {
+                return Err(rule(&format!("tool {:?} is listed twice", t.name)));
+            }
+            names.push(&t.name);
+            if t.args.len() > crate::mcp_map::MAX_ARGS {
                 return Err(rule(&format!(
-                    "tool_args {key:?}: only {SUBJECT_DIR} is substituted"
+                    "tool {:?} may have at most {} arguments",
+                    t.name,
+                    crate::mcp_map::MAX_ARGS
+                )));
+            }
+            for (key, value) in &t.args {
+                if key.is_empty() || key.len() > 64 {
+                    return Err(rule(&format!(
+                        "tool {:?}: argument names are 1–64 characters",
+                        t.name
+                    )));
+                }
+                crate::mcp_map::check_template(value, remote)
+                    .map_err(|why| rule(&format!("tool {:?} argument {key:?}: {why}", t.name)))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_http(&self) -> Result<bool, ManifestError> {
+        let r = &self.runner;
+        if r.command.is_some() || !r.args.is_empty() || !r.version_args.is_empty() {
+            return Err(rule(
+                "an HTTP MCP analyzer connects to url; command and args are for stdio",
+            ));
+        }
+        if self.permissions.spawns_mcp_servers {
+            return Err(rule(
+                "an HTTP MCP analyzer doesn't start a server: set spawns_mcp_servers = false",
+            ));
+        }
+        let url = r.url.as_deref().unwrap_or("");
+        let endpoint = Endpoint::parse(url).ok_or_else(|| {
+            rule("url must be an http(s) URL without credentials, like http://127.0.0.1:8080/mcp")
+        })?;
+        let remote = !endpoint.loopback;
+        if remote {
+            if !endpoint.https {
+                return Err(rule("a server on another machine must use https"));
+            }
+            if !self.permissions.network.iter().any(|h| h == &endpoint.host) {
+                return Err(rule(&format!(
+                    "a server on another machine must be listed in permissions.network ({})",
+                    endpoint.host
                 )));
             }
         }
-        if !r.tool_args.values().any(|v| v.contains(SUBJECT_DIR)) {
-            return Err(rule("an MCP analyzer must pass {subject.dir} in tool_args"));
+        if let Some(name) = &r.auth_secret {
+            if !self.permissions.secrets.contains(name) {
+                return Err(rule("auth_secret must be one of permissions.secrets"));
+            }
         }
-        if !self.permissions.spawns_mcp_servers {
+        if self
+            .permissions
+            .secrets
+            .iter()
+            .any(|n| Some(n) != r.auth_secret.as_ref())
+        {
             return Err(rule(
-                "an MCP analyzer starts a server: set permissions.spawns_mcp_servers = true",
+                "an HTTP MCP analyzer gets no environment; its only secret is auth_secret",
             ));
         }
-        Ok(())
+        Ok(remote)
+    }
+
+    /// The HTTP endpoint, for HTTP MCP analyzers.
+    pub fn endpoint(&self) -> Option<Endpoint> {
+        (self.runner.kind == RunnerKind::Mcp && self.runner.transport == Transport::Http)
+            .then(|| self.runner.url.as_deref().and_then(Endpoint::parse))
+            .flatten()
+    }
+
+    /// Whether this is an HTTP MCP analyzer on another machine (metadata-only, opt-in).
+    pub fn is_remote(&self) -> bool {
+        self.endpoint().is_some_and(|e| !e.loopback)
     }
 
     fn validate_permissions(&self) -> Result<(), ManifestError> {
@@ -471,6 +615,14 @@ impl AnalyzerManifest {
     fn validate_output(&self) -> Result<(), ManifestError> {
         let o = &self.output;
         match o.format {
+            OutputFormat::Auto if o.items.is_some() => {
+                let items = o.items.as_deref().unwrap_or("");
+                if !items.starts_with("$.") || !items.ends_with("[*]") || o.rule_id.is_none() {
+                    return Err(rule(
+                        "a field mapping needs items like \"$.issues[*]\" and rule_id",
+                    ));
+                }
+            }
             OutputFormat::JsonMap => {
                 let items = o.items.as_deref().unwrap_or("");
                 if !items.starts_with("$.") || !items.ends_with("[*]") {
@@ -492,6 +644,79 @@ impl AnalyzerManifest {
     pub fn uses_network(&self) -> bool {
         !self.permissions.network.is_empty()
     }
+}
+
+/// A parsed MCP endpoint URL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Endpoint {
+    /// `https`.
+    pub https: bool,
+    /// Host without port or brackets, lower-case.
+    pub host: String,
+    /// Whether the host is this machine (`localhost`, `127.0.0.0/8`, `::1`).
+    pub loopback: bool,
+}
+
+impl Endpoint {
+    /// Parse `http(s)://host[:port][/path]`; credentials, fragments and spaces are refused.
+    pub fn parse(url: &str) -> Option<Self> {
+        if url.len() > 512 || url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+            return None;
+        }
+        let (https, rest) = if let Some(r) = url.strip_prefix("https://") {
+            (true, r)
+        } else {
+            (false, url.strip_prefix("http://")?)
+        };
+        if url.contains('#') {
+            return None;
+        }
+        let authority = rest.split(['/', '?']).next().unwrap_or("");
+        if authority.is_empty() || authority.contains('@') {
+            return None;
+        }
+        let host = if let Some(v6) = authority.strip_prefix('[') {
+            let (h, port) = v6.split_once(']')?;
+            if !(port.is_empty() || port.strip_prefix(':').is_some_and(valid_port)) {
+                return None;
+            }
+            h.to_ascii_lowercase()
+        } else {
+            let (h, port) = authority.split_once(':').unwrap_or((authority, ""));
+            if !(port.is_empty() && !authority.ends_with(':') || valid_port(port)) {
+                return None;
+            }
+            h.to_ascii_lowercase()
+        };
+        if host.is_empty()
+            || !host
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':'))
+        {
+            return None;
+        }
+        let loopback = host == "localhost"
+            || host == "::1"
+            || host
+                .parse::<std::net::Ipv4Addr>()
+                .is_ok_and(|ip| ip.is_loopback());
+        Some(Self {
+            https,
+            host,
+            loopback,
+        })
+    }
+}
+
+fn valid_port(p: &str) -> bool {
+    !p.is_empty() && p.len() <= 5 && p.parse::<u16>().is_ok_and(|n| n > 0)
+}
+
+fn valid_tool_name(name: &str) -> bool {
+    (1..=128).contains(&name.len())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
 }
 
 fn rule(message: &str) -> ManifestError {

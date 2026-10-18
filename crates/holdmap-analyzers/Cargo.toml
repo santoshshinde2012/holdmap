@@ -12,7 +12,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [features]
-default = ["osv-http", "keychain", "mcp-runner"]
+default = ["osv-http", "keychain", "mcp-runner", "mcp-http"]
 # HTTPS transport for the OSV built-in. Without it the built-in reports itself unavailable.
 osv-http = ["dep:ureq"]
 # API keys for analyzers in the OS keychain (macOS Keychain, Windows Credential Manager,
@@ -21,19 +21,24 @@ keychain = ["dep:keyring"]
 # Run user-registered local MCP analyzers (started over stdio only for a run). Without it
 # holdmap reports MCP analyzers unavailable.
 mcp-runner = ["dep:rmcp", "dep:tokio"]
+# Reach MCP analyzers over Streamable HTTP (rmcp's client transport on holdmap's ureq client).
+mcp-http = ["mcp-runner", "rmcp/transport-streamable-http-client", "dep:ureq", "dep:sse-stream", "dep:futures", "dep:bytes"]
 
 [dependencies]
 holdmap-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-toml.workspace = true
+toml = { workspace = true, features = ["display"] }
 sha2.workspace = true
 hex.workspace = true
 tempfile.workspace = true
 minisign-verify = "0.3"
 rmcp = { version = "3.5", default-features = false, features = ["client", "transport-async-rw"], optional = true }
-tokio = { version = "1", default-features = false, features = ["rt", "process", "time", "io-util"], optional = true }
+tokio = { version = "1", default-features = false, features = ["rt", "process", "time", "io-util", "macros"], optional = true }
+sse-stream = { version = "0.2.4", optional = true }
+futures = { version = "0.3", default-features = false, features = ["std"], optional = true }
+bytes = { version = "1", optional = true }
 ureq = { version = "3.4", default-features = false, features = ["rustls"], optional = true }
 keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "async-secret-service", "async-io", "crypto-rust"], optional = true }
 

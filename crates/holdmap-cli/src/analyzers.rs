@@ -937,6 +937,10 @@ mod tests {
             details: vec![],
             notes: vec![],
             input_signature: None,
+
+            duration_ms: None,
+
+            tool_calls: Vec::new(),
         }
     }
 

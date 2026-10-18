@@ -183,6 +183,8 @@ mod tests {
                     version: None,
                     approved_at_ms: 1,
                     background_network: false,
+                    tools_sha256: None,
+                    remote_opt_in: false,
                 })
                 .unwrap();
         }
@@ -207,6 +209,10 @@ mod tests {
                 details: vec![],
                 notes: vec![],
                 input_signature: None,
+
+                duration_ms: None,
+
+                tool_calls: Vec::new(),
             })
             .unwrap();
         AnalyzerService::new(Stores::of(store))

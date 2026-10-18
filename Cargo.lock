@@ -2262,7 +2262,9 @@ dependencies = [
 name = "holdmap-analyzers"
 version = "0.9.0"
 dependencies = [
+ "bytes",
  "ct-codecs",
+ "futures",
  "hex",
  "holdmap-core",
  "keyring",
@@ -2273,6 +2275,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.1",
+ "sse-stream",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
@@ -4766,12 +4769,16 @@ version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5023804cbe0304cbe06197ac16e645a0a0d0ffa2953bf735c15c2fa0213350"
 dependencies = [
+ "base64 0.23.1",
+ "bytes",
  "chrono",
  "futures",
+ "http",
  "indexmap 2.14.2",
  "pin-project-lite",
  "serde",
  "serde_json",
+ "sse-stream",
  "thiserror 2.0.21",
  "tokio",
  "tokio-stream",
@@ -5452,6 +5459,19 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
+]
+
+[[package]]
+name = "sse-stream"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c25ac7aff0abd1dbc474536e40416e1102c7dd9bfba0b9861c6d357f835dcfb4"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "http-body",
+ "http-body-util",
+ "pin-project-lite",
 ]
 
 [[package]]
