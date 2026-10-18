@@ -26,6 +26,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 import time
 
 ARGS = sys.argv[1:]
@@ -72,8 +73,25 @@ def tools():
     return out
 
 
-def sarif(path):
+# holdmap hands the server a private copy in a temporary folder; anything else is refused, so
+# a request (over HTTP too) can't make the fixture read arbitrary files.
+SCAN_ROOTS = sorted({os.path.realpath(r) for r in (tempfile.gettempdir(), "/tmp", "/var/folders")})
+
+
+def confined(path):
+    real = os.path.realpath(path)
+    for root in SCAN_ROOTS:
+        if real.startswith(root + os.sep):
+            return real
+    return None
+
+
+def sarif(requested):
     found = []
+    path = confined(requested)
+    if path is None:
+        found.append(("outside-temp", "error", "", 1, "The folder isn't a temporary copy; it was not read."))
+        path = os.path.join(SCAN_ROOTS[0], "holdmap-fixture-nothing-here")
     for root, _dirs, files in os.walk(path):
         for name in sorted(files):
             full = os.path.join(root, name)

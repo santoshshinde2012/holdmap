@@ -12,8 +12,7 @@
   import Button from "../ui/Button.svelte";
   import AgentInsights from "./AgentInsights.svelte";
   import SegmentedControl from "../ui/SegmentedControl.svelte";
-  import AnalyzerOverview from "./graph/AnalyzerOverview.svelte";
-  import AnalyzerPipeline from "./graph/AnalyzerPipeline.svelte";
+  import { loadAnalyzerGraphs, type AnalyzerGraphs } from "./graph/load-graphs";
   import { insightsStore } from "../../lib/insights-store.svelte";
   import { inventories } from "../../lib/agent-config";
   import { agentCounts, ago, countsText, total, worst } from "../../lib/analyzers";
@@ -53,6 +52,13 @@
   let tab = $state<"findings" | "graph">(lastTab);
   let pipeline = $state<string | null>(lastPipeline);
   $effect(() => { lastTab = tab; lastPipeline = pipeline; });
+  let graphs = $state<AnalyzerGraphs | null>(null);
+  let graphError = $state(false);
+  $effect(() => {
+    if (tab !== "graph" || graphs) return;
+    graphError = false;
+    loadAnalyzerGraphs().then((g) => (graphs = g), (e) => { console.error("Couldn't load the analyzer graphs", e); graphError = true; });
+  });
   const pipelineView = $derived(insightsStore.analyzers.find((a) => a.id === pipeline) ?? null);
 
   function pick(r: { product: string; id: string | null }) {
@@ -82,12 +88,14 @@
 
   {#if tab === "graph"}
     <div class="graphs">
-      {#if pipelineView}
+      {#if !graphs}
+        <p class="sub" role="status">{graphError ? "Couldn't load the graphs. Reopen this tab to try again." : "Loading the graphs…"}</p>
+      {:else if pipelineView}
         <div class="ghead"><h3>How {pipelineView.name} works</h3><Button size="sm" variant="ghost" icon="arrow-left" onclick={() => (pipeline = null)}>All analyzers</Button></div>
-        <AnalyzerPipeline view={pipelineView} height={420} />
+        <graphs.AnalyzerPipeline view={pipelineView} height={420} />
       {:else}
         <p class="sub">Which analyzer covers which agent, from each one's last run. Select an analyzer for its pipeline.</p>
-        <AnalyzerOverview {report} height={440} onpipeline={(id) => (pipeline = id)} />
+        <graphs.AnalyzerOverview {report} height={440} onpipeline={(id) => (pipeline = id)} />
       {/if}
     </div>
   {:else if !rows.length}

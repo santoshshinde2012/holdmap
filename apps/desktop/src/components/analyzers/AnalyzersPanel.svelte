@@ -11,7 +11,7 @@
   import CatalogUpdate from "./CatalogUpdate.svelte";
   import AddAnalyzer from "./AddAnalyzer.svelte";
   import McpTools from "./McpTools.svelte";
-  import AnalyzerPipeline from "./graph/AnalyzerPipeline.svelte";
+  import { loadAnalyzerGraphs, type AnalyzerGraphs } from "./graph/load-graphs";
   import * as api from "../../lib/api";
   import { SANDBOX_LABEL, STATE_LABEL, ago, countsText, total, type AnalyzerView, type Preview } from "../../lib/analyzers";
   import { insightsStore } from "../../lib/insights-store.svelte";
@@ -26,6 +26,15 @@
   let toolsFor = $state<string | null>(null);
 
   onMount(() => { void insightsStore.refresh(); });
+
+  let graphs = $state<AnalyzerGraphs | null>(null);
+  async function toggleGraph(id: string) {
+    graphFor = graphFor === id ? null : id;
+    if (graphFor && !graphs) {
+      try { graphs = await loadAnalyzerGraphs(); }
+      catch (e) { console.error("Couldn't load the analyzer graph", e); graphFor = null; }
+    }
+  }
 
   async function act(key: string, f: () => Promise<unknown>) {
     if (busy[key]) return;
@@ -101,14 +110,14 @@
             <Button size="sm" variant="ghost" aria-expanded={toolsFor === a.id} onclick={() => (toolsFor = toolsFor === a.id ? null : a.id)}>Tools…</Button>
           {/if}
           {#if a.state !== "not_installed"}
-            <Button size="sm" variant="ghost" icon="branch" aria-expanded={graphFor === a.id} onclick={() => (graphFor = graphFor === a.id ? null : a.id)}>How it works</Button>
+            <Button size="sm" variant="ghost" icon="branch" aria-expanded={graphFor === a.id} onclick={() => toggleGraph(a.id)}>How it works</Button>
           {/if}
           {#if a.source === "user"}
             <Button size="sm" variant="ghost" loading={busy[`rm:${a.id}`]} onclick={() => act(`rm:${a.id}`, () => api.removeAnalyzer(a.id))}>Remove</Button>
           {/if}
         </div>
         {#if toolsFor === a.id}<McpTools id={a.id} name={a.name} onsaved={() => { toolsFor = null; void insightsStore.refresh(); }} oncancel={() => (toolsFor = null)} />{/if}
-        {#if graphFor === a.id}<AnalyzerPipeline view={a} height={300} />{/if}
+        {#if graphFor === a.id && graphs}<graphs.AnalyzerPipeline view={a} height={300} />{/if}
         {#each [errors[a.id], errors[`run:${a.id}`], errors[`off:${a.id}`], errors[`auto:${a.id}`], errors[`rm:${a.id}`]].filter(Boolean) as e}<Callout tone="danger" size="sm">{e}</Callout>{/each}
       </li>
     {/each}
