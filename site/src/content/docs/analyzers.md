@@ -125,7 +125,8 @@ A URL that isn't on this computer needs **Allow this server on another machine**
 permissions sheet (`holdmap analyzers approve ID --allow-remote`). A remote server only gets
 metadata: skill names, file names and agents, never paths or file contents. A bearer token is
 stored in the OS keychain (`--auth KEY_NAME`, then `holdmap analyzers key set ID KEY_NAME`).
-OAuth isn't supported.
+OAuth isn't supported. holdmap connects to the URL directly: it follows no redirects and
+ignores `HTTP_PROXY` / `HTTPS_PROXY`, so what it sends reaches only that server.
 
 ### Limits
 

@@ -42,6 +42,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Analyzer graphs: each analyzer's pipeline from inventory to findings, and which analyzer
   covers which agent, with last-run details, keyboard navigation and a narrow list layout.
 - Stop an analyzer run (`notifications/cancelled` for MCP, the process group for CLI).
+- The website's home page has an Analyzers section (pipeline, coverage and any-MCP screenshots in
+  light and dark, consent and pinning explained), and the README lists analyzers as a feature.
 - **Agents → Insights** collects every agent's findings in one place. Analyzers also cover
   configured agents that aren't running.
 - `holdmap needs` and the MCP tool `list_needs` show the same **Needs you** list as the desktop

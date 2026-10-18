@@ -51,6 +51,10 @@ sample data.
   host, running now), skills, built-in tools, permission rules and instruction files. Env and
   header **names** only; values, prompts and file bodies are never read, and MCP servers are
   never started.
+- **Analyzers (opt-in).** Scan your agents' skills and MCP packages with NVIDIA SkillSpector, a
+  built-in OSV.dev lookup or any MCP server you plug in. Each one is off until you review exactly
+  what it gets; runs use a private copy, a cleared environment and a sandbox. MCP tool lists are
+  pinned, and **How it works** draws each analyzer's pipeline and which agents it covers.
 - **Maps and graphs.** Computer / Footprint / Project agent maps, the service graph with
   clusters (Compose, Kubernetes, workspaces), and the Explore / Map / Compare capability explorer.
 - **Local capture.** Screen or window recording to MP4/GIF and PNG snapshots. Nothing is uploaded.
@@ -308,6 +312,8 @@ data. Details: [desktop guide](site/src/content/docs/desktop.md).
 | ![The Agents Footprint map: folders, agents, tools, ports and remote hosts](docs/screenshots/desktop-agents-light.png) | ![The service graph with the shop services and their observed connections](docs/screenshots/desktop-graph-light.png) |
 | **Capability explorer** | **Command palette** |
 | ![Explore skill cards show declared purposes, source files and file-presence evidence](docs/screenshots/desktop-capability-explore-light.png) | ![The command palette searching "sto"](docs/screenshots/desktop-command-palette-light.png) |
+| **Analyzer pipeline** | **Any MCP server's tools** |
+| ![SkillSpector's pipeline from inventory to findings and where they appear](docs/screenshots/desktop-analyzer-pipeline-light.png) | ![Mapping an MCP server's tools from their schemas, with a flagged tool](docs/screenshots/desktop-analyzer-tools-light.png) |
 | **Screen recording** | **TUI** |
 | ![Screen recording setup explains local exports and the source chooser](docs/screenshots/desktop-screen-record-light.png) | ![The holdmap TUI: port table with the details pane](docs/screenshots/tui-list-light.png) |
 

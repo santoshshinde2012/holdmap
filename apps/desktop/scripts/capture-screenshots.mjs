@@ -173,6 +173,46 @@ async function openSnapshot(page, preview = false) {
   return result;
 }
 
+async function openAnalyzerGraph(page, pipeline = false) {
+  await page.getByRole("radio", { name: /^Agents/ }).click();
+  await page.getByRole("radio", { name: "Insights", exact: true }).click();
+  const insights = page.getByRole("region", { name: "Insights workspace", exact: true });
+  await insights.getByRole("radio", { name: "How it works", exact: true }).click();
+  const overview = insights.getByRole("group", { name: "Analyzers and the agents they cover", exact: true });
+  await expect(overview.locator(".svelte-flow")).toBeVisible();
+  await overview.locator('[data-graph-node="analyzer:nvidia.skillspector"]').click();
+  if (!pipeline) return;
+  await overview.getByRole("button", { name: "How SkillSpector works", exact: true }).click();
+  const graph = insights.getByRole("group", { name: "How SkillSpector works", exact: true });
+  await expect(graph.locator(".svelte-flow")).toBeVisible();
+  await graph.locator('[data-graph-node="findings"]').click();
+  await expect(graph.getByRole("complementary", { name: "Details: Findings", exact: true })).toBeVisible();
+}
+
+async function openMcpTools(page) {
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.getByRole("tab", { name: "Analyzers", exact: true }).click();
+  await settings.getByRole("button", { name: "Add your own analyzer…", exact: true }).click();
+  await settings.getByLabel("Id", { exact: true }).fill("local.skill-lint");
+  await settings.getByLabel("Name", { exact: true }).fill("Skill lint (sample)");
+  await settings.getByLabel("Command", { exact: true }).fill("/usr/local/bin/skill-lint-mcp");
+  await settings.getByLabel("Arguments (one per line)").fill("--stdio");
+  await settings.getByRole("button", { name: "Add and choose tools…", exact: true }).click();
+  await settings.getByRole("button", { name: "List tools", exact: true }).click();
+  const tools = settings.getByRole("region", { name: "Tools of Skill lint (sample)", exact: true });
+  await expect(tools.getByText("contains hidden-instruction markup")).toBeVisible();
+  // Show the schema mapping and, below it, the flagged (poisoned) sample tool.
+  await tools.getByText("contains hidden-instruction markup").evaluate((element) => {
+    for (let box = element.parentElement; box; box = box.parentElement) {
+      if (box.scrollHeight > box.clientHeight && getComputedStyle(box).overflowY !== "visible") {
+        box.scrollTop += element.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom + 24;
+        return;
+      }
+    }
+  });
+}
+
 async function openAgentFlow(page, calls = false) {
   await openAgents(page);
   await page.getByRole("radio", { name: "Flow", exact: true }).click();
@@ -314,6 +354,20 @@ const captures = [
       await flow.getByRole("button", { name: "Fit all relationships in view", exact: true }).click();
     } },
   ]),
+  ...["dark", "light"].flatMap((theme) => [
+    { name: `desktop-analyzer-overview-${theme}.png`, theme, prepare: (page) => openAnalyzerGraph(page) },
+    { name: `desktop-analyzer-pipeline-${theme}.png`, theme, prepare: (page) => openAnalyzerGraph(page, true) },
+    { name: `desktop-analyzer-tools-${theme}.png`, theme, prepare: openMcpTools },
+  ]),
+  { name: "desktop-analyzer-pipeline-narrow-light.png", theme: "light", viewport: { width: 560, height: 1000 }, async prepare(page) {
+    await page.getByRole("radio", { name: /^Agents/ }).click();
+    await page.getByRole("radio", { name: "Insights", exact: true }).click();
+    const insights = page.getByRole("region", { name: "Insights workspace", exact: true });
+    await insights.getByRole("radio", { name: "How it works", exact: true }).click();
+    await insights.getByRole("list", { name: "Analyzers and the agents they cover (list)", exact: true }).getByRole("button", { name: /SkillSpector/ }).click();
+    await insights.getByRole("button", { name: "How SkillSpector works", exact: true }).click();
+    await expect(insights.getByRole("list", { name: "How SkillSpector works (list)", exact: true })).toBeVisible();
+  } },
   ...["dark", "light"].map((theme) => ({ name: `desktop-shutdown-schedule-${theme}.png`, theme, async prepare(page) {
     const dialog = await reviewShutdown(page, true);
     await dialog.getByRole("checkbox").check();
