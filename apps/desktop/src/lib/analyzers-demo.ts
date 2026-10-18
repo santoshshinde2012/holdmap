@@ -3,6 +3,7 @@
 import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, FindingState, Insights, Preview, Subject } from "./analyzers";
 import { emptyCounts } from "./analyzers";
 import { inventories } from "./agent-config";
+import { readManifest, type DemoManifest } from "./analyzer-manifest";
 import type { AgentsReport } from "./types";
 
 const SKILLSPECTOR = "nvidia.skillspector";
@@ -91,6 +92,7 @@ export class DemoAnalyzers {
   private results = new Map<string, AnalyzerResult>([[SKILLSPECTOR, skillspectorResult()]]);
   private reviews = new Map<string, FindingState>();
   private background = new Set<string>();
+  private user = new Map<string, DemoManifest>();
   private catalogState: CatalogStatus = { version: 1, published: "2026-10-18", accepted: false, pending: null };
 
   catalog(): CatalogStatus {
@@ -121,7 +123,32 @@ export class DemoAnalyzers {
   }
 
   list(): AnalyzerView[] {
-    return [SKILLSPECTOR, OSV].map((id) => this.view(id));
+    return [SKILLSPECTOR, OSV, ...this.user.keys()].map((id) => this.view(id));
+  }
+
+  /** Simulated "Add your own analyzer": checks the manifest like holdmap; nothing is installed. */
+  add(text: string): AnalyzerView {
+    const m = readManifest(text, Object.keys(BASE));
+    if (this.user.has(m.id)) throw new Error(`invalid manifest: ${m.id} is already registered; remove it first`);
+    this.user.set(m.id, m);
+    return this.view(m.id);
+  }
+
+  /** Remove a registered analyzer with its approval and results. */
+  remove(id: string): boolean {
+    if (BASE[id]) throw new Error(`${BASE[id].name} is in holdmap's catalog and can't be removed; turn it off instead`);
+    this.revoke(id);
+    return this.user.delete(id);
+  }
+
+  private base(id: string): Omit<AnalyzerView, "state" | "approved_at_ms" | "last_run" | "version"> {
+    const m = this.user.get(id);
+    if (!m) return BASE[id];
+    return {
+      id, name: m.name, publisher: m.publisher, license: m.license, homepage: m.homepage, install: null, kind: m.kind,
+      summary: m.summary, changes: [], sandbox: "macos_seatbelt", binary: `/Users/dev/.local/bin/${m.command.split("/").pop()}`, source: "user",
+      permissions: { read: ["{subject.dir}"], network: m.network, network_reason: m.networkReason, sends: m.sends, spawns_mcp_servers: m.kind === "mcp" },
+    };
   }
 
   private view(id: string): AnalyzerView {
@@ -130,7 +157,8 @@ export class DemoAnalyzers {
     const open = emptyCounts();
     for (const f of this.withReviews(result)?.findings ?? []) if (f.state === "open") open[f.severity]++;
     return {
-      ...BASE[id],
+      source: "catalog",
+      ...this.base(id),
       state: approvedAt ? "approved" : "not_approved",
       background: this.background.has(id),
       approved_at_ms: approvedAt,
@@ -140,6 +168,8 @@ export class DemoAnalyzers {
   }
 
   preview(id: string, report: AgentsReport): Preview {
+    const user = this.user.get(id);
+    if (user) return this.userPreview(user, report);
     const builtin = id === OSV;
     const packages = osvPackages(report);
     const skills = new Map<string, { subject: Subject; input: string }>();
@@ -170,6 +200,46 @@ export class DemoAnalyzers {
     };
   }
 
+  private skills(report: AgentsReport) {
+    const skills = new Map<string, { subject: Subject; input: string }>();
+    for (const a of inventories(report)) {
+      for (const s of a.capabilities?.skills ?? []) {
+        const dir = s.source_path.replace(/\/SKILL\.md$/, "");
+        const entry = skills.get(dir) ?? { subject: skill(s.id, s.name, []), input: dir };
+        if (!entry.subject.agents.includes(a.product)) entry.subject.agents.push(a.product);
+        skills.set(dir, entry);
+      }
+    }
+    return [...skills.values()].sort((a, b) => a.input.localeCompare(b.input));
+  }
+
+  private userPreview(m: DemoManifest, report: AgentsReport): Preview {
+    const program = m.command.split("/").pop() ?? m.command;
+    const notices: string[] = [];
+    if (m.kind === "mcp") {
+      notices.push("This starts a local MCP server. holdmap starts it only when you run this analyzer, with a cleared environment and the same sandbox as other analyzers, and stops it when the run ends. It never runs on its own.");
+      for (const a of inventories(report)) {
+        for (const s of a.capabilities?.mcp_servers ?? []) {
+          if (s.name === program || (s.launch?.package ?? "").split("@")[0].endsWith(program)) {
+            notices.push(`Warning: this looks like the MCP server ${a.product} is configured to use (${s.name}). holdmap starts its own copy: it gets none of your agent's settings or keys, and anything the server does when it starts (signing in, syncing, writing files it is allowed to) happens again.`);
+          }
+        }
+      }
+    }
+    const args = Object.entries(m.toolArgs).map(([k, v]) => `${k}=${v === "{subject.dir}" ? "<copy of the skill folder>" : v}`).join(", ");
+    return {
+      analyzer: this.view(m.id),
+      command: m.kind === "mcp" ? [m.command, ...m.args, `then calls tool ${m.tool}(${args}) once per skill`] : [m.command, ...m.args],
+      subjects: this.skills(report),
+      skipped: [],
+      payload: [],
+      env: ["PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "NO_COLOR"],
+      sandbox: "macOS sandbox (best effort): it gets a copy of the folder, a cleared environment and a private temporary home, and is stopped at the time limit. It can only write inside its private folder and can't read common credential folders (.ssh, .aws, Keychains and similar). " + (m.network.length ? "It may use the network, as its permissions say." : "The operating system blocks its network access.") + " It can still read your other files. Apple has deprecated the sandbox-exec tool this uses.",
+      schedule: m.kind === "mcp" ? "Only when you click Run now. MCP analyzers never run on their own." : "When you click Run now, and while holdmap is open when the analysed items change.",
+      notices,
+    };
+  }
+
   approve(id: string): AnalyzerView {
     this.approved.set(id, Date.now());
     this.background.delete(id);
@@ -177,7 +247,9 @@ export class DemoAnalyzers {
   }
 
   setBackground(id: string, allow: boolean): AnalyzerView {
-    if (!this.approved.has(id)) throw new Error(`${BASE[id]?.name ?? id} is off. Turn it on first.`);
+    const m = this.user.get(id);
+    if (m?.kind === "mcp") throw new Error(`${m.name} starts an MCP server, so it runs only when you click Run now.`);
+    if (!this.approved.has(id)) throw new Error(`${m?.name ?? BASE[id]?.name ?? id} is off. Turn it on first.`);
     if (allow) this.background.add(id);
     else this.background.delete(id);
     return this.view(id);
@@ -191,7 +263,10 @@ export class DemoAnalyzers {
 
   run(id: string, report: AgentsReport): AnalyzerResult {
     if (!this.approved.has(id)) throw new Error(`${BASE[id]?.name ?? id} is off. Review its permissions and turn it on first.`);
-    const result = id === OSV ? osvResult(report) : { ...skillspectorResult(), run_at_ms: Date.now() };
+    const user = this.user.get(id);
+    const result = user
+      ? { analyzer: id, analyzer_version: null, run_at_ms: Date.now(), status: "complete" as const, coverage: null, subjects: this.skills(report).map((s) => s.subject), findings: [], details: [], notes: [`Browser demo: ${user.kind === "mcp" ? "no MCP server was started" : "nothing was run"}; this is a sample result.`] }
+      : id === OSV ? osvResult(report) : { ...skillspectorResult(), run_at_ms: Date.now() };
     this.results.set(id, result);
     return this.withReviews(result)!;
   }

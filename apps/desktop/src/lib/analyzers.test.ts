@@ -117,7 +117,7 @@ describe("demo analyzers", () => {
   });
 
   it("labels every sandbox level", () => {
-    expect(Object.keys(SANDBOX_LABEL).sort()).toEqual(["basic", "linux_bubblewrap", "macos_seatbelt", "windows_job"]);
+    expect(Object.keys(SANDBOX_LABEL).sort()).toEqual(["basic", "linux_bubblewrap", "linux_landlock", "macos_seatbelt", "windows_job"]);
   });
 });
 

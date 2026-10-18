@@ -64,3 +64,36 @@ test("the Insights tab is an agent workspace tab and covers agents that aren't r
   await expect(tab.getByRole("heading", { level: 3 })).toContainText("not running");
   await expect(tab).toContainText("Destructive Shell Command");
 });
+
+test("the browser demo simulates adding, approving and removing your own MCP analyzer", async ({ app }) => {
+  await app.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = app.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.getByRole("tab", { name: "Analyzers", exact: true }).click();
+  await settings.getByRole("button", { name: "Add your own analyzer…" }).click();
+  const box = settings.getByLabel("Analyzer manifest (TOML)");
+  await box.fill('schema = 1\nid = "nvidia.skillspector"\n');
+  await settings.getByRole("button", { name: "Add analyzer", exact: true }).click();
+  await expect(settings).toContainText("invalid manifest");
+  await box.fill([
+    "schema = 1", 'id = "example.mcp-scan"', 'name = "Example MCP Scan"', 'publisher = "Example"',
+    'homepage = "https://example.com"', 'license = "MIT"', 'summary = "Scans a skill folder through a local MCP server."',
+    "[runner]", 'kind = "mcp"', 'command = "example-mcp"', 'args = ["--stdio"]', 'per_subject = "skill"', 'tool = "scan_skill"',
+    "[runner.tool_args]", 'path = "{subject.dir}"', "[permissions]", 'read = ["{subject.dir}"]', "spawns_mcp_servers = true",
+    "[output]", 'format = "sarif"',
+  ].join("\n"));
+  await settings.getByRole("button", { name: "Add analyzer", exact: true }).click();
+  const row = settings.getByRole("listitem").filter({ hasText: "Example MCP Scan" });
+  await expect(row).toContainText("added by you");
+  await expect(row).toContainText("MCP server");
+  await row.getByRole("button", { name: "Review and turn on…" }).click();
+  const sheet = settings.getByRole("region", { name: /Turn on Example MCP Scan/ });
+  await expect(sheet).toContainText("starts it only when you run this analyzer");
+  await expect(sheet).toContainText("calls tool scan_skill");
+  await settings.getByRole("button", { name: "Turn on Example MCP Scan", exact: true }).click();
+  await expect(row).toContainText("On");
+  await expect(row.getByRole("checkbox", { name: "Also run when items change" })).toHaveCount(0);
+  await row.getByRole("button", { name: "Run now", exact: true }).click();
+  await expect(row).toContainText("Last run");
+  await row.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(settings.getByRole("listitem").filter({ hasText: "Example MCP Scan" })).toHaveCount(0);
+});

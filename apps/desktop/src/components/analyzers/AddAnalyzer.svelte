@@ -5,7 +5,7 @@
   import Callout from "../ui/Callout.svelte";
   import * as api from "../../lib/api";
 
-  let { onadded }: { onadded?: (id: string) => void } = $props();
+  let { onadded, demo = false }: { onadded?: (id: string) => void; demo?: boolean } = $props();
   let open = $state(false);
   let text = $state("");
   let busy = $state(false);
@@ -30,7 +30,7 @@
     <Button size="sm" variant="ghost" icon="plus" onclick={() => (open = true)}>Add your own analyzer…</Button>
   {:else}
     <label for="analyzer-manifest">Analyzer manifest (TOML)</label>
-    <p class="meta">A local command-line or MCP scanner. holdmap checks the manifest and keeps it off until you review and turn it on. An MCP analyzer's server starts only when you run it.</p>
+    <p class="meta">A local command-line or MCP scanner. holdmap checks the manifest and keeps it off until you review and turn it on. An MCP analyzer's server starts only when you run it.{demo ? " Browser demo: it's checked and listed, but nothing is installed or started." : ""}</p>
     <textarea id="analyzer-manifest" rows="8" spellcheck="false" bind:value={text} placeholder={'schema = 1\nid = "example.scanner"\n…'}></textarea>
     <div class="acts">
       <Button size="sm" variant="primary" loading={busy} disabled={!text.trim()} onclick={add}>Add analyzer</Button>

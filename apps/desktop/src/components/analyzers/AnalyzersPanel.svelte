@@ -67,7 +67,7 @@
         {#if a.state === "approved"}
           <p class="meta">{lastRun(a)}</p>
           {#if a.kind !== "builtin"}<p class="meta">Sandbox: {SANDBOX_LABEL[a.sandbox] ?? a.sandbox}</p>{/if}
-          {#if a.permissions.network.length}
+          {#if a.permissions.network.length && a.kind !== "mcp"}
             <Checkbox
               checked={a.background ?? false}
               disabled={busy[`auto:${a.id}`]}
@@ -98,7 +98,7 @@
       </li>
     {/each}
   </ul>
-  {#if !demo}<AddAnalyzer onadded={() => insightsStore.refresh()} />{/if}
+  <AddAnalyzer {demo} onadded={() => insightsStore.refresh()} />
   <CatalogUpdate onchange={() => insightsStore.refresh()} />
   <p class="foot">holdmap never starts MCP servers on its own: an MCP analyzer you add starts its server only when you run it. Runs get a copy of each folder, a cleared environment and a time limit. Only short findings are kept.</p>
 {/if}
