@@ -13,6 +13,9 @@ use holdmap_analyzers::{
 };
 use std::sync::Arc;
 
+#[path = "../examples/catalog_key/mod.rs"]
+mod catalog_key;
+
 struct Key {
     sk: minisign::SecretKey,
     pk: String,
@@ -236,4 +239,38 @@ fn rejecting_discards_the_staged_update() {
     svc.reject_catalog().unwrap();
     assert!(svc.catalog_status().pending.is_none());
     assert_eq!(svc.list().len(), 2);
+}
+
+/// The minisign CLI writes unencrypted (`-W`) keys with an unset checksum; the signing tool
+/// must still read them, and keys from the crate, and refuse anything else.
+#[test]
+fn the_signing_tool_reads_minisign_cli_and_crate_keys() {
+    use ct_codecs::{Base64, Decoder, Encoder};
+    let pair = minisign::KeyPair::generate_unencrypted_keypair().unwrap();
+    let pk = pair.pk.to_box().unwrap().to_string();
+    let crate_file = pair.sk.to_box(None).unwrap().to_string();
+    let line = crate_file.lines().nth(1).unwrap();
+    let mut bytes = Base64::decode_to_vec(line, None).unwrap();
+    let n = bytes.len();
+    bytes[n - 32..].fill(0); // what `minisign -G -W` writes
+    let cli_file = format!(
+        "untrusted comment: minisign secret key\n{}\n",
+        Base64::encode_to_string(&bytes).unwrap()
+    );
+    for file in [crate_file.as_str(), cli_file.as_str()] {
+        let sk = catalog_key::load(file).unwrap();
+        let json = render(1, "2026-10-18", SOURCES);
+        let sig =
+            minisign::sign(None, &sk, json.as_bytes(), Some(&trusted_comment(1)), None).unwrap();
+        let signed = SignedCatalog {
+            json,
+            signature: sig.to_string(),
+        };
+        assert!(catalog::verify(&signed, &pk).is_ok());
+    }
+    assert!(catalog_key::load("untrusted comment: x\nnot-base64!\n").is_err());
+    assert!(
+        catalog_key::load(&pk).is_err(),
+        "a public key is not a secret key"
+    );
 }

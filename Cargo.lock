@@ -2262,6 +2262,7 @@ dependencies = [
 name = "holdmap-analyzers"
 version = "0.9.0"
 dependencies = [
+ "ct-codecs",
  "hex",
  "holdmap-core",
  "keyring",

@@ -47,6 +47,8 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 tempfile.workspace = true
 # Signing the first-party catalog (examples/sign_catalog.rs); never linked into holdmap.
 minisign = { version = "0.10", default-features = false }
+# Reads minisign-CLI secret keys in the signing tool.
+ct-codecs = "1"
 tokio = { version = "1", default-features = false, features = ["rt", "io-util"] }
 
 [lints]

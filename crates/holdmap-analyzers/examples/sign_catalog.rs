@@ -6,9 +6,14 @@
 //!                                         writes catalog/analyzers.json and its .minisig from
 //!                                         the manifests listed in catalog::SOURCES
 //!
-//! The secret key is never printed. Keep it out of the repository.
+//! Keys from the minisign CLI (`minisign -G`, with or without `-W`) work too. Each signature is
+//! checked against catalog/holdmap-catalog.pub before anything is written, so a wrong key
+//! changes nothing. The secret key is never printed. Keep it out of the repository.
 
-use holdmap_analyzers::catalog::{render, trusted_comment, SOURCES};
+#[path = "catalog_key/mod.rs"]
+mod catalog_key;
+
+use holdmap_analyzers::catalog::{render, trusted_comment, verify, SignedCatalog, SOURCES};
 use std::path::{Path, PathBuf};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -60,8 +65,7 @@ fn sign(
     date: &str,
     dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sk = minisign::SecretKeyBox::from_string(&std::fs::read_to_string(key)?)?
-        .into_unencrypted_secret_key()?;
+    let sk = catalog_key::load(&std::fs::read_to_string(key)?)?;
     let json = render(version, date, SOURCES);
     let sig = minisign::sign(
         None,
@@ -70,8 +74,16 @@ fn sign(
         Some(&trusted_comment(version)),
         Some("holdmap analyzer catalog signature"),
     )?;
-    std::fs::write(dir.join("analyzers.json"), &json)?;
-    std::fs::write(dir.join("analyzers.json.minisig"), sig.to_string())?;
+    let signed = SignedCatalog {
+        json,
+        signature: sig.to_string(),
+    };
+    let public = std::fs::read_to_string(dir.join("holdmap-catalog.pub"))?;
+    verify(&signed, &public).map_err(|e| {
+        format!("{e}: this key does not match catalog/holdmap-catalog.pub; nothing was written")
+    })?;
+    std::fs::write(dir.join("analyzers.json"), &signed.json)?;
+    std::fs::write(dir.join("analyzers.json.minisig"), &signed.signature)?;
     println!("signed catalog v{version}");
     Ok(())
 }

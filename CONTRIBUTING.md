@@ -432,7 +432,9 @@ copy it to CI or another machine.
 After a change to a built-in manifest, regenerate `analyzers.json` with a higher version:
 `cargo run -p holdmap-analyzers --example sign_catalog -- sign ~/.holdmap-signing/catalog.key
 <version> <YYYY-MM-DD>`. The freshness test in `cargo test -p holdmap-analyzers` fails until
-you do. That command signs the file too. The step below re-signs it with the minisign CLI:
+you do. The tool reads keys made by the minisign CLI, encrypted or not (`-W`), and asks for the
+password on the terminal. Before it writes anything, it checks the signature against
+`catalog/holdmap-catalog.pub`. To sign with the minisign CLI instead:
 
 ```sh
 minisign -S -s ~/.holdmap-signing/catalog.key -m crates/holdmap-analyzers/catalog/analyzers.json \
