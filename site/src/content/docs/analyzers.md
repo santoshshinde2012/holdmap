@@ -75,12 +75,66 @@ to approve it again.
 
 ## Your own analyzers
 
-Paste a manifest under **Add your own analyzer…**, or run `holdmap analyzers add scanner.toml`.
-The browser demo checks it and lists it the same way, but installs and starts nothing.
-holdmap validates it, and it stays off until you approve it like any other analyzer. To remove
-it, along with its approval, results and keys, run `holdmap analyzers remove ID`.
+**Add your own analyzer…** takes any MCP server, not only ones written for holdmap. Choose how
+to reach it:
 
-An MCP analyzer names a local stdio server and one tool that holdmap calls once per skill:
+- **Command**: a local stdio server, for example `npx -y some-mcp-scanner`
+  (`holdmap analyzers add --mcp --id local.lint --name "Lint" --command npx --arg -y --arg some-mcp-scanner`).
+- **Local URL**: a Streamable HTTP server already running on this computer
+  (`--url http://127.0.0.1:8765/mcp`).
+- **From your agents**: copy a server an agent is configured to use (`--from AGENT/NAME`,
+  `holdmap analyzers servers`). holdmap warns that it's the same program your agent uses.
+- **Manifest**: paste a TOML manifest, or run `holdmap analyzers add scanner.toml`.
+
+The browser demo does all of this with sample tools, and installs and starts nothing.
+
+### Choosing tools
+
+**List tools** (`holdmap analyzers tools ID`) starts or contacts the server once, asks for its
+tools (every page) and stops it. No tool is called. holdmap then:
+
+- pins the server name, version, endpoint and every tool's name, description and schemas as a
+  SHA-256 hash;
+- flags descriptions that look like tool poisoning: hidden-instruction markup, asking to ignore
+  earlier instructions, keeping something from the user, credential or config files, sending
+  data elsewhere;
+- suggests an argument mapping from each tool's input schema.
+
+Pick the tools to call once per skill and map each argument to one inventory field, a fixed
+value or nothing. The fields are the path of a private copy of the skill folder, the text of
+its `SKILL.md`, its file names, its name and the agents that use it. The sheet shows the exact
+arguments for one real skill and checks them against the schema
+(`holdmap analyzers map ID --auto`, or `--tool NAME --arg path={subject.dir}`).
+
+### Reading the output
+
+SARIF and holdmap JSON are recognised on their own. For other JSON, say where the findings are,
+in JSONPath style: `--items '$.issues[*]' --rule-id code --severity level --title msg --file file`,
+or `--auto-output` to take the suggestion from the tool's output schema. `structuredContent` is
+read first. Anything else is kept only as a short excerpt, never as findings.
+
+### Pins and re-approval
+
+Every run lists the tools again before calling any. If the pinned hash changed (a renamed tool,
+a new description, a changed schema), the run stops before any call and the analyzer shows
+**Changed** with a diff until you approve it again. Changing the mapping also needs approval.
+
+### Remote servers
+
+A URL that isn't on this computer needs **Allow this server on another machine** on the
+permissions sheet (`holdmap analyzers approve ID --allow-remote`). A remote server only gets
+metadata: skill names, file names and agents, never paths or file contents. A bearer token is
+stored in the OS keychain (`--auth KEY_NAME`, then `holdmap analyzers key set ID KEY_NAME`).
+OAuth isn't supported.
+
+### Limits
+
+holdmap declares no client capabilities, so servers can't ask for elicitation, sampling or
+roots. Each call has a time limit and a response size cap; **Stop** (or the run timing out)
+sends `notifications/cancelled` and stops the server. A stdio server runs in the sandbox with a
+cleared environment. An HTTP server is already running, so holdmap can't sandbox it.
+
+A manifest for the same thing looks like this:
 
 ```toml
 schema = 1
@@ -96,27 +150,41 @@ kind = "mcp"
 command = "example-mcp"
 args = ["--stdio"]
 per_subject = "skill"
-tool = "scan_skill"
 timeout_secs = 30
 
-[runner.tool_args]
-path = "{subject.dir}"
+[[runner.tools]]
+name = "list_files"
+args = { files = "{subject.files}", skill_name = "{subject.name}" }
 
 [permissions]
 read = ["{subject.dir}"]
 spawns_mcp_servers = true
 
 [output]
-format = "sarif"
+format = "auto"
+items = "$.issues[*]"
+rule_id = "code"
+severity = "level"
+title = "msg"
+file = "file"
 ```
 
-holdmap starts that server inside the sandbox only for a run you start, passes it a copy of
-the folder, and stops it when the run ends. If the server looks like one an agent is configured
-to use, the permissions sheet warns you first.
+To remove an analyzer, along with its approval, pin, results and keys, run
+`holdmap analyzers remove ID`.
+
+## How it works, as a graph
+
+**How it works** on an analyzer, or **Agents → Insights → How it works**, draws its pipeline:
+inventory sources, the exact fields it gets, the sandbox and hosts, the program or MCP tools,
+the parser, the findings by severity, and where they appear (Home, Needs you, Insights). Each
+step shows the last run's counts, duration and status, plus the approval and pin state. Click
+or press Enter on a step for details, and use the arrow keys to move between steps. The overview
+shows which analyzer covers which agent. Narrow windows get the same steps as a list.
 
 ## What it never does
 
-- Starts MCP servers on its own, or connects to your agents' servers.
+- Starts MCP servers on its own, or connects to your agents' running servers.
+- Calls a tool you didn't choose, or keeps running after a server's tools change.
 - Passes your environment variables, tokens or secrets. Only a key you set for that analyzer is
   passed.
 - Keeps matched text. Only a short title, location, fix hint and severity are stored, locally.

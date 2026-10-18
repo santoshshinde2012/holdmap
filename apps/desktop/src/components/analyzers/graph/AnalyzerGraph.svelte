@@ -35,7 +35,15 @@
     read();
     const mo = new MutationObserver(read);
     mo.observe(el, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => mo.disconnect();
+    // Width is read on the next frame: switching layouts inside the observer callback would
+    // trigger a "ResizeObserver loop" error.
+    let frame = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => (width = root?.clientWidth ?? 0));
+    });
+    if (root) { width = root.clientWidth; ro.observe(root); }
+    return () => { mo.disconnect(); ro.disconnect(); cancelAnimationFrame(frame); };
   });
 
   const nodeTypes = { stage: AnalyzerGraphNode } as unknown as NodeTypes;
@@ -75,7 +83,7 @@
   const stageOf = (n: GraphNode) => (n.kind === "agent" ? "Agent" : n.kind === "analyzer" ? "Analyzer" : STAGE_LABEL[n.kind]);
 </script>
 
-<div class="ag" bind:this={root} bind:clientWidth={width} role="group" aria-label={label}>
+<div class="ag" bind:this={root} role="group" aria-label={label}>
   {#if narrow}
     <ol class="stack" aria-label={`${label} (list)`}>
       {#each order as n, i (n.id)}

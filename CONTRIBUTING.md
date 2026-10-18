@@ -428,7 +428,9 @@ Two analyzer tests are opt-in.
 
 - `HOLDMAP_MCP_FIXTURE=1 cargo test -p holdmap-analyzers --test mcp_analyzers` starts the
   test-only MCP server `tests/fixtures/mcp_scan_server.py` (needs python3) through the real
-  connector and sandbox. CI runs it on Linux and macOS.
+  connector and sandbox, with several tools, a poisoned tool (`--poison`), a rug pull
+  (`--tools-file`) and Streamable HTTP in JSON and SSE modes (`--http`, `--sse`,
+  `--token-file`). CI runs it on Linux and macOS.
 - `HOLDMAP_REAL_SKILLSPECTOR=1 cargo test -p holdmap-analyzers --test real_skillspector` runs
   an installed SkillSpector against a sample skill, under the default sandbox and under
   Landlock.
