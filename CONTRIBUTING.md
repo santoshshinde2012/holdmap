@@ -422,6 +422,28 @@ succeeded and only the website dispatch failed, run
 published stable tag and run only from `main`; annotated tags are resolved before checkout,
 and the checked-out commit is verified before dependencies or selected release source code execute.
 
+## Analyzer catalog signing
+
+`crates/holdmap-analyzers/catalog/analyzers.json` is signed with minisign. holdmap embeds
+`catalog/holdmap-catalog.pub`. The secret key lives only on the maintainer's machine, at
+`~/.holdmap-signing/catalog.key` (directory 0700, file 0600). Never commit it, print it or
+copy it to CI or another machine.
+
+After a change to a built-in manifest, regenerate `analyzers.json` with a higher version:
+`cargo run -p holdmap-analyzers --example sign_catalog -- sign ~/.holdmap-signing/catalog.key
+<version> <YYYY-MM-DD>`. The freshness test in `cargo test -p holdmap-analyzers` fails until
+you do. That command signs the file too. The step below re-signs it with the minisign CLI:
+
+```sh
+minisign -S -s ~/.holdmap-signing/catalog.key -m crates/holdmap-analyzers/catalog/analyzers.json \
+  -c "holdmap analyzer catalog signature" -t "holdmap analyzer catalog v<version>"
+```
+
+The trusted comment must name the catalog's version. To rotate the key, run
+`minisign -G -W -p ~/.holdmap-signing/holdmap-catalog.pub -s ~/.holdmap-signing/catalog.key`,
+copy the public key to `catalog/holdmap-catalog.pub` and re-sign. Catalogs signed with the old
+key stop verifying.
+
 ## Licence
 
 By contributing, you agree that your contributions are dual-licensed under MIT OR Apache-2.0, as
