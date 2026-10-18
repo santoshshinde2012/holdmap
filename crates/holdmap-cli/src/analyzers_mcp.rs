@@ -68,8 +68,11 @@ pub struct MapArgs {
     /// Remove the --tool(s) instead.
     #[arg(long, requires = "tools", conflicts_with_all = ["args", "auto"])]
     pub remove: bool,
-    /// Where findings sit in JSON output, e.g. $.issues[*] (needs --rule-id).
-    #[arg(long)]
+    // `help` rather than a doc comment: rustdoc would read `[*]` as an intra-doc link.
+    #[arg(
+        long,
+        help = "Where findings sit in JSON output, e.g. $.issues[*] (needs --rule-id)"
+    )]
     pub items: Option<String>,
     /// Rule id field inside one item.
     #[arg(long)]
