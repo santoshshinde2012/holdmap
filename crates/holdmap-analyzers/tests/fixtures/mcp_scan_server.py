@@ -8,6 +8,7 @@ whether it could write outside the folder it was handed. It never uses the netwo
 Test fixture only, not an analyzer anyone should install.
 """
 import json
+import re
 import os
 import sys
 
@@ -30,7 +31,7 @@ def result(path):
             try:
                 with open(full, encoding="utf-8", errors="replace") as f:
                     for n, line in enumerate(f, 1):
-                        if "ignore previous instructions" in line.lower():
+                        if re.search(r"ignore (all )?previous instructions", line, re.I):
                             found.append(("instruction-override", "error", os.path.relpath(full, path), n,
                                           "Text tells the agent to ignore its instructions."))
             except OSError:

@@ -6,14 +6,54 @@ use holdmap_analyzers::{AnalyzerService, FileStore, RunStatus, Severity, Stores}
 use holdmap_core::agents::AgentsReport;
 use serde_json::json;
 
+fn enabled() -> bool {
+    let on = std::env::var("HOLDMAP_REAL_SKILLSPECTOR").as_deref() == Ok("1");
+    if !on {
+        eprintln!("skipped: set HOLDMAP_REAL_SKILLSPECTOR=1 with SkillSpector installed");
+    }
+    on
+}
+
 #[test]
 fn bundled_manifest_works_with_the_real_skillspector() {
-    if std::env::var("HOLDMAP_REAL_SKILLSPECTOR").as_deref() != Ok("1") {
-        eprintln!("skipped: set HOLDMAP_REAL_SKILLSPECTOR=1 with SkillSpector installed");
+    if !enabled() {
         return;
     }
     let dir = tempfile::tempdir().unwrap();
-    let skill = dir.path().join("exfil-skill");
+    let svc = AnalyzerService::new(Stores::of(FileStore::new(dir.path().join("store"))));
+    check(&svc, dir.path());
+}
+
+/// The same run inside the Landlock sandbox (used on Linux when bubblewrap is missing).
+#[cfg(target_os = "linux")]
+#[test]
+fn the_real_skillspector_runs_under_landlock() {
+    use holdmap_analyzers::cli_runner::CliRunner;
+    use holdmap_analyzers::landlock::Landlock;
+    use holdmap_analyzers::osv::OsvRunner;
+    use holdmap_analyzers::probe::SystemProbe;
+    use holdmap_analyzers::SandboxLevel;
+    if !enabled() {
+        return;
+    }
+    let Some(landlock) = Landlock::detect() else {
+        eprintln!("landlock not usable here; skipped");
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let svc = AnalyzerService::with_parts(
+        holdmap_analyzers::catalog::bundled(),
+        Stores::of(FileStore::new(dir.path().join("store"))),
+        Box::new(SystemProbe::from_env()),
+        Box::new(CliRunner::new(Box::new(landlock))),
+        Box::new(OsvRunner::with_default_transport()),
+    )
+    .with_sandbox_level(SandboxLevel::LinuxLandlock);
+    check(&svc, dir.path());
+}
+
+fn check(svc: &AnalyzerService, root: &std::path::Path) {
+    let skill = root.join("exfil-skill");
     std::fs::create_dir_all(skill.join("scripts")).unwrap();
     std::fs::write(
         skill.join("SKILL.md"),
@@ -39,7 +79,6 @@ fn bundled_manifest_works_with_the_real_skillspector() {
         }]
     }))
     .unwrap();
-    let svc = AnalyzerService::new(Stores::of(FileStore::new(dir.path().join("store"))));
     let view = svc
         .approve("nvidia.skillspector")
         .expect("SkillSpector is installed");
