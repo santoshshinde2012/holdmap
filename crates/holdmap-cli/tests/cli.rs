@@ -816,3 +816,38 @@ fn registering_an_analyzer_validates_the_manifest() {
         .failure()
         .stderr(predicate::str::contains("catalog"));
 }
+
+/// The released CLI reaches MCP analyzers added by URL: a closed loopback port gives a
+/// connection error, not "this build can't reach MCP servers over HTTP".
+#[cfg(feature = "mcp-runner")]
+#[test]
+fn analyzers_added_by_url_are_reachable_over_http() {
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("http://127.0.0.1:{}/mcp", free_port());
+    hm().env("HOLDMAP_HOME", dir.path())
+        .args([
+            "analyzers",
+            "add",
+            "--mcp",
+            "--id",
+            "local.http",
+            "--name",
+            "HTTP",
+            "--url",
+            &url,
+        ])
+        .assert()
+        .success();
+    let out = hm()
+        .env("HOLDMAP_HOME", dir.path())
+        .args(["analyzers", "tools", "local.http", "--yes"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let text =
+        String::from_utf8_lossy(&out.stderr).to_string() + &String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !text.contains("can't reach MCP servers over HTTP"),
+        "{text}"
+    );
+}
