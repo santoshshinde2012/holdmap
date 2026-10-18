@@ -1,0 +1,26 @@
+# Preset: Cisco AI Defense Skill Scanner (https://github.com/cisco-ai-defense/skill-scanner).
+# Rules only (YARA, patterns, AST); its LLM judge, VirusTotal and AI Defense API stay off.
+schema = 1
+id = "cisco.skill-scanner"
+name = "Cisco Skill Scanner"
+publisher = "Cisco"
+homepage = "https://github.com/cisco-ai-defense/skill-scanner"
+license = "Apache-2.0"
+summary = "Rule-based scan of skill instructions and scripts for prompt injection, data exfiltration and command injection."
+install = "uv tool install cisco-ai-skill-scanner==2.3.0"
+
+[runner]
+kind = "cli"
+command = "skill-scanner"
+args = ["scan", "{subject.dir}", "--format", "sarif", "--output", "{output}"]
+per_subject = "skill"
+version_args = ["--version"]
+version_prefix = "skill-scanner "
+timeout_secs = 120
+exit_ok = [0]
+
+[permissions]
+read = ["{subject.dir}"]
+
+[output]
+format = "sarif"

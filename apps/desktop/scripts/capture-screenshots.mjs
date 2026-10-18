@@ -194,6 +194,7 @@ async function openMcpTools(page) {
   const settings = page.getByRole("dialog", { name: "Settings", exact: true });
   await settings.getByRole("tab", { name: "Analyzers", exact: true }).click();
   await settings.getByRole("button", { name: "Add your own analyzer…", exact: true }).click();
+  await settings.getByRole("radio", { name: "Command", exact: true }).click();
   await settings.getByLabel("Id", { exact: true }).fill("local.skill-lint");
   await settings.getByLabel("Name", { exact: true }).fill("Skill lint (sample)");
   await settings.getByLabel("Command", { exact: true }).fill("/usr/local/bin/skill-lint-mcp");

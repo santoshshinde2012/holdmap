@@ -98,6 +98,7 @@ spawns_mcp_servers = true
             notes: vec![],
             failed: false,
             tool: Some("scan".into()),
+            nothing_to_check: false,
         }
     }
 

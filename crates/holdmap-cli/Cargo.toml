@@ -18,7 +18,7 @@ name = "holdmap"
 path = "src/main.rs"
 
 [features]
-default = ["osv-http", "keychain", "mcp-runner"]
+default = ["osv-http", "keychain", "mcp-runner", "mcp-http"]
 # HTTPS for the OSV built-in analyzer (rustls). scripts/check-cross.sh type-checks without it,
 # because ring needs a C cross toolchain.
 osv-http = ["holdmap-analyzers/osv-http"]
@@ -26,6 +26,8 @@ osv-http = ["holdmap-analyzers/osv-http"]
 keychain = ["holdmap-analyzers/keychain"]
 # Run user-registered local MCP analyzers, only when the user runs them.
 mcp-runner = ["holdmap-analyzers/mcp-runner"]
+# Reach MCP analyzers a user added by URL over Streamable HTTP (rustls, like osv-http).
+mcp-http = ["mcp-runner", "holdmap-analyzers/mcp-http"]
 
 [dependencies]
 holdmap-core.workspace = true

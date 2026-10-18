@@ -25,7 +25,7 @@ const demo = url("demo/");
     <div class="section-head">
       <span class="eyebrow">Analyzers</span>
       <h2 class="h2" id="analyzers-title">Scan your agents' skills. <span class="soft">See exactly how.</span></h2>
-      <p class="lede">Run scanners you choose on your agents' skills and MCP packages: NVIDIA SkillSpector, a built-in OSV.dev lookup, or any MCP server. Every analyzer is drawn as a graph, from what it reads to where its findings show up.</p>
+      <p class="lede">Run scanners you choose on your agents' skills and MCP packages: NVIDIA SkillSpector, a built-in OSV.dev lookup, one-click presets for Cisco Skill Scanner, OSV-Scanner, Trivy and Bandit, or any MCP server. Every analyzer is drawn as a graph, from what it reads to where its findings show up.</p>
       {!analyzersPublished && <p class="note"><Icon name="Info" size={16} /> On main, not in a published release yet. Downloads stay on <a href={`${repoUrl}/releases/tag/v${version}`}>v{version}</a>.</p>}
     </div>
 
@@ -48,6 +48,7 @@ const demo = url("demo/");
         <li><strong>Pipeline.</strong> Inventory, fields sent, sandbox and hosts, tools, parser, findings and where they appear, with the last run's numbers.</li>
         <li><strong>Coverage.</strong> Which analyzer looked at which agent and skill, and what it found.</li>
         <li><strong>Any MCP server.</strong> Add a command, a local URL or one your agents use; pick its tools and map their inputs from each schema.</li>
+        <li><strong>Presets.</strong> Cisco Skill Scanner, Google OSV-Scanner, Trivy secrets and Bandit: local, no LLM or key, off until you approve.</li>
       </ul>
     </div>
 
@@ -111,5 +112,9 @@ const demo = url("demo/");
     .facts { gap: 12px; padding: 20px; }
     .tabs { padding: 0 20px; }
     .copy { padding: 24px; }
+  }
+  @media (max-width: 480px) {
+    .tabs { flex-wrap: wrap; gap: 0 20px; overflow-x: visible; }
+    .tabs button { height: 44px; }
   }
 </style>

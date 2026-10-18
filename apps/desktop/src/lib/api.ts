@@ -7,6 +7,7 @@ import type { ShutdownPreview } from "./power";
 import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
 import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, ConfiguredServer, FindingState, Insights, McpDraft, OutputMapping, Preview, ToolReport, ToolSpec } from "./analyzers";
 import { DemoAnalyzers } from "./analyzers-demo";
+import type { PresetView } from "./analyzer-presets";
 import { attention, type AttentionItem } from "./home";
 import { MOCK_SNAPSHOT, mockAgents, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
@@ -564,6 +565,20 @@ export async function addAnalyzer(manifest: string): Promise<AnalyzerView> {
   if (isTauri) return call("analyzer_add", { manifest });
   if (liveReads()) liveWrites();
   return demoAnalyzers.add(manifest);
+}
+
+/** Ready-made manifests for well-known local analyzers. */
+export async function analyzerPresets(): Promise<PresetView[]> {
+  if (isTauri) return call("analyzer_presets");
+  if (liveReads()) return [];
+  return demoAnalyzers.presets();
+}
+
+/** Register a preset as the user's own analyzer; it stays off until approved. */
+export async function addAnalyzerPreset(id: string): Promise<AnalyzerView> {
+  if (isTauri) return call("analyzer_add_preset", { id });
+  if (liveReads()) liveWrites();
+  return demoAnalyzers.addPreset(id);
 }
 
 /** Remove an analyzer the user registered. */

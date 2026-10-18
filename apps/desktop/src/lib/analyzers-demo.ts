@@ -6,6 +6,7 @@ import { checkArguments, previewArguments } from "./mcp-mapping";
 import { emptyCounts } from "./analyzers";
 import { inventories } from "./agent-config";
 import { readManifest, type DemoManifest } from "./analyzer-manifest";
+import { presetSource, presetViews, type PresetView } from "./analyzer-presets";
 import type { AgentsReport } from "./types";
 
 const SKILLSPECTOR = "nvidia.skillspector";
@@ -137,6 +138,16 @@ export class DemoAnalyzers {
     if (this.user.has(m.id) || this.mcp.has(m.id)) throw new Error(`invalid manifest: ${m.id} is already registered; remove it first`);
     this.user.set(m.id, m);
     return this.view(m.id);
+  }
+
+  /** Quick-select presets (the app's own manifests), marking those already added. */
+  presets(): PresetView[] {
+    return presetViews((id) => this.user.has(id));
+  }
+
+  /** Simulated preset add: the preset's manifest is checked and listed like any other. */
+  addPreset(id: string): AnalyzerView {
+    return this.add(presetSource(id));
   }
 
   /** Remove a registered analyzer with its approval and results. */

@@ -95,6 +95,8 @@ pub fn run() {
             analyzers::analyzer_revoke,
             analyzers::analyzer_background,
             analyzers::analyzer_add,
+            analyzers::analyzer_presets,
+            analyzers::analyzer_add_preset,
             analyzers::analyzer_remove,
             analyzers::analyzer_cancel,
             analyzers::analyzer_add_mcp,

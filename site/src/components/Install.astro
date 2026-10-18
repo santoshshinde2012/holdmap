@@ -81,7 +81,7 @@ const firstOpen: Record<string, string> = {
                 <tr>
                   <th scope="row">{d.label}</th>
                   <td><a href={d.url}>{d.file}</a></td>
-                  <td><a href={checksumUrl(d.checksum)} aria-label={`SHA-256 checksums for ${d.label}`}>.sha256</a></td>
+                  <td><a href={checksumUrl(d.checksum)}>.sha256<span class="sr-only"> SHA-256 checksums for {d.label}</span></a></td>
                 </tr>
               ))}
             </tbody>

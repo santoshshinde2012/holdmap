@@ -23,6 +23,7 @@ pub mod mcp_tools;
 pub mod needs;
 pub mod osv;
 pub mod parse;
+pub mod presets;
 pub mod probe;
 pub mod runner;
 pub mod sandbox;

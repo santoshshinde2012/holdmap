@@ -275,3 +275,30 @@ fn the_signing_tool_reads_minisign_cli_and_crate_keys() {
         "a public key is not a secret key"
     );
 }
+
+/// The presets can be promoted into the signed catalog: signed (here with a throwaway test key,
+/// never holdmap's), they verify and the review diff lists each as new.
+#[test]
+fn presets_promoted_into_a_signed_catalog_verify_and_show_up_as_new() {
+    let k = key();
+    let all: Vec<&str> = SOURCES
+        .iter()
+        .chain(holdmap_analyzers::presets::SOURCES)
+        .copied()
+        .collect();
+    let next = catalog::verify(&sign(&k, 2, &all), &k.pk).unwrap();
+    assert_eq!(
+        next.manifests.len(),
+        SOURCES.len() + holdmap_analyzers::presets::SOURCES.len()
+    );
+    let diff = catalog::diff(&catalog::bundled_catalog(), &next);
+    for (m, _) in holdmap_analyzers::presets::manifests() {
+        assert!(
+            diff.added.iter().any(|a| a.contains(&m.name)),
+            "{} missing from {:?}",
+            m.name,
+            diff.added
+        );
+    }
+    assert!(diff.removed.is_empty() && diff.changed.is_empty());
+}

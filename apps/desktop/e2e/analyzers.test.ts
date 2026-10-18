@@ -104,6 +104,7 @@ test("any MCP server is added from a command, its tools listed and mapped, appro
   const settings = app.getByRole("dialog", { name: "Settings", exact: true });
   await settings.getByRole("tab", { name: "Analyzers", exact: true }).click();
   await settings.getByRole("button", { name: "Add your own analyzer…" }).click();
+  await settings.getByRole("radio", { name: "Command", exact: true }).click();
   await settings.getByLabel("Id", { exact: true }).fill("local.skill-lint");
   await settings.getByLabel("Name", { exact: true }).fill("Skill lint (sample)");
   await settings.getByLabel("Command", { exact: true }).fill("/usr/local/bin/skill-lint-mcp");
@@ -183,4 +184,32 @@ test("narrow windows get the analyzer graphs as a stacked list", async ({ app })
   await app.setViewportSize({ width: 560, height: 900 });
   await expect(tab.getByRole("list", { name: "How SkillSpector works (list)" })).toBeVisible();
   await expect(app.getByText("holdmap recovered from a UI glitch")).toHaveCount(0);
+});
+
+test("a preset is added from the list, reviewed, turned on, run and removed in the browser demo", async ({ app }) => {
+  await app.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = app.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.getByRole("tab", { name: "Analyzers", exact: true }).click();
+  await settings.getByRole("button", { name: "Add your own analyzer…" }).click();
+  await expect(settings.getByRole("radio", { name: "Presets", exact: true })).toHaveAttribute("aria-checked", "true");
+  const presets = settings.getByRole("list", { name: "Analyzer presets" });
+  await expect(presets.getByRole("listitem")).toHaveCount(4);
+  await expect(presets.getByRole("listitem").filter({ hasText: "OSV-Scanner" })).toContainText("contacts api.osv.dev");
+  await expect(presets.getByRole("listitem").filter({ hasText: "Cisco Skill Scanner" })).toContainText("no network");
+  await settings.getByRole("button", { name: "Add Cisco Skill Scanner", exact: true }).click();
+  const row = settings.getByRole("listitem").filter({ hasText: "Cisco Skill Scanner" });
+  await expect(row).toContainText("added by you");
+  await expect(row).toContainText("Off");
+  await row.getByRole("button", { name: "Review and turn on…" }).click();
+  const sheet = settings.getByRole("region", { name: /Turn on Cisco Skill Scanner/ });
+  await expect(sheet).toContainText("skill-scanner");
+  await settings.getByRole("button", { name: "Turn on Cisco Skill Scanner", exact: true }).click();
+  await expect(row).toContainText("On");
+  await row.getByRole("button", { name: "Run now", exact: true }).click();
+  await expect(row).toContainText("Last run");
+  await settings.getByRole("button", { name: "Add your own analyzer…" }).click();
+  await expect(presets.getByRole("listitem").filter({ hasText: "Cisco Skill Scanner" })).toContainText("Added");
+  await settings.getByRole("button", { name: "Cancel", exact: true }).click();
+  await row.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(settings.getByRole("listitem").filter({ hasText: "Cisco Skill Scanner" })).toHaveCount(0);
 });

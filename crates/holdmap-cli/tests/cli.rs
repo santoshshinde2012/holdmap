@@ -816,3 +816,82 @@ fn registering_an_analyzer_validates_the_manifest() {
         .failure()
         .stderr(predicate::str::contains("catalog"));
 }
+
+/// The released CLI reaches MCP analyzers added by URL: a closed loopback port gives a
+/// connection error, not "this build can't reach MCP servers over HTTP".
+#[cfg(feature = "mcp-runner")]
+#[test]
+fn analyzers_added_by_url_are_reachable_over_http() {
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("http://127.0.0.1:{}/mcp", free_port());
+    hm().env("HOLDMAP_HOME", dir.path())
+        .args([
+            "analyzers",
+            "add",
+            "--mcp",
+            "--id",
+            "local.http",
+            "--name",
+            "HTTP",
+            "--url",
+            &url,
+        ])
+        .assert()
+        .success();
+    let out = hm()
+        .env("HOLDMAP_HOME", dir.path())
+        .args(["analyzers", "tools", "local.http", "--yes"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let text =
+        String::from_utf8_lossy(&out.stderr).to_string() + &String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !text.contains("can't reach MCP servers over HTTP"),
+        "{text}"
+    );
+}
+
+/// Adding a preset registers it off; re-adding the exact manifest after approval keeps the
+/// approval and says so instead of claiming it is off.
+#[cfg(unix)]
+#[test]
+fn re_adding_an_approved_manifest_keeps_it_approved_and_the_list_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = dir.path().join("store");
+    hm().env("HOLDMAP_HOME", &store)
+        .args(["analyzers", "add", "--preset", "pycqa.bandit"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("It is off"));
+    let file = dir.path().join("t.toml");
+    std::fs::write(
+        &file,
+        "schema = 1\nid = \"local.true\"\nname = \"True\"\npublisher = \"me\"\n\
+         homepage = \"https://example.com\"\nlicense = \"MIT\"\nsummary = \"Does nothing.\"\n\
+         [runner]\nkind = \"cli\"\ncommand = \"true\"\nargs = [\"{subject.dir}\"]\nper_subject = \"skill\"\n\
+         [permissions]\nread = [\"{subject.dir}\"]\n[output]\nformat = \"sarif\"\n",
+    )
+    .unwrap();
+    let add = || {
+        hm().env("HOLDMAP_HOME", &store)
+            .args(["analyzers", "add"])
+            .arg(&file)
+            .assert()
+            .success()
+    };
+    add().stdout(predicate::str::contains("It is off"));
+    hm().env("HOLDMAP_HOME", &store)
+        .args(["analyzers", "approve", "local.true", "--yes"])
+        .assert()
+        .success();
+    add().stdout(predicate::str::contains("already registered and approved"));
+    hm().env("HOLDMAP_HOME", &store)
+        .args(["analyzers", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Analyzers are off until you approve one").not())
+        .stdout(predicate::str::contains(
+            "Each analyzer stays off until you approve it",
+        ));
+}
