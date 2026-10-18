@@ -4,7 +4,9 @@
 
 use crate::state::AppState;
 use holdmap_analyzers::catalog::{CatalogDiff, CatalogStatus};
-use holdmap_analyzers::service::{AnalyzerView, Preview};
+use holdmap_analyzers::manifest::ToolSpec;
+use holdmap_analyzers::mcp_map::OutputMapping;
+use holdmap_analyzers::service::{AnalyzerView, ConfiguredServer, McpDraft, Preview, ToolReport};
 use holdmap_analyzers::{
     AnalyzerResult, AnalyzerService, FileStore, FindingState, Insights, Stores,
 };
@@ -64,10 +66,27 @@ pub async fn analyzer_preview(app: AppHandle, id: String) -> Result<Preview, Str
     .await
 }
 
-/// Approve exactly the manifest and program the sheet showed.
+/// Approve exactly the manifest, program and tool list the sheet showed. A remote MCP
+/// server also needs the sheet's explicit opt-in.
 #[tauri::command]
-pub async fn analyzer_approve(app: AppHandle, id: String) -> Result<AnalyzerView, String> {
-    blocking(move || service(&app).approve(&id).map_err(|e| e.to_string())).await
+pub async fn analyzer_approve(
+    app: AppHandle,
+    id: String,
+    allow_remote: Option<bool>,
+) -> Result<AnalyzerView, String> {
+    blocking(move || {
+        service(&app)
+            .approve_with(&id, allow_remote.unwrap_or(false))
+            .map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// Stop the current run: the MCP call in progress is cancelled and CLI analyzers are killed.
+#[tauri::command]
+pub async fn analyzer_cancel(app: AppHandle) -> Result<(), String> {
+    service(&app).cancel_runs();
+    Ok(())
 }
 
 /// Turn an analyzer off and delete its results.
@@ -229,6 +248,66 @@ pub async fn analyzer_remove(app: AppHandle, id: String) -> Result<bool, String>
     blocking(move || {
         service(&app)
             .remove_manifest(&id)
+            .map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// Register any MCP server (a command, a URL or one of the agents' servers). It stays off.
+#[tauri::command]
+pub async fn analyzer_add_mcp(app: AppHandle, draft: McpDraft) -> Result<AnalyzerView, String> {
+    blocking(move || service(&app).add_mcp(&draft).map_err(|e| e.to_string())).await
+}
+
+/// The agents' configured MCP servers, as drafts where holdmap knows enough. Starts nothing.
+#[tauri::command]
+pub async fn analyzer_configured_servers(app: AppHandle) -> Result<Vec<ConfiguredServer>, String> {
+    blocking(move || Ok(service(&app).configured_servers(&inventory(&app)?))).await
+}
+
+/// Start (or contact) the server once to list its tools, after the user clicked List tools.
+/// No tool is called.
+#[tauri::command]
+pub async fn analyzer_list_tools(app: AppHandle, id: String) -> Result<ToolReport, String> {
+    blocking(move || {
+        let running = app.state::<AnalyzersState>().running.clone();
+        let _guard = running.lock().map_err(|e| e.to_string())?;
+        service(&app).list_tools(&id).map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// The saved tool listing. Starts nothing.
+#[tauri::command]
+pub async fn analyzer_tools(app: AppHandle, id: String) -> Result<ToolReport, String> {
+    blocking(move || service(&app).tools(&id).map_err(|e| e.to_string())).await
+}
+
+/// Save the chosen tools and their input mapping. Approval is needed again.
+#[tauri::command]
+pub async fn analyzer_map_tools(
+    app: AppHandle,
+    id: String,
+    tools: Vec<ToolSpec>,
+) -> Result<AnalyzerView, String> {
+    blocking(move || {
+        service(&app)
+            .map_tools(&id, &tools)
+            .map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// Save where findings sit in the tools' output. Approval is needed again.
+#[tauri::command]
+pub async fn analyzer_map_output(
+    app: AppHandle,
+    id: String,
+    output: OutputMapping,
+) -> Result<AnalyzerView, String> {
+    blocking(move || {
+        service(&app)
+            .map_output(&id, &output)
             .map_err(|e| e.to_string())
     })
     .await

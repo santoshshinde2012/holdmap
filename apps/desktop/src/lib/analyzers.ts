@@ -33,6 +33,10 @@ export interface AnalyzerResult {
   details: Detail[];
   notes: string[];
   input_signature?: string | null;
+  /** How long the run took. */
+  duration_ms?: number | null;
+  /** MCP analyzers: calls per tool. */
+  tool_calls?: { tool: string; calls: number; failed: number }[];
 }
 export interface SeverityCounts { critical: number; high: number; medium: number; low: number; info: number }
 export interface Permissions { read: string[]; network: string[]; network_reason: string | null; sends: string[]; spawns_mcp_servers: boolean; secrets?: string[] }
@@ -60,7 +64,60 @@ export interface AnalyzerView {
   last_run: { run_at_ms: number; status: RunStatus; subjects: number; open: SeverityCounts } | null;
   /** Declared API keys and whether one is stored (names only; values never leave the keychain). */
   secrets?: { name: string; stored: boolean }[];
+  /** MCP analyzers: transport, endpoint, chosen tools and the tool-list pin. */
+  mcp?: McpView | null;
+  /** How its output is read. */
+  output_format?: OutputFormat;
 }
+export type OutputFormat = "auto" | "json-map" | "sarif" | "holdmap-json" | "osv";
+export type Transport = "stdio" | "http";
+export interface ServerInfo { name: string; version: string | null; instructions: string | null }
+export interface ToolListing { count: number; server: ServerInfo | null; listed_at_ms: number; pin: string; flagged: number; approved: boolean }
+export interface McpView {
+  transport: Transport;
+  endpoint: string;
+  /** A server on another machine (metadata only, opt-in). */
+  remote: boolean;
+  remote_opt_in: boolean;
+  tools: string[];
+  listing: ToolListing | null;
+  needs_tools: boolean;
+}
+export interface ToolInfo { name: string; title?: string | null; description?: string | null; input_schema: JsonSchema; output_schema?: JsonSchema | null; annotations?: Record<string, unknown> | null }
+export type JsonSchema = { type?: string | string[]; properties?: Record<string, JsonSchema>; required?: string[]; items?: JsonSchema; enum?: unknown[]; description?: string; additionalProperties?: boolean | JsonSchema; [k: string]: unknown };
+export interface ToolSnapshot { endpoint: string; server: ServerInfo | null; tools: ToolInfo[]; sha256: string; tool_hashes?: Record<string, string>; listed_at_ms: number; truncated: boolean }
+export interface ToolSpec { name: string; args: Record<string, unknown> }
+export interface Suggestion { tool: string; args: Record<string, unknown>; missing: string[] }
+export interface OutputMapping { items?: string | null; rule_id?: string | null; severity?: string | null; title?: string | null; file?: string | null; line?: string | null; fix?: string | null }
+export interface PlaceholderInfo { token: string; label: string; list: boolean }
+export interface ToolReport {
+  snapshot: ToolSnapshot;
+  flags: Record<string, string[]>;
+  server_flags: string[];
+  suggestions: Suggestion[];
+  changes: string[];
+  approved: boolean;
+  chosen: ToolSpec[];
+  placeholders: PlaceholderInfo[];
+  output: OutputMapping;
+  output_suggestions: Record<string, OutputMapping>;
+}
+export interface McpDraft {
+  id: string;
+  name: string;
+  summary?: string | null;
+  transport?: Transport;
+  command?: string | null;
+  args?: string[];
+  url?: string | null;
+  secrets?: string[];
+  auth_secret?: string | null;
+  network?: string[];
+  network_reason?: string | null;
+  timeout_secs?: number | null;
+}
+export interface ConfiguredServer { id: string; agent: string; name: string; transport: string; draft: McpDraft | null; note: string | null }
+export interface ToolCallPreview { tool: string; subject: string; arguments: Record<string, unknown>; problems: string[] }
 export type SandboxLevel = "basic" | "macos_seatbelt" | "linux_bubblewrap" | "linux_landlock" | "windows_job";
 
 export const SANDBOX_LABEL: Record<SandboxLevel, string> = {
@@ -82,6 +139,10 @@ export interface Preview {
   schedule: string;
   /** Things to know before approving; ones starting "Warning:" are shown as warnings. */
   notices?: string[];
+  /** Exactly which inventory fields it gets. */
+  projection?: string[];
+  /** MCP analyzers: the exact tool calls for the first few items. */
+  tool_calls?: ToolCallPreview[];
 }
 /** What a signed catalog update changes (reviewed before it applies). */
 export interface CatalogDiff {

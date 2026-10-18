@@ -26,6 +26,9 @@ pub struct RawOutput {
     pub tool: Option<String>,
 }
 
+/// The note on work a user stopped.
+pub const CANCELLED: &str = "Stopped: the run was cancelled.";
+
 /// Set to stop a run early; checked between calls and while waiting for one.
 #[derive(Debug, Clone, Default)]
 pub struct CancelFlag(std::sync::Arc<std::sync::atomic::AtomicBool>);
