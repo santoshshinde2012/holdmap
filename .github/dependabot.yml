@@ -22,6 +22,11 @@ updates:
       # 0.8.0 resolves (0.13); move it together with vendor/global-hotkey.
       - dependency-name: x11rb
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # sse-stream's `Sse` and error types are part of rmcp's Streamable HTTP client trait, so
+      # holdmap-analyzers must use the sse-stream minor that rmcp does (every rmcp up to 3.5.1
+      # requires ^0.2.4). Move it together with an rmcp release that uses 0.3.
+      - dependency-name: sse-stream
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: npm
     directory: /apps/desktop
