@@ -31,15 +31,10 @@ ARM64 download is CLI-only. Homebrew and npm registry installation are not avail
 package is attached to the GitHub release as a tarball.
 
 After installation, compare `holdmap --version` with the
-[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest).
-[What's new](whats-new/) covers 0.9.0: Home (Cards or Map), the richer agent inventory, port stops
-from Home, PNG snapshots, a readable service graph and the capability explorer. During release preparation, downloads remain on
-the latest published release; **0.8.0** installers predate these additions. Local MP4/GIF capture,
-Computer / Footprint / Project maps and optional reported usage remain available.
-For a desktop update, quit Holdmap, install the matching OS/architecture download, then reopen
-it and check Settings → About. The published 0.8.0 release has no configured signed updater
-feed. Use manual installation for releases without a signed feed. Rerun the CLI installer separately to
-update the CLI, TUI and MCP server.
+[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest), and see
+[What's new](whats-new/). To update, rerun the CLI installer (it updates the CLI, TUI and MCP
+server) and install the desktop app separately: quit holdmap, install the download for your OS
+and architecture, then reopen it and check **Settings → About**.
 
 ## Your first minute
 
@@ -84,6 +79,7 @@ Every read command takes `--json`. Exit codes: `0` ok, `1` busy, not found or ti
 
 - [Agents, tools and apps](agents/): folders, access, and stop what an agent started.
 - [MCP and skills](agents/#mcp-and-skills): opt-in configuration metadata, skill purposes and a graphical map.
+- [Analyzers](analyzers/): opt-in scanners for your agents' skills and MCP packages.
 - [Project stacks](projects/): start and stop a project's services with `holdmap up` and `down`.
 - [Shell hook](shell-hook/): explain "port already in use" the moment it happens.
 - [MCP for AI agents](mcp/): let Claude, Cursor or VS Code read and free ports safely.

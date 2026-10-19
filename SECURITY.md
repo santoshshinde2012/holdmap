@@ -13,14 +13,12 @@ as they're ready, with credit unless you'd rather stay anonymous.
 
 ## Supported versions
 
-Security fixes target the latest published stable release and `main`. This source describes
-**0.9.0**. During release preparation, a source version does not imply installer availability.
-Use the [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest)
-to identify the supported stable release and its available downloads.
+Security fixes target the
+[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) and `main`.
 
 ## Scope
 
-Local machine shutdown, introduced in desktop version 0.4.0, is also in scope. It requires a trusted
+Local machine shutdown from the desktop app is also in scope. It requires a trusted
 main webview and a one-use confirmation that expires after 60 seconds. The backend uses
 fixed OS commands without shell interpolation, force flags, elevation or remote targets.
 Linux requires systemd support for explicit inhibitor checks (248 or newer). macOS may
@@ -30,13 +28,13 @@ An accepted or uncertain request prevents further shutdown requests until the ap
 quits and reopens. Closing the dialog does not cancel an accepted OS request. The public
 browser demo has no native shutdown capability.
 
-Anything that breaks the [safety model](README.md#safety-model) is in scope: holdmap signalling a
+Anything that breaks the [safety model](README.md#safety) is in scope: holdmap signalling a
 process it shouldn't (a protected process, another user's process, the wrong process after PID
 reuse, or anything outside the confirmed plan), the MCP server stopping something it must refuse,
 command injection (for example through `holdmap ssh` host names or restart commands from history),
 leaking data beyond what the user asked to see (for example a password from a command line
 showing up unredacted), or the desktop webview bypassing native target checks or its local-only
-capabilities. The main window has three capability permissions: event listen/unlisten and
+capabilities. The main window's capability permits only event listen/unlisten and
 window dragging. Its own native commands separately validate operations such as stops,
 restarts and opening known folders. What a user can already do with their own permissions is
 out of scope.
@@ -135,7 +133,7 @@ out of scope.
   handles returned after a timeout are closed. An OS open has no guaranteed cancellation,
   so its worker may remain blocked while later requests fail promptly at the worker limit.
   Once connected, nonblocking pipe reads and writes share the same deadline.
-- No product analytics are implemented. Optional agent recording (version 0.5.0)
+- No product analytics are implemented. Optional agent recording
   accepts explicitly configured local metadata through a token-authenticated loopback endpoint
   and retains at most 1,000 spans in memory. Prompts, tool inputs/results and unrelated fields
   are discarded before retention;
@@ -156,7 +154,22 @@ out of scope.
   downloads after 10 minutes. Installation work runs
   off the async workers; its concurrency guard remains held until installation finishes.
 
-<a id="linux-glib-dependency-backports-unreleased"></a>
+## Analyzers
+
+Analyzers are opt-in and off until the user approves a permissions sheet built from the real
+inventory: the folders or package versions, the exact command, network hosts and what is sent,
+environment variable names and the sandbox. Approval is pinned to the manifest and the
+program's path, hash and version; any change stops the analyzer until it is approved again.
+Runs get a copy of each folder without scanner settings files a skill could ship to hide its
+findings, a cleared environment, a private home and a time limit, inside bubblewrap or Landlock
+(Linux), Seatbelt (macOS, best effort) or a Job Object (Windows). No sandbox stops an analyzer
+from reading other files the account can read, and Windows blocks neither file reads nor network
+access. API keys stay in the OS keychain and go only to the analyzer that declares them.
+
+holdmap starts an MCP analyzer's server only for a run the user starts, pins its tool list and
+asks again when it changes. The analyzer catalog is signed with minisign and updates are
+applied only after the user reviews the diff. Findings keep capped metadata, never the matched
+text. See [Analyzers](site/src/content/docs/analyzers.md).
 
 ## Linux GLib dependency backports
 
@@ -164,20 +177,25 @@ The desktop GTK3 bindings require GLib 0.18. The published 0.18.5 contains
 [RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429.html): optimized string-variant
 iteration can crash. Its safe boxed-inline slice conversion also allocates only one element
 before copying the whole slice, causing a heap overflow as documented in [upstream issue
-#2040](https://github.com/gtk-rs/gtk-rs-core/issues/2040). Version 0.4.0 and newer use
+#2040](https://github.com/gtk-rs/gtk-rs-core/issues/2040). holdmap uses
 [verified local backports](vendor/README.md) of both upstream fixes, retaining the truthful
 0.18.5 version and license. A separate local `g_malloc0` initialization fix gives `Value`
 copy callbacks the zero-filled destination required by GObject; the original allocation can
-crash even with one element. Linux desktop version 0.3.0 and older lockfiles retain the original
-dependency; use version 0.4.0 or newer, or rebuild from source with these fixes. The CLI, TUI,
+crash even with one element. Linux desktop 0.3.0 and older still have the original dependency.
+The CLI, TUI,
 MCP server and macOS/Windows desktop do not use this Linux GTK dependency.
 
 Cargo-deny now checks transitive unsoundness advisories explicitly. Registry scanning does not
 cover local path packages; CI therefore also verifies every vendored file, both exact backports,
 the local initialization change, lockfile and GTK resolution, and runs optimized Linux
 regressions against the actual GLib
-dependency. No advisory is ignored. A clean dependency scan alone does not establish that a
+dependency. No GLib advisory is ignored. A clean dependency scan alone does not establish that a
 local patch is safe, and the original advisory is not a false positive.
+
+The only ignored advisories are three `zip` advisories (RUSTSEC-2026-0367/0368/0369) in
+[`deny.toml`](deny.toml). `zip` reaches the build only through `tauri-plugin-updater`, which uses
+it on Windows to unpack an update after its signature is verified. They are removed when an
+updater release moves to `zip` 9 or later.
 
 ## Verification and limits
 
@@ -190,26 +208,24 @@ rechecks advisories without waiting for a code change. Dependabot vulnerability 
 automated security updates are enabled. [Architecture notes](docs/architecture.md)
 describe the boundaries and fixtures behind these checks.
 
-Version **0.9.0** adds PNG snapshots alongside video recording. App-view snapshots render the
+PNG snapshots and screen recording are local. App-view snapshots render the
 visible Holdmap viewport without screen-sharing permission; selected-source snapshots require
 an explicit system picker, or borrow the already selected video source. Capture results can
 contain the information visible in that view or source. Exports stay local and are saved only
 through an explicit user action. Native snapshot commands use the trusted-main-window gate,
 opaque independent handles, private temporary files and bounded PNG validation (3840×2160,
 32 MiB) before atomic saving. Cancelling a borrowed snapshot does not stop its video session.
-See [capture boundaries](docs/architecture.md#png-snapshots-090).
+See [capture boundaries](docs/architecture.md#png-snapshots).
 
 These checks reduce risk; they do not prove the absence of vulnerabilities. Credential
 redaction is heuristic and may miss arbitrary positional secrets. Windows privacy depends on
 filesystem ACLs, including any custom state directory. Process visibility depends on OS
 permissions, and macOS retains a check-to-signal race; Linux pidfds and Windows process
 handles bind signalling more directly to process identity. Review plans and avoid sharing raw
-history/logs without inspecting them. Version 0.5.0 includes the agent recording and scheduled
-action safeguards listed in the [0.5.0 release entry](CHANGELOG.md#050---2026-10-11), alongside
-the [0.4.0 security fixes](CHANGELOG.md#040---2026-10-10). Version 0.3.0 predates those fixes.
+history/logs without inspecting them.
 
 Default agent scans report access from the live process table, command line and sockets without
-reading agent settings. Version 0.8.0 adds explicit capability inspection through
+reading agent settings. Capability inspection is explicit, through
 `agents --capabilities`, the terminal Agents **c** toggle, MCP `list_agents(include_capabilities:true)`
 and the desktop's **MCP & skills** workspace. Terminal inspection is scoped to the Agents
 pane; turning it off or leaving the pane clears retained inventory and revokes queued file
@@ -225,13 +241,13 @@ configured command. Custom homes, managed settings, plugins, VS Code profile MCP
 cloud capabilities are outside this inventory's coverage. See the
 [capability guide](site/src/content/docs/agents.md#mcp-and-skills).
 
-The **0.9.0** capability explorer changes presentation without expanding those inspection
+The capability explorer changes presentation without expanding those inspection
 locations. Grouped process contexts retain their original identities. Explore cards, source
 comparisons and inspector tabs do not establish client acceptance, approval, activation or
 execution. A missing tool catalog stays unknown; no server is launched to populate it and
 no inventory-to-activity association is inferred from matching names.
 
-## Scheduled desktop actions (version 0.5.0)
+## Scheduled desktop actions
 
 Scheduling uses the trusted local main window and keeps authorization in the native process.
 Creating a schedule consumes a short-lived, one-use review handle and retains the exact stop

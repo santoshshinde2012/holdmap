@@ -47,12 +47,12 @@ npm run test:demo
 node scripts/capture-screenshots.mjs
 ```
 
-This resolves published downloads independently of the checked-out source. During 0.9.0
-preparation it shows published 0.8.0 downloads, pending 0.9.0 highlights, preview wording in
-metadata and the published feature set in structured data. Offline builds instead use the
-source version for downloads and availability, including metadata and feature declarations.
-That preview can show the 0.9.0 published presentation before its installers exist; use the
-required-release build for publication-state evidence and public-site captures.
+This resolves published downloads independently of the checked-out source. While a new
+version is being prepared, it shows the previous published downloads, pending highlights,
+preview wording in metadata and the published feature set in structured data. Offline builds
+instead use the source version for downloads and availability, so they can show a release as
+published before its installers exist; use the required-release build for publication-state
+evidence and public-site captures.
 
 `npm test` checks the release policy, built links, asset budgets and SEO. `npm run check:seo` checks the static
 HTML without executing page scripts: unique metadata, canonical/social URLs, real social
@@ -80,8 +80,8 @@ deployment identity or publish files.
 
 These captures show a production-mode website build at 1440×900, with a 390×900 mobile guide
 view. Release highlights use 1440×1100 desktop and 390×1800 mobile captures so all three cards
-and the publication note fit in one image. The release examples show 0.9.0 preparation with published
-0.8.0 downloads. The homepage's sample-data recording is paused on its first frame; no machine is scanned.
+and the publication note fit in one image. The release captures were taken while 0.9.0 was
+being prepared, so they show its pending status. The homepage's sample-data recording is paused on its first frame; no machine is scanned.
 After building the site, refresh them with `node scripts/capture-screenshots.mjs` from `site/`.
 The script manages its own preview server and Chromium, waits for content and fonts, and checks
 themes, page errors, overflow and a 600 KB budget for each PNG.
@@ -101,7 +101,7 @@ Release highlights and publication status, dark:
 
 Release highlights and publication status, light:
 
-![Light-theme release highlights keep the pending 0.9.0 status separate from published 0.8.0 downloads](../docs/screenshots/site-release-light.png)
+![Light-theme release highlights keep the pending release status separate from the published downloads](../docs/screenshots/site-release-light.png)
 
 Mobile release highlights, light:
 

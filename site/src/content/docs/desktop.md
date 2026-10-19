@@ -1,6 +1,6 @@
 ---
 title: Desktop app
-description: "Use holdmap 0.9.0 desktop maps, PNG snapshots and screen recording, with local saves and reviewed service stops on macOS, Windows and Linux."
+description: "Use the holdmap desktop app: Home, maps, PNG snapshots and screen recording, with local saves and reviewed service stops on macOS, Windows and Linux."
 order: 6
 ---
 
@@ -10,26 +10,12 @@ CLI, so process identity checks and process protections are shared. The CLI's pr
 `.holdmap.toml` settings apply to CLI and terminal UI actions.
 [Try it in the browser](../../#demo).
 
-**Version 0.9.0** adds PNG snapshots, a readable service graph and the Explore / Map / Compare
-capability explorer. During release preparation, [Install](../../#install) stays on the latest
-published release; 0.8.0 installers predate these additions.
-
-Version **0.8.0** introduced the MCP and skills inventory map, reported usage labels, clearer
-desktop update help and recording startup and cleanup fixes. The app retains native screen recording on
-macOS 14 or later when the desktop window lacks browser screen sharing, introduced in
-**0.7.1**, and the recorder, Computer / Footprint / Project map zoom and live `npm run dev`
-scans introduced in **0.7.0**. Check the
-[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
-current installers.
-
-Version **0.6.0** added editor-extension identity on the graph, hideable details and Flow
-inspector, grouped title-bar actions, schedules started from the empty manager, and a
-macOS fullscreen close that returns to the previous app. See the
-[0.6.0 changes](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md#060---2026-10-14).
+Release-by-release changes are in [What's new](../whats-new/) and the
+[changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md).
 
 ## Home and first open
 
-Since 0.9.0, **Home** shows agents, listening ports, dev
+**Home** shows agents, listening ports, dev
 servers, exposed listeners and running MCP servers, as **Cards** or a **Map** (toggle at the
 top right or press `V`; the choice is remembered). Cards list each agent's projects, ports,
 MCP servers and skills; Map draws the same footprint around this computer with a collapsible
@@ -57,7 +43,7 @@ or use your configured global shortcut. Choose **Quit holdmap** from the icon's 
 exit completely. If the tray is unavailable, closing the window quits the app.
 
 Closing from fullscreen returns to the previous app without leaving an empty black Space,
-and clicking the Dock icon reopens the same window. Use **0.6.0 or newer**.
+and clicking the Dock icon reopens the same window.
 
 ## Service graph and cluster grouping
 
@@ -73,10 +59,9 @@ extension name, not the inherited project — the same identity as the [list and
 view](../agents/). A card's location is a layout choice; only the displayed links represent
 observed connections.
 
-**From 0.9.0:** the graph opens with the full canvas and compact service
+The graph opens with the full canvas and compact service
 and link counts. Disconnected services and separate clusters are packed into compact
-groups in both layouts. The published **0.8.0** installers retain the previous graph
-toolbar, automatic fit and summary pane.
+groups in both layouts.
 
 The new **Search services** field searches displayed names, projects, ports and PIDs.
 Use `port:3000` or `:3000` for an exact port, and `pid:43000` for an exact PID. Multiple
@@ -104,11 +89,7 @@ message explains when no connections are present.
 
 ## Record the screen
 
-Screen recording requires **0.7.0 or newer**, or the browser demo. Version **0.6.0**
-installers do not include it.
-To add it to an existing 0.6.0 installation, download and install the new desktop build.
-
-The video icon in the status bar (a camera icon in the title bar in 0.8.0),
+The video icon in the status bar,
 **Record screen…** in the command palette, or `⇧V` starts a local capture. Holdmap explains that recordings stay on this computer, then the
 operating system asks which display or window to share. Microphone and system audio are
 not captured. A timer in the title bar and **Stop screen recording** replace the dialog so
@@ -135,13 +116,11 @@ there and retry. Unsupported windows explain that capture is unavailable. This i
 from [Agents → Flow recording](../agents/#set-up-optional-recording), which collects optional
 tool-call metadata rather than pixels.
 
-From **0.7.1**, the macOS desktop app uses Apple's native screen picker on **macOS 14 or
-later** when its window does not offer browser screen capture. Install the matching desktop
-download from [Install](../../#install), then reopen the app; a CLI update does not replace it.
+The macOS desktop app uses Apple's native screen picker on **macOS 14 or
+later** when its window does not offer browser screen capture.
 Native capture encodes MP4 and GIF in a private temporary folder, then removes those files
 after copying the exports into the preview or discarding the recording, once pending native
-operations finish. Version **0.8.0** also fixes cancellation while native capture starts.
-The two-minute
+operations finish. The two-minute
 limit is enforced by the native app even while its window is hidden. Older macOS versions
 can record only when their webview provides screen sharing; otherwise use a supporting
 browser or the system screen recorder.
@@ -156,8 +135,7 @@ Review local capture limits before choosing a screen or window:
 
 ## Take a PNG snapshot
 
-**Available from 0.9.0:** PNG snapshots are separate from video recording.
-Published **0.8.0 installers predate this feature**. Open the camera button, choose
+PNG snapshots are separate from video recording. Open the camera button, choose
 **Take snapshot…** in the command palette, or press `⇧S` with single-key shortcuts enabled.
 
 - **Holdmap view** captures the visible app, its current map and details without
@@ -180,7 +158,7 @@ available to retry. **New snapshot** replaces it only after the new capture succ
 **Discard snapshot** removes the retained image without stopping a video. Reloading or
 quitting clears the preview, so save it first to keep it.
 
-These screenshots show 0.9.0 with browser sample data:
+These screenshots use browser sample data:
 
 ![PNG snapshot review in dark theme, with local save and discard controls](../../../../docs/screenshots/desktop-snapshot-dark.png)
 
@@ -189,7 +167,7 @@ These screenshots show 0.9.0 with browser sample data:
 ## Shut down this computer
 
 Open **Settings → Power → Shut down now…**, separately from **Schedule shutdown…**; its review
-has no timing controls. Local shutdown was introduced in 0.4.0. Check the computer
+has no timing controls. Check the computer
 name, save your work and acknowledge that all apps, agents and local services will stop.
 The confirmation expires after 60 seconds; it does not schedule shutdown. Cancel or Escape
 closes the review before submission. After submission, follow any OS permission prompts;
@@ -199,13 +177,9 @@ completely and reopen it before trying again.
 macOS uses System Events and may ask for Automation permission. Windows requests shutdown
 without forced termination. Linux requires systemd 248 or newer with explicit inhibitor
 checks. OS policy or permissions may refuse the action. The browser demo only simulates
-shutdown and cannot power off a computer. Version 0.3.0 binaries predate this feature.
+shutdown and cannot power off a computer.
 
 ## Schedule shutdown or a service stop
-
-Scheduling is available from **0.5.0**. The empty manager can start reviews from **0.6.0**.
-Version 0.4.0 downloads
-include immediate shutdown and stop confirmations, but predate scheduling.
 
 1. For this computer, open **Settings → Power → Schedule shutdown…**, or start from the
    empty **Scheduled actions** dialog (clock control). The review is titled
@@ -250,13 +224,7 @@ These current UI screenshots show the browser simulation:
 
 ## First open
 
-**Linux desktop 0.3.0:** published AppImage, Debian and RPM downloads predate the GLib
-security fixes. Use version **0.4.0 or newer**, or build the desktop from current source.
-This Linux GTK dependency issue does not affect the CLI, TUI or
-MCP server, or the macOS and Windows desktop builds. See the
-[security policy](https://github.com/santoshshinde2012/holdmap/blob/main/SECURITY.md#linux-glib-dependency-backports).
-
-The published **0.8.0** macOS app is ad-hoc signed and sealed, without Developer-ID signing or
+The published macOS app is ad-hoc signed and sealed, without Developer-ID signing or
 notarisation. Its Windows installers are unsigned. First verify the download using the
 checksums and build provenance linked from [Install](../../#install), then open it:
 
@@ -276,7 +244,7 @@ Quit Holdmap before replacing it, then reopen the installed copy. Check **Settin
 in that app to confirm its version; `holdmap --version` checks the separate CLI. A copy
 opened from a downloaded disk image or another folder can still be an older version.
 
-From **0.8.0**, About also shows the running app's location and architecture, with desktop
+About also shows the running app's location and architecture, with desktop
 download and installation-guide actions. The command palette can open desktop downloads too.
 Follow the manual quit/install/reopen steps above for releases without a signed updater
 feed. Check the published release's signing
@@ -284,7 +252,7 @@ and updater notes before installing. Browser About identifies the web preview an
 
 ## Develop with local data
 
-From **0.7.0**, the browser development server reads live ports, agents, map relationships
+The browser development server reads live ports, agents, map relationships
 and Flow connections from a local Holdmap CLI. Follow the
 [development setup](https://github.com/santoshshinde2012/holdmap/blob/main/CONTRIBUTING.md#setup)
 for required toolchains and native packages. From the repository root:
@@ -326,16 +294,15 @@ Screen sharing is separate and always requires your explicit screen or window se
 | `d` · `m` · `e` · `t` | Filter: dev servers · mine · exposed · TCP/UDP |
 | `⌘R` | Rescan now |
 | `⇧V` | Record the screen, stop capture or review the latest recording |
-| `⇧S` | Take or review a PNG snapshot (0.9.0) |
+| `⇧S` | Take or review a PNG snapshot |
 | `⇧L` | Cycle the theme |
 | `⌘,` | Settings |
 | `?` | Every shortcut |
 
-In 0.5.0, **Settings → General → Single-key shortcuts** lets you disable
+**Settings → General → Single-key shortcuts** lets you disable
 letter and symbol shortcuts, including `/` and `j`/`k`. Arrow navigation and `⌘`/`Ctrl` shortcuts
 remain available. This is useful with speech input or when you want to reserve letter keys.
-Shortcuts respect text composition and native controls. From **0.9.0**,
-port-filter shortcuts apply only in List; Graph keeps its own search and selection. In Graph,
+Shortcuts respect text composition and native controls. Port-filter shortcuts apply only in List; Graph keeps its own search and selection. In Graph,
 `B` acts on a selected listener's details instead of opening a summary pane.
 The command palette keeps its active result valid as running services change.
 
@@ -347,11 +314,11 @@ skim memory, CPU, process count, stoppable ports and parent; expand for folders 
 labels), ports and apps it started, child processes as tools & apps, connections, and access: the
 account it runs as, sandbox and approval flags, network listeners, and macOS-protected folders.
 Each fact is marked seen, inferred or unknown. From a card you can reveal a folder, open it in your
-editor, or stop the unprotected ports that agent started. From **0.7.0**, the map zooms
+editor, or stop the unprotected ports that agent started. The map zooms
 Computer → Footprint → Project from the same observed processes, sockets and folders; it does not invent communication
 between agents. Recent projects come from folder names
-only. Default scans do not inspect chats, agent settings or credential stores. From **0.8.0**,
-explicit [MCP & skills inspection](../agents/#mcp-and-skills) separately parses
+only. Default scans do not inspect chats, agent settings or credential stores.
+Explicit [MCP & skills inspection](../agents/#mcp-and-skills) separately parses
 bounded configuration metadata and lists skill locations with optional sanitized YAML-header
 names/purposes; it excludes credential values and skill instruction bodies from its results.
 Recognized credentials in
@@ -359,8 +326,8 @@ observed process arguments are redacted for display; redaction is heuristic. Rem
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
 `holdmap agents` and `holdmap agents AGENT --stop-ports` do the same in a terminal.
 
-Version **0.9.0** adds **Explore**, **Map** and **Compare** to **MCP & skills**, using the opt-in
-inventory introduced in 0.8.0. Explore leads with declared skill purposes; Map retains observed
+**MCP & skills** has **Explore**, **Map** and **Compare** views over the opt-in
+inventory. Explore leads with declared skill purposes; Map retains observed
 source relationships; Compare keeps exact definitions and their contexts separate. Matching
 process observations group without becoming a verified session. Select a card with a click,
 **Enter** or **Space** for **Purpose**, **Source**, **Evidence** and **Activity**. Close or press
@@ -376,11 +343,10 @@ explicit Claude skill activation. These labels are separate from configuration i
 matching names do not prove use by a particular process. Set up
 [optional recording](../agents/#set-up-optional-recording) to collect supported metadata.
 
-Version 0.4.0 also lets you search by agent, child tool, folder, exact PID or
+You can also search by agent, child tool, folder, exact PID or
 `port:3000`. Likely MCP server children appear even without a listening socket; expanded cards
 show their evidence, resource use and redacted commands. Omitted counts and collection warnings
-show where visibility is incomplete. Version 0.3.0 predates these additions;
-the browser demo runs the current UI with sample data.
+show where visibility is incomplete. The browser demo runs the current UI with sample data.
 
 ## From the details pane
 

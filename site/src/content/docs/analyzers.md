@@ -8,6 +8,9 @@ Analyzers are scanners you choose. They look at the skills and pinned MCP packag
 running agents and add short findings to Home, the map, **Needs you** and each agent's
 **Insights**. Every analyzer is off until you turn it on.
 
+Analyzers are new since the 0.9.0 release. They ship with the next release; until then,
+[build from source](https://github.com/santoshshinde2012/holdmap/blob/main/CONTRIBUTING.md#setup) to try them.
+
 | Analyzer | What it checks | Network |
 | --- | --- | --- |
 | **SkillSpector** (NVIDIA, install it yourself) | Skills, statically, for prompt injection, exfiltration, dangerous code and vulnerable dependencies. Runs with `--no-llm`. | `api.osv.dev` for dependency lookups |

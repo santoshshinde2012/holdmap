@@ -30,58 +30,49 @@ of a scan took (sockets, processes, containers). `--no-docker` skips container l
 but no prebuilt desktop installer. Choose from [the platform downloads](../../#install).
 
 **The desktop still shows an older version.** Check **Settings → About** in that app,
-rather than `holdmap --version`. In **0.8.0**, About also shows a copyable running-app location
-and architecture, with actions for the official desktop downloads and installation guide.
+rather than `holdmap --version`. About also shows a copyable running-app location and
+architecture, with actions for the official desktop downloads and installation guide.
 If automatic updates are unavailable, quit Holdmap, install the current release for the same
 OS and architecture, then reopen the installed copy.
 An app launched from an older disk image or another folder can still be the old version.
 The CLI installer updates the CLI, TUI and MCP server; it does not update the separate desktop app.
-Version **0.7.1** also requires a manual update and includes no signed updater feed.
+Browser About identifies the web preview separately and does not show a desktop settings folder.
 
-**0.9.0 features are missing from a 0.8.0 installation.** PNG snapshots, the readable service
-graph and the Explore / Map / Compare capability explorer require the 0.9.0 desktop app.
-During release preparation, the download page remains on the latest published version.
-Install 0.9.0 after its installers are published, or build that source version; updating only
-the CLI does not add desktop features. Existing 0.8.0 CLI/MCP capability and activity support
-does not include the new desktop presentation. [0.9.0 changes](../whats-new/).
-
-Browser About identifies the web preview separately and does
-not show a desktop settings folder.
-
-**Record screen says “Screen capture unavailable” in the macOS app.** Version **0.7.1**
-adds Apple's native picker when the desktop webview lacks screen sharing, requiring
-**macOS 14 or later**. The 0.7.0 installer predates that fallback. Download the **0.7.1 or
-newer desktop installer** from [Install](../../#install), install it and reopen the app;
-updating the CLI does not update it. On older macOS versions,
-try a browser with screen sharing or the system screen recorder. If the picker opens but
-capture is denied, check this app's Screen Recording permission in System Settings.
-See [screen recording](../desktop/#record-the-screen).
+**Record screen says “Screen capture unavailable” in the macOS app.** The native picker
+fallback needs **macOS 14 or later**. On older macOS versions, try a browser with screen
+sharing or the system screen recorder. If the picker opens but capture is denied, check this
+app's Screen Recording permission in System Settings. See [screen recording](../desktop/#record-the-screen).
 
 **The MCP client can't start holdmap.** Use the full path in its config, see
 [MCP setup](../mcp/#set-it-up).
 
 **MCP stops now require `confirmation_id`.** Current servers preview before executing.
 Keep the same server session, show every plan, then send the returned one-use handle with
-`dry_run: false` and identical target/options. Version 0.3.0 used the earlier protocol; follow
-the installed server's discovered schema. See [stop confirmation](../mcp/#preview-and-execute-a-stop).
+`dry_run: false` and identical target/options. See [stop confirmation](../mcp/#preview-and-execute-a-stop).
 
 **Calls recording stays empty.** A running agent or socket connection does not expose calls.
 Start recording, configure a supported exporter or `holdmap mcp --record-activity`, and use
 the endpoint and token for that same active collector. New recording sessions have new tokens.
 See [recording setup](../agents/#set-up-optional-recording).
 
-**MCP or skills are missing.** Inventory and the skill-activation projection require
-**0.8.0 or newer**; **0.7.1** does not include them. Explicitly open
+**MCP or skills are missing.** Explicitly open
 **Agents → MCP & skills**, pass `agents --capabilities`, press **c** in the terminal Agents pane,
 or call MCP `list_agents` with `include_capabilities: true`. Read the coverage limits; custom
-homes and client policy are not resolved. Use **0.8.0 or newer** for both the collector and
-CLI/desktop when reading skill activations or reported MCP aliases. Upgrade the CLI/MCP server
-and desktop separately.
+homes and client policy are not resolved. Use matching collector and CLI/desktop builds when
+reading skill activations or reported MCP aliases.
 See [supported definitions and troubleshooting](../agents/#mcp-and-skills).
 
-**Environment variables.** `HOLDMAP_HOME` (config dir), `HOLDMAP_COLOR`, `HOLDMAP_TRACE`,
-`HOLDMAP_EDITOR`, plus `HOLDMAP_ACTIVITY_ENDPOINT` and private `HOLDMAP_ACTIVITY_TOKEN` for
-explicit local recording integrations. Project stacks use `.holdmap.toml`.
+**Environment variables.**
+
+| Variable | Purpose |
+|---|---|
+| `HOLDMAP_HOME` | Config and history folder (overrides the platform default) |
+| `HOLDMAP_COLOR` | `auto`, `always` or `never` (also `--color`) |
+| `HOLDMAP_TRACE` | Diagnostics topics, such as `scan` or `all` |
+| `HOLDMAP_EDITOR` | Editor executable for folder actions |
+| `HOLDMAP_ACTIVITY_ENDPOINT`, `HOLDMAP_ACTIVITY_TOKEN` | The active local recording collector; keep the token private |
+
+Project stacks use `.holdmap.toml`.
 
 **Uninstall.** Remove the binary at the path reported above (the default is `~/.local/bin/holdmap`
 on macOS/Linux or `%USERPROFILE%\.local\bin\holdmap.exe` on Windows), remove the installer's
