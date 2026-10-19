@@ -1,554 +1,13 @@
 # holdmap architecture
 
-## Reliability review (current source)
-
-The shared Rust core remains the authority for scans, evidence, planning and execution.
-The desktop coordinates presentation and recovery; its native dispatcher applies the same
-trusted-main-webview policy to every first-party command before decoding arguments.
-Existing per-operation checks remain in place for recording, power and scheduling.
-Tauri independently checks the requesting frame's origin and plugin capabilities.
-Mock-runtime IPC tests prove secondary local views cannot reach command dispatch and the
-main view can, without invoking process controls or launching another app.
-
-The review prioritizes failures reproduced from the code. Product demand and field
-performance require separate measurement:
-
-| Developer problem | Approach | Evidence |
-|---|---|---|
-| A failed scan still appears live | Retain the last successful rows, mark scan failure, show an accessible recovery message and allow explicit retry | Frontend failure-after-success and recovery regressions |
-| A searched port appears free after the data changes | Associate availability with the accepted scan, invalidate failed/stale results and ignore late checks | Frontend availability and asynchronous-response regressions |
-| A socket-view change is ignored during a slow scan | Discard the previous mode's reply and immediately request the latest selected mode | In-flight socket-mode regression |
-| A local service sends interim or incomplete HTTP responses | Require complete headers and a final response, decode bounded body framing and share one request deadline | HTTP parser fixtures and loopback servers |
-| Large reported metadata is copied before its limit is checked | Check record count first and serialize through a capped writer before connecting | Exact-limit, escaped-input and no-network regressions |
-| New native commands omit a local-window check | Put the shared policy around the generated dispatcher | Mock-runtime accepted/denied IPC regressions |
-| Persistence fails after a stop completes | Keep process results and history errors distinct; block automatic replay and further batch dispatch | Native, CLI listener and frontend partial-success regressions |
-| One child serves several agent ports, making a later stop look stale | Preflight every reviewed target in one native scan, then execute retained plans and verify each port | Shared-process bind-probe, all-target preflight and frontend batch regressions |
-| Invalid settings or unreadable history is overwritten by a mutation | Use fallible reads for updates and restart lookup; retain tolerant read wrappers for compatibility | Private-file, invalid-format and preserved-byte regressions |
-| File locks freeze native controls | Move settings, history and OS integration to background threads | Native checks plus shared store lock regressions |
-| Cancelled or superseded plans reopen a review | Use one review generation and restore focus across the loading/review dialogs | Async reply, PID replacement and browser focus regressions |
-| Slow availability checks accumulate on each scan | Keep one request in flight and replace the queued request with the latest | Bursty scan and query-change regression |
-| Recognized secrets appear in HTTP metadata or reported labels | Redact full values before clipping, including fragment parameters and namespaced label components | HTTP serialization and live collector regressions |
-
-The desktop stop adapter flattens the original `StopReport` and adds `history_error`;
-it preserves execution facts when recording fails. Only a successful, freed result with
-saved history permits automatic restart. Core state mutations use `try_config` and
-`try_history`, whose missing-file behavior is compatible with first run and whose other
-errors propagate without replacing saved files. Native adapters clone the store before
-dispatching file work to background threads. CLI single-stop JSON retains its existing
-plan/report shape with an optional history error and halts additional requested targets
-after a recording failure.
-
-Immediate agent batches use `stop_many`: a bounded list of exact TCP/UDP listener requests
-with their original one-use confirmation handles. Native request validation, current-account
-ownership, agent membership and fresh effect comparison all complete before dispatch.
-The executor then uses the retained plans, including their PID-reuse and protection guards,
-so a child that releases two listeners does not invalidate its second reviewed plan merely
-by exiting. Each attempted target returns its own execution and persistence result; the
-first incomplete result halts further dispatch. OS effects remain sequential and cannot be
-rolled back if a later effect fails.
-Identical guarded supervisor commands completed successfully earlier in the batch are
-removed from later execution copies, while each listener verification and original history
-plan remain intact. Command identity includes the executable, exact argument array and
-guard PID/start token; display descriptions do not grant authority.
-`holdmap_core::exec::CompletedSupervisorStops` applies the same rule to immediate desktop,
-native schedules and MCP execution. MCP errors retain structured actual stop reports with
-an optional history error, halt further dispatch and require a fresh preview before retry.
-Their structured data and compatible text JSON follow the supported protocol's
-[structured tool result contract](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#structured-content).
-
-Primary references checked on 13 October 2026 are
-[Tauri capabilities](https://v2.tauri.app/security/capabilities/) and
-[permissions](https://v2.tauri.app/security/permissions/) for native access boundaries,
-[async command guidance](https://v2.tauri.app/develop/calling-rust/#async-commands)
-for background native work,
-[MCP security guidance](https://modelcontextprotocol.io/specification/latest/basic/security_best_practices)
-for local tool authority,
-[WCAG status messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html)
-for recovery feedback, and
-[HTTP/1.1 framing](https://www.rfc-editor.org/rfc/rfc9112.html#section-6.3)
-for probe parsing, and
-[AWS STS key identifiers](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetAccessKeyInfo.html)
-for temporary credential label filtering. These references guide the implementation; they do not constitute a
-security certification or user research.
-
-Broader product work should measure representative large process graphs, scan duration and
-interaction latency on each supported OS, then validate the port-conflict and agent-triage
-flows with developers. Collection limits and missing evidence must remain visible as those
-flows grow. Cross-platform CI remains necessary for OS-specific guarantees.
-
-The security and reliability pass completed on 14 October 2026. The macOS `scripts/check-all.sh` gate
-passed with 625 Rust tests, 411 frontend unit tests and 52 browser tests, plus website
-checks, security audits, strict Clippy/rustdoc and five signed-updater runtime scenarios.
-Visual checks at 1440px and 390px verified layout and modal focus. Linux verification on
-Rust 1.95 included real process/socket tests, optimized GLib regressions, armed Xvfb
-shortcut tests, native checks and strict workspace Clippy. That pass also included
-all-target Windows `cargo check` and strict Clippy for all five packages on Rust 1.95
-with MinGW. Windows execution, PE linking and interactive Linux GUI behavior were not
-exercised locally.
-
-The subsequent macOS window-lifecycle fix reproduced the fullscreen black Space and
-verified native close-button handling: the application deactivated, its window left the
-active Space, and the same native window, content view and WKWebView remained intact.
-Secondary-window closing and main-window destruction without a tray also passed. An
-unattended background fixture could not conclusively verify every focus restoration;
-macOS uses [cooperative activation](https://developer.apple.com/documentation/appkit/passing-control-from-one-app-to-another-with-cooperative-activation).
-The owned interactive check is documented separately from headless CI.
-
-## Local screen recording (0.7.0)
-
-Screen pixels have a separate, user-initiated lifecycle from agent activity metadata. The
-capture call runs directly from the Choose screen action so the operating system retains
-control of source selection and consent. A generation guard releases late streams after
-cancellation or unmount, and stopping releases capture tracks before finalizing exports.
-Holdmap does not persist screen selection or a permission decision, and no audio is requested.
-The operating system manages any retained privacy permission separately.
-`screen-record-backend.ts` selects the browser or native session behind one small
-stop/discard/elapsed-time contract. Capability discovery never opens a picker. When
-`getDisplayMedia` is absent, macOS 14+ uses ScreenCaptureKit's public system picker;
-older macOS versions remain launchable through weak framework linking and availability checks.
-The Rust boundary accepts opaque session handles rather than paths, authorizes the local
-main window and owns one private temporary directory. The Swift adapter confines picker
-and stream lifecycle to the main thread, writes H.264 locally and prepares the GIF after
-capture stops. Independent native duration and size bounds survive renderer suspension.
-Cancellation waits for stream/writer/export completion before releasing native files;
-bounded binary IPC copies completed exports into the existing in-memory preview.
-On Linux, a display-only host permission handler applies the same trusted-main-view policy.
-WebKitGTK otherwise denies requests by default. Its display backend independently requires
-the ScreenCast portal's selection and PipeWire stream, including on X11; the host gate
-does not choose a source or grant camera/microphone access. Portal cancellation or absence
-prevents capture. This follows [WebKitGTK's permission default](https://webkitgtk.org/reference/webkit2gtk/stable/class.UserMediaPermissionRequest.html),
-[its display backend](https://github.com/WebKit/WebKit/blob/webkitgtk-2.40.3/Source/WebCore/platform/mediastream/gstreamer/GStreamerDisplayCaptureDeviceManager.cpp),
-and the [ScreenCast portal contract](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.ScreenCast.html).
-
-The encoder module loads on demand. H.264 capability checks include the output dimensions;
-WebCodecs/Mediabunny has a MediaRecorder MP4 fallback. GIF quantization runs in a same-origin
-worker with one RGBA frame in flight and at most 240 indexed frames. Adaptive sampling
-preserves the complete timeline, with cumulative GIF delays avoiding rounding drift.
-Finalization has a deadline and can be discarded. The CSP permits local and blob workers
-without enabling external scripts or network destinations.
-
-Desktop saves use a trusted-main-window binary command, a 128 MiB payload bound, filename
-and container-header validation, and a serialized native save dialog. JavaScript cannot
-supply the destination path. Same-directory private temporary files replace the chosen
-destination atomically after a complete write; cancellation and errors retain the in-memory
-export for retry. No filesystem or dialog plugin permissions are granted to the webview.
-Browser exports use the browser download manager and do not claim confirmed disk writes.
-Closing a completed preview retains one bounded result in memory for the current session;
-Review recording reopens it, and explicit discard releases it before another recording.
-Hiding or minimizing the window preserves active capture until Stop or the two-minute limit.
-
-The implementation follows the primary [Screen Capture specification](https://w3c.github.io/mediacapture-screen-share/),
-the [WebKit capture-permission fix](https://bugs.webkit.org/show_bug.cgi?id=274896),
-[Mediabunny source lifecycle](https://mediabunny.dev/guide/media-sources),
-the [gifenc worker guidance](https://github.com/mattdesl/gifenc), and
-[Tauri native dialogs](https://v2.tauri.app/plugin/dialog/). Synthetic owned canvas streams
-validate actual MP4/GIF content without capturing a user's screen or requesting capture permissions.
-The native fallback follows Apple's [ScreenCaptureKit content-sharing picker](https://developer.apple.com/documentation/screencapturekit/sccontentsharingpicker).
-Its synthetic pixel fixture exercises the production native MP4/GIF writer without requesting
-screen permission. The packaged WKWebView check asserts original browser API availability
-before synthetic capture, and separately checks the actual minified app's confirmation dialog.
-
-<a id="png-snapshots-current-source-unreleased"></a>
-
-## PNG snapshots (0.9.0)
-
-Published 0.8.0 installers predate this feature. The camera action (`⇧S`) separates the
-visible **Holdmap view** from an explicitly selected **Screen or window**. App-view capture
-does not request screen-sharing permission. An active video session can expose a borrowed
-**Recording source**; taking its PNG neither opens another picker nor owns the recording's
-stop/discard lifecycle. A newly selected source is released after the still is captured.
-Browser capture uses its display picker; the native fallback uses Apple's public picker
-on macOS 14 or later. All sources omit audio and return the same bounded PNG result:
-aspect ratio preserved within 3840×2160 and 32 MiB.
-
-The SOLID boundaries keep source acquisition, result ownership and saving independent:
-
-| Boundary | Responsibility |
-|---|---|
-| `screen-snapshot.ts` | Small `SnapshotProvider` contract, dimensions, PNG envelope and result metadata |
-| `app-snapshot.ts` | On-demand DOM rasterization of the app viewport, preserving SVG and scroll state while excluding snapshot controls, embedded frames and hidden media helpers |
-| `screen-snapshot-backend.ts` / `screen-snapshot-native.ts` | Explicit source acquisition and cancellation, or borrowing a recording provider without stopping it |
-| `snapshot-controller.ts` / `SnapshotCapture.svelte` | One retained result, generation/abort guards, source choice, preview and save feedback |
-| Native snapshot and capture modules | Trusted-main-window authorization, opaque handles, private files, bounded reads and operation leases |
-| Shared save adapter and native writer | Save chooser, validated format/size, full native PNG decoding and atomic destination replacement; no JavaScript destination paths |
-
-The controller receives source adapters rather than depending on a particular renderer or
-native session. Closing the preview or cancelling/failing a save preserves its result;
-discard, reload or quit releases it. A failed or cancelled replacement capture keeps the
-previous PNG. Browser downloads report that the download started, not that a disk write
-completed. Snapshot cancellation cannot stop a borrowed video source.
-
-App rendering loads `modern-screenshot` only on demand. Fonts remain separate build assets;
-only the two known bundled WOFF2 files and exact brand SVG enter bounded, credential-free,
-same-origin fetches with redirects rejected. Automatic remote font/style discovery is
-bypassed, and unapproved image resources reject capture. The CSP adds only same-origin
-asset connections; font policy and external destinations remain unchanged. Rendering has
-a bounded result deadline and cooperative checks, with context cleanup and late-result
-rejection after cancellation; this does not preempt synchronous browser rendering work.
-Decoded browser pixel comparisons cover graph text, SVG edges and ordinary dialogs, while
-owned synthetic media/native fixtures exercise PNG capture and saving without sharing a
-real screen. Supplementary WebKit runs do not replace the packaged WKWebView checks.
-
-## Agent communication visibility (0.5.0)
-
-The read-only Connections projection uses one consistent scan and `AgentsReport`. It retains
-exact socket holders and process start tokens; it marks missing and ambiguous ownership rather
-than choosing a guessed peer. Limits bound OS graph output to 256 nodes and 512 edges.
-
-The separate Calls pipeline requires explicit local opt-in. `holdmap-activity` owns strict
-metadata contracts, pure provider normalization, bounded storage, loopback HTTP and a bounded
-client. Native commands share the trusted-main-window policy with Power; CLI hooks and MCP
-recording compose the same client. `ToolCallObserver` is injected into MCP with a no-op default,
-so protocol handling and optional recording have separate responsibilities. It receives only
-catalog names, timing, outcomes and serialized sizes. Recording failure never disables tools.
-
-Hook and OTLP adapters parse their source formats independently, then apply the same metadata
-invariants and name policy. One typed route contract covers accepted paths and exhaustive
-dispatch; client and setup generation share credential validation without constructing a
-transport just to generate text. Request bounds come from the collector's limits contract.
-Native recording commands use one authorized, serialized session boundary. The CLI MCP
-adapter owns its bounded delivery queue and worker lifetime separately from activity commands.
-
-Version 0.8.0 adds an optional sanitized `mcp_server` label to tool records and a separate
-`skill` kind for explicit Claude activation logs. Skill records carry a source event time,
-pseudonymous session/counter identity and unknown workflow outcome; they do not increase tool
-call counts. Built-in adapters derive MCP aliases only from explicit hook metadata or an
-unambiguous sanitized client label. Explicit normalized tool records can also report the
-optional alias through `/v1/activity`, subject to the shared identifier sanitization and record
-validation. None creates a configuration/process join, authenticated identity or action authority. Default Claude
-setup stays trace-only; the documented alternate log-only recipe receives activation events
-without enabling tool-detail or content flags.
-Current decoding accepts older snapshots with an omitted MCP alias. The strict older decoder
-does not accept newly populated fields or the skill kind, so new usage requires matching
-0.8.0 collector and CLI/desktop builds; `/v1` route names do not promise unknown
-record shapes will be accepted. This preserves rejection of unrecognized normalized fields.
-
-The browser adapter supplies labelled examples. Pure TypeScript builds reported parent edges,
-layout and timeline models; an invalidatable loader prevents stale requests from changing a
-later view. Components present evidence and setup without authority to stop a reported PID.
-`RecordingControls` owns recording actions, setup copying and confirmation; `AgentFlowView`
-owns graph and run selection. Injected callbacks connect these components to the application.
-The pure triage projection filters metadata rows, orders reported durations and retains matching
-or inspected records with their explicit ancestors. Controls do not rewrite stored runs or
-infer parent links, and the existing graph window still bounds canvas work.
-An unavailable recording status remains unknown until a successful refresh supplies it.
-A source-provided parent defines an edge; socket presence, elapsed time and common session
-membership cannot define tool causality. Provider setup remains reviewable text that the user
-applies explicitly. No source settings or private conversations are read automatically.
-
-![Agent visibility and optional local metadata flow](diagrams/agent-communication-flow.svg)
-
-<details>
-<summary>Mermaid source</summary>
-
-```mermaid
----
-config:
-  theme: base
-  look: classic
-  htmlLabels: false
-  themeVariables:
-    darkMode: false
-    background: "#ffffff"
-    primaryColor: "#DBEAFE"
-    primaryTextColor: "#172554"
-    primaryBorderColor: "#2563EB"
-    secondaryColor: "#CCFBF1"
-    tertiaryColor: "#ffffff"
-    textColor: "#0F172A"
-    lineColor: "#475569"
-    edgeLabelBackground: "#ffffff"
-    clusterBkg: "#ffffff"
-    clusterBorder: "#94A3B8"
-  flowchart:
-    wrappingWidth: 190
----
-flowchart TB
-  accTitle: Agent visibility and optional local metadata flow
-  accDescr: Observed OS relationships and opt-in provider metadata follow separate read-only paths into the desktop flow view. Authenticated typed routes dispatch source adapters, which share metadata validation before bounded session storage. Recording controls use trusted serialized native sessions independently of graph presentation. Reported trace parents produce call edges, while missing evidence remains unknown. The public browser uses labelled examples and no recording source grants action authority.
-  subgraph OBSERVED["Observed relationships · no recording required"]
-    OS["OS scan<br/>Processes, listeners + sockets"]
-    PROJECT["Core flow projection<br/>Exact holders + process identity<br/>Seen / inferred / unknown"]
-    OS --> PROJECT
-  end
-  subgraph PRODUCERS["Explicitly configured local producers"]
-    AGENT["Codex / Claude / OTLP<br/>Reported events + trace parents"]
-    HOOK["Advisory lifecycle hooks<br/>Normalize before sending"]
-    MCP["Holdmap MCP observer<br/>Fixed tool names + envelope sizes"]
-  end
-  subgraph ACTIVITY["holdmap-activity · no persistence or forwarding"]
-    GATE["Authenticated typed routes<br/>127.0.0.1 + bearer token<br/>Origin / framing / deadline checks"]
-    ADAPTER["Pure source adapters<br/>Hooks / OTLP / normalized records<br/>Discard content fields"]
-    NORMAL["Shared metadata policy<br/>Identity + lifecycle invariants<br/>Bounded names + pseudonyms"]
-    MEMORY[("Bounded memory store<br/>1,000 spans + dropped counts<br/>Identity and outcome merge policy")]
-    GATE --> ADAPTER --> NORMAL --> MEMORY
-  end
-  AGENT & HOOK & MCP --> GATE
-  subgraph VIEW["Desktop presentation · read-only evidence"]
-    API["Trusted local IPC<br/>One serialized session boundary<br/>Opt-in, snapshot, stop + clear"]
-    CONTROLS["Recording controls<br/>Setup + clear confirmation<br/>Unknown status explicit"]
-    CONNECTIONS["Connections graph<br/>Observed OS relationships"]
-    CALLS["Calls graph + timeline<br/>Reported parents, parallel calls<br/>Missing / unknown explicit"]
-    INSPECT["Accessible inspector<br/>Status, duration + serialized sizes"]
-    API --> CALLS
-    CONTROLS -->|"explicit user actions"| API
-    CONNECTIONS & CALLS --> INSPECT
-  end
-  PROJECT --> CONNECTIONS
-  MEMORY --> API
-  DEMO["Public browser demo<br/>Labelled examples<br/>No native collector or actions"] -.-> CONNECTIONS & CALLS
-  style OBSERVED fill:#ffffff,stroke:#94A3B8
-  style PRODUCERS fill:#ffffff,stroke:#94A3B8
-  style ACTIVITY fill:#ffffff,stroke:#94A3B8
-  style VIEW fill:#ffffff,stroke:#94A3B8
-  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
-  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
-  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
-  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
-  classDef web fill:#F1F5F9,stroke:#64748B,color:#0F172A,stroke-width:1.5px
-  class OS,AGENT,HOOK,MCP,MEMORY data
-  class PROJECT,ADAPTER,NORMAL domain
-  class GATE,API safety
-  class CONTROLS,CONNECTIONS,CALLS,INSPECT surface
-  class DEMO web
-```
-
-</details>
-
-Adapters depend on narrow contracts; domain projections do not depend on presentation or
-transport. Tests substitute scans, clocks, MCP observers and executors without redefining
-production policy. Provider wire fixtures, hostile HTTP tests, out-of-order updates, full CLI
-roundtrips and keyboard regressions verify the composition. [Agent flow](agent-flow.md) records
-primary research, exporter setup, source coverage and privacy limits.
-
-## Local computer power
-
-The desktop Power flow has separate presentation, IPC, confirmation policy and OS adapter
-responsibilities. Settings callbacks open distinct immediate or scheduled
-reviews. `ShutdownDialog.svelte` handles accessible confirmation, acknowledgement and expiry;
-its explicit intent prevents a scheduled review from falling through to immediate execution.
-`api.ts` selects native IPC or a harmless browser simulation; `power.rs` owns local-window
-authorization, one-use handles, monotonic expiry, concurrency and bounded command execution.
-Injected executors test policy without shutting down the test computer. No CLI or MCP
-shutdown endpoint is exposed. Accepted or uncertain outcomes latch retries until a complete
-app restart; confirmation expiry does not schedule an OS shutdown.
-
-![Local computer shutdown authority boundaries](diagrams/local-computer-power.svg)
-
-<details>
-<summary>Mermaid source</summary>
-
-```mermaid
----
-config:
-  theme: base
-  look: classic
-  htmlLabels: false
-  themeVariables:
-    darkMode: false
-    background: "#ffffff"
-    primaryColor: "#DBEAFE"
-    primaryTextColor: "#172554"
-    primaryBorderColor: "#2563EB"
-    secondaryColor: "#CCFBF1"
-    tertiaryColor: "#ffffff"
-    textColor: "#0F172A"
-    lineColor: "#475569"
-    edgeLabelBackground: "#ffffff"
-    clusterBkg: "#ffffff"
-    clusterBorder: "#94A3B8"
-  flowchart:
-    wrappingWidth: 240
----
-flowchart LR
-  accTitle: Local computer shutdown authority boundaries
-  accDescr: An accessible desktop confirmation passes a one-use handle through trusted IPC to the native power policy and operating-system adapter. Browser users receive simulation only.
-  UI["Power settings<br/>Save-work acknowledgement"] --> API["API adapter<br/>Native or browser"]
-  API --> GATE["Trusted main webview<br/>Local origin validation"]
-  GATE --> POLICY["Power policy<br/>60-second, one-use confirmation<br/>Concurrency and retry guard"]
-  POLICY --> OS["OS adapter<br/>Fixed executable and arguments<br/>Permissions and inhibitors"]
-  API --> DEMO["Browser simulation<br/>No operating-system access"]
-  TEST["Injected executor tests<br/>No actual shutdown"] -.-> POLICY
-  classDef presentation fill:#dbeafe,stroke:#2563eb,color:#172554;
-  classDef adapter fill:#ccfbf1,stroke:#0f766e,color:#134e4a;
-  classDef authority fill:#fef3c7,stroke:#b45309,color:#78350f;
-  classDef domain fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
-  classDef evidence fill:#e2e8f0,stroke:#475569,color:#0f172a;
-  class UI presentation;
-  class API,OS adapter;
-  class GATE authority;
-  class POLICY domain;
-  class DEMO,TEST evidence;
-```
-
-</details>
-
-## Terminal agent presentation (0.5.0)
-
-The terminal Agents view uses one background scan and one cached `AgentsReport`; render and
-navigation never collect processes or read project history. `tui/agents_view.rs` holds pure
-filter, count, safe-text and wrapping helpers, `tui/agents_state.rs` owns stable selection,
-search and review requests, and `tui/agents_ui.rs` renders the responsive list/details panes.
-`app.rs` coordinates keyboard events, worker messages and refresh sequencing. Agents **c**
-opts into `Engine::agents_with_capabilities()` for the next scan; the default refresh still
-calls `Engine::agents()`. A refresh queued behind an in-flight scan discards its older
-response, including after a completed stop.
-
-`tui/terminal_modes.rs` owns paired mouse/paste modes and terminal restoration;
-`tui/input.rs` owns printable, bounded search text. Paste events enter only active search and
-never the action-key dispatcher. Graph filtering and navigation use visible node IDs, while
-Ports and Agents retain their independent selection state. Supported terminals send bracketed
-paste as one event; unframed keyboard bytes cannot establish whether the user typed or pasted.
-
-CLI and TUI share `agent_actions.rs` for reviewed service stops. Each protocol-qualified plan
-retains the agent identity and exact listener/process identities. One fresh snapshot must
-validate the entire batch before the first effect; execution consumes the original plans and
-halts after a failure or history-write error. Injected execution and recording functions test
-policy without stopping processes. Presentation cannot broaden that authorization. Terminal
-metadata is printable, commands stay redacted, and confirmation keeps cancellation visible.
-
-![Terminal agent visibility and reviewed service actions](diagrams/terminal-agents.svg)
-
-<details>
-<summary>Mermaid source</summary>
-
-```mermaid
----
-config:
-  theme: base
-  look: classic
-  htmlLabels: false
-  themeVariables:
-    darkMode: false
-    background: "#ffffff"
-    primaryColor: "#DBEAFE"
-    primaryTextColor: "#172554"
-    primaryBorderColor: "#2563EB"
-    secondaryColor: "#CCFBF1"
-    tertiaryColor: "#ffffff"
-    textColor: "#0F172A"
-    lineColor: "#475569"
-    edgeLabelBackground: "#ffffff"
-    clusterBkg: "#ffffff"
-    clusterBorder: "#94A3B8"
-  flowchart:
-    wrappingWidth: 210
----
-flowchart LR
-  accTitle: Terminal agent visibility and reviewed service actions
-  accDescr: A background collector supplies one agent snapshot to compact CLI reports and responsive terminal views. A session boundary pairs mouse and bracketed paste modes with restoration; paste routes only to bounded search text. View state keeps stable identity selection. Shared reviews retain exact protocol and process identity. Fresh batch checks precede execution and private history recording, with no automatic retries.
-  SCAN["Background collector<br/>Engine + agent snapshot"] --> REPORT["CLI overview and details<br/>Redacted, printable metadata"]
-  SCAN --> STATE["Terminal view state<br/>Search + stable identity selection"]
-  INPUT["Terminal session boundary<br/>Mouse + bracketed paste<br/>Paired restoration"] --> ROUTE["Input routing<br/>Paste → bounded search only<br/>Typed keys → current view"] --> STATE
-  STATE --> UI["Responsive presentation<br/>Agent list + scrollable details"]
-  REPORT & UI --> REVIEW["Shared service review<br/>Exact TCP / UDP plans<br/>Agent root stays protected"]
-  REVIEW --> CHECK["Fresh whole-batch validation<br/>Identity, ownership and policy"]
-  CHECK --> EXEC["Retained plan executor<br/>Verify result; halt on failure"]
-  EXEC --> HISTORY["Checked private history<br/>Completed effects + errors"]
-  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
-  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
-  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
-  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
-  class REPORT,UI surface
-  class STATE,SCAN,ROUTE domain
-  class INPUT,REVIEW,CHECK,EXEC safety
-  class HISTORY data
-```
-
-</details>
-
-## Scheduled local actions (0.5.0)
-
-The scheduler is a desktop application service with separate queue/timing policy, stop
-validation, IPC adapters and a worker. The native queue owns original reviewed plans and
-fixed Power authorizations; the Svelte timing and manager components only present and request
-changes. Clocks and executors are injected in tests. The public browser API reports simulated
-statuses without operating-system access. CLI and MCP process operations remain immediate.
-Dedicated shutdown and port scheduling entries initialize `ActionTiming.svelte` to one hour
-and exclude **Now**. Immediate reviews omit timing controls. Timing presentation and delay
-validation stay separate from native authorization and dispatch; a missing scheduling callback
-fails closed. These controls are included in 0.5.0; version 0.4.0 downloads predate scheduling.
-Schedules require Holdmap to remain open, including in its tray, with the computer awake.
-
-![Scheduled local actions and retained authorization](diagrams/scheduled-actions.svg)
-
-<details>
-<summary>Mermaid source</summary>
-
-```mermaid
----
-config:
-  theme: base
-  look: classic
-  htmlLabels: false
-  themeVariables:
-    darkMode: false
-    background: "#ffffff"
-    primaryColor: "#DBEAFE"
-    primaryTextColor: "#172554"
-    primaryBorderColor: "#2563EB"
-    secondaryColor: "#CCFBF1"
-    tertiaryColor: "#ffffff"
-    textColor: "#0F172A"
-    lineColor: "#475569"
-    edgeLabelBackground: "#ffffff"
-    clusterBkg: "#ffffff"
-    clusterBorder: "#94A3B8"
-  flowchart:
-    wrappingWidth: 240
----
-flowchart LR
-  accTitle: Scheduled local actions and retained authorization
-  accDescr: The local desktop consumes reviewed handles into a bounded native queue. Cancellation remains available before atomic dispatch. Clock and target checks precede retained stop plans or a fixed local shutdown request. Browser mode simulates status only.
-  UI["Desktop timing controls<br/>Delay or local date/time"] --> CLAIM["Trusted IPC adapter<br/>Consume one-use preview"]
-  CLAIM --> Q["Native session queue<br/>32 active · 64 finished<br/>Reviewed intent + deadline"]
-  Q --> CANCEL["Cancel before dispatch<br/>Release power reservation"]
-  Q --> CLOCK["Independent worker<br/>Wall + monotonic clocks<br/>Missed time requires review"]
-  CLOCK --> VERIFY["Fresh authorization<br/>Exact plans + process identities<br/>Agent ownership + protection"]
-  VERIFY --> GATE["Atomic dispatch gate<br/>Cancellation ends here"]
-  GATE --> STOP["Core executor<br/>Retained stop plan<br/>History + verified result"]
-  GATE --> POWER["Power adapter<br/>Fixed local OS request<br/>Permission + inhibitor checks"]
-  UI -.-> DEMO["Browser simulation<br/>No OS or process access"]
-  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
-  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
-  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
-  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
-  classDef web fill:#F1F5F9,stroke:#64748B,color:#0F172A,stroke-width:1.5px
-  class UI,CLAIM surface
-  class Q,CLOCK domain
-  class VERIFY,GATE,POWER safety
-  class STOP,CANCEL data
-  class DEMO web
-```
-
-</details>
-
-- Creation consumes expiring preview handles, validates the entire batch, and pins agent root
-  identity and reviewed protocol-specific listeners. Delayed force/protection overrides and
-  unguarded supervisor commands and network container runtimes are refused. Process and
-  supervisor effects require current-account ownership at creation and dispatch.
-- The worker validates clock continuity and every fresh plan before dispatching the retained
-  effects. Cancellation can win during checking, until the atomic transition to running.
-- Only one shutdown reservation can exist. Cancellation or preflight refusal releases it;
-  accepted or uncertain OS requests preserve the Power retry latch.
-- Delays are one minute through 24 hours, with 32 active jobs and 64 terminal records. The
-  in-memory queue is cleared on full app quit. Missed times over 60 seconds or clock divergence
-  over 30 seconds require review. Jobs never retry automatically.
-
 holdmap shares one Rust library (`holdmap-core`) across its CLI, TUI, desktop app and MCP
 server. The core determines ownership, protection and stop plans. Adapters validate requests,
-coordinate collection and confirmation, and present the returned types.
+coordinate collection and confirmation, and present the returned types. Optional crates add
+analyzers (`holdmap-analyzers`) and local activity recording (`holdmap-activity`).
 
-This guide describes version 0.9.0, including PNG snapshots, the readable
-service graph and the capability explorer. Published 0.8.0 installers predate those additions.
-Screen recording, C4-style
-agent-map zoom and live browser development scans are included from 0.7.0.
-Editor-extension identity, full-canvas Graph and Flow,
-and schedules started from the empty manager are in [0.6.0](../CHANGELOG.md#060---2026-10-14).
-Agent Flow, scheduling, folder actions and terminal agent navigation landed in
-[0.5.0](../CHANGELOG.md#050---2026-10-11).
-Child-tool metadata, MCP discovery, local desktop shutdown, cache and security improvements
-were introduced in [0.4.0](../CHANGELOG.md#040---2026-10-10); version 0.3.0 predates them.
+Sections 1–8 cover the shared core and its adapters; 9–13 cover individual features; 14–15
+cover the website and verification. The [README](../README.md#architecture) has the one-picture
+overview.
 
 ## 1. Layers
 
@@ -873,6 +332,35 @@ verifies target ports afterwards; blocked
 plans cannot execute. OS identity binding still has platform limits described in
 [SECURITY.md](../SECURITY.md).
 
+### Batches and failed history writes
+
+The desktop stop adapter flattens the original `StopReport` and adds `history_error`;
+it preserves execution facts when recording fails. Only a successful, freed result with
+saved history permits automatic restart. Core state mutations use `try_config` and
+`try_history`, whose missing-file behavior is compatible with first run and whose other
+errors propagate without replacing saved files. Native adapters clone the store before
+dispatching file work to background threads. CLI single-stop JSON retains its existing
+plan/report shape with an optional history error and halts additional requested targets
+after a recording failure.
+
+Immediate agent batches use `stop_many`: a bounded list of exact TCP/UDP listener requests
+with their original one-use confirmation handles. Native request validation, current-account
+ownership, agent membership and fresh effect comparison all complete before dispatch.
+The executor then uses the retained plans, including their PID-reuse and protection guards,
+so a child that releases two listeners does not invalidate its second reviewed plan merely
+by exiting. Each attempted target returns its own execution and persistence result; the
+first incomplete result halts further dispatch. OS effects remain sequential and cannot be
+rolled back if a later effect fails.
+Identical guarded supervisor commands completed successfully earlier in the batch are
+removed from later execution copies, while each listener verification and original history
+plan remain intact. Command identity includes the executable, exact argument array and
+guard PID/start token; display descriptions do not grant authority.
+`holdmap_core::exec::CompletedSupervisorStops` applies the same rule to immediate desktop,
+native schedules and MCP execution. MCP errors retain structured actual stop reports with
+an optional history error, halt further dispatch and require a fresh preview before retry.
+Their structured data and compatible text JSON follow the supported protocol's
+[structured tool result contract](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#structured-content).
+
 ## 3. Topology / mesh
 
 ![Service topology and dependency-aware stop planning](diagrams/service-topology.svg)
@@ -1079,7 +567,7 @@ checking exact path membership in the current agent report. `stoppable_ports()` 
 normal core planning still decides which can be stopped. CLI, TUI, desktop and MCP preserve the
 agent-service stop controls without signalling the agent root merely because it is visible.
 
-### Optional capability inventory (0.8.0)
+### Optional capability inventory
 
 `CapabilityDiscovery` separates configured metadata from process-derived tools and recorded
 usage. The default `NoCapabilities` strategy performs no configuration inspection. Only explicit
@@ -1115,7 +603,7 @@ aliases and skill activations stay in Calls without alias-only joins to an inven
 Metadata identities do not authorize stops, file actions or execution of configured commands.
 See [the usage/source contracts](agent-flow.md#provider-coverage-and-research).
 
-In **0.9.0**, pure capability projections feed **Explore**, **Map** and **Compare**. Exact
+Pure capability projections feed **Explore**, **Map** and **Compare**. Exact
 client/account, observed folder-source context, inventory and coverage group matching agent
 roots while retaining their original IDs and PIDs. Runtime candidates remain independent
 observations. Purpose cards display bounded author metadata. Comparison keeps exact source,
@@ -1138,7 +626,7 @@ dependency of startup or Agents Overview; shared imports keep their existing bud
 the explorer retains the same explicit inventory opt-in. No new client catalog or telemetry
 adapter is introduced.
 
-### Capability discovery audit (2026-10-15)
+### Capability discovery sources
 
 The supported files are a bounded metadata inventory, not an implementation of each client's
 configuration resolver. The following primary-source checks determine what can be inferred:
@@ -1159,9 +647,9 @@ Fixtures cover provider formats, malformed/comment-delimiter strings, unknown/mi
 privacy bounds, protocol envelopes, terminal opt-out races and browser focus/theme behavior.
 These checks establish the tested contracts; they do not establish runtime client loading or
 certify every accessibility or operating-system interaction. Upstream source links are moving
-references checked on the date above; client format changes require another adapter review.
+references checked in October 2026; client format changes require another adapter review.
 
-### Launch, run state, permissions and instructions (Unreleased)
+### Launch, run state, permissions and instructions
 
 `agents/capabilities/` splits the inventory by responsibility: `launch` (runner and package),
 `runtime` (configured vs running), `policy` (permission rules and allowlisted settings),
@@ -1174,7 +662,7 @@ tool names). Each module is pure over parsed input; `capabilities.rs` only reads
   Package names that look like secrets are dropped.
 - **Run state**: a local stdio server is `running` only when its package identity appears in
   that agent's own process tree; otherwise `not_seen`. Remote, disabled or unparsed servers stay
-  `unknown`. This supersedes the "no inventory/process join" note above, scoped to one agent.
+  `unknown`. This is the only inventory/process join, and it is scoped to one agent.
 - **Policy**: allow/ask/deny rules from Claude, Cursor CLI and Gemini settings (≤64, ≤200 chars,
   secret-looking rules dropped) and three allowlisted keys: Codex `approval_policy`,
   `sandbox_mode` and Claude `permissions.defaultMode`, accepted only with documented values.
@@ -1385,7 +873,7 @@ published asset digests and IDs, then publishes the complete `latest.json` index
   while recording. Files stay on the machine (`blob:` / `mediastream:` CSP; macOS Screen Recording
   usage string). `lib/screen-record-native.ts` adapts the bounded native session and binary exports
   to the same preview. Tests cover helpers, both backends, the dialog and synthetic media.
-- **Folder actions (0.5.0).** Map and card paths share `FolderActions.svelte` rather
+- **Folder actions.** Map and card paths share `FolderActions.svelte` rather
   than separate opener flows. `lib/folders.ts` selects an exact-path owner once and revalidates
   that same target during polling; the UI never silently switches agents. The dialog handles
   choices, clipboard feedback and focus through the shared UI kit, while injected callbacks
@@ -1409,7 +897,7 @@ published asset digests and IDs, then publishes the complete `latest.json` index
 - **Pure view logic.** `lib/rows.ts` (badges, status, sparklines), `lib/detail.ts` (details pane)
   and `lib/settings.ts` (the Settings contract) are pure and unit-tested, so components depend on
   interfaces rather than on `api.ts`.
-- **Compact details and menus (0.5.0).** Detail panels keep shared tabs on one scrolling
+- **Compact details and menus.** Detail panels keep shared tabs on one scrolling
   row and long content within the pane, while a dedicated action footer distinguishes port
   stops from computer power controls. The shared Select calls pure `lib/popover.ts`
   placement logic to fit the viewport; feature panels do not duplicate edge calculations.
@@ -1426,7 +914,7 @@ published asset digests and IDs, then publishes the complete `latest.json` index
 
 The graph view uses **Svelte Flow (`@xyflow/svelte`) and `@dagrejs/dagre`**. Nodes are real DOM
 buttons with the shared icons, tokens and focus rings; group nodes draw existing cluster hulls.
-In **0.9.0**, the pure layout finds components from existing edges and
+The pure layout finds components from existing edges and
 cluster membership, lays each one out independently, then packs their bounds, including cluster
 headers. Dagre gives a left-to-right layout inside each connected component. The alternative
 Force layout runs the deterministic simulation inside components only; isolated services do
@@ -1455,8 +943,7 @@ External stays idle
 until there are outbound hosts, and a short no-links message explains disconnected graphs.
 Editor-extension nodes keep the extension identity, not the inherited project. The public
 sample's All services mode adds eligible listeners from the same snapshot without inventing
-edges, including the existing bounded `mockPorts` load samples. Published 0.8.0 installers
-predate these graph presentation changes. Agent cards and the Flow inspector retain their
+edges, including the existing bounded `mockPorts` load samples. Agent cards and the Flow inspector retain their
 separate presentation and visibility controls.
 
 ## 7. Design notes
@@ -1588,14 +1075,483 @@ supporting those MCP capabilities can discover tool-selection guidance and the `
 `prepare_dev_server` and `inspect_agents` workflows. A retrieved prompt is context for the client,
 not an executing workflow. Clients exposing tools alone can use the same tools directly:
 `list_ports`, `explain_port`, `inspect_port`, `find_free_port`, `wait_for_port`, `get_topology`,
-`list_agents`, `get_agent_flow`, `stop_agent_ports`, `plan_cluster_stop` and `stop_port`.
+`list_agents`, `get_agent_flow`, `list_analyzers`, `list_insights`, `list_needs`,
+`stop_agent_ports`, `plan_cluster_stop` and `stop_port` (fourteen in all).
 `inspect_port` shares `explain_port`'s structured inspection. `get_agent_flow` is process
 ancestry and live TCP edges, not recorded tool calls. `stop_agent_ports` uses the shared agent
 matcher and previews by default. Tools preserve collection warnings alongside returned data;
 `wait_for_port` waits for TCP readiness, not application health. No live subscriptions are
 advertised.
 
-## 9. Website and repository layout
+## 9. Analyzers
+
+`holdmap-analyzers` runs opt-in scanners over the skills and pinned MCP packages that the
+capability inventory found. It depends on `holdmap-core` for that inventory and never on an
+interface crate.
+
+| Module | Responsibility |
+|---|---|
+| `manifest.rs` | Analyzer manifests: inputs, command, network hosts, environment names, placeholders such as `{subject.dir}`, `{output}` and `{empty.file}` |
+| `consent.rs`, `store.rs` | Approval pinned to the manifest and the program's path, hash and version; private state under `HOLDMAP_HOME` |
+| `service/` | The entry point the CLI, desktop and MCP adapters call: list, approve, run and store findings |
+| `cli_runner.rs` | Staged copy without scanner settings files, cleared environment, private home and time limit |
+| `sandbox.rs`, `landlock.rs` | The OS sandbox for each run |
+| `mcp_runner.rs` | Starts an MCP analyzer's server only for a run, pins its tool list and flags descriptions that look like tool poisoning |
+| `osv.rs` | Built-in OSV.dev lookup for pinned npm and PyPI packages |
+| `parse/` | SARIF and custom JSON into capped findings; message text is never kept |
+| `catalog.rs` | The minisign-signed catalog; updates are applied only after a reviewed diff |
+| `presets.rs` | Ready-made manifests (Cisco Skill Scanner, OSV-Scanner, Trivy secrets, Bandit) outside the signed catalog |
+
+Sandboxes are bubblewrap or Landlock on Linux, Seatbelt on macOS and a Job Object on Windows;
+the permissions sheet names the one in use and what it does not block. Any change to the
+manifest or program stops the analyzer until it is approved again. Findings feed **Needs you**,
+**Insights**, MCP `list_insights` and `holdmap insights --format sarif`. The user guide is
+[Analyzers](../site/src/content/docs/analyzers.md).
+
+## 10. Agent communication
+
+The read-only Connections projection uses one consistent scan and `AgentsReport`. It retains
+exact socket holders and process start tokens; it marks missing and ambiguous ownership rather
+than choosing a guessed peer. Limits bound OS graph output to 256 nodes and 512 edges.
+
+The separate Calls pipeline requires explicit local opt-in. `holdmap-activity` owns strict
+metadata contracts, pure provider normalization, bounded storage, loopback HTTP and a bounded
+client. Native commands share the trusted-main-window policy with Power; CLI hooks and MCP
+recording compose the same client. `ToolCallObserver` is injected into MCP with a no-op default,
+so protocol handling and optional recording have separate responsibilities. It receives only
+catalog names, timing, outcomes and serialized sizes. Recording failure never disables tools.
+
+Hook and OTLP adapters parse their source formats independently, then apply the same metadata
+invariants and name policy. One typed route contract covers accepted paths and exhaustive
+dispatch; client and setup generation share credential validation without constructing a
+transport just to generate text. Request bounds come from the collector's limits contract.
+Native recording commands use one authorized, serialized session boundary. The CLI MCP
+adapter owns its bounded delivery queue and worker lifetime separately from activity commands.
+
+Tool records carry an optional sanitized `mcp_server` and there is a separate
+`skill` kind for explicit Claude activation logs. Skill records carry a source event time,
+pseudonymous session/counter identity and unknown workflow outcome; they do not increase tool
+call counts. Built-in adapters derive MCP aliases only from explicit hook metadata or an
+unambiguous sanitized client label. Explicit normalized tool records can also report the
+optional alias through `/v1/activity`, subject to the shared identifier sanitization and record
+validation. None creates a configuration/process join, authenticated identity or action authority. Default Claude
+setup stays trace-only; the documented alternate log-only recipe receives activation events
+without enabling tool-detail or content flags.
+Current decoding accepts older snapshots with an omitted MCP alias. The strict older decoder
+does not accept newly populated fields or the skill kind, so new usage requires matching
+collector and CLI/desktop builds; `/v1` route names do not promise unknown
+record shapes will be accepted. This preserves rejection of unrecognized normalized fields.
+
+The browser adapter supplies labelled examples. Pure TypeScript builds reported parent edges,
+layout and timeline models; an invalidatable loader prevents stale requests from changing a
+later view. Components present evidence and setup without authority to stop a reported PID.
+`RecordingControls` owns recording actions, setup copying and confirmation; `AgentFlowView`
+owns graph and run selection. Injected callbacks connect these components to the application.
+The pure triage projection filters metadata rows, orders reported durations and retains matching
+or inspected records with their explicit ancestors. Controls do not rewrite stored runs or
+infer parent links, and the existing graph window still bounds canvas work.
+An unavailable recording status remains unknown until a successful refresh supplies it.
+A source-provided parent defines an edge; socket presence, elapsed time and common session
+membership cannot define tool causality. Provider setup remains reviewable text that the user
+applies explicitly. No source settings or private conversations are read automatically.
+
+![Agent visibility and optional local metadata flow](diagrams/agent-communication-flow.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 190
+---
+flowchart TB
+  accTitle: Agent visibility and optional local metadata flow
+  accDescr: Observed OS relationships and opt-in provider metadata follow separate read-only paths into the desktop flow view. Authenticated typed routes dispatch source adapters, which share metadata validation before bounded session storage. Recording controls use trusted serialized native sessions independently of graph presentation. Reported trace parents produce call edges, while missing evidence remains unknown. The public browser uses labelled examples and no recording source grants action authority.
+  subgraph OBSERVED["Observed relationships · no recording required"]
+    OS["OS scan<br/>Processes, listeners + sockets"]
+    PROJECT["Core flow projection<br/>Exact holders + process identity<br/>Seen / inferred / unknown"]
+    OS --> PROJECT
+  end
+  subgraph PRODUCERS["Explicitly configured local producers"]
+    AGENT["Codex / Claude / OTLP<br/>Reported events + trace parents"]
+    HOOK["Advisory lifecycle hooks<br/>Normalize before sending"]
+    MCP["Holdmap MCP observer<br/>Fixed tool names + envelope sizes"]
+  end
+  subgraph ACTIVITY["holdmap-activity · no persistence or forwarding"]
+    GATE["Authenticated typed routes<br/>127.0.0.1 + bearer token<br/>Origin / framing / deadline checks"]
+    ADAPTER["Pure source adapters<br/>Hooks / OTLP / normalized records<br/>Discard content fields"]
+    NORMAL["Shared metadata policy<br/>Identity + lifecycle invariants<br/>Bounded names + pseudonyms"]
+    MEMORY[("Bounded memory store<br/>1,000 spans + dropped counts<br/>Identity and outcome merge policy")]
+    GATE --> ADAPTER --> NORMAL --> MEMORY
+  end
+  AGENT & HOOK & MCP --> GATE
+  subgraph VIEW["Desktop presentation · read-only evidence"]
+    API["Trusted local IPC<br/>One serialized session boundary<br/>Opt-in, snapshot, stop + clear"]
+    CONTROLS["Recording controls<br/>Setup + clear confirmation<br/>Unknown status explicit"]
+    CONNECTIONS["Connections graph<br/>Observed OS relationships"]
+    CALLS["Calls graph + timeline<br/>Reported parents, parallel calls<br/>Missing / unknown explicit"]
+    INSPECT["Accessible inspector<br/>Status, duration + serialized sizes"]
+    API --> CALLS
+    CONTROLS -->|"explicit user actions"| API
+    CONNECTIONS & CALLS --> INSPECT
+  end
+  PROJECT --> CONNECTIONS
+  MEMORY --> API
+  DEMO["Public browser demo<br/>Labelled examples<br/>No native collector or actions"] -.-> CONNECTIONS & CALLS
+  style OBSERVED fill:#ffffff,stroke:#94A3B8
+  style PRODUCERS fill:#ffffff,stroke:#94A3B8
+  style ACTIVITY fill:#ffffff,stroke:#94A3B8
+  style VIEW fill:#ffffff,stroke:#94A3B8
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  classDef web fill:#F1F5F9,stroke:#64748B,color:#0F172A,stroke-width:1.5px
+  class OS,AGENT,HOOK,MCP,MEMORY data
+  class PROJECT,ADAPTER,NORMAL domain
+  class GATE,API safety
+  class CONTROLS,CONNECTIONS,CALLS,INSPECT surface
+  class DEMO web
+```
+
+</details>
+
+Adapters depend on narrow contracts; domain projections do not depend on presentation or
+transport. Tests substitute scans, clocks, MCP observers and executors without redefining
+production policy. Provider wire fixtures, hostile HTTP tests, out-of-order updates, full CLI
+roundtrips and keyboard regressions verify the composition. [Agent flow](agent-flow.md) records
+primary research, exporter setup, source coverage and privacy limits.
+
+## 11. Terminal agents
+
+The terminal Agents view uses one background scan and one cached `AgentsReport`; render and
+navigation never collect processes or read project history. `tui/agents_view.rs` holds pure
+filter, count, safe-text and wrapping helpers, `tui/agents_state.rs` owns stable selection,
+search and review requests, and `tui/agents_ui.rs` renders the responsive list/details panes.
+`app.rs` coordinates keyboard events, worker messages and refresh sequencing. Agents **c**
+opts into `Engine::agents_with_capabilities()` for the next scan; the default refresh still
+calls `Engine::agents()`. A refresh queued behind an in-flight scan discards its older
+response, including after a completed stop.
+
+`tui/terminal_modes.rs` owns paired mouse/paste modes and terminal restoration;
+`tui/input.rs` owns printable, bounded search text. Paste events enter only active search and
+never the action-key dispatcher. Graph filtering and navigation use visible node IDs, while
+Ports and Agents retain their independent selection state. Supported terminals send bracketed
+paste as one event; unframed keyboard bytes cannot establish whether the user typed or pasted.
+
+CLI and TUI share `agent_actions.rs` for reviewed service stops. Each protocol-qualified plan
+retains the agent identity and exact listener/process identities. One fresh snapshot must
+validate the entire batch before the first effect; execution consumes the original plans and
+halts after a failure or history-write error. Injected execution and recording functions test
+policy without stopping processes. Presentation cannot broaden that authorization. Terminal
+metadata is printable, commands stay redacted, and confirmation keeps cancellation visible.
+
+![Terminal agent visibility and reviewed service actions](diagrams/terminal-agents.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 210
+---
+flowchart LR
+  accTitle: Terminal agent visibility and reviewed service actions
+  accDescr: A background collector supplies one agent snapshot to compact CLI reports and responsive terminal views. A session boundary pairs mouse and bracketed paste modes with restoration; paste routes only to bounded search text. View state keeps stable identity selection. Shared reviews retain exact protocol and process identity. Fresh batch checks precede execution and private history recording, with no automatic retries.
+  SCAN["Background collector<br/>Engine + agent snapshot"] --> REPORT["CLI overview and details<br/>Redacted, printable metadata"]
+  SCAN --> STATE["Terminal view state<br/>Search + stable identity selection"]
+  INPUT["Terminal session boundary<br/>Mouse + bracketed paste<br/>Paired restoration"] --> ROUTE["Input routing<br/>Paste → bounded search only<br/>Typed keys → current view"] --> STATE
+  STATE --> UI["Responsive presentation<br/>Agent list + scrollable details"]
+  REPORT & UI --> REVIEW["Shared service review<br/>Exact TCP / UDP plans<br/>Agent root stays protected"]
+  REVIEW --> CHECK["Fresh whole-batch validation<br/>Identity, ownership and policy"]
+  CHECK --> EXEC["Retained plan executor<br/>Verify result; halt on failure"]
+  EXEC --> HISTORY["Checked private history<br/>Completed effects + errors"]
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  class REPORT,UI surface
+  class STATE,SCAN,ROUTE domain
+  class INPUT,REVIEW,CHECK,EXEC safety
+  class HISTORY data
+```
+
+</details>
+
+## 12. Local capture
+
+### Screen recording
+
+Screen pixels have a separate, user-initiated lifecycle from agent activity metadata. The
+capture call runs directly from the Choose screen action so the operating system retains
+control of source selection and consent. A generation guard releases late streams after
+cancellation or unmount, and stopping releases capture tracks before finalizing exports.
+Holdmap does not persist screen selection or a permission decision, and no audio is requested.
+The operating system manages any retained privacy permission separately.
+`screen-record-backend.ts` selects the browser or native session behind one small
+stop/discard/elapsed-time contract. Capability discovery never opens a picker. When
+`getDisplayMedia` is absent, macOS 14+ uses ScreenCaptureKit's public system picker;
+older macOS versions remain launchable through weak framework linking and availability checks.
+The Rust boundary accepts opaque session handles rather than paths, authorizes the local
+main window and owns one private temporary directory. The Swift adapter confines picker
+and stream lifecycle to the main thread, writes H.264 locally and prepares the GIF after
+capture stops. Independent native duration and size bounds survive renderer suspension.
+Cancellation waits for stream/writer/export completion before releasing native files;
+bounded binary IPC copies completed exports into the existing in-memory preview.
+On Linux, a display-only host permission handler applies the same trusted-main-view policy.
+WebKitGTK otherwise denies requests by default. Its display backend independently requires
+the ScreenCast portal's selection and PipeWire stream, including on X11; the host gate
+does not choose a source or grant camera/microphone access. Portal cancellation or absence
+prevents capture. This follows [WebKitGTK's permission default](https://webkitgtk.org/reference/webkit2gtk/stable/class.UserMediaPermissionRequest.html),
+[its display backend](https://github.com/WebKit/WebKit/blob/webkitgtk-2.40.3/Source/WebCore/platform/mediastream/gstreamer/GStreamerDisplayCaptureDeviceManager.cpp),
+and the [ScreenCast portal contract](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.ScreenCast.html).
+
+The encoder module loads on demand. H.264 capability checks include the output dimensions;
+WebCodecs/Mediabunny has a MediaRecorder MP4 fallback. GIF quantization runs in a same-origin
+worker with one RGBA frame in flight and at most 240 indexed frames. Adaptive sampling
+preserves the complete timeline, with cumulative GIF delays avoiding rounding drift.
+Finalization has a deadline and can be discarded. The CSP permits local and blob workers
+without enabling external scripts or network destinations.
+
+Desktop saves use a trusted-main-window binary command, a 128 MiB payload bound, filename
+and container-header validation, and a serialized native save dialog. JavaScript cannot
+supply the destination path. Same-directory private temporary files replace the chosen
+destination atomically after a complete write; cancellation and errors retain the in-memory
+export for retry. No filesystem or dialog plugin permissions are granted to the webview.
+Browser exports use the browser download manager and do not claim confirmed disk writes.
+Closing a completed preview retains one bounded result in memory for the current session;
+Review recording reopens it, and explicit discard releases it before another recording.
+Hiding or minimizing the window preserves active capture until Stop or the two-minute limit.
+
+The implementation follows the primary [Screen Capture specification](https://w3c.github.io/mediacapture-screen-share/),
+the [WebKit capture-permission fix](https://bugs.webkit.org/show_bug.cgi?id=274896),
+[Mediabunny source lifecycle](https://mediabunny.dev/guide/media-sources),
+the [gifenc worker guidance](https://github.com/mattdesl/gifenc), and
+[Tauri native dialogs](https://v2.tauri.app/plugin/dialog/). Synthetic owned canvas streams
+validate actual MP4/GIF content without capturing a user's screen or requesting capture permissions.
+The native fallback follows Apple's [ScreenCaptureKit content-sharing picker](https://developer.apple.com/documentation/screencapturekit/sccontentsharingpicker).
+Its synthetic pixel fixture exercises the production native MP4/GIF writer without requesting
+screen permission. The packaged WKWebView check asserts original browser API availability
+before synthetic capture, and separately checks the actual minified app's confirmation dialog.
+
+### PNG snapshots
+
+The camera action (`⇧S`) separates the
+visible **Holdmap view** from an explicitly selected **Screen or window**. App-view capture
+does not request screen-sharing permission. An active video session can expose a borrowed
+**Recording source**; taking its PNG neither opens another picker nor owns the recording's
+stop/discard lifecycle. A newly selected source is released after the still is captured.
+Browser capture uses its display picker; the native fallback uses Apple's public picker
+on macOS 14 or later. All sources omit audio and return the same bounded PNG result:
+aspect ratio preserved within 3840×2160 and 32 MiB.
+
+The SOLID boundaries keep source acquisition, result ownership and saving independent:
+
+| Boundary | Responsibility |
+|---|---|
+| `screen-snapshot.ts` | Small `SnapshotProvider` contract, dimensions, PNG envelope and result metadata |
+| `app-snapshot.ts` | On-demand DOM rasterization of the app viewport, preserving SVG and scroll state while excluding snapshot controls, embedded frames and hidden media helpers |
+| `screen-snapshot-backend.ts` / `screen-snapshot-native.ts` | Explicit source acquisition and cancellation, or borrowing a recording provider without stopping it |
+| `snapshot-controller.ts` / `SnapshotCapture.svelte` | One retained result, generation/abort guards, source choice, preview and save feedback |
+| Native snapshot and capture modules | Trusted-main-window authorization, opaque handles, private files, bounded reads and operation leases |
+| Shared save adapter and native writer | Save chooser, validated format/size, full native PNG decoding and atomic destination replacement; no JavaScript destination paths |
+
+The controller receives source adapters rather than depending on a particular renderer or
+native session. Closing the preview or cancelling/failing a save preserves its result;
+discard, reload or quit releases it. A failed or cancelled replacement capture keeps the
+previous PNG. Browser downloads report that the download started, not that a disk write
+completed. Snapshot cancellation cannot stop a borrowed video source.
+
+App rendering loads `modern-screenshot` only on demand. Fonts remain separate build assets;
+only the two known bundled WOFF2 files and exact brand SVG enter bounded, credential-free,
+same-origin fetches with redirects rejected. Automatic remote font/style discovery is
+bypassed, and unapproved image resources reject capture. The CSP adds only same-origin
+asset connections; font policy and external destinations remain unchanged. Rendering has
+a bounded result deadline and cooperative checks, with context cleanup and late-result
+rejection after cancellation; this does not preempt synchronous browser rendering work.
+Decoded browser pixel comparisons cover graph text, SVG edges and ordinary dialogs, while
+owned synthetic media/native fixtures exercise PNG capture and saving without sharing a
+real screen. Supplementary WebKit runs do not replace the packaged WKWebView checks.
+
+## 13. Power and scheduled actions
+
+### Local computer power
+
+The desktop Power flow has separate presentation, IPC, confirmation policy and OS adapter
+responsibilities. Settings callbacks open distinct immediate or scheduled
+reviews. `ShutdownDialog.svelte` handles accessible confirmation, acknowledgement and expiry;
+its explicit intent prevents a scheduled review from falling through to immediate execution.
+`api.ts` selects native IPC or a harmless browser simulation; `power.rs` owns local-window
+authorization, one-use handles, monotonic expiry, concurrency and bounded command execution.
+Injected executors test policy without shutting down the test computer. No CLI or MCP
+shutdown endpoint is exposed. Accepted or uncertain outcomes latch retries until a complete
+app restart; confirmation expiry does not schedule an OS shutdown.
+
+![Local computer shutdown authority boundaries](diagrams/local-computer-power.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
+flowchart LR
+  accTitle: Local computer shutdown authority boundaries
+  accDescr: An accessible desktop confirmation passes a one-use handle through trusted IPC to the native power policy and operating-system adapter. Browser users receive simulation only.
+  UI["Power settings<br/>Save-work acknowledgement"] --> API["API adapter<br/>Native or browser"]
+  API --> GATE["Trusted main webview<br/>Local origin validation"]
+  GATE --> POLICY["Power policy<br/>60-second, one-use confirmation<br/>Concurrency and retry guard"]
+  POLICY --> OS["OS adapter<br/>Fixed executable and arguments<br/>Permissions and inhibitors"]
+  API --> DEMO["Browser simulation<br/>No operating-system access"]
+  TEST["Injected executor tests<br/>No actual shutdown"] -.-> POLICY
+  classDef presentation fill:#dbeafe,stroke:#2563eb,color:#172554;
+  classDef adapter fill:#ccfbf1,stroke:#0f766e,color:#134e4a;
+  classDef authority fill:#fef3c7,stroke:#b45309,color:#78350f;
+  classDef domain fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
+  classDef evidence fill:#e2e8f0,stroke:#475569,color:#0f172a;
+  class UI presentation;
+  class API,OS adapter;
+  class GATE authority;
+  class POLICY domain;
+  class DEMO,TEST evidence;
+```
+
+</details>
+
+### Scheduled local actions
+
+The scheduler is a desktop application service with separate queue/timing policy, stop
+validation, IPC adapters and a worker. The native queue owns original reviewed plans and
+fixed Power authorizations; the Svelte timing and manager components only present and request
+changes. Clocks and executors are injected in tests. The public browser API reports simulated
+statuses without operating-system access. CLI and MCP process operations remain immediate.
+Dedicated shutdown and port scheduling entries initialize `ActionTiming.svelte` to one hour
+and exclude **Now**. Immediate reviews omit timing controls. Timing presentation and delay
+validation stay separate from native authorization and dispatch; a missing scheduling callback
+fails closed.
+Schedules require Holdmap to remain open, including in its tray, with the computer awake.
+
+![Scheduled local actions and retained authorization](diagrams/scheduled-actions.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    darkMode: false
+    background: "#ffffff"
+    primaryColor: "#DBEAFE"
+    primaryTextColor: "#172554"
+    primaryBorderColor: "#2563EB"
+    secondaryColor: "#CCFBF1"
+    tertiaryColor: "#ffffff"
+    textColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#94A3B8"
+  flowchart:
+    wrappingWidth: 240
+---
+flowchart LR
+  accTitle: Scheduled local actions and retained authorization
+  accDescr: The local desktop consumes reviewed handles into a bounded native queue. Cancellation remains available before atomic dispatch. Clock and target checks precede retained stop plans or a fixed local shutdown request. Browser mode simulates status only.
+  UI["Desktop timing controls<br/>Delay or local date/time"] --> CLAIM["Trusted IPC adapter<br/>Consume one-use preview"]
+  CLAIM --> Q["Native session queue<br/>32 active · 64 finished<br/>Reviewed intent + deadline"]
+  Q --> CANCEL["Cancel before dispatch<br/>Release power reservation"]
+  Q --> CLOCK["Independent worker<br/>Wall + monotonic clocks<br/>Missed time requires review"]
+  CLOCK --> VERIFY["Fresh authorization<br/>Exact plans + process identities<br/>Agent ownership + protection"]
+  VERIFY --> GATE["Atomic dispatch gate<br/>Cancellation ends here"]
+  GATE --> STOP["Core executor<br/>Retained stop plan<br/>History + verified result"]
+  GATE --> POWER["Power adapter<br/>Fixed local OS request<br/>Permission + inhibitor checks"]
+  UI -.-> DEMO["Browser simulation<br/>No OS or process access"]
+  classDef surface fill:#DBEAFE,stroke:#2563EB,color:#172554,stroke-width:1.5px
+  classDef domain fill:#EDE9FE,stroke:#7C3AED,color:#2E1065,stroke-width:1.5px
+  classDef safety fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:1.5px
+  classDef data fill:#CCFBF1,stroke:#0F766E,color:#134E4A,stroke-width:1.5px
+  classDef web fill:#F1F5F9,stroke:#64748B,color:#0F172A,stroke-width:1.5px
+  class UI,CLAIM surface
+  class Q,CLOCK domain
+  class VERIFY,GATE,POWER safety
+  class STOP,CANCEL data
+  class DEMO web
+```
+
+</details>
+
+- Creation consumes expiring preview handles, validates the entire batch, and pins agent root
+  identity and reviewed protocol-specific listeners. Delayed force/protection overrides and
+  unguarded supervisor commands and network container runtimes are refused. Process and
+  supervisor effects require current-account ownership at creation and dispatch.
+- The worker validates clock continuity and every fresh plan before dispatching the retained
+  effects. Cancellation can win during checking, until the atomic transition to running.
+- Only one shutdown reservation can exist. Cancellation or preflight refusal releases it;
+  accepted or uncertain OS requests preserve the Power retry latch.
+- Delays are one minute through 24 hours, with 32 active jobs and 64 terminal records. The
+  in-memory queue is cleared on full app quit. Missed times over 60 seconds or clock divergence
+  over 30 seconds require review. Jobs never retry automatically.
+
+## 14. Website and repository layout
 
 The Astro site lives in `site/`. Its guides use Markdown content under `site/src/content/docs`,
 the CLI reference comes from `docs/cli.md`, and screenshots come from `docs/screenshots`.
@@ -1614,23 +1570,10 @@ The current guide captures show the rendered images at
 [desktop width](screenshots/site-guide-images-light.png) and
 [mobile width](screenshots/site-guide-images-mobile-light.png).
 
-| Directory | Contents |
-|---|---|
-| `crates/holdmap-core` | Collection providers, models, attribution, planning, execution and persistence |
-| `crates/holdmap-cli` | CLI rendering, shared reviewed agent actions, TUI view/state helpers, generated-document checks and stdio MCP integration tests |
-| `crates/holdmap-mcp` | Protocol adapter, contracts, live tools and pure discovery modules |
-| `crates/holdmap-activity` | Pure source adapters, shared metadata and credential policy, local collector, bounded client and setup generation |
-| `apps/desktop/src` | Shared Svelte UI, styles and TypeScript view logic |
-| `apps/desktop/src-tauri` | Native commands, state/cache, watcher, tray and OS integration |
-| `apps/desktop/e2e` | Browser regressions using deterministic sample data |
-| `site` | Public website, guides and browser-demo build |
-| `docs` | Architecture, generated CLI reference and published screenshots |
-| `scripts` | Workspace checks, documentation generation and development helpers |
+The folder layout and what is committed are in
+[CONTRIBUTING.md](../CONTRIBUTING.md#repository-layout).
 
-Build output, dependencies and temporary captures are ignored and regenerated. Published assets
-stay with their consumers; superseded source versions belong in Git history.
-
-## 10. Verification
+## 15. Verification
 
 The CLI integration suite starts the built `holdmap mcp` binary as an actual stdio client.
 It checks discovery, rendered prompts, typed read results, version compatibility and rejected

@@ -41,7 +41,7 @@ The repository root is the Rust workspace; each surface keeps its source and too
 | `apps/desktop/src-tauri/` | Native desktop integration, Tauri configuration and icons |
 | `apps/desktop/assets/` | Desktop brand assets |
 | `site/` | Astro website, Markdown guides, site assets and build tools |
-| `docs/` | Architecture, generated CLI reference and screenshots used by the README/site |
+| `docs/` | Architecture, agent flow, generated CLI reference, diagrams and screenshots used by the README and site |
 | `scripts/` | Workspace checks, CLI documentation generation and development helpers |
 | `vendor/` | Audited third-party fixes, preserved upstream snapshots and provenance |
 | `.github/` | CI, release, dependency updates and website deployment |
@@ -162,7 +162,7 @@ duration and cleanup with FFprobe/FFmpeg. Its capture API tripwire rejects any s
 request. It never captures the user's screen or opens the production native save chooser;
 save-policy and atomic-write behavior have separate native unit coverage.
 On macOS 14 and newer, the generated-canvas fixture requests
-[disabled background throttling](https://docs.rs/tauri/2.12.1/tauri/webview/struct.WebviewWindowBuilder.html#method.background_throttling)
+[disabled background throttling](https://docs.rs/tauri/2.12.2/tauri/webview/struct.WebviewWindowBuilder.html#method.background_throttling)
 for its owned, unfocused window so inactive scheduling does not stall its paint/stop timers.
 It reports that policy and timer diagnostics. App UI and capability probes retain default
 scheduling; this fixture does not establish background behavior of permissioned display capture.
@@ -220,7 +220,7 @@ These tests require the explicit guard so ordinary workspace tests do not reserv
 developer's display. Remove this override and its verification together when a compatible
 upstream release includes these fixes.
 
-## Published screenshots
+## Brand assets and screenshots
 
 The canonical logo is `apps/desktop/assets/icon.svg`; its `holdmap-mark` group contains the
 glyph separately from the app tile. After editing it, run
@@ -267,9 +267,9 @@ capture did not stop an agent or service. Recent-project history is excluded fro
 - Process platform code stays behind `cfg` in `crates/holdmap-core/src/sys/`; desktop OS
   integrations stay in native adapter modules. Parsers are pure and tested with fixtures.
 - New protected processes go in `crates/holdmap-core/src/safety.rs`. If you're unsure, protect it.
-- User-facing changes update the README (and screenshots if the UI changes) in the same pull
-  request, plus an entry under `## [Unreleased]` in `CHANGELOG.md`.
-
+- User-facing changes update the docs (the README or the site guide in `site/src/content/docs/`,
+  and screenshots if the UI changes) in the same pull request, plus an entry under
+  `## [Unreleased]` in `CHANGELOG.md`.
 - Agent communication projection lives in `agents/flow.rs`; recording contracts, pure provider
   normalization, bounded storage and HTTP transport live separately in `holdmap-activity`.
   MCP observers receive catalog names and serialized sizes, never raw request/result values.

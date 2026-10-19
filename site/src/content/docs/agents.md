@@ -14,13 +14,7 @@ accepts a separate, strictly limited metadata projection from integrations you c
 Recognized products include Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider,
 Cline, Goose, Docker Desktop, OrbStack, Podman Desktop and others.
 
-The Computer / Footprint / Project map, live local scans during `npm run dev`, and separate
-screen recorder described below require **0.7.0 or newer**. Check the
-[latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest) for
-current installers. Version **0.6.0** added editor-extension identity and Hide cards / Hide
-inspector. Flow, folder actions and the updated CLI and terminal navigation landed in
-0.5.0. Child-tool classifications, expanded metadata and desktop agent search were introduced
-in 0.4.0. The live demo uses the same interface with sample data.
+The live demo uses the same interface with sample data.
 
 ## From the CLI
 
@@ -33,8 +27,8 @@ holdmap agents claude --stop-ports --yes       # stop unprotected ports that age
 holdmap agents --json                  # machine-readable report
 ```
 
-Version **0.8.0** adds `holdmap agents --capabilities --json` for explicitly requested
-configuration and skill metadata. Ordinary `agents` scans keep that inspection off.
+`holdmap agents --capabilities --json` adds explicitly requested configuration and skill
+metadata. Ordinary `agents` scans keep that inspection off.
 
 Each entry shows memory, CPU, process count, how many ports are stoppable, the parent process,
 child processes grouped as tools & apps it started, folder source labels (working dir / child cwd /
@@ -54,7 +48,7 @@ matching known account, and do not establish current work by a particular runnin
   search includes both the listener owner and agents connected to it.
   Choosing **Agents** reveals **Overview**, **MCP & skills** and **Flow** as action pills on the same toolbar row.
   **Overview** then reveals **Computer**, **Footprint** and **Project**; **Flow** reveals
-  **Connections** and **Calls**. The **MCP & skills** workspace requires **0.8.0** and uses the
+  **Connections** and **Calls**. The **MCP & skills** workspace uses the
   explicit inspection described below. Computer is this machine, the agents running on it, and observed
   outside systems, with parent `started` edges. **Footprint** shows folders, tools, ports and hosts
   across every agent. Click a folder to zoom into **Project** — only agents, ports, tools and hosts
@@ -62,7 +56,7 @@ matching known account, and do not establish current work by a particular runnin
   The installed app and `npm run dev` read the live process table; the website demo uses labelled sample data.
 - **TUI:** start `holdmap`, then press **Shift+Tab** to open Agents directly. **Tab** cycles
   Ports → Graph → Agents. Use **↑/↓** to select an agent, **/** to search, and **PgUp/PgDn** to
-  scroll its details. In **0.8.0**, **c** toggles local MCP/skill inspection
+  scroll its details. **c** toggles local MCP/skill inspection
   for the current account. While enabled, Agents refreshes that inventory; pressing **c** again
   or leaving Agents turns it off and clears retained inventory. Ordinary refreshes stay on the
   process table. Wide windows show both panes side by side; small windows stack them.
@@ -80,9 +74,7 @@ These browser captures show **Computer** and one selected **Project** using samp
 
 ![Project view focuses the agents, tools and services observed for shop-web](../../../../docs/screenshots/desktop-agents-project-dark.png)
 
-The compact CLI overview and updated terminal navigation are included in **0.5.0**;
-version 0.4.0 downloads predate these changes. `--json` retains
-its structured report format. No terminal shell attachment or private conversation content is
+`--json` keeps the structured report format. No terminal shell attachment or private conversation content is
 needed to inspect the observed processes.
 
 These terminal captures use isolated local fixtures:
@@ -91,19 +83,16 @@ These terminal captures use isolated local fixtures:
 
 ![An 80-column terminal keeps agent identity visible while tool details scroll](../../../../docs/screenshots/tui-agents-narrow-dark.png)
 
-<a id="mcp-and-skills-current-source"></a>
-
 ## MCP and skills
 
-Available in **0.8.0 or newer**. Open **Agents → MCP & skills** to explicitly
+Open **Agents → MCP & skills** to explicitly
 inspect supported local configuration for the running current-account agents. The CLI equivalent
 is `holdmap agents --capabilities`, optionally with `--json`; the terminal Agents pane uses
 **c**; MCP clients can call `list_agents` with `include_capabilities: true`. Ordinary scans do
 not inspect those files.
 
-Version **0.9.0** adds an **Explore / Map / Compare** capability explorer
-and an inspector with **Purpose**, **Source**, **Evidence** and **Activity** sections. Published
-0.8.0 installers have the earlier map and source details. The explorer uses the same opt-in
+The **Explore / Map / Compare** capability explorer has an inspector with **Purpose**,
+**Source**, **Evidence** and **Activity** sections. It uses the same opt-in
 inventory: it does not add supported discovery locations, client adapters or tool catalogs.
 
 ### Four kinds of evidence
@@ -119,7 +108,7 @@ Nothing is launched, connected, installed or enabled by inventory inspection. Ca
 an alias or skill name to an inventory row or process automatically. Matching names across two
 sources are insufficient evidence of ownership or use.
 
-These **0.9.0** browser captures use labelled sample definitions and
+These browser captures use labelled sample definitions and
 process observations:
 
 | Explore declared purposes | Compare exact source observations |
@@ -137,9 +126,6 @@ process observations:
 <a id="inspect-supported-definitions"></a>
 
 ### Explore, map and compare definitions
-
-These views require **0.9.0**. During release preparation, the download page still follows
-the latest published release; 0.8.0 installers have the earlier map.
 
 - **Explore:** read skill cards by name and declared purpose, with source scope and evidence
   visible. A missing or rejected description stays **Purpose not reported**. An MCP alias
@@ -297,7 +283,7 @@ holdmap agents claude --capabilities --json
 holdmap                                 # then Agents tab, press c
 ```
 
-For MCP, send a `tools/call` request to a Holdmap **0.8.0 or newer** server:
+For MCP, send a `tools/call` request:
 
 ```json
 {"name":"list_agents","arguments":{"include_capabilities":true}}
@@ -316,12 +302,10 @@ are unverified source labels, never an automatic inventory/process join or actio
 The standard MCP protocol does not require this naming convention. Claude skill activation
 logs are separate from tool-call counts. Provider-redacted
 custom skill names stay **name not reported**, and activation never establishes completion or
-success. See the [recording contract and optional log-only setup](https://github.com/santoshshinde2012/holdmap/blob/main/docs/agent-flow.md#record-skill-activations-080).
+success. See the [recording contract and optional log-only setup](https://github.com/santoshshinde2012/holdmap/blob/main/docs/agent-flow.md#record-skill-activations).
 
-Use **0.8.0 or newer** for both the CLI/desktop and the collector to read these usage
-fields. The 0.8.0 decoder accepts older snapshots with no MCP alias, but the 0.7.1
-decoder rejects new fields or the skill kind. An older collector cannot report this
-skill event; absent records do not prove that no skill was used.
+Use matching CLI/desktop and collector builds to read these usage fields. An older collector
+cannot report this skill event; absent records do not prove that no skill was used.
 
 ### Troubleshoot missing capabilities or usage
 
@@ -335,7 +319,7 @@ skill event; absent records do not prove that no skill was used.
   YAML header. Holdmap does not resolve client policy or validate skill packages.
 - **Catalog not reported:** expected for file inventory, even when an MCP definition is
   present. It does not enumerate tools, establish an empty server or diagnose a connection
-  failure. The 0.9.0 Tools view explains this boundary; no catalog adapter is included.
+  failure. The Tools view explains this boundary; no catalog adapter is included.
 - **Configured server with no Calls:** inventory is independent of recording. Configure a
   supported producer, start a fresh recording and restart that producer with its new endpoint
   and token. Keep private setup credentials out of bug reports.
@@ -350,8 +334,8 @@ Local inventory and observed activation answer different questions.
 
 ## Open an agent folder
 
-Folder actions are available from **0.5.0**: click a folder on the map or its name/path in an
-expanded card. From **0.7.0**, the first click on Footprint zooms into that source tree;
+Click a folder on the map or its name/path in an
+expanded card. The first click on Footprint zooms into that source tree;
 click the folder again (or **Enter** / **Space** on Project) for **Folder actions**. **Enter** or **Space** activates a focused folder. **Folder actions** shows the full path and
 offers **Open in Finder** on macOS, **Open in Explorer** on Windows, or **Open in file manager**,
 plus **Open in editor** and **Copy path**. **Esc** or **Close** returns focus to the folder.
@@ -367,7 +351,6 @@ path remains copyable. Recent folders describe account history; they do not prov
 agent is currently working there. Browser file-manager/editor actions are labelled simulations;
 copying uses the displayed sample path.
 
-This chooser is included in **0.5.0**. Version 0.4.0 downloads predate it.
 Existing card **Reveal** and **Editor** shortcuts remain available.
 
 ## Desktop Flow: connections and calls
@@ -377,7 +360,7 @@ In **Agents**, choose **Flow**. The two data sources answer different questions:
 | View | What it shows | What it cannot establish |
 | --- | --- | --- |
 | **Connections** | Observed parent processes, listener ownership and live TCP socket relationships, including the source process IDs. Tool roles may be inferred. | Individual tool invocations, messages, data direction or transferred bytes. |
-| **Calls** | Tool, model, agent, handoff and execution-step metadata supplied by a configured integration, with status, timing and reported parent spans. Version 0.8.0 also shows explicit skill activations separately. | Uninstrumented activity, private message content or verified OS process ownership. |
+| **Calls** | Tool, model, agent, handoff and execution-step metadata supplied by a configured integration, with status, timing and reported parent spans. Explicit skill activations appear separately. | Uninstrumented activity, private message content or verified OS process ownership. |
 
 The graph has zoom, fit and a minimap. Participants, relationships and the activity timeline
 provide keyboard-accessible ways to inspect the same evidence. **Hide inspector**, **Hide
@@ -394,7 +377,6 @@ matching records, the inspected record and their reported parents; filtering doe
 the recorded run. A finished record with an unknown outcome is not treated as missing completion.
 The shown/total count and **Reset activity view** make active filters easy to see and clear.
 
-Connections and Calls are included in **0.5.0**. Version 0.4.0 downloads predate Flow.
 These captures use clearly labelled browser example metadata:
 
 ![Connections shows observed process parenting, listeners and live socket relationships](../../assets/agent-flow/connections-dark.webp)

@@ -1,25 +1,19 @@
 # Agent flow and local recording
 
-Version 0.5.0 adds **Agents → Flow** in the desktop and shared browser demo.
-Version 0.4.0 downloads predate this view; use 0.5.0 or newer for native recording.
+**Agents → Flow** in the desktop app and the browser demo shows how agents connect and,
+when you opt in to local recording, the tool calls they report. **Connections** come from an
+OS scan and need no setup. **Calls** come only from integrations you configure: Codex and
+Claude OTLP, their hooks, or holdmap's own MCP server. They include reported MCP server aliases
+and Claude skill activations.
 
-Version 0.8.0 adds explicit MCP server aliases and Claude skill activation records to Calls,
-alongside a separate opt-in **Agents → MCP & skills** inventory. See the
-[0.8.0 release notes](../CHANGELOG.md#080---2026-10-16).
-Use 0.8.0 or newer CLI/desktop and collector builds for these records. The 0.8.0-and-later
-decoder accepts older snapshots with no MCP alias. An older 0.7.1 decoder rejects new fields
-or the skill kind, and its collector does not produce this new skill activation projection.
-The `/v1` route names remain unchanged; they do not imply forward-compatible decoding of
-unrecognized metadata. Missing activity from an older collector is not proof of no usage.
+The Activity tab of **Agents → MCP & skills** links to these reported Calls without attributing
+them to a similarly named file ([capability explorer](../site/src/content/docs/agents.md#mcp-and-skills)).
+[PNG snapshots](../site/src/content/docs/desktop.md#take-a-png-snapshot) and MP4/GIF screen
+recordings capture pixels locally and are separate from the metadata recording described here.
 
-Version **0.9.0** adds **Explore / Map / Compare** and Purpose, Source, Evidence and Activity
-inspection over the existing capability inventory. It adds no recording adapter or name-based
-join: the Activity tab links to separately reported Calls rather than attributing them to a
-similarly named file. [Capability explorer guide](../site/src/content/docs/agents.md#mcp-and-skills).
-Its [PNG snapshots](../site/src/content/docs/desktop.md#take-a-png-snapshot) and MP4/GIF screen
-recordings capture pixels locally; they are separate from the metadata recording described here.
-During 0.9.0 release preparation, use the latest published installers or a matching source build;
-published 0.8.0 installers do not contain the new explorer or PNG snapshots.
+Collector and CLI/desktop builds should match. The decoder accepts older snapshots without an
+MCP alias, but `/v1` route names don't promise that newer record shapes are accepted by older
+builds. Missing activity from an older collector is not proof of no usage.
 
 ## Read the flow
 
@@ -136,10 +130,7 @@ metadata without putting diagnostics into protocol stdout. Missing collector con
 recording failures leave MCP tools operational. Calls to other servers require their own
 instrumentation; this observer cannot see them.
 
-<a id="record-skill-activations-current-source"></a>
-<a id="record-skill-activations"></a>
-
-## Record skill activations (0.8.0)
+## Record skill activations
 
 Claude's documented `claude_code.skill_activated` OTLP **log** event reports activation through
 the Skill tool or a user slash command. Holdmap requires the reported session ID, event sequence
@@ -196,7 +187,7 @@ actual Codex OTel exporter, not private conversations or agent logs.
 | OS snapshot | Process ancestry, listeners and observed TCP peers | No tool calls, messages, encrypted payloads or stdio exchanges |
 | Codex OTLP JSON logs | Known tool result events, reported call/session IDs, result and duration | Session grouping is not a parent trace; finished events arrive in batches |
 | Claude enhanced OTLP JSON traces | Agent/model/tool wrappers, execution steps and supplied trace parents | Provider beta; spans arrive after completion, and dropped parents remain missing |
-| Claude OTLP JSON logs (0.8.0) | Tool completions and explicit skill activation records | Log-only recipe; activation names can be redacted and activation never proves workflow success |
+| Claude OTLP JSON logs | Tool completions and explicit skill activation records | Log-only recipe; activation names can be redacted and activation never proves workflow success |
 | Codex/Claude hooks | Supported lifecycle events with tool-use IDs | Requested state precedes execution; no guessed causal edges |
 | Holdmap MCP observer | This server's validated catalog calls and outcomes | Does not observe other MCP servers or general agent messages |
 | Generic OTLP JSON traces | Recognized agent, model, tool and execution-step operations with supplied parents | Exporter-specific coverage; no automatic SDK installation or universal capture |

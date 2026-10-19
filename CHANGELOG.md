@@ -224,13 +224,6 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [0.7.1] - 2026-10-15
 
-### Documentation
-
-- Refresh the README's 0.7.0 features, install/update guidance and development workflow;
-  clarify SOLID review expectations and the authorization required for new supervisor strategies.
-- Refresh the public website for 0.7.0 with release highlights, a release guide, current
-  screenshots and product tours, and corrected install, upgrade, recording and privacy details.
-
 ### Fixed
 
 - Use Apple's native screen picker on macOS 14 or later when the installed desktop
@@ -246,6 +239,13 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Release website deployments run trusted workflow code from `main` while building the
   exact published tag's source, preserving source revision metadata and avoiding stale
   tag-context Pages deployments.
+
+### Documentation
+
+- Refresh the README's 0.7.0 features, install/update guidance and development workflow;
+  clarify SOLID review expectations and the authorization required for new supervisor strategies.
+- Refresh the public website for 0.7.0 with release highlights, a release guide, current
+  screenshots and product tours, and corrected install, upgrade, recording and privacy details.
 
 ## [0.7.0] - 2026-10-14
 
@@ -333,17 +333,6 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [0.6.0] - 2026-10-14
 
-### Fixed
-
-- Editor-extension services (VS Code, Cursor, Windsurf and similar, including remote
-  `*.vscode-server` / `*.cursor-server` trees) that inherit an open workspace as their
-  working directory are labelled as that editor's extension, not as the project's
-  framework — in the list and on the service graph, even if a project leaked onto the
-  entry. A Postgres tools process in a Next.js checkout is no longer
-  "Next.js · seller-agent". Those listeners are protected and are not treated as stoppable
-  dev servers. Installed Cargo helpers such as rust-analyzer are not labelled as the open
-  Rust project's framework on Windows.
-
 ### Changed
 
 - The graph view explains when services on the canvas aren't connected, offers All
@@ -371,18 +360,16 @@ by [release-please](https://github.com/googleapis/release-please) from
   descriptions are unique, include holdmap, and stay in the search snippet range. The
   homepage schema describes the free app without inventing ratings or a release version.
 
-### Security
-
-- Every native app command passes the trusted-main-webview policy before dispatch,
-  including restart, settings, history and update installation.
-- Activity metadata encoding rejects excess record counts before serialization and stops
-  at the request byte limit, including escaped JSON, before opening a connection.
-- HTTP status, headers and titles redact recognized credentials before clipping or export.
-  URL fragments and namespaced recording labels also hide recognized credential forms.
-- Settings updates and history appends preserve existing files when validation or reads
-  fail, and checked restart lookups report those errors explicitly.
-
 ### Fixed
+
+- Editor-extension services (VS Code, Cursor, Windsurf and similar, including remote
+  `*.vscode-server` / `*.cursor-server` trees) that inherit an open workspace as their
+  working directory are labelled as that editor's extension, not as the project's
+  framework — in the list and on the service graph, even if a project leaked onto the
+  entry. A Postgres tools process in a Next.js checkout is no longer
+  "Next.js · seller-agent". Those listeners are protected and are not treated as stoppable
+  dev servers. Installed Cargo helpers such as rust-analyzer are not labelled as the open
+  Rust project's framework on Windows.
 
 - Windows MSVC native test executables embed the Common Controls v6 manifest required
   by Tauri's mocked IPC tests, preventing a loader failure before the test harness starts.
@@ -419,24 +406,18 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Numeric port checks keep at most one request in flight and one latest queued request,
   preventing slow checks from accumulating during live scans.
 
-## [0.5.1] - 2026-10-13
-
 ### Security
 
-- CLI and terminal process controls enforce project protection against every known
-  process-tree, container and service effect, reject untrusted configuration, and refresh
-  policy and ownership after confirmation.
-- Restart requests retain protocol and process identity. TCP restart preserves unrelated
-  UDP owners; ambiguous multi-owner recordings and unsafe legacy Windows shell recordings
-  require the normal launcher instead of replaying a different command.
-- Windows CMD syntax is retained privately for faithful restart and omitted from exports.
-  Shell scripts, PowerShell encoded payloads and credential option variants are redacted
-  without modifying the private execution arguments.
-- Runtime framing, connection and I/O deadlines, configuration/history/log reads and worker
-  concurrency are bounded. Private state transactions reject unsafe files and preserve
-  existing data on failed writes.
-- Configured signed updater artifacts and their authenticated release versions are verified
-  before upload. One publisher produces the complete platform index after every build passes.
+- Every native app command passes the trusted-main-webview policy before dispatch,
+  including restart, settings, history and update installation.
+- Activity metadata encoding rejects excess record counts before serialization and stops
+  at the request byte limit, including escaped JSON, before opening a connection.
+- HTTP status, headers and titles redact recognized credentials before clipping or export.
+  URL fragments and namespaced recording labels also hide recognized credential forms.
+- Settings updates and history appends preserve existing files when validation or reads
+  fail, and checked restart lookups report those errors explicitly.
+
+## [0.5.1] - 2026-10-13
 
 ### Fixed
 
@@ -463,6 +444,23 @@ by [release-please](https://github.com/googleapis/release-please) from
   work. Large graphs use layered layout instead of expensive force layout.
 - CLI log tails read only the bounded suffix, health probes limit parallel work, and the MCP
   tool catalog is initialized once.
+
+### Security
+
+- CLI and terminal process controls enforce project protection against every known
+  process-tree, container and service effect, reject untrusted configuration, and refresh
+  policy and ownership after confirmation.
+- Restart requests retain protocol and process identity. TCP restart preserves unrelated
+  UDP owners; ambiguous multi-owner recordings and unsafe legacy Windows shell recordings
+  require the normal launcher instead of replaying a different command.
+- Windows CMD syntax is retained privately for faithful restart and omitted from exports.
+  Shell scripts, PowerShell encoded payloads and credential option variants are redacted
+  without modifying the private execution arguments.
+- Runtime framing, connection and I/O deadlines, configuration/history/log reads and worker
+  concurrency are bounded. Private state transactions reject unsafe files and preserve
+  existing data on failed writes.
+- Configured signed updater artifacts and their authenticated release versions are verified
+  before upload. One publisher produces the complete platform index after every build passes.
 
 ## [0.5.0] - 2026-10-11
 
@@ -654,16 +652,6 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [0.3.0] - 2026-10-09
 
-### Changed
-
-- **Renamed from portwise to holdmap.** The product maps agents, tools and apps — not only ports.
-  Binary, crates, config dir (`~/.config/holdmap`), project file (`.holdmap.toml`), env vars
-  (`HOLDMAP_*`), MCP server name, desktop bundle id (`dev.holdmap.app`) and site base path all
-  use the new name. Legacy env aliases (`PORTWISE_HOME`, `PORTWISE_TRACE`, `PORTWISE_EDITOR`,
-  `PORTWISE_COLOR`), a leftover `portwise` config directory (migrated once), and
-  `.portwise.toml` project files are still accepted. Installers and release artifacts are named
-  `holdmap-*`.
-
 ### Added
 
 - **Control from the Agents surface.** Reveal a folder, open it in your editor, or stop the
@@ -678,6 +666,14 @@ by [release-please](https://github.com/googleapis/release-please) from
   skim and developer tools.
 
 ### Changed
+
+- **Renamed from portwise to holdmap.** The product maps agents, tools and apps — not only ports.
+  Binary, crates, config dir (`~/.config/holdmap`), project file (`.holdmap.toml`), env vars
+  (`HOLDMAP_*`), MCP server name, desktop bundle id (`dev.holdmap.app`) and site base path all
+  use the new name. Legacy env aliases (`PORTWISE_HOME`, `PORTWISE_TRACE`, `PORTWISE_EDITOR`,
+  `PORTWISE_COLOR`), a leftover `portwise` config directory (migrated once), and
+  `.portwise.toml` project files are still accepted. Installers and release artifacts are named
+  `holdmap-*`.
 
 - Agents empty states, onboarding, shortcuts and MCP copy talk about tools and apps as well as
   coding agents. Desktop hides port filters while the Agents tab is open and prefetches the badge
@@ -718,14 +714,14 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [0.1.8] - 2026-10-08
 
+### Changed
+
+- README and release screenshots show the current UI (light and dark).
+
 ### Fixed
 
 - **Desktop: Graph view no longer rebuilds the topology in a loop.** It re-fetched the graph as soon
   as the previous one arrived, costing CPU while Graph was open.
-
-### Changed
-
-- README and release screenshots show the current UI (light and dark).
 
 ## [0.1.7] - 2026-10-05
 
@@ -744,7 +740,7 @@ by [release-please](https://github.com/googleapis/release-please) from
 - Graph / Svelte Flow loads only when you open Graph (~188 KB JS deferred from startup).
 - Live list updates coalesce onto `requestAnimationFrame`.
 
-### Measured (before → after where applicable)
+**Measured (before → after where applicable):**
 
 - CLI `list` / scan already ~40 ms / ~32 ms on Mac (unchanged; no scan rewrite).
 - Vite production: GraphView split into its own chunk (`GraphView-*.js` ~188 KB / ~60 KB gzip);
@@ -754,19 +750,19 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [0.1.6] - 2026-10-05
 
-### Fixed
-
-- **Desktop: blank white screen after long runs.** An uncaught error could leave the WebView
-  empty (only the native title bar). The app now remounts and tells you why. Explain/HTTP/
-  details caches and sparkline samples have hard size caps, history is dropped while the
-  window is hidden, and the service graph is only built in Graph view.
-
 ### Added
 
 - **Accurate memory.** macOS uses Activity Monitor's `phys_footprint`, Linux `VmRSS`, Windows
   Working set. Each port shows the app total (process + helpers) with a helper count in the
   list, details, graph, CLI, JSON and MCP. Heavy apps get a memory badge; sort-by-memory uses
   the app total; a copy-only quit-helpers command appears when safe.
+
+### Fixed
+
+- **Desktop: blank white screen after long runs.** An uncaught error could leave the WebView
+  empty (only the native title bar). The app now remounts and tells you why. Explain/HTTP/
+  details caches and sparkline samples have hard size caps, history is dropped while the
+  window is hidden, and the service graph is only built in Graph view.
 
 ## [0.1.5] - 2026-10-04
 
@@ -815,6 +811,13 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [0.1.3] - 2026-10-04
 
+### Changed
+
+- **Core**: the user list (a directory-service query on macOS) is cached for a minute instead
+  of being re-read on every scan.
+- `HOLDMAP_TRACE=scan` prints how long each part of a scan took (sockets, processes,
+  containers), for the CLI and the desktop app.
+
 ### Fixed
 
 - **Desktop: the header no longer drops to "12s ago" on macOS.** The window's own poll timer
@@ -824,13 +827,6 @@ by [release-please](https://github.com/googleapis/release-please) from
   holds while a scan is in flight.
 - **Desktop**: scans never overlap; the window, the watcher and the tray share one scan per
   interval (previously up to two). The scan no longer waits for the tray menu to update.
-
-### Changed
-
-- **Core**: the user list (a directory-service query on macOS) is cached for a minute instead
-  of being re-read on every scan.
-- `HOLDMAP_TRACE=scan` prints how long each part of a scan took (sockets, processes,
-  containers), for the CLI and the desktop app.
 
 ## [0.1.2] - 2026-10-04
 
@@ -847,6 +843,17 @@ by [release-please](https://github.com/googleapis/release-please) from
   menu is only rebuilt when its content changes, so an open menu isn't closed by a scan.
 
 ## [0.1.1] - 2026-10-04
+
+### Changed
+
+- **Desktop design pass**: an "At a glance" summary in the empty details pane; details facts in
+  one divided card; the command palette keeps its sections while searching, with quieter
+  destructive icons; the stop confirmation names its target ("Stop :3000"); WCAG AA contrast for
+  faint text on selected rows; keyboard focus stays in the list after the welcome banner; a
+  distinct "match system" theme icon; the Graph badge reads "6 links" to screen readers.
+- **Desktop graph**: readable faded nodes and motion-token transitions; edge labels fit between
+  their nodes; the graph fits below its toolbar and legend; the minimap only appears when part of
+  the graph is off-screen, translucent until hovered.
 
 ### Fixed
 
@@ -869,17 +876,6 @@ by [release-please](https://github.com/googleapis/release-please) from
 - **MCP**: `stop_port` is recorded in the history; `list_ports` counts hidden listeners properly.
 - **Release**: bare file names in the Windows desktop checksum file; the desktop build checks out
   the release tag through dist's `workflow_call` (CodeQL alert fixed).
-
-### Changed
-
-- **Desktop design pass**: an "At a glance" summary in the empty details pane; details facts in
-  one divided card; the command palette keeps its sections while searching, with quieter
-  destructive icons; the stop confirmation names its target ("Stop :3000"); WCAG AA contrast for
-  faint text on selected rows; keyboard focus stays in the list after the welcome banner; a
-  distinct "match system" theme icon; the Graph badge reads "6 links" to screen readers.
-- **Desktop graph**: readable faded nodes and motion-token transitions; edge labels fit between
-  their nodes; the graph fits below its toolbar and legend; the minimap only appears when part of
-  the graph is off-screen, translucent until hovered.
 
 ## [0.1.0] - 2026-10-03
 

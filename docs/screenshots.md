@@ -39,7 +39,7 @@ Every capture in `docs/screenshots/`, all with sample data, never a real screen.
 | detail compact | [dark](screenshots/desktop-detail-compact-dark.png) | [light](screenshots/desktop-detail-compact-light.png) |
 | folder actions | [dark](screenshots/desktop-folder-actions-dark.png) | [light](screenshots/desktop-folder-actions-light.png) |
 | folder actions narrow | — | [light](screenshots/desktop-folder-actions-narrow-light.png) |
-| graph | [dark](screenshots/desktop-graph-dark.png) | — |
+| graph | [dark](screenshots/desktop-graph-dark.png) | [light](screenshots/desktop-graph-light.png) |
 | overview | [dark](screenshots/desktop-overview-dark.png) | [light](screenshots/desktop-overview-light.png) |
 | schedules | [dark](screenshots/desktop-schedules-dark.png) | [light](screenshots/desktop-schedules-light.png) |
 | screen record | [dark](screenshots/desktop-screen-record-dark.png) | [light](screenshots/desktop-screen-record-light.png) |
@@ -56,22 +56,22 @@ Every capture in `docs/screenshots/`, all with sample data, never a real screen.
 
 | View | Dark | Light |
 |---|---|---|
-| agent stop confirm | [dark](screenshots/tui-agent-stop-confirm-dark.png) | — |
-| agents | [dark](screenshots/tui-agents-dark.png) | — |
-| agents narrow | [dark](screenshots/tui-agents-narrow-dark.png) | — |
-| graph | [dark](screenshots/tui-graph-dark.png) | — |
-| list | [dark](screenshots/tui-list-dark.png) | — |
+| agent stop confirm | [dark](screenshots/tui-agent-stop-confirm-dark.png) | [light](screenshots/tui-agent-stop-confirm-light.png) |
+| agents | [dark](screenshots/tui-agents-dark.png) | [light](screenshots/tui-agents-light.png) |
+| agents narrow | [dark](screenshots/tui-agents-narrow-dark.png) | [light](screenshots/tui-agents-narrow-light.png) |
+| graph | [dark](screenshots/tui-graph-dark.png) | [light](screenshots/tui-graph-light.png) |
+| list | [dark](screenshots/tui-list-dark.png) | [light](screenshots/tui-list-light.png) |
 
 ## CLI
 
 | View | Dark | Light |
 |---|---|---|
-| agents | [dark](screenshots/cli-agents-dark.png) | — |
+| agents | [dark](screenshots/cli-agents-dark.png) | [light](screenshots/cli-agents-light.png) |
 | analyzer overview | [dark](screenshots/desktop-analyzer-overview-dark.png) | [light](screenshots/desktop-analyzer-overview-light.png) |
 | analyzer pipeline | [dark](screenshots/desktop-analyzer-pipeline-dark.png) | [light](screenshots/desktop-analyzer-pipeline-light.png) |
 | analyzer pipeline narrow | — | [light](screenshots/desktop-analyzer-pipeline-narrow-light.png) |
 | analyzer tools | [dark](screenshots/desktop-analyzer-tools-dark.png) | [light](screenshots/desktop-analyzer-tools-light.png) |
-| explain | [dark](screenshots/cli-explain-dark.png) | — |
+| explain | [dark](screenshots/cli-explain-dark.png) | [light](screenshots/cli-explain-light.png) |
 
 ## Website
 
