@@ -1,6 +1,10 @@
 use super::*;
 use std::fs;
 
+/// Fixtures assert on what the inventory finds, not on how fast a CI runner's disk is: the
+/// 100 ms production bound made Windows runners with on-access scanning skip late locations.
+const FIXTURE_TIME_LIMIT: Duration = Duration::from_secs(30);
+
 struct Fixture {
     _directory: tempfile::TempDir,
     home: PathBuf,
@@ -31,11 +35,9 @@ impl Fixture {
     }
 
     fn discover(&self, product: &str) -> AgentCapabilities {
-        HomeCapabilities::new(self.home.clone()).discover(
-            product,
-            std::slice::from_ref(&self.project),
-            "fixture",
-        )
+        HomeCapabilities::new(self.home.clone())
+            .with_time_limit(FIXTURE_TIME_LIMIT)
+            .discover(product, std::slice::from_ref(&self.project), "fixture")
     }
 }
 
@@ -230,7 +232,8 @@ fn claude_desktop_reads_only_documented_user_mcp_file_not_code_settings_or_skill
         let provider = HomeCapabilities::with_app_data(
             fixture.home.clone(),
             fixture.home.parent().unwrap().join("roaming"),
-        );
+        )
+        .with_time_limit(FIXTURE_TIME_LIMIT);
         let out = provider.discover(
             "claude-desktop",
             std::slice::from_ref(&fixture.project),
@@ -330,6 +333,7 @@ fn skill_metadata_respects_complete_lines_at_the_header_and_total_byte_limits() 
         platform: "fixture",
         out: AgentCapabilities::default(),
         start: Instant::now(),
+        time_limit: MAX_TIME,
         sources: 0,
         bytes: MAX_TOTAL_BYTES - REMAINING,
         entries: 0,
@@ -506,7 +510,7 @@ fn protected_projects_traversal_and_unsupported_products_are_explicitly_unknown(
         b"[mcp_servers.must-not-appear]\ncommand='server-fixture'\n",
     )
     .unwrap();
-    let provider = HomeCapabilities::new(fixture.home.clone());
+    let provider = HomeCapabilities::new(fixture.home.clone()).with_time_limit(FIXTURE_TIME_LIMIT);
     let out = provider.discover(
         "codex",
         &[protected, fixture.project.join("../unobserved")],
@@ -1212,4 +1216,26 @@ env_http_headers = { "X-Figma-Token" = "FIGMA_TOKEN" }
         let encoded = serde_json::to_string(&out).unwrap();
         assert!(!encoded.contains("private-"), "{encoded}");
     }
+}
+
+#[test]
+fn the_time_bound_still_stops_the_inventory_and_says_so() {
+    let fixture = Fixture::new();
+    fixture.put(
+        "home/.codex/config.toml",
+        b"[mcp_servers.docs]\ncommand = \"server-command-fixture\"\n",
+    );
+    let out = HomeCapabilities::new(fixture.home.clone())
+        .with_time_limit(Duration::ZERO)
+        .discover("codex", std::slice::from_ref(&fixture.project), "fixture");
+    assert!(out.mcp_servers.is_empty());
+    assert!(
+        out.limits.iter().any(|l| l.contains("time bound")),
+        "{:?}",
+        out.limits
+    );
+    assert_eq!(
+        HomeCapabilities::new(fixture.home.clone()).time_limit,
+        MAX_TIME
+    );
 }
