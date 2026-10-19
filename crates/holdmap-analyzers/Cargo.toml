@@ -36,6 +36,7 @@ tempfile.workspace = true
 minisign-verify = "0.3"
 rmcp = { version = "3.5", default-features = false, features = ["client", "transport-async-rw"], optional = true }
 tokio = { version = "1", default-features = false, features = ["rt", "process", "time", "io-util", "macros"], optional = true }
+# Must match the sse-stream minor rmcp uses: its Streamable HTTP client trait takes these types.
 sse-stream = { version = "0.2.4", optional = true }
 futures = { version = "0.3", default-features = false, features = ["std"], optional = true }
 bytes = { version = "1", optional = true }
