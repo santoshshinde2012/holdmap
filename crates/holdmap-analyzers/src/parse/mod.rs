@@ -4,6 +4,7 @@
 mod auto;
 mod holdmap_json;
 mod json_map;
+mod plain;
 mod sarif;
 
 pub use auto::AutoParser;

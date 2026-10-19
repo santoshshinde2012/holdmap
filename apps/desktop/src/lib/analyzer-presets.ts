@@ -10,6 +10,8 @@ import { parseToml } from "./analyzer-manifest";
 export interface PresetView {
   id: string; name: string; publisher: string; summary: string; homepage: string; license: string;
   install: string | null; network: string[]; added: boolean;
+  /** Whether its program was found. The browser demo installs nothing, so always false there. */
+  installed: boolean;
 }
 
 export const PRESET_SOURCES: readonly string[] = [cisco, osv, trivy, bandit];
@@ -25,7 +27,7 @@ export function presetViews(added: (id: string) => boolean): PresetView[] {
     return {
       id, name: text(top.name), publisher: text(top.publisher), summary: text(top.summary),
       homepage: text(top.homepage), license: text(top.license), install: text(top.install) || null,
-      network: Array.isArray(perms.network) ? perms.network : [], added: added(id),
+      network: Array.isArray(perms.network) ? perms.network : [], added: added(id), installed: false,
     };
   });
 }

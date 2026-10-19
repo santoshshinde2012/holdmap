@@ -10,7 +10,7 @@
 //! fake; production uses [`RmcpConnector`] (feature `mcp-runner`, HTTP with `mcp-http`).
 //! Server error text is never kept: notes are written by holdmap.
 
-use crate::cli_runner::{finish_env, stage, StagingLimits};
+use crate::cli_runner::{finish_env, settings_note, stage, StagingLimits};
 use crate::finding::Subject;
 use crate::input::AnalyzerInput;
 use crate::manifest::{AnalyzerManifest, Transport};
@@ -264,24 +264,32 @@ impl AnalyzerRunner for McpRunner {
 
         // Stage every subject first; a stdio server only ever sees these copies.
         let mut staged: Vec<Result<PathBuf, &'static str>> = Vec::new();
-        let mut pre_notes: Vec<Option<&'static str>> = Vec::new();
+        let mut pre_notes: Vec<Vec<String>> = Vec::new();
         for (i, s) in input.subjects.iter().enumerate() {
             let Some(dir) = s.dir.as_deref() else {
                 staged.push(Err("No folder to analyse."));
-                pre_notes.push(None);
+                pre_notes.push(Vec::new());
                 continue;
             };
             let to = work.path().join("subjects").join(i.to_string());
             match stage(dir, &to, self.limits) {
                 Ok(st) => {
-                    pre_notes.push(st.truncated.then_some(
-                        "The folder is larger than the staging limit; only part of it was analysed.",
-                    ));
+                    let mut notes = Vec::new();
+                    if st.truncated {
+                        notes.push(
+                            "The folder is larger than the staging limit; only part of it was analysed."
+                                .to_string(),
+                        );
+                    }
+                    if st.settings_left_out > 0 {
+                        notes.push(settings_note(st.settings_left_out));
+                    }
+                    pre_notes.push(notes);
                     staged.push(Ok(to));
                 }
                 Err(_) => {
                     staged.push(Err("The folder could not be read."));
-                    pre_notes.push(None);
+                    pre_notes.push(Vec::new());
                 }
             }
         }
@@ -324,7 +332,7 @@ impl AnalyzerRunner for McpRunner {
                     continue;
                 }
             };
-            if let Some(note) = pre {
+            for note in &pre {
                 result.push(output(&s.subject, None, Some(note), false));
             }
             let data = SubjectData::read(&dir, &s.subject.name, &s.subject.agents, &needs);

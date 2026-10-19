@@ -209,6 +209,8 @@ Scanner, Google OSV-Scanner, Trivy secrets, Bandit), a local CLI scanner, or any
 `holdmap analyzers tools` and `holdmap analyzers map` pick its tools and map inputs from their
 schemas). Every analyzer is off until you approve it. An MCP analyzer's tool list is pinned:
 a changed description or schema stops the next run until you approve it again.
+Every run gets a copy of the folder without scanner settings files a skill could ship to hide
+its findings (`.bandit`, `osv-scanner.toml`, `.trivyignore` and others).
 `holdmap analyzers show ID` prints exactly what it gets: the folders or package versions, the
 command, the network hosts, the cleared environment and the sandbox (bubblewrap or Landlock, Seatbelt or a
 Job Object where available). Approval is pinned to that manifest and program; any change asks

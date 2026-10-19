@@ -13,7 +13,7 @@ unsound = "all"
 ignore = [
   # zip 4.x reaches the build only through tauri-plugin-updater, which uses it on Windows
   # alone to unpack an update archive after its minisign signature is verified. No updater
-  # release with zip >= 9 exists as of 2026-10-17 (2.14.0 and 3.0.0-alpha.3 require zip ^4).
+  # release with zip >= 9 exists as of 2026-10-19 (2.14.0, now in use, and 3.0.0-alpha.3 require zip ^4).
   # Remove these three ignores once one does.
   { id = "RUSTSEC-2026-0367", reason = "zip SUID/SGID bits: tauri-plugin-updater only, Windows only, after signature verification; no fixed updater release yet" },
   { id = "RUSTSEC-2026-0368", reason = "zip symlink targets: tauri-plugin-updater only, Windows only, after signature verification; no fixed updater release yet" },

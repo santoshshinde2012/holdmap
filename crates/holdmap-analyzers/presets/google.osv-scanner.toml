@@ -1,6 +1,6 @@
 # Preset: OSV-Scanner (https://github.com/google/osv-scanner). Lockfiles and manifests in a skill
-# are checked against OSV.dev. --no-resolve skips deps.dev; --config /dev/null ignores any
-# osv-scanner.toml the skill ships, so a skill can't hide its own vulnerabilities.
+# are checked against OSV.dev. --no-resolve skips deps.dev; --config {empty.file} (an empty
+# file, on every OS) ignores osv-scanner.toml, and staging leaves the skill's copy out anyway.
 schema = 1
 id = "google.osv-scanner"
 name = "OSV-Scanner"
@@ -13,7 +13,7 @@ install = "go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.7.0 (o
 [runner]
 kind = "cli"
 command = "osv-scanner"
-args = ["scan", "source", "--recursive", "--no-resolve", "--config", "/dev/null", "--format", "sarif", "--output-file", "{output}", "{subject.dir}"]
+args = ["scan", "source", "--recursive", "--no-resolve", "--config", "{empty.file}", "--format", "sarif", "--output-file", "{output}", "{subject.dir}"]
 per_subject = "skill"
 version_args = ["--version"]
 version_prefix = "osv-scanner version: "

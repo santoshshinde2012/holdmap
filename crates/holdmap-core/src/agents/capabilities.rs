@@ -244,6 +244,7 @@ impl CapabilityDiscovery for NoCapabilities {
 pub struct HomeCapabilities {
     home: PathBuf,
     app_data: Option<PathBuf>,
+    time_limit: Duration,
 }
 
 impl HomeCapabilities {
@@ -252,6 +253,7 @@ impl HomeCapabilities {
         Self {
             home,
             app_data: None,
+            time_limit: MAX_TIME,
         }
     }
 
@@ -260,7 +262,16 @@ impl HomeCapabilities {
         Self {
             home,
             app_data: Some(app_data),
+            time_limit: MAX_TIME,
         }
+    }
+
+    /// Replace the inventory's wall-clock bound (100 ms by default). Fixtures use a generous
+    /// one so a slow or busy machine (a CI runner with on-access scanning) can't cut a test's
+    /// inventory short; the file, byte and entry bounds are unchanged.
+    pub fn with_time_limit(mut self, limit: Duration) -> Self {
+        self.time_limit = limit;
+        self
     }
 
     /// Default locations for the current account. Custom client config homes are not followed.
@@ -283,6 +294,7 @@ struct Inventory<'a> {
     platform: &'a str,
     out: AgentCapabilities,
     start: Instant,
+    time_limit: Duration,
     sources: usize,
     bytes: usize,
     entries: usize,
@@ -323,6 +335,7 @@ impl CapabilityDiscovery for HomeCapabilities {
                 ..Default::default()
             },
             start: Instant::now(),
+            time_limit: self.time_limit,
             sources: 0,
             bytes: 0,
             entries: 0,
@@ -421,7 +434,7 @@ impl Inventory<'_> {
         let permitted = self.sources < MAX_SOURCES
             && self.bytes < MAX_TOTAL_BYTES
             && self.entries < MAX_ENTRIES
-            && self.start.elapsed() < MAX_TIME;
+            && self.start.elapsed() < self.time_limit;
         if !permitted {
             self.out.limit("Inventory stopped at its file, byte, directory-entry or time bound; additional definitions may exist.");
         }
@@ -452,7 +465,7 @@ impl Inventory<'_> {
         // Reject symlinks/reparse points in every component, including parent directories.
         // No canonicalization may silently redirect discovery into a protected location.
         for ancestor in path.ancestors() {
-            if self.start.elapsed() >= MAX_TIME {
+            if self.start.elapsed() >= self.time_limit {
                 self.out.limit(
                     "Inventory stopped at its time bound; additional definitions may exist.",
                 );

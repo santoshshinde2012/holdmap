@@ -12,6 +12,9 @@ pub const SCHEMA: u32 = 1;
 pub const SUBJECT_DIR: &str = "{subject.dir}";
 /// Placeholder for the file the analyzer writes its report to.
 pub const OUTPUT: &str = "{output}";
+/// Placeholder for an empty file holdmap creates for the run: a portable `/dev/null` for
+/// options like `--config` that must not read settings from the scanned folder.
+pub const EMPTY_FILE: &str = "{empty.file}";
 const MAX_TIMEOUT_SECS: u64 = 600;
 const MAX_OUTPUT_MB: u64 = 32;
 /// Tools one MCP analyzer may call.
@@ -124,7 +127,7 @@ pub struct RunnerSpec {
     /// Executable name (looked up on PATH) or absolute path. Never a shell.
     #[serde(default)]
     pub command: Option<String>,
-    /// Arguments; only [`SUBJECT_DIR`] and [`OUTPUT`] are substituted.
+    /// Arguments; only [`SUBJECT_DIR`], [`OUTPUT`] and [`EMPTY_FILE`] are substituted.
     #[serde(default)]
     pub args: Vec<String>,
     /// What one run covers.
@@ -427,8 +430,11 @@ impl AnalyzerManifest {
         if SHELLS.contains(&base.as_str()) {
             return Err(rule("command must not be a shell or launcher"));
         }
-        for arg in r.args.iter().chain(&r.version_args) {
-            let rest = arg.replace(SUBJECT_DIR, "").replace(OUTPUT, "");
+        // The version probe runs outside a run, so it gets no placeholders but these two.
+        let run = r.args.iter().map(|a| (a, a.replace(EMPTY_FILE, "")));
+        let version = r.version_args.iter().map(|a| (a, a.clone()));
+        for (arg, rest) in run.chain(version) {
+            let rest = rest.replace(SUBJECT_DIR, "").replace(OUTPUT, "");
             if rest.contains('{') || rest.contains('}') {
                 return Err(rule(&format!("unknown placeholder in argument {arg:?}")));
             }
@@ -820,6 +826,10 @@ mod tests {
     #[test]
     fn only_known_placeholders_are_allowed() {
         let err = with("\"--no-llm\"", "\"{env.HOME}\"").unwrap_err();
+        assert!(err.to_string().contains("placeholder"), "{err}");
+        // {empty.file} is for run arguments; the version probe has no run folder.
+        assert!(with("\"--no-llm\"", "\"--config\", \"{empty.file}\"").is_ok());
+        let err = with("version_args = [", "version_args = [\"{empty.file}\", ").unwrap_err();
         assert!(err.to_string().contains("placeholder"), "{err}");
     }
 

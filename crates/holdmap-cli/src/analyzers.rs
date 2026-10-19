@@ -297,8 +297,16 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
                     } else {
                         format!("contacts {}", p.network.join(", "))
                     };
+                    let found = if p.installed {
+                        "installed".to_string()
+                    } else {
+                        format!(
+                            "not installed · install: {}",
+                            p.install.as_deref().unwrap_or("see the project page")
+                        )
+                    };
                     println!(
-                        "{}  {}  {}{}\n  {}\n  {} · {} · {}\n  install: {}\n",
+                        "{}  {}  {}{}\n  {}\n  {} · {} · {}\n  {}\n",
                         p.name,
                         p.id,
                         p.publisher,
@@ -307,7 +315,7 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
                         p.license,
                         net,
                         p.homepage,
-                        p.install.as_deref().unwrap_or("unknown")
+                        found
                     );
                 }
                 println!("Add one with: holdmap analyzers add --preset ID (it stays off until you approve it)");

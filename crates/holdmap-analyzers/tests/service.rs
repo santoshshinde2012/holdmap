@@ -628,6 +628,49 @@ fn sarif_from_trivy_reads_string_scores_and_execution_failures() {
     assert_eq!(parsed.status, Some(RunStatus::Partial));
 }
 
+/// Real preset output (trimmed): readable titles and fixes, never the result message.
+#[test]
+fn sarif_from_presets_gets_readable_titles_and_fixes() {
+    let bandit = sarif(include_str!("fixtures/bandit.sarif"));
+    let titles: Vec<_> = bandit
+        .findings
+        .iter()
+        .map(|f| (f.rule_id.as_str(), f.title.as_deref().unwrap_or("")))
+        .collect();
+    assert!(
+        titles.contains(&("B105", "Hardcoded password string")),
+        "{titles:?}"
+    );
+    assert!(
+        titles.contains(&("B404", "Import subprocess")),
+        "{titles:?}"
+    );
+    assert!(
+        titles.contains(&("B602", "Subprocess popen with shell equals true")),
+        "{titles:?}"
+    );
+
+    let trivy = sarif(include_str!("fixtures/trivy_secret.sarif"));
+    assert_eq!(
+        trivy.findings[0].title.as_deref(),
+        Some("GitHub Personal Access Token")
+    );
+    assert_eq!(trivy.findings[0].fix, None, "help only restates the match");
+
+    let osv = sarif(include_str!("fixtures/osv_scanner.sarif"));
+    let fix = osv.findings[0].fix.as_deref().unwrap();
+    assert!(
+        fix.starts_with(
+            "Your dependency is vulnerable to CVE-2019-10906 (Also published as: PYSEC-2019-217, GHSA-462w-v97r-4m45)."
+        ),
+        "{fix}"
+    );
+    assert!(!fix.contains(['*', '<', '`', '#']), "{fix}");
+    for parsed in [&bandit, &trivy, &osv] {
+        assert!(!format!("{parsed:?}").contains("SECRET-IN-MESSAGE"));
+    }
+}
+
 #[test]
 fn configured_agents_that_are_not_running_are_covered_too() {
     let h = harness();

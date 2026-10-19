@@ -126,9 +126,9 @@
         <ul class="presets" aria-label="Analyzer presets">
           {#each presets as p (p.id)}
             <li>
-              <div class="ph"><span class="nm">{p.name}</span><span class="meta">{p.publisher} · {p.license} · {p.network.length ? `contacts ${p.network.join(", ")}` : "no network"}</span></div>
+              <div class="ph"><span class="nm">{p.name}</span><span class="meta">{p.publisher} · {p.license} · {p.network.length ? `contacts ${p.network.join(", ")}` : "no network"}</span><span class="found" class:yes={p.installed}>{p.installed ? "Installed" : "Not installed"}</span></div>
               <p class="meta">{p.summary}</p>
-              {#if p.install}<p class="meta">Install: <code>{p.install}</code></p>{/if}
+              {#if !p.installed && p.install}<p class="meta">Install: <code>{p.install}</code></p>{/if}
               <div class="acts">
                 {#if p.added}<span class="meta">Added</span>
                 {:else}<Button size="sm" variant="secondary" loading={busy} onclick={() => addPreset(p)} aria-label="Add {p.name}">Add</Button>{/if}
@@ -185,5 +185,7 @@
   .presets { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
   .presets li { display: grid; gap: 2px; padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--r-md); }
   .ph { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+  .found { font-size: var(--fs-caption); color: var(--muted); border: 1px solid var(--border); border-radius: var(--r-full); padding: 0 6px; }
+  .found.yes { color: var(--ok-text, var(--ok)); border-color: var(--ok); }
   code { font-family: var(--mono); font-size: var(--fs-caption); overflow-wrap: anywhere; }
 </style>

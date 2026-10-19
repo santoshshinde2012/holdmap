@@ -26,6 +26,10 @@ pub struct BinaryInfo {
 pub trait BinaryProbe: Send + Sync {
     /// Locate and hash the manifest's command.
     fn locate(&self, manifest: &AnalyzerManifest) -> Option<BinaryInfo>;
+    /// Only whether the command is there: no hashing, so it is cheap enough for a list.
+    fn installed(&self, manifest: &AnalyzerManifest) -> bool {
+        self.locate(manifest).is_some()
+    }
     /// Ask it for its version.
     fn version(&self, manifest: &AnalyzerManifest, binary: &Path) -> Option<String>;
 }
@@ -63,8 +67,8 @@ impl SystemProbe {
     }
 }
 
-impl BinaryProbe for SystemProbe {
-    fn locate(&self, manifest: &AnalyzerManifest) -> Option<BinaryInfo> {
+impl SystemProbe {
+    fn find(&self, manifest: &AnalyzerManifest) -> Option<PathBuf> {
         let command = manifest.runner.command.as_deref()?;
         let path = if Path::new(command).is_absolute() {
             Some(PathBuf::from(command))
@@ -83,7 +87,17 @@ impl BinaryProbe for SystemProbe {
                 .flat_map(|d| names.iter().map(move |n| d.join(n)))
                 .find(|p| executable(p))
         }?;
-        let path = fs::canonicalize(&path).ok()?;
+        fs::canonicalize(&path).ok()
+    }
+}
+
+impl BinaryProbe for SystemProbe {
+    fn installed(&self, manifest: &AnalyzerManifest) -> bool {
+        self.find(manifest).is_some()
+    }
+
+    fn locate(&self, manifest: &AnalyzerManifest) -> Option<BinaryInfo> {
+        let path = self.find(manifest)?;
         Some(BinaryInfo {
             sha256: sha256_file(&path)?,
             path,

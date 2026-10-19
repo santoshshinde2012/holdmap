@@ -2,6 +2,7 @@
 //! partial fingerprints, suppressions, execution status). `message` text is never read: it
 //! often quotes the matched code.
 
+use super::plain::plain;
 use super::{json, text, OutputParser, ParseError, Parsed, ParsedFinding};
 use crate::finding::{Location, RunStatus, Severity};
 use crate::manifest::AnalyzerManifest;
@@ -39,10 +40,8 @@ impl OutputParser for SarifParser {
                 let rule = rules.get(rule_id.as_str()).copied();
                 parsed.findings.push(ParsedFinding {
                     severity: Some(severity(result, rule)),
-                    title: rule.and_then(|r| {
-                        text(r.pointer("/shortDescription/text")).or_else(|| text(r.get("name")))
-                    }),
-                    fix: rule.and_then(|r| text(r.pointer("/help/text"))),
+                    title: rule.and_then(title),
+                    fix: rule.and_then(fix),
                     category: rule.and_then(|r| {
                         r.pointer("/properties/tags")
                             .and_then(Value::as_array)
@@ -77,6 +76,58 @@ impl OutputParser for SarifParser {
         });
         Ok(parsed)
     }
+}
+
+/// The rule's short description, else a readable form of its name. A bare or generic name
+/// (Bandit's `blacklist`) gives way to the slug a help link ends with (`#b404-import-subprocess`).
+fn title(rule: &Value) -> Option<String> {
+    if let Some(short) = text(rule.pointer("/shortDescription/text")) {
+        return Some(plain(&short));
+    }
+    let slug = text(rule.get("helpUri"))
+        .and_then(|u| u.rsplit_once('#').map(|(_, f)| f.to_string()))
+        .and_then(|f| {
+            let (head, rest) = f.split_once('-')?;
+            let is_id = head.chars().any(|c| c.is_ascii_digit())
+                && head.chars().all(|c| c.is_ascii_alphanumeric());
+            (is_id && !rest.is_empty()).then(|| rest.to_string())
+        });
+    let name = text(rule.get("name"));
+    let raw = match (&name, slug) {
+        (Some(n), Some(slug)) if !n.contains(['_', ' ', '-']) => slug,
+        (Some(n), _) => n.clone(),
+        (None, slug) => slug?,
+    };
+    Some(sentence(&raw))
+}
+
+/// `subprocess_popen_with_shell` or `import-subprocess` as `Subprocess popen with shell`.
+fn sentence(raw: &str) -> String {
+    if raw.contains(' ') || !raw.contains(['_', '-']) {
+        return raw.to_string();
+    }
+    let words = raw.replace(['_', '-'], " ");
+    let mut chars = words.chars();
+    chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
+}
+
+/// The rule's help as plain text, unless it only restates the title and description (Trivy's
+/// "Secret <title> Severity: … Match: …"), which would show the match as if it were advice.
+fn fix(rule: &Value) -> Option<String> {
+    let help = plain(&text(rule.pointer("/help/text"))?);
+    let restates = |p: &str| {
+        text(rule.pointer(p)).is_some_and(|t| {
+            let t = plain(&t);
+            !t.is_empty() && help.contains(&t)
+        })
+    };
+    if restates("/shortDescription/text") && restates("/fullDescription/text") {
+        return None;
+    }
+    (!help.is_empty()).then_some(help)
 }
 
 fn rule_index(run: &Value) -> HashMap<&str, &Value> {
