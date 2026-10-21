@@ -41,8 +41,8 @@ The repository root is the Rust workspace; each surface keeps its source and too
 | `apps/desktop/src-tauri/` | Native desktop integration, Tauri configuration and icons |
 | `apps/desktop/assets/` | Desktop brand assets |
 | `site/` | Astro website, Markdown guides, site assets and build tools |
-| `docs/` | Architecture, agent flow, generated CLI reference, diagrams and screenshots used by the README and site |
-| `scripts/` | Workspace checks, CLI documentation generation and development helpers |
+| `docs/` | Architecture, agent flow, benchmarks, generated CLI reference, diagrams and screenshots used by the README and site |
+| `scripts/` | Workspace checks, CLI documentation generation, benchmarks and development helpers |
 | `vendor/` | Audited third-party fixes, preserved upstream snapshots and provenance |
 | `.github/` | CI, release, dependency updates and website deployment |
 
@@ -434,6 +434,15 @@ Two analyzer tests are opt-in.
 - `HOLDMAP_REAL_SKILLSPECTOR=1 cargo test -p holdmap-analyzers --test real_skillspector` runs
   an installed SkillSpector against a sample skill, under the default sandbox and under
   Landlock.
+
+## Benchmarks and evaluation
+
+`python3 scripts/bench.py` (startup, scan latency at N ports, memory, analyzer overhead and
+release sizes), `cargo bench -p holdmap-core` (Criterion) and `python3 scripts/eval-analyzers.py`
+(analyzer and preset detection on labelled fixture skills) are run by hand, not in CI. If a
+change moves these numbers, rerun them and update [docs/benchmarks.md](docs/benchmarks.md)
+and the README summary with the measured values and the environment. Never edit a number you
+didn't measure.
 
 ## Analyzer catalog signing
 
