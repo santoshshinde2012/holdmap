@@ -201,3 +201,13 @@ describe("capability inventory projections", () => {
     expect(limits).toContain("not supported for Docker Desktop");
   });
 });
+
+import { baseName, projectShort } from "./agent-capabilities";
+describe("short project labels", () => {
+  it("shows the folder name and counts the rest", () => {
+    expect(baseName("/Users/dev/code/shop-web/")).toBe("shop-web");
+    expect(baseName("C:\\work\\api")).toBe("api");
+    expect(projectShort({ projectPaths: [] })).toBe("No project");
+    expect(projectShort({ projectPaths: ["/a/shop-web", "/a/docs"] })).toBe("shop-web +1");
+  });
+});

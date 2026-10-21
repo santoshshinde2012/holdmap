@@ -4,11 +4,13 @@
   // with the lanes) stays lit while the others dim. ←/→ move between agents.
   import { ACCESS_LABEL } from "../../lib/home";
   import { accessHeadline, monogram } from "../../lib/agents";
-  import { MAP_RINGS, MAP_STRETCH, mapBounds, type FootprintNode, type radialLayout } from "../../lib/machine-map";
+  import Icon from "../Icon.svelte";
+  import { MAP_RINGS, MAP_STRETCH, avoidCollisions, mapBounds, type Box, type FootprintNode, type radialLayout } from "../../lib/machine-map";
 
   type Group = ReturnType<typeof radialLayout>[number];
-  let { groups, colors, platform, ports, active, selected, hot, onhover, onselect, onopen, onport }: {
+  let { groups: laidOut, colors, platform, ports, active, selected, hot, onhover, onselect, onopen, onport }: {
     groups: Group[];
+    /** Remote-host groups shown one by one. */
     /** Agent colour by id, shared with cards and timeline. */
     colors: Map<string, string>;
     platform: string;
@@ -38,16 +40,81 @@
   // Keep labels legible when the stage is small: counter-scale node bodies (not positions).
   // The view box is then fitted to nodes and labels at that scale, so nothing clips at the edges.
   let w = $state(0), h = $state(0);
-  const base = $derived(mapBounds(groups, 1));
+  const base = $derived(mapBounds(laidOut, 1));
   const k = $derived(w && h ? Math.min(1.8, Math.max(1, Math.sqrt(1 / Math.min(w / base.w, h / base.h)))) : 1);
-  const box = $derived(mapBounds(groups, k));
+  // Labels are pushed apart at the scale they're drawn at, so none overlap.
+  const groups = $derived(avoidCollisions(laidOut, k));
+  const fit = $derived(mapBounds(groups, k));
+
+  // Zoom and pan: a zoom factor and a centre in map units. Selecting an agent focuses its sector;
+  // Fit (or clearing the selection) shows everything again.
+  let zoom = $state(1);
+  let centre = $state<{ x: number; y: number } | null>(null);
+  const focusBox = $derived.by<Box | null>(() => {
+    const g = groups.find((g) => g.agent.id === selected);
+    if (!g) return null;
+    const own = mapBounds([g], k, 40);
+    const x0 = Math.min(own.x, -80), x1 = Math.max(own.x + own.w, 80), y0 = Math.min(own.y, -40), y1 = Math.max(own.y + own.h, 40);
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  });
+  const frame = $derived(focusBox ?? fit);
+  const box = $derived.by<Box>(() => {
+    const c = centre ?? { x: frame.x + frame.w / 2, y: frame.y + frame.h / 2 };
+    const bw = frame.w / zoom, bh = frame.h / zoom;
+    return { x: c.x - bw / 2, y: c.y - bh / 2, w: bw, h: bh };
+  });
+  $effect(() => { void selected; zoom = 1; centre = null; });
+  const ZOOM_MIN = 0.6, ZOOM_MAX = 4;
+  function zoomBy(f: number, at?: { x: number; y: number }) {
+    const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom * f));
+    const c = centre ?? { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+    const p = at ?? c;
+    const r = zoom / next;
+    centre = { x: p.x + (c.x - p.x) * r, y: p.y + (c.y - p.y) * r };
+    zoom = next;
+  }
+  function resetView() { zoom = 1; centre = null; if (selected) onselect(selected); }
+  let svg: SVGSVGElement | undefined = $state();
+  const toMap = (e: { clientX: number; clientY: number }) => {
+    const r = svg!.getBoundingClientRect();
+    const s = Math.max(box.w / r.width, box.h / r.height);
+    return { x: box.x + box.w / 2 + (e.clientX - r.left - r.width / 2) * s, y: box.y + box.h / 2 + (e.clientY - r.top - r.height / 2) * s, s };
+  };
+  function onwheel(e: WheelEvent) { if (!svg) return; e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, toMap(e)); }
+  let drag = $state<{ x: number; y: number; c: { x: number; y: number }; s: number; moved: boolean } | null>(null);
+  function ondown(e: PointerEvent) {
+    if (!svg || e.button !== 0 || (e.target as Element).closest(".sat, .agent")) return;
+    drag = { x: e.clientX, y: e.clientY, c: { x: box.x + box.w / 2, y: box.y + box.h / 2 }, s: toMap(e).s, moved: false };
+    svg.setPointerCapture(e.pointerId);
+  }
+  function onmove(e: PointerEvent) {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+    if (drag.moved) centre = { x: drag.c.x - dx * drag.s, y: drag.c.y - dy * drag.s };
+  }
+  function onup() { drag = null; }
+  function mapKey(e: KeyboardEvent) {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "+" || e.key === "=") { e.preventDefault(); zoomBy(1.25); }
+    else if (e.key === "-") { e.preventDefault(); zoomBy(1 / 1.25); }
+    else if (e.key === "0") { e.preventDefault(); resetView(); }
+  }
   // Port nodes open the port's actions (so Stop… is one step away); other nodes open their target.
   function activate(t: FootprintNode["target"], el: SVGElement) { if (t.view === "list") onport(t.entryId, el); else onopen(t); }
+  const KIND_LABEL = (n: FootprintNode) => n.collapse ? `Hide ${n.count} remote hosts` : n.count ? `${n.count} remote hosts` : KIND[n.kind];
   const nodeKey = (e: KeyboardEvent, t: FootprintNode["target"]) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(t, e.currentTarget as SVGElement); } };
 </script>
 
 <div class="fit" bind:clientWidth={w} bind:clientHeight={h}>
-<svg viewBox="{box.x} {box.y} {box.w} {box.h}" class="map" role="group" aria-label="Machine map" style="--k: {k}">
+<div class="zoom" role="toolbar" aria-label="Map zoom">
+  <button type="button" aria-label="Zoom in" title="Zoom in (+)" onclick={() => zoomBy(1.25)}><Icon name="plus" size={13} /></button>
+  <button type="button" aria-label="Zoom out" title="Zoom out (−)" onclick={() => zoomBy(1 / 1.25)}><Icon name="minus" size={13} /></button>
+  <button type="button" aria-label={selected ? "Show every agent" : "Fit the map"} title={selected ? "Show every agent (0)" : "Fit (0)"} onclick={resetView}><Icon name="fit" size={13} /></button>
+</div>
+<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+<svg bind:this={svg} viewBox="{box.x} {box.y} {box.w} {box.h}" class="map" class:grabbing={!!drag} role="group" aria-label="Machine map. Scroll or press + and − to zoom, drag to pan, 0 to fit." style="--k: {k}" tabindex="0"
+  {onwheel} onpointerdown={ondown} onpointermove={onmove} onpointerup={onup} onpointercancel={onup} onkeydown={mapKey}>
   <defs>
     <radialGradient id="map-glow"><stop offset="0" stop-color="var(--accent)" stop-opacity="0.10" /><stop offset="1" stop-color="var(--accent)" stop-opacity="0" /></radialGradient>
   </defs>
@@ -71,16 +138,19 @@
       {#each g.nodes as n (n.item.id)}
         {@const right = Math.cos(n.angle) >= -0.01}
         <g class="sat k-{n.item.kind}" class:warn={n.item.warn} class:idle={!n.item.live} transform="translate({n.x},{n.y})" role="button" tabindex="0"
-          aria-label="{KIND[n.item.kind]} {n.item.label}{n.item.sub ? `, ${n.item.sub}` : ''}{n.item.warn ? ', needs attention' : ''}, {g.agent.name}"
+          aria-label="{KIND_LABEL(n.item)}{n.item.count ? '' : ` ${n.item.full ?? n.item.label}`}{!n.item.full && n.item.sub ? `, ${n.item.sub}` : ''}{n.item.warn ? ', needs attention' : ''}, {g.agent.name}"
+          aria-expanded={n.item.count ? !!n.item.collapse : undefined}
           onmouseenter={() => onhover(g.agent.id)} onmouseleave={() => onhover(null)} onfocus={() => onhover(g.agent.id)} onblur={() => onhover(null)}
           aria-haspopup={n.item.target.view === "list" ? "menu" : undefined} onclick={(e) => activate(n.item.target, e.currentTarget)} onkeydown={(e) => nodeKey(e, n.item.target)}><g class="body">
+          <title>{n.item.collapse ? "Group the remote hosts again" : n.item.count ? `${n.item.count} remote hosts: click to show each` : n.item.full ?? (n.item.sub ? `${n.item.label} · ${n.item.sub}` : n.item.label)}</title>
           <circle r="16" class="hit" />
           {#if n.item.warn}<circle class="halo" r="12" />{/if}
           {#if n.item.kind === "project"}<rect x="-5.5" y="-5.5" width="11" height="11" rx="3" />
           {:else if n.item.kind === "mcp"}<rect x="-5" y="-5" width="10" height="10" rx="2" transform="rotate(45)" />
+          {:else if n.item.count}<rect class="chip" x="-11" y="-8" width="22" height="16" rx="8" /><text class="chip-n" y="3.5">{n.item.collapse ? "−" : n.item.count}</text>
           {:else}<circle r="5.5" class:ring={n.item.kind === "remote"} />{/if}
-          <text x={right ? 12 : -12} y="-1" text-anchor={right ? "start" : "end"} class="l">{n.item.label}</text>
-          {#if n.item.sub}{" "}<text x={right ? 12 : -12} y="12" text-anchor={right ? "start" : "end"} class="s">{n.item.sub}</text>{/if}
+          <text x={right ? (n.item.count ? 16 : 12) : (n.item.count ? -16 : -12)} y="-1" text-anchor={right ? "start" : "end"} class="l">{n.item.label}</text>
+          {#if n.item.sub}{" "}<text x={right ? (n.item.count ? 16 : 12) : (n.item.count ? -16 : -12)} y="12" text-anchor={right ? "start" : "end"} class="s">{n.item.sub}</text>{/if}
         </g></g>
       {/each}
       <g class="agent" class:hot={hot.has(g.agent.id)} class:selected={selected === g.agent.id} transform="translate({g.x},{g.y})" role="button" tabindex="0" id="map-agent-{g.agent.id}"
@@ -101,7 +171,14 @@
 </div>
 
 <style>
-  .fit { width: 100%; height: 100%; }
+  .fit { position: relative; width: 100%; height: 100%; }
+  .zoom { position: absolute; z-index: 1; top: 8px; right: 8px; display: flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); box-shadow: var(--shadow-sm); }
+  .zoom button { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 7px; background: transparent; color: var(--text-2); cursor: pointer; }
+  .zoom button:hover { background: var(--row-hover); color: var(--text); }
+  .zoom button:focus-visible, .map:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .map { cursor: grab; touch-action: none; } .map.grabbing { cursor: grabbing; }
+  .sat .chip { fill: var(--surface); stroke: var(--text-2); stroke-width: 1.5; }
+  .chip-n { text-anchor: middle; font-size: var(--fs-caption); font-weight: var(--fw-semibold); fill: var(--text); pointer-events: none; }
   .body { transform: scale(var(--k)); }
   .map { width: 100%; height: 100%; display: block; font-family: inherit; overflow: visible; }
   .orbit { fill: none; stroke: var(--border); stroke-dasharray: 2 6; }

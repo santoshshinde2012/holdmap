@@ -1,6 +1,6 @@
 <script lang="ts" module>
   // Remembered across remounts (the Agents layout swaps when the window narrows).
-  let lastTab: "findings" | "graph" = "findings";
+  let lastTab: "findings" | "analyzers" | "graph" | null = null;
   let lastPipeline: string | null = null;
 </script>
 
@@ -11,6 +11,7 @@
   import Icon from "../Icon.svelte";
   import Button from "../ui/Button.svelte";
   import AgentInsights from "./AgentInsights.svelte";
+  import AnalyzerGallery from "./AnalyzerGallery.svelte";
   import SegmentedControl from "../ui/SegmentedControl.svelte";
   import { loadAnalyzerGraphs, type AnalyzerGraphs } from "./graph/load-graphs";
   import { insightsStore } from "../../lib/insights-store.svelte";
@@ -49,7 +50,8 @@
   const lastRun = $derived(Math.max(0, ...(insightsStore.insights?.results ?? []).map((r) => r.run_at_ms)));
   const open = $derived(insightsStore.insights ? total(insightsStore.insights.open) : 0);
 
-  let tab = $state<"findings" | "graph">(lastTab);
+  // With nothing approved yet, open on the gallery so the analyzers are easy to find.
+  let tab = $state<"findings" | "analyzers" | "graph">(lastTab ?? (insightsStore.analyzers.some((a) => a.state === "approved") ? "findings" : "analyzers"));
   let pipeline = $state<string | null>(lastPipeline);
   $effect(() => { lastTab = tab; lastPipeline = pipeline; });
   let graphs = $state<AnalyzerGraphs | null>(null);
@@ -67,26 +69,28 @@
   }
 </script>
 
-<section id="agent-insights" class="insights-ws" aria-label="Insights workspace">
+<section id="agent-insights" class="insights-ws" aria-label="Security workspace">
   <header class="head">
     <div class="title">
-      <h2><Icon name="shield" size={15} />Insights</h2>
+      <h2><Icon name="shield" size={15} />Security</h2>
       <p class="sub">
         {#if !approved.length}No analyzer is on. Nothing runs until you turn one on.
         {:else}{open ? `${open} open ${open === 1 ? "finding" : "findings"}` : "No open findings"} from {approved.length} {approved.length === 1 ? "analyzer" : "analyzers"}{#if lastRun} · last run {ago(lastRun)}{/if}{/if}
       </p>
     </div>
     <div class="tools">
-      <SegmentedControl bind:value={tab} label="Insights view" options={[{ value: "findings", label: "Findings" }, { value: "graph", label: "How it works", icon: "branch" }]} />
-      {#if onsettings}<Button size="sm" variant="ghost" onclick={onsettings}>Analyzers…</Button>{/if}
+      <SegmentedControl bind:value={tab} label="Security view" options={[{ value: "findings", label: "Findings" }, { value: "analyzers", label: "Analyzers", icon: "shield" }, { value: "graph", label: "How it works", icon: "branch" }]} />
+      {#if onsettings}<Button size="sm" variant="ghost" icon="sliders" onclick={onsettings}>Settings…</Button>{/if}
     </div>
   </header>
 
   {#if !inventory}
-    <p class="note"><Icon name="info" size={12} />Analyzers look at skills and MCP packages from the agent inventory, which is off. {#if oninventory}<button type="button" class="link" onclick={oninventory}>Turn on inventory</button> to include skills and agents that aren't running.{/if}</p>
+    <p class="note"><Icon name="info" size={12} />Agent inventory is off, so stopped agents and their skills aren't scanned. {#if oninventory}<button type="button" class="link" onclick={oninventory}>Turn on inventory</button>{/if}</p>
   {/if}
 
-  {#if tab === "graph"}
+  {#if tab === "analyzers"}
+    <AnalyzerGallery {onsettings} />
+  {:else if tab === "graph"}
     <div class="graphs">
       {#if !graphs}
         <p class="sub" role="status">{graphError ? "Couldn't load the graphs. Reopen this tab to try again." : "Loading the graphs…"}</p>
@@ -94,7 +98,7 @@
         <div class="ghead"><h3>How {pipelineView.name} works</h3><Button size="sm" variant="ghost" icon="arrow-left" onclick={() => (pipeline = null)}>All analyzers</Button></div>
         <graphs.AnalyzerPipeline view={pipelineView} height={420} />
       {:else}
-        <p class="sub">Which analyzer covers which agent, from each one's last run. Select an analyzer for its pipeline.</p>
+        <p class="sub">Which analyzer covers which agent. Select one to see its pipeline.</p>
         <graphs.AnalyzerOverview {report} height={440} onpipeline={(id) => (pipeline = id)} />
       {/if}
     </div>

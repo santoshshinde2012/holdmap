@@ -160,3 +160,16 @@ export function capabilityLimits(agents: Agent[]): string[] {
   }
   return [...new Set(lines)];
 }
+
+/** A path's last segment ("/Users/dev/code/shop-web" → "shop-web"). */
+export function baseName(path: string): string {
+  const parts = path.split(/[\\/]+/).filter(Boolean);
+  return parts[parts.length - 1] ?? path;
+}
+
+/** A context's projects, short: the first project's folder name plus "+N" for the rest. */
+export function projectShort(group: Pick<CapabilityContextGroup, "projectPaths">): string {
+  const [first, ...rest] = group.projectPaths;
+  if (!first) return "No project";
+  return baseName(first) + (rest.length ? ` +${rest.length}` : "");
+}

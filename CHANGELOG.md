@@ -10,6 +10,15 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- **Agents → Security** (was Insights) shows the open-finding count on its tab and an
+  **Analyzers** gallery: your analyzers and the presets, each marked on/off or installed.
+  Skill cards carry a findings badge, and capability details have **Scan with…**. Approved
+  analyzers run on request; the rest link to their permissions in Settings, so everything stays
+  off by default.
+- Home map: labels push apart instead of overlapping, two or more remote hosts fold into one
+  "N remote hosts" chip you can expand, long labels are shortened with the full text as a
+  tooltip, and the map zooms (+/−/0, wheel), pans by dragging and focuses an agent's sector when
+  you select it.
 - **Analyzers (opt-in).** Run scanners you choose on your agents' skills and MCP packages:
   NVIDIA SkillSpector (installed by you), a built-in OSV.dev lookup for pinned npm/PyPI
   packages, or a local CLI or MCP scanner you add from a manifest. Each one is off until you
@@ -66,6 +75,14 @@ by [release-please](https://github.com/googleapis/release-please) from
   precision and recall of each analyzer and preset on 17 labelled fixture skills. All of it was
   measured on a Linux VM. Rerun it with `scripts/bench.py`, `scripts/eval-analyzers.py` and
   `cargo bench -p holdmap-core`.
+
+### Changed
+
+- MCP & skills: details open inline, right under the card, compare row or process you
+  clicked, and close with Esc or a second click, returning focus. Only the Map canvas keeps a
+  side panel. The Contexts list is compact (project folder name, full path on hover), Compare
+  options read "Cursor · shop-web", and helper text is shorter.
+- Flow: Esc closes the relationship inspector and returns focus.
 
 ## [0.9.0] - 2026-10-17
 

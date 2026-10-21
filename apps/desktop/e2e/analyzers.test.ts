@@ -35,11 +35,11 @@ test("findings reach Needs you, the agent card and the Insights tab, and can be 
   await openAgents(app);
   await agentHeading(app, "Claude Code").click();
   const card = agentCard(app, "Claude Code");
-  await expect(card.getByRole("heading", { name: "Insights", exact: true })).toBeVisible();
+  await expect(card.getByRole("heading", { name: "Security", exact: true })).toBeVisible();
   await expect(card).toContainText("Open findings: 1 high, 1 medium");
-  await card.getByRole("button", { name: "Open Insights", exact: true }).click();
+  await card.getByRole("button", { name: "Open Security", exact: true }).click();
 
-  const tab = app.getByRole("region", { name: "Insights workspace" });
+  const tab = app.getByRole("region", { name: "Security workspace" });
   await expect(tab.getByRole("heading", { level: 3 })).toContainText("Claude Code");
   await expect(tab).toContainText("Instruction Override");
   await expect(tab).toContainText("Risk score: 64 / 100");
@@ -53,8 +53,8 @@ test("findings reach Needs you, the agent card and the Insights tab, and can be 
 
 test("the Insights tab is an agent workspace tab and covers agents that aren't running", async ({ app }) => {
   await openAgents(app);
-  await app.getByRole("radio", { name: "Insights", exact: true }).click();
-  const tab = app.getByRole("region", { name: "Insights workspace" });
+  await app.getByRole("radio", { name: /^Security\b/ }).click();
+  const tab = app.getByRole("region", { name: "Security workspace" });
   await expect(tab).toBeVisible();
   const list = tab.getByRole("navigation", { name: "Agents with insights" });
   await expect(list).toContainText("Claude Code");
@@ -145,8 +145,8 @@ test("any MCP server is added from a command, its tools listed and mapped, appro
 
 test("Insights explains which analyzer covers which agent, as a graph", async ({ app }) => {
   await openAgents(app);
-  await app.getByRole("radio", { name: "Insights", exact: true }).click();
-  const tab = app.getByRole("region", { name: "Insights workspace" });
+  await app.getByRole("radio", { name: /^Security\b/ }).click();
+  const tab = app.getByRole("region", { name: "Security workspace" });
   await tab.getByRole("radio", { name: "How it works" }).click();
   const overview = tab.getByRole("group", { name: "Analyzers and the agents they cover" });
   await expect(overview.locator(".svelte-flow")).toBeVisible();
@@ -168,8 +168,8 @@ test("Insights explains which analyzer covers which agent, as a graph", async ({
 test("narrow windows get the analyzer graphs as a stacked list", async ({ app }) => {
   await app.setViewportSize({ width: 560, height: 900 });
   await openAgents(app);
-  await app.getByRole("radio", { name: "Insights", exact: true }).click();
-  const tab = app.getByRole("region", { name: "Insights workspace" });
+  await app.getByRole("radio", { name: /^Security\b/ }).click();
+  const tab = app.getByRole("region", { name: "Security workspace" });
   await tab.getByRole("radio", { name: "How it works" }).click();
   const list = tab.getByRole("list", { name: "Analyzers and the agents they cover (list)" });
   await expect(list).toBeVisible();

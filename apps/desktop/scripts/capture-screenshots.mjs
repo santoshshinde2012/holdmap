@@ -175,8 +175,8 @@ async function openSnapshot(page, preview = false) {
 
 async function openAnalyzerGraph(page, pipeline = false) {
   await page.getByRole("radio", { name: /^Agents/ }).click();
-  await page.getByRole("radio", { name: "Insights", exact: true }).click();
-  const insights = page.getByRole("region", { name: "Insights workspace", exact: true });
+  await page.getByRole("radio", { name: /^Security\b/ }).click();
+  const insights = page.getByRole("region", { name: "Security workspace", exact: true });
   await insights.getByRole("radio", { name: "How it works", exact: true }).click();
   const overview = insights.getByRole("group", { name: "Analyzers and the agents they cover", exact: true });
   await expect(overview.locator(".svelte-flow")).toBeVisible();
@@ -259,12 +259,23 @@ async function openCapabilities(page, mode = "map") {
     await assertFits();
     return;
   }
+  if (mode === "inline") {
+    await views.getByRole("radio", { name: "Explore", exact: true }).click();
+    const card = workspace.getByRole("button", { name: /^Inspect skill frontend-checks,/ });
+    await card.click();
+    const detail = workspace.getByRole("region", { name: "Capability details", exact: true });
+    await expect(detail.getByRole("heading", { name: "frontend-checks", exact: true })).toBeFocused();
+    await expect(detail.getByRole("region", { name: "Scan with analyzers" })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
+    await assertFits();
+    return;
+  }
   if (mode === "compare") {
     await views.getByRole("radio", { name: "Compare", exact: true }).click();
     const comparison = workspace.getByRole("region", { name: "Capability comparison", exact: true });
-    await expect(comparison.getByRole("heading", { name: "Compare observed sources", exact: true })).toBeVisible();
+    await expect(comparison.getByRole("heading", { name: "Compare sources", exact: true })).toBeVisible();
     await expect(comparison.getByRole("button", { name: /^Inspect compared / })).toHaveCount(10);
-    await expect(comparison.getByText("Not reported here", { exact: true }).first()).toBeVisible();
+    await expect(comparison.getByText("Not found", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
     await assertFits();
     return;
@@ -306,6 +317,14 @@ const captures = [
   ...["dark", "light"].flatMap((theme) => [
     { name: `desktop-capability-explore-${theme}.png`, theme, prepare: (page) => openCapabilities(page, "explore") },
     { name: `desktop-capability-compare-${theme}.png`, theme, prepare: (page) => openCapabilities(page, "compare") },
+    { name: `desktop-capability-inline-${theme}.png`, theme, prepare: (page) => openCapabilities(page, "inline") },
+    { name: `desktop-security-analyzers-${theme}.png`, theme, async prepare(page) {
+      await openAgents(page);
+      await page.getByRole("radio", { name: /^Security\b/ }).click();
+      const security = page.getByRole("region", { name: "Security workspace", exact: true });
+      await security.getByRole("radio", { name: "Analyzers", exact: true }).click();
+      await expect(security.getByRole("region", { name: "Analyzers" })).toContainText("Not installed");
+    } },
   ]),
   { name: "desktop-skills-dark.png", theme: "dark", prepare: (page) => openCapabilities(page, "skill") },
   { name: "desktop-capabilities-narrow-light.png", theme: "light", viewport: { width: 560, height: 1000 }, prepare: (page) => openCapabilities(page, "skill") },
@@ -362,8 +381,8 @@ const captures = [
   ]),
   { name: "desktop-analyzer-pipeline-narrow-light.png", theme: "light", viewport: { width: 560, height: 1000 }, async prepare(page) {
     await page.getByRole("radio", { name: /^Agents/ }).click();
-    await page.getByRole("radio", { name: "Insights", exact: true }).click();
-    const insights = page.getByRole("region", { name: "Insights workspace", exact: true });
+    await page.getByRole("radio", { name: /^Security\b/ }).click();
+    const insights = page.getByRole("region", { name: "Security workspace", exact: true });
     await insights.getByRole("radio", { name: "How it works", exact: true }).click();
     await insights.getByRole("list", { name: "Analyzers and the agents they cover (list)", exact: true }).getByRole("button", { name: /SkillSpector/ }).click();
     await insights.getByRole("button", { name: "How SkillSpector works", exact: true }).click();

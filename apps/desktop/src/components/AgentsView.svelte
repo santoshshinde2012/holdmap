@@ -238,7 +238,7 @@
 <div class="agents-root" class:reduced>
   {#if section === "capabilities"}
     {#if CapabilityWorkspace}
-      <CapabilityWorkspace {report} {query} {selectedAgent} {dark} {reduced} loading={capabilitiesLoading} error={capabilitiesError} demo={flowProps.demo} {onselectagent} onclearquery={flowProps.onclearquery} onretry={onrefreshcapabilities} onrecordedcalls={() => { flowSource = "calls"; section = "flow"; }} />
+      <CapabilityWorkspace {report} {query} {selectedAgent} {dark} {reduced} loading={capabilitiesLoading} error={capabilitiesError} demo={flowProps.demo} {onselectagent} onclearquery={flowProps.onclearquery} onretry={onrefreshcapabilities} onrecordedcalls={() => { flowSource = "calls"; section = "flow"; }} {onsettings} onsecurity={() => { section = "insights"; }} />
     {:else if capabilityChunkError}
       <div class="empty workspace-loading" role="alert"><Icon name="plug" size={28} /><p>Couldn't load MCP &amp; skills</p><span>Try again, or reload the app if the workspace still won't open.</span><div class="load-actions"><Button size="sm" onclick={loadCapabilityWorkspace}>Try again</Button><Button size="sm" variant="ghost" onclick={() => window.location.reload()}>Reload app</Button></div></div>
     {:else}

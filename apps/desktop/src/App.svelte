@@ -1,5 +1,6 @@
 <script lang="ts">
   import { insightsStore } from "./lib/insights-store.svelte";
+  import { total as findingsTotal } from "./lib/analyzers";
   import { onMount, tick, untrack } from "svelte";
   import { dataAge, freshness, pruned, share, shouldPoll, withKey } from "./lib/live";
   import PortList from "./components/list/PortList.svelte";
@@ -1371,7 +1372,7 @@
   </TitleBar>
 
   <ViewToolbar bind:view={prefs.view} bind:agentSection={prefs.agentSection} bind:picture={prefs.picture} bind:flowSource={prefs.flowSource} bind:filters bind:sort={prefs.sort} bind:sideOpen={prefs.sideOpen} bind:graphQuery bind:agentQuery
-    graphEdges={graph?.stats.edges ?? 0} agentCount={agentsReport ? agentsReport.agents.length : null} {stats} {filtersActive} {narrow} singleKeys={prefs.singleKeyShortcuts}
+    graphEdges={graph?.stats.edges ?? 0} agentCount={agentsReport ? agentsReport.agents.length : null} securityCount={insightsStore.insights ? findingsTotal(insightsStore.insights.open) : 0} {stats} {filtersActive} {narrow} singleKeys={prefs.singleKeyShortcuts}
     {projectReady} {projectCaption} onsocketschange={() => refresh()} onclearfilters={clearFilters} />
 
   <Notices {error} retrying={refreshing} showError={!!error && (!!snapshot || prefs.view !== "list")} hasSnapshot={!!snapshot}

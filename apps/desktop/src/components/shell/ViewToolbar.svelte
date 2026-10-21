@@ -22,6 +22,7 @@
     agentQuery = $bindable(),
     graphEdges,
     agentCount,
+    securityCount = 0,
     stats,
     filtersActive,
     narrow,
@@ -42,6 +43,8 @@
     agentQuery: string;
     graphEdges: number;
     agentCount: number | null;
+    /** Open analyzer findings, shown on the Security tab. */
+    securityCount?: number;
     stats: PortStats;
     filtersActive: boolean;
     narrow: boolean;
@@ -63,7 +66,7 @@
   {#if view !== "home"}
   <div class="row">
     {#if view === "agents"}
-      <ActionDock size={dock} hinge={!narrow} label="Agents workspace" bind:value={agentSection} options={[{ value: "overview", label: "Overview", icon: "bot", title: "Agents, resources and access" }, { value: "capabilities", label: "MCP & skills", icon: "plug", title: "Inspect local MCP configuration and installed skill locations" }, { value: "flow", label: "Flow", icon: "branch", title: "Connections and recorded calls" }, { value: "insights", label: "Insights", icon: "shield", title: "Findings from analyzers you turned on" }]} />
+      <ActionDock size={dock} hinge={!narrow} label="Agents workspace" bind:value={agentSection} options={[{ value: "overview", label: "Overview", icon: "bot", title: "Agents, resources and access" }, { value: "capabilities", label: "MCP & skills", icon: "plug", title: "MCP servers and skills your agents can load" }, { value: "flow", label: "Flow", icon: "branch", title: "Connections and recorded calls" }, { value: "insights", label: "Security", icon: "shield", count: securityCount || undefined, countLabel: securityCount ? `${securityCount} open findings` : undefined, title: "Security: analyzers and their findings" }]} />
       {#if agentSection === "overview"}
         <ActionDock size={dock} hinge={!narrow} label="Map picture" bind:value={picture} options={[
           { value: "context", label: "Computer", icon: "monitor", title: "Context: this computer, the agents on it, and systems they talk to" },

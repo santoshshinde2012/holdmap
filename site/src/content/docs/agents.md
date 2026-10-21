@@ -113,11 +113,15 @@ process observations:
 
 | Explore declared purposes | Compare exact source observations |
 | --- | --- |
-| ![Explore skill cards show declared purposes, file-presence evidence, scope and exact source paths](../../../../docs/screenshots/desktop-capability-explore-dark.png) | ![Compare keeps two filesystem aliases at different source paths separate and labels missing observations Not reported here](../../../../docs/screenshots/desktop-capability-compare-dark.png) |
+| ![Explore skill cards show declared purposes, file-presence evidence, scope and exact source paths](../../../../docs/screenshots/desktop-capability-explore-dark.png) | ![Compare keeps two filesystem aliases at different source paths separate and labels missing observations Not found](../../../../docs/screenshots/desktop-capability-compare-dark.png) |
 
 | MCP and skills map | Selected skill details |
 | --- | --- |
 | ![Capability map places declared MCP sources left of observed agent contexts and skill sources to the right, with runtime candidates separate below](../../../../docs/screenshots/desktop-capabilities-dark.png) | ![The selected skill's Purpose tab explains declared purpose and why file presence does not establish activation](../../../../docs/screenshots/desktop-skills-dark.png) |
+
+| Details open inline | Security: analyzers |
+| --- | --- |
+| ![Selecting a skill card opens its details directly under it, with Purpose, Source, Evidence and Activity tabs and Scan with…](../../../../docs/screenshots/desktop-capability-inline-dark.png) | ![The Security tab lists analyzers and presets with their on/off and installed state; all are off by default](../../../../docs/screenshots/desktop-security-analyzers-dark.png) |
 
 | Light theme | Narrow window |
 | --- | --- |

@@ -215,8 +215,8 @@
 
       {#if insightsStore.analyzers.some((a) => a.state === "approved") || insightsStore.insights?.results.length}
         {@const found = agentCounts(insightsStore.insights, agent.product)}
-        <h3>Insights</h3>
-        <p class="insight-line">{total(found) ? `Open findings: ${countsText(found, 5)}` : "No open findings"}{#if oninsights}{" "}<button type="button" class="link" onclick={oninsights}>Open Insights</button>{/if}</p>
+        <h3>Security</h3>
+        <p class="insight-line">{total(found) ? `Open findings: ${countsText(found, 5)}` : "No open findings"}{#if oninsights}{" "}<button type="button" class="link" onclick={oninsights}>Open Security</button>{/if}</p>
       {/if}
 
       <h3>Processes · {c.processes}</h3>

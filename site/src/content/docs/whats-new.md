@@ -17,7 +17,7 @@ These are on `main` and not in a published installer yet:
   any MCP server. Each one is off until you approve exactly what it gets, and runs on a copy in
   a sandbox. [Analyzers](../analyzers/).
 - **Needs you everywhere.** `holdmap needs` and the MCP tool `list_needs` show the same list as
-  Home, including analyzer findings. **Agents → Insights** collects every agent's findings.
+  Home, including analyzer findings. **Agents → Security** collects every agent's findings and lists the analyzers.
 - **MCP:** `list_analyzers`, `list_insights` and `list_needs` bring the server to fourteen tools.
 
 ## 0.9.0

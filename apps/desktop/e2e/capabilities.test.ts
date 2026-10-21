@@ -5,7 +5,8 @@ const cursorMcp = (name: string) => `Inspect MCP server ${name}, Project scope. 
 const frontendSkill = "Inspect skill frontend-checks, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md";
 const claudeFilesystem = "Inspect MCP server filesystem, Project scope. Agents: Claude Code (PID 51200). Project: /Users/dev/code/shop-api. Source: /Users/dev/code/shop-api/.mcp.json";
 const workspace = (page: Page) => page.getByRole("region", { name: "MCP and skills workspace", exact: true });
-const details = (page: Page) => page.getByRole("complementary", { name: "Capability details", exact: true });
+// Details open inline next to the clicked card, row or process; the Map canvas keeps a side panel.
+const details = (page: Page) => page.getByRole("region", { name: "Capability details", exact: true }).or(page.getByRole("complementary", { name: "Capability details", exact: true }));
 const graph = (page: Page) => page.getByRole("region", { name: "Agent capability graph", exact: true });
 const view = (page: Page, name: "Explore" | "Map" | "Compare") => workspace(page).getByRole("radiogroup", { name: "Capability view", exact: true }).getByRole("radio", { name, exact: true });
 const workspaceChunk = /\/AgentCapabilitiesView-[^/]+\.js(?:\?|$)/;
@@ -95,7 +96,7 @@ test("skill inspector separates declared purpose, exact source, evidence and unl
   await expect(inspector).toContainText(/Loading & activation/);
   await expect(inspector).toContainText(/instructions.*not (?:collected|retained|executed)/i);
   await inspector.getByRole("tab", { name: "Activity", exact: true }).click();
-  await expect(inspector).toContainText(/No activity association has been established/);
+  await expect(inspector).toContainText(/No recorded calls are linked/);
   await expect(app.getByRole("radio", { name: "MCP & skills", exact: true })).toHaveAttribute("aria-checked", "true");
   await inspector.getByRole("button", { name: "Open recorded calls", exact: true }).click();
   await expect(app.getByRole("radio", { name: "Flow", exact: true })).toHaveAttribute("aria-checked", "true");
@@ -116,8 +117,8 @@ test("MCP definitions keep same aliases at distinct sources and never infer a to
     await app.keyboard.press("Escape"); await expect(card).toBeFocused();
   }
   await workspace(app).getByRole("radio", { name: /^Tools/ }).click();
-  await expect(workspace(app).getByRole("heading", { name: "Catalog not reported", exact: true })).toBeVisible();
-  await expect(workspace(app)).toContainText(/does not report MCP tool catalogs or built-in actions/i);
+  await expect(workspace(app).getByRole("heading", { name: "Tool catalog not reported", exact: true })).toBeVisible();
+  await expect(workspace(app)).toContainText(/unknown, not zero/i);
   await expect(workspace(app)).not.toContainText("0 tools");
   expect(await app.evaluate(() => "__TAURI_INTERNALS__" in window)).toBe(false);
 });
@@ -172,8 +173,8 @@ test("Compare identifies exact-source differences without treating catalogs as e
   const aliases = comparison.getByRole("button", { name: /^Inspect compared MCP server filesystem, / });
   await expect(aliases).toHaveCount(2);
   for (const alias of await aliases.all()) {
-    await expect(alias).toContainText("Definition observed");
-    await expect(alias).toContainText("Not reported here");
+    await expect(alias).toContainText("Found");
+    await expect(alias).toContainText("Not found");
   }
   await expect(workspace(app)).toContainText(/not reported|unknown/i);
   await expect(workspace(app).getByText("Not installed", { exact: true })).toHaveCount(0);
@@ -192,7 +193,7 @@ test("definition filters never turn runtime candidates into connected or callabl
   const runtime = workspace(app).getByRole("button", { name: "Inspect running process Filesystem MCP, PID 52070", exact: true });
   await runtime.click();
   await details(app).getByRole("tab", { name: "Evidence", exact: true }).click();
-  await expect(details(app)).toContainText(/has not been matched to a configuration entry or invocation/);
+  await expect(details(app)).toContainText(/Not matched to a config entry/);
   await expect(details(app)).toContainText("inferred");
   await details(app).getByRole("tab", { name: "Source", exact: true }).click();
   await expect(details(app)).not.toContainText("Source file");

@@ -276,3 +276,16 @@ export function ago(ms: number, now = Date.now()): string {
   const d = Math.floor(s / 86_400);
   return `${d} ${d === 1 ? "day" : "days"} ago`;
 }
+
+/** Open finding counts about one subject (a skill's id), across every analyzer's last run. */
+export function subjectCounts(insights: Insights | null, subjectId: string): SeverityCounts {
+  const c = emptyCounts();
+  for (const result of insights?.results ?? []) for (const f of result.findings) if (f.subject === subjectId && f.state === "open") c[f.severity]++;
+  return c;
+}
+
+/** Analyzers that look at this kind of item: the built-in OSV lookup reads the packages MCP
+ * servers launch; CLI and MCP analyzers read skill folders. */
+export function scannersFor(views: AnalyzerView[], kind: "skill" | "mcp"): AnalyzerView[] {
+  return views.filter((a) => (kind === "mcp") === (a.kind === "builtin"));
+}

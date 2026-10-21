@@ -211,7 +211,7 @@ export function buildPipeline({ view, preview, result }: PipelineInput): Graph {
   const surfaces: [string, string, string, number][] = [
     ["home", "Home", byAgent.size ? `${plural(byAgent.size, "agent card")} marked` : "No agent marked", byAgent.size],
     ["needs", "Needs you", needs ? `${plural(needs, "item")} (medium or worse)` : "Nothing needs you", needs],
-    ["insights", "Insights", nOpen ? `${plural(nOpen, "open finding")}` : "No open findings", nOpen],
+    ["insights", "Security", nOpen ? `${plural(nOpen, "open finding")}` : "No open findings", nOpen],
   ];
   surfaces.forEach(([id, title, subtitle, n], i) => node({
     id: `surface:${id}`, kind: "surface", title, subtitle,

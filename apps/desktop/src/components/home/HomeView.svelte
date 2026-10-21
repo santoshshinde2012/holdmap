@@ -57,7 +57,9 @@
     );
     return () => { live = false; };
   });
-  const groups = $derived(radialLayout(report?.agents ?? []));
+  /** Remote-host groups the user expanded on the map. */
+  let expanded = $state<ReadonlySet<string>>(new Set());
+  const groups = $derived(radialLayout(report?.agents ?? [], undefined, undefined, undefined, undefined, expanded));
   const rows = $derived(lanes(report, entries, now));
   const hot = $derived(hotAgents(needs));
   const colors = $derived(agentColors(report?.agents ?? []));
@@ -78,7 +80,11 @@
   ]);
   const showInventory = $derived(!inventory && !!oninventory && (report?.agents ?? []).some((a) => !a.capabilities));
 
-  function open(t: FootprintNode["target"]) { if (t.view === "list") onopenentry(t.entryId); else onopenagent(t.agentId); }
+  function open(t: FootprintNode["target"]) {
+    if (t.view === "expand") { const next = new Set(expanded); if (!next.delete(t.groupId)) next.add(t.groupId); expanded = next; }
+    else if (t.view === "list") onopenentry(t.entryId);
+    else onopenagent(t.agentId);
+  }
   // Analyzer findings open the agent's Insights tab; everything else opens the agent or port.
   function openItem(i: AttentionItem) { if (i.rule === "analyzer" && i.target.view === "agents") onopenagent(i.target.agentId, "insights"); else open(i.target); }
   function stopItem(i: AttentionItem) { if (i.stop?.kind === "entry") onstopentry?.(i.stop.entryId); else if (i.stop) onstopagent?.(i.stop.agentId); }

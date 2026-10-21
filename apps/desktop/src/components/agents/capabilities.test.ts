@@ -17,7 +17,9 @@ const report = () => mockAgents(undefined, true);
 const mount = (r: AgentsReport | null = report(), extras: Partial<ComponentProps<typeof AgentCapabilitiesView>> = {}) => render(AgentCapabilitiesView, { report: r, selectedAgent: "agent:52000", reduced: true, onselectagent: vi.fn(), ...extras });
 const cursorMcp = (name: string) => `Inspect MCP server ${name}, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.cursor/mcp.json`;
 const frontendSkill = (name = "frontend-checks") => `Inspect skill ${name}, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md`;
-const details = (view: ReturnType<typeof mount>) => view.getByRole("complementary", { name: "Capability details" });
+// Details open inline (a region by the clicked card or row); the map canvas keeps its side panel.
+const details = (view: ReturnType<typeof mount>) => view.queryByRole("region", { name: "Capability details" }) ?? view.getByRole("complementary", { name: "Capability details" });
+const noDetails = (view: ReturnType<typeof mount>) => !view.queryByRole("region", { name: "Capability details" }) && !view.queryByRole("complementary", { name: "Capability details" });
 const tab = (view: ReturnType<typeof mount>, name: string) => fireEvent.click(view.getByRole("tab", { name }));
 
 /** Reproduce repeated roots sharing inventory without adding a product fixture hook. */
@@ -38,7 +40,7 @@ describe("MCP and skills capability explorer", () => {
     expect(view.getByRole("radio", { name: "Explore" }).getAttribute("aria-checked")).toBe("true");
     expect(view.queryByRole("region", { name: "Agent capability graph" })).toBeNull();
     expect(view.getByRole("complementary", { name: "Capability agents" })).toBeTruthy();
-    expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull();
+    expect(noDetails(view)).toBe(true);
     expect(view.queryByRole("region", { name: "Visibility limits" })).toBeNull();
     expect(view.queryByRole("combobox", { name: /^Scope:/ })).toBeNull();
     const card = view.getByRole("button", { name: frontendSkill() });
@@ -57,7 +59,7 @@ describe("MCP and skills capability explorer", () => {
     await tab(view, "Evidence");
     expect(details(view).textContent).toMatch(/Connection & catalog/);
     await fireEvent.click(view.getByRole("button", { name: "Close capability details" }));
-    expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull();
+    expect(noDetails(view)).toBe(true);
     expect(document.activeElement).toBe(card);
   });
   it("keeps declared skill purpose separate from activity and opens Calls only explicitly", async () => {
@@ -68,7 +70,7 @@ describe("MCP and skills capability explorer", () => {
     expect(details(view).textContent).toMatch(/Loading & activation/);
     expect(details(view).textContent).toMatch(/instructions.*not (?:collected|retained|executed)/i);
     await tab(view, "Activity");
-    expect(details(view).textContent).toMatch(/No activity association has been established/);
+    expect(details(view).textContent).toMatch(/No recorded calls are linked/);
     expect(onrecordedcalls).not.toHaveBeenCalled();
     await fireEvent.click(view.getByRole("button", { name: "Open recorded calls" }));
     expect(onrecordedcalls).toHaveBeenCalledOnce();
@@ -94,7 +96,7 @@ describe("MCP and skills capability explorer", () => {
     await fireEvent.click(view.getByRole("button", { name: "Show processes for Cursor" }));
     for (const pid of [52000, 52001, 52002, 52003]) expect(view.getByRole("button", { name: `Inspect agent card Cursor, PID ${pid}` })).toBeTruthy();
     expect(view.getAllByRole("button", { name: /^Inspect running process Filesystem MCP/ })).toHaveLength(1);
-    expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull();
+    expect(noDetails(view)).toBe(true);
   });
   it("does not group roots with conflicting coverage or declarations", () => {
     const r = repeatedRoots(); r.agents.at(-1)!.capabilities!.limits.push("This context was bounded earlier.");
@@ -116,7 +118,7 @@ describe("MCP and skills capability explorer", () => {
     expect(details(view).textContent).toContain("frontend-checks");
     const gone = { ...next, agents: next.agents.filter(agent => agent.name !== "Cursor") };
     await view.rerender({ report: gone, selectedAgent: null, reduced: true, onselectagent() {} });
-    await waitFor(() => expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull());
+    await waitFor(() => expect(noDetails(view)).toBe(true));
     expect(view.queryByRole("button", { name: /^Inspect skill frontend-checks/ })).toBeNull();
   });
   it("compares shared exact sources separately from same-name files and uninspected contexts", async () => {
@@ -131,16 +133,16 @@ describe("MCP and skills capability explorer", () => {
     expect(view.container.textContent).toContain("/Users/dev/.agents/skills/code-review/SKILL.md");
     expect(view.container.textContent).toContain("/Users/dev/code/shop-api/.mcp.json");
     expect(view.container.textContent).toContain("/Users/dev/code/shop-web/.cursor/mcp.json");
-    expect(view.container.textContent).toMatch(/shared.*source|same.*source/i);
+    expect(view.container.textContent).toMatch(/\d+ shared/);
     const aliases = view.getAllByRole("button", { name: /^Inspect compared MCP server filesystem, / });
     expect(aliases).toHaveLength(2);
     for (const alias of aliases) {
-      expect(alias.textContent).toContain("Definition observed");
-      expect(alias.textContent).toContain("Not reported here");
+      expect(alias.textContent).toContain("Found");
+      expect(alias.textContent).toContain("Not found");
     }
     const shared = view.getByRole("button", { name: "Inspect compared skill code-review, User scope. Agents: Claude Code (PID 51200), Cursor (PID 52000). Source: /Users/dev/.agents/skills/code-review/SKILL.md" });
-    expect(shared.textContent?.match(/Definition observed/g)).toHaveLength(2);
-    expect(shared.textContent).not.toContain("Not reported here");
+    expect(shared.textContent?.match(/Found/g)).toHaveLength(2);
+    expect(shared.textContent).not.toContain("Not found");
     await fireEvent.click(right); await fireEvent.click(view.getByRole("option", { name: /^Docker Desktop/ }));
     expect(view.container.textContent).toMatch(/not inspected|unknown/i);
     expect(view.queryByText("Not installed", { exact: true })).toBeNull();
@@ -173,7 +175,7 @@ describe("MCP and skills capability explorer", () => {
       await fireEvent.click(view.getByRole("button", { name: label }));
       await tab(view, "Source");
       expect(details(view).textContent).toContain(source);
-      expect(details(view).textContent).toContain(`${scope} · source location`);
+      expect(details(view).textContent).toContain(scope);
       if (project) expect(details(view).textContent).toContain(project);
       else expect(details(view).textContent).not.toContain("Project relationship");
       expect(details(view).textContent).toContain(owner.includes("51200") ? "PID 51200" : "PID 52000");
@@ -182,10 +184,10 @@ describe("MCP and skills capability explorer", () => {
   it("shows catalog unknown rather than zero tools and never turns inventory into usage", async () => {
     const view = mount();
     await fireEvent.click(view.getByRole("radio", { name: /^Tools/ }));
-    expect(view.getByRole("heading", { name: "Catalog not reported" })).toBeTruthy();
-    expect(view.container.textContent).toMatch(/does not report MCP tool catalogs or built-in actions/i);
+    expect(view.getByRole("heading", { name: "Tool catalog not reported" })).toBeTruthy();
+    expect(view.container.textContent).toMatch(/unknown, not zero/i);
     expect(view.container.textContent).not.toContain("0 tools");
-    expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull();
+    expect(noDetails(view)).toBe(true);
   });
   it("keeps Compare inspector ownership inside its chosen pair and invalidates a row on pair change", async () => {
     const r = report(), third = structuredClone(r.agents[1]);
@@ -204,7 +206,7 @@ describe("MCP and skills capability explorer", () => {
     expect(details(view).textContent).toContain("52000");
     expect(details(view).textContent).not.toContain("53000");
     await fireEvent.click(right); await fireEvent.click(view.getByRole("option", { name: /^Docker Desktop/ }));
-    await waitFor(() => expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull());
+    await waitFor(() => expect(noDetails(view)).toBe(true));
     expect(view.queryByRole("button", { name: reviewLabel })).toBeNull();
   });
   it("keeps disabled configuration separate from inferred runtime observations", async () => {
@@ -214,7 +216,7 @@ describe("MCP and skills capability explorer", () => {
     await fireEvent.click(view.getByRole("radio", { name: /^Running/ }));
     await fireEvent.click(view.getByRole("button", { name: "Inspect running process Filesystem MCP, PID 52070" }));
     await tab(view, "Evidence");
-    expect(details(view).textContent).toMatch(/has not been matched to a configuration entry or invocation/);
+    expect(details(view).textContent).toMatch(/Not matched to a config entry/);
     expect(details(view).textContent).toContain("inferred");
     await tab(view, "Source"); expect(details(view).textContent).not.toContain("Source file");
   });
@@ -225,8 +227,8 @@ describe("MCP and skills capability explorer", () => {
     const state = view.getByRole("combobox", { name: /^State:/ });
     await fireEvent.click(state); await fireEvent.click(view.getByRole("option", { name: "Disabled MCP" }));
     expect(view.getAllByRole("button", { name: /^Inspect MCP server/ })).toHaveLength(1);
-    expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull();
-    expect(view.getByRole("button", { name: cursorMcp("legacy-browser") }).getAttribute("aria-pressed")).toBe("false");
+    expect(noDetails(view)).toBe(true);
+    expect(view.getByRole("button", { name: cursorMcp("legacy-browser") }).getAttribute("aria-expanded")).toBe("false");
   });
   it("reveals old-backend coverage only on request without inventing an empty catalog", async () => {
     const r = mockAgents(); r.agents.forEach((agent) => delete agent.capabilities);
@@ -250,14 +252,14 @@ describe("MCP and skills capability explorer", () => {
   it("keeps no-match recovery separate from automatic selection", async () => {
     const onclearquery = vi.fn(), view = mount(report(), { query: "no-such-capability", onclearquery });
     expect(view.getByRole("heading", { name: /No .*match/ })).toBeTruthy();
-    expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull();
+    expect(noDetails(view)).toBe(true);
     await fireEvent.click(view.getByRole("button", { name: "Clear search" })); expect(onclearquery).toHaveBeenCalledOnce();
   });
   it("shows loading and no-running-agent states without claiming installed inventory", async () => {
     const view = mount(null, { loading: true }); expect(view.getByText("Loading agents…")).toBeTruthy();
     await view.rerender({ report: { ...report(), agents: [] }, selectedAgent: null, onselectagent() {} });
     expect(view.getByRole("heading", { name: "No running agents to inspect" })).toBeTruthy();
-    expect(view.container.textContent).toContain("not a list of everything installed");
+    expect(view.container.textContent).toContain("Only running agents are listed");
   });
   it("retains exact selection across refresh and closes it when its definition disappears", async () => {
     const r = report(), view = mount(r);
@@ -266,7 +268,7 @@ describe("MCP and skills capability explorer", () => {
     expect(details(view).textContent).toContain("filesystem");
     const next = structuredClone(r); next.agents[1].capabilities!.mcp_servers = next.agents[1].capabilities!.mcp_servers.filter((item) => item.name !== "filesystem");
     await view.rerender({ report: next, selectedAgent: "agent:52000", reduced: true, onselectagent() {} });
-    await waitFor(() => expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull());
+    await waitFor(() => expect(noDetails(view)).toBe(true));
     expect(view.getByRole("complementary", { name: "Capability agents" })).toBeTruthy();
   });
   it("renders untrusted purpose as text while retaining the folder identity", async () => {
@@ -275,6 +277,46 @@ describe("MCP and skills capability explorer", () => {
     const view = mount(r); await fireEvent.click(view.getByRole("button", { name: frontendSkill("UI verification") }));
     expect(view.container.querySelector("img")).toBeNull(); expect(details(view).textContent).toContain(skill.description);
     await tab(view, "Source"); expect(details(view).textContent).toContain("frontend-checks");
+  });
+  it("opens a card's details inline right after it and closes them with Escape", async () => {
+    const view = mount(), card = view.getByRole("button", { name: frontendSkill() });
+    card.focus(); await fireEvent.click(card);
+    const panel = view.getByRole("region", { name: "Capability details" });
+    expect(card.nextElementSibling).toBe(panel);
+    expect(card.getAttribute("aria-expanded")).toBe("true");
+    expect(card.getAttribute("aria-controls")).toBe(panel.id);
+    expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull();
+    await waitFor(() => expect(panel.textContent).toContain("Scan with…"));
+    await fireEvent.keyDown(view.getByRole("heading", { name: "frontend-checks" }), { key: "Escape" });
+    expect(noDetails(view)).toBe(true);
+    expect(document.activeElement).toBe(card);
+    await fireEvent.click(card); await fireEvent.click(card);
+    expect(noDetails(view)).toBe(true);
+  });
+  it("lists contexts by project folder and opens an agent under its process row", async () => {
+    const view = mount();
+    const cursor = view.getByRole("button", { name: /^Explore context Cursor,/ });
+    expect(cursor.textContent).toContain("docs +1");
+    expect(cursor.textContent).not.toContain("/Users/dev/code");
+    expect(cursor.getAttribute("title")).toContain("/Users/dev/code/shop-web");
+    await fireEvent.click(view.getByRole("button", { name: "Show processes for Cursor" }));
+    const row = view.getByRole("button", { name: "Inspect agent card Cursor, PID 52000" });
+    row.focus(); await fireEvent.click(row);
+    const panel = view.getByRole("region", { name: "Capability details" });
+    expect(row.nextElementSibling).toBe(panel);
+    expect(panel.textContent).toContain("PID 52000");
+    await fireEvent.keyDown(panel, { key: "Escape" });
+    expect(noDetails(view)).toBe(true);
+    expect(document.activeElement).toBe(row);
+  });
+  it("labels Compare contexts by name and project folder only", async () => {
+    const view = mount(report(), { selectedAgent: null });
+    await fireEvent.click(view.getByRole("radio", { name: "Compare" }));
+    await fireEvent.click(view.getByRole("combobox", { name: /^Left context:/ }));
+    for (const option of view.getAllByRole("option")) {
+      expect(option.textContent).not.toMatch(/\/Users\/|process/);
+      expect(option.textContent!.length).toBeLessThan(40);
+    }
   });
   it("keeps the Overview entry point explicitly opt-in", async () => {
     const r = mockAgents(), oncapabilities = vi.fn();
