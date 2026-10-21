@@ -190,10 +190,10 @@ try {
     await frame.getByRole("button", { name: /^\d+ listening$/ }).click();
     await frame.locator("#port-list").waitFor();
   });
-  await check("Agents → Insights → How it works loads the analyzer graphs on demand", async () => {
+  await check("Agents → Security → How it works loads the analyzer graphs on demand", async () => {
     await frame.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: /^Agents/ }).click();
-    await frame.getByRole("radio", { name: "Insights", exact: true }).click();
-    const insights = frame.getByRole("region", { name: "Insights workspace", exact: true });
+    await frame.getByRole("radio", { name: /^Security\b/ }).click();
+    const insights = frame.getByRole("region", { name: "Security workspace", exact: true });
     await insights.getByRole("radio", { name: "How it works", exact: true }).click();
     const overview = insights.getByRole("group", { name: "Analyzers and the agents they cover", exact: true });
     await overview.locator(".svelte-flow").waitFor({ timeout: 8000 });
@@ -413,7 +413,7 @@ try {
   const guideBase = new URL("./", page.url());
   const checkGuideImages = async (viewport) => {
     await page.setViewportSize(viewport);
-    for (const [route, count] of [["agents", 12], ["desktop", 11], ["whats-new", 1]]) {
+    for (const [route, count] of [["agents", 14], ["desktop", 11], ["whats-new", 1]]) {
       await page.goto(new URL(`docs/${route}/`, guideBase).href, { waitUntil: "domcontentloaded" });
       const images = page.locator(".prose img");
       if (await images.count() !== count) throw new Error(`${route}: expected ${count} guide screenshots`);

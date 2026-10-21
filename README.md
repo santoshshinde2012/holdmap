@@ -25,6 +25,11 @@
   <img src="docs/screenshots/desktop-home-cards-light.png" width="860" alt="holdmap Home as Cards: each agent with its projects, ports, MCP servers and skills, and a Needs you list (sample data)" />
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/desktop-capability-inline-light.png" width="420" alt="MCP & skills: a skill card's details open inline right under it, with Scan with… (sample data)" />
+  <img src="docs/screenshots/desktop-security-analyzers-light.png" width="420" alt="Agents → Security → Analyzers: analyzers and presets with on/off and installed state, all off by default (sample data)" />
+</p>
+
 ## Features
 
 - **Who owns the port.** The process, command, folder, project, git branch and framework, or
