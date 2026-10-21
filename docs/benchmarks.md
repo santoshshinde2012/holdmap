@@ -88,10 +88,12 @@ to size a desktop bundle you built yourself.
 
 ## Evaluation
 
-`python3 scripts/eval-analyzers.py` builds 17 small skills with known problems in a throwaway
-home, adds and approves each installed analyzer there, runs it through holdmap and scores the
-findings. The secrets in the fixtures are random values put together at run time, so no
-credential-shaped string is committed.
+`python3 scripts/eval-analyzers.py` writes the 17 small skills in
+`scripts/eval-fixtures.json`, each with known problems, to a throwaway home. It adds and approves
+each installed analyzer there, runs it through holdmap and scores the findings. The
+credential-shaped values in the fixtures are a fixed prefix plus a `{{fill:LENGTH:CHARSET}}`
+placeholder (a key file is `{{pem:LINES}}`), filled from a fixed seed when the files are written. No real or
+credential-shaped string is committed, and every run writes the same files.
 
 | Skills | Labels |
 | --- | --- |
