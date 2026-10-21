@@ -278,3 +278,11 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
+/* Severity labels (Security tab): one color per severity in both themes. */
+.sev-pill { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: var(--r-sm); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); white-space: nowrap; text-transform: capitalize; }
+.sev-pill.critical { background: var(--danger); color: var(--danger-fg); }
+.sev-pill.high { background: var(--danger-soft); color: var(--danger); }
+.sev-pill.medium { background: var(--warn-soft); color: var(--tone-amber); }
+.sev-pill.low { background: var(--tone-blue-bg); color: var(--tone-blue); }
+.sev-pill.info { background: var(--tone-gray-bg); color: var(--tone-gray); }

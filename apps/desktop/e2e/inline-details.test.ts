@@ -74,10 +74,11 @@ for (const t of ["light", "dark"] as const) {
     await tab.click();
     const ws = app.getByRole("region", { name: "Security workspace" });
     await ws.getByRole("radio", { name: "Analyzers" }).click();
-    const gallery = ws.getByRole("region", { name: "Analyzers" });
-    await expect(gallery).toContainText("SkillSpector");
-    await expect(gallery).toContainText("Not installed");
-    await expect(gallery).toContainText("Off by default");
+    await expect(ws.getByRole("region", { name: /^Enabled/ })).toContainText("SkillSpector");
+    const available = ws.getByRole("region", { name: /^Available/ });
+    await expect(available).toContainText("Not installed");
+    await expect(available.getByRole("button", { name: "Enable OSV vulnerability lookup" })).toBeVisible();
+    await expect(ws).toContainText("Off by default");
     await axe(app, "#agent-insights");
   });
 }

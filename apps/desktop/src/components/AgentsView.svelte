@@ -13,7 +13,6 @@
   import AutoMiniMap from "./graph/AutoMiniMap.svelte";
   import Icon from "./Icon.svelte";
   import AgentFlowView from "./agents/flow/AgentFlowView.svelte";
-  import InsightsWorkspace from "./analyzers/InsightsWorkspace.svelte";
   import FolderActions from "./FolderActions.svelte";
   import type { AgentFlowProps } from "../lib/agent-flow/model";
   import { FIT_PADDING } from "../lib/flow";
@@ -117,6 +116,21 @@
       if (!capabilityChunkError) void loadCapabilityWorkspace();
     });
   });
+
+  // The Security workspace is optional too: it loads when its tab opens.
+  let SecurityWorkspace = $state<typeof import("./analyzers/InsightsWorkspace.svelte").default | null>(null);
+  let securityChunkError = $state(false);
+  async function loadSecurityWorkspace() {
+    if (disposed || SecurityWorkspace) return;
+    securityChunkError = false;
+    try {
+      const module = await import("./analyzers/InsightsWorkspace.svelte");
+      if (!disposed) SecurityWorkspace = module.default;
+    } catch {
+      if (!disposed) securityChunkError = true;
+    }
+  }
+  $effect(() => { if (section === "insights") untrack(() => { if (!securityChunkError) void loadSecurityWorkspace(); }); });
 
   let recent = $state(prefGet("agents.recent") !== "0");
   $effect(() => prefSet("agents.recent", recent ? "1" : "0"));
@@ -245,7 +259,13 @@
       <div class="empty workspace-loading" role="status" aria-busy="true"><Icon name="plug" size={28} /><p>Loading MCP &amp; skills…</p></div>
     {/if}
   {:else if section === "insights"}
-    <InsightsWorkspace {report} {selectedAgent} {inventory} {onselectagent} {onsettings} {oninventory} />
+    {#if SecurityWorkspace}
+      <SecurityWorkspace {report} {selectedAgent} {inventory} {onselectagent} {onsettings} {oninventory} />
+    {:else if securityChunkError}
+      <div class="empty workspace-loading" role="alert"><Icon name="shield" size={28} /><p>Couldn't load Security</p><div class="load-actions"><Button size="sm" onclick={loadSecurityWorkspace}>Try again</Button><Button size="sm" variant="ghost" onclick={() => window.location.reload()}>Reload app</Button></div></div>
+    {:else}
+      <div class="empty workspace-loading" role="status" aria-busy="true"><Icon name="shield" size={28} /><p>Loading Security…</p></div>
+    {/if}
   {:else if section === "flow"}
     <div class="flow-body" id="agents-flow"><AgentFlowView {query} {dark} {reduced} {...flowProps} bind:mode={flowSource} sourceChrome={false} /></div>
   {:else}

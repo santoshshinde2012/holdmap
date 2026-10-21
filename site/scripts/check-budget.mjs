@@ -73,7 +73,8 @@ function onDemandFeature(key, name) {
 if (!demoManifest["src/components/AgentsView.svelte"]) throw new Error("Agents must have its own manifest entry.");
 const capabilityDemoFiles = onDemandFeature("src/components/agents/AgentCapabilitiesView.svelte", "Capability workspace");
 const analyzerGraphFiles = onDemandFeature("src/components/analyzers/graph/analyzer-graphs.ts", "Analyzer graphs");
-const deferredDemoJs = demoJs.filter((file) => !initialDemoFiles.has(file) && !snapshotDemoFiles.has(file) && !capabilityDemoFiles.has(file) && !analyzerGraphFiles.has(file));
+const securityDemoFiles = onDemandFeature("src/components/analyzers/InsightsWorkspace.svelte", "Security workspace");
+const deferredDemoJs = demoJs.filter((file) => !initialDemoFiles.has(file) && !snapshotDemoFiles.has(file) && !capabilityDemoFiles.has(file) && !analyzerGraphFiles.has(file) && !securityDemoFiles.has(file));
 const videos = files(join(dist, "hero")).filter((f) => /\.(mp4|webm)$/.test(f));
 
 const rows = [
@@ -85,7 +86,8 @@ const rows = [
   ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 220 * 1024],
   ["Snapshot PNG JS (on capture)", [...snapshotDemoFiles].reduce((n, f) => n + gz(f), 0), 40 * 1024],
   ["Capability workspace JS (on inspection)", [...capabilityDemoFiles].reduce((n, f) => n + gz(f), 0), 20 * 1024],
-  ["Analyzer graphs JS (on How it works)", [...analyzerGraphFiles].reduce((n, f) => n + gz(f), 0), 12 * 1024],
+  ["Security workspace JS (on Security)", [...securityDemoFiles].reduce((n, f) => n + gz(f), 0), 12 * 1024],
+  ["Analyzer graphs JS (on Pipeline)", [...analyzerGraphFiles].reduce((n, f) => n + gz(f), 0), 12 * 1024],
   ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 160 * 1024],
   ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];

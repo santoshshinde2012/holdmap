@@ -13,7 +13,7 @@ import toolsLight from "../../../docs/screenshots/desktop-analyzer-tools-light.p
 // Sample-data captures from apps/desktop/scripts/capture-screenshots.mjs (1440×1000 at 2x).
 type Shot = { dark: ImageMetadata; light: ImageMetadata; alt: string };
 const views: { key: string; label: string; icon: string; shot: Shot }[] = [
-  { key: "pipeline", label: "How it works", icon: "Workflow", shot: { dark: pipelineDark, light: pipelineLight, alt: "SkillSpector's pipeline: inventory, the fields it gets, the sandbox, the analyzer, the parser, findings by severity, and where they show: Home, Needs you and Insights. The last run's details are open below." } },
+  { key: "pipeline", label: "Pipeline", icon: "Workflow", shot: { dark: pipelineDark, light: pipelineLight, alt: "SkillSpector's pipeline: inventory, the fields it gets, the sandbox, the analyzer, the parser, findings by severity, and where they show: Home, Needs you and Insights. The last run's details are open below." } },
   { key: "coverage", label: "Coverage", icon: "Network", shot: { dark: overviewDark, light: overviewLight, alt: "Analyzers on the left linked to the agents they cover on the right, with open findings on each link." } },
   { key: "mcp", label: "Any MCP server", icon: "Plug", shot: { dark: toolsDark, light: toolsLight, alt: "Choosing an MCP server's tools: each argument mapped to an inventory field with example arguments, and a tool flagged for hidden instructions and credential files." } },
 ];

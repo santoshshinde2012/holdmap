@@ -27,7 +27,11 @@
 
 <p align="center">
   <img src="docs/screenshots/desktop-capability-inline-light.png" width="420" alt="MCP & skills: a skill card's details open inline right under it, with Scan with… (sample data)" />
-  <img src="docs/screenshots/desktop-security-analyzers-light.png" width="420" alt="Agents → Security → Analyzers: analyzers and presets with on/off and installed state, all off by default (sample data)" />
+  <img src="docs/screenshots/desktop-security-analyzers-light.png" width="420" alt="Agents → Security → Analyzers: cards with publisher, what each checks, on/off or installed state and one action; all off by default (sample data)" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/desktop-security-findings-light.png" width="840" alt="Agents → Security: open findings by severity, last scan and coverage, findings grouped by severity with one expanded to its fix, location, analyzer and evidence (sample data)" />
 </p>
 
 ## Features

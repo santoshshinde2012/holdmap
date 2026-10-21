@@ -10,6 +10,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- **Security tab redesign.** A summary header (open findings by severity, last scan, agents and
+  skills scanned), findings grouped by severity, skill or analyzer with search and agent filters,
+  inline detail (fix, file:line, analyzer, evidence) with Mark reviewed, Snooze and Rescan, a
+  **Rescan** with per-analyzer progress, and analyzer cards with one action each. Enable, Install
+  and Review still go through the permissions sheet; nothing is on by default.
 - **Agents → Security** (was Insights) shows the open-finding count on its tab and an
   **Analyzers** gallery: your analyzers and the presets, each marked on/off or installed.
   Skill cards carry a findings badge, and capability details have **Scan with…**. Approved

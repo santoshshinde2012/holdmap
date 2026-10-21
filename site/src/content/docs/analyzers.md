@@ -222,7 +222,7 @@ To remove an analyzer, along with its approval, pin, results and keys, run
 
 ## How it works, as a graph
 
-**How it works** on an analyzer, or **Agents → Security → How it works**, draws its pipeline:
+**How it works** on an analyzer, or **Agents → Security → Pipeline**, draws its pipeline:
 inventory sources, the exact fields it gets, the sandbox and hosts, the program or MCP tools,
 the parser, the findings by severity, and where they appear (Home, Needs you, Security). Each
 step shows the last run's counts, duration and status, plus the approval and pin state. Click

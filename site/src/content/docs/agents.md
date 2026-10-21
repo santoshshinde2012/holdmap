@@ -123,6 +123,15 @@ process observations:
 | --- | --- |
 | ![Selecting a skill card opens its details directly under it, with Purpose, Source, Evidence and Activity tabs and Scan with…](../../../../docs/screenshots/desktop-capability-inline-dark.png) | ![The Security tab lists analyzers and presets with their on/off and installed state; all are off by default](../../../../docs/screenshots/desktop-security-analyzers-dark.png) |
 
+![Agents → Security: open findings by severity, last scan and coverage; findings grouped by severity, one expanded to its fix, location, analyzer and evidence, with Mark reviewed, Snooze and Rescan](../../../../docs/screenshots/desktop-security-findings-dark.png)
+
+The Security tab opens with a summary: open findings by severity (click one to filter), the last
+scan, and how many agents and skills a scan has covered. Findings group by **Severity**, **Skill**
+or **Analyzer**, filter by search and agent, and expand in place. **Rescan** runs every analyzer
+you turned on, one at a time, with progress. **Analyzers** shows each one as a card with a single
+action: **Run** when it's on, otherwise **Enable…**, **Install…** or **Review…**, which open its
+permissions sheet in Settings. **Pipeline** draws which analyzer covers which agent.
+
 | Light theme | Narrow window |
 | --- | --- |
 | ![The light-theme capability map preserves declared-source relationships and separates runtime observations](../../../../docs/screenshots/desktop-capabilities-light.png) | ![A narrow capability map opens selected details in a dismissible inspector](../../../../docs/screenshots/desktop-capabilities-narrow-light.png) |

@@ -25,31 +25,45 @@ describe("inventories", () => {
   });
 });
 
-describe("Insights tab", () => {
-  it("shows findings per agent, including agents that aren't running", async () => {
+describe("Security tab", () => {
+  it("shows a summary and findings grouped by severity, expandable inline", async () => {
+    withDemoFindings();
+    render(InsightsWorkspace, { report: mockAgents(undefined, true), inventory: true });
+    const summary = screen.getByRole("group", { name: "Security summary" });
+    expect(summary.textContent).toContain("Open findings");
+    expect(summary.textContent).toContain("Agents scanned");
+    expect(screen.getByRole("region", { name: "High findings" })).toBeTruthy();
+    const row = screen.getByRole("button", { name: /Instruction Override/ });
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    await fireEvent.click(row);
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Remove text that tells the agent to ignore prompts or safety rules.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mark reviewed" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Rescan with SkillSpector" })).toBeTruthy();
+  });
+
+  it("filters by severity from the summary and by search", async () => {
+    withDemoFindings();
+    render(InsightsWorkspace, { report: mockAgents(undefined, true), inventory: true });
+    await fireEvent.click(screen.getByRole("button", { name: "2 Medium" }));
+    expect(screen.queryByRole("region", { name: "High findings" })).toBeNull();
+    expect(screen.getByRole("region", { name: "Medium findings" })).toBeTruthy();
+    await fireEvent.input(screen.getByRole("searchbox", { name: "Search findings" }), { target: { value: "zzz" } });
+    expect(screen.getByText("No findings match")).toBeTruthy();
+  });
+
+  it("selects the app agent when a running agent is picked in the filter", async () => {
     withDemoFindings();
     const onselectagent = vi.fn();
     render(InsightsWorkspace, { report: mockAgents(undefined, true), inventory: true, onselectagent });
-    const list = screen.getByRole("navigation", { name: "Agents with insights" });
-    expect(list.textContent).toContain("Codex CLI");
-    expect(list.textContent).toContain("not running");
-    // The agent with the most severe findings opens first.
-    expect(screen.getByRole("heading", { level: 3 }).textContent).toContain("Claude Code");
-    expect(screen.getByText("Instruction Override", { exact: false })).toBeTruthy();
-
-    await fireEvent.click(screen.getByRole("button", { name: /^Codex CLI/ }));
-    expect(screen.getByRole("heading", { level: 3 }).textContent).toContain("not running");
-    expect(screen.getByText("Destructive Shell Command", { exact: false })).toBeTruthy();
-    expect(onselectagent).not.toHaveBeenCalled();
-
-    await fireEvent.click(screen.getByRole("button", { name: /^Cursor/ }));
+    await fireEvent.change(screen.getByRole("combobox", { name: "Agent" }), { target: { value: "cursor" } });
     expect(onselectagent).toHaveBeenCalledWith("agent:52000");
   });
 
-  it("says when nothing is on and offers the inventory when it's off", async () => {
+  it("guides first setup when nothing is on, and offers the inventory when it's off", async () => {
     const oninventory = vi.fn();
     render(InsightsWorkspace, { report: mockAgents(), inventory: false, oninventory });
-    expect(screen.getByText(/No analyzer is on/)).toBeTruthy();
+    expect(screen.getByText("No analyzer is on")).toBeTruthy();
     await fireEvent.click(screen.getByRole("button", { name: "Turn on inventory" }));
     expect(oninventory).toHaveBeenCalled();
   });
