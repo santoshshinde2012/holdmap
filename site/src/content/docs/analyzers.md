@@ -93,7 +93,9 @@ analyzer: off, with the same permissions sheet, sandbox and pin as any other.
 
 The list shows whether each tool is **Installed** (found on your `PATH` or a usual install
 folder) and the install command for those that aren't. Rules-only scanners miss things an LLM
-review might catch; treat no findings as "nothing matched", not "safe". Presets ship with
+review might catch; treat no findings as "nothing matched", not "safe". How each preset and SkillSpector did on a
+small labelled set of skills, with how to rerun it, is in
+[Benchmarks and evaluation](https://github.com/santoshshinde2012/holdmap/blob/main/docs/benchmarks.md). Presets ship with
 holdmap but are not part of the signed catalog.
 
 ### Settings files a skill ships

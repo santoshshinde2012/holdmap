@@ -229,6 +229,36 @@ policy, `4` needs elevation. Every flag is in the [CLI reference](docs/cli.md).
 
 See [SECURITY.md](SECURITY.md) for the full model, limits and how to report a vulnerability.
 
+## Benchmarks & evaluation
+
+Measured on a Linux VM (8 vCPU Xeon, Debian 13). A Mac or Windows PC will differ, so rerun
+the scripts on yours. Details, the environment and how to reproduce are in
+[docs/benchmarks.md](docs/benchmarks.md).
+
+| Measurement | Result |
+| --- | --: |
+| CLI startup (`holdmap --version`), median | 1.2 ms, 4.7 MiB peak RSS |
+| `holdmap list --json` with 127 / 1,027 / 5,027 listening ports, median | 47 / 45 / 189 ms |
+| Peak RSS at 5,027 ports | 36.5 MiB |
+| Analyzer overhead per skill (staging copy, sandbox, parsing) | 36–41 ms |
+| CLI download (macOS / Linux / Windows) | 1.6–2.8 MiB |
+| Desktop installer (`.dmg`, `.msi`, `.deb`) | 5.9–6.9 MiB |
+
+Analyzer and preset detection on 17 labelled fixture skills, findings at medium or above:
+
+| Analyzer | Precision | Recall |
+| --- | --: | --: |
+| Trivy secrets | 1.00 | 1.00 |
+| Bandit | 1.00 | 0.80 |
+| OSV-Scanner | 1.00 | 1.00 |
+| Cisco Skill Scanner | 0.67 | 1.00 |
+| SkillSpector (`--no-llm`) | 1.00 | 0.92 |
+
+Two fixtures ship a `.bandit` or `.trivyignore` that hides their problem. Run directly, those
+scanners report nothing. Through holdmap, which leaves the files out of the copy, both
+problems are found. The set is small and hand-made: it checks the pipeline, not how good the
+scanners are on real skills.
+
 ## Docs
 
 | Guide | What it covers |
@@ -243,6 +273,7 @@ See [SECURITY.md](SECURITY.md) for the full model, limits and how to report a vu
 | [CLI reference](docs/cli.md) | Every command and flag |
 | [Architecture](docs/architecture.md) | How the crates, desktop app and MCP server fit together |
 | [Agent flow](docs/agent-flow.md) | Local recording: providers, privacy and bounds |
+| [Benchmarks and evaluation](docs/benchmarks.md) | Measured speed, memory, sizes and analyzer detection, and how to reproduce them |
 | [Contributing](CONTRIBUTING.md) | Setup, checks, conventions and releases |
 | [Changelog](CHANGELOG.md) | Every release |
 

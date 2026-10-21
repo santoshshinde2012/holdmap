@@ -6,7 +6,7 @@
 use crate::catalog::{
     Catalog, CatalogDiff, CatalogError, CatalogSource, CatalogStatus, CatalogStore, SignedCatalog,
 };
-use crate::cli_runner::CliRunner;
+use crate::cli_runner::{note_limits_coverage, CliRunner};
 use crate::consent::{
     ConsentStore, Grant, ResultStore, Review, ReviewStore, SecretIndex, ToolPinStore, ToolSlot,
     UserManifestStore,
@@ -1344,7 +1344,8 @@ fn assemble(
                 continue;
             }
         };
-        partial |= parsed.status == Some(RunStatus::Partial) || !out.notes.is_empty();
+        partial |= parsed.status == Some(RunStatus::Partial)
+            || out.notes.iter().any(|n| note_limits_coverage(n));
         if parsed.status == Some(RunStatus::Failed) {
             failed += 1;
             notes.push(prefix("the analyzer reported that the analysis failed."));
@@ -1509,6 +1510,17 @@ fn now_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::unstage;
+    use crate::cli_runner::{note_limits_coverage, settings_note};
+
+    #[test]
+    fn leaving_scanner_settings_out_does_not_make_a_run_partial() {
+        assert!(!note_limits_coverage(&settings_note(1)));
+        assert!(!note_limits_coverage(&settings_note(2)));
+        assert!(note_limits_coverage(
+            "The folder is larger than the staging limit; only part of it was analysed."
+        ));
+        assert!(note_limits_coverage("Stopped: the run was cancelled."));
+    }
 
     #[test]
     fn staged_paths_become_relative() {

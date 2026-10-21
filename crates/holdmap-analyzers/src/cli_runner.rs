@@ -298,13 +298,22 @@ pub const TOOL_SETTINGS: &[&str] = &[
     ".skillspector-baseline.yaml", // SkillSpector (applied only on request, left out anyway)
 ];
 
+/// How [`settings_note`] starts.
+const SETTINGS_NOTE_START: &str = "Left out ";
+
 /// The note shown when staging left settings files out.
 pub fn settings_note(count: usize) -> String {
     format!(
-        "Left out {count} scanner settings file{} the folder ships (such as .bandit or \
+        "{SETTINGS_NOTE_START}{count} scanner settings file{} the folder ships (such as .bandit or \
          osv-scanner.toml), so it can't change how it is checked.",
         if count == 1 { "" } else { "s" }
     )
+}
+
+/// Whether a run note means part of the subject went unchecked. Leaving a skill's own scanner
+/// settings out is how holdmap makes the check complete, so that note alone doesn't.
+pub fn note_limits_coverage(note: &str) -> bool {
+    !(note.starts_with(SETTINGS_NOTE_START) && note.contains(" scanner settings file"))
 }
 
 fn is_tool_settings(name: &std::ffi::OsStr) -> bool {

@@ -24,8 +24,8 @@ by [release-please](https://github.com/googleapis/release-please) from
   `{empty.file}`, a portable stand-in for `/dev/null`.
 - Every analyzer runs on a copy without scanner settings files a skill could ship to hide its
   findings (`.bandit`, `osv-scanner.toml`, `.trivyignore`, `.gitleaksignore`, `.semgrepignore`,
-  `.secrets.baseline` and others). SARIF fixes are plain text, and help that only repeats the
-  match is dropped.
+  `.secrets.baseline` and others). Leaving them out doesn't mark the run partial. SARIF fixes
+  are plain text, and help that only repeats the match is dropped.
 - OS sandboxes for analyzer runs:
   - Linux: bubblewrap, or Landlock when bubblewrap isn't installed.
   - macOS: Seatbelt (best effort).
@@ -58,6 +58,14 @@ by [release-please](https://github.com/googleapis/release-please) from
 - `holdmap needs` and the MCP tool `list_needs` show the same **Needs you** list as the desktop
   app, now including analyzer findings. The MCP tools `list_analyzers` and `list_insights` are
   read-only. holdmap's MCP server now has 14 tools.
+
+### Documentation
+
+- [Benchmarks and evaluation](docs/benchmarks.md), with a summary in the README: startup, scan
+  latency and memory at up to 5,000 ports, analyzer overhead and download sizes, plus the
+  precision and recall of each analyzer and preset on 17 labelled fixture skills. All of it was
+  measured on a Linux VM. Rerun it with `scripts/bench.py`, `scripts/eval-analyzers.py` and
+  `cargo bench -p holdmap-core`.
 
 ## [0.9.0] - 2026-10-17
 
