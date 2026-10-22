@@ -25,7 +25,7 @@
   <div class="body">
     <span class="label">{a.name}{#if c.stoppable > 0}<em class="stop-n" data-glyph={c.stoppable}></em>{/if}</span>
     <span class="sub">{data.node.sub}</span>
-    <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.text} · {shown}</span>
+    <span class="acc lv-{head.level}" title="{head.text} · {shown}"><i aria-hidden="true"></i>{head.text}</span>
   </div>
   <Handle type="source" position={Position.Right} isConnectable={false} role="presentation" tabindex={undefined} />
 </div>

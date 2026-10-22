@@ -11,10 +11,19 @@
   import type { ConfiguredServer, McpDraft } from "../../lib/analyzers";
   import type { PresetView } from "../../lib/analyzer-presets";
 
-  let { onadded, demo = false }: { onadded?: (id: string) => void; demo?: boolean } = $props();
   type Mode = "preset" | "command" | "url" | "agents" | "manifest";
-  let open = $state(false);
-  let mode = $state<Mode>("preset");
+  const ALL: { value: Mode; label: string }[] = [
+    { value: "preset", label: "Presets" }, { value: "command", label: "Command" }, { value: "url", label: "Local URL" },
+    { value: "agents", label: "From your agents" }, { value: "manifest", label: "Manifest" },
+  ];
+  // The Security gallery already shows presets as cards, so it opens this form without them.
+  let { onadded, oncancel, demo = false, modes = ALL.map((m) => m.value), startOpen = false }:
+    { onadded?: (id: string) => void; oncancel?: () => void; demo?: boolean; modes?: Mode[]; startOpen?: boolean } = $props();
+  const options = $derived(ALL.filter((m) => modes.includes(m.value)));
+  // svelte-ignore state_referenced_locally
+  let open = $state(startOpen);
+  // svelte-ignore state_referenced_locally
+  let mode = $state<Mode>(modes[0] ?? "preset");
   let presets = $state<PresetView[] | null>(null);
   let id = $state("local.");
   let name = $state("");
@@ -64,7 +73,7 @@
         // A manifest already names its tools; edit them later with Tools….
         const view = await api.addAnalyzer(text);
         text = "";
-        open = false;
+        open = startOpen;
         onadded?.(view.id);
       } else {
         const view = await api.addMcpAnalyzer(draft());
@@ -88,7 +97,7 @@
   function done() {
     const a = added;
     added = null;
-    open = false;
+    open = startOpen;
     if (a) onadded?.(a.id);
   }
   const ready = $derived(mode === "manifest" ? !!text.trim() : !!id.trim() && (mode === "command" ? !!command.trim() : mode === "url" ? !!url.trim() : !!server?.draft));
@@ -102,10 +111,7 @@
     <McpTools id={added.id} name={added.name} onsaved={done} oncancel={done} />
   {:else}
     <h3>Add your own analyzer</h3>
-    <SegmentedControl bind:value={mode} label="How to add it" options={[
-      { value: "preset", label: "Presets" }, { value: "command", label: "Command" }, { value: "url", label: "Local URL" },
-      { value: "agents", label: "From your agents" }, { value: "manifest", label: "Manifest" },
-    ]} />
+    <SegmentedControl bind:value={mode} label="How to add it" {options} />
     <p class="meta">
       {#if mode === "preset"}Well-known scanners that run on this computer without an LLM or API key. You install the tool; holdmap adds its manifest, off until you review and approve its permissions.
       {:else if mode === "command"}Any MCP server that speaks stdio. holdmap starts it in the sandbox with a cleared environment, only for runs you start, and stops it afterwards.
@@ -163,7 +169,7 @@
     {/if}
     <div class="acts">
       {#if mode !== "preset"}<Button size="sm" variant="primary" loading={busy} disabled={!ready} onclick={add}>{mode === "manifest" ? "Add analyzer" : "Add and choose tools…"}</Button>{/if}
-      <Button size="sm" variant="ghost" onclick={() => { open = false; error = null; }}>Cancel</Button>
+      <Button size="sm" variant="ghost" onclick={() => { open = startOpen; error = null; oncancel?.(); }}>Cancel</Button>
     </div>
   {/if}
   {#if error}<Callout tone="danger" size="sm">{error}</Callout>{/if}

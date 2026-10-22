@@ -10,6 +10,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- **One summary header everywhere.** Home, the port list's "At a glance" and Security share the same
+  stat tiles (sentence-case labels, wrap on narrow windows; Home's tiles open the view behind them).
+- **Add your own analyzer from Security → Analyzers.** The "Add your own" card opens the add form in
+  place (command, local URL, your agents' servers or a manifest); Settings keeps the same form. What
+  you add stays off until you approve its permissions.
 - **Security tab redesign.** A summary header (open findings by severity, last scan, agents and
   skills scanned), findings grouped by severity, skill or analyzer with search and agent filters,
   inline detail (fix, file:line, analyzer, evidence) with Mark reviewed, Snooze and Rescan, a

@@ -74,7 +74,7 @@
   const stats = $derived<SummaryStat[]>([
     { id: "agents", value: o.agents, label: "agents", go: () => onview("agents") },
     { id: "ports", value: o.ports, label: "listening", go: () => onview("list") },
-    { id: "dev", value: o.devServers, label: "dev", go: () => onview("list") },
+    { id: "dev", value: o.devServers, label: "dev servers", go: () => onview("list") },
     { id: "exposed", value: o.exposed, label: "exposed", tone: o.exposed ? "warn" : undefined, go: () => onview("list") },
     ...(o.mcpConfigured !== null ? [{ id: "mcp", value: o.mcpRunning, of: o.mcpConfigured, label: "MCP running", go: () => onview("agents") } satisfies SummaryStat] : []),
   ]);

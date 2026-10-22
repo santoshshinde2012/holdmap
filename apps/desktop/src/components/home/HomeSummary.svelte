@@ -11,30 +11,16 @@
 </script>
 
 <script lang="ts">
-  // Terse figures; each opens the view behind it.
+  // Home's summary header: the same tiles as Security and the list's "At a glance"; each opens
+  // the view behind it.
+  import StatStrip from "../ui/StatStrip.svelte";
   let { stats }: { stats: SummaryStat[] } = $props();
+  const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+  const tiles = $derived(stats.map((s) => ({ id: s.id, label: cap(s.label), value: s.value, of: s.of, tone: s.tone, go: s.go, aria: `${s.value}${s.of != null ? `/${s.of}` : ""} ${s.label}` })));
 </script>
 
-<nav class="stats" aria-label="Summary">
-  {#each stats as s (s.id)}
-    {#if s.value === null}
-      <span class="stat" aria-busy="true"><b class="pending">…</b><span>{s.label}</span></span>
-    {:else}
-      <button type="button" class="stat tone-{s.tone ?? 'plain'}" onclick={s.go}>
-        <b>{s.value}{#if s.of != null}<small>/{s.of}</small>{/if}</b>{" "}<span>{s.label}</span>
-      </button>
-    {/if}
-  {/each}
-</nav>
+<div class="home-stats"><StatStrip stats={tiles} label="Summary" compact /></div>
 
 <style>
-  .stats { display: flex; flex-wrap: wrap; gap: 2px var(--sp-1); }
-  .stat { display: inline-flex; align-items: baseline; gap: 6px; padding: 2px 8px; border: 0; border-radius: var(--r-md); background: none; font: inherit; color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); white-space: nowrap; }
-  button.stat { cursor: pointer; }
-  button.stat:hover { background: var(--row-hover); color: var(--text-2); }
-  button.stat:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-  b { font-size: var(--fs-title); line-height: var(--lh-title); font-weight: var(--fw-semibold); color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: var(--ls-title); }
-  b small { font-size: var(--fs-body-sm); color: var(--muted); font-weight: var(--fw-medium); }
-  b.pending { color: var(--faint); }
-  .tone-warn b { color: var(--warn); }
+  .home-stats { flex: 1 1 520px; min-width: 0; }
 </style>

@@ -114,7 +114,7 @@ nothing else is read either.
 
 ## Your own analyzers
 
-**Add your own analyzer…** takes any MCP server, not only ones written for holdmap. Choose how
+**Add your own analyzer…** (in Settings → Analyzers, or the **Add your own** card in Agents → Security → Analyzers) takes any MCP server, not only ones written for holdmap. Choose how
 to reach it:
 
 - **Command**: a local stdio server, for example `npx -y some-mcp-scanner`

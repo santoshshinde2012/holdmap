@@ -44,6 +44,19 @@ for (const t of ["light", "dark"] as const) {
     await expect(ws.getByRole("button", { name: /Add your own/ })).toBeVisible();
     await axe(app);
   });
+
+  test(`${t}: Add your own opens the add form in place; Cancel closes it`, async ({ app }) => {
+    const ws = await security(app, t);
+    await ws.getByRole("radio", { name: "Analyzers" }).click();
+    await ws.getByRole("button", { name: /Add your own/ }).click();
+    const form = ws.getByTestId("add-analyzer");
+    await expect(form).toBeVisible();
+    await expect(form.getByRole("radio", { name: "Presets" })).toHaveCount(0);
+    await expect(form.getByRole("radio", { name: "Command" })).toBeChecked();
+    await axe(app);
+    await form.getByRole("button", { name: "Cancel" }).click();
+    await expect(form).toHaveCount(0);
+  });
 }
 
 test("filters by severity, search and group; clearing restores the list", async ({ app }) => {
