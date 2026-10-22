@@ -32,6 +32,7 @@
   let autostart = $state(untrack(() => model.autostart));
   let singleKeyShortcuts = $state(untrack(() => model.singleKeyShortcuts));
   let notify = $state(untrack(() => model.config.notify));
+  let agentSettings = $state(untrack(() => !!model.agentSettings));
   let notifyDevOnly = $state(untrack(() => model.config.notify_dev_only));
   let hotkey = $state(untrack(() => model.config.hotkey ?? "alt-p"));
   let confirmClear = $state(false);
@@ -173,6 +174,15 @@
             {/snippet}
           </SettingRow>
         </SettingsGroup>
+        {#if actions.setAgentSettings}
+          <SettingsGroup title="Agents">
+            <SettingRow label="Read agent settings" description="MCP servers, skills and permission rules: names and package names only. Never secret values, prompts or chats; never starts a server.">
+              {#snippet children({ labelId, descId })}
+                <Switch labelledby={labelId} describedby={descId} bind:checked={agentSettings} onchange={(v) => save("agentSettings", () => actions.setAgentSettings?.(v), v ? "Reading agent settings" : "Agent settings off")} />
+              {/snippet}
+            </SettingRow>
+          </SettingsGroup>
+        {/if}
         <SettingsGroup title="History">
           <SettingRow label="Remember" description="How many stopped services to keep for one-click restart.">
             {#snippet children()}

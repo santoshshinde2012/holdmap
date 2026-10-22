@@ -19,7 +19,7 @@
   import ShutdownDialog from "./components/ShutdownDialog.svelte";
   import SchedulesDialog from "./components/SchedulesDialog.svelte";
   import { type ScheduledAction, type ScheduledStopRequest } from "./lib/schedules";
-  import type { ShutdownPreview } from "./lib/power";
+  import { ShutdownFlow, type ShutdownIntent, type ShutdownSource } from "./lib/shutdown-flow.svelte";
   import PinDialog from "./components/PinDialog.svelte";
   import RemoteDialog from "./components/RemoteDialog.svelte";
   import { Dialog, IconButton, Splitter } from "./components/ui";
@@ -159,16 +159,7 @@
   let autostartOn = $state(false);
   let shortcut = $state<string | null>(null);
   let showSettings = $state(false);
-  let showShutdown = $state(false);
-  let shutdownIntent = $state<"now" | "schedule">("now");
-  let shutdownSource = $state<"settings" | "schedules">("settings");
-  let shutdownPreview = $state.raw<ShutdownPreview | null>(null);
-  let shutdownLoading = $state(false);
-  let shutdownBusy = $state(false);
-  let shutdownRequested = $state(false);
-  let shutdownError = $state<string | null>(null);
-  let shutdownSequence = 0;
-  let shutdownScheduled = $state.raw<ScheduledAction | null>(null);
+  const shutdown = new ShutdownFlow(api, () => loadSchedules());
   let schedules = $state.raw<ScheduledAction[]>([]);
   let showSchedules = $state(false);
   let schedulesLoading = $state(false);
@@ -242,7 +233,7 @@
   // Agents and small graph canvases use the existing modal details drawer.
   const showDrawer = $derived(!!selected && (prefs.view === "graph" ? graphDetailsDrawer && graphDetailsOpen : (narrow || prefs.view === "agents") && drawerOpen));
   /** Any overlay that owns the keyboard (they stop key events themselves; this is a backstop). */
-  const otherModalOpen: boolean = $derived(!!confirm || !!pendingReview || showHelp || showHistory || showPalette || showSettings || showShutdown || showSchedules || showRemote || !!pinDialog || showDrawer || !!capture.dialog);
+  const otherModalOpen: boolean = $derived(!!confirm || !!pendingReview || showHelp || showHistory || showPalette || showSettings || shutdown.visible || showSchedules || showRemote || !!pinDialog || showDrawer || !!capture.dialog);
   const modalOpen: boolean = $derived(otherModalOpen || snapshotCaptureState.open || snapshotCaptureState.busy);
   const scanMs = $derived(Math.min(60, Math.max(1, config?.scan_interval_secs ?? 4)) * 1000);
 
@@ -583,7 +574,7 @@
   }
   const portHolder = (port: number) => { const e = snapshot?.entries.find((x) => x.port === port); return e ? `${title(e)}${e.process ? ` (PID ${e.process.pid})` : ""}` : null; };
 
-  const settingsModel = $derived<SettingsModel | null>(config ? { theme: prefs.theme, density: prefs.density, singleKeyShortcuts: prefs.singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, updater: info.updater, appPath: info.appPath, architecture: info.architecture, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length } : null);
+  const settingsModel = $derived<SettingsModel | null>(config ? { theme: prefs.theme, density: prefs.density, singleKeyShortcuts: prefs.singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, updater: info.updater, appPath: info.appPath, architecture: info.architecture, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length, agentSettings: prefs.inventoryOn } : null);
   const settingsActions: SettingsActions = {
     setTheme: (t) => { prefs.theme = t; },
     setDensity: (d) => { prefs.density = d; },
@@ -599,6 +590,7 @@
     shutdown: () => openShutdown("now"),
     scheduleShutdown: () => openShutdown("schedule"),
     viewSchedules: openSchedules,
+    setAgentSettings: enableInventoryChoice,
   };
   async function loadConfig() {
     if (configLoading) return;
@@ -619,71 +611,18 @@
     showSettings = true;
   }
 
-  async function openShutdown(intent: "now" | "schedule" = "now", source: "settings" | "schedules" = "settings") {
-    if (shutdownBusy || shutdownLoading) return;
+  function openShutdown(intent: ShutdownIntent = "now", source: ShutdownSource = "settings") {
+    if (shutdown.pending) return;
     if (pendingReview) cancelReview();
-    shutdownIntent = intent;
-    shutdownSource = source;
     showSettings = false;
     showSchedules = false;
-    showShutdown = true;
-    shutdownPreview = null;
-    shutdownError = null;
-    shutdownRequested = false;
-    shutdownScheduled = null;
-    shutdownLoading = true;
-    const sequence = ++shutdownSequence;
-    try {
-      const preview = await api.shutdownPreview();
-      if (showShutdown && sequence === shutdownSequence) shutdownPreview = preview;
-    } catch (e) {
-      if (showShutdown && sequence === shutdownSequence) shutdownError = String(e);
-    } finally {
-      if (sequence === shutdownSequence) shutdownLoading = false;
-    }
+    shutdown.open(intent, source);
   }
 
   function closeShutdown() {
-    if (shutdownBusy) return;
-    showShutdown = false;
-    shutdownSequence++;
-    shutdownLoading = false;
-    shutdownPreview = null;
-    const back = shutdownSource;
-    shutdownSource = "settings";
+    const back = shutdown.close();
     if (back === "schedules") openSchedules();
-    else openSettings("power");
-  }
-
-  async function confirmShutdown() {
-    if (shutdownIntent !== "now" || !shutdownPreview || shutdownBusy || shutdownLoading || shutdownRequested || shutdownScheduled) return;
-    shutdownBusy = true;
-    shutdownError = null;
-    try {
-      const result = await api.shutdownMachine(shutdownPreview.confirmation_id);
-      if (!result.requested) throw new Error("The operating system did not accept the shutdown request.");
-      shutdownRequested = true;
-    } catch (e) {
-      shutdownError = String(e);
-      shutdownPreview = null; // Native handles are consumed on every attempt; re-review to retry.
-    } finally {
-      shutdownBusy = false;
-    }
-  }
-
-  async function scheduleShutdown(delaySecs: number) {
-    if (shutdownIntent !== "schedule" || !shutdownPreview || shutdownBusy || shutdownLoading || shutdownRequested || shutdownScheduled) return;
-    shutdownBusy = true;
-    shutdownError = null;
-    try {
-      shutdownScheduled = await api.scheduleShutdown(shutdownPreview.confirmation_id, delaySecs);
-      await loadSchedules();
-    } catch (e) {
-      shutdownError = String(e);
-      shutdownPreview = null;
-    } finally {
-      shutdownBusy = false;
-    }
+    else if (back) openSettings("power");
   }
 
   function acceptSchedules(items: ScheduledAction[], notify = false) {
@@ -720,9 +659,9 @@
   }
 
   function openSchedules() {
-    if (shutdownBusy || confirm?.schedulingBusy || confirm?.phase === "running") return;
+    if (shutdown.busy || confirm?.schedulingBusy || confirm?.phase === "running") return;
     showSettings = false;
-    showShutdown = false;
+    shutdown.visible = false;
     showPalette = false;
     showRemote = false;
     showHistory = false;
@@ -730,9 +669,7 @@
     pinDialog = null;
     drawerOpen = false;
     graphDetailsOpen = false;
-    shutdownSequence++;
-    shutdownLoading = false;
-    shutdownPreview = null;
+    shutdown.discard();
     cancelReview();
     confirm = null;
     showSchedules = true;
@@ -1449,8 +1386,8 @@
 {#if showHelp}<ShortcutsDialog {mod} singleKeyShortcuts={prefs.singleKeyShortcuts} onclose={() => (showHelp = false)} />{/if}
 {#if showSettings && settingsModel}<SettingsDialog model={settingsModel} actions={settingsActions} bind:section={settingsSection} onclose={() => (showSettings = false)} />{/if}
 {#if showSettings && !settingsModel}<SettingsUnavailableDialog error={configError} loading={configLoading} onretry={() => loadConfig()} onclose={() => (showSettings = false)} />{/if}
-{#if showShutdown}<ShutdownDialog intent={shutdownIntent} preview={shutdownPreview} loading={shutdownLoading} busy={shutdownBusy} requested={shutdownRequested} error={shutdownError} demo={!api.isTauri} onconfirm={confirmShutdown} onclose={closeShutdown} onretry={() => openShutdown(shutdownIntent)} onschedule={scheduleShutdown} scheduled={shutdownScheduled} onviewschedules={openSchedules} />{/if}
-{#if showSchedules && !confirm && !showShutdown}<SchedulesDialog {schedules} loading={schedulesLoading} error={schedulesError} demo={!api.isTauri} powerAvailable={!api.isTauri || ["macos", "linux", "windows"].includes(info.platform)} entries={snapshot?.entries ?? []} onclose={closeSchedules} onrefresh={() => loadSchedules(true)} oncancel={cancelSchedule} onschedulepower={() => openShutdown("schedule", "schedules")} onscheduleport={(entry) => { closeSchedules(); requestScheduledStop(entry); }} />{/if}
+{#if shutdown.visible}<ShutdownDialog intent={shutdown.intent} preview={shutdown.preview} loading={shutdown.loading} busy={shutdown.busy} requested={shutdown.requested} error={shutdown.error} demo={!api.isTauri} onconfirm={() => shutdown.confirm()} onclose={closeShutdown} onretry={() => openShutdown(shutdown.intent)} onschedule={(d) => shutdown.schedule(d)} scheduled={shutdown.scheduled} onviewschedules={openSchedules} />{/if}
+{#if showSchedules && !confirm && !shutdown.visible}<SchedulesDialog {schedules} loading={schedulesLoading} error={schedulesError} demo={!api.isTauri} powerAvailable={!api.isTauri || ["macos", "linux", "windows"].includes(info.platform)} entries={snapshot?.entries ?? []} onclose={closeSchedules} onrefresh={() => loadSchedules(true)} oncancel={cancelSchedule} onschedulepower={() => openShutdown("schedule", "schedules")} onscheduleport={(entry) => { closeSchedules(); requestScheduledStop(entry); }} />{/if}
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
 {#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
 {#if capture.dialog}

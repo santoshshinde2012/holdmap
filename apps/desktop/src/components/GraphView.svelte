@@ -1,4 +1,5 @@
 <script lang="ts">
+  import StatStrip, { type Stat } from "./ui/StatStrip.svelte";
   import { SvelteFlow, Background, type NodeTypes, type EdgeTypes } from "@xyflow/svelte";
   import "@xyflow/svelte/dist/style.css";
   import { setContext, tick, untrack } from "svelte";
@@ -54,6 +55,12 @@
     return { ...graph, nodes, edges: graph.edges.filter((e) => ids.has(e.from) && ids.has(e.to)) };
   });
   const shown = $derived(graphForQuery(scoped, query));
+  const graphStats = $derived<Stat[]>([
+    { id: "services", label: "Services", value: shown ? shown.nodes.filter((n) => n.kind !== "external").length : null },
+    { id: "links", label: "Links", value: shown ? shown.edges.length : null },
+    { id: "groups", label: "Groups", value: shown ? shown.clusters.length : null, meta: "Compose, k8s, workspaces" },
+    { id: "remote", label: "Remote", value: shown ? shown.edges.filter((e) => e.kind === "outbound").length : null, meta: "outbound connections" },
+  ]);
   const matches = $derived(shown?.nodes.filter((n) => graphNodeMatches(n, query)).length ?? 0);
   let visibleSignature: string | null = null;
   $effect(() => {
@@ -152,7 +159,7 @@
   <header class="graph-head">
     <div class="heading">
       <span class="graph-mark" aria-hidden="true"><Icon name="graph" size={18} /></span>
-      <div><h2>Service graph</h2><p class="stats">{shown?.nodes.length ?? 0} nodes <span>·</span> {shown?.edges.length ?? 0} links{#if loading}<span class="updating" role="status">Updating…</span>{/if}</p></div>
+      <div><h2>Service graph</h2><p class="stats">Who talks to whom on this computer{#if loading}<span class="updating" role="status">Updating…</span>{/if}</p></div>
     </div>
     <div class="primary-controls" role="toolbar" aria-label="Graph view options">
       {#if ontoggleall}
@@ -177,6 +184,7 @@
       </div>
     </div>
   </header>
+  <div class="graph-summary"><StatStrip compact label="Graph summary" stats={graphStats} /></div>
   {#if query.trim()}
     <div class="search-context" role="status">
       <Icon name="search" size={14} /><span><strong>{matches}</strong> {matches === 1 ? "match" : "matches"}{#if (shown?.nodes.length ?? 0) > matches} · {(shown?.nodes.length ?? 0) - matches} connected neighbours{/if}</span>
@@ -236,6 +244,7 @@
 </section>
 
 <style>
+  .graph-summary { padding: 0 16px 10px; border-bottom: 1px solid var(--border); background: var(--surface); }
   .graph { display: flex; flex-direction: column; position: relative; height: 100%; min-height: 0; min-width: 0; background: var(--bg); container-type: inline-size; outline: none; }
   .graph:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
   .graph-head { position: relative; display: flex; flex: none; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border); z-index: 6; }
