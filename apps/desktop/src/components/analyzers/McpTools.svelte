@@ -5,6 +5,7 @@
   // only when the user clicks; no tool is called until the analyzer is approved and run.
   import { onMount } from "svelte";
   import Button from "../ui/Button.svelte";
+  import Icon from "../Icon.svelte";
   import Callout from "../ui/Callout.svelte";
   import * as api from "../../lib/api";
   import type { OutputMapping, ToolInfo, ToolReport, ToolSpec } from "../../lib/analyzers";
@@ -22,7 +23,6 @@
   let output = $state<OutputMapping>({});
   /** Tools whose full description is open. OWASP: never let a short summary hide instructions. */
   let full = $state<Record<string, boolean>>({});
-  const SHORT = 280;
 
   const SAMPLE = { dir: "<private copy of example-skill>", skill_md: "<text of SKILL.md>", files: ["SKILL.md", "scripts/run.sh"], name: "example-skill", agents: ["claude-code"] };
   const OUTPUT_FIELDS: [keyof OutputMapping, string, string][] = [
@@ -94,8 +94,9 @@
   {:else if report}
     {@const s = report.snapshot}
     <header>
-      <span class="srv">{s.server?.name ?? "MCP server"}{s.server?.version ? ` ${s.server.version}` : ""}</span>
-      <span class="meta">{s.tools.length} {s.tools.length === 1 ? "tool" : "tools"} · pin {s.sha256.slice(0, 12)} · {report.approved ? "approved list" : "not approved yet"}</span>
+      <span class="srv-ic" aria-hidden="true"><Icon name="server" size={14} /></span>
+      <div class="srv-t"><span class="srv">{s.server?.name ?? "MCP server"}{s.server?.version ? ` ${s.server.version}` : ""}</span>
+        <span class="meta">{s.tools.length} {s.tools.length === 1 ? "tool" : "tools"} · pinned <code>{s.sha256.slice(0, 12)}</code> · {report.approved ? "approved list" : "not approved yet"}</span></div>
       <Button size="sm" variant="ghost" icon="refresh" loading={busy} onclick={list}>List again</Button>
     </header>
     {#each report.server_flags as f}<Callout tone="warn" size="sm">Server instructions: {f}</Callout>{/each}
@@ -106,25 +107,38 @@
         {@const on = chosen.includes(t.name)}
         {@const flags = report.flags[t.name] ?? []}
         {@const hints = toolHints(t.annotations)}
-        <li class:flagged={flags.length}>
-          <label class="pick">
-            <input type="checkbox" checked={on} onchange={(e) => toggle(t, e.currentTarget.checked)} aria-label={t.title ? `${t.title} (${t.name})` : t.name} aria-describedby={t.description ? `desc-${t.name}` : undefined} />
-            <span class="tn">{t.title ?? t.name}</span>{#if t.title}<code>{t.name}</code>{/if}
-          </label>
-          {#if hints.length}<ul class="hints" aria-label={`What the server says about ${t.name}`}>{#each hints as h (h.id)}<li class="hint t-{h.tone}" title={h.tip}>{h.label}</li>{/each}</ul>{/if}
-          {#if t.description}
-            {@const hidden = hiddenText(t.description)}
-            {@const long = t.description.length > SHORT}
-            {@const text = hidden ? revealHidden(t.description) : t.description}
-            <p class="desc" id={`desc-${t.name}`}>{long && !full[t.name] ? text.slice(0, SHORT) + "…" : text}</p>
-            {#if long}<button type="button" class="more" aria-expanded={!!full[t.name]} onclick={() => (full[t.name] = !full[t.name])}>{full[t.name] ? "Show less" : "Show full description"}</button>{/if}
-            {#if hidden}<p class="flag">⚠ {hidden} hidden {hidden === 1 ? "character or comment" : "characters or comments"} in the description: text you can't see but a model reads. Shown as ⟦U+…⟧.</p>{/if}
+        {@const hidden = hiddenText(t.description)}
+        {@const text = t.description ? (hidden ? revealHidden(t.description) : t.description) : ""}
+        {@const warnings = [...(hidden ? [`${hidden} hidden ${hidden === 1 ? "character or comment" : "characters or comments"} in the description: text you can't see but a model reads. Shown as ⟦U+…⟧.`] : []), ...flags]}
+        <li class="row" class:on class:flagged={warnings.length}>
+          <div class="line">
+            <label class="pick">
+              <input type="checkbox" checked={on} onchange={(e) => toggle(t, e.currentTarget.checked)} aria-label={t.title ? `${t.title} (${t.name})` : t.name} aria-describedby={t.description ? `desc-${t.name}` : undefined} />
+              <span class="tn">{t.title ?? t.name}</span>{#if t.title}<code>{t.name}</code>{/if}
+            </label>
+            {#if hints.length}
+              <ul class="hints" aria-label={`What the server says about ${t.name}`}>
+                {#each hints.slice(0, 2) as h (h.id)}<li class="hint t-{h.tone}" title={h.tip}>{h.label}</li>{/each}
+                {#if hints.length > 2}<li class="hint" title={hints.slice(2).map((h) => h.label).join(", ")}>+{hints.length - 2}</li>{/if}
+              </ul>
+            {/if}
+          </div>
+          {#if text}
+            <p class="desc" class:clamp={!full[t.name]} id={`desc-${t.name}`}>{text}</p>
+            {#if text.length > 90}<button type="button" class="more" aria-expanded={!!full[t.name]} onclick={() => (full[t.name] = !full[t.name])}>{full[t.name] ? "Show less" : "Show full description"}</button>{/if}
           {/if}
-          {#each flags as f}<p class="flag">⚠ {f}</p>{/each}
+          {#if warnings.length}
+            <div class="warn" role="note" aria-label={`Warnings for ${t.name}`}>
+              <b><Icon name="alert" size={13} />{warnings.length} {warnings.length === 1 ? "warning" : "warnings"} · not selected by default</b>
+              <ul>{#each warnings as w, i}<li hidden={i > 1 && !full[`w:${t.name}`]}>{w}</li>{/each}</ul>
+              {#if warnings.length > 2}<button type="button" class="more" aria-expanded={!!full[`w:${t.name}`]} onclick={() => (full[`w:${t.name}`] = !full[`w:${t.name}`])}>{full[`w:${t.name}`] ? "Show fewer" : `Show ${warnings.length - 2} more`}</button>{/if}
+            </div>
+          {/if}
           {#if on}
             {@const fields = schemaFields(t.input_schema)}
             {@const args = previewArguments(specs[t.name].args, t.input_schema, SAMPLE)}
             {@const problems = checkArguments(args, t.input_schema)}
+            <div class="inset">
             {#if fields.length}
               <div class="map" role="group" aria-label={`Inputs of ${t.name}`}>
                 {#each fields as f (f.name)}
@@ -145,9 +159,10 @@
                 {/each}
               </div>
             {/if}
-            <p class="meta">Arguments for one skill (example):</p>
+            <p class="meta">What holdmap sends for one skill (example)</p>
             <pre aria-label={`Example arguments for ${t.name}`}>{JSON.stringify(args, null, 2)}</pre>
             {#each problems as p}<p class="flag">✕ {p}</p>{/each}
+            </div>
           {/if}
         </li>
       {/each}
@@ -162,10 +177,10 @@
         {/each}
       </div>
     </fieldset>
-    <div class="acts">
-      <Button size="sm" variant="primary" loading={busy} disabled={!chosen.length} onclick={save}>Save tools</Button>
+    <div class="acts foot">
+      <span class="meta">{chosen.length} of {s.tools.length} selected · you approve again before the next run</span>
       {#if oncancel}<Button size="sm" variant="ghost" onclick={oncancel}>Cancel</Button>{/if}
-      <span class="meta">Saving needs your approval again before the next run.</span>
+      <Button size="sm" variant="primary" loading={busy} disabled={!chosen.length} onclick={save}>Save tools</Button>
     </div>
   {:else}
     <p class="meta">Loading…</p>
@@ -174,32 +189,46 @@
 </section>
 
 <style>
-  .tools { display: grid; gap: var(--sp-2); padding: var(--sp-2) 0; }
-  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--sp-2); }
+  .tools { display: grid; gap: 12px; }
+  header { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+  .srv-ic { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--r-md); background: var(--surface-3); color: var(--text-2); }
+  .srv-t { display: grid; min-width: 0; }
   .srv { font-weight: var(--fw-semibold); font-size: var(--fs-body-sm); }
   .meta { margin: 0; color: var(--muted); font-size: var(--fs-caption); }
-  .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-  .list > li { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
-  .list > li.flagged { border-color: var(--warn); }
-  .pick { display: flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); font-weight: var(--fw-medium); }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--surface); }
+  .row { display: grid; gap: 6px; padding: 12px 14px; }
+  .row + .row { border-top: 1px solid var(--border); }
+  .row.on { background: color-mix(in srgb, var(--accent-softer) 60%, transparent); }
+  .line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .pick { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; font-size: var(--fs-body-sm); font-weight: var(--fw-medium); cursor: pointer; }
+  .pick input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; flex: none; }
+  .tn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   code { font-family: var(--mono); font-size: var(--fs-caption); color: var(--muted); }
-  .desc { margin: 0; color: var(--text-2); font-size: var(--fs-caption); overflow-wrap: anywhere; }
-  .hints { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
-  .hint { padding: 0 7px; border: 1px solid var(--border); border-radius: var(--r-full); font-size: var(--fs-caption); color: var(--text-2); cursor: help; }
-  .hint.t-ok { color: var(--ok-text, var(--ok)); border-color: color-mix(in srgb, var(--ok) 50%, var(--border)); }
-  .hint.t-warn { color: var(--warn-text, var(--warn)); border-color: color-mix(in srgb, var(--warn) 50%, var(--border)); }
-  .more { justify-self: start; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: var(--fs-caption); cursor: pointer; }
+  .desc { margin: 0 0 0 25px; color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); overflow-wrap: anywhere; }
+  .desc.clamp { display: -webkit-box; -webkit-line-clamp: 1; line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .more { justify-self: start; margin-left: 25px; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: var(--fs-caption); cursor: pointer; }
   .more:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-  .flag { margin: 0; color: var(--warn-text, var(--warn)); font-size: var(--fs-caption); }
-  .map { display: grid; grid-template-columns: minmax(110px, 160px) minmax(0, 1fr); gap: 4px var(--sp-2); align-items: start; }
-  .fl { font-family: var(--mono); font-size: var(--fs-caption); padding-top: 4px; overflow-wrap: anywhere; }
+  .hints { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; flex: none; }
+  .hint { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-size: var(--fs-caption); white-space: nowrap; cursor: help; }
+  .hint.t-ok::before, .hint.t-warn::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+  .hint.t-warn::before { background: var(--warn); }
+  .warn { margin-left: 25px; display: grid; gap: 4px; padding: 8px 10px; border-radius: var(--r-md); background: var(--warn-soft); color: var(--warn-text, var(--text)); font-size: var(--fs-caption); }
+  .warn b { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--fw-semibold); }
+  .warn .more { margin-left: 0; }
+  .warn ul { margin: 0; padding-left: 18px; color: var(--text-2); display: grid; gap: 2px; }
+  .flag { margin: 0; color: var(--danger); font-size: var(--fs-caption); }
+  .inset { margin-left: 25px; display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+  .map { display: grid; grid-template-columns: minmax(110px, 160px) minmax(0, 1fr); gap: 6px 12px; align-items: start; }
+  .fl { font-family: var(--mono); font-size: var(--fs-caption); padding-top: 6px; overflow-wrap: anywhere; }
   .fv { display: grid; gap: 2px; min-width: 0; }
-  select, input { font: inherit; font-size: var(--fs-caption); padding: 3px 6px; border: 1px solid var(--input-border, var(--border)); border-radius: var(--r-sm, 6px); background: var(--input-bg, var(--surface)); color: var(--text); min-width: 0; }
-  pre { margin: 0; padding: 6px 8px; border-radius: var(--r-md); background: var(--surface-2, var(--bg)); font-family: var(--mono); font-size: var(--fs-caption); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 140px; overflow: auto; }
-  .out { border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 10px; display: grid; gap: 6px; }
-  legend { font-size: var(--fs-caption); font-weight: var(--fw-semibold); padding: 0 4px; }
-  .ofields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
-  .ofields label { display: grid; gap: 2px; font-size: var(--fs-caption); color: var(--muted); }
+  select, input:not([type="checkbox"]) { height: 28px; font: inherit; font-size: var(--fs-caption); padding: 0 8px; border: 1px solid var(--input-border, var(--border)); border-radius: var(--r-md); background: var(--input-bg, var(--surface)); color: var(--text); min-width: 0; }
+  pre { margin: 0; padding: 8px 10px; border-radius: var(--r-md); background: var(--surface-2); font-family: var(--mono); font-size: var(--fs-caption); white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; }
+  .out { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 14px; display: grid; gap: 8px; margin: 0; }
+  legend { font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); padding: 0 4px; }
+  .ofields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .ofields label { display: grid; gap: 4px; font-size: var(--fs-caption); color: var(--muted); }
   .acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+  .foot { position: sticky; bottom: calc(-1 * var(--scroll-pad-bottom, 0px)); z-index: 1; justify-content: flex-end; margin: 0 -16px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface); }
+  .foot .meta { margin-right: auto; }
   @media (max-width: 520px) { .map { grid-template-columns: minmax(0, 1fr); } }
 </style>

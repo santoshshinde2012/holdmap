@@ -6,7 +6,10 @@
   // Review; fields are checked inline as you type (lib/add-analyzer.ts).
   import Button from "../ui/Button.svelte";
   import Callout from "../ui/Callout.svelte";
-  import SegmentedControl from "../ui/SegmentedControl.svelte";
+  import TextField from "../ui/TextField.svelte";
+  import Field from "../ui/Field.svelte";
+  import SourcePicker, { type SourceOption } from "./add/SourcePicker.svelte";
+  import ReviewCard from "./add/ReviewCard.svelte";
   import McpTools from "./McpTools.svelte";
   import Stepper from "../ui/Stepper.svelte";
   import { ADD_STEPS, draftErrors, idFromName, type AddStep } from "../../lib/add-analyzer-flow";
@@ -15,9 +18,12 @@
   import type { PresetView } from "../../lib/analyzer-presets";
 
   type Mode = "preset" | "command" | "url" | "agents" | "manifest";
-  const ALL: { value: Mode; label: string }[] = [
-    { value: "preset", label: "Presets" }, { value: "command", label: "Command" }, { value: "url", label: "Local URL" },
-    { value: "agents", label: "From your agents" }, { value: "manifest", label: "Manifest" },
+  const ALL: (SourceOption & { value: Mode })[] = [
+    { value: "preset", label: "Presets", icon: "box", desc: "Well-known local scanners" },
+    { value: "command", label: "Command", icon: "terminal", desc: "An MCP server holdmap starts" },
+    { value: "url", label: "Local URL", icon: "link", desc: "An HTTP MCP server you run" },
+    { value: "agents", label: "From your agents", icon: "bot", desc: "Copy an agent's MCP server" },
+    { value: "manifest", label: "Manifest", icon: "code", desc: "Paste a TOML manifest" },
   ];
   // The Security gallery already shows presets as cards, so it opens this form without them.
   let { onadded, oncancel, ondone, onreview, demo = false, modes = ALL.map((m) => m.value), startOpen = false }:
@@ -42,7 +48,7 @@
   let error = $state<string | null>(null);
   let added = $state<{ id: string; name: string } | null>(null);
   /** Set once the analyzer exists: the Review step. */
-  let done = $state<{ id: string; name: string; tools: boolean } | null>(null);
+  let done = $state<{ id: string; name: string; tools: boolean; source: string } | null>(null);
   let touched = $state<Record<string, boolean>>({});
   let idEdited = $state(false);
   const step = $derived<AddStep>(done ? "review" : added ? "tools" : "source");
@@ -82,7 +88,7 @@
         // A manifest already names its tools; edit them later with Tools….
         const view = await api.addAnalyzer(text);
         text = "";
-        done = { id: view.id, name: view.name, tools: false };
+        done = { id: view.id, name: view.name, tools: false, source: "Manifest" };
         onadded?.(view.id);
       } else {
         const view = await api.addMcpAnalyzer(draft());
@@ -108,10 +114,18 @@
     const a = added;
     added = null;
     if (!a) return;
-    done = { id: a.id, name: a.name, tools: saved };
+    done = { id: a.id, name: a.name, tools: saved, source: SOURCE_TEXT[mode] };
     onadded?.(a.id);
   }
   const errors = $derived(draftErrors(mode, { id, command, url, keys: mode === "url" ? auth : keys, manifest: text, serverPicked: !!server?.draft }));
+  const SOURCE_TEXT: Record<Mode, string> = { preset: "Preset", command: "Command (stdio), started in the sandbox", url: "Local URL (Streamable HTTP)", agents: "Copy of an agent's MCP server", manifest: "Manifest" };
+  const HELP: Record<Mode, string> = {
+    preset: "Run on this computer without an LLM or API key. You install the tool; holdmap adds it, off until you approve it.",
+    command: "Any stdio MCP server. holdmap starts it in the sandbox with a cleared environment, only for scans you start.",
+    url: "A Streamable HTTP MCP server you run. holdmap connects only for scans you start; it isn't sandboxed.",
+    agents: "holdmap starts its own copy. It gets none of your agent's settings or keys.",
+    manifest: "A manifest for a local command-line or MCP scanner.",
+  };
   const ready = $derived(Object.keys(errors).length === 0);
   const shown = (k: string) => (touched[k] || touched.__submit) && errors[k] ? errors[k] : null;
   const touch = (k: string) => () => (touched = { ...touched, [k]: true });
@@ -119,121 +133,125 @@
   function finish() { done = null; touched = {}; idEdited = false; open = startOpen; ondone?.(); }
 </script>
 
-<div class="add" data-testid="add-analyzer">
+<div class="add" class:panel={open} data-testid="add-analyzer">
   {#if !open}
     <Button size="sm" variant="ghost" icon="plus" onclick={() => (open = true)}>Add your own analyzer…</Button>
   {:else}
-  <div class="head"><h3>Add your own analyzer</h3>{#if mode !== "preset"}<Stepper label="Add analyzer steps" steps={mode === "manifest" ? ADD_STEPS.filter((x) => x.id !== "tools") : ADD_STEPS} current={step} />{/if}</div>
+  <header class="head">
+    <div class="title"><h3>Add your own analyzer</h3><p>Off until you approve it · runs sandboxed</p></div>
+    {#if mode !== "preset"}<Stepper label="Add analyzer steps" steps={mode === "manifest" ? ADD_STEPS.filter((x) => x.id !== "tools") : ADD_STEPS} current={step} />{/if}
+  </header>
   {#if done}
-    <div class="review" role="status">
-      <p class="ok"><b>{done.name}</b> is added and <b>off</b>.</p>
-      <ul class="facts">
-        <li>Nothing runs until you review its permissions and turn it on.</li>
-        <li>When on, it runs only when you start a scan, in the sandbox, on a private copy of each skill.</li>
-        {#if done.tools}<li>Its tool list is pinned. If the server's tools change, holdmap asks you again.</li>{/if}
-      </ul>
-      <div class="acts">
-        {#if onreview}<Button size="sm" variant="primary" icon="shield" onclick={() => { const id = done!.id; finish(); onreview(id); }}>Review and turn on…</Button>{/if}
-        <Button size="sm" variant={onreview ? "ghost" : "secondary"} onclick={finish}>Done</Button>
-      </div>
-    </div>
+    <ReviewCard name={done.name} id={done.id} source={done.source} tools={done.tools ? "Chosen and pinned" : mode === "manifest" ? null : "Not chosen yet (Tools… in Settings)"}
+      ondone={finish} onreview={onreview ? () => { const rid = done!.id; finish(); onreview(rid); } : undefined} />
   {:else if added}
-    <p class="meta">Choose {added.name}'s tools.</p>
     <McpTools id={added.id} name={added.name} onsaved={() => toolsDone(true)} oncancel={() => toolsDone(false)} />
   {:else}
-    <SegmentedControl bind:value={mode} label="How to add it" {options} />
-    <p class="meta">
-      {#if mode === "preset"}Well-known scanners that run on this computer without an LLM or API key. You install the tool; holdmap adds its manifest, off until you review and approve its permissions.
-      {:else if mode === "command"}Any MCP server that speaks stdio. holdmap starts it in the sandbox with a cleared environment, only for runs you start, and stops it afterwards.
-      {:else if mode === "url"}An MCP server you run that speaks Streamable HTTP. holdmap connects only for runs you start and doesn't sandbox it.
-      {:else if mode === "agents"}One of your agents' configured MCP servers. holdmap starts its own copy: it gets none of your agent's settings or keys.
-      {:else}A manifest for a local command-line or MCP scanner (TOML).{/if}
-      {demo ? " Browser demo: it's checked and listed, but nothing is installed, started or contacted." : ""}
-    </p>
-    {#if mode !== "manifest" && mode !== "preset"}
-      <div class="grid">
-        <label>Name<input bind:value={name} placeholder="My scanner" oninput={nameInput} /></label>
-        <label>Id<input bind:value={id} placeholder="local.my-scanner" spellcheck="false" oninput={() => (idEdited = true)} onblur={touch("id")} aria-invalid={!!shown("id")} aria-describedby={shown("id") ? "add-err-id" : undefined} /></label>
-        {#if shown("id")}<span class="err" id="add-err-id">{shown("id")}</span>{/if}
-      </div>
-    {/if}
+    <SourcePicker bind:value={mode} label="How to add it" {options} />
+    <p class="help">{HELP[mode]}{demo ? " Browser demo: nothing is installed, started or contacted." : ""}</p>
     {#if mode === "preset"}
-      {#if presets === null}<p class="meta">Loading presets…</p>
+      {#if presets === null}<p class="help">Loading presets…</p>
       {:else}
         <ul class="presets" aria-label="Analyzer presets">
           {#each presets as p (p.id)}
             <li>
-              <div class="ph"><span class="nm">{p.name}</span><span class="meta">{p.publisher} · {p.license} · {p.network.length ? `contacts ${p.network.join(", ")}` : "no network"}</span><span class="found" class:yes={p.installed}>{p.installed ? "Installed" : "Not installed"}</span></div>
-              <p class="meta">{p.summary}</p>
-              {#if !p.installed && p.install}<p class="meta">Install: <code>{p.install}</code></p>{/if}
-              <div class="acts">
-                {#if p.added}<span class="meta">Added</span>
+              <span class="logo" aria-hidden="true">{p.name.charAt(0)}</span>
+              <div class="pm">
+                <div class="ph"><span class="nm">{p.name}</span><span class="found" class:yes={p.installed}>{p.installed ? "Installed" : "Not installed"}</span></div>
+                <p class="sub">{p.publisher} · {p.license} · {p.network.length ? `contacts ${p.network.join(", ")}` : "no network"}</p>
+                <p class="sub">{p.summary}</p>
+                {#if !p.installed && p.install}<p class="sub">Install: <code>{p.install}</code></p>{/if}
+              </div>
+              <div class="pa">
+                {#if p.homepage}<a class="sub" href={p.homepage} target="_blank" rel="noopener noreferrer">Project page<span class="sr-only"> for {p.name} (opens in a new tab)</span></a>{/if}
+                {#if p.added}<span class="sub">Added</span>
                 {:else}<Button size="sm" variant="secondary" loading={busy} onclick={() => addPreset(p)} aria-label="Add {p.name}">Add</Button>{/if}
-                {#if p.homepage}<a class="meta" href={p.homepage} target="_blank" rel="noopener noreferrer">Project page<span class="sr-only"> for {p.name} (opens in a new tab)</span></a>{/if}
               </div>
             </li>
           {/each}
         </ul>
       {/if}
-    {:else if mode === "command"}
-      <label class="wide">Command<input bind:value={command} placeholder="/usr/local/bin/my-mcp-scanner" spellcheck="false" onblur={touch("command")} aria-invalid={!!shown("command")} aria-describedby={shown("command") ? "add-err-command" : undefined} /></label>
-        {#if shown("command")}<span class="err" id="add-err-command">{shown("command")}</span>{/if}
-      <label class="wide">Arguments (one per line)<textarea rows="2" bind:value={args} spellcheck="false" placeholder="--stdio"></textarea></label>
-      <label class="wide">API key names it may get from your keychain (optional)<input bind:value={keys} placeholder="SCANNER_TOKEN" spellcheck="false" onblur={touch("keys")} aria-invalid={!!shown("keys")} aria-describedby={shown("keys") ? "add-err-keys" : undefined} /></label>
-        {#if shown("keys")}<span class="err" id="add-err-keys">{shown("keys")}</span>{/if}
-    {:else if mode === "url"}
-      <label class="wide">URL<input bind:value={url} spellcheck="false" onblur={touch("url")} aria-invalid={!!shown("url")} aria-describedby={shown("url") ? "add-err-url" : undefined} /></label>
-        {#if shown("url")}<span class="err" id="add-err-url">{shown("url")}</span>{/if}
-      <label class="wide">Bearer token key name (optional; you store the token in the keychain next)<input bind:value={auth} placeholder="SCANNER_TOKEN" spellcheck="false" /></label>
-      {#if remote}<Callout tone="warn" size="sm">This server is on another machine. It must use https, gets only skill names, file names and agent ids, and stays off until you explicitly allow it when you turn it on.</Callout>{/if}
-    {:else if mode === "agents"}
-      {#if servers === null}<p class="meta">Reading your agents' configuration…</p>
-      {:else if !servers.length}<p class="meta">No configured MCP servers were found.</p>
-      {:else}
-        <div class="servers" role="radiogroup" aria-label="Configured MCP servers">
-          {#each servers as s, i (s.id + s.agent)}
-            <div><label><input type="radio" name="server" checked={picked === s.id} disabled={!s.draft} aria-describedby={s.note ? `server-note-${i}` : undefined} onchange={() => pick(s)} /><span class="nm">{s.name}</span><span class="meta">{s.agent} · {s.transport}{s.draft ? "" : " · can't be added"}</span></label>{#if s.note}<p class="meta note" id={`server-note-${i}`}>{s.note}</p>{/if}</div>
-          {/each}
-        </div>
-        {#if server?.draft}<Callout tone="warn" size="sm">Warning: {server.name} is also {server.agent}'s server. As an analyzer holdmap starts a separate copy for each run you start; anything it does when it starts (signing in, syncing) happens again.</Callout>{/if}
-      {/if}
     {:else}
-      <label for="analyzer-manifest" class="wide">Analyzer manifest (TOML)</label>
-      <textarea id="analyzer-manifest" rows="8" spellcheck="false" bind:value={text} placeholder={'schema = 1\nid = "example.scanner"\n…'} onblur={touch("manifest")} aria-invalid={!!shown("manifest")} aria-describedby={shown("manifest") ? "add-err-manifest" : undefined}></textarea>
-      {#if shown("manifest")}<span class="err" id="add-err-manifest">{shown("manifest")}</span>{/if}
+      <div class="form">
+        {#if mode !== "manifest"}
+          <TextField label="Name" bind:value={name} placeholder="My scanner" oninput={nameInput} />
+          <TextField label="Id" bind:value={id} mono placeholder="local.my-scanner" spellcheck="false" oninput={() => (idEdited = true)} onblur={touch("id")} error={shown("id")} hint="Reverse-DNS, suggested from the name" />
+        {/if}
+        {#if mode === "command"}
+          <div class="wide"><TextField label="Command" bind:value={command} mono placeholder="/usr/local/bin/my-mcp-scanner" spellcheck="false" onblur={touch("command")} error={shown("command")} /></div>
+          <Field id="add-args" label="Arguments (one per line)" optional>
+            {#snippet children({ id: fid })}<textarea id={fid} rows="2" bind:value={args} spellcheck="false" placeholder="--stdio"></textarea>{/snippet}
+          </Field>
+          <TextField label="Keychain key names" optional bind:value={keys} mono placeholder="SCANNER_TOKEN" spellcheck="false" onblur={touch("keys")} error={shown("keys")} hint="Secrets it may read from your keychain" />
+        {:else if mode === "url"}
+          <div class="wide"><TextField label="URL" bind:value={url} mono spellcheck="false" onblur={touch("url")} error={shown("url")} /></div>
+          <div class="wide"><TextField label="Bearer token key name" optional bind:value={auth} mono placeholder="SCANNER_TOKEN" spellcheck="false" hint="You store the token in the keychain next" /></div>
+          {#if remote}<div class="wide"><Callout tone="warn" size="sm">This server is on another machine. It must use https, gets only skill names, file names and agent ids, and stays off until you explicitly allow it.</Callout></div>{/if}
+        {:else if mode === "agents"}
+          <div class="wide">
+            {#if servers === null}<p class="help">Reading your agents' configuration…</p>
+            {:else if !servers.length}<p class="help">No configured MCP servers were found.</p>
+            {:else}
+              <div class="servers" role="radiogroup" aria-label="Configured MCP servers">
+                {#each servers as s, i (s.id + s.agent)}
+                  <label class="srv" class:on={picked === s.id} class:off={!s.draft}><input type="radio" name="server" checked={picked === s.id} disabled={!s.draft} aria-describedby={s.note ? `server-note-${i}` : undefined} onchange={() => pick(s)} />
+                    <span class="nm">{s.name}</span><span class="sub">{s.agent} · {s.transport}{s.draft ? "" : " · can't be added"}</span>
+                    {#if s.note}<span class="sub note" id={`server-note-${i}`}>{s.note}</span>{/if}</label>
+                {/each}
+              </div>
+              {#if shown("server")}<p class="err">{shown("server")}</p>{/if}
+              {#if server?.draft}<Callout tone="warn" size="sm">{server.name} is also {server.agent}'s server. holdmap starts a separate copy for each scan; anything it does on start (signing in, syncing) happens again.</Callout>{/if}
+            {/if}
+          </div>
+        {:else}
+          <div class="wide">
+            <Field id="analyzer-manifest" label="Analyzer manifest (TOML)" error={shown("manifest")}>
+              {#snippet children({ id: fid, describedBy, invalid })}<textarea id={fid} rows="8" spellcheck="false" bind:value={text} placeholder={'schema = 1\nid = "example.scanner"\n…'} onblur={touch("manifest")} aria-invalid={invalid} aria-describedby={describedBy}></textarea>{/snippet}
+            </Field>
+          </div>
+        {/if}
+      </div>
     {/if}
-    <div class="acts">
-      {#if mode !== "preset"}<Button size="sm" variant="primary" loading={busy} onclick={add}>{mode === "manifest" ? "Add analyzer" : "Add and choose tools…"}</Button>{/if}
+    <footer class="foot">
       <Button size="sm" variant="ghost" onclick={() => { open = startOpen; error = null; touched = {}; oncancel?.(); }}>Cancel</Button>
-    </div>
+      {#if mode !== "preset"}<Button size="sm" variant="primary" loading={busy} onclick={add}>{mode === "manifest" ? "Add analyzer" : "Add and choose tools…"}</Button>{/if}
+    </footer>
   {/if}
   {/if}
   {#if error}<Callout tone="danger" size="sm">{error}</Callout>{/if}
 </div>
 
 <style>
-  .add { display: grid; gap: var(--sp-2); margin-top: var(--sp-3); }
-  h3 { margin: 0; font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
-  .head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
-  .err { color: var(--danger); font-size: var(--fs-caption); font-weight: var(--fw-regular); }
-  input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--danger); }
-  .review { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--ok-soft); }
-  .ok { margin: 0; font-size: var(--fs-body-sm); }
-  .facts { margin: 0; padding-left: 18px; color: var(--text-2); font-size: var(--fs-caption); display: grid; gap: 2px; }
-  label { display: grid; gap: 2px; font-size: var(--fs-caption); color: var(--text-2); font-weight: var(--fw-medium); }
-  .meta { margin: 0; font-size: var(--fs-caption); color: var(--muted); font-weight: var(--fw-regular); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--sp-2); }
-  input, textarea { font: inherit; font-size: var(--fs-caption); padding: 4px 8px; border: 1px solid var(--input-border, var(--border)); border-radius: var(--r-md); background: var(--input-bg, var(--surface)); color: var(--text); }
-  textarea { font-family: var(--mono); resize: vertical; padding: var(--sp-2); }
-  .servers { display: grid; gap: 4px; }
-  .servers label { display: flex; align-items: center; gap: 6px; }
-  .nm { color: var(--text); font-size: var(--fs-body-sm); }
-  .note { padding-left: 22px; }
-  .acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
-  .presets { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
-  .presets li { display: grid; gap: 2px; padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--r-md); }
-  .ph { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
-  .found { font-size: var(--fs-caption); color: var(--muted); border: 1px solid var(--border); border-radius: var(--r-full); padding: 0 6px; }
-  .found.yes { color: var(--ok-text, var(--ok)); border-color: var(--ok); }
+  .add { display: grid; gap: 14px; margin-top: var(--sp-3); }
+  .panel { padding: 16px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-sm); }
+  .head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .title { display: grid; gap: 2px; }
+  h3 { margin: 0; font-size: var(--fs-body); font-weight: var(--fw-semibold); }
+  .title p, .help { margin: 0; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; align-items: start; }
+  .wide { grid-column: 1 / -1; display: grid; gap: 8px; }
+  @media (max-width: 640px) { .form { grid-template-columns: minmax(0, 1fr); } }
+  textarea { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: var(--fs-body-sm); padding: 8px 10px; border: 1px solid var(--input-border, var(--border)); border-radius: var(--r-md); background: var(--input-bg, var(--surface)); color: var(--text); resize: vertical; }
+  textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  textarea[aria-invalid="true"] { border-color: var(--danger); }
+  .err { margin: 0; color: var(--danger); font-size: var(--fs-body-sm); font-weight: var(--fw-medium); }
+  .foot { position: sticky; bottom: calc(-1 * var(--scroll-pad-bottom, 0px)); z-index: 1; display: flex; justify-content: flex-end; gap: 8px; margin: 0 -16px -16px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface); border-radius: 0 0 var(--r-lg) var(--r-lg); }
+  .sub { margin: 0; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .nm { color: var(--text); font-size: var(--fs-body-sm); font-weight: var(--fw-medium); }
+  .presets { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+  .presets li { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px; }
+  .presets li + li { border-top: 1px solid var(--border); }
+  .logo { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-md); background: var(--surface-3); color: var(--text-2); font-weight: var(--fw-semibold); }
+  .pm { display: grid; gap: 2px; min-width: 0; }
+  .ph { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .pa { display: flex; align-items: center; gap: 10px; }
+  .found { font-size: var(--fs-caption); color: var(--muted); }
+  .found.yes { color: var(--ok-text, var(--ok)); }
+  .servers { display: grid; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+  .srv { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; align-items: center; padding: 10px 12px; cursor: pointer; }
+  .srv + .srv { border-top: 1px solid var(--border); }
+  .srv.on { background: var(--accent-softer); }
+  .srv.off { cursor: default; opacity: 0.7; }
+  .srv input { grid-row: span 3; }
   code { font-family: var(--mono); font-size: var(--fs-caption); overflow-wrap: anywhere; }
 </style>

@@ -96,7 +96,7 @@ describe("adding your own analyzer", () => {
     await openMode("Command");
     await fireEvent.input(screen.getByLabelText("Id"), { target: { value: "local.scan" } });
     await fireEvent.input(screen.getByLabelText("Name"), { target: { value: "Scan" } });
-    await fireEvent.input(screen.getByLabelText("Command"), { target: { value: "/opt/bin/my-mcp" } });
+    await fireEvent.input(screen.getByRole("textbox", { name: "Command" }), { target: { value: "/opt/bin/my-mcp" } });
     await fireEvent.input(screen.getByLabelText("Arguments (one per line)"), { target: { value: "--stdio\n\n--quiet" } });
     await fireEvent.click(screen.getByRole("button", { name: "Add and choose tools…" }));
     expect(api.addMcpAnalyzer).toHaveBeenCalledWith({ id: "local.scan", name: "Scan", transport: "stdio", command: "/opt/bin/my-mcp", args: ["--stdio", "--quiet"], secrets: [] });
@@ -137,7 +137,7 @@ describe("adding your own analyzer", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Add and choose tools…" }));
     expect(api.addMcpAnalyzer).not.toHaveBeenCalled();
     expect(screen.getByText("Required.")).toBeTruthy();
-    expect(screen.getByLabelText("Command").getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByRole("textbox", { name: "Command" }).getAttribute("aria-invalid")).toBe("true");
     expect(screen.getByRole("list", { name: "Add analyzer steps" }).querySelector('[aria-current="step"]')?.textContent).toContain("Source");
   });
 

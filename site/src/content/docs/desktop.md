@@ -59,8 +59,8 @@ extension name, not the inherited project — the same identity as the [list and
 view](../agents/). A card's location is a layout choice; only the displayed links represent
 observed connections.
 
-The graph opens with the full canvas and compact service
-and link counts. Disconnected services and separate clusters are packed into compact
+The graph opens with the full canvas under summary tiles: services, links, groups and
+remote (outbound) connections. Disconnected services and separate clusters are packed into compact
 groups in both layouts.
 
 The new **Search services** field searches displayed names, projects, ports and PIDs.
