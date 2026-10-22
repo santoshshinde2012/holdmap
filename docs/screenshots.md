@@ -22,6 +22,9 @@ Every capture in `docs/screenshots/`, all with sample data, never a real screen.
 |---|---|---|
 | about | [dark](screenshots/desktop-about-dark.png) | [light](screenshots/desktop-about-light.png) |
 | agent connections | [dark](screenshots/desktop-agent-connections-dark.png) | [light](screenshots/desktop-agent-connections-light.png) |
+| agent details | [dark](screenshots/desktop-agent-details-dark.png) | [light](screenshots/desktop-agent-details-light.png) |
+| agent details footprint | — | [light](screenshots/desktop-agent-details-footprint-light.png) |
+| agent details narrow | — | [light](screenshots/desktop-agent-details-narrow-light.png) |
 | agent flow | [dark](screenshots/desktop-agent-flow-dark.png) | [light](screenshots/desktop-agent-flow-light.png) |
 | agent flow narrow | [dark](screenshots/desktop-agent-flow-narrow-dark.png) | [light](screenshots/desktop-agent-flow-narrow-light.png) |
 | agent schedule | [dark](screenshots/desktop-agent-schedule-dark.png) | [light](screenshots/desktop-agent-schedule-light.png) |
