@@ -44,7 +44,7 @@ server advertises.
 
 ## Tools
 
-The server has fourteen tools. Three are new since the 0.9.0 release and ship with the next one:
+The server has fourteen tools. Three are new in 0.10.0:
 
 | Tool | What it does |
 |---|---|

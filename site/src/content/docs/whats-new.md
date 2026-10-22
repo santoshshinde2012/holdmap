@@ -1,6 +1,6 @@
 ---
 title: What's new
-description: "What's new in holdmap: analyzers coming next, and 0.9.0 with Home as Cards or Map, a richer agent inventory, PNG snapshots and the capability explorer."
+description: "What's new in holdmap: 0.10.0 adds opt-in analyzers, a guided add-your-own flow and Security; 0.9.0 added Home as Cards or Map."
 order: 1.5
 ---
 
@@ -8,9 +8,10 @@ The [changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG
 every change, and [releases](https://github.com/santoshshinde2012/holdmap/releases) has the
 notes for each version.
 
-## Coming in the next release
+## 0.10.0
 
-These are on `main` and not in a published installer yet:
+**holdmap 0.10.0** brings opt-in analyzers for your agents' skills and MCP packages, a guided
+way to add any MCP server as one, and the Security workspace:
 
 - **Analyzers (opt-in).** Scan your agents' skills and MCP packages with SkillSpector, the
   built-in OSV.dev lookup, presets for Cisco Skill Scanner, OSV-Scanner, Trivy and Bandit, or
@@ -18,6 +19,11 @@ These are on `main` and not in a published installer yet:
   a sandbox. [Analyzers](../analyzers/).
 - **Needs you everywhere.** `holdmap needs` and the MCP tool `list_needs` show the same list as
   Home, including analyzer findings. **Agents → Security** collects every agent's findings and lists the analyzers.
+- **Add your own analyzer in three steps.** Source → Tools → Review: each tool's full
+  description, hidden characters and the server's own hints before you choose, and it's added
+  off until you approve it.
+- **One look everywhere.** Summary tiles on Home, the port list, the service graph, MCP & skills
+  and Security; Settings can turn reading agent settings off again.
 - **MCP:** `list_analyzers`, `list_insights` and `list_needs` bring the server to fourteen tools.
 
 ## 0.9.0

@@ -57,7 +57,7 @@ export const releaseHighlightsPublished = atLeast(version, sourceVersion);
 export const homeRelease: string | null = "0.9.0";
 export const homePublished = homeRelease !== null && atLeast(version, homeRelease);
 /** The release that first ships analyzers. null until one is published; the site says they're on main. */
-export const analyzersRelease: string | null = null;
+export const analyzersRelease: string | null = "0.10.0";
 export const analyzersPublished = analyzersRelease !== null && atLeast(version, analyzersRelease);
 export const description = releaseHighlightsPublished
   ? "holdmap shows your agents, MCP servers, skills, tools, apps and ports, and stops services safely after a reviewed plan. macOS, Linux and Windows."
