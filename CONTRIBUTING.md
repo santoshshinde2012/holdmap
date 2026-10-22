@@ -340,7 +340,9 @@ Versions follow [SemVer](https://semver.org/). One `vX.Y.Z` tag releases everyth
   GitHub Release. npm registry publication is optional and disabled by default; release notes link
   the attached package tarball when no registry publishing job is configured.
 - While the release is still a draft, `release.yml` calls `desktop-release.yml` (tauri-action), which
-  adds the `.dmg`, `.msi`, NSIS `.exe`, `.AppImage`, `.deb` and `.rpm`, with checksums and provenance. Run it by hand with an empty tag
+  adds the `.dmg`, `.msi`, NSIS `.exe`, `.AppImage`, `.deb` and `.rpm`, with checksums and provenance. Each installer is also uploaded under a version-free name
+  (`holdmap-<macos-arm64|macos-x64|windows-x64|linux-x64>.<ext>`, NSIS as `holdmap-windows-x64-setup.exe`),
+  covered by the same checksum file and provenance, so README `releases/latest/download/` links never go stale. Run it by hand with an empty tag
   for a dry run that keeps the bundles as workflow artifacts.
   Signed updater artifacts are verified against the public key and signed release version
   before upload. After all platforms succeed, one job uploads the complete `latest.json`.

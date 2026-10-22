@@ -330,13 +330,15 @@ jobs:
           {
             printf '\n## Install the desktop app\n\n| File | Checksums |\n|--------|-----------|\n'
             gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' \
-              | grep -E '\.(dmg|msi|exe|AppImage|deb|rpm)$' | sort | while read -r f; do
+              | grep -E '\.(dmg|msi|exe|AppImage|deb|rpm)$' | grep -vE '^holdmap-(macos|windows|linux)-' | sort | while read -r f; do
                   case "$f" in
                     *aarch64.dmg) sum=macos-arm64 ;; *.dmg) sum=macos-x64 ;;
                     *.msi|*.exe) sum=windows-x64 ;; *) sum=linux-x64 ;;
                   esac
                   echo "| [$f]($base/$f) | [holdmap-desktop-$sum.sha256]($base/holdmap-desktop-$sum.sha256) |"
                 done
+            # shellcheck disable=SC2016 # literal backticks for markdown
+            printf '\nEach installer also has a version-free copy (`holdmap-macos-arm64.dmg`, `holdmap-windows-x64-setup.exe`, …) for `releases/latest/download/` links, with the same checksum.\n'
             # shellcheck disable=SC2016 # literal backticks for markdown
             printf '\nThe installers have build-provenance attestations too (`gh attestation verify <file> --repo %s`).\n' "$GITHUB_REPOSITORY"
           } >> "$RUNNER_TEMP/notes.md"
