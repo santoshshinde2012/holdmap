@@ -34,6 +34,8 @@ export interface SettingsModel {
   powerDemo: boolean;
   /** Pending or executing actions in this local desktop session. */
   scheduledCount?: number;
+  /** Opt-in: read agents' MCP, skills and permission settings (names only). */
+  agentSettings?: boolean;
 }
 
 export interface SettingsActions {
@@ -53,6 +55,7 @@ export interface SettingsActions {
   /** Opens the scheduled shutdown preview, with a future time and separate acknowledgement. */
   scheduleShutdown?(): void;
   viewSchedules?(): void;
+  setAgentSettings?(on: boolean): void;
 }
 
 export const SETTINGS_SECTIONS = [

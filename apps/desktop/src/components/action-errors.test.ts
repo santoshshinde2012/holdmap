@@ -252,3 +252,14 @@ for (const control of copyControls) describe(`${control.name} clipboard feedback
     expect(view.queryByRole("button", { name: "Command copied" })).toBeNull();
   });
 });
+
+describe("agent settings opt-in", () => {
+  it("can be turned off later in Settings, as the first-run dialog promises", async () => {
+    const setAgentSettings = vi.fn();
+    const view = render(SettingsDialog, { model: { ...model, agentSettings: true }, section: "scanning", actions: { ...settingsActions, setAgentSettings }, onclose() {} });
+    const toggle = view.getByRole("switch", { name: "Read agent settings" });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    await fireEvent.click(toggle);
+    await waitFor(() => expect(setAgentSettings).toHaveBeenCalledWith(false));
+  });
+});

@@ -32,12 +32,14 @@
       <SegmentedControl label="Start view" bind:value={choices.start} options={starts} />
     </section>
     <section aria-labelledby="fr-optin">
-      <h3 id="fr-optin">Your choice</h3>
-      <p class="note">Change these any time in Settings. Scans stay on this computer.</p>
+      <h3 id="fr-optin">Preferences</h3>
+      <div class="opts">
       <Switch bind:checked={choices.notify} label="Notify me about new and conflicting ports" />
       {#if canAutostart}<Switch bind:checked={choices.autostart} label="Launch holdmap at login" />{/if}
       <Switch bind:checked={choices.singleKeys} label="Single-key shortcuts" description="G graph · ⇧A agents · ⌫ stop (always asks first)" />
       <Switch bind:checked={choices.inventory} label="Read agents' MCP, skills and permission settings" description="Names, launch commands' package names and rules only. Never secret values, prompts or chats; never starts a server." />
+      </div>
+      <p class="note">Change these any time in Settings. Scans stay on this computer.</p>
     </section>
     <p class="tips"><kbd>{mod}</kbd><kbd>K</kbd> opens every command.{#if tray} Closing the window keeps holdmap in the {platform === "macos" ? "menu bar" : "system tray"}{#if shortcut}; <kbd>{shortcut}</kbd> brings it back{/if}.{/if}</p>
   </div>
@@ -53,4 +55,8 @@
   h3 { margin: 0; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--muted); }
   .note, .tips { margin: 0; color: var(--text-2); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   kbd { font-family: var(--mono); }
+  .opts { display: grid; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
+  .opts > :global(*) { padding: 12px 14px; }
+  .opts > :global(* + *) { border-top: 1px solid var(--border); }
+  .note { font-size: var(--fs-caption); color: var(--muted); }
 </style>

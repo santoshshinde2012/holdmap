@@ -235,7 +235,7 @@
   textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   textarea[aria-invalid="true"] { border-color: var(--danger); }
   .err { margin: 0; color: var(--danger); font-size: var(--fs-body-sm); font-weight: var(--fw-medium); }
-  .foot { position: sticky; bottom: 0; z-index: 1; display: flex; justify-content: flex-end; gap: 8px; margin: 0 -16px -16px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface); border-radius: 0 0 var(--r-lg) var(--r-lg); }
+  .foot { position: sticky; bottom: calc(-1 * var(--scroll-pad-bottom, 0px)); z-index: 1; display: flex; justify-content: flex-end; gap: 8px; margin: 0 -16px -16px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface); border-radius: 0 0 var(--r-lg) var(--r-lg); }
   .sub { margin: 0; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
   .nm { color: var(--text); font-size: var(--fs-body-sm); font-weight: var(--fw-medium); }
   .presets { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }

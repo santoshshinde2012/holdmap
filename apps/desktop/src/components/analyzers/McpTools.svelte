@@ -228,7 +228,7 @@
   .ofields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
   .ofields label { display: grid; gap: 4px; font-size: var(--fs-caption); color: var(--muted); }
   .acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
-  .foot { position: sticky; bottom: 0; z-index: 1; justify-content: flex-end; margin: 0 -16px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface); }
+  .foot { position: sticky; bottom: calc(-1 * var(--scroll-pad-bottom, 0px)); z-index: 1; justify-content: flex-end; margin: 0 -16px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface); }
   .foot .meta { margin-right: auto; }
   @media (max-width: 520px) { .map { grid-template-columns: minmax(0, 1fr); } }
 </style>
