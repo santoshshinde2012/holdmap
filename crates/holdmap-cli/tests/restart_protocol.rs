@@ -533,6 +533,11 @@ fn a_failed_restart_history_save_does_not_replay_the_stopped_command() {
     assert_eq!(output.status.code(), Some(2), "{output:?}");
     assert!(String::from_utf8_lossy(&output.stderr).contains("Restart was not attempted"));
     assert!(!String::from_utf8_lossy(&output.stdout).contains("started `"));
+    // The stop is verified, but the child's exit status can land a moment later: reap it.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while owned.children[0].try_wait().unwrap().is_none() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
     assert!(owned.children[0].try_wait().unwrap().is_some());
     assert!(!holdmap_core::tcp_accepting(original.port));
     let ready: Ready =

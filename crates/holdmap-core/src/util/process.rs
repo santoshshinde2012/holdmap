@@ -397,7 +397,7 @@ mod windows_shell_tests {
                 .args([
                     "--ignored",
                     "--exact",
-                    "util::windows_shell_tests::detached_listener_fixture",
+                    "util::process::windows_shell_tests::detached_listener_fixture",
                     "--nocapture",
                     "--",
                 ])
@@ -476,7 +476,7 @@ mod windows_shell_tests {
                 &[
                     "--ignored",
                     "--exact",
-                    "util::windows_shell_tests::detached_launcher_fixture",
+                    "util::process::windows_shell_tests::detached_launcher_fixture",
                     "--nocapture",
                     "--",
                     mode,
@@ -566,7 +566,7 @@ mod windows_shell_tests {
         let marker = directory.path().join("executed.txt");
         let output = directory.path().join("output.txt");
         let line = format!(
-            r#""{}" --ignored --exact util::windows_shell_tests::shell_fixture --nocapture && echo literal ^& safe > "%HOLDMAP_SHELL_TEST_OUTPUT%""#,
+            r#""{}" --ignored --exact util::process::windows_shell_tests::shell_fixture --nocapture && echo literal ^& safe > "%HOLDMAP_SHELL_TEST_OUTPUT%""#,
             exe.display()
         );
 
