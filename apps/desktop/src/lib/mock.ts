@@ -339,7 +339,7 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT, includeCapabilities = fa
   const started = Math.floor(Date.now() / 1000);
 
   const cursorPorts = [...port(3000, "dev_server"), ...port(5173, "dev_server")];
-  const cursorLinks = [...local(3001, 2), remote("198.51.100.24:443", 4), remote("203.0.113.40:443", 1)];
+  const cursorLinks = [...local(3001, 2), remote("198.51.100.24:443", 4), remote("203.0.113.40:443", 1), remote("[2001:db8:4700:4408::ac40:9bd1]:443", 2), remote("[2001:db8:6bc0::10]:443", 1), remote("192.0.2.183:443", 1), remote("[2001:db8:4700:681a::7e21]:443", 1)];
   const cursor: Agent = {
     id: "agent:52000", product: "cursor", name: "Cursor", vendor: "Anysphere", kind: "ide", pid: 52000, process_name: "Cursor",
     command: "/Applications/Cursor.app/Contents/MacOS/Cursor", started_at: started - 86400, parent: null, memory_bytes: 2.4e9, cpu_percent: 6.2,

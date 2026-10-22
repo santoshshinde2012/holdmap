@@ -6,6 +6,7 @@
   import * as api from "../../lib/api";
   import Icon from "../Icon.svelte";
   import { SegmentedControl } from "../ui";
+  import EmptyPanel from "../ui/EmptyPanel.svelte";
   import HomeSummary, { type SummaryStat } from "./HomeSummary.svelte";
   import AgentCards from "./AgentCards.svelte";
   import MachineMap from "./MachineMap.svelte";
@@ -57,7 +58,9 @@
     );
     return () => { live = false; };
   });
-  const groups = $derived(radialLayout(report?.agents ?? []));
+  /** Remote-host groups the user expanded on the map. */
+  let expanded = $state<ReadonlySet<string>>(new Set());
+  const groups = $derived(radialLayout(report?.agents ?? [], undefined, undefined, undefined, undefined, expanded));
   const rows = $derived(lanes(report, entries, now));
   const hot = $derived(hotAgents(needs));
   const colors = $derived(agentColors(report?.agents ?? []));
@@ -72,13 +75,17 @@
   const stats = $derived<SummaryStat[]>([
     { id: "agents", value: o.agents, label: "agents", go: () => onview("agents") },
     { id: "ports", value: o.ports, label: "listening", go: () => onview("list") },
-    { id: "dev", value: o.devServers, label: "dev", go: () => onview("list") },
+    { id: "dev", value: o.devServers, label: "dev servers", go: () => onview("list") },
     { id: "exposed", value: o.exposed, label: "exposed", tone: o.exposed ? "warn" : undefined, go: () => onview("list") },
     ...(o.mcpConfigured !== null ? [{ id: "mcp", value: o.mcpRunning, of: o.mcpConfigured, label: "MCP running", go: () => onview("agents") } satisfies SummaryStat] : []),
   ]);
   const showInventory = $derived(!inventory && !!oninventory && (report?.agents ?? []).some((a) => !a.capabilities));
 
-  function open(t: FootprintNode["target"]) { if (t.view === "list") onopenentry(t.entryId); else onopenagent(t.agentId); }
+  function open(t: FootprintNode["target"]) {
+    if (t.view === "expand") { const next = new Set(expanded); if (!next.delete(t.groupId)) next.add(t.groupId); expanded = next; }
+    else if (t.view === "list") onopenentry(t.entryId);
+    else onopenagent(t.agentId);
+  }
   // Analyzer findings open the agent's Insights tab; everything else opens the agent or port.
   function openItem(i: AttentionItem) { if (i.rule === "analyzer" && i.target.view === "agents") onopenagent(i.target.agentId, "insights"); else open(i.target); }
   function stopItem(i: AttentionItem) { if (i.stop?.kind === "entry") onstopentry?.(i.stop.entryId); else if (i.stop) onstopagent?.(i.stop.agentId); }
@@ -133,7 +140,7 @@
           <NeedsList items={needs} lit={activeNeeds} onopen={openItem} onstop={stopItem} onhover={(i) => (hovered = i ? attentionAgent(i, report) : null)} />
         </div>
       {:else if entries && report}
-        <p class="clear"><Icon name="check" size={13} />All clear</p>
+        <EmptyPanel compact tone="ok" icon="check" title="All clear" hint="Nothing needs you right now." />
       {:else}
         <p class="clear" aria-busy="true">…</p>
       {/if}

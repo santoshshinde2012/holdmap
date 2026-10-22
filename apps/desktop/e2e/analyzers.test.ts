@@ -35,34 +35,36 @@ test("findings reach Needs you, the agent card and the Insights tab, and can be 
   await openAgents(app);
   await agentHeading(app, "Claude Code").click();
   const card = agentCard(app, "Claude Code");
-  await expect(card.getByRole("heading", { name: "Insights", exact: true })).toBeVisible();
+  await expect(card.getByRole("heading", { name: "Security", exact: true })).toBeVisible();
   await expect(card).toContainText("Open findings: 1 high, 1 medium");
-  await card.getByRole("button", { name: "Open Insights", exact: true }).click();
+  await card.getByRole("button", { name: "Open Security", exact: true }).click();
 
-  const tab = app.getByRole("region", { name: "Insights workspace" });
-  await expect(tab.getByRole("heading", { level: 3 })).toContainText("Claude Code");
-  await expect(tab).toContainText("Instruction Override");
-  await expect(tab).toContainText("Risk score: 64 / 100");
-  const high = tab.getByRole("listitem").filter({ hasText: "Instruction Override" });
-  await high.getByRole("button", { name: "Mark reviewed", exact: true }).click();
-  await expect(tab.getByRole("listitem").filter({ hasText: "Instruction Override" })).toHaveCount(0);
-  await tab.getByRole("checkbox", { name: "Show reviewed and snoozed" }).check();
-  await tab.getByRole("listitem").filter({ hasText: "Instruction Override" }).getByRole("button", { name: "Reopen", exact: true }).click();
-  await expect(tab.getByRole("listitem").filter({ hasText: "Instruction Override" }).getByRole("button", { name: "Mark reviewed" })).toBeVisible();
+  const tab = app.getByRole("region", { name: "Security workspace" });
+  await expect(tab.getByRole("combobox", { name: "Agent" })).toHaveValue("claude-code");
+  const row = tab.getByRole("button", { name: /Instruction Override/ });
+  await row.click();
+  await expect(row).toHaveAttribute("aria-expanded", "true");
+  await expect(tab).toContainText("64 / 100");
+  await tab.getByRole("button", { name: "Mark reviewed", exact: true }).click();
+  await expect(tab.getByRole("button", { name: /Instruction Override/ })).toHaveCount(0);
+  await tab.getByRole("checkbox", { name: "Show reviewed" }).check();
+  // The row it was opened from stays open when it comes back.
+  await expect(tab.getByRole("button", { name: /Instruction Override/ })).toHaveAttribute("aria-expanded", "true");
+  await tab.getByRole("button", { name: "Reopen", exact: true }).click();
+  await expect(tab.getByRole("button", { name: "Mark reviewed" })).toBeVisible();
 });
 
 test("the Insights tab is an agent workspace tab and covers agents that aren't running", async ({ app }) => {
   await openAgents(app);
-  await app.getByRole("radio", { name: "Insights", exact: true }).click();
-  const tab = app.getByRole("region", { name: "Insights workspace" });
+  await app.getByRole("radio", { name: /^Security\b/ }).click();
+  const tab = app.getByRole("region", { name: "Security workspace" });
   await expect(tab).toBeVisible();
-  const list = tab.getByRole("navigation", { name: "Agents with insights" });
-  await expect(list).toContainText("Claude Code");
-  await expect(list).not.toContainText("Codex CLI");
+  const agent = tab.getByRole("combobox", { name: "Agent" });
+  await expect(agent).not.toContainText("Codex CLI");
   await tab.getByRole("button", { name: "Turn on inventory", exact: true }).click();
-  await list.getByRole("button", { name: /^Codex CLI/ }).click();
-  await expect(tab.getByRole("heading", { level: 3 })).toContainText("not running");
+  await agent.selectOption({ label: "Codex CLI" });
   await expect(tab).toContainText("Destructive Shell Command");
+  await expect(tab).not.toContainText("Instruction Override");
 });
 
 test("the browser demo simulates adding, approving and removing your own MCP analyzer", async ({ app }) => {
@@ -145,9 +147,9 @@ test("any MCP server is added from a command, its tools listed and mapped, appro
 
 test("Insights explains which analyzer covers which agent, as a graph", async ({ app }) => {
   await openAgents(app);
-  await app.getByRole("radio", { name: "Insights", exact: true }).click();
-  const tab = app.getByRole("region", { name: "Insights workspace" });
-  await tab.getByRole("radio", { name: "How it works" }).click();
+  await app.getByRole("radio", { name: /^Security\b/ }).click();
+  const tab = app.getByRole("region", { name: "Security workspace" });
+  await tab.getByRole("radio", { name: /^Pipeline/ }).click();
   const overview = tab.getByRole("group", { name: "Analyzers and the agents they cover" });
   await expect(overview.locator(".svelte-flow")).toBeVisible();
   await expect(overview.locator('[data-graph-node="analyzer:nvidia.skillspector"]')).toContainText("SkillSpector");
@@ -168,9 +170,9 @@ test("Insights explains which analyzer covers which agent, as a graph", async ({
 test("narrow windows get the analyzer graphs as a stacked list", async ({ app }) => {
   await app.setViewportSize({ width: 560, height: 900 });
   await openAgents(app);
-  await app.getByRole("radio", { name: "Insights", exact: true }).click();
-  const tab = app.getByRole("region", { name: "Insights workspace" });
-  await tab.getByRole("radio", { name: "How it works" }).click();
+  await app.getByRole("radio", { name: /^Security\b/ }).click();
+  const tab = app.getByRole("region", { name: "Security workspace" });
+  await tab.getByRole("radio", { name: /^Pipeline/ }).click();
   const list = tab.getByRole("list", { name: "Analyzers and the agents they cover (list)" });
   await expect(list).toBeVisible();
   await list.getByRole("button", { name: /SkillSpector/ }).click();

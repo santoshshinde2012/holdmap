@@ -10,6 +10,35 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- **One summary header everywhere.** Home, the port list's "At a glance" and Security share the same
+  stat tiles (sentence-case labels, wrap on narrow windows; Home's tiles open the view behind them).
+- **Guided add-analyzer flow.** Source → Tools → Review with inline checks (reverse-DNS id suggested
+  from the name, command, https for servers on another machine, key names, manifest id). The Review
+  step says it is added and off, with **Review and turn on…** next.
+- **Tool transparency before you choose tools.** Full descriptions (no 280-character cut that could
+  hide instructions), hidden zero-width/bidi characters and HTML comments revealed as ⟦U+…⟧, and MCP
+  tool annotations shown as "the server says" badges (read-only, may delete, reaches outside,
+  idempotent). holdmap never relies on them. Follows the OWASP third-party MCP server guide.
+- **Consistent everywhere.** MCP & skills and the Agents side panel get the same summary tiles;
+  Needs you shows the shared calm empty state; Home cards say "Not read" (with a tooltip) instead
+  of "?" for MCP and skills not read yet; small section headings are sentence case app-wide.
+- **Add your own analyzer from Security → Analyzers.** The "Add your own" card opens the add form in
+  place (command, local URL, your agents' servers or a manifest); Settings keeps the same form. What
+  you add stays off until you approve its permissions.
+- **Security tab redesign.** A summary header (open findings by severity, last scan, agents and
+  skills scanned), findings grouped by severity, skill or analyzer with search and agent filters,
+  inline detail (fix, file:line, analyzer, evidence) with Mark reviewed, Snooze and Rescan, a
+  **Rescan** with per-analyzer progress, and analyzer cards with one action each. Enable, Install
+  and Review still go through the permissions sheet; nothing is on by default.
+- **Agents → Security** (was Insights) shows the open-finding count on its tab and an
+  **Analyzers** gallery: your analyzers and the presets, each marked on/off or installed.
+  Skill cards carry a findings badge, and capability details have **Scan with…**. Approved
+  analyzers run on request; the rest link to their permissions in Settings, so everything stays
+  off by default.
+- Home map: labels push apart instead of overlapping, two or more remote hosts fold into one
+  "N remote hosts" chip you can expand, long labels are shortened with the full text as a
+  tooltip, and the map zooms (+/−/0, wheel), pans by dragging and focuses an agent's sector when
+  you select it.
 - **Analyzers (opt-in).** Run scanners you choose on your agents' skills and MCP packages:
   NVIDIA SkillSpector (installed by you), a built-in OSV.dev lookup for pinned npm/PyPI
   packages, or a local CLI or MCP scanner you add from a manifest. Each one is off until you
@@ -66,6 +95,14 @@ by [release-please](https://github.com/googleapis/release-please) from
   precision and recall of each analyzer and preset on 17 labelled fixture skills. All of it was
   measured on a Linux VM. Rerun it with `scripts/bench.py`, `scripts/eval-analyzers.py` and
   `cargo bench -p holdmap-core`.
+
+### Changed
+
+- MCP & skills: details open inline, right under the card, compare row or process you
+  clicked, and close with Esc or a second click, returning focus. Only the Map canvas keeps a
+  side panel. The Contexts list is compact (project folder name, full path on hover), Compare
+  options read "Cursor · shop-web", and helper text is shorter.
+- Flow: Esc closes the relationship inspector and returns focus.
 
 ## [0.9.0] - 2026-10-17
 

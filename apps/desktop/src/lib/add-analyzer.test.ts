@@ -63,19 +63,24 @@ describe("adding your own analyzer", () => {
     const onadded = vi.fn();
     render(AddAnalyzer, { onadded });
     await openMode("Manifest");
-    const add = screen.getByRole("button", { name: "Add analyzer" }) as HTMLButtonElement;
-    expect(add.disabled).toBe(true);
-    await fireEvent.input(screen.getByLabelText("Analyzer manifest (TOML)"), { target: { value: "schema = 1" } });
+    const add = screen.getByRole("button", { name: "Add analyzer" });
+    // Checked inline first: nothing is sent while the manifest has no id.
     await fireEvent.click(add);
-    expect(api.addAnalyzer).toHaveBeenCalledWith("schema = 1");
+    expect(await screen.findByText("Paste a manifest.")).toBeTruthy();
+    expect(api.addAnalyzer).not.toHaveBeenCalled();
+    const manifest = 'schema = 1\nid = "me.scanner"';
+    await fireEvent.input(screen.getByLabelText("Analyzer manifest (TOML)"), { target: { value: manifest } });
+    await fireEvent.click(add);
+    expect(api.addAnalyzer).toHaveBeenCalledWith(manifest);
     await vi.waitFor(() => expect(onadded).toHaveBeenCalledWith("me.scanner"));
+    expect(await screen.findByText(/is added and/)).toBeTruthy();
   });
 
   it("shows holdmap's validation error", async () => {
     api.addAnalyzer.mockRejectedValue("invalid manifest: missing runner");
     render(AddAnalyzer, {});
     await openMode("Manifest");
-    await fireEvent.input(screen.getByLabelText("Analyzer manifest (TOML)"), { target: { value: "x" } });
+    await fireEvent.input(screen.getByLabelText("Analyzer manifest (TOML)"), { target: { value: 'id = "x.y"' } });
     await fireEvent.click(screen.getByRole("button", { name: "Add analyzer" }));
     expect(await screen.findByText(/missing runner/)).toBeTruthy();
   });
@@ -110,6 +115,30 @@ describe("adding your own analyzer", () => {
     const saved = api.mapAnalyzerTools.mock.calls[0][1].map((t: { name: string }) => t.name);
     expect(saved).toEqual(["list_files", "scan_skill", "word_count"]);
     expect(api.mapAnalyzerOutput).toHaveBeenCalledWith("local.scan", expect.objectContaining({ items: "$.issues[*]", rule_id: "code" }));
+    expect(await screen.findByText(/is added and/)).toBeTruthy();
+  });
+
+  it("shows server hints, the full description and hidden characters before you choose tools", async () => {
+    api.analyzerTools.mockResolvedValue(report);
+    const McpTools = (await import("../components/analyzers/McpTools.svelte")).default;
+    render(McpTools, { id: "local.scan", name: "Scan" });
+    const hints = await screen.findByRole("list", { name: "What the server says about list_files" });
+    expect(hints.textContent).toContain("Read-only");
+    expect(screen.getByRole("list", { name: "What the server says about helper" }).textContent).toContain("Reaches outside");
+    expect(screen.getByText(/1 hidden character or comment/)).toBeTruthy();
+    expect(screen.getByText(/⟦U\+200B⟧/)).toBeTruthy();
+  });
+
+  it("checks fields inline and suggests an id from the name", async () => {
+    render(AddAnalyzer, {});
+    await openMode("Command");
+    await fireEvent.input(screen.getByLabelText("Name"), { target: { value: "My Lint!" } });
+    expect((screen.getByLabelText("Id") as HTMLInputElement).value).toBe("local.my-lint");
+    await fireEvent.click(screen.getByRole("button", { name: "Add and choose tools…" }));
+    expect(api.addMcpAnalyzer).not.toHaveBeenCalled();
+    expect(screen.getByText("Required.")).toBeTruthy();
+    expect(screen.getByLabelText("Command").getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByRole("list", { name: "Add analyzer steps" }).querySelector('[aria-current="step"]')?.textContent).toContain("Source");
   });
 
   it("warns that a URL on another machine is metadata only and needs an opt-in", async () => {

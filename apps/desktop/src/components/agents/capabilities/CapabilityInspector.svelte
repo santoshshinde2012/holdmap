@@ -8,10 +8,14 @@
   import { isComposingKey } from "../../../lib/keyboard";
   import { nextIndex } from "../../../lib/roving";
   import type { AgentMcpServer, AgentSkill } from "../../../lib/types";
+  // Scan with… loads on first open: it pulls in the analyzer store and API.
+  const scanWith = import("../../analyzers/ScanWith.svelte");
 
-  let { item, takenAt, onselectagent, onrecordedcalls, oncoverage }: {
+  let { item, takenAt, onselectagent, onrecordedcalls, oncoverage, onsettings, onsecurity }: {
     item: CapabilitySelection; takenAt: number | null; onselectagent: (id: string) => void;
     onrecordedcalls?: () => void; oncoverage: () => void;
+    /** Analyzer settings (consent lives there) and the Security tab, for "Scan with…". */
+    onsettings?: () => void; onsecurity?: () => void;
   } = $props();
   type DetailTab = "purpose" | "source" | "evidence" | "activity";
   const tabs: { id: DetailTab; label: string }[] = [{ id: "purpose", label: "Purpose" }, { id: "source", label: "Source" }, { id: "evidence", label: "Evidence" }, { id: "activity", label: "Activity" }];
@@ -41,21 +45,21 @@
   </div>
   <div class="panel" id={`${prefix}-panel`} role="tabpanel" aria-labelledby={`${prefix}-${tab}`} tabindex="0">
     {#if tab === "purpose"}
-      <h4>{skill ? "Declared purpose" : "What this observation means"}</h4>
-      <p>{skill ? skill.description || "Purpose not reported. Only bounded skill-header metadata is retained." : mcp ? "A named MCP server definition was found in supported configuration. The server’s purpose and individual tools have not been reported." : "An observed process was classified as an MCP candidate, independently of configuration or recorded calls."}</p>
-      <h4>Why it appears here</h4>
-      <p>{skill ? "A supported source contains this exact SKILL.md file. Its declared purpose is author metadata, not a behavior guarantee." : mcp ? "The inventory found this exact definition and retained its alias, source, scope and transport declaration." : "Process evidence suggests an MCP candidate. Its name does not establish a link to a similarly named configuration entry."}</p>
+      <h4>{skill ? "Declared purpose" : "What this is"}</h4>
+      <p>{skill ? skill.description || "No description in the skill header." : mcp ? "An MCP server defined in this agent's config. Its tools aren't reported." : "A process that looks like an MCP server. Not linked to any config entry."}</p>
+      <h4>Why it's listed</h4>
+      <p>{skill ? "This SKILL.md is in a source the agent reads. The description is the author's claim." : mcp ? "Found in a supported config file, with its name, scope and transport." : "Process evidence only. A similar name doesn't make it the configured server."}</p>
     {:else if tab === "source"}
       <h4>Source &amp; context</h4>
       <dl>
         {#if item.kind === "running"}
           <div><dt>Process ID</dt><dd><code>{item.tool.pid}</code></dd></div>
           {#if item.tool.cwd}<div><dt>Working folder</dt><dd class="path">{item.tool.cwd}</dd></div>{/if}
-          <div><dt>Listening ports</dt><dd>{item.tool.ports.length ? item.tool.ports.map(port => ":" + port).join(", ") : "None reported; this does not establish its transport."}</dd></div>
+          <div><dt>Listening ports</dt><dd>{item.tool.ports.length ? item.tool.ports.map(port => ":" + port).join(", ") : "None"}</dd></div>
           <div><dt>Resources</dt><dd>{item.tool.cpu_percent.toFixed(1)}% CPU · {humanBytes(item.tool.memory_bytes)}</dd></div>
         {:else}
           <div><dt>Source file</dt><dd class="path">{item.sourcePath}</dd></div>
-          <div><dt>Scope</dt><dd>{scopeLabel[item.scope]} · source location, not effective session policy</dd></div>
+          <div><dt>Scope</dt><dd>{scopeLabel[item.scope]}</dd></div>
           {#if item.projectPath}<div><dt>Project relationship</dt><dd class="path">{item.projectPath}</dd></div>{/if}
           {#if skill && item.name !== item.definition.name}<div><dt>Skill folder name</dt><dd>{item.definition.name}</dd></div>{/if}
           {#if mcp}<div><dt>Transport declaration</dt><dd>{mcp.transport === "unknown" ? "Not reported" : mcp.transport.toUpperCase()}</dd></div><div><dt>Configuration enablement</dt><dd>{enabledLabel(item)}</dd></div>{/if}
@@ -64,21 +68,20 @@
       </dl>
     {:else if tab === "evidence"}
       <h4>Why these are connected</h4>
-      <p>{item.kind === "running" ? "This process has not been matched to a configuration entry or invocation. No callable-tool connection is established." : item.kind === "skill" ? "Skill file observed in the associated agents’ supported source layout." : "Configuration observed in the associated agents’ supported source layout. Configured does not mean connected, loaded or invoked."}</p>
+      <p>{item.kind === "running" ? "Not matched to a config entry or a call." : item.kind === "skill" ? "Skill file found where these agents look for skills." : "Found in these agents' config. Configured isn't the same as connected or used."}</p>
       <dl>
         <div><dt>Evidence</dt><dd>{item.kind === "running" ? EVIDENCE_LABEL[item.tool.evidence] + " process classification" : EVIDENCE_LABEL[item.definition.evidence] + " file metadata"}</dd></div>
         <div><dt>Report snapshot</dt><dd>{stamp ?? "Time not reported"}</dd></div>
-        <div><dt>Meaning of this time</dt><dd>Agent report time; not a per-file inspection timestamp or execution time.</dd></div>
-        <div><dt>{skill ? "Loading & activation" : mcp ? "Connection & catalog" : "Connection & invocation"}</dt><dd>Not established by this observation</dd></div>
+        <div><dt>{skill ? "Loading & activation" : mcp ? "Connection & catalog" : "Connection & invocation"}</dt><dd>Not confirmed</dd></div>
       </dl>
       <Button size="sm" variant="ghost" icon="info" onclick={oncoverage}>View coverage</Button>
     {:else}
-      <h4>{skill ? "Activation not established" : "Usage not established"}</h4>
-      <p>This inventory is separate from optional recorded calls. No activity association has been established for this item.</p>
-      <p>A matching name or alias does not prove identity. Missing records do not prove a capability was unused.</p>
+      <h4>{skill ? "Activation unknown" : "Usage unknown"}</h4>
+      <p>No recorded calls are linked to this item. No record doesn't mean unused.</p>
       {#if onrecordedcalls}<Button size="sm" icon="activity" onclick={onrecordedcalls}>Open recorded calls</Button>{:else}<p class="muted">Recorded calls are not available in this view.</p>{/if}
     {/if}
   </div>
+  {#if item.kind !== "running"}{#await scanWith then { default: ScanWith }}<ScanWith kind={item.kind} subject={item.kind === "skill" ? item.definition.id : null} {onsettings} {onsecurity} />{/await}{/if}
 </div>
 
 <style>

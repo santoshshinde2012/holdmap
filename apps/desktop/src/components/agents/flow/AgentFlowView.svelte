@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
+  import { isComposingKey } from "../../../lib/keyboard";
   import { ActionDock, ActionMenu, ActionPill, EvidenceChip, type MenuItem } from "../../ui";
   import Icon from "../../Icon.svelte";
   import FlowCanvas from "./FlowCanvas.svelte";
@@ -24,6 +25,23 @@
   let showRecording = $state(prefGetBoolean("flow.recording", true));
   $effect(() => prefSet("flow.recording", showRecording ? "1" : "0"));
   let chosen = $state<string | null>(null);
+  /** The control that opened the inspector, so Esc can return focus to it. */
+  let flowOpener: HTMLElement | null = null;
+  function pick(id: string | null) {
+    if (id && !chosen && document.activeElement instanceof HTMLElement) flowOpener = document.activeElement;
+    chosen = id;
+  }
+  async function closeInspector() {
+    chosen = null;
+    await tick();
+    if (flowOpener?.isConnected) flowOpener.focus({ preventScroll: true });
+    flowOpener = null;
+  }
+  function flowKey(event: KeyboardEvent) {
+    if (event.key !== "Escape" || !selected || isComposingKey(event)) return;
+    event.preventDefault(); event.stopPropagation();
+    void closeInspector();
+  }
   let runId = $state<string | null>(null);
   let filter = $state<ActivityFilter>("all");
   let order = $state<ActivityOrder>("time");
@@ -108,12 +126,13 @@
   {/if}
   {#if windowed.omitted}<p class="window-note">Showing {graph.nodes.length} of {context.nodes.length} context spans in the graph. All matching records remain in the timeline; select one to show it and its reported parents.</p>{/if}
   {#if graph.nodes.length || (mode === "calls" && run)}
-    <div class="workspace" class:full={!inspector}>
-      {#if graph.nodes.length}<FlowCanvas {graph} calls={mode === "calls"} chosen={selected} {dark} {reduced} onselect={(id) => chosen = id} />
+    <!-- svelte-ignore a11y_no_static_element_interactions (Esc closes the inspector from anywhere inside.) -->
+    <div class="workspace" class:full={!inspector} onkeydown={flowKey}>
+      {#if graph.nodes.length}<FlowCanvas {graph} calls={mode === "calls"} chosen={selected} {dark} {reduced} onselect={pick} />
       {:else}<div class="empty"><Icon name="activity" size={28} /><h2>No activity matches this view</h2><p>Reset the filters or clear your search to see this recorded run.</p></div>{/if}
       {#if inspector}
       <aside class="companion" aria-label={mode === "calls" ? "Recorded activity details" : "Connection details"}>
-        <FlowInspector {graph} chosen={selected} onclose={() => chosen = null} />
+        <FlowInspector {graph} chosen={selected} onclose={closeInspector} />
         {#if mode === "calls" && run}<ActivityTimeline {run} {rows} chosen={selected} onselect={(id) => chosen = id} />
         {:else}
           <section class="participants" aria-label="Flow participants"><h2>Participants <span>{graph.nodes.length}</span></h2><ul>{#each graph.nodes as n (n.id)}<li><button type="button" class:chosen={selected === n.id} aria-label={nodeDescription(n)} onclick={() => chosen = n.id}><strong>{n.label}</strong><span>{n.sub}</span><small>{n.kind} · {n.evidence}</small></button></li>{/each}</ul></section>

@@ -98,7 +98,7 @@
   .clear { width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); cursor: pointer; }
   .clear:hover { background: var(--surface-3); color: var(--text); }
   .list { overflow-y: auto; padding: 6px; flex: 1; min-height: 0; scroll-padding: 6px; }
-  .gh { font-size: var(--fs-label); line-height: var(--lh-label); text-transform: uppercase; letter-spacing: var(--ls-label); color: var(--muted); font-weight: var(--fw-medium); padding: 10px 10px 4px; }
+  .gh { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-weight: var(--fw-medium); padding: 10px 10px 4px; }
   .item { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 8px; border-radius: var(--r-md); cursor: default; }
   .item.active { background: var(--row-selected); }
   .ic { width: 24px; height: 24px; border-radius: var(--r-sm); display: grid; place-items: center; color: var(--muted); flex: none; border: 1px solid var(--border); background: var(--surface); }

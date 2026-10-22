@@ -93,6 +93,11 @@ for (const layout of ["cards", "map"] as const) for (const width of [390, 1024, 
       expect(outside).toEqual([]);
       if (width <= 760) await expect(overview.getByRole("list", { name: "Machine map" })).toBeVisible();
       else {
+        // Selecting an agent zooms to its sector; fitting again brings every label back.
+        const map = overview.getByRole("group", { name: /^Machine map/ });
+        const zoomed = await map.getAttribute("viewBox");
+        await overview.getByRole("button", { name: /^(Show every agent|Fit the map)$/ }).click();
+        expect(await map.getAttribute("viewBox")).not.toBe(zoomed);
         // Every map label sits inside the stage: nothing clips at the edges.
         const off = await overview.evaluate((root) => {
           const stage = root.querySelector(".stage")!.getBoundingClientRect();
@@ -103,6 +108,49 @@ for (const layout of ["cards", "map"] as const) for (const width of [390, 1024, 
     }
   });
 }
+
+test("map labels never overlap and remote hosts fold into one expandable chip", async ({ app }) => {
+  await app.evaluate(() => localStorage.setItem("holdmap.home.layout", "map"));
+  await app.reload();
+  await app.setViewportSize({ width: 1280, height: 900 });
+  const overview = await home(app);
+  const map = overview.getByRole("group", { name: /^Machine map/ });
+  const overlapping = () => map.evaluate((svg) => {
+    // What people see: each node's shape and label text (not its invisible hit circle).
+    const boxes = [...svg.querySelectorAll<SVGGElement>("g.sat")].map((g) => {
+      const rs = [...g.querySelectorAll<SVGGraphicsElement>(":scope > g.body > :not(.hit), :scope > :not(.hit):not(title):not(g)")].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0);
+      const r = { left: Math.min(...rs.map((r) => r.left)), right: Math.max(...rs.map((r) => r.right)), top: Math.min(...rs.map((r) => r.top)), bottom: Math.max(...rs.map((r) => r.bottom)), width: 1 };
+      return { name: g.getAttribute("aria-label"), r };
+    }).filter((b) => Number.isFinite(b.r.left));
+    const hits: string[] = [];
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i].r, b = boxes[j].r;
+      if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) hits.push(`${boxes[i].name} × ${boxes[j].name}`);
+    }
+    return hits;
+  });
+  expect(await overlapping()).toEqual([]);
+  const chip = map.getByRole("button", { name: /^6 remote hosts/ });
+  await expect(chip).toHaveAttribute("aria-expanded", "false");
+  await chip.click();
+  await expect(map.getByRole("button", { name: /^Remote host .*2001:db8/ }).first()).toBeVisible();
+  expect(await overlapping()).toEqual([]);
+  const hide = map.getByRole("button", { name: /^Hide 6 remote hosts/ });
+  await expect(hide).toHaveAttribute("aria-expanded", "true");
+  await hide.click();
+  await expect(map.getByRole("button", { name: /^6 remote hosts/ })).toBeVisible();
+  // Long labels are shortened on the map and carry the full text as a tooltip.
+  await chip.click();
+  const long = map.locator("g.sat", { has: app.locator("title", { hasText: "2001:db8:4700:4408::ac40:9bd1" }) });
+  await expect(long).toHaveCount(1);
+  expect(await long.locator("text.s").textContent()).toContain("…");
+  // Zoom and pan stay inside the map.
+  const before = await map.getAttribute("viewBox");
+  await overview.getByRole("button", { name: "Zoom in" }).click();
+  expect(await map.getAttribute("viewBox")).not.toBe(before);
+  await map.focus(); await app.keyboard.press("0");
+  expect(await map.getAttribute("viewBox")).toBe(before);
+});
 
 test("first open shows the welcome once", async ({ page }) => {
   await page.addInitScript(() => { if (!sessionStorage.getItem("seeded")) { localStorage.clear(); sessionStorage.setItem("seeded", "1"); } });

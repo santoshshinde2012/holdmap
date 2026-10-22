@@ -35,7 +35,7 @@ describe("footprint graph", () => {
     const api = g.nodes.find((n) => n.entryId === MOCK_SNAPSHOT.entries.find((e) => e.port === 3001)!.id)!;
     expect(api.kind).toBe("port");
     expect(api.owners.sort()).toEqual(["agent:51200", "agent:52000"]);
-    expect(kinds("remote")).toEqual(["203.0.113.10", "198.51.100.24", "203.0.113.40"]);
+    expect(kinds("remote")).toEqual(["203.0.113.10", "198.51.100.24", "203.0.113.40", "[2001:db8:4700:4408::ac40:9bd1]"]);
     expect(g.edges.find((e) => e.kind === "parent")).toMatchObject({ from: "agent:52000", to: "agent:51200", label: "started" });
     expect(new Set(g.edges.map((e) => e.id)).size).toBe(g.edges.length);
   });
@@ -43,8 +43,8 @@ describe("footprint graph", () => {
   it("folds remote hosts beyond the limit into one node and can hide recent projects", () => {
     const g = footprintGraph(report(), { remoteLimit: 1, recent: false });
     const more = g.nodes.find((n) => n.id === "more:agent:52000")!;
-    expect(more.label).toBe("+1 more remote links");
-    expect(more.sub).toBe("1 connection");
+    expect(more.label).toBe("+5 more remote links");
+    expect(more.sub).toBe("6 connections");
     expect(g.nodes.some((n) => n.id === "folder:/Users/dev/code/design-system")).toBe(false);
     expect(g.edges.filter((e) => e.kind === "recent")).toEqual([]);
   });
@@ -303,7 +303,7 @@ describe("pictures", () => {
     expect(g.nodes.some((n) => n.kind === "folder" || n.kind === "port" || n.kind === "tool")).toBe(false);
     expect(g.edges.filter((e) => e.kind === "host").map((e) => e.to).sort()).toEqual(["agent:48000", "agent:52000"]);
     expect(g.edges.find((e) => e.kind === "parent")).toMatchObject({ from: "agent:52000", to: "agent:51200", label: "started" });
-    expect(g.nodes.filter((n) => n.kind === "remote").map((n) => n.label).sort()).toEqual(["198.51.100.24", "203.0.113.10", "203.0.113.40"]);
+    expect(g.nodes.filter((n) => n.kind === "remote").map((n) => n.label).sort()).toEqual(["192.0.2.183", "198.51.100.24", "203.0.113.10", "203.0.113.40", "[2001:db8:4700:4408::ac40:9bd1]", "[2001:db8:4700:681a::7e21]", "[2001:db8:6bc0::10]"]);
     const pos = layoutContext(g);
     expect(pos.get(MACHINE_ID)!.x).toBeLessThan(pos.get("agent:52000")!.x);
     expect(headers(g, pos).map((h) => h.label)).toEqual(["This computer", "Agents", "Outside"]);

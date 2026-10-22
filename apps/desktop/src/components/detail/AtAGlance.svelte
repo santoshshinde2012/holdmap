@@ -4,6 +4,7 @@
   import Icon from "../Icon.svelte";
   import IconButton from "../ui/IconButton.svelte";
   import Kbd from "../ui/Kbd.svelte";
+  import StatStrip from "../ui/StatStrip.svelte";
   import FrameworkIcon from "../FrameworkIcon.svelte";
   import { glance } from "../../lib/detail";
   import { title } from "../../lib/format";
@@ -18,11 +19,11 @@
     <h2>At a glance</h2>
     {#if onhide}<IconButton icon="panel" size="sm" label="Hide details pane" kbd="B" onclick={onhide} />{/if}
   </div>
-  <div class="counts">
-    <div><span class="n">{g.total}</span><span class="l">listening</span></div>
-    <div><span class="n">{g.dev}</span><span class="l">dev servers</span></div>
-    <div class:warn={g.exposedCount > 0}><span class="n">{g.exposedCount}</span><span class="l">exposed</span></div>
-  </div>
+  <StatStrip compact label="Ports summary" stats={[
+    { id: "total", label: "Listening", value: g.total },
+    { id: "dev", label: "Dev servers", value: g.dev },
+    { id: "exposed", label: "Exposed", value: g.exposedCount, tone: g.exposedCount > 0 ? "warn" : "plain" },
+  ]} />
 
   {#if g.exposed.length}
     <section aria-labelledby="glance-exposed">
@@ -50,12 +51,7 @@
   .glance { padding: var(--sp-6) var(--sp-5); display: grid; gap: var(--sp-5); color: var(--muted); }
   .head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
   h2 { margin: 0; color: var(--text); font-size: var(--fs-title); font-weight: var(--fw-semibold); letter-spacing: var(--ls-title); line-height: var(--lh-title); }
-  .counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--surface-2); }
-  .counts div { display: grid; gap: 2px; padding: 12px; box-shadow: -1px 0 0 var(--border); }
-  .n { color: var(--text); font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
-  .counts .warn .n { color: var(--warn); }
-  .l { font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); text-transform: uppercase; font-weight: var(--fw-medium); }
-  h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--sp-2); font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); text-transform: uppercase; font-weight: var(--fw-medium); }
+  h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--sp-2); color: var(--text); font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
   button { width: 100%; display: flex; align-items: center; gap: var(--sp-2); height: 34px; padding: 0 var(--sp-2); border: 0; border-radius: var(--r-md); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: background var(--dur-1) var(--ease); }
   button:hover { background: var(--row-hover); }

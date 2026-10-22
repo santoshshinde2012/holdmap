@@ -35,7 +35,7 @@ describe("HomeView cards", () => {
   it("marks unreadable configuration unknown with its reason, never zero", () => {
     const view = render(HomeView, props({ layout: "cards" }));
     const docker = card(view, "Docker Desktop");
-    expect(within(docker).getAllByText("unknown")).toHaveLength(2);
+    expect(within(docker).getAllByText("Not read")).toHaveLength(2);
     expect(docker.querySelector("[title*='not supported']")).not.toBeNull();
     expect(docker.textContent).not.toMatch(/Not supported|No project folder/);
   });

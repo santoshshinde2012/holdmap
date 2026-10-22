@@ -113,11 +113,24 @@ process observations:
 
 | Explore declared purposes | Compare exact source observations |
 | --- | --- |
-| ![Explore skill cards show declared purposes, file-presence evidence, scope and exact source paths](../../../../docs/screenshots/desktop-capability-explore-dark.png) | ![Compare keeps two filesystem aliases at different source paths separate and labels missing observations Not reported here](../../../../docs/screenshots/desktop-capability-compare-dark.png) |
+| ![Explore skill cards show declared purposes, file-presence evidence, scope and exact source paths](../../../../docs/screenshots/desktop-capability-explore-dark.png) | ![Compare keeps two filesystem aliases at different source paths separate and labels missing observations Not found](../../../../docs/screenshots/desktop-capability-compare-dark.png) |
 
 | MCP and skills map | Selected skill details |
 | --- | --- |
 | ![Capability map places declared MCP sources left of observed agent contexts and skill sources to the right, with runtime candidates separate below](../../../../docs/screenshots/desktop-capabilities-dark.png) | ![The selected skill's Purpose tab explains declared purpose and why file presence does not establish activation](../../../../docs/screenshots/desktop-skills-dark.png) |
+
+| Details open inline | Security: analyzers |
+| --- | --- |
+| ![Selecting a skill card opens its details directly under it, with Purpose, Source, Evidence and Activity tabs and Scan with…](../../../../docs/screenshots/desktop-capability-inline-dark.png) | ![The Security tab lists analyzers and presets with their on/off and installed state; all are off by default](../../../../docs/screenshots/desktop-security-analyzers-dark.png) |
+
+![Agents → Security: open findings by severity, last scan and coverage; findings grouped by severity, one expanded to its fix, location, analyzer and evidence, with Mark reviewed, Snooze and Rescan](../../../../docs/screenshots/desktop-security-findings-dark.png)
+
+The Security tab opens with a summary: open findings by severity (click one to filter), the last
+scan, and how many agents and skills a scan has covered. Findings group by **Severity**, **Skill**
+or **Analyzer**, filter by search and agent, and expand in place. **Rescan** runs every analyzer
+you turned on, one at a time, with progress. **Analyzers** shows each one as a card with a single
+action: **Run** when it's on, otherwise **Enable…**, **Install…** or **Review…**, which open its
+permissions sheet in Settings. **Pipeline** draws which analyzer covers which agent.
 
 | Light theme | Narrow window |
 | --- | --- |

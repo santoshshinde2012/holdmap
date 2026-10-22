@@ -50,7 +50,7 @@
 <style>
   .body { display: grid; gap: var(--sp-5); }
   section { display: grid; gap: var(--sp-2); }
-  h3 { margin: 0; font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); font-weight: var(--fw-semibold); text-transform: uppercase; color: var(--muted); }
+  h3 { margin: 0; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--muted); }
   .note, .tips { margin: 0; color: var(--text-2); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   kbd { font-family: var(--mono); }
 </style>

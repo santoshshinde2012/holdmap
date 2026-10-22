@@ -215,8 +215,8 @@
 
       {#if insightsStore.analyzers.some((a) => a.state === "approved") || insightsStore.insights?.results.length}
         {@const found = agentCounts(insightsStore.insights, agent.product)}
-        <h3>Insights</h3>
-        <p class="insight-line">{total(found) ? `Open findings: ${countsText(found, 5)}` : "No open findings"}{#if oninsights}{" "}<button type="button" class="link" onclick={oninsights}>Open Insights</button>{/if}</p>
+        <h3>Security</h3>
+        <p class="insight-line">{total(found) ? `Open findings: ${countsText(found, 5)}` : "No open findings"}{#if oninsights}{" "}<button type="button" class="link" onclick={oninsights}>Open Security</button>{/if}</p>
       {/if}
 
       <h3>Processes · {c.processes}</h3>
@@ -274,7 +274,7 @@
   .relations button { padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-2); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .group-label { margin: 6px 0 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .body { padding: 2px 12px 12px; display: grid; gap: 6px; border-top: 1px solid var(--border); }
-  h3 { margin: 8px 0 0; font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
+  h3 { margin: 8px 0 0; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--muted); }
   .ports-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 8px; }
   .ports-head h3 { margin: 0; }
   .facts { margin: 8px 0 0; display: grid; gap: 7px; }

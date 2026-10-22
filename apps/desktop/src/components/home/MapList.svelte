@@ -18,10 +18,12 @@
   const NOUN: Record<string, [string, string]> = { project: ["project", "projects"], port: ["port", "ports"], mcp: ["MCP server", "MCP servers"], remote: ["remote host", "remote hosts"] };
   /** Visible words first (name, access), then the counts the icons show. */
   function mapListLabel(g: Group): string {
-    const counts = KINDS.map(({ k }) => g.nodes.filter((n) => n.item.kind === k).length)
+    const counts = KINDS.map(({ k }) => tally(g, k))
       .flatMap((n, i) => (n ? [`${n} ${NOUN[KINDS[i].k][n === 1 ? 0 : 1]}`] : []));
     return [g.agent.name, ACCESS_LABEL[accessHeadline(g.agent).level], ...counts].join(", ");
   }
+  /** Nodes of one kind, counting a collapsed remote group as the hosts it stands for. */
+  const tally = (g: Group, k: string) => g.nodes.filter((n) => n.item.kind === k).reduce((sum, n) => sum + (n.item.collapse ? 0 : n.item.count ?? 1), 0);
   const KINDS = [{ k: "project", icon: "folder" }, { k: "port", icon: "plug" }, { k: "mcp", icon: "server" }, { k: "remote", icon: "globe" }] as const;
 </script>
 
@@ -35,8 +37,8 @@
         <span class="nm"><b>{g.agent.name}</b>{" "}<small class="lv-{head.level}">{ACCESS_LABEL[head.level]}</small></span>
         <span class="counts">
           {#each KINDS as { k, icon }}
-            {@const nodes = g.nodes.filter((n) => n.item.kind === k)}
-            {#if nodes.length}<span class:warn={nodes.some((n) => n.item.warn)}><Icon name={icon} size={11} /><span data-glyph={nodes.length}></span></span>{/if}
+            {@const nodes = g.nodes.filter((n) => n.item.kind === k && !n.item.collapse)}
+            {#if nodes.length}<span class:warn={nodes.some((n) => n.item.warn)}><Icon name={icon} size={11} /><span data-glyph={tally(g, k)}></span></span>{/if}
           {/each}
         </span>
       </button>

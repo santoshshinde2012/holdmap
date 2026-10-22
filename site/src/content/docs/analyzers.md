@@ -5,8 +5,12 @@ order: 5
 ---
 
 Analyzers are scanners you choose. They look at the skills and pinned MCP packages of your
-running agents and add short findings to Home, the map, **Needs you** and each agent's
-**Insights**. Every analyzer is off until you turn it on.
+running agents and add short findings to Home, the map, **Needs you**, skill cards and **Agents → Security**.
+Every analyzer is off until you turn it on.
+
+**Agents → Security → Analyzers** lists the analyzers you set up and the ready-made presets,
+each marked on/off or installed. A skill or MCP card's details have **Scan with…**: approved
+analyzers run on request; the rest link to their permissions sheet in Settings.
 
 Analyzers are new since the 0.9.0 release. They ship with the next release; until then,
 [build from source](https://github.com/santoshshinde2012/holdmap/blob/main/CONTRIBUTING.md#setup) to try them.
@@ -110,7 +114,10 @@ nothing else is read either.
 
 ## Your own analyzers
 
-**Add your own analyzer…** takes any MCP server, not only ones written for holdmap. Choose how
+**Add your own analyzer…** (in Settings → Analyzers, or the **Add your own** card in Agents → Security → Analyzers) takes any MCP server, not only ones written for holdmap. It walks through
+**Source → Tools → Review** and checks each field as you type. Before you choose tools you see each
+tool's full description, any hidden characters in it, and what the server says about it (read-only,
+may delete, reaches outside). Those are hints from the server, and holdmap doesn't rely on them. Choose how
 to reach it:
 
 - **Command**: a local stdio server, for example `npx -y some-mcp-scanner`
@@ -218,9 +225,9 @@ To remove an analyzer, along with its approval, pin, results and keys, run
 
 ## How it works, as a graph
 
-**How it works** on an analyzer, or **Agents → Insights → How it works**, draws its pipeline:
+**How it works** on an analyzer, or **Agents → Security → Pipeline**, draws its pipeline:
 inventory sources, the exact fields it gets, the sandbox and hosts, the program or MCP tools,
-the parser, the findings by severity, and where they appear (Home, Needs you, Insights). Each
+the parser, the findings by severity, and where they appear (Home, Needs you, Security). Each
 step shows the last run's counts, duration and status, plus the approval and pin state. Click
 or press Enter on a step for details, and use the arrow keys to move between steps. The overview
 shows which analyzer covers which agent. Narrow windows get the same steps as a list.
