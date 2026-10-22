@@ -8,6 +8,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-22
+
 ### Added
 
 - **One summary header everywhere.** Home, the port list's "At a glance" and Security share the same
@@ -964,7 +966,8 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
-[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/santoshshinde2012/holdmap/compare/v0.7.0...v0.7.1

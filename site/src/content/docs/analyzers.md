@@ -12,8 +12,7 @@ Every analyzer is off until you turn it on.
 each marked on/off or installed. A skill or MCP card's details have **Scan with…**: approved
 analyzers run on request; the rest link to their permissions sheet in Settings.
 
-Analyzers are new since the 0.9.0 release. They ship with the next release; until then,
-[build from source](https://github.com/santoshshinde2012/holdmap/blob/main/CONTRIBUTING.md#setup) to try them.
+Analyzers are new in 0.10.0.
 
 | Analyzer | What it checks | Network |
 | --- | --- | --- |
