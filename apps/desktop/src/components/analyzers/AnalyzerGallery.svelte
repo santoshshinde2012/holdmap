@@ -63,7 +63,8 @@
   h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); color: var(--text); }
   h3 span { color: var(--muted); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
   ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 12px; }
-  .add-form { grid-column: 1 / -1; padding: 4px 16px 16px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
+  .add-form { grid-column: 1 / -1; }
+  .add-form :global(.add) { margin-top: 0; }
   .add button { display: grid; place-content: center; justify-items: center; gap: 4px; width: 100%; height: 100%; min-height: 150px; border: 1px dashed var(--border-strong); border-radius: var(--r-lg); background: none; color: var(--text-2); font: inherit; cursor: pointer; }
   .add button:hover { background: var(--surface-2); color: var(--text); }
   .add button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }

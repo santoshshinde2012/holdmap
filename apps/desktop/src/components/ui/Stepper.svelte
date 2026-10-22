@@ -15,11 +15,13 @@
 </ol>
 
 <style>
-  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: var(--fs-caption); color: var(--muted); }
-  li { display: inline-flex; align-items: center; gap: 6px; }
-  li + li::before { content: ""; width: 18px; height: 1px; background: var(--border-strong); margin-right: 2px; }
-  .dot { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border-strong); font-size: var(--fs-label); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; font-size: var(--fs-caption); color: var(--muted); }
+  li { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  li + li::before { content: ""; width: 28px; height: 2px; margin: 0 10px; border-radius: 1px; background: var(--border); }
+  li.done + li::before, li.done + li.now::before { background: var(--accent); }
+  .dot { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface); font-size: var(--fs-label); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; transition: background var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease); }
   .now { color: var(--text); font-weight: var(--fw-semibold); }
-  .now .dot { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
-  .done .dot { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .now .dot { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .done { color: var(--text-2); }
+  .done .dot { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 </style>

@@ -197,7 +197,7 @@ async function openMcpTools(page) {
   await settings.getByRole("radio", { name: "Command", exact: true }).click();
   await settings.getByLabel("Id", { exact: true }).fill("local.skill-lint");
   await settings.getByLabel("Name", { exact: true }).fill("Skill lint (sample)");
-  await settings.getByLabel("Command", { exact: true }).fill("/usr/local/bin/skill-lint-mcp");
+  await settings.getByRole("textbox", { name: "Command", exact: true }).fill("/usr/local/bin/skill-lint-mcp");
   await settings.getByLabel("Arguments (one per line)").fill("--stdio");
   await settings.getByRole("button", { name: "Add and choose tools…", exact: true }).click();
   await settings.getByRole("button", { name: "List tools", exact: true }).click();
