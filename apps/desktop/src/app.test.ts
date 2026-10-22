@@ -111,6 +111,7 @@ beforeAll(() => {
 beforeEach(() => localStorage.setItem("holdmap.onboarded", "1"));
 afterEach(() => {
   cleanup();
+  history.replaceState(null, "", location.pathname); // an #agent= link must not leak into the next test
   vi.useRealTimers();
   localStorage.clear();
   calls.deferHttp = false;

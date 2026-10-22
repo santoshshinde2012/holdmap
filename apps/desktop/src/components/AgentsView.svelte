@@ -5,6 +5,8 @@
   import { SvelteFlow, Background, Controls, type NodeTypes, type EdgeTypes } from "@xyflow/svelte";
   import "@xyflow/svelte/dist/style.css";
   import AgentCard from "./agents/AgentCard.svelte";
+  import AgentDetails from "./agents/AgentDetails.svelte";
+  import RevealNode from "./graph/RevealNode.svelte";
   import AgentNode from "./agents/AgentNode.svelte";
   import FootNode from "./agents/FootNode.svelte";
   import HeaderNode from "./agents/HeaderNode.svelte";
@@ -19,7 +21,7 @@
   import { counts as agentCounts, agentColor, filterAgents, layoutPicture, pictureGraph, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Picture, type Positions } from "../lib/agents";
   import type { AgentsReport, PortEntry } from "../lib/types";
   import { prefGet, prefGetBoolean, prefSet } from "../lib/prefs";
-  import { onDestroy, untrack } from "svelte";
+  import { onDestroy, tick, untrack } from "svelte";
   import { currentFolderOwner, preferredFolderOwner, resolveFolderTarget, type FolderTarget } from "../lib/folders";
   import { isComposingKey } from "../lib/keyboard";
   import { ActionDock, ActionPill, Button } from "./ui";
@@ -197,11 +199,7 @@
 
   function activate(n: FNode | undefined) {
     if (!n || n.kind === "header") return;
-    if (n.kind === "agent") {
-      picked = null;
-      onselectagent(n.id);
-      return;
-    }
+    if (n.kind === "agent") { pick(n.id); return; }
     if (n.kind === "tool") { picked = n.id; onselectagent(n.owners[0] ?? null); return; }
     if (n.kind === "machine") { picked = n.id; return; }
     if (n.kind === "folder" && n.path) {
@@ -216,11 +214,46 @@
     if (e) { picked = null; onentry(e); return; }
     picked = picked === n.id ? null : n.id;
   }
+  /** The selected agent's full details, next to the map (any picture). */
+  const selectedInfo = $derived(report?.agents.find((a) => a.id === selectedAgent) ?? null);
+  let detailsView = $state<{ focusHeading: () => void } | undefined>();
+  let detailsOpener: HTMLElement | null = null;
+  /** Select an agent from any surface and reveal its details; the panel takes focus only when asked. */
+  function pick(id: string, focusDetails = false) {
+    picked = null;
+    detailsOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    onselectagent(id);
+    if (focusDetails) queueMicrotask(() => detailsView?.focusHeading());
+  }
+  function closeDetails() {
+    onselectagent(null);
+    const back = detailsOpener;
+    detailsOpener = null;
+    if (back?.isConnected) back.focus({ preventScroll: true });
+  }
+  function detailsKey(ev: KeyboardEvent) {
+    if (ev.key !== "Escape" || isComposingKey(ev)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    closeDetails();
+  }
   const byId = (id: string | null | undefined) => (id ? graph?.nodes.find((n) => n.id === id) : undefined);
   // Enter / Space on a focused map node does what a click does.
   function onkeydown(ev: KeyboardEvent) {
-    if (isComposingKey(ev) || ev.repeat || ev.altKey || ev.ctrlKey || ev.metaKey) return;
-    if (ev.key !== "Enter" && ev.key !== " ") return;
+    if (isComposingKey(ev) || ev.altKey || ev.ctrlKey || ev.metaKey) return;
+    // ↑/↓ on a focused card moves the shared selection and focus to the next card.
+    if ((ev.key === "ArrowDown" || ev.key === "ArrowUp") && (ev.target as HTMLElement | null)?.matches?.(".rail .card > .head")) {
+      const at = visibleAgents.findIndex((x) => x.id === selectedAgent);
+      const next = visibleAgents[Math.min(visibleAgents.length - 1, Math.max(0, at + (ev.key === "ArrowDown" ? 1 : -1)))];
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!next) return;
+      pick(next.id);
+      const index = visibleAgents.indexOf(next);
+      void tick().then(() => document.querySelectorAll<HTMLElement>("#agents-overview .rail .card > .head")[index]?.focus());
+      return;
+    }
+    if (ev.repeat || (ev.key !== "Enter" && ev.key !== " ")) return;
     const el = (ev.target as HTMLElement | null)?.closest?.(".svelte-flow__node") as HTMLElement | null;
     if (!el) return;
     ev.preventDefault();
@@ -280,7 +313,7 @@
     <div class="flow-body" id="agents-flow"><AgentFlowView {query} {dark} {reduced} {...flowProps} bind:mode={flowSource} sourceChrome={false} /></div>
   {:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="agents" id="agents-overview" class:rail-off={!rail} {onkeydown}>
+<div class="agents" id="agents-overview" class:rail-off={!rail} class:has-details={!!selectedInfo} {onkeydown}>
   {#if !report}
     <div class="empty" aria-busy="true"><Icon name="bot" size={28} /><p>Looking for agents…</p></div>
   {:else if report.agents.length === 0}
@@ -305,11 +338,8 @@
       </header>
       <div class="cards" id="agent-list">
         {#each visibleAgents as a (a.id)}
-          <AgentCard agent={a} {report} {entries} color={graph ? agentColor(graph, a.id, agentIds) : "var(--accent)"} selected={a.id === selectedAgent} onselect={() => { picked = null; onselectagent(a.id === selectedAgent ? null : a.id); }} onnavigate={(id) => { picked = null; onselectagent(id); }}
-            {onentry} onreveal={(path) => onreveal(a.id, path)} oneditor={(path) => oneditor(a.id, path)}
-            onfolder={(path) => { projectPath = path; openFolder(path, a.id); }}
-            oncapabilities={() => { onselectagent(a.id); section = "capabilities"; }} oninsights={() => { onselectagent(a.id); section = "insights"; }} {oninventory}
-            onstop={(entry) => onstop(entry, a.id)} onstopall={() => onstopall(a.id)} now={report.taken_at_ms || Date.now()} />
+          <AgentCard agent={a} {report} color={graph ? agentColor(graph, a.id, agentIds) : "var(--accent)"} selected={a.id === selectedAgent} onselect={() => pick(a.id)} onnavigate={(id) => pick(id)}
+            now={report.taken_at_ms || Date.now()} />
         {:else}
           <div class="no-matches"><Icon name="search" size={20} /><p>No agents match this search</p><span>Search by name, tool, folder, port or process ID.</span></div>
         {/each}
@@ -379,8 +409,9 @@
         onnodeclick={({ node }) => activate((node.data as FootFlowNode["data"]).node)}
         onnodepointerenter={({ node }) => { if (node.type !== "header") hover = node.id; }}
         onnodepointerleave={() => (hover = null)}
-        onpaneclick={() => { picked = null; }}
+        onpaneclick={() => { picked = null; if (selectedAgent) onselectagent(null); }}
       >
+        <RevealNode id={selectedInfo && graph?.nodes.some((n) => n.id === selectedInfo.id) ? selectedInfo.id : null} {reduced} />
         <FitOnChange token={sig} focus={null} {reduced} />
         <Background gap={22} size={1.2} />
         <Controls showLock={false} position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.1, duration: reduced ? 0 : 320 }} />
@@ -388,6 +419,19 @@
       </SvelteFlow>
       {/if}
     </div>
+    {#if selectedInfo}
+      {@const a = selectedInfo}
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <aside class="details" id="agent-details" aria-label="Agent details" onkeydown={detailsKey}>
+        {#key a.id}
+          <AgentDetails bind:this={detailsView} agent={a} {report} {entries} color={graph ? agentColor(graph, a.id, agentIds) : "var(--accent)"} onclose={closeDetails}
+            {onentry} onreveal={(path) => onreveal(a.id, path)} oneditor={(path) => oneditor(a.id, path)}
+            onfolder={(path) => { projectPath = path; openFolder(path, a.id); }} onnavigate={(id) => pick(id, true)}
+            oncapabilities={() => { section = "capabilities"; }} oninsights={() => { section = "insights"; }} {oninventory}
+            onstop={(entry) => onstop(entry, a.id)} onstopall={() => onstopall(a.id)} now={report.taken_at_ms || Date.now()} />
+        {/key}
+      </aside>
+    {/if}
   {/if}
 </div>
   {/if}
@@ -403,6 +447,9 @@
   .workspace-loading { flex: 1; padding: 24px; box-sizing: border-box; }
   .load-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .agents.rail-off { grid-template-columns: 1fr; }
+  .agents.has-details { grid-template-columns: minmax(280px, 320px) 1fr minmax(340px, 400px); }
+  .agents.rail-off.has-details { grid-template-columns: 1fr minmax(340px, 400px); }
+  .details { min-width: 0; min-height: 0; overflow: auto; border-left: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-sm); }
   .flow-body { flex: 1; min-height: 0; }
   .agents { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 340px) 1fr; background: var(--bg); }
   .rail { min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg); }
@@ -445,6 +492,11 @@
   .no-matches p { margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text); }
   .no-matches span { font-size: var(--fs-caption); line-height: var(--lh-caption); }
   @container (max-width: 1100px) { .stats .opt { display: none; } }
+  @container (max-width: 1100px) {
+    .agents.has-details { grid-template-columns: minmax(260px, 300px) 1fr; }
+    .agents.rail-off.has-details { grid-template-columns: 1fr; }
+    .details { position: absolute; top: 8px; right: 8px; bottom: 8px; width: min(380px, calc(100% - 16px)); z-index: 6; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-md); }
+  }
   @container (max-width: 860px) {
     .agents:not(.rail-off) { grid-template-columns: 1fr; grid-template-rows: minmax(0, 52%) 1fr; }
     .rail { border-right: 0; border-bottom: 1px solid var(--border); }

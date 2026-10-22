@@ -22,7 +22,7 @@
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
   type Section = "overview" | "capabilities" | "insights";
-  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, onopenagent, onopenentry, onview, oninventory, onstopentry, onstopagent }: {
+  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, onopenagent, onopenentry, onview, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent }: {
     entries: PortEntry[] | null;
     report: AgentsReport | null;
     /** Whether reading agents' MCP/skills/permission files is turned on. */
@@ -42,6 +42,9 @@
     /** Both open the stop plan for review; neither stops anything directly. */
     onstopentry?: (id: string) => void;
     onstopagent?: (id: string) => void;
+    /** The app's shared selected agent, so a pick here is still selected on Agents. */
+    selectedAgent?: string | null;
+    onselectagent?: (id: string | null) => void;
   } = $props();
 
   const o = $derived(overview(entries, report));
@@ -68,7 +71,9 @@
   const layoutOptions = HOME_LAYOUTS.map((l) => ({ value: l, label: HOME_LAYOUT_LABEL[l], icon: LAYOUT_ICON[l], title: `${HOME_LAYOUT_LABEL[l]} · V` }));
 
   let hovered = $state<string | null>(null);
-  let selected = $state<string | null>(null);
+  let localSelected = $state<string | null>(null);
+  const selected = $derived(onselectagent ? selectedAgent : localSelected);
+  function setSelected(id: string | null) { if (onselectagent) onselectagent(id); else localSelected = id; }
   const active = $derived(hovered ?? selected);
   const activeNeeds = $derived(active ? new Set(needs.filter((n) => attentionAgent(n, report) === active).map((n) => n.id)) : null);
 
@@ -94,8 +99,8 @@
     const entry = entries?.find((e) => e.id === entryId);
     if (entry) portMenu = { entry, anchor }; else onopenentry(entryId);
   }
-  function select(id: string) { selected = selected === id ? null : id; }
-  function onkeydown(e: KeyboardEvent) { if (e.key === "Escape" && selected) { selected = null; e.stopPropagation(); } }
+  function select(id: string) { setSelected(selected === id ? null : id); }
+  function onkeydown(e: KeyboardEvent) { if (e.key === "Escape" && selected) { setSelected(null); e.stopPropagation(); } }
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
