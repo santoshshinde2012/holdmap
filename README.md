@@ -162,13 +162,14 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/santoshshinde2012/
 The binary goes to `~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows). If that folder isn't
 on your `PATH` yet, the installer adds it: open a new terminal.
 
-**Desktop app.** Pick your installer on the [website](https://santoshshinde2012.github.io/holdmap/#install):
+**Desktop app.** Download the latest installer, or pick one on the [website](https://santoshshinde2012.github.io/holdmap/#install):
 
-| Platform | Installer |
+| Platform | Download |
 |---|---|
-| macOS, Apple silicon or Intel | `.dmg` |
-| Windows x64 | `.msi` or setup `.exe` |
-| Linux x64 | `.AppImage`, `.deb` or `.rpm` |
+| macOS, Apple silicon | [Download .dmg](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-macos-arm64.dmg) |
+| macOS, Intel | [Download .dmg](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-macos-x64.dmg) |
+| Windows x64 | [Download .msi](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-windows-x64.msi) · [Download setup .exe](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-windows-x64-setup.exe) |
+| Linux x64 | [Download .AppImage](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-linux-x64.AppImage) · [Download .deb](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-linux-x64.deb) · [Download .rpm](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-linux-x64.rpm) |
 
 macOS builds are ad-hoc signed and Windows installers are unsigned, so see
 [first open](https://santoshshinde2012.github.io/holdmap/docs/desktop/#first-open). Every release

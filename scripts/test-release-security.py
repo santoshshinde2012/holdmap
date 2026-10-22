@@ -14,6 +14,18 @@ import unittest
 ROOT = Path(__file__).resolve().parent.parent
 
 
+
+def stable_installer(matrix, name):
+    """Version-free copy that collect-desktop-release-assets.mjs adds for each installer."""
+    for ext in ("dmg", "msi", "deb", "rpm", "AppImage", "exe"):
+        if name.endswith("." + ext):
+            return f"holdmap-{matrix}-setup.exe" if ext == "exe" else f"holdmap-{matrix}.{ext}"
+    return None
+
+
+def with_stable(matrix, names):
+    return list(names) + [alias for alias in (stable_installer(matrix, n) for n in names) if alias]
+
 class ReleaseSecurityTests(unittest.TestCase):
     def test_distribution_action_pins_match_the_release_workflow(self):
         config = tomllib.loads((ROOT / "dist-workspace.toml").read_text())
@@ -207,7 +219,7 @@ class DesktopReleaseAssetTests(unittest.TestCase):
         root, result = self.collect("macos-arm64", ["dmg/holdmap_0.4.0_aarch64.dmg",
                                     "macos/holdmap.app.tar.gz", "macos/holdmap.app.tar.gz.sig"], False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assert_manifest(root, "macos-arm64", ["holdmap_0.4.0_aarch64.dmg"])
+        self.assert_manifest(root, "macos-arm64", with_stable("macos-arm64", ["holdmap_0.4.0_aarch64.dmg"]))
 
     def test_built_version_must_match_the_release_tag_before_collecting(self):
         prior = os.environ.get("TAG")
@@ -228,9 +240,9 @@ class DesktopReleaseAssetTests(unittest.TestCase):
                 root, result = self.collect(matrix, [f"dmg/holdmap_0.4.0_{architecture}.dmg",
                                             "macos/holdmap.app.tar.gz", "macos/holdmap.app.tar.gz.sig"], True)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assert_manifest(root, matrix, [f"holdmap_0.4.0_{architecture}.dmg",
+                self.assert_manifest(root, matrix, with_stable(matrix, [f"holdmap_0.4.0_{architecture}.dmg",
                                      f"holdmap_0.4.0_{architecture}.app.tar.gz",
-                                     f"holdmap_0.4.0_{architecture}.app.tar.gz.sig"])
+                                     f"holdmap_0.4.0_{architecture}.app.tar.gz.sig"]))
 
     def test_windows_and_linux_updater_files_are_all_covered(self):
         fixtures = {"windows-x64": ["msi/holdmap_0.4.0_x64_en-US.msi", "msi/holdmap_0.4.0_x64_en-US.msi.sig",
@@ -243,7 +255,7 @@ class DesktopReleaseAssetTests(unittest.TestCase):
             with self.subTest(matrix=matrix):
                 root, result = self.collect(matrix, names, True)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assert_manifest(root, matrix, [Path(name).name for name in names])
+                self.assert_manifest(root, matrix, with_stable(matrix, [Path(name).name for name in names]))
 
     def test_unsigned_updater_archive_fails_before_manifest(self):
         root, result = self.collect("macos-arm64", ["dmg/holdmap_0.4.0_aarch64.dmg",
@@ -288,7 +300,7 @@ class DesktopReleaseAssetTests(unittest.TestCase):
 
         root, result = self.collect("macos-arm64", ["dmg/holdmap_0.4.0_aarch64.dmg"], False, old_staging)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assert_manifest(root, "macos-arm64", ["holdmap_0.4.0_aarch64.dmg"])
+        self.assert_manifest(root, "macos-arm64", with_stable("macos-arm64", ["holdmap_0.4.0_aarch64.dmg"]))
         self.assertEqual(list((root / "outside").iterdir()), [])
 
 
@@ -641,6 +653,7 @@ else:
             "windows-x64": [f"holdmap_{version}_x64_en-US.msi", f"holdmap_{version}_x64-setup.exe"],
             "linux-x64": [f"holdmap_{version}_amd64.deb", f"holdmap-{version}-1.x86_64.rpm", f"holdmap_{version}_amd64.AppImage"],
         }
+        desktop = {matrix: with_stable(matrix, names) for matrix, names in desktop.items()}
         data = {"release": {"id": 42, "tag_name": "v" + version,
                             "draft": draft, "prerelease": "-" in version},
                 "assets": [], "payloads": {}}
@@ -733,7 +746,7 @@ else:
                 self.assertEqual(calls, [])
 
     def test_missing_platform_or_duplicate_asset_fails(self):
-        for name in ["holdmap_0.6.0_aarch64.dmg", "holdmap_0.6.0_x64.dmg",
+        for name in ["holdmap_0.6.0_aarch64.dmg", "holdmap_0.6.0_x64.dmg", "holdmap-macos-arm64.dmg", "holdmap-windows-x64-setup.exe",
                      "holdmap_0.6.0_amd64.AppImage", "holdmap_0.6.0_x64-setup.exe",
                      "holdmap-desktop-windows-x64.sha256", "holdmap-installer.sh", "holdmap-core.cdx.xml",
                      "holdmap-aarch64-unknown-linux-gnu.tar.xz.sha256"]:

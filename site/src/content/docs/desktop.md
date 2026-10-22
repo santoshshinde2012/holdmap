@@ -224,6 +224,11 @@ These current UI screenshots show the browser simulation:
 
 ## First open
 
+Download the latest installer: macOS [Apple silicon](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-macos-arm64.dmg) or
+[Intel](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-macos-x64.dmg) `.dmg`; Windows [`.msi`](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-windows-x64.msi) or
+[setup `.exe`](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-windows-x64-setup.exe); Linux [`.AppImage`](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-linux-x64.AppImage),
+[`.deb`](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-linux-x64.deb) or [`.rpm`](https://github.com/santoshshinde2012/holdmap/releases/latest/download/holdmap-linux-x64.rpm).
+
 The published macOS app is ad-hoc signed and sealed, without Developer-ID signing or
 notarisation. Its Windows installers are unsigned. First verify the download using the
 checksums and build provenance linked from [Install](../../#install), then open it:

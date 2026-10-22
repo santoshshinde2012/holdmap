@@ -80,10 +80,18 @@ const desktop = {
   "windows-x64": [`holdmap_${version}_x64_en-US.msi`, `holdmap_${version}_x64-setup.exe`],
   "linux-x64": [`holdmap_${version}_amd64.deb`, `holdmap-${version}-1.x86_64.rpm`, `holdmap_${version}_amd64.AppImage`],
 };
+// Version-free copies for README/site `releases/latest/download/` links (see collect-desktop-release-assets.mjs).
+const stable = {
+  "macos-arm64": ["holdmap-macos-arm64.dmg"],
+  "macos-x64": ["holdmap-macos-x64.dmg"],
+  "windows-x64": ["holdmap-windows-x64.msi", "holdmap-windows-x64-setup.exe"],
+  "linux-x64": ["holdmap-linux-x64.deb", "holdmap-linux-x64.rpm", "holdmap-linux-x64.AppImage"],
+};
 const globalArchives = [...cli, "holdmap-npm-package.tar.gz", "source.tar.gz"];
 const required = [
   ...cli.flatMap((name) => [name, `${name}.sha256`]),
   ...Object.values(desktop).flat(),
+  ...Object.values(stable).flat(),
   ...Object.keys(desktop).map((platform) => `holdmap-desktop-${platform}.sha256`),
   "holdmap-installer.sh", "holdmap-installer.ps1", "holdmap-npm-package.tar.gz",
   "source.tar.gz", "source.tar.gz.sha256", "dist-manifest.json", "sha256.sum",
@@ -122,7 +130,7 @@ await Promise.all([
   ...cli.map((name) => verifyChecksums(`${name}.sha256`, [name])),
   verifyChecksums("source.tar.gz.sha256", ["source.tar.gz"]),
   verifyChecksums("sha256.sum", globalArchives),
-  ...Object.entries(desktop).map(([platform, names]) => verifyChecksums(`holdmap-desktop-${platform}.sha256`, names)),
+  ...Object.entries(desktop).map(([platform, names]) => verifyChecksums(`holdmap-desktop-${platform}.sha256`, [...names, ...stable[platform]])),
 ]);
 const manifest = JSON.parse(await readVerified("dist-manifest.json", 1024 * 1024));
 if (manifest.announcement_tag !== tag || manifest.announcement_is_prerelease !== prerelease

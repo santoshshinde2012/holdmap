@@ -65,6 +65,22 @@ for (const path of files) {
   for await (const chunk of createReadStream(destination)) hash.update(chunk);
   published.set(name, { path: destination, digest: hash.digest("hex") });
 }
+// Version-free copies of each installer so `releases/latest/download/<name>` never goes stale:
+// holdmap-<platform>.<ext> (Windows NSIS: holdmap-windows-x64-setup.exe). Hashed, attested and
+// uploaded like the versioned files.
+export const stableInstallerName = (platform, name) => {
+  const m = /\.(dmg|msi|deb|rpm|AppImage|exe)$/.exec(name);
+  if (!m) return null;
+  return `holdmap-${platform}${m[1] === "exe" ? "-setup.exe" : `.${m[1]}`}`;
+};
+for (const [name, asset] of [...published]) {
+  const alias = stableInstallerName(matrix, name);
+  if (!alias) continue;
+  if (published.has(alias)) throw new Error("Two installers map to one version-free name");
+  const destination = join(staging, alias);
+  await copyFile(asset.path, destination);
+  published.set(alias, { path: destination, digest: asset.digest });
+}
 const sum = `holdmap-desktop-${matrix}.sha256`;
 const paths = [...published.values()].map(({ path }) => path).join("\n") + "\n";
 await writeFile(sum, [...published].map(([name, { digest }]) => `${digest}  ${name}`).join("\n") + "\n");
