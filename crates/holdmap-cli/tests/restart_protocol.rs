@@ -386,7 +386,9 @@ fn fixture_diagnostic_prefix_is_bounded_redacted_and_control_safe() {
 #[test]
 fn restarting_an_owned_tcp_listener_preserves_a_separate_udp_process_on_the_same_port() {
     let mut owned = Owned::new();
-    let tcp = owned.start("tcp", 0);
+    // An ephemeral TCP port can sit inside a range Windows reserves for UDP
+    // (WSAEACCES 10013), so start from a port both protocols can bind.
+    let tcp = owned.start("tcp", port_free_for_tcp_and_udp());
     let udp = owned.start("udp", tcp.port);
     assert_udp_alive(tcp.port);
     let output = owned
@@ -544,6 +546,18 @@ fn a_failed_restart_history_save_does_not_replay_the_stopped_command() {
         serde_json::from_slice(&std::fs::read(owned.directory.path().join("tcp.json")).unwrap())
             .unwrap();
     assert_eq!(ready.pid, original.pid, "no restarted fixture was launched");
+}
+
+/// A loopback port that both a TCP listener and a UDP socket can bind right now.
+fn port_free_for_tcp_and_udp() -> u16 {
+    for _ in 0..64 {
+        let udp = UdpSocket::bind(("127.0.0.1", 0)).unwrap();
+        let port = udp.local_addr().unwrap().port();
+        if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    }
+    panic!("no loopback port was free for both TCP and UDP");
 }
 
 #[test]
