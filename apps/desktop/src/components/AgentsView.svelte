@@ -16,13 +16,14 @@
   import FolderActions from "./FolderActions.svelte";
   import type { AgentFlowProps } from "../lib/agent-flow/model";
   import { FIT_PADDING } from "../lib/flow";
-  import { agentColor, filterAgents, layoutPicture, pictureGraph, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Picture, type Positions } from "../lib/agents";
+  import { counts as agentCounts, agentColor, filterAgents, layoutPicture, pictureGraph, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Picture, type Positions } from "../lib/agents";
   import type { AgentsReport, PortEntry } from "../lib/types";
   import { prefGet, prefGetBoolean, prefSet } from "../lib/prefs";
   import { onDestroy, untrack } from "svelte";
   import { currentFolderOwner, preferredFolderOwner, resolveFolderTarget, type FolderTarget } from "../lib/folders";
   import { isComposingKey } from "../lib/keyboard";
   import { ActionDock, ActionPill, Button } from "./ui";
+  import StatStrip from "./ui/StatStrip.svelte";
 
   let {
     report,
@@ -160,6 +161,15 @@
   const edgeTypes: EdgeTypes = { foot: FootEdge } as unknown as EdgeTypes;
 
   const visibleAgents = $derived(report ? filterAgents(report.agents, query) : []);
+  const railStats = $derived.by(() => {
+    const c = visibleAgents.map(agentCounts);
+    const sum = (k: "ports" | "folders" | "stoppable") => c.reduce((n, x) => n + x[k], 0);
+    return [
+      { id: "folders", label: "Projects", value: sum("folders") },
+      { id: "ports", label: "Ports", value: sum("ports") },
+      { id: "stop", label: "Stoppable", value: sum("stoppable"), tone: sum("stoppable") ? "warn" as const : "plain" as const },
+    ];
+  });
   const agentIds = $derived(report?.agents.map((a) => a.id) ?? []);
   const graph = $derived(report ? pictureGraph({ ...report, agents: visibleAgents }, picture, { recent, folder: projectPath }) : null);
   const sig = $derived(graph ? signature(graph) : "");
@@ -290,7 +300,8 @@
     <aside class="rail" aria-label="Agents">
       <header class="rail-head">
         <h2>Agents <span class="n">{visibleAgents.length}{#if visibleAgents.length !== report.agents.length}{" / "}{report.agents.length}{/if}</span></h2>
-        <span class="hint">↑↓ to switch · click a folder to zoom into that project · Enter on a map node</span>
+        <span class="hint" title="↑↓ switches agents · click a folder to zoom into that project · Enter opens a map node">↑↓ to switch agents</span>
+        <StatStrip compact label="Agents summary" stats={railStats} />
       </header>
       <div class="cards" id="agent-list">
         {#each visibleAgents as a (a.id)}
@@ -395,7 +406,7 @@
   .flow-body { flex: 1; min-height: 0; }
   .agents { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 340px) 1fr; background: var(--bg); }
   .rail { min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg); }
-  .rail-head { padding: 12px 14px 8px; display: grid; gap: 2px; }
+  .rail-head { padding: 12px 14px 8px; display: grid; gap: 6px; }
   h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); font-weight: var(--fw-semibold); }
   .n { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--muted); background: var(--surface-2); padding: 0 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
   .hint { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }

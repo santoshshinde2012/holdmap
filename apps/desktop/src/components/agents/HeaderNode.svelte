@@ -8,5 +8,5 @@
 <div class="hd">{data.node.label}</div>
 
 <style>
-  .hd { width: 216px; text-align: center; color: var(--muted); font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; pointer-events: none; }
+  .hd { width: 216px; text-align: center; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); pointer-events: none; }
 </style>

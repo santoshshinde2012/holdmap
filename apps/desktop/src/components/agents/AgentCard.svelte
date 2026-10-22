@@ -274,7 +274,7 @@
   .relations button { padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-2); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .group-label { margin: 6px 0 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .body { padding: 2px 12px 12px; display: grid; gap: 6px; border-top: 1px solid var(--border); }
-  h3 { margin: 8px 0 0; font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
+  h3 { margin: 8px 0 0; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--muted); }
   .ports-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 8px; }
   .ports-head h3 { margin: 0; }
   .facts { margin: 8px 0 0; display: grid; gap: 7px; }

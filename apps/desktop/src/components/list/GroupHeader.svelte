@@ -52,7 +52,7 @@
   .toggle:hover { background: var(--row-hover); color: var(--text); }
   .chev { display: inline-grid; place-items: center; width: 16px; color: var(--faint); transform: rotate(90deg); transition: transform var(--dur-2) var(--ease); }
   .collapsed .chev { transform: none; }
-  .label { font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); font-weight: var(--fw-medium); text-transform: uppercase; white-space: nowrap; }
+  .label { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); white-space: nowrap; }
   .count { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--faint); font-variant-numeric: tabular-nums; font-weight: var(--fw-medium); }
   .hint { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; margin-left: 4px; }
   @container portlist (max-width: 560px) { .hint { display: none; } }

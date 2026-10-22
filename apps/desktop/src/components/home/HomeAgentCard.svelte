@@ -43,7 +43,7 @@
   function headKey(e: KeyboardEvent) { if (e.key === "Enter" && selected) { e.preventDefault(); onopen(agent.id); } }
 </script>
 
-{#snippet unknown()}<span class="unk"><span aria-hidden="true">?</span><span class="sr-only">unknown</span></span>{/snippet}
+{#snippet unknown()}<span class="unk" title={model.unknownReason ?? "Not read yet: use Read config to read this agent's MCP servers and skills."}>Not read</span>{/snippet}
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <article class="card" style="--agent: {color}" aria-label={agent.name} class:selected class:active={active === agent.id} class:dim={active !== null && active !== agent.id}
@@ -154,7 +154,7 @@
   dd small { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-regular); color: var(--muted); white-space: nowrap; }
   .ctrs .warn dd small, .ctrs .warn dt :global(svg) { color: var(--warn); }
   .of small { margin-left: 1px; }
-  .unk { color: var(--faint); font-weight: var(--fw-medium); }
+  .unk { color: var(--muted); font-size: var(--fs-caption); font-weight: var(--fw-medium); white-space: nowrap; }
   .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; flex: 1; }
   .chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--r-full); background: var(--surface); color: var(--text-2); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); white-space: nowrap; }
   button.chip { cursor: pointer; }

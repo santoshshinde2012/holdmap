@@ -36,3 +36,12 @@ describe("AnalyzerGallery add your own", () => {
     expect(view.getByRole("button", { name: /Add your own/ })).toBeTruthy();
   });
 });
+
+import EmptyPanel from "./EmptyPanel.svelte";
+describe("EmptyPanel", () => {
+  it("shows a title and an optional hint as a status", () => {
+    const view = render(EmptyPanel, { icon: "check", title: "All clear", hint: "Nothing needs you right now.", tone: "ok", compact: true });
+    expect(view.getByRole("status").textContent).toContain("All clear");
+    expect(view.getByText("Nothing needs you right now.")).toBeTruthy();
+  });
+});

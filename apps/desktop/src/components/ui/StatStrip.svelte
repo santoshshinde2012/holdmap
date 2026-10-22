@@ -39,12 +39,12 @@
 </div>
 
 <style>
-  /* 1px gaps over a border-coloured backdrop draw the dividers, so tiles can wrap on narrow windows. */
-  .strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--border); overflow: hidden; }
-  .compact { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); }
+  /* Dividers are inset shadows clipped by the frame, so wrapped rows never leave grey holes. */
+  .strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
+  .compact { grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); }
   .strip.has-lead { grid-template-columns: minmax(0, 2fr) repeat(var(--n), minmax(0, 1fr)); }
   @media (max-width: 720px) { .strip.has-lead { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); } .lead { grid-column: 1 / -1; } }
-  .tile { display: grid; align-content: start; gap: 4px; padding: 12px 16px; min-width: 0; border: 0; background: var(--surface); font: inherit; color: inherit; text-align: left; }
+  .tile { display: grid; align-content: start; gap: 4px; padding: 12px 16px; min-width: 0; border: 0; background: var(--surface); font: inherit; color: inherit; text-align: left; box-shadow: -1px 0 0 var(--border), 0 -1px 0 var(--border); }
   .compact .tile { padding: 10px 12px; gap: 2px; }
   .go { cursor: pointer; transition: background var(--dur-1) var(--ease); }
   .go:hover { background: linear-gradient(var(--row-hover), var(--row-hover)) var(--surface); }

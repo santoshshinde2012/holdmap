@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import Icon from "../Icon.svelte";
   import { ActionDock, Button, Callout, Select } from "../ui";
+  import StatStrip from "../ui/StatStrip.svelte";
   import CapabilityMap from "./capabilities/CapabilityMap.svelte";
   import CapabilityCatalog from "./capabilities/CapabilityCatalog.svelte";
   import CapabilityComparison from "./capabilities/CapabilityComparison.svelte";
@@ -68,6 +69,13 @@
   const inspected = $derived(scoped.some((agent) => agent.capabilities?.inspected));
   const mcpCount = $derived(inventory.filter((item) => item.kind === "mcp").length);
   const skillCount = $derived(inventory.filter((item) => item.kind === "skill").length);
+  const notRead = "Not read yet: use Read config on Home or the agent card.";
+  const capStats = $derived([
+    { id: "agents", label: "Agents", value: scoped.length },
+    { id: "mcp", label: "MCP servers", value: inspected ? mcpCount : "Not read", title: inspected ? undefined : notRead },
+    { id: "skills", label: "Skills", value: inspected ? skillCount : "Not read", title: inspected ? undefined : notRead },
+    { id: "running", label: "Running MCP", value: processes.length, tone: processes.length ? "ok" as const : "plain" as const },
+  ]);
   const filtered = $derived(kind !== "all" || scope !== "all" || enablement !== "all");
   const narrowed = $derived(filtered || !!query.trim());
   const agentIds = $derived(agents.map((agent) => agent.id));
@@ -278,6 +286,7 @@
 <section id="agent-capabilities" class="capabilities" aria-label="MCP and skills workspace" aria-busy={loading} bind:this={workspaceElement} bind:clientWidth={workspaceWidth} {onkeydown}>
   <header class="workspace-head">
     <div class="workspace-title"><span class="title-icon"><Icon name="plug" size={19} /></span><div><h2>MCP &amp; skills {#if demo}<span class="preview">Example inventory</span>{/if}</h2><p>What your agents can load, and where it comes from.</p></div></div>
+    {#if report && agents.length}<div class="cap-stats"><StatStrip compact label="MCP and skills summary" stats={capStats} /></div>{/if}
     <div class="head-actions">
       <Button size="sm" variant={coverageOpen ? "soft" : "ghost"} icon="info" aria-expanded={coverageOpen} aria-controls="capability-coverage" onclick={() => openPanel("coverage")}>Coverage</Button>
       {#if onrecordedcalls}<Button size="sm" icon="activity" onclick={onrecordedcalls}>Recorded calls</Button>{/if}
@@ -355,6 +364,8 @@
 </section>
 
 <style>
+  .cap-stats { flex: 1 1 auto; max-width: 560px; min-width: 0; margin-left: auto; }
+  .cap-stats :global(.tile) { padding: 6px 12px; }
   .capabilities { position: relative; height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--text); container-type: inline-size; }
   h2, h3, p { margin: 0; } h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: var(--fs-heading); line-height: var(--lh-heading); } h3 { font-size: var(--fs-body); line-height: var(--lh-body); }
   button { font: inherit; cursor: pointer; } button:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
@@ -399,7 +410,7 @@
   .coverage-panel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; } .coverage-panel > p { margin-top: 12px; color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .coverage-stat { display: flex; gap: 8px; align-items: center; margin-top: 16px; padding: 10px; border-radius: 9px; color: var(--text-2); background: var(--surface-2); font-size: var(--fs-caption); line-height: var(--lh-caption); }
   .coverage-panel ul { display: grid; gap: 12px; list-style: none; padding: 0; margin: 16px 0 0; } .coverage-panel li { padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); } .coverage-panel small { display: block; color: var(--muted); margin-top: 4px; font-size: var(--fs-caption); line-height: var(--lh-caption); }
-  .inspector { padding: 22px 18px; } .eyebrow { display: block; color: var(--muted); font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); text-transform: uppercase; margin-bottom: 8px; } .inspector-title { font-size: var(--fs-heading); line-height: var(--lh-heading); overflow-wrap: anywhere; outline: none; }
+  .inspector { padding: 22px 18px; } .eyebrow { display: block; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); margin-bottom: 8px; } .inspector-title { font-size: var(--fs-heading); line-height: var(--lh-heading); overflow-wrap: anywhere; outline: none; }
   .detail-intro, .agent-hint { margin-top: 12px; color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); } .agent-counts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 20px; } .agent-counts > span { display: grid; grid-template-columns: auto 1fr; gap: 6px; padding: 12px; background: var(--surface-2); border-radius: 10px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); } .agent-counts b { color: var(--text); font-size: var(--fs-heading); }
   dl { display: grid; gap: 17px; margin: 24px 0; } dl > div { display: grid; gap: 5px; } dt { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); } dd { margin: 0; color: var(--text-2); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); overflow-wrap: anywhere; }
   .notice { display: flex; align-items: center; gap: 8px; padding: 8px 16px; } .empty { flex: 1; display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; text-align: center; padding: 24px; color: var(--muted); } .empty h3 { color: var(--text-2); } .empty p { max-width: 480px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }

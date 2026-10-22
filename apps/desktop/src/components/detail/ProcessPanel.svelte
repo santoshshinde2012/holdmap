@@ -81,6 +81,6 @@
   .tn { overflow-wrap: anywhere; min-width: 0; flex: 1 1 64px; }
   .tp, .tm { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--muted); white-space: nowrap; }
   .tm { margin-left: auto; }
-  .here { font-size: var(--fs-label); line-height: var(--lh-label); text-transform: uppercase; letter-spacing: var(--ls-label); font-weight: var(--fw-medium); color: var(--accent); }
+  .here { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--accent); }
   .more { margin: 0; color: var(--muted); font-size: var(--fs-body-sm); }
 </style>

@@ -31,7 +31,7 @@
 
 <style>
   section { display: grid; gap: 6px; }
-  h3 { margin: 8px 0 0; font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
+  h3 { margin: 8px 0 0; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--muted); }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
   li { min-width: 0; display: grid; gap: 1px; }
   .identity { display: flex; align-items: center; gap: 6px; color: var(--text-2); }

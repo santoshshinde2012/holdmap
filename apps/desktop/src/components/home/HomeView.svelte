@@ -6,6 +6,7 @@
   import * as api from "../../lib/api";
   import Icon from "../Icon.svelte";
   import { SegmentedControl } from "../ui";
+  import EmptyPanel from "../ui/EmptyPanel.svelte";
   import HomeSummary, { type SummaryStat } from "./HomeSummary.svelte";
   import AgentCards from "./AgentCards.svelte";
   import MachineMap from "./MachineMap.svelte";
@@ -139,7 +140,7 @@
           <NeedsList items={needs} lit={activeNeeds} onopen={openItem} onstop={stopItem} onhover={(i) => (hovered = i ? attentionAgent(i, report) : null)} />
         </div>
       {:else if entries && report}
-        <p class="clear"><Icon name="check" size={13} />All clear</p>
+        <EmptyPanel compact tone="ok" icon="check" title="All clear" hint="Nothing needs you right now." />
       {:else}
         <p class="clear" aria-busy="true">…</p>
       {/if}

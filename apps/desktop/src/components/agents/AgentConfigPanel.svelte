@@ -70,7 +70,7 @@
 
 <style>
   .config { display: grid; gap: 6px; min-width: 0; }
-  h3 { margin: 8px 0 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
+  h3 { margin: 8px 0 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--muted); }
   .n { font-variant-numeric: tabular-nums; color: var(--faint); }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   .name { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); color: var(--text); }

@@ -135,7 +135,7 @@
   .details header { display: flex; align-items: baseline; gap: var(--sp-2); margin-bottom: 6px; }
   .x { margin-left: auto; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px; }
   .x:focus-visible, .link:focus-visible, .row:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-  .stage { color: var(--muted); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; font-weight: var(--fw-medium); }
+  .stage { color: var(--muted); font-size: var(--fs-caption); font-weight: var(--fw-medium); }
   .lines { margin: 0; display: grid; gap: 2px; }
   .lines > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: var(--sp-2); font-size: var(--fs-caption); line-height: var(--lh-caption); }
   dt { color: var(--muted); overflow-wrap: anywhere; }

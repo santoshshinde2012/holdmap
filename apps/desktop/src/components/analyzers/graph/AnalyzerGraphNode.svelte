@@ -48,7 +48,7 @@
   .k-sandbox .tile { color: var(--tone-violet, var(--accent)); background: color-mix(in srgb, var(--tone-violet, var(--accent)) 12%, var(--surface)); }
   .k-findings .tile, .k-agent .tile { color: var(--text-2); background: var(--surface-2); }
   .copy { display: grid; gap: 2px; min-width: 0; flex: 1; }
-  .stage { color: var(--muted); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; font-weight: var(--fw-medium); }
+  .stage { color: var(--muted); font-size: var(--fs-caption); font-weight: var(--fw-medium); }
   strong { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-semibold); }
   strong, .sub, em { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .sub { color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); }

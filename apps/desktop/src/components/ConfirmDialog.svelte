@@ -288,7 +288,7 @@
   .big-check { width: 56px; height: 56px; margin: 0 auto var(--sp-4); border-radius: 50%; display: grid; place-items: center; background: var(--ok-soft); color: var(--ok); animation: pop 360ms var(--ease-spring); }
   @keyframes pop { from { transform: scale(0.5); opacity: 0; } }
   .order { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 var(--sp-3); color: var(--muted); }
-  .ol { font-size: var(--fs-label); line-height: var(--lh-label); text-transform: uppercase; letter-spacing: var(--ls-label); font-weight: var(--fw-medium); margin-right: 4px; }
+  .ol { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); margin-right: 4px; }
   .chipo { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); padding: 3px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
   .risk-low { color: var(--ok); background: var(--ok-soft); }
   .risk-medium { color: var(--warn); background: var(--warn-soft); }

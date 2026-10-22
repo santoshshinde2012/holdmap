@@ -30,7 +30,7 @@
 
 <style>
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--sp-2) var(--sp-8); }
-  h3 { margin: var(--sp-3) 0 var(--sp-1); font-size: var(--fs-label); line-height: var(--lh-label); text-transform: uppercase; letter-spacing: var(--ls-label); color: var(--muted); font-weight: var(--fw-medium); }
+  h3 { margin: var(--sp-3) 0 var(--sp-1); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-weight: var(--fw-medium); }
   .item { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); min-height: 30px; color: var(--text-2); font-size: var(--fs-body); line-height: var(--lh-body); border-bottom: 1px solid var(--border); }
   .hint { color: var(--muted); margin: var(--sp-5) 0 0; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }

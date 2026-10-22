@@ -12,6 +12,9 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 - **One summary header everywhere.** Home, the port list's "At a glance" and Security share the same
   stat tiles (sentence-case labels, wrap on narrow windows; Home's tiles open the view behind them).
+- **Consistent everywhere.** MCP & skills and the Agents side panel get the same summary tiles;
+  Needs you shows the shared calm empty state; Home cards say "Not read" (with a tooltip) instead
+  of "?" for MCP and skills not read yet; small section headings are sentence case app-wide.
 - **Add your own analyzer from Security → Analyzers.** The "Add your own" card opens the add form in
   place (command, local URL, your agents' servers or a manifest); Settings keeps the same form. What
   you add stays off until you approve its permissions.

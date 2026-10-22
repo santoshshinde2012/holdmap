@@ -107,13 +107,13 @@
   .web { margin: 0; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--text-2); }
   .web :global(svg) { color: var(--ok); flex: none; }
   .web.bad :global(svg) { color: var(--danger); }
-  .wl { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-medium); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
+  .wl { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--muted); }
   .wv { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* One card of facts split by hairlines (not a grid of separate cards): less chrome, same data. */
   .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: var(--sp-4) 0 var(--sp-5); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
   .stat { display: grid; align-content: start; gap: 4px; padding: 10px 12px; min-width: 0; box-shadow: -1px 0 0 var(--border), 0 -1px 0 var(--border); }
   .stat.wide { grid-column: 1 / -1; box-shadow: 0 -1px 0 var(--border); }
-  .sl { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-label); line-height: var(--lh-label); color: var(--muted); font-weight: var(--fw-medium); text-transform: uppercase; letter-spacing: var(--ls-label); overflow-wrap: anywhere; }
+  .sl { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
   .sl :global(svg) { flex: none; }
   .sv { margin: 0; min-width: 0; font-size: var(--fs-heading); letter-spacing: var(--ls-heading); line-height: var(--lh-heading); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   .sm { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px var(--sp-2); min-width: 0; margin: 0; }
