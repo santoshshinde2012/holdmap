@@ -650,7 +650,7 @@ pub(crate) struct WindowsStdioInheritance {
 
 #[cfg(windows)]
 impl WindowsStdioInheritance {
-    fn exclude() -> std::io::Result<Self> {
+    pub(crate) fn exclude() -> std::io::Result<Self> {
         use windows_sys::Win32::Foundation::{
             GetHandleInformation, SetHandleInformation, ERROR_INVALID_HANDLE, HANDLE_FLAG_INHERIT,
             INVALID_HANDLE_VALUE,

@@ -1,6 +1,6 @@
 //! Small helpers, split by responsibility and re-exported here so callers keep using `util::…`.
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 use std::time::{Duration, Instant};
 
 mod launch;
