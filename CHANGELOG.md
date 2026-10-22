@@ -12,6 +12,13 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 - **One summary header everywhere.** Home, the port list's "At a glance" and Security share the same
   stat tiles (sentence-case labels, wrap on narrow windows; Home's tiles open the view behind them).
+- **Guided add-analyzer flow.** Source → Tools → Review with inline checks (reverse-DNS id suggested
+  from the name, command, https for servers on another machine, key names, manifest id). The Review
+  step says it is added and off, with **Review and turn on…** next.
+- **Tool transparency before you choose tools.** Full descriptions (no 280-character cut that could
+  hide instructions), hidden zero-width/bidi characters and HTML comments revealed as ⟦U+…⟧, and MCP
+  tool annotations shown as "the server says" badges (read-only, may delete, reaches outside,
+  idempotent). holdmap never relies on them. Follows the OWASP third-party MCP server guide.
 - **Consistent everywhere.** MCP & skills and the Agents side panel get the same summary tiles;
   Needs you shows the shared calm empty state; Home cards say "Not read" (with a tooltip) instead
   of "?" for MCP and skills not read yet; small section headings are sentence case app-wide.

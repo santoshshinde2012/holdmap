@@ -114,7 +114,10 @@ nothing else is read either.
 
 ## Your own analyzers
 
-**Add your own analyzer…** (in Settings → Analyzers, or the **Add your own** card in Agents → Security → Analyzers) takes any MCP server, not only ones written for holdmap. Choose how
+**Add your own analyzer…** (in Settings → Analyzers, or the **Add your own** card in Agents → Security → Analyzers) takes any MCP server, not only ones written for holdmap. It walks through
+**Source → Tools → Review** and checks each field as you type. Before you choose tools you see each
+tool's full description, any hidden characters in it, and what the server says about it (read-only,
+may delete, reaches outside). Those are hints from the server, and holdmap doesn't rely on them. Choose how
 to reach it:
 
 - **Command**: a local stdio server, for example `npx -y some-mcp-scanner`

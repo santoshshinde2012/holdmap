@@ -17,7 +17,7 @@
   let presets = $state<PresetView[]>([]);
   let adding = $state(false);
   const demo = !api.isTauri;
-  function added() { adding = false; void insightsStore.refresh(); }
+  function added() { void insightsStore.refresh(); }
   onMount(() => { api.analyzerPresets().then((p) => (presets = p), () => (presets = [])); });
   const cards = $derived(analyzerCards(insightsStore.analyzers, presets));
   const enabled = $derived(cards.filter((c) => c.status === "on" || c.status === "changed"));
@@ -45,7 +45,7 @@
           {/each}
           {#if sec.key === "off"}
             {#if adding}
-              <li class="add-form" id="gal-add-form"><AddAnalyzer {demo} startOpen modes={["command", "url", "agents", "manifest"]} onadded={added} oncancel={() => (adding = false)} /></li>
+              <li class="add-form" id="gal-add-form"><AddAnalyzer {demo} startOpen modes={["command", "url", "agents", "manifest"]} onadded={added} oncancel={() => (adding = false)} ondone={() => (adding = false)} onreview={onsettings ? () => onsettings() : undefined} /></li>
             {:else}
               <li class="add"><button type="button" aria-expanded="false" aria-controls="gal-add-form" onclick={() => (adding = true)}><Icon name="plus" size={16} /><b>Add your own</b><small>CLI or MCP server</small></button></li>
             {/if}

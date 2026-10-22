@@ -8,6 +8,7 @@
   import Callout from "../ui/Callout.svelte";
   import * as api from "../../lib/api";
   import type { OutputMapping, ToolInfo, ToolReport, ToolSpec } from "../../lib/analyzers";
+  import { hiddenText, revealHidden, toolHints } from "../../lib/add-analyzer-flow";
   import { checkArguments, initialSpec, parseValue, placeholdersFor, preselect, previewArguments, schemaFields, valueText } from "../../lib/mcp-mapping";
 
   let { id, name, onsaved, oncancel }: { id: string; name: string; onsaved?: () => void; oncancel?: () => void } = $props();
@@ -19,6 +20,9 @@
   let specs = $state<Record<string, ToolSpec>>({});
   let custom = $state<Record<string, boolean>>({});
   let output = $state<OutputMapping>({});
+  /** Tools whose full description is open. OWASP: never let a short summary hide instructions. */
+  let full = $state<Record<string, boolean>>({});
+  const SHORT = 280;
 
   const SAMPLE = { dir: "<private copy of example-skill>", skill_md: "<text of SKILL.md>", files: ["SKILL.md", "scripts/run.sh"], name: "example-skill", agents: ["claude-code"] };
   const OUTPUT_FIELDS: [keyof OutputMapping, string, string][] = [
@@ -101,12 +105,21 @@
       {#each s.tools as t (t.name)}
         {@const on = chosen.includes(t.name)}
         {@const flags = report.flags[t.name] ?? []}
+        {@const hints = toolHints(t.annotations)}
         <li class:flagged={flags.length}>
           <label class="pick">
             <input type="checkbox" checked={on} onchange={(e) => toggle(t, e.currentTarget.checked)} aria-label={t.title ? `${t.title} (${t.name})` : t.name} aria-describedby={t.description ? `desc-${t.name}` : undefined} />
             <span class="tn">{t.title ?? t.name}</span>{#if t.title}<code>{t.name}</code>{/if}
           </label>
-          {#if t.description}<p class="desc" id={`desc-${t.name}`}>{t.description.length > 280 ? t.description.slice(0, 280) + "…" : t.description}</p>{/if}
+          {#if hints.length}<ul class="hints" aria-label={`What the server says about ${t.name}`}>{#each hints as h (h.id)}<li class="hint t-{h.tone}" title={h.tip}>{h.label}</li>{/each}</ul>{/if}
+          {#if t.description}
+            {@const hidden = hiddenText(t.description)}
+            {@const long = t.description.length > SHORT}
+            {@const text = hidden ? revealHidden(t.description) : t.description}
+            <p class="desc" id={`desc-${t.name}`}>{long && !full[t.name] ? text.slice(0, SHORT) + "…" : text}</p>
+            {#if long}<button type="button" class="more" aria-expanded={!!full[t.name]} onclick={() => (full[t.name] = !full[t.name])}>{full[t.name] ? "Show less" : "Show full description"}</button>{/if}
+            {#if hidden}<p class="flag">⚠ {hidden} hidden {hidden === 1 ? "character or comment" : "characters or comments"} in the description: text you can't see but a model reads. Shown as ⟦U+…⟧.</p>{/if}
+          {/if}
           {#each flags as f}<p class="flag">⚠ {f}</p>{/each}
           {#if on}
             {@const fields = schemaFields(t.input_schema)}
@@ -166,11 +179,17 @@
   .srv { font-weight: var(--fw-semibold); font-size: var(--fs-body-sm); }
   .meta { margin: 0; color: var(--muted); font-size: var(--fs-caption); }
   .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-  .list li { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
-  .list li.flagged { border-color: var(--warn); }
+  .list > li { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+  .list > li.flagged { border-color: var(--warn); }
   .pick { display: flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); font-weight: var(--fw-medium); }
   code { font-family: var(--mono); font-size: var(--fs-caption); color: var(--muted); }
   .desc { margin: 0; color: var(--text-2); font-size: var(--fs-caption); overflow-wrap: anywhere; }
+  .hints { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+  .hint { padding: 0 7px; border: 1px solid var(--border); border-radius: var(--r-full); font-size: var(--fs-caption); color: var(--text-2); cursor: help; }
+  .hint.t-ok { color: var(--ok-text, var(--ok)); border-color: color-mix(in srgb, var(--ok) 50%, var(--border)); }
+  .hint.t-warn { color: var(--warn-text, var(--warn)); border-color: color-mix(in srgb, var(--warn) 50%, var(--border)); }
+  .more { justify-self: start; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: var(--fs-caption); cursor: pointer; }
+  .more:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
   .flag { margin: 0; color: var(--warn-text, var(--warn)); font-size: var(--fs-caption); }
   .map { display: grid; grid-template-columns: minmax(110px, 160px) minmax(0, 1fr); gap: 4px var(--sp-2); align-items: start; }
   .fl { font-family: var(--mono); font-size: var(--fs-caption); padding-top: 4px; overflow-wrap: anywhere; }

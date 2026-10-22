@@ -91,3 +91,30 @@ test("Enable opens Settings, where consent happens; nothing runs from the card",
   await ws.getByRole("button", { name: "Enable OSV vulnerability lookup" }).click();
   await expect(app.getByRole("dialog", { name: "Settings", exact: true })).toBeVisible();
 });
+
+test("gallery: add an MCP analyzer step by step, with inline checks, tool hints and a review that leaves it off", async ({ app }) => {
+  const ws = await security(app, "light");
+  await ws.getByRole("radio", { name: "Analyzers" }).click();
+  await ws.getByRole("button", { name: /Add your own/ }).click();
+  const form = ws.getByTestId("add-analyzer");
+  const steps = form.getByRole("list", { name: "Add analyzer steps" });
+  await expect(steps.locator('[aria-current="step"]')).toContainText("Source");
+  await form.getByRole("button", { name: "Add and choose tools…" }).click();
+  await expect(form.getByLabel("Command", { exact: true })).toHaveAttribute("aria-invalid", "true");
+  await form.getByLabel("Name", { exact: true }).fill("Skill lint (sample)");
+  await expect(form.getByLabel("Id", { exact: true })).toHaveValue("local.skill-lint-sample");
+  await form.getByLabel("Command", { exact: true }).fill("/usr/local/bin/skill-lint-mcp");
+  await form.getByRole("button", { name: "Add and choose tools…" }).click();
+  await expect(steps.locator('[aria-current="step"]')).toContainText("Tools");
+  await form.getByRole("button", { name: "List tools", exact: true }).click();
+  const tools = form.getByRole("region", { name: "Tools of Skill lint (sample)" });
+  await expect(tools.getByRole("list", { name: "What the server says about list_files" })).toContainText("Read-only");
+  await expect(tools).toContainText("hidden character");
+  await axe(app);
+  await tools.getByRole("button", { name: "Save tools", exact: true }).click();
+  await expect(steps.locator('[aria-current="step"]')).toContainText("Review");
+  await expect(form).toContainText("is added and off");
+  await axe(app);
+  await form.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(form).toHaveCount(0);
+});

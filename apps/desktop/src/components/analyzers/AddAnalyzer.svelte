@@ -2,11 +2,14 @@
   // Add your own analyzer: a preset for a well-known local scanner, any MCP server (a command
   // holdmap starts, a URL it connects to, or one of your agents' configured servers), or a
   // manifest file. holdmap validates it and keeps it off until its permissions are approved.
-  // For MCP servers the next step lists the tools and maps their inputs.
+  // For MCP servers the next step lists the tools and maps their inputs. Steps: Source → Tools →
+  // Review; fields are checked inline as you type (lib/add-analyzer.ts).
   import Button from "../ui/Button.svelte";
   import Callout from "../ui/Callout.svelte";
   import SegmentedControl from "../ui/SegmentedControl.svelte";
   import McpTools from "./McpTools.svelte";
+  import Stepper from "../ui/Stepper.svelte";
+  import { ADD_STEPS, draftErrors, idFromName, type AddStep } from "../../lib/add-analyzer-flow";
   import * as api from "../../lib/api";
   import type { ConfiguredServer, McpDraft } from "../../lib/analyzers";
   import type { PresetView } from "../../lib/analyzer-presets";
@@ -17,8 +20,8 @@
     { value: "agents", label: "From your agents" }, { value: "manifest", label: "Manifest" },
   ];
   // The Security gallery already shows presets as cards, so it opens this form without them.
-  let { onadded, oncancel, demo = false, modes = ALL.map((m) => m.value), startOpen = false }:
-    { onadded?: (id: string) => void; oncancel?: () => void; demo?: boolean; modes?: Mode[]; startOpen?: boolean } = $props();
+  let { onadded, oncancel, ondone, onreview, demo = false, modes = ALL.map((m) => m.value), startOpen = false }:
+    { onadded?: (id: string) => void; oncancel?: () => void; ondone?: () => void; onreview?: (id: string) => void; demo?: boolean; modes?: Mode[]; startOpen?: boolean } = $props();
   const options = $derived(ALL.filter((m) => modes.includes(m.value)));
   // svelte-ignore state_referenced_locally
   let open = $state(startOpen);
@@ -38,6 +41,11 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
   let added = $state<{ id: string; name: string } | null>(null);
+  /** Set once the analyzer exists: the Review step. */
+  let done = $state<{ id: string; name: string; tools: boolean } | null>(null);
+  let touched = $state<Record<string, boolean>>({});
+  let idEdited = $state(false);
+  const step = $derived<AddStep>(done ? "review" : added ? "tools" : "source");
 
   const remote = $derived.by(() => {
     try { const h = new URL(url).hostname.replace(/^\[|\]$/g, ""); return !(h === "localhost" || h === "::1" || /^127\./.test(h)); } catch { return false; }
@@ -65,7 +73,8 @@
   }
 
   async function add() {
-    if (busy) return;
+    touched = { ...touched, __submit: true };
+    if (busy || !ready) return;
     busy = true;
     error = null;
     try {
@@ -73,7 +82,7 @@
         // A manifest already names its tools; edit them later with Tools….
         const view = await api.addAnalyzer(text);
         text = "";
-        open = startOpen;
+        done = { id: view.id, name: view.name, tools: false };
         onadded?.(view.id);
       } else {
         const view = await api.addMcpAnalyzer(draft());
@@ -94,23 +103,44 @@
     } catch (e) { error = String(e); }
     finally { busy = false; }
   }
-  function done() {
+  /** Tools saved (or skipped): move to Review. */
+  function toolsDone(saved: boolean) {
     const a = added;
     added = null;
-    open = startOpen;
-    if (a) onadded?.(a.id);
+    if (!a) return;
+    done = { id: a.id, name: a.name, tools: saved };
+    onadded?.(a.id);
   }
-  const ready = $derived(mode === "manifest" ? !!text.trim() : !!id.trim() && (mode === "command" ? !!command.trim() : mode === "url" ? !!url.trim() : !!server?.draft));
+  const errors = $derived(draftErrors(mode, { id, command, url, keys: mode === "url" ? auth : keys, manifest: text, serverPicked: !!server?.draft }));
+  const ready = $derived(Object.keys(errors).length === 0);
+  const shown = (k: string) => (touched[k] || touched.__submit) && errors[k] ? errors[k] : null;
+  const touch = (k: string) => () => (touched = { ...touched, [k]: true });
+  function nameInput() { if (!idEdited) id = idFromName(name); }
+  function finish() { done = null; touched = {}; idEdited = false; open = startOpen; ondone?.(); }
 </script>
 
 <div class="add" data-testid="add-analyzer">
   {#if !open}
     <Button size="sm" variant="ghost" icon="plus" onclick={() => (open = true)}>Add your own analyzer…</Button>
-  {:else if added}
-    <h3>Choose {added.name}'s tools</h3>
-    <McpTools id={added.id} name={added.name} onsaved={done} oncancel={done} />
   {:else}
-    <h3>Add your own analyzer</h3>
+  <div class="head"><h3>Add your own analyzer</h3>{#if mode !== "preset"}<Stepper label="Add analyzer steps" steps={mode === "manifest" ? ADD_STEPS.filter((x) => x.id !== "tools") : ADD_STEPS} current={step} />{/if}</div>
+  {#if done}
+    <div class="review" role="status">
+      <p class="ok"><b>{done.name}</b> is added and <b>off</b>.</p>
+      <ul class="facts">
+        <li>Nothing runs until you review its permissions and turn it on.</li>
+        <li>When on, it runs only when you start a scan, in the sandbox, on a private copy of each skill.</li>
+        {#if done.tools}<li>Its tool list is pinned. If the server's tools change, holdmap asks you again.</li>{/if}
+      </ul>
+      <div class="acts">
+        {#if onreview}<Button size="sm" variant="primary" icon="shield" onclick={() => { const id = done!.id; finish(); onreview(id); }}>Review and turn on…</Button>{/if}
+        <Button size="sm" variant={onreview ? "ghost" : "secondary"} onclick={finish}>Done</Button>
+      </div>
+    </div>
+  {:else if added}
+    <p class="meta">Choose {added.name}'s tools.</p>
+    <McpTools id={added.id} name={added.name} onsaved={() => toolsDone(true)} oncancel={() => toolsDone(false)} />
+  {:else}
     <SegmentedControl bind:value={mode} label="How to add it" {options} />
     <p class="meta">
       {#if mode === "preset"}Well-known scanners that run on this computer without an LLM or API key. You install the tool; holdmap adds its manifest, off until you review and approve its permissions.
@@ -122,8 +152,9 @@
     </p>
     {#if mode !== "manifest" && mode !== "preset"}
       <div class="grid">
-        <label>Id<input bind:value={id} placeholder="local.my-scanner" spellcheck="false" /></label>
-        <label>Name<input bind:value={name} placeholder="My scanner" /></label>
+        <label>Name<input bind:value={name} placeholder="My scanner" oninput={nameInput} /></label>
+        <label>Id<input bind:value={id} placeholder="local.my-scanner" spellcheck="false" oninput={() => (idEdited = true)} onblur={touch("id")} aria-invalid={!!shown("id")} aria-describedby={shown("id") ? "add-err-id" : undefined} /></label>
+        {#if shown("id")}<span class="err" id="add-err-id">{shown("id")}</span>{/if}
       </div>
     {/if}
     {#if mode === "preset"}
@@ -145,11 +176,14 @@
         </ul>
       {/if}
     {:else if mode === "command"}
-      <label class="wide">Command<input bind:value={command} placeholder="/usr/local/bin/my-mcp-scanner" spellcheck="false" /></label>
+      <label class="wide">Command<input bind:value={command} placeholder="/usr/local/bin/my-mcp-scanner" spellcheck="false" onblur={touch("command")} aria-invalid={!!shown("command")} aria-describedby={shown("command") ? "add-err-command" : undefined} /></label>
+        {#if shown("command")}<span class="err" id="add-err-command">{shown("command")}</span>{/if}
       <label class="wide">Arguments (one per line)<textarea rows="2" bind:value={args} spellcheck="false" placeholder="--stdio"></textarea></label>
-      <label class="wide">API key names it may get from your keychain (optional)<input bind:value={keys} placeholder="SCANNER_TOKEN" spellcheck="false" /></label>
+      <label class="wide">API key names it may get from your keychain (optional)<input bind:value={keys} placeholder="SCANNER_TOKEN" spellcheck="false" onblur={touch("keys")} aria-invalid={!!shown("keys")} aria-describedby={shown("keys") ? "add-err-keys" : undefined} /></label>
+        {#if shown("keys")}<span class="err" id="add-err-keys">{shown("keys")}</span>{/if}
     {:else if mode === "url"}
-      <label class="wide">URL<input bind:value={url} spellcheck="false" /></label>
+      <label class="wide">URL<input bind:value={url} spellcheck="false" onblur={touch("url")} aria-invalid={!!shown("url")} aria-describedby={shown("url") ? "add-err-url" : undefined} /></label>
+        {#if shown("url")}<span class="err" id="add-err-url">{shown("url")}</span>{/if}
       <label class="wide">Bearer token key name (optional; you store the token in the keychain next)<input bind:value={auth} placeholder="SCANNER_TOKEN" spellcheck="false" /></label>
       {#if remote}<Callout tone="warn" size="sm">This server is on another machine. It must use https, gets only skill names, file names and agent ids, and stays off until you explicitly allow it when you turn it on.</Callout>{/if}
     {:else if mode === "agents"}
@@ -165,12 +199,14 @@
       {/if}
     {:else}
       <label for="analyzer-manifest" class="wide">Analyzer manifest (TOML)</label>
-      <textarea id="analyzer-manifest" rows="8" spellcheck="false" bind:value={text} placeholder={'schema = 1\nid = "example.scanner"\n…'}></textarea>
+      <textarea id="analyzer-manifest" rows="8" spellcheck="false" bind:value={text} placeholder={'schema = 1\nid = "example.scanner"\n…'} onblur={touch("manifest")} aria-invalid={!!shown("manifest")} aria-describedby={shown("manifest") ? "add-err-manifest" : undefined}></textarea>
+      {#if shown("manifest")}<span class="err" id="add-err-manifest">{shown("manifest")}</span>{/if}
     {/if}
     <div class="acts">
-      {#if mode !== "preset"}<Button size="sm" variant="primary" loading={busy} disabled={!ready} onclick={add}>{mode === "manifest" ? "Add analyzer" : "Add and choose tools…"}</Button>{/if}
-      <Button size="sm" variant="ghost" onclick={() => { open = startOpen; error = null; oncancel?.(); }}>Cancel</Button>
+      {#if mode !== "preset"}<Button size="sm" variant="primary" loading={busy} onclick={add}>{mode === "manifest" ? "Add analyzer" : "Add and choose tools…"}</Button>{/if}
+      <Button size="sm" variant="ghost" onclick={() => { open = startOpen; error = null; touched = {}; oncancel?.(); }}>Cancel</Button>
     </div>
+  {/if}
   {/if}
   {#if error}<Callout tone="danger" size="sm">{error}</Callout>{/if}
 </div>
@@ -178,6 +214,12 @@
 <style>
   .add { display: grid; gap: var(--sp-2); margin-top: var(--sp-3); }
   h3 { margin: 0; font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
+  .head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+  .err { color: var(--danger); font-size: var(--fs-caption); font-weight: var(--fw-regular); }
+  input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--danger); }
+  .review { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--ok-soft); }
+  .ok { margin: 0; font-size: var(--fs-body-sm); }
+  .facts { margin: 0; padding-left: 18px; color: var(--text-2); font-size: var(--fs-caption); display: grid; gap: 2px; }
   label { display: grid; gap: 2px; font-size: var(--fs-caption); color: var(--text-2); font-weight: var(--fw-medium); }
   .meta { margin: 0; font-size: var(--fs-caption); color: var(--muted); font-weight: var(--fw-regular); }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--sp-2); }
