@@ -44,7 +44,9 @@ jobs:
             if sudo timeout 60 apt-get update && sudo timeout 180 apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev; then
               exit 0
             fi
-            echo "::warning::apt attempt $attempt failed or stalled; retrying"
+            echo "::warning::apt attempt $attempt failed or stalled; retrying from archive.ubuntu.com"
+            # The Azure mirror can crawl on large packages; the next attempts use Canonical's archive instead.
+            sudo sed -i 's#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g' /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
             sleep 5
           done
           exit 1
@@ -76,7 +78,9 @@ jobs:
             if sudo timeout 60 apt-get update && sudo timeout 180 apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev; then
               exit 0
             fi
-            echo "::warning::apt attempt $attempt failed or stalled; retrying"
+            echo "::warning::apt attempt $attempt failed or stalled; retrying from archive.ubuntu.com"
+            # The Azure mirror can crawl on large packages; the next attempts use Canonical's archive instead.
+            sudo sed -i 's#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g' /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
             sleep 5
           done
           exit 1
@@ -280,7 +284,9 @@ jobs:
             if sudo timeout 60 apt-get update && sudo timeout 180 apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev; then
               exit 0
             fi
-            echo "::warning::apt attempt $attempt failed or stalled; retrying"
+            echo "::warning::apt attempt $attempt failed or stalled; retrying from archive.ubuntu.com"
+            # The Azure mirror can crawl on large packages; the next attempts use Canonical's archive instead.
+            sudo sed -i 's#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g' /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
             sleep 5
           done
           exit 1

@@ -100,6 +100,12 @@ try {
   lastPaintAt = waitStartedAt;
   maxPaintGapMs = 0;
   await new Promise(resolve => setTimeout(resolve, 2600));
+  // A loaded CI runner can throttle this page's timers (one run painted 4 frames in 2.6 s, so the GIF, which drops
+  // repeated frames, kept fewer than 3). The check needs a moving picture, so give the painter up to 2.4 s more to
+  // reach 12 distinct frames; if it never does, the assertions below still fail with the timing in the report.
+  while (frame - firstPaint < 12 && performance.now() - waitStartedAt < 5000) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
   const waitEndedAt = performance.now();
   report.syntheticTiming = {
     startupMs: Math.round(waitStartedAt - startRequestedAt),
