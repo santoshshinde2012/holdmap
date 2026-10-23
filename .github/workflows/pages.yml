@@ -94,7 +94,18 @@ jobs:
         run: npm test
       - name: Install browser for the embedded demo check
         working-directory: apps/desktop
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 10
+        run: |
+          # The hosted image already has the browser's system libraries; the extra --with-deps packages are fonts and
+          # a virtual display that headless Chromium does not need, and the Azure Ubuntu mirror serving them
+          # sometimes stalls for many minutes. Download the browser alone and fall back to apt only if it will not start.
+          npx playwright install chromium
+          check='require("@playwright/test").chromium.launch().then((b) => b.close())'
+          if ! node -e "$check"; then
+            echo "::warning::Chromium needs system packages; installing them"
+            printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nDPkg::Lock::Timeout "300";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network >/dev/null
+            npx playwright install --with-deps chromium
+          fi
       - name: Embedded demo end-to-end check
         working-directory: site
         run: npm run test:demo

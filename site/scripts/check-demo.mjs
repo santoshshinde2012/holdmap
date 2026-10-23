@@ -248,6 +248,8 @@ try {
     await measureViewport("after-agents");
   });
   await check("Agent folders offer keyboard-accessible choices with honest browser previews", async () => {
+    // The selected agent's details are docked and the map is zoomed to that agent; close them to see the whole map again.
+    await frame.getByRole("button", { name: "Close agent details", exact: true }).click();
     await frame.getByRole("button", { name: /^Folder shop-web,.*Zooms into this project/ }).click();
     const folder = frame.getByRole("button", { name: /^Folder shop-web,.*\. Opens folder actions$/ });
     const mapNode = folder; // the focusable svelte-flow wrapper is the named control

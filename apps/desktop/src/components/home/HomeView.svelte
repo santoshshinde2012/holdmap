@@ -67,6 +67,8 @@
   let expanded = $state<ReadonlySet<string>>(new Set());
   const groups = $derived(radialLayout(report?.agents ?? [], undefined, undefined, undefined, undefined, expanded));
   const rows = $derived(lanes(report, entries, now));
+  /** Nothing observed at all: the first minute on a quiet machine. One calm message instead of empty cards or a bare map. */
+  const idle = $derived(!!report && !!entries && report.agents.length === 0 && entries.length === 0);
   const hot = $derived(hotAgents(needs));
   const colors = $derived(agentColors(report?.agents ?? []));
   const LAYOUT_ICON: Record<HomeLayout, string> = { cards: "layers", map: "radar" };
@@ -122,13 +124,15 @@
     </div>
   </header>
 
-  <div class="body" class:map={layout === "map"}>
+  <div class="body" class:map={layout === "map" && !idle}>
     {#key layout}
       <div class="main">
-        {#if layout === "cards"}
+        {#if idle}
+          <EmptyPanel icon="bot" title="No agents or dev servers running" hint="Start Claude Code, Cursor, Codex or a dev server and it shows up here within a few seconds." />
+        {:else if layout === "cards"}
           {#if report}
             <AgentCards {report} {entries} {needs} {colors} {now} {selected} {active} onhover={(id) => (hovered = id)} onselect={select}
-              onopen={(id) => onopenagent(id)} onport={port} onstop={onstopagent} oninventory={inventory ? undefined : oninventory} />
+              onopen={(id) => onopenagent(id)} onport={port} onstop={onstopagent} />
           {:else}
             <p class="clear wait" aria-busy="true">…</p>
           {/if}
@@ -156,7 +160,7 @@
     </aside>
   </div>
 
-  {#if layout === "map"}
+  {#if layout === "map" && !idle}
     {#if rows.length}
       <AgentLanes lanes={rows} {now} {colors} {active} open={timeline} ontoggle={() => ontimeline?.(!timeline)} onhover={(id) => (hovered = id)} onselect={select} onopenagent={(id) => onopenagent(id)} onport={port} />
     {:else}

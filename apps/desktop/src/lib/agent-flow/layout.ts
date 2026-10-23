@@ -3,7 +3,10 @@ import type { VisualEdge, VisualGraph, VisualNode } from "./model";
 import { nodeDescription } from "./build";
 
 export type FlowNodeData = { node: VisualNode; chosen: boolean };
-export type FlowEdgeData = { edge: VisualEdge; chosen: boolean };
+/** `labelled`: whether the relationship's label is drawn. A busy graph names only the edges you pick or that touch the picked card, so labels never pile up. */
+export type FlowEdgeData = { edge: VisualEdge; chosen: boolean; labelled: boolean };
+/** Above this many relationships the labels would collide at a readable zoom. */
+export const LABEL_EDGE_LIMIT = 8;
 export type FlowNode = Node<FlowNodeData>;
 export type FlowEdge = Edge<FlowEdgeData>;
 
@@ -30,12 +33,13 @@ export function layoutGraph(graph: VisualGraph, calls: boolean): Map<string, { x
 }
 
 export function toFlow(graph: VisualGraph, positions: Map<string, { x: number; y: number }>, chosen: string | null): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const crowded = graph.edges.length > LABEL_EDGE_LIMIT;
   return {
     nodes: graph.nodes.map((n) => ({ id: n.id, type: "activity", position: positions.get(n.id) ?? { x: 0, y: 0 }, width: 244, height: 78,
       data: { node: n, chosen: chosen === n.id }, draggable: false, connectable: false,
       ariaLabel: nodeDescription(n), })),
     edges: graph.edges.map((e) => ({ id: e.id, type: "relationship", source: e.from, target: e.to,
-      data: { edge: e, chosen: chosen === e.id }, selectable: false, focusable: true,
+      data: { edge: e, chosen: chosen === e.id, labelled: !crowded || chosen === e.id || chosen === e.from || chosen === e.to }, selectable: false, focusable: true,
       ariaLabel: `${e.label}, ${e.kind === "span_parent" ? "reported by integration" : e.evidence}` })),
   };
 }

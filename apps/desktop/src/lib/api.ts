@@ -312,7 +312,8 @@ export async function topology(all: boolean): Promise<Graph> {
 export async function agents(includeCapabilities = false): Promise<AgentsReport> {
   if (isTauri) return call("agents", { includeCapabilities });
   if (liveReads()) return liveJson("agents", { capabilities: includeCapabilities });
-  return mockAgents({ ...MOCK_SNAPSHOT, taken_at_ms: Date.now() }, includeCapabilities);
+  const report = mockAgents({ ...MOCK_SNAPSHOT, taken_at_ms: Date.now() }, includeCapabilities);
+  return emptyDemo() ? { ...report, agents: [], configured: [] } : report;
 }
 
 /** OS process/socket relationships. Recorded calls are fetched independently. */
@@ -463,7 +464,10 @@ export async function remoteScan(host: string): Promise<Snapshot> {
 /** Browser demo only: a plausible, gently moving CPU figure per process so sparklines have a shape. */
 /** The mock ports; `?mockPorts=N` pads the list to N for scrolling and polling load tests. */
 export const MAX_MOCK_PORTS = 1_000;
+/** `?mockPorts=0` pretends nothing is listening and no agents run: the first-minute empty machine. */
+const emptyDemo = () => new URLSearchParams(globalThis.location?.search ?? "").get("mockPorts") === "0";
 function mockEntries(): PortEntry[] {
+  if (emptyDemo()) return [];
   const requested = Number(new URLSearchParams(globalThis.location?.search ?? "").get("mockPorts"));
   const want = Number.isFinite(requested) ? Math.min(MAX_MOCK_PORTS, Math.max(0, Math.floor(requested))) : 0;
   const out = [...MOCK_SNAPSHOT.entries];
@@ -484,7 +488,7 @@ function mockUsage(e: PortEntry): PortEntry {
 }
 
 // Opt-in analyzers. The desktop runs them; the browser demo simulates approval and runs.
-const demoAnalyzers = new DemoAnalyzers();
+const demoAnalyzers = new DemoAnalyzers(emptyDemo());
 
 export async function analyzers(): Promise<AnalyzerView[]> {
   if (isTauri) return call("analyzers_list");

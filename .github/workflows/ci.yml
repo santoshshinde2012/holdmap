@@ -184,7 +184,7 @@ jobs:
   frontend:
     name: desktop frontend
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: apps/desktop
@@ -200,8 +200,20 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+      # Usually 20 s to 4 min; a stalled mirror once took 12 min and used the whole job budget.
       - name: Install browser for end-to-end tests
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 10
+        run: |
+          # The hosted image already has the browser's system libraries; the extra --with-deps packages are fonts and
+          # a virtual display that headless Chromium does not need, and the Azure Ubuntu mirror serving them
+          # sometimes stalls for many minutes. Download the browser alone and fall back to apt only if it will not start.
+          npx playwright install chromium
+          check='require("@playwright/test").chromium.launch().then((b) => b.close())'
+          if ! node -e "$check"; then
+            echo "::warning::Chromium needs system packages; installing them"
+            printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nDPkg::Lock::Timeout "300";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network >/dev/null
+            npx playwright install --with-deps chromium
+          fi
       # test:e2e builds the production UI before starting its managed preview server.
       - run: npm run test:e2e
       - name: Browser failure diagnostics

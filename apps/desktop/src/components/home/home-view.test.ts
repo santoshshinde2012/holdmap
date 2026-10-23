@@ -19,6 +19,15 @@ type View = { container: HTMLElement };
 const mapAgent = (view: View, name: string) => view.container.querySelector<SVGGElement>(`.map g.agent[aria-label^="${name},"]`)!;
 const lane = (view: View, name: string) => within(view.container).getAllByRole("button", { name: new RegExp(`^${name}, up `) })[0];
 
+describe("HomeView on a quiet machine", () => {
+  it.each(["cards", "map"] as const)("shows one calm message in the %s layout instead of an empty canvas", (layout) => {
+    const view = render(HomeView, props({ layout, entries: [], report: { ...mockAgents(undefined, true), agents: [], configured: [] } }));
+    expect(within(view.container).getByText("No agents or dev servers running")).toBeTruthy();
+    expect(view.container.querySelector(".map")).toBeNull();
+    expect(view.queryByRole("table", { name: "Agent lanes" })).toBeNull();
+  });
+});
+
 describe("HomeView cards", () => {
   it("shows one card per agent with fixed counters, chips and an inline attention badge", () => {
     const p = props({ layout: "cards" });
@@ -35,7 +44,9 @@ describe("HomeView cards", () => {
   it("marks unreadable configuration unknown with its reason, never zero", () => {
     const view = render(HomeView, props({ layout: "cards" }));
     const docker = card(view, "Docker Desktop");
-    expect(within(docker).getAllByText("Not read")).toHaveLength(2);
+    // One "MCP & skills: Not read" tile, and no per-card button: Home's header offers the single Read MCP config.
+    expect(within(docker).getAllByText("Not read")).toHaveLength(1);
+    expect(within(docker).queryByRole("button", { name: "Read config" })).toBeNull();
     expect(docker.querySelector("[title*='not supported']")).not.toBeNull();
     expect(docker.textContent).not.toMatch(/Not supported|No project folder/);
   });

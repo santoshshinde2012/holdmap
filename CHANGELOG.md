@@ -15,6 +15,16 @@ by [release-please](https://github.com/googleapis/release-please) from
   length (up to one hour). Recordings stop by themselves with a warning and say why, can be paused,
   and the desktop shows the saved path with Copy and Show in folder. GIFs are built to a size budget
   (still screens now cost kilobytes, not megabytes) and macOS saves long MP4s straight from disk.
+- **Every screen checked.** A pass over all views and states in light and dark at 1280, 1000 and 390 px, with
+  and without data, found and fixed: Home cards blank on a quiet machine; an orphan *External* node in an
+  empty Graph; incoherent first-run Security in the demo; list roles with no options and a scrollable region
+  without keyboard access (axe); dimmed cards and a hover state below 4.5:1 contrast; controls under the 24 px
+  target size; and 7 px diagram text (the Footprint picture now keeps the selected agent and its neighbours
+  readable beside the details panel, and Flow labels only the busiest edges instead of overlapping).
+- **MCP tool annotations are complete.** All twelve read-only tools declare `readOnlyHint`, `destructiveHint`,
+  `idempotentHint` and `openWorldHint` explicitly (checked by a test), which is what MCP directories score.
+- **More reliable CI.** The browser install for the end-to-end job downloads the browser without the apt font packages (a stalled mirror can no longer hold it up) and the job
+  has more headroom, after a stalled download used up the whole 15-minute budget.
 
 ## [0.10.0] - 2026-10-22
 

@@ -69,7 +69,7 @@
   const inspected = $derived(scoped.some((agent) => agent.capabilities?.inspected));
   const mcpCount = $derived(inventory.filter((item) => item.kind === "mcp").length);
   const skillCount = $derived(inventory.filter((item) => item.kind === "skill").length);
-  const notRead = "Not read yet: use Read config on Home or the agent card.";
+  const notRead = "Not read yet: use Read MCP config on Home.";
   const capStats = $derived([
     { id: "agents", label: "Agents", value: scoped.length },
     { id: "mcp", label: "MCP servers", value: inspected ? mcpCount : "Not read", title: inspected ? undefined : notRead },
@@ -400,7 +400,7 @@
   .filter-panel { position: absolute; top: calc(100% + 7px); right: 16px; display: flex; gap: 9px; align-items: center; flex-wrap: wrap; max-width: calc(100% - 32px); padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-lg); } .filter-panel :global(.field) { min-width: 0; }
   .result-summary { padding: 10px 18px; border-bottom: 1px solid var(--border); color: var(--muted); background: var(--surface-2); font-size: var(--fs-caption); line-height: var(--lh-caption); }
   .canvas-host { flex: 1; min-height: 0; position: relative; } .canvas-host.scrollable { overflow: auto; overscroll-behavior: contain; }
-  .evidence-footer { display: flex; align-items: flex-start; gap: 7px; padding: 10px 16px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); border-top: 1px solid var(--border); background: var(--surface); } .evidence-footer :global(svg) { margin-top: 1px; } .evidence-footer span { flex: 1; } .evidence-footer button { background: transparent; border: 0; padding: 0; color: var(--accent); font-size: var(--fs-caption); line-height: var(--lh-caption); text-align: left; }
+  .evidence-footer { display: flex; align-items: flex-start; gap: 7px; padding: 10px 16px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); border-top: 1px solid var(--border); background: var(--surface); } .evidence-footer :global(svg) { margin-top: 1px; } .evidence-footer span { flex: 1; } .evidence-footer button { background: transparent; border: 0; padding: 0; min-height: 24px; color: var(--accent); font-size: var(--fs-caption); line-height: var(--lh-caption); text-align: left; }
   .map-empty { position: absolute; z-index: 2; bottom: 60px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; width: min(430px, calc(100% - 40px)); padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-sm); }
   .map-empty.catalog-empty { position: static; transform: none; margin: 22px auto; } .empty-icon { color: var(--muted); flex: none; padding-top: 2px; }
   .map-empty p, .tools-empty p { color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); margin-top: 9px; }

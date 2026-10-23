@@ -127,7 +127,7 @@
   h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-title); font-weight: var(--fw-semibold); }
   .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .note { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: var(--fs-caption); }
-  .link { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .link { border: 0; background: none; padding: 0 2px; min-height: 24px; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .graphs { display: grid; align-content: start; gap: 10px; min-width: 0; }
   .ghead { display: flex; align-items: baseline; gap: 10px; }
   .ghead :global(.ui-btn) { margin-left: auto; }

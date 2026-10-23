@@ -24,6 +24,12 @@
 </p>
 
 <p align="center">
+
+[![M8ven Score](https://m8ven.ai/badge/mcp/santoshshinde2012-holdmap-1nt5m9?v=2e07decd96f11735565e5b1746856acf)](https://m8ven.ai/mcp/santoshshinde2012-holdmap-1nt5m9?s=readme)
+
+</p>
+
+<p align="center">
   <img src="docs/screenshots/desktop-home-cards-light.png" width="860" alt="holdmap Home as Cards: each agent with its projects, ports, MCP servers and skills, and a Needs you list (sample data)" />
 </p>
 
