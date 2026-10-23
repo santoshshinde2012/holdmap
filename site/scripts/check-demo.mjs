@@ -187,7 +187,7 @@ try {
     await frame.locator("#agent-capabilities").waitFor();
     await frame.getByRole("radio", { name: "Overview", exact: true }).click();
     await views.getByRole("radio", { name: "Home", exact: true }).click();
-    await frame.getByRole("button", { name: /^\d+ listening$/ }).click();
+    await frame.getByRole("button", { name: /^Listening \d+$/ }).click();
     await frame.locator("#port-list").waitFor();
   });
   await check("Agents → Security → Pipeline loads the analyzer graphs on demand", async () => {
