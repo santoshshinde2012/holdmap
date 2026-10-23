@@ -184,7 +184,7 @@ jobs:
   frontend:
     name: desktop frontend
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: apps/desktop
@@ -200,8 +200,15 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+      # Usually 20 s to 4 min. A stalled apt or CDN download once ate the whole job budget (12 min),
+      # so cap each attempt and retry instead of waiting out the job timeout.
       - name: Install browser for end-to-end tests
-        run: npx playwright install --with-deps chromium
+        run: |
+          for attempt in 1 2 3; do
+            timeout 5m npx playwright install --with-deps chromium && exit 0
+            echo "::warning::Browser install attempt $attempt failed or stalled; retrying"
+          done
+          exit 1
       # test:e2e builds the production UI before starting its managed preview server.
       - run: npm run test:e2e
       - name: Browser failure diagnostics
