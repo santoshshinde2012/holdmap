@@ -44,8 +44,9 @@
 </div>
 
 <style>
-  .export { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
-  .note { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); margin-left: 4px; }
-  .note.err { color: var(--danger); }
+  .export { position: relative; display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+  /* Floats under the buttons so announcing a result never pushes the page around. */
+  .note { position: absolute; top: calc(100% + 4px); right: 0; z-index: 5; white-space: nowrap; padding: 4px 10px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-md); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--text-2); pointer-events: none; }
+  .note.err { color: var(--danger); border-color: var(--danger); }
   .note:empty { display: none; }
 </style>

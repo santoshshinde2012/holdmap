@@ -1,6 +1,7 @@
 <script lang="ts">
   // The view switcher and the active view's filters (list), map picture (agents) or search reset.
   // Pure presentation: every value is bound to app state, so the toolbar holds no state of its own.
+  import { tick } from "svelte";
   import { ActionDock, Button, FilterChip, IconButton, Select } from "../ui";
   import { linksLabel } from "../../lib/graph";
   import type { Picture } from "../../lib/agents";
@@ -57,10 +58,36 @@
   } = $props();
 
   const dock = $derived(narrow ? "compact" : "md");
+
+  // Between "narrow" and a wide window the active view's controls can still outgrow one line (the
+  // Agents map pictures, the List filters). Rather than clip them, stack onto a second row.
+  let bar = $state<HTMLElement | null>(null);
+  let crowded = $state(false);
+  async function measure() {
+    if (!bar) return;
+    crowded = false;
+    await tick();
+    crowded = !!bar && bar.scrollWidth > bar.clientWidth + 1;
+  }
+  $effect(() => {
+    // Re-measure whenever the controls change (view, section, picture, filters) or the window resizes.
+    void [view, agentSection, picture, flowSource, filters, filtersActive, sideOpen, projectCaption, stats, narrow];
+    void measure();
+  });
+  $effect(() => {
+    if (!bar || typeof ResizeObserver === "undefined") return;
+    let width = bar.clientWidth;
+    const ro = new ResizeObserver(() => {
+      const next = bar?.clientWidth ?? width;
+      if (next !== width) { width = next; void measure(); }
+    });
+    ro.observe(bar);
+    return () => ro.disconnect();
+  });
 </script>
 
 <nav aria-label="Views">
-<div class="toolbar" class:narrow role="toolbar" aria-label="View and filters">
+<div class="toolbar" class:stacked={narrow || crowded} bind:this={bar} role="toolbar" aria-label="View and filters">
   <ActionDock hinge={false} animate={false} label="View" bind:value={view} options={[{ value: "home", label: "Home", icon: "radar", title: "Overview: what is running and what needs a look" }, { value: "list", label: "List", icon: "list", title: singleKeys ? "Port list (G)" : "Port list" }, { value: "graph", label: "Graph", icon: "graph", count: graphEdges || null, countLabel: linksLabel(graphEdges), title: singleKeys ? "Service graph (G)" : "Service graph" }, { value: "agents", label: "Agents", icon: "bot", count: agentCount || null, countLabel: agentCount !== null ? `${agentCount} agents and tools` : undefined, title: singleKeys ? "Agents, tools and apps (⇧A)" : "Agents, tools and apps" }]} />
   <!-- Narrow windows: the active view's controls wrap onto their own rows instead of scrolling sideways. -->
   {#if view !== "home"}
@@ -107,6 +134,6 @@
   .divider { width: 1px; height: 18px; background: var(--border-strong); margin: 0 var(--sp-1); flex: none; }
   .spacer { flex: 1; min-width: var(--sp-2); }
   .row { display: contents; }
-  .toolbar.narrow { flex-wrap: wrap; overflow-x: visible; white-space: normal; row-gap: 6px; }
-  .toolbar.narrow .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--sp-2); flex: 1 1 100%; min-width: 0; }
+  .toolbar.stacked { flex-wrap: wrap; overflow-x: visible; white-space: normal; row-gap: 6px; }
+  .toolbar.stacked .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--sp-2); flex: 1 1 100%; min-width: 0; }
 </style>

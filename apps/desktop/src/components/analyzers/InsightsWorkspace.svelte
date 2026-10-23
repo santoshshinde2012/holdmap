@@ -83,11 +83,13 @@
     <h2><Icon name="shield" size={16} />Security</h2>
     <div class="tools">
       <SegmentedControl bind:value={tab} label="Security view" options={[{ value: "findings", label: "Findings", count: summary.open || null, countLabel: `${summary.open} open` }, { value: "analyzers", label: "Analyzers", icon: "shield" }, { value: "graph", label: "Pipeline", icon: "branch" }]} />
-      <ExportActions label="Export findings" disabled={!insightsStore.insights} copy={() => securitySummaryText(exportable, summary, Date.now())}
-        files={[
-          { label: "Download JSON", filename: reportFilename("security", Date.now(), "json"), build: () => securityReport(exportable, summary, Date.now()) },
-          { label: "Download SARIF", filename: reportFilename("security", Date.now(), "sarif"), build: () => securitySarif(exportable) },
-        ]} />
+      {#if tab === "findings"}
+        <ExportActions label="Export findings" disabled={!insightsStore.insights} copy={() => securitySummaryText(exportable, summary, Date.now())}
+          files={[
+            { label: "Download JSON", filename: reportFilename("security", Date.now(), "json"), build: () => securityReport(exportable, summary, Date.now()) },
+            { label: "Download SARIF", filename: reportFilename("security", Date.now(), "sarif"), build: () => securitySarif(exportable) },
+          ]} />
+      {/if}
       <Button size="sm" variant="primary" icon="refresh" disabled={!approved.length} loading={securityRuns.busy} onclick={() => securityRuns.start(approved)} title={approved.length ? undefined : "Turn on an analyzer first"}>Rescan</Button>
       {#if onsettings}<IconButton icon="sliders" label="Analyzer settings" size="sm" onclick={onsettings} />{/if}
     </div>

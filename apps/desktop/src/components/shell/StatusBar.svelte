@@ -34,7 +34,7 @@
   {#if stats}
     <span><b>{stats.total}</b> ports</span><span class="g"><b>{stats.dev}</b> dev</span>{#if stats.exposed}<span class="w"><b>{stats.exposed}</b> exposed</span>{/if}
     <span class="sp"></span>
-    <span class="hints">{#if hints === "flow"}<span><Kbd keys="Tab" size="sm" />flow controls</span>{:else if hints === "home" && singleKeys}<span><Kbd keys="V" size="sm" />cards ↔ map</span>{:else}<span><Kbd keys={["↑", "↓"]} size="sm" />move</span>{#if hints === "list"}<span><Kbd keys="⌫" size="sm" />stop</span>{/if}{/if}{#if singleKeys}<span><Kbd keys="G" size="sm" />graph</span><span><Kbd keys={["⇧", "A"]} size="sm" />agents</span>{/if}<span><Kbd keys={[mod, "K"]} size="sm" />commands</span>{#if singleKeys}<span><Kbd keys="?" size="sm" />shortcuts</span>{/if}{#if shortcut}<span class="gs"><Kbd keys={shortcut} size="sm" />from anywhere</span>{/if}</span>
+    <span class="hints">{#if hints === "flow"}<span><Kbd keys="Tab" size="sm" />flow controls</span>{:else if hints === "home" && singleKeys}<span><Kbd keys="V" size="sm" />cards ↔ map</span>{:else}<span><Kbd keys={["↑", "↓"]} size="sm" />move</span>{#if hints === "list"}<span><Kbd keys="⌫" size="sm" />stop</span>{/if}{/if}{#if singleKeys}<span class="opt"><Kbd keys="G" size="sm" />graph</span><span class="opt"><Kbd keys={["⇧", "A"]} size="sm" />agents</span>{/if}<span><Kbd keys={[mod, "K"]} size="sm" />commands</span>{#if singleKeys}<span><Kbd keys="?" size="sm" />shortcuts</span>{/if}{#if shortcut}<span class="gs"><Kbd keys={shortcut} size="sm" />from anywhere</span>{/if}</span>
   {:else}
     <span class="sp"></span>
   {/if}
@@ -53,5 +53,8 @@
   .hints { display: inline-flex; align-items: center; gap: 14px; min-width: 0; overflow: hidden; }
   .hints > span { display: inline-flex; align-items: center; gap: 6px; }
   .capture { display: flex; align-items: center; gap: 1px; flex: none; padding-left: var(--sp-2); border-left: 1px solid var(--border); }
+  /* Trim the hints in priority order instead of clipping the last one mid-word. */
+  @media (max-width: 1100px) { .hints .gs { display: none; } }
+  @media (max-width: 900px) { .hints .opt { display: none; } }
   @media (max-width: 760px) { .hints { display: none; } }
 </style>
