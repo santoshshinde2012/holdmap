@@ -94,7 +94,12 @@ jobs:
         run: npm test
       - name: Install browser for the embedded demo check
         working-directory: apps/desktop
-        run: npx playwright install --with-deps chromium
+        run: |
+          for attempt in 1 2 3; do
+            timeout 4m npx playwright install --with-deps chromium && exit 0
+            echo "::warning::Browser install attempt $attempt failed or stalled; retrying"
+          done
+          exit 1
       - name: Embedded demo end-to-end check
         working-directory: site
         run: npm run test:demo
