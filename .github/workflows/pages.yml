@@ -96,14 +96,16 @@ jobs:
         working-directory: apps/desktop
         timeout-minutes: 10
         run: |
-          # The Azure Ubuntu mirror sometimes stalls. Fail a stalled connection fast, retry downloads, and wait for
-          # the dpkg lock instead of killing apt (killing npx would leave apt running and lock out the retry).
-          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nDPkg::Lock::Timeout "300";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network >/dev/null
-          for attempt in 1 2 3; do
-            npx playwright install --with-deps chromium && exit 0
-            echo "::warning::Browser install attempt $attempt failed; retrying"
-          done
-          exit 1
+          # The hosted image already has the browser's system libraries; the extra --with-deps packages are fonts and
+          # a virtual display that headless Chromium does not need, and the Azure Ubuntu mirror serving them
+          # sometimes stalls for many minutes. Download the browser alone and fall back to apt only if it will not start.
+          npx playwright install chromium
+          check='require("@playwright/test").chromium.launch().then((b) => b.close())'
+          if ! node -e "$check"; then
+            echo "::warning::Chromium needs system packages; installing them"
+            printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nDPkg::Lock::Timeout "300";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network >/dev/null
+            npx playwright install --with-deps chromium
+          fi
       - name: Embedded demo end-to-end check
         working-directory: site
         run: npm run test:demo
