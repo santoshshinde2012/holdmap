@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MAX_RECORDING_BYTES, saveRecording, saveSnapshot } from "./screen-record-save";
+import { MAX_RECORDING_BYTES, revealSavedRecording, saveRecording, saveSnapshot } from "./screen-record-save";
 import { MAX_SNAPSHOT_BYTES } from "./screen-snapshot";
 import type { CaptureFile } from "./screen-record";
 
@@ -75,5 +75,31 @@ describe("recording downloads", () => {
       expect(arrayBuffer).not.toHaveBeenCalled();
     }
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("exports a long native recording by copying the file, never through the window", async () => {
+    Object.assign(window, { __TAURI_INTERNALS__: {} });
+    invoke.mockResolvedValue("/chosen/long.mp4");
+    const arrayBuffer = vi.fn();
+    const long: CaptureFile = { blob: { size: 0, arrayBuffer } as unknown as Blob, bytes: 900_000_000, filename: "holdmap-long.mp4", native: { sessionId: "abc", format: "mp4" } };
+    expect(await saveRecording(long)).toEqual({ saved: true, path: "/chosen/long.mp4" });
+    expect(invoke).toHaveBeenCalledWith("export_screen_recording", { sessionId: "abc", format: "mp4", filename: "holdmap-long.mp4" });
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    invoke.mockResolvedValue(null);
+    expect(await saveRecording(long)).toEqual({ saved: false });
+  });
+
+  it("refuses a native export outside the desktop app", async () => {
+    const long: CaptureFile = { blob: new Blob([]), bytes: 5, filename: "x.mp4", native: { sessionId: "abc", format: "mp4" } };
+    await expect(saveRecording(long)).rejects.toThrow("desktop app");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("reveals a saved file's folder only from the desktop app", async () => {
+    await expect(revealSavedRecording("/a/b.mp4")).rejects.toThrow("desktop app");
+    Object.assign(window, { __TAURI_INTERNALS__: {} });
+    invoke.mockResolvedValue(undefined);
+    await revealSavedRecording("/a/b.mp4");
+    expect(invoke).toHaveBeenCalledWith("reveal_saved_recording", { path: "/a/b.mp4" });
   });
 });

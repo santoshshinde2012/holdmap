@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { PRESETS } from "./screen-record-plan";
 import { initialRecordingSupport, resolveRecordingSupport, startRecording } from "./screen-record-backend";
 
 const { invoke, encode } = vi.hoisted(() => ({ invoke: vi.fn(), encode: vi.fn() }));
@@ -71,5 +72,14 @@ describe("screen recording backend selection", () => {
     expect(picker).toHaveBeenCalledOnce();
     expect(encode).not.toHaveBeenCalled();
     expect(await pending).toBe(session);
+  });
+
+  it("passes the chosen plan to the recorder", async () => {
+    const track = { readyState: "live", stop: vi.fn() };
+    const stream = { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream;
+    media(vi.fn().mockResolvedValue(stream));
+    encode.mockResolvedValue({ elapsedMs: () => 0, stop: vi.fn(), discard: vi.fn() });
+    await startRecording("browser", { onTick() {}, onEnded() {} }, new AbortController().signal, vi.fn(), PRESETS.clip);
+    expect(encode.mock.calls[0]).toContain(PRESETS.clip);
   });
 });

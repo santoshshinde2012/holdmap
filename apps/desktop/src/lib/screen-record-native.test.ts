@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NativeRecordingSession, type NativeRecordingStatus } from "./screen-record-native";
-import { MAX_DURATION_MS } from "./screen-record";
+import { LEGACY_PLAN, PRESETS } from "./screen-record-plan";
 import { Blob as NodeBlob } from "node:buffer";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
@@ -17,8 +17,8 @@ function deferred<T>() {
   return { promise, resolve };
 }
 const sessions: NativeRecordingSession[] = [];
-async function start(controller = new AbortController(), listener = { onTick: vi.fn(), onEnded: vi.fn() }) {
-  const session = await NativeRecordingSession.start(listener, controller.signal, vi.fn());
+async function start(controller = new AbortController(), listener = { onTick: vi.fn(), onEnded: vi.fn(), onLimit: vi.fn() }, plan = LEGACY_PLAN) {
+  const session = await NativeRecordingSession.start(listener, controller.signal, vi.fn(), plan);
   sessions.push(session);
   return { session, controller, listener };
 }
@@ -192,14 +192,15 @@ describe("native recording session", () => {
   it("reports a native two-minute completion once and skips a redundant stop command", async () => {
     const { session, listener } = await start();
     invoke.mockImplementation(async (command: string, args?: { format?: string }) => {
-      if (command === "screen_recording_status") return status({ phase: "ready", elapsedMs: MAX_DURATION_MS + 100 });
+      if (command === "screen_recording_status") return status({ phase: "ready", elapsedMs: LEGACY_PLAN.maxDurationMs + 100 });
       if (command === "read_screen_recording") return new ArrayBuffer(args?.format === "mp4" ? 4 : 3);
     });
     await vi.advanceTimersByTimeAsync(1_000);
     expect(listener.onEnded).toHaveBeenCalledOnce();
-    expect(session.elapsedMs()).toBe(MAX_DURATION_MS);
+    expect(listener.onLimit).toHaveBeenCalledExactlyOnceWith("duration");
+    expect(session.elapsedMs()).toBe(LEGACY_PLAN.maxDurationMs);
     const result = await session.stop();
-    expect(result.durationMs).toBe(MAX_DURATION_MS);
+    expect(result.durationMs).toBe(LEGACY_PLAN.maxDurationMs);
     expect(invoke.mock.calls.some(([command]) => command === "stop_screen_recording")).toBe(false);
   });
 
@@ -236,10 +237,38 @@ describe("native recording session", () => {
     expect(await stopped).toMatchObject({ durationMs: 1_500, mp4: { bytes: 4 }, gif: { bytes: 3 } });
   });
 
+  it("passes the plan to the native recorder and stops at its length", async () => {
+    const { session, listener } = await start(undefined, undefined, PRESETS.clip);
+    expect(invoke).toHaveBeenCalledWith("start_screen_recording", { options: {
+      maxDurationMs: 15_000, mp4: false, gif: true, mp4Bitrate: 3_000_000, gifFps: 10, gifMaxEdge: 800, gifMaxBytes: 10 * 1024 * 1024,
+    } });
+    invoke.mockImplementation(async (command: string) => command === "screen_recording_status" ? status({ elapsedMs: 15_400 }) : undefined);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(listener.onLimit).toHaveBeenCalledWith("duration");
+    expect(listener.onEnded).toHaveBeenCalledOnce();
+    expect(session.elapsedMs()).toBe(15_000);
+  });
+
+  it("keeps a long MP4 on disk instead of reading it into the window", async () => {
+    const { session } = await start();
+    const mp4Bytes = 300 * 1024 * 1024;
+    invoke.mockImplementation(async (command: string, args?: { format?: string }) => {
+      if (command === "stop_screen_recording") return status({ phase: "ready", mp4Bytes });
+      if (command === "read_screen_recording" && args?.format === "gif") return new ArrayBuffer(3);
+    });
+    const result = await session.stop();
+    expect(result.mp4).toMatchObject({ bytes: mp4Bytes, native: { sessionId: "owned-session", format: "mp4" } });
+    expect(result.mp4!.blob.size).toBe(0);
+    expect(invoke.mock.calls.some(([command, args]) => command === "read_screen_recording" && args?.format === "mp4")).toBe(false);
+    expect(invoke).not.toHaveBeenCalledWith("discard_screen_recording", expect.anything());
+    await result.release!();
+    expect(invoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "owned-session" });
+  });
+
   it("rejects oversized and truncated exports before retaining any recording", async () => {
     const { session } = await start();
     invoke.mockImplementation(async (command: string) => {
-      if (command === "stop_screen_recording") return status({ phase: "ready", mp4Bytes: 128 * 1024 * 1024 + 1 });
+      if (command === "stop_screen_recording") return status({ phase: "ready", mp4Bytes: 2 * 1024 * 1024 * 1024 + 1 });
       if (command === "read_screen_recording") return new ArrayBuffer(2);
     });
     await expect(session.stop()).rejects.toThrow("complete native recording");

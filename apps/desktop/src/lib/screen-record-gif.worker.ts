@@ -1,23 +1,30 @@
 /// <reference lib="webworker" />
-import { GifTimeline, type GifFrame } from "./screen-record-gif";
+import { GifTimeline, type GifFrame, type GifLimits } from "./screen-record-gif";
 import { GIF_MAX_WIDTH, MAX_DURATION_MS } from "./screen-record";
 
-type Request = { type: "frame"; frame: GifFrame; at: number } | { type: "finish"; durationMs: number };
+type Request =
+  | { type: "init"; limits: GifLimits }
+  | { type: "frame"; frame: GifFrame; at: number }
+  | { type: "finish"; durationMs: number };
 declare const self: DedicatedWorkerGlobalScope;
 if (typeof DedicatedWorkerGlobalScope === "undefined" || !(self instanceof DedicatedWorkerGlobalScope)) {
   throw new Error("GIF encoding requires a dedicated worker.");
 }
-const timeline = new GifTimeline();
+const DEFAULT_LIMITS: GifLimits = { fps: 8, maxBytes: 25 * 1024 * 1024, maxDurationMs: 120_000 };
+let timeline: GifTimeline | null = null;
+
+const finite = (value: unknown, min: number, max: number): value is number => typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
 
 function isRequest(value: unknown): value is Request {
   if (typeof value !== "object" || value === null) return false;
   const request = value as Record<string, unknown>;
-  if (request.type === "finish") {
-    return typeof request.durationMs === "number" && Number.isFinite(request.durationMs)
-      && request.durationMs >= 0 && request.durationMs <= MAX_DURATION_MS;
+  if (request.type === "init") {
+    const limits = request.limits as Record<string, unknown> | null;
+    return typeof limits === "object" && limits !== null && finite(limits.fps, 1, 30)
+      && finite(limits.maxBytes, 1, 128 * 1024 * 1024) && finite(limits.maxDurationMs, 1, MAX_DURATION_MS);
   }
-  if (request.type !== "frame" || typeof request.at !== "number" || !Number.isFinite(request.at)
-    || request.at < 0 || request.at > MAX_DURATION_MS || typeof request.frame !== "object" || request.frame === null) return false;
+  if (request.type === "finish") return finite(request.durationMs, 0, MAX_DURATION_MS);
+  if (request.type !== "frame" || !finite(request.at, 0, MAX_DURATION_MS) || typeof request.frame !== "object" || request.frame === null) return false;
   const frame = request.frame as Record<string, unknown>;
   return typeof frame.width === "number" && Number.isInteger(frame.width) && frame.width >= 1 && frame.width <= GIF_MAX_WIDTH
     && typeof frame.height === "number" && Number.isInteger(frame.height) && frame.height >= 1 && frame.height <= GIF_MAX_WIDTH
@@ -33,9 +40,14 @@ self.onmessage = (event: MessageEvent<unknown>) => {
   try {
     const request = event.data;
     if (!isRequest(request)) throw new Error("Invalid GIF recording request.");
+    if (request.type === "init") {
+      timeline = new GifTimeline(request.limits);
+      return;
+    }
+    timeline ??= new GifTimeline(DEFAULT_LIMITS);
     if (request.type === "frame") {
-      timeline.add(request.frame, request.at);
-      self.postMessage({ type: "frame", intervalMs: timeline.intervalMs });
+      const progress = timeline.add(request.frame, request.at);
+      self.postMessage({ type: "frame", ...progress });
     } else {
       const bytes = timeline.finish(request.durationMs);
       self.postMessage({ type: "done", bytes }, { transfer: [bytes.buffer] });

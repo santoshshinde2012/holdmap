@@ -36,30 +36,57 @@ describe("GIF export", () => {
     expect(() => encodeGif([], 125)).toThrow(/Nothing was captured/);
   });
 
-  it("preserves a two-minute timeline while bounding retained frames", () => {
-    const timeline = new GifTimeline();
+  const limits = { fps: 8, maxBytes: 128 * 1024 * 1024, maxDurationMs: 120_000 };
+  const noise = (seed: number, size = 64) => {
+    const data = new Uint8ClampedArray(size * size * 4);
+    let x = seed * 2654435761 >>> 0;
+    for (let i = 0; i < data.length; i += 1) { x = (x * 1664525 + 1013904223) >>> 0; data[i] = i % 4 === 3 ? 255 : x >>> 24; }
+    return { data, width: size, height: size };
+  };
+
+  it("keeps a still two-minute recording to the frames that changed", () => {
+    const timeline = new GifTimeline(limits);
     for (let at = 0; at < 120_000; at += timeline.intervalMs) {
       timeline.add({ data: fill(2, 2, at > 110_000 ? 255 : 0, 0, 0), width: 2, height: 2 }, at);
-      expect(timeline.frameCount).toBeLessThanOrEqual(240);
     }
+    expect(timeline.frameCount).toBe(2);
     const decoded = gifTiming(timeline.finish(120_000));
-    expect(decoded.delays.length).toBeLessThanOrEqual(240);
     expect(decoded.delays.reduce((sum, delay) => sum + delay, 0)).toBe(120_000);
     expect(decoded.colors.at(-1)).toEqual([255, 0, 0]);
   });
 
   it("rounds cumulative frame delays without speeding up or slowing down the recording", () => {
-    const timeline = new GifTimeline();
-    for (let i = 0; i < 20; i += 1) timeline.add({ data: fill(2, 2, 0, 0, 255), width: 2, height: 2 }, i * 125);
-    expect(gifTiming(timeline.finish(2_500)).delays.reduce((sum, delay) => sum + delay, 0)).toBe(2_500);
+    const timeline = new GifTimeline(limits);
+    for (let i = 0; i < 20; i += 1) timeline.add({ data: fill(2, 2, i % 2 ? 0 : 255, 0, 255), width: 2, height: 2 }, i * 125);
+    const delays = gifTiming(timeline.finish(2_500)).delays;
+    expect(delays).toHaveLength(20);
+    expect(delays.reduce((sum, delay) => sum + delay, 0)).toBe(2_500);
+  });
+
+  it("stops adding frames at the byte budget instead of failing the export", () => {
+    const timeline = new GifTimeline({ fps: 8, maxBytes: 100_000, maxDurationMs: 60_000 });
+    let full = false;
+    for (let i = 0; i < 400 && !full; i += 1) full = timeline.add(noise(i), i * 125).full;
+    expect(full).toBe(true);
+    const bytes = timeline.finish(60_000);
+    expect(bytes.byteLength).toBeLessThan(115_000);
+    expect(gifTiming(bytes).delays.reduce((sum, delay) => sum + delay, 0)).toBe(60_000);
+  });
+
+  it("samples more slowly when the whole recording would pass the budget", () => {
+    const timeline = new GifTimeline({ fps: 8, maxBytes: 200_000, maxDurationMs: 120_000 });
+    const initial = timeline.intervalMs;
+    for (let i = 0; i < 40; i += 1) timeline.add(noise(i, 24), i * timeline.intervalMs);
+    expect(timeline.intervalMs).toBeGreaterThan(initial);
+    expect(timeline.intervalMs).toBeLessThanOrEqual(1_000);
   });
 
   it("rejects corrupt, oversized, changing or backwards frames", () => {
-    const timeline = new GifTimeline();
-    expect(() => timeline.add({ data: fill(1, 1, 0, 0, 0), width: 640, height: 640 }, 0)).toThrow(/dimensions/);
-    expect(() => timeline.add({ data: fill(1, 1, 0, 0, 0), width: 641, height: 1 }, 0)).toThrow(/dimensions/);
+    const timeline = new GifTimeline(limits);
+    expect(() => timeline.add({ data: fill(1, 1, 0, 0, 0), width: 1000, height: 1000 }, 0)).toThrow(/dimensions/);
+    expect(() => timeline.add({ data: fill(1, 1, 0, 0, 0), width: 961, height: 1 }, 0)).toThrow(/dimensions/);
     timeline.add({ data: fill(2, 2, 0, 0, 0), width: 2, height: 2 }, 100);
-    expect(() => timeline.add({ data: fill(2, 2, 0, 0, 0), width: 2, height: 2 }, 50)).toThrow(/consistent/);
+    expect(() => timeline.add({ data: fill(2, 2, 9, 0, 0), width: 2, height: 2 }, 50)).toThrow(/consistent/);
     expect(() => timeline.add({ data: fill(1, 1, 0, 0, 0), width: 1, height: 1 }, 200)).toThrow(/consistent/);
     expect(() => timeline.finish(50)).toThrow(/duration/);
   });

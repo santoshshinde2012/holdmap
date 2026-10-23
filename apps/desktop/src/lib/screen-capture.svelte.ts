@@ -2,7 +2,8 @@
 // lifecycle, stale-request guards and focus return. Kept out of App.svelte so the shell only
 // renders it; the recording backends themselves live in screen-record-backend.ts.
 import { tick } from "svelte";
-import { displayCaptureError, MAX_DURATION_MS, type CaptureResult } from "./screen-record";
+import { displayCaptureError, type CaptureResult, type RecordingLimit } from "./screen-record";
+import { DEFAULT_PLAN, clampPlan, type RecordingPlan } from "./screen-record-plan";
 import { initialRecordingSupport, resolveRecordingSupport, startRecording, type RecordingSession } from "./screen-record-backend";
 
 export type CapturePhase = "confirm" | "encoding" | "ready";
@@ -18,6 +19,13 @@ export class ScreenCaptureController {
   session = $state<RecordingSession | null>(null);
   support = $state(initialRecordingSupport());
   elapsed = $state(0);
+  /** What the next (or running) recording captures; chosen in the dialog before the picker opens. */
+  plan = $state<RecordingPlan>(DEFAULT_PLAN);
+  /** The plan the running recording was started with, so changing the dialog cannot alter it. */
+  activePlan = $state<RecordingPlan>(DEFAULT_PLAN);
+  paused = $state(false);
+  /** Why the last recording stopped by itself, or null when the user stopped it. */
+  stoppedBy = $state<RecordingLimit | null>(null);
   dialog = $state<CapturePhase | null>(null);
   result = $state<CaptureResult | null>(null);
   error = $state<string | null>(null);
@@ -37,6 +45,19 @@ export class ScreenCaptureController {
   constructor(host: ScreenCaptureHost) {
     this.#host = host;
   }
+
+  get canPause(): boolean { return typeof this.session?.pause === "function"; }
+
+  setPlan = (plan: RecordingPlan) => { this.plan = clampPlan(plan); };
+
+  /** Pause and resume leave the paused stretch out of the files; only backends that can do so offer it. */
+  togglePause = () => {
+    const session = this.session;
+    if (!session?.pause || !session.resume || this.#finishing) return;
+    if (this.paused) session.resume();
+    else session.pause();
+    this.paused = !this.paused;
+  };
 
   /** Title-bar / palette / ⇧V entry point: stop a running recording, else open the dialog. */
   open = () => {
@@ -65,6 +86,10 @@ export class ScreenCaptureController {
     this.error = null;
     this.errorTitle = "Couldn't start";
     this.elapsed = 0;
+    this.paused = false;
+    this.stoppedBy = null;
+    const plan = clampPlan(this.plan);
+    this.activePlan = plan;
     this.busy = true;
     this.starting = false;
     const controller = new AbortController();
@@ -72,9 +97,10 @@ export class ScreenCaptureController {
     try {
       let ended = false;
       const session = await startRecording(this.support.backend, {
-        onTick: (ms) => { if (current()) this.elapsed = Math.min(MAX_DURATION_MS, Math.max(0, ms)); },
+        onTick: (ms) => { if (current()) this.elapsed = Math.min(plan.maxDurationMs, Math.max(0, ms)); },
+        onLimit: (limit) => { if (current()) this.stoppedBy = limit; },
         onEnded: () => { ended = true; if (current()) void this.finish(); },
-      }, controller.signal, () => { if (current()) this.starting = true; });
+      }, controller.signal, () => { if (current()) this.starting = true; }, plan);
       if (!current()) { session.discard(); return; }
       this.session = session;
       this.dialog = null;
@@ -100,10 +126,11 @@ export class ScreenCaptureController {
     this.#finishing = true;
     this.#encoding = session;
     this.session = null;
+    this.paused = false;
     this.dialog = "encoding";
     try {
       const result = await session.stop();
-      if (this.#disposed || sequence !== this.#sequence) return;
+      if (this.#disposed || sequence !== this.#sequence) { void result.release?.().catch(() => undefined); return; }
       this.result = result;
       this.dialog = "ready";
     } catch (cause) {
@@ -138,6 +165,8 @@ export class ScreenCaptureController {
     this.#controller = null;
     this.session?.discard();
     this.#encoding?.discard();
+    // A long desktop recording still lives in the native recorder's private folder.
+    void this.result?.release?.().catch(() => undefined);
     this.session = null;
     this.#encoding = null;
     this.#finishing = false;
@@ -147,6 +176,8 @@ export class ScreenCaptureController {
     this.busy = false;
     this.starting = false;
     this.elapsed = 0;
+    this.paused = false;
+    this.stoppedBy = null;
   };
 
   dispose = () => {

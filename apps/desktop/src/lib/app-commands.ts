@@ -4,7 +4,7 @@ import type { View } from "../components/shell/ViewToolbar.svelte";
 import { canOpen, title, type Filters } from "./format";
 import type { Command } from "./palette";
 import type { Density } from "./rows";
-import { formatClock, MAX_DURATION_MS } from "./screen-record";
+import { formatClock } from "./screen-record";
 import { THEME_ICON, type SettingsSection, type Theme } from "./settings";
 import type { Sort } from "./port-list";
 import type { Cluster, GraphNode, PortEntry } from "./types";
@@ -138,7 +138,7 @@ export function appCommands(st: CommandState, act: CommandActions): Command[] {
       ? { id: "screen-stop", group: "Actions", icon: "stop", title: "Stop screen recording", subtitle: formatClock(rec.elapsedMs), keywords: "capture video gif mp4 stop", shortcut: ["⇧", "V"], run: act.stopRecording }
       : rec.hasResult
         ? { id: "screen-review", group: "Actions", icon: "video", title: "Review recording", subtitle: "Preview and save the latest recording from this session", keywords: "capture video gif mp4 download record", shortcut: ["⇧", "V"], run: act.openRecording }
-        : { id: "screen-record", group: "Actions", icon: "video", title: "Record screen…", subtitle: rec.checking ? "Checking screen recording support…" : rec.supported ? `Local MP4 and GIF · up to ${Math.round(MAX_DURATION_MS / 60_000)} min · never uploaded` : "Screen capture is unavailable in this window", keywords: "capture video gif mp4 download", shortcut: ["⇧", "V"], run: act.openRecording },
+        : { id: "screen-record", group: "Actions", icon: "video", title: "Record screen…", subtitle: rec.checking ? "Checking screen recording support…" : rec.supported ? "MP4 or GIF · clip or full session · never uploaded" : "Screen capture is unavailable in this window", keywords: "capture video gif mp4 download", shortcut: ["⇧", "V"], run: act.openRecording },
     { id: "snapshot", group: "Actions", icon: "camera", title: st.snapshotHasResult ? "Review snapshot" : "Take snapshot…", subtitle: "Holdmap view or a selected screen/window · local PNG", keywords: "screenshot capture image png snapshot", shortcut: ["⇧", "S"], run: act.snapshot },
     ...(rec.active ? [{ id: "snapshot-recording", group: "Actions" as const, icon: "camera", title: "Snapshot recording source", subtitle: "Capture a PNG without stopping the video", keywords: "screenshot current recording still png", run: act.snapshotRecording }] : []),
     { id: "notify", group: "Settings", icon: "bell", title: st.notify ? "Turn notifications off" : "Turn notifications on", keywords: "alert conflict new listener", run: act.toggleNotify },
