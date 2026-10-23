@@ -85,7 +85,7 @@ test("Holdmap-only PNG includes the real Graph cards and SVG without a screen-sh
   const baseline = await app.screenshot();
   await app.getByRole("button", { name: "Take snapshot", exact: true }).press("Shift+S");
   await expect(chooser(app)).toBeVisible();
-  await expect(source(app, "Screen or window")).toBeDisabled();
+  await expect(source(app, "Holdmap window")).toBeDisabled();
   await expect(source(app, "Holdmap view")).toHaveAttribute("aria-checked", "true");
   await chooser(app).getByRole("button", { name: "Capture PNG", exact: true }).click();
   await expect(preview(app)).toBeVisible({ timeout: 20_000 });
@@ -145,17 +145,17 @@ test("Holdmap-only PNG includes the real Graph cards and SVG without a screen-sh
 test("screen PNG stops its source, preserves the last result after denial and retries", async ({ app }) => {
   await app.emulateMedia({ reducedMotion: "no-preference" });
   await app.getByRole("button", { name: "Take snapshot", exact: true }).click();
-  await source(app, "Screen or window").click();
-  await chooser(app).getByRole("button", { name: "Choose screen…", exact: true }).click();
+  await source(app, "Holdmap window").click();
+  await chooser(app).getByRole("button", { name: "Capture window", exact: true }).click();
   await expect(preview(app)).toBeVisible();
   expect(await app.evaluate(() => window.__holdmapCapture.pngOverlayPresence)).toEqual([false]);
   const original = await downloadPng(app);
   expect(await decodeImage(app, original.bytes)).toMatchObject({ width: 320, height: 180 });
   expect(await app.evaluate(() => window.__holdmapCapture.streams[0].getTracks().every((track) => track.readyState === "ended"))).toBe(true);
   await preview(app).getByRole("button", { name: "New snapshot", exact: true }).click();
-  await source(app, "Screen or window").click();
+  await source(app, "Holdmap window").click();
   await app.evaluate(() => { window.__holdmapCapture.mode = "denied"; });
-  await chooser(app).getByRole("button", { name: "Choose screen…", exact: true }).click();
+  await chooser(app).getByRole("button", { name: "Capture window", exact: true }).click();
   await expect(chooser(app).getByRole("alert")).toContainText("cancelled or permission was denied");
   await expect(chooser(app)).toContainText("Your previous snapshot is still available");
   await chooser(app).getByRole("button", { name: "Review last snapshot", exact: true }).click();
@@ -163,9 +163,9 @@ test("screen PNG stops its source, preserves the last result after denial and re
   expect(retained.filename).toBe(original.filename);
   expect(retained.bytes.equals(original.bytes)).toBe(true);
   await preview(app).getByRole("button", { name: "New snapshot", exact: true }).click();
-  await source(app, "Screen or window").click();
+  await source(app, "Holdmap window").click();
   await app.evaluate(() => { window.__holdmapCapture.mode = "ready"; });
-  await chooser(app).getByRole("button", { name: "Choose screen…", exact: true }).click();
+  await chooser(app).getByRole("button", { name: "Capture window", exact: true }).click();
   await expect(preview(app)).toBeVisible();
   const retried = await downloadPng(app);
   expect(retried.filename).not.toBe(original.filename);
@@ -177,8 +177,8 @@ for (const cancel of ["Escape", "toolbar"] as const) {
   test(`${cancel} cancels a pending snapshot and releases its late picker stream`, async ({ app }) => {
     await app.evaluate(() => { window.__holdmapCapture.mode = "pending"; });
     await app.getByRole("button", { name: "Take snapshot", exact: true }).click();
-    await source(app, "Screen or window").click();
-    await chooser(app).getByRole("button", { name: "Choose screen…", exact: true }).click();
+    await source(app, "Holdmap window").click();
+    await chooser(app).getByRole("button", { name: "Capture window", exact: true }).click();
     await expect(chooser(app)).toHaveCount(0);
     const abort = app.getByRole("button", { name: "Cancel snapshot capture", exact: true });
     await expect(abort).toBeVisible();
@@ -194,12 +194,12 @@ for (const cancel of ["Escape", "toolbar"] as const) {
 test("the direct recording snapshot command waits for the animated palette to leave the pixels", async ({ app }) => {
   await app.emulateMedia({ reducedMotion: "no-preference" });
   await app.getByRole("button", { name: "Record screen", exact: true }).click();
-  await app.getByRole("dialog", { name: "Record screen", exact: true }).getByRole("button", { name: "Choose screen…", exact: true }).click();
+  await app.getByRole("dialog", { name: "Record screen", exact: true }).getByRole("button", { name: "Start recording", exact: true }).click();
   await expect(app.getByRole("button", { name: "Stop screen recording", exact: true })).toBeVisible();
   await app.getByRole("button", { name: "Commands", exact: true }).click();
   const palette = app.getByRole("dialog", { name: "Command palette", exact: true });
-  await palette.getByRole("combobox", { name: "Search commands" }).fill("Snapshot recording source");
-  await palette.getByRole("option", { name: /Snapshot recording source/ }).click();
+  await palette.getByRole("combobox", { name: "Search commands" }).fill("Snapshot recording window");
+  await palette.getByRole("option", { name: /Snapshot recording window/ }).click();
   await expect(preview(app)).toBeVisible();
   expect(await app.evaluate(() => window.__holdmapCapture.pngPalettePresence)).toEqual([false]);
   expect(await app.evaluate(() => window.__holdmapCapture.pngOverlayPresence)).toEqual([false]);
@@ -212,12 +212,12 @@ test("a recording snapshot reuses the source and leaves advancing video and both
   await app.getByRole("button", { name: "Record screen", exact: true }).click();
   const start = app.getByRole("dialog", { name: "Record screen", exact: true });
   await start.getByRole("radio", { name: "Both", exact: true }).click();
-  await start.getByRole("button", { name: "Choose screen…", exact: true }).click();
+  await start.getByRole("button", { name: "Start recording", exact: true }).click();
   const stop = app.getByRole("button", { name: "Stop screen recording", exact: true });
   await expect(stop).toBeVisible();
   await app.getByRole("button", { name: "Take snapshot", exact: true }).click();
-  await expect(source(app, "Screen or window")).toHaveCount(0);
-  await source(app, "Recording source").click();
+  await expect(source(app, "Holdmap window")).toHaveCount(0);
+  await source(app, "Recording window").click();
   await chooser(app).getByRole("button", { name: "Capture PNG", exact: true }).click();
   await expect(preview(app)).toBeVisible();
   await expect(preview(app)).toContainText("Your video is still recording");
@@ -272,9 +272,9 @@ for (const theme of ["dark", "light"]) {
     const holdmap = source(app, "Holdmap view");
     await holdmap.focus();
     await holdmap.press("ArrowRight");
-    await expect(source(app, "Screen or window")).toBeFocused();
-    await expect(source(app, "Screen or window")).toHaveAttribute("aria-checked", "true");
-    await chooser(app).getByRole("button", { name: "Choose screen…", exact: true }).click();
+    await expect(source(app, "Holdmap window")).toBeFocused();
+    await expect(source(app, "Holdmap window")).toHaveAttribute("aria-checked", "true");
+    await chooser(app).getByRole("button", { name: "Capture window", exact: true }).click();
     await expect(preview(app)).toBeVisible();
     await contained(app, preview(app));
     const downloaded = await downloadPng(app);

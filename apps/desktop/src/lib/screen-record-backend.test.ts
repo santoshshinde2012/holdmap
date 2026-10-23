@@ -62,7 +62,7 @@ describe("screen recording backend selection", () => {
   });
 
   it("invokes the browser picker synchronously in the click turn", async () => {
-    const track = { readyState: "live", stop: vi.fn() };
+    const track = { readyState: "live", label: "Holdmap", getSettings: () => ({ displaySurface: "browser" }), stop: vi.fn() };
     const stream = { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream;
     const picker = vi.fn().mockResolvedValue(stream);
     media(picker);
@@ -75,7 +75,7 @@ describe("screen recording backend selection", () => {
   });
 
   it("passes the chosen plan to the recorder", async () => {
-    const track = { readyState: "live", stop: vi.fn() };
+    const track = { readyState: "live", label: "Holdmap", getSettings: () => ({ displaySurface: "browser" }), stop: vi.fn() };
     const stream = { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream;
     media(vi.fn().mockResolvedValue(stream));
     encode.mockResolvedValue({ elapsedMs: () => 0, stop: vi.fn(), discard: vi.fn() });

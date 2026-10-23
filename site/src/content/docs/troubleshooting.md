@@ -38,10 +38,11 @@ An app launched from an older disk image or another folder can still be the old 
 The CLI installer updates the CLI, TUI and MCP server; it does not update the separate desktop app.
 Browser About identifies the web preview separately and does not show a desktop settings folder.
 
-**Record screen says “Screen capture unavailable” in the macOS app.** The native picker
-fallback needs **macOS 14 or later**. On older macOS versions, try a browser with screen
-sharing or the system screen recorder. If the picker opens but capture is denied, check this
-app's Screen Recording permission in System Settings. See [screen recording](../desktop/#record-the-screen).
+**Record screen says “Screen capture unavailable” in the macOS app.** The native window
+capture needs **macOS 14 or later**. On older macOS versions, try a browser with screen
+sharing or the system screen recorder. If capture is denied, check this app's Screen Recording
+permission in System Settings. “Holdmap can only record its own window” means the window is
+minimized or hidden: bring it forward and try again. Holdmap never records anything else. See [screen recording](../desktop/#record-the-screen).
 
 **The MCP client can't start holdmap.** Use the full path in its config, see
 [MCP setup](../mcp/#set-it-up).

@@ -2,9 +2,9 @@
 import Icon from "./Icon.astro";
 import { releaseHighlightsPublished as released, repoUrl, sourceVersion, url, version } from "../lib/site";
 const highlights = [
-  { icon: "ShieldCheck", title: "Scan your agents' skills", text: "Opt-in analyzers: SkillSpector, a built-in OSV.dev lookup and presets for Cisco Skill Scanner, OSV-Scanner, Trivy and Bandit. Each is off until you approve exactly what it gets, and runs on a sandboxed copy.", href: url("docs/analyzers/"), link: "Analyzers guide" },
-  { icon: "Plug", title: "Add any MCP server in three steps", text: "Source, Tools, Review: see each tool's full description, hidden characters and the server's own hints before you choose. It's added off, and pinned so a changed tool stops the next run.", href: url("docs/analyzers/#your-own-analyzers"), link: "Add your own analyzer" },
-  { icon: "LayoutDashboard", title: "Findings where you work", text: "Agents → Security groups findings by severity with the fix, location and evidence. Needs you, holdmap needs and the MCP tools list_insights and list_needs show the same list.", href: url("docs/agents/"), link: "Agents and Security" },
+  { icon: "Camera", title: "Records only the holdmap window", text: "Other apps, your desktop and notifications are never captured. macOS records its own window directly; browsers share this tab and anything wider is refused before a frame is read.", href: url("docs/desktop/#record-the-screen"), link: "How recording works" },
+  { icon: "Video", title: "Presets for clips and long sessions", text: "Share a clip as a small GIF or save a full session as MP4, with a live size estimate, pause, and the saved path with Copy and Show in folder.", href: url("docs/desktop/#record-the-screen"), link: "Recording presets" },
+  { icon: "ShieldCheck", title: "Every screen checked", text: "Contrast, target sizes, keyboard access, empty states and diagram text fixed across all views, in light and dark, at three widths.", href: url("docs/whats-new/"), link: "What's new" },
 ];
 ---
 <section id="whats-new" class="section" aria-labelledby="release-title">
@@ -12,7 +12,7 @@ const highlights = [
     <div class="section-head head-row">
       <div>
         <span class="eyebrow">Release highlights</span>
-        <h2 class="h2" id="release-title">{released ? `${sourceVersion} is here.` : `${sourceVersion} release preparation.`} <span class="soft">Scan, review, approve.</span></h2>
+        <h2 class="h2" id="release-title">{released ? `${sourceVersion} is here.` : `${sourceVersion} release preparation.`} <span class="soft">Capture only what is yours.</span></h2>
       </div>
       <a class="link-arrow" href={url("docs/whats-new/")}>What's new <Icon name="ArrowRight" size={16} /></a>
     </div>
@@ -26,7 +26,7 @@ const highlights = [
         </li>
       ))}
     </ul>
-    <p class="release-note">{sourceVersion} adds opt-in analyzers, a guided add-your-own flow and the Security workspace. {released ? <a href={`${repoUrl}/releases/tag/v${sourceVersion}`}>Read the full {sourceVersion} release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
+    <p class="release-note">{sourceVersion} records only the holdmap window and adds recording presets. {released ? <a href={`${repoUrl}/releases/tag/v${sourceVersion}`}>Read the full {sourceVersion} release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
   </div>
 </section>
 

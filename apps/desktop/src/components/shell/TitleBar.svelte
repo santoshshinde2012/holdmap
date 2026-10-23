@@ -84,10 +84,11 @@
       <IconButton icon="refresh" label="Refresh" kbd={singleKeys ? "R" : undefined} onclick={onrefresh} disabled={refreshing} aria-busy={manualRefresh || undefined} class={manualRefresh ? "spinning" : ""} />
     </div>
     {#if recordingMs !== null}
-      <div class="cluster rec" class:paused={recordingPaused} class:ending={endingSoon}>
+      <div class="cluster rec" class:paused={recordingPaused} class:ending={endingSoon} title="Records only the holdmap window">
         <span class="rec-dot" aria-hidden="true"></span>
         <span class="rec-time" title={recordingLimitMs ? `Stops by itself after ${formatClock(recordingLimitMs)}` : undefined}>{formatClock(recordingMs)}{#if endingSoon && recordingLimitMs} <span class="rec-left">· {formatClock(recordingLimitMs - recordingMs)} left</span>{/if}</span>
-        <span class="sr-only" role="status">{recordingPaused ? "Recording paused" : endingSoon ? "Recording stops soon" : "Recording"}</span>
+        <span class="sr-only" role="status">{recordingPaused ? "Recording paused" : endingSoon ? "Recording stops soon" : "Recording"}. Only the holdmap window is recorded.</span>
+        <span class="rec-scope" aria-hidden="true">Holdmap window only</span>
         {#if canPauseRecording}<IconButton icon={recordingPaused ? "play" : "pause"} label={recordingPaused ? "Resume screen recording" : "Pause screen recording"} aria-pressed={recordingPaused} onclick={onpauserecording} />{/if}
         <IconButton icon="stop" label="Stop screen recording" data-screen-record kbd={singleKeys ? ["⇧", "V"] : undefined} onclick={onstoprecording} />
       </div>
@@ -117,6 +118,8 @@
   .rec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
   .cluster.rec.paused .rec-dot { background: var(--muted); box-shadow: 0 0 0 3px var(--surface-2); animation: none; }
   .cluster.rec.ending .rec-left { font-weight: var(--fw-regular); }
+  .rec-scope { display: none; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
+  @media (min-width: 1100px) { .rec-scope { display: inline; } }
   .rec-time { font-size: var(--fs-caption); line-height: var(--lh-caption); font-variant-numeric: tabular-nums; font-weight: var(--fw-semibold); min-width: 2.4em; }
   @media (prefers-reduced-motion: no-preference) { .rec-dot { animation: beat 1.1s ease-in-out infinite; } }
   .tools :global(.spinning svg) { animation: spin 0.9s linear infinite; }

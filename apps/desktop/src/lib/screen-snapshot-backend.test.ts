@@ -7,7 +7,7 @@ vi.mock("./screen-snapshot", async (original) => ({ ...await original<typeof imp
 const original = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
 function media(picker: () => Promise<MediaStream>) { Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getDisplayMedia: picker } }); }
 function stream() {
-  const track = { readyState: "live", stop: vi.fn() };
+  const track = { readyState: "live", label: "Holdmap", getSettings: () => ({ displaySurface: "browser" }), stop: vi.fn() };
   return { track, value: { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream };
 }
 afterEach(() => {
@@ -22,7 +22,7 @@ describe("owned standalone screen snapshot", () => {
     const result = { source: "screen" }; frame.mockResolvedValue(result);
     const pending = captureScreenSnapshot("browser", new AbortController().signal);
     expect(picker).toHaveBeenCalledOnce();
-    expect(picker).toHaveBeenCalledWith(expect.objectContaining({ video: { frameRate: 30, width: { max: 3840 }, height: { max: 2160 } }, audio: false, systemAudio: "exclude" }));
+    expect(picker).toHaveBeenCalledWith(expect.objectContaining({ video: { displaySurface: "browser", frameRate: 30, width: { max: 3840 }, height: { max: 2160 } }, audio: false, preferCurrentTab: true, selfBrowserSurface: "include", systemAudio: "exclude" }));
     expect(await pending).toBe(result);
     expect(frame).toHaveBeenCalledWith(expect.any(HTMLVideoElement), expect.any(AbortSignal), "screen");
     expect(owned.track.stop).toHaveBeenCalledOnce(); expect(document.querySelector("video")).toBeNull();
@@ -63,7 +63,7 @@ describe("owned standalone screen snapshot", () => {
     let resolve!: (stream: MediaStream) => void;
     const owned = stream(); media(() => new Promise((done) => { resolve = done; }));
     const pending = captureScreenSnapshot("browser", new AbortController().signal);
-    const rejected = expect(pending).rejects.toThrow(/selection took too long/);
+    const rejected = expect(pending).rejects.toThrow(/Sharing took too long/);
     await vi.advanceTimersByTimeAsync(120_000); await rejected;
     resolve(owned.value); await Promise.resolve(); await Promise.resolve();
     expect(owned.track.stop).toHaveBeenCalledOnce(); expect(vi.getTimerCount()).toBe(0);

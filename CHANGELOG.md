@@ -8,8 +8,17 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-23
+
 ### Changed
 
+- **Screen recording captures only the holdmap window.** Other apps, the desktop and notifications are never
+  recorded, even on top of holdmap. macOS records its own window directly (no picker, never a whole display; if the
+  window isn't on screen it says so and stops). Browsers are asked for this tab, and the choice is verified: a screen,
+  another window, or a browser that can't say what it shares is refused before a frame is read. **Because window-only
+  can't be guaranteed there, recording and window snapshots are now refused in browsers that don't report what they share (Firefox and Safari) and through the Linux
+  screen-sharing portal** (which may offer whole screens); use the macOS app or a Chromium browser tab. The snapshot
+  *Screen or window* choice became *Holdmap window*, and a small indicator shows while recording.
 - **Screen recording for clips and long sessions.** Presets: *Share a clip* (GIF, 15 s, up to 10 MB)
   and *Full session* (MP4, up to 30 minutes), with a live size estimate and a custom format and
   length (up to one hour). Recordings stop by themselves with a warning and say why, can be paused,
@@ -24,7 +33,9 @@ by [release-please](https://github.com/googleapis/release-please) from
 - **MCP tool annotations are complete.** All twelve read-only tools declare `readOnlyHint`, `destructiveHint`,
   `idempotentHint` and `openWorldHint` explicitly (checked by a test), which is what MCP directories score.
 - **More reliable CI.** The browser install for the end-to-end job downloads the browser without the apt font packages (a stalled mirror can no longer hold it up) and the job
-  has more headroom, after a stalled download used up the whole 15-minute budget.
+  has more headroom, after a stalled download used up the whole 15-minute budget. Linux package installs now retry (three stalled attempts are killed and retried) and give up after 15 minutes instead of stalling the job.
+
+Builds are unsigned: macOS builds are ad-hoc signed without Developer-ID signing or notarization, and Windows installers are unsigned (see the README for first-open steps).
 
 ## [0.10.0] - 2026-10-22
 
@@ -984,7 +995,8 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
-[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.7.1...v0.8.0

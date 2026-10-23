@@ -4,7 +4,7 @@
      HOLDMAP_BLESS=1 cargo test -p holdmap cli_reference -->
 
 This page is the `--help` output of every command and nested subcommand in the current
-source (package version 0.10.0). `cargo test` checks it against the code. Released downloads
+source (package version 0.11.0). `cargo test` checks it against the code. Released downloads
 may predate commands or options shown here; see the [README](../README.md) for release availability.
 
 Global options (accepted by every command): `--color <auto|always|never>` (env `HOLDMAP_COLOR`; `NO_COLOR` and `CLICOLOR_FORCE` are honoured too) and `--no-docker`.

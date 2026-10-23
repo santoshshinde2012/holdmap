@@ -61,7 +61,7 @@
   MCP server in three steps: source, tools, review.
 - **Home, maps and graphs.** Agents as Cards or a Map with a Timeline and a **Needs you**
   list, the service graph with clusters, and agent flow.
-- **Local capture.** Screen or window recording to MP4/GIF and PNG snapshots. Nothing is uploaded.
+- **Local capture.** Records only the holdmap window to MP4/GIF, plus PNG snapshots. Other apps and your desktop are never captured. Nothing is uploaded.
 - **Scriptable.** Every read command takes `--json`. holdmap has no product analytics.
 
 ## Architecture
@@ -150,7 +150,7 @@ See [docs/architecture.md](docs/architecture.md) for details.
 
 <!-- release-please updates this source-version marker; download links follow published releases. -->
 <!-- x-release-please-start-version -->
-Source version: **0.10.0**.
+Source version: **0.11.0**.
 <!-- x-release-please-end -->
 Downloads come from the [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest),
 and `main` can be ahead of it ([changelog](CHANGELOG.md)).

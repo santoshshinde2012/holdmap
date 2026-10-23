@@ -35,9 +35,19 @@ jobs:
         with:
           key: msrv-1.95
       - name: Install Tauri Linux dependencies
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+          # The Azure Ubuntu mirror sometimes stalls a download for many minutes: fail a stuck connection fast and retry.
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nDPkg::Lock::Timeout "300";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network >/dev/null
+          # A healthy install takes under a minute; a stalled attempt is killed and retried (partial downloads resume).
+          for attempt in 1 2 3; do
+            if sudo timeout 60 apt-get update && sudo timeout 180 apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev; then
+              exit 0
+            fi
+            echo "::warning::apt attempt $attempt failed or stalled; retrying"
+            sleep 5
+          done
+          exit 1
       - name: Placeholder frontend for native compilation
         run: mkdir -p apps/desktop/dist && echo '<html></html>' > apps/desktop/dist/index.html
       - run: cargo check --workspace --all-targets --locked --features tauri/custom-protocol
@@ -57,9 +67,19 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Install Tauri Linux dependencies
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+          # The Azure Ubuntu mirror sometimes stalls a download for many minutes: fail a stuck connection fast and retry.
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nDPkg::Lock::Timeout "300";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network >/dev/null
+          # A healthy install takes under a minute; a stalled attempt is killed and retried (partial downloads resume).
+          for attempt in 1 2 3; do
+            if sudo timeout 60 apt-get update && sudo timeout 180 apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev; then
+              exit 0
+            fi
+            echo "::warning::apt attempt $attempt failed or stalled; retrying"
+            sleep 5
+          done
+          exit 1
       - name: Placeholder frontend for tauri::generate_context!
         run: mkdir -p apps/desktop/dist && echo '<html></html>' > apps/desktop/dist/index.html
       - run: cargo fmt --all --check
@@ -250,10 +270,20 @@ jobs:
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
       - name: Install Tauri Linux dependencies
+        timeout-minutes: 15
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+          # The Azure Ubuntu mirror sometimes stalls a download for many minutes: fail a stuck connection fast and retry.
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nDPkg::Lock::Timeout "300";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network >/dev/null
+          # A healthy install takes under a minute; a stalled attempt is killed and retried (partial downloads resume).
+          for attempt in 1 2 3; do
+            if sudo timeout 60 apt-get update && sudo timeout 180 apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev; then
+              exit 0
+            fi
+            echo "::warning::apt attempt $attempt failed or stalled; retrying"
+            sleep 5
+          done
+          exit 1
       - run: npm ci
         working-directory: apps/desktop
       - name: PowerShell native argv regressions (5.1 and 7)
@@ -268,7 +298,11 @@ jobs:
       - name: Real X11 shortcut registration and release
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y xvfb xauth
+          for attempt in 1 2 3; do
+            sudo timeout 120 apt-get install -y xvfb xauth && break
+            [ "$attempt" = 3 ] && exit 1
+            echo "::warning::apt attempt $attempt failed or stalled; retrying"
+          done
           xvfb-run -a env HOLDMAP_X11_TEST=1 cargo test -p holdmap-desktop --locked --test hotkey_x11 -- --include-ignored --test-threads=1
       - name: Optimized Linux GLib security regression
         if: runner.os == 'Linux'

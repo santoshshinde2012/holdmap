@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate native MP4/GIF encoding with owned pixels; never open a screen picker."""
+"""Validate native MP4/GIF encoding with owned pixels; never capture the screen. Also guards the own-window-only rule."""
 
 from __future__ import annotations
 
@@ -88,6 +88,13 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="holdmap-native-recording-") as temporary:
         private = Path(temporary)
         source = private / "fixture.swift"
+        # Privacy: recordings and snapshots hold only holdmap's own window. No picker, and no
+        # display, application or "everything except" filter that could widen the scope.
+        native = (NATIVE / "screen_capture.swift").read_text()
+        assert "SCContentFilter(desktopIndependentWindow:" in native, "capture must use the own-window filter"
+        for widening in ("SCContentSharingPicker", "SCContentFilter(display:", "SCContentFilter(excludingApplications", "SCContentFilter(including"):
+            assert widening not in native, f"capture must never widen beyond the holdmap window: {widening}"
+        assert "owningApplication?.processID == me" in native, "the filter must select this process's own window"
         # Only the fixture is appended; the real writer, converter, C boundary and
         # lifecycle state implementation are compiled without substitution.
         source.write_text((NATIVE / "screen_capture.swift").read_text() + "\n"

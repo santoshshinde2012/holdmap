@@ -165,7 +165,7 @@ async function openSnapshot(page, preview = false) {
   await page.getByRole("button", { name: "Take snapshot", exact: true }).click();
   const chooser = page.getByRole("dialog", { name: "Take snapshot", exact: true });
   await expect(chooser.getByRole("radio", { name: "Holdmap view", exact: true })).toHaveAttribute("aria-checked", "true");
-  await expect(chooser.getByRole("radio", { name: "Screen or window", exact: true })).toBeVisible();
+  await expect(chooser.getByRole("radio", { name: "Holdmap window", exact: true })).toBeVisible();
   if (!preview) return chooser;
   await chooser.getByRole("button", { name: "Capture PNG", exact: true }).click();
   const result = page.getByRole("dialog", { name: "Snapshot preview", exact: true });
@@ -481,8 +481,8 @@ const captures = [
   ...["dark", "light"].map((theme) => ({ name: `desktop-screen-record-${theme}.png`, theme, async prepare(page) {
     await page.getByRole("button", { name: "Record screen", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Record screen", exact: true });
-    await expect(dialog.getByRole("button", { name: "Choose screen…", exact: true })).toBeVisible();
-    await expect(dialog).toContainText("No microphone or system audio");
+    await expect(dialog.getByRole("button", { name: "Start recording", exact: true })).toBeVisible();
+    await expect(dialog).toContainText("Records only the holdmap window");
     await expect(dialog.getByRole("radio", { name: "Full session" })).toBeChecked();
     await expect(dialog.getByRole("list", { name: "Expected size and length" })).toBeVisible();
     return dialog;

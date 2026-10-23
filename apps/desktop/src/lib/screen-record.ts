@@ -1,3 +1,5 @@
+import { ownWindowDisplayOptions, refuseWiderSurface } from "./capture-surface";
+
 /** Local screen capture: MP4 (H.264) and GIF stay on this computer and are never uploaded. */
 
 /** Hard ceiling for any recording; the chosen plan (see screen-record-plan.ts) sets the real limit. */
@@ -72,31 +74,29 @@ export function captureSupport(): { display: boolean; gif: boolean } {
 export function displayCaptureError(cause: unknown): Error {
   const error = cause as { name?: string; message?: string };
   if (error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError") {
-    return new Error("Screen selection was cancelled or permission was denied. Choose a screen again to retry. If access stays blocked, check screen recording permission for this app or browser in system settings.");
+    return new Error("Sharing was cancelled or permission was denied. Choose the holdmap tab or window again to retry. If access stays blocked, check screen recording permission for this app or browser in system settings.");
   }
-  if (error?.name === "NotFoundError") return new Error("No screen or window was available to capture.");
+  if (error?.name === "NotFoundError") return new Error("The holdmap window was not available to capture.");
   if (error?.name === "NotSupportedError") {
     return new Error("Screen capture is unavailable in this window. Try a browser that supports screen sharing, or use your operating system's screen recorder.");
   }
-  if (error?.name === "NotReadableError") return new Error("The selected screen could not be read. Check system screen recording permission, then choose a screen again.");
-  if (error?.name === "InvalidStateError") return new Error("Return to this window and choose a screen again to start recording.");
-  if (error?.name === "AbortError") return new Error("Screen capture was interrupted before it started. Choose a screen again to retry.");
+  if (error?.name === "NotReadableError") return new Error("The holdmap window could not be read. Check system screen recording permission, then try again.");
+  if (error?.name === "InvalidStateError") return new Error("Return to this window and start recording again.");
+  if (error?.name === "AbortError") return new Error("Screen capture was interrupted before it started. Try again.");
   return new Error(typeof error?.message === "string" && error.message.trim() ? error.message : "Couldn't start screen recording.");
 }
 
 export async function requestDisplayStream(resolution = { width: 1920, height: 1080 }): Promise<MediaStream> {
   if (!captureSupport().display) throw displayCaptureError({ name: "NotSupportedError" });
+  let stream: MediaStream;
   try {
-    return await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 30, width: { max: resolution.width }, height: { max: resolution.height } },
-      audio: false,
-      preferCurrentTab: false,
-      selfBrowserSurface: "include",
-      systemAudio: "exclude",
-    } as DisplayMediaStreamOptions);
+    stream = await navigator.mediaDevices.getDisplayMedia(ownWindowDisplayOptions(resolution));
   } catch (cause) {
     throw displayCaptureError(cause);
   }
+  const refusal = refuseWiderSurface(stream, [document.title, "holdmap"]);
+  if (refusal) throw new Error(refusal);
+  return stream;
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {
