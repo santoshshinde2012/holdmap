@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fuzzyScore, groupResults, rank, type Command } from "./palette";
+import { fuzzyScore, groupResults, IDLE_PORT_LIMIT, rank, type Command } from "./palette";
 
 describe("command palette ranking", () => {
   const cmd = (title: string, keywords = ""): Command => ({ id: title, title, keywords, group: "Actions", run: () => {} });
@@ -32,5 +32,11 @@ describe("palette sections", () => {
     const q = groupResults("st", list);
     expect(q.map((g) => g.name)).toEqual(["Actions", "Ports", "View"]);
     expect(q[0].items.map((c) => c.id)).toEqual(["stop a", "stop b"]);
+  });
+  it("previews a few ports when idle so actions stay above the fold, and searches them all when typing", () => {
+    const ports = Array.from({ length: IDLE_PORT_LIMIT + 4 }, (_, i) => cmd(`:300${i}`, "Ports"));
+    const list = [...ports, cmd("graph", "View")];
+    expect(groupResults("", list)[0].items).toHaveLength(IDLE_PORT_LIMIT);
+    expect(groupResults("300", list)[0].items).toHaveLength(ports.length);
   });
 });

@@ -1,4 +1,5 @@
 import { captureSupport, requestDisplayStream, stopTracks, type RecordingListener, type RecordingSession } from "./screen-record";
+import { DEFAULT_PLAN, type RecordingPlan } from "./screen-record-plan";
 export type { RecordingSession } from "./screen-record";
 
 export type RecordingSupport = {
@@ -41,11 +42,12 @@ export async function startRecording(
   listener: RecordingListener,
   signal: AbortSignal,
   onPreparing: () => void,
+  plan: RecordingPlan = DEFAULT_PLAN,
 ): Promise<RecordingSession> {
   if (signal.aborted) throw new DOMException("Recording cancelled.", "AbortError");
   if (backend === "native") {
     const { NativeRecordingSession } = await import("./screen-record-native");
-    return NativeRecordingSession.start(listener, signal, onPreparing);
+    return NativeRecordingSession.start(listener, signal, onPreparing, plan);
   }
   // Call before the first await/import: browsers require the user's click activation.
   const requested = requestDisplayStream();
@@ -61,7 +63,7 @@ export async function startRecording(
     onPreparing();
     const { ScreenRecording } = await import("./screen-record-encode");
     if (signal.aborted) throw new DOMException("Recording cancelled.", "AbortError");
-    const session = await ScreenRecording.start(stream, listener);
+    const session = await ScreenRecording.start(stream, listener, plan);
     if (signal.aborted) { session.discard(); throw new DOMException("Recording cancelled.", "AbortError"); }
     if (stream.getVideoTracks().every((track) => track.readyState === "ended")) listener.onEnded();
     return session;

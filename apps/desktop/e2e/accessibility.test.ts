@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./fixtures";
 
 // Regressions from the end-to-end audit: names, landmarks and keyboard paths that axe or a
@@ -52,6 +53,17 @@ test("Needs you actions meet the 24px target size and explain Open", async ({ ap
   }
   await open.hover();
   await expect(app.getByRole("tooltip", { name: "Open details" })).toBeVisible();
+});
+
+test("Home summary tiles are named by their visible text, so voice control can say it", async ({ app }) => {
+  await app.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: "Home", exact: true }).click();
+  const tiles = app.locator("button.tile");
+  await expect(tiles.first()).toBeVisible();
+  for (const tile of await tiles.all()) {
+    const visible = (await tile.innerText()).replace(/\s+/g, " ").trim().toLowerCase();
+    const name = ((await tile.getAttribute("aria-label")) ?? visible).toLowerCase();
+    expect(name, "WCAG 2.5.3: the accessible name contains the visible text").toContain(visible);
+  }
 });
 
 test("the timeline names each lane with a row header", async ({ app }) => {
@@ -129,3 +141,20 @@ test("phone width: view controls wrap onto rows instead of scrolling sideways", 
   await app.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: /^List/ }).click();
   expect(await toolbar.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
 });
+
+// Every top-level view, both themes, the whole page: no axe violation of any impact. This is the
+// guard for names that must contain their visible text (WCAG 2.5.3, e.g. the port rows).
+for (const theme of ["light", "dark"] as const) {
+  test(`${theme}: Home, Ports, Graph and Agents pass axe with no violations`, async ({ app }) => {
+    await app.evaluate((t) => localStorage.setItem("holdmap.theme", t), theme);
+    await app.reload();
+    await expect(app.locator("html")).toHaveAttribute("data-theme", theme);
+    const views = app.getByRole("radiogroup", { name: "View", exact: true });
+    for (const view of [/^Home/, /^List/, /^Graph/, /^Agents/]) {
+      await views.getByRole("radio", { name: view }).click();
+      await app.waitForTimeout(400);
+      const { violations } = await new AxeBuilder({ page: app }).analyze();
+      expect(violations.map((v) => `${view} ${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+    }
+  });
+}

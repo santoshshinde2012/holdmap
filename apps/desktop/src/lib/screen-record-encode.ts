@@ -2,27 +2,34 @@ import {
   BufferTarget,
   Quality,
   Mp4OutputFormat,
-  MediaStreamVideoTrackSource,
   Output,
   canEncodeVideo,
 } from "mediabunny";
 import {
-  MAX_DURATION_MS,
   gifSize,
   recordingFilename,
   stopTracks,
   type CaptureResult,
+  type RecordingLimit,
   type RecordingListener,
 } from "./screen-record";
+import { LEGACY_PLAN, MEMORY_MP4_LIMIT_BYTES, planWantsGif, planWantsMp4, type RecordingPlan } from "./screen-record-plan";
+import { createTrackSource } from "./screen-record-source";
+import type { GifProgress } from "./screen-record-gif";
 import { captureVideoSnapshot, snapshotCancelled, snapshotSignal, type SnapshotResult } from "./screen-snapshot";
 
-const MAX_MP4_BYTES = 128 * 1024 * 1024;
+const MAX_MP4_BYTES = MEMORY_MP4_LIMIT_BYTES;
+/** Ask the recording to stop this far below the in-memory ceiling, leaving room for the index. */
+const SOFT_MP4_MARGIN_BYTES = 8 * 1024 * 1024;
 const FINALIZE_TIMEOUT_MS = 20_000;
 
+type Mp4Options = { bitrate: number; onSizeLimit: () => void };
 type Mp4Session = {
   close: () => void;
   cancel: () => void;
   finalize: () => Promise<Blob | null>;
+  pause: () => void;
+  resume: () => void;
 };
 
 function even(n: number, fallback: number): number {
@@ -71,19 +78,20 @@ function attachVideo(stream: MediaStream): Promise<HTMLVideoElement> {
   });
 }
 
-async function startWebCodecsMp4(track: MediaStreamVideoTrack, signal: AbortSignal): Promise<Mp4Session | null> {
+async function startWebCodecsMp4(track: MediaStreamVideoTrack, signal: AbortSignal, options: Mp4Options): Promise<Mp4Session | null> {
   const settings = track.getSettings();
   const scale = Math.min(1, 1920 / (settings.width || 1280), 1080 / (settings.height || 720));
   const width = even((settings.width || 1280) * scale, 1280);
   const height = even((settings.height || 720) * scale, 720);
-  const quality = new Quality({ bitrate: 5_000_000 });
+  const quality = new Quality({ bitrate: options.bitrate });
   if (!await canEncodeVideo("avc", { width, height, frameRate: 30, quality })) return null;
   if (signal.aborted) return null;
   const target = new BufferTarget();
   const output = new Output({ format: new Mp4OutputFormat(), target });
   let failure: unknown = null;
   let encodedBytes = 0;
-  const source = new MediaStreamVideoTrackSource(track, {
+  let softLimitReported = false;
+  const frames = createTrackSource(track, {
     codec: "avc",
     quality,
     latencyMode: "realtime",
@@ -92,32 +100,40 @@ async function startWebCodecsMp4(track: MediaStreamVideoTrack, signal: AbortSign
     transform: { width, height },
     onEncodedPacket(packet) {
       encodedBytes += packet.byteLength;
+      // Stop cleanly before the ceiling so the recording is kept, not discarded.
+      if (!softLimitReported && encodedBytes > MAX_MP4_BYTES - SOFT_MP4_MARGIN_BYTES) {
+        softLimitReported = true;
+        options.onSizeLimit();
+      }
       // Leave room for MP4 metadata and indexes in addition to encoded packets.
       if (encodedBytes > MAX_MP4_BYTES - 1024 * 1024) throw new Error("The MP4 exceeded the 128 MiB recording limit.");
     },
-  }, { frameRate: 30 });
-  void source.errorPromise.catch((cause) => {
+  }, 30);
+  void frames.errorPromise.catch((cause) => {
     failure = cause;
-    source.close();
+    frames.close();
     void output.cancel().catch(() => undefined);
   });
-  output.addVideoTrack(source);
-  const cancel = () => { source.close(); void output.cancel().catch(() => undefined); };
+  output.addVideoTrack(frames.source);
+  const cancel = () => { frames.close(); void output.cancel().catch(() => undefined); };
   signal.addEventListener("abort", cancel, { once: true });
   try {
     if (signal.aborted) { cancel(); return null; }
     await output.start();
     if (signal.aborted) { cancel(); return null; }
+    frames.begin();
   } catch (cause) {
-    source.close();
+    frames.close();
     await output.cancel().catch(() => undefined);
     throw cause;
   } finally {
     signal.removeEventListener("abort", cancel);
   }
   return {
-    close: () => source.close(),
-    cancel: () => { source.close(); void output.cancel().catch(() => undefined); },
+    close: () => frames.close(),
+    cancel: () => { frames.close(); void output.cancel().catch(() => undefined); },
+    pause: () => frames.pause(),
+    resume: () => frames.resume(),
     async finalize() {
       if (failure) throw failure;
       await output.finalize();
@@ -129,21 +145,26 @@ async function startWebCodecsMp4(track: MediaStreamVideoTrack, signal: AbortSign
   };
 }
 
-function startRecorderMp4(track: MediaStreamVideoTrack): Mp4Session | null {
+function startRecorderMp4(track: MediaStreamVideoTrack, options: Mp4Options): Mp4Session | null {
   if (typeof MediaRecorder === "undefined") return null;
   const mime = ["video/mp4;codecs=avc1.42E01E", "video/mp4"].find((type) => MediaRecorder.isTypeSupported(type));
   if (!mime) return null;
-  const recorder = new MediaRecorder(new MediaStream([track]), { mimeType: mime, videoBitsPerSecond: 5_000_000 });
+  const recorder = new MediaRecorder(new MediaStream([track]), { mimeType: mime, videoBitsPerSecond: options.bitrate });
   const chunks: Blob[] = [];
   let failure: Error | null = null;
   let cancelled = false;
   let bytes = 0;
+  let softLimitReported = false;
   const blob = () => chunks.length ? new Blob(chunks, { type: "video/mp4" }) : null;
   const stop = () => { if (recorder.state !== "inactive") recorder.stop(); };
   const completed = new Promise<Blob | null>((resolve, reject) => {
     recorder.ondataavailable = (event) => {
       if (cancelled || failure || !event.data.size) return;
       bytes += event.data.size;
+      if (!softLimitReported && bytes > MAX_MP4_BYTES - SOFT_MP4_MARGIN_BYTES) {
+        softLimitReported = true;
+        options.onSizeLimit();
+      }
       if (bytes > MAX_MP4_BYTES) {
         failure = new Error("The MP4 exceeded the 128 MiB recording limit.");
         chunks.length = 0;
@@ -167,6 +188,8 @@ function startRecorderMp4(track: MediaStreamVideoTrack): Mp4Session | null {
   recorder.start(400);
   return {
     close() {},
+    pause() { if (recorder.state === "recording") recorder.pause(); },
+    resume() { if (recorder.state === "paused") recorder.resume(); },
     cancel() { cancelled = true; chunks.length = 0; stop(); },
     finalize() {
       stop();
@@ -175,14 +198,14 @@ function startRecorderMp4(track: MediaStreamVideoTrack): Mp4Session | null {
   };
 }
 
-async function startMp4(track: MediaStreamVideoTrack): Promise<Mp4Session | null> {
+async function startMp4(track: MediaStreamVideoTrack, options: Mp4Options): Promise<Mp4Session | null> {
   const controller = new AbortController();
   const ended = () => controller.abort();
   const timeout = setTimeout(ended, 8_000);
   track.addEventListener("ended", ended, { once: true });
   try {
     const aborted = new Promise<null>((resolve) => controller.signal.addEventListener("abort", () => resolve(null), { once: true }));
-    const encoded = await Promise.race([startWebCodecsMp4(track, controller.signal), aborted]);
+    const encoded = await Promise.race([startWebCodecsMp4(track, controller.signal, options), aborted]);
     if (encoded) return encoded;
   } catch {
     // Safari and some webviews still record MP4 through MediaRecorder.
@@ -191,7 +214,7 @@ async function startMp4(track: MediaStreamVideoTrack): Promise<Mp4Session | null
     track.removeEventListener("ended", ended);
   }
   if (track.readyState === "ended") return null;
-  return startRecorderMp4(track);
+  return startRecorderMp4(track, options);
 }
 
 function gifBlob(bytes: Uint8Array): Blob {
@@ -216,13 +239,18 @@ class GifWorkerSession {
   private failure: Error | null = null;
   private resolve: ((blob: Blob) => void) | null = null;
   private reject: ((cause: Error) => void) | null = null;
-  intervalMs = 125;
+  intervalMs: number;
+  full = false;
 
-  constructor() {
+  constructor(plan: RecordingPlan, private readonly onFull: () => void) {
+    this.intervalMs = 1_000 / plan.gifFps;
+    this.worker.postMessage({ type: "init", limits: { fps: plan.gifFps, maxBytes: plan.gifMaxBytes, maxDurationMs: plan.maxDurationMs } });
     this.worker.onmessage = (event: MessageEvent) => {
       if (event.data.type === "frame") {
         this.busy = false;
-        this.intervalMs = event.data.intervalMs;
+        const progress = event.data as GifProgress;
+        this.intervalMs = progress.intervalMs;
+        if (progress.full && !this.full) { this.full = true; this.onFull(); }
       } else if (event.data.type === "done") this.resolve?.(gifBlob(event.data.bytes));
       else if (event.data.type === "error") this.fail(new Error(event.data.message));
     };
@@ -230,7 +258,7 @@ class GifWorkerSession {
     this.worker.onmessageerror = () => this.fail(new Error("Couldn't read the GIF encoder's result."));
   }
 
-  get ready(): boolean { return !this.busy && !this.failure; }
+  get ready(): boolean { return !this.busy && !this.failure && !this.full; }
 
   add(data: Uint8ClampedArray, width: number, height: number, at: number): void {
     if (!this.ready) return;
@@ -261,40 +289,65 @@ class GifWorkerSession {
 
 export class ScreenRecording {
   private startedAt = performance.now();
+  private pausedAt: number | null = null;
+  private pausedTotal = 0;
   private stream: MediaStream;
   private video: HTMLVideoElement | null = null;
   private gif: GifWorkerSession | null = null;
   private gifCanvas: HTMLCanvasElement | null = null;
   private gifCtx: CanvasRenderingContext2D | null = null;
   private gifNextAt = 0;
+  private gifEndedAt: number | null = null;
   private mp4: Mp4Session | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private gifLoop: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
   private discarded = false;
+  private limitReached = false;
   private gifFailure: string | null = null;
+  private notes: string[] = [];
   private endedTrack: MediaStreamTrack | null = null;
   private readonly onTrackEnded = () => { if (!this.stopped) this.listener.onEnded(); };
-  private limit: ReturnType<typeof setTimeout> | null = null;
   private readonly listener: RecordingListener;
+  private readonly plan: RecordingPlan;
   private readonly stamp = new Date();
   private readonly snapshotAbort = new AbortController();
   private snapshotBusy = false;
 
-  private constructor(stream: MediaStream, listener: RecordingListener) {
+  private constructor(stream: MediaStream, listener: RecordingListener, plan: RecordingPlan) {
     this.stream = stream;
     this.listener = listener;
+    this.plan = plan;
   }
 
-  static async start(stream: MediaStream, listener: RecordingListener): Promise<ScreenRecording> {
-    const session = new ScreenRecording(stream, listener);
+  static async start(stream: MediaStream, listener: RecordingListener, plan: RecordingPlan = LEGACY_PLAN): Promise<ScreenRecording> {
+    const session = new ScreenRecording(stream, listener, plan);
     try { await session.begin(); }
     catch (cause) { session.discard(); throw cause; }
     return session;
   }
 
+  /** Time actually recorded: paused stretches are left out of the MP4 and the GIF alike. */
   elapsedMs(): number {
-    return Math.max(0, performance.now() - this.startedAt);
+    const now = this.pausedAt ?? performance.now();
+    return Math.max(0, now - this.startedAt - this.pausedTotal);
+  }
+
+  get paused(): boolean { return this.pausedAt !== null; }
+
+  pause(): void {
+    if (this.stopped || this.pausedAt !== null) return;
+    this.pausedAt = performance.now();
+    this.mp4?.pause();
+    this.listener.onTick(this.elapsedMs());
+  }
+
+  resume(): void {
+    if (this.stopped || this.pausedAt === null) return;
+    this.pausedTotal += performance.now() - this.pausedAt;
+    this.pausedAt = null;
+    this.gifNextAt = this.elapsedMs();
+    this.mp4?.resume();
   }
 
   async captureSnapshot(signal: AbortSignal): Promise<SnapshotResult> {
@@ -303,7 +356,7 @@ export class ScreenRecording {
     this.snapshotBusy = true;
     const linked = snapshotSignal(signal, this.snapshotAbort.signal);
     try {
-      const result = await captureVideoSnapshot(this.video, linked.signal, "recording", Math.min(MAX_DURATION_MS, this.elapsedMs()));
+      const result = await captureVideoSnapshot(this.video, linked.signal, "recording", Math.min(this.plan.maxDurationMs, this.elapsedMs()));
       if (this.stopped) throw snapshotCancelled();
       return result;
     } finally {
@@ -314,11 +367,12 @@ export class ScreenRecording {
 
   async stop(): Promise<CaptureResult> {
     if (this.stopped) throw new Error("This recording has already stopped.");
+    if (this.pausedAt !== null) this.resume();
     this.stopped = true;
     this.snapshotAbort.abort();
     this.teardownClock();
-    const durationMs = Math.min(MAX_DURATION_MS, this.elapsedMs());
-    const warnings: string[] = [];
+    const durationMs = Math.min(this.plan.maxDurationMs, this.elapsedMs());
+    const warnings: string[] = [...this.notes];
     const track = this.stream.getVideoTracks()[0];
     const settings = track?.getSettings();
     const width = this.video?.videoWidth || settings?.width || 0;
@@ -330,7 +384,8 @@ export class ScreenRecording {
     try {
       mp4Session?.close();
       const mp4Ready = mp4Session ? withDeadline(mp4Session.finalize(), () => mp4Session.cancel()) : Promise.resolve(null);
-      const gifReady = gifSession ? withDeadline(gifSession.finish(durationMs), () => gifSession.cancel()) : Promise.resolve(null);
+      const gifDuration = Math.min(durationMs, this.gifEndedAt ?? durationMs);
+      const gifReady = gifSession ? withDeadline(gifSession.finish(gifDuration), () => gifSession.cancel()) : Promise.resolve(null);
       // Stop the privacy indicator immediately, while already captured frames finish encoding.
       stopTracks(this.stream);
       const [mp4Result, gifResult] = await Promise.allSettled([mp4Ready, gifReady]);
@@ -338,7 +393,7 @@ export class ScreenRecording {
       if (mp4Result.status === "fulfilled" && mp4Result.value?.size) {
         const blob = mp4Result.value;
         mp4 = { blob, bytes: blob.size, filename: recordingFilename("mp4", this.stamp) };
-      } else {
+      } else if (planWantsMp4(this.plan)) {
         if (mp4Result.status === "rejected") warnings.push(mp4Result.reason instanceof Error ? mp4Result.reason.message : "Couldn't finish the MP4.");
         warnings.push("MP4 encoding isn't available here.");
       }
@@ -363,6 +418,23 @@ export class ScreenRecording {
     this.cleanup();
   }
 
+  /** Reports once why the recording ends by itself, then asks the owner to stop it. */
+  private endBecause(limit: RecordingLimit): void {
+    if (this.stopped || this.limitReached) return;
+    this.limitReached = true;
+    this.listener.onLimit?.(limit);
+    this.listener.onEnded();
+  }
+
+  private gifIsFull(): void {
+    if (this.stopped || this.gifEndedAt !== null) return;
+    if (this.mp4) {
+      // The MP4 still has the whole recording; the GIF keeps what fit in its budget.
+      this.gifEndedAt = this.elapsedMs();
+      this.notes.push("The GIF reached its size limit and ends early. The MP4 has the whole recording.");
+    } else this.endBecause("size");
+  }
+
   private async begin() {
     const track = this.stream.getVideoTracks()[0];
     if (!track) throw new Error("The chosen screen or window had no video track.");
@@ -371,39 +443,46 @@ export class ScreenRecording {
     this.video = await attachVideo(this.stream);
     const srcW = this.video.videoWidth || 1280;
     const srcH = this.video.videoHeight || 720;
-    const size = gifSize(srcW, srcH);
-    try {
-      this.gif = new GifWorkerSession();
-      const canvas = document.createElement("canvas");
-      canvas.width = size.width;
-      canvas.height = size.height;
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (!ctx) throw new Error("Couldn't prepare GIF frames.");
-      this.gifCanvas = canvas;
-      this.gifCtx = ctx;
-    } catch {
-      this.gif?.cancel();
-      this.gif = null;
-      this.gifFailure = "GIF encoding isn't available here.";
+    if (planWantsGif(this.plan)) {
+      const size = gifSize(srcW, srcH, this.plan.gifMaxEdge);
+      try {
+        this.gif = new GifWorkerSession(this.plan, () => this.gifIsFull());
+        const canvas = document.createElement("canvas");
+        canvas.width = size.width;
+        canvas.height = size.height;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) throw new Error("Couldn't prepare GIF frames.");
+        this.gifCanvas = canvas;
+        this.gifCtx = ctx;
+      } catch {
+        this.gif?.cancel();
+        this.gif = null;
+        this.gifFailure = "GIF encoding isn't available here.";
+      }
     }
-    try {
-      this.mp4 = await startMp4(track);
-    } catch {
-      this.mp4 = null;
+    if (planWantsMp4(this.plan)) {
+      try {
+        this.mp4 = await startMp4(track, { bitrate: this.plan.mp4Bitrate, onSizeLimit: () => this.endBecause("size") });
+      } catch {
+        this.mp4 = null;
+      }
     }
-    if (!this.gif && !this.mp4) throw new Error("This window cannot create an MP4 or GIF recording.");
+    if (!this.gif && !this.mp4) throw new Error("This window cannot create the requested recording.");
     if (track.readyState === "ended") throw new Error("Screen sharing ended before recording could start. Choose a screen again.");
     this.startedAt = performance.now();
+    this.pausedAt = null;
+    this.pausedTotal = 0;
     this.gifNextAt = 0;
     const tickGif = () => {
       if (this.stopped) return;
       const now = this.elapsedMs();
-      if (now >= this.gifNextAt && this.gif?.ready && this.video && this.gifCtx && this.gifCanvas) {
+      if (this.pausedAt === null && this.gifEndedAt === null && now >= this.gifNextAt
+        && this.gif?.ready && this.video && this.gifCtx && this.gifCanvas) {
         try {
           this.gifCtx.drawImage(this.video, 0, 0, this.gifCanvas.width, this.gifCanvas.height);
           const { data } = this.gifCtx.getImageData(0, 0, this.gifCanvas.width, this.gifCanvas.height);
-          this.gif.add(data, this.gifCanvas.width, this.gifCanvas.height, Math.min(now, MAX_DURATION_MS));
-          this.gifNextAt = now + this.gif.intervalMs;
+          this.gif.add(data, this.gifCanvas.width, this.gifCanvas.height, Math.min(now, this.plan.maxDurationMs));
+          this.gifNextAt = Math.max(this.gifNextAt + this.gif.intervalMs, now);
         } catch {
           this.gif.cancel();
           this.gif = null;
@@ -411,20 +490,21 @@ export class ScreenRecording {
         }
       }
       // rAF stops for hidden windows; a timer continues sampling while another app is focused.
-      this.gifLoop = setTimeout(tickGif, this.gif?.intervalMs ?? 500);
+      this.gifLoop = setTimeout(tickGif, Math.min(250, Math.max(5, this.gifNextAt - this.elapsedMs())));
     };
     tickGif();
-    this.timer = setInterval(() => this.listener.onTick(this.elapsedMs()), 250);
-    this.limit = setTimeout(() => { if (!this.stopped) this.listener.onEnded(); }, MAX_DURATION_MS);
+    this.timer = setInterval(() => {
+      const elapsed = this.elapsedMs();
+      this.listener.onTick(elapsed);
+      if (elapsed >= this.plan.maxDurationMs) this.endBecause("duration");
+    }, 250);
     this.listener.onTick(0);
   }
 
   private teardownClock() {
     if (this.timer) clearInterval(this.timer);
-    if (this.limit) clearTimeout(this.limit);
     if (this.gifLoop != null) clearTimeout(this.gifLoop);
     this.timer = null;
-    this.limit = null;
     this.gifLoop = null;
   }
 

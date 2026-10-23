@@ -1,4 +1,4 @@
-import { agentCard, agentHeading, expect, openAgents, test } from "./fixtures";
+import { agentDetails, agentCard, agentHeading, expect, openAgents, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 const cursorMcp = (name: string) => `Inspect MCP server ${name}, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.cursor/mcp.json`;
@@ -226,7 +226,7 @@ test("typing search closes disappearing selection without stealing focus or repl
 
 test("Overview entry keeps requested agent scope without automatically opening details", async ({ app }) => {
   await openAgents(app); await agentHeading(app, "Cursor").click();
-  await agentCard(app, "Cursor").getByRole("button", { name: /MCP & skills.*inspect sources/ }).click();
+  await agentDetails(app).getByRole("button", { name: /^MCP & skills/ }).click();
   await expect(view(app, "Explore")).toHaveAttribute("aria-checked", "true");
   await expect(workspace(app).getByRole("button", { name: /^Inspect MCP server/ })).toHaveCount(3);
   await expect(details(app)).toHaveCount(0);

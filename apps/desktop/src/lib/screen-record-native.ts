@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { MAX_DURATION_MS, recordingFilename, type CaptureFile, type CaptureResult, type RecordingListener, type RecordingSession } from "./screen-record";
+import { recordingFilename, type CaptureFile, type CaptureResult, type RecordingListener, type RecordingSession } from "./screen-record";
+import { DISK_MP4_LIMIT_BYTES, LEGACY_PLAN, planWantsGif, planWantsMp4, type RecordingPlan } from "./screen-record-plan";
 import { snapshotSignal, type SnapshotResult } from "./screen-snapshot";
 import { captureNativeSnapshot } from "./screen-snapshot-native";
 
@@ -16,9 +17,13 @@ export type NativeRecordingStatus = {
 };
 
 const POLL_MS = 250;
-const MAX_EXPORT_BYTES = 128 * 1024 * 1024;
+/** Files up to this size are copied into the window (preview and save); larger MP4s stay on disk. */
+const MAX_READ_BYTES = 64 * 1024 * 1024;
+const MAX_GIF_BYTES = 128 * 1024 * 1024;
 const IPC_TIMEOUT_MS = 15_000;
 const FINALIZE_TIMEOUT_MS = 120_000;
+/** Turning a long MP4 into a GIF samples hundreds of frames, and may retry smaller. */
+const LONG_GIF_FINALIZE_TIMEOUT_MS = 600_000;
 const cancelled = () => new DOMException("Recording cancelled.", "AbortError");
 
 function friendlyMessage(message: string): string {
@@ -35,6 +40,19 @@ function friendlyMessage(message: string): string {
     missing_directory: "The temporary recording files are unavailable. Try recording again.",
   };
   return messages[message] || (/^[a-z][a-z0-9_]*$/.test(message) ? "Native screen recording failed. Choose a screen again to retry." : message);
+}
+
+/** The native recorder re-validates every limit; the plan only chooses within them. */
+function nativeOptions(plan: RecordingPlan) {
+  return {
+    maxDurationMs: plan.maxDurationMs,
+    mp4: planWantsMp4(plan),
+    gif: planWantsGif(plan),
+    mp4Bitrate: plan.mp4Bitrate,
+    gifFps: plan.gifFps,
+    gifMaxEdge: plan.gifMaxEdge,
+    gifMaxBytes: plan.gifMaxBytes,
+  };
 }
 
 function nativeCall<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -91,18 +109,18 @@ export class NativeRecordingSession implements RecordingSession {
   private snapshotAbort: AbortController | null = null;
   private readonly onAbort = () => this.discard();
 
-  private constructor(private status: NativeRecordingStatus, private readonly listener: RecordingListener, private readonly signal: AbortSignal) {
+  private constructor(private status: NativeRecordingStatus, private readonly listener: RecordingListener, private readonly signal: AbortSignal, private readonly plan: RecordingPlan) {
     signal.addEventListener("abort", this.onAbort, { once: true });
   }
 
-  static async start(listener: RecordingListener, signal: AbortSignal, onPreparing: () => void): Promise<NativeRecordingSession> {
+  static async start(listener: RecordingListener, signal: AbortSignal, onPreparing: () => void, plan: RecordingPlan = LEGACY_PLAN): Promise<NativeRecordingSession> {
     if (signal.aborted) throw cancelled();
     let abandoned = false;
     let session: NativeRecordingSession | null = null;
-    const request = nativeCall<NativeRecordingStatus>("start_screen_recording").then((value) => {
+    const request = nativeCall<NativeRecordingStatus>("start_screen_recording", { options: nativeOptions(plan) }).then((value) => {
       // Own the acknowledged session before another promise turn can cancel
       // startup. Its abort listener and bounded cleanup must cover the handoff.
-      session = new NativeRecordingSession(checkedStatus(value), listener, signal);
+      session = new NativeRecordingSession(checkedStatus(value), listener, signal, plan);
       if (abandoned || signal.aborted) {
         session.discard();
         throw cancelled();
@@ -128,7 +146,7 @@ export class NativeRecordingSession implements RecordingSession {
     }
   }
 
-  elapsedMs(): number { return Math.min(MAX_DURATION_MS, this.status.elapsedMs); }
+  elapsedMs(): number { return Math.min(this.plan.maxDurationMs, this.status.elapsedMs); }
 
   captureSnapshot(signal: AbortSignal): Promise<SnapshotResult> {
     if (this.finishing || this.discarded || this.status.phase !== "capturing") return Promise.reject(new Error("The recording is no longer capturing."));
@@ -195,7 +213,8 @@ export class NativeRecordingSession implements RecordingSession {
         if (this.finishing || this.discarded) return;
         this.status = status;
         this.listener.onTick(this.elapsedMs());
-        if (this.status.phase !== "capturing" || this.elapsedMs() >= MAX_DURATION_MS) this.notifyEnded();
+        if (this.status.elapsedMs >= this.plan.maxDurationMs - 250) this.listener.onLimit?.("duration");
+        if (this.status.phase !== "capturing" || this.elapsedMs() >= this.plan.maxDurationMs) this.notifyEnded();
         else if (!this.snapshotting) this.schedulePoll();
       }).catch((cause) => {
         if (this.finishing || this.discarded) return;
@@ -222,6 +241,8 @@ export class NativeRecordingSession implements RecordingSession {
 
   private async finish(): Promise<CaptureResult> {
     this.finishing = true;
+    // A long MP4 is never copied into the window: its session stays open until the result is released.
+    let keepSession = false;
     this.clearPoll();
     this.snapshotAbort?.abort();
     const warnings = this.status.warnings.map(friendlyMessage);
@@ -235,7 +256,7 @@ export class NativeRecordingSession implements RecordingSession {
       if (this.status.phase !== "ready" && this.status.phase !== "finalizing") {
         this.status = checkedStatus(await bounded(nativeCall<NativeRecordingStatus>("stop_screen_recording", { sessionId: this.status.sessionId }), this.controller.signal), this.status.sessionId);
       }
-      const deadline = performance.now() + FINALIZE_TIMEOUT_MS;
+      const deadline = performance.now() + (planWantsGif(this.plan) && this.plan.maxDurationMs > 300_000 ? LONG_GIF_FINALIZE_TIMEOUT_MS : FINALIZE_TIMEOUT_MS);
       while (this.status.phase !== "ready") {
         this.assertUsable();
         if (performance.now() >= deadline) throw new Error("Preparing this recording took too long. Try a shorter recording.");
@@ -247,10 +268,15 @@ export class NativeRecordingSession implements RecordingSession {
       const read = async (format: "mp4" | "gif"): Promise<CaptureFile | null> => {
         const expected = format === "mp4" ? this.status.mp4Bytes : this.status.gifBytes;
         if (!expected) return null;
-        if (!Number.isSafeInteger(expected) || expected > MAX_EXPORT_BYTES) throw new Error("Recording must be smaller than 128 MiB.");
+        const limit = format === "mp4" ? DISK_MP4_LIMIT_BYTES : MAX_GIF_BYTES;
+        if (!Number.isSafeInteger(expected) || expected > limit) throw new Error("Recording is too large to save.");
+        if (format === "mp4" && expected > MAX_READ_BYTES) {
+          keepSession = true;
+          return { blob: new Blob([]), bytes: expected, filename: recordingFilename(format, this.stamp), native: { sessionId: this.status.sessionId, format } };
+        }
         const bytes = await bounded(nativeCall<ArrayBuffer>("read_screen_recording", { sessionId: this.status.sessionId, format }), this.controller.signal);
         this.assertUsable();
-        if (!(bytes instanceof ArrayBuffer) || bytes.byteLength !== expected || bytes.byteLength > MAX_EXPORT_BYTES) throw new Error("Couldn't read the complete native recording.");
+        if (!(bytes instanceof ArrayBuffer) || bytes.byteLength !== expected || bytes.byteLength > MAX_READ_BYTES) throw new Error("Couldn't read the complete native recording.");
         const blob = new Blob([bytes], { type: format === "mp4" ? "video/mp4" : "image/gif" });
         return { blob, bytes: blob.size, filename: recordingFilename(format, this.stamp) };
       };
@@ -263,11 +289,14 @@ export class NativeRecordingSession implements RecordingSession {
         }
       }
       if (!files.mp4 && !files.gif) throw new Error(warnings.at(-1) || "Nothing was captured. Try another screen or window.");
-      return { durationMs: this.elapsedMs(), width: this.status.width, height: this.status.height, ...files, warnings };
+      return {
+        durationMs: this.elapsedMs(), width: this.status.width, height: this.status.height, ...files, warnings,
+        ...(keepSession ? { release: () => this.release() } : {}),
+      };
     } finally {
       this.controller.abort();
       this.signal.removeEventListener("abort", this.onAbort);
-      await this.release().catch(() => { warnings.push("Couldn't remove temporary recording files."); });
+      if (!keepSession) await this.release().catch(() => { warnings.push("Couldn't remove temporary recording files."); });
     }
   }
 }

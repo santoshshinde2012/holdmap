@@ -187,7 +187,7 @@ try {
     await frame.locator("#agent-capabilities").waitFor();
     await frame.getByRole("radio", { name: "Overview", exact: true }).click();
     await views.getByRole("radio", { name: "Home", exact: true }).click();
-    await frame.getByRole("button", { name: /^\d+ listening$/ }).click();
+    await frame.getByRole("button", { name: /^Listening \d+$/ }).click();
     await frame.locator("#port-list").waitFor();
   });
   await check("Agents → Security → Pipeline loads the analyzer graphs on demand", async () => {
@@ -413,7 +413,7 @@ try {
   const guideBase = new URL("./", page.url());
   const checkGuideImages = async (viewport) => {
     await page.setViewportSize(viewport);
-    for (const [route, count] of [["agents", 15], ["desktop", 11], ["whats-new", 1]]) {
+    for (const [route, count] of [["agents", 16], ["desktop", 11], ["whats-new", 1]]) {
       await page.goto(new URL(`docs/${route}/`, guideBase).href, { waitUntil: "domcontentloaded" });
       const images = page.locator(".prose img");
       if (await images.count() !== count) throw new Error(`${route}: expected ${count} guide screenshots`);

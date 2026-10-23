@@ -56,3 +56,8 @@ export function agentCard(page: Page, name: string): Locator {
 export function agentHeading(page: Page, name: string): Locator {
   return agentCard(page, name).getByRole("button", { name: new RegExp(`^${name} `) });
 }
+
+/** The selected agent's detail panel beside the Agents map. */
+export function agentDetails(page: Page): Locator {
+  return page.getByRole("complementary", { name: "Agent details", exact: true });
+}

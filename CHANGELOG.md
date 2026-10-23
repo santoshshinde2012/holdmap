@@ -8,6 +8,14 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Changed
+
+- **Screen recording for clips and long sessions.** Presets: *Share a clip* (GIF, 15 s, up to 10 MB)
+  and *Full session* (MP4, up to 30 minutes), with a live size estimate and a custom format and
+  length (up to one hour). Recordings stop by themselves with a warning and say why, can be paused,
+  and the desktop shows the saved path with Copy and Show in folder. GIFs are built to a size budget
+  (still screens now cost kilobytes, not megabytes) and macOS saves long MP4s straight from disk.
+
 ## [0.10.0] - 2026-10-22
 
 ### Added

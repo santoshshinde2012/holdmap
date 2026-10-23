@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { captureSupport, displayCaptureError, formatClock, gifDelayMs, gifSize, recordingFilename, GIF_MAX_FRAMES } from "./screen-record";
+import { captureSupport, displayCaptureError, formatClock, gifSize, recordingFilename } from "./screen-record";
 
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
@@ -20,6 +20,7 @@ describe("screen recording helpers", () => {
   it("scales GIF frames down without stretching", () => {
     expect(gifSize(320, 180)).toEqual({ width: 320, height: 180 });
     expect(gifSize(1920, 1080)).toEqual({ width: 640, height: 360 });
+    expect(gifSize(1920, 1080, 800)).toEqual({ width: 800, height: 450 });
     expect(gifSize(0, 0)).toEqual({ width: 1, height: 1 });
   });
 
@@ -33,11 +34,6 @@ describe("screen recording helpers", () => {
     expect(gifSize(Number.POSITIVE_INFINITY, Number.NaN)).toEqual({ width: 1, height: 1 });
     expect(gifSize(1920, 1080, Number.NaN)).toEqual({ width: 640, height: 360 });
     expect(gifSize(1920, 1080, -1)).toEqual({ width: 1, height: 1 });
-  });
-
-  it("keeps GIF length within the frame budget", () => {
-    expect(gifDelayMs(1_000)).toBe(125);
-    expect(gifDelayMs(120_000) * GIF_MAX_FRAMES).toBe(120_000);
   });
 
   it("explains permission and support failures without leaking internals", () => {

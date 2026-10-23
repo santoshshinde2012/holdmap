@@ -111,7 +111,9 @@ def main() -> None:
         validate(output / "rounded.mp4", 20)
         validate(output / "rounded.gif", 20, 160)
         validate(output / "capped.mp4", 120)
-        validate(output / "capped.gif", 120, 240)
+        # 120 s at 8 fps wants 960 frames; the 256 MiB ImageIO memory budget at the default
+        # 640 px edge keeps 252 of them (it was a fixed 240 before recordings had options).
+        validate(output / "capped.gif", 120, 252)
         validate_png(output / "snapshot.png")
     print("Native recording fixture passed: real H.264/GIF and PNG, full timeline, bounds, privacy and cancellation; no screen capture")
 

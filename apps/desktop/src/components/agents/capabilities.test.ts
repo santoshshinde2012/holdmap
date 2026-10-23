@@ -3,7 +3,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import type { ComponentProps } from "svelte";
 import AgentCapabilitiesView from "./AgentCapabilitiesView.svelte";
-import AgentCard from "./AgentCard.svelte";
+import AgentDetails from "./AgentDetails.svelte";
 import { MOCK_SNAPSHOT, mockAgents } from "../../lib/mock";
 import type { AgentsReport } from "../../lib/types";
 
@@ -320,9 +320,9 @@ describe("MCP and skills capability explorer", () => {
   });
   it("keeps the Overview entry point explicitly opt-in", async () => {
     const r = mockAgents(), oncapabilities = vi.fn();
-    const view = render(AgentCard, { agent: r.agents[1], report: r, entries: MOCK_SNAPSHOT.entries, selected: true, color: "var(--accent)", onselect() {}, onentry() {}, onreveal() {}, oneditor() {}, onstop() {}, onstopall() {}, oncapabilities });
+    const view = render(AgentDetails, { agent: r.agents[1], report: r, entries: MOCK_SNAPSHOT.entries, color: "var(--accent)", onentry() {}, onreveal() {}, oneditor() {}, onstop() {}, onstopall() {}, oncapabilities });
     expect(oncapabilities).not.toHaveBeenCalled();
-    await fireEvent.click(view.getByRole("button", { name: /MCP & skills.*inspect sources/ }));
+    await fireEvent.click(view.getByRole("button", { name: /MCP & skills/ }));
     expect(oncapabilities).toHaveBeenCalledOnce(); expect(r.agents[1].capabilities).toBeUndefined();
   });
 });

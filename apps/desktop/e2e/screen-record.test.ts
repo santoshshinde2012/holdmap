@@ -6,11 +6,14 @@ test("records a local MP4 and GIF that can be downloaded", async ({ app }) => {
   await app.getByRole("button", { name: "Record screen" }).click();
   const confirm = app.getByRole("dialog", { name: "Record screen" });
   await expect(confirm).toBeVisible();
-  await expect(confirm).toContainText("never leaves this machine");
-  await expect(confirm).toContainText("Microphone and system audio are not captured");
+  await expect(confirm).toContainText("Nothing is uploaded");
+  await expect(confirm).toContainText("No microphone or system audio");
+  await confirm.getByRole("radio", { name: "Both" }).click();
+  await expect(confirm.getByRole("radio", { name: "Custom" })).toBeChecked();
   await confirm.getByRole("button", { name: "Choose screen…" }).click();
   await expect(app.getByRole("button", { name: "Stop screen recording" })).toBeVisible({ timeout: 10_000 });
-  await expect(app.getByRole("status").filter({ hasText: /0:\d\d/ })).toBeVisible();
+  await expect(app.locator(".rec-time")).toHaveText(/0:\d\d/);
+  await expect(app.getByRole("status").filter({ hasText: "Recording" })).toBeAttached();
   await app.waitForTimeout(700);
   await app.getByRole("button", { name: "Stop screen recording" }).click();
   const done = app.getByRole("dialog", { name: "Download recording" });
@@ -170,7 +173,7 @@ test("permission failure can be retried and ending sharing opens the saved resul
   });
   const done = app.getByRole("dialog", { name: "Download recording" });
   await expect(done).toBeVisible({ timeout: 20_000 });
-  await expect(done.getByRole("button", { name: "Download GIF" })).toBeVisible();
+  await expect(done.getByRole("button", { name: "Download MP4" })).toBeVisible();
   await expect(app.getByRole("button", { name: "Stop screen recording" })).toHaveCount(0);
   await app.mouse.click(5, 5); // Closing the backdrop keeps an unsaved preview available.
   await expect(done).toHaveCount(0);
@@ -180,7 +183,7 @@ test("permission failure can be retried and ending sharing opens the saved resul
   await palette.getByRole("combobox", { name: "Search commands" }).fill("Review recording");
   await palette.getByRole("option", { name: /Review recording/ }).click();
   await expect(done).toBeVisible();
-  await expect(done.getByRole("button", { name: "Download GIF" })).toBeVisible();
+  await expect(done.getByRole("button", { name: "Download MP4" })).toBeVisible();
   expect(await app.evaluate(() => window.__holdmapCapture.streams.length)).toBe(1);
   await done.press("Escape");
   await expect(app.getByRole("button", { name: "Review recording", exact: true })).toBeFocused();
@@ -195,4 +198,46 @@ test("unsupported capture explains the current window without promising desktop 
   await expect(dialog.getByRole("button", { name: "Choose screen…" })).toHaveCount(0);
   await dialog.press("Escape");
   await expect(app.getByRole("button", { name: "Record screen", exact: true })).toBeFocused();
+});
+
+test("presets set format and length with a live estimate, and the clip preset makes a GIF only", async ({ app }) => {
+  await app.getByRole("button", { name: "Record screen", exact: true }).click();
+  const confirm = app.getByRole("dialog", { name: "Record screen" });
+  // The default is the full-session MP4 preset.
+  await expect(confirm.getByRole("radio", { name: "Full session" })).toBeChecked();
+  await expect(confirm.getByRole("radio", { name: "MP4", exact: true })).toBeChecked();
+  const estimate = confirm.getByRole("list", { name: "Expected size and length" });
+  await expect(estimate).toContainText("MP4");
+  await expect(estimate).toContainText("Stops by itself after");
+  await confirm.getByRole("radio", { name: "Share a clip" }).click();
+  await expect(confirm.getByRole("radio", { name: "GIF", exact: true })).toBeChecked();
+  await expect(estimate).toContainText("GIF");
+  await expect(estimate).not.toContainText("MP4");
+  await confirm.getByRole("button", { name: "Choose screen…" }).click();
+  await expect(app.getByRole("button", { name: "Stop screen recording" })).toBeVisible({ timeout: 10_000 });
+  await app.waitForTimeout(700);
+  await app.getByRole("button", { name: "Stop screen recording" }).click();
+  const done = app.getByRole("dialog", { name: "Download recording" });
+  await expect(done).toBeVisible({ timeout: 20_000 });
+  await expect(done.getByRole("button", { name: "Download GIF" })).toBeVisible();
+  await expect(done.getByRole("button", { name: "Download MP4" })).toHaveCount(0);
+  await done.getByRole("button", { name: "Discard recording" }).click();
+});
+
+test("a recording can be paused and resumed from the title bar", async ({ app }) => {
+  await app.getByRole("button", { name: "Record screen", exact: true }).click();
+  await app.getByRole("dialog", { name: "Record screen" }).getByRole("button", { name: "Choose screen…" }).click();
+  const pause = app.getByRole("button", { name: "Pause screen recording" });
+  await expect(pause).toBeVisible({ timeout: 10_000 });
+  await expect(pause).toHaveAttribute("aria-pressed", "false");
+  await pause.click();
+  const resume = app.getByRole("button", { name: "Resume screen recording" });
+  await expect(resume).toHaveAttribute("aria-pressed", "true");
+  await expect(app.getByRole("status").filter({ hasText: "Recording paused" })).toBeAttached();
+  await resume.click();
+  await expect(app.getByRole("button", { name: "Pause screen recording" })).toBeVisible();
+  await app.getByRole("button", { name: "Stop screen recording" }).click();
+  const done = app.getByRole("dialog", { name: "Download recording" });
+  await expect(done).toBeVisible({ timeout: 20_000 });
+  await done.getByRole("button", { name: "Discard recording" }).click();
 });

@@ -18,6 +18,10 @@ mod capture_file;
 #[allow(dead_code)]
 mod capture_lease;
 #[cfg(target_os = "macos")]
+#[path = "../src/recording_save.rs"]
+#[allow(dead_code)]
+mod recording_save;
+#[cfg(target_os = "macos")]
 #[path = "../src/snapshot_image.rs"]
 #[allow(dead_code)]
 mod snapshot_image;

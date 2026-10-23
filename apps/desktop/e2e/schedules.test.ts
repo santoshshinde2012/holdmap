@@ -1,5 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
-import { agentCard, agentHeading, expect, openAgents, test } from "./fixtures";
+import { agentDetails, agentCard, agentHeading, expect, openAgents, test } from "./fixtures";
 
 // Install the virtual clock before loading the application. Every action stays in
 // browser simulation, including cases which advance through the scheduled deadline.
@@ -142,7 +142,7 @@ test("a port schedule keeps its reviewed protocol and process, updates countdown
 test("an individual agent service retains scheduling without selecting its other port", async ({ page }) => {
   await openAgents(page);
   await agentHeading(page, "Cursor").click();
-  const cursor = agentCard(page, "Cursor");
+  const cursor = agentDetails(page);
   await cursor.getByTitle("Stop :3000", { exact: true }).click();
   const review = page.getByRole("alertdialog");
   await expect(review.getByRole("combobox", { name: "When", exact: true })).toContainText("Now");
@@ -156,7 +156,7 @@ test("an individual agent service retains scheduling without selecting its other
   await expect(manager).not.toContainText(":5173");
   await manager.getByRole("button", { name: "Cancel Stop agent services (1 port)", exact: true }).click();
   await manager.getByRole("button", { name: "Done", exact: true }).click();
-  await expect(cursor).toContainText("2 stoppable");
+  await expect(agentCard(page, "Cursor")).toContainText("2 stoppable");
   await expect(agentHeading(page, "Cursor")).toContainText("52000");
   await page.getByRole("radio", { name: "List", exact: true }).click();
   await expect(page.getByRole("option", { name: /^Port 3000 tcp,/ })).toBeVisible();
@@ -166,7 +166,7 @@ test("an individual agent service retains scheduling without selecting its other
 test("an agent schedule retains both reviewed owned ports and keeps its session running", async ({ page }) => {
   await openAgents(page);
   await agentHeading(page, "Cursor").click();
-  await agentCard(page, "Cursor").getByRole("button", { name: "Stop all (2)", exact: true }).click();
+  await agentDetails(page).getByRole("button", { name: "Stop all (2)", exact: true }).click();
   const review = page.getByRole("alertdialog");
   await expect(review.getByRole("list", { name: "Plan", exact: true }).getByRole("listitem")).toHaveCount(4);
   await expect(review).toContainText("43000");

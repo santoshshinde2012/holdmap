@@ -37,7 +37,9 @@
   import ReviewPendingDialog from "./components/ReviewPendingDialog.svelte";
   import SettingsUnavailableDialog from "./components/SettingsUnavailableDialog.svelte";
   import * as api from "./lib/api";
-  import { agentMatches, filterAgents, step, stoppableEntries } from "./lib/agents";
+  import { agentMatches, filterAgents, stoppableEntries } from "./lib/agents";
+  import { createAgentSelection } from "./lib/agent-selection.svelte";
+  import { agentHash, findLinkedAgent, parseAgentHash } from "./lib/agent-selection";
   import { createAgentReportLoader } from "./lib/agents-live";
   import { createFlowLoader } from "./lib/agent-flow/live";
   import type { AgentFlowMode, AgentFlowReport, ActivitySnapshot, RecordingStatus } from "./lib/agent-flow/model";
@@ -125,7 +127,19 @@
   /** AgentsView loads, and agents are looked up, only while the Agents tab is open. */
   let AgentsView = $state<typeof import("./components/AgentsView.svelte").default | null>(null);
   let agentsReport = $state.raw<AgentsReport | null>(null);
-  let selectedAgent = $state<string | null>(null);
+  /** One selected agent for every Agents surface; injected into the views. */
+  const agentSelection = createAgentSelection();
+  const selectedAgent = $derived(agentSelection.id);
+  /** `#agent=<id or name>` waiting for the first agents report. */
+  let agentLink = parseAgentHash(globalThis.location?.hash ?? "");
+  if (agentLink) prefs.view = "agents";
+  // The selected agent is the URL's #agent=… while Agents is open, so a reload or a shared link reopens it.
+  $effect(() => {
+    const want = prefs.view === "agents" ? agentHash(selectedAgent) : "";
+    const at = globalThis.location;
+    if (!at || at.hash === want || agentLink || (at.hash && !parseAgentHash(at.hash))) return;
+    history.replaceState(history.state, "", want || at.pathname + at.search);
+  });
   let agentQuery = $state("");
   let agentsRefreshing = $state(false);
   let agentsError = $state<string | null>(null);
@@ -332,7 +346,12 @@
     if (disposed) return;
     agentsReport = share(agentsReport, report);
     void insightsStore.afterAgents();
-    if (selectedAgent && !agentsReport.agents.some((a) => a.id === selectedAgent)) selectedAgent = null;
+    agentSelection.reconcile(agentsReport.agents);
+    if (agentLink) {
+      const linked = findLinkedAgent(agentLink, agentsReport.agents);
+      agentLink = null;
+      if (linked) openAgent(linked.id);
+    }
   }, () => !disposed && (prefs.inventoryOn || prefs.view === "agents" && prefs.agentSection === "capabilities"));
   async function loadAgents() {
     if (agentsRefreshing) return;
@@ -389,7 +408,7 @@
     drawerOpen = true;
   }
   function selectAgent(delta: number) {
-    selectedAgent = step(visibleAgentIds, selectedAgent, delta);
+    agentSelection.step(visibleAgentIds, delta, agentsReport?.agents);
   }
 
   const topologyLoader = createFlowLoader(() => api.topology(topologyAll),
@@ -1068,7 +1087,7 @@
     if (a && !agentMatches(a, agentQuery)) agentQuery = "";
     prefs.agentSection = section;
     prefs.view = "agents";
-    selectedAgent = id;
+    agentSelection.select(id, agentsReport?.agents);
   }
   function openEntryById(id: string) {
     const e = snapshot?.entries.find((x) => x.id === id);
@@ -1148,7 +1167,7 @@
       case "move": (prefs.view === "graph" ? selectGraph : prefs.view === "agents" ? selectAgent : select)(intent.delta); break;
       case "blur-search": search?.blur(); break;
       case "agents-clear-query": agentQuery = ""; break;
-      case "agents-deselect": selectedAgent = null; break;
+      case "agents-deselect": agentSelection.clear(); break;
       case "clear-filters": clearFilters(); break;
       case "list-deselect": selectedId = null; break;
       case "agents-pick-from-search": if (!selectedAgent || !visibleAgentIds.includes(selectedAgent)) selectAgent(1); search?.blur(); break;
@@ -1299,6 +1318,10 @@
     livePulse={prefs.view === "agents" ? agentsRefreshing : refreshing}
     {modK} {mod} singleKeys={prefs.singleKeyShortcuts} {refreshing} {manualRefresh}
     recordingMs={capture.session ? capture.elapsed : null}
+    recordingLimitMs={capture.activePlan.maxDurationMs}
+    recordingPaused={capture.paused}
+    canPauseRecording={capture.canPause}
+    onpauserecording={capture.togglePause}
     scheduleCount={activeSchedules.length} {themeIcon} themeLabel={THEME_LABEL[prefs.theme]}
     bind:schedulesTrigger
     onpalette={() => (showPalette = true)} onrefresh={() => refresh(true)} onstoprecording={() => void capture.finish()}
@@ -1325,14 +1348,14 @@
         {/if}
       </div>
     {:else if prefs.view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent}
+      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
         onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (prefs.view = v)} oninventory={enableInventory} />
     {:else if prefs.view === "agents"}
       <div class="graph-wrap agents-wrap">
         {#if AgentsView}
           <AgentsView bind:section={prefs.agentSection} bind:flowSource={prefs.flowSource} bind:picture={prefs.picture} bind:projectReady bind:projectCaption pictureChrome={false} report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
             capabilitiesLoading={agentsRefreshing} capabilitiesError={agentsError} onrefreshcapabilities={() => { void loadAgents(); }}
-            onselectagent={(id) => { const a = agentsReport?.agents.find((a) => a.id === id); if (a && !agentMatches(a, agentQuery)) agentQuery = ""; selectedAgent = id; }} onentry={openEntry}
+            onselectagent={(id) => { const a = agentsReport?.agents.find((a) => a.id === id); if (a && !agentMatches(a, agentQuery)) agentQuery = ""; agentSelection.select(id, agentsReport?.agents); }} onentry={openEntry}
             onreveal={revealAgentFolder} oneditor={openAgentFolder}
             onstop={(e, agentId) => requestStop(e, false, false, { agentId })} onstopall={requestStopAgentPorts}
             {flowReport} {activity} {recording} {flowLoading} {activityLoading} {flowError} {activityError} demo={api.usesSampleData()}
@@ -1391,7 +1414,7 @@
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
 {#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
 {#if capture.dialog}
-  <ScreenRecordDialog phase={capture.dialog} error={capture.error} errorTitle={capture.errorTitle} result={capture.result} busy={capture.busy} starting={capture.starting} supported={!!capture.support.backend} checkingSupport={capture.support.pending} unsupportedReason={capture.support.reason} onstart={() => void capture.begin()} onclose={capture.close} ondiscard={capture.discardAndClose} />
+  <ScreenRecordDialog phase={capture.dialog} error={capture.error} errorTitle={capture.errorTitle} result={capture.result} busy={capture.busy} starting={capture.starting} supported={!!capture.support.backend} checkingSupport={capture.support.pending} unsupportedReason={capture.support.reason} plan={capture.plan} backend={capture.support.backend} stoppedBy={capture.stoppedBy} onplan={capture.setPlan} onstart={() => void capture.begin()} onclose={capture.close} ondiscard={capture.discardAndClose} />
 {/if}
 <SnapshotCapture bind:this={snapshotCaptureUi} session={capture.session} blocked={otherModalOpen} onstatechange={(state) => (snapshotCaptureState = state)} />
 {#if snapshotCaptureState.busy}<span class="sr-only" role="status">Capturing snapshot. Press Escape or use Cancel snapshot capture to cancel.</span>{/if}

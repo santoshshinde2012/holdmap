@@ -3,25 +3,46 @@
 
 use std::{
     io::Write,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, Mutex,
     },
 };
 use tauri::{ipc::InvokeBody, AppHandle, Runtime, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 
 const MAX_BYTES: usize = 128 * 1024 * 1024;
+const MAX_REMEMBERED: usize = 16;
 
 #[derive(Default)]
 pub(crate) struct RecordingSaveState {
     busy: Arc<AtomicBool>,
+    /// Files saved in this session; the only paths "show in folder" accepts.
+    saved: Arc<Mutex<Vec<PathBuf>>>,
+    #[cfg(test)]
+    reveal: Option<TestReveal>,
     // Test only: substitute the interactive OS boundary while exercising the real
     // generated command, binary IPC decoding, lease and atomic filesystem writer.
     #[cfg(test)]
     picker: Option<TestSavePicker>,
 }
+
+#[cfg(test)]
+impl RecordingSaveState {
+    /// Test only: answer the native save dialog without a window.
+    pub(crate) fn with_picker(
+        picker: impl Fn(&str, &str) -> Result<Option<PathBuf>, String> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            picker: Some(Arc::new(picker)),
+            ..Default::default()
+        }
+    }
+}
+
+#[cfg(test)]
+type TestReveal = Arc<dyn Fn(&Path) -> Result<(), String> + Send + Sync>;
 
 #[cfg(test)]
 type TestSavePicker =
@@ -45,6 +66,14 @@ impl Drop for SaveLease {
     }
 }
 
+/// A report is a UTF-8 JSON object of at most 8 MiB; the picker, not JavaScript, chooses where.
+fn is_report(bytes: &[u8]) -> bool {
+    bytes.len() <= 8 * 1024 * 1024
+        && bytes.first() == Some(&b'{')
+        && std::str::from_utf8(bytes).is_ok()
+        && serde_json::from_slice::<serde_json::Value>(bytes).is_ok()
+}
+
 fn validate<'a>(filename: &'a str, bytes: &[u8]) -> Result<&'a str, String> {
     if bytes.is_empty() || bytes.len() > MAX_BYTES {
         return Err("Recording must contain data and be smaller than 128 MiB.".into());
@@ -65,11 +94,20 @@ fn validate<'a>(filename: &'a str, bytes: &[u8]) -> Result<&'a str, String> {
         }
         Some("gif") if bytes.starts_with(b"GIF89a") || bytes.starts_with(b"GIF87a") => Ok("gif"),
         Some("mp4") if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" => Ok("mp4"),
-        _ => Err("Only PNG snapshots, MP4 video and GIF recordings can be saved.".into()),
+        // Exported reports are plain text, small, and chosen in the same native dialog.
+        Some(ext @ ("json" | "sarif")) if is_report(bytes) => Ok(ext),
+        _ => Err(
+            "Only PNG snapshots, MP4 video and GIF recordings, and JSON or SARIF reports can be saved."
+                .into(),
+        ),
     }
 }
 
-fn persist_recording(path: &Path, extension: &str, bytes: &[u8]) -> Result<(), String> {
+fn persist_with(
+    path: &Path,
+    extension: &str,
+    write: impl FnOnce(&mut std::fs::File) -> Result<(), String>,
+) -> Result<(), String> {
     if !path.is_absolute()
         || !path
             .extension()
@@ -84,14 +122,124 @@ fn persist_recording(path: &Path, extension: &str, bytes: &[u8]) -> Result<(), S
     // and tempfile gives the unpublished recording private permissions on Unix.
     let mut temporary = tempfile::NamedTempFile::new_in(parent)
         .map_err(|e| format!("Couldn't create the recording in this folder: {e}"))?;
+    write(temporary.as_file_mut())?;
     temporary
-        .write_all(bytes)
-        .and_then(|()| temporary.as_file().sync_all())
+        .as_file()
+        .sync_all()
         .map_err(|e| format!("Couldn't write the recording: {e}"))?;
     temporary
         .persist(path)
         .map_err(|e| format!("Couldn't save the recording: {}", e.error))?;
     Ok(())
+}
+
+#[cfg(test)]
+fn persist_recording(path: &Path, extension: &str, bytes: &[u8]) -> Result<(), String> {
+    persist_with(path, extension, |file| {
+        file.write_all(bytes)
+            .map_err(|e| format!("Couldn't write the recording: {e}"))
+    })
+}
+
+/// The native chooser decides where a file goes; JavaScript never supplies a path.
+fn choose_destination<R: Runtime>(
+    app: &AppHandle<R>,
+    window: &WebviewWindow<R>,
+    filename: &str,
+    extension: &str,
+    #[cfg(test)] picker: Option<TestSavePicker>,
+) -> Result<Option<PathBuf>, String> {
+    let native_picker = || {
+        app.dialog()
+            .file()
+            .set_parent(window)
+            .set_title(match extension {
+                "png" => "Save Holdmap snapshot",
+                "json" | "sarif" => "Save Holdmap report",
+                _ => "Save Holdmap recording",
+            })
+            .set_file_name(filename)
+            .add_filter(
+                match extension {
+                    "png" => "PNG snapshot",
+                    "mp4" => "MP4 video",
+                    "json" => "JSON report",
+                    "sarif" => "SARIF report",
+                    _ => "GIF animation",
+                },
+                &[extension],
+            )
+            .blocking_save_file()
+            .map(|selected| {
+                selected
+                    .into_path()
+                    .map_err(|_| "Choose a local file for the recording.".to_owned())
+            })
+            .transpose()
+    };
+    #[cfg(test)]
+    return match picker {
+        Some(picker) => picker(filename, extension),
+        None => native_picker(),
+    };
+    #[cfg(not(test))]
+    native_picker()
+}
+
+/// Folder names are only revealed for files this session saved, never for a renderer-chosen path.
+fn remember(saved: &Mutex<Vec<PathBuf>>, path: &Path) {
+    let mut saved = saved
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    saved.retain(|known| known != path);
+    saved.push(path.to_path_buf());
+    if saved.len() > MAX_REMEMBERED {
+        saved.remove(0);
+    }
+}
+
+/// Valid recording filenames are `holdmap-…` with an allow-listed extension.
+pub(crate) fn valid_name(filename: &str, extension: &str) -> bool {
+    filename.starts_with("holdmap-")
+        && filename.len() <= 64
+        && filename
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'.'))
+        && filename.rsplit_once('.').map(|(_, ext)| ext) == Some(extension)
+}
+
+/// Ask where to save, then let `write` stream the file there. Runs on a blocking thread.
+pub(crate) fn save_streamed<R: Runtime>(
+    window: &WebviewWindow<R>,
+    app: &AppHandle<R>,
+    state: &RecordingSaveState,
+    filename: &str,
+    extension: &str,
+    write: impl FnOnce(&mut std::fs::File) -> Result<(), String> + Send + 'static,
+) -> Result<impl FnOnce() -> Result<Option<String>, String> + Send + 'static, String> {
+    let lease = SaveLease::acquire(state)?;
+    let (window, app) = (window.clone(), app.clone());
+    let (filename, extension) = (filename.to_owned(), extension.to_owned());
+    let saved = Arc::clone(&state.saved);
+    #[cfg(test)]
+    let picker = state.picker.clone();
+    Ok(move || {
+        let _lease = lease;
+        let Some(path) = choose_destination(
+            &app,
+            &window,
+            &filename,
+            &extension,
+            #[cfg(test)]
+            picker,
+        )?
+        else {
+            return Ok(None);
+        };
+        persist_with(&path, &extension, write)?;
+        remember(&saved, &path);
+        Ok(Some(path.to_string_lossy().into_owned()))
+    })
 }
 
 #[tauri::command]
@@ -111,56 +259,47 @@ pub(crate) async fn save_screen_recording<R: Runtime>(
         return Err("Send the recording as binary data.".into());
     };
     let extension = validate(filename, bytes)?.to_owned();
-    let lease = SaveLease::acquire(&state)?;
-    let filename = filename.to_owned();
     let bytes = bytes.clone();
+    let save = save_streamed(&window, &app, &state, filename, &extension, move |file| {
+        file.write_all(&bytes)
+            .map_err(|e| format!("Couldn't write the recording: {e}"))
+    })?;
+    tauri::async_runtime::spawn_blocking(save)
+        .await
+        .map_err(|_| "The save dialog could not finish. Try saving again.".to_string())?
+}
+
+/// Show the folder of a file this session saved. Anything else is refused.
+#[tauri::command]
+pub(crate) async fn reveal_saved_recording<R: Runtime>(
+    window: WebviewWindow<R>,
+    state: tauri::State<'_, RecordingSaveState>,
+    path: String,
+) -> Result<(), String> {
+    crate::local_window::authorize(&window, "Showing recordings")?;
+    let requested = PathBuf::from(path);
+    let known = state
+        .saved
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .contains(&requested);
+    if !known {
+        return Err("Only a recording saved in this session can be shown.".into());
+    }
+    let folder = requested
+        .parent()
+        .ok_or("The saved recording has no folder.")?
+        .to_path_buf();
     #[cfg(test)]
-    let picker = state.picker.clone();
+    if let Some(reveal) = &state.reveal {
+        return reveal(&folder);
+    }
     tauri::async_runtime::spawn_blocking(move || {
-        let _lease = lease;
-        let native_picker = || {
-            app.dialog()
-                .file()
-                .set_parent(&window)
-                .set_title(if extension == "png" {
-                    "Save Holdmap snapshot"
-                } else {
-                    "Save Holdmap recording"
-                })
-                .set_file_name(&filename)
-                .add_filter(
-                    if extension == "png" {
-                        "PNG snapshot"
-                    } else if extension == "mp4" {
-                        "MP4 video"
-                    } else {
-                        "GIF animation"
-                    },
-                    &[&extension],
-                )
-                .blocking_save_file()
-                .map(|selected| {
-                    selected
-                        .into_path()
-                        .map_err(|_| "Choose a local file for the recording.".to_owned())
-                })
-                .transpose()
-        };
-        #[cfg(test)]
-        let selected = match picker {
-            Some(picker) => picker(&filename, &extension),
-            None => native_picker(),
-        };
-        #[cfg(not(test))]
-        let selected = native_picker();
-        let Some(path) = selected? else {
-            return Ok(None);
-        };
-        persist_recording(&path, &extension, &bytes)?;
-        Ok(Some(path.to_string_lossy().into_owned()))
+        holdmap_core::util::reveal(&folder)
+            .map_err(|_| "Couldn't open the folder. Open it from your file manager.".to_owned())
     })
     .await
-    .map_err(|_| "The save dialog could not finish. Try saving again.".to_string())?
+    .map_err(|_| "Couldn't open the folder.".to_owned())?
 }
 
 #[cfg(test)]
@@ -179,8 +318,8 @@ mod tests {
     ) -> tauri::App<MockRuntime> {
         mock_builder()
             .manage(RecordingSaveState {
-                busy: Arc::default(),
                 picker: Some(Arc::new(picker)),
+                ..Default::default()
             })
             // Use the actual generated production handler. Do not replace the command
             // or its argument decoding with a fixture sink or an outer origin guard.
@@ -257,6 +396,39 @@ mod tests {
         assert_eq!(std::fs::read(&output).unwrap(), png);
         assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn ipc_saves_json_and_sarif_reports_only_when_they_are_json() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("report.sarif");
+        let chosen = output.clone();
+        let app = test_app(move |name, extension| {
+            assert_eq!(name, "holdmap-security-2026-10-23.sarif");
+            assert_eq!(extension, "sarif");
+            Ok(Some(chosen.clone()))
+        });
+        let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .unwrap();
+        for bad in [&b"not json"[..], b"{\"unterminated\":", b"[1]"] {
+            assert!(get_ipc_response(
+                &window,
+                raw_request("holdmap-security-2026-10-23.sarif", bad)
+            )
+            .is_err());
+        }
+        let report = br#"{"version":"2.1.0","runs":[]}"#;
+        let saved = get_ipc_response(
+            &window,
+            raw_request("holdmap-security-2026-10-23.sarif", report),
+        )
+        .unwrap();
+        assert_eq!(
+            saved.deserialize::<Option<String>>().unwrap(),
+            Some(output.to_string_lossy().into_owned())
+        );
+        assert_eq!(std::fs::read(&output).unwrap(), report);
     }
 
     #[test]
@@ -504,5 +676,79 @@ mod tests {
         assert!(SaveLease::acquire(&state).is_err());
         drop(lease);
         assert!(SaveLease::acquire(&state).is_ok());
+    }
+
+    #[test]
+    fn recording_names_must_be_holdmap_files_with_the_expected_extension() {
+        assert!(valid_name("holdmap-20261023-120000.mp4", "mp4"));
+        assert!(!valid_name("holdmap-20261023-120000.mp4", "gif"));
+        assert!(!valid_name("other-20261023.mp4", "mp4"));
+        assert!(!valid_name("holdmap-../escape.mp4", "mp4"));
+        assert!(!valid_name("holdmap-a/b.mp4", "mp4"));
+        assert!(!valid_name(
+            &format!("holdmap-{}.mp4", "x".repeat(60)),
+            "mp4"
+        ));
+    }
+
+    #[test]
+    fn only_recent_saved_paths_are_remembered_once_each() {
+        let saved = Mutex::new(Vec::new());
+        for index in 0..(MAX_REMEMBERED + 4) {
+            remember(&saved, Path::new(&format!("/tmp/holdmap-{index}.mp4")));
+        }
+        remember(&saved, Path::new("/tmp/holdmap-20.mp4"));
+        let saved = saved.lock().unwrap();
+        assert_eq!(saved.len(), MAX_REMEMBERED);
+        assert!(!saved.contains(&PathBuf::from("/tmp/holdmap-0.mp4")));
+        assert_eq!(
+            saved
+                .iter()
+                .filter(|p| p.ends_with("holdmap-20.mp4"))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn show_in_folder_works_only_for_files_this_session_saved() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("clip.gif");
+        let chosen = output.clone();
+        let revealed = Arc::new(Mutex::new(Vec::<PathBuf>::new()));
+        let seen = Arc::clone(&revealed);
+        let app = mock_builder()
+            .manage(RecordingSaveState {
+                picker: Some(Arc::new(move |_: &str, _: &str| Ok(Some(chosen.clone())))),
+                reveal: Some(Arc::new(move |folder: &Path| {
+                    seen.lock().unwrap().push(folder.to_path_buf());
+                    Ok(())
+                })),
+                ..Default::default()
+            })
+            .invoke_handler(tauri::generate_handler![
+                save_screen_recording,
+                reveal_saved_recording
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .unwrap();
+        let reveal = |path: &Path| {
+            let mut asked = request(None, InvokeBody::Json(serde_json::json!({ "path": path })));
+            asked.cmd = "reveal_saved_recording".into();
+            get_ipc_response(&window, asked)
+        };
+        // Nothing was saved yet, so no path may be shown, whatever the renderer sends.
+        assert!(reveal(&output).is_err());
+        assert!(reveal(Path::new("/etc")).is_err());
+        get_ipc_response(&window, raw_request("holdmap-clip.gif", &valid_gif())).unwrap();
+        reveal(&output).unwrap();
+        assert!(reveal(&directory.path().join("other.gif")).is_err());
+        assert_eq!(
+            *revealed.lock().unwrap(),
+            vec![directory.path().to_path_buf()]
+        );
     }
 }

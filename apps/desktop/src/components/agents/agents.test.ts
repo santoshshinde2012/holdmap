@@ -2,6 +2,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import AgentCard from "./AgentCard.svelte";
+import AgentDetails from "./AgentDetails.svelte";
 import AgentsView from "../AgentsView.svelte";
 import { MOCK_SNAPSHOT, mockAgents } from "../../lib/mock";
 import type { Agent } from "../../lib/types";
@@ -15,13 +16,14 @@ beforeAll(() => {
 afterEach(() => { cleanup(); localStorage.clear(); });
 
 const actions = { onreveal() {}, oneditor() {}, onstop() {}, onstopall() {} };
+const detailProps = (agent: Agent) => ({ agent, report: mockAgents(), entries: MOCK_SNAPSHOT.entries, color: "var(--accent)", onentry() {}, ...actions });
 const props = (agent: Agent, selected = false) => ({ agent, selected, report: mockAgents(), entries: MOCK_SNAPSHOT.entries, color: "var(--accent)", onselect() {}, onentry() {}, ...actions });
 
 describe("agent visibility", () => {
   it("opens the shared folder chooser from the card name/path while preserving quick actions", async () => {
     const a = mockAgents().agents[1], folder = a.folders[0];
     const onfolder = vi.fn(), onreveal = vi.fn(), oneditor = vi.fn();
-    const { getByRole } = render(AgentCard, { ...props(a, true), onfolder, onreveal, oneditor });
+    const { getByRole } = render(AgentDetails, { ...detailProps(a), onfolder, onreveal, oneditor });
     await fireEvent.click(getByRole("button", { name: `Folder actions for ${folder.path}` }));
     expect(onfolder).toHaveBeenCalledExactlyOnceWith(folder.path);
     await fireEvent.click(getByRole("group", { name: `Open ${folder.label}` }).querySelector("button[title='Open in file manager']")!);
@@ -35,7 +37,7 @@ describe("agent visibility", () => {
     let resolve!: () => void;
     const onreveal = vi.fn(() => new Promise<void>((done) => (resolve = done)));
     const oneditor = vi.fn();
-    const { getByRole } = render(AgentCard, { ...props(a, true), onreveal, oneditor });
+    const { getByRole } = render(AgentDetails, { ...detailProps(a), onreveal, oneditor });
     const group = getByRole("group", { name: `Open ${folder.label}` });
     const reveal = group.querySelector("button[title='Open in file manager']")!;
     const editor = group.querySelector("button[title='Open in editor']")!;
@@ -59,14 +61,14 @@ describe("agent visibility", () => {
 
   it("renders inferred MCP without a port and preserves tool command expansion under polling", async () => {
     const a = mockAgents().agents[1];
-    const { container, rerender } = render(AgentCard, props(a, true));
+    const { container, rerender } = render(AgentDetails, detailProps(a));
     expect(container.textContent).toContain("Filesystem MCP");
     expect(container.textContent).toContain("MCP server · inferred · no listening port");
     const details = container.querySelector("section[aria-label='Agent tools'] details") as HTMLDetailsElement;
     await fireEvent.click(details.querySelector("summary")!);
     // jsdom does not implement native details activation.
     details.open = true;
-    await rerender(props({ ...structuredClone(a), cpu_percent: 12.3 }, true));
+    await rerender(detailProps({ ...structuredClone(a), cpu_percent: 12.3 }));
     expect(container.textContent).toContain("12% CPU");
     expect(container.querySelector("section[aria-label='Agent tools'] details")).toBe(details);
     expect(details.open).toBe(true);
@@ -74,7 +76,7 @@ describe("agent visibility", () => {
 
   it("shows omitted folders, links and tools even when their visible lists are empty", () => {
     const a = { ...mockAgents().agents[0], folders: [], links: [], tools: [], more_folders: 3, more_links: 5, more_tools: 4 };
-    const { container } = render(AgentCard, props(a, true));
+    const { container } = render(AgentDetails, detailProps(a));
     expect(container.textContent).toContain("+3 folders not listed");
     expect(container.textContent).toContain("+5 links not listed");
     expect(container.textContent).toContain("+4 tools not listed");
@@ -83,7 +85,7 @@ describe("agent visibility", () => {
   it("can select the parent agent and describes specific binds precisely", async () => {
     const a = mockAgents().agents[0], navigate = vi.fn();
     a.ports[0].exposure = "specific";
-    const { getByRole, container } = render(AgentCard, { ...props(a, true), onnavigate: navigate });
+    const { getByRole, container } = render(AgentDetails, { ...detailProps(a), onnavigate: navigate });
     await fireEvent.click(getByRole("button", { name: "Cursor 52000" }));
     expect(navigate).toHaveBeenCalledWith("agent:52000");
     expect(container.textContent).toContain("bound to a specific interface");

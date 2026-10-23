@@ -57,6 +57,7 @@ describe("Holdmap view snapshots", () => {
     expect(options.font.cssText).toContain('font-family:"Inter Variable"');
     expect(options.font.cssText).toContain('font-family:"JetBrains Mono Variable"');
     expect(options.font.cssText).toContain("data:font/woff2;base64,d09GMgECAwQ=");
+    expect(options.font.cssText.match(/font-display:swap/g)).toHaveLength(2);
     expect(options.features).toMatchObject({ restoreScrollPosition: true, fixSvgXmlDecode: true });
     expect(options.workerNumber).toBe(0);
     expect(render.destroyContext).toHaveBeenCalledExactlyOnceWith(await render.createContext.mock.results[0].value);

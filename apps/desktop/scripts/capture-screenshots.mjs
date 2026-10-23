@@ -79,6 +79,7 @@ async function stopPreview() {
 }
 
 const card = (page, name) => page.getByRole("article", { name, exact: true });
+const agentDetails = (page) => page.getByRole("complementary", { name: "Agent details", exact: true });
 const heading = (page, name) => card(page, name).getByRole("button", { name: new RegExp(`^${name} `) });
 
 async function selectPort(page, port = 3000) {
@@ -411,7 +412,7 @@ const captures = [
   ...["dark", "light"].map((theme) => ({ name: `desktop-agent-schedule-${theme}.png`, theme, async prepare(page) {
     await openAgents(page);
     await heading(page, "Cursor").click();
-    await card(page, "Cursor").getByRole("button", { name: "Stop all (2)", exact: true }).click();
+    await agentDetails(page).getByRole("button", { name: "Stop all (2)", exact: true }).click();
     const dialog = page.getByRole("alertdialog");
     await dialog.getByRole("combobox", { name: "When", exact: true }).click();
     await page.getByRole("option", { name: "In 1 hour", exact: true }).click();
@@ -451,6 +452,21 @@ const captures = [
   { name: "desktop-agents-dark.png", theme: "dark", prepare: openAgents },
   { name: "desktop-agents-light.png", theme: "light", prepare: openAgents },
   { name: "desktop-agents-computer-dark.png", theme: "dark", prepare: (page) => openAgents(page, "Computer") },
+  ...["dark", "light"].map((theme) => ({ name: `desktop-agent-details-${theme}.png`, theme, async prepare(page) {
+    await openAgents(page, "Computer");
+    await page.locator('.svelte-flow__node[data-id="agent:51200"]').click();
+    await expect(agentDetails(page).getByRole("heading", { name: "Claude Code", exact: true })).toBeVisible();
+  } })),
+  { name: "desktop-agent-details-footprint-light.png", theme: "light", async prepare(page) {
+    await openAgents(page);
+    await heading(page, "Cursor").click();
+    await expect(agentDetails(page).getByRole("heading", { name: "Cursor", exact: true })).toBeVisible();
+  } },
+  { name: "desktop-agent-details-narrow-light.png", theme: "light", viewport: { width: 1000, height: 820 }, async prepare(page) {
+    await openAgents(page, "Computer");
+    await heading(page, "Claude Code").click();
+    await expect(agentDetails(page).getByRole("heading", { name: "Claude Code", exact: true })).toBeVisible();
+  } },
   { name: "desktop-agents-project-dark.png", theme: "dark", async prepare(page) {
     await openAgents(page);
     await page.getByRole("button", { name: /^Folder shop-web,.*Zooms into this project/ }).click();
@@ -466,8 +482,9 @@ const captures = [
     await page.getByRole("button", { name: "Record screen", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Record screen", exact: true });
     await expect(dialog.getByRole("button", { name: "Choose screen…", exact: true })).toBeVisible();
-    await expect(dialog).toContainText("Microphone and system audio are not captured");
-    await expect(dialog).toContainText("Maximum 2 minutes");
+    await expect(dialog).toContainText("No microphone or system audio");
+    await expect(dialog.getByRole("radio", { name: "Full session" })).toBeChecked();
+    await expect(dialog.getByRole("list", { name: "Expected size and length" })).toBeVisible();
     return dialog;
   } })),
   { name: "desktop-agent-tools-dark.png", theme: "dark", async prepare(page) {
@@ -475,7 +492,7 @@ const captures = [
     await page.getByLabel("Search agents", { exact: true }).fill("filesystem");
     await expect(page.getByRole("article")).toHaveCount(1);
     await heading(page, "Cursor").click();
-    const tools = card(page, "Cursor").getByRole("region", { name: "Agent tools" });
+    const tools = agentDetails(page).getByRole("region", { name: "Agent tools" });
     const mcp = tools.getByRole("listitem").filter({ hasText: "Filesystem MCP" });
     await expect(mcp).toContainText("MCP server · inferred · no listening port");
     await mcp.getByText("Command", { exact: true }).click();
@@ -493,7 +510,7 @@ const captures = [
   ...["dark", "light"].map((theme) => ({ name: `desktop-agent-stop-confirm-${theme}.png`, theme, async prepare(page) {
     await openAgents(page);
     await heading(page, "Cursor").click();
-    await card(page, "Cursor").getByRole("button", { name: "Stop all (2)", exact: true }).click();
+    await agentDetails(page).getByRole("button", { name: "Stop all (2)", exact: true }).click();
     const plan = page.getByRole("alertdialog");
     await expect(plan.getByRole("list", { name: "Plan", exact: true }).getByRole("listitem")).toHaveCount(4);
     await expect(plan).toContainText("43000");

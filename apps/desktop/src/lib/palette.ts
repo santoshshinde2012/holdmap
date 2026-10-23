@@ -51,13 +51,19 @@ export function rank(query: string, commands: Command[], limit = 40): Command[] 
     .map((x) => x.c);
 }
 
+/** With nothing typed, show only the first few ports so the Actions and View commands stay in sight. */
+export const IDLE_PORT_LIMIT = 5;
 export const GROUP_ORDER = ["Ports", "Actions", "Filters", "View", "Settings"] as const;
 
 /**
  * Sections for the palette. Without a query: the fixed group order. With one: still grouped (so a
- * run of "Stop …" results reads as one section), but sections follow their best match.
+ * run of "Stop …" results reads as one section), but sections follow their best match. The idle list
+ * previews a handful of ports; typing searches them all.
  */
 export function groupResults(query: string, results: Command[]): { name: Command["group"]; items: Command[] }[] {
   const order: Command["group"][] = query.trim() ? [...new Set(results.map((c) => c.group))] : [...GROUP_ORDER];
-  return order.map((name) => ({ name, items: results.filter((c) => c.group === name) })).filter((g) => g.items.length);
+  const idle = !query.trim();
+  return order
+    .map((name) => ({ name, items: results.filter((c) => c.group === name).slice(0, idle && name === "Ports" ? IDLE_PORT_LIMIT : undefined) }))
+    .filter((g) => g.items.length);
 }

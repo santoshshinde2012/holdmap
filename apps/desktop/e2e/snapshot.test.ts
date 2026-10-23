@@ -210,7 +210,9 @@ test("the direct recording snapshot command waits for the animated palette to le
 test("a recording snapshot reuses the source and leaves advancing video and both exports intact", async ({ app }) => {
   test.setTimeout(45_000);
   await app.getByRole("button", { name: "Record screen", exact: true }).click();
-  await app.getByRole("dialog", { name: "Record screen", exact: true }).getByRole("button", { name: "Choose screen…", exact: true }).click();
+  const start = app.getByRole("dialog", { name: "Record screen", exact: true });
+  await start.getByRole("radio", { name: "Both", exact: true }).click();
+  await start.getByRole("button", { name: "Choose screen…", exact: true }).click();
   const stop = app.getByRole("button", { name: "Stop screen recording", exact: true });
   await expect(stop).toBeVisible();
   await app.getByRole("button", { name: "Take snapshot", exact: true }).click();

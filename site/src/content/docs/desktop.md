@@ -26,6 +26,10 @@ first. Select an agent once to highlight it everywhere; select it again to open 
 Agents. Counts read **…** until the first scan. On a narrow window the Map becomes a list
 of agents, each with its ports and the same **Details** / **Stop…** menu.
 
+**Copy summary** puts the overview and **Needs you** on the clipboard as plain text for a
+ticket or chat; **Download JSON** saves the same facts as a file. Neither starts a scan, and
+neither includes command lines, environment values, prompts or folder paths.
+
 ![Home as Cards in dark theme: agent cards with projects, ports, MCP servers and skills, and Needs you](../../../../docs/screenshots/desktop-home-cards-dark.png)
 
 ![Home as Map in light theme: agents around this computer with the Timeline below](../../../../docs/screenshots/desktop-home-map-light.png)
@@ -89,49 +93,62 @@ message explains when no connections are present.
 
 ## Record the screen
 
-The video icon in the status bar,
-**Record screen…** in the command palette, or `⇧V` starts a local capture. Holdmap explains that recordings stay on this computer, then the
-operating system asks which display or window to share. Microphone and system audio are
-not captured. A timer in the title bar and **Stop screen recording** replace the dialog so
-this window can be part of the capture.
-Recording continues while Holdmap is hidden or minimized. Reopen the window to stop it;
-the two-minute limit still applies.
+The video icon in the status bar, **Record screen…** in the command palette, or `⇧V` opens
+the recorder. Pick what to make, then the operating system asks which display or window to
+share. Holdmap records only what you pick there, and never audio. Nothing is uploaded.
 
-When the recording stops (or after two minutes), preview and download **MP4** and **GIF**.
-The desktop app opens a native save dialog and reports the saved location after writing the
-file. Cancelling the save dialog or a failed write keeps the recording available for retry.
-The browser uses its own download manager. **Close**, `Esc` and clicking outside the preview
-keep the latest recording for this session. Use the video icon, **Review recording** in the
-command palette, or `⇧V` to reopen it. **Discard recording** removes it and lets you record again.
-Save a file before reloading or quitting; the preview is kept only in memory.
+| Preset | Makes | Stops by itself after | Size |
+| --- | --- | --- | --- |
+| **Share a clip** | GIF, 10 frames a second, up to 800 px wide | 15 seconds | at most 10 MB |
+| **Full session** | MP4 (H.264) | 30 minutes | about 4 MB a minute for a mostly still screen, up to about 22 MB a minute with constant motion |
+| **Custom** | MP4, GIF or both | 15 seconds to 1 hour | live estimate in the dialog |
 
-MP4 uses H.264 when an encoder is available. GIF uses a smaller picture and reduces its
-frame rate during longer recordings to cover the whole capture while keeping memory bounded.
-Exports are limited to 128 MiB per file; if a format cannot be encoded, the other available
-format can still be saved. Preparing files can be cancelled with **Discard recording**.
+The dialog shows the expected size and when recording will stop before you choose a screen.
+A timer in the title bar replaces the dialog so this window can be part of the capture. It
+shows the time left in the last seconds, then stops by itself and tells you why. **Pause**
+leaves a stretch out of the files (the browser pipeline and Windows/Linux; the macOS native
+recorder cannot pause yet). **Stop screen recording** or `⇧V` ends it. Recording continues
+while Holdmap is hidden or minimized. If the app freezes for a moment, that moment is skipped
+rather than replayed, so a long recording cannot run out of memory.
 
-Nothing is uploaded. Each recording asks which screen or window to share. macOS may ask for
-Screen Recording permission in System Settings; if capture is blocked, allow this app or browser
-there and retry. Unsupported windows explain that capture is unavailable. This is separate
-from [Agents → Flow recording](../agents/#set-up-optional-recording), which collects optional
-tool-call metadata rather than pixels.
+When it ends, **Download recording** previews and saves the files. The desktop app opens a
+native save dialog and then shows the saved path with **Copy** and **Show in folder**. A cancelled save
+or a failed write keeps the recording for another try. The browser uses its own download
+manager. **Close**, `Esc` and clicking outside keep the latest recording for this session; use
+the video icon, **Review recording**, or `⇧V` to reopen it. **Discard recording** removes it.
 
-The macOS desktop app uses Apple's native screen picker on **macOS 14 or
-later** when its window does not offer browser screen capture.
-Native capture encodes MP4 and GIF in a private temporary folder, then removes those files
-after copying the exports into the preview or discarding the recording, once pending native
-operations finish. The two-minute
-limit is enforced by the native app even while its window is hidden. Older macOS versions
-can record only when their webview provides screen sharing; otherwise use a supporting
-browser or the system screen recorder.
+A GIF is a short, silent loop, so it is capped by size rather than only by time: a still
+screen costs almost nothing, and when motion pushes it toward the size limit Holdmap spaces the frames
+further apart (never dropping the timeline) and stops with a note if it would still go over.
+For anything longer than a minute or two choose MP4.
+
+Memory and disk: the macOS native recorder writes the MP4 straight to a private file, and a
+long MP4 is copied to the place you choose without passing through the window, up to 2 GiB. The
+browser pipeline (Windows, Linux, browsers) keeps the MP4 in memory, so it stops by itself
+at about 128 MiB and saves what it has. Use **Full session** on macOS for hour-long recordings.
+
+MP4 uses the system's H.264 encoder through WebCodecs, or the browser's MediaRecorder when that is
+missing. No third-party encoder is bundled, so installers do not grow. Builds from this project
+are unsigned.
+
+macOS may ask for Screen Recording permission in System Settings; if capture is blocked, allow this
+app or browser there and retry. This is separate from
+[Agents → Flow recording](../agents/#set-up-optional-recording), which collects optional tool-call
+metadata rather than pixels.
+
+The macOS desktop app uses Apple's native screen picker on **macOS 14 or later** when its window does
+not offer browser screen capture. Native capture writes to a private temporary folder, and removes those files
+once you save or discard. The limits are enforced by the native app even while its window is hidden.
+Older macOS versions can record only when their webview provides screen sharing; otherwise use a
+supporting browser or the system screen recorder.
 
 Linux desktop capture needs PipeWire and a working ScreenCast portal for your desktop
 environment. Its system picker still asks which screen or window to share each time.
 If that service is unavailable, try a browser with screen sharing or the system recorder.
 
-Review local capture limits before choosing a screen or window:
+Choose the preset and see the estimate before choosing a screen or window:
 
-![Screen recording explains local exports, the two-minute limit and permission before choosing a screen](../../../../docs/screenshots/desktop-screen-record-light.png)
+![The recorder offers a clip or full-session preset, shows the expected size and says it stays local](../../../../docs/screenshots/desktop-screen-record-light.png)
 
 ## Take a PNG snapshot
 

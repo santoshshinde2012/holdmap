@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import platform
 import plistlib
+import re
 import shutil
 import subprocess
 import tempfile
@@ -451,4 +452,15 @@ if __name__ == "__main__":
         reports.append(run(capabilities_only=True, devtools=False))
         print(json.dumps({"capability_comparison": reports}, indent=2), flush=True)
     else:
-        run(app_ui=args.app_ui, release_profile=args.app_ui)
+        # An unfocused WKWebView on a busy runner can hand back a blank canvas for the very first
+        # capture (see the comment on the brightness check). That one symptom, and only that one, is
+        # worth a single fresh attempt; any other failure, or a second blank, fails the check.
+        for attempt in (1, 2):
+            try:
+                run(app_ui=args.app_ui, release_profile=args.app_ui)
+                break
+            except AssertionError as error:
+                blank = re.search(r"blank|bundled (icon|font)", str(error))
+                if not (args.app_ui and blank) or attempt == 2:
+                    raise
+                print(f"RETRY once: the App PNG came back blank ({error}); capturing again with a fresh window", flush=True)

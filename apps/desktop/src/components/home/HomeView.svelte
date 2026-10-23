@@ -7,6 +7,8 @@
   import Icon from "../Icon.svelte";
   import { SegmentedControl } from "../ui";
   import EmptyPanel from "../ui/EmptyPanel.svelte";
+  import ExportActions from "../ui/ExportActions.svelte";
+  import { homeReport, homeSummaryText, reportFilename } from "../../lib/report-export";
   import HomeSummary, { type SummaryStat } from "./HomeSummary.svelte";
   import AgentCards from "./AgentCards.svelte";
   import MachineMap from "./MachineMap.svelte";
@@ -22,7 +24,7 @@
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
   type Section = "overview" | "capabilities" | "insights";
-  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, onopenagent, onopenentry, onview, oninventory, onstopentry, onstopagent }: {
+  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, onopenagent, onopenentry, onview, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent }: {
     entries: PortEntry[] | null;
     report: AgentsReport | null;
     /** Whether reading agents' MCP/skills/permission files is turned on. */
@@ -42,6 +44,9 @@
     /** Both open the stop plan for review; neither stops anything directly. */
     onstopentry?: (id: string) => void;
     onstopagent?: (id: string) => void;
+    /** The app's shared selected agent, so a pick here is still selected on Agents. */
+    selectedAgent?: string | null;
+    onselectagent?: (id: string | null) => void;
   } = $props();
 
   const o = $derived(overview(entries, report));
@@ -68,7 +73,9 @@
   const layoutOptions = HOME_LAYOUTS.map((l) => ({ value: l, label: HOME_LAYOUT_LABEL[l], icon: LAYOUT_ICON[l], title: `${HOME_LAYOUT_LABEL[l]} · V` }));
 
   let hovered = $state<string | null>(null);
-  let selected = $state<string | null>(null);
+  let localSelected = $state<string | null>(null);
+  const selected = $derived(onselectagent ? selectedAgent : localSelected);
+  function setSelected(id: string | null) { if (onselectagent) onselectagent(id); else localSelected = id; }
   const active = $derived(hovered ?? selected);
   const activeNeeds = $derived(active ? new Set(needs.filter((n) => attentionAgent(n, report) === active).map((n) => n.id)) : null);
 
@@ -94,8 +101,8 @@
     const entry = entries?.find((e) => e.id === entryId);
     if (entry) portMenu = { entry, anchor }; else onopenentry(entryId);
   }
-  function select(id: string) { selected = selected === id ? null : id; }
-  function onkeydown(e: KeyboardEvent) { if (e.key === "Escape" && selected) { selected = null; e.stopPropagation(); } }
+  function select(id: string) { setSelected(selected === id ? null : id); }
+  function onkeydown(e: KeyboardEvent) { if (e.key === "Escape" && selected) { setSelected(null); e.stopPropagation(); } }
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -108,6 +115,8 @@
           <span><i class="k project"></i>Project</span><span><i class="k port"></i>Port</span><span><i class="k mcp"></i>MCP</span><span><i class="k remote"></i>Remote</span><span><i class="k warn"></i>Needs you</span>
         </span>
       {/if}
+      <ExportActions label="Export overview" disabled={!report || !entries} copy={() => homeSummaryText(o, needs, Date.now())}
+        files={[{ label: "Download JSON", filename: reportFilename("overview", Date.now(), "json"), build: () => homeReport(o, needs, report, Date.now()) }]} />
       {#if showInventory}<button type="button" class="inv" onclick={oninventory}><Icon name="plug" size={12} />Read MCP config</button>{/if}
       <SegmentedControl value={layout} options={layoutOptions} label="Home layout" onchange={(l) => onlayout?.(l)} />
     </div>

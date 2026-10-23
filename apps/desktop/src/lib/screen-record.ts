@@ -1,12 +1,21 @@
 /** Local screen capture: MP4 (H.264) and GIF stay on this computer and are never uploaded. */
 
-export const MAX_DURATION_MS = 120_000;
-export const GIF_FPS = 8;
-export const GIF_MAX_WIDTH = 640;
-export const GIF_MAX_FRAMES = 240;
+/** Hard ceiling for any recording; the chosen plan (see screen-record-plan.ts) sets the real limit. */
+export const MAX_DURATION_MS = 3_600_000;
+export const GIF_DEFAULT_EDGE = 640;
+export const GIF_MAX_WIDTH = 960;
 export const GIF_MAX_COLORS = 256;
 
-export type CaptureFile = { blob: Blob; bytes: number; filename: string };
+/**
+ * A finished file. Small ones are in memory (`blob`). A long desktop MP4 stays in the native
+ * recorder's private folder (`native`); its `blob` is then an empty placeholder and `bytes` is the real size.
+ */
+export type CaptureFile = {
+  blob: Blob;
+  bytes: number;
+  filename: string;
+  native?: { sessionId: string; format: "mp4" | "gif" };
+};
 export type CaptureResult = {
   durationMs: number;
   width: number;
@@ -14,13 +23,25 @@ export type CaptureResult = {
   mp4: CaptureFile | null;
   gif: CaptureFile | null;
   warnings: string[];
+  /** Frees files the desktop app is still holding for this result. Safe to call twice. */
+  release?: () => Promise<void>;
 };
 
-export type RecordingListener = { onTick: (elapsedMs: number) => void; onEnded: () => void };
+/** Why a recording stopped by itself. */
+export type RecordingLimit = "duration" | "size" | "frames";
+export type RecordingListener = {
+  onTick: (elapsedMs: number) => void;
+  onEnded: () => void;
+  onLimit?: (limit: RecordingLimit) => void;
+};
 export interface RecordingSession {
   elapsedMs(): number;
   stop(): Promise<CaptureResult>;
   discard(): void;
+  /** Present only when the backend can leave out a stretch of time. */
+  pause?(): void;
+  resume?(): void;
+  readonly paused?: boolean;
 }
 
 export function formatClock(ms: number): string {
@@ -33,20 +54,12 @@ export function recordingFilename(ext: "mp4" | "gif", at = new Date()): string {
   return `holdmap-${at.getFullYear()}${p(at.getMonth() + 1)}${p(at.getDate())}-${p(at.getHours())}${p(at.getMinutes())}${p(at.getSeconds())}.${ext}`;
 }
 
-export function gifSize(srcW: number, srcH: number, maxEdge = GIF_MAX_WIDTH): { width: number; height: number } {
+export function gifSize(srcW: number, srcH: number, maxEdge = GIF_DEFAULT_EDGE): { width: number; height: number } {
   const width = Math.max(1, Number.isFinite(srcW) ? srcW : 1);
   const height = Math.max(1, Number.isFinite(srcH) ? srcH : 1);
-  const bound = Math.max(1, Number.isFinite(maxEdge) ? Math.floor(maxEdge) : GIF_MAX_WIDTH);
+  const bound = Math.max(1, Number.isFinite(maxEdge) ? Math.floor(maxEdge) : GIF_DEFAULT_EDGE);
   const scale = Math.min(1, bound / Math.max(width, height));
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
-}
-
-/** Delay between GIF frames so a recording stays within `GIF_MAX_FRAMES`. */
-export function gifDelayMs(durationMs: number): number {
-  const elapsed = Math.max(1, durationMs);
-  const ideal = 1_000 / GIF_FPS;
-  if (elapsed / ideal <= GIF_MAX_FRAMES) return ideal;
-  return elapsed / GIF_MAX_FRAMES;
 }
 
 export function captureSupport(): { display: boolean; gif: boolean } {

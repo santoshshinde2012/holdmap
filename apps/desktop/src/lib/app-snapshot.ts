@@ -85,7 +85,11 @@ async function bundledBytes(asset: string, base: URL, signal: AbortSignal, maxim
   return bytes;
 }
 
-/** These two build-generated font URLs bypass automatic remote stylesheet discovery. */
+/**
+ * These two build-generated font URLs bypass automatic remote stylesheet discovery. `swap`, like
+ * the app's own fonts.css: a font that finishes decoding after the image was drawn leaves text in
+ * a fallback face instead of invisible (the default `auto` hides it), which WKWebView did at random.
+ */
 async function fontCss(base: URL, signal: AbortSignal): Promise<string> {
   const load = async (asset: string): Promise<string> => {
     const bytes = await bundledBytes(asset, base, signal, MAX_FONT_BYTES);
@@ -93,8 +97,8 @@ async function fontCss(base: URL, signal: AbortSignal): Promise<string> {
     return `data:font/woff2;base64,${base64(bytes)}`;
   };
   const [inter, mono] = await Promise.all([load(interUrl), load(monoUrl)]);
-  return `@font-face{font-family:"Inter Variable";src:url("${inter}") format("woff2");font-style:normal;font-weight:100 900}`
-    + `@font-face{font-family:"JetBrains Mono Variable";src:url("${mono}") format("woff2");font-style:normal;font-weight:100 800}`;
+  return `@font-face{font-family:"Inter Variable";src:url("${inter}") format("woff2");font-style:normal;font-weight:100 900;font-display:swap}`
+    + `@font-face{font-family:"JetBrains Mono Variable";src:url("${mono}") format("woff2");font-style:normal;font-weight:100 800;font-display:swap}`;
 }
 
 /** Rasterize only the current Holdmap viewport; it never requests a display or native IPC. */

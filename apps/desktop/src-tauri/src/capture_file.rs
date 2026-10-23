@@ -1,15 +1,17 @@
-//! Fixed-name, bounded reads from native-owned private capture directories.
+//! Fixed-name, bounded reads and copies from native-owned private capture directories.
 #[cfg(unix)]
 use std::io::Read;
 use std::path::Path;
 
+/// Open the fixed-name file through a verified private directory and check that it is the
+/// private, complete, regular file the native recorder reported.
 #[cfg(unix)]
-pub(crate) fn read_private(
+fn open_private(
     directory: &Path,
     filename: &'static str,
     expected: u64,
     limit: u64,
-) -> Result<Vec<u8>, String> {
+) -> Result<std::fs::File, String> {
     use std::os::fd::{AsRawFd, FromRawFd};
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
     if expected == 0 || expected > limit {
@@ -53,6 +55,17 @@ pub(crate) fn read_private(
     {
         return Err("The recording file is not a private, complete regular file.".into());
     }
+    Ok(file)
+}
+
+#[cfg(unix)]
+pub(crate) fn read_private(
+    directory: &Path,
+    filename: &'static str,
+    expected: u64,
+    limit: u64,
+) -> Result<Vec<u8>, String> {
+    let file = open_private(directory, filename, expected, limit)?;
     let mut bytes = Vec::with_capacity(expected as usize);
     file.take(limit + 1)
         .read_to_end(&mut bytes)
@@ -61,6 +74,47 @@ pub(crate) fn read_private(
         return Err("The recording data is incomplete or invalid.".into());
     }
     Ok(bytes)
+}
+
+/// Stream a verified private file to `out` without holding it in memory (long recordings).
+#[cfg(unix)]
+pub(crate) fn copy_private(
+    directory: &Path,
+    filename: &'static str,
+    expected: u64,
+    limit: u64,
+    magic: impl Fn(&[u8]) -> bool,
+    out: &mut impl std::io::Write,
+) -> Result<(), String> {
+    let mut file = open_private(directory, filename, expected, limit)?;
+    let mut head = [0u8; 12];
+    let head_len = (head.len() as u64).min(expected) as usize;
+    file.read_exact(&mut head[..head_len])
+        .map_err(|_| "The recording data is incomplete or invalid.".to_owned())?;
+    if !magic(&head[..head_len]) {
+        return Err("The recording data is incomplete or invalid.".into());
+    }
+    out.write_all(&head[..head_len])
+        .map_err(|e| format!("Couldn't write the recording: {e}"))?;
+    let copied = std::io::copy(&mut file.take(expected - head_len as u64 + 1), out)
+        .map_err(|e| format!("Couldn't write the recording: {e}"))?
+        + head_len as u64;
+    if copied != expected {
+        return Err("The recording data is incomplete or invalid.".into());
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+pub(crate) fn copy_private(
+    _: &Path,
+    _: &'static str,
+    _: u64,
+    _: u64,
+    _: impl Fn(&[u8]) -> bool,
+    _: &mut impl std::io::Write,
+) -> Result<(), String> {
+    Err("Native recording files are unavailable on this platform.".into())
 }
 
 #[cfg(not(unix))]

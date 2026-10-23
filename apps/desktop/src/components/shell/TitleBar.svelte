@@ -17,6 +17,9 @@
     refreshing,
     manualRefresh,
     recordingMs = null,
+    recordingLimitMs = null,
+    recordingPaused = false,
+    canPauseRecording = false,
     scheduleCount,
     themeIcon,
     themeLabel,
@@ -24,6 +27,7 @@
     onpalette,
     onrefresh,
     onstoprecording,
+    onpauserecording = () => {},
     onhistory,
     onschedules,
     onremote,
@@ -41,6 +45,10 @@
     manualRefresh: boolean;
     /** Elapsed time of an active screen recording; null when not recording. */
     recordingMs?: number | null;
+    /** Length at which the recording stops by itself; shows the time left near the end. */
+    recordingLimitMs?: number | null;
+    recordingPaused?: boolean;
+    canPauseRecording?: boolean;
     scheduleCount: number;
     themeIcon: string;
     themeLabel: string;
@@ -48,12 +56,15 @@
     onpalette: () => void;
     onrefresh: () => void;
     onstoprecording: () => void;
+    onpauserecording?: () => void;
     onhistory: () => void;
     onschedules: () => void;
     onremote: () => void;
     ontheme: () => void;
     onsettings: () => void;
   } = $props();
+  /** The last 30 seconds (or fifth, for short limits) before an automatic stop. */
+  const endingSoon = $derived(recordingMs !== null && !!recordingLimitMs && !recordingPaused && recordingLimitMs - recordingMs <= Math.min(30_000, recordingLimitMs / 5));
 </script>
 
 <header class="titlebar" data-tauri-drag-region>
@@ -73,9 +84,11 @@
       <IconButton icon="refresh" label="Refresh" kbd={singleKeys ? "R" : undefined} onclick={onrefresh} disabled={refreshing} aria-busy={manualRefresh || undefined} class={manualRefresh ? "spinning" : ""} />
     </div>
     {#if recordingMs !== null}
-      <div class="cluster rec" role="status">
+      <div class="cluster rec" class:paused={recordingPaused} class:ending={endingSoon}>
         <span class="rec-dot" aria-hidden="true"></span>
-        <span class="rec-time">{formatClock(recordingMs)}</span>
+        <span class="rec-time" title={recordingLimitMs ? `Stops by itself after ${formatClock(recordingLimitMs)}` : undefined}>{formatClock(recordingMs)}{#if endingSoon && recordingLimitMs} <span class="rec-left">· {formatClock(recordingLimitMs - recordingMs)} left</span>{/if}</span>
+        <span class="sr-only" role="status">{recordingPaused ? "Recording paused" : endingSoon ? "Recording stops soon" : "Recording"}</span>
+        {#if canPauseRecording}<IconButton icon={recordingPaused ? "play" : "pause"} label={recordingPaused ? "Resume screen recording" : "Pause screen recording"} aria-pressed={recordingPaused} onclick={onpauserecording} />{/if}
         <IconButton icon="stop" label="Stop screen recording" data-screen-record kbd={singleKeys ? ["⇧", "V"] : undefined} onclick={onstoprecording} />
       </div>
     {/if}
@@ -102,6 +115,8 @@
   .cluster { display: flex; align-items: center; gap: 1px; padding: 2px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); }
   .cluster.rec { gap: 6px; padding: 2px 4px 2px 10px; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 28%, var(--border)); }
   .rec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+  .cluster.rec.paused .rec-dot { background: var(--muted); box-shadow: 0 0 0 3px var(--surface-2); animation: none; }
+  .cluster.rec.ending .rec-left { font-weight: var(--fw-regular); }
   .rec-time { font-size: var(--fs-caption); line-height: var(--lh-caption); font-variant-numeric: tabular-nums; font-weight: var(--fw-semibold); min-width: 2.4em; }
   @media (prefers-reduced-motion: no-preference) { .rec-dot { animation: beat 1.1s ease-in-out infinite; } }
   .tools :global(.spinning svg) { animation: spin 0.9s linear infinite; }

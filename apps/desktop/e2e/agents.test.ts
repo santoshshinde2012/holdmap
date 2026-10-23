@@ -1,8 +1,8 @@
-import { agentCard, agentHeading, expect, folderNode, openAgents, openAgentsPicture, openProject, test } from "./fixtures";
+import { agentDetails, agentCard, agentHeading, expect, folderNode, openAgents, openAgentsPicture, openProject, test } from "./fixtures";
 
 test("Agents shows aggregate resources and inferred MCP servers without listeners", async ({ app }) => {
   await openAgentsPicture(app, "Footprint");
-  const cursor = agentCard(app, "Cursor");
+  const cursor = agentDetails(app);
   await expect(agentHeading(app, "Cursor")).toContainText("15 processes");
   await expect(agentHeading(app, "Cursor")).toContainText("5 tools");
   await expect(agentHeading(app, "Cursor")).toContainText("6.2% CPU");
@@ -74,7 +74,7 @@ test("parent and child navigation clear a filter hiding the destination", async 
 test("agent folder actions and stop-all planning preserve the current listeners", async ({ app }) => {
   await openAgents(app);
   await agentHeading(app, "Cursor").click();
-  const cursor = agentCard(app, "Cursor");
+  const cursor = agentDetails(app);
   await cursor.getByRole("group", { name: "Open shop-web", exact: true }).getByRole("button", { name: "Editor", exact: true }).click();
   await expect(app.getByText("Editor preview", { exact: true })).toBeVisible();
   await cursor.getByRole("button", { name: "Stop all (2)", exact: true }).click();
@@ -88,7 +88,7 @@ test("agent folder actions and stop-all planning preserve the current listeners"
   await expect(plan).toContainText("port 5173 is free");
   await plan.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(plan).toHaveCount(0);
-  await expect(cursor).toContainText("2 stoppable");
+  await expect(agentCard(app, "Cursor")).toContainText("2 stoppable");
   await app.getByRole("radio", { name: "List", exact: true }).click();
   await expect(app.getByRole("option", { name: /^Port 3000 tcp,/ })).toBeVisible();
   await expect(app.getByRole("option", { name: /^Port 5173 tcp,/ })).toBeVisible();
@@ -120,7 +120,7 @@ test("folder map actions copy the original path and preserve listeners", async (
 test("agent card folders offer editor and file-manager previews without native effects", async ({ app }) => {
   await openAgents(app);
   await agentHeading(app, "Cursor").click();
-  const cursor = agentCard(app, "Cursor");
+  const cursor = agentDetails(app);
   const folder = cursor.getByRole("button", { name: `Folder actions for ${shopFolderPath}`, exact: true });
   const dialog = app.getByRole("dialog", { name: "Folder actions", exact: true });
   await folder.click();
@@ -135,7 +135,7 @@ test("agent card folders offer editor and file-manager previews without native e
   await expect(dialog).toHaveCount(0);
   await expect(folder).toBeFocused();
   expect(await app.evaluate(() => "__TAURI_INTERNALS__" in window)).toBe(false);
-  await expect(cursor).toContainText("2 stoppable");
+  await expect(agentCard(app, "Cursor")).toContainText("2 stoppable");
   await app.getByRole("radio", { name: "List", exact: true }).click();
   await expect(app.getByRole("option", { name: /^Port 3000 tcp,/ })).toBeVisible();
   await expect(app.getByRole("option", { name: /^Port 5173 tcp,/ })).toBeVisible();

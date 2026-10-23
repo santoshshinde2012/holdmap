@@ -15,13 +15,15 @@
   import SegmentedControl from "../ui/SegmentedControl.svelte";
   import AnalyzerGallery from "./AnalyzerGallery.svelte";
   import SecuritySummary from "../security/SecuritySummary.svelte";
+  import ExportActions from "../ui/ExportActions.svelte";
+  import { reportFilename, securityReport, securitySarif, securitySummaryText } from "../../lib/report-export";
   import RunStatus from "../security/RunStatus.svelte";
   import FindingsPanel from "../security/FindingsPanel.svelte";
   import { loadAnalyzerGraphs, type AnalyzerGraphs } from "./graph/load-graphs";
   import { insightsStore } from "../../lib/insights-store.svelte";
   import { securityRuns } from "../../lib/security-runs.svelte";
   import { inventories } from "../../lib/agent-config";
-  import { emptyFilter, securitySummary } from "../../lib/security-view";
+  import { emptyFilter, findingItems, securitySummary } from "../../lib/security-view";
   import type { Severity } from "../../lib/analyzers";
   import type { AgentsReport } from "../../lib/types";
 
@@ -40,6 +42,8 @@
   const agents = $derived([...new Map(inv.map((i) => [i.product, { product: i.product, name: i.name, id: i.id }])).values()]);
   const skillsTotal = $derived(new Set(inv.flatMap((i) => i.capabilities?.skills.map((s) => s.id) ?? [])).size);
   const summary = $derived(securitySummary(insightsStore.insights, insightsStore.analyzers, agents, skillsTotal));
+  /** What an export carries: every open finding, whatever the on-screen filter shows. */
+  const exportable = $derived(findingItems(insightsStore.insights, insightsStore.analyzers, new Map(agents.map((a) => [a.product, a.name]))).filter((i) => i.finding.state === "open"));
   const approved = $derived(insightsStore.analyzers.filter((a) => a.state === "approved"));
 
   let tab = $state<"findings" | "analyzers" | "graph">(lastTab ?? (insightsStore.analyzers.some((a) => a.state === "approved") ? "findings" : "analyzers"));
@@ -79,6 +83,13 @@
     <h2><Icon name="shield" size={16} />Security</h2>
     <div class="tools">
       <SegmentedControl bind:value={tab} label="Security view" options={[{ value: "findings", label: "Findings", count: summary.open || null, countLabel: `${summary.open} open` }, { value: "analyzers", label: "Analyzers", icon: "shield" }, { value: "graph", label: "Pipeline", icon: "branch" }]} />
+      {#if tab === "findings"}
+        <ExportActions label="Export findings" disabled={!insightsStore.insights} copy={() => securitySummaryText(exportable, summary, Date.now())}
+          files={[
+            { label: "Download JSON", filename: reportFilename("security", Date.now(), "json"), build: () => securityReport(exportable, summary, Date.now()) },
+            { label: "Download SARIF", filename: reportFilename("security", Date.now(), "sarif"), build: () => securitySarif(exportable) },
+          ]} />
+      {/if}
       <Button size="sm" variant="primary" icon="refresh" disabled={!approved.length} loading={securityRuns.busy} onclick={() => securityRuns.start(approved)} title={approved.length ? undefined : "Turn on an analyzer first"}>Rescan</Button>
       {#if onsettings}<IconButton icon="sliders" label="Analyzer settings" size="sm" onclick={onsettings} />{/if}
     </div>

@@ -68,6 +68,14 @@ matching known account, and do not establish current work by a particular runnin
   **y** confirms. The batch is freshly checked before any action. Changed targets require a new
   review; failures stop remaining plans and show what completed. Agent sessions stay running.
 
+Select an agent from the list, a map node, the Home map, **↑/↓** or search and its details open
+beside the map; the selection stays across tabs, pictures, reloads (`#agent=` link) and restarts.
+**Esc**, **✕** or a click on empty canvas clears it. In a mid-size window the details float over
+the map's right edge and the map fits into the space left; in a narrow one the agent list and the
+details stack, and closing the details brings the map back.
+
+![Agent details beside the Computer map for a selected Claude Code session](../../../../docs/screenshots/desktop-agent-details-light.png)
+
 These browser captures show **Computer** and one selected **Project** using sample data:
 
 ![Computer view shows this machine, its running agents and observed remote systems](../../../../docs/screenshots/desktop-agents-computer-dark.png)

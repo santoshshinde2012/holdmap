@@ -27,8 +27,8 @@ describe("screen record dialog", () => {
     const onstart = vi.fn();
     render(ScreenRecordDialog, { phase: "confirm", supported: true, onstart, onclose: vi.fn() });
     expect(screen.getByRole("dialog", { name: "Record screen" })).toBeTruthy();
-    expect(screen.getByText(/never leaves this machine/)).toBeTruthy();
-    expect(screen.getByText(/Microphone and system audio are not captured/)).toBeTruthy();
+    expect(screen.getByText(/Nothing is uploaded/)).toBeTruthy();
+    expect(screen.getByText(/No microphone or system audio/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Choose screen…" })).toBeTruthy();
   });
 
@@ -43,7 +43,8 @@ describe("screen record dialog", () => {
     const onclose = vi.fn();
     render(ScreenRecordDialog, { phase: "encoding", onstart: vi.fn(), onclose });
     const dialog = screen.getByRole("dialog", { name: "Preparing files" });
-    expect(screen.getByRole("status").textContent).toContain("Encoding MP4 and GIF");
+    expect(screen.getByRole("status").textContent).toContain("Finishing your recording");
+    expect(screen.getByText(/Finishing MP4/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
     expect(screen.getByRole("button", { name: "Discard recording" })).toBeTruthy();
     await fireEvent.keyDown(dialog, { key: "Escape" });
@@ -78,7 +79,7 @@ describe("screen record dialog", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Download GIF" }));
     expect(save).toHaveBeenCalledTimes(2);
     expect(save.mock.calls[0][0].filename).toBe("holdmap-clip.mp4");
-    expect(screen.getByRole("status").textContent).toContain("Download started");
+    expect(screen.getAllByRole("status").map((node) => node.textContent).join(" ")).toContain("Download started");
     expect(screen.queryByText(/Saved to/)).toBeNull();
   });
 
@@ -90,7 +91,7 @@ describe("screen record dialog", () => {
     expect(screen.getByText(/Your recording is still available/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Download GIF" })).toBeTruthy();
     await fireEvent.click(screen.getByRole("button", { name: "Download MP4" }));
-    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Saved to /tmp/holdmap-clip.mp4"));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/MP4 saved.*\/tmp\/holdmap-clip\.mp4/));
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -106,7 +107,7 @@ describe("screen record dialog", () => {
     resolve({ saved: false });
     await waitFor(() => expect(screen.getByRole<HTMLButtonElement>("button", { name: "Download MP4" }).disabled).toBe(false));
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.queryByText(/Saved to|Download started/)).toBeNull();
+    expect(screen.queryByText(/ saved|Download started/)).toBeNull();
   });
 
   it("releases preview URLs after closing", () => {
@@ -127,5 +128,34 @@ describe("screen record dialog", () => {
     expect(ondiscard).not.toHaveBeenCalled();
     await fireEvent.click(screen.getByRole("button", { name: "Discard recording" }));
     expect(ondiscard).toHaveBeenCalledOnce();
+  });
+
+  it("offers presets and a live estimate before the picker, and reports the chosen plan", async () => {
+    const onplan = vi.fn();
+    render(ScreenRecordDialog, { phase: "confirm", supported: true, backend: "browser", onstart: vi.fn(), onclose: vi.fn(), onplan });
+    expect(screen.getByRole("radio", { name: "Full session" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("list", { name: "Expected size and length" }).textContent).toContain("Stops by itself after");
+    await fireEvent.click(screen.getByRole("radio", { name: "Share a clip" }));
+    expect(onplan).toHaveBeenCalledWith(expect.objectContaining({ preset: "clip", formats: ["gif"] }));
+    await fireEvent.click(screen.getByRole("radio", { name: "Both" }));
+    expect(onplan).toHaveBeenLastCalledWith(expect.objectContaining({ preset: "custom", formats: ["mp4", "gif"] }));
+  });
+
+  it("says why a recording stopped by itself and what to do next", () => {
+    render(ScreenRecordDialog, { phase: "ready", result: result(), stoppedBy: "duration", onstart: vi.fn(), onclose: vi.fn() });
+    expect(screen.getByText("Stopped automatically")).toBeTruthy();
+  });
+
+  it("keeps a large desktop recording on disk and offers its folder after saving", async () => {
+    save.mockResolvedValue({ saved: true, path: "/Users/me/Movies/holdmap-long.mp4" });
+    const long = { ...result(), gif: null, mp4: { blob: new Blob([]), bytes: 900_000_000, filename: "holdmap-long.mp4", native: { sessionId: "s", format: "mp4" as const } } };
+    Object.assign(window, { __TAURI_INTERNALS__: {} });
+    try {
+      render(ScreenRecordDialog, { phase: "ready", result: long, onstart: vi.fn(), onclose: vi.fn() });
+      expect(screen.getByText(/stays on disk/)).toBeTruthy();
+      expect(document.querySelector("video")).toBeNull();
+      await fireEvent.click(screen.getByRole("button", { name: "Download MP4" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "Show in folder" })).toBeTruthy());
+    } finally { delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__; }
   });
 });

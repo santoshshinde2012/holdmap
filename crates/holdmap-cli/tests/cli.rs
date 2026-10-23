@@ -82,6 +82,20 @@ fn explain_free_port_succeeds() {
 }
 
 #[test]
+fn a_lone_port_number_explains_that_port() {
+    let port = free_port();
+    // Not `hm()`: it puts `--no-docker` first, and the shorthand is exactly `holdmap <port>`.
+    Command::cargo_bin("holdmap")
+        .unwrap()
+        .env("HOLDMAP_COLOR", "never")
+        .env("HOLDMAP_HOME", home().path())
+        .arg(port.to_string())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!("Port {port} is free")));
+}
+
+#[test]
 fn explain_busy_port_names_the_owner() {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = l.local_addr().unwrap().port();
@@ -120,17 +134,29 @@ fn stop_dry_run_on_free_port_reports_nothing_to_do() {
 
 #[test]
 fn free_port_returns_bindable_ports() {
-    let out = hm()
-        .args(["free-port", "--count", "3", "--json"])
-        .output()
-        .unwrap();
-    assert!(out.status.success());
-    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    let ports = v["ports"].as_array().unwrap();
-    assert_eq!(ports.len(), 3);
-    for p in ports {
-        TcpListener::bind(("127.0.0.1", p.as_u64().unwrap() as u16)).expect("port is free");
+    // The CLI answers "free right now". An unrelated process (a parallel test, an outbound
+    // connection) can take one of the ports between that answer and our bind, so the check is
+    // allowed three fresh answers; a CLI that returns busy ports fails all three.
+    let mut last = String::new();
+    for _ in 0..3 {
+        let out = hm()
+            .args(["free-port", "--count", "3", "--json"])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        let ports = v["ports"].as_array().unwrap();
+        assert_eq!(ports.len(), 3);
+        let held: Result<Vec<_>, _> = ports
+            .iter()
+            .map(|p| TcpListener::bind(("127.0.0.1", p.as_u64().unwrap() as u16)))
+            .collect();
+        match held {
+            Ok(_) => return,
+            Err(e) => last = e.to_string(),
+        }
     }
+    panic!("free-port returned a busy port three times in a row: {last}");
 }
 
 #[test]

@@ -411,6 +411,20 @@ fn adopt_legacy_env(new: &str, old: &str) {
     }
 }
 
+/// `holdmap 3000` (or `holdmap :3000`) is what someone with a "port already in use" error types
+/// first, so a lone port number means `holdmap explain <port>` instead of a clap error.
+fn with_port_shorthand(args: Vec<std::ffi::OsString>) -> Vec<std::ffi::OsString> {
+    let port = match args.as_slice() {
+        [_, arg] => arg
+            .to_str()
+            .filter(|a| !a.starts_with('-'))
+            .and_then(|a| parse_port(a).ok()),
+        _ => None,
+    };
+    let Some(port) = port else { return args };
+    vec![args[0].clone(), "explain".into(), port.to_string().into()]
+}
+
 fn main() -> ExitCode {
     adopt_legacy_env("HOLDMAP_HOME", "PORTWISE_HOME");
     adopt_legacy_env("HOLDMAP_COLOR", "PORTWISE_COLOR");
@@ -423,7 +437,7 @@ fn main() -> ExitCode {
     unsafe {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
-    let cli = Cli::parse();
+    let cli = Cli::parse_from(with_port_shorthand(std::env::args_os().collect()));
     style::init(cli.color);
     let docker = !cli.no_docker;
     let result = match cli.command {
@@ -542,5 +556,32 @@ mod tests {
         assert_eq!(parse_port(":3000"), Ok(3000));
         assert!(parse_port("0").is_err());
         assert!(parse_port("99999").is_err());
+    }
+
+    #[test]
+    fn a_lone_port_number_means_explain() {
+        let args = |list: &[&str]| {
+            list.iter()
+                .map(std::ffi::OsString::from)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            with_port_shorthand(args(&["holdmap", "3000"])),
+            args(&["holdmap", "explain", "3000"])
+        );
+        assert_eq!(
+            with_port_shorthand(args(&["holdmap", ":8080"])),
+            args(&["holdmap", "explain", "8080"])
+        );
+        for untouched in [
+            &["holdmap"][..],
+            &["holdmap", "list"],
+            &["holdmap", "0"],
+            &["holdmap", "99999"],
+            &["holdmap", "3000", "--json"],
+            &["holdmap", "-3000"],
+        ] {
+            assert_eq!(with_port_shorthand(args(untouched)), args(untouched));
+        }
     }
 }

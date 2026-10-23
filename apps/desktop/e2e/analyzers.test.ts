@@ -1,4 +1,4 @@
-import { agentCard, agentHeading, expect, openAgents, test } from "./fixtures";
+import { agentDetails, agentCard, agentHeading, expect, openAgents, test } from "./fixtures";
 
 test("an analyzer turns on only after its permissions sheet, and runs on demand", async ({ app }) => {
   await app.getByRole("button", { name: "Settings", exact: true }).click();
@@ -34,7 +34,7 @@ test("findings reach Needs you, the agent card and the Insights tab, and can be 
 
   await openAgents(app);
   await agentHeading(app, "Claude Code").click();
-  const card = agentCard(app, "Claude Code");
+  const card = agentDetails(app);
   await expect(card.getByRole("heading", { name: "Security", exact: true })).toBeVisible();
   await expect(card).toContainText("Open findings: 1 high, 1 medium");
   await card.getByRole("button", { name: "Open Security", exact: true }).click();

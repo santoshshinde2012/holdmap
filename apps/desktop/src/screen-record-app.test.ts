@@ -270,7 +270,7 @@ describe("screen recording lifecycle", () => {
     await vi.advanceTimersByTimeAsync(20);
     expect(save).toHaveBeenCalledTimes(2);
     expect(save.mock.calls[1][0].blob).toBe(captured.gif!.blob);
-    expect(view.getByRole("status").textContent).toContain("Saved to /tmp/holdmap-test.gif");
+    expect(view.getByRole("status").textContent).toMatch(/GIF saved.*\/tmp\/holdmap-test\.gif/);
     expect(encoder.start).toHaveBeenCalledOnce();
     expect(capture).toHaveBeenCalledOnce();
   });
