@@ -8,8 +8,43 @@ import ImageIO
 import UniformTypeIdentifiers
 import Darwin
 
+/// Defaults when Rust sends no options: the original two minutes and 128 MiB bounds.
 private let durationLimit = 120.0
 private let byteLimit: Int64 = 128 * 1024 * 1024
+/// Absolute ceilings; Rust clamps every request to them and the recorder re-checks.
+private let hardDurationLimit = 3600.0
+private let mp4ByteLimit: Int64 = 2 * 1024 * 1024 * 1024
+private let gifByteCeiling: Int64 = 128 * 1024 * 1024
+/// ImageIO keeps every GIF frame in memory until it finalizes, so frames are bounded by pixels.
+private let gifMemoryBudget = 256 * 1024 * 1024
+
+/// What the user chose before the picker opened (already clamped by Rust, clamped again here).
+private struct RecordingOptions {
+    var durationLimit = 120.0
+    var mp4 = true
+    var gif = true
+    var bitrate = 5_000_000
+    var gifFPS = 8
+    var gifEdge = 640
+    var gifBytes: Int64 = 25 * 1024 * 1024
+    init() {}
+    init?(_ raw: Any?) {
+        guard let raw else { return }
+        guard let values = raw as? [String: Any] else { return nil }
+        func number(_ key: String, _ low: Double, _ high: Double, _ fallback: Double) -> Double {
+            guard let value = (values[key] as? NSNumber)?.doubleValue, value.isFinite else { return fallback }
+            return min(high, max(low, value))
+        }
+        durationLimit = number("max_duration_ms", 1_000, hardDurationLimit * 1000, durationLimit * 1000) / 1000
+        mp4 = (values["mp4"] as? Bool) ?? true
+        gif = (values["gif"] as? Bool) ?? true
+        guard mp4 || gif else { return nil }
+        bitrate = Int(number("mp4_bitrate", 500_000, 8_000_000, Double(bitrate)))
+        gifFPS = Int(number("gif_fps", 1, 15, Double(gifFPS)))
+        gifEdge = Int(number("gif_max_edge", 160, 960, Double(gifEdge)))
+        gifBytes = Int64(number("gif_max_bytes", 1024 * 1024, Double(gifByteCeiling), Double(gifBytes)))
+    }
+}
 private let captureQueue = DispatchQueue(label: "holdmap.capture.samples")
 private let exportQueue = DispatchQueue(label: "holdmap.capture.export", qos: .userInitiated)
 private let snapshotQueue = DispatchQueue(label: "holdmap.capture.snapshot", qos: .userInitiated)
@@ -60,8 +95,8 @@ public func command(_ raw: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>
         if #available(macOS 14.0, *) { available = true }
         // Availability only: no enumeration, permission preflight, picker or IO.
         return strdup(json(["available": available, "minimum_macos": "14.0",
-            "formats": ["mp4", "gif"], "max_duration_ms": 120000,
-            "max_bytes": byteLimit, "max_width": 1920, "max_height": 1080, "audio": false]))
+            "formats": ["mp4", "gif"], "max_duration_ms": Int(hardDurationLimit * 1000),
+            "max_bytes": mp4ByteLimit, "max_width": 1920, "max_height": 1080, "audio": false]))
     }
     guard #available(macOS 14.0, *) else { return strdup(json(["phase": "error", "error": "unsupported_os"])) }
     guard let id = request["session_id"] as? String, validID(id) else {
@@ -80,7 +115,10 @@ public func command(_ raw: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>
         guard let root = privateDirectory(request) else {
             return strdup(json(["phase": "error", "error": "invalid_directory"]))
         }
-        let next = CaptureSession(id: id, root: root)
+        guard let options = RecordingOptions(request["options"]) else {
+            return strdup(json(["phase": "error", "error": "invalid_options"]))
+        }
+        let next = CaptureSession(id: id, root: root, options: options)
         session = next
         next.choose()
         return strdup(json(next.snapshot()))
@@ -104,6 +142,7 @@ public func freeJSON(_ value: UnsafeMutablePointer<CChar>?) { free(value) }
 private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SCStreamDelegate {
     let id: String
     let root: URL
+    let options: RecordingOptions
     var phase = "choosing"
     var error: String?
     var width = 0, height = 0
@@ -127,10 +166,10 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
     var exportPending = false
     var cleanupPending = false
 
-    init(id: String, root: URL) { self.id = id; self.root = root }
+    init(id: String, root: URL, options: RecordingOptions = RecordingOptions()) { self.id = id; self.root = root; self.options = options }
     func snapshot() -> [String: Any] {
         var result: [String: Any] = ["session_id": id, "phase": phase,
-            "elapsed_ms": Int(min(durationLimit, startedAt.map { ProcessInfo.processInfo.systemUptime - $0 } ?? elapsed) * 1000),
+            "elapsed_ms": Int(min(options.durationLimit, startedAt.map { ProcessInfo.processInfo.systemUptime - $0 } ?? elapsed) * 1000),
             "width": width, "height": height, "mp4_bytes": mp4Bytes, "gif_bytes": gifBytes, "warnings": warnings]
         if let error { result["error"] = error }
         return result
@@ -195,7 +234,8 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
             let ratio = min(1, min(1920 / sourceWidth, 1080 / sourceHeight))
             width = max(2, Int(sourceWidth * ratio) / 2 * 2)
             height = max(2, Int(sourceHeight * ratio) / 2 * 2)
-            let writerSink = try WriterSink(url: root.appendingPathComponent("capture.mp4"), width: width, height: height)
+            let writerSink = try WriterSink(url: root.appendingPathComponent("capture.mp4"), width: width, height: height,
+                bitrate: options.bitrate, durationLimit: options.durationLimit)
             sink = writerSink
             let config = SCStreamConfiguration()
             config.width = width; config.height = height
@@ -241,7 +281,7 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
         clock.setEventHandler { [weak self] in
             guard let self, self.phase == "capturing" || self.startPending else { return }
             let elapsed = self.startedAt.map { ProcessInfo.processInfo.systemUptime - $0 } ?? 0
-            if elapsed >= durationLimit || self.sink.map({ fileSize($0.url) >= byteLimit - 1024 * 1024 }) == true {
+            if elapsed >= self.options.durationLimit || self.sink.map({ fileSize($0.url) >= mp4ByteLimit - 1024 * 1024 }) == true {
                 self.stop()
             } else if self.sink?.hasFailed == true { self.fail("mp4_failed") }
         }
@@ -267,7 +307,7 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
     }
     func requestStreamStop() {
         guard !streamStopPending else { return }
-        elapsed = min(durationLimit, startedAt.map { ProcessInfo.processInfo.systemUptime - $0 } ?? elapsed)
+        elapsed = min(options.durationLimit, startedAt.map { ProcessInfo.processInfo.systemUptime - $0 } ?? elapsed)
         startedAt = nil
         phase = "finalizing"
         timer?.cancel(); timer = nil
@@ -308,10 +348,11 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
                 self.writerPending = false
                 if self.discardRequested || self.error != nil { self.cleanup(); return }
                 let size = fileSize(sink.url)
-                guard ok, size > 0, size <= byteLimit else { self.fail("mp4_failed"); return }
-                self.mp4Bytes = size
+                guard ok, size > 0, size <= mp4ByteLimit else { self.fail("mp4_failed"); return }
                 try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: sink.url.path)
-                self.makeGIF(sink.url)
+                if self.options.mp4 { self.mp4Bytes = size }
+                // An MP4-only recording is finished; a GIF-only one keeps the MP4 just long enough to convert it.
+                if self.options.gif { self.makeGIF(sink.url) } else { self.phase = "ready" }
             }
         }
     }
@@ -319,8 +360,9 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
         let gif = root.appendingPathComponent("capture.gif")
         let token = cancellation
         exportPending = true
+        let options = self.options
         exportQueue.async { [weak self] in
-            let ok = autoreleasepool { Self.encodeGIF(mp4: mp4, gif: gif, cancellation: token) }
+            let ok = autoreleasepool { Self.encodeGIF(mp4: mp4, gif: gif, cancellation: token, options: options) }
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.exportPending = false
@@ -332,30 +374,57 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
                     self.warnings.append("gif_failed")
                     try? FileManager.default.removeItem(at: gif)
                 }
+                if !self.options.mp4 {
+                    try? FileManager.default.removeItem(at: mp4)
+                    // A GIF-only recording with no GIF has nothing to offer.
+                    if self.gifBytes == 0 { self.fail("gif_failed"); return }
+                }
                 self.phase = "ready"
             }
         }
     }
-    static func encodeGIF(mp4: URL, gif: URL, cancellation: Cancellation) -> Bool {
+    /// Down-samples the MP4 into a GIF within the user's size budget. A GIF that comes out too large is
+    /// redone with half the frames at a smaller size rather than failing the recording.
+    static func encodeGIF(mp4: URL, gif: URL, cancellation: Cancellation, options: RecordingOptions = RecordingOptions()) -> Bool {
+        var frameShare = 1.0, edge = Double(options.gifEdge)
+        for _ in 0..<3 {
+            if cancellation.isCancelled { return false }
+            let outcome = autoreleasepool {
+                encodeGIFOnce(mp4: mp4, gif: gif, cancellation: cancellation, options: options, frameShare: frameShare, edge: Int(edge))
+            }
+            if outcome == .done { return true }
+            try? FileManager.default.removeItem(at: gif)
+            // Only a size overrun is worth retrying; a failed frame or a cancel is final.
+            guard outcome == .tooLarge else { return false }
+            frameShare /= 2; edge = max(160, edge * 0.8)
+        }
+        return false
+    }
+    private enum GIFOutcome { case done, tooLarge, failed }
+    private static func encodeGIFOnce(mp4: URL, gif: URL, cancellation: Cancellation, options: RecordingOptions, frameShare: Double, edge: Int) -> GIFOutcome {
         let asset = AVURLAsset(url: mp4)
-        let duration = min(durationLimit, CMTimeGetSeconds(asset.duration))
-        guard duration.isFinite, duration > 0, !cancellation.isCancelled else { return false }
-        let frames = max(1, min(240, Int(ceil(duration * 8))))
+        let duration = min(options.durationLimit, CMTimeGetSeconds(asset.duration))
+        guard duration.isFinite, duration > 0, !cancellation.isCancelled else { return .failed }
+        // Every frame stays in memory until the GIF is finalized, so cap by pixels as well as by rate.
+        let frameBytes = max(1, Double(edge * edge) * 0.65 * 4)
+        let memoryFrames = max(1, min(300, Int(Double(gifMemoryBudget) / frameBytes)))
+        let wanted = Int(ceil(duration * Double(options.gifFPS) * frameShare))
+        let frames = max(1, min(memoryFrames, wanted))
         // GIF delays use centiseconds. Distribute rounding across frames rather
         // than adding a rounding error for every frame of a long recording.
         let totalDelay = max(frames * 2, Int((duration * 100).rounded()))
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 640, height: 640)
+        generator.maximumSize = CGSize(width: edge, height: edge)
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .zero
-        guard let destination = CGImageDestinationCreateWithURL(gif as CFURL, UTType.gif.identifier as CFString, frames, nil) else { return false }
+        guard let destination = CGImageDestinationCreateWithURL(gif as CFURL, UTType.gif.identifier as CFString, frames, nil) else { return .failed }
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: gif.path)
         CGImageDestinationSetProperties(destination, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
         let began = ProcessInfo.processInfo.systemUptime
         for index in 0..<frames {
             if cancellation.isCancelled || ProcessInfo.processInfo.systemUptime - began > 180 {
-                generator.cancelAllCGImageGeneration(); return false
+                generator.cancelAllCGImageGeneration(); return .failed
             }
             let ok = autoreleasepool { () -> Bool in
                 let seconds = min(max(0, duration - 1.0 / 30.0), Double(index) * duration / Double(max(1, frames - 1)))
@@ -367,11 +436,13 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
                     [kCGImagePropertyGIFDelayTime: delay, kCGImagePropertyGIFUnclampedDelayTime: delay]] as CFDictionary)
                 return true
             }
-            if !ok || fileSize(gif) > byteLimit { return false }
+            if !ok { return .failed }
         }
-        guard !cancellation.isCancelled, CGImageDestinationFinalize(destination) else { return false }
+        guard !cancellation.isCancelled, CGImageDestinationFinalize(destination) else { return .failed }
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: gif.path)
-        return fileSize(gif) > 0 && fileSize(gif) <= byteLimit
+        let size = fileSize(gif)
+        if size > options.gifBytes { return .tooLarge }
+        return size > 0 ? .done : .failed
     }
     func fail(_ reason: String) {
         guard !isDisposed else { return }
@@ -448,6 +519,7 @@ private func snapshotCommand(_ op: String, request: [String: Any], id: String) -
 private final class SnapshotCapture: NSObject, SCContentSharingPickerObserver {
     let id: String
     let root: URL
+    let options: RecordingOptions
     var phase = "choosing"
     var error: String?
     var width = 0, height = 0
@@ -461,7 +533,7 @@ private final class SnapshotCapture: NSObject, SCContentSharingPickerObserver {
     let cancellation = Cancellation()
     var ownsSelection: Bool { pickerRegistered || capturePending }
 
-    init(id: String, root: URL) { self.id = id; self.root = root }
+    init(id: String, root: URL, options: RecordingOptions = RecordingOptions()) { self.id = id; self.root = root; self.options = options }
     func status() -> [String: Any] {
         var result: [String: Any] = ["session_id": id, "phase": phase, "width": width,
             "height": height, "png_bytes": pngBytes]
@@ -625,12 +697,14 @@ private final class WriterSink: NSObject, SCStreamOutput {
     private var failed = false
     var hasFailed: Bool { failureLock.lock(); defer { failureLock.unlock() }; return failed }
     private func recordFailure() { failureLock.lock(); failed = true; failureLock.unlock() }
-    init(url: URL, width: Int, height: Int) throws {
+    let limit: Double
+    init(url: URL, width: Int, height: Int, bitrate: Int = 5_000_000, durationLimit limit: Double = durationLimit) throws {
         self.url = url
+        self.limit = limit
         writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         let settings: [String: Any] = [AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: width, AVVideoHeightKey: height,
-            AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 5_000_000,
+            AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate,
                 AVVideoMaxKeyFrameIntervalKey: 60, AVVideoExpectedSourceFrameRateKey: 30]]
         input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
         input.expectsMediaDataInRealTime = true
@@ -656,7 +730,7 @@ private final class WriterSink: NSObject, SCStreamOutput {
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
             writer.startSession(atSourceTime: pts); firstPTS = pts
         }
-        guard let firstPTS, CMTimeGetSeconds(pts - firstPTS) < durationLimit, writer.status == .writing else { return }
+        guard let firstPTS, CMTimeGetSeconds(pts - firstPTS) < limit, writer.status == .writing else { return }
         // Retain at most the latest pending frame. In particular, a first frame
         // cannot disappear just because the hardware encoder was not ready yet:
         // an unchanged desktop may provide no further complete frames.
@@ -709,7 +783,7 @@ private final class WriterSink: NSObject, SCStreamOutput {
         guard writer.status == .writing, let firstPTS, lastSample != nil, !hasFailed else {
             writer.cancelWriting(); done(false); return
         }
-        let end = firstPTS + CMTime(seconds: min(durationLimit, max(1.0 / 30.0, duration)), preferredTimescale: 600)
+        let end = firstPTS + CMTime(seconds: min(limit, max(1.0 / 30.0, duration)), preferredTimescale: 600)
         // Extend static screen content to the user's stop time rather than
         // truncating the MP4 at the last changed desktop frame.
         if let lastSample, let lastPTS, input.isReadyForMoreMediaData {
