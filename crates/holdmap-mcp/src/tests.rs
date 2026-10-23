@@ -54,6 +54,33 @@ fn lists_tools_with_annotations() {
     let stop = tools.iter().find(|t| t["name"] == "stop_port").unwrap();
     assert_eq!(stop["annotations"]["destructiveHint"], true);
     assert_eq!(stop["annotations"]["idempotentHint"], false);
+    // Directories such as OpenAI's reject a tool unless all four hints are explicit booleans.
+    for tool in tools {
+        for hint in [
+            "readOnlyHint",
+            "destructiveHint",
+            "idempotentHint",
+            "openWorldHint",
+        ] {
+            assert!(
+                tool["annotations"][hint].is_boolean(),
+                "{} lacks {hint}",
+                tool["name"]
+            );
+        }
+        let read_only = tool["annotations"]["readOnlyHint"] == true;
+        assert_eq!(
+            tool["annotations"]["destructiveHint"] == false,
+            read_only,
+            "{}",
+            tool["name"]
+        );
+        assert_eq!(
+            tool["annotations"]["openWorldHint"], false,
+            "{}",
+            tool["name"]
+        );
+    }
 }
 
 #[test]
