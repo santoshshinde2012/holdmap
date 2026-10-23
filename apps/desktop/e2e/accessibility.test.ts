@@ -54,6 +54,17 @@ test("Needs you actions meet the 24px target size and explain Open", async ({ ap
   await expect(app.getByRole("tooltip", { name: "Open details" })).toBeVisible();
 });
 
+test("Home summary tiles are named by their visible text, so voice control can say it", async ({ app }) => {
+  await app.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: "Home", exact: true }).click();
+  const tiles = app.locator("button.tile");
+  await expect(tiles.first()).toBeVisible();
+  for (const tile of await tiles.all()) {
+    const visible = (await tile.innerText()).replace(/\s+/g, " ").trim().toLowerCase();
+    const name = ((await tile.getAttribute("aria-label")) ?? visible).toLowerCase();
+    expect(name, "WCAG 2.5.3: the accessible name contains the visible text").toContain(visible);
+  }
+});
+
 test("the timeline names each lane with a row header", async ({ app }) => {
   await app.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: "Home", exact: true }).click();
   await app.getByRole("radiogroup", { name: "Home layout", exact: true }).getByRole("radio", { name: "Map", exact: true }).click();
