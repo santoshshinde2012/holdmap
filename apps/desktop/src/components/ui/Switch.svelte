@@ -68,6 +68,8 @@
   .disabled label { cursor: default; color: var(--muted); }
   .sw { --w: 34px; --h: 20px; position: relative; flex: none; width: var(--w); height: var(--h); border-radius: 999px; border: 0; padding: 0; background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border-strong); cursor: pointer; transition: background var(--dur-2) var(--ease), box-shadow var(--dur-2); }
   .sw.sm { --w: 28px; --h: 16px; }
+  /* The track stays slim; an invisible margin brings the hit area to the 24px minimum. */
+  .sw::after { content: ""; position: absolute; inset: -4px 0; }
   .sw:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--input-border-hover); }
   .sw.on { background: var(--accent); box-shadow: none; }
   .sw:disabled { opacity: 0.5; cursor: not-allowed; }

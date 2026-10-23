@@ -17,7 +17,7 @@
   import AgentFlowView from "./agents/flow/AgentFlowView.svelte";
   import FolderActions from "./FolderActions.svelte";
   import type { AgentFlowProps } from "../lib/agent-flow/model";
-  import { FIT_PADDING } from "../lib/flow";
+  import { FIT_MIN_ZOOM, FIT_PADDING } from "../lib/flow";
   import { counts as agentCounts, agentColor, filterAgents, layoutPicture, pictureGraph, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Picture, type Positions } from "../lib/agents";
   import type { AgentsReport, PortEntry } from "../lib/types";
   import { prefGet, prefGetBoolean, prefSet } from "../lib/prefs";
@@ -215,6 +215,12 @@
     picked = picked === n.id ? null : n.id;
   }
   /** The selected agent's full details, next to the map (any picture). */
+  /** The picked agent and everything it touches: what to keep readable when a docked panel leaves the map little room. */
+  const near = $derived.by(() => {
+    const id = selectedAgent;
+    if (!id || !graph) return [];
+    return [...new Set([id, ...graph.edges.filter((e) => e.from === id || e.to === id).flatMap((e) => [e.from, e.to])])];
+  });
   const selectedInfo = $derived(report?.agents.find((a) => a.id === selectedAgent) ?? null);
   let detailsView = $state<{ focusHeading: () => void } | undefined>();
   let detailsOpener: HTMLElement | null = null;
@@ -324,7 +330,7 @@
       {#if report.limits.length}
         <details class="limits" open>
           <summary><Icon name="info" size={12} />What this can and can't see</summary>
-          <ul>{#each report.limits as l}<li>{l}</li>{/each}</ul>
+          <ul tabindex="0" aria-label="What this can and can't see">{#each report.limits as l}<li>{l}</li>{/each}</ul>
         </details>
       {/if}
     </div>
@@ -346,7 +352,7 @@
       </div>
       <details class="limits">
         <summary><Icon name="info" size={12} />What this can and can't see</summary>
-        <ul>{#each report.limits as l}<li>{l}</li>{/each}</ul>
+        <ul tabindex="0" aria-label="What this can and can't see">{#each report.limits as l}<li>{l}</li>{/each}</ul>
       </details>
     </aside>
     {/if}
@@ -399,7 +405,7 @@
         {edgeTypes}
         colorMode={dark ? "dark" : "light"}
         fitView
-        fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.1 }}
+        fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.1, minZoom: FIT_MIN_ZOOM }}
         minZoom={0.2}
         maxZoom={2}
         nodesDraggable={false}
@@ -412,9 +418,9 @@
         onpaneclick={() => { picked = null; if (selectedAgent) onselectagent(null); }}
       >
         <RevealNode id={selectedInfo && graph?.nodes.some((n) => n.id === selectedInfo.id) ? selectedInfo.id : null} {reduced} obstacle={() => document.getElementById("agent-details")} />
-        <FitOnChange token={sig} focus={null} {reduced} open={!!selectedInfo} obstacle={() => document.getElementById("agent-details")} />
+        <FitOnChange token={sig} focus={null} {reduced} open={!!selectedInfo} {near} obstacle={() => document.getElementById("agent-details")} />
         <Background gap={22} size={1.2} />
-        <Controls showLock={false} position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.1, duration: reduced ? 0 : 320 }} />
+        <Controls showLock={false} position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.1, minZoom: FIT_MIN_ZOOM, duration: reduced ? 0 : 320 }} />
         <AutoMiniMap {dark} />
       </SvelteFlow>
       {/if}
@@ -459,7 +465,7 @@
   .hint { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .cards { flex: 1; min-height: 0; overflow: auto; padding: 4px 12px 12px; display: grid; grid-auto-rows: max-content; align-content: start; gap: 8px; }
   .limits { border-top: 1px solid var(--border); padding: 8px 14px 10px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
-  .limits summary { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text-2); }
+  .limits summary { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; cursor: pointer; color: var(--text-2); }
   .limits ul { margin: 6px 0 0; padding-left: 16px; display: grid; gap: 3px; max-height: 160px; overflow: auto; }
   .map { position: relative; min-width: 0; min-height: 0; }
   .chrome-host { position: absolute; top: 10px; left: 10px; z-index: 5; pointer-events: none; }

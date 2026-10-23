@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { activityMatches, activityName, activityRuns, activityStatus, callGraph, duration, graphSignature, graphWindow, isIncomplete, missingParent, observedGraph, payloadSize, spanNodeId } from "./build";
-import { layoutGraph, toFlow } from "./layout";
+import { LABEL_EDGE_LIMIT, layoutGraph, toFlow } from "./layout";
 import type { ActivitySpan, AgentFlowNode, AgentFlowReport } from "./model";
 
 const span = (values: Partial<ActivitySpan> = {}): ActivitySpan => ({ id: "root", trace_id: "trace-a", parent_id: null,
@@ -23,6 +23,14 @@ describe("observed agent connections", () => {
     expect(g.edges.find((e) => e.id === "socket")).toMatchObject({ label: "2 live sockets", observed: { source_pids: [124] } });
     expect(g.edges.map((e) => e.label).join(" ")).not.toMatch(/message|invocation|bytes|traffic/i);
     expect(toFlow(g, layoutGraph(g, false), null).edges.every((e) => e.markerEnd == null && e.animated !== true)).toBe(true);
+  });
+  it("labels every edge on a small graph, but only the picked card's edges on a busy one", () => {
+    const small = observedGraph(report());
+    expect(toFlow(small, layoutGraph(small, false), null).edges.every((e) => e.data?.labelled)).toBe(true);
+    const busy = { ...small, edges: Array.from({ length: LABEL_EDGE_LIMIT + 1 }, (_, i) => ({ ...small.edges[i % small.edges.length], id: `e${i}` })) };
+    expect(toFlow(busy, layoutGraph(busy, false), null).edges.some((e) => e.data?.labelled)).toBe(false);
+    const picked = toFlow(busy, layoutGraph(busy, false), "e2").edges.filter((e) => e.data?.labelled).map((e) => e.id);
+    expect(picked).toEqual(["e2"]);
   });
   it("searches process identity and retains only adjacent relationship context", () => {
     const g = observedGraph(report(), "124");

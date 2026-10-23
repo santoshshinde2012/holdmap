@@ -135,6 +135,6 @@
   input::placeholder { color: var(--faint); opacity: 1; }
   input:disabled { cursor: not-allowed; }
   input::-webkit-search-cancel-button, input::-webkit-search-decoration { display: none; -webkit-appearance: none; }
-  .clear { flex: none; width: 20px; height: 20px; display: grid; place-items: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); cursor: pointer; }
+  .clear { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); cursor: pointer; }
   .clear:hover { background: var(--surface-3); color: var(--text); }
 </style>

@@ -240,7 +240,7 @@ kbd {
 .action-pill.on { background: var(--accent); color: var(--accent-fg); border-color: transparent; box-shadow: none; }
 .action-pill.on:hover:not(:disabled) { background: var(--accent-hover); color: var(--accent-fg); border-color: transparent; }
 .action-pill.toggle.on { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: none; }
-.action-pill.toggle.on:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-soft) 70%, var(--accent)); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+.action-pill.toggle.on:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
 .action-pill:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 .action-pill:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .action-pill.compact { height: var(--h-xs); padding: 0 9px; font-size: var(--fs-caption); line-height: var(--lh-caption); gap: 5px; box-shadow: none; }

@@ -174,7 +174,7 @@
 <style>
   .content { display: grid; gap: var(--sp-4); }
   .policy { color: var(--text-2); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
-  .policy summary { cursor: pointer; color: var(--text-2); font-weight: var(--fw-medium); }
+  .policy summary { min-height: 24px; cursor: pointer; color: var(--text-2); font-weight: var(--fw-medium); }
   .policy p { margin: 8px 0 0; }
   .summary { display: flex; justify-content: space-between; gap: var(--sp-3); color: var(--text); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); }
   .summary span { color: var(--muted); font-weight: var(--fw-regular); }

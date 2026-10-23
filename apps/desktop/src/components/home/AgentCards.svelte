@@ -9,7 +9,7 @@
   import { cardModel } from "../../lib/agent-card";
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
-  let { report, entries, needs, colors, now, selected, active, onhover, onselect, onopen, onport, onstop, oninventory }: {
+  let { report, entries, needs, colors, now, selected, active, onhover, onselect, onopen, onport, onstop }: {
     report: AgentsReport;
     entries: PortEntry[] | null;
     needs: AttentionItem[];
@@ -23,7 +23,6 @@
     /** Opens the port's actions (Details, Stop…) anchored to the clicked element. */
     onport: (entryId: string, anchor: HTMLElement | SVGElement) => void;
     onstop?: (id: string) => void;
-    oninventory?: () => void;
   } = $props();
 
   const loose = $derived(unownedDevServers(entries, report));
@@ -42,7 +41,7 @@
 <section class="cards" aria-label="Agents" bind:this={root} {onkeydown}>
   {#each report.agents as a (a.id)}
     <HomeAgentCard agent={a} model={cardModel(a, entries)} needs={needs.filter((n) => attentionAgent(n, report) === a.id)} findings={agentCounts(insightsStore.insights, a.product)} color={colors.get(a.id) ?? "var(--accent)"}
-      {now} selected={selected === a.id} {active} {onhover} {onselect} {onopen} {onport} {onstop} {oninventory} />
+      {now} selected={selected === a.id} {active} {onhover} {onselect} {onopen} {onport} {onstop} />
   {/each}
   {#if loose.length}
     <article class="loose" aria-label="Unowned dev servers">

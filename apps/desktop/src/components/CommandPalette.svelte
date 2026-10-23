@@ -59,7 +59,7 @@
     {#if query}<button type="button" class="clear" aria-label="Clear" onclick={() => (query = "")}><Icon name="x" size={12} /></button>{/if}
     <Kbd keys="Esc" size="sm" />
   </div>
-  <div class="list" id="palette-list" role="listbox" aria-label="Commands" bind:this={listEl}>
+  <div class="list" id="palette-list" role={flat.length ? "listbox" : undefined} aria-label={flat.length ? "Commands" : undefined} bind:this={listEl}>
     {#if !flat.length}
       <div class="none"><b>No commands match “{query}”</b><span>Try a port number like <code>3000</code>, a project name or “stop”.</span></div>
     {/if}
@@ -95,7 +95,7 @@
   .search { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px 0 16px; border-bottom: 1px solid var(--border); color: var(--muted); flex: none; }
   .search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; font: inherit; font-size: var(--fs-heading); font-weight: var(--fw-regular); letter-spacing: var(--ls-heading); line-height: var(--lh-heading); color: var(--text); user-select: text; }
   .search input::placeholder { color: var(--faint); }
-  .clear { width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); cursor: pointer; }
+  .clear { width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); cursor: pointer; }
   .clear:hover { background: var(--surface-3); color: var(--text); }
   .list { overflow-y: auto; padding: 6px; flex: 1; min-height: 0; scroll-padding: 6px; }
   .gh { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-weight: var(--fw-medium); padding: 10px 10px 4px; }

@@ -182,7 +182,7 @@
   .participants button.chosen, .relationships button.chosen { border-color: var(--accent); background: var(--accent-soft); }
   .empty { flex: 1; min-height: 120px; padding: 25px 18px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 9px; text-align: center; color: var(--muted); }
   .empty h2 { margin: 0; color: var(--text); font-size: var(--fs-heading); } .empty p { max-width: 440px; margin: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body); }
-  .limits { border-top: 1px solid var(--border); padding: 8px 14px; font-size: var(--fs-caption); color: var(--muted); } .limits summary { display: flex; gap: 6px; align-items: center; color: var(--text-2); cursor: pointer; } .limits ul { margin: 8px 0; padding-left: 18px; max-height: 110px; overflow: auto; }
+  .limits { border-top: 1px solid var(--border); padding: 8px 14px; font-size: var(--fs-caption); color: var(--muted); } .limits summary { display: flex; gap: 6px; align-items: center; min-height: 24px; color: var(--text-2); cursor: pointer; } .limits ul { margin: 8px 0; padding-left: 18px; max-height: 110px; overflow: auto; }
   @container (max-width: 940px) {
     .workspace:not(.full) { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 42%) minmax(0, 1fr); overflow: hidden; }
     .companion { overflow: auto; border-left: 0; border-top: 1px solid var(--border); }

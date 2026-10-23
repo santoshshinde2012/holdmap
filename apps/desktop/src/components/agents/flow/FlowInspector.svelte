@@ -50,7 +50,7 @@
   .inspector { position: sticky; top: 12px; z-index: 2; margin: 12px; padding: 12px; border: 1px solid var(--border-strong); border-radius: 11px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
   header { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
   h3 { margin: 0; font-size: var(--fs-body); overflow-wrap: anywhere; }
-  button { display: inline-flex; color: var(--muted); border: 0; background: transparent; cursor: pointer; line-height: 1; padding: 2px; }
+  button { display: inline-grid; place-items: center; min-width: 24px; min-height: 24px; color: var(--muted); border: 0; background: transparent; cursor: pointer; line-height: 1; padding: 2px; }
   button:focus-visible { outline: 2px solid var(--ring); }
   dl { display: grid; grid-template-columns: minmax(90px, auto) minmax(0, 1fr); gap: 5px 12px; font-size: var(--fs-caption); margin: 12px 0; }
   dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }

@@ -11,7 +11,7 @@
   import type { Agent } from "../../lib/types";
   import { countsText, total, worst, type SeverityCounts } from "../../lib/analyzers";
 
-  let { agent, model, needs, findings = null, color, now, selected, active, onhover, onselect, onopen, onport, onstop, oninventory }: {
+  let { agent, model, needs, findings = null, color, now, selected, active, onhover, onselect, onopen, onport, onstop }: {
     agent: Agent;
     model: CardModel;
     /** Attention items about this agent. */
@@ -30,7 +30,6 @@
     onport: (entryId: string, anchor: HTMLElement | SVGElement) => void;
     /** Opens the stop plan for review. */
     onstop?: (id: string) => void;
-    oninventory?: () => void;
   } = $props();
 
   const head = $derived(accessHeadline(agent));
@@ -43,7 +42,7 @@
   function headKey(e: KeyboardEvent) { if (e.key === "Enter" && selected) { e.preventDefault(); onopen(agent.id); } }
 </script>
 
-{#snippet unknown()}<span class="unk" title={model.unknownReason ?? "Not read yet: use Read config to read this agent's MCP servers and skills."}>Not read</span>{/snippet}
+{#snippet unknown()}<span class="unk" title={model.unknownReason ?? "Not read yet: use Read MCP config at the top of Home to read MCP servers and skills."}>Not read</span>{/snippet}
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <article class="card" style="--agent: {color}" aria-label={agent.name} class:selected class:active={active === agent.id} class:dim={active !== null && active !== agent.id}
@@ -79,10 +78,14 @@
     <dl class="ctrs">
       <div><dt><Icon name="folder" size={12} />Projects</dt><dd>{model.projects.length}</dd></div>
       <div class:warn={exposed > 0}><dt><Icon name="plug" size={12} />Ports</dt><dd>{model.ports.length}{#if exposed}<small>{`${exposed} exposed`}</small>{/if}</dd></div>
-      <div title={model.unknownReason ?? undefined}><dt><Icon name="server" size={12} />MCP</dt>
-        <dd>{#if model.mcp}<span class="of" title="{model.mcp.running} of {model.mcp.total} running"><span aria-hidden="true">{model.mcp.running}<small>{`/${model.mcp.total}`}</small></span><span class="sr-only">{`${model.mcp.running} of ${model.mcp.total} running`}</span></span>{:else}{@render unknown()}{/if}</dd></div>
-      <div title={model.unknownReason ?? undefined}><dt><Icon name="sparkles" size={12} />Skills</dt>
-        <dd>{#if model.skills !== null}{model.skills}{:else}{@render unknown()}{/if}</dd></div>
+      {#if model.mcp === null && model.skills === null}
+        <div class="wide" title={model.unknownReason ?? undefined}><dt><Icon name="server" size={12} />MCP &amp; skills</dt><dd>{@render unknown()}</dd></div>
+      {:else}
+        <div title={model.unknownReason ?? undefined}><dt><Icon name="server" size={12} />MCP</dt>
+          <dd>{#if model.mcp}<span class="of" title="{model.mcp.running} of {model.mcp.total} running"><span aria-hidden="true">{model.mcp.running}<small>{`/${model.mcp.total}`}</small></span><span class="sr-only">{`${model.mcp.running} of ${model.mcp.total} running`}</span></span>{:else}{@render unknown()}{/if}</dd></div>
+        <div title={model.unknownReason ?? undefined}><dt><Icon name="sparkles" size={12} />Skills</dt>
+          <dd>{#if model.skills !== null}{model.skills}{:else}{@render unknown()}{/if}</dd></div>
+      {/if}
     </dl>
   </div>
 
@@ -100,7 +103,6 @@
   <footer>
     <button type="button" class="btn" onclick={() => onopen(agent.id)} aria-label="Open {agent.name}">Open<Icon name="chevron" size={12} /></button>
     {#if model.stoppable && onstop}<button type="button" class="btn ghost" onclick={() => onstop(agent.id)} aria-label="Review stop plan: {agent.name}"><Icon name="stop" size={11} />Stop…</button>{/if}
-    {#if model.configOff && oninventory}<button type="button" class="btn ghost accent" onclick={oninventory}><Icon name="plug" size={11} />Read config</button>{/if}
   </footer>
 </article>
 
@@ -109,11 +111,11 @@
   .card::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; border-radius: var(--r-lg) var(--r-lg) 0 0; background: linear-gradient(90deg, var(--agent), transparent 70%); opacity: 0.55; }
   .card.active { border-color: color-mix(in srgb, var(--agent) 45%, var(--border)); }
   .card.selected { border-color: var(--agent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent) 18%, transparent); }
-  .card.dim { opacity: 0.45; }
+  .card.dim { opacity: 0.9; }
   @media (prefers-reduced-motion: reduce) { .card { transition: none; } }
   header { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; grid-template-areas: "tile name tags" "tile meta meta"; column-gap: var(--sp-3); align-items: center; }
   .tile { grid-area: tile; }
-  .head { grid-area: name; justify-self: start; min-width: 0; border: 0; padding: 0; background: none; font: inherit; font-size: var(--fs-heading); line-height: var(--lh-heading); font-weight: var(--fw-semibold); color: var(--text); text-align: left; cursor: pointer; border-radius: var(--r-sm); overflow-wrap: anywhere; }
+  .head { grid-area: name; justify-self: start; min-width: 0; min-height: 24px; border: 0; padding: 0; background: none; font: inherit; font-size: var(--fs-heading); line-height: var(--lh-heading); font-weight: var(--fw-semibold); color: var(--text); text-align: left; cursor: pointer; border-radius: var(--r-sm); overflow-wrap: anywhere; }
   .head::after { content: ""; position: absolute; inset: 0; border-radius: var(--r-lg); }
   .head:hover { color: var(--text); text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
   .head:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
@@ -147,6 +149,7 @@
   .k-port.warn circle:not(.halo) { fill: var(--warn); }
   .halo { fill: var(--warn-soft); }
   .ctrs { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3) var(--sp-4); }
+  .ctrs .wide { grid-column: 1 / -1; }
   .ctrs div { display: grid; gap: 2px; min-width: 0; }
   dt { display: flex; align-items: center; gap: 5px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   dt :global(svg) { color: var(--faint); }
@@ -174,7 +177,6 @@
   footer { display: flex; gap: 6px; flex-wrap: wrap; }
   .btn { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--r-md); background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); cursor: pointer; white-space: nowrap; }
   .btn.ghost { background: var(--surface); border-color: var(--border); color: var(--text-2); }
-  .btn.accent { color: var(--accent); }
   .btn:hover { color: var(--text); border-color: var(--border-strong); background: var(--row-hover); }
   button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 </style>

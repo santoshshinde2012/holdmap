@@ -114,7 +114,8 @@
   });
   const viewKey = $derived(effectiveMode + "|" + query.trim() + "|" + all + "|" + external);
   const hasRemote = $derived(graph?.nodes.some((n) => n.kind === "external") ?? false);
-  const empty = $derived(!shown?.nodes.length);
+  // A lone "External" card with no service beside it is still an empty graph.
+  const empty = $derived(!shown?.nodes.some((n) => n.kind !== "external"));
   const peer = $derived(shown?.nodes.find((n) => n.id === selectedNode && n.ports.length === 0) ?? null);
   const peerLinks = $derived(peer ? shown?.edges.filter((edge) => edge.from === peer.id || edge.to === peer.id) ?? [] : []);
   const legend = [["service", "Service"], ["client", "Client"], ["external", "External host"]];
