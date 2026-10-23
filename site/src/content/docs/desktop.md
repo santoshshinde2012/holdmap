@@ -26,6 +26,10 @@ first. Select an agent once to highlight it everywhere; select it again to open 
 Agents. Counts read **…** until the first scan. On a narrow window the Map becomes a list
 of agents, each with its ports and the same **Details** / **Stop…** menu.
 
+**Copy summary** puts the overview and **Needs you** on the clipboard as plain text for a
+ticket or chat; **Download JSON** saves the same facts as a file. Neither starts a scan, and
+neither includes command lines, environment values, prompts or folder paths.
+
 ![Home as Cards in dark theme: agent cards with projects, ports, MCP servers and skills, and Needs you](../../../../docs/screenshots/desktop-home-cards-dark.png)
 
 ![Home as Map in light theme: agents around this computer with the Timeline below](../../../../docs/screenshots/desktop-home-map-light.png)

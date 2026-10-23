@@ -15,8 +15,9 @@ const primary = Object.fromEntries(downloads.filter((d) => d.primary && d.os !==
         <span class="line">And which agent started it.</span>
       </h1>
       <p class="sub">
-        See every agent with its MCP servers, skills and tools, and the apps and ports it holds —
-        access marked seen, inferred or unknown. Then stop only what you choose, after a plan.
+        See every agent with its MCP servers, skills and tools, and the apps and ports it holds.
+        Each fact is marked seen, inferred or unknown, so you know what to trust. Then stop only
+        what you choose, after a plan.
       </p>
       <div class="cta">
         <a class="btn btn-primary" href="#install" data-download data-urls={JSON.stringify(primary)}>
@@ -35,6 +36,7 @@ const primary = Object.fromEntries(downloads.filter((d) => d.primary && d.os !==
       </div>
       <p class="meta" id="hero-install-hint">
         Latest release <a href={`${repoUrl}/releases/tag/v${version}`}>v{version}</a>
+        <span aria-hidden="true">·</span> Scans stay on your computer
         <span aria-hidden="true">·</span> CLI, TUI, desktop app and MCP server
         <span aria-hidden="true">·</span> <a href={url("docs/whats-new/")}>What's new</a>
       </p>

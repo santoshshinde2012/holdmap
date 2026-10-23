@@ -39,6 +39,10 @@ holdmap analyzers key set ID NAME       # an API key, stored in the OS keychain
 holdmap insights --min medium           # findings; --format sarif for other tools
 ```
 
+In the desktop app, **Security** has **Copy summary**, **Download JSON** and **Download SARIF**
+for the open findings. They carry the rule, severity, title, analyzer, skill or package, agents,
+location and fix, with your home folder shown as `~`. The raw evidence behind a finding is left out.
+
 ## When it runs
 
 An analyzer runs when you press **Run now**. One that uses no network also runs while holdmap
