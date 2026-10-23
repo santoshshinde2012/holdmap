@@ -1344,8 +1344,10 @@ and the [ScreenCast portal contract](https://flatpak.github.io/xdg-desktop-porta
 
 The encoder module loads on demand. H.264 capability checks include the output dimensions;
 WebCodecs/Mediabunny has a MediaRecorder MP4 fallback. GIF quantization runs in a same-origin
-worker with one RGBA frame in flight and at most 240 indexed frames. Adaptive sampling
-preserves the complete timeline, with cumulative GIF delays avoiding rounding drift.
+worker with one RGBA frame in flight. The GIF streams to a byte budget: identical frames are merged,
+sampling is a fixed cadence that stretches as the budget fills, and cumulative delays avoid
+rounding drift. The user's plan (presets in `screen-record-plan.ts`) sets format, length, rate and
+size; the recorder pauses and resumes through the video source, so paused time is left out.
 Finalization has a deadline and can be discarded. The CSP permits local and blob workers
 without enabling external scripts or network destinations.
 
@@ -1357,7 +1359,10 @@ export for retry. No filesystem or dialog plugin permissions are granted to the 
 Browser exports use the browser download manager and do not claim confirmed disk writes.
 Closing a completed preview retains one bounded result in memory for the current session;
 Review recording reopens it, and explicit discard releases it before another recording.
-Hiding or minimizing the window preserves active capture until Stop or the two-minute limit.
+Hiding or minimizing the window preserves active capture until Stop or the chosen limit (at most one hour).
+The native macOS recorder writes the MP4 to its private folder; a long MP4 is copied to the chosen
+destination by `export_screen_recording` (same chooser, same atomic replace, 2 GiB bound) instead of
+crossing IPC. `reveal_saved_recording` opens only folders of files saved this session.
 
 The implementation follows the primary [Screen Capture specification](https://w3c.github.io/mediacapture-screen-share/),
 the [WebKit capture-permission fix](https://bugs.webkit.org/show_bug.cgi?id=274896),

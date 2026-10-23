@@ -107,14 +107,14 @@ const widths = (w: number) => [w, w * 2, w * 3];
       <li class="card span-3 split">
         <div class="copy">
           <h3>Record a screen or window</h3>
-          <p>Choose what to share, then save available MP4 or GIF exports locally. Record for up to two minutes with no microphone or system audio. Close and reopen the latest preview while Holdmap stays open; nothing is uploaded.</p>
+          <p>Make a GIF clip or a full-session MP4 of the screen or window you choose. See the size and length first, pause, and save locally. No audio; nothing is uploaded.</p>
           <p class="source-note">Each new video recording asks for a screen or window. Export formats depend on the encoder available in your app or browser.</p>
           <p class="source-note">PNG snapshots of the Holdmap view or a selected screen/window. An active recording can supply the still without another picker or stopping the video.</p>
           <a class="link-arrow" href={url("docs/desktop/#record-the-screen")}>Screen recording and saving <Icon name="ArrowRight" size={16} /></a>
           <a class="link-arrow" href={url("docs/desktop/#take-a-png-snapshot")}>PNG snapshots <Icon name="ArrowRight" size={16} /></a>
         </div>
         <div class="visual agents-shot">{["dark", "light"].map((t) => (
-          <Picture src={t === "dark" ? screenRecordDark : screenRecordLight} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280]} sizes={`(max-width: 1000px) calc(100vw - 80px), 720px`} alt="Screen recording consent explains local MP4 and GIF exports, the two-minute limit and the screen picker" loading="lazy" pictureAttributes={{ class: `only-${t}` }} />
+          <Picture src={t === "dark" ? screenRecordDark : screenRecordLight} formats={["avif"]} fallbackFormat="webp" widths={[640, 1280]} sizes={`(max-width: 1000px) calc(100vw - 80px), 720px`} alt="The recorder offers a clip or full-session preset, shows the expected size and says it stays local" loading="lazy" pictureAttributes={{ class: `only-${t}` }} />
         ))}</div>
       </li>
       <li class="card span-3 split agent-flow">
