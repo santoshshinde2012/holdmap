@@ -1318,6 +1318,10 @@
     livePulse={prefs.view === "agents" ? agentsRefreshing : refreshing}
     {modK} {mod} singleKeys={prefs.singleKeyShortcuts} {refreshing} {manualRefresh}
     recordingMs={capture.session ? capture.elapsed : null}
+    recordingLimitMs={capture.activePlan.maxDurationMs}
+    recordingPaused={capture.paused}
+    canPauseRecording={capture.canPause}
+    onpauserecording={capture.togglePause}
     scheduleCount={activeSchedules.length} {themeIcon} themeLabel={THEME_LABEL[prefs.theme]}
     bind:schedulesTrigger
     onpalette={() => (showPalette = true)} onrefresh={() => refresh(true)} onstoprecording={() => void capture.finish()}
@@ -1410,7 +1414,7 @@
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
 {#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
 {#if capture.dialog}
-  <ScreenRecordDialog phase={capture.dialog} error={capture.error} errorTitle={capture.errorTitle} result={capture.result} busy={capture.busy} starting={capture.starting} supported={!!capture.support.backend} checkingSupport={capture.support.pending} unsupportedReason={capture.support.reason} onstart={() => void capture.begin()} onclose={capture.close} ondiscard={capture.discardAndClose} />
+  <ScreenRecordDialog phase={capture.dialog} error={capture.error} errorTitle={capture.errorTitle} result={capture.result} busy={capture.busy} starting={capture.starting} supported={!!capture.support.backend} checkingSupport={capture.support.pending} unsupportedReason={capture.support.reason} plan={capture.plan} backend={capture.support.backend} stoppedBy={capture.stoppedBy} onplan={capture.setPlan} onstart={() => void capture.begin()} onclose={capture.close} ondiscard={capture.discardAndClose} />
 {/if}
 <SnapshotCapture bind:this={snapshotCaptureUi} session={capture.session} blocked={otherModalOpen} onstatechange={(state) => (snapshotCaptureState = state)} />
 {#if snapshotCaptureState.busy}<span class="sr-only" role="status">Capturing snapshot. Press Escape or use Cancel snapshot capture to cancel.</span>{/if}

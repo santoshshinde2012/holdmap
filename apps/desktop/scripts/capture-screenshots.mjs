@@ -482,8 +482,9 @@ const captures = [
     await page.getByRole("button", { name: "Record screen", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Record screen", exact: true });
     await expect(dialog.getByRole("button", { name: "Choose screen…", exact: true })).toBeVisible();
-    await expect(dialog).toContainText("Microphone and system audio are not captured");
-    await expect(dialog).toContainText("Maximum 2 minutes");
+    await expect(dialog).toContainText("No microphone or system audio");
+    await expect(dialog.getByRole("radio", { name: "Full session" })).toBeChecked();
+    await expect(dialog.getByRole("list", { name: "Expected size and length" })).toBeVisible();
     return dialog;
   } })),
   { name: "desktop-agent-tools-dark.png", theme: "dark", async prepare(page) {
