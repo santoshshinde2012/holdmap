@@ -411,8 +411,8 @@
         onnodepointerleave={() => (hover = null)}
         onpaneclick={() => { picked = null; if (selectedAgent) onselectagent(null); }}
       >
-        <RevealNode id={selectedInfo && graph?.nodes.some((n) => n.id === selectedInfo.id) ? selectedInfo.id : null} {reduced} />
-        <FitOnChange token={sig} focus={null} {reduced} />
+        <RevealNode id={selectedInfo && graph?.nodes.some((n) => n.id === selectedInfo.id) ? selectedInfo.id : null} {reduced} obstacle={() => document.getElementById("agent-details")} />
+        <FitOnChange token={sig} focus={null} {reduced} open={!!selectedInfo} obstacle={() => document.getElementById("agent-details")} />
         <Background gap={22} size={1.2} />
         <Controls showLock={false} position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.1, duration: reduced ? 0 : 320 }} />
         <AutoMiniMap {dark} />
@@ -501,6 +501,13 @@
     .agents:not(.rail-off) { grid-template-columns: 1fr; grid-template-rows: minmax(0, 52%) 1fr; }
     .rail { border-right: 0; border-bottom: 1px solid var(--border); }
     .stats, .legend { display: none; }
+    /* A narrow window gets a bottom sheet instead of a side panel; the map pans clear of it. */
+    .details { top: auto; left: 8px; right: 8px; width: auto; height: min(52%, 420px); }
+    /* With the agent list showing, list and details stack and take turns with the map, so
+       nothing sits on top of a node. Closing the details brings the map back. */
+    .agents.has-details:not(.rail-off) { grid-template-rows: minmax(0, 40%) 1fr; }
+    .agents.has-details:not(.rail-off) .map { display: none; }
+    .agents.has-details:not(.rail-off) .details { position: static; width: auto; height: auto; border: 0; border-top: 1px solid var(--border); border-radius: 0; box-shadow: none; }
   }
   .reduced :global(*) { animation: none !important; transition: none !important; }
 </style>

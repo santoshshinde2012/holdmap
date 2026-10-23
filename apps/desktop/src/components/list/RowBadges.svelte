@@ -9,7 +9,7 @@
 
 <span class="badges">
   {#each parts.shown as b (b.id)}
-    <span class="chip tone-{b.tone}" use:tooltip={b.tip}>{#if b.icon}<Icon name={b.icon} size={11} />{/if}<span class="t">{b.label}</span></span>
+    <span class="chip tone-{b.tone}" use:tooltip={b.tip}>{#if b.icon}<Icon name={b.icon} size={11} />{/if}<span class="t">{b.label}</span></span>{" "}
   {/each}
   {#if parts.overflow}
     <span class="chip more" use:tooltip={parts.overflow} aria-label="{parts.rest.length} more: {parts.overflow}">+{parts.rest.length}</span>

@@ -54,6 +54,24 @@
   const cpu = $derived(entry.process?.cpu_percent);
   const usageTip = $derived([cpu !== undefined ? `CPU ${cpu.toFixed(1)}%` : null, memTip ? `Memory ${memTip}` : mem ? `Memory ${mem}` : null].filter(Boolean).join(" · "));
   const tile = $derived(density === "compact" ? 18 : 22);
+
+  // WCAG 2.5.3 (label in name): voice control says what it sees, so the option's name carries the
+  // row's visible text after the "Port 3000 tcp" prefix, read from the cells as rendered.
+  let row: HTMLElement | undefined = $state();
+  let visible = $state("");
+  $effect(() => {
+    void [entry, badges, pinned, density, mem, meta];
+    if (!row) return;
+    const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+    const words: string[] = [];
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node.textContent?.replace(/\s+/g, " ").trim();
+      if (text && !(node.parentElement?.closest("[aria-hidden='true']"))) words.push(text);
+    }
+    visible = words.join(" ");
+  });
+  const label = $derived(rowLabel(entry, { pinned, badges }));
+  const named = $derived(visible ? `${label}, ${visible}` : label);
 </script>
 
 <div
@@ -66,7 +84,8 @@
   aria-selected={selected}
   aria-posinset={posinset}
   aria-setsize={setsize}
-  aria-label={rowLabel(entry, { pinned, badges })}
+  aria-label={named}
+  bind:this={row}
   tabindex="-1"
   onclick={onselect}
   ondblclick={() => canOpen(entry) && onopen()}

@@ -85,3 +85,30 @@ for (const t of ["light", "dark"] as const) {
     expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
   });
 }
+
+test("a narrow window stacks the agent list over its details instead of covering the map", async ({ app }) => {
+  await app.setViewportSize({ width: 700, height: 800 });
+  await openAgents(app);
+  await agentHeading(app, "Cursor").click();
+  await expect(details(app)).toBeVisible();
+  const [rail, panel] = [(await app.locator(".rail").boundingBox())!, (await details(app).boundingBox())!];
+  expect(panel.y).toBeGreaterThanOrEqual(rail.y + rail.height - 1);
+  expect(panel.height).toBeGreaterThan(300);
+  await details(app).getByRole("button", { name: "Close agent details" }).click();
+  await expect(app.locator(".svelte-flow")).toBeVisible();
+});
+
+test("a mid-size window pans the selected node clear of the floating details panel", async ({ app }) => {
+  await app.setViewportSize({ width: 1000, height: 700 });
+  await openAgents(app);
+  for (const [name, pid] of [["Cursor", 52000], ["Claude Code", 51200]] as const) {
+    await agentHeading(app, name).click();
+    await expect(details(app)).toBeVisible();
+    const node = flowNode(app, pid).locator(".node");
+    await expect.poll(async () => {
+      const [n, d] = [await node.boundingBox(), await details(app).boundingBox()];
+      if (!n || !d) return "missing";
+      return n.x + n.width <= d.x || n.x >= d.x + d.width || n.y + n.height <= d.y || n.y >= d.y + d.height ? "clear" : "overlaps";
+    }).toBe("clear");
+  }
+});
