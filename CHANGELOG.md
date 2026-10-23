@@ -23,7 +23,7 @@ by [release-please](https://github.com/googleapis/release-please) from
   readable beside the details panel, and Flow labels only the busiest edges instead of overlapping).
 - **MCP tool annotations are complete.** All twelve read-only tools declare `readOnlyHint`, `destructiveHint`,
   `idempotentHint` and `openWorldHint` explicitly (checked by a test), which is what MCP directories score.
-- **More reliable CI.** The browser install for the end-to-end job is capped per attempt and retried, and the job
+- **More reliable CI.** The browser install for the end-to-end job waits out a stalled mirror (shorter network timeouts, retries, step limit) and the job
   has more headroom, after a stalled download used up the whole 15-minute budget.
 
 ## [0.10.0] - 2026-10-22

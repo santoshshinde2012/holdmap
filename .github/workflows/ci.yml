@@ -200,13 +200,16 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
-      # Usually 20 s to 4 min. A stalled apt or CDN download once ate the whole job budget (12 min),
-      # so cap each attempt and retry instead of waiting out the job timeout.
+      # Usually 20 s to 4 min; a stalled mirror once took 12 min and used the whole job budget.
       - name: Install browser for end-to-end tests
+        timeout-minutes: 10
         run: |
+          # The Azure Ubuntu mirror sometimes stalls. Fail a stalled connection fast, retry downloads, and wait for
+          # the dpkg lock instead of killing apt (killing npx would leave apt running and lock out the retry).
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nDPkg::Lock::Timeout "300";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network >/dev/null
           for attempt in 1 2 3; do
-            timeout 5m npx playwright install --with-deps chromium && exit 0
-            echo "::warning::Browser install attempt $attempt failed or stalled; retrying"
+            npx playwright install --with-deps chromium && exit 0
+            echo "::warning::Browser install attempt $attempt failed; retrying"
           done
           exit 1
       # test:e2e builds the production UI before starting its managed preview server.

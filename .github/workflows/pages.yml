@@ -94,10 +94,14 @@ jobs:
         run: npm test
       - name: Install browser for the embedded demo check
         working-directory: apps/desktop
+        timeout-minutes: 10
         run: |
+          # The Azure Ubuntu mirror sometimes stalls. Fail a stalled connection fast, retry downloads, and wait for
+          # the dpkg lock instead of killing apt (killing npx would leave apt running and lock out the retry).
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nDPkg::Lock::Timeout "300";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network >/dev/null
           for attempt in 1 2 3; do
-            timeout 4m npx playwright install --with-deps chromium && exit 0
-            echo "::warning::Browser install attempt $attempt failed or stalled; retrying"
+            npx playwright install --with-deps chromium && exit 0
+            echo "::warning::Browser install attempt $attempt failed; retrying"
           done
           exit 1
       - name: Embedded demo end-to-end check
