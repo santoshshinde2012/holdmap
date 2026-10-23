@@ -45,6 +45,14 @@ impl Drop for SaveLease {
     }
 }
 
+/// A report is a UTF-8 JSON object of at most 8 MiB; the picker, not JavaScript, chooses where.
+fn is_report(bytes: &[u8]) -> bool {
+    bytes.len() <= 8 * 1024 * 1024
+        && bytes.first() == Some(&b'{')
+        && std::str::from_utf8(bytes).is_ok()
+        && serde_json::from_slice::<serde_json::Value>(bytes).is_ok()
+}
+
 fn validate<'a>(filename: &'a str, bytes: &[u8]) -> Result<&'a str, String> {
     if bytes.is_empty() || bytes.len() > MAX_BYTES {
         return Err("Recording must contain data and be smaller than 128 MiB.".into());
@@ -65,7 +73,12 @@ fn validate<'a>(filename: &'a str, bytes: &[u8]) -> Result<&'a str, String> {
         }
         Some("gif") if bytes.starts_with(b"GIF89a") || bytes.starts_with(b"GIF87a") => Ok("gif"),
         Some("mp4") if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" => Ok("mp4"),
-        _ => Err("Only PNG snapshots, MP4 video and GIF recordings can be saved.".into()),
+        // Exported reports are plain text, small, and chosen in the same native dialog.
+        Some(ext @ ("json" | "sarif")) if is_report(bytes) => Ok(ext),
+        _ => Err(
+            "Only PNG snapshots, MP4 video and GIF recordings, and JSON or SARIF reports can be saved."
+                .into(),
+        ),
     }
 }
 
@@ -122,19 +135,19 @@ pub(crate) async fn save_screen_recording<R: Runtime>(
             app.dialog()
                 .file()
                 .set_parent(&window)
-                .set_title(if extension == "png" {
-                    "Save Holdmap snapshot"
-                } else {
-                    "Save Holdmap recording"
+                .set_title(match extension.as_str() {
+                    "png" => "Save Holdmap snapshot",
+                    "json" | "sarif" => "Save Holdmap report",
+                    _ => "Save Holdmap recording",
                 })
                 .set_file_name(&filename)
                 .add_filter(
-                    if extension == "png" {
-                        "PNG snapshot"
-                    } else if extension == "mp4" {
-                        "MP4 video"
-                    } else {
-                        "GIF animation"
+                    match extension.as_str() {
+                        "png" => "PNG snapshot",
+                        "mp4" => "MP4 video",
+                        "json" => "JSON report",
+                        "sarif" => "SARIF report",
+                        _ => "GIF animation",
                     },
                     &[&extension],
                 )
@@ -257,6 +270,39 @@ mod tests {
         assert_eq!(std::fs::read(&output).unwrap(), png);
         assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn ipc_saves_json_and_sarif_reports_only_when_they_are_json() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("report.sarif");
+        let chosen = output.clone();
+        let app = test_app(move |name, extension| {
+            assert_eq!(name, "holdmap-security-2026-10-23.sarif");
+            assert_eq!(extension, "sarif");
+            Ok(Some(chosen.clone()))
+        });
+        let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .unwrap();
+        for bad in [&b"not json"[..], b"{\"unterminated\":", b"[1]"] {
+            assert!(get_ipc_response(
+                &window,
+                raw_request("holdmap-security-2026-10-23.sarif", bad)
+            )
+            .is_err());
+        }
+        let report = br#"{"version":"2.1.0","runs":[]}"#;
+        let saved = get_ipc_response(
+            &window,
+            raw_request("holdmap-security-2026-10-23.sarif", report),
+        )
+        .unwrap();
+        assert_eq!(
+            saved.deserialize::<Option<String>>().unwrap(),
+            Some(output.to_string_lossy().into_owned())
+        );
+        assert_eq!(std::fs::read(&output).unwrap(), report);
     }
 
     #[test]

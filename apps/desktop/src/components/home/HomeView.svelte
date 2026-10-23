@@ -7,6 +7,8 @@
   import Icon from "../Icon.svelte";
   import { SegmentedControl } from "../ui";
   import EmptyPanel from "../ui/EmptyPanel.svelte";
+  import ExportActions from "../ui/ExportActions.svelte";
+  import { homeReport, homeSummaryText, reportFilename } from "../../lib/report-export";
   import HomeSummary, { type SummaryStat } from "./HomeSummary.svelte";
   import AgentCards from "./AgentCards.svelte";
   import MachineMap from "./MachineMap.svelte";
@@ -113,6 +115,8 @@
           <span><i class="k project"></i>Project</span><span><i class="k port"></i>Port</span><span><i class="k mcp"></i>MCP</span><span><i class="k remote"></i>Remote</span><span><i class="k warn"></i>Needs you</span>
         </span>
       {/if}
+      <ExportActions label="Export overview" disabled={!report || !entries} copy={() => homeSummaryText(o, needs, Date.now())}
+        files={[{ label: "Download JSON", filename: reportFilename("overview", Date.now(), "json"), build: () => homeReport(o, needs, report, Date.now()) }]} />
       {#if showInventory}<button type="button" class="inv" onclick={oninventory}><Icon name="plug" size={12} />Read MCP config</button>{/if}
       <SegmentedControl value={layout} options={layoutOptions} label="Home layout" onchange={(l) => onlayout?.(l)} />
     </div>

@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./fixtures";
 
 // Regressions from the end-to-end audit: names, landmarks and keyboard paths that axe or a
@@ -140,3 +141,20 @@ test("phone width: view controls wrap onto rows instead of scrolling sideways", 
   await app.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: /^List/ }).click();
   expect(await toolbar.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
 });
+
+// Every top-level view, both themes, the whole page: no axe violation of any impact. This is the
+// guard for names that must contain their visible text (WCAG 2.5.3, e.g. the port rows).
+for (const theme of ["light", "dark"] as const) {
+  test(`${theme}: Home, Ports, Graph and Agents pass axe with no violations`, async ({ app }) => {
+    await app.evaluate((t) => localStorage.setItem("holdmap.theme", t), theme);
+    await app.reload();
+    await expect(app.locator("html")).toHaveAttribute("data-theme", theme);
+    const views = app.getByRole("radiogroup", { name: "View", exact: true });
+    for (const view of [/^Home/, /^List/, /^Graph/, /^Agents/]) {
+      await views.getByRole("radio", { name: view }).click();
+      await app.waitForTimeout(400);
+      const { violations } = await new AxeBuilder({ page: app }).analyze();
+      expect(violations.map((v) => `${view} ${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+    }
+  });
+}
