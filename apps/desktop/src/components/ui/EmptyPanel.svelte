@@ -15,7 +15,7 @@
 </div>
 
 <style>
-  .empty { display: grid; justify-items: center; gap: 6px; padding: 40px 16px; border: 1px dashed var(--border-strong); border-radius: var(--r-lg); text-align: center; color: var(--muted); font-size: var(--fs-body-sm); }
+  .empty { display: grid; align-content: center; justify-items: center; gap: 6px; padding: 40px 16px; border: 1px dashed var(--border-strong); border-radius: var(--r-lg); text-align: center; color: var(--muted); font-size: var(--fs-body-sm); }
   .compact { padding: 20px 12px; gap: 4px; }
   .hint { max-width: 360px; }
   .ic { display: grid; place-items: center; width: 36px; height: 36px; margin-bottom: 4px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); }

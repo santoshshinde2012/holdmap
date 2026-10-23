@@ -93,13 +93,19 @@ function osvPackages(report: AgentsReport) {
 
 /** In-memory demo state. */
 export class DemoAnalyzers {
-  private approved = new Map<string, number>([[SKILLSPECTOR, RUN_AT - 3_600_000]]);
-  private results = new Map<string, AnalyzerResult>([[SKILLSPECTOR, skillspectorResult()]]);
+  private approved: Map<string, number>;
+  private results: Map<string, AnalyzerResult>;
   private reviews = new Map<string, FindingState>();
   private background = new Set<string>();
   private user = new Map<string, DemoManifest>();
   private mcp = new Map<string, mcp.DemoMcp>();
   private catalogState: CatalogStatus = { version: 1, published: "2026-10-18", accepted: false, pending: null };
+
+  /** `fresh`: nothing turned on yet, like a first launch (the empty-machine demo profile). */
+  constructor(fresh = false) {
+    this.approved = new Map(fresh ? [] : [[SKILLSPECTOR, RUN_AT - 3_600_000]]);
+    this.results = new Map(fresh ? [] : [[SKILLSPECTOR, skillspectorResult()]]);
+  }
 
   catalog(): CatalogStatus {
     return structuredClone(this.catalogState);

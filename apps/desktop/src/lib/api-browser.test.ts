@@ -23,6 +23,17 @@ describe("bounded browser load fixtures", () => {
     expect(new Set(snapshot.entries.map((entry) => entry.id)).size).toBe(MAX_MOCK_PORTS);
   });
 
+  it("mockPorts=0 is the first-minute empty machine: no listeners and no agents", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("location", { search: "?mockPorts=0" });
+    const pending = scan(false);
+    await vi.advanceTimersByTimeAsync(250);
+    expect((await pending).entries).toEqual([]);
+    const report = await agents();
+    expect(report.agents).toEqual([]);
+    expect(report.configured).toEqual([]);
+  });
+
   it("retains supported finite load-test sizes", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("location", { search: "?mockPorts=100.5" });

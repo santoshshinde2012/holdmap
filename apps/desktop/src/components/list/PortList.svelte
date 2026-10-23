@@ -77,16 +77,18 @@
     onopen: (e: PortEntry) => void;
     onpin: (e: PortEntry) => void;
   } = $props();
+  const hasRows = $derived(!!snapshot && ordered.length > 0);
 </script>
 
-<div class="list {density}" id="port-list" role="listbox" aria-label="Ports in use" aria-activedescendant={selectedId ? "row-" + selectedId : undefined} tabindex="0" bind:this={listEl}>
+<!-- A listbox needs options: while loading or empty the container is a plain region so assistive tech isn't told about a list with nothing in it. -->
+<div class="list {density}" id="port-list" role={hasRows ? "listbox" : undefined} aria-label={hasRows ? "Ports in use" : undefined} aria-activedescendant={hasRows && selectedId ? "row-" + selectedId : undefined} tabindex={hasRows ? 0 : undefined} bind:this={listEl}>
   {#if error && !snapshot}
     <EmptyState tone="err" title="Couldn't read the socket table">
       <p class="selectable">{error}</p>
       <Button variant="primary" icon="refresh" loading={refreshing} loadingText="Retrying…" onclick={onretry}>Try again</Button>
     </EmptyState>
   {:else if !snapshot}
-    <div class="skeletons" aria-busy="true" aria-label="Loading ports">
+    <div class="skeletons" role="status" aria-busy="true" aria-label="Loading ports">
       <div class="sk-gh shimmer"></div>
       {#each Array(9) as _, i}
         <div class="sk-row" style="animation-delay: {i * 70}ms; opacity: {1 - i * 0.08}">

@@ -5,8 +5,8 @@
   // whole graph shows beside or above it; a docked panel just resizes the pane instead.
   import { untrack } from "svelte";
   import { useSvelteFlow } from "@xyflow/svelte";
-  import { FIT_PADDING } from "../../lib/flow";
-  let { token, focus, reduced, open = false, obstacle = () => null }: { token: string; focus: { x: number; y: number } | null; reduced: boolean; open?: boolean; obstacle?: () => HTMLElement | null } = $props();
+  import { FIT_MIN_ZOOM, FIT_PADDING } from "../../lib/flow";
+  let { token, focus, reduced, open = false, obstacle = () => null, near = [] }: { token: string; focus: { x: number; y: number } | null; reduced: boolean; open?: boolean; obstacle?: () => HTMLElement | null; near?: string[] } = $props();
   const flow = useSvelteFlow();
   let last = "";
   let covered = false;
@@ -24,7 +24,27 @@
     }
     return p;
   }
-  const fit = () => flow.fitView({ padding: padding(), duration: reduced ? 0 : 320, maxZoom: 1.2 });
+  /** Under a floating panel the map may crop rather than shrink below this: tiny diagrams are unreadable. */
+  const COVERED_MIN_ZOOM = 0.6;
+  /** Whether fitting every node would shrink the map below the readable floor in the pane as it is now. */
+  function tooSmall(p: Record<string, string>): boolean {
+    const pane = document.querySelector<HTMLElement>(".agents .svelte-flow")?.getBoundingClientRect();
+    const all = flow.getNodes();
+    if (!pane || all.length === 0) return false;
+    const b = flow.getNodesBounds(all);
+    const px = (v: string) => parseFloat(v) || 0;
+    const zoom = Math.min((pane.width - px(p.left) - px(p.right)) / Math.max(b.width, 1), (pane.height - px(p.top) - px(p.bottom)) / Math.max(b.height, 1));
+    return zoom < COVERED_MIN_ZOOM;
+  }
+  /** What to fit: the whole map, or (a panel is open and the whole map would be too small to read) just the picked agent and what it touches. */
+  function target(p: Record<string, string>) {
+    const ids = near.filter((id) => !!flow.getInternalNode(id));
+    return open && ids.length > 1 && tooSmall(p) ? { nodes: ids.map((id) => ({ id })), minZoom: COVERED_MIN_ZOOM } : { minZoom: covered ? COVERED_MIN_ZOOM : FIT_MIN_ZOOM };
+  }
+  const fit = () => {
+    const p = padding();
+    return flow.fitView({ padding: p, duration: reduced ? 0 : 320, maxZoom: 1.2, ...target(p) });
+  };
   $effect(() => {
     if (token === last) return;
     last = token;
@@ -37,11 +57,13 @@
   let wasCovered = false;
   $effect(() => {
     void open;
+    void near.join();
     const t = setTimeout(() => untrack(() => {
       const p = padding();
-      if (!covered && !wasCovered) return;
-      wasCovered = covered;
-      flow.fitView({ padding: p, duration: reduced ? 0 : 320, maxZoom: 1.1 });
+      const t = target(p);
+      if (!covered && !wasCovered && !t.nodes) return;
+      wasCovered = covered || !!t.nodes;
+      flow.fitView({ padding: p, duration: reduced ? 0 : 320, maxZoom: 1.1, ...t });
     }), 80);
     return () => clearTimeout(t);
   });

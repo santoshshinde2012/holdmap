@@ -38,9 +38,9 @@
   li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 2px var(--sp-2); padding: 7px var(--sp-3); border-bottom: 1px solid var(--border); }
   li:last-child { border-bottom: 0; }
   li { transition: opacity 160ms ease; }
-  li.dim { opacity: 0.4; }
+  li.dim { opacity: 0.9; }
   li:hover, li:focus-within { background: var(--row-hover); }
-  .title { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: var(--sp-2); align-items: start; border: 0; background: none; padding: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+  .title { min-height: 24px; display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: var(--sp-2); align-items: start; border: 0; background: none; padding: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
   .dot { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--warn); }
   .sev-high .dot { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
   .t { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); overflow-wrap: anywhere; }

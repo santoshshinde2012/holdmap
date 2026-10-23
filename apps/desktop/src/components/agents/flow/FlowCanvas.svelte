@@ -38,7 +38,7 @@
   <SvelteFlow bind:nodes bind:edges {nodeTypes} {edgeTypes} colorMode={dark ? "dark" : "light"}
     fitView fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.15 }} minZoom={0.12} maxZoom={1.8}
     nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} deleteKey={null}
-    onlyRenderVisibleElements
+    onlyRenderVisibleElements={nodes.length > 120} proOptions={{ hideAttribution: true }}
     onnodeclick={({ node }) => onselect(node.id)} onedgeclick={({ edge }) => onselect(edge.id)} onpaneclick={() => onselect(null)}
     ariaLabelConfig={{ "controls.fitView.ariaLabel": "Fit all relationships in view" }}>
     <Background gap={22} size={1} />

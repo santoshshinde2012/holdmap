@@ -46,7 +46,7 @@
   .narrow .sl { display: none; }
   .count { flex: none; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--muted); background: var(--surface-3); border-radius: 999px; padding: 0 6px; }
   .stop {
-    flex: none; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium);
+    flex: none; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium);
     border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); cursor: pointer; opacity: 0.85;
   }
   .stop:hover { color: var(--danger); border-color: var(--danger); opacity: 1; }

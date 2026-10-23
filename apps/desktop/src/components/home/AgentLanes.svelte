@@ -126,7 +126,7 @@
   .lane { border-bottom: 1px solid var(--border); transition: opacity 160ms ease, background 160ms ease; }
   .lane:last-child { border-bottom: 0; }
   .lane.active { background: color-mix(in srgb, var(--agent) 6%, var(--surface)); }
-  .lane.dim { opacity: 0.4; }
+  .lane.dim { opacity: 0.9; }
   .lane .track { padding: 6px 0; display: grid; align-content: center; gap: 1px; }
   .lane .track::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 1.5px; background: color-mix(in srgb, var(--ok) 60%, transparent); }
   .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); }
@@ -147,7 +147,7 @@
   .bar.thin.warn { background: color-mix(in srgb, var(--warn) 55%, transparent); }
   .dot { position: absolute; top: 50%; width: 10px; height: 10px; border-radius: 50%; transform: translate(-50%, -50%); background: var(--surface); border: 2px solid var(--agent); }
   /* Dot at the port's start; label right-aligned at the live edge, or left of the dot on short bars. */
-  .pin { position: absolute; inset: 0 0 0 var(--x); border: 0; background: none; padding: 0; font: inherit; color: var(--text-2); cursor: pointer; }
+  .pin { position: absolute; inset: -3px 0 -3px var(--x); border: 0; background: none; padding: 0; font: inherit; color: var(--text-2); cursor: pointer; }
   .pin i { position: absolute; left: 0; top: 50%; transform: translate(-50%, -50%); width: 9px; height: 9px; border-radius: 50%; background: var(--agent); box-shadow: 0 0 0 2px var(--surface); }
   .pin span { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); white-space: nowrap; }
   .pin.short span { right: auto; left: -10px; transform: translate(-100%, -50%); }

@@ -283,7 +283,7 @@
   button.row-btn:disabled { cursor: default; }
   .row-btn.static { cursor: default; }
   .acts { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 0 2px 28px; }
-  .act { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); cursor: pointer; }
+  .act { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); cursor: pointer; }
   .act:hover { color: var(--text); border-color: var(--border-strong, var(--border)); }
   .act:disabled { opacity: 0.5; cursor: wait; }
   .folder-error { margin: 0; color: var(--danger); font-size: var(--fs-caption); line-height: var(--lh-caption); overflow-wrap: anywhere; }

@@ -416,7 +416,7 @@ export const AGENT_W = 248;
 export const AGENT_H = 84;
 export const FOOT_W = 216;
 export const FOOT_H = 56;
-export const COL_GAP = 112;
+export const COL_GAP = 88;
 export const ROW_GAP = 18;
 export const HEADER_Y_GAP = 54;
 

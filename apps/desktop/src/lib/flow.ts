@@ -2,6 +2,9 @@
 // the agents map doesn't pull in the dagre layout.
 
 /** Fit-view margins: the top clears the floating toolbar + legend so no node hides under them. */
+/** "Fit" never shrinks the map below this: past it nodes are too small to read or hit, so a very narrow pane crops (pan to see the rest). */
+export const FIT_MIN_ZOOM = 0.5;
+
 export const FIT_PADDING = { top: "84px", bottom: "28px", x: "28px" } as const;
 
 /**

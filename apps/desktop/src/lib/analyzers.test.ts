@@ -8,6 +8,15 @@ import { InsightsStore, CHANGE_CHECK_MS } from "./insights-store.svelte";
 const report = mockAgents(undefined, true);
 const demoInsights = (): Insights => new DemoAnalyzers().insights();
 
+describe("a fresh demo", () => {
+  it("starts with every analyzer off and nothing found, like a first launch", () => {
+    const fresh = new DemoAnalyzers(true);
+    expect(fresh.list().some((a) => a.state === "approved")).toBe(false);
+    expect(fresh.insights().results).toEqual([]);
+    expect(total(fresh.insights().open)).toBe(0);
+  });
+});
+
 describe("analyzer helpers", () => {
   it("counts, orders and describes severities", () => {
     const c = { ...emptyCounts(), medium: 2, critical: 1, low: 4 };
