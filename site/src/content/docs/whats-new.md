@@ -1,12 +1,30 @@
 ---
 title: What's new
-description: "What's new in holdmap: 0.10.0 adds opt-in analyzers, a guided add-your-own flow and Security; 0.9.0 added Home as Cards or Map."
+description: "What's new in holdmap: 0.11.0 records only the holdmap window and adds recording presets; 0.10.0 added opt-in analyzers and Security."
 order: 1.5
 ---
 
 The [changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md) records
 every change, and [releases](https://github.com/santoshshinde2012/holdmap/releases) has the
 notes for each version.
+
+## 0.11.0
+
+**holdmap 0.11.0** records only its own window, adds recording presets, and fixes what a pass over
+every screen found:
+
+- **Window-only recording.** Other apps, your desktop and notifications are never captured. macOS
+  records the holdmap window directly, with no picker. Browsers are asked for this tab and the
+  choice is checked; a screen or another window is refused before a frame is read. Browsers that
+  don't report what they share (Firefox, Safari) and the Linux screen-sharing portal are refused too,
+  because window-only can't be guaranteed there: use the macOS app or a Chromium tab.
+  [Record the screen](../desktop/#record-the-screen).
+- **Recording presets.** *Share a clip* (GIF, 15 s, up to 10 MB) or *Full session* (MP4, up to 30
+  minutes), with a live size estimate, pause, and the saved path with Copy and Show in folder.
+- **Every screen checked.** Contrast, target sizes, keyboard access, empty states and diagram text
+  fixed across all views in light and dark.
+- **MCP:** all read-only tools declare their four annotation hints explicitly.
+- Builds are unsigned; see [first open](../desktop/#first-open).
 
 ## 0.10.0
 
