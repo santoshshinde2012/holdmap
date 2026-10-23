@@ -29,7 +29,7 @@ by [release-please](https://github.com/googleapis/release-please) from
   another window, or a browser that can't say what it shares is refused before a frame is read. The snapshot
   *Screen or window* choice became *Holdmap window*, and a small indicator shows while recording.
 - **More reliable CI.** The browser install for the end-to-end job downloads the browser without the apt font packages (a stalled mirror can no longer hold it up) and the job
-  has more headroom, after a stalled download used up the whole 15-minute budget.
+  has more headroom, after a stalled download used up the whole 15-minute budget. Linux package installs now retry and give up after 10 minutes instead of stalling the job.
 
 ## [0.10.0] - 2026-10-22
 
