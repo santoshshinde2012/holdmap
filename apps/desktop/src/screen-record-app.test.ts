@@ -20,7 +20,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 function stream() {
-  const track = { readyState: "live", stop: vi.fn() };
+  const track = { readyState: "live", label: "Holdmap", getSettings: () => ({ displaySurface: "browser" }), stop: vi.fn() };
   return { track, stream: { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream };
 }
 function result(): CaptureResult {
@@ -60,7 +60,7 @@ async function choose(view: ReturnType<typeof mount>) {
   await fireEvent.click(view.getByRole("button", { name: /^Record screen$/ }));
   await vi.dynamicImportSettled();
   await vi.advanceTimersByTimeAsync(0);
-  await fireEvent.click(view.getByRole("button", { name: "Choose screen…" }));
+  await fireEvent.click(view.getByRole("button", { name: "Start recording" }));
   await vi.dynamicImportSettled();
 }
 
@@ -75,10 +75,10 @@ describe("screen recording lifecycle", () => {
     await fireEvent.click(view.getByRole("button", { name: /^Record screen$/ }));
     expect(view.getByRole("status").textContent).toContain("Checking screen recording support");
     expect(view.queryByText("Screen capture unavailable")).toBeNull();
-    expect(view.queryByRole("button", { name: "Choose screen…" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Start recording" })).toBeNull();
     capabilities.resolve({ available: true, reason: null });
     await vi.advanceTimersByTimeAsync(0);
-    expect(view.getByRole("button", { name: "Choose screen…" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Start recording" })).toBeTruthy();
     expect(capture).not.toHaveBeenCalled();
   });
 
@@ -207,13 +207,13 @@ describe("screen recording lifecycle", () => {
     recording.stop.mockRejectedValueOnce(new Error("Encoding timed out"));
     capture.mockResolvedValueOnce(stream().stream);
     encoder.start.mockResolvedValueOnce(recording);
-    await fireEvent.click(view.getByRole("button", { name: "Choose screen…" }));
+    await fireEvent.click(view.getByRole("button", { name: "Start recording" }));
     await vi.dynamicImportSettled();
     await fireEvent.click(view.getByRole("button", { name: "Stop screen recording" }));
     await vi.advanceTimersByTimeAsync(20);
     expect(view.getByRole("alert").textContent).toContain("Couldn't finish");
     expect(view.getByRole("alert").textContent).toContain("Encoding timed out");
-    expect((view.getByRole("button", { name: "Choose screen…" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((view.getByRole("button", { name: "Start recording" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("releases late picker streams after the app unmounts", async () => {

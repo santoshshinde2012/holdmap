@@ -209,9 +209,10 @@ automated security updates are enabled. [Architecture notes](docs/architecture.m
 describe the boundaries and fixtures behind these checks.
 
 PNG snapshots and screen recording are local. App-view snapshots render the
-visible Holdmap viewport without screen-sharing permission; selected-source snapshots require
-an explicit system picker, or borrow the already selected video source. Capture results can
-contain the information visible in that view or source. Exports stay local and are saved only
+visible Holdmap viewport without screen-sharing permission. Window snapshots and video capture
+are limited to Holdmap's own window: macOS uses an independent-window ScreenCaptureKit filter with no
+display or other-app fallback, and browsers must share the holdmap tab or window, which is verified
+and refused otherwise. Capture results can contain whatever Holdmap itself shows. Exports stay local and are saved only
 through an explicit user action. Native snapshot commands use the trusted-main-window gate,
 opaque independent handles, private temporary files and bounded PNG validation (3840×2160,
 32 MiB) before atomic saving. Cancelling a borrowed snapshot does not stop its video session.

@@ -10,7 +10,7 @@ test("records a local MP4 and GIF that can be downloaded", async ({ app }) => {
   await expect(confirm).toContainText("No microphone or system audio");
   await confirm.getByRole("radio", { name: "Both" }).click();
   await expect(confirm.getByRole("radio", { name: "Custom" })).toBeChecked();
-  await confirm.getByRole("button", { name: "Choose screen…" }).click();
+  await confirm.getByRole("button", { name: "Start recording" }).click();
   await expect(app.getByRole("button", { name: "Stop screen recording" })).toBeVisible({ timeout: 10_000 });
   await expect(app.locator(".rec-time")).toHaveText(/0:\d\d/);
   await expect(app.getByRole("status").filter({ hasText: "Recording" })).toBeAttached();
@@ -141,13 +141,38 @@ test("command palette opens the local recorder and Escape cancels before capture
   await expect(app.getByRole("button", { name: "Stop screen recording" })).toHaveCount(0);
 });
 
+test("states and enforces that only the holdmap window is recorded", async ({ app }) => {
+  await app.getByRole("button", { name: "Record screen", exact: true }).click();
+  const dialog = app.getByRole("dialog", { name: "Record screen" });
+  await expect(dialog).toContainText("Records only the holdmap window");
+  await expect(dialog).toContainText("Other apps, your desktop and notifications are never captured");
+  // A user who shares a whole screen anyway gets a clear refusal, and nothing keeps recording.
+  await app.evaluate(() => { window.__holdmapCapture.mode = "monitor"; });
+  await dialog.getByRole("button", { name: "Start recording" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("records only its own window");
+  await expect(dialog.getByRole("alert")).toContainText("Nothing was recorded");
+  await expect(app.getByRole("button", { name: "Stop screen recording" })).toHaveCount(0);
+  await expect.poll(() => app.evaluate(() => window.__holdmapCapture.streams[0].getVideoTracks()[0].readyState)).toBe("ended");
+  // The browser was steered to this tab, with no screens or audio on offer.
+  expect(await app.evaluate(() => window.__holdmapCapture.options[0])).toMatchObject({
+    preferCurrentTab: true, monitorTypeSurfaces: "exclude", systemAudio: "exclude", audio: false, video: { displaySurface: "browser" },
+  });
+  await app.evaluate(() => { window.__holdmapCapture.mode = "ready"; });
+  await dialog.getByRole("button", { name: "Start recording" }).click();
+  const stop = app.getByRole("button", { name: "Stop screen recording" });
+  await expect(stop).toBeVisible();
+  await expect(app.locator(".cluster.rec")).toHaveAttribute("title", "Records only the holdmap window");
+  await expect(app.getByRole("status").filter({ hasText: "Only the holdmap window is recorded" })).toBeAttached();
+  await stop.click();
+});
+
 test("cancelling a pending screen picker ignores and releases its later stream", async ({ app }) => {
   await app.evaluate(() => { window.__holdmapCapture.mode = "pending"; });
   const trigger = app.getByRole("button", { name: "Record screen", exact: true });
   await trigger.click();
   const dialog = app.getByRole("dialog", { name: "Record screen" });
-  await dialog.getByRole("button", { name: "Choose screen…" }).click();
-  await expect(dialog.getByRole("status")).toContainText("picker");
+  await dialog.getByRole("button", { name: "Start recording" }).click();
+  await expect(dialog.getByRole("status")).toContainText("holdmap tab or window");
   await dialog.press("Escape");
   await app.evaluate(() => { window.__holdmapCapture.pending.shift()?.(); });
   await expect.poll(() => app.evaluate(() => window.__holdmapCapture.streams[0].getVideoTracks()[0].readyState)).toBe("ended");
@@ -160,10 +185,10 @@ test("permission failure can be retried and ending sharing opens the saved resul
   await app.evaluate(() => { window.__holdmapCapture.mode = "denied"; });
   await app.getByRole("button", { name: "Record screen", exact: true }).click();
   const dialog = app.getByRole("dialog", { name: "Record screen" });
-  await dialog.getByRole("button", { name: "Choose screen…" }).click();
+  await dialog.getByRole("button", { name: "Start recording" }).click();
   await expect(dialog.getByRole("alert")).toContainText("cancelled or permission was denied");
   await app.evaluate(() => { window.__holdmapCapture.mode = "ready"; });
-  await dialog.getByRole("button", { name: "Choose screen…" }).click();
+  await dialog.getByRole("button", { name: "Start recording" }).click();
   await expect(app.getByRole("button", { name: "Stop screen recording" })).toBeVisible();
   await app.waitForTimeout(400);
   await app.evaluate(() => {
@@ -195,7 +220,7 @@ test("unsupported capture explains the current window without promising desktop 
   await app.getByRole("button", { name: "Record screen", exact: true }).click();
   const dialog = app.getByRole("dialog", { name: "Record screen" });
   await expect(dialog).toContainText("Screen capture unavailable");
-  await expect(dialog.getByRole("button", { name: "Choose screen…" })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Start recording" })).toHaveCount(0);
   await dialog.press("Escape");
   await expect(app.getByRole("button", { name: "Record screen", exact: true })).toBeFocused();
 });
@@ -213,7 +238,7 @@ test("presets set format and length with a live estimate, and the clip preset ma
   await expect(confirm.getByRole("radio", { name: "GIF", exact: true })).toBeChecked();
   await expect(estimate).toContainText("GIF");
   await expect(estimate).not.toContainText("MP4");
-  await confirm.getByRole("button", { name: "Choose screen…" }).click();
+  await confirm.getByRole("button", { name: "Start recording" }).click();
   await expect(app.getByRole("button", { name: "Stop screen recording" })).toBeVisible({ timeout: 10_000 });
   await app.waitForTimeout(700);
   await app.getByRole("button", { name: "Stop screen recording" }).click();
@@ -226,7 +251,7 @@ test("presets set format and length with a live estimate, and the clip preset ma
 
 test("a recording can be paused and resumed from the title bar", async ({ app }) => {
   await app.getByRole("button", { name: "Record screen", exact: true }).click();
-  await app.getByRole("dialog", { name: "Record screen" }).getByRole("button", { name: "Choose screen…" }).click();
+  await app.getByRole("dialog", { name: "Record screen" }).getByRole("button", { name: "Start recording" }).click();
   const pause = app.getByRole("button", { name: "Pause screen recording" });
   await expect(pause).toBeVisible({ timeout: 10_000 });
   await expect(pause).toHaveAttribute("aria-pressed", "false");

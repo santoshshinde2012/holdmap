@@ -21,7 +21,7 @@ export async function captureScreenSnapshot(backend: NonNullable<RecordingSuppor
     const selected = await snapshotWait(requested.then((value) => {
       if (abandoned || signal.aborted) { stopTracks(value); throw snapshotCancelled(); }
       return value;
-    }), signal, 120_000, "Screen selection took too long. Choose a screen again.");
+    }), signal, 120_000, "Sharing took too long. Try again.");
     stream = selected;
     if (signal.aborted) throw snapshotCancelled();
     if (!selected.getVideoTracks().some((track) => track.readyState === "live")) throw new Error("Screen sharing ended before a snapshot was available.");

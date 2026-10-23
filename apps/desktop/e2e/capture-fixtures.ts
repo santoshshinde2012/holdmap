@@ -6,7 +6,8 @@ export { expect };
 const { app: { security: { csp } } } = JSON.parse(await readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
 
 type CaptureFixture = {
-  mode: "ready" | "pending" | "denied";
+  mode: "ready" | "pending" | "denied" | "monitor";
+  options: unknown[];
   requests: number;
   pngOverlayPresence: boolean[];
   pngPalettePresence: boolean[];
@@ -41,7 +42,7 @@ export const test = base.extend<{ app: import("@playwright/test").Page }>({
         requestAnimationFrame(paint);
       };
       requestAnimationFrame(paint);
-      const capture: CaptureFixture = { mode: "ready", requests: 0, pngOverlayPresence: [], pngPalettePresence: [], streams: [], pending: [] };
+      const capture: CaptureFixture = { mode: "ready", options: [], requests: 0, pngOverlayPresence: [], pngPalettePresence: [], streams: [], pending: [] };
       window.__holdmapCapture = capture;
       const toBlob = HTMLCanvasElement.prototype.toBlob;
       HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
@@ -53,10 +54,17 @@ export const test = base.extend<{ app: import("@playwright/test").Page }>({
       };
       Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", {
         configurable: true,
-        value: async () => {
+        value: async (options: unknown) => {
           capture.requests++;
+          capture.options.push(options);
           if (capture.mode === "denied") throw new DOMException("Permission denied", "NotAllowedError");
           const stream = canvas.captureStream(12);
+          // Like a browser tab share; "monitor" is a user picking a whole screen anyway.
+          const displaySurface = capture.mode === "monitor" ? "monitor" : "browser";
+          for (const track of stream.getVideoTracks()) {
+            const settings = track.getSettings.bind(track);
+            track.getSettings = () => ({ ...settings(), displaySurface }) as MediaTrackSettings;
+          }
           capture.streams.push(stream);
           if (capture.mode === "pending") await new Promise<void>((resolve) => capture.pending.push(resolve));
           return stream;

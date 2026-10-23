@@ -468,7 +468,7 @@ export class ScreenRecording {
       }
     }
     if (!this.gif && !this.mp4) throw new Error("This window cannot create the requested recording.");
-    if (track.readyState === "ended") throw new Error("Screen sharing ended before recording could start. Choose a screen again.");
+    if (track.readyState === "ended") throw new Error("Screen sharing ended before recording could start. Try again.");
     this.startedAt = performance.now();
     this.pausedAt = null;
     this.pausedTotal = 0;

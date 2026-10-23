@@ -29,13 +29,13 @@ describe("screen record dialog", () => {
     expect(screen.getByRole("dialog", { name: "Record screen" })).toBeTruthy();
     expect(screen.getByText(/Nothing is uploaded/)).toBeTruthy();
     expect(screen.getByText(/No microphone or system audio/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Choose screen…" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start recording" })).toBeTruthy();
   });
 
-  it("starts capture from Choose screen", async () => {
+  it("starts capture from Start recording", async () => {
     const onstart = vi.fn();
     render(ScreenRecordDialog, { phase: "confirm", supported: true, onstart, onclose: vi.fn() });
-    await fireEvent.click(screen.getByRole("button", { name: "Choose screen…" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Start recording" }));
     expect(onstart).toHaveBeenCalledOnce();
   });
 
@@ -54,7 +54,7 @@ describe("screen record dialog", () => {
   it("explains unavailable capture without offering a picker that cannot work", () => {
     render(ScreenRecordDialog, { phase: "confirm", supported: false, onstart: vi.fn(), onclose: vi.fn() });
     expect(screen.getByText("Screen capture unavailable")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Choose screen…" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start recording" })).toBeNull();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
   });
 
@@ -64,7 +64,7 @@ describe("screen record dialog", () => {
     expect(screen.queryByText("Screen capture unavailable")).toBeNull();
     await view.rerender({ phase: "confirm", supported: false, checkingSupport: false, unsupportedReason: "Native recording requires macOS 14 or newer.", onstart: vi.fn(), onclose: vi.fn() });
     expect(screen.getByText("Native recording requires macOS 14 or newer.")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Choose screen…" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start recording" })).toBeNull();
   });
 
   it("offers MP4 and GIF downloads from a finished capture", async () => {

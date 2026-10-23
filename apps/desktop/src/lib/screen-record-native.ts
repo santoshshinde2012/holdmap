@@ -29,17 +29,17 @@ const cancelled = () => new DOMException("Recording cancelled.", "AbortError");
 function friendlyMessage(message: string): string {
   const messages: Record<string, string> = {
     unsupported_os: "Native screen recording requires macOS 14 or newer. Update macOS, or use a browser that supports screen sharing.",
-    picker_failed: "Couldn't open the screen picker. Choose a screen again to retry.",
-    permission_denied: "Screen recording permission was denied. Allow Holdmap in System Settings, then choose a screen again.",
-    capture_start_failed: "Couldn't start capturing the selected screen. Check screen recording permission in System Settings, then retry.",
-    invalid_dimensions: "The selected screen has an unsupported size. Try another screen or window.",
-    capture_setup_failed: "Couldn't prepare the selected screen for recording. Choose a screen again to retry.",
+    window_unavailable: "Holdmap can only record its own window, and that window isn't on screen. Bring it forward (not minimized or hidden), then record again. Nothing else is ever recorded.",
+    permission_denied: "Screen recording permission was denied. Allow Holdmap in System Settings, then record again.",
+    capture_start_failed: "Couldn't start capturing the holdmap window. Check screen recording permission in System Settings, then retry.",
+    invalid_dimensions: "The holdmap window has an unsupported size. Resize it and try again.",
+    capture_setup_failed: "Couldn't prepare the holdmap window for recording. Try recording again.",
     missing_writer: "The video encoder couldn't start. Try recording again.",
     mp4_failed: "Couldn't finish the recording. Try recording again.",
     gif_failed: "Couldn't finish the GIF. The MP4 may still be available.",
     missing_directory: "The temporary recording files are unavailable. Try recording again.",
   };
-  return messages[message] || (/^[a-z][a-z0-9_]*$/.test(message) ? "Native screen recording failed. Choose a screen again to retry." : message);
+  return messages[message] || (/^[a-z][a-z0-9_]*$/.test(message) ? "Native screen recording failed. Try recording again." : message);
 }
 
 /** The native recorder re-validates every limit; the plan only chooses within them. */
@@ -198,8 +198,8 @@ export class NativeRecordingSession implements RecordingSession {
 
   private assertUsable() {
     if (this.discarded || this.controller.signal.aborted) throw cancelled();
-    if (this.status.phase === "cancelled") throw new Error("Screen selection was cancelled. Choose a screen again to retry.");
-    if (this.status.phase === "error") throw new Error(this.status.error ? friendlyMessage(this.status.error) : "Native screen recording failed. Choose a screen again to retry.");
+    if (this.status.phase === "cancelled") throw new Error("Recording was cancelled. Start again to retry.");
+    if (this.status.phase === "error") throw new Error(this.status.error ? friendlyMessage(this.status.error) : "Native screen recording failed. Try recording again.");
   }
 
   private notifyEnded() {

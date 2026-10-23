@@ -48,19 +48,19 @@ snapshots, a readable service graph and the **Explore / Map / Compare** capabili
 Use the camera button, **Take snapshot…** or `⇧S` to choose what to capture:
 
 - **Holdmap view:** the visible app viewport, without screen-sharing permission.
-- **Screen or window:** an explicit system picker chooses the source, then sharing ends
+- **Holdmap window:** the system captures only holdmap's own window, then sharing ends
   after the still is captured.
-- **Recording source:** while video is active, take a still from its existing source without
-  another picker or stopping the video.
+- **Recording window:** while video is active, take a still from the window being recorded
+  without stopping the video.
 
 Review and save the PNG locally. Images preserve their aspect ratio within **3840×2160**
 and **32 MiB**. Closing the preview or cancelling a save retains it for retry; a new capture
 replaces it only on success. **Discard snapshot**, reload or quit clears the retained image.
 The desktop opens a native save dialog; the browser starts a download. Nothing is uploaded.
 
-App-view snapshots work separately from display-capture support. The native selected-source
-fallback requires **macOS 14 or later**; other platforms use browser screen-sharing support
-and their system picker. [Snapshot sources and limits](../desktop/#take-a-png-snapshot).
+App-view snapshots work separately from display-capture support. The native window path
+requires **macOS 14 or later**; other platforms use browser screen-sharing support and refuse
+anything that is not the holdmap tab or window. [Snapshot sources and limits](../desktop/#take-a-png-snapshot).
 Video recording retains its two-minute, no-audio MP4/GIF workflow and now uses the video icon.
 
 ### A readable service graph
