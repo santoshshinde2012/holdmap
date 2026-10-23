@@ -2,7 +2,6 @@ import {
   BufferTarget,
   Quality,
   Mp4OutputFormat,
-  MediaStreamVideoTrackSource,
   Output,
   canEncodeVideo,
 } from "mediabunny";
@@ -15,6 +14,7 @@ import {
   type RecordingListener,
 } from "./screen-record";
 import { LEGACY_PLAN, MEMORY_MP4_LIMIT_BYTES, planWantsGif, planWantsMp4, type RecordingPlan } from "./screen-record-plan";
+import { createTrackSource } from "./screen-record-source";
 import type { GifProgress } from "./screen-record-gif";
 import { captureVideoSnapshot, snapshotCancelled, snapshotSignal, type SnapshotResult } from "./screen-snapshot";
 
@@ -91,7 +91,7 @@ async function startWebCodecsMp4(track: MediaStreamVideoTrack, signal: AbortSign
   let failure: unknown = null;
   let encodedBytes = 0;
   let softLimitReported = false;
-  const source = new MediaStreamVideoTrackSource(track, {
+  const frames = createTrackSource(track, {
     codec: "avc",
     quality,
     latencyMode: "realtime",
@@ -108,31 +108,32 @@ async function startWebCodecsMp4(track: MediaStreamVideoTrack, signal: AbortSign
       // Leave room for MP4 metadata and indexes in addition to encoded packets.
       if (encodedBytes > MAX_MP4_BYTES - 1024 * 1024) throw new Error("The MP4 exceeded the 128 MiB recording limit.");
     },
-  }, { frameRate: 30 });
-  void source.errorPromise.catch((cause) => {
+  }, 30);
+  void frames.errorPromise.catch((cause) => {
     failure = cause;
-    source.close();
+    frames.close();
     void output.cancel().catch(() => undefined);
   });
-  output.addVideoTrack(source);
-  const cancel = () => { source.close(); void output.cancel().catch(() => undefined); };
+  output.addVideoTrack(frames.source);
+  const cancel = () => { frames.close(); void output.cancel().catch(() => undefined); };
   signal.addEventListener("abort", cancel, { once: true });
   try {
     if (signal.aborted) { cancel(); return null; }
     await output.start();
     if (signal.aborted) { cancel(); return null; }
+    frames.begin();
   } catch (cause) {
-    source.close();
+    frames.close();
     await output.cancel().catch(() => undefined);
     throw cause;
   } finally {
     signal.removeEventListener("abort", cancel);
   }
   return {
-    close: () => source.close(),
-    cancel: () => { source.close(); void output.cancel().catch(() => undefined); },
-    pause: () => source.pause(),
-    resume: () => source.resume(),
+    close: () => frames.close(),
+    cancel: () => { frames.close(); void output.cancel().catch(() => undefined); },
+    pause: () => frames.pause(),
+    resume: () => frames.resume(),
     async finalize() {
       if (failure) throw failure;
       await output.finalize();

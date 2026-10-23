@@ -108,7 +108,8 @@ A timer in the title bar replaces the dialog so this window can be part of the c
 shows the time left in the last seconds, then stops by itself and tells you why. **Pause**
 leaves a stretch out of the files (the browser pipeline and Windows/Linux; the macOS native
 recorder cannot pause yet). **Stop screen recording** or `⇧V` ends it. Recording continues
-while Holdmap is hidden or minimized.
+while Holdmap is hidden or minimized. If the app freezes for a moment, that moment is skipped
+rather than replayed, so a long recording cannot run out of memory.
 
 When it ends, **Download recording** previews and saves the files. The desktop app opens a
 native save dialog and then shows the saved path with **Copy** and **Show in folder**. A cancelled save

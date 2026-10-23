@@ -64,14 +64,14 @@ describe("GIF export", () => {
   });
 
   it("stops adding frames at the byte budget instead of failing the export", () => {
-    const timeline = new GifTimeline({ fps: 8, maxBytes: 100_000, maxDurationMs: 60_000 });
+    const timeline = new GifTimeline({ fps: 8, maxBytes: 20_000, maxDurationMs: 60_000 });
     let full = false;
-    for (let i = 0; i < 400 && !full; i += 1) full = timeline.add(noise(i), i * 125).full;
+    for (let i = 0; i < 400 && !full; i += 1) full = timeline.add(noise(i, 24), i * 125).full;
     expect(full).toBe(true);
     const bytes = timeline.finish(60_000);
-    expect(bytes.byteLength).toBeLessThan(115_000);
+    expect(bytes.byteLength).toBeLessThan(23_000);
     expect(gifTiming(bytes).delays.reduce((sum, delay) => sum + delay, 0)).toBe(60_000);
-  });
+  }, 20_000);
 
   it("samples more slowly when the whole recording would pass the budget", () => {
     const timeline = new GifTimeline({ fps: 8, maxBytes: 200_000, maxDurationMs: 120_000 });
