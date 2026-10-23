@@ -27,28 +27,28 @@ fn build_catalog() -> Value {
                 "dev_only": {"type": "boolean", "description": "Only likely development servers"},
                 "protocol": {"type": "string", "enum": ["tcp", "udp"]}
             }},
-            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "explain_port",
             "title": "Explain why a port is busy",
             "description": "Plain-English root cause for a port (process tree, container, supervisor, OS service, TIME_WAIT, other user) plus the recommended fix and stop plan, who is connected, uptime, bind-address risk and the HTTP status/title. Command lines have secrets hidden.",
             "inputSchema": {"type": "object", "properties": {"port": {"type": "integer", "minimum": 1, "maximum": 65535}}, "required": ["port"]},
-            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "inspect_port",
             "title": "Inspect a port in full",
             "description": "Full inspection of a port: process tree, who is connected, bind-address risk, HTTP status/title, recommended fix and stop plan. Same structured result as explain_port. Command lines have secrets hidden.",
             "inputSchema": {"type": "object", "properties": {"port": {"type": "integer", "minimum": 1, "maximum": 65535}}, "required": ["port"]},
-            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "find_free_port",
             "title": "Find a free port",
             "description": "Find a free TCP port before starting a server. With near, checks at most 500 ports at or above that number; without it, asks the OS for an ephemeral port. The result is a point-in-time check and does not reserve the port.",
             "inputSchema": {"type": "object", "properties": {"near": {"type": "integer", "minimum": 1, "maximum": 65535}}},
-            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "wait_for_port",
@@ -59,7 +59,7 @@ fn build_catalog() -> Value {
                 "timeout_s": {"type": "number", "minimum": 0.1, "maximum": 600, "default": 30},
                 "until_free": {"type": "boolean", "default": false}
             }, "required": ["port"]},
-            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "get_topology",
@@ -69,7 +69,7 @@ fn build_catalog() -> Value {
                 "all": {"type": "boolean", "default": false, "description": "Include system/app services, not only dev services and their peers"},
                 "format": {"type": "string", "enum": ["json", "mermaid", "dot", "tree"], "default": "json"}
             }},
-            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "list_agents",
@@ -79,7 +79,7 @@ fn build_catalog() -> Value {
                 "agent": {"type": "string", "description": "Filter by product id, name, vendor, folder, visible capability/tool name or exact agent/child PID"},
                 "include_capabilities": {"type": "boolean", "default": false, "description": "Explicitly inspect bounded local MCP definitions and skill file locations; no loading or usage claim"}
             }},
-            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "get_agent_flow",
@@ -88,14 +88,14 @@ fn build_catalog() -> Value {
             "inputSchema": {"type": "object", "properties": {
                 "agent": {"type": "string", "description": "Filter by product id, name, vendor, observed folder, running child-tool name or exact agent/child PID. Does not inspect configured MCP or installed skill inventory."}
             }},
-            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "list_analyzers",
             "title": "Opt-in analyzers and their state",
             "description": "List the analyzers holdmap knows (bundled OSV lookup and SkillSpector) with state (not_installed, not_approved, approved, changed), declared network hosts and what they send, sandbox level and last run. Read-only: never runs, installs or approves an analyzer; the user turns them on in holdmap.",
             "inputSchema": {"type": "object", "properties": {}},
-            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "list_insights",
@@ -107,14 +107,14 @@ fn build_catalog() -> Value {
                 "min_severity": {"type": "string", "enum": ["info", "low", "medium", "high", "critical"], "default": "info"},
                 "include_closed": {"type": "boolean", "default": false, "description": "Include reviewed and snoozed findings"}
             }},
-            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "list_needs",
             "title": "What needs the user's attention",
             "description": "The short \"needs you\" list holdmap shows on Home: agents listening on all interfaces, agents running as root or with wider access than usual, documented settings that skip approvals or the sandbox, unpinned MCP servers, dev servers open to the network and open medium-or-worse findings from approved analyzers. Each item has a rule, severity (high/medium), title, detail, target and, where stopping is the usual fix, a stop to preview with stop_port or stop_agent_ports. Read-only: never stops, runs or changes anything.",
             "inputSchema": {"type": "object", "properties": {}},
-            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "stop_agent_ports",
@@ -133,7 +133,7 @@ fn build_catalog() -> Value {
             "title": "Plan stopping a cluster",
             "description": "Dry-run only: the dependency-ordered plan (dependents first) for stopping every service in a cluster, with warnings about outside dependents. Never executes; ask the user to run `holdmap stop --cluster NAME`.",
             "inputSchema": {"type": "object", "properties": {"cluster": {"type": "string", "minLength": 1, "description": "Cluster id or name from get_topology"}}, "required": ["cluster"]},
-            "annotations": {"readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "stop_port",
