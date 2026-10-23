@@ -868,8 +868,8 @@ published asset digests and IDs, then publishes the complete `latest.json` index
   and blob downloads. `lib/screen-record-backend.ts` chooses browser or native capture.
   `lib/screen-record-encode.ts` processes browser video (video only),
   encodes H.264/MP4 with WebCodecs (`mediabunny`) or `MediaRecorder` when that codec is missing,
-  and writes a bounded GIF with `gifenc`. `ScreenRecordDialog.svelte` confirms before the OS
-  picker, then the title bar shows Stop + elapsed time so the modal does not cover this window
+  and writes a bounded GIF with `gifenc`. `ScreenRecordDialog.svelte` confirms before capture
+  starts, then the title bar shows Stop + elapsed time so the modal does not cover this window
   while recording. Files stay on the machine (`blob:` / `mediastream:` CSP; macOS Screen Recording
   usage string). `lib/screen-record-native.ts` adapts the bounded native session and binary exports
   to the same preview. Tests cover helpers, both backends, the dialog and synthetic media.
@@ -1319,17 +1319,19 @@ flowchart LR
 ### Screen recording
 
 Screen pixels have a separate, user-initiated lifecycle from agent activity metadata. The
-capture call runs directly from the Choose screen action so the operating system retains
+capture call runs directly from the Start recording click so the browser retains
 control of source selection and consent. A generation guard releases late streams after
 cancellation or unmount, and stopping releases capture tracks before finalizing exports.
 Holdmap does not persist screen selection or a permission decision, and no audio is requested.
 The operating system manages any retained privacy permission separately.
 `screen-record-backend.ts` selects the browser or native session behind one small
 stop/discard/elapsed-time contract. Capability discovery never opens a picker. When
-`getDisplayMedia` is absent, macOS 14+ uses ScreenCaptureKit's public system picker;
+`getDisplayMedia` is absent, macOS 14+ captures its own window with ScreenCaptureKit's
+`SCContentFilter(desktopIndependentWindow:)`, looked up by this process id, with no picker, no display
+or other-app filter and a `window_unavailable` failure instead of widening scope;
 older macOS versions remain launchable through weak framework linking and availability checks.
 The Rust boundary accepts opaque session handles rather than paths, authorizes the local
-main window and owns one private temporary directory. The Swift adapter confines picker
+main window and owns one private temporary directory. The Swift adapter confines window lookup
 and stream lifecycle to the main thread, writes H.264 locally and prepares the GIF after
 capture stops. Independent native duration and size bounds survive renderer suspension.
 Cancellation waits for stream/writer/export completion before releasing native files;
@@ -1370,7 +1372,7 @@ the [WebKit capture-permission fix](https://bugs.webkit.org/show_bug.cgi?id=2748
 the [gifenc worker guidance](https://github.com/mattdesl/gifenc), and
 [Tauri native dialogs](https://v2.tauri.app/plugin/dialog/). Synthetic owned canvas streams
 validate actual MP4/GIF content without capturing a user's screen or requesting capture permissions.
-The native fallback follows Apple's [ScreenCaptureKit content-sharing picker](https://developer.apple.com/documentation/screencapturekit/sccontentsharingpicker).
+The native path follows Apple's [independent-window content filter](https://developer.apple.com/documentation/screencapturekit/sccontentfilter/init(desktopindependentwindow:)).
 Its synthetic pixel fixture exercises the production native MP4/GIF writer without requesting
 screen permission. The packaged WKWebView check asserts original browser API availability
 before synthetic capture, and separately checks the actual minified app's confirmation dialog.
@@ -1378,12 +1380,15 @@ before synthetic capture, and separately checks the actual minified app's confir
 ### PNG snapshots
 
 The camera action (`⇧S`) separates the
-visible **Holdmap view** from an explicitly selected **Screen or window**. App-view capture
-does not request screen-sharing permission. An active video session can expose a borrowed
-**Recording source**; taking its PNG neither opens another picker nor owns the recording's
-stop/discard lifecycle. A newly selected source is released after the still is captured.
-Browser capture uses its display picker; the native fallback uses Apple's public picker
-on macOS 14 or later. All sources omit audio and return the same bounded PNG result:
+visible **Holdmap view** from the **Holdmap window**. App-view capture
+does not request screen-sharing permission. An active video session can expose its
+**Recording window**; taking its PNG neither shares anything new nor owns the recording's
+stop/discard lifecycle. A newly shared window is released after the still is captured.
+Browser capture hints the picker toward this tab (`preferCurrentTab`, `displaySurface: "browser"`,
+screens excluded) and then verifies the track in `lib/capture-surface.ts`: a tab, or a window titled
+Holdmap, is accepted; a screen, another window or an unidentifiable source is stopped before any
+frame is read. Tab capture is already confined to the tab by the browser, so no element crop is
+added. The native path uses the own-window filter on macOS 14 or later. All sources omit audio and return the same bounded PNG result:
 aspect ratio preserved within 3840×2160 and 32 MiB.
 
 The SOLID boundaries keep source acquisition, result ownership and saving independent:

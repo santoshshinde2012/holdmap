@@ -1,5 +1,5 @@
 //! Native capture owns one private session; renderer IPC receives opaque handles and bytes.
-//! Source selection and capture are exclusively the native adapter's explicit OS picker.
+//! The native adapter captures only holdmap's own window; there is no source picker and no wider fallback.
 
 use crate::capture_bridge::native_command;
 use crate::capture_lease::{lock, Operation, Session};
@@ -113,7 +113,7 @@ fn parse_status(value: Value, id: &str) -> Result<Status, String> {
     })
 }
 
-/// What the user chose before the picker opened. Every value is clamped here, so the native
+/// What the user chose before capture started. Every value is clamped here, so the native
 /// recorder only ever sees limits this app accepts; omitted fields keep the two-minute defaults.
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -331,7 +331,7 @@ pub(crate) async fn start_screen_recording<R: Runtime>(
         return Err("Native screen recording requires macOS 14 or newer.".into());
     }
     let app = window.app_handle().clone();
-    // Detached operation ownership survives an IPC caller disappearing during a picker.
+    // Detached operation ownership survives an IPC caller disappearing during window lookup.
     tauri::async_runtime::spawn(async move {
         let session = app.state::<ScreenRecordingState>().reserve(epoch)?;
         let operation = Operation::acquire(Arc::clone(&session))?;

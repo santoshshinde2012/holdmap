@@ -73,9 +73,9 @@ const foreground = async (stage) => {
   report.foregroundChecks.push({ stage, visibility: document.visibilityState, focused: document.hasFocus() });
 };
 const entryReady = async (dialog) => {
-  await waitFor(() => [...dialog.querySelectorAll("button")].some((button) => button.textContent.includes("Choose screen"))
+  await waitFor(() => [...dialog.querySelectorAll("button")].some((button) => button.textContent.includes("Start recording"))
     || dialog.textContent.includes("Screen capture unavailable"), "recording capability discovery");
-  const choose = [...dialog.querySelectorAll("button")].find((button) => button.textContent.includes("Choose screen"));
+  const choose = [...dialog.querySelectorAll("button")].find((button) => button.textContent.includes("Start recording"));
   return {
     choose,
     ui: {
@@ -116,7 +116,7 @@ try {
     throw new Error("Production App/dialog disagrees with the original browser capability");
   }
   report.originalSupportedViaNative = !originalAvailable && !!choose;
-  // Close without ever clicking Choose screen.
+  // Close without ever clicking Start recording.
   [...dialog.querySelectorAll("button")].find((button) => button.textContent.trim() === "Cancel")?.click();
   await tick();
   await waitFor(() => !dialog.isConnected, "recording dialog outro");

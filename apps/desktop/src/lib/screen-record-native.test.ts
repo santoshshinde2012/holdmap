@@ -304,7 +304,13 @@ describe("native recording session", () => {
     expect(invoke).toHaveBeenCalledWith("discard_screen_recording", { sessionId: "owned-session" });
   });
 
-  it.each(["unsupported_os", "picker_failed", "capture_start_failed", "invalid_dimensions", "capture_setup_failed", "missing_writer", "mp4_failed", "gif_failed", "missing_directory"])("translates the native %s failure into actionable copy", async (code) => {
+  it("says plainly that only the holdmap window can be recorded when it is not on screen", async () => {
+    invoke.mockImplementation(async (command: string) => command === "start_screen_recording"
+      ? status({ phase: "error", error: "window_unavailable" }) : undefined);
+    await expect(start()).rejects.toThrow(/only record its own window.*Nothing else is ever recorded/);
+  });
+
+  it.each(["unsupported_os", "window_unavailable", "capture_start_failed", "invalid_dimensions", "capture_setup_failed", "missing_writer", "mp4_failed", "gif_failed", "missing_directory"])("translates the native %s failure into actionable copy", async (code) => {
     invoke.mockImplementation(async (command: string) => command === "start_screen_recording"
       ? status({ phase: "error", error: code }) : undefined);
     let failure: unknown;

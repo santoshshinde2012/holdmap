@@ -94,8 +94,11 @@ message explains when no connections are present.
 ## Record the screen
 
 The video icon in the status bar, **Record screen…** in the command palette, or `⇧V` opens
-the recorder. Pick what to make, then the operating system asks which display or window to
-share. Holdmap records only what you pick there, and never audio. Nothing is uploaded.
+the recorder. Pick what to make and start. **Holdmap records only its own window.** Other apps,
+your desktop and notifications are never captured, even when they sit on top, and there is never audio.
+Nothing is uploaded. The macOS app needs no picker: it records its own window directly. A browser or
+other desktop webview asks you to share the holdmap tab or window, then checks the choice and refuses
+anything wider, such as a whole screen or another window, without recording a frame.
 
 | Preset | Makes | Stops by itself after | Size |
 | --- | --- | --- | --- |
@@ -105,10 +108,11 @@ share. Holdmap records only what you pick there, and never audio. Nothing is upl
 
 The dialog shows the expected size and when recording will stop before you choose a screen.
 A timer in the title bar replaces the dialog so this window can be part of the capture. It
-shows the time left in the last seconds, then stops by itself and tells you why. **Pause**
+shows the time left in the last seconds, then stops by itself and tells you why. A small indicator
+says it is recording the holdmap window only. **Pause**
 leaves a stretch out of the files (the browser pipeline and Windows/Linux; the macOS native
-recorder cannot pause yet). **Stop screen recording** or `⇧V` ends it. Recording continues
-while Holdmap is hidden or minimized. If the app freezes for a moment, that moment is skipped
+recorder cannot pause yet). **Stop screen recording** or `⇧V` ends it. Keep holdmap open on screen:
+minimizing or hiding it freezes the picture. If the app freezes for a moment, that moment is skipped
 rather than replayed, so a long recording cannot run out of memory.
 
 When it ends, **Download recording** previews and saves the files. The desktop app opens a
@@ -136,19 +140,21 @@ app or browser there and retry. This is separate from
 [Agents → Flow recording](../agents/#set-up-optional-recording), which collects optional tool-call
 metadata rather than pixels.
 
-The macOS desktop app uses Apple's native screen picker on **macOS 14 or later** when its window does
-not offer browser screen capture. Native capture writes to a private temporary folder, and removes those files
-once you save or discard. The limits are enforced by the native app even while its window is hidden.
+The macOS desktop app captures its own window through ScreenCaptureKit on **macOS 14 or later** when its
+window does not offer browser screen capture; if that window is not on screen it stops with a clear message instead of
+recording anything wider. Native capture writes to a private temporary folder, and removes those files
+once you save or discard. The limits are enforced by the native app.
 Older macOS versions can record only when their webview provides screen sharing; otherwise use a
 supporting browser or the system screen recorder.
 
 Linux desktop capture needs PipeWire and a working ScreenCast portal for your desktop
-environment. Its system picker still asks which screen or window to share each time.
+environment. Its portal picker may offer whole screens, so Holdmap refuses any choice it cannot confirm
+is its own window; if it can't, use the macOS app, a Chromium browser tab or the system recorder.
 If that service is unavailable, try a browser with screen sharing or the system recorder.
 
-Choose the preset and see the estimate before choosing a screen or window:
+Choose the preset and see the estimate before you start:
 
-![The recorder offers a clip or full-session preset, shows the expected size and says it stays local](../../../../docs/screenshots/desktop-screen-record-light.png)
+![The recorder offers a clip or full-session preset, shows the expected size and says it records only the holdmap window and stays local](../../../../docs/screenshots/desktop-screen-record-light.png)
 
 ## Take a PNG snapshot
 
@@ -157,13 +163,13 @@ PNG snapshots are separate from video recording. Open the camera button, choose
 
 - **Holdmap view** captures the visible app, its current map and details without
   screen-sharing permission. The snapshot chooser is excluded.
-- **Screen or window** asks you to choose a source through the system picker. Sharing
-  ends after the PNG is captured, and no audio is requested. Browser screen-sharing
-  support and the platform requirements above apply; the native macOS fallback requires
-  **macOS 14 or later**. An unsupported screen source does not disable Holdmap-view snapshots.
-- During video recording, **Recording source** replaces the new-source choice. It takes
-  a still from the existing source without another picker or stopping the video. The
-  command palette also offers **Snapshot recording source** while that source is available.
+- **Holdmap window** captures only the holdmap window through the system, with the same own-window
+  rule as recording. Sharing ends after the PNG is captured, and no audio is requested. Browser
+  screen-sharing support and the platform requirements above apply; the native macOS path requires
+  **macOS 14 or later**. An unsupported source does not disable Holdmap-view snapshots.
+- During video recording, **Recording window** replaces the new-source choice. It takes
+  a still from the window being recorded without stopping the video. The
+  command palette also offers **Snapshot recording window** while that is available.
 
 Review the PNG before saving. Images preserve their aspect ratio within **3840×2160** and
 **32 MiB**. **Download PNG** opens a native save dialog in the desktop app; the browser

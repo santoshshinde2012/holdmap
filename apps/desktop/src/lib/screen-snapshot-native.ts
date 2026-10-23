@@ -16,15 +16,14 @@ const identifier = (value: unknown): value is string => typeof value === "string
 function friendlyError(code: string): string {
   const messages: Record<string, string> = {
     permission_denied: "Screen recording permission was denied. Allow Holdmap in System Settings, then try again.",
-    picker_timed_out: "Screen selection took too long. Choose a screen again.",
-    picker_failed: "Couldn't open the screen picker. Choose a screen again.",
-    invalid_dimensions: "The selected source has an unsupported size. Try another window.",
+    window_unavailable: "Holdmap can only capture its own window, and that window isn't on screen. Bring it forward (not minimized or hidden), then try again.",
+    invalid_dimensions: "The holdmap window has an unsupported size. Resize it and try again.",
     snapshot_timed_out: "Preparing the snapshot took too long. Try again.",
     snapshot_busy: "Wait for the current snapshot to finish or discard it.",
-    recording_unavailable: "The recording is no longer capturing. Choose a screen again.",
+    recording_unavailable: "The recording is no longer capturing. Start a new recording or capture the holdmap window again.",
     invalid_directory: "Temporary snapshot files are unavailable. Try again.",
   };
-  return messages[code] ?? "Couldn't capture the selected source. Choose a screen again to retry.";
+  return messages[code] ?? "Couldn't capture the holdmap window. Try again.";
 }
 
 function nativeCall<T>(command: string, args: Record<string, unknown>): Promise<T> {

@@ -116,25 +116,25 @@
 {#if capture.open}
   <div data-snapshot-ui>
     <Dialog title={capture.phase === "ready" ? "Snapshot preview" : "Take snapshot"}
-      description={capture.phase === "ready" ? "Save this PNG on your computer. Nothing is uploaded." : "Choose what to capture. Video recording can continue while you take a snapshot."}
+      description={capture.phase === "ready" ? "Save this PNG on your computer. Nothing is uploaded." : "Capture the holdmap view or window. Video recording can continue while you take a snapshot."}
       icon="camera" size="lg" animate={false} dismissable={!saving} onclose={() => controller.close()} initialFocus={capture.phase === "choose" ? "[data-primary]" : "self"}>
       {#if capture.phase === "choose"}
         <ActionDock label="Snapshot source" value={choice} options={[
           { value: "app", label: "Holdmap view", icon: "panel" },
           provider
-            ? { value: "recording", label: "Recording source", icon: "video" }
-            : { value: "screen", label: "Screen or window", icon: "monitor", disabled: support.pending || !support.backend },
+            ? { value: "recording", label: "Recording window", icon: "video" }
+            : { value: "screen", label: "Holdmap window", icon: "monitor", disabled: support.pending || !support.backend },
         ]} onchange={(value) => (choice = value)} />
         <div class="source-note">
           {#if choice === "app"}
             <h3>This Holdmap view</h3>
             <p>Capture the visible app, including its current map and details. The snapshot controls are excluded. No screen-sharing permission is needed.</p>
           {:else if choice === "recording"}
-            <h3>The source already being recorded</h3>
-            <p>Capture the selected screen or window without opening another picker or stopping the video.</p>
+            <h3>The window already being recorded</h3>
+            <p>Capture the holdmap window being recorded without stopping the video.</p>
           {:else}
-            <h3>A screen or window you choose</h3>
-            <p>The system picker asks what to share. Sharing ends as soon as the PNG is captured; no audio or video is recorded for this snapshot.</p>
+            <h3>The holdmap window</h3>
+            <p>Captures only the holdmap window, as the system sees it. Anything else is refused. Sharing ends as soon as the PNG is captured; no audio or video is recorded.</p>
           {/if}
         </div>
         {#if !provider && support.pending}<p class="note" role="status">Checking screen capture support…</p>
@@ -143,7 +143,7 @@
       {:else if result && url}
         <div class="preview"><img src={url} alt="PNG snapshot preview" onerror={() => (previewError = true)} /></div>
         {#if previewError}<p class="note">This window couldn't display the preview. The PNG is still available to save.</p>{/if}
-        <p class="meta">PNG · {result.width}×{result.height} · {humanBytes(result.png.bytes)} · {result.source === "app" ? "Holdmap view" : result.source === "recording" ? "Recording source" : "Selected screen or window"}</p>
+        <p class="meta">PNG · {result.width}×{result.height} · {humanBytes(result.png.bytes)} · {result.source === "app" ? "Holdmap view" : result.source === "recording" ? "Recording window" : "Holdmap window"}</p>
         <p class="note">Close keeps the latest snapshot for this session. Save it to keep it after reloading or quitting. A new snapshot replaces it only after capture succeeds.</p>
         {#if session}<p class="note">Your video is still recording.</p>{/if}
         {#if saveError}<Callout tone="danger" title="Couldn't save snapshot"><p>{saveError}</p><p>Your PNG is still available. Try saving again.</p></Callout>{/if}
@@ -153,7 +153,7 @@
         {#if capture.phase === "choose"}
           {#if result}<Button variant="ghost" onclick={() => controller.review()}>Review last snapshot</Button>{/if}
           <Button onclick={() => controller.close()}>Cancel</Button>
-          <Button variant="primary" icon="camera" disabled={choice === "recording" ? !provider : choice === "screen" ? !!provider || !support.backend || support.pending : false} onclick={() => void controller.capture(choice)} data-primary>{choice === "screen" ? "Choose screen…" : "Capture PNG"}</Button>
+          <Button variant="primary" icon="camera" disabled={choice === "recording" ? !provider : choice === "screen" ? !!provider || !support.backend || support.pending : false} onclick={() => void controller.capture(choice)} data-primary>{choice === "screen" ? "Capture window" : "Capture PNG"}</Button>
         {:else}
           <Button variant="ghost" disabled={saving} onclick={() => controller.discard()}>Discard snapshot</Button>
           <Button disabled={saving} onclick={choose}>New snapshot</Button>

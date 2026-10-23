@@ -23,6 +23,11 @@ by [release-please](https://github.com/googleapis/release-please) from
   readable beside the details panel, and Flow labels only the busiest edges instead of overlapping).
 - **MCP tool annotations are complete.** All twelve read-only tools declare `readOnlyHint`, `destructiveHint`,
   `idempotentHint` and `openWorldHint` explicitly (checked by a test), which is what MCP directories score.
+- **Screen recording captures only the holdmap window.** Other apps, the desktop and notifications are never
+  recorded, even on top of holdmap. macOS records its own window directly (no picker, never a whole display; if the
+  window isn't on screen it says so and stops). Browsers are asked for this tab, and the choice is verified: a screen,
+  another window, or a browser that can't say what it shares is refused before a frame is read. The snapshot
+  *Screen or window* choice became *Holdmap window*, and a small indicator shows while recording.
 - **More reliable CI.** The browser install for the end-to-end job downloads the browser without the apt font packages (a stalled mirror can no longer hold it up) and the job
   has more headroom, after a stalled download used up the whole 15-minute budget.
 

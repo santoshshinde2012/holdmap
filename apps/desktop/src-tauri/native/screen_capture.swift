@@ -18,7 +18,7 @@ private let gifByteCeiling: Int64 = 128 * 1024 * 1024
 /// ImageIO keeps every GIF frame in memory until it finalizes, so frames are bounded by pixels.
 private let gifMemoryBudget = 256 * 1024 * 1024
 
-/// What the user chose before the picker opened (already clamped by Rust, clamped again here).
+/// What the user chose before capture started (already clamped by Rust, clamped again here).
 private struct RecordingOptions {
     var durationLimit = 120.0
     var mp4 = true
@@ -93,7 +93,7 @@ public func command(_ raw: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>
     if op == "capabilities" {
         var available = false
         if #available(macOS 14.0, *) { available = true }
-        // Availability only: no enumeration, permission preflight, picker or IO.
+        // Availability only: no enumeration, permission preflight or IO.
         return strdup(json(["available": available, "minimum_macos": "14.0",
             "formats": ["mp4", "gif"], "max_duration_ms": Int(hardDurationLimit * 1000),
             "max_bytes": mp4ByteLimit, "max_width": 1920, "max_height": 1080, "audio": false]))
@@ -138,8 +138,32 @@ public func command(_ raw: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>
 @_cdecl("hm_capture_free_json")
 public func freeJSON(_ value: UnsafeMutablePointer<CChar>?) { free(value) }
 
+/// Holdmap records only its own window. There is no picker and no display or "other app" fallback:
+/// an independent-window filter holds that one window's pixels and nothing else, so other apps, the
+/// desktop, the menu bar and notifications can never appear, however they are stacked.
 @available(macOS 14.0, *)
-private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SCStreamDelegate {
+private enum OwnWindow {
+    /// The largest on-screen, normal-level window of this process, or why there is none.
+    static func filter(_ done: @escaping (SCContentFilter?, String?) -> Void) {
+        SCShareableContent.getExcludingDesktopWindows(true, onScreenWindowsOnly: true) { content, error in
+            DispatchQueue.main.async {
+                guard error == nil, let content else { done(nil, "permission_denied"); return }
+                let me = ProcessInfo.processInfo.processIdentifier
+                let mine = content.windows.filter {
+                    $0.owningApplication?.processID == me && $0.windowLayer == 0 && $0.isOnScreen
+                        && $0.frame.width >= 100 && $0.frame.height >= 100
+                }
+                guard let window = mine.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else {
+                    done(nil, "window_unavailable"); return
+                }
+                done(SCContentFilter(desktopIndependentWindow: window), nil)
+            }
+        }
+    }
+}
+
+@available(macOS 14.0, *)
+private final class CaptureSession: NSObject, SCStreamDelegate {
     let id: String
     let root: URL
     let options: RecordingOptions
@@ -156,7 +180,6 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
     var timer: DispatchSourceTimer?
     var deadline: DispatchWorkItem?
     let cancellation = Cancellation()
-    var pickerRegistered = false
     var isDisposed = false
     var startPending = false
     var stopRequested = false
@@ -181,45 +204,14 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
     func choose() {
-        let picker = SCContentSharingPicker.shared
-        var config = SCContentSharingPickerConfiguration()
-        config.allowedPickerModes = [.singleWindow, .singleDisplay]
-        config.allowsChangingSelectedContent = false
-        picker.defaultConfiguration = config
-        picker.maximumStreamCount = 1
-        picker.add(self)
-        pickerRegistered = true
-        picker.isActive = true
-        setDeadline(60) { [weak self] in
+        setDeadline(15) { [weak self] in
             guard let self, self.phase == "choosing", !self.startPending else { return }
-            self.error = "picker_timed_out"
-            self.releasePicker()
-            self.phase = "error"
+            self.fail("window_unavailable")
         }
-        picker.present()
-    }
-    func releasePicker() {
-        guard pickerRegistered else { return }
-        SCContentSharingPicker.shared.remove(self)
-        SCContentSharingPicker.shared.isActive = false
-        pickerRegistered = false
-    }
-    func contentSharingPicker(_ picker: SCContentSharingPicker, didCancelFor stream: SCStream?) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.phase == "choosing", !self.startPending else { return }
-            self.deadline?.cancel(); self.releasePicker(); self.phase = "cancelled"
-        }
-    }
-    func contentSharingPickerStartDidFailWithError(_ error: Error) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.phase == "choosing", !self.startPending else { return }
-            self.fail("picker_failed")
-        }
-    }
-    func contentSharingPicker(_ picker: SCContentSharingPicker, didUpdateWith filter: SCContentFilter, for stream: SCStream?) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.phase == "choosing", !self.startPending, !self.discardRequested else { return }
-            self.begin(filter)
+        OwnWindow.filter { [weak self] filter, reason in
+            guard let self, self.phase == "choosing", !self.startPending, !self.discardRequested, !self.stopRequested else { return }
+            self.deadline?.cancel()
+            if let filter { self.begin(filter) } else { self.fail(reason ?? "window_unavailable") }
         }
     }
     func begin(_ filter: SCContentFilter) {
@@ -299,10 +291,9 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
         guard phase == "choosing" || phase == "capturing" else { return }
         stopRequested = true
         if phase == "choosing" && !startPending {
-            deadline?.cancel(); releasePicker(); phase = "cancelled"; return
+            deadline?.cancel(); phase = "cancelled"; return
         }
         phase = "finalizing"
-        releasePicker()
         requestStreamStop()
     }
     func requestStreamStop() {
@@ -311,7 +302,6 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
         startedAt = nil
         phase = "finalizing"
         timer?.cancel(); timer = nil
-        releasePicker()
         guard let active = stream else {
             if !startPending { afterStreamStopped() }
             return
@@ -448,7 +438,7 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
         guard !isDisposed else { return }
         error = reason
         cancellation.cancel()
-        releasePicker(); timer?.cancel(); timer = nil
+        timer?.cancel(); timer = nil
         phase = "finalizing"
         if writerPending || exportPending { return }
         requestStreamStop()
@@ -457,7 +447,7 @@ private final class CaptureSession: NSObject, SCContentSharingPickerObserver, SC
         guard !isDisposed else { return }
         discardRequested = true
         cancellation.cancel()
-        releasePicker(); timer?.cancel(); timer = nil
+        timer?.cancel(); timer = nil
         phase = "finalizing"
         if writerPending || exportPending { return }
         requestStreamStop()
@@ -498,7 +488,7 @@ private func snapshotCommand(_ op: String, request: [String: Any], id: String) -
             filter = selected
         } else {
             guard request["recording_id"] == nil || request["recording_id"] is NSNull else { return failure("invalid_request") }
-            // The shared system picker is never reconfigured while a video owns its source.
+            // A video owns its window filter; a snapshot reuses it instead of looking the window up again.
             if let current = session, current.phase == "choosing" || current.phase == "capturing"
                 || current.startPending || current.streamStopPending || current.stream != nil {
                 return failure("recording_unavailable")
@@ -516,7 +506,7 @@ private func snapshotCommand(_ op: String, request: [String: Any], id: String) -
 
 // The image workflow owns no AVAssetWriter and never changes CaptureSession's phases.
 @available(macOS 14.0, *)
-private final class SnapshotCapture: NSObject, SCContentSharingPickerObserver {
+private final class SnapshotCapture: NSObject {
     let id: String
     let root: URL
     let options: RecordingOptions
@@ -524,14 +514,13 @@ private final class SnapshotCapture: NSObject, SCContentSharingPickerObserver {
     var error: String?
     var width = 0, height = 0
     var pngBytes: Int64 = 0
-    var pickerRegistered = false
     var capturePending = false
     var encodePending = false
     var discardRequested = false
     var isDisposed = false
     var deadline: DispatchWorkItem?
     let cancellation = Cancellation()
-    var ownsSelection: Bool { pickerRegistered || capturePending }
+    var ownsSelection: Bool { phase == "choosing" || capturePending }
 
     init(id: String, root: URL, options: RecordingOptions = RecordingOptions()) { self.id = id; self.root = root; self.options = options }
     func status() -> [String: Any] {
@@ -547,38 +536,10 @@ private final class SnapshotCapture: NSObject, SCContentSharingPickerObserver {
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
     func choose() {
-        let picker = SCContentSharingPicker.shared
-        var config = SCContentSharingPickerConfiguration()
-        config.allowedPickerModes = [.singleWindow, .singleDisplay]
-        config.allowsChangingSelectedContent = false
-        picker.defaultConfiguration = config
-        picker.maximumStreamCount = 1
-        picker.add(self); pickerRegistered = true; picker.isActive = true
-        timeout(60, "picker_timed_out")
-        picker.present()
-    }
-    func releasePicker() {
-        guard pickerRegistered else { return }
-        SCContentSharingPicker.shared.remove(self)
-        SCContentSharingPicker.shared.isActive = false
-        pickerRegistered = false
-    }
-    func contentSharingPicker(_ picker: SCContentSharingPicker, didCancelFor stream: SCStream?) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.phase == "choosing" else { return }
-            self.discard()
-        }
-    }
-    func contentSharingPickerStartDidFailWithError(_ error: Error) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.phase == "choosing" else { return }
-            self.fail("picker_failed")
-        }
-    }
-    func contentSharingPicker(_ picker: SCContentSharingPicker, didUpdateWith filter: SCContentFilter, for stream: SCStream?) {
-        DispatchQueue.main.async { [weak self] in
+        timeout(15, "window_unavailable")
+        OwnWindow.filter { [weak self] filter, reason in
             guard let self, self.phase == "choosing", !self.discardRequested else { return }
-            self.capture(filter)
+            if let filter { self.capture(filter) } else { self.fail(reason ?? "window_unavailable") }
         }
     }
     func capture(_ filter: SCContentFilter) {
@@ -602,7 +563,6 @@ private final class SnapshotCapture: NSObject, SCContentSharingPickerObserver {
             _ = filter
             DispatchQueue.main.async {
                 self.capturePending = false
-                self.releasePicker()
                 if self.discardRequested || self.error != nil { self.cleanup(); return }
                 guard failure == nil, let image else { self.fail("snapshot_capture_failed"); return }
                 self.encode(image)
@@ -655,13 +615,13 @@ private final class SnapshotCapture: NSObject, SCContentSharingPickerObserver {
     func fail(_ reason: String) {
         guard !isDisposed else { return }
         error = reason; phase = "error"
-        cancellation.cancel(); deadline?.cancel(); releasePicker()
+        cancellation.cancel(); deadline?.cancel()
         cleanup()
     }
     func discard() {
         guard !isDisposed else { return }
         discardRequested = true
-        cancellation.cancel(); deadline?.cancel(); releasePicker()
+        cancellation.cancel(); deadline?.cancel()
         cleanup()
     }
     func cleanup() {

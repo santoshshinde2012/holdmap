@@ -92,7 +92,7 @@
     : phase === "encoding"
       ? `Finishing ${plan.formats.map((format) => format.toUpperCase()).join(" and ")}. This stays on this computer.`
       : checkingSupport ? "Checking screen recording support in this window."
-        : supported ? "Pick what to record, then choose a screen or window." : "Screen recording needs screen sharing support in this window.");
+        : supported ? "Pick what to make. Records only the holdmap window." : "Screen recording needs screen sharing support in this window.");
 
   function choosePreset(id: RecordingPresetId) { onplan(withPreset(id, plan)); }
   function chooseFormat(choice: FormatChoice) { onplan(withFormat(plan, choice)); }
@@ -141,15 +141,15 @@
         </ul>
       </div>
       <Callout tone="info" title="Local only">
-        <p>You choose the screen or window in the system picker, and Holdmap records only that. No microphone or system audio. Nothing is uploaded.</p>
-        <p>Recording continues while Holdmap is hidden. Use the red timer in the title bar to pause or stop.</p>
+        <p>Records only the holdmap window. Other apps, your desktop and notifications are never captured, even when they sit on top. No microphone or system audio. Nothing is uploaded.</p>
+        <p>Keep holdmap open on screen; minimizing it freezes the picture. Use the red timer in the title bar to pause or stop.</p>
       </Callout>
     {:else}
       <Callout tone="warn" title="Screen capture unavailable">
         <p>{unsupportedReason || "This window does not offer screen sharing. Try a browser that supports it, or use your operating system's screen recorder."}</p>
       </Callout>
     {/if}
-    {#if busy}<p class="waiting" role="status">{starting ? "Preparing recording. Cancel stops sharing and discards this request." : "Choose a screen in the picker. Cancel here to ignore this request; you may still need to dismiss the system picker."}</p>{/if}
+    {#if busy}<p class="waiting" role="status">{starting ? "Preparing recording. Cancel stops sharing and discards this request." : "Choose the holdmap tab or window to share. Anything else is refused. Cancel here to ignore this request."}</p>{/if}
     {#if error}<div class="gap"><Callout tone="danger" title={errorTitle}>{error}</Callout></div>{/if}
   {:else if phase === "encoding"}
     <p class="status" role="status" aria-busy="true">Finishing your recording…</p>
@@ -192,7 +192,7 @@
   {#snippet footer()}
     {#if phase === "confirm"}
       <Button onclick={onclose}>Cancel</Button>
-      {#if supported}<Button variant="primary" icon="video" loading={busy} loadingText={starting ? "Starting recording…" : "Waiting for permission…"} onclick={onstart} data-primary>Choose screen…</Button>{/if}
+      {#if supported}<Button variant="primary" icon="video" loading={busy} loadingText={starting ? "Starting recording…" : "Waiting for permission…"} onclick={onstart} data-primary>Start recording</Button>{/if}
     {:else if phase === "encoding"}
       <Button onclick={onclose}>Discard recording</Button>
     {:else}

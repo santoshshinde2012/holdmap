@@ -39,7 +39,7 @@ describe("screen recording helpers", () => {
   it("explains permission and support failures without leaking internals", () => {
     expect(displayCaptureError({ name: "NotAllowedError" }).message).toMatch(/cancelled or permission was denied/);
     expect(displayCaptureError({ name: "NotSupportedError" }).message).toMatch(/unavailable in this window/);
-    expect(displayCaptureError({ name: "NotFoundError" }).message).toMatch(/No screen/);
+    expect(displayCaptureError({ name: "NotFoundError" }).message).toMatch(/holdmap window was not available/);
     expect(displayCaptureError({ name: "NotReadableError" }).message).toMatch(/could not be read/);
     expect(displayCaptureError({ name: "InvalidStateError" }).message).toMatch(/Return to this window/);
     expect(displayCaptureError({ name: "AbortError" }).message).toMatch(/interrupted/);

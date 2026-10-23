@@ -61,7 +61,7 @@
   MCP server in three steps: source, tools, review.
 - **Home, maps and graphs.** Agents as Cards or a Map with a Timeline and a **Needs you**
   list, the service graph with clusters, and agent flow.
-- **Local capture.** Screen or window recording to MP4/GIF and PNG snapshots. Nothing is uploaded.
+- **Local capture.** Records only the holdmap window to MP4/GIF, plus PNG snapshots. Other apps and your desktop are never captured. Nothing is uploaded.
 - **Scriptable.** Every read command takes `--json`. holdmap has no product analytics.
 
 ## Architecture
