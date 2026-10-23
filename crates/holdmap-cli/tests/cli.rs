@@ -82,6 +82,20 @@ fn explain_free_port_succeeds() {
 }
 
 #[test]
+fn a_lone_port_number_explains_that_port() {
+    let port = free_port();
+    // Not `hm()`: it puts `--no-docker` first, and the shorthand is exactly `holdmap <port>`.
+    Command::cargo_bin("holdmap")
+        .unwrap()
+        .env("HOLDMAP_COLOR", "never")
+        .env("HOLDMAP_HOME", home().path())
+        .arg(port.to_string())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!("Port {port} is free")));
+}
+
+#[test]
 fn explain_busy_port_names_the_owner() {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = l.local_addr().unwrap().port();

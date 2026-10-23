@@ -16,7 +16,7 @@
   import StatStrip from "../ui/StatStrip.svelte";
   let { stats }: { stats: SummaryStat[] } = $props();
   const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-  const tiles = $derived(stats.map((s) => ({ id: s.id, label: cap(s.label), value: s.value, of: s.of, tone: s.tone, go: s.go, aria: `${s.value}${s.of != null ? `/${s.of}` : ""} ${s.label}` })));
+  const tiles = $derived(stats.map((s) => ({ id: s.id, label: cap(s.label), value: s.value, of: s.of, tone: s.tone, go: s.go, aria: `${cap(s.label)} ${s.value}${s.of != null ? `/${s.of}` : ""}` })));
 </script>
 
 <div class="home-stats"><StatStrip stats={tiles} label="Summary" compact /></div>

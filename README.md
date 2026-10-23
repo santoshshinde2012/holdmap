@@ -12,7 +12,9 @@
 <p align="center">
   <a href="https://santoshshinde2012.github.io/holdmap/"><b>Website</b></a> ·
   <a href="https://santoshshinde2012.github.io/holdmap/#demo">Live demo</a> ·
-  <a href="https://santoshshinde2012.github.io/holdmap/docs/">Guide</a>
+  <a href="https://santoshshinde2012.github.io/holdmap/docs/">Guide</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#quick-start">Quick start</a>
 </p>
 
 <p align="center">
@@ -182,7 +184,7 @@ has SHA-256 checksums and build provenance
 
 ```sh
 holdmap list                    # every listening port, grouped by kind
-holdmap explain 3000            # who holds it, why, and what to do
+holdmap explain 3000            # who holds it, why, and what to do (or just: holdmap 3000)
 holdmap stop 3000 --dry-run     # show exactly what a stop would do
 holdmap stop 3000               # stop it gracefully, then check the port is free
 holdmap run -p 3000 -- npm run dev   # free 3000, then start your server on it

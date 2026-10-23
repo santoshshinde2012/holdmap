@@ -10,14 +10,14 @@ describe("StatStrip", () => {
   it("renders tiles, buttons only for tiles that open something, and a pending value", async () => {
     const go = vi.fn();
     const view = render(StatStrip, { stats: [
-      { id: "a", label: "Agents", value: 3, go, aria: "3 agents" },
+      { id: "a", label: "Agents", value: 3, go, aria: "Agents 3" },
       { id: "b", label: "Exposed", value: 2, tone: "warn" },
       { id: "c", label: "MCP", value: null, go },
       { id: "d", label: "Skills scanned", value: 1, of: 4, bar: true },
     ] });
     expect(view.getByRole("group", { name: "Summary" })).toBeTruthy();
     expect(view.getAllByRole("button")).toHaveLength(1);
-    await fireEvent.click(view.getByRole("button", { name: "3 agents" }));
+    await fireEvent.click(view.getByRole("button", { name: "Agents 3" }));
     expect(go).toHaveBeenCalledOnce();
     expect(view.getByText("…")).toBeTruthy();
     expect(view.container.querySelector(".bar i")?.getAttribute("style")).toContain("25%");
