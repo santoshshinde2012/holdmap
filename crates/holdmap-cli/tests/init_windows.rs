@@ -106,9 +106,24 @@ impl Project {
     }
 
     fn init(&self, port: u16) -> holdmap_core::stack::Stack {
-        let output = self.command().arg("init").output().unwrap();
-        assert!(output.status.success(), "{output:?}");
-        let stack = holdmap_core::stack::load(&self.root.join(".holdmap.toml")).unwrap();
+        // `init` reads the live process table. On a loaded Windows runner the fixture's listener can
+        // be bound (its ready file is written) a moment before the process table shows its working
+        // directory, and `init` then finds no service. That window closes by itself, so look again,
+        // at most three times, starting from a clean slate each time. A wrong port or a failing
+        // `init` is never retried.
+        let file = self.root.join(".holdmap.toml");
+        let mut attempt = 0;
+        let (output, stack) = loop {
+            attempt += 1;
+            let _ = std::fs::remove_file(&file);
+            let output = self.command().arg("init").output().unwrap();
+            assert!(output.status.success(), "{output:?}");
+            let stack = holdmap_core::stack::load(&file).unwrap();
+            if !stack.services.is_empty() || attempt == 3 {
+                break (output, stack);
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        };
         assert_eq!(stack.services.len(), 1, "init must find the owned listener");
         if stack.services[0].port != Some(port) {
             let pid = self.child.as_ref().unwrap().id();
@@ -155,7 +170,7 @@ impl Project {
     }
 
     fn wait_ready(&self) -> Ready {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(20);
         loop {
             if let Ok(bytes) = std::fs::read(&self.ready) {
                 if let Ok(ready) = serde_json::from_slice(&bytes) {

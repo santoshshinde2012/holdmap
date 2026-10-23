@@ -2,6 +2,7 @@
 
 use assert_cmd::Command;
 use std::net::TcpListener;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 fn command(state: &std::path::Path) -> Command {
@@ -15,11 +16,21 @@ fn command(state: &std::path::Path) -> Command {
 }
 
 fn free_port() -> u16 {
-    TcpListener::bind(("127.0.0.1", 0))
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
+    // bind(:0) then drop lets a parallel listener or outbound connection take the port back
+    // before the CLI looks at it (Windows does this readily). Probe distinct candidates below
+    // the ephemeral ranges instead; this observes a free port, it does not reserve one.
+    static NEXT: AtomicUsize = AtomicUsize::new(16_000);
+    loop {
+        let candidate = NEXT.fetch_add(1, Ordering::Relaxed);
+        assert!(
+            candidate < 20_000,
+            "no unused fixture TCP port found in 16000..20000"
+        );
+        let port = candidate as u16;
+        if holdmap_core::probe_tcp(port) == holdmap_core::ProbeResult::Free {
+            return port;
+        }
+    }
 }
 
 #[test]

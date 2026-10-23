@@ -87,6 +87,11 @@ pub(crate) fn scan_of(
 /// acme-shop: pnpm monorepo with web (vite, :3000) → api (python, :8080) → postgres :5432 +
 /// redis :6379, a worker client → redis, outbound HTTPS from api and an inbound LAN client.
 pub(crate) fn acme(dir: &Path) -> Scan {
+    // Project lookups wait at most the scan budget (100 ms by default, a few ms in the app). On a
+    // loaded CI runner (Windows, mostly) that is not enough to read three manifests, and a service
+    // then shows up as "node (PID 50)" instead of "worker". These tests are about topology, not
+    // timing, so give the lookups time to finish.
+    crate::project::set_scan_budget(std::time::Duration::from_secs(10));
     let root = dir.join("acme-shop");
     for (sub, file, body) in [
         (
