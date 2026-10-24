@@ -709,15 +709,9 @@ mod tests {
 
     #[test]
     fn output_mappings_are_suggested_from_output_schemas() {
-        let tool = ToolInfo::from_json(&json!({
-            "name": "lint", "inputSchema": {"type": "object"},
-            "outputSchema": {"type": "object", "properties": {
-                "count": {"type": "integer"},
-                "issues": {"type": "array", "items": {"type": "object", "properties": {
-                    "code": {"type": "string"}, "level": {"type": "string"}, "msg": {"type": "string"},
-                    "file": {"type": "string"}, "line": {"type": "integer"}}}}}}
-        }))
-        .unwrap();
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/lint_tool.json")).unwrap();
+        let tool = ToolInfo::from_json(&fixture).unwrap();
         let s = suggest_output(&tool).unwrap();
         assert_eq!(s.items.as_deref(), Some("$.issues[*]"));
         assert_eq!(s.rule_id.as_deref(), Some("code"));
