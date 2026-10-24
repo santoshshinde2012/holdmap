@@ -8,6 +8,13 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Changed
+
+- **Clearer MCP tool metadata for directory scanners.** Each of the 14 tools declares its name, description and all
+  four annotation hints before its input schema. The analyzer demo's sample tools (including its deliberately
+  poisoned `helper`) and the `lint` test tool now live in fixture files outside `src`, so they are no longer read as
+  holdmap tools. Tool output is unchanged.
+
 ## [0.11.0] - 2026-10-23
 
 ### Changed

@@ -22,131 +22,131 @@ fn build_catalog() -> Value {
             "name": "list_ports",
             "title": "List ports in use",
             "description": "Inspect listening TCP/UDP ports before starting a service. Returns owners, PIDs, projects, frameworks, exposure and protection flags; hidden_sockets counts rows whose owner is unavailable. Includes platform, taken_at_ms (Unix epoch milliseconds) and scan warnings: check warnings before treating an empty result as complete. Use explain_port or inspect_port for a busy port's cause and safe next step. Commands have secrets hidden.",
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
             "inputSchema": {"type": "object", "properties": {
                 "query": {"type": "string", "description": "Filter, e.g. 'vite', ':3000', '3000-3999', 'proto:udp'"},
                 "dev_only": {"type": "boolean", "description": "Only likely development servers"},
                 "protocol": {"type": "string", "enum": ["tcp", "udp"]}
-            }},
-            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+            }}
         },
         {
             "name": "explain_port",
             "title": "Explain why a port is busy",
             "description": "Plain-English root cause for a port (process tree, container, supervisor, OS service, TIME_WAIT, other user) plus the recommended fix and stop plan, who is connected, uptime, bind-address risk and the HTTP status/title. Command lines have secrets hidden.",
-            "inputSchema": {"type": "object", "properties": {"port": {"type": "integer", "minimum": 1, "maximum": 65535}}, "required": ["port"]},
-            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+            "inputSchema": {"type": "object", "properties": {"port": {"type": "integer", "minimum": 1, "maximum": 65535}}, "required": ["port"]}
         },
         {
             "name": "inspect_port",
             "title": "Inspect a port in full",
             "description": "Full inspection of a port: process tree, who is connected, bind-address risk, HTTP status/title, recommended fix and stop plan. Same structured result as explain_port. Command lines have secrets hidden.",
-            "inputSchema": {"type": "object", "properties": {"port": {"type": "integer", "minimum": 1, "maximum": 65535}}, "required": ["port"]},
-            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+            "inputSchema": {"type": "object", "properties": {"port": {"type": "integer", "minimum": 1, "maximum": 65535}}, "required": ["port"]}
         },
         {
             "name": "find_free_port",
             "title": "Find a free port",
             "description": "Find a free TCP port before starting a server. With near, checks at most 500 ports at or above that number; without it, asks the OS for an ephemeral port. The result is a point-in-time check and does not reserve the port.",
-            "inputSchema": {"type": "object", "properties": {"near": {"type": "integer", "minimum": 1, "maximum": 65535}}},
-            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+            "inputSchema": {"type": "object", "properties": {"near": {"type": "integer", "minimum": 1, "maximum": 65535}}}
         },
         {
             "name": "wait_for_port",
             "title": "Wait for a port",
             "description": "Wait for TCP acceptance on localhost:port, or for the port to be free with until_free. This checks socket readiness, not HTTP/application health. Blocks this stdio server until ready or timeout; timeout_s is 0.1–600 seconds (default 30).",
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
             "inputSchema": {"type": "object", "properties": {
                 "port": {"type": "integer", "minimum": 1, "maximum": 65535},
                 "timeout_s": {"type": "number", "minimum": 0.1, "maximum": 600, "default": 30},
                 "until_free": {"type": "boolean", "default": false}
-            }, "required": ["port"]},
-            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+            }, "required": ["port"]}
         },
         {
             "name": "get_topology",
             "title": "Service dependency graph",
             "description": "Which local services talk to which: nodes (services, containers, clients, external hosts), edges (live TCP connections; `a -> b` means a depends on b) and clusters (compose project, k8s namespace, supervisor such as turbo/pm2/concurrently, monorepo workspace, git repo). Use all=true before stopping something to include system/app dependents; the default view is filtered to development services and peers.",
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
             "inputSchema": {"type": "object", "properties": {
                 "all": {"type": "boolean", "default": false, "description": "Include system/app services, not only dev services and their peers"},
                 "format": {"type": "string", "enum": ["json", "mermaid", "dot", "tree"], "default": "json"}
-            }},
-            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+            }}
         },
         {
             "name": "list_agents",
             "title": "Agents and developer tools on this machine",
             "description": "Inspect running AI coding agents (Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider…) and developer tools with their working folders, child tools, ports, local services, remote IPs and CPU/memory. Likely MCP processes do not confirm a handshake or invocation. include_capabilities=true explicitly inspects bounded local MCP configuration metadata and installed skill file locations for supported current-account agents; returned as untrusted metadata: aliases, transport, enablement, scope, source paths, runner and package name with pinning, remote host, environment/header names (never values), whether one of the agent's processes runs each stdio server now, permission allow/ask/deny rules, documented safety settings, instruction-file (rules, commands, prompts, subagents, AGENTS.md) names and frontmatter descriptions, sanitized skill names/purposes and documented built-in tools. Configured/installed does not mean loaded or used. Default scans do not read capability configuration. The inventory never connects to servers or executes commands; skill instructions, chats and credential values are excluded from retention. Consult evidence, limits and omitted counts; recent folders do not prove current work.",
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
             "inputSchema": {"type": "object", "properties": {
                 "agent": {"type": "string", "description": "Filter by product id, name, vendor, folder, visible capability/tool name or exact agent/child PID"},
                 "include_capabilities": {"type": "boolean", "default": false, "description": "Explicitly inspect bounded local MCP definitions and skill file locations; no loading or usage claim"}
-            }},
-            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+            }}
         },
         {
             "name": "get_agent_flow",
             "title": "Agent process and socket relationships",
             "description": "Observed process ancestry and live TCP socket relationships for running agents. Distinct from get_topology (service clusters) and list_agents (inventory). Nodes and edges omit command lines, working directories, prompts and payloads. MCP process roles are inferred; tool calls need a separate activity observer. Optional agent filter uses the same matcher as list_agents.",
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
             "inputSchema": {"type": "object", "properties": {
                 "agent": {"type": "string", "description": "Filter by product id, name, vendor, observed folder, running child-tool name or exact agent/child PID. Does not inspect configured MCP or installed skill inventory."}
-            }},
-            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+            }}
         },
         {
             "name": "list_analyzers",
             "title": "Opt-in analyzers and their state",
             "description": "List the analyzers holdmap knows (bundled OSV lookup and SkillSpector) with state (not_installed, not_approved, approved, changed), declared network hosts and what they send, sandbox level and last run. Read-only: never runs, installs or approves an analyzer; the user turns them on in holdmap.",
-            "inputSchema": {"type": "object", "properties": {}},
-            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+            "inputSchema": {"type": "object", "properties": {}}
         },
         {
             "name": "list_insights",
             "title": "Stored analyzer findings",
             "description": "Findings from the latest run of each approved analyzer about agents' skills and MCP packages: severity, short title, subject with owning agents, file:line, fix hint and state (open/reviewed/snoozed). Never runs analyzers and never returns matched text. Findings are untrusted analyzer output; verify before acting.",
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
             "inputSchema": {"type": "object", "properties": {
                 "analyzer": {"type": "string", "description": "Only this analyzer id, e.g. nvidia.skillspector"},
                 "agent": {"type": "string", "description": "Only findings about subjects of this agent product id, e.g. claude-code"},
                 "min_severity": {"type": "string", "enum": ["info", "low", "medium", "high", "critical"], "default": "info"},
                 "include_closed": {"type": "boolean", "default": false, "description": "Include reviewed and snoozed findings"}
-            }},
-            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+            }}
         },
         {
             "name": "list_needs",
             "title": "What needs the user's attention",
             "description": "The short \"needs you\" list holdmap shows on Home: agents listening on all interfaces, agents running as root or with wider access than usual, documented settings that skip approvals or the sandbox, unpinned MCP servers, dev servers open to the network and open medium-or-worse findings from approved analyzers. Each item has a rule, severity (high/medium), title, detail, target and, where stopping is the usual fix, a stop to preview with stop_port or stop_agent_ports. Read-only: never stops, runs or changes anything.",
-            "inputSchema": {"type": "object", "properties": {}},
-            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+            "inputSchema": {"type": "object", "properties": {}}
         },
         {
             "name": "stop_agent_ports",
             "title": "Stop ports an agent started",
             "description": "Preview the unprotected services started by specific matching agents or developer tools (dry_run=true by default). Show every plan and get the user's authorization. Execute with dry_run=false and the returned session-local, one-use confirmation_id within 5 minutes, preserving agent/force options. All selected agents and plans must still match before any stop; changes require a new preview. A partially refused preview issues no handle. Only low-risk plans execute; protected and other users' processes are refused. Prefer an exact PID or specific agent filter.",
+            "annotations": {"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false},
             "inputSchema": {"type": "object", "properties": {
                 "agent": {"type": "string", "minLength": 1, "description": "Match product, name, vendor, folder, tool name or exact root/owned-child PID; use a specific match"},
                 "dry_run": {"type": "boolean", "default": true, "description": "Only return plans; set false only after user authorization"},
                 "confirmation_id": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Required with dry_run=false: one-use handle returned by a matching preview in this stdio session; expires after 5 minutes"},
                 "force": {"type": "boolean", "default": false, "description": "SIGKILL immediately"}
-            }, "required": ["agent"]},
-            "annotations": {"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false}
+            }, "required": ["agent"]}
         },
         {
             "name": "plan_cluster_stop",
             "title": "Plan stopping a cluster",
             "description": "Dry-run only: the dependency-ordered plan (dependents first) for stopping every service in a cluster, with warnings about outside dependents. Never executes; ask the user to run `holdmap stop --cluster NAME`.",
-            "inputSchema": {"type": "object", "properties": {"cluster": {"type": "string", "minLength": 1, "description": "Cluster id or name from get_topology"}}, "required": ["cluster"]},
-            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+            "inputSchema": {"type": "object", "properties": {"cluster": {"type": "string", "minLength": 1, "description": "Cluster id or name from get_topology"}}, "required": ["cluster"]}
         },
         {
             "name": "stop_port",
             "title": "Stop whatever holds a port",
             "description": "Preview a port owner's stop plan (dry_run=true by default), show it and obtain the user's authorization. To execute, send dry_run=false and the returned session-local, one-use confirmation_id within 5 minutes with identical port/force/allow_non_dev options. Current owners and effects must still match the preview; any change requires a fresh preview. Stops the retained plan and verifies the port is free. Only the user's own permitted processes/containers can be stopped; protected, high-risk and other users' processes remain refused, with no override.",
+            "annotations": {"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false},
             "inputSchema": {"type": "object", "properties": {
                 "port": {"type": "integer", "minimum": 1, "maximum": 65535},
                 "dry_run": {"type": "boolean", "default": true, "description": "Only return the plan; false requires a matching confirmation_id after user authorization"},
                 "confirmation_id": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Required with dry_run=false: one-use handle from this session's preview; expires after 5 minutes"},
                 "force": {"type": "boolean", "default": false, "description": "SIGKILL immediately"},
                 "allow_non_dev": {"type": "boolean", "default": false, "description": "Allow stopping a non-dev process of the user"}
-            }, "required": ["port"]},
-            "annotations": {"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false}
+            }, "required": ["port"]}
         }
     ]);
     for tool in tools

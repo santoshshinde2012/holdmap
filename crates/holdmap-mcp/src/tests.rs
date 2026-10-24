@@ -56,6 +56,12 @@ fn lists_tools_with_annotations() {
     assert_eq!(stop["annotations"]["idempotentHint"], false);
     // Directories such as OpenAI's reject a tool unless all four hints are explicit booleans.
     for tool in tools {
+        let description = tool["description"].as_str().unwrap_or_default();
+        assert!(
+            !description.trim().is_empty(),
+            "{} lacks a description",
+            tool["name"]
+        );
         for hint in [
             "readOnlyHint",
             "destructiveHint",
@@ -80,6 +86,26 @@ fn lists_tools_with_annotations() {
             "{}",
             tool["name"]
         );
+    }
+}
+
+/// Static scanners read catalog.rs as text, so each tool declares its name, description and
+/// annotations before its input schema (whose field descriptions are not tool descriptions).
+#[test]
+fn catalog_source_declares_metadata_before_input_schema() {
+    let source = include_str!("catalog.rs");
+    let entries: Vec<&str> = source
+        .split("\n        {\n            \"name\": ")
+        .skip(1)
+        .collect();
+    assert_eq!(entries.len(), 14);
+    for entry in entries {
+        let at = |key: &str| entry.find(key).unwrap_or(usize::MAX);
+        let schema = at("\"inputSchema\"");
+        assert!(schema < usize::MAX, "{entry}");
+        for key in ["\"description\"", "\"annotations\""] {
+            assert!(at(key) < schema, "{key} after inputSchema in {entry}");
+        }
     }
 }
 
