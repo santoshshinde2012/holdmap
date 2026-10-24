@@ -29,7 +29,7 @@
     "@tauri-apps/api": "^2",
     "@xyflow/svelte": "^1.7.0",
     "gifenc": "^1.0.3",
-    "mediabunny": "^1.61.5",
+    "mediabunny": "^1.62.0",
     "modern-screenshot": "4.7.0"
   },
   "devDependencies": {
@@ -45,7 +45,7 @@
     "svelte": "^5",
     "svelte-check": "^4",
     "typescript": "~6.0",
-    "vite": "^8.3.4",
+    "vite": "^8.3.5",
     "vitest": "^5.0.5"
   }
 }
