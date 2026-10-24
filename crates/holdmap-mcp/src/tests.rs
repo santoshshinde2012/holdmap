@@ -93,7 +93,8 @@ fn lists_tools_with_annotations() {
 /// annotations before its input schema (whose field descriptions are not tool descriptions).
 #[test]
 fn catalog_source_declares_metadata_before_input_schema() {
-    let source = include_str!("catalog.rs");
+    // Windows checkouts may convert the source to CRLF line endings.
+    let source = include_str!("catalog.rs").replace("\r\n", "\n");
     let entries: Vec<&str> = source
         .split("\n        {\n            \"name\": ")
         .skip(1)
