@@ -1,0 +1,13 @@
+{
+  "nvidia.skillspector": {
+    "analyzer": "nvidia.skillspector",
+    "manifest_sha256": "c98b6d341fea26f57899909dc0f5dcab96e58bebf3c2e2ed84b56ace1465960e",
+    "binary": "/opt/bin/skillspector",
+    "binary_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "version": "2.13.0",
+    "approved_at_ms": 1000000,
+    "background_network": false,
+    "tools_sha256": null,
+    "remote_opt_in": false
+  }
+}

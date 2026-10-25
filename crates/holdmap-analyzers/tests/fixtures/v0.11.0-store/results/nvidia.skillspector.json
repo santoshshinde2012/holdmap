@@ -1,0 +1,83 @@
+{
+  "analyzer": "nvidia.skillspector",
+  "analyzer_version": "2.13.0",
+  "run_at_ms": 1000000,
+  "status": "partial",
+  "coverage": 0.875,
+  "subjects": [
+    {
+      "id": "skill:user:deploy-helper",
+      "kind": "skill",
+      "name": "deploy-helper",
+      "agents": [
+        "claude-code"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "fingerprint": "4cc3d53f9ca2f17c38a0397ecb95addc",
+      "analyzer": "nvidia.skillspector",
+      "rule_id": "E2",
+      "category": "data exfiltration",
+      "severity": "critical",
+      "title": "Credential file read and sent over the network",
+      "subject": "skill:user:deploy-helper",
+      "location": {
+        "file": "scripts/deploy.sh",
+        "line": 14
+      },
+      "fix": "Remove the upload. Never read credential files from a skill.",
+      "refs": [],
+      "state": "open"
+    },
+    {
+      "fingerprint": "dc85b3894376192e1333c6a0aee35290",
+      "analyzer": "nvidia.skillspector",
+      "rule_id": "P1",
+      "category": "prompt injection",
+      "severity": "high",
+      "title": "Instruction override in SKILL.md",
+      "subject": "skill:user:deploy-helper",
+      "location": {
+        "file": "SKILL.md",
+        "line": 3
+      },
+      "fix": "Delete the override. Set API_KEY=•••• only in your shell, never here.",
+      "refs": [],
+      "state": "open"
+    },
+    {
+      "fingerprint": "9982bf8d099fb6e64f775c28fd087d52",
+      "analyzer": "nvidia.skillspector",
+      "rule_id": "Q9",
+      "category": "quality",
+      "severity": "medium",
+      "title": "Missing description",
+      "subject": "skill:user:deploy-helper",
+      "location": {
+        "file": null,
+        "line": 1
+      },
+      "fix": null,
+      "refs": [],
+      "state": "open"
+    }
+  ],
+  "details": [
+    {
+      "subject": "skill:user:deploy-helper",
+      "label": "Risk score",
+      "value": "72 / 100"
+    },
+    {
+      "subject": "skill:user:deploy-helper",
+      "label": "Recommendation",
+      "value": "DO NOT INSTALL"
+    }
+  ],
+  "notes": [],
+  "input_signature": "4b5218c7cbbce76844ed67503bd844f9",
+  "duration_ms": 0,
+  "tool_calls": []
+}

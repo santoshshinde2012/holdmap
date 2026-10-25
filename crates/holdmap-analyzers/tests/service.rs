@@ -982,3 +982,72 @@ fn installs_need_a_holdmap_folder_and_presets_can_be_planned_before_they_are_add
     assert_eq!(plan.can_install, plan.blocked.is_none());
     assert!(service.install_plan("unknown.tool").is_err());
 }
+
+/// A store written by holdmap 0.11.0 (approval, latest result, one review; no install records,
+/// run history, folders or scopes) loads as is, and the next run adds history without losing it.
+#[test]
+fn a_v0110_store_loads_and_keeps_working() {
+    let h = harness();
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/v0.11.0-store");
+    for rel in [
+        "grants.json",
+        "reviews.json",
+        "results/nvidia.skillspector.json",
+    ] {
+        let to = h.store_dir.join(rel);
+        std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+        std::fs::copy(fixture.join(rel), &to).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(to.parent().unwrap(), std::fs::Permissions::from_mode(0o700))
+                .unwrap();
+            std::fs::set_permissions(&to, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&h.store_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    assert_eq!(
+        h.service.get(SKILLSPECTOR).unwrap().state,
+        AnalyzerState::Approved
+    );
+    let old = h.service.insights();
+    assert_eq!(old.results.len(), 1);
+    let result = &old.results[0];
+    assert_eq!(result.findings.len(), 3);
+    assert!(result
+        .subjects
+        .iter()
+        .all(|s| s.dir.is_none() && s.scope.is_none()));
+    assert_eq!(
+        result
+            .findings
+            .iter()
+            .filter(|f| f.state == FindingState::Reviewed)
+            .count(),
+        1,
+        "the 0.11.0 review still applies"
+    );
+    assert!(h.service.history(SKILLSPECTOR).unwrap().is_empty());
+
+    let r = report(&h.skill_dir);
+    let again = h.service.run(SKILLSPECTOR, &r).unwrap();
+    assert_eq!(again.findings.len(), 3);
+    assert_eq!(h.service.history(SKILLSPECTOR).unwrap().len(), 1);
+    let now = h.service.insights();
+    assert_eq!(
+        now.results[0]
+            .findings
+            .iter()
+            .filter(|f| f.state == FindingState::Reviewed)
+            .count(),
+        1
+    );
+    assert!(now.results[0]
+        .subjects
+        .iter()
+        .any(|s| s.scope.as_deref() == Some("user")));
+}
