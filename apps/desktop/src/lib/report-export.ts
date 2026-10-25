@@ -182,8 +182,8 @@ export function securityCsv(items: FindingItem[]): string {
   return [CSV_COLUMNS.join(","), ...rows].join("\r\n") + "\r\n";
 }
 
-/** A Markdown cell: one line, pipes escaped. */
-const md = (s: string | number | null) => (s === null || s === "" ? "—" : line(String(s)).replace(/\|/g, "\\|").replace(/</g, "&lt;"));
+/** A Markdown cell: one line, backslashes and pipes escaped. */
+const md = (s: string | number | null) => (s === null || s === "" ? "—" : line(String(s)).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/</g, "&lt;"));
 
 /** Markdown for a ticket or PR: summary, inclusion note, then a table. */
 export function securityMarkdown(items: FindingItem[], summary: SecuritySummary, now: number, included = "Open findings"): string {

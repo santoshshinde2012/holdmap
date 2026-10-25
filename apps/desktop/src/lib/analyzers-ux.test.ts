@@ -247,7 +247,8 @@ describe("exports carry only what's shown", () => {
   });
   it("Markdown", () => {
     const m = securityMarkdown(shown, summary, 0, note);
-    expect(m).toContain(`**Included:** ${note.replace(/'/g, "'")}`);
+    expect(m).toContain(`**Included:** ${note}`);
+    expect(securityMarkdown(shown, summary, 0, "a\\|b")).toContain("**Included:** a\\\\\\|b");
     expect(m).toContain("hasn't verified");
     expect(m.split("\n").filter((l) => l.startsWith("| ") && !l.startsWith("| Severity") && !l.startsWith("| ---"))).toHaveLength(shown.length);
     expect(securityMarkdown([], summary, 0)).toContain("No findings.");
