@@ -8,7 +8,7 @@ import { inventories } from "./agent-config";
 import { readManifest, type DemoManifest } from "./analyzer-manifest";
 import { presetSource, presetViews, type PresetView } from "./analyzer-presets";
 import type { AgentsReport } from "./types";
-import { demoPlan, type InstallPlan, type InstallRecord } from "./analyzer-install";
+import type { InstallPlan, InstallRecord } from "./analyzer-install";
 import type { RunRecord } from "./analyzers";
 
 const SKILLSPECTOR = "nvidia.skillspector";
@@ -158,13 +158,14 @@ export class DemoAnalyzers {
   }
 
   /** What an install would do (simulated; nothing runs). */
-  installPlan(id: string): InstallPlan {
+  async installPlan(id: string): Promise<InstallPlan> {
     const preset = presetViews(() => false).find((p) => p.id === id);
     const known = BASE[id] ?? (this.user.has(id) ? this.base(id) : null);
     if (!known && !preset) throw new Error(`no analyzer named "${id}"`);
     const name = known?.name ?? preset!.name;
     const network = known?.permissions.network ?? preset!.network;
     const reads = known?.permissions.read.length ? ["A private copy of each skill's folder (read-only)"] : preset ? ["A private copy of each skill's folder (read-only)"] : [];
+    const { demoPlan } = await import("./analyzer-install-demo");
     return demoPlan(id, name, known?.install ?? preset?.install ?? null, reads, network, this.installs.get(id) ?? null);
   }
 

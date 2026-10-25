@@ -4,7 +4,7 @@
 // run stays inside its sandbox. Progress updates carry names only.
 import * as api from "./api";
 import { insightsStore } from "./insights-store.svelte";
-import { runProgress, runSummary, type RunStep } from "./security-view";
+import { runProgress, runSummary, type RunStep } from "./run-view";
 import type { AnalyzerResult, AnalyzerView } from "./analyzers";
 
 type Runner = (id: string) => Promise<Pick<AnalyzerResult, "status"> & Partial<Pick<AnalyzerResult, "findings" | "subjects">>>;

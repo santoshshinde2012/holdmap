@@ -658,7 +658,6 @@ fn run_streaming(
 mod tests {
     use super::*;
     use std::ffi::OsString;
-    use std::sync::Mutex;
 
     fn manifest(id: &str) -> AnalyzerManifest {
         crate::presets::manifests()
@@ -782,7 +781,7 @@ echo "Installed 1 executable: bandit""#;
             &plan.command[1..5],
             ["tool", "install", "--force", "--no-config"]
         );
-        let events = Mutex::new(Vec::new());
+        let events = std::sync::Mutex::new(Vec::new());
         let record = inst
             .install(&m, &CancelFlag::default(), 42, &|e| {
                 events.lock().unwrap().push(e)
@@ -829,7 +828,7 @@ echo "Installed 1 executable: bandit""#;
                 "echo 'error: No solution found' >&2; exit 2",
             ),
         );
-        let events = Mutex::new(Vec::new());
+        let events = std::sync::Mutex::new(Vec::new());
         let err = fail
             .install(&m, &CancelFlag::default(), 1, &|e| {
                 events.lock().unwrap().push(e)

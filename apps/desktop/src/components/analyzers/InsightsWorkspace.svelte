@@ -11,9 +11,9 @@
   import SecuritySummary from "../security/SecuritySummary.svelte";
   import ExportActions from "../ui/ExportActions.svelte";
   import { reportFilename, securityCsv, securityMarkdown, securityReport, securitySarif, securitySummaryText } from "../../lib/report-export";
-  import RunHistory from "../security/RunHistory.svelte";
   import SkillExplainer from "../security/SkillExplainer.svelte";
   import PipelineSubjects from "../security/PipelineSubjects.svelte";
+  import RunHistory from "../security/RunHistory.svelte";
   import { securityTab, type SecurityTab } from "../../lib/security-tab.svelte";
   import FindingsPanel from "../security/FindingsPanel.svelte";
   import { loadAnalyzerGraphs, type AnalyzerGraphs } from "./graph/load-graphs";

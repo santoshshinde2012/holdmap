@@ -9,7 +9,7 @@
   import { configSummary } from "../../lib/agent-config";
   import { agentCounts, agentFindings, countsText, total } from "../../lib/analyzers";
   import { redactHome } from "../../lib/report-export";
-  import { scopeLabel } from "../../lib/security-view";
+  import { scopeLabel } from "../../lib/run-view";
   import { EvidenceChip } from "../ui";
   import StatStrip from "../ui/StatStrip.svelte";
   import { evidenceChip } from "../../lib/evidence";

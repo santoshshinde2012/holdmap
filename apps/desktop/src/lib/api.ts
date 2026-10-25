@@ -8,7 +8,7 @@ import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateSche
 import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, ConfiguredServer, FindingState, Insights, McpDraft, RunEvent, RunRecord, OutputMapping, Preview, ToolReport, ToolSpec } from "./analyzers";
 import { DemoAnalyzers } from "./analyzers-demo";
 import type { PresetView } from "./analyzer-presets";
-import { demoInstall, type InstallEvent, type InstallPlan, type InstallRecord } from "./analyzer-install";
+import type { InstallEvent, InstallPlan, InstallRecord } from "./analyzer-install";
 import { attention, type AttentionItem } from "./home";
 import { MOCK_SNAPSHOT, mockAgents, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
@@ -697,7 +697,8 @@ export async function installAnalyzer(id: string, on: (e: InstallEvent) => void)
   }
   if (liveReads()) liveWrites();
   demoInstallCancelled = false;
-  const record = await demoInstall(demoAnalyzers.installPlan(id), on, () => demoInstallCancelled);
+  const { demoInstall } = await import("./analyzer-install-demo");
+  const record = await demoInstall(await demoAnalyzers.installPlan(id), on, () => demoInstallCancelled);
   demoAnalyzers.recordInstall(record);
   return record;
 }

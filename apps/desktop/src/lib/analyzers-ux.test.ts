@@ -2,7 +2,8 @@
 import { describe, expect, it, vi } from "vitest";
 import installRs from "../../../../crates/holdmap-analyzers/src/install.rs?raw";
 import { DemoAnalyzers } from "./analyzers-demo";
-import { DEMO_RECIPES, beginInstall, demoInstall, demoPlan, initialInstall, reduceInstall, MAX_LOG, type InstallEvent, type InstallPlan, type InstallRecord } from "./analyzer-install";
+import { DEMO_RECIPES, demoInstall, demoPlan } from "./analyzer-install-demo";
+import { beginInstall, initialInstall, reduceInstall, MAX_LOG, type InstallEvent, type InstallPlan, type InstallRecord } from "./analyzer-install";
 import { InstallDialog } from "./install-dialog.svelte";
 import { SecurityRuns } from "./security-runs.svelte";
 import { applyFilter, emptyFilter, findingItems, groupFindings, runSummary, runProgress, scopeLabel, securitySummary, sortFindings, stepLabel, suggestedActions, type FindingItem } from "./security-view";

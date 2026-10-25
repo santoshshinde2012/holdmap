@@ -4,7 +4,7 @@
   import { IconButton, Kbd } from "../ui";
   import type { PortStats } from "../../lib/port-list";
   import { securityRuns } from "../../lib/security-runs.svelte";
-  import { runFraction } from "../../lib/security-view";
+  import { runFraction } from "../../lib/run-view";
 
   let {
     stats,
