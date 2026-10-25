@@ -74,6 +74,16 @@ fn is_report(bytes: &[u8]) -> bool {
         && serde_json::from_slice::<serde_json::Value>(bytes).is_ok()
 }
 
+/// A CSV or Markdown report is UTF-8 text of at most 8 MiB without control characters
+/// other than tab and newlines.
+fn is_text_report(bytes: &[u8]) -> bool {
+    bytes.len() <= 8 * 1024 * 1024
+        && std::str::from_utf8(bytes).is_ok_and(|text| {
+            text.chars()
+                .all(|c| !c.is_control() || matches!(c, '\t' | '\n' | '\r'))
+        })
+}
+
 fn validate<'a>(filename: &'a str, bytes: &[u8]) -> Result<&'a str, String> {
     if bytes.is_empty() || bytes.len() > MAX_BYTES {
         return Err("Recording must contain data and be smaller than 128 MiB.".into());
@@ -96,8 +106,9 @@ fn validate<'a>(filename: &'a str, bytes: &[u8]) -> Result<&'a str, String> {
         Some("mp4") if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" => Ok("mp4"),
         // Exported reports are plain text, small, and chosen in the same native dialog.
         Some(ext @ ("json" | "sarif")) if is_report(bytes) => Ok(ext),
+        Some(ext @ ("csv" | "md")) if is_text_report(bytes) => Ok(ext),
         _ => Err(
-            "Only PNG snapshots, MP4 video and GIF recordings, and JSON or SARIF reports can be saved."
+            "Only PNG snapshots, MP4 video and GIF recordings, and JSON, SARIF, CSV or Markdown reports can be saved."
                 .into(),
         ),
     }
@@ -155,7 +166,7 @@ fn choose_destination<R: Runtime>(
             .set_parent(window)
             .set_title(match extension {
                 "png" => "Save Holdmap snapshot",
-                "json" | "sarif" => "Save Holdmap report",
+                "json" | "sarif" | "csv" | "md" => "Save Holdmap report",
                 _ => "Save Holdmap recording",
             })
             .set_file_name(filename)
@@ -165,6 +176,8 @@ fn choose_destination<R: Runtime>(
                     "mp4" => "MP4 video",
                     "json" => "JSON report",
                     "sarif" => "SARIF report",
+                    "csv" => "CSV report",
+                    "md" => "Markdown report",
                     _ => "GIF animation",
                 },
                 &[extension],
@@ -429,6 +442,38 @@ mod tests {
             Some(output.to_string_lossy().into_owned())
         );
         assert_eq!(std::fs::read(&output).unwrap(), report);
+    }
+
+    #[test]
+    fn ipc_saves_csv_and_markdown_reports_only_when_they_are_plain_text() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("report.csv");
+        let chosen = output.clone();
+        let app = test_app(move |_, extension| {
+            assert_eq!(extension, "csv");
+            Ok(Some(chosen.clone()))
+        });
+        let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .unwrap();
+        for bad in [&b"a,b\x00"[..], b"\x1b[31mred", &[0xff, 0xfe][..]] {
+            assert!(
+                get_ipc_response(&window, raw_request("holdmap-security-2026-10-23.csv", bad))
+                    .is_err()
+            );
+        }
+        let report = b"severity,rule\nhigh,run-shell\n";
+        let saved = get_ipc_response(
+            &window,
+            raw_request("holdmap-security-2026-10-23.csv", report),
+        )
+        .unwrap();
+        assert_eq!(
+            saved.deserialize::<Option<String>>().unwrap(),
+            Some(output.to_string_lossy().into_owned())
+        );
+        assert_eq!(std::fs::read(&output).unwrap(), report);
+        assert!(validate("holdmap-security-2026-10-23.md", b"# Report\n").is_ok());
     }
 
     #[test]

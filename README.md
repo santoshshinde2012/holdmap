@@ -57,8 +57,10 @@
   never values or file bodies, and never starts an MCP server.
 - **Analyzers (opt-in).** Scan skills and MCP packages with SkillSpector, the built-in OSV.dev
   lookup, presets (Cisco Skill Scanner, OSV-Scanner, Trivy, Bandit) or any MCP server. Each one
-  stays off until you approve exactly what it gets, and runs on a copy in a sandbox. Add any
-  MCP server in three steps: source, tools, review.
+  stays off until you approve exactly what it gets, and runs on a copy in a sandbox. Install
+  pinned analyzers from the app after a consent step, follow runs in a progress dock, and
+  review results by agent, folder and source path, exported as JSON, SARIF, CSV or Markdown.
+  Add any MCP server in three steps: source, tools, review.
 - **Home, maps and graphs.** Agents as Cards or a Map with a Timeline and a **Needs you**
   list, the service graph with clusters, and agent flow.
 - **Local capture.** Records only the holdmap window to MP4/GIF, plus PNG snapshots. Other apps and your desktop are never captured. Nothing is uploaded.

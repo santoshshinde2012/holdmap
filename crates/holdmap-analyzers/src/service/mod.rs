@@ -13,10 +13,11 @@ use crate::consent::{
 };
 use crate::finding::{
     clean_id, clean_refs, clean_relative_path, clean_text, fingerprint, hex, AnalyzerResult,
-    Detail, Finding, FindingState, Location, RunStatus, Severity, Subject, ToolCalls, MAX_DETAIL,
-    MAX_FINDINGS_PER_SUBJECT, MAX_FIX, MAX_TITLE,
+    Detail, Finding, FindingState, Location, RunRecord, RunStatus, Severity, Subject, ToolCalls,
+    MAX_DETAIL, MAX_FINDINGS_PER_SUBJECT, MAX_FIX, MAX_TITLE,
 };
 use crate::input::{AnalyzerInput, InputProjector, InventoryProjector};
+use crate::install::{InstallError, InstallEvent, InstallPlan, InstallRecord, Installer};
 use crate::manifest::{
     AnalyzerManifest, ManifestError, OutputFormat, Permissions, RunnerKind, Transport, OUTPUT,
     SUBJECT_DIR,
@@ -26,7 +27,8 @@ use crate::osv::{request_bodies, OsvParser, OsvRunner};
 use crate::parse::{for_format, OutputParser, Parsed};
 use crate::probe::{BinaryProbe, SystemProbe};
 use crate::runner::{
-    AnalyzerRunner, CancelFlag, RawOutput, RunContext, RunError, SandboxLevel, ENV_NAMES,
+    AnalyzerRunner, CancelFlag, ProgressSink, RawOutput, RunContext, RunError, RunEvent, RunStep,
+    SandboxLevel, ENV_NAMES,
 };
 use crate::secrets::{check_value, Secret, SecretError, SecretStore};
 use holdmap_core::agents::AgentsReport;
@@ -263,6 +265,9 @@ pub enum ServiceError {
     /// An API key could not be stored, read or deleted.
     #[error(transparent)]
     Secret(#[from] SecretError),
+    /// An install didn't finish.
+    #[error(transparent)]
+    Install(#[from] InstallError),
 }
 
 /// The stores the service needs.
@@ -343,6 +348,8 @@ pub struct AnalyzerService {
     cancel: CancelFlag,
     keychain: Box<dyn SecretStore>,
     now: fn() -> u64,
+    installer: Option<Installer>,
+    install_cancel: CancelFlag,
 }
 
 impl AnalyzerService {
@@ -407,7 +414,69 @@ impl AnalyzerService {
             cancel: CancelFlag::default(),
             keychain: Box::new(crate::secrets::NoSecrets),
             now: now_ms,
+            installer: None,
+            install_cancel: CancelFlag::default(),
         }
+    }
+
+    /// Allow in-app installs into `tools` (`<holdmap dir>/analyzers/tools`), and look for
+    /// analyzers' programs there first. `probe` finds package managers; production passes
+    /// [`SystemProbe::from_env`].
+    pub fn with_tools_dir(
+        mut self,
+        tools: impl Into<std::path::PathBuf>,
+        probe: SystemProbe,
+    ) -> Self {
+        let tools = tools.into();
+        self.probe = Box::new(probe.clone().with_tools_dir(&tools));
+        self.installer = Some(Installer::new(tools, probe));
+        self
+    }
+
+    /// A different installer (tests: a short time limit).
+    pub fn with_installer(mut self, installer: Installer) -> Self {
+        self.installer = Some(installer);
+        self
+    }
+
+    fn installable(&self, id: &str) -> Result<AnalyzerManifest, ServiceError> {
+        self.manifest(id).or_else(|_| {
+            let text = crate::presets::source(id)?;
+            Ok(AnalyzerManifest::parse(text)?)
+        })
+    }
+
+    fn installer(&self) -> Result<&Installer, ServiceError> {
+        self.installer.as_ref().ok_or_else(|| {
+            ServiceError::Install(InstallError::Unavailable(
+                "In-app installs aren't available here.".into(),
+            ))
+        })
+    }
+
+    /// What installing an analyzer's (or a preset's) program would do. Runs nothing.
+    pub fn install_plan(&self, id: &str) -> Result<InstallPlan, ServiceError> {
+        let m = self.installable(id)?;
+        Ok(self.installer()?.plan(&m))
+    }
+
+    /// Install an analyzer's (or a preset's) program after the user agreed to its plan. It
+    /// stays off until approved; an approved analyzer whose program changes asks again.
+    pub fn install(
+        &self,
+        id: &str,
+        on: &dyn Fn(InstallEvent),
+    ) -> Result<InstallRecord, ServiceError> {
+        let m = self.installable(id)?;
+        self.install_cancel.reset();
+        Ok(self
+            .installer()?
+            .install(&m, &self.install_cancel, (self.now)(), on)?)
+    }
+
+    /// Stop the install in progress.
+    pub fn cancel_install(&self) {
+        self.install_cancel.cancel();
     }
 
     /// The runner for MCP analyzers (tests use an in-process fake).
@@ -923,7 +992,19 @@ impl AnalyzerService {
 
     /// Run one approved, unchanged analyzer now.
     pub fn run(&self, id: &str, report: &AgentsReport) -> Result<AnalyzerResult, ServiceError> {
+        self.run_with_progress(id, report, ProgressSink::default())
+    }
+
+    /// [`Self::run`], reporting each step (preparing, copying and scanning each subject,
+    /// collecting) to `progress`.
+    pub fn run_with_progress(
+        &self,
+        id: &str,
+        report: &AgentsReport,
+        progress: ProgressSink,
+    ) -> Result<AnalyzerResult, ServiceError> {
         let m = &self.manifest(id)?;
+        progress.send(RunEvent::step(RunStep::Preparing, 0));
         let grant = self.stores.consent.grant(&m.id);
         let mut cx = RunContext::default();
         let mut version = grant.as_ref().and_then(|g| g.version.clone());
@@ -971,6 +1052,12 @@ impl AnalyzerService {
         self.cancel.reset();
         cx.cancel = self.cancel.clone();
         let input = self.projector.project(report, m);
+        let total = input.subjects.len();
+        progress.send(RunEvent::step(RunStep::Preparing, total));
+        if m.runner.kind != RunnerKind::Cli {
+            progress.send(RunEvent::step(RunStep::Scanning, total));
+        }
+        cx.progress = progress.clone();
         let started = std::time::Instant::now();
         let outputs = match m.runner.kind {
             RunnerKind::Builtin => self.builtin.run(m, &input, &cx),
@@ -985,6 +1072,7 @@ impl AnalyzerService {
             other => other?,
         };
         let duration_ms = started.elapsed().as_millis() as u64;
+        progress.send(RunEvent::step(RunStep::Collecting, total));
         let parser: Box<dyn OutputParser> = match m.output.format {
             OutputFormat::Osv => Box::new(OsvParser),
             other => for_format(other).expect("parser for every non-builtin format"),
@@ -994,7 +1082,38 @@ impl AnalyzerService {
         result.duration_ms = Some(duration_ms);
         result.notes.extend(secret_notes);
         self.stores.results.save(&result)?;
+        self.stores
+            .results
+            .append_history(&RunRecord::of(&result))?;
         Ok(self.with_reviews(result))
+    }
+
+    /// Past runs of one analyzer, newest first (counts only; findings are kept for the latest
+    /// run).
+    pub fn history(&self, id: &str) -> Result<Vec<RunRecord>, ServiceError> {
+        let m = self.manifest(id)?;
+        Ok(self.stores.results.history(&m.id))
+    }
+
+    /// The folder of a subject in an analyzer's latest result, only when it is a folder
+    /// holdmap's inventory recorded and it still exists. Used to reveal it in the file manager;
+    /// a path coming from the front end is never trusted.
+    pub fn subject_dir(&self, id: &str, subject: &str) -> Result<std::path::PathBuf, ServiceError> {
+        let m = self.manifest(id)?;
+        let result = self
+            .stores
+            .results
+            .latest(&m.id)
+            .ok_or_else(|| ServiceError::Unknown(format!("{id} has no results")))?;
+        let dir = result
+            .subjects
+            .iter()
+            .find(|s| s.id == subject)
+            .and_then(|s| s.dir.as_deref())
+            .map(std::path::PathBuf::from)
+            .filter(|d| d.is_absolute() && d.is_dir())
+            .ok_or_else(|| ServiceError::Unknown(format!("{subject} has no folder to show")))?;
+        Ok(dir)
     }
 
     /// Latest results with review states applied.

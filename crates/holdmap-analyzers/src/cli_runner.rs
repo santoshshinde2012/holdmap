@@ -5,7 +5,8 @@
 use crate::input::{AnalyzerInput, InputSubject};
 use crate::manifest::{AnalyzerManifest, EMPTY_FILE, OUTPUT, SUBJECT_DIR};
 use crate::runner::{
-    AnalyzerRunner, CancelFlag, Containment, RawOutput, RunContext, RunError, Sandbox, CANCELLED,
+    AnalyzerRunner, CancelFlag, Containment, RawOutput, RunContext, RunError, RunEvent, RunStep,
+    Sandbox, CANCELLED,
 };
 use std::fs;
 use std::io::{self, Read};
@@ -58,6 +59,8 @@ impl CliRunner {
         binary: &Path,
         cx: &RunContext,
         subject: &InputSubject,
+        index: usize,
+        total: usize,
     ) -> RawOutput {
         let mut out = RawOutput {
             subjects: vec![subject.subject.clone()],
@@ -139,6 +142,12 @@ impl CliRunner {
         finish_env(&mut cmd, manifest, binary, &cx.secrets);
         let cap = (manifest.runner.max_output_mb * 1024 * 1024) as usize;
         let timeout = Duration::from_secs(manifest.runner.timeout_secs);
+        cx.progress.send(RunEvent::subject(
+            RunStep::Scanning,
+            index,
+            total,
+            &subject.subject,
+        ));
         let ran = run_until(cmd, timeout, cap, self.sandbox.as_ref(), &cx.cancel);
         let Ok(ran) = ran else {
             out.notes.push("The analyzer could not be started.".into());
@@ -225,10 +234,20 @@ impl AnalyzerRunner for CliRunner {
         if input.subjects.is_empty() {
             return Err(RunError::NoSubjects("no skills were found".into()));
         }
+        let total = input.subjects.len();
         Ok(input
             .subjects
             .iter()
-            .map(|s| self.run_one(manifest, binary, cx, s))
+            .enumerate()
+            .map(|(i, s)| {
+                cx.progress.send(RunEvent::subject(
+                    RunStep::Copying,
+                    i + 1,
+                    total,
+                    &s.subject,
+                ));
+                self.run_one(manifest, binary, cx, s, i + 1, total)
+            })
             .collect())
     }
 }
@@ -453,7 +472,7 @@ pub fn run_until(
     Ok(ran)
 }
 
-fn kill_tree(child: &mut Child) {
+pub(crate) fn kill_tree(child: &mut Child) {
     #[cfg(unix)]
     if let Ok(pid) = i32::try_from(child.id()) {
         // SAFETY: signals the process group this function created with process_group(0).
@@ -510,6 +529,8 @@ mod tests {
                     kind: SubjectKind::Skill,
                     name: "a".into(),
                     agents: vec![],
+                    dir: None,
+                    scope: None,
                 },
                 dir: Some(dir.to_path_buf()),
                 package: None,

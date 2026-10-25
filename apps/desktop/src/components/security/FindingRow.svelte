@@ -2,6 +2,7 @@
   // One finding: a compact row that expands inline to evidence, location, fix and actions.
   import Icon from "../Icon.svelte";
   import Button from "../ui/Button.svelte";
+  import FindingPlace from "./FindingPlace.svelte";
   import type { FindingState } from "../../lib/analyzers";
   import type { FindingItem } from "../../lib/security-view";
   let { item, open = false, busy = false, ontoggle, onreview, onrescan }: {
@@ -17,17 +18,17 @@
     <Icon name={open ? "chevron-down" : "chevron"} size={12} />
     <span class="sev-pill {f.severity}">{f.severity}</span>
     <span class="title">{f.title}</span>
-    <span class="meta"><span class="skill">{item.subject?.name ?? f.subject}</span>{#if item.where}<code>{item.where}</code>{/if}</span>
+    <span class="meta"><span class="skill">{item.subject?.name ?? f.subject}</span>{#if item.agents.length}<span class="ag">{item.agents.join(", ")}</span>{/if}{#if item.where}<code>{item.where}</code>{/if}</span>
     <span class="by">{item.analyzerName}</span>
     {#if f.state !== "open"}<span class="st">{f.state}</span>{/if}
   </button>
   {#if open}
     <div class="body" {id}>
       {#if f.fix}<div class="fix"><Icon name="sparkles" size={12} /><span><b>Fix</b> {f.fix}</span></div>{/if}
+      <FindingPlace {item} />
       <dl>
         <div><dt>Location</dt><dd>{#if item.where}<code>{item.where}</code>{:else}—{/if}</dd></div>
         <div><dt>Analyzer</dt><dd>{item.analyzerName}</dd></div>
-        {#if item.agents.length}<div><dt>Agents</dt><dd>{item.agents.join(", ")}</dd></div>{/if}
         {#each item.evidence as e (e.label)}<div><dt>{e.label}</dt><dd>{e.value}</dd></div>{/each}
       </dl>
       <div class="acts">

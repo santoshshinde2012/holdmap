@@ -4,23 +4,42 @@
 
 use crate::state::AppState;
 use holdmap_analyzers::catalog::{CatalogDiff, CatalogStatus};
+use holdmap_analyzers::finding::RunRecord;
+use holdmap_analyzers::install::{InstallEvent, InstallPlan, InstallRecord};
 use holdmap_analyzers::manifest::ToolSpec;
 use holdmap_analyzers::mcp_map::OutputMapping;
 use holdmap_analyzers::presets::PresetView;
+use holdmap_analyzers::probe::SystemProbe;
+use holdmap_analyzers::runner::{ProgressSink, RunEvent};
 use holdmap_analyzers::service::{AnalyzerView, ConfiguredServer, McpDraft, Preview, ToolReport};
 use holdmap_analyzers::{
     AnalyzerResult, AnalyzerService, FileStore, FindingState, Insights, Stores,
 };
 use holdmap_core::agents::AgentsReport;
+use serde::Serialize;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Default)]
 pub(crate) struct AnalyzersState {
     service: OnceLock<Arc<AnalyzerService>>,
     /// Held for the length of a run, so Run now and run-on-change never overlap.
     running: Arc<Mutex<()>>,
+    /// Held for the length of an install; one at a time.
+    installing: Arc<Mutex<()>>,
+}
+
+#[derive(Clone, Serialize)]
+struct RunProgress<'a> {
+    id: &'a str,
+    event: &'a RunEvent,
+}
+
+#[derive(Clone, Serialize)]
+struct InstallProgress<'a> {
+    id: &'a str,
+    event: &'a InstallEvent,
 }
 
 fn service(app: &AppHandle) -> Arc<AnalyzerService> {
@@ -29,8 +48,13 @@ fn service(app: &AppHandle) -> Arc<AnalyzerService> {
         .service
         .get_or_init(|| {
             let dir = app.state::<AppState>().store.dir().join("analyzers");
-            // Production wiring includes the OS keychain for API keys.
-            Arc::new(AnalyzerService::new(Stores::of(FileStore::new(dir))))
+            let tools = dir.join("tools");
+            // Production wiring includes the OS keychain for API keys. In-app installs go to
+            // holdmap's own folder, never system-wide.
+            Arc::new(
+                AnalyzerService::new(Stores::of(FileStore::new(dir)))
+                    .with_tools_dir(tools, SystemProbe::from_env()),
+            )
         })
         .clone()
 }
@@ -107,11 +131,90 @@ pub async fn analyzer_run(app: AppHandle, id: String) -> Result<AnalyzerResult, 
     blocking(move || {
         let running = app.state::<AnalyzersState>().running.clone();
         let _guard = running.lock().map_err(|e| e.to_string())?;
+        let emitter = app.clone();
+        let run_id = id.clone();
+        let progress = ProgressSink::new(move |event| {
+            let _ = emitter.emit(
+                "analyzer-run-progress",
+                RunProgress {
+                    id: &run_id,
+                    event: &event,
+                },
+            );
+        });
         service(&app)
-            .run(&id, &inventory(&app)?)
+            .run_with_progress(&id, &inventory(&app)?, progress)
             .map_err(|e| e.to_string())
     })
     .await
+}
+
+/// Past runs of an analyzer (newest first): when, which version, how many findings.
+#[tauri::command]
+pub async fn analyzer_history(app: AppHandle, id: String) -> Result<Vec<RunRecord>, String> {
+    blocking(move || service(&app).history(&id).map_err(|e| e.to_string())).await
+}
+
+/// Show a scanned skill's folder. Only folders holdmap recorded for the latest run can be
+/// revealed; the renderer names a subject, never a path.
+#[tauri::command]
+pub async fn analyzer_reveal_subject(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    id: String,
+    subject: String,
+) -> Result<(), String> {
+    crate::local_window::authorize(&window, "Showing folders")?;
+    blocking(move || {
+        let dir = service(&app)
+            .subject_dir(&id, &subject)
+            .map_err(|e| e.to_string())?;
+        holdmap_core::util::reveal(&dir).map_err(|e| format!("Couldn't show the folder: {e}"))
+    })
+    .await
+}
+
+/// What installing an analyzer's program would do: package, version, folder, network. Runs
+/// nothing.
+#[tauri::command]
+pub async fn analyzer_install_plan(app: AppHandle, id: String) -> Result<InstallPlan, String> {
+    blocking(move || service(&app).install_plan(&id).map_err(|e| e.to_string())).await
+}
+
+/// Install an analyzer's program after the user agreed to its plan in the main window.
+/// Progress arrives as `analyzer-install` events. The analyzer still needs approval.
+#[tauri::command]
+pub async fn analyzer_install(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    id: String,
+) -> Result<InstallRecord, String> {
+    crate::local_window::authorize(&window, "Installing analyzers")?;
+    blocking(move || {
+        let installing = app.state::<AnalyzersState>().installing.clone();
+        let Ok(_guard) = installing.try_lock() else {
+            return Err("Another install is in progress.".into());
+        };
+        let emitter = app.clone();
+        let on = |event: InstallEvent| {
+            let _ = emitter.emit(
+                "analyzer-install",
+                InstallProgress {
+                    id: &id,
+                    event: &event,
+                },
+            );
+        };
+        service(&app).install(&id, &on).map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// Stop the install in progress.
+#[tauri::command]
+pub async fn analyzer_install_cancel(app: AppHandle) -> Result<(), String> {
+    service(&app).cancel_install();
+    Ok(())
 }
 
 /// Run approved analyzers whose input changed; skipped while another run is in progress.

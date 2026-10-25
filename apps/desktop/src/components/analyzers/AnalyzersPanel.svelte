@@ -15,6 +15,8 @@
   import * as api from "../../lib/api";
   import { SANDBOX_LABEL, STATE_LABEL, ago, countsText, total, type AnalyzerView, type Preview } from "../../lib/analyzers";
   import { insightsStore } from "../../lib/insights-store.svelte";
+  import { securityRuns } from "../../lib/security-runs.svelte";
+  import { installDialog } from "../../lib/install-dialog.svelte";
 
   const demo = api.usesSampleData();
   let preview = $state<Preview | null>(null);
@@ -94,13 +96,17 @@
         {#if a.state === "changed"}<p class="meta warn">{a.changes.join("; ")}</p>{/if}
         {#if a.mcp}<p class="meta">{a.mcp.transport === "http" ? "Connects to" : "Starts"} <code>{a.mcp.endpoint}</code> · {a.mcp.tools.length ? `tools: ${a.mcp.tools.join(", ")}` : "no tools chosen yet"}{a.mcp.listing ? ` · pin ${a.mcp.listing.pin}` : ""}</p>{/if}
         {#if a.state === "not_installed" && a.install}
-          <div class="install"><span class="meta">Install it yourself, then come back:</span><CopyValue value={a.install} mono wrap what="Install command" oncopy={(t) => navigator.clipboard?.writeText(t)} /></div>
+          <div class="install">
+            <div class="acts"><Button size="sm" variant="primary" icon="download" onclick={() => installDialog.show(a.id)}>Install…</Button><span class="meta">holdmap shows what it installs and asks first.</span></div>
+            <details><summary class="meta">Or install it yourself</summary><CopyValue value={a.install} mono wrap what="Install command" oncopy={(t) => navigator.clipboard?.writeText(t)} /></details>
+          </div>
         {/if}
         {#if a.secrets?.length && !demo}<AnalyzerKeys id={a.id} name={a.name} secrets={a.secrets} onchange={() => insightsStore.refresh()} />{/if}
         <div class="acts">
           {#if a.state === "approved"}
-            <Button size="sm" variant="primary" icon="play" loading={busy[`run:${a.id}`]} onclick={() => act(`run:${a.id}`, () => api.runAnalyzer(a.id))}>Run now</Button>
-            {#if busy[`run:${a.id}`]}<Button size="sm" variant="ghost" icon="stop" onclick={() => api.cancelAnalyzerRun()}>Stop</Button>{/if}
+            {@const step = securityRuns.stepFor(a.id)}
+            <Button size="sm" variant="primary" icon="play" loading={step?.phase === "running"} disabled={securityRuns.busy && step?.phase !== "running"} onclick={() => securityRuns.start([a])}>Run now</Button>
+            {#if step?.phase === "running"}<Button size="sm" variant="ghost" icon="stop" onclick={() => securityRuns.cancel()}>Stop</Button>{/if}
             <Button size="sm" variant="ghost" onclick={() => review(a)} loading={busy[a.id]}>Permissions</Button>
             <Button size="sm" variant="danger-outline" loading={busy[`off:${a.id}`]} onclick={() => act(`off:${a.id}`, () => api.revokeAnalyzer(a.id))}>Turn off</Button>
           {:else if a.state !== "not_installed"}

@@ -16,6 +16,7 @@
   import * as api from "../../lib/api";
   import type { ConfiguredServer, McpDraft } from "../../lib/analyzers";
   import type { PresetView } from "../../lib/analyzer-presets";
+  import { installDialog } from "../../lib/install-dialog.svelte";
 
   type Mode = "preset" | "command" | "url" | "agents" | "manifest";
   const ALL: (SourceOption & { value: Mode })[] = [
@@ -60,7 +61,8 @@
   const names = (s: string) => s.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
 
   $effect(() => {
-    if (open && mode === "preset" && presets === null) api.analyzerPresets().then((p) => (presets = p), (e) => { presets = []; error = String(e); });
+    void installDialog.attempts;
+    if (open && mode === "preset" && (presets === null || installDialog.attempts)) api.analyzerPresets().then((p) => (presets = p), (e) => { presets = []; error = String(e); });
   });
   $effect(() => {
     if (mode === "agents" && servers === null) api.configuredMcpServers().then((s) => (servers = s), (e) => { servers = []; error = String(e); });
@@ -120,7 +122,7 @@
   const errors = $derived(draftErrors(mode, { id, command, url, keys: mode === "url" ? auth : keys, manifest: text, serverPicked: !!server?.draft }));
   const SOURCE_TEXT: Record<Mode, string> = { preset: "Preset", command: "Command (stdio), started in the sandbox", url: "Local URL (Streamable HTTP)", agents: "Copy of an agent's MCP server", manifest: "Manifest" };
   const HELP: Record<Mode, string> = {
-    preset: "Run on this computer without an LLM or API key. You install the tool; holdmap adds it, off until you approve it.",
+    preset: "Run on this computer without an LLM or API key. Install it from holdmap (it asks first) or yourself; holdmap adds it, off until you approve it.",
     command: "Any stdio MCP server. holdmap starts it in the sandbox with a cleared environment, only for scans you start.",
     url: "A Streamable HTTP MCP server you run. holdmap connects only for scans you start; it isn't sandboxed.",
     agents: "holdmap starts its own copy. It gets none of your agent's settings or keys.",
@@ -164,6 +166,7 @@
               </div>
               <div class="pa">
                 {#if p.homepage}<a class="sub" href={p.homepage} target="_blank" rel="noopener noreferrer">Project page<span class="sr-only"> for {p.name} (opens in a new tab)</span></a>{/if}
+                {#if !p.installed && p.install}<Button size="sm" variant="ghost" icon="download" onclick={() => installDialog.show(p.id)} aria-label="Install {p.name}">Install…</Button>{/if}
                 {#if p.added}<span class="sub">Added</span>
                 {:else}<Button size="sm" variant="secondary" loading={busy} onclick={() => addPreset(p)} aria-label="Add {p.name}">Add</Button>{/if}
               </div>

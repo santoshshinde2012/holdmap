@@ -926,3 +926,59 @@ fn a_preset_is_added_as_the_users_own_analyzer_and_stays_off_until_approved() {
     assert!(h.service.remove_manifest("google.osv-scanner").unwrap());
     assert!(h.service.presets().iter().all(|p| !p.added));
 }
+
+#[test]
+fn a_run_reports_its_steps_and_keeps_a_history_and_the_skill_folder() {
+    use holdmap_analyzers::runner::{ProgressSink, RunStep};
+    let h = harness();
+    let r = report(&h.skill_dir);
+    h.service.approve(SKILLSPECTOR).unwrap();
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let sink = {
+        let events = events.clone();
+        ProgressSink::new(move |e| events.lock().unwrap().push(e))
+    };
+    let result = h.service.run_with_progress(SKILLSPECTOR, &r, sink).unwrap();
+    let steps: Vec<RunStep> = events.lock().unwrap().iter().map(|e| e.step).collect();
+    assert_eq!(steps.first(), Some(&RunStep::Preparing));
+    assert_eq!(steps.last(), Some(&RunStep::Collecting));
+    // The fake runner doesn't report per subject; the real CLI runner's per-skill steps are
+    // covered in cli_runner's tests.
+    assert!(events.lock().unwrap().iter().all(|e| e.subject.is_none()));
+    let subject = &result.subjects[0];
+    assert_eq!(subject.dir.as_deref(), Some(h.skill_dir.to_str().unwrap()));
+    assert!(subject.scope.is_some());
+    assert_eq!(
+        h.service.subject_dir(SKILLSPECTOR, &subject.id).unwrap(),
+        h.skill_dir
+    );
+    assert!(h.service.subject_dir(SKILLSPECTOR, "nope").is_err());
+    h.service.run(SKILLSPECTOR, &r).unwrap();
+    let history = h.service.history(SKILLSPECTOR).unwrap();
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[0].subjects, result.subjects.len());
+    assert_eq!(
+        history[0].counts.values().sum::<usize>(),
+        result.findings.len()
+    );
+    assert!(history[0].run_at_ms >= history[1].run_at_ms);
+}
+
+#[test]
+fn installs_need_a_holdmap_folder_and_presets_can_be_planned_before_they_are_added() {
+    let h = harness();
+    assert!(matches!(
+        h.service.install_plan("pycqa.bandit"),
+        Err(ServiceError::Install(_))
+    ));
+    let tools = tempfile::tempdir().unwrap();
+    let service = h.service.with_tools_dir(
+        tools.path(),
+        holdmap_analyzers::probe::SystemProbe::with_env(Some("/nonexistent".into()), None),
+    );
+    let plan = service.install_plan("pycqa.bandit").unwrap();
+    assert_eq!(plan.version, "1.9.4");
+    assert!(plan.target_dir.starts_with(tools.path().to_str().unwrap()));
+    assert_eq!(plan.can_install, plan.blocked.is_none());
+    assert!(service.install_plan("unknown.tool").is_err());
+}

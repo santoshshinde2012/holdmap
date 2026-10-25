@@ -8,6 +8,27 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- **Guided analyzer installs.** **Install…** (analyzer cards, Settings → Analyzers, Scan with…, Presets) shows
+  the pinned package and version, its source, holdmap's own install folder (no admin rights), the hosts contacted
+  and what the analyzer reads, then installs only after you tick consent. Live output, **Cancel install**, a
+  reason on failure and **Retry**; holdmap verifies and records the version and SHA-256. Uses `uv` or `go` you
+  already have, with a cleared environment and a time limit, and says when one is missing. The copy-command
+  fallback stays. An installed analyzer is still off until you approve it.
+- **Run progress that stays visible.** A dock above the status bar, a status-bar pill and each analyzer card show
+  the current step and skill, elapsed time and **Cancel**, across tabs and dialogs, then a summary with **View
+  results**.
+- **Security → Results.** A sortable table (severity, rule, message, agent, skill, folder, path:line) with filters,
+  search, grouping by agent, folder or severity, **Copy path**, **Show in folder** (desktop) and a run history
+  with time, analyzer version and counts.
+- **Exports of what's on screen.** JSON, SARIF 2.1.0, CSV and Markdown carry only the filtered findings plus a
+  note saying what was included, with scope and folder.
+- **Where a finding lives.** Each finding shows the agents that load the skill, its scope (global, project, local
+  or unknown), the scanned folder, the source path and suggested next steps, still marked as unverified. A
+  "What a skill analyzer does" explainer, a skill-findings tile on Home, skills with findings on each agent and a
+  per-skill summary in Pipeline detail.
+
 ### Changed
 
 - **Clearer MCP tool metadata for directory scanners.** Each of the 14 tools declares its name, description and all

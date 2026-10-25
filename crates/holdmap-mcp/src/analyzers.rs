@@ -193,6 +193,8 @@ mod tests {
             kind: SubjectKind::Skill,
             name: id.into(),
             agents: vec![agent.into()],
+            dir: None,
+            scope: None,
         };
         store
             .save(&AnalyzerResult {

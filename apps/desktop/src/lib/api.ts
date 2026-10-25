@@ -5,9 +5,10 @@ import type { ActionPlan, AgentsReport, AppInfo, Config, DesktopHelpDestination,
 import { version as pkgVersion } from "../../package.json";
 import type { ShutdownPreview } from "./power";
 import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
-import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, ConfiguredServer, FindingState, Insights, McpDraft, OutputMapping, Preview, ToolReport, ToolSpec } from "./analyzers";
+import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, ConfiguredServer, FindingState, Insights, McpDraft, RunEvent, RunRecord, OutputMapping, Preview, ToolReport, ToolSpec } from "./analyzers";
 import { DemoAnalyzers } from "./analyzers-demo";
 import type { PresetView } from "./analyzer-presets";
+import { demoInstall, type InstallEvent, type InstallPlan, type InstallRecord } from "./analyzer-install";
 import { attention, type AttentionItem } from "./home";
 import { MOCK_SNAPSHOT, mockAgents, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
@@ -628,8 +629,82 @@ export async function setAnalyzerBackground(id: string, allow: boolean): Promise
 export async function runAnalyzer(id: string): Promise<AnalyzerResult> {
   if (isTauri) return call("analyzer_run", { id });
   if (liveReads()) liveWrites();
-  await delay(600);
-  return demoAnalyzers.run(id, await agents(true));
+  const report = await agents(true);
+  if (!(await analyzers()).some((a) => a.id === id && a.state === "approved")) return demoAnalyzers.run(id, report);
+  // The browser demo walks the same steps the app reports, so progress can be seen and cancelled.
+  demoAnalyzers.resetCancel();
+  const subjects = demoAnalyzers.runSubjects(id, report);
+  const total = subjects.length;
+  const send = (event: RunEvent) => demoRunListeners.forEach((cb) => cb({ id, event }));
+  const step = async (event: RunEvent, ms: number) => {
+    send(event);
+    await delay(ms);
+    if (demoAnalyzers.wasCancelled) throw new Error("The run was cancelled.");
+  };
+  await step({ step: "preparing", index: 0, total, subject: null, agents: [] }, 150);
+  for (let i = 0; i < total; i++) {
+    const s = subjects[i];
+    await step({ step: "copying", index: i + 1, total, subject: s.name, agents: s.agents }, 60);
+    await step({ step: "scanning", index: i + 1, total, subject: s.name, agents: s.agents }, demoRunTick);
+  }
+  await step({ step: "collecting", index: 0, total, subject: null, agents: [] }, 120);
+  return demoAnalyzers.run(id, report);
+}
+
+export interface RunProgressMessage { id: string; event: RunEvent }
+const demoRunListeners = new Set<(m: RunProgressMessage) => void>();
+/** `?demoRunMs=` slows the browser demo's per-item step (Playwright uses it to see progress). */
+const demoRunTick = Number(new URLSearchParams(globalThis.location?.search ?? "").get("demoRunMs") ?? "") || 250;
+
+/** Live steps of the analyzer run in progress (names only). Returns an unsubscribe. */
+export async function onAnalyzerProgress(cb: (m: RunProgressMessage) => void): Promise<() => void> {
+  if (isTauri) return onEvent<RunProgressMessage>("analyzer-run-progress", cb);
+  demoRunListeners.add(cb);
+  return () => demoRunListeners.delete(cb);
+}
+
+/** Past runs of an analyzer, newest first: when, version, counts. */
+export async function analyzerHistory(id: string): Promise<RunRecord[]> {
+  if (isTauri) return call("analyzer_history", { id });
+  if (liveReads()) return [];
+  return demoAnalyzers.history(id);
+}
+
+/** Show a scanned skill's folder in the file manager. Only folders holdmap recorded can be
+ *  shown; the browser can't open folders, so it returns the folder for the caller to copy. */
+export async function revealAnalyzerSubject(id: string, subject: string): Promise<{ revealed: boolean; folder: string | null }> {
+  if (isTauri) {
+    await call("analyzer_reveal_subject", { id, subject });
+    return { revealed: true, folder: null };
+  }
+  return { revealed: false, folder: demoAnalyzers.subjectDir(id, subject) };
+}
+
+/** What installing an analyzer's program would do. Runs nothing. */
+export async function analyzerInstallPlan(id: string): Promise<InstallPlan> {
+  if (isTauri) return call("analyzer_install_plan", { id });
+  if (liveReads()) liveWrites();
+  return demoAnalyzers.installPlan(id);
+}
+
+let demoInstallCancelled = false;
+
+/** Install after the user agreed to the plan; updates arrive through `on`. */
+export async function installAnalyzer(id: string, on: (e: InstallEvent) => void): Promise<InstallRecord> {
+  if (isTauri) {
+    const off = await onEvent<{ id: string; event: InstallEvent }>("analyzer-install", (m) => { if (m.id === id) on(m.event); });
+    try { return await call("analyzer_install", { id }); } finally { off(); }
+  }
+  if (liveReads()) liveWrites();
+  demoInstallCancelled = false;
+  const record = await demoInstall(demoAnalyzers.installPlan(id), on, () => demoInstallCancelled);
+  demoAnalyzers.recordInstall(record);
+  return record;
+}
+
+export async function cancelAnalyzerInstall(): Promise<void> {
+  if (isTauri) return call("analyzer_install_cancel");
+  demoInstallCancelled = true;
 }
 
 export async function runChangedAnalyzers(): Promise<string[]> {

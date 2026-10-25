@@ -84,7 +84,7 @@ describe("runs", () => {
   });
   it("runs only approved analyzers, one at a time, then refreshes", async () => {
     const order: string[] = [];
-    const run = vi.fn(async (id: string) => { order.push(id); if (id === "b") throw new Error("boom"); return { status: "complete" }; });
+    const run = vi.fn(async (id: string) => { order.push(id); if (id === "b") throw new Error("boom"); return { status: "complete" as const }; });
     const refresh = vi.fn(async () => {});
     const r = new SecurityRuns(run, refresh);
     await r.start([{ id: "a", name: "A", state: "approved" }, { id: "off", name: "Off", state: "not_approved" }, { id: "b", name: "B", state: "approved" }]);

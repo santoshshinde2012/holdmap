@@ -73,12 +73,24 @@ function counts(items: FindingItem[]): Record<Severity, number> {
   return c;
 }
 
-/** Findings as the Security tab lists them (open ones unless the caller passes more). */
-export function securityReport(items: FindingItem[], summary: SecuritySummary, now: number) {
+/** Where a finding sits, home folder hidden; "unknown" when holdmap couldn't confirm it. */
+function place(i: FindingItem) {
+  return {
+    folder: i.folder ? redactHome(i.folder) : null,
+    scope: i.scope,
+    path: i.path ? redactHome(i.path) : null,
+    line: i.finding.location.line,
+  };
+}
+
+/** Findings as the Security tab lists them. `included` says which ones (the on-screen filter). */
+export function securityReport(items: FindingItem[], summary: SecuritySummary, now: number, included = "Open findings") {
   return {
     schema: REPORT_SCHEMA,
     kind: "security" as const,
     generated_at: new Date(now).toISOString(),
+    included: line(included),
+    note: "Findings are what each analyzer reported; holdmap hasn't verified them.",
     open: summary.open,
     last_scan: summary.lastRun ? new Date(summary.lastRun).toISOString() : null,
     coverage: { agents_scanned: summary.agents.scanned, agents_total: summary.agents.total, skills_scanned: summary.skills.scanned, skills_total: summary.skills.total },
@@ -93,6 +105,7 @@ export function securityReport(items: FindingItem[], summary: SecuritySummary, n
       subject: i.subject ? { kind: i.subject.kind, name: i.subject.name } : null,
       agents: i.agents,
       location: i.finding.location.file ? { file: redactHome(i.finding.location.file), line: i.finding.location.line } : null,
+      ...place(i),
       fix: i.finding.fix ? line(i.finding.fix) : null,
       references: i.finding.refs,
     })),
@@ -116,7 +129,7 @@ export function securitySummaryText(items: FindingItem[], summary: SecuritySumma
 }
 
 /** SARIF 2.1.0: one run, one rule per rule id, one result per finding. */
-export function securitySarif(items: FindingItem[], version?: string) {
+export function securitySarif(items: FindingItem[], version?: string, included = "Open findings") {
   const rules = new Map<string, { id: string; name: string; shortDescription: { text: string }; defaultConfiguration: { level: string }; properties: { tags: string[] } }>();
   for (const i of items) {
     const f = i.finding;
@@ -132,8 +145,9 @@ export function securitySarif(items: FindingItem[], version?: string) {
       results: items.map((i) => {
         const f = i.finding;
         const logical = i.subject ? { logicalLocations: [{ name: i.subject.name, kind: i.subject.kind }] } : {};
-        const physical = f.location.file
-          ? { physicalLocation: { artifactLocation: { uri: redactHome(f.location.file) }, ...(f.location.line ? { region: { startLine: f.location.line } } : {}) } }
+        const file = i.path ?? f.location.file;
+        const physical = file
+          ? { physicalLocation: { artifactLocation: { uri: redactHome(file) }, ...(f.location.line ? { region: { startLine: f.location.line } } : {}) } }
           : {};
         const where = { ...physical, ...logical };
         return {
@@ -142,22 +156,72 @@ export function securitySarif(items: FindingItem[], version?: string) {
           message: { text: line(f.fix ? `${f.title}. Fix: ${f.fix}` : f.title) },
           partialFingerprints: { holdmap: f.fingerprint },
           locations: Object.keys(where).length ? [where] : [],
-          properties: { analyzer: i.analyzerName, state: f.state, agents: i.agents },
+          properties: { analyzer: i.analyzerName, state: f.state, agents: i.agents, skill: i.subject?.name ?? null, folder: i.folder ? redactHome(i.folder) : null, scope: i.scope },
         };
       }),
+      properties: { included: line(included), unverified: true },
     }],
   };
 }
 
+export const CSV_COLUMNS = ["severity", "rule", "message", "analyzer", "agents", "skill", "scope", "folder", "path", "line", "state", "fix"] as const;
+
+/** A CSV cell: quoted when needed, and never starting with = + - @ so a spreadsheet can't run it. */
+export function csvCell(v: string | number | null): string {
+  let s = v === null ? "" : line(String(v));
+  if (/^[=+\-@]/.test(s)) s = `'${s}`;
+  return /[",]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** RFC 4180 CSV, one row per finding shown. */
+export function securityCsv(items: FindingItem[]): string {
+  const rows = items.map((i) => {
+    const p = place(i);
+    return [i.finding.severity, i.finding.rule_id, i.finding.title, i.analyzerName, i.agents.join("; "), i.subject?.name ?? i.finding.subject, p.scope, p.folder ?? "unknown", p.path, p.line, i.finding.state, i.finding.fix].map(csvCell).join(",");
+  });
+  return [CSV_COLUMNS.join(","), ...rows].join("\r\n") + "\r\n";
+}
+
+/** A Markdown cell: one line, pipes escaped. */
+const md = (s: string | number | null) => (s === null || s === "" ? "—" : line(String(s)).replace(/\|/g, "\\|").replace(/</g, "&lt;"));
+
+/** Markdown for a ticket or PR: summary, inclusion note, then a table. */
+export function securityMarkdown(items: FindingItem[], summary: SecuritySummary, now: number, included = "Open findings"): string {
+  const c = counts(items);
+  const out = [
+    `# Holdmap security findings · ${day(now)}`,
+    "",
+    `**Included:** ${md(included)} (${plural(items.length, "finding")}).  `,
+    `**Coverage:** ${summary.agents.scanned} of ${plural(summary.agents.total, "agent")}, ${summary.skills.scanned} of ${plural(summary.skills.total, "skill")}${summary.lastRun ? `, last scan ${day(summary.lastRun)}` : ", no scan yet"}.  `,
+    `**By severity:** ${SEVERITY_ORDER.map((s) => `${sevWord(s)} ${c[s]}`).join(" · ")}`,
+    "",
+    "> Findings are what each analyzer reported; holdmap hasn't verified them. Home folders are shown as `~`.",
+    "",
+  ];
+  if (!items.length) return out.concat("No findings.", "").join("\n");
+  out.push("| Severity | Rule | Message | Agents | Skill | Scope | Folder | Path |", "| --- | --- | --- | --- | --- | --- | --- | --- |");
+  for (const i of items) {
+    const p = place(i);
+    out.push(`| ${sevWord(i.finding.severity)} | ${md(i.finding.rule_id)} | ${md(i.finding.title)} | ${md(i.agents.join(", "))} | ${md(i.subject?.name ?? i.finding.subject)} | ${md(p.scope)} | ${md(p.folder ?? "unknown")} | ${md(p.path ? `${p.path}${p.line ? `:${p.line}` : ""}` : null)} |`);
+  }
+  return out.join("\n") + "\n";
+}
+
+export type ReportExt = "json" | "sarif" | "csv" | "md";
+
 /** A file name safe for the native save dialog: `holdmap-<what>-<date>.<ext>`. */
-export function reportFilename(what: string, now: number, ext: "json" | "sarif"): string {
+export function reportFilename(what: string, now: number, ext: ReportExt): string {
   return `holdmap-${what}-${day(now)}.${ext}`;
 }
 
-/** Save through the native chooser in the app, or a download in the browser. */
+const MIME: Record<ReportExt, string> = { json: "application/json", sarif: "application/sarif+json", csv: "text/csv", md: "text/markdown" };
+
+/** Save through the native chooser in the app, or a download in the browser. Strings are saved
+ *  as they are (CSV, Markdown); anything else as pretty JSON. */
 export async function saveReport(filename: string, data: unknown): Promise<{ saved: boolean }> {
-  const text = JSON.stringify(data, null, 2) + "\n";
-  const blob = new Blob([text], { type: "application/json" });
+  const ext = (filename.split(".").pop() ?? "json") as ReportExt;
+  const text = typeof data === "string" ? data : JSON.stringify(data, null, 2) + "\n";
+  const blob = new Blob([text], { type: MIME[ext] ?? "application/json" });
   const r = await saveRecording({ blob, bytes: blob.size, filename });
   return { saved: r.saved };
 }

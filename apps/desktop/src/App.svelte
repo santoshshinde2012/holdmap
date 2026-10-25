@@ -8,6 +8,9 @@
   import ViewToolbar from "./components/shell/ViewToolbar.svelte";
   import Notices from "./components/shell/Notices.svelte";
   import StatusBar from "./components/shell/StatusBar.svelte";
+  import RunDock from "./components/security/RunDock.svelte";
+  import InstallDialog from "./components/security/InstallDialog.svelte";
+  import { securityTab } from "./lib/security-tab.svelte";
   import HomeView from "./components/home/HomeView.svelte";
   import { nextLayout } from "./lib/home-layout";
   import FirstRun from "./components/FirstRun.svelte";
@@ -1349,7 +1352,7 @@
       </div>
     {:else if prefs.view === "home"}
       <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
-        onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (prefs.view = v)} oninventory={enableInventory} />
+        onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (prefs.view = v)} onsecurity={() => { prefs.view = "agents"; prefs.agentSection = "insights"; securityTab.value = "findings"; }} oninventory={enableInventory} />
     {:else if prefs.view === "agents"}
       <div class="graph-wrap agents-wrap">
         {#if AgentsView}
@@ -1418,6 +1421,8 @@
 {/if}
 <SnapshotCapture bind:this={snapshotCaptureUi} session={capture.session} blocked={otherModalOpen} onstatechange={(state) => (snapshotCaptureState = state)} />
 {#if snapshotCaptureState.busy}<span class="sr-only" role="status">Capturing snapshot. Press Escape or use Cancel snapshot capture to cancel.</span>{/if}
+<RunDock onresults={() => { prefs.view = "agents"; prefs.agentSection = "insights"; securityTab.value = "results"; }} />
+<InstallDialog onreview={() => openSettings("analyzers")} />
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />
 </div>
 

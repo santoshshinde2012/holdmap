@@ -7,7 +7,9 @@
   import { insightsStore } from "../../lib/insights-store.svelte";
   import AgentConfigPanel from "./AgentConfigPanel.svelte";
   import { configSummary } from "../../lib/agent-config";
-  import { agentCounts, countsText, total } from "../../lib/analyzers";
+  import { agentCounts, agentFindings, countsText, total } from "../../lib/analyzers";
+  import { redactHome } from "../../lib/report-export";
+  import { scopeLabel } from "../../lib/security-view";
   import { EvidenceChip } from "../ui";
   import StatStrip from "../ui/StatStrip.svelte";
   import { evidenceChip } from "../../lib/evidence";
@@ -204,6 +206,14 @@
         {@const found = agentCounts(insightsStore.insights, agent.product)}
         <h4>Security</h4>
         <p class="insight-line">{total(found) ? `Open findings: ${countsText(found, 5)}` : "No open findings"}{#if oninsights}{" "}<button type="button" class="link" onclick={oninsights}>Open Security</button>{/if}</p>
+        {@const bySkill = [...new Map(agentFindings(insightsStore.insights, agent.product).map((x) => [x.finding.subject, x])).values()]}
+        {#if bySkill.length}
+          <ul class="skill-sec" aria-label="Skills with open findings" data-agent-skill-findings>
+            {#each bySkill.slice(0, 6) as x (x.finding.subject)}
+              <li><span class="sev-pill {x.finding.severity}">{x.finding.severity}</span><b>{x.subject?.name ?? x.finding.subject}</b><small>{scopeLabel(x.subject?.scope)} · {x.subject?.dir ? redactHome(x.subject.dir) : "folder unknown"}</small></li>
+            {/each}
+          </ul>
+        {/if}
       {/if}
 
       <h4>Processes · {c.processes}</h4>
@@ -306,4 +316,8 @@
   .pfig { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
   .insight-line { margin: 0; color: var(--text-2); font-size: var(--fs-caption); }
   .insight-line .link { border: 0; background: none; padding: 0; color: var(--accent-text, var(--accent)); font: inherit; cursor: pointer; text-decoration: underline; }
+  .skill-sec { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
+  .skill-sec li { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: var(--fs-body-sm); }
+  .skill-sec b { font-weight: var(--fw-medium); white-space: nowrap; }
+  .skill-sec small { color: var(--muted); font-size: var(--fs-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 </style>

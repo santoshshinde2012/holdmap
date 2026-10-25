@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 
 /// Longest finding title, in characters.
 pub const MAX_TITLE: usize = 120;
@@ -92,6 +93,13 @@ pub struct Subject {
     /// Catalog ids of the agents it belongs to, e.g. `claude-code`.
     #[serde(default)]
     pub agents: Vec<String>,
+    /// The folder it lives in (skills), as holdmap's inventory found it. Shown and revealed
+    /// locally; never sent to an analyzer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dir: Option<String>,
+    /// Where it applies (skills): `user` (every project), `project` or `local`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
 }
 
 /// Where in the subject a finding points, relative to the subject's folder.
@@ -201,6 +209,54 @@ pub struct AnalyzerResult {
     /// MCP analyzers: calls per tool.
     #[serde(default)]
     pub tool_calls: Vec<ToolCalls>,
+}
+
+/// Runs kept in an analyzer's history.
+pub const MAX_HISTORY: usize = 20;
+
+/// One past run in brief: when, which version, how it ended and what it found. Findings
+/// themselves are kept for the latest run only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RunRecord {
+    /// Analyzer id.
+    pub analyzer: String,
+    /// When it finished (Unix epoch ms).
+    pub run_at_ms: u64,
+    /// Version the analyzer reported.
+    pub analyzer_version: Option<String>,
+    /// How it ended.
+    pub status: RunStatus,
+    /// Subjects analysed.
+    pub subjects: usize,
+    /// Findings by severity (every finding, whatever its review state).
+    pub counts: BTreeMap<Severity, usize>,
+    /// How long it took.
+    pub duration_ms: Option<u64>,
+}
+
+impl RunRecord {
+    /// The record of `result`.
+    pub fn of(result: &AnalyzerResult) -> Self {
+        let mut counts = BTreeMap::new();
+        for f in &result.findings {
+            *counts.entry(f.severity).or_insert(0) += 1;
+        }
+        Self {
+            analyzer: result.analyzer.clone(),
+            run_at_ms: result.run_at_ms,
+            analyzer_version: result.analyzer_version.clone(),
+            status: result.status,
+            subjects: result.subjects.len(),
+            counts,
+            duration_ms: result.duration_ms,
+        }
+    }
+}
+
+/// Newest first, at most [`MAX_HISTORY`].
+pub fn push_history(history: &mut Vec<RunRecord>, record: RunRecord) {
+    history.insert(0, record);
+    history.truncate(MAX_HISTORY);
 }
 
 /// How often one MCP tool was called in a run.

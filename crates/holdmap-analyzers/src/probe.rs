@@ -39,6 +39,7 @@ pub trait BinaryProbe: Send + Sync {
 pub struct SystemProbe {
     path: Option<OsString>,
     home: Option<PathBuf>,
+    tools: Option<PathBuf>,
 }
 
 impl SystemProbe {
@@ -49,7 +50,36 @@ impl SystemProbe {
             home: std::env::var_os("HOME")
                 .or_else(|| std::env::var_os("USERPROFILE"))
                 .map(PathBuf::from),
+            tools: None,
         }
+    }
+
+    /// Also look in holdmap's own install folder (`<tools>/<analyzer id>/bin`), first.
+    pub fn with_tools_dir(mut self, tools: impl Into<PathBuf>) -> Self {
+        self.tools = Some(tools.into());
+        self
+    }
+
+    /// An explicit PATH and home (tests).
+    pub fn with_env(path: Option<OsString>, home: Option<PathBuf>) -> Self {
+        Self {
+            path,
+            home,
+            tools: None,
+        }
+    }
+
+    /// Find a program (a package manager such as `uv` or `go`) on PATH or a usual folder.
+    pub fn find_program(&self, name: &str) -> Option<PathBuf> {
+        let mut dirs = self.dirs();
+        if let Some(home) = &self.home {
+            dirs.push(home.join("go/bin"));
+        }
+        dirs.push(PathBuf::from("/usr/local/go/bin"));
+        program_names(name)
+            .iter()
+            .flat_map(|n| dirs.iter().map(move |d| d.join(n)))
+            .find(|p| executable(p))
     }
 
     fn dirs(&self) -> Vec<PathBuf> {
@@ -73,21 +103,32 @@ impl SystemProbe {
         let path = if Path::new(command).is_absolute() {
             Some(PathBuf::from(command))
         } else {
-            let names: Vec<String> = if cfg!(windows) {
-                vec![
-                    format!("{command}.exe"),
-                    format!("{command}.cmd"),
-                    command.into(),
-                ]
-            } else {
-                vec![command.into()]
-            };
-            self.dirs()
+            let names = program_names(command);
+            let own = self
+                .tools
+                .as_ref()
+                .map(|t| t.join(&manifest.id).join("bin"));
+            own.into_iter()
+                .chain(self.dirs())
+                .collect::<Vec<_>>()
                 .iter()
                 .flat_map(|d| names.iter().map(move |n| d.join(n)))
                 .find(|p| executable(p))
         }?;
         fs::canonicalize(&path).ok()
+    }
+}
+
+/// The file names a command can have on this platform.
+pub fn program_names(command: &str) -> Vec<String> {
+    if cfg!(windows) {
+        vec![
+            format!("{command}.exe"),
+            format!("{command}.cmd"),
+            command.into(),
+        ]
+    } else {
+        vec![command.into()]
     }
 }
 
@@ -185,10 +226,7 @@ mod tests {
         let bin = dir.path().join("skillspector");
         fs::write(&bin, "#!/bin/sh\necho 'SkillSpector v9.9.9'\n").unwrap();
         fs::set_permissions(&bin, fs::Permissions::from_mode(0o755)).unwrap();
-        let probe = SystemProbe {
-            path: Some(dir.path().as_os_str().to_owned()),
-            home: None,
-        };
+        let probe = SystemProbe::with_env(Some(dir.path().as_os_str().to_owned()), None);
         let manifest =
             AnalyzerManifest::parse(include_str!("../manifests/nvidia.skillspector.toml")).unwrap();
         let info = probe.locate(&manifest).unwrap();
@@ -197,12 +235,27 @@ mod tests {
             probe.version(&manifest, &info.path).as_deref(),
             Some("9.9.9")
         );
-        let none = SystemProbe {
-            path: Some(OsString::from("/nonexistent")),
-            home: None,
-        };
+        let none = SystemProbe::with_env(Some(OsString::from("/nonexistent")), None);
         assert!(
             none.locate(&manifest).is_none() || Path::new("/usr/local/bin/skillspector").exists()
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn holdmaps_own_install_folder_is_searched_first() {
+        use std::os::unix::fs::PermissionsExt;
+        let tools = tempfile::tempdir().unwrap();
+        let bin = tools.path().join("nvidia.skillspector/bin");
+        fs::create_dir_all(&bin).unwrap();
+        let exe = bin.join("skillspector");
+        fs::write(&exe, "#!/bin/sh\necho 'SkillSpector v2.13.0'\n").unwrap();
+        fs::set_permissions(&exe, fs::Permissions::from_mode(0o755)).unwrap();
+        let manifest =
+            AnalyzerManifest::parse(include_str!("../manifests/nvidia.skillspector.toml")).unwrap();
+        let probe = SystemProbe::with_env(Some(OsString::from("/nonexistent")), None)
+            .with_tools_dir(tools.path());
+        let info = probe.locate(&manifest).unwrap();
+        assert_eq!(info.path, fs::canonicalize(&exe).unwrap());
     }
 }

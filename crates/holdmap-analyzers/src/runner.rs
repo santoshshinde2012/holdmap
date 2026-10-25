@@ -58,6 +58,98 @@ impl PartialEq for CancelFlag {
 }
 impl Eq for CancelFlag {}
 
+/// The step a run is on, for a live progress line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunStep {
+    /// Checking approval, the program and its version.
+    Preparing,
+    /// Copying one subject's folder into the private staging folder.
+    Copying,
+    /// The analyzer is looking at one subject (or the whole batch).
+    Scanning,
+    /// Reading and normalising what came back.
+    Collecting,
+}
+
+/// One progress update. Carries names only: never file contents, output or environment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunEvent {
+    /// The step.
+    pub step: RunStep,
+    /// 1-based position of the subject being worked on (0 when the step isn't per subject).
+    pub index: usize,
+    /// Subjects in this run.
+    pub total: usize,
+    /// The subject's display name, when the step is about one subject.
+    pub subject: Option<String>,
+    /// Catalog ids of the agents that load that subject.
+    #[serde(default)]
+    pub agents: Vec<String>,
+}
+
+impl RunEvent {
+    /// A step that isn't about one subject.
+    pub fn step(step: RunStep, total: usize) -> Self {
+        Self {
+            step,
+            index: 0,
+            total,
+            subject: None,
+            agents: Vec::new(),
+        }
+    }
+
+    /// A step about subject `index` (1-based) of `total`.
+    pub fn subject(step: RunStep, index: usize, total: usize, subject: &Subject) -> Self {
+        Self {
+            step,
+            index,
+            total,
+            subject: Some(subject.name.clone()),
+            agents: subject.agents.clone(),
+        }
+    }
+}
+
+/// Where progress updates go. The default drops them.
+#[derive(Clone, Default)]
+pub struct ProgressSink(Option<std::sync::Arc<dyn Fn(RunEvent) + Send + Sync>>);
+
+impl ProgressSink {
+    /// Send updates to `f`.
+    pub fn new(f: impl Fn(RunEvent) + Send + Sync + 'static) -> Self {
+        Self(Some(std::sync::Arc::new(f)))
+    }
+    /// Report one update.
+    pub fn send(&self, event: RunEvent) {
+        if let Some(f) = &self.0 {
+            f(event);
+        }
+    }
+}
+
+impl std::fmt::Debug for ProgressSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(if self.0.is_some() {
+            "ProgressSink(on)"
+        } else {
+            "ProgressSink(off)"
+        })
+    }
+}
+
+impl PartialEq for ProgressSink {
+    fn eq(&self, other: &Self) -> bool {
+        match (&self.0, &other.0) {
+            (Some(a), Some(b)) => std::sync::Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+}
+impl Eq for ProgressSink {}
+
 /// Facts about the run shared by every subject.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RunContext {
@@ -69,6 +161,8 @@ pub struct RunContext {
     pub tools_sha256: Option<String>,
     /// Stops the run early.
     pub cancel: CancelFlag,
+    /// Live progress updates.
+    pub progress: ProgressSink,
 }
 
 /// Why a run could not start.
