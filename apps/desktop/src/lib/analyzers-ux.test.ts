@@ -254,3 +254,12 @@ describe("exports carry only what's shown", () => {
     expect(securityMarkdown([], summary, 0)).toContain("No findings.");
   });
 });
+
+describe("agent names", () => {
+  it("names agents holdmap isn't seeing from their product id", async () => {
+    const { productLabel } = await import("./run-view");
+    expect(productLabel("codex")).toBe("Codex");
+    expect(productLabel("claude-code")).toBe("Claude Code");
+    expect(productLabel("")).toBe("");
+  });
+});

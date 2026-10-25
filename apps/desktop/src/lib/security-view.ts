@@ -1,6 +1,7 @@
 // Security tab view-model: pure functions that shape analyzer state into what the Security
 // components draw (summary, grouped findings, gallery cards, run progress). No Svelte, no I/O,
 // so every rule here is unit-tested and the components stay small.
+import { productLabel } from "./run-view";
 import { SEVERITY_ORDER, emptyCounts, findingWhere, total, type AnalyzerResult, type AnalyzerView, type Finding, type Insights, type Severity, type SeverityCounts, type Subject } from "./analyzers";
 import type { PresetView } from "./analyzer-presets";
 
@@ -77,7 +78,7 @@ export function findingItems(insights: Insights | null, analyzers: AnalyzerView[
         subject,
         analyzer: r.analyzer,
         analyzerName: names.get(r.analyzer) ?? r.analyzer,
-        agents: (subject?.agents ?? []).map((p) => agentNames.get(p) ?? p),
+        agents: (subject?.agents ?? []).map((p) => agentNames.get(p) ?? productLabel(p)),
         where: findingWhere(f),
         evidence: evidence(r, f),
         folder: subject?.dir ?? null,
@@ -246,5 +247,5 @@ export function firstSentence(s: string): string {
   return (m ? m[1] : s).replace(/[.]$/, "");
 }
 
-export { scopeLabel, runProgress, stepLabel, runFraction, elapsed, runSummary } from "./run-view";
+export { productLabel, scopeLabel, runProgress, stepLabel, runFraction, elapsed, runSummary } from "./run-view";
 export type { RunPhase, RunStep, RunProgress } from "./run-view";

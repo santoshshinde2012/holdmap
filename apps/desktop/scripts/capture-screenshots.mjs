@@ -311,6 +311,101 @@ async function boundedClip(page, locator, { height, padding = 0 } = {}) {
   return { clip: { x, y, width: Math.min(viewport.width - x, box.width + padding * 2), height: Math.min(viewport.height - y, (height ?? box.height) + padding * 2) } };
 }
 
+// The analyzers walkthrough in docs/analyzers.md, light only, in the order a user follows it.
+async function securityTab(page, tab) {
+  await page.getByRole("radio", { name: /^Agents/ }).click();
+  await page.getByRole("radio", { name: /^Security\b/ }).click();
+  const security = page.getByRole("region", { name: "Security workspace", exact: true });
+  if (tab) await security.getByRole("radio", { name: tab }).click();
+  return security;
+}
+async function openInstall(page) {
+  const security = await securityTab(page, "Analyzers");
+  await security.getByRole("button", { name: "Install Bandit", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Install Bandit", exact: true });
+  await expect(dialog).toContainText("bandit[sarif]==1.9.4");
+  return dialog;
+}
+async function install(page, status) {
+  const dialog = await openInstall(page);
+  await dialog.getByRole("checkbox").check();
+  await dialog.locator("[data-install-go]").click();
+  await expect(dialog.locator("[data-install-status]")).toHaveAttribute("data-install-status", status, { timeout: 15_000 });
+  return dialog;
+}
+async function results(page) {
+  const security = await securityTab(page, /^Results/);
+  await expect(security.locator("[data-results-table]").first()).toBeVisible();
+  return security;
+}
+const walkthrough = [
+  { name: "find", async prepare(page) {
+    const security = await securityTab(page, "Analyzers");
+    await expect(security.getByRole("button", { name: "Install Bandit", exact: true })).toBeVisible();
+  } },
+  { name: "install-consent", prepare: openInstall },
+  { name: "install-done", prepare: (page) => install(page, "done") },
+  { name: "install-failed", query: "?demoInstall=fail", prepare: (page) => install(page, "failed") },
+  { name: "turn-on", async prepare(page) {
+    const dialog = await install(page, "done");
+    await dialog.getByRole("button", { name: "Review and turn on…", exact: true }).click();
+    const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+    await expect(settings).toBeVisible();
+    return settings;
+  } },
+  { name: "run-progress", query: "?demoRunMs=60000", async prepare(page) {
+    const security = await securityTab(page);
+    await security.getByRole("button", { name: "Rescan", exact: true }).click();
+    await security.getByRole("radio", { name: "Analyzers" }).click();
+    await expect(page.locator("[data-status-run]")).toContainText("Scanning");
+    await expect(page.locator("[data-card-step]").first()).toBeVisible();
+  } },
+  { name: "results", async prepare(page) {
+    const security = await results(page);
+    await security.getByRole("radio", { name: "Agent", exact: true }).click();
+    await expect(security.getByRole("region", { name: "Claude Code findings" })).toBeVisible();
+  } },
+  { name: "finding-detail", async prepare(page) {
+    const security = await results(page);
+    await security.getByRole("button", { name: /Show details for Instruction Override/ }).click();
+    const place = security.locator("[data-finding-place]").first();
+    await expect(place).toContainText("Suggested next steps");
+    await place.scrollIntoViewIfNeeded();
+  } },
+  { name: "export", async prepare(page) {
+    const security = await results(page);
+    await security.getByRole("button", { name: "2 medium" }).click();
+    await expect(security.locator("[data-export-scope]")).toContainText("severity medium");
+  } },
+  { name: "history", async prepare(page) {
+    const security = await results(page);
+    const history = page.locator("[data-run-history]");
+    await expect(history).toContainText("SkillSpector");
+    await history.scrollIntoViewIfNeeded();
+  } },
+  { name: "home-summary", async prepare(page) {
+    await securityTab(page, /^Findings/);
+    await page.getByRole("radio", { name: /^Home/ }).click();
+    await page.getByRole("radiogroup", { name: "Home layout", exact: true }).getByRole("radio", { name: /^Cards/ }).click();
+    await expect(page.getByText(/skill findings/i).first()).toBeVisible();
+  } },
+  { name: "agent-summary", async prepare(page) {
+    await securityTab(page, /^Findings/);
+    await page.getByRole("radio", { name: /^Overview/ }).click();
+    await openAgents(page);
+    await heading(page, "Claude Code").click();
+    const list = page.locator("[data-agent-skill-findings]");
+    await expect(list).toBeVisible();
+    await list.scrollIntoViewIfNeeded();
+  } },
+  { name: "pipeline", async prepare(page) {
+    await openAnalyzerGraph(page, true);
+    const subjects = page.locator("[data-pipeline-subjects]");
+    await expect(subjects).toContainText("release-check");
+    await subjects.scrollIntoViewIfNeeded();
+  } },
+].map((step) => ({ ...step, name: `desktop-analyzers-${step.name}-light.png`, theme: "light" }));
+
 const captures = [
   { name: "desktop-snapshot-dark.png", theme: "dark", prepare: (page) => openSnapshot(page, true) },
   { name: "desktop-snapshot-light.png", theme: "light", prepare: (page) => openSnapshot(page) },
@@ -335,6 +430,7 @@ const captures = [
       await expect(security).toContainText("SKILL.md:12");
     } },
   ]),
+  ...walkthrough,
   { name: "desktop-skills-dark.png", theme: "dark", prepare: (page) => openCapabilities(page, "skill") },
   { name: "desktop-capabilities-narrow-light.png", theme: "light", viewport: { width: 560, height: 1000 }, prepare: (page) => openCapabilities(page, "skill") },
   ...["dark", "light"].map((theme) => ({ name: `desktop-about-${theme}.png`, theme, async prepare(page) {
@@ -610,7 +706,7 @@ try {
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
       await page.clock.setFixedTime(new Date("2026-10-10T10:00:00Z"));
-      await page.goto(baseURL);
+      await page.goto(baseURL + (capture.query ?? ""));
       await expect(page.getByRole("listbox", { name: "Ports in use" }).getByRole("option")).toHaveCount(11);
       assert.equal(await page.evaluate(() => "__TAURI_INTERNALS__" in window), false, "Screenshots must use browser sample data");
       await page.evaluate(() => document.fonts.ready);

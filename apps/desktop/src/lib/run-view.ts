@@ -2,6 +2,11 @@
 // don't pull the whole Security view into the first screen.
 import type { RunEvent } from "./analyzers";
 
+/** A readable name for a catalog product id holdmap isn't seeing right now: "claude-code" → "Claude Code". */
+export function productLabel(id: string): string {
+  return id.split(/[-_]/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ") || id;
+}
+
 /** Scope in plain words; "unknown" when holdmap couldn't tell. */
 export function scopeLabel(scope: string | null | undefined): string {
   switch (scope) {
