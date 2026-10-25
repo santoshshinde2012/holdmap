@@ -11,7 +11,7 @@
   <div class="body">
     <p>Agent skills are folders of instructions and scripts that your coding agents load and follow. A skill can tell an agent to run commands, read files or send data out, so a risky skill acts with your agent's access.</p>
     <ul>
-      <li><b>What runs:</b> only analyzers you approved, only when you click Run or Rescan. holdmap never starts or connects to MCP servers on its own.</li>
+      <li><b>What runs:</b> only analyzers you approved, when you click Run or Rescan or, if you allowed it, when a skill changes. holdmap never starts or connects to MCP servers on its own.</li>
       <li><b>What it sees:</b> a copy of each skill folder, with a cleared environment and a time limit. holdmap keeps short findings only.</li>
       <li><b>What you get:</b> for each finding, the agents that load the skill, its scope (global, project or local), the folder and the source file, plus next steps.</li>
       <li><b>Unverified:</b> findings are the analyzer's word. holdmap hasn't checked them; review before you act.</li>

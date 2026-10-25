@@ -175,7 +175,7 @@ export function suggestedActions(i: FindingItem): SuggestedAction[] {
   if (i.finding.fix) out.push({ kind: "fix", label: "Apply the fix above, or remove the flagged text" });
   if (i.folder) out.push({ kind: "open_folder", label: "Show the skill's folder to edit or remove it" });
   if (i.agents.length) out.push({ kind: "ask_agent", label: `Until it's fixed, turn the skill off in ${i.agents.join(", ")}` });
-  out.push({ kind: "snooze", label: "If it's expected, mark it accepted so it stops counting" });
+  out.push({ kind: "snooze", label: "If it's expected, choose Mark reviewed so it stops counting" });
   return out;
 }
 

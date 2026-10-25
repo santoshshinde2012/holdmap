@@ -211,6 +211,7 @@ describe("results shaping", () => {
   it("suggests next steps without claiming holdmap verified anything", () => {
     const acts = suggestedActions(items[0]);
     expect(acts.at(-1)?.kind).toBe("snooze");
+    expect(acts.at(-1)?.label, "names the real button").toContain("Mark reviewed");
     expect(acts.map((a) => a.label).join(" ")).not.toMatch(/verified|confirmed|safe/i);
   });
 });

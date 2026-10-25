@@ -8,6 +8,9 @@ Analyzers are scanners you choose. They look at the skills and pinned MCP packag
 running agents and add short findings to Home, the map, **Needs you**, skill cards and **Agents → Security**.
 Every analyzer is off until you turn it on.
 
+Want the whole flow with screenshots, step by step? See
+[Analyzers, end to end](https://github.com/santoshshinde2012/holdmap/blob/main/docs/analyzers.md).
+
 **Agents → Security → Analyzers** lists the analyzers you set up and the ready-made presets,
 each marked on/off or installed. A skill or MCP card's details have **Scan with…**: approved
 analyzers run on request; the rest link to their permissions sheet in Settings.

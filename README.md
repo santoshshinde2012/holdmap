@@ -287,6 +287,7 @@ scanners are on real skills.
 | [Getting started](https://santoshshinde2012.github.io/holdmap/docs/) | Install, first commands and recipes |
 | [Agents, tools and apps](https://santoshshinde2012.github.io/holdmap/docs/agents/) | Agent inventory, MCP and skills, flow and recording |
 | [Analyzers](https://santoshshinde2012.github.io/holdmap/docs/analyzers/) | Opt-in scanners, presets, sandboxes and findings |
+| [Analyzers, end to end](docs/analyzers.md) | Steps to follow, a 3-minute demo and every screen |
 | [Desktop app](https://santoshshinde2012.github.io/holdmap/docs/desktop/) | Home, graph, shortcuts, capture and first open |
 | [MCP for AI agents](https://santoshshinde2012.github.io/holdmap/docs/mcp/) | Client setup, tools and stop confirmation |
 | [Project stacks](https://santoshshinde2012.github.io/holdmap/docs/projects/) | `.holdmap.toml`, `holdmap up` and `down` |
