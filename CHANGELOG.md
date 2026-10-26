@@ -8,59 +8,54 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-26
+
+Skill analyzers become a full workflow: install them with consent, watch runs, compare results between runs, and
+track which skills changed since you trusted them.
+
 ### Added
 
-- **Skill trust.** Security → **Skills** fingerprints each skill folder (SHA-256 over names and bytes, bounded,
-  symlinks skipped) and flags skills **Changed since trusted** or **Not trusted yet** on Home, agent details and
-  Security, with what changed by file name and size only. **Trust this version** takes an optional reason. CLI
-  `holdmap analyzers skills|trust|untrust`, MCP `list_skill_trust`.
-- **Top risks.** A banded, explained score per agent and folder from open findings and changed skills (exposure
-  isn't counted; it can't be confirmed). Sortable, CSV and Markdown export, CLI `holdmap analyzers risks`, MCP
-  `list_risks` (the MCP server now has 16 tools).
-- **Scheduled scans.** Off by default; turning on shows the plan and needs a confirm. Offline analyzers only (MCP
-  ones when opted in), only while the app is open, skipped on battery, with throttled notifications for new
-  high/critical findings or changed skills and quiet hours.
-- **Custom snoozes.** 1, 7, 30 days or a date up to 90 days, shown on the finding and in exports and the CLI
-  (`--until`). CLI `insights --format csv|markdown` includes reasons and snooze ends.
-
-### Fixed
-
-- The Security view switcher no longer overflows at 390px; it scrolls.
-- The browser demo's rescans vary their sample results (labelled demo) so new and fixed findings show.
-
-- **New and fixed since the last run.** After a rescan, Security shows how many findings are new and fixed, a
-  **New since last run** filter, a **New** pill and **What was fixed**. Run history, exports (JSON, CSV), the CLI
-  (`holdmap insights --new`, `holdmap analyzers history ID`) and MCP `list_insights` (`new_only`) carry the same
-  counts. `--new --fail-on` fails CI only on new findings.
-- **Review reasons.** Mark reviewed and Snooze take an optional reason (UI, `--reason` in the CLI), shown on the
-  finding and in exports; not exposed to agents.
-- **Paged results.** The results table and grouped list show 200 rows at a time.
-
-- **Guided analyzer installs.** **Install…** (analyzer cards, Settings → Analyzers, Scan with…, Presets) shows
-  the pinned package and version, its source, holdmap's own install folder (no admin rights), the hosts contacted
-  and what the analyzer reads, then installs only after you tick consent. Live output, **Cancel install**, a
-  reason on failure and **Retry**; holdmap verifies and records the version and SHA-256. Uses `uv` or `go` you
-  already have, with a cleared environment and a time limit, and says when one is missing. The copy-command
-  fallback stays. An installed analyzer is still off until you approve it.
+- **Guided analyzer installs.** **Install…** shows the pinned package and version, its source, holdmap's own
+  install folder (no admin rights), the hosts contacted and what the analyzer reads. It installs only after you
+  tick consent, streams output with **Cancel install** and **Retry**, and records the version and SHA-256. It uses
+  `uv` or `go` you already have and says when one is missing. An installed analyzer stays off until you approve it.
 - **Run progress that stays visible.** A dock above the status bar, a status-bar pill and each analyzer card show
-  the current step and skill, elapsed time and **Cancel**, across tabs and dialogs, then a summary with **View
-  results**.
-- **Security → Results.** A sortable table (severity, rule, message, agent, skill, folder, path:line) with filters,
-  search, grouping by agent, folder or severity, **Copy path**, **Show in folder** (desktop) and a run history
-  with time, analyzer version and counts.
-- **Exports of what's on screen.** JSON, SARIF 2.1.0, CSV and Markdown carry only the filtered findings plus a
-  note saying what was included, with scope and folder.
-- **Where a finding lives.** Each finding shows the agents that load the skill, its scope (global, project, local
-  or unknown), the scanned folder, the source path and suggested next steps, still marked as unverified. A
-  "What a skill analyzer does" explainer, a skill-findings tile on Home, skills with findings on each agent and a
-  per-skill summary in Pipeline detail.
+  the current step and skill, elapsed time and **Cancel**, then a summary with **View results**.
+- **Results and exports.** Security → **Results** is a sortable, filterable table with **Copy path**, **Show in
+  folder** (desktop) and run history. Each finding shows the agents that load the skill, its scope, folder and
+  source path. JSON, SARIF 2.1.0, CSV and Markdown exports carry only what's on screen, with review reasons.
+- **New and fixed between runs.** After a rescan, Security shows what is new and what was fixed (**New since last
+  run**, **What was fixed**). The CLI (`holdmap insights --new`, `holdmap analyzers history ID`) and MCP
+  `list_insights` (`new_only`) carry the same counts, and `--new --fail-on` fails CI only on new findings.
+- **Skill trust.** Security → **Skills** fingerprints each skill folder (SHA-256 over names and bytes, bounded,
+  symlinks never followed). It flags skills **Changed since trusted** or **Not trusted yet** on Home, agent
+  details and Security, with what changed by file name and size only. **Trust this version** takes a reason. CLI
+  `holdmap analyzers skills|trust|untrust`, MCP `list_skill_trust`.
+- **Risk scores.** Security → **Risks** gives a banded, explained score per agent and per skill folder. It counts
+  open findings plus skills changed since trusted. Exposure isn't counted because holdmap can't confirm it. The
+  view is sortable and exports CSV and Markdown. The same scores are in the CLI (`holdmap analyzers risks`) and MCP
+  (`list_risks`, which names folders by their skills, never by path).
+- **Scheduled rescans.** Off by default; turning them on shows the plan and needs a confirm. Only offline
+  analyzers can be scheduled, plus MCP analyzers you opt in. Scans run only while the app is open and can skip on
+  battery. Notifications are throttled, cover only new high or critical findings and changed skills, and respect
+  quiet hours.
+- **Review reasons and custom snoozes.** Mark reviewed and Snooze take a reason. Snooze for 1, 7 or 30 days or
+  until a date up to 90 days away. Reasons and snooze ends show on the finding, in exports and in the CLI
+  (`--reason`, `--until`, `insights --format csv|markdown`). They are not exposed to agents.
 
 ### Changed
 
-- **Clearer MCP tool metadata for directory scanners.** Each of the 14 tools declares its name, description and all
-  four annotation hints before its input schema. The analyzer demo's sample tools (including its deliberately
-  poisoned `helper`) and the `lint` test tool now live in fixture files outside `src`, so they are no longer read as
-  holdmap tools. Tool output is unchanged.
+- **MCP:** the server has 16 tools (`list_skill_trust` and `list_risks` are new). Every tool declares its name,
+  description and all four annotation hints before its input schema. The demo's sample tools moved to fixture files
+  outside `src`.
+
+### Fixed
+
+- The Security view switcher scrolls instead of overflowing at 390 px.
+- **Show in folder** refuses a skill folder that was swapped for a symlink after the scan.
+- A failed analyzer install now reports an error instead of crashing when holdmap has no recipe for it.
+
+Builds are unsigned: macOS builds are ad-hoc signed without Developer-ID signing or notarization, and Windows installers are unsigned (see the README for first-open steps).
 
 ## [0.11.0] - 2026-10-23
 
@@ -1049,7 +1044,8 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
-[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.8.0...v0.9.0

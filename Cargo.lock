@@ -2218,7 +2218,7 @@ dependencies = [
 
 [[package]]
 name = "holdmap"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2244,7 +2244,7 @@ dependencies = [
 
 [[package]]
 name = "holdmap-activity"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "getrandom 0.4.3",
  "hex",
@@ -2260,7 +2260,7 @@ dependencies = [
 
 [[package]]
 name = "holdmap-analyzers"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bytes",
  "ct-codecs",
@@ -2286,7 +2286,7 @@ dependencies = [
 
 [[package]]
 name = "holdmap-core"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "criterion",
  "libc",
@@ -2304,7 +2304,7 @@ dependencies = [
 
 [[package]]
 name = "holdmap-desktop"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "base64 0.23.1",
  "glib",
@@ -2334,7 +2334,7 @@ dependencies = [
 
 [[package]]
 name = "holdmap-mcp"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "holdmap-analyzers",
  "holdmap-core",

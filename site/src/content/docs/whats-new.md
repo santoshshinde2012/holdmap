@@ -1,12 +1,35 @@
 ---
 title: What's new
-description: "What's new in holdmap: 0.11.0 records only the holdmap window and adds recording presets; 0.10.0 added opt-in analyzers and Security."
+description: "What's new in holdmap: 0.12.0 adds guided analyzer installs, new-since-last-run results, skill trust, risk scores and scheduled rescans."
 order: 1.5
 ---
 
 The [changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md) records
 every change, and [releases](https://github.com/santoshshinde2012/holdmap/releases) has the
 notes for each version.
+
+## 0.12.0
+
+**holdmap 0.12.0** makes skill analyzers a full workflow: install, run, compare between runs, and
+know when a skill changed since you trusted it.
+
+- **Guided analyzer installs.** **Install…** shows the pinned package, its source, the folder, the
+  hosts contacted and what the analyzer reads, and installs only after you consent. The analyzer
+  stays off until you approve it. [Analyzers](../analyzers/).
+- **Run progress, results and exports.** A run dock with the current step and **Cancel**; a
+  sortable **Results** table with **Show in folder**; JSON, SARIF, CSV and Markdown exports of
+  what's on screen, with review reasons.
+- **New and fixed between runs.** **New since last run** and **What was fixed** after each rescan.
+  `holdmap insights --new --fail-on high` fails CI only on new findings.
+- **Skill trust.** Each skill gets a fingerprint. Skills that changed since you trusted them are
+  flagged on Home, on agents and in Security → **Skills**, with what changed by file name and size.
+- **Risk scores.** Security → **Risks** gives an explained score per agent and skill folder from
+  open findings and changed skills, with CSV and Markdown export.
+- **Scheduled rescans.** Off by default. Only offline analyzers run, only while the app is open,
+  with throttled notifications and quiet hours.
+- **Custom snoozes** up to 90 days, with a reason.
+- **MCP:** `list_skill_trust` and `list_risks` (sixteen read-only tools).
+- Builds are unsigned; see [first open](../desktop/#first-open).
 
 ## 0.11.0
 
