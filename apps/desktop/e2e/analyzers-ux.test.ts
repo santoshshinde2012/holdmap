@@ -169,3 +169,30 @@ test("explainer, Home summary and per-agent skill findings", async ({ app }) => 
   await tile.click();
   await expect(app.getByRole("region", { name: "Security workspace" })).toBeVisible();
 });
+
+test("a rescan says what's new and fixed, and history keeps the counts", async ({ app }) => {
+  const ws = await security(app);
+  await ws.getByRole("button", { name: "Rescan", exact: true }).click();
+  await expect(app.locator("[data-status-run]")).toContainText("Scan done", { timeout: 15_000 });
+  await ws.getByRole("radio", { name: /^Results/ }).click();
+  const changes = ws.locator("[data-run-changes]");
+  await expect(changes).toContainText("new");
+  await expect(changes).toContainText("fixed since the previous run");
+  await expect(app.locator("[data-run-history]")).toContainText(/\d+ new · \d+ fixed/);
+  await ws.getByRole("checkbox", { name: "New since last run" }).check();
+  await expect(ws.locator("[data-results-table]")).toHaveCount(0);
+  await expect(ws).toContainText("No findings match");
+  await axe(app, "#agent-insights");
+});
+
+test("mark reviewed keeps a reason that shows with the finding", async ({ app }) => {
+  const ws = await security(app);
+  await ws.getByRole("radio", { name: /^Findings/ }).click();
+  await ws.getByRole("button", { name: /Instruction Override/ }).first().click();
+  await ws.getByRole("textbox", { name: /Reason for Instruction Override/ }).fill("Documented in the skill's README");
+  await ws.getByRole("button", { name: "Mark reviewed" }).click();
+  await ws.getByRole("checkbox", { name: "Show reviewed" }).check();
+  // The row stays open after the review, so the reason shows right away.
+  await expect(ws).toContainText("Documented in the skill's README");
+  await axe(app, "#agent-insights");
+});
