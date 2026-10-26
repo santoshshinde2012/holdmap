@@ -8,8 +8,9 @@
   import * as api from "../../lib/api";
   import { insightsStore } from "../../lib/insights-store.svelte";
   import { trustStore } from "../../lib/trust-store.svelte";
-  import { BAND_LABEL, CHANGED_SKILL_POINTS, SEVERITY_POINTS, explain, risksCsv, risksMarkdown, sortRisks, type RiskBand, type RiskEntry, type RiskSortKey } from "../../lib/trust";
+  import { BAND_LABEL, CHANGED_SKILL_POINTS, SEVERITY_POINTS, explain, risksCsv, risksMarkdown, sortRisks, type RiskBand, type RiskEntry, type RiskSortKey } from "../../lib/risk";
   import { reportFilename } from "../../lib/report-export";
+  import { tildify } from "../../lib/format";
 
   let { agentNames = new Map() }: { agentNames?: Map<string, string> } = $props();
 
@@ -21,7 +22,8 @@
     void insightsStore.insights; void trustStore.report;
     api.risks().then((r) => { list = r; error = null; }, (e) => (error = e instanceof Error ? e.message : String(e)));
   });
-  const label = (e: RiskEntry) => (e.scope === "agent" ? agentNames.get(e.key) ?? e.key : e.key);
+  /** Agents by name; folders with the home folder as `~` (on screen and in exports). */
+  const label = (e: RiskEntry) => (e.scope === "agent" ? agentNames.get(e.key) ?? e.key : tildify(e.key));
   const shown = $derived(sortRisks((list ?? []).filter((e) => scope === "all" || e.scope === scope), sort.key, sort.dir));
   const pill: Record<RiskBand, string> = { critical: "critical", high: "high", elevated: "medium", low: "low", none: "info" };
   function by(key: RiskSortKey) { sort = { key, dir: sort.key === key && sort.dir === "desc" ? "asc" : "desc" }; }

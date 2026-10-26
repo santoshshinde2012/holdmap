@@ -8,6 +8,10 @@
   import { trustStore } from "../../lib/trust-store.svelte";
   import { alerts, bytes, TRUST_LABEL, type ChangeSummary, type SkillTrustView } from "../../lib/trust";
   import { ago } from "../../lib/analyzers";
+  import { tildify } from "../../lib/format";
+
+  let { agentNames = new Map() }: { agentNames?: Map<string, string> } = $props();
+  const names = (ids: string[]) => ids.map((id) => agentNames.get(id) ?? id).join(", ");
 
   let open = $state<string | null>(null);
   let reasons = $state<Record<string, string>>({});
@@ -51,13 +55,13 @@
             <Icon name={open === s.subject.id ? "chevron-down" : "chevron"} size={12} />
             <span class="name">{s.subject.name}</span>
             <span class="pill">{TRUST_LABEL[s.state]}</span>
-            <span class="meta">{s.subject.agents.join(", ")}{#if s.changed_since_last_scan} · changed since last check{/if}</span>
+            <span class="meta">{names(s.subject.agents)}{#if s.changed_since_last_scan} · changed since last check{/if}</span>
             <span class="meta">{s.file_count} files · {bytes(s.total_bytes)}</span>
           </button>
           {#if open === s.subject.id}
             <div class="body" {id}>
               <dl>
-                <div><dt>Source</dt><dd>{s.subject.scope ? `${s.subject.scope} skill` : "Skill"} · {s.subject.agents.join(", ") || "unknown agent"}{#if s.subject.dir} · <code>{s.subject.dir}</code>{/if}</dd></div>
+                <div><dt>Source</dt><dd>{s.subject.scope ? `${s.subject.scope} skill` : "Skill"} · {names(s.subject.agents) || "unknown agent"}{#if s.subject.dir} · <code>{tildify(s.subject.dir)}</code>{/if}</dd></div>
                 <div><dt>Fingerprint</dt><dd><code title={s.sha256 ?? undefined}>{shortHash(s.sha256)}</code>{#if s.partial} <span class="sub">(first files only; large folder)</span>{/if}</dd></div>
                 <div><dt>Last modified</dt><dd>{when(s.modified_ms)}</dd></div>
                 <div><dt>First seen</dt><dd>{when(s.first_seen_ms)}</dd></div>

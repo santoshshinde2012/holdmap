@@ -22,8 +22,8 @@ class TrustStore {
     await this.guard(async () => { view = await api.setSkillTrust(id, trusted, reason); this.report = await api.skillTrust(); });
     return view;
   }
-  /** Alerting skills that belong to one agent product (subject ids start with `product:`). */
-  forAgent(product: string): SkillTrustView[] { return this.alerting.filter((s) => s.subject.id.startsWith(`${product}:`)); }
+  /** Alerting skills that one agent product loads. */
+  forAgent(product: string): SkillTrustView[] { return this.alerting.filter((s) => s.subject.agents.includes(product)); }
 
   private async guard(fn: () => Promise<void>) {
     this.busy = true; this.error = null;

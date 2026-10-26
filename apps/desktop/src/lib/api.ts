@@ -7,7 +7,8 @@ import type { ShutdownPreview } from "./power";
 import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
 import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, ConfiguredServer, FindingState, Insights, McpDraft, RunEvent, RunRecord, OutputMapping, Preview, ToolReport, ToolSpec } from "./analyzers";
 import { DemoAnalyzers } from "./analyzers-demo";
-import type { RiskEntry, SkillTrustView, TrustReport } from "./trust";
+import type { SkillTrustView, TrustReport } from "./trust";
+import type { RiskEntry } from "./risk";
 import type { Due, ScheduleFinished, SchedulePlan, ScheduleRequest, ScheduleStatus } from "./schedule";
 import { clampSnooze } from "./snooze";
 import type { DemoTrust } from "./trust-demo";
@@ -778,7 +779,7 @@ export async function setSkillTrust(id: string, trusted: boolean, reason?: strin
 }
 export async function risks(): Promise<RiskEntry[]> {
   if (isTauri) return call("risks");
-  const { risks: mirror } = await import("./trust");
+  const { risks: mirror } = await import("./risk");
   return mirror((await insights()).results, await skillTrust());
 }
 export async function scheduleStatus(): Promise<ScheduleStatus> {

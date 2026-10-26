@@ -95,3 +95,13 @@ test("390px: the Security view switcher scrolls instead of overflowing", async (
   await expect(ws.getByRole("radio", { name: "Risks" })).toBeAttached();
   expect(await app.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test("Home's trust alert opens Security → Skills", async ({ app }) => {
+  await app.getByRole("radio", { name: /^Home/ }).click();
+  const alert = app.locator("[data-trust-alert]");
+  await expect(alert).toContainText("1 skill changed since you trusted it");
+  await alert.click();
+  const ws = app.getByRole("region", { name: "Security workspace" });
+  await expect(ws.getByRole("radio", { name: /^Skills/ })).toBeChecked();
+  await expect(ws.getByRole("button", { name: /release-check.*Changed since trusted/ })).toBeVisible();
+});

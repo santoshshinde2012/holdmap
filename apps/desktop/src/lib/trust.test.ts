@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bandOf, explain, risks, risksCsv, risksMarkdown, sortRisks, bytes, type TrustReport } from "./trust";
+import { bandOf, explain, risks, risksCsv, risksMarkdown, sortRisks } from "./risk";
+import { bytes, type TrustReport } from "./trust";
 import type { AnalyzerResult, Finding, Severity } from "./analyzers";
 
 const f = (fp: string, severity: Severity, subject: string, state: Finding["state"] = "open"): Finding => ({ fingerprint: fp, analyzer: "a", rule_id: "r", category: null, severity, title: `t ${fp}`, subject, location: { file: null, line: null }, fix: null, refs: [], state });
@@ -43,5 +44,15 @@ describe("demo rescans", async () => {
     expect(even.findings.map((f) => f.fingerprint)).toEqual(["demo-lp3", "other"]);
     expect(odd.findings.map((f) => f.fingerprint)).toEqual(["other", "demo-p2-1"]);
     expect(odd.notes[0]).toMatch(/demo/i);
+  });
+});
+
+describe("trust store", async () => {
+  const { trustStore } = await import("./trust-store.svelte");
+  it("loads the demo and finds an agent's alerting skills by the agents that load them", async () => {
+    await trustStore.load();
+    expect(trustStore.alerting.map((s) => s.subject.name).sort()).toEqual(["db-migrations", "release-check"]);
+    expect(trustStore.forAgent("claude-code").map((s) => s.subject.name)).toEqual(["release-check"]);
+    expect(trustStore.forAgent("cursor")).toEqual([]);
   });
 });

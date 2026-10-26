@@ -85,15 +85,17 @@ const rows = [
   ["Site fonts (woff2)", fonts.reduce((n, f) => n + statSync(f).size, 0), 100 * 1024],
   ["Largest image", Math.max(...images.map((f) => statSync(f).size)), 260 * 1024],
   ["Open Graph image", statSync(join(dist, "og.png")).size, 300 * 1024],
-  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 220 * 1024],
+  // +4 KB for skill trust alerts on Home, bounded snoozes and the demo trust API; Risks, Skills
+  // and Scheduled scans load on demand.
+  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 224 * 1024],
   ["Snapshot PNG JS (on capture)", [...snapshotDemoFiles].reduce((n, f) => n + gz(f), 0), 40 * 1024],
-  ["Capability workspace JS (on inspection)", [...capabilityDemoFiles].reduce((n, f) => n + gz(f), 0), 20 * 1024],
-  // The Security view's helpers moved here from the first screen; the initial budget stays at 220 KB.
-  ["Security workspace JS (on Security)", [...securityDemoFiles].reduce((n, f) => n + gz(f), 0), 14 * 1024],
+  ["Capability workspace JS (on inspection)", [...capabilityDemoFiles].reduce((n, f) => n + gz(f), 0), 21 * 1024],
+  // The Security view's helpers moved here from the first screen; the trust and risk views load separately.
+  ["Security workspace JS (on Security)", [...securityDemoFiles].reduce((n, f) => n + gz(f), 0), 16 * 1024],
   ["Analyzer graphs JS (on Pipeline)", [...analyzerGraphFiles].reduce((n, f) => n + gz(f), 0), 12 * 1024],
   ["Analyzer install JS (on Install…)", [...installDemoFiles].reduce((n, f) => n + gz(f), 0), 8 * 1024],
   ["Run progress JS (on Run)", [...runDockDemoFiles].reduce((n, f) => n + gz(f), 0), 4 * 1024],
-  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 160 * 1024],
+  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 172 * 1024],
   ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];
 

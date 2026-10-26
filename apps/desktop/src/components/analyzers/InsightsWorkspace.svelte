@@ -1,4 +1,6 @@
 <script lang="ts">
+  // Names for agents that aren't running or weren't scanned; live data wins.
+  const KNOWN_AGENT_NAMES: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex", cursor: "Cursor", windsurf: "Windsurf" };
   // The Security tab: a summary header, findings (grouped, filterable, expandable inline), the
   // analyzer gallery, and the pipeline graphs. Shaping lives in lib/security-view.ts; runs in
   // lib/security-runs.svelte.ts. Analyzers stay off until approved in their permissions sheet.
@@ -16,8 +18,9 @@
   import RunHistory from "../security/RunHistory.svelte";
   import { securityTab, type SecurityTab } from "../../lib/security-tab.svelte";
   import FindingsPanel from "../security/FindingsPanel.svelte";
-  import RiskPanel from "../security/RiskPanel.svelte";
-  import SkillTrustPanel from "../security/SkillTrustPanel.svelte";
+  // Risks and Skills load with their tabs so the Security workspace stays small.
+  const loadRiskPanel = () => import("../security/RiskPanel.svelte");
+  const loadSkillTrustPanel = () => import("../security/SkillTrustPanel.svelte");
   import { trustStore } from "../../lib/trust-store.svelte";
   import { scheduler } from "../../lib/schedule-driver.svelte";
   import { untilLabel } from "../../lib/schedule";
@@ -88,6 +91,8 @@
     if (tab !== "results") setTab("findings");
   }
   $effect(() => { if (!trustStore.report) void trustStore.load(); });
+  /** Product id → display name, from every agent holdmap knows about. */
+  const agentNames = $derived(new Map([...Object.entries(KNOWN_AGENT_NAMES), ...(report?.agents ?? []).map((a) => [a.product, a.name] as const), ...agents.map((a) => [a.product, a.name] as const)]));
   const trustAlerts = $derived(trustStore.alerting.length);
   const nextScan = $derived(scheduler.driver?.enabled ? scheduler.driver.nextMs : null);
   function showPipeline(id: string) { securityTab.pipeline = id; setTab("graph"); }
@@ -131,9 +136,9 @@
     <FindingsPanel {agents} bind:filter view="table" onsetup={() => setTab("analyzers")} />
     <RunHistory analyzers={insightsStore.analyzers} version={securityRuns.finishedAt ?? 0} />
   {:else if tab === "risks"}
-    <RiskPanel agentNames={new Map(agents.map((a) => [a.product, a.name]))} />
+    {#await loadRiskPanel()}<p class="sub" role="status">Loading…</p>{:then { default: RiskPanel }}<RiskPanel {agentNames} />{:catch}<p class="sub" role="alert">Couldn't load top risks. Reopen this tab to try again.</p>{/await}
   {:else if tab === "skills"}
-    <SkillTrustPanel />
+    {#await loadSkillTrustPanel()}<p class="sub" role="status">Loading…</p>{:then { default: SkillTrustPanel }}<SkillTrustPanel {agentNames} />{:catch}<p class="sub" role="alert">Couldn't load skill trust. Reopen this tab to try again.</p>{/await}
   {:else if tab === "graph"}
     <div class="graphs">
       {#if !graphs}
