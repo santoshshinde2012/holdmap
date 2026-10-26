@@ -164,6 +164,18 @@ describe("run progress", () => {
     expect(r.finishedAt! - r.startedAt!).toBeGreaterThan(0);
     expect(runSummary(r.progress)).toMatch(/2/);
   });
+  it("an analyzer with nothing to check finishes neutrally, not as a failure", async () => {
+    const note = "No pinned packages to check: 2 MCP servers use unpinned or non-npm/PyPI commands. Pin a version (npx pkg@1.2.3 or uvx pkg==1.2.3) to have it checked.";
+    const r = new SecurityRuns(async (id) => (id === "a"
+      ? { status: "complete" as const, findings: [], subjects: [], notes: [note] }
+      : { status: "complete" as const, findings: [{}, {}] as never, subjects: [{}] as never, notes: [] }), async () => {}, async () => {}, async () => () => {});
+    await r.start(a);
+    expect(r.progress.phase).toBe("done");
+    expect(stepLabel(r.stepFor("a")!)).toBe(note);
+    expect(stepLabel(r.stepFor("b")!)).toBe("Done · 2 findings");
+    expect(runSummary(r.progress)).toBe("2 of 2 analyzers finished · 2 findings · 1 with nothing to check");
+    expect(runSummary(r.progress)).not.toMatch(/failed/);
+  });
   it("cancel stops the running analyzer and skips the queued ones", async () => {
     const cancelRun = vi.fn(async () => {});
     let reject!: (e: Error) => void;

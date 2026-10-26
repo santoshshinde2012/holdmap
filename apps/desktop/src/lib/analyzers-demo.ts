@@ -78,6 +78,13 @@ export function varied(base: AnalyzerResult, n: number): AnalyzerResult {
   return { ...base, run_at_ms: Date.now(), findings: [...fixed, added], notes };
 }
 
+/** Mirrors the app's note when OSV has nothing pinned to look up. */
+function noPinnedNote(report: AgentsReport): string {
+  const n = inventories(report).reduce((k, a) => k + (a.capabilities?.mcp_servers?.length ?? 0), 0);
+  const what = n === 0 ? "no MCP servers were found" : n === 1 ? "1 MCP server uses an unpinned or non-npm/PyPI command" : `${n} MCP servers use unpinned or non-npm/PyPI commands`;
+  return `No pinned packages to check: ${what}. Pin a version (npx pkg@1.2.3 or uvx pkg==1.2.3) to have it checked.`;
+}
+
 function osvResult(report: AgentsReport): AnalyzerResult {
   const packages = osvPackages(report);
   return {
@@ -85,17 +92,20 @@ function osvResult(report: AgentsReport): AnalyzerResult {
     subjects: packages.map((p) => ({ id: `package:${p.ecosystem}/${p.name}@${p.version}`, kind: "package", name: `${p.name}@${p.version}`, agents: p.agents })),
     findings: [],
     details: packages.map((p) => ({ subject: `package:${p.ecosystem}/${p.name}@${p.version}`, label: "Known advisories", value: "none (sample data)" })),
-    notes: ["Browser demo: no request was sent; results are sample data."],
+    notes: packages.length ? ["Browser demo: no request was sent; results are sample data."] : [noPinnedNote(report)],
     duration_ms: 620,
   };
 }
+
+/** `?demoOsvEmpty=1` turns OSV on with nothing pinned (Playwright uses it for the "nothing to check" state). */
+const demoOsvEmpty = new URLSearchParams(globalThis.location?.search ?? "").get("demoOsvEmpty") === "1";
 
 function osvPackages(report: AgentsReport) {
   const out = new Map<string, { ecosystem: string; name: string; version: string; agents: string[] }>();
   for (const a of inventories(report)) {
     for (const s of a.capabilities?.mcp_servers ?? []) {
       const spec = s.launch?.package;
-      if (!spec || !s.launch?.pinned || s.launch.runner !== "npx") continue;
+      if (demoOsvEmpty || !spec || !s.launch?.pinned || s.launch.runner !== "npx") continue;
       const at = spec.lastIndexOf("@");
       if (at <= 0) continue;
       const key = spec;
@@ -123,7 +133,7 @@ export class DemoAnalyzers {
 
   /** `fresh`: nothing turned on yet, like a first launch (the empty-machine demo profile). */
   constructor(fresh = false) {
-    this.approved = new Map(fresh ? [] : [[SKILLSPECTOR, RUN_AT - 3_600_000]]);
+    this.approved = new Map(fresh ? [] : [[SKILLSPECTOR, RUN_AT - 3_600_000], ...(demoOsvEmpty ? [[OSV, RUN_AT - 3_600_000] as [string, number]] : [])]);
     this.results = new Map(fresh ? [] : [[SKILLSPECTOR, skillspectorResult()]]);
     if (!fresh) this.remember(skillspectorResult());
   }

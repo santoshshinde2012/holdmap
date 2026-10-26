@@ -34,6 +34,8 @@ export interface RunStep {
   /** Findings and subjects the finished run reported. */
   findings?: number | null;
   subjects?: number | null;
+  /** Why a finished run had nothing to check (its first note), shown instead of a count. */
+  detail?: string | null;
 }
 export interface RunProgress { steps: RunStep[]; done: number; total: number; phase: RunPhase }
 
@@ -55,6 +57,8 @@ export function stepLabel(s: RunStep): string {
     case "cancelled": return "Cancelled";
     case "failed": return s.note ? `Failed: ${s.note}` : "Failed";
     case "done": {
+      // An empty input is a clean, neutral outcome, not a failure: say why instead of "0 findings".
+      if (s.subjects === 0) return s.detail ?? "Nothing to check";
       const found = s.findings == null ? "" : s.findings === 1 ? " · 1 finding" : ` · ${s.findings} findings`;
       return `${s.note ? `Done (${s.note})` : "Done"}${found}`;
     }
@@ -101,6 +105,8 @@ export function runSummary(p: RunProgress): string {
   const cancelled = p.steps.filter((s) => s.phase === "cancelled").length;
   const findings = ok.reduce((n, s) => n + (s.findings ?? 0), 0);
   const parts = [`${ok.length} of ${p.total} ${p.total === 1 ? "analyzer" : "analyzers"} finished`, `${findings} ${findings === 1 ? "finding" : "findings"}`];
+  const empty = ok.filter((s) => s.subjects === 0).length;
+  if (empty) parts.push(`${empty} with nothing to check`);
   if (failed) parts.push(`${failed} failed`);
   if (cancelled) parts.push(`${cancelled} cancelled`);
   return parts.join(" · ");

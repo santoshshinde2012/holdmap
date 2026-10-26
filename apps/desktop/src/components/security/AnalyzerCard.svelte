@@ -19,7 +19,7 @@
     {#if card.network.length}<span title="Contacts {card.network.join(', ')}"><Icon name="globe" size={11} />Network</span>{:else}<span><Icon name="lock" size={11} />Offline</span>{/if}
     {#if card.lastRun}<span>{ago(card.lastRun)}{#if card.open} · {card.open} open{/if}</span>{/if}
   </div>
-  {#if step}<p class="step ph-{step.phase}" role="status" data-card-step>{stepLabel(step)}</p>{/if}
+  {#if step}<p class="step ph-{step.phase}" class:empty={step.phase === "done" && step.subjects === 0} role="status" data-card-step>{stepLabel(step)}</p>{/if}
   <div class="foot">
     <Button size="sm" variant={card.action === "run" ? "primary" : "secondary"} icon={card.action === "run" ? "play" : card.action === "install" ? "download" : undefined} loading={busy} {disabled} onclick={onaction} aria-label="{card.actionLabel.replace('…', '')} {card.name}">{card.actionLabel}</Button>
     {#if onpipeline}<Button size="sm" variant="ghost" icon="branch" onclick={onpipeline} aria-label="Pipeline for {card.name}">Pipeline</Button>{/if}
@@ -43,6 +43,6 @@
   .tags { display: flex; flex-wrap: wrap; gap: 6px; }
   .tags span { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-size: var(--fs-caption); }
   .step { margin: 0; font-size: var(--fs-caption); color: var(--text-2); }
-  .step.ph-running { color: var(--accent); } .step.ph-failed { color: var(--danger); }
+  .step.ph-running { color: var(--accent); } .step.ph-failed { color: var(--danger); } .step.empty { color: var(--muted); }
   .foot { display: flex; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
 </style>

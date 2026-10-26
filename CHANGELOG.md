@@ -8,6 +8,10 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Fixed
+
+- OSV vulnerability lookup no longer reports "Failed: nothing to analyse" when no MCP server launches a pinned npm or PyPI package. The run now finishes cleanly with a neutral "No pinned packages to check" note that says how many servers are unpinned and how to pin one; the run dock, status bar, counters and analyzer card agree ("Scan finished", "1 with nothing to check"). Real failures still show as failures.
+
 ## [0.12.0] - 2026-10-26
 
 Skill analyzers become a full workflow: install them with consent, watch runs, compare results between runs, and
