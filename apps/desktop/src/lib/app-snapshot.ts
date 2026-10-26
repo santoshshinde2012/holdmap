@@ -12,6 +12,8 @@ const TIMEOUT_MESSAGE = "Preparing the Holdmap snapshot took too long. Try again
 const SVG_NS = "http://www.w3.org/2000/svg";
 type Renderer = typeof import("modern-screenshot");
 type RenderContext = Awaited<ReturnType<Renderer["createContext"]>>;
+/** Extra draws of the rendered SVG; see where it is set. */
+const FONT_REDRAWS = 3;
 
 function inlineImage(url: string): boolean {
   return url.length <= MAX_INLINE_IMAGE_CHARS && /^data:image\/(?:png|jpeg|gif|webp|svg\+xml)[;,]/i.test(url);
@@ -191,6 +193,11 @@ export async function captureAppSnapshot(root: HTMLElement, signal: AbortSignal)
           }
         },
       });
+      // In WebKit, modern-screenshot redraws its SVG once per embedded image (here just the icon),
+      // never for the embedded fonts, so the last draw could still land inside the font's block
+      // period and save the text invisible (CI's macOS app check saw this at random).
+      // Redraw a few times, about 100 ms apart, so the text is drawn after the font is ready.
+      context.drawImageCount = Math.max(context.drawImageCount ?? 0, FONT_REDRAWS);
       active();
       const blob = await renderer.domToBlob(context);
       active();
