@@ -73,10 +73,14 @@ pub(super) fn list_risks(
         Some("elevated") => RiskBand::Elevated,
         _ => RiskBand::Low,
     };
-    let list: Vec<_> = risks(&insights.results, Some(trust))
+    let mut list: Vec<_> = risks(&insights.results, Some(trust))
         .into_iter()
         .filter(|e| scope.is_none_or(|s| e.scope == s) && e.band >= min)
         .collect();
+    // MCP never shows folder paths: a folder row is named by the skill(s) scanned there.
+    for e in list.iter_mut().filter(|e| e.scope == RiskScope::Folder) {
+        e.key = folder_label(insights, &e.key);
+    }
     let text = if list.is_empty() {
         "No matching risks.".to_string()
     } else {
@@ -94,9 +98,27 @@ pub(super) fn list_risks(
         })
         .collect();
     (
-        format!("{text}\nBands: critical 40, high 15, medium 5, low 1 per open finding, 10 per skill changed since trusted."),
+        format!("{text}\nPoints: critical 40, high 15, medium 5, low 1 per open finding, 10 per skill changed since trusted; any open critical makes the band Critical."),
         json!({ "risks": rows }),
     )
+}
+
+/// "skill folder: a, b" for the skills scanned in `dir`; never the path itself.
+fn folder_label(insights: &Insights, dir: &str) -> String {
+    let mut names: Vec<&str> = insights
+        .results
+        .iter()
+        .flat_map(|r| &r.subjects)
+        .filter(|s| s.dir.as_deref() == Some(dir))
+        .map(|s| s.name.as_str())
+        .collect();
+    names.sort_unstable();
+    names.dedup();
+    if names.is_empty() {
+        "skill folder".to_string()
+    } else {
+        format!("skill folder: {}", names.join(", "))
+    }
 }
 
 #[cfg(test)]
@@ -118,5 +140,25 @@ mod tests {
         );
         assert!(text.starts_with("No matching risks."));
         assert_eq!(data["risks"], json!([]));
+    }
+
+    #[test]
+    fn folder_risks_name_the_skill_never_the_path() {
+        let result: holdmap_analyzers::AnalyzerResult = serde_json::from_value(json!({
+            "analyzer": "nvidia.skillspector", "run_at_ms": 2, "status": "complete",
+            "subjects": [{"id": "s", "kind": "skill", "name": "release-check", "agents": ["claude-code"],
+                          "dir": "/Users/someone/code/app/.claude/skills/release-check"}],
+            "findings": [{"fingerprint": "f", "analyzer": "nvidia.skillspector", "rule_id": "r",
+                          "severity": "high", "title": "t", "subject": "s", "location": {}}],
+        }))
+        .unwrap();
+        let insights = Insights {
+            results: vec![result],
+            open: Default::default(),
+        };
+        let (text, data) = list_risks(&insights, &TrustReport::default(), &json!({"by": "folder"}));
+        let all = format!("{text}{data}");
+        assert!(!all.contains("/Users/someone"), "{all}");
+        assert_eq!(data["risks"][0]["key"], "skill folder: release-check");
     }
 }
