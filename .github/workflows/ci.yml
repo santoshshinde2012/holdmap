@@ -155,7 +155,7 @@ jobs:
         run: python3 scripts/verify-vendored-global-hotkey.py
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4  # Astro 7.4.2 needs >=22.23.4; a bare 22 can resolve to an older cached runner Node
           cache: npm
           cache-dependency-path: |
             apps/desktop/package-lock.json
@@ -218,7 +218,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4  # Astro 7.4.2 needs >=22.23.4; a bare 22 can resolve to an older cached runner Node
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
       - run: npm ci
@@ -270,7 +270,7 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4  # Astro 7.4.2 needs >=22.23.4; a bare 22 can resolve to an older cached runner Node
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
       - name: Install Tauri Linux dependencies
