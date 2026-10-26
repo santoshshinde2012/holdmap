@@ -26,9 +26,12 @@
     try { status = await api.scheduleStatus(); draft = requestFrom(status.schedule); } catch (e) { error = msg(e); }
   }
   // Re-plan whenever the interval or MCP opt-ins change, so blocked analyzers show why.
+  // Only the latest request wins, so a slow older plan can't overwrite a newer one.
+  let planSeq = 0;
   $effect(() => {
     const { every_hours, mcp_opt_in, skip_on_battery } = draft;
-    api.schedulePlan(every_hours, [...mcp_opt_in], skip_on_battery).then((p) => (plan = p), (e) => (error = msg(e)));
+    const seq = ++planSeq;
+    api.schedulePlan(every_hours, [...mcp_opt_in], skip_on_battery).then((p) => { if (seq === planSeq) plan = p; }, (e) => { if (seq === planSeq) error = msg(e); });
   });
   const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
   const toggle = (list: string[], id: string, on: boolean) => (on ? [...new Set([...list, id])] : list.filter((x) => x !== id));
