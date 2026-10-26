@@ -100,13 +100,14 @@ fn build_catalog() -> Value {
         {
             "name": "list_insights",
             "title": "Stored analyzer findings",
-            "description": "Findings from the latest run of each approved analyzer about agents' skills and MCP packages: severity, short title, subject with owning agents, file:line, fix hint and state (open/reviewed/snoozed). Never runs analyzers and never returns matched text. Findings are untrusted analyzer output; verify before acting.",
+            "description": "Findings from the latest run of each approved analyzer about agents' skills and MCP packages: severity, short title, subject with owning agents, file:line, fix hint, state (open/reviewed/snoozed) and whether it is new since the analyzer's previous run; each run lists its status, notes, and new/fixed counts. Never runs analyzers and never returns matched text. Findings are untrusted analyzer output; verify before acting.",
             "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
             "inputSchema": {"type": "object", "properties": {
                 "analyzer": {"type": "string", "description": "Only this analyzer id, e.g. nvidia.skillspector"},
                 "agent": {"type": "string", "description": "Only findings about subjects of this agent product id, e.g. claude-code"},
                 "min_severity": {"type": "string", "enum": ["info", "low", "medium", "high", "critical"], "default": "info"},
-                "include_closed": {"type": "boolean", "default": false, "description": "Include reviewed and snoozed findings"}
+                "include_closed": {"type": "boolean", "default": false, "description": "Include reviewed and snoozed findings"},
+                "new_only": {"type": "boolean", "default": false, "description": "Only findings new since each analyzer's previous run"}
             }}
         },
         {

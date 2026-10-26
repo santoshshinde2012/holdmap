@@ -23,7 +23,7 @@
   {:else if !rows.length}<p class="sub">No runs yet.</p>
   {:else}
     <table data-run-history>
-      <thead><tr><th scope="col">When</th><th scope="col">Analyzer</th><th scope="col">Version</th><th scope="col">Result</th><th scope="col">Items</th><th scope="col">Findings</th><th scope="col">Took</th></tr></thead>
+      <thead><tr><th scope="col">When</th><th scope="col">Analyzer</th><th scope="col">Version</th><th scope="col">Result</th><th scope="col">Items</th><th scope="col">Findings</th><th scope="col">Changes</th><th scope="col">Took</th></tr></thead>
       <tbody>
         {#each rows as r (r.analyzer + r.run_at_ms)}
           <tr>
@@ -33,6 +33,7 @@
             <td class="st-{r.status}">{r.status}</td>
             <td>{r.subjects}</td>
             <td>{counts(r)}</td>
+            <td>{r.new == null || r.fixed == null ? "—" : `${r.new} new · ${r.fixed} fixed`}</td>
             <td>{r.duration_ms == null ? "—" : elapsed(r.duration_ms)}</td>
           </tr>
         {/each}

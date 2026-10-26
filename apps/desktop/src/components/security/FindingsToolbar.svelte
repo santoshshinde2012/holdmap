@@ -12,6 +12,7 @@
     <option value={null}>All agents</option>
     {#each agents as a (a.product)}<option value={a.product}>{a.name}</option>{/each}
   </select>
+  <label class="closed"><input type="checkbox" bind:checked={filter.newOnly} />New since last run</label>
   <label class="closed"><input type="checkbox" bind:checked={filter.showClosed} />Show reviewed</label>
   <span class="n" aria-live="polite">{shown} shown</span>
   <SegmentedControl bind:value={groupBy} label="Group findings by" options={[{ value: "severity", label: "Severity" }, { value: "skill", label: "Skill" }, { value: "agent", label: "Agent" }, { value: "folder", label: "Folder" }, { value: "analyzer", label: "Analyzer" }]} />

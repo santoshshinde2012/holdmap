@@ -738,8 +738,9 @@ export async function deleteAnalyzerSecret(id: string, name: string): Promise<bo
   return false;
 }
 
-export async function reviewFinding(fingerprint: string, state: FindingState, days?: number): Promise<void> {
-  if (isTauri) return call("review_finding", { fingerprint, state, days: days ?? null });
+export async function reviewFinding(fingerprint: string, state: FindingState, days?: number, reason?: string): Promise<void> {
+  const note = reason?.trim() ? reason.trim().slice(0, 200) : null;
+  if (isTauri) return call("review_finding", { fingerprint, state, days: days ?? null, reason: note });
   if (liveReads()) liveWrites();
-  demoAnalyzers.review(fingerprint, state);
+  demoAnalyzers.review(fingerprint, state, note);
 }

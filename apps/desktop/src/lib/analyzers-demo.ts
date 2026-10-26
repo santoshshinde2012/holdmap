@@ -3,7 +3,7 @@
 import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, ConfiguredServer, FindingState, Insights, McpDraft, OutputMapping, Preview, Subject, ToolReport, ToolSpec } from "./analyzers";
 import * as mcp from "./analyzers-demo-mcp";
 import { checkArguments, previewArguments } from "./mcp-mapping";
-import { emptyCounts } from "./analyzers";
+import { emptyCounts, runChanges } from "./analyzers";
 import { inventories } from "./agent-config";
 import { readManifest, type DemoManifest } from "./analyzer-manifest";
 import { presetSource, presetViews, type PresetView } from "./analyzer-presets";
@@ -98,7 +98,7 @@ function osvPackages(report: AgentsReport) {
 export class DemoAnalyzers {
   private approved: Map<string, number>;
   private results: Map<string, AnalyzerResult>;
-  private reviews = new Map<string, FindingState>();
+  private reviews = new Map<string, { state: FindingState; note: string | null }>();
   private background = new Set<string>();
   private user = new Map<string, DemoManifest>();
   private mcp = new Map<string, mcp.DemoMcp>();
@@ -187,7 +187,7 @@ export class DemoAnalyzers {
     const counts: RunRecord["counts"] = {};
     for (const f of r.findings) counts[f.severity] = (counts[f.severity] ?? 0) + 1;
     const list = this.runs.get(r.analyzer) ?? [];
-    list.unshift({ analyzer: r.analyzer, run_at_ms: r.run_at_ms, analyzer_version: r.analyzer_version, status: r.status, subjects: r.subjects.length, counts, duration_ms: r.duration_ms ?? null });
+    list.unshift({ analyzer: r.analyzer, run_at_ms: r.run_at_ms, analyzer_version: r.analyzer_version, status: r.status, subjects: r.subjects.length, counts, duration_ms: r.duration_ms ?? null, new: r.changes?.new_total ?? null, fixed: r.changes?.fixed_total ?? null });
     this.runs.set(r.analyzer, list.slice(0, 20));
   }
 
@@ -439,6 +439,7 @@ export class DemoAnalyzers {
     if (d) {
       if (d.approvedSha !== d.listed?.sha256) throw new Error(`${d.draft.name} changed since you approved it. Review it again.`);
       const result = mcp.sampleRun(id, d, this.skills(report).map((s) => s.subject));
+      result.changes = runChanges(this.results.get(id), result);
       this.results.set(id, result);
       this.remember(result);
       return this.withReviews(result)!;
@@ -447,9 +448,10 @@ export class DemoAnalyzers {
     const result = user
       ? { analyzer: id, analyzer_version: null, run_at_ms: Date.now(), status: "complete" as const, coverage: null, subjects: this.skills(report).map((s) => s.subject), findings: [], details: [], notes: [`Browser demo: ${user.kind === "mcp" ? "no MCP server was started" : "nothing was run"}; this is a sample result.`] }
       : id === OSV ? osvResult(report) : { ...skillspectorResult(), run_at_ms: Date.now() };
-    this.results.set(id, result);
-    this.remember(result);
-    return this.withReviews(result)!;
+    const withChanges: AnalyzerResult = { ...result, changes: runChanges(this.results.get(id), result) };
+    this.results.set(id, withChanges);
+    this.remember(withChanges);
+    return this.withReviews(withChanges)!;
   }
 
   insights(): Insights {
@@ -459,12 +461,12 @@ export class DemoAnalyzers {
     return { results, open };
   }
 
-  review(fingerprint: string, state: FindingState) {
+  review(fingerprint: string, state: FindingState, note: string | null = null) {
     if (state === "open") this.reviews.delete(fingerprint);
-    else this.reviews.set(fingerprint, state);
+    else this.reviews.set(fingerprint, { state, note });
   }
 
   private withReviews(r: AnalyzerResult | undefined): AnalyzerResult | undefined {
-    return r && { ...r, findings: r.findings.map((f) => ({ ...f, state: this.reviews.get(f.fingerprint) ?? "open" })) };
+    return r && { ...r, findings: r.findings.map((f) => { const rv = this.reviews.get(f.fingerprint); return { ...f, state: rv?.state ?? "open", note: rv?.note ?? null }; }) };
   }
 }

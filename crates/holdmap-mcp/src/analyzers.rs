@@ -74,14 +74,24 @@ fn filter(insights: Insights, args: &Value) -> (String, Value) {
     let analyzer = args["analyzer"].as_str();
     let agent = args["agent"].as_str().map(str::to_ascii_lowercase);
     let closed = args["include_closed"].as_bool().unwrap_or(false);
+    let new_only = args["new_only"].as_bool().unwrap_or(false);
     let mut findings = Vec::new();
     let mut runs = Vec::new();
     for r in &insights.results {
         if analyzer.is_some_and(|a| a != r.analyzer) {
             continue;
         }
-        runs.push(json!({"analyzer": r.analyzer, "version": r.analyzer_version, "run_at_ms": r.run_at_ms, "status": r.status, "coverage": r.coverage}));
+        let changes = r.changes.as_ref();
+        runs.push(json!({
+            "analyzer": r.analyzer, "version": r.analyzer_version, "run_at_ms": r.run_at_ms,
+            "status": r.status, "coverage": r.coverage, "notes": r.notes,
+            "new": changes.map(|c| c.new_total), "fixed": changes.map(|c| c.fixed_total),
+        }));
+        let is_new = |fp: &str| changes.is_none_or(|c| c.is_new(fp));
         for f in &r.findings {
+            if new_only && !is_new(&f.fingerprint) {
+                continue;
+            }
             let subject = r.subjects.iter().find(|s| s.id == f.subject);
             let owned = agent.as_deref().is_none_or(|a| {
                 subject.is_some_and(|s| s.agents.iter().any(|p| p.eq_ignore_ascii_case(a)))
@@ -89,7 +99,7 @@ fn filter(insights: Insights, args: &Value) -> (String, Value) {
             if f.severity < min || !owned || (!closed && f.state != FindingState::Open) {
                 continue;
             }
-            findings.push((f, subject));
+            findings.push((f, subject, is_new(&f.fingerprint)));
         }
     }
     findings.sort_by(|a, b| {
@@ -105,14 +115,15 @@ fn filter(insights: Insights, args: &Value) -> (String, Value) {
     } else {
         findings
             .iter()
-            .map(|(f, s)| text_line(f, s.map(|s| s.name.as_str())))
+            .map(|(f, s, _)| text_line(f, s.map(|s| s.name.as_str())))
             .collect::<Vec<_>>()
             .join("\n")
     };
     let rows: Vec<Value> = findings
         .iter()
-        .map(|(f, s)| {
+        .map(|(f, s, new)| {
             json!({
+                "new": new,
                 "fingerprint": f.fingerprint, "analyzer": f.analyzer, "rule_id": f.rule_id,
                 "category": f.category, "severity": f.severity, "title": f.title,
                 "subject": s.map(|s| json!({"name": s.name, "kind": s.kind, "agents": s.agents})),
@@ -168,6 +179,7 @@ mod tests {
             fix: None,
             refs: vec![],
             state: FindingState::Open,
+            note: None,
         }
     }
 
@@ -215,6 +227,8 @@ mod tests {
                 duration_ms: None,
 
                 tool_calls: Vec::new(),
+
+                changes: None,
             })
             .unwrap();
         AnalyzerService::new(Stores::of(store))
@@ -258,5 +272,25 @@ mod tests {
         assert!(text.contains("(SKILL.md:3)"));
         let (_, none) = insights(&s, &json!({"analyzer": "holdmap.osv"}));
         assert!(none["runs"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn new_only_keeps_findings_new_since_the_previous_run() {
+        let mut insights = service(true).insights();
+        insights.results[0].changes = Some(holdmap_analyzers::RunChanges {
+            new: vec!["high".into()],
+            new_total: 1,
+            fixed: vec![],
+            fixed_total: 4,
+            since_ms: 1,
+        });
+        let (_, data) = filter(insights.clone(), &json!({"new_only": true}));
+        let rows = data["findings"].as_array().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["fingerprint"], "high");
+        assert_eq!(rows[0]["new"], true);
+        assert_eq!(data["runs"][0]["fixed"], 4);
+        let (_, all) = filter(insights, &json!({}));
+        assert_eq!(all["findings"].as_array().unwrap().len(), 2);
     }
 }

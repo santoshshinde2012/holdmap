@@ -244,20 +244,22 @@ pub async fn insights(app: AppHandle) -> Result<Insights, String> {
     blocking(move || Ok(service(&app).insights())).await
 }
 
-/// Mark a finding reviewed, snooze it for `days`, or reopen it.
+/// Mark a finding reviewed, snooze it for `days`, or reopen it, with an optional reason.
 #[tauri::command]
 pub async fn review_finding(
     app: AppHandle,
     fingerprint: String,
     state: FindingState,
     days: Option<u64>,
+    reason: Option<String>,
 ) -> Result<(), String> {
     blocking(move || {
         service(&app)
-            .review(
+            .review_with_reason(
                 &fingerprint,
                 state,
                 days.map(|d| d.min(365).saturating_mul(86_400_000)),
+                reason.as_deref(),
             )
             .map_err(|e| e.to_string())
     })

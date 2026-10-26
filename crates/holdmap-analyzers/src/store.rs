@@ -361,6 +361,7 @@ mod tests {
             duration_ms: None,
 
             tool_calls: Vec::new(),
+            changes: None,
         };
         store.save(&result).unwrap();
         assert_eq!(store.latest("a.b"), Some(result));
@@ -372,6 +373,7 @@ mod tests {
                 Some(Review {
                     state: FindingState::Reviewed,
                     until_ms: None,
+                    reason: None,
                 }),
             )
             .unwrap();

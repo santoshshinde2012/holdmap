@@ -36,8 +36,8 @@ pub use consent::{
     ConsentStore, Grant, MemoryStore, ResultStore, Review, ReviewStore, SecretIndex,
 };
 pub use finding::{
-    AnalyzerResult, Detail, Finding, FindingState, Location, RunStatus, Severity, Subject,
-    SubjectKind,
+    AnalyzerResult, Detail, Finding, FindingState, FixedFinding, Location, RunChanges, RunStatus,
+    Severity, Subject, SubjectKind,
 };
 pub use input::{AnalyzerInput, InputProjector, InventoryProjector, PackageCoord};
 pub use manifest::{AnalyzerManifest, ManifestError};

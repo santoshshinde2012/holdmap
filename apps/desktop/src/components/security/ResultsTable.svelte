@@ -5,10 +5,12 @@
   import IconButton from "../ui/IconButton.svelte";
   import FindingPlace from "./FindingPlace.svelte";
   import { redactHome } from "../../lib/report-export";
-  import type { FindingItem, SortKey, SortSpec } from "../../lib/security-view";
+  import { PAGE_SIZE, type FindingItem, type SortKey, type SortSpec } from "../../lib/security-view";
 
   let { items, sort = $bindable() }: { items: FindingItem[]; sort: SortSpec } = $props();
   let openId = $state<string | null>(null);
+  let limit = $state(PAGE_SIZE);
+  const rows = $derived(items.slice(0, limit));
   const COLS: { key: SortKey; label: string }[] = [
     { key: "severity", label: "Severity" }, { key: "rule", label: "Rule" }, { key: "message", label: "Message" },
     { key: "agent", label: "Agent" }, { key: "skill", label: "Skill" }, { key: "folder", label: "Folder" }, { key: "path", label: "Path" },
@@ -34,13 +36,13 @@
       </tr>
     </thead>
     <tbody>
-      {#each items as i (i.finding.fingerprint)}
+      {#each rows as i (i.finding.fingerprint)}
         {@const open = openId === i.finding.fingerprint}
         <tr class:open class:closed={i.finding.state !== "open"}>
           <td class="x"><IconButton size="xs" icon={open ? "chevron-down" : "chevron"} label="{open ? 'Hide' : 'Show'} details for {i.finding.title}" pressed={open} onclick={() => (openId = open ? null : i.finding.fingerprint)} /></td>
           <td><span class="sev-pill {i.finding.severity}">{i.finding.severity}</span></td>
           <td><code>{i.finding.rule_id}</code></td>
-          <td class="msg">{i.finding.title}{#if i.finding.state !== "open"} <small>({i.finding.state})</small>{/if}</td>
+          <td class="msg">{#if i.isNew}<span class="new-pill">New</span> {/if}{i.finding.title}{#if i.finding.state !== "open"} <small>({i.finding.state})</small>{/if}</td>
           <td>{i.agents.length ? i.agents.join(", ") : "unknown"}</td>
           <td>{i.subject?.name ?? i.finding.subject}</td>
           <td class="dir" title={i.folder ? redactHome(i.folder) : "holdmap couldn't confirm the folder"}>{short(i.folder)}</td>
@@ -48,11 +50,14 @@
           <td class="x">{#if i.path}<IconButton size="xs" icon="copy" label="Copy path of {i.finding.title}" onclick={() => copy(i.path + (i.finding.location.line ? `:${i.finding.location.line}` : ""))} />{/if}</td>
         </tr>
         {#if open}
-          <tr class="detail"><td colspan={COLS.length + 2}><FindingPlace item={i} />{#if i.finding.fix}<p class="fix"><b>Fix</b> {i.finding.fix}</p>{/if}</td></tr>
+          <tr class="detail"><td colspan={COLS.length + 2}><FindingPlace item={i} />{#if i.finding.fix}<p class="fix"><b>Fix</b> {i.finding.fix}</p>{/if}{#if i.finding.note}<p class="fix"><b>Reason</b> {i.finding.note}</p>{/if}</td></tr>
         {/if}
       {/each}
     </tbody>
   </table>
+  {#if items.length > rows.length}
+    <p class="more"><span>Showing {rows.length} of {items.length}.</span> <button type="button" onclick={() => (limit += PAGE_SIZE)}>Show {Math.min(PAGE_SIZE, items.length - rows.length)} more</button></p>
+  {/if}
 </div>
 
 <style>
@@ -73,4 +78,7 @@
   small { color: var(--muted); }
   .fix { margin: 8px 0 0; color: var(--text-2); }
   .fix b { color: var(--text); margin-right: 4px; }
+  .more { display: flex; gap: 8px; align-items: center; justify-content: center; margin: 0; padding: 8px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--fs-caption); }
+  .more button { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; padding: 3px 10px; cursor: pointer; }
+  .more button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 </style>

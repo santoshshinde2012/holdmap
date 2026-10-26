@@ -7,6 +7,7 @@ use crate::style::{self, bold, dim, paint, S};
 use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
 use holdmap_analyzers::catalog::{CatalogDiff, SignedCatalog};
+use holdmap_analyzers::finding::RunRecord;
 use holdmap_analyzers::secrets::Secret;
 use holdmap_analyzers::service::{AnalyzerView, Preview, ServiceError};
 use holdmap_analyzers::FileStore;
@@ -101,6 +102,8 @@ pub enum AnalyzerAction {
         #[arg(long, conflicts_with = "id")]
         changed: bool,
     },
+    /// An analyzer's past runs, newest first: status, subjects, findings, new and fixed.
+    History { id: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -147,7 +150,12 @@ pub struct InsightsArgs {
     /// Include reviewed and snoozed findings.
     #[arg(long)]
     pub all: bool,
-    /// Exit with status 1 when an open finding at or above this severity exists.
+    /// Only findings new since each analyzer's previous run (with --fail-on: fail on new
+    /// findings only, so existing ones act as a baseline).
+    #[arg(long)]
+    pub new: bool,
+    /// Exit with status 1 when an open finding at or above this severity exists (among the
+    /// shown findings when --new is set).
     #[arg(long, value_enum)]
     pub fail_on: Option<MinSeverity>,
 }
@@ -155,12 +163,20 @@ pub struct InsightsArgs {
 #[derive(Subcommand, Debug)]
 pub enum InsightAction {
     /// Mark a finding reviewed; it stays hidden while it is unchanged.
-    Review { fingerprint: String },
+    Review {
+        fingerprint: String,
+        /// Why it is acceptable (kept with the review, at most 200 characters).
+        #[arg(long)]
+        reason: Option<String>,
+    },
     /// Hide a finding for some days.
     Snooze {
         fingerprint: String,
         #[arg(long, default_value_t = 7)]
         days: u64,
+        /// Why it can wait (kept with the snooze, at most 200 characters).
+        #[arg(long)]
+        reason: Option<String>,
     },
     /// Show a reviewed or snoozed finding again.
     Reopen { fingerprint: String },
@@ -409,8 +425,23 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
             } else {
                 print!(
                     "{}",
-                    style::terminal_text(&render_result(&result, Severity::Info, false))
+                    style::terminal_text(&render_result(
+                        &result,
+                        &View {
+                            min: Severity::Info,
+                            all: false,
+                            new_only: false
+                        }
+                    ))
                 );
+            }
+        }
+        AnalyzerAction::History { id } => {
+            let runs = svc.history(id)?;
+            if a.json {
+                println!("{}", serde_json::to_string_pretty(&runs)?);
+            } else {
+                print!("{}", style::terminal_text(&render_history(&runs)));
             }
         }
         AnalyzerAction::Run { id: None, .. } => {
@@ -649,14 +680,22 @@ fn read_secret(prompt: &str) -> Result<Secret> {
 pub fn run_insights(a: &InsightsArgs) -> Result<u8> {
     let svc = service();
     if let Some(action) = &a.action {
-        let (fp, state, snooze) = match action {
-            InsightAction::Review { fingerprint } => (fingerprint, FindingState::Reviewed, None),
-            InsightAction::Snooze { fingerprint, days } => (
+        let (fp, state, snooze, reason) = match action {
+            InsightAction::Review {
+                fingerprint,
+                reason,
+            } => (fingerprint, FindingState::Reviewed, None, reason),
+            InsightAction::Snooze {
+                fingerprint,
+                days,
+                reason,
+            } => (
                 fingerprint,
                 FindingState::Snoozed,
                 Some(days.saturating_mul(86_400_000)),
+                reason,
             ),
-            InsightAction::Reopen { fingerprint } => (fingerprint, FindingState::Open, None),
+            InsightAction::Reopen { fingerprint } => (fingerprint, FindingState::Open, None, &None),
         };
         if !svc
             .insights()
@@ -667,12 +706,16 @@ pub fn run_insights(a: &InsightsArgs) -> Result<u8> {
         {
             bail!("no current finding has fingerprint {fp:?}");
         }
-        svc.review(fp, state, snooze)?;
+        svc.review_with_reason(fp, state, snooze, reason.as_deref())?;
         println!("{} Saved.", style::ok_mark());
         return Ok(crate::exit::OK);
     }
     let insights = svc.insights();
-    let min = Severity::from(a.min);
+    let view = View {
+        min: Severity::from(a.min),
+        all: a.all,
+        new_only: a.new,
+    };
     let format = if a.json {
         InsightFormat::Json
     } else {
@@ -681,11 +724,11 @@ pub fn run_insights(a: &InsightsArgs) -> Result<u8> {
     match format {
         InsightFormat::Json => println!(
             "{}",
-            serde_json::to_string_pretty(&filtered(&insights, min, a.all))?
+            serde_json::to_string_pretty(&filtered(&insights, &view))?
         ),
         InsightFormat::Sarif => println!(
             "{}",
-            serde_json::to_string_pretty(&sarif(&filtered(&insights, min, a.all)))?
+            serde_json::to_string_pretty(&sarif(&filtered(&insights, &view)))?
         ),
         InsightFormat::Text => {
             if insights.results.is_empty() {
@@ -694,15 +737,15 @@ pub fn run_insights(a: &InsightsArgs) -> Result<u8> {
                 );
             }
             for r in &insights.results {
-                print!("{}", style::terminal_text(&render_result(r, min, a.all)));
+                print!("{}", style::terminal_text(&render_result(r, &view)));
             }
         }
     }
     let failing = a.fail_on.map(Severity::from).is_some_and(|fail| {
-        insights
-            .results
-            .iter()
-            .any(|r| r.open_at_least(fail).next().is_some())
+        insights.results.iter().any(|r| {
+            r.open_at_least(fail)
+                .any(|f| !view.new_only || is_new(r, &f.fingerprint))
+        })
     });
     Ok(if failing {
         crate::exit::BUSY
@@ -711,11 +754,37 @@ pub fn run_insights(a: &InsightsArgs) -> Result<u8> {
     })
 }
 
-fn filtered(insights: &Insights, min: Severity, all: bool) -> Insights {
+/// Which findings a listing shows.
+struct View {
+    min: Severity,
+    all: bool,
+    new_only: bool,
+}
+
+impl View {
+    fn shows(&self, r: &AnalyzerResult, f: &Finding) -> bool {
+        f.severity >= self.min
+            && (self.all || f.state == FindingState::Open)
+            && (!self.new_only || is_new(r, &f.fingerprint))
+    }
+}
+
+/// New since the analyzer's previous run. A first run has nothing to compare with, so every
+/// finding counts as new.
+fn is_new(r: &AnalyzerResult, fingerprint: &str) -> bool {
+    r.changes.as_ref().is_none_or(|c| c.is_new(fingerprint))
+}
+
+fn filtered(insights: &Insights, view: &View) -> Insights {
     let mut out = insights.clone();
     for r in &mut out.results {
-        r.findings
-            .retain(|f| f.severity >= min && (all || f.state == FindingState::Open));
+        let keep: Vec<Finding> = r
+            .findings
+            .iter()
+            .filter(|f| view.shows(r, f))
+            .cloned()
+            .collect();
+        r.findings = keep;
     }
     out
 }
@@ -918,7 +987,31 @@ fn sev_paint(s: Severity) -> String {
     paint(s.label(), style)
 }
 
-fn render_result(r: &AnalyzerResult, min: Severity, all: bool) -> String {
+fn render_history(runs: &[RunRecord]) -> String {
+    if runs.is_empty() {
+        return "No runs yet.\n".into();
+    }
+    let mut out = String::new();
+    for r in runs {
+        let total: usize = r.counts.values().sum();
+        let change = match (r.new, r.fixed) {
+            (Some(n), Some(f)) => format!(", {n} new, {f} fixed"),
+            _ => String::new(),
+        };
+        out.push_str(&format!(
+            "  {}  {:<8} {} subject(s), {total} finding(s){change}{}\n",
+            dim(holdmap_core::util::local_datetime(r.run_at_ms / 1000)),
+            format!("{:?}", r.status).to_lowercase(),
+            r.subjects,
+            r.duration_ms
+                .map(|d| dim(format!("  {:.1}s", d as f64 / 1000.0)))
+                .unwrap_or_default()
+        ));
+    }
+    out
+}
+
+fn render_result(r: &AnalyzerResult, view: &View) -> String {
     let mut out = format!(
         "{}  {:?}{}  {} subject(s)\n",
         bold(&r.analyzer),
@@ -929,11 +1022,16 @@ fn render_result(r: &AnalyzerResult, min: Severity, all: bool) -> String {
         r.subjects.len()
     )
     .to_lowercase();
-    let shown: Vec<&Finding> = r
-        .findings
-        .iter()
-        .filter(|f| f.severity >= min && (all || f.state == FindingState::Open))
-        .collect();
+    if let Some(c) = &r.changes {
+        out.push_str(&format!(
+            "  {}\n",
+            dim(format!(
+                "since the previous run: {} new, {} fixed",
+                c.new_total, c.fixed_total
+            ))
+        ));
+    }
+    let shown: Vec<&Finding> = r.findings.iter().filter(|f| view.shows(r, f)).collect();
     if shown.is_empty() {
         out.push_str("  no open findings\n");
     }
@@ -948,8 +1046,13 @@ fn render_result(r: &AnalyzerResult, min: Severity, all: bool) -> String {
             (Some(file), None) => format!(" {file}"),
             _ => String::new(),
         };
+        let new = if r.changes.as_ref().is_some_and(|c| c.is_new(&f.fingerprint)) {
+            format!("{} ", paint("new", S::Yellow))
+        } else {
+            String::new()
+        };
         out.push_str(&format!(
-            "  {:<8} {}  {}{}\n",
+            "  {:<8} {new}{}  {}{}\n",
             sev_paint(f.severity),
             f.title,
             dim(subject),
@@ -961,7 +1064,10 @@ fn render_result(r: &AnalyzerResult, min: Severity, all: bool) -> String {
         if f.state != FindingState::Open {
             out.push_str(&format!(
                 "           {}\n",
-                dim(format!("{:?}", f.state).to_lowercase())
+                dim(match &f.note {
+                    Some(note) => format!("{:?}: {note}", f.state).to_lowercase(),
+                    None => format!("{:?}", f.state).to_lowercase(),
+                })
             ));
         }
         out.push_str(&format!(
@@ -1056,6 +1162,7 @@ mod tests {
                     fix: Some("Remove the upload.".into()),
                     refs: vec![],
                     state: FindingState::Open,
+                    note: None,
                 },
                 Finding {
                     fingerprint: "f2".into(),
@@ -1069,6 +1176,7 @@ mod tests {
                     fix: None,
                     refs: vec![],
                     state: FindingState::Reviewed,
+                    note: None,
                 },
             ],
             details: vec![],
@@ -1078,21 +1186,46 @@ mod tests {
             duration_ms: None,
 
             tool_calls: Vec::new(),
+
+            changes: None,
         }
     }
 
     #[test]
     fn text_shows_open_findings_with_location_fix_and_id() {
         style::init(style::ColorChoice::Never);
-        let text = render_result(&result(), Severity::Info, false);
+        let text = render_result(
+            &result(),
+            &View {
+                min: Severity::Info,
+                all: false,
+                new_only: false,
+            },
+        );
         assert!(text.contains("critical Credential file sent over the network  deploy-helper scripts/deploy.sh:14"), "{text}");
         assert!(text.contains("fix: Remove the upload."));
         assert!(
             !text.contains("Missing description"),
             "reviewed findings are hidden by default"
         );
-        assert!(render_result(&result(), Severity::Info, true).contains("Missing description"));
-        assert!(!render_result(&result(), Severity::High, true).contains("Missing description"));
+        assert!(render_result(
+            &result(),
+            &View {
+                min: Severity::Info,
+                all: true,
+                new_only: false
+            }
+        )
+        .contains("Missing description"));
+        assert!(!render_result(
+            &result(),
+            &View {
+                min: Severity::High,
+                all: true,
+                new_only: false
+            }
+        )
+        .contains("Missing description"));
     }
 
     #[test]
@@ -1126,16 +1259,68 @@ mod tests {
             open: Default::default(),
         };
         assert_eq!(
-            filtered(&insights, Severity::Info, false).results[0]
+            filtered(
+                &insights,
+                &View {
+                    min: Severity::Info,
+                    all: false,
+                    new_only: false
+                }
+            )
+            .results[0]
                 .findings
                 .len(),
             1
         );
         assert_eq!(
-            filtered(&insights, Severity::Info, true).results[0]
+            filtered(
+                &insights,
+                &View {
+                    min: Severity::Info,
+                    all: true,
+                    new_only: false
+                }
+            )
+            .results[0]
                 .findings
                 .len(),
             2
         );
+    }
+
+    #[test]
+    fn new_only_shows_findings_new_since_the_previous_run() {
+        let mut r = result();
+        let first = r.findings[0].fingerprint.clone();
+        r.changes = Some(holdmap_analyzers::RunChanges {
+            new: vec![first.clone()],
+            new_total: 1,
+            fixed: vec![],
+            fixed_total: 2,
+            since_ms: 1,
+        });
+        let view = View {
+            min: Severity::Info,
+            all: true,
+            new_only: true,
+        };
+        let shown: Vec<&Finding> = r.findings.iter().filter(|f| view.shows(&r, f)).collect();
+        assert_eq!(shown.len(), 1);
+        assert_eq!(shown[0].fingerprint, first);
+        let text = render_result(&r, &view);
+        assert!(text.contains("1 new, 2 fixed"), "{text}");
+        // A first run has nothing to compare with: everything is new.
+        r.changes = None;
+        assert!(r.findings.iter().all(|f| view.shows(&r, f)));
+    }
+
+    #[test]
+    fn history_lists_new_and_fixed_when_known() {
+        let mut rec = RunRecord::of(&result());
+        assert!(!render_history(std::slice::from_ref(&rec)).contains("new"));
+        rec.new = Some(3);
+        rec.fixed = Some(1);
+        assert!(render_history(&[rec]).contains("3 new, 1 fixed"));
+        assert_eq!(render_history(&[]), "No runs yet.\n");
     }
 }

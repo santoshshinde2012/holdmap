@@ -52,17 +52,19 @@ export interface FindingItem {
   scope: string;
   /** The file the finding points at, inside `folder` when both are known. */
   path: string | null;
+  /** New since its analyzer's previous run (false on a first run: nothing to compare). */
+  isNew: boolean;
 }
 export type GroupBy = "severity" | "skill" | "analyzer" | "agent" | "folder";
 export type SortKey = "severity" | "rule" | "message" | "agent" | "skill" | "folder" | "path";
 export interface SortSpec { key: SortKey; dir: "asc" | "desc" }
-export interface FindingFilter { severities: Severity[]; query: string; agent: string | null; showClosed: boolean }
+export interface FindingFilter { severities: Severity[]; query: string; agent: string | null; showClosed: boolean; newOnly: boolean }
 export interface FindingGroup { key: string; label: string; severity: Severity | null; items: FindingItem[] }
 
 const RANK: Record<Severity, number> = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
 
 export function emptyFilter(): FindingFilter {
-  return { severities: [], query: "", agent: null, showClosed: false };
+  return { severities: [], query: "", agent: null, showClosed: false, newOnly: false };
 }
 
 /** Every finding from every analyzer's last run, joined to its subject and evidence. */
@@ -71,6 +73,7 @@ export function findingItems(insights: Insights | null, analyzers: AnalyzerView[
   const out: FindingItem[] = [];
   for (const r of insights?.results ?? []) {
     const subjects = new Map(r.subjects.map((s) => [s.id, s]));
+    const fresh = new Set(r.changes?.new ?? []);
     for (const f of r.findings) {
       const subject = subjects.get(f.subject) ?? null;
       out.push({
@@ -84,6 +87,7 @@ export function findingItems(insights: Insights | null, analyzers: AnalyzerView[
         folder: subject?.dir ?? null,
         scope: subject?.scope ?? "unknown",
         path: joinPath(subject?.dir ?? null, f.location.file),
+        isNew: fresh.has(f.fingerprint),
       });
     }
   }
@@ -108,6 +112,7 @@ export function applyFilter(items: FindingItem[], filter: FindingFilter): Findin
   const q = filter.query.trim().toLowerCase();
   return items.filter((i) => {
     if (!filter.showClosed && i.finding.state !== "open") return false;
+    if (filter.newOnly && !i.isNew) return false;
     if (filter.severities.length && !filter.severities.includes(i.finding.severity)) return false;
     if (filter.agent && !i.subject?.agents.includes(filter.agent)) return false;
     if (!q) return true;
@@ -249,3 +254,34 @@ export function firstSentence(s: string): string {
 
 export { productLabel, scopeLabel, runProgress, stepLabel, runFraction, elapsed, runSummary } from "./run-view";
 export type { RunPhase, RunStep, RunProgress } from "./run-view";
+
+export interface ChangeSummary {
+  /** Analyzers whose latest run could be compared with an earlier one. */
+  compared: number;
+  new: number;
+  fixed: number;
+  /** The most severe fixed findings (up to 5), with their analyzer's name. */
+  fixedTop: { title: string; severity: Severity; analyzer: string }[];
+  /** Oldest previous run compared against. */
+  sinceMs: number | null;
+}
+
+/** What changed since each analyzer's previous run, summed. `compared` 0 means nothing to show. */
+export function changeSummary(insights: Insights | null, analyzers: AnalyzerView[]): ChangeSummary {
+  const names = new Map(analyzers.map((a) => [a.id, a.name]));
+  const out: ChangeSummary = { compared: 0, new: 0, fixed: 0, fixedTop: [], sinceMs: null };
+  for (const r of insights?.results ?? []) {
+    const c = r.changes;
+    if (!c) continue;
+    out.compared++;
+    out.new += c.new_total;
+    out.fixed += c.fixed_total;
+    out.sinceMs = out.sinceMs === null ? c.since_ms : Math.min(out.sinceMs, c.since_ms);
+    for (const f of c.fixed) out.fixedTop.push({ title: f.title, severity: f.severity, analyzer: names.get(r.analyzer) ?? r.analyzer });
+  }
+  out.fixedTop = out.fixedTop.sort((a, b) => RANK[b.severity] - RANK[a.severity]).slice(0, 5);
+  return out;
+}
+
+/** Rows drawn at first and per "Show more", so thousands of findings never freeze the view. */
+export const PAGE_SIZE = 200;

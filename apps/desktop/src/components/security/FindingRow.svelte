@@ -7,8 +7,9 @@
   import type { FindingItem } from "../../lib/security-view";
   let { item, open = false, busy = false, ontoggle, onreview, onrescan }: {
     item: FindingItem; open?: boolean; busy?: boolean;
-    ontoggle: () => void; onreview: (state: FindingState) => void; onrescan?: () => void;
+    ontoggle: () => void; onreview: (state: FindingState, reason?: string) => void; onrescan?: () => void;
   } = $props();
+  let reason = $state("");
   const f = $derived(item.finding);
   const id = $derived(`finding-${f.fingerprint}`);
 </script>
@@ -17,7 +18,7 @@
   <button type="button" class="head" aria-expanded={open} aria-controls={id} onclick={ontoggle}>
     <Icon name={open ? "chevron-down" : "chevron"} size={12} />
     <span class="sev-pill {f.severity}">{f.severity}</span>
-    <span class="title">{f.title}</span>
+    <span class="title">{#if item.isNew}<span class="new-pill">New</span> {/if}{f.title}</span>
     <span class="meta"><span class="skill">{item.subject?.name ?? f.subject}</span>{#if item.agents.length}<span class="ag">{item.agents.join(", ")}</span>{/if}{#if item.where}<code>{item.where}</code>{/if}</span>
     <span class="by">{item.analyzerName}</span>
     {#if f.state !== "open"}<span class="st">{f.state}</span>{/if}
@@ -31,10 +32,12 @@
         <div><dt>Analyzer</dt><dd>{item.analyzerName}</dd></div>
         {#each item.evidence as e (e.label)}<div><dt>{e.label}</dt><dd>{e.value}</dd></div>{/each}
       </dl>
+      {#if f.state !== "open" && f.note}<p class="note"><b>Reason</b> {f.note}</p>{/if}
       <div class="acts">
         {#if f.state === "open"}
-          <Button size="xs" icon="check" loading={busy} onclick={() => onreview("reviewed")}>Mark reviewed</Button>
-          <Button size="xs" variant="ghost" icon="clock" disabled={busy} onclick={() => onreview("snoozed")}>Snooze 7 days</Button>
+          <input class="reason" type="text" maxlength="200" placeholder="Reason (optional)" aria-label="Reason for {f.title}" bind:value={reason} />
+          <Button size="xs" icon="check" loading={busy} onclick={() => onreview("reviewed", reason)}>Mark reviewed</Button>
+          <Button size="xs" variant="ghost" icon="clock" disabled={busy} onclick={() => onreview("snoozed", reason)}>Snooze 7 days</Button>
         {:else}
           <Button size="xs" variant="ghost" icon="undo" loading={busy} onclick={() => onreview("open")}>Reopen</Button>
         {/if}
@@ -64,5 +67,9 @@
   dl { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px 16px; }
   dt { color: var(--muted); font-size: var(--fs-caption); }
   dd { margin: 0; font-size: var(--fs-body-sm); color: var(--text); overflow-wrap: anywhere; }
-  .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .reason { flex: 1 1 200px; max-width: 360px; height: 24px; padding: 0 8px; border: 1px solid var(--input-border, var(--border)); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-caption); }
+  .reason:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .note { margin: 0; color: var(--text-2); font-size: var(--fs-body-sm); }
+  .note b { color: var(--text); font-weight: var(--fw-semibold); margin-right: 4px; }
 </style>

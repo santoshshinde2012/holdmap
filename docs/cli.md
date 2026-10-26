@@ -48,6 +48,7 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`holdmap analyzers catalog reject`](#holdmap-analyzers-catalog-reject) | Discard the staged update |
 | [`holdmap analyzers auto`](#holdmap-analyzers-auto) | Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that uses the network. Analyzers without network access run automatically once on |
 | [`holdmap analyzers run`](#holdmap-analyzers-run) | Run an approved analyzer now (or, with --changed, every approved one whose input changed) |
+| [`holdmap analyzers history`](#holdmap-analyzers-history) | An analyzer's past runs, newest first: status, subjects, findings, new and fixed |
 | [`holdmap insights`](#holdmap-insights) | Findings from approved analyzers, as text, JSON or SARIF |
 | [`holdmap insights review`](#holdmap-insights-review) | Mark a finding reviewed; it stays hidden while it is unchanged |
 | [`holdmap insights snooze`](#holdmap-insights-snooze) | Hide a finding for some days |
@@ -509,6 +510,7 @@ Commands:
   auto     Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that
            uses the network. Analyzers without network access run automatically once on
   run      Run an approved analyzer now (or, with --changed, every approved one whose input changed)
+  history  An analyzer's past runs, newest first: status, subjects, findings, new and fixed
   help     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -927,6 +929,24 @@ Options:
   -h, --help           Print help
 ```
 
+## holdmap analyzers history
+
+```text
+An analyzer's past runs, newest first: status, subjects, findings, new and fixed
+
+Usage: holdmap analyzers history [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
 ## holdmap insights
 
 ```text
@@ -946,8 +966,11 @@ Options:
       --min <MIN>          Only findings at or above this severity [default: info] [possible values:
                            info, low, medium, high, critical]
       --all                Include reviewed and snoozed findings
+      --new                Only findings new since each analyzer's previous run (with --fail-on:
+                           fail on new findings only, so existing ones act as a baseline)
       --fail-on <FAIL_ON>  Exit with status 1 when an open finding at or above this severity exists
-                           [possible values: info, low, medium, high, critical]
+                           (among the shown findings when --new is set) [possible values: info, low,
+                           medium, high, critical]
       --color <COLOR>      When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible
                            values: auto, always, never]
       --no-docker          Don't query Docker/Podman/OrbStack/Colima
@@ -965,6 +988,7 @@ Arguments:
   <FINGERPRINT>
 
 Options:
+      --reason <REASON>  Why it is acceptable (kept with the review, at most 200 characters)
       --format <FORMAT>  Output format [default: text] [possible values: text, json, sarif]
       --json             Shorthand for --format json
       --color <COLOR>    When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
@@ -985,6 +1009,7 @@ Arguments:
 
 Options:
       --days <DAYS>      [default: 7]
+      --reason <REASON>  Why it can wait (kept with the snooze, at most 200 characters)
       --format <FORMAT>  Output format [default: text] [possible values: text, json, sarif]
       --json             Shorthand for --format json
       --color <COLOR>    When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:

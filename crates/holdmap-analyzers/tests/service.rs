@@ -481,6 +481,52 @@ fn reviews_hide_findings_and_snoozes_expire() {
 }
 
 #[test]
+fn a_second_run_reports_what_changed_and_history_keeps_the_counts() {
+    let h = harness();
+    let r = report(&h.skill_dir);
+    h.service.approve(SKILLSPECTOR).unwrap();
+    let first = h.service.run(SKILLSPECTOR, &r).unwrap();
+    assert_eq!(
+        first.changes, None,
+        "a first run has nothing to compare with"
+    );
+    let second = h.service.run(SKILLSPECTOR, &r).unwrap();
+    let changes = second.changes.expect("compared with the first run");
+    assert_eq!((changes.new_total, changes.fixed_total), (0, 0));
+    assert_eq!(changes.since_ms, first.run_at_ms);
+    let history = h.service.history(SKILLSPECTOR).unwrap();
+    assert_eq!((history[0].new, history[0].fixed), (Some(0), Some(0)));
+    assert_eq!((history[1].new, history[1].fixed), (None, None));
+}
+
+#[test]
+fn a_review_keeps_its_reason_capped_and_reopening_drops_it() {
+    let h = harness();
+    let r = report(&h.skill_dir);
+    h.service.approve(SKILLSPECTOR).unwrap();
+    let fp = h.service.run(SKILLSPECTOR, &r).unwrap().findings[0]
+        .fingerprint
+        .clone();
+    let long = "Expected: the skill documents this webhook. ".repeat(10);
+    h.service
+        .review_with_reason(&fp, FindingState::Reviewed, None, Some(&long))
+        .unwrap();
+    let note = h.service.insights().results[0]
+        .findings
+        .iter()
+        .find(|f| f.fingerprint == fp)
+        .and_then(|f| f.note.clone())
+        .expect("reason kept");
+    assert!(note.starts_with("Expected: the skill documents this webhook."));
+    assert!(note.chars().count() <= holdmap_analyzers::finding::MAX_NOTE);
+    h.service.review(&fp, FindingState::Open, None).unwrap();
+    assert!(h.service.insights().results[0]
+        .findings
+        .iter()
+        .all(|f| f.note.is_none()));
+}
+
+#[test]
 fn revoking_turns_it_off_and_forgets_results() {
     let h = harness();
     let r = report(&h.skill_dir);
