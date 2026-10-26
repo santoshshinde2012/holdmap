@@ -382,6 +382,13 @@ def run(
                     contrast = (max(sum(pixel[:3]) for pixel in pixels) - min(sum(pixel[:3]) for pixel in pixels)) / 3
                     opaque = sum(pixel[3] == 255 for pixel in pixels) / len(pixels)
                     colorful = sum(max(pixel[:3]) - min(pixel[:3]) > 40 for pixel in pixels) / len(pixels)
+                    if os.environ.get("HOLDMAP_SNAPSHOT_DEBUG_DIR"):
+                        debug = Path(os.environ["HOLDMAP_SNAPSHOT_DEBUG_DIR"])
+                        debug.mkdir(parents=True, exist_ok=True)
+                        stamp = f"{int(time.time() * 1000)}-{region['name'].replace(' ', '-')}-{'ok' if contrast > 25 else 'fail'}"
+                        (debug / f"snapshot-{stamp}.png").write_bytes(payload)
+                        (debug / f"snapshot-{stamp}.json").write_text(json.dumps(
+                            {"snapshot": snapshot, "failed": region["name"], "contrast": contrast}, indent=2, default=str))
                     assert contrast > 25 and opaque > .95, (region["name"], contrast, opaque)
                     if region["name"] == "bundled icon":
                         assert colorful > .1, "App PNG lost the bundled icon colors"

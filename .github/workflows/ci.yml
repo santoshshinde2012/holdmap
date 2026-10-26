@@ -331,3 +331,14 @@ jobs:
           python3 scripts/check-screen-recording-runtime.py
           python3 scripts/check-screen-recording-runtime.py --app-ui
           python3 scripts/check-native-screen-recording.py
+        env:
+          HOLDMAP_SNAPSHOT_DEBUG_DIR: ${{ runner.temp }}/snapshot-debug
+      # TEMP (PR #111): saved App PNGs + region metadata to diagnose the blank "bundled font" region.
+      - name: App snapshot diagnostics
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: app-snapshot-debug-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/snapshot-debug/
+          if-no-files-found: ignore
+          retention-days: 7
