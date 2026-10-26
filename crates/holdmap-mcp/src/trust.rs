@@ -48,7 +48,7 @@ pub(super) fn skills(report: &TrustReport, args: &Value) -> (String, Value) {
 
 fn row(s: &SkillTrustView) -> Value {
     json!({
-        "id": s.subject.id, "name": s.subject.name, "agents": s.subject.agents, "scope": s.subject.scope,
+        "name": s.subject.name, "agents": s.subject.agents, "scope": s.subject.scope,
         "state": s.state, "sha256": s.sha256, "files": s.file_count, "bytes": s.total_bytes,
         "partial": s.partial, "first_seen_ms": s.first_seen_ms, "seen_ms": s.seen_ms,
         "changed_since_last_scan": s.changed_since_last_scan, "trusted_ms": s.trusted_ms,
@@ -79,7 +79,7 @@ pub(super) fn list_risks(
         .collect();
     // MCP never shows folder paths: a folder row is named by the skill(s) scanned there.
     for e in list.iter_mut().filter(|e| e.scope == RiskScope::Folder) {
-        e.key = folder_label(insights, &e.key);
+        e.key = folder_label(insights, trust, &e.key);
     }
     let text = if list.is_empty() {
         "No matching risks.".to_string()
@@ -104,11 +104,13 @@ pub(super) fn list_risks(
 }
 
 /// "skill folder: a, b" for the skills scanned in `dir`; never the path itself.
-fn folder_label(insights: &Insights, dir: &str) -> String {
+fn folder_label(insights: &Insights, trust: &TrustReport, dir: &str) -> String {
+    // Skill ids embed the source path, so rows are named by skill, never by id or folder.
     let mut names: Vec<&str> = insights
         .results
         .iter()
         .flat_map(|r| &r.subjects)
+        .chain(trust.skills.iter().map(|s| &s.subject))
         .filter(|s| s.dir.as_deref() == Some(dir))
         .map(|s| s.name.as_str())
         .collect();
@@ -157,6 +159,32 @@ mod tests {
             open: Default::default(),
         };
         let (text, data) = list_risks(&insights, &TrustReport::default(), &json!({"by": "folder"}));
+        let all = format!("{text}{data}");
+        assert!(!all.contains("/Users/someone"), "{all}");
+        assert_eq!(data["risks"][0]["key"], "skill folder: release-check");
+    }
+
+    #[test]
+    fn skill_trust_and_changed_folders_never_carry_a_path() {
+        let report: TrustReport = serde_json::from_value(json!({
+            "skills": [{
+                "subject": {"id": "[\"claude-code\",\"skill\",\"user\",\"/Users/someone/.claude/skills/release-check/SKILL.md\",null,\"release-check\"]",
+                            "kind": "skill", "name": "release-check", "agents": ["claude-code"],
+                            "dir": "/Users/someone/.claude/skills/release-check", "scope": "user"},
+                "state": "changed", "sha256": "ab", "file_count": 1, "total_bytes": 1,
+                "first_seen_ms": 1, "seen_ms": 2, "changed_since_last_scan": true
+            }],
+            "changed": 1, "untrusted": 0, "scanned_ms": 2
+        }))
+        .unwrap();
+        let (text, data) = skills(&report, &json!({}));
+        let all = format!("{text}{data}");
+        assert!(!all.contains("/Users/someone"), "{all}");
+        let empty = Insights {
+            results: vec![],
+            open: Default::default(),
+        };
+        let (text, data) = list_risks(&empty, &report, &json!({"by": "folder"}));
         let all = format!("{text}{data}");
         assert!(!all.contains("/Users/someone"), "{all}");
         assert_eq!(data["risks"][0]["key"], "skill folder: release-check");
