@@ -333,6 +333,11 @@ impl ActiveCatalog {
     }
 }
 
+/// The shortest snooze: one hour.
+pub const MIN_SNOOZE_MS: u64 = 3_600_000;
+/// The longest snooze: 90 days, so nothing stays hidden indefinitely by accident.
+pub const MAX_SNOOZE_MS: u64 = 90 * 86_400_000;
+
 /// The orchestrator.
 pub struct AnalyzerService {
     catalog: RwLock<ActiveCatalog>,
@@ -1144,6 +1149,7 @@ impl AnalyzerService {
 
     /// [`Self::review`] with the user's reason, kept (capped and secret-masked) next to the
     /// review and shown with the finding.
+    /// Review or snooze a finding. Snoozes last from [`MIN_SNOOZE_MS`] to [`MAX_SNOOZE_MS`].
     pub fn review_with_reason(
         &self,
         fingerprint: &str,
@@ -1164,7 +1170,11 @@ impl AnalyzerService {
             FindingState::Snoozed => Some(Review {
                 state,
                 until_ms: Some(
-                    (self.now)().saturating_add(snooze_ms.unwrap_or(7 * 24 * 3_600_000)),
+                    (self.now)().saturating_add(
+                        snooze_ms
+                            .unwrap_or(7 * 24 * 3_600_000)
+                            .clamp(MIN_SNOOZE_MS, MAX_SNOOZE_MS),
+                    ),
                 ),
                 reason,
             }),
@@ -1178,9 +1188,11 @@ impl AnalyzerService {
         for f in &mut result.findings {
             let review = reviews.get(&f.fingerprint);
             f.state = review.map(|r| r.effective(now)).unwrap_or_default();
-            f.note = review
-                .filter(|_| f.state != FindingState::Open)
-                .and_then(|r| r.reason.clone());
+            let hidden = review.filter(|_| f.state != FindingState::Open);
+            f.note = hidden.and_then(|r| r.reason.clone());
+            f.until_ms = hidden
+                .filter(|_| f.state == FindingState::Snoozed)
+                .and_then(|r| r.until_ms);
         }
         result
     }
@@ -1605,6 +1617,7 @@ fn normalise(m: &AnalyzerManifest, out: &RawOutput, parsed: Parsed) -> (Vec<Find
             refs: clean_refs(p.refs.iter().map(String::as_str)),
             state: FindingState::Open,
             note: None,
+            until_ms: None,
             new: false,
             subject,
             location,

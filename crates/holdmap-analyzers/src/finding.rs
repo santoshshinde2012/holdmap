@@ -155,6 +155,9 @@ pub struct Finding {
     /// The user's reason for a review or snooze, at most [`MAX_NOTE`] characters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// For snoozed findings: when it reopens (Unix epoch ms).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub until_ms: Option<u64>,
     /// New since the analyzer's previous run (always false on a first run).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub new: bool,
@@ -548,6 +551,7 @@ mod change_tests {
             refs: vec![],
             state: FindingState::Open,
             note: None,
+            until_ms: None,
             new: false,
         }
     }

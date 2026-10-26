@@ -260,6 +260,7 @@ mod tests {
             refs: vec![],
             state: FindingState::Open,
             note: None,
+            until_ms: None,
             new: false,
         }
     }

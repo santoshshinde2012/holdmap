@@ -104,6 +104,36 @@ pub enum AnalyzerAction {
     },
     /// An analyzer's past runs, newest first: status, subjects, findings, new and fixed.
     History { id: String },
+    /// Fingerprint every skill folder (hashes, names and sizes; never contents) and show which
+    /// changed or appeared since you trusted them.
+    Skills {
+        /// Show the last scan without reading any folder.
+        #[arg(long)]
+        no_scan: bool,
+        /// Output format (--json is the same as --format json).
+        #[arg(long, value_enum, default_value = "text")]
+        format: crate::analyzers_trust::TableFormat,
+    },
+    /// Trust the version of a skill the last `skills` scan saw.
+    Trust {
+        /// Skill id, as `holdmap analyzers skills` shows it.
+        skill: String,
+        /// Why you trust it (at most 200 characters).
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Forget that you trusted a skill.
+    Untrust { skill: String },
+    /// Banded risk per agent and per skill folder, riskiest first, with what contributes.
+    Risks {
+        #[arg(long, value_enum, default_value = "all")]
+        by: crate::analyzers_trust::RiskBy,
+        /// Output format (--json is the same as --format json).
+        #[arg(long, value_enum, default_value = "text")]
+        format: crate::analyzers_trust::TableFormat,
+    },
+    /// Scheduled scans: whether they're on, what they would run and when.
+    Schedule,
 }
 
 #[derive(Subcommand, Debug)]
@@ -169,11 +199,14 @@ pub enum InsightAction {
         #[arg(long)]
         reason: Option<String>,
     },
-    /// Hide a finding for some days.
+    /// Hide a finding for some days (1 to 90), or until a date.
     Snooze {
         fingerprint: String,
-        #[arg(long, default_value_t = 7)]
+        #[arg(long, default_value_t = 7, value_parser = clap::value_parser!(u64).range(1..=90), conflicts_with = "until")]
         days: u64,
+        /// Until this local date (YYYY-MM-DD), at most 90 days ahead.
+        #[arg(long)]
+        until: Option<String>,
         /// Why it can wait (kept with the snooze, at most 200 characters).
         #[arg(long)]
         reason: Option<String>,
@@ -187,6 +220,68 @@ pub enum InsightFormat {
     Text,
     Json,
     Sarif,
+    Csv,
+    Markdown,
+}
+
+/// Milliseconds from now until the end of `date` (local), within 1 to 90 days.
+fn snooze_until(date: &str) -> Result<u64> {
+    let ms = holdmap_core::util::local_date_end_ms(date)
+        .with_context(|| format!("{date:?} is not a date like 2026-12-31"))?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64);
+    let left = ms.saturating_sub(now);
+    if left == 0 || left > holdmap_analyzers::service::MAX_SNOOZE_MS {
+        bail!("choose a date from tomorrow to 90 days ahead");
+    }
+    Ok(left)
+}
+
+const FINDING_HEADERS: [&str; 12] = [
+    "analyzer",
+    "severity",
+    "state",
+    "new",
+    "rule",
+    "title",
+    "subject",
+    "path",
+    "line",
+    "fix",
+    "snoozed_until",
+    "reason",
+];
+
+fn finding_rows(insights: &Insights) -> Vec<Vec<String>> {
+    insights
+        .results
+        .iter()
+        .flat_map(|r| r.findings.iter().map(move |f| (r, f)))
+        .map(|(r, f)| {
+            let subject = r
+                .subjects
+                .iter()
+                .find(|s| s.id == f.subject)
+                .map_or(f.subject.clone(), |s| s.name.clone());
+            vec![
+                f.analyzer.clone(),
+                format!("{:?}", f.severity).to_lowercase(),
+                format!("{:?}", f.state).to_lowercase(),
+                (r.changes.is_some() && f.new).to_string(),
+                f.rule_id.clone(),
+                f.title.clone(),
+                subject,
+                f.location.file.clone().unwrap_or_default(),
+                f.location.line.map(|l| l.to_string()).unwrap_or_default(),
+                f.fix.clone().unwrap_or_default(),
+                f.until_ms
+                    .map(|ms| holdmap_core::util::local_datetime(ms / 1000))
+                    .unwrap_or_default(),
+                f.note.clone().unwrap_or_default(),
+            ]
+        })
+        .collect()
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum, PartialEq, Eq)]
@@ -207,6 +302,17 @@ impl From<MinSeverity> for Severity {
             MinSeverity::High => Severity::High,
             MinSeverity::Critical => Severity::Critical,
         }
+    }
+}
+
+fn json_or(
+    json: bool,
+    format: crate::analyzers_trust::TableFormat,
+) -> crate::analyzers_trust::TableFormat {
+    if json {
+        crate::analyzers_trust::TableFormat::Json
+    } else {
+        format
     }
 }
 
@@ -435,6 +541,30 @@ pub fn run_analyzers(a: &AnalyzersArgs, docker: bool) -> Result<u8> {
                     ))
                 );
             }
+        }
+        AnalyzerAction::Skills { no_scan, format } => {
+            let report = if *no_scan {
+                None
+            } else {
+                Some(inventory(docker)?)
+            };
+            return crate::analyzers_trust::run_skills(report.as_ref(), json_or(a.json, *format));
+        }
+        AnalyzerAction::Trust { skill, reason } => {
+            return crate::analyzers_trust::run_trust(skill, reason.as_deref(), false, a.json);
+        }
+        AnalyzerAction::Untrust { skill } => {
+            return crate::analyzers_trust::run_trust(skill, None, true, a.json);
+        }
+        AnalyzerAction::Risks { by, format } => {
+            return crate::analyzers_trust::run_risks(
+                &svc.insights(),
+                *by,
+                json_or(a.json, *format),
+            );
+        }
+        AnalyzerAction::Schedule => {
+            return crate::analyzers_trust::run_schedule(&svc.list(), a.json);
         }
         AnalyzerAction::History { id } => {
             let runs = svc.history(id)?;
@@ -688,11 +818,15 @@ pub fn run_insights(a: &InsightsArgs) -> Result<u8> {
             InsightAction::Snooze {
                 fingerprint,
                 days,
+                until,
                 reason,
             } => (
                 fingerprint,
                 FindingState::Snoozed,
-                Some(days.saturating_mul(86_400_000)),
+                Some(match until {
+                    Some(date) => snooze_until(date)?,
+                    None => days.saturating_mul(86_400_000),
+                }),
                 reason,
             ),
             InsightAction::Reopen { fingerprint } => (fingerprint, FindingState::Open, None, &None),
@@ -730,11 +864,28 @@ pub fn run_insights(a: &InsightsArgs) -> Result<u8> {
             "{}",
             serde_json::to_string_pretty(&sarif(&filtered(&insights, &view)))?
         ),
+        InsightFormat::Csv => print!(
+            "{}",
+            crate::analyzers_trust::csv(
+                &FINDING_HEADERS,
+                &finding_rows(&filtered(&insights, &view))
+            )
+        ),
+        InsightFormat::Markdown => print!(
+            "{}",
+            crate::analyzers_trust::markdown(
+                &FINDING_HEADERS,
+                &finding_rows(&filtered(&insights, &view))
+            )
+        ),
         InsightFormat::Text => {
             if insights.results.is_empty() {
                 println!(
                     "No results yet. Turn an analyzer on with: holdmap analyzers approve <id>"
                 );
+            }
+            if let Some(line) = crate::analyzers_trust::trust_alert_line() {
+                print!("{}", style::terminal_text(&line));
             }
             for r in &insights.results {
                 print!("{}", style::terminal_text(&render_result(r, &view)));
@@ -1064,10 +1215,20 @@ fn render_result(r: &AnalyzerResult, view: &View) -> String {
         if f.state != FindingState::Open {
             out.push_str(&format!(
                 "           {}\n",
-                dim(match &f.note {
-                    Some(note) => format!("{:?}: {note}", f.state).to_lowercase(),
-                    None => format!("{:?}", f.state).to_lowercase(),
-                })
+                dim(format!(
+                    "{}{}{}",
+                    format!("{:?}", f.state).to_lowercase(),
+                    f.until_ms
+                        .map(|ms| format!(
+                            " until {}",
+                            holdmap_core::util::local_datetime(ms / 1000)
+                        ))
+                        .unwrap_or_default(),
+                    f.note
+                        .as_deref()
+                        .map(|n| format!(": {n}"))
+                        .unwrap_or_default()
+                ))
             ));
         }
         out.push_str(&format!(
@@ -1163,6 +1324,7 @@ mod tests {
                     refs: vec![],
                     state: FindingState::Open,
                     note: None,
+                    until_ms: None,
                     new: false,
                 },
                 Finding {
@@ -1178,6 +1340,7 @@ mod tests {
                     refs: vec![],
                     state: FindingState::Reviewed,
                     note: None,
+                    until_ms: None,
                     new: false,
                 },
             ],

@@ -49,9 +49,14 @@ Global options (accepted by every command): `--color <auto|always|never>` (env `
 | [`holdmap analyzers auto`](#holdmap-analyzers-auto) | Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that uses the network. Analyzers without network access run automatically once on |
 | [`holdmap analyzers run`](#holdmap-analyzers-run) | Run an approved analyzer now (or, with --changed, every approved one whose input changed) |
 | [`holdmap analyzers history`](#holdmap-analyzers-history) | An analyzer's past runs, newest first: status, subjects, findings, new and fixed |
+| [`holdmap analyzers skills`](#holdmap-analyzers-skills) | Fingerprint every skill folder (hashes, names and sizes; never contents) and show which changed or appeared since you trusted them |
+| [`holdmap analyzers trust`](#holdmap-analyzers-trust) | Trust the version of a skill the last `skills` scan saw |
+| [`holdmap analyzers untrust`](#holdmap-analyzers-untrust) | Forget that you trusted a skill |
+| [`holdmap analyzers risks`](#holdmap-analyzers-risks) | Banded risk per agent and per skill folder, riskiest first, with what contributes |
+| [`holdmap analyzers schedule`](#holdmap-analyzers-schedule) | Scheduled scans: whether they're on, what they would run and when |
 | [`holdmap insights`](#holdmap-insights) | Findings from approved analyzers, as text, JSON or SARIF |
 | [`holdmap insights review`](#holdmap-insights-review) | Mark a finding reviewed; it stays hidden while it is unchanged |
-| [`holdmap insights snooze`](#holdmap-insights-snooze) | Hide a finding for some days |
+| [`holdmap insights snooze`](#holdmap-insights-snooze) | Hide a finding for some days (1 to 90), or until a date |
 | [`holdmap insights reopen`](#holdmap-insights-reopen) | Show a reviewed or snoozed finding again |
 | [`holdmap needs`](#holdmap-needs) | What needs you: exposed agents, wide access, risky settings, unpinned MCP servers |
 | [`holdmap watch`](#holdmap-watch) | Stream port events: new listeners, closed listeners, conflicts |
@@ -492,26 +497,33 @@ Opt-in analyzers (SkillSpector, OSV lookup): see what one gets, approve, run, re
 Usage: holdmap analyzers [OPTIONS] [COMMAND]
 
 Commands:
-  list     List analyzers and whether each is on (the default)
-  show     Show what an analyzer would get: folders or packages, command, network and environment
-  approve  Review an analyzer's permissions and turn it on
-  revoke   Turn an analyzer off and delete its results
-  key      Store or delete an API key an analyzer declares, in the OS keychain
-  add      Register your own analyzer from a manifest file, a preset (--preset), or any MCP server
-           with --mcp (from a command, a URL or one of your agents' servers). It stays off until you
-           approve it
-  presets  Ready-made manifests for well-known local analyzers; add one with `add --preset ID`
-  servers  Your agents' configured MCP servers that can be added as analyzers
-  tools    An MCP analyzer's tools: descriptions, warnings, suggested inputs and pin. Lists them
-           from the server (after you confirm) the first time or with --refresh
-  map      Choose an MCP analyzer's tools and map their inputs and output
-  remove   Remove an analyzer you registered, with its approval, results and stored keys
-  catalog  The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject
-  auto     Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer that
-           uses the network. Analyzers without network access run automatically once on
-  run      Run an approved analyzer now (or, with --changed, every approved one whose input changed)
-  history  An analyzer's past runs, newest first: status, subjects, findings, new and fixed
-  help     Print this message or the help of the given subcommand(s)
+  list      List analyzers and whether each is on (the default)
+  show      Show what an analyzer would get: folders or packages, command, network and environment
+  approve   Review an analyzer's permissions and turn it on
+  revoke    Turn an analyzer off and delete its results
+  key       Store or delete an API key an analyzer declares, in the OS keychain
+  add       Register your own analyzer from a manifest file, a preset (--preset), or any MCP server
+            with --mcp (from a command, a URL or one of your agents' servers). It stays off until
+            you approve it
+  presets   Ready-made manifests for well-known local analyzers; add one with `add --preset ID`
+  servers   Your agents' configured MCP servers that can be added as analyzers
+  tools     An MCP analyzer's tools: descriptions, warnings, suggested inputs and pin. Lists them
+            from the server (after you confirm) the first time or with --refresh
+  map       Choose an MCP analyzer's tools and map their inputs and output
+  remove    Remove an analyzer you registered, with its approval, results and stored keys
+  catalog   The signed analyzer catalog: show it, get a newer one, review the diff, accept or reject
+  auto      Allow (on) or stop (off) automatic runs, when items change, for an approved analyzer
+            that uses the network. Analyzers without network access run automatically once on
+  run       Run an approved analyzer now (or, with --changed, every approved one whose input
+            changed)
+  history   An analyzer's past runs, newest first: status, subjects, findings, new and fixed
+  skills    Fingerprint every skill folder (hashes, names and sizes; never contents) and show which
+            changed or appeared since you trusted them
+  trust     Trust the version of a skill the last `skills` scan saw
+  untrust   Forget that you trusted a skill
+  risks     Banded risk per agent and per skill folder, riskiest first, with what contributes
+  schedule  Scheduled scans: whether they're on, what they would run and when
+  help      Print this message or the help of the given subcommand(s)
 
 Options:
       --json           Machine-readable JSON output
@@ -947,6 +959,95 @@ Options:
   -h, --help           Print help
 ```
 
+## holdmap analyzers skills
+
+```text
+Fingerprint every skill folder (hashes, names and sizes; never contents) and show which changed or
+appeared since you trusted them
+
+Usage: holdmap analyzers skills [OPTIONS]
+
+Options:
+      --no-scan          Show the last scan without reading any folder
+      --format <FORMAT>  Output format (--json is the same as --format json) [default: text]
+                         [possible values: text, json, csv, markdown]
+      --json             Machine-readable JSON output
+      --color <COLOR>    When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                         auto, always, never]
+      --no-docker        Don't query Docker/Podman/OrbStack/Colima
+  -h, --help             Print help
+```
+
+## holdmap analyzers trust
+
+```text
+Trust the version of a skill the last `skills` scan saw
+
+Usage: holdmap analyzers trust [OPTIONS] <SKILL>
+
+Arguments:
+  <SKILL>  Skill id, as `holdmap analyzers skills` shows it
+
+Options:
+      --reason <REASON>  Why you trust it (at most 200 characters)
+      --json             Machine-readable JSON output
+      --color <COLOR>    When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                         auto, always, never]
+      --no-docker        Don't query Docker/Podman/OrbStack/Colima
+  -h, --help             Print help
+```
+
+## holdmap analyzers untrust
+
+```text
+Forget that you trusted a skill
+
+Usage: holdmap analyzers untrust [OPTIONS] <SKILL>
+
+Arguments:
+  <SKILL>
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
+## holdmap analyzers risks
+
+```text
+Banded risk per agent and per skill folder, riskiest first, with what contributes
+
+Usage: holdmap analyzers risks [OPTIONS]
+
+Options:
+      --by <BY>          [default: all] [possible values: agent, folder, all]
+      --format <FORMAT>  Output format (--json is the same as --format json) [default: text]
+                         [possible values: text, json, csv, markdown]
+      --json             Machine-readable JSON output
+      --color <COLOR>    When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                         auto, always, never]
+      --no-docker        Don't query Docker/Podman/OrbStack/Colima
+  -h, --help             Print help
+```
+
+## holdmap analyzers schedule
+
+```text
+Scheduled scans: whether they're on, what they would run and when
+
+Usage: holdmap analyzers schedule [OPTIONS]
+
+Options:
+      --json           Machine-readable JSON output
+      --color <COLOR>  When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
+                       auto, always, never]
+      --no-docker      Don't query Docker/Podman/OrbStack/Colima
+  -h, --help           Print help
+```
+
 ## holdmap insights
 
 ```text
@@ -956,12 +1057,13 @@ Usage: holdmap insights [OPTIONS] [COMMAND]
 
 Commands:
   review  Mark a finding reviewed; it stays hidden while it is unchanged
-  snooze  Hide a finding for some days
+  snooze  Hide a finding for some days (1 to 90), or until a date
   reopen  Show a reviewed or snoozed finding again
   help    Print this message or the help of the given subcommand(s)
 
 Options:
-      --format <FORMAT>    Output format [default: text] [possible values: text, json, sarif]
+      --format <FORMAT>    Output format [default: text] [possible values: text, json, sarif, csv,
+                           markdown]
       --json               Shorthand for --format json
       --min <MIN>          Only findings at or above this severity [default: info] [possible values:
                            info, low, medium, high, critical]
@@ -989,7 +1091,8 @@ Arguments:
 
 Options:
       --reason <REASON>  Why it is acceptable (kept with the review, at most 200 characters)
-      --format <FORMAT>  Output format [default: text] [possible values: text, json, sarif]
+      --format <FORMAT>  Output format [default: text] [possible values: text, json, sarif, csv,
+                         markdown]
       --json             Shorthand for --format json
       --color <COLOR>    When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
                          auto, always, never]
@@ -1000,7 +1103,7 @@ Options:
 ## holdmap insights snooze
 
 ```text
-Hide a finding for some days
+Hide a finding for some days (1 to 90), or until a date
 
 Usage: holdmap insights snooze [OPTIONS] <FINGERPRINT>
 
@@ -1009,8 +1112,10 @@ Arguments:
 
 Options:
       --days <DAYS>      [default: 7]
+      --until <UNTIL>    Until this local date (YYYY-MM-DD), at most 90 days ahead
       --reason <REASON>  Why it can wait (kept with the snooze, at most 200 characters)
-      --format <FORMAT>  Output format [default: text] [possible values: text, json, sarif]
+      --format <FORMAT>  Output format [default: text] [possible values: text, json, sarif, csv,
+                         markdown]
       --json             Shorthand for --format json
       --color <COLOR>    When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
                          auto, always, never]
@@ -1029,7 +1134,8 @@ Arguments:
   <FINGERPRINT>
 
 Options:
-      --format <FORMAT>  Output format [default: text] [possible values: text, json, sarif]
+      --format <FORMAT>  Output format [default: text] [possible values: text, json, sarif, csv,
+                         markdown]
       --json             Shorthand for --format json
       --color <COLOR>    When to use colours [env: HOLDMAP_COLOR=] [default: auto] [possible values:
                          auto, always, never]
