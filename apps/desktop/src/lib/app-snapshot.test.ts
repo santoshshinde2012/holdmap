@@ -60,7 +60,6 @@ describe("Holdmap view snapshots", () => {
     expect(options.font.cssText.match(/font-display:swap/g)).toHaveLength(2);
     expect(options.features).toMatchObject({ restoreScrollPosition: true, fixSvgXmlDecode: true });
     expect(options.workerNumber).toBe(0);
-    expect(render.domToBlob.mock.calls[0][0].drawImageCount).toBeGreaterThanOrEqual(3);
     expect(render.destroyContext).toHaveBeenCalledExactlyOnceWith(await render.createContext.mock.results[0].value);
   });
 

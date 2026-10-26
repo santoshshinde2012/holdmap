@@ -56,7 +56,6 @@ track which skills changed since you trusted them.
 - The Security view switcher scrolls instead of overflowing at 390 px.
 - **Show in folder** refuses a skill folder that was swapped for a symlink after the scan.
 - A failed analyzer install now reports an error instead of crashing when holdmap has no recipe for it.
-- A PNG snapshot of the holdmap view on macOS could occasionally save its text invisible; it now waits for the font.
 
 Builds are unsigned: macOS builds are ad-hoc signed without Developer-ID signing or notarization, and Windows installers are unsigned (see the README for first-open steps).
 
