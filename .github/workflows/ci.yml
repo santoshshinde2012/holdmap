@@ -333,23 +333,12 @@ jobs:
           python3 scripts/check-native-screen-recording.py
         env:
           HOLDMAP_SNAPSHOT_DEBUG_DIR: ${{ runner.temp }}/snapshot-debug
-      # TEMP (PR #111): repeat the App PNG capture to sample the intermittent blank-title case.
-      - name: App snapshot stress sample (temporary)
-        if: always() && runner.os == 'macOS'
-        continue-on-error: true
-        env:
-          HOLDMAP_SNAPSHOT_DEBUG_DIR: ${{ runner.temp }}/snapshot-debug
-          HOLDMAP_SNAPSHOT_NO_RETRY: "1"
-        run: |
-          for i in 1 2 3 4 5 6 7 8; do
-            echo "::group::sample $i"; python3 scripts/check-screen-recording-runtime.py --app-ui || echo "SAMPLE $i FAILED"; echo "::endgroup::"
-          done
-      # TEMP (PR #111): saved App PNGs + region metadata to diagnose the blank "bundled font" region.
-      - name: App snapshot diagnostics
-        if: always() && runner.os == 'macOS'
+      # The App PNG check is rarely blank in its title text on a whole run; keep the evidence.
+      - name: App snapshot failure diagnostics
+        if: failure() && runner.os == 'macOS'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: app-snapshot-debug-${{ github.run_attempt }}
+          name: app-snapshot-failure-${{ github.run_attempt }}
           path: ${{ runner.temp }}/snapshot-debug/
           if-no-files-found: ignore
           retention-days: 7

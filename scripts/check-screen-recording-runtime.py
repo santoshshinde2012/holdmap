@@ -382,10 +382,10 @@ def run(
                     contrast = (max(sum(pixel[:3]) for pixel in pixels) - min(sum(pixel[:3]) for pixel in pixels)) / 3
                     opaque = sum(pixel[3] == 255 for pixel in pixels) / len(pixels)
                     colorful = sum(max(pixel[:3]) - min(pixel[:3]) > 40 for pixel in pixels) / len(pixels)
-                    if os.environ.get("HOLDMAP_SNAPSHOT_DEBUG_DIR"):
+                    if not (contrast > 25 and opaque > .95) and os.environ.get("HOLDMAP_SNAPSHOT_DEBUG_DIR"):
                         debug = Path(os.environ["HOLDMAP_SNAPSHOT_DEBUG_DIR"])
                         debug.mkdir(parents=True, exist_ok=True)
-                        stamp = f"{int(time.time() * 1000)}-{region['name'].replace(' ', '-')}-{'ok' if contrast > 25 else 'fail'}"
+                        stamp = f"{int(time.time() * 1000)}-{region['name'].replace(' ', '-')}"
                         (debug / f"snapshot-{stamp}.png").write_bytes(payload)
                         (debug / f"snapshot-{stamp}.json").write_text(json.dumps(
                             {"snapshot": snapshot, "failed": region["name"], "contrast": contrast}, indent=2, default=str))
@@ -474,6 +474,6 @@ if __name__ == "__main__":
                 break
             except AssertionError as error:
                 blank = re.search(r"blank|bundled (icon|font)", str(error))
-                if not (args.app_ui and blank) or attempt == 2 or os.environ.get("HOLDMAP_SNAPSHOT_NO_RETRY"):
+                if not (args.app_ui and blank) or attempt == 2:
                     raise
                 print(f"RETRY once: the App PNG came back blank ({error}); capturing again with a fresh window", flush=True)
