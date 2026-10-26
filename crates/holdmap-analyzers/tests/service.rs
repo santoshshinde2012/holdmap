@@ -1031,6 +1031,16 @@ fn a_run_reports_its_steps_and_keeps_a_history_and_the_skill_folder() {
         h.skill_dir
     );
     assert!(h.service.subject_dir(SKILLSPECTOR, "nope").is_err());
+    // A folder swapped for a symlink after the scan is never revealed.
+    #[cfg(unix)]
+    {
+        let moved = h.skill_dir.with_extension("moved");
+        std::fs::rename(&h.skill_dir, &moved).unwrap();
+        std::os::unix::fs::symlink(&moved, &h.skill_dir).unwrap();
+        assert!(h.service.subject_dir(SKILLSPECTOR, &subject.id).is_err());
+        std::fs::remove_file(&h.skill_dir).unwrap();
+        std::fs::rename(&moved, &h.skill_dir).unwrap();
+    }
     h.service.run(SKILLSPECTOR, &r).unwrap();
     let history = h.service.history(SKILLSPECTOR).unwrap();
     assert_eq!(history.len(), 2);

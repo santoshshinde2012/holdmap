@@ -1119,7 +1119,11 @@ impl AnalyzerService {
             .find(|s| s.id == subject)
             .and_then(|s| s.dir.as_deref())
             .map(std::path::PathBuf::from)
-            .filter(|d| d.is_absolute() && d.is_dir())
+            // A real folder only: a symlink swapped in since the scan is never followed.
+            .filter(|d| {
+                d.is_absolute()
+                    && std::fs::symlink_metadata(d).is_ok_and(|m| m.file_type().is_dir())
+            })
             .ok_or_else(|| ServiceError::Unknown(format!("{subject} has no folder to show")))?;
         Ok(dir)
     }
