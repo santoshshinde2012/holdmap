@@ -1,6 +1,8 @@
 //! Skill trust: deterministic, bounded, link-safe fingerprints; states; names-and-sizes changes.
 
-use holdmap_analyzers::trust::{fingerprint, EntryKind, HashLimits};
+#[cfg(unix)]
+use holdmap_analyzers::trust::EntryKind;
+use holdmap_analyzers::trust::{fingerprint, HashLimits};
 use holdmap_analyzers::{MemoryStore, SkillTrust, TrustState};
 use holdmap_core::agents::AgentsReport;
 use serde_json::json;
