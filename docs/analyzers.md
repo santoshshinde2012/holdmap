@@ -280,6 +280,8 @@ running, so holdmap can't place it; the path is relative to the skill.
 | The analyzer stopped and asks for review | Its program or manifest changed; review and turn it on again |
 | "Stopped agents aren't scanned" | Start the agent, or turn on inventory, then **Rescan** |
 | Scope or folder **Unknown** | The agent isn't running or holdmap couldn't place the skill; the path is still shown |
+| "No pinned packages to check" (OSV) | None of your MCP servers launches an exact npm or PyPI version. This isn't an error. Pin one (`npx pkg@1.2.3`, `uvx pkg==1.2.3`) to have it checked |
+| "No skills to check" | No agent loads a skill folder, so there was nothing to scan. This isn't an error |
 | A run takes too long | **Cancel** in the dock; each run also has a time limit |
 | Exported fewer findings than expected | Exports follow the filter; clear it or tick **Show reviewed** |
 

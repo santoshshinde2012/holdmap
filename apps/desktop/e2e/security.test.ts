@@ -119,20 +119,24 @@ for (const theme of ["light", "dark"] as const) test(`gallery: add an MCP analyz
   await expect(form).toHaveCount(0);
 });
 
-for (const [theme, width] of [["light", 1280], ["dark", 1280], ["light", 390]] as const) test(`OSV with nothing pinned finishes neutrally, not as a failure (${theme}, ${width}px)`, async ({ app }) => {
+const nothingToCheck = [
+  { name: "OSV vulnerability lookup", query: "demoOsvEmpty=1", note: "No pinned packages to check", next: "Pin a version", shot: "osv" },
+  { name: "SkillSpector", query: "demoNoSkills=1", note: "No skills to check", next: "Add a skill folder", shot: "skills" },
+] as const;
+for (const c of nothingToCheck) for (const [theme, width] of [["light", 1280], ["dark", 1280], ["light", 390]] as const) test(`${c.name} with nothing to check finishes neutrally, not as a failure (${theme}, ${width}px)`, async ({ app }) => {
   await app.setViewportSize({ width, height: 900 });
-  await app.goto("/?demoOsvEmpty=1");
+  await app.goto(`/?${c.query}`);
   const ws = await security(app, theme);
   await ws.getByRole("radio", { name: "Analyzers" }).click();
-  await ws.getByRole("button", { name: "Run OSV vulnerability lookup", exact: true }).click();
+  await ws.getByRole("button", { name: `Run ${c.name}`, exact: true }).click();
   await expect(app.locator("[data-status-run]")).toContainText("Scan done", { timeout: 15_000 });
   const dock = app.locator("[data-run-dock]");
   await expect(dock).toContainText("Scan finished");
   await expect(dock).not.toContainText(/errors|failed|Failed/);
-  await expect(dock).toContainText("No pinned packages to check");
+  await expect(dock).toContainText(c.note);
   await expect(dock).toContainText("1 with nothing to check");
-  await expect(ws.locator("[data-card-step]").filter({ hasText: "No pinned packages to check" })).toContainText("Pin a version");
+  await expect(ws.locator("[data-card-step]").filter({ hasText: c.note })).toContainText(c.next);
   await expect(ws).not.toContainText("nothing to analyse");
   await axe(app);
-  if (process.env.HOLDMAP_SHOTS) await app.screenshot({ path: `${process.env.HOLDMAP_SHOTS}/osv-empty-${theme}-${width}.png` });
+  if (process.env.HOLDMAP_SHOTS) await app.screenshot({ path: `${process.env.HOLDMAP_SHOTS}/${c.shot}-empty-${theme}-${width}.png` });
 });

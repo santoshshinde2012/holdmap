@@ -1179,3 +1179,35 @@ fn a_v0110_store_loads_and_keeps_working() {
         .iter()
         .any(|s| s.scope.as_deref() == Some("user")));
 }
+
+#[test]
+fn a_skill_analyzer_with_no_skills_is_a_clean_empty_run_not_a_failure() {
+    let h = harness();
+    let mut v = serde_json::to_value(report(&h.skill_dir)).unwrap();
+    for list in ["agents", "configured"] {
+        if let Some(items) = v.get_mut(list).and_then(|l| l.as_array_mut()) {
+            for a in items {
+                if let Some(caps) = a.get_mut("capabilities").and_then(|c| c.as_object_mut()) {
+                    caps.insert("skills".into(), json!([]));
+                }
+            }
+        }
+    }
+    let r: AgentsReport = serde_json::from_value(v).unwrap();
+    h.service.approve(SKILLSPECTOR).unwrap();
+    let result = h
+        .service
+        .run(SKILLSPECTOR, &r)
+        .expect("no skills is not an error");
+    assert_eq!(result.status, RunStatus::Complete);
+    assert!(result.subjects.is_empty() && result.findings.is_empty());
+    assert!(
+        result.notes[0].starts_with("No skills to check: "),
+        "{:?}",
+        result.notes
+    );
+    assert_eq!(
+        h.service.history(SKILLSPECTOR).unwrap()[0].status,
+        RunStatus::Complete
+    );
+}

@@ -89,23 +89,32 @@ fn lists_tools_with_annotations() {
     }
 }
 
-/// Static scanners read catalog.rs as text, so each tool declares its name, description and
-/// annotations before its input schema (whose field descriptions are not tool descriptions).
+/// Static scanners read catalog.rs as text, so each tool entry there holds only its name,
+/// title, description and all four annotations; field descriptions live in schemas.rs and can't
+/// be mistaken for a tool description.
 #[test]
-fn catalog_source_declares_metadata_before_input_schema() {
+fn catalog_source_has_one_description_and_four_hints_per_tool() {
     // Windows checkouts may convert the source to CRLF line endings.
     let source = include_str!("catalog.rs").replace("\r\n", "\n");
-    let entries: Vec<&str> = source
+    let list = &source[..source.find("\n    ]);").expect("end of the tool list")];
+    let entries: Vec<&str> = list
         .split("\n        {\n            \"name\": ")
         .skip(1)
         .collect();
     assert_eq!(entries.len(), 16);
     for entry in entries {
-        let at = |key: &str| entry.find(key).unwrap_or(usize::MAX);
-        let schema = at("\"inputSchema\"");
-        assert!(schema < usize::MAX, "{entry}");
-        for key in ["\"description\"", "\"annotations\""] {
-            assert!(at(key) < schema, "{key} after inputSchema in {entry}");
+        assert_eq!(entry.matches("\"description\"").count(), 1, "{entry}");
+        assert!(
+            !entry.contains("inputSchema") && !entry.contains("properties"),
+            "{entry}"
+        );
+        for hint in [
+            "readOnlyHint",
+            "destructiveHint",
+            "idempotentHint",
+            "openWorldHint",
+        ] {
+            assert_eq!(entry.matches(hint).count(), 1, "{hint} in {entry}");
         }
     }
 }

@@ -107,9 +107,21 @@ pub fn skill_subjects(report: &AgentsReport) -> AnalyzerInput {
             }
         }
     }
+    let mut skipped = Vec::new();
+    if by_dir.is_empty() {
+        let agents = inventories(report).count();
+        let what = match agents {
+            0 => "no agents were found".to_string(),
+            1 => "1 agent loads no skills".to_string(),
+            n => format!("{n} agents load no skills"),
+        };
+        skipped.push(format!(
+            "No skills to check: {what}. Add a skill folder with a SKILL.md to have it scanned."
+        ));
+    }
     AnalyzerInput {
         subjects: by_dir.into_values().collect(),
-        skipped: Vec::new(),
+        skipped,
     }
 }
 

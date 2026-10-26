@@ -210,6 +210,11 @@ holdmap                         # interactive TUI (Shift+Tab opens Agents)
 Stops over MCP always preview first and need a one-use `confirmation_id`. Protected processes
 are never stopped. See the [MCP guide](https://santoshshinde2012.github.io/holdmap/docs/mcp/).
 
+**Tool annotations.** All 16 tools set `readOnlyHint`, `destructiveHint`, `idempotentHint` and
+`openWorldHint`. Only `stop_port` and `stop_agent_ports` are destructive. See
+[`catalog.rs`](crates/holdmap-mcp/src/catalog.rs) for the hints and
+[`schemas.rs`](crates/holdmap-mcp/src/schemas.rs) for input and output schemas.
+
 **Shell hook.** Add `eval "$(holdmap init zsh)"` to `~/.zshrc` (also `bash`, `fish`, `powershell`)
 and a failed "port in use" command tells you who holds the port.
 

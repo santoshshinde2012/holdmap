@@ -13,6 +13,7 @@ mod needs;
 mod observer;
 mod prompts;
 mod resources;
+mod schemas;
 mod stops;
 mod tools;
 mod trust;

@@ -1344,3 +1344,24 @@ mod real_server {
         }
     }
 }
+
+#[test]
+fn no_skills_is_a_clean_empty_run_with_a_note_not_a_failure() {
+    let empty = holdmap_analyzers::input::skill_subjects(&AgentsReport::default());
+    assert!(empty.subjects.is_empty());
+    assert_eq!(
+        empty.skipped,
+        vec!["No skills to check: no agents were found. Add a skill folder with a SKILL.md to have it scanned.".to_string()]
+    );
+    let log = Arc::new(Mutex::new(Log::default()));
+    let c = fake(&log, schema_tools(), reply);
+    let r = runner(&c);
+    // Even before tools are approved: with nothing to scan, nothing is started.
+    let out = r.run(&manifest(), &empty, &RunContext::default()).unwrap();
+    assert!(out.is_empty());
+    assert_eq!(
+        log.lock().unwrap().calls.len(),
+        0,
+        "no MCP server is started"
+    );
+}

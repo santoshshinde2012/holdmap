@@ -232,7 +232,8 @@ impl AnalyzerRunner for CliRunner {
             .as_deref()
             .ok_or_else(|| RunError::Unavailable(format!("{} is not installed.", manifest.name)))?;
         if input.subjects.is_empty() {
-            return Err(RunError::NoSubjects("no skills were found".into()));
+            // Nothing to scan is a clean, empty run (the input's note says why), not an error.
+            return Ok(Vec::new());
         }
         let total = input.subjects.len();
         Ok(input
@@ -594,6 +595,22 @@ mod tests {
             "HOME is private"
         );
         assert!(!Path::new(dir).exists(), "staging is removed after the run");
+    }
+
+    #[test]
+    fn no_skills_is_an_empty_run_but_a_missing_binary_is_still_a_failure() {
+        let m = manifest(10);
+        let empty = crate::input::AnalyzerInput::default();
+        let r = CliRunner::new(Box::new(BasicSandbox));
+        let cx = RunContext {
+            binary: Some(std::path::PathBuf::from("/bin/true")),
+            ..RunContext::default()
+        };
+        assert!(r.run(&m, &empty, &cx).unwrap().is_empty());
+        assert!(matches!(
+            r.run(&m, &empty, &RunContext::default()),
+            Err(RunError::Unavailable(_))
+        ));
     }
 
     #[test]

@@ -176,6 +176,16 @@ describe("run progress", () => {
     expect(runSummary(r.progress)).toBe("2 of 2 analyzers finished · 2 findings · 1 with nothing to check");
     expect(runSummary(r.progress)).not.toMatch(/failed/);
   });
+  it("a real failure still reads as a failure next to an empty run", async () => {
+    const r = new SecurityRuns(async (id) => {
+      if (id === "a") throw new Error("SkillSpector is not installed.");
+      return { status: "complete" as const, findings: [], subjects: [], notes: ["No skills to check: 1 agent loads no skills. Add a skill folder with a SKILL.md to have it scanned."] };
+    }, async () => {}, async () => {}, async () => () => {});
+    await r.start(a);
+    expect(r.stepFor("a")!.phase).toBe("failed");
+    expect(stepLabel(r.stepFor("b")!)).toMatch(/^No skills to check/);
+    expect(runSummary(r.progress)).toMatch(/1 with nothing to check · 1 failed/);
+  });
   it("cancel stops the running analyzer and skips the queued ones", async () => {
     const cancelRun = vi.fn(async () => {});
     let reject!: (e: Error) => void;

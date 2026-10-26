@@ -247,7 +247,8 @@ impl AnalyzerRunner for McpRunner {
         cx: &RunContext,
     ) -> Result<Vec<RawOutput>, RunError> {
         if input.subjects.is_empty() {
-            return Err(RunError::NoSubjects("no skills were found".into()));
+            // Nothing to scan is a clean, empty run (the input's note says why), not an error.
+            return Ok(Vec::new());
         }
         let Some(pin) = cx.tools_sha256.as_deref() else {
             return Err(RunError::NotApproved(format!(

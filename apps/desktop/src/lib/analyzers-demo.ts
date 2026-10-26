@@ -99,6 +99,15 @@ function osvResult(report: AgentsReport): AnalyzerResult {
 
 /** `?demoOsvEmpty=1` turns OSV on with nothing pinned (Playwright uses it for the "nothing to check" state). */
 const demoOsvEmpty = new URLSearchParams(globalThis.location?.search ?? "").get("demoOsvEmpty") === "1";
+/** `?demoNoSkills=1` runs SkillSpector as if no agent loads a skill (the "nothing to check" state). */
+const demoNoSkills = new URLSearchParams(globalThis.location?.search ?? "").get("demoNoSkills") === "1";
+
+/** Mirrors the app's note when a skill analyzer has no skills to scan. */
+function noSkillsNote(report: AgentsReport): string {
+  const n = inventories(report).length;
+  const what = n === 0 ? "no agents were found" : n === 1 ? "1 agent loads no skills" : `${n} agents load no skills`;
+  return `No skills to check: ${what}. Add a skill folder with a SKILL.md to have it scanned.`;
+}
 
 function osvPackages(report: AgentsReport) {
   const out = new Map<string, { ecosystem: string; name: string; version: string; agents: string[] }>();
@@ -279,6 +288,7 @@ export class DemoAnalyzers {
   /** The items a demo run walks through, for its progress updates. */
   runSubjects(id: string, report: AgentsReport): { name: string; agents: string[] }[] {
     if (id === OSV) return osvPackages(report).map((p) => ({ name: `${p.name}@${p.version}`, agents: p.agents }));
+    if (id === SKILLSPECTOR && demoNoSkills) return [];
     if (id === SKILLSPECTOR) return skillspectorResult().subjects.map((s) => ({ name: s.name, agents: s.agents }));
     return this.skills(report).map((s) => ({ name: s.subject.name, agents: s.subject.agents }));
   }
@@ -471,7 +481,9 @@ export class DemoAnalyzers {
     const user = this.user.get(id);
     const result = user
       ? { analyzer: id, analyzer_version: null, run_at_ms: Date.now(), status: "complete" as const, coverage: null, subjects: this.skills(report).map((s) => s.subject), findings: [], details: [], notes: [`Browser demo: ${user.kind === "mcp" ? "no MCP server was started" : "nothing was run"}; this is a sample result.`] }
-      : id === OSV ? osvResult(report) : varied(skillspectorResult(), this.rescans++);
+      : id === OSV ? osvResult(report)
+      : demoNoSkills ? { ...skillspectorResult(), run_at_ms: Date.now(), subjects: [], findings: [], details: [], notes: [noSkillsNote(report)] }
+      : varied(skillspectorResult(), this.rescans++);
     const withChanges = withRunChanges(this.results.get(id), result);
     this.results.set(id, withChanges);
     this.remember(withChanges);

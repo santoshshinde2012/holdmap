@@ -11,6 +11,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 ### Fixed
 
 - OSV vulnerability lookup no longer reports "Failed: nothing to analyse" when no MCP server launches a pinned npm or PyPI package. The run now finishes cleanly with a neutral "No pinned packages to check" note that says how many servers are unpinned and how to pin one; the run dock, status bar, counters and analyzer card agree ("Scan finished", "1 with nothing to check"). Real failures still show as failures.
+- Skill analyzers (SkillSpector, CLI and MCP analyzers) handle "no skills found" the same way: a clean run with a "No skills to check" note instead of "Failed: nothing to analyse". A missing binary or unapproved tools still fail.
+
+### Changed
+
+- The MCP tool catalog (`crates/holdmap-mcp/src/catalog.rs`) now holds only each tool's name, title, description and four annotations; input and output schemas moved to `schemas.rs`, so static scanners can't read a field's description as a tool description. The `tools/list` output is unchanged. README and the MCP guide document the annotations.
 
 ## [0.12.0] - 2026-10-26
 
