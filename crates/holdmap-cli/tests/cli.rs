@@ -921,3 +921,56 @@ fn re_adding_an_approved_manifest_keeps_it_approved_and_the_list_says_so() {
             "Each analyzer stays off until you approve it",
         ));
 }
+
+/// Skill trust, risks and the schedule work on an empty store, read nothing they don't need,
+/// and the table formats and snooze limits hold.
+#[test]
+fn trust_risks_schedule_and_table_formats_on_an_empty_store() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = dir.path().join("store");
+    let run = |args: &[&str]| {
+        let mut c = hm();
+        c.env("HOLDMAP_HOME", &store)
+            .env("HOME", dir.path())
+            .args(args);
+        c.assert()
+    };
+    run(&["analyzers", "skills", "--no-scan"])
+        .success()
+        .stdout(predicate::str::contains("No skills found."));
+    run(&["analyzers", "skills", "--no-scan", "--format", "csv"])
+        .success()
+        .stdout(predicate::str::starts_with(
+            "skill,state,agents,folder,files,bytes,sha256",
+        ));
+    run(&["analyzers", "trust", "skill:nope", "--reason", "checked"]).failure();
+    run(&["analyzers", "risks", "--format", "markdown"])
+        .success()
+        .stdout(predicate::str::starts_with("| scope | key | band | points"));
+    run(&["analyzers", "risks"])
+        .success()
+        .stdout(predicate::str::contains("No risks"));
+    run(&["analyzers", "schedule"])
+        .success()
+        .stdout(predicate::str::contains("Scheduled scans  off"))
+        .stdout(predicate::str::contains("Settings → Analyzers"));
+    run(&["analyzers", "schedule", "--json"])
+        .success()
+        .stdout(predicate::str::contains("\"enabled\": false"));
+    run(&["insights", "--format", "csv"])
+        .success()
+        .stdout(predicate::str::starts_with(
+            "analyzer,severity,state,new,rule,title",
+        ))
+        .stdout(predicate::str::contains("snoozed_until,reason"));
+    run(&["insights", "--format", "markdown"])
+        .success()
+        .stdout(predicate::str::starts_with("| analyzer | severity |"));
+    run(&["insights", "snooze", "abc", "--days", "91"]).failure();
+    run(&["insights", "snooze", "abc", "--until", "someday"])
+        .failure()
+        .stderr(predicate::str::contains("is not a date"));
+    run(&["insights", "snooze", "abc", "--until", "2020-01-01"])
+        .failure()
+        .stderr(predicate::str::contains("90 days ahead"));
+}

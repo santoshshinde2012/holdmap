@@ -155,6 +155,71 @@ pub fn local_datetime(epoch_secs: u64) -> String {
     format!("{y:04}-{m:02}-{d:02} {:02}:{:02}Z", s / 3600, (s / 60) % 60)
 }
 
+/// The local hour (0–23) of a Unix time (UTC where local time isn't available).
+pub fn local_hour(epoch_secs: u64) -> u8 {
+    local_datetime(epoch_secs)
+        .get(11..13)
+        .and_then(|h| h.parse().ok())
+        .unwrap_or(0)
+}
+
+/// The last millisecond of a `YYYY-MM-DD` date in local time (UTC where local time isn't
+/// available), as Unix epoch ms. `None` for anything that isn't a real date.
+pub fn local_date_end_ms(date: &str) -> Option<u64> {
+    let mut parts = date.trim().splitn(3, '-');
+    let (y, m, d): (i64, i64, i64) = (
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+    );
+    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    let days_in = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    if !(1970..=9999).contains(&y)
+        || !(1..=12).contains(&m)
+        || d < 1
+        || d > days_in[(m - 1) as usize]
+    {
+        return None;
+    }
+    #[cfg(unix)]
+    {
+        // SAFETY: mktime reads and normalizes the zero-initialized `tm` we own.
+        let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+        tm.tm_year = (y - 1900) as libc::c_int;
+        tm.tm_mon = (m - 1) as libc::c_int;
+        tm.tm_mday = d as libc::c_int;
+        tm.tm_hour = 23;
+        tm.tm_min = 59;
+        tm.tm_sec = 59;
+        tm.tm_isdst = -1;
+        let t = unsafe { libc::mktime(&mut tm) };
+        if t >= 0 {
+            return Some(t as u64 * 1000 + 999);
+        }
+    }
+    // Days since the epoch (Howard Hinnant's algorithm), UTC.
+    let (y2, m2) = if m <= 2 { (y - 1, m + 9) } else { (y, m - 3) };
+    let era = y2.div_euclid(400);
+    let yoe = y2 - era * 400;
+    let doy = (153 * m2 + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    Some((days as u64 + 1) * 86_400_000 - 1)
+}
+
 /// `HH:MM:SS` in local time (UTC with a `Z` suffix where local time isn't available).
 pub fn local_hms(epoch_secs: u64) -> String {
     #[cfg(unix)]
@@ -171,4 +236,28 @@ pub fn local_hms(epoch_secs: u64) -> String {
     }
     let s = epoch_secs % 86_400;
     format!("{:02}:{:02}:{:02}Z", s / 3600, (s / 60) % 60, s % 60)
+}
+
+#[cfg(test)]
+mod date_tests {
+    use super::local_date_end_ms;
+
+    #[test]
+    fn parses_real_dates_only() {
+        assert!(local_date_end_ms("2026-12-31").is_some());
+        assert!(local_date_end_ms("2028-02-29").is_some());
+        for bad in [
+            "2026-02-29",
+            "2026-13-01",
+            "2026-1",
+            "soon",
+            "1969-12-31",
+            "2026-00-10",
+        ] {
+            assert_eq!(local_date_end_ms(bad), None, "{bad}");
+        }
+        let a = local_date_end_ms("2026-12-30").unwrap();
+        let b = local_date_end_ms("2026-12-31").unwrap();
+        assert_eq!(b - a, 86_400_000);
+    }
 }

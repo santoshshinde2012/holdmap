@@ -1,4 +1,6 @@
 <script lang="ts">
+  // Names for agents that aren't running or weren't scanned; live data wins.
+  const KNOWN_AGENT_NAMES: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex", cursor: "Cursor", windsurf: "Windsurf" };
   // The Security tab: a summary header, findings (grouped, filterable, expandable inline), the
   // analyzer gallery, and the pipeline graphs. Shaping lives in lib/security-view.ts; runs in
   // lib/security-runs.svelte.ts. Analyzers stay off until approved in their permissions sheet.
@@ -16,6 +18,12 @@
   import RunHistory from "../security/RunHistory.svelte";
   import { securityTab, type SecurityTab } from "../../lib/security-tab.svelte";
   import FindingsPanel from "../security/FindingsPanel.svelte";
+  // Risks and Skills load with their tabs so the Security workspace stays small.
+  const loadRiskPanel = () => import("../security/RiskPanel.svelte");
+  const loadSkillTrustPanel = () => import("../security/SkillTrustPanel.svelte");
+  import { trustStore } from "../../lib/trust-store.svelte";
+  import { scheduler } from "../../lib/schedule-driver.svelte";
+  import { untilLabel } from "../../lib/schedule";
   import { loadAnalyzerGraphs, type AnalyzerGraphs } from "./graph/load-graphs";
   import { insightsStore } from "../../lib/insights-store.svelte";
   import { securityRuns } from "../../lib/security-runs.svelte";
@@ -82,6 +90,11 @@
     filter = { ...filter, severities: has ? filter.severities.filter((x) => x !== s) : [...filter.severities, s] };
     if (tab !== "results") setTab("findings");
   }
+  $effect(() => { if (!trustStore.report) void trustStore.load(); });
+  /** Product id → display name, from every agent holdmap knows about. */
+  const agentNames = $derived(new Map([...Object.entries(KNOWN_AGENT_NAMES), ...(report?.agents ?? []).map((a) => [a.product, a.name] as const), ...agents.map((a) => [a.product, a.name] as const)]));
+  const trustAlerts = $derived(trustStore.alerting.length);
+  const nextScan = $derived(scheduler.driver?.enabled ? scheduler.driver.nextMs : null);
   function showPipeline(id: string) { securityTab.pipeline = id; setTab("graph"); }
 </script>
 
@@ -89,7 +102,7 @@
   <header class="head">
     <h2><Icon name="shield" size={16} />Security</h2>
     <div class="tools">
-      <SegmentedControl bind:value={() => tab, setTab} label="Security view" options={[{ value: "findings", label: "Findings", count: summary.open || null, countLabel: `${summary.open} open` }, { value: "results", label: "Results", icon: "list" }, { value: "analyzers", label: "Analyzers", icon: "shield" }, { value: "graph", label: "Pipeline", icon: "branch" }]} />
+      <div class="tabs"><SegmentedControl bind:value={() => tab, setTab} label="Security view" options={[{ value: "findings", label: "Findings", count: summary.open || null, countLabel: `${summary.open} open` }, { value: "results", label: "Results", icon: "list" }, { value: "risks", label: "Risks", icon: "activity" }, { value: "skills", label: "Skills", icon: "hash", count: trustAlerts || null, countLabel: `${trustAlerts} need a look` }, { value: "analyzers", label: "Analyzers", icon: "shield" }, { value: "graph", label: "Pipeline", icon: "branch" }]} /></div>
       {#if tab === "findings" || tab === "results"}
         <ExportActions label="Export findings" disabled={!insightsStore.insights} copy={() => securitySummaryText(exportable, summary, Date.now())}
           files={[
@@ -100,6 +113,7 @@
           ]} />
       {/if}
       <Button size="sm" variant="primary" icon="refresh" disabled={!approved.length} loading={securityRuns.busy} onclick={() => securityRuns.start(approved)} title={approved.length ? undefined : "Turn on an analyzer first"}>Rescan</Button>
+      {#if nextScan}<span class="next" title="Scheduled scans run only while holdmap is open">Next scan {untilLabel(nextScan, Date.now())}</span>{/if}
       {#if onsettings}<IconButton icon="sliders" label="Analyzer settings" size="sm" onclick={onsettings} />{/if}
     </div>
   </header>
@@ -111,12 +125,20 @@
     <p class="note"><Icon name="info" size={12} />Stopped agents aren't scanned.{#if oninventory}<button type="button" class="link" onclick={oninventory}>Turn on inventory</button>{/if}</p>
   {/if}
 
+  {#if trustAlerts && tab !== "skills"}
+    <p class="note alert" role="status"><Icon name="alert" size={12} />{trustAlerts} skill{trustAlerts === 1 ? "" : "s"} changed or not trusted yet.<button type="button" class="link" onclick={() => setTab("skills")}>Review skills</button></p>
+  {/if}
+
   {#if tab === "analyzers"}
     <AnalyzerGallery {onsettings} onpipeline={showPipeline} />
   {:else if tab === "results"}
     <p class="note" data-export-scope><Icon name="info" size={12} />Exports carry {included.replace("Only what's on screen: ", "only what's on screen — ")} ({exportable.length}).</p>
     <FindingsPanel {agents} bind:filter view="table" onsetup={() => setTab("analyzers")} />
     <RunHistory analyzers={insightsStore.analyzers} version={securityRuns.finishedAt ?? 0} />
+  {:else if tab === "risks"}
+    {#await loadRiskPanel()}<p class="sub" role="status">Loading…</p>{:then { default: RiskPanel }}<RiskPanel {agentNames} />{:catch}<p class="sub" role="alert">Couldn't load top risks. Reopen this tab to try again.</p>{/await}
+  {:else if tab === "skills"}
+    {#await loadSkillTrustPanel()}<p class="sub" role="status">Loading…</p>{:then { default: SkillTrustPanel }}<SkillTrustPanel {agentNames} />{:catch}<p class="sub" role="alert">Couldn't load skill trust. Reopen this tab to try again.</p>{/await}
   {:else if tab === "graph"}
     <div class="graphs">
       {#if !graphs}
@@ -136,10 +158,15 @@
 </section>
 
 <style>
-  .ws { --scroll-pad-bottom: 20px; display: grid; grid-auto-rows: max-content; align-content: start; gap: 16px; height: 100%; min-height: 0; padding: 20px 24px; box-sizing: border-box; overflow: auto; max-width: 1280px; margin: 0 auto; width: 100%; }
+  .ws { --scroll-pad-bottom: 20px; display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; align-content: start; gap: 16px; height: 100%; min-height: 0; padding: 20px 24px; box-sizing: border-box; overflow: auto; max-width: 1280px; margin: 0 auto; width: 100%; }
   .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
   h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-title); font-weight: var(--fw-semibold); }
-  .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  /* Six views don't fit a phone width: the tab strip scrolls sideways instead of overflowing. */
+  .tabs { max-width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 1px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .next { color: var(--muted); font-size: var(--fs-caption); white-space: nowrap; }
+  .note.alert { color: var(--text); }
   .note { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: var(--fs-caption); }
   .link { border: 0; background: none; padding: 0 2px; min-height: 24px; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .graphs { display: grid; align-content: start; gap: 10px; min-width: 0; }

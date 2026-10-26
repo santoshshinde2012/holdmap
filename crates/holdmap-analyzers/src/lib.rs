@@ -26,24 +26,30 @@ pub mod osv;
 pub mod parse;
 pub mod presets;
 pub mod probe;
+pub mod risk;
 pub mod runner;
 pub mod sandbox;
+pub mod schedule;
 pub mod secrets;
 pub mod service;
 pub mod store;
+pub mod trust;
 
 pub use consent::{
     ConsentStore, Grant, MemoryStore, ResultStore, Review, ReviewStore, SecretIndex,
 };
 pub use finding::{
-    AnalyzerResult, Detail, Finding, FindingState, Location, RunStatus, Severity, Subject,
-    SubjectKind,
+    AnalyzerResult, Detail, Finding, FindingState, FixedFinding, Location, RunChanges, RunStatus,
+    Severity, Subject, SubjectKind,
 };
 pub use input::{AnalyzerInput, InputProjector, InventoryProjector, PackageCoord};
 pub use manifest::{AnalyzerManifest, ManifestError};
 pub use parse::OutputParser;
+pub use risk::{RiskBand, RiskEntry, RiskScope};
 pub use runner::{AnalyzerRunner, BasicSandbox, Containment, Sandbox, SandboxLevel};
+pub use schedule::{Due, PowerSource, Schedule, SchedulePlan, ScheduleRequest, ScheduleStore};
 pub use service::{
     AnalyzerService, AnalyzerState, AnalyzerView, Insights, Preview, SeverityCounts, Stores,
 };
 pub use store::FileStore;
+pub use trust::{ChangeSummary, SkillTrust, SkillTrustView, TrustReport, TrustState, TrustStore};

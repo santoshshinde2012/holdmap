@@ -15,6 +15,7 @@ mod prompts;
 mod resources;
 mod stops;
 mod tools;
+mod trust;
 mod validation;
 
 #[cfg(test)]

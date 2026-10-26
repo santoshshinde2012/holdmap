@@ -254,6 +254,16 @@ describe("exports carry only what's shown", () => {
     expect(m.split("\n").filter((l) => l.startsWith("| ") && !l.startsWith("| Severity") && !l.startsWith("| ---"))).toHaveLength(shown.length);
     expect(securityMarkdown([], summary, 0)).toContain("No findings.");
   });
+  it("carries review reasons and snooze ends in CSV and Markdown", () => {
+    const until = new Date(2026, 11, 31, 23, 59).getTime();
+    const snoozed = { ...shown[0], finding: { ...shown[0].finding, state: "snoozed" as const, note: "Vendor | fix due", until_ms: until } };
+    const m = securityMarkdown([snoozed], summary, 0);
+    expect(m).toContain("| State | Reason |");
+    expect(m).toContain("snoozed until 2026-12-31 | Vendor \\| fix due |");
+    const row = securityCsv([snoozed]).split("\r\n")[1];
+    expect(row).toContain(",snoozed,2026-12-31,");
+    expect(row.endsWith(",Vendor | fix due")).toBe(true);
+  });
 });
 
 describe("agent names", () => {

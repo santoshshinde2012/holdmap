@@ -11,6 +11,11 @@
   import CatalogUpdate from "./CatalogUpdate.svelte";
   import AddAnalyzer from "./AddAnalyzer.svelte";
   import McpTools from "./McpTools.svelte";
+  // Scheduled scans load with Settings → Analyzers, not with the first screen.
+  // A plain $state loader, not {#await}: an await block would pull Svelte's transition runtime into the first screen.
+  let ScheduledScans = $state<typeof import("./ScheduledScans.svelte").default | null>(null);
+  let scheduledError = $state(false);
+  $effect(() => { import("./ScheduledScans.svelte").then((m) => { ScheduledScans = m.default; }, () => { scheduledError = true; }); });
   import { loadAnalyzerGraphs, type AnalyzerGraphs } from "./graph/load-graphs";
   import * as api from "../../lib/api";
   import { SANDBOX_LABEL, STATE_LABEL, ago, countsText, total, type AnalyzerView, type Preview } from "../../lib/analyzers";
@@ -130,6 +135,7 @@
   </ul>
   <AddAnalyzer {demo} onadded={() => insightsStore.refresh()} />
   <CatalogUpdate onchange={() => insightsStore.refresh()} />
+  {#if ScheduledScans}<ScheduledScans />{:else if scheduledError}<p class="sub" role="alert">Couldn't load scheduled scans. Reopen Settings to try again.</p>{/if}
   <p class="foot">holdmap never starts MCP servers on its own: an MCP analyzer you add starts its server only when you run it. Runs get a copy of each folder, a cleared environment and a time limit. Only short findings are kept.</p>
 {/if}
 

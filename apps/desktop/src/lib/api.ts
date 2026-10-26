@@ -7,6 +7,11 @@ import type { ShutdownPreview } from "./power";
 import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
 import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, ConfiguredServer, FindingState, Insights, McpDraft, RunEvent, RunRecord, OutputMapping, Preview, ToolReport, ToolSpec } from "./analyzers";
 import { DemoAnalyzers } from "./analyzers-demo";
+import type { SkillTrustView, TrustReport } from "./trust";
+import type { RiskEntry } from "./risk";
+import type { Due, ScheduleFinished, SchedulePlan, ScheduleRequest, ScheduleStatus } from "./schedule";
+import { clampSnooze } from "./snooze";
+import type { DemoTrust } from "./trust-demo";
 import type { PresetView } from "./analyzer-presets";
 import type { InstallEvent, InstallPlan, InstallRecord } from "./analyzer-install";
 import { attention, type AttentionItem } from "./home";
@@ -490,6 +495,11 @@ function mockUsage(e: PortEntry): PortEntry {
 
 // Opt-in analyzers. The desktop runs them; the browser demo simulates approval and runs.
 const demoAnalyzers = new DemoAnalyzers(emptyDemo());
+let demoTrust: DemoTrust | null = null;
+async function demoTrustStore(): Promise<DemoTrust> {
+  if (!demoTrust) { const { DemoTrust } = await import("./trust-demo"); demoTrust = new DemoTrust(emptyDemo()); }
+  return demoTrust;
+}
 
 export async function analyzers(): Promise<AnalyzerView[]> {
   if (isTauri) return call("analyzers_list");
@@ -738,8 +748,58 @@ export async function deleteAnalyzerSecret(id: string, name: string): Promise<bo
   return false;
 }
 
-export async function reviewFinding(fingerprint: string, state: FindingState, days?: number): Promise<void> {
-  if (isTauri) return call("review_finding", { fingerprint, state, days: days ?? null });
+/** Snooze for `days` or until `untilMs` (the backend clamps snoozes to 1 hour – 90 days). */
+export interface SnoozeFor { days?: number; untilMs?: number }
+
+export async function reviewFinding(fingerprint: string, state: FindingState, snooze?: SnoozeFor | number, reason?: string): Promise<void> {
+  const note = reason?.trim() ? reason.trim().slice(0, 200) : null;
+  const s: SnoozeFor = typeof snooze === "number" ? { days: snooze } : snooze ?? {};
+  if (isTauri) return call("review_finding", { fingerprint, state, days: s.days ?? null, untilMs: s.untilMs ?? null, reason: note });
   if (liveReads()) liveWrites();
-  demoAnalyzers.review(fingerprint, state);
+  const until = state === "snoozed" ? clampSnooze(s.untilMs ?? Date.now() + (s.days ?? 7) * 86_400_000, Date.now()) : null;
+  demoAnalyzers.review(fingerprint, state, note, until);
+}
+
+// ---- Skill trust, risk and scheduled scans (Rust: holdmap_analyzers::{trust, risk, schedule}).
+
+export async function skillTrust(): Promise<TrustReport> {
+  if (isTauri) return call("skill_trust");
+  return (await demoTrustStore()).report();
+}
+/** Fingerprint skill folders now (hashes, names and sizes; never contents). */
+export async function scanSkillTrust(): Promise<TrustReport> {
+  if (isTauri) return call("skill_trust_scan");
+  return (await demoTrustStore()).scan();
+}
+export async function setSkillTrust(id: string, trusted: boolean, reason?: string): Promise<SkillTrustView> {
+  const note = reason?.trim() ? reason.trim().slice(0, 200) : null;
+  if (isTauri) return call("skill_trust_set", { id, trusted, reason: note });
+  if (liveReads()) liveWrites();
+  return (await demoTrustStore()).set(id, trusted, note);
+}
+export async function risks(): Promise<RiskEntry[]> {
+  if (isTauri) return call("risks");
+  const { risks: mirror } = await import("./risk");
+  return mirror((await insights()).results, await skillTrust());
+}
+export async function scheduleStatus(): Promise<ScheduleStatus> {
+  if (isTauri) return call("schedule_status");
+  return (await demoTrustStore()).scheduleStatus(await analyzers());
+}
+export async function schedulePlan(everyHours: number, mcpOptIn: string[], skipOnBattery: boolean): Promise<SchedulePlan> {
+  if (isTauri) return call("schedule_plan", { everyHours, mcpOptIn, skipOnBattery });
+  return (await demoTrustStore()).plan(await analyzers(), everyHours, mcpOptIn, skipOnBattery);
+}
+export async function setSchedule(request: ScheduleRequest): Promise<ScheduleStatus> {
+  if (isTauri) return call("schedule_set", { request });
+  if (liveReads()) liveWrites();
+  return (await demoTrustStore()).setSchedule(await analyzers(), request);
+}
+export async function scheduleDue(): Promise<Due> {
+  if (isTauri) return call("schedule_due");
+  return (await demoTrustStore()).due(await analyzers());
+}
+export async function scheduleFinished(startedMs: number): Promise<ScheduleFinished> {
+  if (isTauri) return call("schedule_finished", { startedMs });
+  return (await demoTrustStore()).finished(startedMs);
 }

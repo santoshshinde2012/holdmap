@@ -152,6 +152,88 @@ pub struct Finding {
     /// Review state.
     #[serde(default)]
     pub state: FindingState,
+    /// The user's reason for a review or snooze, at most [`MAX_NOTE`] characters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// For snoozed findings: when it reopens (Unix epoch ms).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub until_ms: Option<u64>,
+    /// New since the analyzer's previous run (always false on a first run).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub new: bool,
+}
+
+/// Longest review reason, in characters.
+pub const MAX_NOTE: usize = 200;
+/// Fixed findings listed per run; the rest are counted.
+pub const MAX_FIXED_LISTED: usize = 50;
+
+/// A finding the previous run reported that this run no longer does.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FixedFinding {
+    /// Its fingerprint.
+    pub fingerprint: String,
+    /// How serious it was.
+    pub severity: Severity,
+    /// Its title.
+    pub title: String,
+    /// The subject's id.
+    pub subject: String,
+}
+
+/// What changed since the analyzer's previous run. `None` on a first run.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunChanges {
+    /// How many findings are new (each is marked [`Finding::new`]).
+    pub new_total: usize,
+    /// Findings the previous run reported and this one doesn't, most severe first (at most
+    /// [`MAX_FIXED_LISTED`]).
+    pub fixed: Vec<FixedFinding>,
+    /// How many findings are gone.
+    pub fixed_total: usize,
+    /// When the previous run finished (Unix epoch ms).
+    pub since_ms: u64,
+}
+
+impl RunChanges {
+    /// Compare `current` with the analyzer's `previous` result and mark each new finding.
+    pub fn between(previous: &AnalyzerResult, current: &mut [Finding]) -> Self {
+        use std::collections::HashSet;
+        let before: HashSet<&str> = previous
+            .findings
+            .iter()
+            .map(|f| f.fingerprint.as_str())
+            .collect();
+        let mut gone: Vec<&Finding> = {
+            let now: HashSet<&str> = current.iter().map(|f| f.fingerprint.as_str()).collect();
+            previous
+                .findings
+                .iter()
+                .filter(|f| !now.contains(f.fingerprint.as_str()))
+                .collect()
+        };
+        let mut new_total = 0;
+        for f in current.iter_mut() {
+            f.new = !before.contains(f.fingerprint.as_str());
+            new_total += usize::from(f.new);
+        }
+        gone.sort_by_key(|f| std::cmp::Reverse(f.severity));
+        Self {
+            new_total,
+            fixed_total: gone.len(),
+            fixed: gone
+                .into_iter()
+                .take(MAX_FIXED_LISTED)
+                .map(|f| FixedFinding {
+                    fingerprint: f.fingerprint.clone(),
+                    severity: f.severity,
+                    title: f.title.clone(),
+                    subject: f.subject.clone(),
+                })
+                .collect(),
+            since_ms: previous.run_at_ms,
+        }
+    }
 }
 
 /// A labelled fact about a subject (a risk score, a recommendation).
@@ -209,6 +291,9 @@ pub struct AnalyzerResult {
     /// MCP analyzers: calls per tool.
     #[serde(default)]
     pub tool_calls: Vec<ToolCalls>,
+    /// New and fixed findings since the previous run; `None` on a first run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changes: Option<RunChanges>,
 }
 
 /// Runs kept in an analyzer's history.
@@ -232,6 +317,12 @@ pub struct RunRecord {
     pub counts: BTreeMap<Severity, usize>,
     /// How long it took.
     pub duration_ms: Option<u64>,
+    /// Findings new since the previous run (`None`: first run or recorded before 0.12).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new: Option<usize>,
+    /// Findings gone since the previous run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fixed: Option<usize>,
 }
 
 impl RunRecord {
@@ -249,6 +340,8 @@ impl RunRecord {
             subjects: result.subjects.len(),
             counts,
             duration_ms: result.duration_ms,
+            new: result.changes.as_ref().map(|c| c.new_total),
+            fixed: result.changes.as_ref().map(|c| c.fixed_total),
         }
     }
 }
@@ -437,5 +530,90 @@ mod tests {
     fn ids_drop_anything_unexpected() {
         assert_eq!(clean_id("SC4 <b>osv</b>"), "SC4bosv/b");
         assert_eq!(clean_id(&"r".repeat(200)).chars().count(), MAX_ID);
+    }
+}
+
+#[cfg(test)]
+mod change_tests {
+    use super::*;
+
+    fn f(fp: &str, severity: Severity) -> Finding {
+        Finding {
+            fingerprint: fp.into(),
+            analyzer: "a.b".into(),
+            rule_id: "r".into(),
+            category: None,
+            severity,
+            title: format!("t {fp}"),
+            subject: "s".into(),
+            location: Location::default(),
+            fix: None,
+            refs: vec![],
+            state: FindingState::Open,
+            note: None,
+            until_ms: None,
+            new: false,
+        }
+    }
+
+    fn result(findings: Vec<Finding>) -> AnalyzerResult {
+        AnalyzerResult {
+            analyzer: "a.b".into(),
+            analyzer_version: None,
+            run_at_ms: 7,
+            status: RunStatus::Complete,
+            coverage: None,
+            subjects: vec![],
+            findings,
+            details: vec![],
+            notes: vec![],
+            input_signature: None,
+            duration_ms: None,
+            tool_calls: vec![],
+            changes: None,
+        }
+    }
+
+    #[test]
+    fn new_and_fixed_are_found_by_fingerprint_most_severe_fixed_first() {
+        let before = result(vec![
+            f("kept", Severity::Low),
+            f("gone-low", Severity::Low),
+            f("gone-high", Severity::High),
+        ]);
+        let mut now = vec![f("kept", Severity::Low), f("fresh", Severity::Medium)];
+        let c = RunChanges::between(&before, &mut now);
+        assert!(!now[0].new && now[1].new);
+        assert_eq!((c.new_total, c.fixed_total, c.since_ms), (1, 2, 7));
+        assert_eq!(c.fixed[0].fingerprint, "gone-high");
+    }
+
+    #[test]
+    fn the_fixed_list_is_capped_but_totals_are_exact() {
+        let before = result(
+            (0..MAX_FIXED_LISTED + 5)
+                .map(|i| f(&format!("o{i}"), Severity::Low))
+                .collect(),
+        );
+        let mut now: Vec<Finding> = (0..5_003)
+            .map(|i| f(&format!("n{i}"), Severity::Low))
+            .collect();
+        let c = RunChanges::between(&before, &mut now);
+        assert_eq!(c.new_total, 5_003);
+        assert!(
+            now.iter().all(|f| f.new),
+            "every new finding is marked, however many"
+        );
+        assert_eq!(
+            (c.fixed.len(), c.fixed_total),
+            (MAX_FIXED_LISTED, MAX_FIXED_LISTED + 5)
+        );
+    }
+
+    #[test]
+    fn records_written_before_changes_existed_still_load() {
+        let old = r#"{"analyzer":"a.b","run_at_ms":1,"analyzer_version":null,"status":"complete","subjects":0,"counts":{},"duration_ms":null}"#;
+        let r: RunRecord = serde_json::from_str(old).unwrap();
+        assert_eq!((r.new, r.fixed), (None, None));
     }
 }

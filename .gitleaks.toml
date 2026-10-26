@@ -11,3 +11,10 @@ condition = "AND"
 paths = ['''(^|/)vendor/global-hotkey/src/hotkey\.rs$''']
 regexTarget = "match"
 regexes = ['''^key, `shift\+alt\+KeyQ`$''']
+
+[[rules.allowlists]]
+description = "made-up key in a test that proves trust reasons are redacted before storage"
+condition = "AND"
+paths = ['''(^|/)crates/holdmap-analyzers/tests/trust\.rs$''']
+regexTarget = "match"
+regexes = ['''^API_KEY=sk-live-abcdefghijklmnop12345 $''']

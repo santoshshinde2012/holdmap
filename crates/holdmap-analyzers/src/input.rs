@@ -60,7 +60,7 @@ pub struct InventoryProjector;
 impl InputProjector for InventoryProjector {
     fn project(&self, report: &AgentsReport, manifest: &AnalyzerManifest) -> AnalyzerInput {
         match manifest.runner.per_subject {
-            PerSubject::Skill => skills(report),
+            PerSubject::Skill => skill_subjects(report),
             PerSubject::Packages => packages(report),
         }
     }
@@ -82,7 +82,8 @@ pub(crate) fn inventories(
         )
 }
 
-fn skills(report: &AgentsReport) -> AnalyzerInput {
+/// Every skill folder in the report once, with the agents that load it.
+pub fn skill_subjects(report: &AgentsReport) -> AnalyzerInput {
     let mut by_dir: BTreeMap<PathBuf, InputSubject> = BTreeMap::new();
     for (product, capabilities) in inventories(report) {
         for skill in &capabilities.skills {

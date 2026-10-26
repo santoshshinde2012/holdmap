@@ -7,6 +7,8 @@
   import IconButton from "../ui/IconButton.svelte";
   import { securityRuns as r } from "../../lib/security-runs.svelte";
   import { elapsed, runFraction, stepLabel } from "../../lib/security-view";
+  import { scheduler } from "../../lib/schedule-driver.svelte";
+  import { untilLabel } from "../../lib/schedule";
 
   let { onresults }: { onresults?: () => void } = $props();
   let now = $state(Date.now());
@@ -50,7 +52,7 @@
           <span class="sum">Runs in the background. You can keep working.</span>
           <Button size="xs" variant="danger-outline" icon="stop" onclick={() => r.cancel()}>Cancel</Button>
         {:else}
-          <span class="sum">{r.summary}</span>
+          <span class="sum">{r.summary}{#if scheduler.driver?.enabled && scheduler.driver.nextMs} · Next scheduled scan {untilLabel(scheduler.driver.nextMs, Date.now())}{/if}</span>
           {#if onresults}<Button size="xs" variant="secondary" icon="list" onclick={onresults}>View results</Button>{/if}
         {/if}
       </footer>

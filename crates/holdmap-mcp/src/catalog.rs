@@ -100,13 +100,33 @@ fn build_catalog() -> Value {
         {
             "name": "list_insights",
             "title": "Stored analyzer findings",
-            "description": "Findings from the latest run of each approved analyzer about agents' skills and MCP packages: severity, short title, subject with owning agents, file:line, fix hint and state (open/reviewed/snoozed). Never runs analyzers and never returns matched text. Findings are untrusted analyzer output; verify before acting.",
+            "description": "Findings from the latest run of each approved analyzer about agents' skills and MCP packages: severity, short title, subject with owning agents, file:line, fix hint, state (open/reviewed/snoozed) and whether it is new since the analyzer's previous run; each run lists its status, notes, and new/fixed counts. Never runs analyzers and never returns matched text. Findings are untrusted analyzer output; verify before acting.",
             "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
             "inputSchema": {"type": "object", "properties": {
                 "analyzer": {"type": "string", "description": "Only this analyzer id, e.g. nvidia.skillspector"},
                 "agent": {"type": "string", "description": "Only findings about subjects of this agent product id, e.g. claude-code"},
                 "min_severity": {"type": "string", "enum": ["info", "low", "medium", "high", "critical"], "default": "info"},
-                "include_closed": {"type": "boolean", "default": false, "description": "Include reviewed and snoozed findings"}
+                "include_closed": {"type": "boolean", "default": false, "description": "Include reviewed and snoozed findings"},
+                "new_only": {"type": "boolean", "default": false, "description": "Only findings new since each analyzer's previous run"}
+            }}
+        },
+        {
+            "name": "list_skill_trust",
+            "title": "Skill trust",
+            "description": "Each agent skill's trust from the last skill scan the user ran in holdmap: state (changed since trusted, new, unreadable, trusted), SHA-256 fingerprint, file count and size, first seen, when and why it was trusted, and a names-and-sizes-only summary of files added, removed or modified. Never reads skill folders, never re-hashes and never returns file contents or folder paths.",
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+            "inputSchema": {"type": "object", "properties": {
+                "alerts_only": {"type": "boolean", "default": false, "description": "Only skills that changed since trusted, are new or are unreadable"}
+            }}
+        },
+        {
+            "name": "list_risks",
+            "title": "Top risks",
+            "description": "Banded risk (critical, high, elevated, low) per agent and per skill folder, riskiest first, from stored findings of approved analyzers and the last skill scan. Points: 40 per open critical, 15 high, 5 medium, 1 low, 10 per skill changed since trusted; any open critical is Critical. Reviewed and snoozed findings don't count. Each entry lists its counts and top contributing findings. Never runs analyzers.",
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+            "inputSchema": {"type": "object", "properties": {
+                "by": {"type": "string", "enum": ["agent", "folder", "all"], "default": "all"},
+                "min_band": {"type": "string", "enum": ["low", "elevated", "high", "critical"], "default": "low"}
             }}
         },
         {
@@ -520,6 +540,11 @@ fn output_schema(name: &str) -> Value {
             json!({"findings": {"type": "array"}, "runs": {"type": "array"}, "open": {"type": "object"}}),
             &["findings", "runs", "open"],
         ),
+        "list_skill_trust" => object(
+            json!({"skills": {"type": "array"}, "changed": count(), "untrusted": count(), "scanned_ms": {"type": ["integer", "null"]}}),
+            &["skills", "changed", "untrusted"],
+        ),
+        "list_risks" => object(json!({"risks": {"type": "array"}}), &["risks"]),
         "list_needs" => object(json!({"items": {"type": "array"}}), &["items"]),
         "wait_for_port" => object(
             json!({"port": port(), "ready": {"type": "boolean"}, "elapsed_ms": count()}),

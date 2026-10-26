@@ -39,13 +39,16 @@ pub struct Grant {
 }
 
 /// A user's decision about one finding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Review {
     /// Reviewed or snoozed.
     pub state: FindingState,
     /// For snoozes: when it reopens (Unix epoch ms).
     #[serde(default)]
     pub until_ms: Option<u64>,
+    /// Why, in the user's words (capped and secret-masked).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 impl Review {
@@ -160,6 +163,31 @@ pub struct MemoryStore {
     manifests: Mutex<BTreeMap<String, String>>,
     tools: Mutex<BTreeMap<(String, ToolSlot), crate::mcp_tools::ToolSnapshot>>,
     history: Mutex<BTreeMap<String, Vec<RunRecord>>>,
+    trust: Mutex<BTreeMap<String, crate::trust::TrustRecord>>,
+    schedule: Mutex<Option<crate::schedule::Schedule>>,
+}
+
+impl crate::schedule::ScheduleStore for MemoryStore {
+    fn schedule(&self) -> crate::schedule::Schedule {
+        self.schedule.lock().unwrap().clone().unwrap_or_default()
+    }
+    fn set_schedule(&self, schedule: &crate::schedule::Schedule) -> io::Result<()> {
+        *self.schedule.lock().unwrap() = Some(schedule.clone());
+        Ok(())
+    }
+}
+
+impl crate::trust::TrustStore for MemoryStore {
+    fn trust_records(&self) -> BTreeMap<String, crate::trust::TrustRecord> {
+        self.trust.lock().unwrap().clone()
+    }
+    fn set_trust_records(
+        &self,
+        records: &BTreeMap<String, crate::trust::TrustRecord>,
+    ) -> io::Result<()> {
+        *self.trust.lock().unwrap() = records.clone();
+        Ok(())
+    }
 }
 
 impl ToolPinStore for MemoryStore {
@@ -312,12 +340,14 @@ mod tests {
         let r = Review {
             state: FindingState::Snoozed,
             until_ms: Some(100),
+            reason: None,
         };
         assert_eq!(r.effective(99), FindingState::Snoozed);
         assert_eq!(r.effective(100), FindingState::Open);
         let reviewed = Review {
             state: FindingState::Reviewed,
             until_ms: None,
+            reason: None,
         };
         assert_eq!(reviewed.effective(u64::MAX), FindingState::Reviewed);
     }

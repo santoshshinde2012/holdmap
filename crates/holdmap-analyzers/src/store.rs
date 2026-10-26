@@ -1,4 +1,5 @@
-//! On-disk stores under `<holdmap dir>/analyzers/`: `grants.json`, `reviews.json` and
+//! On-disk stores under `<holdmap dir>/analyzers/`: `grants.json`, `reviews.json`,
+//! `trust.json` (skill fingerprints: hashes, names and sizes only), `schedule.json` and
 //! `results/<id>.json`. Files are private to the user (0600, directory 0700) and replaced
 //! atomically. Results contain only normalised, capped findings.
 
@@ -322,6 +323,29 @@ impl ReviewStore for FileStore {
     }
 }
 
+impl crate::schedule::ScheduleStore for FileStore {
+    fn schedule(&self) -> crate::schedule::Schedule {
+        self.read("schedule.json")
+    }
+    fn set_schedule(&self, schedule: &crate::schedule::Schedule) -> io::Result<()> {
+        let _guard = self.lock.lock().unwrap();
+        self.write("schedule.json", schedule)
+    }
+}
+
+impl crate::trust::TrustStore for FileStore {
+    fn trust_records(&self) -> BTreeMap<String, crate::trust::TrustRecord> {
+        self.read("trust.json")
+    }
+    fn set_trust_records(
+        &self,
+        records: &BTreeMap<String, crate::trust::TrustRecord>,
+    ) -> io::Result<()> {
+        let _guard = self.lock.lock().unwrap();
+        self.write("trust.json", records)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,6 +385,7 @@ mod tests {
             duration_ms: None,
 
             tool_calls: Vec::new(),
+            changes: None,
         };
         store.save(&result).unwrap();
         assert_eq!(store.latest("a.b"), Some(result));
@@ -372,6 +397,7 @@ mod tests {
                 Some(Review {
                     state: FindingState::Reviewed,
                     until_ms: None,
+                    reason: None,
                 }),
             )
             .unwrap();
