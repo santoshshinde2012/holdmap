@@ -22,6 +22,7 @@
   {#if loading}<p class="sub" role="status">Loading…</p>
   {:else if !rows.length}<p class="sub">No runs yet.</p>
   {:else}
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex (a scrollable region must be keyboard-reachable) -->
     <div class="scroll" role="region" aria-label="Run history table" tabindex="0"><table data-run-history>
       <thead><tr><th scope="col">When</th><th scope="col">Analyzer</th><th scope="col">Version</th><th scope="col">Result</th><th scope="col">Items</th><th scope="col">Findings</th><th scope="col">Changes</th><th scope="col">Took</th></tr></thead>
       <tbody>
