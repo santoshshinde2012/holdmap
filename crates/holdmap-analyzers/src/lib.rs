@@ -29,6 +29,7 @@ pub mod probe;
 pub mod risk;
 pub mod runner;
 pub mod sandbox;
+pub mod schedule;
 pub mod secrets;
 pub mod service;
 pub mod store;
@@ -46,6 +47,7 @@ pub use manifest::{AnalyzerManifest, ManifestError};
 pub use parse::OutputParser;
 pub use risk::{RiskBand, RiskEntry, RiskScope};
 pub use runner::{AnalyzerRunner, BasicSandbox, Containment, Sandbox, SandboxLevel};
+pub use schedule::{Due, PowerSource, Schedule, SchedulePlan, ScheduleRequest, ScheduleStore};
 pub use service::{
     AnalyzerService, AnalyzerState, AnalyzerView, Insights, Preview, SeverityCounts, Stores,
 };

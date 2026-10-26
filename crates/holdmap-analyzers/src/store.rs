@@ -323,6 +323,16 @@ impl ReviewStore for FileStore {
     }
 }
 
+impl crate::schedule::ScheduleStore for FileStore {
+    fn schedule(&self) -> crate::schedule::Schedule {
+        self.read("schedule.json")
+    }
+    fn set_schedule(&self, schedule: &crate::schedule::Schedule) -> io::Result<()> {
+        let _guard = self.lock.lock().unwrap();
+        self.write("schedule.json", schedule)
+    }
+}
+
 impl crate::trust::TrustStore for FileStore {
     fn trust_records(&self) -> BTreeMap<String, crate::trust::TrustRecord> {
         self.read("trust.json")

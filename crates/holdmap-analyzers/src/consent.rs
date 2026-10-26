@@ -164,6 +164,17 @@ pub struct MemoryStore {
     tools: Mutex<BTreeMap<(String, ToolSlot), crate::mcp_tools::ToolSnapshot>>,
     history: Mutex<BTreeMap<String, Vec<RunRecord>>>,
     trust: Mutex<BTreeMap<String, crate::trust::TrustRecord>>,
+    schedule: Mutex<Option<crate::schedule::Schedule>>,
+}
+
+impl crate::schedule::ScheduleStore for MemoryStore {
+    fn schedule(&self) -> crate::schedule::Schedule {
+        self.schedule.lock().unwrap().clone().unwrap_or_default()
+    }
+    fn set_schedule(&self, schedule: &crate::schedule::Schedule) -> io::Result<()> {
+        *self.schedule.lock().unwrap() = Some(schedule.clone());
+        Ok(())
+    }
 }
 
 impl crate::trust::TrustStore for MemoryStore {
