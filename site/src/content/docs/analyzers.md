@@ -130,7 +130,8 @@ Only approve analyzers you trust.
 
 ## API keys
 
-If an analyzer declares a key, set it with **Set key** or `holdmap analyzers key set`. The key
+If an analyzer declares a key, type it on the analyzer's card and click **Save** next to its name,
+or run `holdmap analyzers key set`. The key
 is stored in the OS keychain and passed only to that analyzer's run, under the declared name.
 It is never shown again, logged or sent anywhere else.
 
