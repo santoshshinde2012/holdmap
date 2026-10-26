@@ -34,6 +34,7 @@ pub mod history;
 pub mod http;
 pub mod memory;
 pub mod model;
+pub mod power;
 pub mod probe;
 pub mod process;
 pub mod project;

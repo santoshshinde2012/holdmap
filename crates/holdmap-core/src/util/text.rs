@@ -155,6 +155,14 @@ pub fn local_datetime(epoch_secs: u64) -> String {
     format!("{y:04}-{m:02}-{d:02} {:02}:{:02}Z", s / 3600, (s / 60) % 60)
 }
 
+/// The local hour (0–23) of a Unix time (UTC where local time isn't available).
+pub fn local_hour(epoch_secs: u64) -> u8 {
+    local_datetime(epoch_secs)
+        .get(11..13)
+        .and_then(|h| h.parse().ok())
+        .unwrap_or(0)
+}
+
 /// The last millisecond of a `YYYY-MM-DD` date in local time (UTC where local time isn't
 /// available), as Unix epoch ms. `None` for anything that isn't a real date.
 pub fn local_date_end_ms(date: &str) -> Option<u64> {

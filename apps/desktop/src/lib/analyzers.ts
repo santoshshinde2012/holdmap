@@ -43,6 +43,8 @@ export interface Finding {
   state: FindingState;
   /** The user's reason for a review or snooze. */
   note?: string | null;
+  /** For snoozed findings: when it reopens (epoch ms). */
+  until_ms?: number | null;
   /** New since the analyzer's previous run (absent or false on a first run). */
   new?: boolean;
 }

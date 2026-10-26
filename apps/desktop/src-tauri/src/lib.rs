@@ -13,6 +13,7 @@
 //! - [`update`]: optional self-update (release builds signed with an update key)
 
 mod activity;
+mod analyzer_trust;
 mod analyzers;
 mod capture_bridge;
 mod capture_file;
@@ -119,6 +120,15 @@ pub fn run() {
             analyzers::insights,
             needs::needs,
             analyzers::review_finding,
+            analyzer_trust::skill_trust,
+            analyzer_trust::skill_trust_scan,
+            analyzer_trust::skill_trust_set,
+            analyzer_trust::risks,
+            analyzer_trust::schedule_status,
+            analyzer_trust::schedule_plan,
+            analyzer_trust::schedule_set,
+            analyzer_trust::schedule_due,
+            analyzer_trust::schedule_finished,
             analyzers::analyzer_secret_set,
             analyzers::analyzer_secret_delete,
             commands::explain,
