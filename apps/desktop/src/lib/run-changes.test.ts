@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runChanges, type AnalyzerResult, type Finding, type RunStatus } from "./analyzers";
+import { withRunChanges, type AnalyzerResult, type Finding, type RunStatus } from "./analyzers";
 import { DemoAnalyzers } from "./analyzers-demo";
 import { applyFilter, changeSummary, emptyFilter, findingItems } from "./security-view";
 
@@ -10,25 +10,27 @@ const run = (status: RunStatus, findings: Finding[], run_at_ms = 1): AnalyzerRes
   analyzer: "a.b", analyzer_version: null, run_at_ms, status, coverage: null, subjects: [], findings, details: [], notes: [],
 });
 
-describe("runChanges (mirrors the Rust rules)", () => {
-  it("finds new and fixed findings by fingerprint, most severe fixed first", () => {
-    const c = runChanges(run("complete", [f("kept"), f("gone"), f("gone-high", "high")], 7), run("complete", [f("kept"), f("fresh")]))!;
-    expect(c).toMatchObject({ new: ["fresh"], new_total: 1, fixed_total: 2, since_ms: 7 });
+describe("withRunChanges (mirrors the Rust rules)", () => {
+  it("marks new findings and lists fixed ones by fingerprint, most severe first", () => {
+    const r = withRunChanges(run("complete", [f("kept"), f("gone"), f("gone-high", "high")], 7), run("complete", [f("kept"), f("fresh")]));
+    const c = r.changes!;
+    expect(r.findings.map((x) => x.new)).toEqual([false, true]);
+    expect(c).toMatchObject({ new_total: 1, fixed_total: 2, since_ms: 7 });
     expect(c.fixed[0].fingerprint).toBe("gone-high");
   });
   it("has nothing to compare on a first run or after a failed run", () => {
-    expect(runChanges(undefined, run("complete", [f("a")]))).toBeNull();
-    expect(runChanges(run("failed", []), run("complete", [f("a")]))).toBeNull();
-    expect(runChanges(run("complete", [f("a")]), run("failed", []))).toBeNull();
+    expect(withRunChanges(undefined, run("complete", [f("a")])).changes).toBeNull();
+    expect(withRunChanges(run("failed", []), run("complete", [f("a")])).changes).toBeNull();
+    expect(withRunChanges(run("complete", [f("a")]), run("failed", [])).changes).toBeNull();
   });
   it("never claims fixes from a partial run", () => {
-    const c = runChanges(run("complete", [f("a"), f("b")]), run("partial", [f("a"), f("c")]))!;
+    const c = withRunChanges(run("complete", [f("a"), f("b")]), run("partial", [f("a"), f("c")])).changes!;
     expect(c).toMatchObject({ new_total: 1, fixed_total: 0, fixed: [] });
   });
 });
 
 describe("new findings in the Security tab", () => {
-  const changed = { results: [{ ...run("complete", [f("x", "high"), f("y")]), changes: { new: ["x"], new_total: 1, fixed: [{ fingerprint: "z", severity: "medium" as const, title: "Old", subject: "s" }], fixed_total: 3, since_ms: 5 } }], open: { critical: 0, high: 1, medium: 0, low: 1, info: 0 } };
+  const changed = { results: [{ ...run("complete", [{ ...f("x", "high"), new: true }, f("y")]), changes: { new_total: 1, fixed: [{ fingerprint: "z", severity: "medium" as const, title: "Old", subject: "s" }], fixed_total: 3, since_ms: 5 } }], open: { critical: 0, high: 1, medium: 0, low: 1, info: 0 } };
   it("marks new findings and filters to them", () => {
     const items = findingItems(changed, []);
     expect(items.find((i) => i.finding.fingerprint === "x")?.isNew).toBe(true);

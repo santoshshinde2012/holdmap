@@ -87,9 +87,10 @@ fn filter(insights: Insights, args: &Value) -> (String, Value) {
             "status": r.status, "coverage": r.coverage, "notes": r.notes,
             "new": changes.map(|c| c.new_total), "fixed": changes.map(|c| c.fixed_total),
         }));
-        let is_new = |fp: &str| changes.is_none_or(|c| c.is_new(fp));
+        // A first run has nothing to compare with: everything in it is new.
+        let is_new = |f: &Finding| changes.is_none() || f.new;
         for f in &r.findings {
-            if new_only && !is_new(&f.fingerprint) {
+            if new_only && !is_new(f) {
                 continue;
             }
             let subject = r.subjects.iter().find(|s| s.id == f.subject);
@@ -99,7 +100,7 @@ fn filter(insights: Insights, args: &Value) -> (String, Value) {
             if f.severity < min || !owned || (!closed && f.state != FindingState::Open) {
                 continue;
             }
-            findings.push((f, subject, is_new(&f.fingerprint)));
+            findings.push((f, subject, is_new(f)));
         }
     }
     findings.sort_by(|a, b| {
@@ -180,6 +181,7 @@ mod tests {
             refs: vec![],
             state: FindingState::Open,
             note: None,
+            new: false,
         }
     }
 
@@ -277,8 +279,10 @@ mod tests {
     #[test]
     fn new_only_keeps_findings_new_since_the_previous_run() {
         let mut insights = service(true).insights();
+        for f in &mut insights.results[0].findings {
+            f.new = f.fingerprint == "high";
+        }
         insights.results[0].changes = Some(holdmap_analyzers::RunChanges {
-            new: vec!["high".into()],
             new_total: 1,
             fixed: vec![],
             fixed_total: 4,

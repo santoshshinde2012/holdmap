@@ -744,7 +744,7 @@ pub fn run_insights(a: &InsightsArgs) -> Result<u8> {
     let failing = a.fail_on.map(Severity::from).is_some_and(|fail| {
         insights.results.iter().any(|r| {
             r.open_at_least(fail)
-                .any(|f| !view.new_only || is_new(r, &f.fingerprint))
+                .any(|f| !view.new_only || is_new(r, f))
         })
     });
     Ok(if failing {
@@ -765,14 +765,14 @@ impl View {
     fn shows(&self, r: &AnalyzerResult, f: &Finding) -> bool {
         f.severity >= self.min
             && (self.all || f.state == FindingState::Open)
-            && (!self.new_only || is_new(r, &f.fingerprint))
+            && (!self.new_only || is_new(r, f))
     }
 }
 
 /// New since the analyzer's previous run. A first run has nothing to compare with, so every
 /// finding counts as new.
-fn is_new(r: &AnalyzerResult, fingerprint: &str) -> bool {
-    r.changes.as_ref().is_none_or(|c| c.is_new(fingerprint))
+fn is_new(r: &AnalyzerResult, f: &Finding) -> bool {
+    r.changes.is_none() || f.new
 }
 
 fn filtered(insights: &Insights, view: &View) -> Insights {
@@ -1046,7 +1046,7 @@ fn render_result(r: &AnalyzerResult, view: &View) -> String {
             (Some(file), None) => format!(" {file}"),
             _ => String::new(),
         };
-        let new = if r.changes.as_ref().is_some_and(|c| c.is_new(&f.fingerprint)) {
+        let new = if f.new {
             format!("{} ", paint("new", S::Yellow))
         } else {
             String::new()
@@ -1163,6 +1163,7 @@ mod tests {
                     refs: vec![],
                     state: FindingState::Open,
                     note: None,
+                    new: false,
                 },
                 Finding {
                     fingerprint: "f2".into(),
@@ -1177,6 +1178,7 @@ mod tests {
                     refs: vec![],
                     state: FindingState::Reviewed,
                     note: None,
+                    new: false,
                 },
             ],
             details: vec![],
@@ -1292,8 +1294,8 @@ mod tests {
     fn new_only_shows_findings_new_since_the_previous_run() {
         let mut r = result();
         let first = r.findings[0].fingerprint.clone();
+        r.findings[0].new = true;
         r.changes = Some(holdmap_analyzers::RunChanges {
-            new: vec![first.clone()],
             new_total: 1,
             fixed: vec![],
             fixed_total: 2,

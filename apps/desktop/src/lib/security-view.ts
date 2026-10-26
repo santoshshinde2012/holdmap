@@ -73,7 +73,6 @@ export function findingItems(insights: Insights | null, analyzers: AnalyzerView[
   const out: FindingItem[] = [];
   for (const r of insights?.results ?? []) {
     const subjects = new Map(r.subjects.map((s) => [s.id, s]));
-    const fresh = new Set(r.changes?.new ?? []);
     for (const f of r.findings) {
       const subject = subjects.get(f.subject) ?? null;
       out.push({
@@ -87,7 +86,7 @@ export function findingItems(insights: Insights | null, analyzers: AnalyzerView[
         folder: subject?.dir ?? null,
         scope: subject?.scope ?? "unknown",
         path: joinPath(subject?.dir ?? null, f.location.file),
-        isNew: fresh.has(f.fingerprint),
+        isNew: !!r.changes && !!f.new,
       });
     }
   }

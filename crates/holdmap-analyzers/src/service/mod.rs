@@ -1081,11 +1081,9 @@ impl AnalyzerService {
         result.input_signature = Some(signature(&input));
         result.duration_ms = Some(duration_ms);
         result.notes.extend(secret_notes);
-        result.changes = self
-            .stores
-            .results
-            .latest(&m.id)
-            .and_then(|previous| changes_since(&previous, &result));
+        if let Some(previous) = self.stores.results.latest(&m.id) {
+            result.changes = changes_since(&previous, &mut result);
+        }
         self.stores.results.save(&result)?;
         self.stores
             .results
@@ -1190,11 +1188,11 @@ impl AnalyzerService {
 
 /// New and fixed findings against the previous run. Nothing is compared when either run
 /// failed, and a partial run never reports fixes: a finding it didn't see may still be there.
-fn changes_since(previous: &AnalyzerResult, current: &AnalyzerResult) -> Option<RunChanges> {
+fn changes_since(previous: &AnalyzerResult, current: &mut AnalyzerResult) -> Option<RunChanges> {
     if previous.status == RunStatus::Failed || current.status == RunStatus::Failed {
         return None;
     }
-    let mut changes = RunChanges::between(previous, &current.findings);
+    let mut changes = RunChanges::between(previous, &mut current.findings);
     if current.status != RunStatus::Complete {
         changes.fixed.clear();
         changes.fixed_total = 0;
@@ -1607,6 +1605,7 @@ fn normalise(m: &AnalyzerManifest, out: &RawOutput, parsed: Parsed) -> (Vec<Find
             refs: clean_refs(p.refs.iter().map(String::as_str)),
             state: FindingState::Open,
             note: None,
+            new: false,
             subject,
             location,
             rule_id,
@@ -1729,12 +1728,20 @@ mod change_tests {
     #[test]
     fn a_partial_run_never_claims_fixes_and_a_failed_one_compares_nothing() {
         let before = run(RunStatus::Complete, &["a", "b"]);
-        let partial = changes_since(&before, &run(RunStatus::Partial, &["a", "c"])).unwrap();
+        let mut partial_run = run(RunStatus::Partial, &["a", "c"]);
+        let partial = changes_since(&before, &mut partial_run).unwrap();
         assert_eq!((partial.new_total, partial.fixed_total), (1, 0));
         assert!(partial.fixed.is_empty());
-        assert_eq!(changes_since(&before, &run(RunStatus::Failed, &[])), None);
-        assert_eq!(changes_since(&run(RunStatus::Failed, &[]), &before), None);
-        let complete = changes_since(&before, &run(RunStatus::Complete, &["a"])).unwrap();
+        assert!(!partial_run.findings[0].new && partial_run.findings[1].new);
+        assert_eq!(
+            changes_since(&before, &mut run(RunStatus::Failed, &[])),
+            None
+        );
+        assert_eq!(
+            changes_since(&run(RunStatus::Failed, &[]), &mut before.clone()),
+            None
+        );
+        let complete = changes_since(&before, &mut run(RunStatus::Complete, &["a"])).unwrap();
         assert_eq!((complete.new_total, complete.fixed_total), (0, 1));
     }
 }

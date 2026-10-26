@@ -43,6 +43,8 @@ export interface Finding {
   state: FindingState;
   /** The user's reason for a review or snooze. */
   note?: string | null;
+  /** New since the analyzer's previous run (absent or false on a first run). */
+  new?: boolean;
 }
 export interface Detail { subject: string; label: string; value: string }
 export interface AnalyzerResult {
@@ -65,7 +67,6 @@ export interface AnalyzerResult {
 }
 /** Mirrors `holdmap_analyzers::RunChanges`. */
 export interface RunChanges {
-  new: string[];
   new_total: number;
   fixed: { fingerprint: string; severity: Severity; title: string; subject: string }[];
   fixed_total: number;
@@ -325,24 +326,23 @@ export function scannersFor(views: AnalyzerView[], kind: "skill" | "mcp"): Analy
 
 const SEVERITY_RANK: Record<Severity, number> = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
 
-/** New and fixed findings between two runs (mirrors `changes_since` in holdmap-analyzers):
- *  nothing is compared when either run failed, and a partial run never reports fixes. */
-export function runChanges(previous: AnalyzerResult | undefined, current: AnalyzerResult): RunChanges | null {
-  if (!previous || previous.status === "failed" || current.status === "failed") return null;
+/** `current` with its new findings marked and what changed since `previous` (mirrors
+ *  `changes_since` in holdmap-analyzers): nothing is compared when either run failed, and a
+ *  partial run never reports fixes. */
+export function withRunChanges(previous: AnalyzerResult | undefined, current: AnalyzerResult): AnalyzerResult {
+  if (!previous || previous.status === "failed" || current.status === "failed") return { ...current, changes: null };
   const before = new Set(previous.findings.map((f) => f.fingerprint));
   const now = new Set(current.findings.map((f) => f.fingerprint));
-  const added = current.findings.filter((f) => !before.has(f.fingerprint)).map((f) => f.fingerprint);
+  const findings = current.findings.map((f) => ({ ...f, new: !before.has(f.fingerprint) }));
   const gone = current.status === "complete"
     ? previous.findings.filter((f) => !now.has(f.fingerprint)).sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])
     : [];
   return {
-    new: added.slice(0, 2000), new_total: added.length,
-    fixed: gone.slice(0, 50).map((f) => ({ fingerprint: f.fingerprint, severity: f.severity, title: f.title, subject: f.subject })),
-    fixed_total: gone.length, since_ms: previous.run_at_ms,
+    ...current, findings,
+    changes: {
+      new_total: findings.filter((f) => f.new).length,
+      fixed: gone.slice(0, 50).map((f) => ({ fingerprint: f.fingerprint, severity: f.severity, title: f.title, subject: f.subject })),
+      fixed_total: gone.length, since_ms: previous.run_at_ms,
+    },
   };
-}
-
-/** Whether a finding is new since its analyzer's previous run (null: no previous run). */
-export function isNewFinding(result: AnalyzerResult, fingerprint: string): boolean | null {
-  return result.changes ? result.changes.new.includes(fingerprint) : null;
 }

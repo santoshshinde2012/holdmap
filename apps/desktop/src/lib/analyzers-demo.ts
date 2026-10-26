@@ -3,7 +3,7 @@
 import type { AnalyzerResult, AnalyzerView, CatalogDiff, CatalogStatus, ConfiguredServer, FindingState, Insights, McpDraft, OutputMapping, Preview, Subject, ToolReport, ToolSpec } from "./analyzers";
 import * as mcp from "./analyzers-demo-mcp";
 import { checkArguments, previewArguments } from "./mcp-mapping";
-import { emptyCounts, runChanges } from "./analyzers";
+import { emptyCounts, withRunChanges } from "./analyzers";
 import { inventories } from "./agent-config";
 import { readManifest, type DemoManifest } from "./analyzer-manifest";
 import { presetSource, presetViews, type PresetView } from "./analyzer-presets";
@@ -438,8 +438,7 @@ export class DemoAnalyzers {
     const d = this.mcp.get(id);
     if (d) {
       if (d.approvedSha !== d.listed?.sha256) throw new Error(`${d.draft.name} changed since you approved it. Review it again.`);
-      const result = mcp.sampleRun(id, d, this.skills(report).map((s) => s.subject));
-      result.changes = runChanges(this.results.get(id), result);
+      const result = withRunChanges(this.results.get(id), mcp.sampleRun(id, d, this.skills(report).map((s) => s.subject)));
       this.results.set(id, result);
       this.remember(result);
       return this.withReviews(result)!;
@@ -448,7 +447,7 @@ export class DemoAnalyzers {
     const result = user
       ? { analyzer: id, analyzer_version: null, run_at_ms: Date.now(), status: "complete" as const, coverage: null, subjects: this.skills(report).map((s) => s.subject), findings: [], details: [], notes: [`Browser demo: ${user.kind === "mcp" ? "no MCP server was started" : "nothing was run"}; this is a sample result.`] }
       : id === OSV ? osvResult(report) : { ...skillspectorResult(), run_at_ms: Date.now() };
-    const withChanges: AnalyzerResult = { ...result, changes: runChanges(this.results.get(id), result) };
+    const withChanges = withRunChanges(this.results.get(id), result);
     this.results.set(id, withChanges);
     this.remember(withChanges);
     return this.withReviews(withChanges)!;

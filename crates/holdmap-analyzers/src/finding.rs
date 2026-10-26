@@ -155,12 +155,13 @@ pub struct Finding {
     /// The user's reason for a review or snooze, at most [`MAX_NOTE`] characters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// New since the analyzer's previous run (always false on a first run).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub new: bool,
 }
 
 /// Longest review reason, in characters.
 pub const MAX_NOTE: usize = 200;
-/// New-finding fingerprints kept per run.
-pub const MAX_NEW_IDS: usize = 2_000;
 /// Fixed findings listed per run; the rest are counted.
 pub const MAX_FIXED_LISTED: usize = 50;
 
@@ -180,9 +181,7 @@ pub struct FixedFinding {
 /// What changed since the analyzer's previous run. `None` on a first run.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunChanges {
-    /// Fingerprints of findings the previous run did not report (at most [`MAX_NEW_IDS`]).
-    pub new: Vec<String>,
-    /// How many findings are new.
+    /// How many findings are new (each is marked [`Finding::new`]).
     pub new_total: usize,
     /// Findings the previous run reported and this one doesn't, most severe first (at most
     /// [`MAX_FIXED_LISTED`]).
@@ -194,29 +193,30 @@ pub struct RunChanges {
 }
 
 impl RunChanges {
-    /// Compare `current` with the analyzer's `previous` result.
-    pub fn between(previous: &AnalyzerResult, current: &[Finding]) -> Self {
+    /// Compare `current` with the analyzer's `previous` result and mark each new finding.
+    pub fn between(previous: &AnalyzerResult, current: &mut [Finding]) -> Self {
         use std::collections::HashSet;
         let before: HashSet<&str> = previous
             .findings
             .iter()
             .map(|f| f.fingerprint.as_str())
             .collect();
-        let now: HashSet<&str> = current.iter().map(|f| f.fingerprint.as_str()).collect();
-        let new: Vec<String> = current
-            .iter()
-            .filter(|f| !before.contains(f.fingerprint.as_str()))
-            .map(|f| f.fingerprint.clone())
-            .collect();
-        let mut gone: Vec<&Finding> = previous
-            .findings
-            .iter()
-            .filter(|f| !now.contains(f.fingerprint.as_str()))
-            .collect();
+        let mut gone: Vec<&Finding> = {
+            let now: HashSet<&str> = current.iter().map(|f| f.fingerprint.as_str()).collect();
+            previous
+                .findings
+                .iter()
+                .filter(|f| !now.contains(f.fingerprint.as_str()))
+                .collect()
+        };
+        let mut new_total = 0;
+        for f in current.iter_mut() {
+            f.new = !before.contains(f.fingerprint.as_str());
+            new_total += usize::from(f.new);
+        }
         gone.sort_by_key(|f| std::cmp::Reverse(f.severity));
         Self {
-            new_total: new.len(),
-            new: new.into_iter().take(MAX_NEW_IDS).collect(),
+            new_total,
             fixed_total: gone.len(),
             fixed: gone
                 .into_iter()
@@ -230,11 +230,6 @@ impl RunChanges {
                 .collect(),
             since_ms: previous.run_at_ms,
         }
-    }
-
-    /// Whether `fingerprint` is new in this run.
-    pub fn is_new(&self, fingerprint: &str) -> bool {
-        self.new.iter().any(|f| f == fingerprint)
     }
 }
 
@@ -553,6 +548,7 @@ mod change_tests {
             refs: vec![],
             state: FindingState::Open,
             note: None,
+            new: false,
         }
     }
 
@@ -581,26 +577,29 @@ mod change_tests {
             f("gone-low", Severity::Low),
             f("gone-high", Severity::High),
         ]);
-        let now = vec![f("kept", Severity::Low), f("fresh", Severity::Medium)];
-        let c = RunChanges::between(&before, &now);
-        assert_eq!(c.new, vec!["fresh".to_string()]);
+        let mut now = vec![f("kept", Severity::Low), f("fresh", Severity::Medium)];
+        let c = RunChanges::between(&before, &mut now);
+        assert!(!now[0].new && now[1].new);
         assert_eq!((c.new_total, c.fixed_total, c.since_ms), (1, 2, 7));
         assert_eq!(c.fixed[0].fingerprint, "gone-high");
-        assert!(c.is_new("fresh") && !c.is_new("kept"));
     }
 
     #[test]
-    fn listed_ids_are_capped_but_totals_are_exact() {
+    fn the_fixed_list_is_capped_but_totals_are_exact() {
         let before = result(
             (0..MAX_FIXED_LISTED + 5)
                 .map(|i| f(&format!("o{i}"), Severity::Low))
                 .collect(),
         );
-        let now: Vec<Finding> = (0..MAX_NEW_IDS + 3)
+        let mut now: Vec<Finding> = (0..5_003)
             .map(|i| f(&format!("n{i}"), Severity::Low))
             .collect();
-        let c = RunChanges::between(&before, &now);
-        assert_eq!((c.new.len(), c.new_total), (MAX_NEW_IDS, MAX_NEW_IDS + 3));
+        let c = RunChanges::between(&before, &mut now);
+        assert_eq!(c.new_total, 5_003);
+        assert!(
+            now.iter().all(|f| f.new),
+            "every new finding is marked, however many"
+        );
         assert_eq!(
             (c.fixed.len(), c.fixed_total),
             (MAX_FIXED_LISTED, MAX_FIXED_LISTED + 5)
