@@ -28,7 +28,7 @@ know when a skill changed since you trusted it.
 - **Scheduled rescans.** Off by default. Only offline analyzers run, only while the app is open,
   with throttled notifications and quiet hours.
 - **Custom snoozes** up to 90 days, with a reason.
-- **MCP:** `list_skill_trust` and `list_risks` (sixteen read-only tools).
+- **MCP:** `list_skill_trust` and `list_risks` (sixteen tools; the two that stop ports still need a confirmed preview).
 - Builds are unsigned; see [first open](../desktop/#first-open).
 
 ## 0.11.0
