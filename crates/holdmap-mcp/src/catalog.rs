@@ -111,6 +111,25 @@ fn build_catalog() -> Value {
             }}
         },
         {
+            "name": "list_skill_trust",
+            "title": "Skill trust",
+            "description": "Each agent skill's trust from the last skill scan the user ran in holdmap: state (changed since trusted, new, unreadable, trusted), SHA-256 fingerprint, file count and size, first seen, when and why it was trusted, and a names-and-sizes-only summary of files added, removed or modified. Never reads skill folders, never re-hashes and never returns file contents or folder paths.",
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+            "inputSchema": {"type": "object", "properties": {
+                "alerts_only": {"type": "boolean", "default": false, "description": "Only skills that changed since trusted, are new or are unreadable"}
+            }}
+        },
+        {
+            "name": "list_risks",
+            "title": "Top risks",
+            "description": "Banded risk (critical, high, elevated, low) per agent and per skill folder, riskiest first, from stored findings of approved analyzers and the last skill scan. Points: 40 per open critical, 15 high, 5 medium, 1 low, 10 per skill changed since trusted; any open critical is Critical. Reviewed and snoozed findings don't count. Each entry lists its counts and top contributing findings. Never runs analyzers.",
+            "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+            "inputSchema": {"type": "object", "properties": {
+                "by": {"type": "string", "enum": ["agent", "folder", "all"], "default": "all"},
+                "min_band": {"type": "string", "enum": ["low", "elevated", "high", "critical"], "default": "low"}
+            }}
+        },
+        {
             "name": "list_needs",
             "title": "What needs the user's attention",
             "description": "The short \"needs you\" list holdmap shows on Home: agents listening on all interfaces, agents running as root or with wider access than usual, documented settings that skip approvals or the sandbox, unpinned MCP servers, dev servers open to the network and open medium-or-worse findings from approved analyzers. Each item has a rule, severity (high/medium), title, detail, target and, where stopping is the usual fix, a stop to preview with stop_port or stop_agent_ports. Read-only: never stops, runs or changes anything.",
@@ -521,6 +540,11 @@ fn output_schema(name: &str) -> Value {
             json!({"findings": {"type": "array"}, "runs": {"type": "array"}, "open": {"type": "object"}}),
             &["findings", "runs", "open"],
         ),
+        "list_skill_trust" => object(
+            json!({"skills": {"type": "array"}, "changed": count(), "untrusted": count(), "scanned_ms": {"type": ["integer", "null"]}}),
+            &["skills", "changed", "untrusted"],
+        ),
+        "list_risks" => object(json!({"risks": {"type": "array"}}), &["risks"]),
         "list_needs" => object(json!({"items": {"type": "array"}}), &["items"]),
         "wait_for_port" => object(
             json!({"port": port(), "ready": {"type": "boolean"}, "elapsed_ms": count()}),

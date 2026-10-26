@@ -129,6 +129,7 @@ fn filter(insights: Insights, args: &Value) -> (String, Value) {
                 "category": f.category, "severity": f.severity, "title": f.title,
                 "subject": s.map(|s| json!({"name": s.name, "kind": s.kind, "agents": s.agents})),
                 "file": f.location.file, "line": f.location.line, "fix": f.fix, "refs": f.refs, "state": f.state,
+                "reason": f.note, "snoozed_until_ms": f.until_ms,
             })
         })
         .collect();
