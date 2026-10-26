@@ -22,7 +22,7 @@
   {#if loading}<p class="sub" role="status">Loading…</p>
   {:else if !rows.length}<p class="sub">No runs yet.</p>
   {:else}
-    <table data-run-history>
+    <div class="scroll" role="region" aria-label="Run history table" tabindex="0"><table data-run-history>
       <thead><tr><th scope="col">When</th><th scope="col">Analyzer</th><th scope="col">Version</th><th scope="col">Result</th><th scope="col">Items</th><th scope="col">Findings</th><th scope="col">Changes</th><th scope="col">Took</th></tr></thead>
       <tbody>
         {#each rows as r (r.analyzer + r.run_at_ms)}
@@ -38,12 +38,14 @@
           </tr>
         {/each}
       </tbody>
-    </table>
+    </table></div>
   {/if}
 </section>
 
 <style>
-  .hist { display: grid; gap: 8px; }
+  .hist { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .scroll { overflow-x: auto; }
+  .scroll:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
   h3 { margin: 0; font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
   .sub { margin: 0; color: var(--muted); font-size: var(--fs-caption); }
   table { width: 100%; border-collapse: collapse; font-size: var(--fs-body-sm); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }

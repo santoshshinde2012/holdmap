@@ -196,3 +196,13 @@ test("mark reviewed keeps a reason that shows with the finding", async ({ app })
   await expect(ws).toContainText("Documented in the skill's README");
   await axe(app, "#agent-insights");
 });
+
+test("at 390px the results tab and run history stay inside the workspace", async ({ app }) => {
+  await app.setViewportSize({ width: 390, height: 844 });
+  const ws = await security(app);
+  await ws.getByRole("radio", { name: /^Results/ }).click();
+  await expect(app.locator("[data-run-history]")).toBeVisible();
+  // Wide tables scroll in their own box; the workspace itself never scrolls sideways.
+  const overflow = await ws.evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(4);
+});

@@ -136,10 +136,10 @@
 </section>
 
 <style>
-  .ws { --scroll-pad-bottom: 20px; display: grid; grid-auto-rows: max-content; align-content: start; gap: 16px; height: 100%; min-height: 0; padding: 20px 24px; box-sizing: border-box; overflow: auto; max-width: 1280px; margin: 0 auto; width: 100%; }
+  .ws { --scroll-pad-bottom: 20px; display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; align-content: start; gap: 16px; height: 100%; min-height: 0; padding: 20px 24px; box-sizing: border-box; overflow: auto; max-width: 1280px; margin: 0 auto; width: 100%; }
   .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
   h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-title); font-weight: var(--fw-semibold); }
-  .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
   .note { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: var(--fs-caption); }
   .link { border: 0; background: none; padding: 0 2px; min-height: 24px; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .graphs { display: grid; align-content: start; gap: 10px; min-width: 0; }

@@ -134,7 +134,14 @@ and the card show the same step, on any tab.
 
 **Results** is a table of severity, rule, message, agent, skill, folder and path. Sort by any
 column, filter by severity or **All agents**, search, and group by **Severity**, **Skill**,
-**Agent**, **Folder** or **Analyzer**.
+**Agent**, **Folder** or **Analyzer**. Long lists show 200 rows at a time with **Show N more**.
+
+After a rescan, a banner says how many findings are **new** and how many were **fixed** since the
+previous run (matched by fingerprint). **Show new only** (or the **New since last run** filter)
+narrows the list, and **What was fixed** lists up to 50 fixed findings, most severe first. A
+failed run compares nothing, and a partial run never reports fixes.
+
+![After a rescan: new and fixed since the previous run](screenshots/desktop-analyzers-changes-light.png)
 
 ![Results grouped by agent](screenshots/desktop-analyzers-results-light.png)
 
@@ -143,6 +150,11 @@ column, filter by severity or **All agents**, search, and group by **Severity**,
 A row expands to **Agents**, **Skill**, **Scope**, **Folder** and **Source path**, with **Copy
 folder**, **Show in folder** (desktop; the browser copies instead) and **Suggested next steps**.
 "Reported by *analyzer*; holdmap hasn't verified it" stays on every finding.
+
+**Mark reviewed** and **Snooze** take an optional reason (up to 200 characters), shown on the
+finding and in exports. Reopening drops it. Reasons stay on this computer and are not shown to agents.
+
+![A finding with a review reason](screenshots/desktop-analyzers-review-reason-light.png)
 
 ![An expanded finding with scope, folder, source path and next steps](screenshots/desktop-analyzers-finding-detail-light.png)
 
@@ -153,7 +165,7 @@ filter. Your home folder is written as `~`; raw evidence is never exported.
 
 | Format | Contains | Use it for |
 | --- | --- | --- |
-| JSON (`holdmap-report/1`) | Included note, coverage, counts, and per finding: rule, severity, state, title, analyzer, skill, agents, scope, folder, path, line, fix | Scripts, archives |
+| JSON (`holdmap-report/1`) | Included note, coverage, counts, and per finding: rule, severity, state, review reason, new since previous run, title, analyzer, skill, agents, scope, folder, path, line, fix | Scripts, archives |
 | SARIF 2.1.0 | One run per analyzer with rules, results and locations | GitHub code scanning, IDEs |
 | CSV | One row per finding with the same fields; cells can't start a formula | Spreadsheets |
 | Markdown | Summary, included note, coverage, the "unverified" note and a table | Tickets, PRs |
@@ -163,7 +175,7 @@ filter. Your home folder is written as `~`; raw evidence is never exported.
 ### 8. Run history
 
 **Run history** lists recent runs with time, version, result, subjects
-and counts. Use it to confirm a rescan after a fix.
+and counts, plus how many findings were new and fixed. Use it to confirm a rescan after a fix.
 
 ![Run history under the results](screenshots/desktop-analyzers-history-light.png)
 
@@ -218,7 +230,10 @@ running, so holdmap can't place it; the path is relative to the skill.
 | Exported fewer findings than expected | Exports follow the filter; clear it or tick **Show reviewed** |
 
 CLI equivalents: `holdmap analyzers`, `holdmap analyzers show ID`, `holdmap analyzers approve ID`,
-`holdmap analyzers run ID`, `holdmap insights --format sarif`.
+`holdmap analyzers run ID`, `holdmap analyzers history ID`, `holdmap insights --format sarif`,
+`holdmap insights --new --fail-on high` (fail CI only on findings new since the previous run) and
+`holdmap insights review FP --reason "…"`. Agents can call the read-only MCP tool `list_insights`
+with `new_only: true`.
 
 ## Privacy
 

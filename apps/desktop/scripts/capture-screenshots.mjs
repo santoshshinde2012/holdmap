@@ -377,6 +377,20 @@ const walkthrough = [
     await security.getByRole("button", { name: "2 medium" }).click();
     await expect(security.locator("[data-export-scope]")).toContainText("severity medium");
   } },
+  { name: "changes", async prepare(page) {
+    const security = await securityTab(page);
+    await security.getByRole("button", { name: "Rescan", exact: true }).click();
+    await expect(page.locator("[data-status-run]")).toContainText("Scan done", { timeout: 15_000 });
+    await security.getByRole("radio", { name: /^Results/ }).click();
+    await expect(security.locator("[data-run-changes]")).toContainText("fixed since the previous run");
+  } },
+  { name: "review-reason", async prepare(page) {
+    const security = await securityTab(page, /^Findings/);
+    await security.getByRole("button", { name: /Instruction Override/ }).first().click();
+    const reason = security.getByRole("textbox", { name: /Reason for Instruction Override/ });
+    await reason.fill("Documented in the skill's README");
+    await reason.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  } },
   { name: "history", async prepare(page) {
     const security = await results(page);
     const history = page.locator("[data-run-history]");

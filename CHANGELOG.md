@@ -10,6 +10,14 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- **New and fixed since the last run.** After a rescan, Security shows how many findings are new and fixed, a
+  **New since last run** filter, a **New** pill and **What was fixed**. Run history, exports (JSON, CSV), the CLI
+  (`holdmap insights --new`, `holdmap analyzers history ID`) and MCP `list_insights` (`new_only`) carry the same
+  counts. `--new --fail-on` fails CI only on new findings.
+- **Review reasons.** Mark reviewed and Snooze take an optional reason (UI, `--reason` in the CLI), shown on the
+  finding and in exports; not exposed to agents.
+- **Paged results.** The results table and grouped list show 200 rows at a time.
+
 - **Guided analyzer installs.** **Install…** (analyzer cards, Settings → Analyzers, Scan with…, Presets) shows
   the pinned package and version, its source, holdmap's own install folder (no admin rights), the hosts contacted
   and what the analyzer reads, then installs only after you tick consent. Live output, **Cancel install**, a

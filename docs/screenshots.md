@@ -103,6 +103,8 @@ Light only, used by [Analyzers, end to end](analyzers.md).
 | results | [light](screenshots/desktop-analyzers-results-light.png) |
 | finding-detail | [light](screenshots/desktop-analyzers-finding-detail-light.png) |
 | export | [light](screenshots/desktop-analyzers-export-light.png) |
+| changes | [light](screenshots/desktop-analyzers-changes-light.png) |
+| review-reason | [light](screenshots/desktop-analyzers-review-reason-light.png) |
 | history | [light](screenshots/desktop-analyzers-history-light.png) |
 | home-summary | [light](screenshots/desktop-analyzers-home-summary-light.png) |
 | agent-summary | [light](screenshots/desktop-analyzers-agent-summary-light.png) |
