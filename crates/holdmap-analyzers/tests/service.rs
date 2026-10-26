@@ -393,6 +393,46 @@ fn a_manifest_change_after_an_upgrade_requires_approval_again() {
 }
 
 #[test]
+fn osv_with_no_pinned_packages_is_a_clean_empty_run_not_a_failure() {
+    let h = harness();
+    let mut v = serde_json::to_value(report(&h.skill_dir)).unwrap();
+    let servers = v["agents"][0]["capabilities"]["mcp_servers"]
+        .as_array_mut()
+        .unwrap();
+    servers.retain(|s| s["name"] == "latest-thing");
+    let mut docker = servers[0].clone();
+    docker["name"] = json!("container");
+    docker["launch"] = json!({"runner": "docker", "package": "ghcr.io/x/y", "pinned": false});
+    servers.push(docker);
+    let r: AgentsReport = serde_json::from_value(v).unwrap();
+    h.service.approve(OSV).unwrap();
+    let result = h
+        .service
+        .run(OSV, &r)
+        .expect("an empty input is not an error");
+    assert_eq!(result.status, RunStatus::Complete);
+    assert!(result.subjects.is_empty() && result.findings.is_empty());
+    assert!(
+        h.osv.sent.lock().unwrap().is_empty(),
+        "nothing is sent to OSV.dev"
+    );
+    assert!(
+        result.notes[0].starts_with("No pinned packages to check: 2 MCP servers use unpinned"),
+        "{:?}",
+        result.notes
+    );
+    assert!(result
+        .notes
+        .iter()
+        .any(|n| n.contains("latest-thing (some-mcp) is not pinned")));
+    for n in &result.notes {
+        assert!(!n.contains("/home/") && !n.contains(".claude.json"), "{n}");
+    }
+    let history = h.service.history(OSV).unwrap();
+    assert_eq!(history[0].status, RunStatus::Complete);
+}
+
+#[test]
 fn osv_sends_exactly_the_previewed_payload_and_only_pinned_coordinates() {
     let h = harness();
     let r = report(&h.skill_dir);
