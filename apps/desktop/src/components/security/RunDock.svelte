@@ -39,7 +39,7 @@
     {#if !r.collapsed}
       <ol class="steps">
         {#each p.steps as s (s.id)}
-          <li class="st-{s.phase}">
+          <li class="st-{s.phase}" class:empty={s.phase === "done" && s.subjects === 0}>
             <span class="dot" aria-hidden="true"></span>
             <span class="nm">{s.name}</span>
             <span class="lbl">{stepLabel(s)}</span>
@@ -76,6 +76,7 @@
   .nm { font-weight: var(--fw-medium); white-space: nowrap; }
   .lbl { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .st-failed .lbl { color: var(--danger); white-space: normal; }
+  .empty .dot { background: var(--border-strong); } .empty .lbl { color: var(--muted); white-space: normal; }
   .ag { grid-column: 3; color: var(--muted); font-size: var(--fs-caption); }
   footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
   .sum { color: var(--muted); font-size: var(--fs-caption); }

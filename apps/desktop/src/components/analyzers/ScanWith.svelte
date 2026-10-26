@@ -5,6 +5,7 @@
   import Button from "../ui/Button.svelte";
   import { insightsStore } from "../../lib/insights-store.svelte";
   import { securityRuns } from "../../lib/security-runs.svelte";
+  import { stepLabel } from "../../lib/security-view";
   import { installDialog } from "../../lib/install-dialog.svelte";
   import { STATE_LABEL, countsText, scannersFor, subjectCounts, total } from "../../lib/analyzers";
 
@@ -28,7 +29,7 @@
       if (!a) return;
       await securityRuns.start([a]); // the run dock shows progress and refreshes findings
       const s = securityRuns.stepFor(id);
-      note = `${name}: ${s?.phase === "done" ? "done" : s?.note ?? s?.phase ?? "done"}`;
+      note = `${name}: ${s?.phase === "done" ? (s.subjects === 0 ? stepLabel(s) : "done") : s?.note ?? s?.phase ?? "done"}`;
     } catch (e) { note = `${name} failed: ${String(e)}`; }
     finally { busy = null; }
   }

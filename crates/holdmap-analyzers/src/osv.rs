@@ -74,19 +74,18 @@ impl AnalyzerRunner for OsvRunner {
         input: &AnalyzerInput,
         _: &RunContext,
     ) -> Result<Vec<RawOutput>, RunError> {
-        let transport = self.transport.as_deref().ok_or_else(|| {
-            RunError::Unavailable("This build of holdmap can't reach OSV.dev.".into())
-        })?;
         let coords: Vec<&PackageCoord> = input
             .subjects
             .iter()
             .filter_map(|s| s.package.as_ref())
             .collect();
         if coords.is_empty() {
-            return Err(RunError::NoSubjects(
-                "no pinned npm or PyPI packages were found".into(),
-            ));
+            // Nothing to look up is a clean, empty run (the input's notes say why), not an error.
+            return Ok(Vec::new());
         }
+        let transport = self.transport.as_deref().ok_or_else(|| {
+            RunError::Unavailable("This build of holdmap can't reach OSV.dev.".into())
+        })?;
         let mut notes = Vec::new();
         let mut matches: Vec<(String, Vec<String>)> = Vec::new();
         let mut failed = false;

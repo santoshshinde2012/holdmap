@@ -174,9 +174,6 @@ pub enum RunError {
     /// The analyzer is missing or can't be used.
     #[error("{0}")]
     Unavailable(String),
-    /// Nothing to analyse.
-    #[error("nothing to analyse: {0}")]
-    NoSubjects(String),
     /// The MCP server's tools differ from the approved ones; nothing was called.
     #[error("its MCP tools changed since you approved it ({}). Review and approve it again.", .0.changes.join("; "))]
     ToolsChanged(Box<ToolsChanged>),

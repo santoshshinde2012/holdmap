@@ -164,6 +164,28 @@ describe("run progress", () => {
     expect(r.finishedAt! - r.startedAt!).toBeGreaterThan(0);
     expect(runSummary(r.progress)).toMatch(/2/);
   });
+  it("an analyzer with nothing to check finishes neutrally, not as a failure", async () => {
+    const note = "No pinned packages to check: 2 MCP servers use unpinned or non-npm/PyPI commands. Pin a version (npx pkg@1.2.3 or uvx pkg==1.2.3) to have it checked.";
+    const r = new SecurityRuns(async (id) => (id === "a"
+      ? { status: "complete" as const, findings: [], subjects: [], notes: [note] }
+      : { status: "complete" as const, findings: [{}, {}] as never, subjects: [{}] as never, notes: [] }), async () => {}, async () => {}, async () => () => {});
+    await r.start(a);
+    expect(r.progress.phase).toBe("done");
+    expect(stepLabel(r.stepFor("a")!)).toBe(note);
+    expect(stepLabel(r.stepFor("b")!)).toBe("Done · 2 findings");
+    expect(runSummary(r.progress)).toBe("2 of 2 analyzers finished · 2 findings · 1 with nothing to check");
+    expect(runSummary(r.progress)).not.toMatch(/failed/);
+  });
+  it("a real failure still reads as a failure next to an empty run", async () => {
+    const r = new SecurityRuns(async (id) => {
+      if (id === "a") throw new Error("SkillSpector is not installed.");
+      return { status: "complete" as const, findings: [], subjects: [], notes: ["No skills to check: 1 agent loads no skills. Add a skill folder with a SKILL.md to have it scanned."] };
+    }, async () => {}, async () => {}, async () => () => {});
+    await r.start(a);
+    expect(r.stepFor("a")!.phase).toBe("failed");
+    expect(stepLabel(r.stepFor("b")!)).toMatch(/^No skills to check/);
+    expect(runSummary(r.progress)).toMatch(/1 with nothing to check · 1 failed/);
+  });
   it("cancel stops the running analyzer and skips the queued ones", async () => {
     const cancelRun = vi.fn(async () => {});
     let reject!: (e: Error) => void;

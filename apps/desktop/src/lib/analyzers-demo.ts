@@ -78,6 +78,13 @@ export function varied(base: AnalyzerResult, n: number): AnalyzerResult {
   return { ...base, run_at_ms: Date.now(), findings: [...fixed, added], notes };
 }
 
+/** Mirrors the app's note when OSV has nothing pinned to look up. */
+function noPinnedNote(report: AgentsReport): string {
+  const n = inventories(report).reduce((k, a) => k + (a.capabilities?.mcp_servers?.length ?? 0), 0);
+  const what = n === 0 ? "no MCP servers were found" : n === 1 ? "1 MCP server uses an unpinned or non-npm/PyPI command" : `${n} MCP servers use unpinned or non-npm/PyPI commands`;
+  return `No pinned packages to check: ${what}. Pin a version (npx pkg@1.2.3 or uvx pkg==1.2.3) to have it checked.`;
+}
+
 function osvResult(report: AgentsReport): AnalyzerResult {
   const packages = osvPackages(report);
   return {
@@ -85,9 +92,21 @@ function osvResult(report: AgentsReport): AnalyzerResult {
     subjects: packages.map((p) => ({ id: `package:${p.ecosystem}/${p.name}@${p.version}`, kind: "package", name: `${p.name}@${p.version}`, agents: p.agents })),
     findings: [],
     details: packages.map((p) => ({ subject: `package:${p.ecosystem}/${p.name}@${p.version}`, label: "Known advisories", value: "none (sample data)" })),
-    notes: ["Browser demo: no request was sent; results are sample data."],
+    notes: packages.length ? ["Browser demo: no request was sent; results are sample data."] : [noPinnedNote(report)],
     duration_ms: 620,
   };
+}
+
+/** `?demoOsvEmpty=1` turns OSV on with nothing pinned (Playwright uses it for the "nothing to check" state). */
+const demoOsvEmpty = new URLSearchParams(globalThis.location?.search ?? "").get("demoOsvEmpty") === "1";
+/** `?demoNoSkills=1` runs SkillSpector as if no agent loads a skill (the "nothing to check" state). */
+const demoNoSkills = new URLSearchParams(globalThis.location?.search ?? "").get("demoNoSkills") === "1";
+
+/** Mirrors the app's note when a skill analyzer has no skills to scan. */
+function noSkillsNote(report: AgentsReport): string {
+  const n = inventories(report).length;
+  const what = n === 0 ? "no agents were found" : n === 1 ? "1 agent loads no skills" : `${n} agents load no skills`;
+  return `No skills to check: ${what}. Add a skill folder with a SKILL.md to have it scanned.`;
 }
 
 function osvPackages(report: AgentsReport) {
@@ -95,7 +114,7 @@ function osvPackages(report: AgentsReport) {
   for (const a of inventories(report)) {
     for (const s of a.capabilities?.mcp_servers ?? []) {
       const spec = s.launch?.package;
-      if (!spec || !s.launch?.pinned || s.launch.runner !== "npx") continue;
+      if (demoOsvEmpty || !spec || !s.launch?.pinned || s.launch.runner !== "npx") continue;
       const at = spec.lastIndexOf("@");
       if (at <= 0) continue;
       const key = spec;
@@ -123,7 +142,7 @@ export class DemoAnalyzers {
 
   /** `fresh`: nothing turned on yet, like a first launch (the empty-machine demo profile). */
   constructor(fresh = false) {
-    this.approved = new Map(fresh ? [] : [[SKILLSPECTOR, RUN_AT - 3_600_000]]);
+    this.approved = new Map(fresh ? [] : [[SKILLSPECTOR, RUN_AT - 3_600_000], ...(demoOsvEmpty ? [[OSV, RUN_AT - 3_600_000] as [string, number]] : [])]);
     this.results = new Map(fresh ? [] : [[SKILLSPECTOR, skillspectorResult()]]);
     if (!fresh) this.remember(skillspectorResult());
   }
@@ -269,6 +288,7 @@ export class DemoAnalyzers {
   /** The items a demo run walks through, for its progress updates. */
   runSubjects(id: string, report: AgentsReport): { name: string; agents: string[] }[] {
     if (id === OSV) return osvPackages(report).map((p) => ({ name: `${p.name}@${p.version}`, agents: p.agents }));
+    if (id === SKILLSPECTOR && demoNoSkills) return [];
     if (id === SKILLSPECTOR) return skillspectorResult().subjects.map((s) => ({ name: s.name, agents: s.agents }));
     return this.skills(report).map((s) => ({ name: s.subject.name, agents: s.subject.agents }));
   }
@@ -461,7 +481,9 @@ export class DemoAnalyzers {
     const user = this.user.get(id);
     const result = user
       ? { analyzer: id, analyzer_version: null, run_at_ms: Date.now(), status: "complete" as const, coverage: null, subjects: this.skills(report).map((s) => s.subject), findings: [], details: [], notes: [`Browser demo: ${user.kind === "mcp" ? "no MCP server was started" : "nothing was run"}; this is a sample result.`] }
-      : id === OSV ? osvResult(report) : varied(skillspectorResult(), this.rescans++);
+      : id === OSV ? osvResult(report)
+      : demoNoSkills ? { ...skillspectorResult(), run_at_ms: Date.now(), subjects: [], findings: [], details: [], notes: [noSkillsNote(report)] }
+      : varied(skillspectorResult(), this.rescans++);
     const withChanges = withRunChanges(this.results.get(id), result);
     this.results.set(id, withChanges);
     this.remember(withChanges);

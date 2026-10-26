@@ -89,6 +89,23 @@ Inspect `list_ports.warnings` before treating an empty result as a complete scan
 `taken_at_ms` is the collection time in Unix epoch milliseconds; `platform` identifies the
 system scanned. Warnings also appear in the readable summary.
 
+## Tool annotations
+
+Every tool declares all four MCP hints as explicit booleans, so clients can warn before a tool
+acts:
+
+| Tools | `readOnlyHint` | `destructiveHint` | `idempotentHint` | `openWorldHint` |
+|---|---|---|---|---|
+| The 14 read and plan tools (every tool except the two below) | `true` | `false` | `true` | `false` |
+| `stop_port`, `stop_agent_ports` | `false` | `true` | `false` | `false` |
+
+The hints sit next to each tool's name and description in
+[`crates/holdmap-mcp/src/catalog.rs`](https://github.com/santoshshinde2012/holdmap/blob/main/crates/holdmap-mcp/src/catalog.rs).
+Input and output schemas live in
+[`crates/holdmap-mcp/src/schemas.rs`](https://github.com/santoshshinde2012/holdmap/blob/main/crates/holdmap-mcp/src/schemas.rs),
+so a field's description is never read as a tool's description. A test checks that each of
+the 16 entries has one description and all four hints.
+
 ## Discover workflows
 
 The server exposes `holdmap://guide` through MCP resources. It explains which tool to choose,

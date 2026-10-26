@@ -107,17 +107,31 @@ pub fn skill_subjects(report: &AgentsReport) -> AnalyzerInput {
             }
         }
     }
+    let mut skipped = Vec::new();
+    if by_dir.is_empty() {
+        let agents = inventories(report).count();
+        let what = match agents {
+            0 => "no agents were found".to_string(),
+            1 => "1 agent loads no skills".to_string(),
+            n => format!("{n} agents load no skills"),
+        };
+        skipped.push(format!(
+            "No skills to check: {what}. Add a skill folder with a SKILL.md to have it scanned."
+        ));
+    }
     AnalyzerInput {
         subjects: by_dir.into_values().collect(),
-        skipped: Vec::new(),
+        skipped,
     }
 }
 
 fn packages(report: &AgentsReport) -> AnalyzerInput {
     let mut by_coord: BTreeMap<PackageCoord, InputSubject> = BTreeMap::new();
     let mut skipped = Vec::new();
+    let mut servers = 0usize;
     for (product, capabilities) in inventories(report) {
         for server in &capabilities.mcp_servers {
+            servers += 1;
             let Some(launch) = &server.launch else {
                 continue;
             };
@@ -157,6 +171,20 @@ fn packages(report: &AgentsReport) -> AnalyzerInput {
                 entry.subject.agents.push(product.to_string());
             }
         }
+    }
+    if by_coord.is_empty() {
+        // Not a failure: there is simply nothing OSV can look up. Say why and what to do.
+        let what = match servers {
+            0 => "no MCP servers were found".to_string(),
+            1 => "1 MCP server uses an unpinned or non-npm/PyPI command".to_string(),
+            n => format!("{n} MCP servers use unpinned or non-npm/PyPI commands"),
+        };
+        skipped.insert(
+            0,
+            format!(
+                "No pinned packages to check: {what}. Pin a version (npx pkg@1.2.3 or uvx pkg==1.2.3) to have it checked."
+            ),
+        );
     }
     AnalyzerInput {
         subjects: by_coord.into_values().collect(),

@@ -7,7 +7,7 @@ import { insightsStore } from "./insights-store.svelte";
 import { runProgress, runSummary, type RunStep } from "./run-view";
 import type { AnalyzerResult, AnalyzerView } from "./analyzers";
 
-type Runner = (id: string) => Promise<Pick<AnalyzerResult, "status"> & Partial<Pick<AnalyzerResult, "findings" | "subjects">>>;
+type Runner = (id: string) => Promise<Pick<AnalyzerResult, "status"> & Partial<Pick<AnalyzerResult, "findings" | "subjects" | "notes">>>;
 
 export class SecurityRuns {
   steps = $state<RunStep[]>([]);
@@ -42,7 +42,7 @@ export class SecurityRuns {
     this.collapsed = false;
     this.startedAt = this.now();
     this.finishedAt = null;
-    this.steps = ok.map((a) => ({ id: a.id, name: a.name, phase: "idle", note: null, event: null, startedAt: null, finishedAt: null, findings: null, subjects: null }));
+    this.steps = ok.map((a) => ({ id: a.id, name: a.name, phase: "idle", note: null, event: null, startedAt: null, finishedAt: null, findings: null, subjects: null, detail: null }));
     await this.listen();
     try {
       for (let i = 0; i < this.steps.length; i++) {
@@ -56,6 +56,7 @@ export class SecurityRuns {
           step.note = r.status === "complete" ? null : r.status;
           step.findings = r.findings?.length ?? null;
           step.subjects = r.subjects?.length ?? null;
+          step.detail = step.phase === "done" && step.subjects === 0 ? r.notes?.[0] ?? null : null;
         } catch (e) {
           step.phase = this.cancelRequested ? "cancelled" : "failed";
           step.note = this.cancelRequested ? null : String(e instanceof Error ? e.message : e);
