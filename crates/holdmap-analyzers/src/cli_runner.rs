@@ -505,12 +505,19 @@ mod tests {
     use crate::finding::{Subject, SubjectKind};
     use crate::manifest::AnalyzerManifest;
     use crate::runner::BasicSandbox;
-    use std::os::unix::fs::PermissionsExt;
 
     fn script(dir: &Path, body: &str) -> PathBuf {
         let path = dir.join("fake-analyzer");
-        fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        // Write it from a short-lived child, never from this process: a parallel test's fork
+        // can inherit a writable descriptor we hold here and keep it until exec, so running
+        // the script fails with Linux ETXTBSY ("Text file busy") at random.
+        let status = std::process::Command::new("/bin/sh")
+            .args(["-c", r#"printf '%s\n' "$1" > "$2" && chmod 755 "$2""#, "sh"])
+            .arg(format!("#!/bin/sh\n{body}"))
+            .arg(&path)
+            .status()
+            .unwrap();
+        assert!(status.success());
         path
     }
 
@@ -706,7 +713,11 @@ mod tests {
                 .remove(0)
         };
         let none = run("echo 'No package sources found'; exit 128");
-        assert!(none.nothing_to_check && !none.failed && none.bytes.is_empty());
+        assert!(
+            none.nothing_to_check && !none.failed && none.bytes.is_empty(),
+            "{:?}",
+            none.notes
+        );
         // A report written alongside that code is not trusted as "clean".
         let wrote = run(r#"echo '{}' > "${10}"; exit 128"#);
         assert!(!wrote.nothing_to_check && wrote.failed);

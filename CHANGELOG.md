@@ -48,6 +48,8 @@ track which skills changed since you trusted them.
 - **MCP:** the server has 16 tools (`list_skill_trust` and `list_risks` are new). Every tool declares its name,
   description and all four annotation hints before its input schema. The demo's sample tools moved to fixture files
   outside `src`.
+- **Dependencies:** rmcp 3.6.0, Tauri 2.12.5, ureq 3.5.0, vite 8.3.5, mediabunny 1.62.0, Astro 7.4.2;
+  CI actions rust-cache 2.9.3 and codeql-action 4.39.1.
 
 ### Fixed
 
