@@ -474,6 +474,6 @@ if __name__ == "__main__":
                 break
             except AssertionError as error:
                 blank = re.search(r"blank|bundled (icon|font)", str(error))
-                if not (args.app_ui and blank) or attempt == 2:
+                if not (args.app_ui and blank) or attempt == 2 or os.environ.get("HOLDMAP_SNAPSHOT_NO_RETRY"):
                     raise
                 print(f"RETRY once: the App PNG came back blank ({error}); capturing again with a fresh window", flush=True)

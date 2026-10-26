@@ -333,6 +333,17 @@ jobs:
           python3 scripts/check-native-screen-recording.py
         env:
           HOLDMAP_SNAPSHOT_DEBUG_DIR: ${{ runner.temp }}/snapshot-debug
+      # TEMP (PR #111): repeat the App PNG capture to sample the intermittent blank-title case.
+      - name: App snapshot stress sample (temporary)
+        if: always() && runner.os == 'macOS'
+        continue-on-error: true
+        env:
+          HOLDMAP_SNAPSHOT_DEBUG_DIR: ${{ runner.temp }}/snapshot-debug
+          HOLDMAP_SNAPSHOT_NO_RETRY: "1"
+        run: |
+          for i in 1 2 3 4 5 6 7 8; do
+            echo "::group::sample $i"; python3 scripts/check-screen-recording-runtime.py --app-ui || echo "SAMPLE $i FAILED"; echo "::endgroup::"
+          done
       # TEMP (PR #111): saved App PNGs + region metadata to diagnose the blank "bundled font" region.
       - name: App snapshot diagnostics
         if: always() && runner.os == 'macOS'
