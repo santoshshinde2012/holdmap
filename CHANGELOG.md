@@ -48,12 +48,15 @@ track which skills changed since you trusted them.
 - **MCP:** the server has 16 tools (`list_skill_trust` and `list_risks` are new). Every tool declares its name,
   description and all four annotation hints before its input schema. The demo's sample tools moved to fixture files
   outside `src`.
+- **Dependencies:** rmcp 3.6.0, Tauri 2.12.5, ureq 3.5.0, vite 8.3.5, mediabunny 1.62.0, Astro 7.4.2;
+  CI actions rust-cache 2.9.3 and codeql-action 4.39.1.
 
 ### Fixed
 
 - The Security view switcher scrolls instead of overflowing at 390 px.
 - **Show in folder** refuses a skill folder that was swapped for a symlink after the scan.
 - A failed analyzer install now reports an error instead of crashing when holdmap has no recipe for it.
+- A PNG snapshot of the holdmap view on macOS could occasionally save its text invisible; it now waits for the font.
 
 Builds are unsigned: macOS builds are ad-hoc signed without Developer-ID signing or notarization, and Windows installers are unsigned (see the README for first-open steps).
 
