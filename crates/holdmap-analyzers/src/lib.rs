@@ -31,6 +31,7 @@ pub mod sandbox;
 pub mod secrets;
 pub mod service;
 pub mod store;
+pub mod trust;
 
 pub use consent::{
     ConsentStore, Grant, MemoryStore, ResultStore, Review, ReviewStore, SecretIndex,
@@ -47,3 +48,4 @@ pub use service::{
     AnalyzerService, AnalyzerState, AnalyzerView, Insights, Preview, SeverityCounts, Stores,
 };
 pub use store::FileStore;
+pub use trust::{ChangeSummary, SkillTrust, SkillTrustView, TrustReport, TrustState, TrustStore};

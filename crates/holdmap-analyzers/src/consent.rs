@@ -163,6 +163,20 @@ pub struct MemoryStore {
     manifests: Mutex<BTreeMap<String, String>>,
     tools: Mutex<BTreeMap<(String, ToolSlot), crate::mcp_tools::ToolSnapshot>>,
     history: Mutex<BTreeMap<String, Vec<RunRecord>>>,
+    trust: Mutex<BTreeMap<String, crate::trust::TrustRecord>>,
+}
+
+impl crate::trust::TrustStore for MemoryStore {
+    fn trust_records(&self) -> BTreeMap<String, crate::trust::TrustRecord> {
+        self.trust.lock().unwrap().clone()
+    }
+    fn set_trust_records(
+        &self,
+        records: &BTreeMap<String, crate::trust::TrustRecord>,
+    ) -> io::Result<()> {
+        *self.trust.lock().unwrap() = records.clone();
+        Ok(())
+    }
 }
 
 impl ToolPinStore for MemoryStore {
