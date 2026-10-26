@@ -34,3 +34,14 @@ describe("risk (mirror of Rust risk::risks)", () => {
     expect([bytes(10), bytes(2048), bytes(3 * 1024 * 1024)]).toEqual(["10 B", "2.0 KB", "3.0 MB"]);
   });
 });
+
+describe("demo rescans", async () => {
+  const { varied } = await import("./analyzers-demo");
+  const base = { analyzer: "x", run_at_ms: 0, subjects: [], findings: [{ fingerprint: "demo-lp3" }, { fingerprint: "other" }], notes: [] } as never;
+  it("vary on every other rescan and say they're demo data", () => {
+    const even = varied(base, 0), odd = varied(base, 1);
+    expect(even.findings.map((f) => f.fingerprint)).toEqual(["demo-lp3", "other"]);
+    expect(odd.findings.map((f) => f.fingerprint)).toEqual(["other", "demo-p2-1"]);
+    expect(odd.notes[0]).toMatch(/demo/i);
+  });
+});

@@ -3,6 +3,8 @@
   // with "Needs you" beside both. Hover and selection are shared across cards, map, timeline and
   // attention items, and survive a layout switch. Esc clears the selection.
   import { insightsStore } from "../../lib/insights-store.svelte";
+  import { trustStore } from "../../lib/trust-store.svelte";
+  import { securityTab } from "../../lib/security-tab.svelte";
   import * as api from "../../lib/api";
   import Icon from "../Icon.svelte";
   import { SegmentedControl } from "../ui";
@@ -53,6 +55,10 @@
 
   const o = $derived(overview(entries, report));
   // The TypeScript mirror paints instantly; in the app the Rust rules then replace it.
+  $effect(() => { if (!trustStore.report) void trustStore.load(); });
+  const trustAlerts = $derived(trustStore.alerting);
+  const trustChanged = $derived(trustAlerts.filter((s) => s.state === "changed").length);
+  function openSkills() { onsecurity?.(); securityTab.value = "skills"; }
   const quick = $derived(attention(entries, report, insightsStore.insights));
   let decided = $state<{ from: AttentionItem[]; items: AttentionItem[] } | null>(null);
   const needs = $derived(decided && decided.from === quick ? decided.items : quick);
@@ -159,6 +165,13 @@
     {/key}
     <aside class="panel" aria-labelledby="home-needs">
       <h2 id="home-needs">Needs you{#if needs.length}<span class="count">{needs.length}</span>{/if}</h2>
+      {#if trustAlerts.length && onsecurity}
+        <button type="button" class="trust-alert" class:changed={trustChanged > 0} onclick={openSkills} data-trust-alert>
+          <Icon name="hash" size={13} />
+          <span>{#if trustChanged}{trustChanged} skill{trustChanged === 1 ? "" : "s"} changed since you trusted {trustChanged === 1 ? "it" : "them"}{:else}{trustAlerts.length} skill{trustAlerts.length === 1 ? "" : "s"} not trusted yet{/if}</span>
+          <span class="go">Review</span>
+        </button>
+      {/if}
       {#if needs.length}
         <div class="needs-scroll">
           <NeedsList items={needs} lit={activeNeeds} onopen={openItem} onstop={stopItem} onhover={(i) => (hovered = i ? attentionAgent(i, report) : null)} />
@@ -229,4 +242,11 @@
     .map-wrap { display: none; }
     .map-list { display: block; }
   }
+  .trust-alert { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-caption); text-align: left; cursor: pointer; }
+  .trust-alert.changed { border-color: var(--danger-soft); }
+  .trust-alert.changed :global(svg) { color: var(--danger); }
+  .trust-alert:hover { background: var(--row-hover); }
+  .trust-alert:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .trust-alert span:first-of-type { flex: 1; min-width: 0; }
+  .trust-alert .go { color: var(--accent); }
 </style>

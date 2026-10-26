@@ -2,6 +2,7 @@
   import { insightsStore } from "./lib/insights-store.svelte";
   import { total as findingsTotal } from "./lib/analyzers";
   import { onMount, tick, untrack } from "svelte";
+  import { scheduleDriver } from "./lib/schedule-driver.svelte";
   import { dataAge, freshness, pruned, share, shouldPoll, withKey } from "./lib/live";
   import PortList from "./components/list/PortList.svelte";
   import TitleBar from "./components/shell/TitleBar.svelte";
@@ -1217,6 +1218,9 @@
     refresh();
     loadSchedules();
     void insightsStore.refresh();
+    // Scheduled scans (off until confirmed in Settings) run only while this window is open.
+    let stopScheduler: (() => void) | null = null;
+    void scheduleDriver().then((d) => { d.start(); stopScheduler = () => d.dispose(); }).catch((e) => console.error("Couldn't start scheduled scans", e));
     api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, tray: i.tray, configDir: i.config_dir ?? null, updater: typeof i.updater === "boolean" ? i.updater : null, appPath: i.app_path ?? null, architecture: i.architecture ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; }).catch((e) => toast("error", "Couldn't load app information", String(e)));
     api.hotkeys().then((h) => (hotkeyList = h)).catch(() => {});
     void loadConfig();
@@ -1278,6 +1282,7 @@
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     return () => {
+      stopScheduler?.();
       disposed = true;
       reviewSequence++;
       queuedPortCheck = null;

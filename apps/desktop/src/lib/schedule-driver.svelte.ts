@@ -3,6 +3,9 @@
 // re-fingerprint skills and decide on one throttled notification. No daemon: closing holdmap
 // stops it. Everything is injected so tests drive it with a fake clock.
 import * as api from "./api";
+import { insightsStore } from "./insights-store.svelte";
+import { securityRuns } from "./security-runs.svelte";
+import { trustStore } from "./trust-store.svelte";
 import type { AnalyzerView } from "./analyzers";
 import type { Due, ScheduleStatus } from "./schedule";
 
@@ -66,14 +69,15 @@ export class ScheduleDriver {
   }
 }
 
+/** The app's one driver once started, for Settings, the run dock and the Security header. */
+export const scheduler = $state<{ driver: ScheduleDriver | null }>({ driver: null });
 let shared: ScheduleDriver | null = null;
 /** The app's one driver, wired to the real API and run dock. */
 export async function scheduleDriver(): Promise<ScheduleDriver> {
   if (shared) return shared;
-  const [{ securityRuns }, { insightsStore }] = await Promise.all([import("./security-runs.svelte"), import("./insights-store.svelte")]);
   shared = new ScheduleDriver({
     due: api.scheduleDue,
-    finished: api.scheduleFinished,
+    finished: async (t) => { const r = await api.scheduleFinished(t); await trustStore.load(); return r; },
     status: api.scheduleStatus,
     analyzers: () => insightsStore.analyzers,
     run: (list) => securityRuns.start(list),
@@ -81,5 +85,6 @@ export async function scheduleDriver(): Promise<ScheduleDriver> {
     now: Date.now,
     every: (fn, ms) => { const t = setInterval(fn, ms); return () => clearInterval(t); },
   });
+  scheduler.driver = shared;
   return shared;
 }

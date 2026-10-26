@@ -25,9 +25,9 @@
   const filtered = $derived(!!(filter.query || filter.agent || filter.severities.length || filter.newOnly));
   const changes = $derived(changeSummary(insightsStore.insights, insightsStore.analyzers));
 
-  async function review(fingerprint: string, state: FindingState, reason?: string) {
+  async function review(fingerprint: string, state: FindingState, reason?: string, snooze?: api.SnoozeFor) {
     busy = fingerprint; error = null;
-    try { await api.reviewFinding(fingerprint, state, state === "snoozed" ? 7 : undefined, reason); await insightsStore.refresh(); }
+    try { await api.reviewFinding(fingerprint, state, state === "snoozed" ? snooze ?? { days: 7 } : undefined, reason); await insightsStore.refresh(); }
     catch (e) { error = String(e); }
     finally { busy = null; }
   }

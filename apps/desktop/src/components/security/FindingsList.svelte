@@ -1,11 +1,12 @@
 <script lang="ts">
+  import type { SnoozeFor } from "../../lib/api";
   // Findings in groups, each a card with a header (label, worst severity, count).
   import FindingRow from "./FindingRow.svelte";
   import type { FindingState } from "../../lib/analyzers";
   import { PAGE_SIZE, type FindingGroup, type GroupBy } from "../../lib/security-view";
   let { groups, groupBy, busy, onreview, onrescan }: {
     groups: FindingGroup[]; groupBy: GroupBy; busy: string | null;
-    onreview: (fingerprint: string, state: FindingState, reason?: string) => void; onrescan?: (analyzer: string) => void;
+    onreview: (fingerprint: string, state: FindingState, reason?: string, snooze?: SnoozeFor) => void; onrescan?: (analyzer: string) => void;
   } = $props();
   let openId = $state<string | null>(null);
   let limits = $state<Record<string, number>>({});
@@ -23,7 +24,7 @@
         {#each g.items.slice(0, limit) as item (item.finding.fingerprint)}
           <FindingRow {item} open={openId === item.finding.fingerprint} busy={busy === item.finding.fingerprint}
             ontoggle={() => (openId = openId === item.finding.fingerprint ? null : item.finding.fingerprint)}
-            onreview={(s, reason) => onreview(item.finding.fingerprint, s, reason)}
+            onreview={(s, reason, snooze) => onreview(item.finding.fingerprint, s, reason, snooze)}
             onrescan={onrescan ? () => onrescan(item.analyzer) : undefined} />
         {/each}
       </ul>
