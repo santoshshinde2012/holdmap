@@ -10,6 +10,24 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
+- **Skill trust.** Security → **Skills** fingerprints each skill folder (SHA-256 over names and bytes, bounded,
+  symlinks skipped) and flags skills **Changed since trusted** or **Not trusted yet** on Home, agent details and
+  Security, with what changed by file name and size only. **Trust this version** takes an optional reason. CLI
+  `holdmap analyzers skills|trust|untrust`, MCP `list_skill_trust`.
+- **Top risks.** A banded, explained score per agent and folder from open findings and changed skills (exposure
+  isn't counted; it can't be confirmed). Sortable, CSV and Markdown export, CLI `holdmap analyzers risks`, MCP
+  `list_risks` (the MCP server now has 16 tools).
+- **Scheduled scans.** Off by default; turning on shows the plan and needs a confirm. Offline analyzers only (MCP
+  ones when opted in), only while the app is open, skipped on battery, with throttled notifications for new
+  high/critical findings or changed skills and quiet hours.
+- **Custom snoozes.** 1, 7, 30 days or a date up to 90 days, shown on the finding and in exports and the CLI
+  (`--until`). CLI `insights --format csv|markdown` includes reasons and snooze ends.
+
+### Fixed
+
+- The Security view switcher no longer overflows at 390px; it scrolls.
+- The browser demo's rescans vary their sample results (labelled demo) so new and fixed findings show.
+
 - **New and fixed since the last run.** After a rescan, Security shows how many findings are new and fixed, a
   **New since last run** filter, a **New** pill and **What was fixed**. Run history, exports (JSON, CSV), the CLI
   (`holdmap insights --new`, `holdmap analyzers history ID`) and MCP `list_insights` (`new_only`) carry the same

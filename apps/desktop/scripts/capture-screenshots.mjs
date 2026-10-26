@@ -418,6 +418,15 @@ const walkthrough = [
     await expect(subjects).toContainText("release-check");
     await subjects.scrollIntoViewIfNeeded();
   } },
+  { name: "trust", async prepare(page) {
+    const security = await securityTab(page, /^Skills/);
+    await security.getByRole("button", { name: /release-check.*Changed since trusted/ }).click();
+    await expect(security.getByRole("list", { name: "Changed files for release-check" })).toContainText("scripts/upload.sh");
+  } },
+  { name: "risks", async prepare(page) {
+    const security = await securityTab(page, "Risks");
+    await expect(security.getByRole("table")).toBeVisible();
+  } },
 ].map((step) => ({ ...step, name: `desktop-analyzers-${step.name}-light.png`, theme: "light" }));
 
 const captures = [

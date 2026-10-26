@@ -33,6 +33,12 @@ From a fresh install to an exported, fixed result. Bold text is the exact label 
     Only what's on screen is exported. ([screenshot](#7-export))
 11. After fixing, choose **Rescan** (or **Rescan** on the finding) and check the finding is gone and
     **Run history** shows the new run. ([screenshot](#8-run-history))
+12. Open **Skills**. For a skill marked **Changed since trusted**, read **What changed since you
+    trusted it** (file names and sizes), check the folder, then **Trust this version** with a
+    reason. ([screenshot](#10-skill-trust))
+13. Open **Risks** to see which agents and folders to look at first; sort or download it. ([screenshot](#11-top-risks))
+14. Optional: **Settings → Analyzers → Scheduled scans**, pick offline analyzers, **Review plan and
+    turn on…**, then **Turn on**. ([section](#12-scheduled-scans))
 
 ## Demo script (3 minutes)
 
@@ -48,6 +54,9 @@ Use the live demo (<https://santoshshinde2012.github.io/holdmap/#demo>) or `npm 
    folder, `SKILL.md:12`, suggested steps.
 5. **2:30** Filter **2 medium**, **Download Markdown**: the file says what was included.
 6. **2:50** **Home** shows the skill findings tile; Claude Code's details list the skill.
+7. **3:00** **Skills**: *release-check* changed since trusted; show the added script by name and
+   size, **Trust this version**. **Risks**: Claude Code is on top, with why. Rescan again: the demo
+   varies its sample results so **New** and **What was fixed** have something to show.
 
 ## What a skill analyzer means for security
 
@@ -191,6 +200,51 @@ skills had findings in its last run.
 
 ![Pipeline with the skills that had findings](screenshots/desktop-analyzers-pipeline-light.png)
 
+### 10. Skill trust
+
+**Skills** lists every skill folder with its source, a SHA-256 fingerprint, last modified, first
+seen and when you trusted it. **Changed since trusted** and **Not trusted yet** show first; Home,
+the agent's details and the Security header show the same alert. Expand one for **What changed
+since you trusted it**: added, removed and changed files by name and size, never contents.
+**Trust this version** (optional reason) records the current fingerprint. **Check skills now**
+fingerprints again.
+
+The fingerprint covers file names and bytes in a fixed order, skips symlinks, and stops after
+2,000 files or 64 MB (then it says **first files only**). CLI: `holdmap analyzers skills`,
+`holdmap analyzers trust ID --reason …`; MCP: `list_skill_trust` (no folder paths).
+
+![Skill trust with a changed skill and what changed](screenshots/desktop-analyzers-trust-light.png)
+
+### 11. Top risks
+
+**Risks** scores each agent and skill folder: 40 points per open critical, 15 high, 5 medium, 1
+low, and 10 per skill changed since trusted. Bands: Low 1+, Elevated 10+, High 25+, Critical 40+
+or any open critical. Whether a skill is reachable from outside isn't counted, because holdmap
+can't confirm it. Each row says why and lists up to five findings. Sort by any column, download
+CSV or Markdown. CLI: `holdmap analyzers risks --by agent --format csv`; MCP: `list_risks`.
+
+![Top risks by agent and folder](screenshots/desktop-analyzers-risks-light.png)
+
+### 12. Scheduled scans
+
+Off by default. In **Settings → Analyzers → Scheduled scans** pick how often (every 6 or 12
+hours, daily, weekly) and which analyzers. Only analyzers that are on and use no network can be
+picked; an MCP analyzer only after **Allow *name* on a schedule**. **Review plan and turn on…**
+shows what runs, how often, network use and notifications; nothing changes until **Turn on**.
+Widening the plan later asks again.
+
+Scans run only while holdmap is open (there is no background service), skip on battery unless you
+untick it (if the power source is unknown they run), and also re-check skill fingerprints
+locally. A notification appears only for new high or critical findings or changed skills, at
+most once an hour and never in quiet hours (default 22:00–07:00); untick **Notify me** to turn
+them off. The next scan shows in the Security header and the run dock.
+
+### Snooze
+
+**Snooze** takes 1, 7 or 30 days or **Pick a date…** up to 90 days ahead, with an optional
+reason. The finding shows **snoozed until …**, and CSV and Markdown exports carry the end date
+and reason. CLI: `holdmap analyzers snooze FP --days 30` or `--until 2026-12-31`.
+
 ## Worked example (demo data)
 
 **Demo data**, exported with **Download Markdown** from the browser demo with no filter:
@@ -245,3 +299,5 @@ with `new_only: true`.
   variables, tokens or secrets, except a key you set for it in the OS keychain.
 - Network use is limited to what the analyzer declares and the install hosts shown before you agree.
 - Exports carry only what's on screen, with your home folder as `~`.
+- Skill trust stores fingerprints, file names and sizes, never contents. Scheduled scans use only
+  offline analyzers and send nothing.
