@@ -3,6 +3,8 @@
   // screen, take a snapshot), kept here so the title bar stays for everyday actions.
   import { IconButton, Kbd } from "../ui";
   import type { PortStats } from "../../lib/port-list";
+  import { securityRuns } from "../../lib/security-runs.svelte";
+  import { runFraction } from "../../lib/run-view";
 
   let {
     stats,
@@ -38,6 +40,12 @@
   {:else}
     <span class="sp"></span>
   {/if}
+  {#if securityRuns.visible}
+    <button type="button" class="run ph-{securityRuns.progress.phase}" data-status-run aria-label={securityRuns.busy ? `Analyzer run in progress, ${Math.round(runFraction(securityRuns.progress) * 100)}%. Show details` : `Analyzer run finished: ${securityRuns.summary}. Show details`} onclick={() => (securityRuns.collapsed = false)}>
+      {#if securityRuns.busy}<span class="spin" aria-hidden="true"></span>{:else}<span class="dot" aria-hidden="true"></span>{/if}
+      {securityRuns.busy ? `Scanning ${Math.min(securityRuns.progress.done + 1, securityRuns.progress.total)}/${securityRuns.progress.total}` : securityRuns.progress.phase === "done" ? "Scan done" : securityRuns.progress.phase === "cancelled" ? "Scan cancelled" : "Scan failed"}
+    </button>
+  {/if}
   <div class="capture" role="group" aria-label="Capture">
     <IconButton size="sm" placement="top" icon="video" label={recording ? "Recording screen" : recordingResult ? "Review recording" : "Record screen"} data-screen-record kbd={singleKeys ? ["⇧", "V"] : undefined} pressed={recording || recordingResult} onclick={onrecord} />
     <IconButton size="sm" placement="top" icon={snapshot.busy ? "x" : "camera"} label={snapshot.busy ? "Cancel snapshot capture" : snapshot.hasResult ? "Review snapshot" : "Take snapshot"} data-screen-snapshot kbd={singleKeys && !snapshot.busy ? ["⇧", "S"] : undefined} pressed={snapshot.open || snapshot.busy || snapshot.hasResult} onclick={onsnapshot} />
@@ -52,6 +60,14 @@
   .sp { flex: 1; }
   .hints { display: inline-flex; align-items: center; gap: 14px; min-width: 0; overflow: hidden; }
   .hints > span { display: inline-flex; align-items: center; gap: 6px; }
+  .run { display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); font: inherit; font-size: var(--fs-caption); cursor: pointer; }
+  .run:hover { color: var(--text); border-color: var(--border-strong); }
+  .run:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .run .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  .run.ph-failed .dot { background: var(--danger); } .run.ph-cancelled .dot { background: var(--border-strong); }
+  .spin { width: 10px; height: 10px; border: 2px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
   .capture { display: flex; align-items: center; gap: 1px; flex: none; padding-left: var(--sp-2); border-left: 1px solid var(--border); }
   /* Trim the hints in priority order instead of clipping the last one mid-word. */
   @media (max-width: 1100px) { .hints .gs { display: none; } }

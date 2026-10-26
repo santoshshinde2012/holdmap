@@ -1,6 +1,7 @@
 // Security tab view-model: pure functions that shape analyzer state into what the Security
 // components draw (summary, grouped findings, gallery cards, run progress). No Svelte, no I/O,
 // so every rule here is unit-tested and the components stay small.
+import { productLabel } from "./run-view";
 import { SEVERITY_ORDER, emptyCounts, findingWhere, total, type AnalyzerResult, type AnalyzerView, type Finding, type Insights, type Severity, type SeverityCounts, type Subject } from "./analyzers";
 import type { PresetView } from "./analyzer-presets";
 
@@ -45,8 +46,16 @@ export interface FindingItem {
   agents: string[];
   where: string | null;
   evidence: { label: string; value: string }[];
+  /** The scanned folder, or null when holdmap can't confirm it (show "unknown"). */
+  folder: string | null;
+  /** "global", "project", "local", or "unknown". */
+  scope: string;
+  /** The file the finding points at, inside `folder` when both are known. */
+  path: string | null;
 }
-export type GroupBy = "severity" | "skill" | "analyzer";
+export type GroupBy = "severity" | "skill" | "analyzer" | "agent" | "folder";
+export type SortKey = "severity" | "rule" | "message" | "agent" | "skill" | "folder" | "path";
+export interface SortSpec { key: SortKey; dir: "asc" | "desc" }
 export interface FindingFilter { severities: Severity[]; query: string; agent: string | null; showClosed: boolean }
 export interface FindingGroup { key: string; label: string; severity: Severity | null; items: FindingItem[] }
 
@@ -69,13 +78,23 @@ export function findingItems(insights: Insights | null, analyzers: AnalyzerView[
         subject,
         analyzer: r.analyzer,
         analyzerName: names.get(r.analyzer) ?? r.analyzer,
-        agents: (subject?.agents ?? []).map((p) => agentNames.get(p) ?? p),
+        agents: (subject?.agents ?? []).map((p) => agentNames.get(p) ?? productLabel(p)),
         where: findingWhere(f),
         evidence: evidence(r, f),
+        folder: subject?.dir ?? null,
+        scope: subject?.scope ?? "unknown",
+        path: joinPath(subject?.dir ?? null, f.location.file),
       });
     }
   }
   return out.sort((a, b) => RANK[b.finding.severity] - RANK[a.finding.severity] || a.finding.title.localeCompare(b.finding.title));
+}
+
+/** `dir/file` for a relative file inside a known folder; an absolute file as is. */
+export function joinPath(dir: string | null, file: string | null): string | null {
+  if (!file) return null;
+  if (/^(\/|[A-Za-z]:[\\/])/.test(file) || !dir) return file;
+  return `${dir.replace(/[\\/]+$/, "")}/${file.replace(/^\.\//, "")}`;
 }
 
 function evidence(r: AnalyzerResult, f: Finding): { label: string; value: string }[] {
@@ -92,7 +111,7 @@ export function applyFilter(items: FindingItem[], filter: FindingFilter): Findin
     if (filter.severities.length && !filter.severities.includes(i.finding.severity)) return false;
     if (filter.agent && !i.subject?.agents.includes(filter.agent)) return false;
     if (!q) return true;
-    return [i.finding.title, i.finding.rule_id, i.subject?.name ?? i.finding.subject, i.analyzerName, i.where ?? "", i.finding.fix ?? ""].some((t) => t.toLowerCase().includes(q));
+    return [i.finding.title, i.finding.rule_id, i.subject?.name ?? i.finding.subject, i.analyzerName, i.where ?? "", i.finding.fix ?? "", i.folder ?? "", i.agents.join(" ")].some((t) => t.toLowerCase().includes(q));
   });
 }
 
@@ -100,16 +119,75 @@ export function applyFilter(items: FindingItem[], filter: FindingFilter): Findin
 export function groupFindings(items: FindingItem[], by: GroupBy): FindingGroup[] {
   const groups = new Map<string, FindingGroup>();
   for (const i of items) {
-    const key = by === "severity" ? i.finding.severity : by === "skill" ? i.finding.subject : i.analyzer;
-    const label = by === "severity" ? cap(i.finding.severity) : by === "skill" ? (i.subject?.name ?? i.finding.subject) : i.analyzerName;
-    const g = groups.get(key) ?? { key, label, severity: null, items: [] };
-    g.items.push(i);
-    if (!g.severity || RANK[i.finding.severity] > RANK[g.severity]) g.severity = i.finding.severity;
-    groups.set(key, g);
+    for (const [key, label] of groupKeys(i, by)) {
+      const g = groups.get(key) ?? { key, label, severity: null, items: [] };
+      g.items.push(i);
+      if (!g.severity || RANK[i.finding.severity] > RANK[g.severity]) g.severity = i.finding.severity;
+      groups.set(key, g);
+    }
   }
   const list = [...groups.values()];
   if (by === "severity") return SEVERITY_ORDER.map((s) => groups.get(s)).filter((g): g is FindingGroup => !!g);
   return list.sort((a, b) => RANK[b.severity!] - RANK[a.severity!] || b.items.length - a.items.length || a.label.localeCompare(b.label));
+}
+
+/** A finding loaded by two agents shows under both when grouping by agent. */
+function groupKeys(i: FindingItem, by: GroupBy): [string, string][] {
+  switch (by) {
+    case "severity": return [[i.finding.severity, cap(i.finding.severity)]];
+    case "skill": return [[i.finding.subject, i.subject?.name ?? i.finding.subject]];
+    case "analyzer": return [[i.analyzer, i.analyzerName]];
+    case "folder": return [[i.folder ?? "unknown", i.folder ?? "Folder unknown"]];
+    case "agent": return i.agents.length ? i.agents.map((a) => [a, a] as [string, string]) : [["unknown", "Agent unknown"]];
+  }
+}
+
+const sortValue = (i: FindingItem, key: SortKey): string | number => {
+  switch (key) {
+    case "severity": return RANK[i.finding.severity];
+    case "rule": return i.finding.rule_id;
+    case "message": return i.finding.title;
+    case "agent": return i.agents.join(", ");
+    case "skill": return i.subject?.name ?? i.finding.subject;
+    case "folder": return i.folder ?? "";
+    case "path": return i.where ?? "";
+  }
+};
+
+/** Table order; ties fall back to severity (worst first), then title, so it stays stable. */
+export function sortFindings(items: FindingItem[], sort: SortSpec): FindingItem[] {
+  const sign = sort.dir === "asc" ? 1 : -1;
+  return [...items].sort((a, b) => {
+    const x = sortValue(a, sort.key), y = sortValue(b, sort.key);
+    const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
+    return sign * c || RANK[b.finding.severity] - RANK[a.finding.severity] || a.finding.title.localeCompare(b.finding.title);
+  });
+}
+
+export type ActionKind = "open_folder" | "review_file" | "fix" | "ask_agent" | "snooze";
+export interface SuggestedAction { kind: ActionKind; label: string }
+
+/** What a person can do about a finding, in the order worth trying. Never claims holdmap
+ *  verified anything: findings are the analyzer's word, unverified. */
+export function suggestedActions(i: FindingItem): SuggestedAction[] {
+  const out: SuggestedAction[] = [];
+  if (i.path) out.push({ kind: "review_file", label: `Open ${i.where ?? i.path} and read the flagged lines` });
+  if (i.finding.fix) out.push({ kind: "fix", label: "Apply the fix above, or remove the flagged text" });
+  if (i.folder) out.push({ kind: "open_folder", label: "Show the skill's folder to edit or remove it" });
+  if (i.agents.length) out.push({ kind: "ask_agent", label: `Until it's fixed, turn the skill off in ${i.agents.join(", ")}` });
+  out.push({ kind: "snooze", label: "If it's expected, choose Mark reviewed so it stops counting" });
+  return out;
+}
+
+
+/** Open findings for one agent (catalog product id), e.g. for its card or detail view. */
+export function agentFindingCounts(insights: Insights | null, product: string): SeverityCounts {
+  const c = emptyCounts();
+  for (const r of insights?.results ?? []) {
+    const subjects = new Map(r.subjects.map((s) => [s.id, s]));
+    for (const f of r.findings) if (f.state === "open" && subjects.get(f.subject)?.agents.includes(product)) c[f.severity]++;
+  }
+  return c;
 }
 
 /** Counts of the filtered-but-unsevered set, for the severity chips. */
@@ -169,14 +247,5 @@ export function firstSentence(s: string): string {
   return (m ? m[1] : s).replace(/[.]$/, "");
 }
 
-// ---- Runs ----
-
-export type RunPhase = "idle" | "running" | "done" | "failed";
-export interface RunStep { id: string; name: string; phase: RunPhase; note: string | null }
-export interface RunProgress { steps: RunStep[]; done: number; total: number; phase: RunPhase }
-
-export function runProgress(steps: RunStep[]): RunProgress {
-  const done = steps.filter((s) => s.phase === "done" || s.phase === "failed").length;
-  const phase: RunPhase = !steps.length ? "idle" : steps.some((s) => s.phase === "running" || s.phase === "idle") ? "running" : steps.some((s) => s.phase === "failed") ? "failed" : "done";
-  return { steps, done, total: steps.length, phase };
-}
+export { productLabel, scopeLabel, runProgress, stepLabel, runFraction, elapsed, runSummary } from "./run-view";
+export type { RunPhase, RunStep, RunProgress } from "./run-view";

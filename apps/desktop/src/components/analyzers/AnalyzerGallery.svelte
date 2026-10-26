@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Analyzer cards: the ones on, then the ones you can add. Run is the only action that acts here;
-  // Enable, Review and Install open the permissions sheet in Settings, so consent and sandboxing
+  // Analyzer cards: the ones on, then the ones you can add. Run acts here; Install opens the
+  // guided install (consent first); Enable and Review open the permissions sheet in Settings, so consent and sandboxing
   // are unchanged and nothing is on by default. "Add your own" opens the add form in place; what
   // it adds stays off until approved.
   import { onMount } from "svelte";
@@ -10,6 +10,7 @@
   import * as api from "../../lib/api";
   import { insightsStore } from "../../lib/insights-store.svelte";
   import { securityRuns } from "../../lib/security-runs.svelte";
+  import { installDialog } from "../../lib/install-dialog.svelte";
   import { analyzerCards } from "../../lib/security-view";
   import type { PresetView } from "../../lib/analyzer-presets";
 
@@ -18,7 +19,9 @@
   let adding = $state(false);
   const demo = !api.isTauri;
   function added() { void insightsStore.refresh(); }
-  onMount(() => { api.analyzerPresets().then((p) => (presets = p), () => (presets = [])); });
+  const loadPresets = () => api.analyzerPresets().then((p) => (presets = p), () => (presets = []));
+  onMount(() => { void loadPresets(); });
+  $effect(() => { if (installDialog.attempts) void loadPresets(); });
   const cards = $derived(analyzerCards(insightsStore.analyzers, presets));
   const enabled = $derived(cards.filter((c) => c.status === "on" || c.status === "changed"));
   const available = $derived(cards.filter((c) => c.status !== "on" && c.status !== "changed"));
@@ -27,6 +30,7 @@
 
   function act(id: string, action: string) {
     if (action === "run") { const a = insightsStore.analyzers.find((x) => x.id === id); if (a) void securityRuns.start([a]); }
+    else if (action === "install") void installDialog.show(id);
     else onsettings?.();
   }
 </script>
@@ -39,7 +43,7 @@
         <h3 id="gal-{sec.key}">{sec.title}<span>{sec.list.length}</span></h3>
         <ul>
           {#each sec.list as card (card.id)}
-            <AnalyzerCard {card} busy={running === card.id} disabled={card.action === "run" && securityRuns.busy && running !== card.id}
+            <AnalyzerCard {card} step={securityRuns.stepFor(card.id)} busy={running === card.id} disabled={card.action === "run" && securityRuns.busy && running !== card.id}
               onaction={() => act(card.id, card.action)}
               onpipeline={onpipeline && configured(card.id) ? () => onpipeline(card.id) : undefined} />
           {/each}

@@ -926,3 +926,128 @@ fn a_preset_is_added_as_the_users_own_analyzer_and_stays_off_until_approved() {
     assert!(h.service.remove_manifest("google.osv-scanner").unwrap());
     assert!(h.service.presets().iter().all(|p| !p.added));
 }
+
+#[test]
+fn a_run_reports_its_steps_and_keeps_a_history_and_the_skill_folder() {
+    use holdmap_analyzers::runner::{ProgressSink, RunStep};
+    let h = harness();
+    let r = report(&h.skill_dir);
+    h.service.approve(SKILLSPECTOR).unwrap();
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let sink = {
+        let events = events.clone();
+        ProgressSink::new(move |e| events.lock().unwrap().push(e))
+    };
+    let result = h.service.run_with_progress(SKILLSPECTOR, &r, sink).unwrap();
+    let steps: Vec<RunStep> = events.lock().unwrap().iter().map(|e| e.step).collect();
+    assert_eq!(steps.first(), Some(&RunStep::Preparing));
+    assert_eq!(steps.last(), Some(&RunStep::Collecting));
+    // The fake runner doesn't report per subject; the real CLI runner's per-skill steps are
+    // covered in cli_runner's tests.
+    assert!(events.lock().unwrap().iter().all(|e| e.subject.is_none()));
+    let subject = &result.subjects[0];
+    assert_eq!(subject.dir.as_deref(), Some(h.skill_dir.to_str().unwrap()));
+    assert!(subject.scope.is_some());
+    assert_eq!(
+        h.service.subject_dir(SKILLSPECTOR, &subject.id).unwrap(),
+        h.skill_dir
+    );
+    assert!(h.service.subject_dir(SKILLSPECTOR, "nope").is_err());
+    h.service.run(SKILLSPECTOR, &r).unwrap();
+    let history = h.service.history(SKILLSPECTOR).unwrap();
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[0].subjects, result.subjects.len());
+    assert_eq!(
+        history[0].counts.values().sum::<usize>(),
+        result.findings.len()
+    );
+    assert!(history[0].run_at_ms >= history[1].run_at_ms);
+}
+
+#[test]
+fn installs_need_a_holdmap_folder_and_presets_can_be_planned_before_they_are_added() {
+    let h = harness();
+    assert!(matches!(
+        h.service.install_plan("pycqa.bandit"),
+        Err(ServiceError::Install(_))
+    ));
+    let tools = tempfile::tempdir().unwrap();
+    let service = h.service.with_tools_dir(
+        tools.path(),
+        holdmap_analyzers::probe::SystemProbe::with_env(Some("/nonexistent".into()), None),
+    );
+    let plan = service.install_plan("pycqa.bandit").unwrap();
+    assert_eq!(plan.version, "1.9.4");
+    assert!(plan.target_dir.starts_with(tools.path().to_str().unwrap()));
+    assert_eq!(plan.can_install, plan.blocked.is_none());
+    assert!(service.install_plan("unknown.tool").is_err());
+}
+
+/// A store written by holdmap 0.11.0 (approval, latest result, one review; no install records,
+/// run history, folders or scopes) loads as is, and the next run adds history without losing it.
+#[test]
+fn a_v0110_store_loads_and_keeps_working() {
+    let h = harness();
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/v0.11.0-store");
+    for rel in [
+        "grants.json",
+        "reviews.json",
+        "results/nvidia.skillspector.json",
+    ] {
+        let to = h.store_dir.join(rel);
+        std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+        std::fs::copy(fixture.join(rel), &to).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(to.parent().unwrap(), std::fs::Permissions::from_mode(0o700))
+                .unwrap();
+            std::fs::set_permissions(&to, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&h.store_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    assert_eq!(
+        h.service.get(SKILLSPECTOR).unwrap().state,
+        AnalyzerState::Approved
+    );
+    let old = h.service.insights();
+    assert_eq!(old.results.len(), 1);
+    let result = &old.results[0];
+    assert_eq!(result.findings.len(), 3);
+    assert!(result
+        .subjects
+        .iter()
+        .all(|s| s.dir.is_none() && s.scope.is_none()));
+    assert_eq!(
+        result
+            .findings
+            .iter()
+            .filter(|f| f.state == FindingState::Reviewed)
+            .count(),
+        1,
+        "the 0.11.0 review still applies"
+    );
+    assert!(h.service.history(SKILLSPECTOR).unwrap().is_empty());
+
+    let r = report(&h.skill_dir);
+    let again = h.service.run(SKILLSPECTOR, &r).unwrap();
+    assert_eq!(again.findings.len(), 3);
+    assert_eq!(h.service.history(SKILLSPECTOR).unwrap().len(), 1);
+    let now = h.service.insights();
+    assert_eq!(
+        now.results[0]
+            .findings
+            .iter()
+            .filter(|f| f.state == FindingState::Reviewed)
+            .count(),
+        1
+    );
+    assert!(now.results[0]
+        .subjects
+        .iter()
+        .any(|s| s.scope.as_deref() == Some("user")));
+}

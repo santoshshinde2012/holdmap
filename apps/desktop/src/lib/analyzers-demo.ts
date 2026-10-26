@@ -8,6 +8,8 @@ import { inventories } from "./agent-config";
 import { readManifest, type DemoManifest } from "./analyzer-manifest";
 import { presetSource, presetViews, type PresetView } from "./analyzer-presets";
 import type { AgentsReport } from "./types";
+import type { InstallPlan, InstallRecord } from "./analyzer-install";
+import type { RunRecord } from "./analyzers";
 
 const SKILLSPECTOR = "nvidia.skillspector";
 const OSV = "holdmap.osv";
@@ -29,12 +31,13 @@ const BASE: Record<string, Omit<AnalyzerView, "state" | "approved_at_ms" | "last
   },
 };
 
-const skill = (id: string, name: string, agents: string[]): Subject => ({ id, kind: "skill", name, agents });
+const skill = (id: string, name: string, agents: string[], dir?: string, scope?: string): Subject => ({ id, kind: "skill", name, agents, ...(dir ? { dir } : {}), ...(scope ? { scope } : {}) });
 
 function skillspectorResult(): AnalyzerResult {
-  const releaseCheck = skill("claude:project:release-check", "release-check", ["claude-code"]);
-  const frontend = skill("shared:project:frontend-checks", "frontend-checks", ["cursor"]);
-  const review = skill("shared:user:code-review", "code-review", ["cursor", "codex"]);
+  const releaseCheck = skill("claude:project:release-check", "release-check", ["claude-code"], "/Users/dev/code/shop-api/.claude/skills/release-check", "project");
+  const frontend = skill("shared:project:frontend-checks", "frontend-checks", ["cursor"], "/Users/dev/code/shop-web/.agents/skills/frontend-checks", "project");
+  const review = skill("shared:user:code-review", "code-review", ["cursor", "codex"], "/Users/dev/.agents/skills/code-review", "user");
+  // Holdmap couldn't confirm where this one lives: the UI says "unknown".
   const migrations = skill("codex:user:db-migrations", "db-migrations", ["codex"]);
   const f = (fingerprint: string, rule_id: string, category: string, severity: AnalyzerResult["findings"][number]["severity"], title: string, subject: string, file: string, line: number, fix: string) =>
     ({ fingerprint, analyzer: SKILLSPECTOR, rule_id, category, severity, title, subject, location: { file, line }, fix, refs: [], state: "open" as FindingState });
@@ -99,12 +102,15 @@ export class DemoAnalyzers {
   private background = new Set<string>();
   private user = new Map<string, DemoManifest>();
   private mcp = new Map<string, mcp.DemoMcp>();
+  private installs = new Map<string, InstallRecord>();
+  private runs = new Map<string, RunRecord[]>();
   private catalogState: CatalogStatus = { version: 1, published: "2026-10-18", accepted: false, pending: null };
 
   /** `fresh`: nothing turned on yet, like a first launch (the empty-machine demo profile). */
   constructor(fresh = false) {
     this.approved = new Map(fresh ? [] : [[SKILLSPECTOR, RUN_AT - 3_600_000]]);
     this.results = new Map(fresh ? [] : [[SKILLSPECTOR, skillspectorResult()]]);
+    if (!fresh) this.remember(skillspectorResult());
   }
 
   catalog(): CatalogStatus {
@@ -148,7 +154,41 @@ export class DemoAnalyzers {
 
   /** Quick-select presets (the app's own manifests), marking those already added. */
   presets(): PresetView[] {
-    return presetViews((id) => this.user.has(id));
+    return presetViews((id) => this.user.has(id)).map((p) => ({ ...p, installed: this.installs.has(p.id) }));
+  }
+
+  /** What an install would do (simulated; nothing runs). */
+  async installPlan(id: string): Promise<InstallPlan> {
+    const preset = presetViews(() => false).find((p) => p.id === id);
+    const known = BASE[id] ?? (this.user.has(id) ? this.base(id) : null);
+    if (!known && !preset) throw new Error(`no analyzer named "${id}"`);
+    const name = known?.name ?? preset!.name;
+    const network = known?.permissions.network ?? preset!.network;
+    const reads = known?.permissions.read.length ? ["A private copy of each skill's folder (read-only)"] : preset ? ["A private copy of each skill's folder (read-only)"] : [];
+    const { demoPlan } = await import("./analyzer-install-demo");
+    return demoPlan(id, name, known?.install ?? preset?.install ?? null, reads, network, this.installs.get(id) ?? null);
+  }
+
+  recordInstall(record: InstallRecord): void {
+    this.installs.set(record.analyzer, record);
+  }
+
+  /** Past runs, newest first. */
+  history(id: string): RunRecord[] {
+    return structuredClone(this.runs.get(id) ?? []);
+  }
+
+  /** Simulated reveal: the browser can't open folders, so it returns the folder to show. */
+  subjectDir(id: string, subject: string): string | null {
+    return this.results.get(id)?.subjects.find((s) => s.id === subject)?.dir ?? null;
+  }
+
+  private remember(r: AnalyzerResult): void {
+    const counts: RunRecord["counts"] = {};
+    for (const f of r.findings) counts[f.severity] = (counts[f.severity] ?? 0) + 1;
+    const list = this.runs.get(r.analyzer) ?? [];
+    list.unshift({ analyzer: r.analyzer, run_at_ms: r.run_at_ms, analyzer_version: r.analyzer_version, status: r.status, subjects: r.subjects.length, counts, duration_ms: r.duration_ms ?? null });
+    this.runs.set(r.analyzer, list.slice(0, 20));
   }
 
   /** Simulated preset add: the preset's manifest is checked and listed like any other. */
@@ -205,7 +245,18 @@ export class DemoAnalyzers {
     return this.view(id);
   }
 
-  cancel(): void { /* demo runs finish at once */ }
+  private cancelled = false;
+  cancel(): void { this.cancelled = true; }
+  /** Clear a previous cancel at the start of a run; true once the user pressed Cancel. */
+  resetCancel(): void { this.cancelled = false; }
+  get wasCancelled(): boolean { return this.cancelled; }
+
+  /** The items a demo run walks through, for its progress updates. */
+  runSubjects(id: string, report: AgentsReport): { name: string; agents: string[] }[] {
+    if (id === OSV) return osvPackages(report).map((p) => ({ name: `${p.name}@${p.version}`, agents: p.agents }));
+    if (id === SKILLSPECTOR) return skillspectorResult().subjects.map((s) => ({ name: s.name, agents: s.agents }));
+    return this.skills(report).map((s) => ({ name: s.subject.name, agents: s.subject.agents }));
+  }
 
   private base(id: string): Omit<AnalyzerView, "state" | "approved_at_ms" | "last_run" | "version"> {
     const d = this.mcp.get(id);
@@ -259,7 +310,7 @@ export class DemoAnalyzers {
     for (const a of inventories(report)) {
       for (const s of a.capabilities?.skills ?? []) {
         const dir = s.source_path.replace(/\/SKILL\.md$/, "");
-        const entry = skills.get(dir) ?? { subject: skill(s.id, s.name, []), input: dir };
+        const entry = skills.get(dir) ?? { subject: skill(s.id, s.name, [], dir, s.scope), input: dir };
         if (!entry.subject.agents.includes(a.product)) entry.subject.agents.push(a.product);
         skills.set(dir, entry);
       }
@@ -389,6 +440,7 @@ export class DemoAnalyzers {
       if (d.approvedSha !== d.listed?.sha256) throw new Error(`${d.draft.name} changed since you approved it. Review it again.`);
       const result = mcp.sampleRun(id, d, this.skills(report).map((s) => s.subject));
       this.results.set(id, result);
+      this.remember(result);
       return this.withReviews(result)!;
     }
     const user = this.user.get(id);
@@ -396,6 +448,7 @@ export class DemoAnalyzers {
       ? { analyzer: id, analyzer_version: null, run_at_ms: Date.now(), status: "complete" as const, coverage: null, subjects: this.skills(report).map((s) => s.subject), findings: [], details: [], notes: [`Browser demo: ${user.kind === "mcp" ? "no MCP server was started" : "nothing was run"}; this is a sample result.`] }
       : id === OSV ? osvResult(report) : { ...skillspectorResult(), run_at_ms: Date.now() };
     this.results.set(id, result);
+    this.remember(result);
     return this.withReviews(result)!;
   }
 

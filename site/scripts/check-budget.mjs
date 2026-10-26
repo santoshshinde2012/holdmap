@@ -74,7 +74,9 @@ if (!demoManifest["src/components/AgentsView.svelte"]) throw new Error("Agents m
 const capabilityDemoFiles = onDemandFeature("src/components/agents/AgentCapabilitiesView.svelte", "Capability workspace");
 const analyzerGraphFiles = onDemandFeature("src/components/analyzers/graph/analyzer-graphs.ts", "Analyzer graphs");
 const securityDemoFiles = onDemandFeature("src/components/analyzers/InsightsWorkspace.svelte", "Security workspace");
-const deferredDemoJs = demoJs.filter((file) => !initialDemoFiles.has(file) && !snapshotDemoFiles.has(file) && !capabilityDemoFiles.has(file) && !analyzerGraphFiles.has(file) && !securityDemoFiles.has(file));
+const installDemoFiles = new Set([...onDemandFeature("src/components/security/InstallDialog.svelte", "Analyzer install"), ...onDemandFeature("src/lib/analyzer-install-demo.ts", "Analyzer install demo")]);
+const runDockDemoFiles = onDemandFeature("src/components/security/RunDock.svelte", "Run progress");
+const deferredDemoJs = demoJs.filter((file) => !initialDemoFiles.has(file) && !snapshotDemoFiles.has(file) && !capabilityDemoFiles.has(file) && !analyzerGraphFiles.has(file) && !securityDemoFiles.has(file) && !installDemoFiles.has(file) && !runDockDemoFiles.has(file));
 const videos = files(join(dist, "hero")).filter((f) => /\.(mp4|webm)$/.test(f));
 
 const rows = [
@@ -86,8 +88,11 @@ const rows = [
   ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 220 * 1024],
   ["Snapshot PNG JS (on capture)", [...snapshotDemoFiles].reduce((n, f) => n + gz(f), 0), 40 * 1024],
   ["Capability workspace JS (on inspection)", [...capabilityDemoFiles].reduce((n, f) => n + gz(f), 0), 20 * 1024],
-  ["Security workspace JS (on Security)", [...securityDemoFiles].reduce((n, f) => n + gz(f), 0), 12 * 1024],
+  // The Security view's helpers moved here from the first screen; the initial budget stays at 220 KB.
+  ["Security workspace JS (on Security)", [...securityDemoFiles].reduce((n, f) => n + gz(f), 0), 14 * 1024],
   ["Analyzer graphs JS (on Pipeline)", [...analyzerGraphFiles].reduce((n, f) => n + gz(f), 0), 12 * 1024],
+  ["Analyzer install JS (on Install…)", [...installDemoFiles].reduce((n, f) => n + gz(f), 0), 8 * 1024],
+  ["Run progress JS (on Run)", [...runDockDemoFiles].reduce((n, f) => n + gz(f), 0), 4 * 1024],
   ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 160 * 1024],
   ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];

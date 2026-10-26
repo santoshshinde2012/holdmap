@@ -57,8 +57,10 @@
   never values or file bodies, and never starts an MCP server.
 - **Analyzers (opt-in).** Scan skills and MCP packages with SkillSpector, the built-in OSV.dev
   lookup, presets (Cisco Skill Scanner, OSV-Scanner, Trivy, Bandit) or any MCP server. Each one
-  stays off until you approve exactly what it gets, and runs on a copy in a sandbox. Add any
-  MCP server in three steps: source, tools, review.
+  stays off until you approve exactly what it gets, and runs on a copy in a sandbox. Install
+  pinned analyzers from the app after a consent step, follow runs in a progress dock, and
+  review results by agent, folder and source path, exported as JSON, SARIF, CSV or Markdown.
+  Add any MCP server in three steps: source, tools, review.
 - **Home, maps and graphs.** Agents as Cards or a Map with a Timeline and a **Needs you**
   list, the service graph with clusters, and agent flow.
 - **Local capture.** Records only the holdmap window to MP4/GIF, plus PNG snapshots. Other apps and your desktop are never captured. Nothing is uploaded.
@@ -285,6 +287,7 @@ scanners are on real skills.
 | [Getting started](https://santoshshinde2012.github.io/holdmap/docs/) | Install, first commands and recipes |
 | [Agents, tools and apps](https://santoshshinde2012.github.io/holdmap/docs/agents/) | Agent inventory, MCP and skills, flow and recording |
 | [Analyzers](https://santoshshinde2012.github.io/holdmap/docs/analyzers/) | Opt-in scanners, presets, sandboxes and findings |
+| [Analyzers, end to end](docs/analyzers.md) | Steps to follow, a 3-minute demo and every screen |
 | [Desktop app](https://santoshshinde2012.github.io/holdmap/docs/desktop/) | Home, graph, shortcuts, capture and first open |
 | [MCP for AI agents](https://santoshshinde2012.github.io/holdmap/docs/mcp/) | Client setup, tools and stop confirmation |
 | [Project stacks](https://santoshshinde2012.github.io/holdmap/docs/projects/) | `.holdmap.toml`, `holdmap up` and `down` |

@@ -1,7 +1,7 @@
 //! Approvals, latest results and review states, behind three narrow traits so the service can
 //! be tested in memory and stored on disk in production ([`crate::store::FileStore`]).
 
-use crate::finding::{AnalyzerResult, FindingState};
+use crate::finding::{push_history, AnalyzerResult, FindingState, RunRecord};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io;
@@ -113,6 +113,14 @@ pub trait ResultStore: Send + Sync {
     fn save(&self, result: &AnalyzerResult) -> io::Result<()>;
     /// Forget the result of `analyzer`.
     fn forget(&self, analyzer: &str) -> io::Result<()>;
+    /// Past runs of `analyzer`, newest first.
+    fn history(&self, _analyzer: &str) -> Vec<RunRecord> {
+        Vec::new()
+    }
+    /// Add a run to the front of its analyzer's history (capped).
+    fn append_history(&self, _record: &RunRecord) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 /// Review states by finding fingerprint.
@@ -151,6 +159,7 @@ pub struct MemoryStore {
     catalogs: Mutex<BTreeMap<u8, crate::catalog::SignedCatalog>>,
     manifests: Mutex<BTreeMap<String, String>>,
     tools: Mutex<BTreeMap<(String, ToolSlot), crate::mcp_tools::ToolSnapshot>>,
+    history: Mutex<BTreeMap<String, Vec<RunRecord>>>,
 }
 
 impl ToolPinStore for MemoryStore {
@@ -260,6 +269,22 @@ impl ResultStore for MemoryStore {
     }
     fn forget(&self, analyzer: &str) -> io::Result<()> {
         self.results.lock().unwrap().remove(analyzer);
+        Ok(())
+    }
+    fn history(&self, analyzer: &str) -> Vec<RunRecord> {
+        self.history
+            .lock()
+            .unwrap()
+            .get(analyzer)
+            .cloned()
+            .unwrap_or_default()
+    }
+    fn append_history(&self, record: &RunRecord) -> io::Result<()> {
+        let mut all = self.history.lock().unwrap();
+        push_history(
+            all.entry(record.analyzer.clone()).or_default(),
+            record.clone(),
+        );
         Ok(())
     }
 }

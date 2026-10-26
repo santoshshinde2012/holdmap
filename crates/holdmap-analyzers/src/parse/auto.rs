@@ -92,6 +92,8 @@ spawns_mcp_servers = true
                 kind: SubjectKind::Skill,
                 name: "s".into(),
                 agents: vec![],
+                dir: None,
+                scope: None,
             }],
             exit_code: None,
             bytes: bytes.as_bytes().to_vec(),

@@ -87,3 +87,23 @@ Every capture in `docs/screenshots/`, all with sample data, never a real screen.
 | home | [dark](screenshots/site-home-dark.png) | [light](screenshots/site-home-light.png) |
 | release | [dark](screenshots/site-release-dark.png) | [light](screenshots/site-release-light.png) |
 | release mobile | — | [light](screenshots/site-release-mobile-light.png) |
+
+## Desktop: Analyzers walkthrough
+
+Light only, used by [Analyzers, end to end](analyzers.md).
+
+| Step | Light |
+|---|---|
+| find | [light](screenshots/desktop-analyzers-find-light.png) |
+| install-consent | [light](screenshots/desktop-analyzers-install-consent-light.png) |
+| install-done | [light](screenshots/desktop-analyzers-install-done-light.png) |
+| install-failed | [light](screenshots/desktop-analyzers-install-failed-light.png) |
+| turn-on | [light](screenshots/desktop-analyzers-turn-on-light.png) |
+| run-progress | [light](screenshots/desktop-analyzers-run-progress-light.png) |
+| results | [light](screenshots/desktop-analyzers-results-light.png) |
+| finding-detail | [light](screenshots/desktop-analyzers-finding-detail-light.png) |
+| export | [light](screenshots/desktop-analyzers-export-light.png) |
+| history | [light](screenshots/desktop-analyzers-history-light.png) |
+| home-summary | [light](screenshots/desktop-analyzers-home-summary-light.png) |
+| agent-summary | [light](screenshots/desktop-analyzers-agent-summary-light.png) |
+| pipeline | [light](screenshots/desktop-analyzers-pipeline-light.png) |

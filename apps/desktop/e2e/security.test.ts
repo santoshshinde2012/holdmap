@@ -77,12 +77,12 @@ test("filters by severity, search and group; clearing restores the list", async 
 test("Rescan runs approved analyzers with progress, then reports completion", async ({ app }) => {
   const ws = await security(app, "light");
   await ws.getByRole("button", { name: "Rescan", exact: true }).click();
-  const status = ws.getByRole("status", { name: "Scan status" });
-  await expect(status).toContainText("SkillSpector");
-  await expect(status).toContainText("Scanned SkillSpector");
+  const dock = app.locator("[data-run-dock]");
+  await expect(dock).toContainText("SkillSpector");
+  await expect(app.locator("[data-status-run]")).toContainText("Scan done", { timeout: 15_000 });
   await expect(ws.getByRole("group", { name: "Security summary" })).toContainText("just now");
-  await status.getByRole("button", { name: "Dismiss" }).click();
-  await expect(status).toHaveCount(0);
+  await dock.getByRole("button", { name: "Dismiss" }).click();
+  await expect(dock).toHaveCount(0);
 });
 
 test("Enable opens Settings, where consent happens; nothing runs from the card", async ({ app }) => {

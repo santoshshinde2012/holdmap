@@ -3,7 +3,7 @@
 //! atomically. Results contain only normalised, capped findings.
 
 use crate::consent::{ConsentStore, Grant, ResultStore, Review, ReviewStore};
-use crate::finding::AnalyzerResult;
+use crate::finding::{push_history, AnalyzerResult, RunRecord};
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -88,12 +88,28 @@ impl FileStore {
         Self::result_name(analyzer).map(|n| n.replacen("results/", folder, 1))
     }
 
+    fn history_name(analyzer: &str) -> Option<String> {
+        Self::result_name(analyzer).map(|n| n.replacen("results/", "history/", 1))
+    }
+
     fn result_name(analyzer: &str) -> Option<String> {
         analyzer
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '-'))
             .then(|| format!("results/{analyzer}.json"))
     }
+}
+
+/// Write `value` as JSON to `path`, privately (0600, folder 0700) and atomically.
+pub(crate) fn write_private<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no folder"))?;
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no file name"))?;
+    FileStore::new(parent).write(name, value)
 }
 
 fn private_dir(dir: &Path) -> io::Result<()> {
@@ -261,6 +277,18 @@ impl ResultStore for FileStore {
             Some(Err(e)) if e.kind() != io::ErrorKind::NotFound => Err(e),
             _ => Ok(()),
         }
+    }
+    fn history(&self, analyzer: &str) -> Vec<RunRecord> {
+        Self::history_name(analyzer)
+            .map(|n| self.read(&n))
+            .unwrap_or_default()
+    }
+    fn append_history(&self, record: &RunRecord) -> io::Result<()> {
+        let name = Self::history_name(&record.analyzer)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "bad analyzer id"))?;
+        let mut history: Vec<RunRecord> = self.read(&name);
+        push_history(&mut history, record.clone());
+        self.write(&name, &history)
     }
 }
 

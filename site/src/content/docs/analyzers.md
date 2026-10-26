@@ -8,6 +8,9 @@ Analyzers are scanners you choose. They look at the skills and pinned MCP packag
 running agents and add short findings to Home, the map, **Needs you**, skill cards and **Agents → Security**.
 Every analyzer is off until you turn it on.
 
+Want the whole flow with screenshots, step by step? See
+[Analyzers, end to end](https://github.com/santoshshinde2012/holdmap/blob/main/docs/analyzers.md).
+
 **Agents → Security → Analyzers** lists the analyzers you set up and the ready-made presets,
 each marked on/off or installed. A skill or MCP card's details have **Scan with…**: approved
 analyzers run on request; the rest link to their permissions sheet in Settings.
@@ -16,10 +19,36 @@ Analyzers are new in 0.10.0.
 
 | Analyzer | What it checks | Network |
 | --- | --- | --- |
-| **SkillSpector** (NVIDIA, install it yourself) | Skills, statically, for prompt injection, exfiltration, dangerous code and vulnerable dependencies. Runs with `--no-llm`. | `api.osv.dev` for dependency lookups |
+| **SkillSpector** (NVIDIA; install it from holdmap or yourself) | Skills, statically, for prompt injection, exfiltration, dangerous code and vulnerable dependencies. Runs with `--no-llm`. | `api.osv.dev` for dependency lookups |
 | **OSV lookup** (built in) | Pinned npm and PyPI packages your MCP servers launch, against OSV.dev. Unpinned ones are listed as skipped. | `api.osv.dev`: ecosystem, name and version only |
-| **Presets** (Cisco, Google, Aqua Security, PyCQA; install them yourself) | One click adds a ready-made manifest for a well-known local scanner. See [Presets](#presets). | Only OSV-Scanner: `api.osv.dev` |
+| **Presets** (Cisco, Google, Aqua Security, PyCQA; install from holdmap or yourself) | One click adds a ready-made manifest for a well-known local scanner. See [Presets](#presets). | Only OSV-Scanner: `api.osv.dev` |
 | **Your own** | A local command-line or MCP scanner you register from a manifest. | Only what its manifest declares |
+
+## What a skill analyzer is for
+
+A skill is a folder of instructions and scripts your coding agents load and follow. A risky skill
+acts with your agent's access: it can tell the agent to run commands, read files or send data out.
+A skill analyzer reads a copy of each skill folder and reports what looks risky. For every finding
+holdmap shows **which agents load the skill**, its **scope** (global, project or local, or
+"unknown" when holdmap can't tell), the **folder** it scanned and the **source file and line**,
+with suggested next steps. Findings are the analyzer's word; holdmap hasn't verified them.
+
+## Installing one
+
+In the desktop app, **Install…** on an analyzer card, in **Settings → Analyzers**, in **Scan
+with…** or in **Presets** opens a guided install. Before anything runs it shows the exact pinned
+package and version, where it comes from, the folder it installs into (holdmap's own
+`analyzers/tools/ID` folder; no admin rights, nothing system-wide, your shell config untouched),
+the hosts the package manager contacts and what the analyzer reads once approved. You tick a
+consent box, then **Install**. Progress and the package manager's output are shown live, with
+**Cancel install**; a failure says why and offers **Retry**. holdmap then checks the version the
+program reports and records its SHA-256.
+
+Installs use package managers you already have (`uv` for Python tools, `go` for OSV-Scanner) with
+a cleared environment and a 10-minute limit. If one is missing, the dialog says so and links to
+its official install page. Trivy ships as a prebuilt program, so holdmap shows the safest way to
+install it yourself. **Prefer to run it yourself?** keeps the publisher's command to copy. An
+installed analyzer is still **off** until you review its permissions and turn it on.
 
 ## Turning one on
 
@@ -39,9 +68,25 @@ holdmap analyzers key set ID NAME       # an API key, stored in the OS keychain
 holdmap insights --min medium           # findings; --format sarif for other tools
 ```
 
-In the desktop app, **Security** has **Copy summary**, **Download JSON** and **Download SARIF**
-for the open findings. They carry the rule, severity, title, analyzer, skill or package, agents,
-location and fix, with your home folder shown as `~`. The raw evidence behind a finding is left out.
+### Progress and results
+
+A run keeps going in the background. A dock above the status bar shows each analyzer's step
+(preparing, copying, scanning which skill, collecting), elapsed time and **Cancel**; the status
+bar and the analyzer's card show it too, across tabs and dialogs. When it ends, the dock
+summarises the findings and **View results** opens **Security → Results**.
+
+**Results** is a table of severity, rule, message, agent, skill, folder and path:line. Sort by any
+column, group by severity, skill, agent, folder or analyzer, filter by severity or agent and
+search. A row expands to the agents, scope, folder and source path, with **Copy path**, **Show in
+folder** (desktop; only folders holdmap scanned; the browser copies the path instead) and
+suggested next steps. **Run history** lists recent runs with time, analyzer version, result and
+counts.
+
+**Copy summary**, **Download JSON**, **Download SARIF 2.1.0**, **Download CSV** and **Download
+Markdown** carry **only what's on screen** (the current filter), with a note saying what was
+included. They have the rule, severity, title, analyzer, skill or package, agents, scope, folder,
+path and fix, with your home folder shown as `~`. CSV cells can't start a spreadsheet formula. The
+raw evidence behind a finding is left out.
 
 ## When it runs
 
@@ -88,7 +133,8 @@ to approve it again.
 
 **Add your own analyzer… → Presets** (`holdmap analyzers presets`, then
 `holdmap analyzers add --preset ID`) lists scanners from established publishers that run on this
-computer with no LLM and no API key. You install the tool. holdmap adds its manifest as your own
+computer with no LLM and no API key. Install the tool from holdmap (see
+[Installing one](#installing-one)) or yourself. holdmap adds its manifest as your own
 analyzer: off, with the same permissions sheet, sandbox and pin as any other.
 
 | Preset | Id | What it checks | Network |
@@ -99,7 +145,7 @@ analyzer: off, with the same permissions sheet, sandbox and pin as any other.
 | [Bandit](https://github.com/PyCQA/bandit) (PyCQA) | `pycqa.bandit` | Risky Python in a skill's scripts: `shell=True`, `eval`, unsafe deserialization, weak crypto. | None |
 
 The list shows whether each tool is **Installed** (found on your `PATH` or a usual install
-folder) and the install command for those that aren't. Rules-only scanners miss things an LLM
+folder), with **Install…** and the install command for those that aren't. Rules-only scanners miss things an LLM
 review might catch; treat no findings as "nothing matched", not "safe". How each preset and SkillSpector did on a
 small labelled set of skills, with how to rerun it, is in
 [Benchmarks and evaluation](https://github.com/santoshshinde2012/holdmap/blob/main/docs/benchmarks.md). Presets ship with

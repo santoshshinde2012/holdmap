@@ -1037,6 +1037,8 @@ mod tests {
                 kind: SubjectKind::Skill,
                 name: "deploy-helper".into(),
                 agents: vec![],
+                dir: None,
+                scope: None,
             }],
             findings: vec![
                 Finding {

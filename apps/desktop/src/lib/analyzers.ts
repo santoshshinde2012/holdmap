@@ -7,7 +7,24 @@ export type FindingState = "open" | "reviewed" | "snoozed";
 export type RunStatus = "complete" | "partial" | "failed";
 export type AnalyzerState = "not_installed" | "not_approved" | "approved" | "changed";
 
-export interface Subject { id: string; kind: "skill" | "package" | "agent"; name: string; agents: string[] }
+/** `dir` is the folder holdmap scanned (absolute), `scope` "global", "project" or "local"; both
+ *  are missing when holdmap couldn't tell. */
+export interface Subject { id: string; kind: "skill" | "package" | "agent"; name: string; agents: string[]; dir?: string | null; scope?: string | null }
+
+/** One past run in brief (mirrors `holdmap_analyzers::finding::RunRecord`). */
+export interface RunRecord {
+  analyzer: string;
+  run_at_ms: number;
+  analyzer_version: string | null;
+  status: RunStatus;
+  subjects: number;
+  counts: Partial<Record<Severity, number>>;
+  duration_ms: number | null;
+}
+
+/** A live run step (mirrors `holdmap_analyzers::runner::RunEvent`). Names only. */
+export type RunEventStep = "preparing" | "copying" | "scanning" | "collecting";
+export interface RunEvent { step: RunEventStep; index: number; total: number; subject: string | null; agents: string[] }
 export interface Finding {
   fingerprint: string;
   analyzer: string;

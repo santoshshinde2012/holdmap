@@ -8,6 +8,9 @@
   import ViewToolbar from "./components/shell/ViewToolbar.svelte";
   import Notices from "./components/shell/Notices.svelte";
   import StatusBar from "./components/shell/StatusBar.svelte";
+  import { securityRuns } from "./lib/security-runs.svelte";
+  import { installDialog } from "./lib/install-dialog.svelte";
+  import { securityTab } from "./lib/security-tab.svelte";
   import HomeView from "./components/home/HomeView.svelte";
   import { nextLayout } from "./lib/home-layout";
   import FirstRun from "./components/FirstRun.svelte";
@@ -125,6 +128,15 @@
   let graph = $state.raw<Graph | null>(null);
   let topologyLoading = $state(false);
   /** AgentsView loads, and agents are looked up, only while the Agents tab is open. */
+  // The run dock and install dialog load on first use to keep the initial bundle small.
+  let RunDock = $state<typeof import("./components/security/RunDock.svelte").default | null>(null);
+  let InstallDialog = $state<typeof import("./components/security/InstallDialog.svelte").default | null>(null);
+  $effect(() => {
+    if (securityRuns.visible && !RunDock) import("./components/security/RunDock.svelte").then((m) => { RunDock = m.default; }).catch((e) => console.error("Couldn't load run progress", e));
+  });
+  $effect(() => {
+    if (installDialog.open && !InstallDialog) import("./components/security/InstallDialog.svelte").then((m) => { InstallDialog = m.default; }).catch((e) => console.error("Couldn't load the installer", e));
+  });
   let AgentsView = $state<typeof import("./components/AgentsView.svelte").default | null>(null);
   let agentsReport = $state.raw<AgentsReport | null>(null);
   /** One selected agent for every Agents surface; injected into the views. */
@@ -1349,7 +1361,7 @@
       </div>
     {:else if prefs.view === "home"}
       <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
-        onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (prefs.view = v)} oninventory={enableInventory} />
+        onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (prefs.view = v)} onsecurity={() => { prefs.view = "agents"; prefs.agentSection = "insights"; securityTab.value = "findings"; }} oninventory={enableInventory} />
     {:else if prefs.view === "agents"}
       <div class="graph-wrap agents-wrap">
         {#if AgentsView}
@@ -1418,6 +1430,9 @@
 {/if}
 <SnapshotCapture bind:this={snapshotCaptureUi} session={capture.session} blocked={otherModalOpen} onstatechange={(state) => (snapshotCaptureState = state)} />
 {#if snapshotCaptureState.busy}<span class="sr-only" role="status">Capturing snapshot. Press Escape or use Cancel snapshot capture to cancel.</span>{/if}
+{#if RunDock}<RunDock onresults={() => { prefs.view = "agents"; prefs.agentSection = "insights"; securityTab.value = "results"; }} />
+{/if}
+{#if InstallDialog}<InstallDialog onreview={() => openSettings("analyzers")} />{/if}
 <Toasts {toasts} ondismiss={(id) => (toasts = toasts.filter((t) => t.id !== id))} />
 </div>
 

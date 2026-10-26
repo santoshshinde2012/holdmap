@@ -12,6 +12,7 @@ pub mod cli_runner;
 pub mod consent;
 pub mod finding;
 pub mod input;
+pub mod install;
 #[cfg(target_os = "linux")]
 pub mod landlock;
 pub mod manifest;

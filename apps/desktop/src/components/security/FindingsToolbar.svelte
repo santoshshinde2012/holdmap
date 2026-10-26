@@ -14,7 +14,7 @@
   </select>
   <label class="closed"><input type="checkbox" bind:checked={filter.showClosed} />Show reviewed</label>
   <span class="n" aria-live="polite">{shown} shown</span>
-  <SegmentedControl bind:value={groupBy} label="Group findings by" options={[{ value: "severity", label: "Severity" }, { value: "skill", label: "Skill" }, { value: "analyzer", label: "Analyzer" }]} />
+  <SegmentedControl bind:value={groupBy} label="Group findings by" options={[{ value: "severity", label: "Severity" }, { value: "skill", label: "Skill" }, { value: "agent", label: "Agent" }, { value: "folder", label: "Folder" }, { value: "analyzer", label: "Analyzer" }]} />
 </div>
 
 <style>

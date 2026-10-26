@@ -24,7 +24,7 @@
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
   type Section = "overview" | "capabilities" | "insights";
-  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, onopenagent, onopenentry, onview, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent }: {
+  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, onopenagent, onopenentry, onview, onsecurity, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent }: {
     entries: PortEntry[] | null;
     report: AgentsReport | null;
     /** Whether reading agents' MCP/skills/permission files is turned on. */
@@ -40,6 +40,8 @@
     onopenagent: (id: string, section?: Section) => void;
     onopenentry: (id: string) => void;
     onview: (view: "list" | "agents" | "graph") => void;
+    /** Opens Security → Findings (the skill-security tile). */
+    onsecurity?: () => void;
     oninventory?: () => void;
     /** Both open the stop plan for review; neither stops anything directly. */
     onstopentry?: (id: string) => void;
@@ -81,11 +83,20 @@
   const active = $derived(hovered ?? selected);
   const activeNeeds = $derived(active ? new Set(needs.filter((n) => attentionAgent(n, report) === active).map((n) => n.id)) : null);
 
+  /** Skill security at a glance: open findings and the skills they're about (only once an analyzer is on or has run). */
+  const skillSec = $derived.by(() => {
+    const on = insightsStore.analyzers.some((a) => a.state === "approved");
+    const results = insightsStore.insights?.results ?? [];
+    if (!on && !results.length) return null;
+    const open = results.flatMap((r) => r.findings).filter((f) => f.state === "open");
+    return { open: open.length, skills: new Set(open.map((f) => f.subject)).size };
+  });
   const stats = $derived<SummaryStat[]>([
     { id: "agents", value: o.agents, label: "agents", go: () => onview("agents") },
     { id: "ports", value: o.ports, label: "listening", go: () => onview("list") },
     { id: "dev", value: o.devServers, label: "dev servers", go: () => onview("list") },
     { id: "exposed", value: o.exposed, label: "exposed", tone: o.exposed ? "warn" : undefined, go: () => onview("list") },
+    ...(skillSec ? [{ id: "skill-findings", value: skillSec.open, label: skillSec.skills ? `skill findings · ${skillSec.skills} skills` : "skill findings", tone: skillSec.open ? "warn" : "ok", go: () => onsecurity?.() ?? onview("agents") } satisfies SummaryStat] : []),
     ...(o.mcpConfigured !== null ? [{ id: "mcp", value: o.mcpRunning, of: o.mcpConfigured, label: "MCP running", go: () => onview("agents") } satisfies SummaryStat] : []),
   ]);
   const showInventory = $derived(!inventory && !!oninventory && (report?.agents ?? []).some((a) => !a.capabilities));

@@ -6,6 +6,7 @@ import type { AnalyzerResult, AnalyzerView, Insights, Preview, Severity, Severit
 import { SANDBOX_LABEL, SEVERITY_ORDER, STATE_LABEL, countsText, emptyCounts, total, worst } from "./analyzers";
 import type { AgentsReport } from "./types";
 import { inventories } from "./agent-config";
+import { productLabel } from "./run-view";
 
 export type StageKind = "sources" | "projection" | "sandbox" | "analyzer" | "parser" | "findings" | "surface";
 export type NodeStatus = "ok" | "warn" | "error" | "idle";
@@ -237,7 +238,7 @@ export function buildOverview(views: AnalyzerView[], insights: Insights | null, 
   const results = new Map((insights?.results ?? []).map((r) => [r.analyzer, r]));
   const agentNames = new Map<string, string>();
   for (const i of inventories(report)) if (!agentNames.has(i.product)) agentNames.set(i.product, i.name);
-  for (const r of results.values()) for (const s of r.subjects) for (const a of s.agents) if (!agentNames.has(a)) agentNames.set(a, a);
+  for (const r of results.values()) for (const s of r.subjects) for (const a of s.agents) if (!agentNames.has(a)) agentNames.set(a, productLabel(a));
   const products = [...agentNames.keys()].sort((a, b) => (agentNames.get(a) ?? a).localeCompare(agentNames.get(b) ?? b));
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];

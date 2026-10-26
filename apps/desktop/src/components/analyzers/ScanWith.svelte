@@ -3,8 +3,9 @@
   // a run button for the ones you already approved. Turning one on stays in Settings, behind its
   // permissions sheet, so consent and sandboxing are unchanged; nothing here runs by itself.
   import Button from "../ui/Button.svelte";
-  import * as api from "../../lib/api";
   import { insightsStore } from "../../lib/insights-store.svelte";
+  import { securityRuns } from "../../lib/security-runs.svelte";
+  import { installDialog } from "../../lib/install-dialog.svelte";
   import { STATE_LABEL, countsText, scannersFor, subjectCounts, total } from "../../lib/analyzers";
 
   let { kind, subject, onsettings, onsecurity }: {
@@ -23,9 +24,11 @@
     if (busy) return;
     busy = id; note = null;
     try {
-      const r = await api.runAnalyzer(id);
-      await insightsStore.refresh();
-      note = `${name}: ${r.status === "complete" ? "done" : r.status}`;
+      const a = insightsStore.analyzers.find((x) => x.id === id);
+      if (!a) return;
+      await securityRuns.start([a]); // the run dock shows progress and refreshes findings
+      const s = securityRuns.stepFor(id);
+      note = `${name}: ${s?.phase === "done" ? "done" : s?.note ?? s?.phase ?? "done"}`;
     } catch (e) { note = `${name} failed: ${String(e)}`; }
     finally { busy = null; }
   }
@@ -44,7 +47,7 @@
           {#if a.state === "approved"}
             <Button size="xs" icon="shield" disabled={!!busy} onclick={() => scan(a.id, a.name)}>{busy === a.id ? "Scanning…" : "Scan"}</Button>
           {:else if onsettings}
-            <Button size="xs" variant="ghost" onclick={onsettings}>{a.state === "not_installed" ? "Set up…" : "Review…"}</Button>
+            {#if a.state === "not_installed"}<Button size="xs" variant="ghost" icon="download" onclick={() => installDialog.show(a.id)}>Install…</Button>{:else}<Button size="xs" variant="ghost" onclick={onsettings}>Review…</Button>{/if}
           {/if}
         </li>
       {/each}
