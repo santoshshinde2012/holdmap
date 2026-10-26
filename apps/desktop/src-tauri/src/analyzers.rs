@@ -42,7 +42,7 @@ struct InstallProgress<'a> {
     event: &'a InstallEvent,
 }
 
-fn service(app: &AppHandle) -> Arc<AnalyzerService> {
+pub(crate) fn service(app: &AppHandle) -> Arc<AnalyzerService> {
     let state = app.state::<AnalyzersState>();
     state
         .service
@@ -59,7 +59,7 @@ fn service(app: &AppHandle) -> Arc<AnalyzerService> {
         .clone()
 }
 
-async fn blocking<T: Send + 'static>(
+pub(crate) async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(f)
@@ -67,7 +67,7 @@ async fn blocking<T: Send + 'static>(
         .map_err(|e| format!("background task failed: {e}"))?
 }
 
-fn inventory(app: &AppHandle) -> Result<AgentsReport, String> {
+pub(crate) fn inventory(app: &AppHandle) -> Result<AgentsReport, String> {
     app.state::<AppState>()
         .with_engine(Duration::from_millis(1000), |e| {
             e.agents_with_capabilities()
@@ -244,21 +244,26 @@ pub async fn insights(app: AppHandle) -> Result<Insights, String> {
     blocking(move || Ok(service(&app).insights())).await
 }
 
-/// Mark a finding reviewed, snooze it for `days`, or reopen it.
+/// Mark a finding reviewed, snooze it for `days` or until `until_ms`, or reopen it, with an
+/// optional reason. Snoozes are clamped to 1 hour – 90 days by the service.
 #[tauri::command]
 pub async fn review_finding(
     app: AppHandle,
     fingerprint: String,
     state: FindingState,
     days: Option<u64>,
+    until_ms: Option<u64>,
+    reason: Option<String>,
 ) -> Result<(), String> {
     blocking(move || {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis() as u64);
+        let snooze_ms = until_ms
+            .map(|u| u.saturating_sub(now))
+            .or(days.map(|d| d.saturating_mul(86_400_000)));
         service(&app)
-            .review(
-                &fingerprint,
-                state,
-                days.map(|d| d.min(365).saturating_mul(86_400_000)),
-            )
+            .review_with_reason(&fingerprint, state, snooze_ms, reason.as_deref())
             .map_err(|e| e.to_string())
     })
     .await

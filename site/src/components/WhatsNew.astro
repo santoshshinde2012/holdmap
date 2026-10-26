@@ -2,9 +2,9 @@
 import Icon from "./Icon.astro";
 import { releaseHighlightsPublished as released, repoUrl, sourceVersion, url, version } from "../lib/site";
 const highlights = [
-  { icon: "Camera", title: "Records only the holdmap window", text: "Other apps, your desktop and notifications are never captured. macOS records its own window directly; browsers share this tab and anything wider is refused before a frame is read.", href: url("docs/desktop/#record-the-screen"), link: "How recording works" },
-  { icon: "Video", title: "Presets for clips and long sessions", text: "Share a clip as a small GIF or save a full session as MP4, with a live size estimate, pause, and the saved path with Copy and Show in folder.", href: url("docs/desktop/#record-the-screen"), link: "Recording presets" },
-  { icon: "ShieldCheck", title: "Every screen checked", text: "Contrast, target sizes, keyboard access, empty states and diagram text fixed across all views, in light and dark, at three widths.", href: url("docs/whats-new/"), link: "What's new" },
+  { icon: "Download", title: "Guided installs, visible runs", text: "Install an analyzer after you see exactly what it fetches and reads, watch each run's progress, and get a sortable results table with exports of what's on screen.", href: url("docs/analyzers/"), link: "Analyzers" },
+  { icon: "Fingerprint", title: "Know when a skill changes", text: "Every skill gets a fingerprint. Holdmap flags skills changed since you trusted them, shows what changed by file name and size, and scores risk per agent and folder.", href: url("docs/analyzers/#skill-trust-and-top-risks"), link: "Skill trust and risks" },
+  { icon: "CalendarClock", title: "New since last run", text: "See what is new and what was fixed after each rescan, schedule offline rescans while the app is open, and fail CI only on new findings.", href: url("docs/whats-new/"), link: "What's new" },
 ];
 ---
 <section id="whats-new" class="section" aria-labelledby="release-title">
@@ -12,7 +12,7 @@ const highlights = [
     <div class="section-head head-row">
       <div>
         <span class="eyebrow">Release highlights</span>
-        <h2 class="h2" id="release-title">{released ? `${sourceVersion} is here.` : `${sourceVersion} release preparation.`} <span class="soft">Capture only what is yours.</span></h2>
+        <h2 class="h2" id="release-title">{released ? `${sourceVersion} is here.` : `${sourceVersion} release preparation.`} <span class="soft">Trust the skills your agents load.</span></h2>
       </div>
       <a class="link-arrow" href={url("docs/whats-new/")}>What's new <Icon name="ArrowRight" size={16} /></a>
     </div>
@@ -26,7 +26,7 @@ const highlights = [
         </li>
       ))}
     </ul>
-    <p class="release-note">{sourceVersion} records only the holdmap window and adds recording presets. {released ? <a href={`${repoUrl}/releases/tag/v${sourceVersion}`}>Read the full {sourceVersion} release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
+    <p class="release-note">{sourceVersion} turns skill analyzers into a full workflow: install, run, compare, trust. {released ? <a href={`${repoUrl}/releases/tag/v${sourceVersion}`}>Read the full {sourceVersion} release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
   </div>
 </section>
 

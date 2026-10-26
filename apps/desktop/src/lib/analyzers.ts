@@ -20,6 +20,10 @@ export interface RunRecord {
   subjects: number;
   counts: Partial<Record<Severity, number>>;
   duration_ms: number | null;
+  /** Findings new since the previous run (absent: first run, or recorded before 0.12). */
+  new?: number | null;
+  /** Findings gone since the previous run. */
+  fixed?: number | null;
 }
 
 /** A live run step (mirrors `holdmap_analyzers::runner::RunEvent`). Names only. */
@@ -37,6 +41,12 @@ export interface Finding {
   fix: string | null;
   refs: string[];
   state: FindingState;
+  /** The user's reason for a review or snooze. */
+  note?: string | null;
+  /** For snoozed findings: when it reopens (epoch ms). */
+  until_ms?: number | null;
+  /** New since the analyzer's previous run (absent or false on a first run). */
+  new?: boolean;
 }
 export interface Detail { subject: string; label: string; value: string }
 export interface AnalyzerResult {
@@ -54,6 +64,15 @@ export interface AnalyzerResult {
   duration_ms?: number | null;
   /** MCP analyzers: calls per tool. */
   tool_calls?: { tool: string; calls: number; failed: number }[];
+  /** New and fixed findings since the previous run; absent on a first run. */
+  changes?: RunChanges | null;
+}
+/** Mirrors `holdmap_analyzers::RunChanges`. */
+export interface RunChanges {
+  new_total: number;
+  fixed: { fingerprint: string; severity: Severity; title: string; subject: string }[];
+  fixed_total: number;
+  since_ms: number;
 }
 export interface SeverityCounts { critical: number; high: number; medium: number; low: number; info: number }
 export interface Permissions { read: string[]; network: string[]; network_reason: string | null; sends: string[]; spawns_mcp_servers: boolean; secrets?: string[] }
@@ -305,4 +324,27 @@ export function subjectCounts(insights: Insights | null, subjectId: string): Sev
  * servers launch; CLI and MCP analyzers read skill folders. */
 export function scannersFor(views: AnalyzerView[], kind: "skill" | "mcp"): AnalyzerView[] {
   return views.filter((a) => (kind === "mcp") === (a.kind === "builtin"));
+}
+
+const SEVERITY_RANK: Record<Severity, number> = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
+
+/** `current` with its new findings marked and what changed since `previous` (mirrors
+ *  `changes_since` in holdmap-analyzers): nothing is compared when either run failed, and a
+ *  partial run never reports fixes. */
+export function withRunChanges(previous: AnalyzerResult | undefined, current: AnalyzerResult): AnalyzerResult {
+  if (!previous || previous.status === "failed" || current.status === "failed") return { ...current, changes: null };
+  const before = new Set(previous.findings.map((f) => f.fingerprint));
+  const now = new Set(current.findings.map((f) => f.fingerprint));
+  const findings = current.findings.map((f) => ({ ...f, new: !before.has(f.fingerprint) }));
+  const gone = current.status === "complete"
+    ? previous.findings.filter((f) => !now.has(f.fingerprint)).sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])
+    : [];
+  return {
+    ...current, findings,
+    changes: {
+      new_total: findings.filter((f) => f.new).length,
+      fixed: gone.slice(0, 50).map((f) => ({ fingerprint: f.fingerprint, severity: f.severity, title: f.title, subject: f.subject })),
+      fixed_total: gone.length, since_ms: previous.run_at_ms,
+    },
+  };
 }

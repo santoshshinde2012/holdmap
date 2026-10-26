@@ -44,7 +44,7 @@ server advertises.
 
 ## Tools
 
-The server has fourteen tools. Three are new in 0.10.0:
+The server has sixteen tools. Three are new in 0.10.0, and `list_skill_trust` and `list_risks` are new in 0.12.0:
 
 | Tool | What it does |
 |---|---|
@@ -58,6 +58,8 @@ The server has fourteen tools. Three are new in 0.10.0:
 | `get_agent_flow` | Observed process ancestry and live TCP relationships for agents, with typed nodes, relationships, evidence and collection limits. It does not inspect capability files or report tool invocations. |
 | `list_analyzers` | Opt-in analyzers (SkillSpector, OSV lookup and ones you added), their state, source, sandbox, declared network use, last run and the signed catalog version. Never runs, installs, adds or approves one. New after 0.9.0. |
 | `list_insights` | Stored findings from approved analyzers about agents' skills and MCP packages, filtered by analyzer, agent, severity or state. Never runs analyzers. New after 0.9.0. |
+| `list_skill_trust` | Each skill's trust from the last scan the user ran: changed since trusted, new or trusted, with fingerprint, first seen and a names-and-sizes-only change summary. Never reads folders. New in 0.12.0. |
+| `list_risks` | Banded risk per agent and per skill folder (named by its skills, never a path) from stored findings and skill trust, with the counts and findings behind each band. Never runs analyzers. New in 0.12.0. |
 | `list_needs` | The "needs you" list from Home: exposed agents, root or wider access, risky settings, unpinned MCP servers, open dev servers and analyzer findings, with a stop to preview where that's the usual fix. Read-only. New after 0.9.0. |
 | `stop_agent_ports` | Preview the unprotected ports started by matching agents; execute the retained plans with a one-use `confirmation_id`. Defaults to `dry_run: true`. |
 | `plan_cluster_stop` | A dry-run, dependency-ordered plan for stopping a cluster. Never executes. |

@@ -312,6 +312,12 @@ pub(super) fn call(
         }
         "list_analyzers" => Ok(crate::analyzers::list(&analyzer_service())),
         "list_insights" => Ok(crate::analyzers::insights(&analyzer_service(), args)),
+        "list_skill_trust" => Ok(crate::trust::skills(&skill_trust().report(), args)),
+        "list_risks" => Ok(crate::trust::list_risks(
+            &analyzer_service().insights(),
+            &skill_trust().report(),
+            args,
+        )),
         "list_needs" => {
             let e = engine()?;
             let report = e.agents_with_capabilities();
@@ -490,6 +496,12 @@ fn agent_flow_result(report: holdmap_core::agents::AgentFlowReport) -> (String, 
 pub(super) fn validate_args(name: &str, args: &Value) -> Result<(), ToolError> {
     let definition = super::catalog::definition(name).ok_or(ToolError::Unknown)?;
     super::validation::validate(args, &definition["inputSchema"]).map_err(ToolError::Failed)
+}
+
+fn skill_trust() -> holdmap_analyzers::trust::SkillTrust {
+    holdmap_analyzers::trust::SkillTrust::new(std::sync::Arc::new(
+        holdmap_analyzers::FileStore::open_default(),
+    ))
 }
 
 fn analyzer_service() -> holdmap_analyzers::AnalyzerService {

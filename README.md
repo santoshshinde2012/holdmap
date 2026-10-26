@@ -152,7 +152,7 @@ See [docs/architecture.md](docs/architecture.md) for details.
 
 <!-- release-please updates this source-version marker; download links follow published releases. -->
 <!-- x-release-please-start-version -->
-Source version: **0.11.0**.
+Source version: **0.12.0**.
 <!-- x-release-please-end -->
 Downloads come from the [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest),
 and `main` can be ahead of it ([changelog](CHANGELOG.md)).
@@ -225,7 +225,7 @@ and a failed "port in use" command tells you who holds the port.
 | Ports | `holdmap free-port --near 3000`, `holdmap wait 5432 --timeout 30s` |
 | Projects | `holdmap up`, `holdmap down`, `holdmap status`, `holdmap init` |
 | Remember | `holdmap pin`, `holdmap unpin`, `holdmap pins`, `holdmap history` |
-| Analyzers | `holdmap analyzers list`, `holdmap analyzers show`, `holdmap analyzers approve`, `holdmap analyzers revoke`, `holdmap analyzers run`, `holdmap analyzers auto`, `holdmap analyzers add`, `holdmap analyzers presets`, `holdmap analyzers servers`, `holdmap analyzers tools`, `holdmap analyzers map`, `holdmap analyzers remove`, `holdmap analyzers key set`, `holdmap analyzers key delete` |
+| Analyzers | `holdmap analyzers list`, `holdmap analyzers show`, `holdmap analyzers approve`, `holdmap analyzers revoke`, `holdmap analyzers run`, `holdmap analyzers history`, `holdmap analyzers skills`, `holdmap analyzers trust`, `holdmap analyzers untrust`, `holdmap analyzers risks`, `holdmap analyzers schedule`, `holdmap analyzers auto`, `holdmap analyzers add`, `holdmap analyzers presets`, `holdmap analyzers servers`, `holdmap analyzers tools`, `holdmap analyzers map`, `holdmap analyzers remove`, `holdmap analyzers key set`, `holdmap analyzers key delete` |
 | Analyzer catalog | `holdmap analyzers catalog`, `holdmap analyzers catalog status`, `holdmap analyzers catalog fetch`, `holdmap analyzers catalog import`, `holdmap analyzers catalog accept`, `holdmap analyzers catalog reject` |
 | Findings | `holdmap insights`, `holdmap insights review`, `holdmap insights snooze`, `holdmap insights reopen` |
 | Recording | `holdmap activity serve`, `holdmap activity setup`, `holdmap activity snapshot`, `holdmap activity hook` |

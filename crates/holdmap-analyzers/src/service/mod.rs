@@ -13,8 +13,8 @@ use crate::consent::{
 };
 use crate::finding::{
     clean_id, clean_refs, clean_relative_path, clean_text, fingerprint, hex, AnalyzerResult,
-    Detail, Finding, FindingState, Location, RunRecord, RunStatus, Severity, Subject, ToolCalls,
-    MAX_DETAIL, MAX_FINDINGS_PER_SUBJECT, MAX_FIX, MAX_TITLE,
+    Detail, Finding, FindingState, Location, RunChanges, RunRecord, RunStatus, Severity, Subject,
+    ToolCalls, MAX_DETAIL, MAX_FINDINGS_PER_SUBJECT, MAX_FIX, MAX_NOTE, MAX_TITLE,
 };
 use crate::input::{AnalyzerInput, InputProjector, InventoryProjector};
 use crate::install::{InstallError, InstallEvent, InstallPlan, InstallRecord, Installer};
@@ -332,6 +332,11 @@ impl ActiveCatalog {
         }
     }
 }
+
+/// The shortest snooze: one hour.
+pub const MIN_SNOOZE_MS: u64 = 3_600_000;
+/// The longest snooze: 90 days, so nothing stays hidden indefinitely by accident.
+pub const MAX_SNOOZE_MS: u64 = 90 * 86_400_000;
 
 /// The orchestrator.
 pub struct AnalyzerService {
@@ -1081,6 +1086,9 @@ impl AnalyzerService {
         result.input_signature = Some(signature(&input));
         result.duration_ms = Some(duration_ms);
         result.notes.extend(secret_notes);
+        if let Some(previous) = self.stores.results.latest(&m.id) {
+            result.changes = changes_since(&previous, &mut result);
+        }
         self.stores.results.save(&result)?;
         self.stores
             .results
@@ -1111,7 +1119,11 @@ impl AnalyzerService {
             .find(|s| s.id == subject)
             .and_then(|s| s.dir.as_deref())
             .map(std::path::PathBuf::from)
-            .filter(|d| d.is_absolute() && d.is_dir())
+            // A real folder only: a symlink swapped in since the scan is never followed.
+            .filter(|d| {
+                d.is_absolute()
+                    && std::fs::symlink_metadata(d).is_ok_and(|m| m.file_type().is_dir())
+            })
             .ok_or_else(|| ServiceError::Unknown(format!("{subject} has no folder to show")))?;
         Ok(dir)
     }
@@ -1136,17 +1148,39 @@ impl AnalyzerService {
         state: FindingState,
         snooze_ms: Option<u64>,
     ) -> Result<(), ServiceError> {
+        self.review_with_reason(fingerprint, state, snooze_ms, None)
+    }
+
+    /// [`Self::review`] with the user's reason, kept (capped and secret-masked) next to the
+    /// review and shown with the finding.
+    /// Review or snooze a finding. Snoozes last from [`MIN_SNOOZE_MS`] to [`MAX_SNOOZE_MS`].
+    pub fn review_with_reason(
+        &self,
+        fingerprint: &str,
+        state: FindingState,
+        snooze_ms: Option<u64>,
+        reason: Option<&str>,
+    ) -> Result<(), ServiceError> {
+        let reason = reason
+            .map(|r| clean_text(r, MAX_NOTE))
+            .filter(|r| !r.is_empty());
         let review = match state {
             FindingState::Open => None,
             FindingState::Reviewed => Some(Review {
                 state,
                 until_ms: None,
+                reason,
             }),
             FindingState::Snoozed => Some(Review {
                 state,
                 until_ms: Some(
-                    (self.now)().saturating_add(snooze_ms.unwrap_or(7 * 24 * 3_600_000)),
+                    (self.now)().saturating_add(
+                        snooze_ms
+                            .unwrap_or(7 * 24 * 3_600_000)
+                            .clamp(MIN_SNOOZE_MS, MAX_SNOOZE_MS),
+                    ),
                 ),
+                reason,
             }),
         };
         Ok(self.stores.reviews.set_review(fingerprint, review)?)
@@ -1156,13 +1190,30 @@ impl AnalyzerService {
         let reviews = self.stores.reviews.reviews();
         let now = (self.now)();
         for f in &mut result.findings {
-            f.state = reviews
-                .get(&f.fingerprint)
-                .map(|r| r.effective(now))
-                .unwrap_or_default();
+            let review = reviews.get(&f.fingerprint);
+            f.state = review.map(|r| r.effective(now)).unwrap_or_default();
+            let hidden = review.filter(|_| f.state != FindingState::Open);
+            f.note = hidden.and_then(|r| r.reason.clone());
+            f.until_ms = hidden
+                .filter(|_| f.state == FindingState::Snoozed)
+                .and_then(|r| r.until_ms);
         }
         result
     }
+}
+
+/// New and fixed findings against the previous run. Nothing is compared when either run
+/// failed, and a partial run never reports fixes: a finding it didn't see may still be there.
+fn changes_since(previous: &AnalyzerResult, current: &mut AnalyzerResult) -> Option<RunChanges> {
+    if previous.status == RunStatus::Failed || current.status == RunStatus::Failed {
+        return None;
+    }
+    let mut changes = RunChanges::between(previous, &mut current.findings);
+    if current.status != RunStatus::Complete {
+        changes.fixed.clear();
+        changes.fixed_total = 0;
+    }
+    Some(changes)
 }
 
 fn refuse(m: &AnalyzerManifest, state: AnalyzerState, changes: &[String]) -> Result<(), RunError> {
@@ -1509,6 +1560,7 @@ fn assemble(
         input_signature: None,
         duration_ms: None,
         tool_calls: calls,
+        changes: None,
     }
 }
 
@@ -1568,6 +1620,9 @@ fn normalise(m: &AnalyzerManifest, out: &RawOutput, parsed: Parsed) -> (Vec<Find
                 .filter(|f| !f.is_empty()),
             refs: clean_refs(p.refs.iter().map(String::as_str)),
             state: FindingState::Open,
+            note: None,
+            until_ms: None,
+            new: false,
             subject,
             location,
             rule_id,
@@ -1661,5 +1716,49 @@ mod tests {
         assert_eq!(unstage("./holdmap-subject/a/b.py"), "a/b.py");
         // A skill's own folder named "subject" is left alone.
         assert_eq!(unstage("subject/notes.md"), "subject/notes.md");
+    }
+}
+
+#[cfg(test)]
+mod change_tests {
+    use super::*;
+
+    fn run(status: RunStatus, fps: &[&str]) -> AnalyzerResult {
+        let mut r: AnalyzerResult = serde_json::from_value(serde_json::json!({
+            "analyzer": "a.b", "analyzer_version": null, "run_at_ms": 1, "status": status,
+            "coverage": null, "subjects": [], "findings": [],
+        }))
+        .unwrap();
+        r.findings = fps
+            .iter()
+            .map(|fp| {
+                serde_json::from_value(serde_json::json!({
+                    "fingerprint": fp, "analyzer": "a.b", "rule_id": "r", "category": null,
+                    "severity": "high", "title": "t", "subject": "s", "fix": null,
+                }))
+                .unwrap()
+            })
+            .collect();
+        r
+    }
+
+    #[test]
+    fn a_partial_run_never_claims_fixes_and_a_failed_one_compares_nothing() {
+        let before = run(RunStatus::Complete, &["a", "b"]);
+        let mut partial_run = run(RunStatus::Partial, &["a", "c"]);
+        let partial = changes_since(&before, &mut partial_run).unwrap();
+        assert_eq!((partial.new_total, partial.fixed_total), (1, 0));
+        assert!(partial.fixed.is_empty());
+        assert!(!partial_run.findings[0].new && partial_run.findings[1].new);
+        assert_eq!(
+            changes_since(&before, &mut run(RunStatus::Failed, &[])),
+            None
+        );
+        assert_eq!(
+            changes_since(&run(RunStatus::Failed, &[]), &mut before.clone()),
+            None
+        );
+        let complete = changes_since(&before, &mut run(RunStatus::Complete, &["a"])).unwrap();
+        assert_eq!((complete.new_total, complete.fixed_total), (0, 1));
     }
 }

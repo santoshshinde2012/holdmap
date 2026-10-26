@@ -50,7 +50,7 @@ fn notifications_get_no_response() {
 fn lists_tools_with_annotations() {
     let r = call(json!({"jsonrpc":"2.0","id":3,"method":"tools/list"}));
     let tools = r["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 14);
+    assert_eq!(tools.len(), 16);
     let stop = tools.iter().find(|t| t["name"] == "stop_port").unwrap();
     assert_eq!(stop["annotations"]["destructiveHint"], true);
     assert_eq!(stop["annotations"]["idempotentHint"], false);
@@ -99,7 +99,7 @@ fn catalog_source_declares_metadata_before_input_schema() {
         .split("\n        {\n            \"name\": ")
         .skip(1)
         .collect();
-    assert_eq!(entries.len(), 14);
+    assert_eq!(entries.len(), 16);
     for entry in entries {
         let at = |key: &str| entry.find(key).unwrap_or(usize::MAX);
         let schema = at("\"inputSchema\"");

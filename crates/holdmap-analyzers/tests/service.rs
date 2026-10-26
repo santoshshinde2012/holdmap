@@ -464,7 +464,7 @@ fn reviews_hide_findings_and_snoozes_expire() {
         insights.results[0].findings[0].state,
         FindingState::Reviewed
     );
-    // The clock is fixed, so build a later one to see the snooze lapse.
+    // The clock is fixed, so build a later one to see the snooze lapse (snoozes last an hour at least).
     let later = AnalyzerService::with_parts(
         catalog::bundled(),
         Stores::of(FileStore::new(&h.store_dir)),
@@ -472,12 +472,90 @@ fn reviews_hide_findings_and_snoozes_expire() {
         Box::new(Shared(h.cli.clone())),
         Box::new(OsvRunner::new(None)),
     )
-    .with_clock(|| 2_000_000);
+    .with_clock(|| 1_000_000 + holdmap_analyzers::service::MIN_SNOOZE_MS + 1);
     assert_eq!(later.insights().open.total(), 2);
     h.service
         .review(&result.findings[0].fingerprint, FindingState::Open, None)
         .unwrap();
     assert_eq!(h.service.insights().open.total(), 2);
+}
+
+#[test]
+fn a_second_run_reports_what_changed_and_history_keeps_the_counts() {
+    let h = harness();
+    let r = report(&h.skill_dir);
+    h.service.approve(SKILLSPECTOR).unwrap();
+    let first = h.service.run(SKILLSPECTOR, &r).unwrap();
+    assert_eq!(
+        first.changes, None,
+        "a first run has nothing to compare with"
+    );
+    let second = h.service.run(SKILLSPECTOR, &r).unwrap();
+    let changes = second.changes.expect("compared with the first run");
+    assert_eq!((changes.new_total, changes.fixed_total), (0, 0));
+    assert_eq!(changes.since_ms, first.run_at_ms);
+    let history = h.service.history(SKILLSPECTOR).unwrap();
+    assert_eq!((history[0].new, history[0].fixed), (Some(0), Some(0)));
+    assert_eq!((history[1].new, history[1].fixed), (None, None));
+}
+
+#[test]
+fn a_review_keeps_its_reason_capped_and_reopening_drops_it() {
+    let h = harness();
+    let r = report(&h.skill_dir);
+    h.service.approve(SKILLSPECTOR).unwrap();
+    let fp = h.service.run(SKILLSPECTOR, &r).unwrap().findings[0]
+        .fingerprint
+        .clone();
+    let long = "Expected: the skill documents this webhook. ".repeat(10);
+    h.service
+        .review_with_reason(&fp, FindingState::Reviewed, None, Some(&long))
+        .unwrap();
+    let note = h.service.insights().results[0]
+        .findings
+        .iter()
+        .find(|f| f.fingerprint == fp)
+        .and_then(|f| f.note.clone())
+        .expect("reason kept");
+    assert!(note.starts_with("Expected: the skill documents this webhook."));
+    assert!(note.chars().count() <= holdmap_analyzers::finding::MAX_NOTE);
+    h.service.review(&fp, FindingState::Open, None).unwrap();
+    assert!(h.service.insights().results[0]
+        .findings
+        .iter()
+        .all(|f| f.note.is_none()));
+}
+
+#[test]
+fn snoozes_are_clamped_to_ninety_days_and_report_when_they_reopen() {
+    use holdmap_analyzers::service::{MAX_SNOOZE_MS, MIN_SNOOZE_MS};
+    let h = harness();
+    let r = report(&h.skill_dir);
+    h.service.approve(SKILLSPECTOR).unwrap();
+    let fp = h.service.run(SKILLSPECTOR, &r).unwrap().findings[0]
+        .fingerprint
+        .clone();
+    let until = |ms: u64| {
+        h.service
+            .review_with_reason(&fp, FindingState::Snoozed, Some(ms), Some("later"))
+            .unwrap();
+        let f = h.service.insights().results[0]
+            .findings
+            .iter()
+            .find(|f| f.fingerprint == fp)
+            .cloned()
+            .unwrap();
+        assert_eq!(f.state, FindingState::Snoozed);
+        f.until_ms.expect("snooze end exported") - 1_000_000
+    };
+    assert_eq!(until(u64::MAX), MAX_SNOOZE_MS);
+    assert_eq!(until(1), MIN_SNOOZE_MS);
+    assert_eq!(until(86_400_000), 86_400_000);
+    h.service.review(&fp, FindingState::Reviewed, None).unwrap();
+    assert!(h.service.insights().results[0]
+        .findings
+        .iter()
+        .all(|f| f.until_ms.is_none()));
 }
 
 #[test]
@@ -953,6 +1031,16 @@ fn a_run_reports_its_steps_and_keeps_a_history_and_the_skill_folder() {
         h.skill_dir
     );
     assert!(h.service.subject_dir(SKILLSPECTOR, "nope").is_err());
+    // A folder swapped for a symlink after the scan is never revealed.
+    #[cfg(unix)]
+    {
+        let moved = h.skill_dir.with_extension("moved");
+        std::fs::rename(&h.skill_dir, &moved).unwrap();
+        std::os::unix::fs::symlink(&moved, &h.skill_dir).unwrap();
+        assert!(h.service.subject_dir(SKILLSPECTOR, &subject.id).is_err());
+        std::fs::remove_file(&h.skill_dir).unwrap();
+        std::fs::rename(&moved, &h.skill_dir).unwrap();
+    }
     h.service.run(SKILLSPECTOR, &r).unwrap();
     let history = h.service.history(SKILLSPECTOR).unwrap();
     assert_eq!(history.len(), 2);

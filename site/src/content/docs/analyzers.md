@@ -95,6 +95,19 @@ is open, whenever the analysed items change. An analyzer that uses the network r
 only if you tick **Also run when items change** (`holdmap analyzers auto ID on`). MCP analyzers
 run only when you press Run.
 
+**Scheduled scans** are off until you turn them on in **Settings → Analyzers** and confirm the
+plan (what runs, how often, network use). Only offline analyzers qualify, and an MCP analyzer only
+if you opt it in. They run while holdmap is open, skip on battery, and notify only for new high or
+critical findings or changed skills, at most hourly and outside quiet hours.
+
+## Skill trust and top risks
+
+**Security → Skills** records a fingerprint of each skill folder (SHA-256 of names and bytes,
+bounded, symlinks skipped) and flags skills changed since you trusted them, with what changed by
+file name and size only. **Trust this version** takes an optional reason. **Security → Risks**
+scores each agent and folder: 40 per open critical, 15 high, 5 medium, 1 low, 10 per changed
+skill; any open critical is Critical. Exposure isn't counted because holdmap can't confirm it.
+
 ## Sandbox
 
 Every run gets a copy of each folder, a cleared environment, a private temporary home and a time
@@ -117,7 +130,8 @@ Only approve analyzers you trust.
 
 ## API keys
 
-If an analyzer declares a key, set it with **Set key** or `holdmap analyzers key set`. The key
+If an analyzer declares a key, type it on the analyzer's card and click **Save** next to its name,
+or run `holdmap analyzers key set`. The key
 is stored in the OS keychain and passed only to that analyzer's run, under the declared name.
 It is never shown again, logged or sent anywhere else.
 
@@ -289,5 +303,5 @@ shows which analyzer covers which agent. Narrow windows get the same steps as a 
   passed.
 - Keeps matched text. Only a short title, location, fix hint and severity are stored, locally.
 
-MCP clients can read results with `list_analyzers` and `list_insights`. They can't run, approve
-or add analyzers.
+MCP clients can read results with `list_analyzers`, `list_insights`, `list_skill_trust` and
+`list_risks`. They can't run, approve, add or trust anything, or change the schedule.

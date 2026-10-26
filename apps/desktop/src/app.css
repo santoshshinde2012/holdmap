@@ -286,3 +286,4 @@ kbd {
 .sev-pill.medium { background: var(--warn-soft); color: var(--tone-amber); }
 .sev-pill.low { background: var(--tone-blue-bg); color: var(--tone-blue); }
 .sev-pill.info { background: var(--tone-gray-bg); color: var(--tone-gray); }
+.new-pill { display: inline-flex; align-items: center; height: 16px; padding: 0 5px; border-radius: var(--r-sm); background: var(--accent-soft); color: var(--accent); font-size: var(--fs-caption); font-weight: var(--fw-semibold); line-height: 1; vertical-align: 1px; }

@@ -399,8 +399,13 @@ impl Installer {
         if let Some(why) = plan.blocked {
             return Err(InstallError::Unavailable(why));
         }
-        let recipe = recipe(&manifest.id).expect("a plan that can install has a recipe");
-        let program = PathBuf::from(&plan.command[0]);
+        // `plan` only clears `blocked` with a recipe and a command; fail closed if that ever changes.
+        let (Some(recipe), Some(first)) = (recipe(&manifest.id), plan.command.first()) else {
+            return Err(InstallError::Unavailable(
+                "holdmap has no install recipe for this analyzer.".into(),
+            ));
+        };
+        let program = PathBuf::from(first);
         let target = self.target(&manifest.id);
         let bin = target.join("bin");
         let home = self.root.join(".home");
