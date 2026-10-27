@@ -1,12 +1,22 @@
 ---
 title: What's new
-description: "What's new in holdmap: 0.12.0 adds guided analyzer installs, new-since-last-run results, skill trust, risk scores and scheduled rescans."
+description: "What's new in holdmap: 0.12.1 makes empty analyzer runs a clean finish; 0.12.0 added guided installs, skill trust and risk scores."
 order: 1.5
 ---
 
 The [changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md) records
 every change, and [releases](https://github.com/santoshshinde2012/holdmap/releases) has the
 notes for each version.
+
+## 0.12.1
+
+**holdmap 0.12.1** is a small fix release.
+
+- **Nothing to check is not a failure.** OSV with no pinned packages, and skill analyzers with no
+  skills, now finish cleanly with a short note on what to add. Real failures still show as
+  failures. [Analyzers](../analyzers/).
+- **MCP tool annotations are documented.** Each tool's description and four safety hints live in
+  one catalog file; see [MCP](../mcp/#tool-annotations). The tool list is unchanged.
 
 ## 0.12.0
 
