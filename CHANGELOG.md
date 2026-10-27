@@ -18,6 +18,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 ### Changed
 
 - The MCP tool catalog (`crates/holdmap-mcp/src/catalog.rs`) now holds only each tool's name, title, description and four annotations; input and output schemas moved to `schemas.rs`, so static scanners can't read a field's description as a tool description. The `tools/list` output is unchanged. README and the MCP guide document the annotations.
+- The MCP guide's tools table no longer carries "new in" version tags (#120, thanks @Jah-yee).
+- Dependencies: compatible updates within current majors, including rmcp 3.8.0, tokio 1.54.1, Tauri plugin and wry/tao patches, Svelte 5.57.3, mediabunny 1.62.1, dagre 3.1.3 and lucide-static 1.62.0.
 
 ## [0.12.0] - 2026-10-26
 
