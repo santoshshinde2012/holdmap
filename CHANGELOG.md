@@ -8,6 +8,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-27
+
 ### Fixed
 
 - OSV vulnerability lookup no longer reports "Failed: nothing to analyse" when no MCP server launches a pinned npm or PyPI package. The run now finishes cleanly with a neutral "No pinned packages to check" note that says how many servers are unpinned and how to pin one; the run dock, status bar, counters and analyzer card agree ("Scan finished", "1 with nothing to check"). Real failures still show as failures.
@@ -1055,7 +1057,8 @@ The first public release.
 - A warm scan takes about 19 ms on Linux (was 60 ms): process refresh no longer walks every
   thread's `/proc/<pid>/task` entry.
 
-[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/santoshshinde2012/holdmap/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/santoshshinde2012/holdmap/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/santoshshinde2012/holdmap/compare/v0.9.0...v0.10.0
