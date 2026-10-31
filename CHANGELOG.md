@@ -8,6 +8,15 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- The desktop menu-bar / tray icon becomes a live widget on macOS, Windows and Linux. It carries a badge when something needs you: a red (look now) or amber (worth a look) count on Windows and Linux, and a dot on macOS, where menu-bar icons take the menu bar's colour. On macOS and Linux panels, text beside the icon shows running dev servers and how many items need you, for example `2 dev · 1 need you`. **Settings → Appearance → Menu bar** (**Panel** on Linux) chooses **Icon only**, **Counts** or **Counts and agent CPU trend**, and the panel has the same choice. Windows tray icons can't show text, so there the figures are in the tooltip. The panel works like a system monitor and updates while it's open: ports in use and network-exposed, the agents' CPU and memory with sparklines, **Needs you** (the same rules as Home for running agents, ports and approved analyzer findings), dev servers, and each agent with its project folder, CPU sparkline and memory. Choosing a row opens it in the window, and **Stop all dev servers…** still opens the reviewed plan there. CPU appears from the second scan, because it's measured between scans.
+
+### Changed
+
+- On macOS, clicking the menu-bar icon opens its panel, as menu-bar extras do; choose **Open holdmap** there to open the window. On Windows a click still opens the window, and the right button opens the panel. Linux trays open the panel on any click.
+- The window's scans no longer refresh the tray on the main thread. The background watcher refreshes it at the same cadence and reuses those scans.
+
 ## [0.12.1] - 2026-10-27
 
 ### Fixed

@@ -20,7 +20,8 @@
   import type { Density } from "../lib/rows";
   import type { DesktopHelpDestination } from "../lib/types";
   import AnalyzersPanel from "./analyzers/AnalyzersPanel.svelte";
-  import { SETTINGS_SECTIONS, THEME_ICON, architectureLabel, cadenceText, type SettingsActions, type SettingsModel, type SettingsSection, type Theme } from "../lib/settings";
+  import { SETTINGS_SECTIONS, THEME_ICON, TRAY_STYLE_OPTIONS, architectureLabel, cadenceText, trayWidgetName, type SettingsActions, type SettingsModel, type SettingsSection, type Theme } from "../lib/settings";
+  import type { TrayStyle } from "../lib/types";
 
   let { model, actions, onclose, section = $bindable("general") }: { model: SettingsModel; actions: SettingsActions; onclose: () => void; section?: SettingsSection } = $props();
 
@@ -35,6 +36,8 @@
   let agentSettings = $state(untrack(() => !!model.agentSettings));
   let notifyDevOnly = $state(untrack(() => model.config.notify_dev_only));
   let hotkey = $state(untrack(() => model.config.hotkey ?? "alt-p"));
+  let trayStyle = $state<TrayStyle>(untrack(() => model.config.tray_style ?? "count"));
+  const trayName = $derived(actions.setTrayStyle ? trayWidgetName(model.platform, model.tray) : null);
   let confirmClear = $state(false);
   let navEls: HTMLButtonElement[] = $state([]);
   let t: ReturnType<typeof setTimeout> | undefined;
@@ -90,13 +93,14 @@
     if (key === "singleKeyShortcuts") singleKeyShortcuts = model.singleKeyShortcuts;
     if (key === "notify") { notify = model.config.notify; notifyDevOnly = model.config.notify_dev_only; }
     if (key === "hotkey") hotkey = model.config.hotkey ?? "alt-p";
+    if (key === "trayStyle") trayStyle = model.config.tray_style ?? "count";
     if (key === "theme") theme = model.theme;
     if (key === "density") density = model.density;
   }
   // Controls may show an optimistic value while saving, then follow the value that
   // actually persisted. A rejected write must restore the previous model value.
   $effect(() => {
-    for (const key of ["autostart", "singleKeyShortcuts", "notify", "hotkey", "theme", "density"]) if (!busy[key]) followModel(key);
+    for (const key of ["autostart", "singleKeyShortcuts", "notify", "hotkey", "trayStyle", "theme", "density"]) if (!busy[key]) followModel(key);
   });
 </script>
 
@@ -153,6 +157,16 @@
           </SettingRow>
         </SettingsGroup>
         {#if errors.theme || errors.density}<div class="err"><Callout tone="danger" size="sm">{errors.theme ?? errors.density}</Callout></div>{/if}
+        {#if trayName}
+          <SettingsGroup title={trayName} description="holdmap's icon carries a badge when something needs you. Click it for live readings, what needs you, dev servers and agents.">
+            <SettingRow label="Beside the icon" description={model.platform === "linux" ? "Running dev servers and what needs you, as a panel label where your desktop shows one." : "Running dev servers and what needs you."}>
+              {#snippet children()}
+                <Select labelHidden label="Beside the icon" width="250px" bind:value={trayStyle} disabled={busy.trayStyle} options={TRAY_STYLE_OPTIONS} onchange={(v) => save("trayStyle", () => actions.setTrayStyle?.(v))} />
+              {/snippet}
+            </SettingRow>
+          </SettingsGroup>
+          {#if errors.trayStyle}<div class="err"><Callout tone="danger" size="sm">{errors.trayStyle}</Callout></div>{/if}
+        {/if}
         {#if model.singleKeyShortcuts}<p class="tip"><Kbd keys={["⇧", "L"]} size="sm" /> cycles the theme while you aren't typing.</p>{/if}
       {:else if section === "notifications"}
         <SettingsGroup title="Desktop notifications" description="holdmap watches in the background and tells you when something changes.">

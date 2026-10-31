@@ -605,7 +605,7 @@
   }
   const portHolder = (port: number) => { const e = snapshot?.entries.find((x) => x.port === port); return e ? `${title(e)}${e.process ? ` (PID ${e.process.pid})` : ""}` : null; };
 
-  const settingsModel = $derived<SettingsModel | null>(config ? { theme: prefs.theme, density: prefs.density, singleKeyShortcuts: prefs.singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, updater: info.updater, appPath: info.appPath, architecture: info.architecture, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length, agentSettings: prefs.inventoryOn } : null);
+  const settingsModel = $derived<SettingsModel | null>(config ? { theme: prefs.theme, density: prefs.density, singleKeyShortcuts: prefs.singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, updater: info.updater, appPath: info.appPath, architecture: info.architecture, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length, agentSettings: prefs.inventoryOn, tray: info.tray } : null);
   const settingsActions: SettingsActions = {
     setTheme: (t) => { prefs.theme = t; },
     setDensity: (d) => { prefs.density = d; },
@@ -615,6 +615,7 @@
     setNotify: async (on, devOnly) => { config = await api.setNotify(on, devOnly); },
     setScanInterval: async (secs) => { config = await api.setPreferences({ scanIntervalSecs: secs }); },
     setHistoryLimit: async (n) => { config = await api.setPreferences({ historyLimit: n }); },
+    setTrayStyle: async (style) => { config = await api.setPreferences({ trayStyle: style }); },
     clearHistory: async () => { await api.clearHistory(); historyItems = []; },
     copy: (t, w) => copy(t, w),
     openDesktopHelp: api.openDesktopHelp,
@@ -1245,6 +1246,17 @@
         const e = snapshot?.entries.find((x) => x.port === port);
         if (e) selectEntry(e);
       }),
+      // Tray panel rows: an agent or a "needs you" item opens where the window would show it.
+      api.onEvent<string>("open-agent", (id) => {
+        if (agentsReport?.agents.some((a) => a.id === id)) openAgent(id);
+        else { agentLink = id; prefs.view = "agents"; void loadAgents(); }
+      }),
+      api.onEvent<string>("open-entry", async (id) => {
+        await refresh();
+        clearFilters();
+        openEntryById(id);
+      }),
+      api.onEvent<Config>("config-changed", (c) => { config = c; }),
       api.onEvent("refresh", () => refresh()),
       api.onEvent("stop-all-dev", () => { if (!confirm) requestStopAllDev(); }),
       api.onEvent<{ version: string; notes: string | null }>("update-available", (u) => {

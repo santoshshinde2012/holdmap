@@ -69,7 +69,26 @@ test("settings preserve composition, modified navigation and the modal tab order
   await app.keyboard.press("Tab");
   await expect(settings.getByRole("radio", { name: "Comfortable", exact: true })).toBeFocused();
   await app.keyboard.press("Tab");
+  await expect(settings.getByRole("combobox", { name: /^Beside the icon:/ })).toBeFocused();
+  await app.keyboard.press("Tab");
   await expect(done).toBeFocused();
+});
+
+test("the menu bar style is saved and kept when Settings reopens", async ({ app }) => {
+  await app.getByRole("button", { name: "Settings", exact: true }).click();
+  let settings = app.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.getByRole("tab", { name: "Appearance", exact: true }).click();
+  await expect(settings.getByRole("heading", { name: "Menu bar", exact: true })).toBeVisible();
+  await settings.getByRole("combobox", { name: "Beside the icon: Counts", exact: true }).click();
+  await app.getByRole("option", { name: "Counts and agent CPU trend", exact: true }).click();
+  await expect(settings.getByText("Saved", { exact: true })).toBeVisible();
+  await settings.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(settings).toBeHidden();
+
+  await app.getByRole("button", { name: "Settings", exact: true }).click();
+  settings = app.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.getByRole("tab", { name: "Appearance", exact: true }).click();
+  await expect(settings.getByRole("combobox", { name: "Beside the icon: Counts and agent CPU trend", exact: true })).toBeVisible();
 });
 
 test("settings controls retain successful changes across sections and reopening", async ({ app }) => {

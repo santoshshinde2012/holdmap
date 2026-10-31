@@ -42,12 +42,42 @@ shortcuts with their current settings. **Skip** changes nothing.
 ## Close, reopen and quit
 
 When the menu-bar or tray icon is available, closing the desktop window keeps Holdmap
-running, including active schedules and recording. Click the icon to reopen the window,
-or use your configured global shortcut. Choose **Quit holdmap** from the icon's menu to
-exit completely. If the tray is unavailable, closing the window quits the app.
+running, including active schedules and recording. Choose **Open holdmap** from the icon's
+menu to reopen the window (on Windows, a click on the icon also opens it), or use your
+configured global shortcut. Choose **Quit holdmap** from the icon's menu to exit completely.
+If the tray is unavailable, closing the window quits the app.
 
 Closing from fullscreen returns to the previous app without leaving an empty black Space,
 and clicking the Dock icon reopens the same window.
+
+## Menu bar and tray
+
+**Current source (Unreleased):** holdmap's menu-bar or tray icon works like a small system
+monitor for your agents and dev servers, on macOS, Windows and Linux.
+
+- **Badge.** When something needs you, the icon carries a badge. On Windows and Linux it's
+  a disc with the count, red for items to look at now and amber for items worth a look. On
+  macOS, where menu-bar icons take the menu bar's own colour, it's a dot.
+- **Beside the icon.** On macOS, and on Linux panels that show labels, text next to the icon
+  counts running dev servers and the items that need you, for example `2 dev · 1 need you`.
+  **Settings → Appearance → Menu bar** (**Panel** on Linux) chooses **Icon only**, **Counts**
+  (the default) or **Counts and agent CPU trend**, which adds a sparkline of the agents' CPU
+  over recent scans. Windows tray icons can't show text, so on Windows the same figures are in
+  the icon's tooltip.
+- **Panel.** Click the icon on macOS, right-click it on Windows, or click it on Linux. The
+  panel shows ports in use and how many are open to the network, the agents' CPU and
+  memory, **Needs you**, your dev servers, and each agent with its own CPU sparkline and
+  memory. It keeps updating while it's open. Choose an item, a dev server or an agent to open
+  it in the window. **Stop all dev servers…** opens the stop plan in the window; nothing is
+  stopped from the panel.
+
+The panel reads the same scan as the window and refreshes at the **Scan every** cadence (at
+least every 10 seconds while the window is hidden). CPU is measured between scans, so it
+appears from the second scan. **Needs you** in the panel follows the same rules as Home for
+running agents, ports and approved analyzer findings (re-read at most once a minute). Items
+that come from agents' MCP, skill and permission settings appear only in the window, after
+**Read MCP config**. On Linux the icon needs a desktop with AppIndicator support (on GNOME,
+the AppIndicator extension); Linux trays show no tooltip and open the panel on any click.
 
 ## Service graph and cluster grouping
 

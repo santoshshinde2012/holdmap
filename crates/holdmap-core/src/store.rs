@@ -75,6 +75,10 @@ pub struct Config {
     pub hotkey: String,
     /// Recently used SSH hosts for the desktop remote view, newest first.
     pub recent_hosts: Vec<String>,
+    /// What the desktop menu-bar / tray widget shows beside its icon: `icon` (the icon and its
+    /// attention badge), `count` (adds running dev servers and items that need you) or `trend`
+    /// (also adds the agents' CPU trend). Unknown values read as `count`.
+    pub tray_style: String,
 }
 
 impl Default for Config {
@@ -87,6 +91,7 @@ impl Default for Config {
             scan_interval_secs: 4,
             hotkey: "alt-p".into(),
             recent_hosts: Vec::new(),
+            tray_style: "count".into(),
         }
     }
 }
@@ -98,6 +103,16 @@ impl Config {
     pub const HISTORY_LIMIT: std::ops::RangeInclusive<usize> = 10..=5000;
     /// How many recent SSH hosts are remembered.
     pub const RECENT_HOSTS: usize = 6;
+    /// Tray widget styles, from the quietest.
+    pub const TRAY_STYLES: [&'static str; 3] = ["icon", "count", "trend"];
+
+    /// The tray widget style, falling back to `count` for unknown or hand-edited values.
+    pub fn tray_style(&self) -> &str {
+        Self::TRAY_STYLES
+            .into_iter()
+            .find(|s| *s == self.tray_style)
+            .unwrap_or("count")
+    }
 
     /// Foreground scan interval, clamped to the allowed range.
     pub fn scan_interval(&self) -> std::time::Duration {
@@ -1247,6 +1262,27 @@ mod tests {
         );
         assert_eq!(old.hotkey, "alt-p");
         assert!(!old.notify);
+        assert_eq!(
+            old.tray_style(),
+            "count",
+            "configs from before the tray widget"
+        );
+        for style in Config::TRAY_STYLES {
+            let c = Config {
+                tray_style: style.into(),
+                ..Config::default()
+            };
+            assert_eq!(c.tray_style(), style);
+        }
+        let edited = Config {
+            tray_style: "rainbow".into(),
+            ..Config::default()
+        };
+        assert_eq!(
+            edited.tray_style(),
+            "count",
+            "unknown styles read as the default"
+        );
         let mut c = Config {
             scan_interval_secs: 0,
             ..Config::default()

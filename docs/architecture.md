@@ -758,7 +758,7 @@ flowchart TB
     CMD["commands.rs · Native operations<br/>Validated reads, plans, stops + openers"]
     ST["state.rs<br/>AppState (config, last snapshot)"]
     CF["confirmation.rs<br/>one-use reviewed plans"]
-    TR["tray.rs<br/>menu + top ports"]
+    TR["tray/ · Tray widget<br/>badge, live panel + style"]
     W["watch.rs · Background scans<br/>Events, notifications + tray refresh"]
     SC["shortcuts.rs<br/>presets, re-registered at runtime"]
     LIB --> CMD & TR & W & SC
@@ -824,8 +824,14 @@ return an error while leaving the previous cache eligible for a retry. Collectio
 scan lock without holding the engine mutex. Folder actions run off-thread and force a fresh
 scan rather than authorizing paths from an old cache. Openers construct localhost URLs or
 resolve port/agent folders in the backend; the webview cannot supply an arbitrary command or URL.
-Tray updates requested by scans use the native event loop rather than creating a thread per
-refresh. Shortcut replacement registers the new shortcut before releasing the working one,
+The tray widget (`tray/`) is refreshed by the watcher after each scan, on the watcher's
+thread: it reuses that scan for the agents report, applies the shared "needs you" rules with
+analyzer insights cached for a minute, and records CPU trends. `tray/model.rs` turns those
+readings into plain data (panel rows, the text beside the icon, the tooltip and the badge) for
+each platform's tray limits, and `tray/badge.rs` draws the badge into the icon's pixels. When
+only text changed, the open panel's rows are updated in place; it is rebuilt only when rows
+change. Panel actions reuse the window's events, and a stop always opens the reviewed plan in
+the window. Shortcut replacement registers the new shortcut before releasing the working one,
 so a collision leaves the previous shortcut active.
 
 `window_lifecycle.rs` intercepts main-window close requests only while a working tray exists.

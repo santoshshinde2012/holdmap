@@ -3,7 +3,6 @@
 
 use crate::confirmation::{validate_fresh, Preview};
 use crate::state::{scan_now, AppState};
-use crate::tray::refresh_tray;
 use holdmap_core::agents::AgentsReport;
 use holdmap_core::history::{self, HistoryEntry};
 use holdmap_core::store::{Config, Store};
@@ -172,11 +171,8 @@ pub async fn scan(
     }
     let max_age = max_age_ms.map_or(FRESH, Duration::from_millis);
     let handle = app.clone();
-    let snapshot = blocking(move || handle.state::<AppState>().snapshot(all, max_age)).await?;
-    // The tray menu is updated on the main thread; don't make the scan wait for it.
-    let (handle, snap) = (app.clone(), snapshot.clone());
-    let _ = app.run_on_main_thread(move || refresh_tray(&handle, &snap));
-    Ok(snapshot)
+    // The watcher refreshes the tray at the same cadence, reusing this scan.
+    blocking(move || handle.state::<AppState>().snapshot(all, max_age)).await
 }
 
 /// Agent footprint from a scan no older than one second, with optional local capability metadata.
@@ -660,12 +656,14 @@ pub async fn unpin(app: AppHandle, port: u16) -> Result<Config, String> {
     .await
 }
 
-/// Scan interval and history length (validated against the core's allowed ranges).
+/// Scan interval, history length and what the tray widget shows (validated against the
+/// core's allowed values).
 #[tauri::command]
 pub async fn set_preferences(
     app: AppHandle,
     scan_interval_secs: Option<u64>,
     history_limit: Option<usize>,
+    tray_style: Option<String>,
 ) -> Result<Config, String> {
     if let Some(s) = scan_interval_secs {
         if !Config::SCAN_INTERVAL.contains(&s) {
@@ -685,7 +683,17 @@ pub async fn set_preferences(
             ));
         }
     }
-    with_store(app, move |store| {
+    if let Some(t) = tray_style.as_deref() {
+        if !Config::TRAY_STYLES.contains(&t) {
+            return Err(format!(
+                "The menu bar shows one of: {}",
+                Config::TRAY_STYLES.join(", ")
+            ));
+        }
+    }
+    let restyle = tray_style.is_some();
+    let handle = app.clone();
+    let config = with_store(app, move |store| {
         save(store, |c| {
             if let Some(s) = scan_interval_secs {
                 c.scan_interval_secs = s;
@@ -693,9 +701,20 @@ pub async fn set_preferences(
             if let Some(h) = history_limit {
                 c.history_limit = h;
             }
+            if let Some(t) = tray_style {
+                c.tray_style = t;
+            }
         })
     })
-    .await
+    .await?;
+    if restyle {
+        blocking(move || {
+            crate::tray::restyle(&handle);
+            Ok(())
+        })
+        .await?;
+    }
+    Ok(config)
 }
 
 #[derive(Serialize)]

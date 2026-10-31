@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { cadenceText, SETTINGS_SECTIONS, THEME_ICON, THEME_LABEL } from "./settings";
+import { cadenceText, SETTINGS_SECTIONS, THEME_ICON, THEME_LABEL, TRAY_STYLE_OPTIONS, trayWidgetName } from "./settings";
 
 describe("settings", () => {
   it("describes the cadence the backend uses (2.5×, at least 10 s)", () => {
@@ -19,5 +19,16 @@ describe("settings", () => {
       expect(["monitor", "server"]).not.toContain(name);
     }
     expect(THEME_LABEL.system).toBe("match system");
+  });
+
+  it("offers the tray style only where text can sit beside the icon", () => {
+    expect(trayWidgetName("macos", true)).toBe("Menu bar");
+    expect(trayWidgetName("linux", true)).toBe("Panel");
+    expect(trayWidgetName("windows", true)).toBeNull();
+    expect(trayWidgetName("linux", false)).toBeNull();
+    expect(trayWidgetName("macos", undefined)).toBeNull();
+    expect(trayWidgetName("browser", false)).toBe("Menu bar");
+    // Same values and order as `Config::TRAY_STYLES`.
+    expect(TRAY_STYLE_OPTIONS.map((o) => o.value)).toEqual(["icon", "count", "trend"]);
   });
 });

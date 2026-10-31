@@ -270,7 +270,12 @@ export interface Config {
   /** Global shortcut preset id ("alt-p", "alt-space", "alt-k", "off"). */
   hotkey: string;
   recent_hosts: string[];
+  /** What the menu-bar / tray widget shows beside its icon (absent from older backends). */
+  tray_style?: TrayStyle;
 }
+
+/** `Config::TRAY_STYLES`: the icon and its badge, plus counts, plus the agents' CPU trend. */
+export type TrayStyle = "icon" | "count" | "trend";
 
 export interface HistoryEntry {
   at_ms: number;
