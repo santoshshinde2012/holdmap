@@ -69,6 +69,18 @@
     };
   });
 
+  // Size is read on the next frame, as elsewhere in the app: resizing inside the observer
+  // callback would trigger a "ResizeObserver loop" notice.
+  $effect(() => {
+    const el = host;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let frame = 0;
+    const read = () => { width = el.clientWidth; height = el.clientHeight; };
+    read();
+    const ro = new ResizeObserver(() => { cancelAnimationFrame(frame); frame = requestAnimationFrame(read); });
+    ro.observe(el);
+    return () => { ro.disconnect(); cancelAnimationFrame(frame); };
+  });
   $effect(() => { stage?.resize(width, height); });
   $effect(() => { stage?.setInsets(insets.top, insets.bottom); });
   // Poses are fitted to the free area between the overlays, then pulled back to the full canvas.
@@ -295,7 +307,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-<div class="stage3d" bind:this={host} bind:clientWidth={width} bind:clientHeight={height} role="group" tabindex="0"
+<div class="stage3d" bind:this={host} role="group" tabindex="0"
   aria-label="3D machine. Drag to turn, right-drag or Shift-drag to pan, scroll to zoom. Arrow keys turn, + and − zoom, 0 resets. The parts list beside it has every part as a button."
   onkeydown={onkey}>
   <canvas bind:this={canvas} class:grab={!!view.hovered} onpointerdown={ondown} onpointermove={onmove} onpointerup={onup} onpointercancel={onup}

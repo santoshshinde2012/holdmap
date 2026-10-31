@@ -155,7 +155,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="home" id="home-overview" role="region" aria-label="Overview" {onkeydown}>
+<div class="home" class:three={layout === "3d" && !idle} id="home-overview" role="region" aria-label="Overview" {onkeydown}>
   <header class="top">
     {#if !focused}<HomeSummary {stats} />{/if}
     <div class="tools">
@@ -258,9 +258,11 @@
   .inv:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   .body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--sp-4); align-items: start; }
   .body.map { align-items: stretch; height: clamp(340px, 44vh, 560px); }
-  /* The 3D machine fills the window under the summary, down to the status bar. */
-  .body.three { height: clamp(440px, calc(100vh - 252px), 900px); }
-  .body.three.focused { grid-template-columns: minmax(0, 1fr); height: clamp(460px, calc(100vh - 214px), 1400px); }
+  /* The 3D machine takes exactly the height Home has left under its header, so the page never
+     gains a scrollbar that would resize the canvas while it lays out. */
+  .home.three { grid-template-rows: auto minmax(440px, 1fr); align-content: stretch; }
+  .body.map.three { height: auto; min-height: 0; }
+  .body.three.focused { grid-template-columns: minmax(0, 1fr); }
   .main { min-width: 0; min-height: 0; height: 100%; animation: view-in 180ms ease both; }
   @keyframes view-in { from { opacity: 0; transform: translateY(3px); } }
   @media (prefers-reduced-motion: reduce) { .main { animation: none; } }
@@ -280,10 +282,11 @@
   .clear { margin: 0; padding: var(--sp-3); display: flex; align-items: center; gap: var(--sp-2); color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .clear :global(svg) { color: var(--ok); }
   .lanes-empty { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
-  @media (max-width: 1100px) { .body { grid-template-columns: minmax(0, 1fr) 280px; } .body.map { height: clamp(300px, 38vh, 480px); } .body.three { height: clamp(420px, calc(100vh - 290px), 760px); } }
+  @media (max-width: 1100px) { .body { grid-template-columns: minmax(0, 1fr) 280px; } .body.map { height: clamp(300px, 38vh, 480px); } }
   @media (max-width: 860px) {
     .body, .body.map { grid-template-columns: minmax(0, 1fr); height: auto; }
     .body.map .stage { height: 420px; }
+    .home.three { grid-template-rows: none; align-content: start; }
     .body.three .stage { height: 560px; }
     .body:not(.map) .panel { position: static; }
     .panel { order: -1; }

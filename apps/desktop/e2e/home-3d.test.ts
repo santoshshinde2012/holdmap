@@ -150,7 +150,7 @@ test("without WebGL, 3D shows the map and says why", async ({ app }) => {
   await expect(overview.getByRole("button", { name: "Use 3D anyway" })).toHaveCount(0);
 });
 
-for (const width of [390, 1024, 1440]) {
+for (const width of [390, 1024, 1280, 1440]) {
   test(`3D at ${width}px: no page overflow, and a list of agents on a phone-sized window`, async ({ app }) => {
     await app.setViewportSize({ width, height: 900 });
     const mode = await open3d(app);

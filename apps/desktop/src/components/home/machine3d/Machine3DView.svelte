@@ -273,7 +273,9 @@
       <div class="hud top" data-inset>
         <Readings readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
       </div>
-      <div class="hud bottom-left" data-inset>
+      <!-- One overlay along the bottom: the legend (or tour caption) across the width, then the
+           layer bar and the view controls, which wrap onto two rows when space runs out. -->
+      <div class="hud bottom" data-inset>
         {#if caption}
           <p class="caption" aria-live="polite"><Icon name="play" size={11} />{caption}</p>
         {:else if legend}
@@ -283,6 +285,7 @@
             {#if scene.calls}<li><i class="call"></i>Reported call</li>{/if}
           </ul>
         {/if}
+        <div class="row">
         <div class="bar" role="group" aria-label="Layers">
           <ActionPill label="Processes" toggle pressed={!hidden.has("runtime")} size="compact" title="Show or hide the runtime plate" onclick={() => toggleLayer("runtime")} />
           <ActionPill label="Configuration" toggle pressed={!hidden.has("config")} size="compact" title="Show or hide configuration files on disk" onclick={() => toggleLayer("config")} />
@@ -290,13 +293,14 @@
           <ActionPill icon="info" label="Legend" toggle pressed={legend} size="compact" expanded={legend} onclick={() => (legend = !legend)} />
           {#if !inventory && oninventory && !scene.inspected}<button type="button" class="link" onclick={oninventory}><Icon name="plug" size={12} />Read MCP config</button>{/if}
         </div>
-      </div>
-      <div class="hud bottom-right bar" role="toolbar" aria-label="3D view" data-inset>
+        <div class="bar tools" role="toolbar" aria-label="3D view">
         <ActionDock value={explode ? "exploded" : "assembled"} options={MODES} label="Assembly" hinge={false} animate={false} size="compact" onchange={(v) => { stopTour(); explode = v === "exploded"; }} />
         <ActionPill icon="radar" label="X-ray" toggle pressed={xray} size="compact" kbd="X" title="See through solid parts; configuration and running beams stand out" onclick={() => { stopTour(); xray = !xray; }} />
         <ActionPill icon="layers" label="Top" toggle pressed={top} size="compact" title="Look straight down: the same picture as the Map" onclick={() => { stopTour(); top = !top; }} />
         <ActionPill icon="play" label="Tour" toggle pressed={tour} size="compact" kbd="T" disabled={reduced || !hasParts} title={reduced ? "The tour is off while reduced motion is on" : "Walk through the machine; any input hands you control"} onclick={() => (tour = !tour)} />
         {#if onexpand}<ActionPill icon="sidebar" label="Focus" toggle pressed={expanded} size="compact" title={expanded ? "Show the summary and Needs you again" : "Hide the summary and Needs you so the machine fills Home"} onclick={() => onexpand?.(!expanded)} />{/if}
+        </div>
+        </div>
       </div>
       <div class="hud zoom" role="toolbar" aria-label="Zoom" aria-orientation="vertical">
         <IconButton icon="plus" label="Zoom in" kbd="+" size="sm" onclick={() => stage3d?.zoomBy(1 / 1.25)} />
@@ -326,14 +330,14 @@
   .hud { position: absolute; pointer-events: none; z-index: 1; }
   .hud > :global(*) { pointer-events: auto; }
   .top { top: 10px; left: 10px; right: 10px; }
-  .bottom-left { left: 10px; bottom: 10px; display: grid; gap: 6px; justify-items: start; max-width: calc(100% - 470px); }
-  .bottom-right { right: 10px; bottom: 10px; }
+  .bottom { left: 10px; right: 10px; bottom: 10px; display: grid; gap: 6px; justify-items: start; }
+  .row { justify-self: stretch; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; }
+  .row .tools { margin-left: auto; flex-wrap: nowrap; }
   .side { right: 52px; display: flex; align-items: flex-end; }
   /* Zoom sits on the right edge, clear of the readings above and the controls below. */
   .zoom { right: 10px; top: 50%; transform: translateY(-50%); display: grid; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: var(--r-lg);
     background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-sm); }
   .bar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; padding: 3px; border: 1px solid var(--border); border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-sm); }
-  .bottom-right.bar { flex-wrap: nowrap; }
   .legend { list-style: none; margin: 0; padding: 4px 8px; display: flex; flex-wrap: wrap; gap: 4px 12px; border-radius: var(--r-md); background: color-mix(in srgb, var(--surface) 80%, transparent); color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
   .legend li { display: inline-flex; align-items: center; gap: 5px; }
   .legend i { width: 10px; height: 10px; border-radius: 2px; border: 1.5px solid var(--text-2); }
@@ -350,10 +354,10 @@
   .link { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--accent); font: inherit; font-size: var(--fs-caption); font-weight: var(--fw-medium); cursor: pointer; }
   .link:hover { background: var(--accent-softer); }
   .link:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-  /* Narrow: the view controls sit above the layer toggles, and the parts list narrows. */
-  @container (max-width: 900px) {
+  /* Narrower: the view controls show their icons only. Their names stay as visually hidden text,
+     so each button keeps its accessible name, and its tooltip still shows it. */
+  @container (max-width: 1000px) {
     .m3d { grid-template-columns: 180px minmax(0, 1fr); }
-    .bottom-left { max-width: calc(100% - 20px); bottom: 52px; }
-    .bottom-right { left: 10px; right: auto; }
+    .tools :global(.action-pill > span) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   }
 </style>

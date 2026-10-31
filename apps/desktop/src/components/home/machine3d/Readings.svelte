@@ -61,4 +61,13 @@
   .cpu .tile { padding-right: 132px; }
   .spark { position: absolute; right: 6px; top: 50%; width: 120px; height: 26px; transform: translateY(-50%); }
   .spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  /* On a narrower 3D stage the readings stay on one row and scroll sideways, so the machine keeps its room. */
+  @container (max-width: 1000px) {
+    ul { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+    .r.cpu { grid-column: auto; }
+    .tile { width: max-content; }
+    .l, small { overflow: visible; }
+    .cpu .tile { padding-right: 70px; }
+    .spark { width: 60px; }
+  }
 </style>
