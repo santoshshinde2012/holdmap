@@ -158,8 +158,8 @@
         </SettingsGroup>
         {#if errors.theme || errors.density}<div class="err"><Callout tone="danger" size="sm">{errors.theme ?? errors.density}</Callout></div>{/if}
         {#if trayName}
-          <SettingsGroup title={trayName} description="holdmap's icon carries a badge when something needs you. Click it for live readings, what needs you, dev servers and agents.">
-            <SettingRow label="Beside the icon" description={model.platform === "linux" ? "Running dev servers and what needs you, as a panel label where your desktop shows one." : "Running dev servers and what needs you."}>
+          <SettingsGroup title={trayName} description={model.platform === "linux" ? "holdmap's icon carries a badge when something needs you. Its menu opens a panel with live readings, history, what needs you, dev servers and agents." : "holdmap's icon carries a badge when something needs you. Click it for a panel with live readings, history, what needs you, dev servers and agents."}>
+            <SettingRow label="Beside the icon" description={model.platform === "linux" ? "Agents, their CPU, dev servers and what needs you, as a panel label where your desktop shows one." : "Agents, their CPU, dev servers and what needs you, each a small label over its value."}>
               {#snippet children()}
                 <Select labelHidden label="Beside the icon" width="250px" bind:value={trayStyle} disabled={busy.trayStyle} options={TRAY_STYLE_OPTIONS} onchange={(v) => save("trayStyle", () => actions.setTrayStyle?.(v))} />
               {/snippet}

@@ -19,7 +19,7 @@ if (!existsSync(join(desktop, "node_modules"))) {
 execFileSync("npx", ["vite", "build", "--base", base, "--outDir", out, "--emptyOutDir", "--manifest", "manifest.json", "--logLevel", "warn"], {
   cwd: desktop,
   stdio: "inherit",
-  env: { ...process.env, TAURI_ENV_PLATFORM: "" },
+  env: { ...process.env, TAURI_ENV_PLATFORM: "", HOLDMAP_SITE_DEMO: "1" },
 });
 
 // Demo defaults before the app mounts: skip onboarding, start on Home like the app (or ?view=),

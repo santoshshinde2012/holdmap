@@ -16,12 +16,15 @@ pub struct Pixels {
 }
 
 /// Look now: white text on it has 5.6:1 contrast.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 const HIGH: [u8; 3] = [0xC5, 0x22, 0x1F];
 /// Worth a look: white text on it has 5.0:1 contrast.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 const MEDIUM: [u8; 3] = [0xB4, 0x53, 0x09];
 
 /// 3×5 digits and `+`, one row per byte (bit 2 is the left column). At 64 px and scale 4
 /// they map onto whole pixels when Windows shows the icon at 16 px.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 const GLYPHS: [(char, [u8; 5]); 11] = [
     ('0', [0b111, 0b101, 0b101, 0b101, 0b111]),
     ('1', [0b010, 0b110, 0b010, 0b010, 0b111]),
@@ -76,6 +79,7 @@ fn disc(p: &mut Pixels, cx: f32, cy: f32, r: f32, gap: f32, rgb: [u8; 3]) {
     }
 }
 
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 fn text(p: &mut Pixels, s: &str, cx: f32, cy: f32, scale: u32) {
     let glyphs: Vec<[u8; 5]> = s
         .chars()
@@ -112,6 +116,7 @@ fn text(p: &mut Pixels, s: &str, cx: f32, cy: f32, scale: u32) {
 
 /// Windows and Linux: `base` with the count in a disc in the top-right corner, or `base`
 /// unchanged when nothing needs you.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 pub fn with_count(base: &Pixels, badge: Badge) -> Pixels {
     let mut p = base.clone();
     let Some(urgency) = badge.urgency.filter(|_| badge.count > 0) else {
@@ -136,6 +141,7 @@ pub fn with_count(base: &Pixels, badge: Badge) -> Pixels {
 }
 
 /// macOS: the template glyph with a dot in the top-right corner when anything needs you.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn with_dot(base: &Pixels, badge: Badge) -> Pixels {
     let mut p = base.clone();
     if badge.count == 0 {

@@ -2304,6 +2304,8 @@ dependencies = [
  "holdmap-core",
  "libc",
  "minisign-verify",
+ "objc2",
+ "objc2-app-kit",
  "semver",
  "serde",
  "serde_json",

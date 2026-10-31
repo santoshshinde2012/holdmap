@@ -3,7 +3,12 @@
 use tauri::{ipc::Invoke, Manager, Runtime, Webview, WebviewWindow};
 
 pub(crate) fn trusted_origin(label: &str, url: &tauri::Url, dev_url: Option<&tauri::Url>) -> bool {
-    if label != "main" || !url.username().is_empty() || url.password().is_some() {
+    label == "main" && local_origin(url, dev_url)
+}
+
+/// The bundled app assets (or the dev server in debug builds), never another authority.
+fn local_origin(url: &tauri::Url, dev_url: Option<&tauri::Url>) -> bool {
+    if !url.username().is_empty() || url.password().is_some() {
         return false;
     }
     let packaged = matches!(
@@ -11,6 +16,36 @@ pub(crate) fn trusted_origin(label: &str, url: &tauri::Url, dev_url: Option<&tau
         ("tauri", Some("localhost"), None) | ("http" | "https", Some("tauri.localhost"), None)
     );
     packaged || dev_url.is_some_and(|dev| dev.origin() == url.origin())
+}
+
+fn dev_url<R: Runtime>(webview: &Webview<R>) -> Option<tauri::Url> {
+    if cfg!(debug_assertions) {
+        webview.app_handle().config().build.dev_url.clone()
+    } else {
+        None
+    }
+}
+
+/// The tray popup panel's window label, its bundled page, and the only commands it may call.
+pub(crate) const TRAY_PANEL: &str = "tray";
+pub(crate) const TRAY_PANEL_PAGE: &str = "tray.html";
+pub(crate) const TRAY_PANEL_COMMANDS: [&str; 2] = ["tray_panel", "tray_action"];
+
+/// The tray panel: its own window showing the bundled panel page, which may call only the
+/// panel's two commands (read its data; run a row's tray action).
+fn authorize_tray_panel<R: Runtime>(webview: &Webview<R>, command: &str) -> Result<(), String> {
+    let url = webview
+        .url()
+        .map_err(|_| "Couldn't verify the tray panel.")?;
+    let page = url.path().strip_prefix('/') == Some(TRAY_PANEL_PAGE);
+    if webview.window().label() != TRAY_PANEL
+        || !page
+        || !local_origin(&url, dev_url(webview).as_ref())
+        || !TRAY_PANEL_COMMANDS.contains(&command)
+    {
+        return Err("The tray panel can only read its readings and run its own rows.".into());
+    }
+    Ok(())
 }
 
 pub(crate) fn authorize<R: Runtime>(window: &WebviewWindow<R>, action: &str) -> Result<(), String> {
@@ -39,12 +74,9 @@ fn authorize_webview<R: Runtime>(webview: &Webview<R>, action: &str) -> Result<(
     let url = webview
         .url()
         .map_err(|_| "Couldn't verify the local app window.")?;
-    let dev_url = if cfg!(debug_assertions) {
-        webview.app_handle().config().build.dev_url.as_ref()
-    } else {
-        None
-    };
-    if webview.window().label() != "main" || !trusted_origin(webview.label(), &url, dev_url) {
+    if webview.window().label() != "main"
+        || !trusted_origin(webview.label(), &url, dev_url(webview).as_ref())
+    {
         return Err(format!(
             "{action} is available only from the local Holdmap app window."
         ));
@@ -58,7 +90,13 @@ pub(crate) fn guard<R: Runtime>(
     dispatch: impl Fn(Invoke<R>) -> bool + Send + Sync + 'static,
 ) -> impl Fn(Invoke<R>) -> bool + Send + Sync + 'static {
     move |invoke| {
-        if let Err(error) = authorize_webview(invoke.message.webview_ref(), "Native commands") {
+        let webview = invoke.message.webview_ref();
+        let allowed = if webview.label() == TRAY_PANEL {
+            authorize_tray_panel(webview, invoke.message.command())
+        } else {
+            authorize_webview(webview, "Native commands")
+        };
+        if let Err(error) = allowed {
             invoke.resolver.reject(error);
             return true;
         }
@@ -134,6 +172,54 @@ mod tests {
                     PermissionResponse::Default
                 );
             }
+        }
+    }
+
+    #[test]
+    fn the_tray_panel_page_may_call_only_its_own_commands() {
+        let local = if cfg!(any(windows, target_os = "android")) {
+            "http://tauri.localhost"
+        } else {
+            "tauri://localhost"
+        };
+        for (label, page, command, allowed) in [
+            ("tray", "tray.html", "tray_panel", true),
+            ("tray", "tray.html", "tray_action", true),
+            ("tray", "tray.html", "scan", false),
+            ("tray", "tray.html", "stop", false),
+            ("tray", "tray.html", "set_preferences", false),
+            ("tray", "tray.html", "future_command", false),
+            // The panel's label alone grants nothing: it must show the panel page.
+            ("tray", "index.html", "tray_panel", false),
+            // Other windows still need to be the main window, panel commands included.
+            ("secondary", "tray.html", "tray_panel", false),
+        ] {
+            let calls = Arc::new(AtomicUsize::new(0));
+            let dispatched = Arc::clone(&calls);
+            let app = mock_builder()
+                .invoke_handler(guard(move |invoke| {
+                    dispatched.fetch_add(1, Ordering::SeqCst);
+                    invoke.resolver.resolve("accepted");
+                    true
+                }))
+                .build(mock_context(noop_assets()))
+                .unwrap();
+            let window =
+                tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::App(page.into()))
+                    .build()
+                    .unwrap();
+            let request = tauri::webview::InvokeRequest {
+                cmd: command.into(),
+                callback: tauri::ipc::CallbackFn(0),
+                error: tauri::ipc::CallbackFn(1),
+                url: format!("{local}/{page}").parse().unwrap(),
+                body: tauri::ipc::InvokeBody::default(),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.into(),
+            };
+            let response = get_ipc_response(&window, request);
+            assert_eq!(response.is_ok(), allowed, "{label} {page} {command}");
+            assert_eq!(calls.load(Ordering::SeqCst), usize::from(allowed));
         }
     }
 

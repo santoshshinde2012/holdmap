@@ -79,8 +79,8 @@ test("the menu bar style is saved and kept when Settings reopens", async ({ app 
   let settings = app.getByRole("dialog", { name: "Settings", exact: true });
   await settings.getByRole("tab", { name: "Appearance", exact: true }).click();
   await expect(settings.getByRole("heading", { name: "Menu bar", exact: true })).toBeVisible();
-  await settings.getByRole("combobox", { name: "Beside the icon: Counts", exact: true }).click();
-  await app.getByRole("option", { name: "Counts and agent CPU trend", exact: true }).click();
+  await settings.getByRole("combobox", { name: "Beside the icon: Readings", exact: true }).click();
+  await app.getByRole("option", { name: "Readings and agent CPU chart", exact: true }).click();
   await expect(settings.getByText("Saved", { exact: true })).toBeVisible();
   await settings.getByRole("button", { name: "Done", exact: true }).click();
   await expect(settings).toBeHidden();
@@ -88,7 +88,7 @@ test("the menu bar style is saved and kept when Settings reopens", async ({ app 
   await app.getByRole("button", { name: "Settings", exact: true }).click();
   settings = app.getByRole("dialog", { name: "Settings", exact: true });
   await settings.getByRole("tab", { name: "Appearance", exact: true }).click();
-  await expect(settings.getByRole("combobox", { name: "Beside the icon: Counts and agent CPU trend", exact: true })).toBeVisible();
+  await expect(settings.getByRole("combobox", { name: "Beside the icon: Readings and agent CPU chart", exact: true })).toBeVisible();
 });
 
 test("settings controls retain successful changes across sections and reopening", async ({ app }) => {

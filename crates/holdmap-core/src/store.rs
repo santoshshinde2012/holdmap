@@ -76,8 +76,9 @@ pub struct Config {
     /// Recently used SSH hosts for the desktop remote view, newest first.
     pub recent_hosts: Vec<String>,
     /// What the desktop menu-bar / tray widget shows beside its icon: `icon` (the icon and its
-    /// attention badge), `count` (adds running dev servers and items that need you) or `trend`
-    /// (also adds the agents' CPU trend). Unknown values read as `count`.
+    /// attention badge), `count` (adds readings: agents, their CPU, dev servers and items that
+    /// need you) or `trend` (also adds a mini chart of the agents' CPU). Unknown values read as
+    /// `count`.
     pub tray_style: String,
 }
 

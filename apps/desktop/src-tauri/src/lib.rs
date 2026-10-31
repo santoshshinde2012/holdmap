@@ -79,6 +79,8 @@ pub fn run() {
         .manage(screen_recording::ScreenRecordingState::default())
         .manage(screen_snapshot::ScreenSnapshotState::default())
         .invoke_handler(local_window::guard(tauri::generate_handler![
+            tray::panel::tray_panel,
+            tray::panel::tray_action,
             commands::app_info,
             commands::scan,
             commands::topology,

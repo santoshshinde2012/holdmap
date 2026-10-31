@@ -63,11 +63,10 @@
   Add any MCP server in three steps: source, tools, review.
 - **Home, maps and graphs.** Agents as Cards or a Map with a Timeline and a **Needs you**
   list, the service graph with clusters, and agent flow.
-- **Menu bar and tray widget (Unreleased).** The icon carries a badge when something needs
-  you and, on macOS and Linux panels, shows running dev servers and what needs you beside it
-  (optionally with the agents' CPU trend). Its panel is a live monitor: ports, agents' CPU and
-  memory with sparklines, **Needs you**, dev servers and agents, on macOS, Windows and Linux.
-  Stops still open the reviewed plan in the window.
+- **Menu bar and tray widget (Unreleased).** Stacked readings beside the icon on macOS (agents,
+  their CPU, dev servers, what needs you) and a badge on every OS. A click opens a panel like a
+  system monitor's: headline numbers, an agent CPU chart, a Needs you history, and your dev
+  servers and busiest agents. macOS, Windows and Linux; stops still open the reviewed plan.
 - **Local capture.** Records only the holdmap window to MP4/GIF, plus PNG snapshots. Other apps and your desktop are never captured. Nothing is uploaded.
 - **Scriptable.** Every read command takes `--json`. holdmap has no product analytics.
 

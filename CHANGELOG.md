@@ -10,12 +10,21 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Added
 
-- The desktop menu-bar / tray icon becomes a live widget on macOS, Windows and Linux. It carries a badge when something needs you: a red (look now) or amber (worth a look) count on Windows and Linux, and a dot on macOS, where menu-bar icons take the menu bar's colour. On macOS and Linux panels, text beside the icon shows running dev servers and how many items need you, for example `2 dev · 1 need you`. **Settings → Appearance → Menu bar** (**Panel** on Linux) chooses **Icon only**, **Counts** or **Counts and agent CPU trend**, and the panel has the same choice. Windows tray icons can't show text, so there the figures are in the tooltip. The panel works like a system monitor and updates while it's open: ports in use and network-exposed, the agents' CPU and memory with sparklines, **Needs you** (the same rules as Home for running agents, ports and approved analyzer findings), dev servers, and each agent with its project folder, CPU sparkline and memory. Choosing a row opens it in the window, and **Stop all dev servers…** still opens the reviewed plan there. CPU appears from the second scan, because it's measured between scans.
+- The desktop menu-bar / tray icon becomes a live widget, like a system monitor's, on macOS, Windows and Linux.
+  - **Beside the icon:** on macOS, small stacked readings (**AGENTS**, their **CPU**, **DEV** servers and, when something needs you, **NEEDS**) drawn with the system font as a template image, so they follow the menu bar's light or dark look. Linux panels that show labels get the same readings as text. **Settings → Appearance → Menu bar** (**Panel** on Linux) chooses **Icon only**, **Readings** or **Readings and agent CPU chart**, and the menu has the same choice. Windows tray icons can't show text, so there the figures are in the tooltip.
+  - **Badge:** when something needs you, a red (look now) or amber (worth a look) count on Windows and Linux, and a dot on macOS.
+  - **Panel:** a click (on Linux, **Show panel** in the menu) opens a panel under the icon with how many agents are running, their CPU and dev servers in large type, a chart of the agents' CPU over the last 60 scans, a **Needs you** history grid, **Needs you** with its urgency, ports, dev servers and the busiest agents with their CPU and memory. It updates while open, follows the theme and closes on `Esc` or a click elsewhere. Rows open in the window, and **Stop all…** still opens the reviewed plan there.
+  - **Menu:** the right button (any click on Linux) opens the same rows as a native menu.
+  - **Honest figures:** CPU appears from the second scan, because it's measured between scans, and a chart once there are two samples; a flat, idle trend draws nothing rather than a row of empty bars. **Needs you** uses the same rules as Home for running agents, ports and approved analyzer findings.
 
 ### Changed
 
-- On macOS, clicking the menu-bar icon opens its panel, as menu-bar extras do; choose **Open holdmap** there to open the window. On Windows a click still opens the window, and the right button opens the panel. Linux trays open the panel on any click.
 - The window's scans no longer refresh the tray on the main thread. The background watcher refreshes it at the same cadence and reuses those scans.
+- On Windows, a click on the tray icon opens the panel; a double click opens the window.
+
+### Security
+
+- The panel is its own small page (`tray.html`) in its own window. `local_window::guard` lets that window call only `tray_panel` (read its data) and `tray_action` (run an action id the tray menu also offers), and only from the bundled page; it has no capabilities, and every other command still requires the main window.
 
 ## [0.12.1] - 2026-10-27
 

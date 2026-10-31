@@ -1,22 +1,29 @@
-//! What the menu-bar / tray widget shows, as plain data: the panel (the native menu), the text
-//! beside the icon, the tooltip and the attention badge. Pure, so every platform's output is
-//! unit-tested; `mod.rs` applies it with Tauri.
+//! What the menu-bar / tray widget shows, as plain data: the readings beside the icon, the
+//! native menu, the tooltip, the attention badge and the data for the popup panel. Pure, so
+//! every platform's output is unit-tested; `mod.rs` applies it with Tauri.
 //!
 //! Platforms differ in what a tray can show, and the model only asks for what each one draws:
-//! macOS shows text beside the icon and a tooltip; Linux (AppIndicator) shows the text as a
-//! panel label but no tooltip and opens the menu on any click; Windows shows a tooltip but no
-//! text, so its figures live in the tooltip and the badge.
+//! macOS draws stacked mini readings into the menu-bar image and has a tooltip; Linux
+//! (AppIndicator) shows the readings as a panel label but no tooltip and opens the menu on any
+//! click; Windows shows a tooltip but no text, so its figures live in the tooltip and the badge.
 
 use holdmap_core::agents::AgentsReport;
 use holdmap_core::attention::{AttentionItem, Target, Urgency};
 use holdmap_core::model::Exposure;
 use holdmap_core::util::{count, human_bytes, printable};
 use holdmap_core::{PortEntry, Snapshot};
+use serde::Serialize;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Samples kept per trend: the most recent scans (about half a minute at the default 4 s,
 /// longer while the window is hidden and scans slow down).
 const TREND_LEN: usize = 8;
+/// Scans the panel's history chart and attention grid keep.
+const HISTORY_LEN: usize = 60;
+/// Bars in the menu bar's mini CPU chart.
+const BAR_CHART_LEN: usize = 16;
+/// Agents the panel's table lists, busiest first.
+const PANEL_AGENTS: usize = 5;
 /// Rows each panel section lists before "+N more".
 const MAX_NEEDS: usize = 5;
 const MAX_DEV: usize = 10;
@@ -47,8 +54,9 @@ impl Platform {
         Platform::Linux
     };
 
-    /// Windows has no text beside tray icons, so the style choice changes nothing there.
-    fn shows_title(self) -> bool {
+    /// Windows tray icons are square with no text beside them, so the style choice changes
+    /// nothing there.
+    fn has_style(self) -> bool {
         self != Platform::Windows
     }
 }
@@ -58,9 +66,9 @@ impl Platform {
 pub enum Style {
     /// The icon and its badge only.
     Icon,
-    /// Adds running dev servers and items that need you.
+    /// Adds the readings: agents, their CPU, dev servers and items that need you.
     Count,
-    /// Also adds the agents' CPU trend.
+    /// Also adds a mini chart of the agents' CPU.
     Trend,
 }
 
@@ -87,8 +95,8 @@ impl Style {
     fn label(self) -> &'static str {
         match self {
             Style::Icon => "Icon only",
-            Style::Count => "Counts",
-            Style::Trend => "Counts and agent CPU trend",
+            Style::Count => "Readings",
+            Style::Trend => "Readings and agent CPU chart",
         }
     }
 }
@@ -99,6 +107,8 @@ pub struct DevServer {
     pub port: u16,
     pub label: String,
     pub stoppable: bool,
+    /// Reachable from the network, not only this computer.
+    pub exposed: bool,
 }
 
 /// One agent row.
@@ -162,6 +172,7 @@ impl Readings {
                     port: e.port,
                     label: dev_label(e),
                     stoppable: !e.protected,
+                    exposed: e.exposure != Exposure::Loopback,
                 })
                 .collect(),
             agents: report.map(|r| {
@@ -193,7 +204,10 @@ impl Readings {
     }
 
     fn cpu(&self) -> Option<f32> {
-        self.agents.as_ref().map(|a| a.iter().map(|a| a.cpu).sum())
+        // Folded from +0.0: an empty float `sum()` is -0.0, which would print as "-0%".
+        self.agents
+            .as_ref()
+            .map(|a| a.iter().fold(0.0, |total, a| total + a.cpu))
     }
 }
 
@@ -206,29 +220,55 @@ impl Readings {
 pub struct Trends {
     total: VecDeque<f32>,
     agents: HashMap<String, VecDeque<f32>>,
+    /// The most urgent "needs you" item per scan: 0 none, 1 worth a look, 2 look now.
+    attention: VecDeque<u8>,
     /// Agents in the previous scan (`None` before the first one).
     seen: Option<HashSet<String>>,
 }
 
-fn push(series: &mut VecDeque<f32>, v: f32) {
-    if series.len() == TREND_LEN {
+fn push<T>(series: &mut VecDeque<T>, v: T, len: usize) {
+    if series.len() == len {
         series.pop_front();
     }
-    series.push_back(v.max(0.0));
+    series.push_back(v);
+}
+
+/// The last `n` samples.
+fn recent(series: &VecDeque<f32>, n: usize) -> VecDeque<f32> {
+    series
+        .iter()
+        .skip(series.len().saturating_sub(n))
+        .copied()
+        .collect()
+}
+
+fn urgency_level(needs: &[NeedRow]) -> u8 {
+    match needs.iter().map(|n| n.urgency).max() {
+        Some(Urgency::High) => 2,
+        Some(Urgency::Medium) => 1,
+        None => 0,
+    }
 }
 
 impl Trends {
     /// Add one scan's samples; agents that stopped are forgotten.
     pub fn record(&mut self, readings: &Readings) {
+        if let Some(needs) = &readings.needs {
+            push(&mut self.attention, urgency_level(needs), HISTORY_LEN);
+        }
         let (Some(agents), Some(total)) = (&readings.agents, readings.cpu()) else {
             return;
         };
         self.agents
             .retain(|id, _| agents.iter().any(|a| &a.id == id));
         if let Some(seen) = &self.seen {
-            push(&mut self.total, total);
+            push(&mut self.total, total.max(0.0), HISTORY_LEN);
             for a in agents.iter().filter(|a| seen.contains(&a.id)) {
-                push(self.agents.entry(a.id.clone()).or_default(), a.cpu);
+                push(
+                    self.agents.entry(a.id.clone()).or_default(),
+                    a.cpu.max(0.0),
+                    TREND_LEN,
+                );
             }
         }
         self.seen = Some(agents.iter().map(|a| a.id.clone()).collect());
@@ -240,16 +280,30 @@ impl Trends {
     }
 }
 
-/// `▁▂▅▇` for the samples, scaled to the highest (or [`CPU_FLOOR`], so idle stays flat).
-pub fn sparkline(samples: &VecDeque<f32>) -> String {
+/// `▁▂▅▇` for the samples, scaled to the highest (or [`CPU_FLOOR`], so idle stays flat). `None`
+/// for fewer than two samples (one point isn't a trend) and when every bar is the lowest: a row
+/// of `▁` reads as an empty `____` field in a menu.
+pub fn sparkline(samples: &VecDeque<f32>) -> Option<String> {
+    if samples.len() < 2 {
+        return None;
+    }
     let top = samples.iter().copied().fold(CPU_FLOOR, f32::max);
-    samples
+    let bars: String = samples
         .iter()
         .map(|v| {
             let level = (v / top * (BARS.len() - 1) as f32).round() as usize;
             BARS[level.min(BARS.len() - 1)]
         })
-        .collect()
+        .collect();
+    bars.chars().any(|b| b != BARS[0]).then_some(bars)
+}
+
+/// "3.7% ▃▅▇", or "3.7%" while the trend is flat.
+fn cpu_with_trend(cpu: f32, samples: &VecDeque<f32>) -> String {
+    match sparkline(samples) {
+        Some(bars) => format!("{} {bars}", cpu_text(cpu)),
+        None => cpu_text(cpu),
+    }
 }
 
 fn cpu_text(cpu: f32) -> String {
@@ -374,6 +428,9 @@ pub fn flatten(items: &[TrayItem]) -> Vec<&TrayItem> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     Show,
+    /// The popup panel (macOS and Windows open it with a click; Linux trays only from the menu).
+    ShowPanel,
+    HidePanel,
     Quit,
     Refresh,
     /// Opens the window's reviewed stop plan; nothing is stopped from the menu itself.
@@ -388,6 +445,8 @@ impl Action {
     pub fn parse(id: &str) -> Option<Action> {
         let action = match id {
             "show" | "more-needs" | "more-dev" | "more-agents" => Action::Show,
+            "show-panel" => Action::ShowPanel,
+            "hide-panel" => Action::HidePanel,
             "quit" => Action::Quit,
             "refresh" => Action::Refresh,
             "stop-all-dev" => Action::StopAllDev,
@@ -445,7 +504,9 @@ pub struct Badge {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrayView {
     pub items: Vec<TrayItem>,
-    /// Text beside the icon (macOS, Linux); `None` shows the icon alone.
+    /// Readings drawn beside the icon (macOS).
+    pub bar: MenuBar,
+    /// The panel label beside the icon (Linux); `None` shows the icon alone.
     pub title: Option<String>,
     /// Hover text (macOS, Windows).
     pub tooltip: String,
@@ -479,9 +540,12 @@ fn panel(r: Option<&Readings>, trends: &Trends, style: Style, platform: Platform
             "No agents running".to_string()
         } else {
             let memory: u64 = agents.iter().map(|a| a.memory).sum();
-            let cpu = trends
-                .total_cpu(r)
-                .map(|cpu| format!(" · CPU {} {}", cpu_text(cpu), sparkline(&trends.total)));
+            let cpu = trends.total_cpu(r).map(|cpu| {
+                format!(
+                    " · CPU {}",
+                    cpu_with_trend(cpu, &recent(&trends.total, TREND_LEN))
+                )
+            });
             format!(
                 "{}{} · {}",
                 count(agents.len(), "agent", "agents"),
@@ -546,7 +610,7 @@ fn panel(r: Option<&Readings>, trends: &Trends, style: Style, platform: Platform
             let cpu = trends
                 .agents
                 .get(&a.id)
-                .map(|s| format!("   {} {}", cpu_text(a.cpu), sparkline(s)));
+                .map(|s| format!("   {}", cpu_with_trend(a.cpu, s)));
             out.push(item(
                 format!("agent:{}", a.id),
                 clip(&format!(
@@ -570,8 +634,11 @@ fn panel(r: Option<&Readings>, trends: &Trends, style: Style, platform: Platform
 }
 
 fn controls(style: Style, platform: Platform) -> Vec<TrayItem> {
-    let mut out = vec![item("show", "Open holdmap", true)];
-    if platform.shows_title() {
+    let mut out = vec![
+        item("show-panel", "Show panel", true),
+        item("show", "Open holdmap", true),
+    ];
+    if platform.has_style() {
         out.push(TrayItem::Submenu {
             id: "style".into(),
             label: if platform == Platform::MacOs {
@@ -603,28 +670,83 @@ fn needs_text(n: usize) -> String {
     format!("{n} need you")
 }
 
-fn title(r: Option<&Readings>, trends: &Trends, style: Style) -> Option<String> {
-    let r = r?;
-    if style == Style::Icon {
+/// One stacked reading beside the icon, like a system monitor's: a small label over a value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mini {
+    pub label: &'static str,
+    pub value: String,
+    /// How the reading reads in a sentence (the Linux label), e.g. "8 agents".
+    pub words: String,
+}
+
+/// What macOS draws beside the icon: stacked readings and, with [`Style::Trend`], a mini chart
+/// of the agents' CPU. Empty shows the icon alone.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MenuBar {
+    pub readings: Vec<Mini>,
+    pub chart: Vec<f32>,
+}
+
+impl Eq for MenuBar {}
+
+/// "7%", or "<1%" for a little but not nothing.
+fn bar_cpu(cpu: f32) -> String {
+    if cpu > 0.0 && cpu < 0.5 {
+        "<1%".into()
+    } else {
+        format!("{cpu:.0}%")
+    }
+}
+
+fn menu_bar(r: Option<&Readings>, trends: &Trends, style: Style) -> MenuBar {
+    let Some(r) = r.filter(|_| style != Style::Icon) else {
+        return MenuBar::default();
+    };
+    let mut readings = Vec::new();
+    if let Some(agents) = &r.agents {
+        readings.push(Mini {
+            label: "AGENTS",
+            value: agents.len().to_string(),
+            words: count(agents.len(), "agent", "agents"),
+        });
+    }
+    if let Some(cpu) = trends.total_cpu(r) {
+        readings.push(Mini {
+            label: "CPU",
+            value: bar_cpu(cpu),
+            words: format!("CPU {}", bar_cpu(cpu)),
+        });
+    }
+    readings.push(Mini {
+        label: "DEV",
+        value: r.dev.len().to_string(),
+        words: format!("{} dev", r.dev.len()),
+    });
+    if let Some(n) = r.needs.as_ref().map(Vec::len).filter(|n| *n > 0) {
+        readings.push(Mini {
+            label: "NEEDS",
+            value: n.to_string(),
+            words: needs_text(n),
+        });
+    }
+    let chart = if style == Style::Trend && trends.total.len() >= 2 {
+        recent(&trends.total, BAR_CHART_LEN).into_iter().collect()
+    } else {
+        Vec::new()
+    };
+    MenuBar { readings, chart }
+}
+
+/// The Linux panel label: the same readings as a sentence.
+fn label_text(bar: &MenuBar) -> Option<String> {
+    if bar.readings.is_empty() {
         return None;
     }
-    let mut parts = Vec::new();
-    if !r.dev.is_empty() {
-        parts.push(format!("{} dev", r.dev.len()));
+    let mut parts: Vec<String> = bar.readings.iter().map(|m| m.words.clone()).collect();
+    if let Some(spark) = sparkline(&bar.chart.iter().copied().collect()) {
+        parts.push(spark);
     }
-    if let Some(n) = r.needs.as_ref().map(Vec::len).filter(|n| *n > 0) {
-        parts.push(needs_text(n));
-    }
-    if style == Style::Trend {
-        if let Some(cpu) = trends.total_cpu(r) {
-            parts.push(format!(
-                "agents {} {}",
-                sparkline(&trends.total),
-                cpu_text(cpu)
-            ));
-        }
-    }
-    (!parts.is_empty()).then(|| parts.join(" · "))
+    Some(parts.join(" · "))
 }
 
 /// The hover text, at most [`MAX_TOOLTIP_UNITS`] UTF-16 units (whole lines only).
@@ -686,15 +808,164 @@ pub fn view(
     style: Style,
     platform: Platform,
 ) -> TrayView {
+    let bar = if platform.has_style() {
+        menu_bar(readings, trends, style)
+    } else {
+        MenuBar::default()
+    };
     TrayView {
         items: panel(readings, trends, style, platform),
-        title: if platform.shows_title() {
-            title(readings, trends, style)
+        title: if platform == Platform::Linux {
+            label_text(&bar)
         } else {
             None
         },
+        bar: if platform == Platform::MacOs {
+            bar
+        } else {
+            MenuBar::default()
+        },
         tooltip: tooltip(readings, trends),
         badge: badge(readings),
+    }
+}
+
+/// One "needs you" row in the popup panel.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelNeed {
+    /// `high` (look now) or `medium` (worth a look).
+    pub urgency: &'static str,
+    pub title: String,
+    /// The [`Action`] id that opens it in the window.
+    pub action: String,
+}
+
+/// One dev server row in the popup panel.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelDev {
+    pub port: u16,
+    pub label: String,
+    pub exposed: bool,
+    pub action: String,
+}
+
+/// One agent row in the popup panel's table.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelAgent {
+    pub name: String,
+    pub place: Option<String>,
+    /// Percent of one core, once measured between two scans.
+    pub cpu: Option<f32>,
+    pub memory: u64,
+    pub action: String,
+}
+
+/// Everything the popup panel shows. Rows carry the [`Action`] id they trigger, so the panel can
+/// only ask for what the native menu offers (and a stop still opens the window's reviewed plan).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelData {
+    /// False until the first scan.
+    pub ready: bool,
+    pub ports: usize,
+    pub exposed: usize,
+    /// `None` until the agents report is read.
+    pub agents: Option<usize>,
+    /// The agents' CPU together, once measured.
+    pub cpu: Option<f32>,
+    pub memory: Option<u64>,
+    /// The agents' CPU per scan, oldest first.
+    pub cpu_history: Vec<f32>,
+    /// The most urgent item per scan, oldest first: 0 none, 1 worth a look, 2 look now.
+    pub attention_history: Vec<u8>,
+    /// `None` until both the scan and the agents report are read.
+    pub needs: Option<Vec<PanelNeed>>,
+    pub dev: Vec<PanelDev>,
+    /// Whether "Stop all dev servers…" has anything to stop.
+    pub stop_dev: bool,
+    /// The busiest agents first.
+    pub top_agents: Vec<PanelAgent>,
+    pub more_agents: usize,
+    pub style: &'static str,
+}
+
+/// The popup panel's data for `readings` (`None` before the first scan).
+pub fn panel_data(readings: Option<&Readings>, trends: &Trends, style: Style) -> PanelData {
+    let Some(r) = readings else {
+        return PanelData {
+            ready: false,
+            ports: 0,
+            exposed: 0,
+            agents: None,
+            cpu: None,
+            memory: None,
+            cpu_history: Vec::new(),
+            attention_history: Vec::new(),
+            needs: None,
+            dev: Vec::new(),
+            stop_dev: false,
+            top_agents: Vec::new(),
+            more_agents: 0,
+            style: style.as_str(),
+        };
+    };
+    let mut agents: Vec<&AgentRow> = r.agents.iter().flatten().collect();
+    agents.sort_by(|a, b| {
+        b.cpu
+            .total_cmp(&a.cpu)
+            .then_with(|| b.memory.cmp(&a.memory))
+    });
+    PanelData {
+        ready: true,
+        ports: r.ports,
+        exposed: r.exposed,
+        agents: r.agents.as_ref().map(Vec::len),
+        cpu: trends.total_cpu(r),
+        memory: r.agents.as_ref().map(|a| a.iter().map(|a| a.memory).sum()),
+        cpu_history: trends.total.iter().copied().collect(),
+        attention_history: trends.attention.iter().copied().collect(),
+        needs: r.needs.as_ref().map(|needs| {
+            needs
+                .iter()
+                .enumerate()
+                .map(|(row, n)| PanelNeed {
+                    urgency: if n.urgency == Urgency::High {
+                        "high"
+                    } else {
+                        "medium"
+                    },
+                    title: printable(&n.title).into_owned(),
+                    action: need_id(row, &n.target),
+                })
+                .collect()
+        }),
+        dev: r
+            .dev
+            .iter()
+            .map(|d| PanelDev {
+                port: d.port,
+                label: printable(&d.label).into_owned(),
+                exposed: d.exposed,
+                action: format!("focus:{}", d.port),
+            })
+            .collect(),
+        stop_dev: r.dev.iter().any(|d| d.stoppable),
+        more_agents: agents.len().saturating_sub(PANEL_AGENTS),
+        top_agents: agents
+            .into_iter()
+            .take(PANEL_AGENTS)
+            .map(|a| PanelAgent {
+                name: printable(&a.name).into_owned(),
+                place: a.place.as_deref().map(|p| printable(p).into_owned()),
+                cpu: trends.agents.get(&a.id).map(|_| a.cpu),
+                memory: a.memory,
+                action: format!("agent:{}", a.id),
+            })
+            .collect(),
+        style: style.as_str(),
     }
 }
 
@@ -711,11 +982,13 @@ mod tests {
                     port: 3000,
                     label: "Next.js · web".into(),
                     stoppable: true,
+                    exposed: false,
                 },
                 DevServer {
                     port: 5173,
                     label: "Vite".into(),
                     stoppable: true,
+                    exposed: true,
                 },
             ],
             agents: Some(vec![AgentRow {
@@ -744,11 +1017,12 @@ mod tests {
         }
     }
 
-    /// Trends after two scans of `r`: the first only primes them.
+    /// Trends after three scans of `r`: the first only primes them, the next two are samples.
     fn measured(r: &Readings) -> Trends {
         let mut trends = Trends::default();
-        trends.record(r);
-        trends.record(r);
+        for _ in 0..3 {
+            trends.record(r);
+        }
         trends
     }
 
@@ -794,6 +1068,7 @@ mod tests {
                 "stop-all-dev",
                 "agents",
                 "agent:agent:42",
+                "show-panel",
                 "show",
                 "style",
                 "style:icon",
@@ -809,7 +1084,7 @@ mod tests {
         );
         assert_eq!(
             label_of(&v.items, "reading-agents"),
-            "1 agent · CPU 12% █ · 300.0 MB"
+            "1 agent · CPU 12% ██ · 300.0 MB"
         );
         assert_eq!(
             label_of(&v.items, "need:0:agent:agent:42"),
@@ -818,7 +1093,7 @@ mod tests {
         assert_eq!(label_of(&v.items, "focus:3000"), "● :3000   Next.js · web");
         assert_eq!(
             label_of(&v.items, "agent:agent:42"),
-            "Claude Code · holdmap   12% █ · 300.0 MB"
+            "Claude Code · holdmap   12% ██ · 300.0 MB"
         );
         // Read-only rows are disabled; everything else does something.
         for i in flatten(&v.items) {
@@ -849,45 +1124,58 @@ mod tests {
     }
 
     #[test]
-    fn styles_choose_the_text_beside_the_icon() {
+    fn styles_choose_the_readings_beside_the_icon() {
         let r = readings();
         let mut trends = Trends::default();
-        let title = |trends: &Trends, style| view(Some(&r), trends, style, Platform::MacOs).title;
-        assert_eq!(title(&trends, Style::Icon), None);
+        let bar = |trends: &Trends, style| view(Some(&r), trends, style, Platform::MacOs).bar;
+        let cells = |b: &MenuBar| -> Vec<String> {
+            b.readings
+                .iter()
+                .map(|m| format!("{} {}", m.label, m.value))
+                .collect()
+        };
+        assert_eq!(bar(&trends, Style::Icon), MenuBar::default());
+        // CPU waits for its first measurement; no chart without the Trend style.
         assert_eq!(
-            title(&trends, Style::Count).as_deref(),
-            Some("2 dev · 2 need you")
+            cells(&bar(&trends, Style::Count)),
+            ["AGENTS 1", "DEV 2", "NEEDS 2"]
         );
-        // No trend until CPU has been measured between two scans.
+        trends.record(&r);
         trends.record(&r);
         assert_eq!(
-            title(&trends, Style::Trend).as_deref(),
-            Some("2 dev · 2 need you")
+            cells(&bar(&trends, Style::Count)),
+            ["AGENTS 1", "CPU 12%", "DEV 2", "NEEDS 2"]
         );
+        assert!(bar(&trends, Style::Count).chart.is_empty());
+        // A chart needs two samples.
+        assert!(bar(&trends, Style::Trend).chart.is_empty());
         trends.record(&r);
+        assert_eq!(bar(&trends, Style::Trend).chart, [12.4, 12.4]);
+        // macOS draws the readings; Linux shows them as a panel label; Windows has neither.
+        let mac = view(Some(&r), &trends, Style::Trend, Platform::MacOs);
+        assert_eq!(mac.title, None);
+        let linux = view(Some(&r), &trends, Style::Trend, Platform::Linux);
+        assert_eq!(linux.bar, MenuBar::default());
         assert_eq!(
-            title(&trends, Style::Trend).as_deref(),
-            Some("2 dev · 2 need you · agents █ 12%")
+            linux.title.as_deref(),
+            Some("1 agent · CPU 12% · 2 dev · 2 need you · ██")
         );
-        // Linux shows the same label; Windows has no text beside tray icons.
-        assert_eq!(
-            view(Some(&r), &trends, Style::Count, Platform::Linux).title,
-            title(&trends, Style::Count)
-        );
-        assert_eq!(
-            view(Some(&r), &trends, Style::Trend, Platform::Windows).title,
-            None
-        );
-        // A quiet machine shows the icon alone.
+        let windows = view(Some(&r), &trends, Style::Trend, Platform::Windows);
+        assert_eq!((windows.title, windows.bar), (None, MenuBar::default()));
+        // Nothing needs you: no NEEDS reading.
         let quiet = Readings {
             agents: Some(vec![]),
             needs: Some(vec![]),
+            dev: vec![],
             ..Readings::default()
         };
         assert_eq!(
-            view(Some(&quiet), &trends, Style::Count, Platform::MacOs).title,
-            None
+            cells(&view(Some(&quiet), &trends, Style::Count, Platform::MacOs).bar),
+            ["AGENTS 0", "CPU 0%", "DEV 0"]
         );
+        assert_eq!(bar_cpu(0.2), "<1%");
+        assert_eq!(bar_cpu(0.0), "0%");
+        assert_eq!(bar_cpu(7.4), "7%");
     }
 
     #[test]
@@ -930,9 +1218,19 @@ mod tests {
         let ids = ids(&v.items);
         assert!(!ids.contains(&"reading-agents".to_string()));
         assert!(!ids.contains(&"needs".to_string()));
-        assert_eq!(v.title.as_deref(), Some("2 dev"));
+        let labels: Vec<&str> = v.bar.readings.iter().map(|m| m.label).collect();
+        assert_eq!(labels, ["DEV"]);
+        assert_eq!(
+            view(Some(&r), &Trends::default(), Style::Count, Platform::Linux)
+                .title
+                .as_deref(),
+            Some("2 dev")
+        );
         assert_eq!(v.tooltip, "holdmap\n2 dev servers · 12 ports in use");
         assert_eq!(v.badge, Badge::default());
+        let data = panel_data(Some(&r), &Trends::default(), Style::Count);
+        assert_eq!((data.agents, data.cpu, data.memory), (None, None, None));
+        assert!(data.needs.is_none());
     }
 
     #[test]
@@ -993,14 +1291,14 @@ mod tests {
         let v = view(Some(&later), &trends, Style::Count, Platform::MacOs);
         assert_eq!(
             label_of(&v.items, "agent:agent:42"),
-            "Claude Code · holdmap   12% █ · 300.0 MB"
+            "Claude Code · holdmap   12% · 300.0 MB"
         );
         assert_eq!(label_of(&v.items, "agent:agent:7"), "Codex CLI · 1.0 MB");
         trends.record(&later);
         let v = view(Some(&later), &trends, Style::Count, Platform::MacOs);
         assert_eq!(
             label_of(&v.items, "agent:agent:7"),
-            "Codex CLI   0.0% ▁ · 1.0 MB"
+            "Codex CLI   0.0% · 1.0 MB"
         );
     }
 
@@ -1012,6 +1310,7 @@ mod tests {
                 port,
                 label: "x".repeat(200),
                 stoppable: false,
+                exposed: false,
             })
             .collect();
         let v = view(Some(&r), &Trends::default(), Style::Count, Platform::MacOs);
@@ -1049,20 +1348,85 @@ mod tests {
     #[test]
     fn sparklines_scale_to_the_peak_but_keep_idle_flat() {
         let s = |v: &[f32]| sparkline(&v.iter().copied().collect());
-        assert_eq!(s(&[0.0, 50.0, 100.0]), "▁▅█");
-        assert_eq!(s(&[0.1, 0.4, 0.2]), "▁▁▁");
-        assert_eq!(s(&[]), "");
+        assert_eq!(s(&[0.0, 50.0, 100.0]).as_deref(), Some("▁▅█"));
+        // Idle is left out rather than drawn as a flat line.
+        assert_eq!(s(&[0.1, 0.4, 0.2]), None);
+        assert_eq!(s(&[]), None);
         let mut trends = Trends::default();
-        for _ in 0..20 {
+        for _ in 0..100 {
             trends.record(&readings());
         }
-        assert_eq!(trends.total.len(), TREND_LEN);
+        // The panel's history is longer than a row's sparkline.
+        assert_eq!(trends.total.len(), HISTORY_LEN);
+        assert_eq!(trends.agents["agent:42"].len(), TREND_LEN);
+        assert_eq!(trends.attention.len(), HISTORY_LEN);
         // An agent that stopped is forgotten.
         trends.record(&Readings {
             agents: Some(vec![]),
             ..readings()
         });
         assert!(trends.agents.is_empty());
+    }
+
+    #[test]
+    fn the_popup_panel_lists_busiest_agents_first_with_their_actions() {
+        let mut r = readings();
+        r.agents.as_mut().unwrap().extend((0..6).map(|i| AgentRow {
+            id: format!("agent:{i}"),
+            name: format!("Codex {i}"),
+            place: None,
+            cpu: i as f32,
+            memory: 1024,
+        }));
+        let mut trends = Trends::default();
+        assert!(!panel_data(None, &trends, Style::Count).ready);
+        trends.record(&r);
+        let mut quiet = r.clone();
+        quiet.needs = Some(vec![]);
+        trends.record(&quiet);
+        let data = panel_data(Some(&r), &trends, Style::Trend);
+        assert!(data.ready);
+        assert_eq!((data.ports, data.exposed, data.agents), (12, 2, Some(7)));
+        assert_eq!(data.style, "trend");
+        // Busiest first, five rows, and each opens its agent.
+        let names: Vec<&str> = data.top_agents.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["Claude Code", "Codex 5", "Codex 4", "Codex 3", "Codex 2"]
+        );
+        assert_eq!(data.more_agents, 2);
+        assert_eq!(data.top_agents[0].action, "agent:agent:42");
+        assert_eq!(data.top_agents[0].cpu, Some(12.4));
+        // Needs keep their urgency and the action the menu uses.
+        let needs = data.needs.unwrap();
+        assert_eq!(needs[0].urgency, "high");
+        assert_eq!(needs[0].action, "need:0:agent:agent:42");
+        assert_eq!(needs[1].urgency, "medium");
+        // Dev servers say whether they're reachable from the network.
+        let dev: Vec<(u16, bool, &str)> = data
+            .dev
+            .iter()
+            .map(|d| (d.port, d.exposed, d.action.as_str()))
+            .collect();
+        assert_eq!(
+            dev,
+            [(3000, false, "focus:3000"), (5173, true, "focus:5173")]
+        );
+        assert!(data.stop_dev);
+        // History: one CPU sample so far (the first scan primes); attention per scan.
+        assert_eq!(data.cpu_history.len(), 1);
+        assert_eq!(data.attention_history, [2, 0]);
+        // Every row's action is one the tray menu accepts.
+        for action in needs
+            .iter()
+            .map(|n| &n.action)
+            .chain(data.dev.iter().map(|d| &d.action))
+            .chain(data.top_agents.iter().map(|a| &a.action))
+        {
+            assert!(Action::parse(action).is_some(), "{action}");
+        }
+        assert_eq!(Action::parse("show-panel"), Some(Action::ShowPanel));
+        assert_eq!(Action::parse("hide-panel"), Some(Action::HidePanel));
     }
 
     #[test]
@@ -1086,6 +1450,7 @@ mod tests {
             port: 8080,
             label: "api".into(),
             stoppable: true,
+            exposed: false,
         });
         let c = view(Some(&more), &trends, Style::Count, Platform::MacOs);
         assert!(!same_rows(&a.items, &c.items));
@@ -1116,7 +1481,8 @@ mod tests {
                 dev: vec![DevServer {
                     port: 3000,
                     label: "svc".into(),
-                    stoppable: false
+                    stoppable: false,
+                    exposed: true,
                 }],
                 agents: None,
                 needs: None,

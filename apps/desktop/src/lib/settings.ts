@@ -81,8 +81,8 @@ export function architectureLabel(architecture: string, platform: string): strin
 
 export const TRAY_STYLE_OPTIONS: { value: TrayStyle; label: string }[] = [
   { value: "icon", label: "Icon only" },
-  { value: "count", label: "Counts" },
-  { value: "trend", label: "Counts and agent CPU trend" },
+  { value: "count", label: "Readings" },
+  { value: "trend", label: "Readings and agent CPU chart" },
 ];
 
 /** What the tray widget is called here, or null where nothing can sit beside its icon:

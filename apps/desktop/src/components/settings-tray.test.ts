@@ -30,18 +30,18 @@ describe("Menu bar / tray widget setting", () => {
     const setTrayStyle = vi.fn(async () => {});
     const view = mount({}, actions(setTrayStyle));
     expect(view.getByRole("heading", { name: "Menu bar" })).toBeTruthy();
-    await fireEvent.click(view.getByRole("combobox", { name: "Beside the icon: Counts" }));
-    await fireEvent.click(view.getByRole("option", { name: "Counts and agent CPU trend" }));
+    await fireEvent.click(view.getByRole("combobox", { name: "Beside the icon: Readings" }));
+    await fireEvent.click(view.getByRole("option", { name: "Readings and agent CPU chart" }));
     await waitFor(() => expect(setTrayStyle).toHaveBeenCalledWith("trend"));
   });
 
   it("restores the saved style when the write is rejected", async () => {
     const setTrayStyle = vi.fn().mockRejectedValue(new Error("Settings are read-only"));
     const view = mount({}, actions(setTrayStyle));
-    await fireEvent.click(view.getByRole("combobox", { name: "Beside the icon: Counts" }));
+    await fireEvent.click(view.getByRole("combobox", { name: "Beside the icon: Readings" }));
     await fireEvent.click(view.getByRole("option", { name: "Icon only" }));
     await waitFor(() => expect(view.getByRole("alert").textContent).toContain("Settings are read-only"));
-    expect(view.getByRole("combobox", { name: "Beside the icon: Counts" })).toBeTruthy();
+    expect(view.getByRole("combobox", { name: "Beside the icon: Readings" })).toBeTruthy();
   });
 
   it("calls it the panel on Linux and leaves it out where nothing can sit beside the icon", () => {

@@ -642,6 +642,14 @@ const captures = [
     await palette.getByRole("combobox").fill("sto");
     await expect(palette.getByRole("option").first()).toBeVisible();
   } },
+  // The tray popup panel is its own page (tray.html), shot at the size the app opens it.
+  ...["light", "dark"].map((theme) => ({
+    name: `desktop-tray-panel-${theme}.png`, theme, path: "/tray.html", viewport: { width: 360, height: 600 },
+    async prepare(page) {
+      await expect(page.getByRole("img", { name: /^Agent CPU over the last \d+ scans/ })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Claude Code listens on all interfaces/ })).toBeVisible();
+    },
+  })),
   { name: "desktop-settings-dark.png", theme: "dark", async prepare(page) {
     await selectPort(page);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -729,8 +737,8 @@ try {
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
       await page.clock.setFixedTime(new Date("2026-10-10T10:00:00Z"));
-      await page.goto(baseURL + (capture.query ?? ""));
-      await expect(page.getByRole("listbox", { name: "Ports in use" }).getByRole("option")).toHaveCount(11);
+      await page.goto(baseURL + (capture.path ?? "") + (capture.query ?? ""));
+      if (!capture.path) await expect(page.getByRole("listbox", { name: "Ports in use" }).getByRole("option")).toHaveCount(11);
       assert.equal(await page.evaluate(() => "__TAURI_INTERNALS__" in window), false, "Screenshots must use browser sample data");
       await page.evaluate(() => document.fonts.ready);
       const target = await capture.prepare(page);

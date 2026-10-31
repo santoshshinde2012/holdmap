@@ -1,10 +1,18 @@
-//! The menu-bar / tray widget: a live icon with an attention badge, text beside it on macOS and
-//! Linux, and a panel (the native menu) with readings, what needs you, dev servers and agents.
-//! Every desktop gets the same widget within what its tray can show ([`model`]). Nothing is
-//! stopped from here: a stop opens the window's reviewed plan.
+//! The menu-bar / tray widget, on every desktop within what its tray can show ([`model`]):
+//!
+//! - the icon, with an attention badge, and on macOS stacked mini readings beside it
+//!   ([`menubar`]); Linux shows the readings as a panel label;
+//! - a popup panel with live readings, histories and lists ([`panel`]), opened by a click on
+//!   macOS and Windows and from the menu on Linux;
+//! - a native menu with the same rows as text.
+//!
+//! Nothing is stopped from here: a stop opens the window's reviewed plan.
 
 mod badge;
+#[cfg(target_os = "macos")]
+mod menubar;
 mod model;
+pub mod panel;
 
 use crate::state::AppState;
 use badge::Pixels;
@@ -139,10 +147,12 @@ fn build_menu(app: &AppHandle, items: &[TrayItem]) -> tauri::Result<(Menu<Wry>, 
     Ok((menu, handles))
 }
 
-fn icon(base: &Pixels, b: model::Badge) -> Image<'static> {
-    let p = if Platform::CURRENT == Platform::MacOs {
-        badge::with_dot(base, b)
-    } else {
+fn icon(base: &Pixels, b: model::Badge, bar: &model::MenuBar) -> Image<'static> {
+    #[cfg(target_os = "macos")]
+    let p = menubar::render(&badge::with_dot(base, b), bar);
+    #[cfg(not(target_os = "macos"))]
+    let p = {
+        let _ = bar;
         badge::with_count(base, b)
     };
     Image::new_owned(p.rgba, p.width, p.height)
@@ -154,6 +164,7 @@ fn icon(base: &Pixels, b: model::Badge) -> Image<'static> {
 fn apply(app: &AppHandle, tray: &TrayIcon, w: &mut Widget, next: TrayView, resync: bool) {
     let TrayView {
         items,
+        bar,
         title,
         tooltip,
         badge,
@@ -191,15 +202,16 @@ fn apply(app: &AppHandle, tray: &TrayIcon, w: &mut Widget, next: TrayView, resyn
     if w.shown.tooltip != tooltip && tray.set_tooltip(Some(&tooltip)).is_ok() {
         w.shown.tooltip = tooltip;
     }
-    if w.shown.badge != badge
+    if (w.shown.badge != badge || w.shown.bar != bar)
         && tray
             .set_icon_with_as_template(
-                Some(icon(&w.base, badge)),
+                Some(icon(&w.base, badge, &bar)),
                 Platform::CURRENT == Platform::MacOs,
             )
             .is_ok()
     {
         w.shown.badge = badge;
+        w.shown.bar = bar;
     }
 }
 
@@ -254,6 +266,18 @@ pub fn restyle(app: &AppHandle) {
     render(app, None, true);
 }
 
+/// What the popup panel shows now.
+fn panel_data(app: &AppHandle) -> model::PanelData {
+    let style = style(app);
+    match app.try_state::<TrayWidget>() {
+        Some(widget) => {
+            let w = widget.widget.lock().unwrap_or_else(|e| e.into_inner());
+            model::panel_data(w.readings.as_ref(), &w.trends, style)
+        }
+        None => model::panel_data(None, &Trends::default(), style),
+    }
+}
+
 fn set_style(app: &AppHandle, style: Style) {
     match app
         .state::<AppState>()
@@ -276,11 +300,21 @@ pub fn show_main(app: &AppHandle) {
 }
 
 fn on_menu(app: &AppHandle, id: &str) {
-    let Some(action) = Action::parse(id) else {
-        return;
-    };
+    if let Some(action) = Action::parse(id) {
+        run(app, action);
+    }
+}
+
+/// What a menu or panel row does. Blocking work goes to a thread: menu handlers run on the main
+/// thread, which tray calls wait for.
+fn run(app: &AppHandle, action: Action) {
     match action {
         Action::Show => show_main(app),
+        Action::ShowPanel => {
+            let app = app.clone();
+            std::thread::spawn(move || panel::toggle(&app, None));
+        }
+        Action::HidePanel => panel::hide(app),
         Action::Quit => app.exit(0),
         // Confirmation happens in the window, with the full plan.
         Action::StopAllDev => {
@@ -327,23 +361,26 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     #[cfg(target_os = "macos")]
     let builder = builder.icon_as_template(true);
     builder
-        // macOS opens the panel on a click, as menu-bar extras do. On Windows a click opens
-        // the window and the right button the panel. Linux trays open the panel on any click.
-        .show_menu_on_left_click(Platform::CURRENT == Platform::MacOs)
+        // macOS and Windows open the popup panel on a click and the menu on the right button;
+        // Windows also opens the window on a double click. Linux trays report no clicks and
+        // open the menu, which starts with "Show panel".
+        .show_menu_on_left_click(false)
         .on_menu_event(|app, event| on_menu(app, event.id.as_ref()))
-        .on_tray_icon_event(|tray, event| {
-            if Platform::CURRENT == Platform::Windows
-                && matches!(
-                    event,
-                    TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    }
-                )
-            {
-                show_main(tray.app_handle());
+        .on_tray_icon_event(|tray, event| match event {
+            TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                rect,
+                ..
+            } => {
+                let app = tray.app_handle().clone();
+                std::thread::spawn(move || panel::toggle(&app, Some(rect)));
             }
+            TrayIconEvent::DoubleClick {
+                button: MouseButton::Left,
+                ..
+            } if Platform::CURRENT == Platform::Windows => show_main(tray.app_handle()),
+            _ => {}
         })
         .build(app)?;
     app.manage(TrayWidget {

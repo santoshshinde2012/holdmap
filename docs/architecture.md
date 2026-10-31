@@ -758,7 +758,7 @@ flowchart TB
     CMD["commands.rs · Native operations<br/>Validated reads, plans, stops + openers"]
     ST["state.rs<br/>AppState (config, last snapshot)"]
     CF["confirmation.rs<br/>one-use reviewed plans"]
-    TR["tray/ · Tray widget<br/>badge, live panel + style"]
+    TR["tray/ · Tray widget<br/>menu-bar readings, popup panel + menu"]
     W["watch.rs · Background scans<br/>Events, notifications + tray refresh"]
     SC["shortcuts.rs<br/>presets, re-registered at runtime"]
     LIB --> CMD & TR & W & SC
@@ -826,12 +826,23 @@ scan rather than authorizing paths from an old cache. Openers construct localhos
 resolve port/agent folders in the backend; the webview cannot supply an arbitrary command or URL.
 The tray widget (`tray/`) is refreshed by the watcher after each scan, on the watcher's
 thread: it reuses that scan for the agents report, applies the shared "needs you" rules with
-analyzer insights cached for a minute, and records CPU trends. `tray/model.rs` turns those
-readings into plain data (panel rows, the text beside the icon, the tooltip and the badge) for
-each platform's tray limits, and `tray/badge.rs` draws the badge into the icon's pixels. When
-only text changed, the open panel's rows are updated in place; it is rebuilt only when rows
-change. Panel actions reuse the window's events, and a stop always opens the reviewed plan in
-the window. Shortcut replacement registers the new shortcut before releasing the working one,
+analyzer insights cached for a minute, and records CPU and attention history. `tray/model.rs`
+turns those readings into plain data for each platform's tray limits: the stacked menu-bar
+readings, the native menu's rows, the tooltip, the badge and the popup panel's data.
+`tray/menubar.rs` (macOS) draws the readings with CoreText into a template image beside the
+icon, and `tray/badge.rs` draws the badge into the icon's pixels. When only text changed, an
+open menu's rows are updated in place; it is rebuilt only when rows change.
+
+The popup panel (`tray/panel.rs`) is a second, small window showing its own page,
+`tray.html` (`src/tray-panel/`), built as a separate entry so it doesn't load the app. It is
+created on first use, off the main thread, and placed under the icon (above it for a bottom
+taskbar). It polls `tray_panel` once a second while visible and runs rows through
+`tray_action`, which accepts only the action ids the native menu offers. `local_window::guard`
+lets the `tray` window call those two commands and nothing else, and only while it shows the
+bundled panel page; the window has no capabilities. On macOS the panel is created unfocused,
+and if the app is hidden it is unhidden without activation while the main window is ordered
+out (fully transparent in between), so opening the panel doesn't bring back a closed window.
+Stops always open the reviewed plan in the main window. Shortcut replacement registers the new shortcut before releasing the working one,
 so a collision leaves the previous shortcut active.
 
 `window_lifecycle.rs` intercepts main-window close requests only while a working tray exists.
