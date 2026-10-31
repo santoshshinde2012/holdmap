@@ -31,6 +31,13 @@ describe("app prefs", () => {
     stop();
   });
 
+  it("restores the 3D Home layout", () => {
+    localStorage.setItem("holdmap.home.layout", "3d");
+    const { prefs, stop } = create();
+    expect(prefs.homeLayout).toBe("3d");
+    stop();
+  });
+
   it("writes every change back", () => {
     const { prefs, stop } = create();
     prefs.view = "agents";

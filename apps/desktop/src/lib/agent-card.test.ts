@@ -40,8 +40,9 @@ describe("agent card model", () => {
     }
   });
 
-  it("flips between the two Home layouts", () => {
+  it("cycles through the Home layouts", () => {
     expect(nextLayout("cards")).toBe("map");
-    expect(nextLayout("map")).toBe("cards");
+    expect(nextLayout("map")).toBe("3d");
+    expect(nextLayout("3d")).toBe("cards");
   });
 });

@@ -71,12 +71,22 @@ for (const layout of ["cards", "map"] as const) for (const width of [390, 1024, 
     expect(clipped).toEqual([]);
     // Stacked blocks (summary, body, timeline) never run into each other, even when the summary wraps.
     const overlaps = await app.evaluate(() => {
-      // Each block's real extent includes descendants that spill out of it.
+      // Each block's real extent includes descendants that spill out of it; rows inside a scroll
+      // area (the stage, the Needs you list) are clipped by it, so they don't count.
       const kids = [...document.querySelector(".home")!.children].filter((el) => (el as HTMLElement).offsetParent !== null)
-        .map((el) => ({ top: el.getBoundingClientRect().top, bottom: Math.max(...[el, ...el.querySelectorAll("*")].filter((d) => !d.closest(".stage")).map((d) => d.getBoundingClientRect().bottom)) }));
+        .map((el) => ({ top: el.getBoundingClientRect().top, bottom: Math.max(...[el, ...el.querySelectorAll("*")].filter((d) => !d.closest(".stage, .needs-scroll")).map((d) => d.getBoundingClientRect().bottom)) }));
       return kids.slice(1).filter((r, i) => r.top < kids[i].bottom - 0.5).length;
     });
     expect(overlaps).toBe(0);
+    // That only holds while the Needs you list scrolls inside its panel: the scroll area itself,
+    // and the skill-trust alert above it, stay within the panel without overlapping.
+    const needsBox = await overview.evaluate((root) => {
+      const panel = root.querySelector("aside.panel")!.getBoundingClientRect();
+      const box = (sel: string) => root.querySelector(sel)?.getBoundingClientRect() ?? null;
+      const list = box(".needs-scroll"), alert = box("[data-trust-alert]");
+      return { listInside: !list || (list.top >= panel.top - 0.5 && list.bottom <= panel.bottom + 0.5), alertAboveList: !list || !alert || alert.bottom <= list.top + 0.5 };
+    });
+    expect(needsBox).toEqual({ listInside: true, alertAboveList: true });
     if (layout === "cards") {
       // Cards in a row share one height.
       const uneven = await overview.evaluate((root) => {

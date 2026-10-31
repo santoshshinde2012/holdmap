@@ -23,6 +23,8 @@ export default defineConfig({
     // Vite 8 minifies with Oxc (esbuild is no longer bundled).
     minify: !process.env.TAURI_ENV_DEBUG,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    // The Home 3D view carries three.js in its own on-demand chunk (budgeted in site/scripts/check-budget.mjs).
+    chunkSizeWarningLimit: 700,
   },
   // Component tests mount real Svelte 5 components in jsdom (client build, not SSR).
   resolve: process.env.VITEST ? { conditions: ["browser"] } : undefined,

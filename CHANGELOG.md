@@ -8,6 +8,19 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- Home gets a **3D** layout next to Cards and Map: the same agents as a machine you can take apart. Agents stand on the board with the ports they hold, their working folders and their remote hosts; their processes float on a **Runtime** plate; MCP servers, skills and instruction files found on disk sit on a **Configuration** plate on top (after **Read MCP config**). **Exploded** pulls the plates apart, **X-ray** turns solid parts to glass and shows each agent's processes as slices inside its tower, **Top** shows the Map's picture, and **Tour** walks through the machine, agents that need you first, handing control back on any input. A parts list gives every agent and part a button, live readings cover the computer or the selected agent (press one that counts parts to light up exactly those parts), a hover card and an inspector state how each fact is known, **Focus** lets the machine fill Home, and the machine builds up layer by layer when it opens, with each agent's initials on its tower. With local Calls recording, recorded calls appear in a lane of their own above the machine, never joined to a process or a configured server. Every link comes from a process tree, a held listener, an open connection, a working folder or the agent's own configuration; a configured MCP server joins a process only when that agent's own process runs it, and nothing is joined by name. Without WebGL 2 Home shows the Map and says why; software-only rendering asks first.
+
+### Changed
+
+- `V` cycles Home through Cards, Map and 3D.
+- The 3D view loads on demand with three.js 0.186.1 in its own chunk, under a new 168 KiB site budget; it is not loaded on a phone-sized window.
+
+### Fixed
+
+- The "skill changed since you trusted it" alert in **Needs you** no longer collapses over the first item when the list is long; the list now scrolls inside its panel.
+
 ## [0.12.1] - 2026-10-27
 
 ### Fixed
