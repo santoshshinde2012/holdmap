@@ -6,8 +6,10 @@
   import { partChip } from "../../../lib/machine3d/describe";
   import { PART_KIND_LABEL, type Part } from "../../../lib/machine3d/scene";
 
-  let { part, onclose, onopenagent, onport }: {
+  let { part, flat = false, onclose, onopenagent, onport }: {
     part: Part;
+    /** Inside Home's Details panel rather than floating over the canvas. */
+    flat?: boolean;
     onclose: () => void;
     onopenagent: (id: string) => void;
     onport: (entryId: string, anchor: HTMLElement) => void;
@@ -17,7 +19,7 @@
   let portBtn = $state<HTMLButtonElement>();
 </script>
 
-<section class="inspector" aria-label="{PART_KIND_LABEL[part.kind]} {part.label}">
+<section class="inspector" class:flat aria-label="{PART_KIND_LABEL[part.kind]} {part.label}">
   <header>
     <div class="h">
       <small>{PART_KIND_LABEL[part.kind]}</small>
@@ -45,6 +47,7 @@
 
 <style>
   .inspector { pointer-events: auto; width: 300px; max-height: 100%; overflow-y: auto; padding: 10px 12px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: var(--shadow-md); backdrop-filter: blur(6px); }
+  .inspector.flat { width: auto; max-height: none; overflow: visible; margin: 0 6px 6px; padding: 10px 10px 12px; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
   header { display: flex; align-items: flex-start; gap: 8px; }
   .h { flex: 1; min-width: 0; }
   small { font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); font-weight: var(--fw-semibold); }

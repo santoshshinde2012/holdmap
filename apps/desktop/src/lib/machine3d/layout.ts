@@ -1,21 +1,34 @@
-// Deterministic 3D placement. Agents stand on a ring on the board at the same angles as the 2D
-// map, so the top-down view is the map. Each agent's parts fan out in its own sector, on their
-// layer: ports and folders on the board, processes on the runtime plate, configuration on top.
-// Positions depend only on the scene's identity, never on resource samples.
+// Deterministic 3D placement. Each agent owns a district on the board: its tower at the back,
+// the folders it works in, then the ports it holds along the front edge. Its processes and its
+// configuration sit on floors stacked over the same footprint, so everything above a district
+// belongs to that agent and no wire is needed to say so. Districts stand side by side, a street
+// apart; the default view turns only as far as the streets allow, so no district hides another.
+// Positions are on a quarter-unit grid and depend only on the scene's identity, never on
+// resource samples.
 import type { Layer, MachineScene, Part, PartKind } from "./scene";
 
 export interface Size { w: number; h: number; d: number }
-export interface Placed { x: number; z: number; layer: Layer; angle: number }
+export interface Placed { x: number; z: number; layer: Layer }
+export interface Rect { x0: number; x1: number; z0: number; z1: number }
+export interface District extends Rect {
+  id: string;
+  /** Each floor's tray, sized to its parts; null where the agent has none. */
+  floors: { runtime: Rect | null; config: Rect | null };
+  /** The antenna at the back-right corner, for an agent with remote hosts. */
+  mast: { x: number; z: number } | null;
+}
 export interface MachineLayout {
   parts: Map<string, Placed>;
-  /** Board radius; the runtime and configuration plates share it. */
-  radius: number;
-  /** Agent ring radius (0 for a single agent, which stands in the middle). */
-  ring: number;
-  /** Agent angle on the ring, by agent id. */
-  angles: Map<string, number>;
-  /** Radius of the recorded-calls lane, or 0 when no calls are drawn. */
-  callsRadius: number;
+  /** By agent id, in drawing order: running agents in report order, then agents that aren't. */
+  districts: Map<string, District>;
+  board: Rect;
+  /** The "This computer" chip at the left end of the board. */
+  hub: { x: number; z: number };
+  /** The recorded-calls shelf at the right end, apart from every district, or null. */
+  calls: Rect | null;
+  /** Default view: turned as far as the streets allow, raised a little more for each row. */
+  theta: number;
+  phi: number;
   signature: string;
 }
 
@@ -32,118 +45,182 @@ export const SIZE: Record<Exclude<PartKind, "agent">, Size> = {
   call: { w: 0.58, h: 0.22, d: 0.22 },
 };
 export const AGENT_MAX_HEIGHT = 2.2;
+/** The tower's footprint, and the CPU gauge ring drawn around its base. */
+export const TOWER = 1.5;
+export const GAUGE_RADIUS = 1.12;
 
 /** Agent tower size: height grows with memory on a log scale, so one large IDE doesn't dwarf the rest. */
 export function partSize(p: Pick<Part, "kind" | "memory">): Size {
   if (p.kind !== "agent") return SIZE[p.kind];
   const h = 0.6 + 0.28 * Math.log2(1 + Math.max(0, p.memory) / (64 * 1024 * 1024));
-  return { w: 1.5, h: Math.min(AGENT_MAX_HEIGHT, h), d: 1.5 };
+  return { w: TOWER, h: Math.min(AGENT_MAX_HEIGHT, h), d: TOWER };
 }
 
-/** Plate heights (the base parts stand on), assembled → exploded. They don't move with samples. */
+/** Floor heights (the base parts stand on), assembled → exploded. They don't move with samples. */
 const PLATE: Record<Layer, [number, number]> = {
   board: [0, 0], runtime: [AGENT_MAX_HEIGHT + 0.55, AGENT_MAX_HEIGHT + 2.9], config: [AGENT_MAX_HEIGHT + 1.8, AGENT_MAX_HEIGHT + 6.4],
-  calls: [AGENT_MAX_HEIGHT + 3.1, AGENT_MAX_HEIGHT + 8.4],
+  // Recorded calls aren't one of the machine's floors: their shelf stays on the board.
+  calls: [0, 0],
 };
 export function plateY(layer: Layer, explode: number): number {
   const [a, b] = PLATE[layer];
   return a + (b - a) * Math.min(1, Math.max(0, explode));
 }
-/** Highest point drawn (labels included) at an explode amount, with or without the calls lane. */
-export const sceneTop = (explode: number, calls = false) => plateY(calls ? "calls" : "config", explode) + 1.4;
+/** Where remote hosts float: above the top floor, at the head of their agent's mast. */
+export const skyY = (explode: number) => plateY("config", explode) + 1.7;
+/** Highest point drawn (labels included) at an explode amount. */
+export const sceneTop = (explode: number) => skyY(explode) + 0.9;
 
-/** Item spacing along a row, and the distance between rows. */
-const SPACING: Record<Layer, number> = { board: 1.25, runtime: 1.3, config: 1.3, calls: 0.9 };
-const ROW = 1.25;
+/** Grid snap, district padding, the street between districts and the gap between rows. */
+const GRID = 0.25;
+const PAD = 0.5;
+export const STREET = 1.5;
+/** Rows stand far enough apart that a row's exploded floors stay clear of the row behind: on
+ *  screen, each row is its own band. One row holds up to eight districts. */
+const ROW_GAP = 11;
+const PER_ROW = 8;
+/** Spacing and columns per kind of row. */
+const STEP = { port: 1.05, folder: 1.35, runtime: 1.3, config: 1.25, calls: 0.9 } as const;
+const COLS = { port: 4, folder: 3, runtime: 3, config: 4, calls: 3 } as const;
 
-interface Slot { r: number; angle: number }
-/** `count` slots fanned around `angle` within `sector`, filling rows outward from `r0`. */
-export function fan(count: number, angle: number, sector: number, r0: number, spacing: number, row = ROW): Slot[] {
-  const full = sector >= Math.PI * 2 - 1e-6;
-  const out: Slot[] = [];
-  let r = Math.max(r0, 0.8);
-  while (out.length < count) {
-    const usable = full ? Math.PI * 2 * r : sector * 0.84 * r;
-    const cap = Math.max(1, Math.floor(usable / spacing) + (full ? 0 : 1));
-    const k = Math.min(cap, count - out.length);
-    const step = full ? (Math.PI * 2) / k : k > 1 ? Math.min(spacing / r, (sector * 0.84) / (k - 1)) : 0;
-    const start = full ? angle : angle - (step * (k - 1)) / 2;
-    for (let i = 0; i < k; i++) out.push({ r, angle: start + i * step });
-    r += row;
-  }
-  return out;
+const snap = (v: number) => Math.round(v / GRID) * GRID + 0;
+
+interface Grid { cols: number; rows: number; w: number; d: number }
+/** Columns and rows for `n` items: square-ish, at most `max` wide. */
+function grid(n: number, step: number, max: number, square = true): Grid {
+  if (!n) return { cols: 0, rows: 0, w: 0, d: 0 };
+  const cols = Math.min(max, n, square ? Math.max(1, Math.ceil(Math.sqrt(n * 1.4))) : max);
+  const rows = Math.ceil(n / cols);
+  return { cols, rows, w: cols * step, d: rows * step };
 }
 
-const outer = (slots: Slot[]) => slots.reduce((m, s) => Math.max(m, s.r), 0);
+/** Local positions (centred on x = 0) for `items` in a grid whose first row's centre is at `z`. */
+function place(items: Part[], g: Grid, step: number, z: number): [Part, number, number][] {
+  return items.map((p, i) => {
+    const row = Math.floor(i / g.cols), col = i % g.cols;
+    const inRow = Math.min(g.cols, items.length - row * g.cols);
+    return [p, (col - (inRow - 1) / 2) * step, z + row * step] as [Part, number, number];
+  });
+}
+
+const isKind = (...kinds: string[]) => (p: Part) => kinds.includes(p.kind);
+const moreOf = (variant: string) => (p: Part) => p.kind === "more" && p.variant === variant;
+
+interface Plan {
+  agent: Part;
+  w: number;
+  d: number;
+  /** Ground placements: x from the district's centre, z from its back edge. */
+  local: [Part, number, number][];
+  remote: Part | undefined;
+  /** Floor contents; their grids are centred once the row's depth is known. */
+  runtime: Part[];
+  config: Part[];
+  gR: Grid;
+  gC: Grid;
+}
+
+function plan(agent: Part, own: Part[]): Plan {
+  const folders = own.filter((p) => p.kind === "project" || moreOf("folders")(p));
+  const ports = own.filter((p) => p.kind === "port" || moreOf("ports")(p));
+  const runtime = own.filter((p) => p.layer === "runtime");
+  // Configuration reads as rows of a kind: MCP servers, then skills, then rules.
+  const order: PartKind[] = ["mcp", "skill", "instructions"];
+  const config = own.filter((p) => p.layer === "config").sort((a, b) => {
+    const rank = (p: Part) => p.kind === "more" ? order.indexOf(p.variant === "skills" ? "skill" : "mcp") + 0.5 : order.indexOf(p.kind);
+    return rank(a) - rank(b);
+  });
+  const gF = grid(folders.length, STEP.folder, COLS.folder, false);
+  const gP = grid(ports.length, STEP.port, COLS.port, false);
+  const gR = grid(runtime.length, STEP.runtime, COLS.runtime);
+  const gC = grid(config.length, STEP.config, COLS.config);
+  // Ground, back to front: the tower in its gauge ring, folders, then ports on the front edge.
+  const towerRow = GAUGE_RADIUS * 2 + 0.2;
+  const folderZ = towerRow + (gF.rows ? 0.35 + SIZE.project.d / 2 : 0);
+  const portZ = folderZ + (gF.rows ? (gF.rows - 1) * STEP.folder + SIZE.project.d / 2 : 0) + (gP.rows ? 0.45 + SIZE.port.d / 2 : 0);
+  const groundD = gP.rows ? portZ + (gP.rows - 1) * STEP.port + SIZE.port.d / 2 + 0.35 : gF.rows ? folderZ + (gF.rows - 1) * STEP.folder + SIZE.project.d / 2 : towerRow;
+  const w = Math.max(towerRow, gF.w, gP.w, gR.w, gC.w, 2.6) + PAD * 2;
+  const d = Math.max(groundD, gR.d, gC.d) + PAD * 2;
+  const local: [Part, number, number][] = [
+    ...place(folders, gF, STEP.folder, PAD + folderZ),
+    ...place(ports, gP, STEP.port, PAD + portZ),
+  ];
+  return { agent, w, d, local, remote: own.find(isKind("remote")), runtime, config, gR, gC };
+}
 
 export function layoutScene(scene: MachineScene): MachineLayout {
-  // Running agents take the 2D map's angles; agents that aren't running share out the gaps between
-  // them, so they never move a running agent. Configuration then splits each sector between the
-  // agents that stand in it. With nothing running, the agents that aren't take the ring evenly.
-  const running = scene.agents.filter((a) => a.kind === "agent");
-  const dormant = scene.agents.filter((a) => a.kind !== "agent");
-  const hosts = running.length ? running.length : dormant.length;
-  const sector = hosts > 0 ? (Math.PI * 2) / hosts : Math.PI * 2;
-  // Agents that aren't running, by the gap (after running agent g) they stand in.
-  const perGap = running.length ? running.map((_, g) => Math.floor(dormant.length / running.length) + (g < dormant.length % running.length ? 1 : 0)) : [];
-  const share = running.length ? 1 + Math.max(0, ...perGap) : 1;
-  const configSector = sector / share;
-  const ring = scene.agents.length <= 1 ? 0 : Math.max(3.2, (scene.agents.length * 3.6) / (Math.PI * 2));
-  const parts = new Map<string, Placed>();
-  const angles = new Map<string, number>();
   const byOwner = new Map<string, Part[]>();
-  for (const p of scene.parts) if (p.kind !== "agent" && p.kind !== "dormant") byOwner.set(p.owner, [...(byOwner.get(p.owner) ?? []), p]);
-  let extent = ring + 2.6;
-  const remotes: [Part, number][] = [];
-  const slots: (readonly [Part, number])[] = running.map((a, i) => [a, -Math.PI / 2 + i * sector] as const);
-  if (running.length) {
-    let next = 0;
-    perGap.forEach((count, g) => {
-      for (let k = 0; k < count; k++) slots.push([dormant[next++], -Math.PI / 2 + (g + (k + 1) / (count + 1)) * sector] as const);
-    });
-  } else dormant.forEach((a, j) => slots.push([a, -Math.PI / 2 + j * sector] as const));
+  for (const p of scene.parts) if (p.kind !== "agent" && p.kind !== "dormant" && p.layer !== "calls") byOwner.set(p.owner, [...(byOwner.get(p.owner) ?? []), p]);
+  // Running agents first (their colours follow the report order), then agents that aren't running.
+  const order = [...scene.agents.filter((a) => a.kind === "agent"), ...scene.agents.filter((a) => a.kind !== "agent")];
+  const plans = order.map((a) => plan(a, byOwner.get(a.id) ?? []));
+  const rows = Math.max(1, Math.ceil(plans.length / PER_ROW));
+  // One depth per row keeps every front edge, and every nameplate on it, on one line.
+  const depth = snap(Math.max(PAD * 2 + 2.6, ...plans.map((p) => p.d)));
+  const parts = new Map<string, Placed>();
+  const districts = new Map<string, District>();
+  const rowWidth = (r: number) => plans.slice(r * PER_ROW, (r + 1) * PER_ROW).reduce((s, p, i) => s + snap(p.w) + (i ? STREET : 0), 0);
+  const widest = Math.max(0, ...Array.from({ length: rows }, (_, r) => rowWidth(r)));
 
-  for (const [agent, a] of slots) {
-    // The same angle convention as the 2D map: the first agent at the top (the back, in 3D).
-    angles.set(agent.id, a);
-    // `+ 0` keeps a centred agent at 0, not -0.
-    parts.set(agent.id, { x: Math.cos(a) * ring + 0, z: Math.sin(a) * ring + 0, layer: "board", angle: a });
-    const own = byOwner.get(agent.id) ?? [];
-    const place = (items: Part[], slots: Slot[]) => items.forEach((p, j) => parts.set(p.id, { x: Math.cos(slots[j].angle) * slots[j].r, z: Math.sin(slots[j].angle) * slots[j].r, layer: p.layer, angle: slots[j].angle }));
-    const start = ring === 0 ? 2.2 : ring;
-
-    const folders = own.filter((p) => p.kind === "project" || (p.kind === "more" && p.variant === "folders"));
-    const ports = own.filter((p) => p.kind === "port" || (p.kind === "more" && p.variant === "ports"));
-    const folderSlots = fan(folders.length, a, sector, start + 1.8, SPACING.board);
-    const portSlots = fan(ports.length, a, sector, Math.max(start + 1.8, outer(folderSlots)) + (folders.length ? ROW : 0), SPACING.board);
-    place(folders, folderSlots); place(ports, portSlots);
-
-    const runtime = own.filter((p) => p.layer === "runtime");
-    const runtimeSlots = fan(runtime.length, a, sector, start, SPACING.runtime);
-    place(runtime, runtimeSlots);
-
-    const config = own.filter((p) => p.layer === "config");
-    const configSlots = fan(config.length, a, configSector, Math.max(start - 0.6, 1.6), SPACING.config);
-    place(config, configSlots);
-
-    for (const p of own) if (p.kind === "remote") remotes.push([p, a]);
-    extent = Math.max(extent, outer(folderSlots), outer(portSlots), outer(runtimeSlots), outer(configSlots));
-  }
-
-  const radius = extent + 1.0;
-  // Recorded calls: a lane of their own above the plates, newest at the front, older ones round
-  // the ring in order. Their place says when they were reported, never which agent made them.
-  const calls = scene.parts.filter((p) => p.layer === "calls");
-  const callsRadius = calls.length ? Math.max(2.4, radius * 0.55) : 0;
-  const step = calls.length ? Math.min((Math.PI * 2) / calls.length, 0.9 / callsRadius) : 0;
-  calls.forEach((p, i) => {
-    const a = Math.PI / 2 - i * step;
-    parts.set(p.id, { x: Math.cos(a) * callsRadius, z: Math.sin(a) * callsRadius, layer: "calls", angle: a });
+  plans.forEach((pl, i) => {
+    const row = Math.floor(i / PER_ROW);
+    const first = row * PER_ROW;
+    // Each row centred on the widest.
+    let x0 = -widest / 2 + (rowWidth(row) < widest ? (widest - rowWidth(row)) / 2 : 0);
+    for (let k = first; k < i; k++) x0 += snap(plans[k].w) + STREET;
+    x0 = snap(x0);
+    const w = snap(pl.w);
+    const z0 = snap(-depth / 2 - row * (depth + ROW_GAP));
+    const cx = x0 + w / 2;
+    const d: District = { id: pl.agent.id, x0, x1: x0 + w, z0, z1: z0 + depth, floors: { runtime: null, config: null }, mast: null };
+    parts.set(pl.agent.id, { x: snap(cx), z: snap(z0 + PAD + GAUGE_RADIUS + 0.1), layer: "board" });
+    for (const [p, x, z] of pl.local) parts.set(p.id, { x: snap(cx + x), z: snap(z0 + z), layer: p.layer });
+    // Floors: their grids centred in the district.
+    for (const [layer, items, g, step] of [["runtime", pl.runtime, pl.gR, STEP.runtime], ["config", pl.config, pl.gC, STEP.config]] as const) {
+      if (!items.length) continue;
+      const top = z0 + (depth - g.d) / 2;
+      for (const [p, x, z] of place(items, g, step, top + step / 2)) parts.set(p.id, { x: snap(cx + x), z: snap(z), layer: p.layer });
+      // A tray a little larger than its grid, never narrower than the tower below it.
+      const tw = Math.max(g.w, TOWER + 0.5) + 0.3, td = g.d + 0.3;
+      d.floors[layer] = { x0: snap(cx - tw / 2), x1: snap(cx + tw / 2), z0: snap(top - 0.15), z1: snap(top - 0.15 + td) };
+    }
+    if (pl.remote) {
+      d.mast = { x: x0 + w - 0.5, z: z0 + 0.5 };
+      parts.set(pl.remote.id, { x: d.mast.x, z: d.mast.z, layer: "board" });
+    }
+    districts.set(pl.agent.id, d);
   });
-  // Remote hosts float just beyond the board's edge, in their agent's direction.
-  for (const [p, a] of remotes) parts.set(p.id, { x: Math.cos(a) * (radius + 1.5), z: Math.sin(a) * (radius + 1.5), layer: "board", angle: a });
-  return { parts, radius, ring, angles, callsRadius, signature: scene.signature };
+
+  // The hub stands at the left end of the front row; the recorded-calls shelf at the right end,
+  // so a call's place never suggests which agent made it.
+  const front = [...districts.values()].slice(0, PER_ROW);
+  const left = front.length ? Math.min(...front.map((d) => d.x0)) : 0;
+  const right = districts.size ? Math.max(...[...districts.values()].map((d) => d.x1)) : 0;
+  const hub = { x: snap(left - STREET - 0.8), z: snap(depth / 2 - 1.2) };
+  const callParts = scene.parts.filter((p) => p.layer === "calls");
+  let calls: Rect | null = null;
+  if (callParts.length) {
+    const g = grid(callParts.length, STEP.calls, COLS.calls);
+    const x0 = snap(right + STREET), w = snap(g.w + PAD * 2), z0 = snap(-depth / 2);
+    calls = { x0, x1: x0 + w, z0, z1: z0 + Math.max(depth, snap(g.d + PAD * 2)) };
+    const cx = x0 + w / 2;
+    // Newest first, from the back left.
+    for (const [p, x, z] of place(callParts, g, STEP.calls, z0 + PAD + STEP.calls / 2)) parts.set(p.id, { x: snap(cx + x), z: snap(z), layer: "calls" });
+  }
+  const back = districts.size ? Math.min(...[...districts.values()].map((d) => d.z0)) : -depth / 2;
+  const board: Rect = { x0: snap(hub.x - 1.4), x1: snap((calls?.x1 ?? right) + 0.8), z0: snap(back - 0.8), z1: snap(depth / 2 + 0.8) };
+  // Turned so a district's far edge stays clear of its neighbour: tan θ · depth < street.
+  // Nearly square on to the row, so it fills the width; just enough turn to show the sides.
+  const theta = Math.min(0.14, Math.atan((STREET - 0.6) / depth));
+  const phi = Math.min(0.9, 0.62 + 0.08 * (rows - 1));
+  return { parts, districts, board, hub, calls, theta, phi, signature: scene.signature };
 }
 
-/** Bounding radius in the ground plane, remote hosts included. */
-export const groundRadius = (layout: MachineLayout) => layout.radius + ([...layout.parts.values()].some((p) => Math.hypot(p.x, p.z) > layout.radius) ? 2.1 : 0);
+/** Room past the board's ends for the labels that hang over them (the chip's, the shelf's). */
+const LABEL_ROOM = 1.4;
+
+/** The model's bounds at an explode amount: the board, the floors and the sky above them. */
+export function bounds(layout: MachineLayout, explode: number): { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number } {
+  const { board } = layout;
+  return { x0: board.x0 - LABEL_ROOM, x1: board.x1 + LABEL_ROOM, y0: -0.36, y1: sceneTop(explode), z0: board.z0, z1: board.z1 };
+}

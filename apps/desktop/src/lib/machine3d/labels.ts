@@ -13,6 +13,9 @@ export interface LabelCandidate {
   priority: number;
   /** Behind the camera or clipped by the near plane. */
   behind?: boolean;
+  /** Fallback vertical offsets (CSS pixels) to try when the first place is taken: a nameplate
+   *  steps down a line rather than disappear. */
+  alts?: readonly number[];
 }
 
 export const LABEL_CHAR = { label: 6.9, sub: 6 } as const;
@@ -21,21 +24,29 @@ export function labelSize(label: string, sub: string | null): { w: number; h: nu
   return { w: Math.max(label.length * LABEL_CHAR.label, (sub?.length ?? 0) * LABEL_CHAR.sub) + 14, h: sub ? 34 : 20 };
 }
 
-/** Screen area free for labels: the canvas less the overlays along its top and bottom edges. */
-export interface LabelArea { width: number; height: number; top?: number; bottom?: number }
+/** Screen area free for labels: the canvas less the overlays along its edges. */
+export interface LabelArea { width: number; height: number; top?: number; bottom?: number; right?: number }
 
-export function pickLabels(cands: readonly LabelCandidate[], { width, height, top = 0, bottom = 0 }: LabelArea, gap = 4, edge = 6): Set<string> {
+export function pickLabels(cands: readonly LabelCandidate[], area: LabelArea, gap = 4, edge = 6): Set<string> {
+  return new Set(placeLabels(cands, area, gap, edge).keys());
+}
+
+/** The labels to show and the vertical offset each one took (0, or one of its fallbacks). */
+export function placeLabels(cands: readonly LabelCandidate[], { width, height, top = 0, bottom = 0, right = 0 }: LabelArea, gap = 4, edge = 6): Map<string, number> {
   const shown: { x: number; y: number; w: number; h: number }[] = [];
-  const out = new Set<string>();
-  // Stable order: priority, then nearer the bottom of the screen (usually nearer the camera), then id.
-  const sorted = [...cands].sort((a, b) => b.priority - a.priority || b.y - a.y || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const out = new Map<string, number>();
+  // Stable order: priority, then nearer the bottom of the screen (usually nearer the camera), then x, then id.
+  const sorted = [...cands].sort((a, b) => b.priority - a.priority || b.y - a.y || a.x - b.x || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   for (const c of sorted) {
     if (c.behind) continue;
-    const box = { x: c.x - c.w / 2, y: c.y - c.h, w: c.w, h: c.h };
-    if (box.x < edge || box.y < top + edge || box.x + box.w > width - edge || box.y + box.h > height - bottom - edge) continue;
-    if (shown.some((s) => box.x < s.x + s.w + gap && s.x < box.x + box.w + gap && box.y < s.y + s.h + gap && s.y < box.y + box.h + gap)) continue;
-    shown.push(box);
-    out.add(c.id);
+    for (const dy of [0, ...(c.alts ?? [])]) {
+      const box = { x: c.x - c.w / 2, y: c.y + dy - c.h, w: c.w, h: c.h };
+      if (box.x < edge || box.y < top + edge || box.x + box.w > width - right - edge || box.y + box.h > height - bottom - edge) continue;
+      if (shown.some((s) => box.x < s.x + s.w + gap && s.x < box.x + box.w + gap && box.y < s.y + s.h + gap && s.y < box.y + box.h + gap)) continue;
+      shown.push(box);
+      out.set(c.id, dy);
+      break;
+    }
   }
   return out;
 }

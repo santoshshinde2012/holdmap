@@ -11,7 +11,7 @@
   import PartsRail from "./PartsRail.svelte";
   import Readings from "./Readings.svelte";
   import PartInspector from "./PartInspector.svelte";
-  import { buildScene, gaugeParts, readings, type Gauge, type Layer, type Part } from "../../../lib/machine3d/scene";
+  import { buildScene, gaugeParts, LENS_LABEL, LENS_TITLE, LENSES, lensView, readings, type Gauge, type Lens, type Layer, type Part } from "../../../lib/machine3d/scene";
   import { layoutScene, type MachineLayout } from "../../../lib/machine3d/layout";
   import { agentPose, overviewPose, partPose, topPose } from "../../../lib/machine3d/camera";
   import { webglSupport, type StageView, type Support } from "../../../lib/machine3d/stage";
@@ -22,7 +22,7 @@
   import type { AgentsReport, PortEntry } from "../../../lib/types";
 
   let { report, entries, hot, needs, colors, trust = [], activity = null, recording = null, selected, active, inventory = false, singleKeys = true, expanded = false,
-    onexpand, oninventory, onselectagent, onhover, onopenagent, onport, fallback }: {
+    onexpand, oninventory, onselectagent, onhover, onopenagent, onport, ondetails, fallback }: {
     report: AgentsReport | null;
     entries: PortEntry[] | null;
     /** Agents whose "Needs you" items are about the agent itself. */
@@ -50,6 +50,9 @@
     onhover: (id: string | null) => void;
     onopenagent: (id: string) => void;
     onport: (entryId: string, anchor: HTMLElement) => void;
+    /** Home shows the readings and the selected part in its side column, above Needs you; the
+     *  view hands it that content as a snippet (null while there's nothing to show). */
+    ondetails?: (details: Snippet | null) => void;
     /** The 2D map, shown when WebGL is unavailable. */
     fallback: Snippet;
   } = $props();
@@ -79,13 +82,20 @@
   });
 
   // ---------- view state ----------
-  let explode = $state(prefGetBoolean("home.3d.exploded", false));
+  // Pulled apart reads best: every floor clear of the one below. Assembled is the compact view.
+  let explode = $state(prefGetBoolean("home.3d.exploded", true));
   let xray = $state(prefGetBoolean("home.3d.xray", false));
   $effect(() => prefSet("home.3d.exploded", explode ? "1" : "0"));
   $effect(() => prefSet("home.3d.xray", xray ? "1" : "0"));
   let top = $state(false);
   let tour = $state(false);
-  let hidden = $state<ReadonlySet<Layer>>(new Set());
+  // One concern at a time: a lens lights its parts and sets aside the floors in its way.
+  let lens = $state<Lens>("all");
+  $effect(() => { if (lens === "calls" && !scene.calls) lens = "all"; });
+  const lensed = $derived(lensView(scene, lens));
+  const hidden = $derived<ReadonlySet<Layer>>(lensed.hidden);
+  const LENS_ICON: Record<Lens, string> = { all: "layers", network: "globe", runtime: "cpu", config: "plug", needs: "alert", calls: "activity" };
+  const lensOptions = $derived(LENSES.filter((l) => l !== "calls" || scene.calls).map((l) => ({ value: l, label: LENS_LABEL[l], icon: LENS_ICON[l], title: `${LENS_TITLE[l]} · L` })));
   let legend = $state(prefGetBoolean("home.3d.legend", true));
   $effect(() => prefSet("home.3d.legend", legend ? "1" : "0"));
   /** A selected part that isn't an agent, or an agent that isn't running. */
@@ -101,14 +111,15 @@
   const inspected = $derived(part ?? (selectedAgent ? scene.parts.find((p) => p.id === selectedAgent) ?? null : null));
   // A pressed reading lights up exactly the parts it counts (for the agent in focus, if any).
   let gauge = $state<Gauge | null>(null);
-  const highlight = $derived(gauge ? gaugeParts(scene, gauge, focus) : null);
+  const highlight = $derived(gauge ? gaugeParts(scene, gauge, focus) : lensed.lit);
   function pickGauge(next: Gauge | null) {
     stopTour();
     gauge = next;
-    // Bring back a hidden plate when its parts are the ones asked for.
+    // A lens that sets aside the floor those parts stand on steps back to All.
     const lit = next ? gaugeParts(scene, next, focus) : null;
-    if (lit) { const layers = new Set(scene.parts.filter((p) => lit.has(p.id)).map((p) => p.layer)); if ([...hidden].some((l) => layers.has(l))) hidden = new Set([...hidden].filter((l) => !layers.has(l))); }
+    if (lit && scene.parts.some((p) => lit.has(p.id) && hidden.has(p.layer))) lens = "all";
   }
+  function pickLens(next: Lens) { stopTour(); gauge = null; lens = next; }
   const view = $derived<StageView>({ explode: explode ? 1 : 0, xray, focus: focus ?? active, selected: inspected?.id ?? null, hovered: hoverPart, hidden, reduced, highlight });
 
   // Fly only on an explicit change (selection, angle, explode, Fit, the first agent scan), so a
@@ -189,11 +200,6 @@
     void tick().then(() => pickPart(p, pointAnchor!));
   }
   function clear() { partId = null; onselectagent(null); }
-  function toggleLayer(layer: Layer) {
-    const next = new Set(hidden);
-    if (!next.delete(layer)) next.add(layer);
-    hidden = next;
-  }
   // The same policy as the app's shortcuts: no keys while composing or editing; letters are
   // single-key shortcuts, so they follow that setting and leave focused native controls alone.
   // Listened for on the window, in the capture phase: WebKit doesn't focus a clicked button, so
@@ -207,7 +213,8 @@
     if (c.blocked || c.editing) return;
     if (e.key === "Escape" && c.navigation && (partId || tour || gauge)) { e.stopPropagation(); if (tour) stopTour(); else if (partId) partId = null; else gauge = null; return; }
     if (!singleKeys || !c.navigation || c.control) return;
-    const act: Record<string, () => void> = { e: () => { stopTour(); explode = !explode; }, x: () => { stopTour(); xray = !xray; }, t: () => { if (!reduced && hasParts) tour = !tour; }, f: () => { stopTour(); top = false; fit++; } };
+    const nextLens = () => { const all = lensOptions.map((o) => o.value); pickLens(all[(all.indexOf(lens) + 1) % all.length]); };
+    const act: Record<string, () => void> = { e: () => { stopTour(); explode = !explode; }, x: () => { stopTour(); xray = !xray }, t: () => { if (!reduced && hasParts) tour = !tour; }, f: () => { stopTour(); top = false; fit++; }, l: nextLens };
     const fn = act[e.key];
     if (!fn) return;
     e.preventDefault();
@@ -217,37 +224,59 @@
   // Overlays along the top and bottom of the canvas: the camera frames the model between them.
   let viewport = $state<HTMLDivElement>();
   let stage3d = $state<ReturnType<typeof Stage3D>>();
-  let insets = $state({ top: 0, bottom: 0 });
+  let insets = $state({ top: 0, bottom: 0, right: 0 });
   $effect(() => {
     const vp = viewport;
     if (!vp || typeof ResizeObserver === "undefined") return;
     const measure = () => {
       const box = vp.getBoundingClientRect();
-      let top = 0, bottom = 0;
+      let top = 0, bottom = 0, right = 0;
       for (const el of vp.querySelectorAll<HTMLElement>("[data-inset]")) {
         const r = el.getBoundingClientRect();
         if (!r.height) continue;
-        if (r.top + r.height / 2 < box.top + box.height / 2) top = Math.max(top, r.bottom - box.top + 4);
+        // The inspector takes the right side: the picture centres in what's left of it.
+        if (el.dataset.inset === "right") right = Math.max(right, box.right - r.left + 8);
+        else if (r.top + r.height / 2 < box.top + box.height / 2) top = Math.max(top, r.bottom - box.top + 4);
         else bottom = Math.max(bottom, box.bottom - r.top + 4);
       }
       // Untracked: a new measurement must not re-subscribe this effect.
-      untrack(() => { if (top !== insets.top || bottom !== insets.bottom) insets = { top, bottom }; });
+      untrack(() => { if (top !== insets.top || bottom !== insets.bottom || right !== insets.right) insets = { top, bottom, right }; });
     };
     // Measure on the next frame, not inside the observer callback: the update moves the camera's
     // frame and WebKit reports a resize loop if that happens in the same layout pass.
     let raf = 0;
     const ro = new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); });
     ro.observe(vp);
-    for (const el of vp.querySelectorAll("[data-inset]")) ro.observe(el);
+    const watch = () => { for (const el of vp.querySelectorAll("[data-inset]")) ro.observe(el); };
+    watch();
+    // The inspector comes and goes: watch new overlays as they appear.
+    const mo = new MutationObserver(() => { watch(); cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); });
+    mo.observe(vp, { childList: true, subtree: true });
     measure();
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); mo.disconnect(); };
+  });
+  // The parts list folds to a strip of agent buttons; remembered.
+  let railOpen = $state(prefGetBoolean("home.3d.rail", true));
+  $effect(() => prefSet("home.3d.rail", railOpen ? "1" : "0"));
+  // Details live in Home's side column; in Focus (no side column) the selected part floats over the canvas.
+  const sideDetails = $derived(!!ondetails && !expanded);
+  $effect(() => {
+    const host = ondetails;
+    if (!host) return;
+    host(usable ? details : null);
+    return () => host(null);
   });
   const MODES = [{ value: "assembled" as const, label: "Assembled", icon: "box", title: "Assembled · E" }, { value: "exploded" as const, label: "Exploded", icon: "layers", title: "Pulled apart · E" }];
 </script>
 
 <svelte:window onkeydowncapture={onkey} />
 
-<div class="m3d">
+{#snippet details()}
+  <Readings flat readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
+  {#if inspected}<PartInspector flat part={inspected} onclose={clear} {onopenagent} {onport} />{/if}
+{/snippet}
+
+<div class="m3d" class:folded={!railOpen}>
   {#if support === "pending"}
     <p class="wait" aria-busy="true">Starting 3D…</p>
   {:else if !usable}
@@ -265,14 +294,17 @@
       <div class="fallback-map">{@render fallback()}</div>
     </div>
   {:else}
-    <PartsRail {scene} {colors} {focus} selected={inspected?.id ?? null} onagent={pickAgent} onpart={pickPart} onhover={onhover} />
-    <div class="viewport" class:xray bind:this={viewport}>
+    <PartsRail {scene} {colors} {focus} selected={inspected?.id ?? null} collapsed={!railOpen} ontoggle={() => (railOpen = !railOpen)} onagent={pickAgent} onpart={pickPart} onhover={onhover} />
+    <div class="viewport" class:xray bind:this={viewport} data-capture-area>
       <Stage3D bind:this={stage3d} {scene} {layout} {colors} {view} {flight} {tour} {insets} onpick={onpick} onhover={(id) => (hoverPart = id)} onfail={(reason) => (failure = reason)}
         oncaption={(c) => (caption = c)} ontourfocus={(id) => (tourFocus = id)} onreset={() => { stopTour(); top = false; clear(); fit++; }} />
       <span class="anchor" bind:this={pointAnchor} style="left: {anchorAt.x}px; top: {anchorAt.y}px" aria-hidden="true"></span>
-      <div class="hud top" data-inset>
-        <Readings readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
-      </div>
+      {#if !sideDetails}
+        <!-- Without Home's side column (Focus, or no host), the readings ride along the top. -->
+        <div class="hud top" data-inset>
+          <Readings readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
+        </div>
+      {/if}
       <!-- One overlay along the bottom: the legend (or tour caption) across the width, then the
            layer bar and the view controls, which wrap onto two rows when space runs out. -->
       <div class="hud bottom" data-inset>
@@ -280,23 +312,22 @@
           <p class="caption" aria-live="polite"><Icon name="play" size={11} />{caption}</p>
         {:else if legend}
           <ul class="legend" id="m3d-legend" aria-label="Legend">
-            <li><i class="solid"></i>Seen now</li><li><i class="faded"></i>Inferred</li><li><i class="blue"></i>File on disk</li>
-            <li><i class="beam"></i>MCP running</li><li><i class="amber"></i>Needs you</li><li><i class="dots"></i>Open connections</li>
+            <li><i class="solid"></i>Seen now</li><li><i class="faded"></i>Inferred</li><li><i class="blue"></i>On disk</li>
+            <li><i class="gauge"></i>CPU</li><li><i class="beam"></i>MCP running</li><li><i class="flow"></i>Connection</li>
+            <li><i class="ripple"></i>Open to network</li><li><i class="pin"></i>Needs you</li>
             {#if scene.calls}<li><i class="call"></i>Reported call</li>{/if}
           </ul>
         {/if}
         <div class="row">
-        <div class="bar" role="group" aria-label="Layers">
-          <ActionPill label="Processes" toggle pressed={!hidden.has("runtime")} size="compact" title="Show or hide the runtime plate" onclick={() => toggleLayer("runtime")} />
-          <ActionPill label="Configuration" toggle pressed={!hidden.has("config")} size="compact" title="Show or hide configuration files on disk" onclick={() => toggleLayer("config")} />
-          {#if scene.calls}<ActionPill label="Calls" toggle pressed={!hidden.has("calls")} size="compact" title="Show or hide recorded calls" onclick={() => toggleLayer("calls")} />{/if}
+        <div class="bar lenses" role="group" aria-label="View">
+          <ActionDock value={lens} options={lensOptions} label="Lens" hinge={false} animate={false} size="compact" onchange={pickLens} />
           <ActionPill icon="info" label="Legend" toggle pressed={legend} size="compact" expanded={legend} onclick={() => (legend = !legend)} />
           {#if !inventory && oninventory && !scene.inspected}<button type="button" class="link" onclick={oninventory}><Icon name="plug" size={12} />Read MCP config</button>{/if}
         </div>
         <div class="bar tools" role="toolbar" aria-label="3D view">
         <ActionDock value={explode ? "exploded" : "assembled"} options={MODES} label="Assembly" hinge={false} animate={false} size="compact" onchange={(v) => { stopTour(); explode = v === "exploded"; }} />
         <ActionPill icon="radar" label="X-ray" toggle pressed={xray} size="compact" kbd="X" title="See through solid parts; configuration and running beams stand out" onclick={() => { stopTour(); xray = !xray; }} />
-        <ActionPill icon="layers" label="Top" toggle pressed={top} size="compact" title="Look straight down: the same picture as the Map" onclick={() => { stopTour(); top = !top; }} />
+        <ActionPill icon="hash" label="Plan" toggle pressed={top} size="compact" title="Look straight down: the floor plan, one district per agent" onclick={() => { stopTour(); top = !top; }} />
         <ActionPill icon="play" label="Tour" toggle pressed={tour} size="compact" kbd="T" disabled={reduced || !hasParts} title={reduced ? "The tour is off while reduced motion is on" : "Walk through the machine; any input hands you control"} onclick={() => (tour = !tour)} />
         {#if onexpand}<ActionPill icon="sidebar" label="Focus" toggle pressed={expanded} size="compact" title={expanded ? "Show the summary and Needs you again" : "Hide the summary and Needs you so the machine fills Home"} onclick={() => onexpand?.(!expanded)} />{/if}
         </div>
@@ -307,8 +338,8 @@
         <IconButton icon="minus" label="Zoom out" kbd="−" size="sm" onclick={() => stage3d?.zoomBy(1.25)} />
         <IconButton icon="fit" label="Fit" kbd="F" size="sm" onclick={() => { stopTour(); top = false; fit++; }} />
       </div>
-      {#if inspected}
-        <div class="hud side" style="top: {insets.top + 6}px; bottom: {insets.bottom + 6}px">
+      {#if inspected && !sideDetails}
+        <div class="hud side" data-inset="right" style="top: {insets.top + 6}px; bottom: {insets.bottom + 6}px">
           <PartInspector part={inspected} onclose={clear} {onopenagent} {onport} />
         </div>
       {/if}
@@ -318,6 +349,7 @@
 
 <style>
   .m3d { position: relative; display: grid; grid-template-columns: 216px minmax(0, 1fr); height: 100%; min-height: 0; container-type: inline-size; }
+  .m3d.folded { grid-template-columns: 44px minmax(0, 1fr); }
   .wait { margin: 0; padding: var(--sp-4); color: var(--muted); grid-column: 1 / -1; }
   .fallback { grid-column: 1 / -1; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; height: 100%; }
   .note { padding: var(--sp-2) var(--sp-2) 0; }
@@ -345,8 +377,10 @@
   .legend .faded { background: color-mix(in srgb, var(--text-2) 35%, transparent); }
   .legend .blue { border-color: var(--tone-blue); background: var(--tone-blue-bg); }
   .legend .beam { width: 4px; border: 0; border-radius: 2px; background: var(--ok); height: 12px; }
-  .legend .amber { border-color: var(--warn); background: var(--warn-soft); border-radius: 50%; }
-  .legend .dots { border: 0; width: 14px; background: radial-gradient(circle, var(--text-2) 1.5px, transparent 2px) 0 50% / 5px 5px repeat-x; }
+  .legend .gauge { border-radius: 50%; border-width: 2px; border-color: var(--border-strong) var(--border-strong) var(--accent) var(--accent); transform: rotate(-45deg); }
+  .legend .flow { border: 0; width: 16px; background: radial-gradient(circle, var(--tone-blue) 1.6px, transparent 2.1px) 0 50% / 5px 6px repeat-x; }
+  .legend .ripple { width: 6px; height: 6px; border-color: var(--warn); border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px color-mix(in srgb, var(--warn) 55%, transparent); margin: 0 2px; }
+  .legend .pin { width: 8px; height: 8px; border: 0; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--warn); }
   .legend .call { width: 14px; height: 7px; border-radius: 4px; border: 0; background: color-mix(in srgb, var(--accent) 75%, transparent); }
   .caption { margin: 0; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 6px 10px; border-radius: var(--r-md); background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--border); box-shadow: var(--shadow-sm);
     color: var(--text); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
@@ -356,8 +390,12 @@
   .link:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   /* Narrower: the view controls show their icons only. Their names stay as visually hidden text,
      so each button keeps its accessible name, and its tooltip still shows it. */
+  /* Lenses show their icons only first; each keeps its name as visually hidden text and in its tooltip. */
+  @container (max-width: 1200px) {
+    .lenses :global([role="radio"] > span) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  }
   @container (max-width: 1000px) {
-    .m3d { grid-template-columns: 180px minmax(0, 1fr); }
+    .m3d:not(.folded) { grid-template-columns: 180px minmax(0, 1fr); }
     .tools :global(.action-pill > span) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   }
 </style>

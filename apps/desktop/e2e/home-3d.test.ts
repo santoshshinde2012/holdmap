@@ -64,10 +64,14 @@ test("the 3D machine: a button for every part, live readings and honest details"
   await expect(menu.getByRole("menuitem", { name: "Details" })).toBeVisible();
   await app.keyboard.press("Escape");
 
-  // Keyboard: E pulls the machine apart, X toggles X-ray, Esc clears the part.
+  // Keyboard: the machine opens pulled apart and E puts it together; X toggles X-ray; L steps through the lenses.
+  const assembly = overview.getByRole("radiogroup", { name: "Assembly" });
+  await expect(assembly.getByRole("radio", { name: /Exploded/ })).toHaveAttribute("aria-checked", "true");
   await overview.locator(".stage3d").focus();
   await app.keyboard.press("e");
-  await expect(overview.getByRole("radiogroup", { name: "Assembly" }).getByRole("radio", { name: /Exploded/ })).toHaveAttribute("aria-checked", "true");
+  await expect(assembly.getByRole("radio", { name: /Assembled/ })).toHaveAttribute("aria-checked", "true");
+  await app.keyboard.press("l");
+  await expect(overview.getByRole("radiogroup", { name: "Lens" }).getByRole("radio", { name: /^Network/ })).toHaveAttribute("aria-checked", "true");
   await app.keyboard.press("x");
   await expect(overview.getByRole("button", { name: /^X-ray/ })).toHaveAttribute("aria-pressed", "true");
   // The tour is off while reduced motion is on (this suite runs with reduced motion).
@@ -119,12 +123,53 @@ test("Focus, gauges, zoom and recorded calls", async ({ app }) => {
   await overview.getByRole("button", { name: "Zoom in" }).click();
   await overview.getByRole("button", { name: "Zoom out" }).click();
 
-  // The demo's recorded calls: a reading, a layer of their own, and their own toggle.
+  // Lenses: one concern at a time. Pressing a reading whose parts the lens sets aside (the
+  // demo's recorded calls, under Network) brings everything back.
+  const lens = overview.getByRole("radiogroup", { name: "Lens" });
+  await lens.getByRole("radio", { name: /^Network/ }).click();
+  await expect(lens.getByRole("radio", { name: /^Network/ })).toHaveAttribute("aria-checked", "true");
   const calls = readings.getByRole("button", { name: /Calls/ });
   await expect(calls).toContainText("recording off");
   await calls.click();
   await expect(calls).toHaveAttribute("aria-pressed", "true");
-  await expect(overview.getByRole("group", { name: "Layers" }).getByRole("button", { name: /^Calls/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(lens.getByRole("radio", { name: /^All/ })).toHaveAttribute("aria-checked", "true");
+});
+
+test("every panel around the machine folds away, comes back and is remembered", async ({ app }) => {
+  test.skip(await open3d(app) !== "3d", "Needs WebGL 2");
+  const overview = app.getByRole("region", { name: "Overview" });
+  const readings = overview.getByRole("region", { name: "Live readings: This computer" });
+  // Details (the machine's readings) above Needs you, each under its own heading.
+  const details = overview.getByRole("heading", { name: "Details" }).getByRole("button");
+  await expect(details).toHaveAttribute("aria-expanded", "true");
+  await expect(readings).toBeVisible();
+  await details.click();
+  await expect(details).toHaveAttribute("aria-expanded", "false");
+  await expect(readings).toBeHidden();
+  const needs = overview.getByRole("heading", { name: /^Needs you/ }).getByRole("button");
+  await needs.click();
+  await expect(needs).toHaveAttribute("aria-expanded", "false");
+  // The whole side column, the summary and the parts list.
+  await overview.getByRole("button", { name: "Hide the side panels" }).click();
+  await expect(overview.getByRole("heading", { name: /^Needs you/ })).toHaveCount(0);
+  // With no side column, the readings ride over the canvas instead of disappearing.
+  await expect(readings).toBeVisible();
+  await overview.getByRole("button", { name: "Show the side panels" }).click();
+  await expect(overview.getByRole("heading", { name: /^Needs you/ })).toBeVisible();
+  await overview.getByRole("button", { name: "Fold the summary" }).click();
+  await expect(overview.getByRole("group", { name: "Summary" })).toHaveCount(0);
+  const parts = overview.getByRole("navigation", { name: "Machine parts" });
+  await parts.getByRole("button", { name: "Fold the parts list" }).click();
+  // Folded, each agent is still one click away.
+  await parts.getByRole("button", { name: "Cursor", exact: true }).click();
+  await expect(parts.getByRole("button", { name: "Cursor", exact: true })).toHaveAttribute("aria-pressed", "true");
+  // Remembered after a reload.
+  await app.reload();
+  await app.getByRole("radio", { name: /^Home/ }).click();
+  await expect(overview.getByRole("heading", { name: "Details" }).getByRole("button")).toHaveAttribute("aria-expanded", "false");
+  await expect(overview.getByRole("heading", { name: /^Needs you/ }).getByRole("button")).toHaveAttribute("aria-expanded", "false");
+  await expect(overview.getByRole("button", { name: "Show the summary" })).toBeVisible();
+  await expect(parts.getByRole("button", { name: "Show the parts list" })).toBeVisible();
 });
 
 test("the 3D machine keeps configuration unknown until it is read", async ({ app }) => {

@@ -5,7 +5,7 @@
   import { sparkPoints } from "../../../lib/rows";
   import { isGauge, type Gauge, type Reading } from "../../../lib/machine3d/scene";
 
-  let { readings, scope, cpu = [], active = null, onpick }: {
+  let { readings, scope, cpu = [], active = null, flat = false, onpick }: {
     readings: Reading[];
     /** What the figures cover: "This computer" or an agent's name. */
     scope: string;
@@ -13,12 +13,14 @@
     cpu?: number[];
     /** The reading whose parts are lit, if any. */
     active?: Gauge | null;
+    /** Inside a panel that already frames it (Home's Details), rather than floating over the canvas. */
+    flat?: boolean;
     onpick?: (gauge: Gauge | null) => void;
   } = $props();
   const spark = $derived(sparkPoints(cpu, 120, 26, 5));
 </script>
 
-<section class="readings" aria-label="Live readings: {scope}">
+<section class="readings" class:flat aria-label="Live readings: {scope}">
   <h3>{scope}</h3>
   <ul>
     {#each readings as r (r.id)}
@@ -41,6 +43,7 @@
 
 <style>
   .readings { pointer-events: auto; padding: 7px 8px 6px; border: 1px solid var(--border); border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-sm); backdrop-filter: blur(6px); }
+  .readings.flat { padding: 8px 6px 6px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
   h3 { margin: 0 0 2px 4px; font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); text-transform: uppercase; font-weight: var(--fw-semibold); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 2px 6px; }
   .r { min-width: 0; }

@@ -5,13 +5,16 @@
   import Icon from "../../Icon.svelte";
   import { agentSummary, LAYER_LABEL, PART_KIND_LABEL, type Layer, type MachineScene, type Part } from "../../../lib/machine3d/scene";
 
-  let { scene, colors, focus, selected, onagent, onpart, onhover }: {
+  let { scene, colors, focus, selected, collapsed = false, ontoggle, onagent, onpart, onhover }: {
     scene: MachineScene;
     colors: ReadonlyMap<string, string>;
     /** The agent whose parts are listed (selected, or the owner of the selected part). */
     focus: string | null;
     /** Selected part or agent id. */
     selected: string | null;
+    /** Folded to a strip of agent buttons, so the canvas gets the width. */
+    collapsed?: boolean;
+    ontoggle?: () => void;
     onagent: (id: string) => void;
     onpart: (part: Part, el: HTMLElement) => void;
     onhover: (id: string | null) => void;
@@ -34,8 +37,28 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<nav class="rail" aria-label="Machine parts" bind:this={nav} onkeydown={key}>
-  <h3>Agents</h3>
+<nav class="rail" class:collapsed aria-label="Machine parts" bind:this={nav} onkeydown={key}>
+  <div class="head">
+    {#if !collapsed}<h3>Agents</h3>{/if}
+    {#if ontoggle}
+      <button type="button" class="fold" aria-expanded={!collapsed} title={collapsed ? "Show the parts list" : "Fold the parts list"} onclick={ontoggle}>
+        <Icon name="sidebar" size={14} /><span class="sr-only">{collapsed ? "Show the parts list" : "Fold the parts list"}</span>
+      </button>
+    {/if}
+  </div>
+  {#if collapsed}
+    <!-- Folded: one button per agent, in its colour, named for screen readers and tooltips. -->
+    <ul class="dots">
+      {#each scene.agents as a (a.id)}
+        <li>
+          <button type="button" class="dotbtn" class:on={focus === a.id} class:dormant={a.kind === "dormant"} aria-pressed={focus === a.id} title={a.label}
+            style="--agent: {colors.get(a.id) ?? 'var(--muted)'}" onclick={() => onagent(a.id)} onmouseenter={() => onhover(a.id)} onmouseleave={() => onhover(null)}>
+            <i aria-hidden="true"></i><span class="sr-only">{a.label}</span>{#if a.warn}<span class="dot" aria-hidden="true"></span>{/if}
+          </button>
+        </li>
+      {/each}
+    </ul>
+  {:else}
   <ul>
     {#each scene.agents as a (a.id)}
       <li>
@@ -72,10 +95,22 @@
     {/each}
   </ul>
   {#if scene.omittedAgents}<p class="omitted">+{scene.omittedAgents} more on Agents</p>{/if}
+  {/if}
 </nav>
 
 <style>
   .rail { min-height: 0; overflow-y: auto; padding: var(--sp-2); border-right: 1px solid var(--border); background: var(--surface); }
+  .rail.collapsed { padding: var(--sp-2) 6px; }
+  .head { display: flex; align-items: center; gap: 4px; }
+  .head h3 { flex: 1; }
+  .fold { display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 0; padding: 0; margin-left: auto; color: var(--muted); }
+  .collapsed .fold { margin: 0 auto; }
+  .fold:hover { color: var(--text); }
+  .dots { margin-top: var(--sp-2); justify-items: center; gap: 4px; }
+  .dotbtn { justify-content: center; width: 30px; min-height: 30px; padding: 0; }
+  .dotbtn i { width: 12px; height: 12px; border-radius: 50%; background: var(--agent); }
+  .dotbtn.dormant i { background: transparent; border: 1.5px dashed var(--muted); }
+  .dotbtn .dot { position: absolute; top: 4px; right: 4px; }
   h3, h4 { margin: var(--sp-2) var(--sp-2) var(--sp-1); font-size: var(--fs-label); line-height: var(--lh-label); letter-spacing: var(--ls-label); text-transform: uppercase; font-weight: var(--fw-semibold); color: var(--muted); }
   h4 { margin: var(--sp-2) 0 2px var(--sp-1); }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }

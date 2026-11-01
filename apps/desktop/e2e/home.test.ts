@@ -81,7 +81,7 @@ for (const layout of ["cards", "map"] as const) for (const width of [390, 1024, 
     // That only holds while the Needs you list scrolls inside its panel: the scroll area itself,
     // and the skill-trust alert above it, stay within the panel without overlapping.
     const needsBox = await overview.evaluate((root) => {
-      const panel = root.querySelector("aside.panel")!.getBoundingClientRect();
+      const panel = root.querySelector("#home-needs-h")!.closest("section")!.getBoundingClientRect();
       const box = (sel: string) => root.querySelector(sel)?.getBoundingClientRect() ?? null;
       const list = box(".needs-scroll"), alert = box("[data-trust-alert]");
       return { listInside: !list || (list.top >= panel.top - 0.5 && list.bottom <= panel.bottom + 0.5), alertAboveList: !list || !alert || alert.bottom <= list.top + 0.5 };

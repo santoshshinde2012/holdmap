@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MOCK_SNAPSHOT, mockAgents } from "../mock";
 import { attention, hotAgents, needsByAgent } from "../home";
 import { layoutScene } from "./layout";
-import { labelPriority, labelSize, pickLabels } from "./labels";
+import { labelPriority, labelSize, pickLabels, placeLabels } from "./labels";
 import { buildScene } from "./scene";
 import type { AgentsReport } from "../types";
 import { parseColor, toHex } from "./theme";
@@ -23,7 +23,7 @@ describe("3D machine tour", () => {
     const warned = scene.agents.filter((a) => a.kind === "agent" && a.warn).map((a) => a.id);
     expect(focus.slice(0, warned.length)).toEqual(warned);
     expect(beats.some((b) => b.xray)).toBe(true);
-    expect(beats.at(-1)!.caption).toMatch(/Map/);
+    expect(beats.at(-1)!.caption).toMatch(/floor plan/);
     expect(beats.every((b) => b.caption.length > 0)).toBe(true);
   });
 
@@ -73,6 +73,16 @@ describe("3D machine labels", () => {
     expect([...shown].sort()).toEqual(["apart", "high"]);
     // Labels under an overlay along the top don't count as shown.
     expect(pickLabels([{ id: "under", x: 200, y: 40, w: 80, h: 20, priority: 50 }], { width: 400, height: 400, top: 60 }).size).toBe(0);
+  });
+
+  it("steps a nameplate down a line rather than hide it, and keeps out from under the inspector", () => {
+    const placed = placeLabels([
+      { id: "a", x: 100, y: 100, w: 80, h: 20, priority: 90, alts: [26, 52] },
+      { id: "b", x: 140, y: 100, w: 80, h: 20, priority: 90, alts: [26, 52] },
+      { id: "c", x: 180, y: 100, w: 80, h: 20, priority: 90, alts: [26, 52] },
+    ], { width: 400, height: 400 });
+    expect([...placed]).toEqual([["a", 0], ["b", 26], ["c", 52]]);
+    expect(pickLabels([{ id: "right", x: 350, y: 100, w: 80, h: 20, priority: 50 }], { width: 400, height: 400, right: 60 }).size).toBe(0);
   });
 
   it("shows agents always, a focused agent's parts, and warnings in the overview", () => {

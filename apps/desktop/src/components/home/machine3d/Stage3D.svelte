@@ -5,7 +5,7 @@
   import { onMount, untrack } from "svelte";
   import { MachineStage, type StageView } from "../../../lib/machine3d/stage";
   import { readColors } from "../../../lib/machine3d/theme";
-  import { labelPriority, labelSize, pickLabels, type LabelCandidate } from "../../../lib/machine3d/labels";
+  import { labelPriority, labelSize, placeLabels as fitLabels, type LabelCandidate } from "../../../lib/machine3d/labels";
   import { LAYER_LABEL, type Layer, type MachineScene, type Part } from "../../../lib/machine3d/scene";
   import type { MachineLayout } from "../../../lib/machine3d/layout";
   import type { Pose } from "../../../lib/machine3d/camera";
@@ -23,8 +23,8 @@
     /** Where the camera should be; a new object starts a flight there. */
     flight: { pose: (aspect: number) => Pose; instant?: boolean } | null;
     tour?: boolean;
-    /** Overlays along the top and bottom edges, in CSS pixels: the model is framed between them. */
-    insets?: { top: number; bottom: number };
+    /** Overlays along the top and bottom edges, and the inspector on the right, in CSS pixels: the model is framed between them. */
+    insets?: { top: number; bottom: number; right?: number };
     onpick: (id: string | null, at: { x: number; y: number }) => void;
     onhover: (id: string | null) => void;
     /** WebGL could not start or was lost. */
@@ -82,9 +82,10 @@
     return () => { ro.disconnect(); cancelAnimationFrame(frame); };
   });
   $effect(() => { stage?.resize(width, height); });
-  $effect(() => { stage?.setInsets(insets.top, insets.bottom); });
+  $effect(() => { stage?.setInsets(insets.top, insets.bottom, insets.right ?? 0); });
   // Poses are fitted to the free area between the overlays, then pulled back to the full canvas.
   const freeHeight = $derived(Math.max(120, height - insets.top - insets.bottom));
+  const freeWidth = $derived(Math.max(160, width - (insets.right ?? 0)));
   const framed = (p: Pose): Pose => ({ ...p, distance: p.distance * (height / freeHeight) });
   $effect(() => { stage?.setScene(scene, layout); });
   // Agent colours follow the report order. Home builds a new map every scan, so recolour (and
@@ -99,7 +100,7 @@
   let tourFocus = $state<string | null | undefined>(undefined);
   // Rebuilt with each scan (captions carry live counts), read by the running tour without restarting it.
   let beats: TourBeat[] = [];
-  $effect(() => { beats = width && height ? tourBeats(scene, layout, width / freeHeight).map((b) => ({ ...b, pose: framed(b.pose) })) : []; });
+  $effect(() => { beats = width && height ? tourBeats(scene, layout, freeWidth / freeHeight).map((b) => ({ ...b, pose: framed(b.pose) })) : []; });
   $effect(() => {
     if (!stage || !tour) { oncaption(null); tourFocus = undefined; return; }
     const s = stage;
@@ -144,7 +145,7 @@
     if (!ready || !f || tour) return;
     moved = false;
     untrack(() => {
-      const target = framed(f.pose(width / freeHeight));
+      const target = framed(f.pose(freeWidth / freeHeight));
       // Opening move, once the first scan is in: settle onto the machine from higher up while it
       // builds, unless motion is reduced. Until then (an instant fit) the camera just waits.
       if (!opened && !f.instant) {
@@ -158,13 +159,13 @@
       stage!.flyTo(target, f.instant ? 0 : 1100);
     });
   });
-  const settleKey = $derived(JSON.stringify([layout.radius, layout.callsRadius, insets.top, insets.bottom, width, height]));
+  const settleKey = $derived(JSON.stringify([layout.board, layout.calls, insets.top, insets.bottom, insets.right, width, height]));
   $effect(() => {
     void settleKey;
     untrack(() => {
       const f = flight;
       if (!ready || !f || f.instant || tour || moved || !opened) return;
-      stage!.flyTo(framed(f.pose(width / freeHeight)), 600);
+      stage!.flyTo(framed(f.pose(freeWidth / freeHeight)), 600);
     });
   });
 
@@ -197,14 +198,16 @@
       out.push({ id: p.id, part: p, text, sub, priority, size: labelSize(text, sub), kind: p.kind, warn: !!p.warn, owner: p.owner });
     }
     for (const layer of ["runtime", "config", "calls"] as Layer[]) {
-      if (view.hidden.has(layer) || layer === "calls" && !layout.callsRadius) continue;
-      const text = LAYER_LABEL[layer], sub = layer === "runtime" ? "Processes running now" : layer === "config" ? "Files on disk" : "Reported, not matched to processes";
+      if (view.hidden.has(layer) || layer === "calls" && !layout.calls) continue;
+      const text = LAYER_LABEL[layer], sub = layer === "runtime" ? "Processes running now" : layer === "config" ? "Files on disk" : "Not matched to processes";
       out.push({ id: `plate:${layer}`, part: null, text, sub, priority: 85, size: labelSize(text, sub), kind: "plate", lane: layer === "calls", warn: false, owner: null });
     }
-    if (layout.ring > 0) out.push({ id: "hub", part: null, text: "This computer", sub: null, priority: 20, size: labelSize("This computer", null), kind: "hub", warn: false, owner: null });
+    out.push({ id: "hub", part: null, text: "This computer", sub: null, priority: 20, size: labelSize("This computer", null), kind: "hub", warn: false, owner: null });
     return out;
   });
 
+  /** Gap between a front edge and the label hanging below it. */
+  const BELOW = 4;
   function placeLabels() {
     if (!stage) return;
     const list = labels;
@@ -216,16 +219,20 @@
       if (!a) continue;
       // Plate names only read once the plates are apart; the calls lane is above them either way.
       if (l.kind === "plate" && !l.lane && explode < 0.5) continue;
-      cands.push({ id: l.id, x: a.x, y: a.y, w: l.size.w, h: l.size.h, priority: l.priority, behind: a.behind });
+      // Nameplates and port numbers hang below a front edge; everything else sits above its part.
+      // A nameplate that would overlap its neighbour's steps down a line, then another.
+      const alts = l.kind === "agent" || l.kind === "dormant" ? [l.size.h + 6, (l.size.h + 6) * 2] : undefined;
+      cands.push({ id: l.id, x: a.end ? a.x - l.size.w / 2 : a.x, y: a.below ? a.y + BELOW + l.size.h : a.y, w: l.size.w, h: l.size.h, priority: l.priority, behind: a.behind, alts });
     }
-    const shown = pickLabels(cands, { width, height, top: insets.top, bottom: insets.bottom });
+    const shown = fitLabels(cands, { width, height, top: insets.top, bottom: insets.bottom, right: insets.right ?? 0 });
     for (const l of list) {
       const el = labelEls[l.id];
       if (!el) continue;
       const a = anchors.get(l.id);
       if (!a || !shown.has(l.id)) { el.style.visibility = "hidden"; continue; }
       el.style.visibility = "visible";
-      el.style.transform = `translate(${Math.round(a.x - l.size.w / 2)}px, ${Math.round(a.y - l.size.h)}px)`;
+      const dy = shown.get(l.id) ?? 0;
+      el.style.transform = `translate(${Math.round(a.end ? a.x - l.size.w : a.x - l.size.w / 2)}px, ${Math.round((a.below ? a.y + BELOW : a.y - l.size.h) + dy)}px)`;
     }
   }
   // New label candidates need positions before the next camera move.
@@ -281,7 +288,8 @@
     if (!stage) return;
     e.preventDefault();
     interact();
-    stage.zoom(Math.exp(Math.max(-60, Math.min(60, e.deltaY)) * 0.0022));
+    // Toward the pointer, as maps do.
+    stage.zoom(Math.exp(Math.max(-60, Math.min(60, e.deltaY)) * 0.0022), local(e));
   }
   function onkey(e: KeyboardEvent) {
     if (!stage || e.target !== e.currentTarget || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -343,6 +351,9 @@
   .lbl span { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .lbl i { width: 8px; height: 8px; border-radius: 50%; background: var(--agent); }
   .lbl.k-dormant i { background: transparent; border: 1.5px dashed var(--muted); }
+  /* Port numbers: a light tag, so a row of them doesn't bury the towers behind. */
+  .lbl.k-port { padding: 0 5px; box-shadow: none; background: color-mix(in srgb, var(--surface) 78%, transparent); }
+  .lbl.k-port b { font-family: var(--mono); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); }
   .lbl.k-plate { background: transparent; border: 0; box-shadow: none; }
   .lbl.k-plate b { color: var(--text-2); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; }
   .lbl.k-hub { background: transparent; border: 0; box-shadow: none; }

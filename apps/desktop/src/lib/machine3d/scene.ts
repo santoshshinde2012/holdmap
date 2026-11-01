@@ -368,6 +368,40 @@ export function gaugeParts(scene: MachineScene, gauge: Gauge, focus: string | nu
   }
 }
 
+/** Lenses: one concern at a time. Each lights the parts it is about, dims the rest, and sets
+ *  aside the floors that would only stand in the way. */
+export const LENSES = ["all", "network", "runtime", "config", "needs", "calls"] as const;
+export type Lens = (typeof LENSES)[number];
+export const LENS_LABEL: Record<Lens, string> = { all: "All", network: "Network", runtime: "Runtime", config: "Config", needs: "Needs you", calls: "Calls" };
+export const LENS_TITLE: Record<Lens, string> = {
+  all: "Everything on this computer",
+  network: "Ports, who holds them, connections and where they go; configuration set aside",
+  runtime: "Processes, their tree and the ports they hold; configuration set aside",
+  config: "MCP servers, skills and rules on disk, and the processes running them",
+  needs: "Only what needs you, and the agents it belongs to",
+  calls: "Recorded calls, on their own shelf",
+};
+
+export function lensView(scene: MachineScene, lens: Lens): { lit: Set<string> | null; hidden: Set<Layer> } {
+  const pick = (test: (p: Part) => boolean) => new Set(scene.parts.filter(test).map((p) => p.id));
+  const along = (lit: Set<string>, kinds: readonly WireKind[]) => {
+    for (const w of scene.wires) if (kinds.includes(w.kind)) { lit.add(w.from); lit.add(w.to); }
+    return lit;
+  };
+  switch (lens) {
+    case "all": return { lit: null, hidden: new Set() };
+    case "network": return { lit: along(pick((p) => p.kind === "port" || p.kind === "remote"), ["listener", "socket"]), hidden: new Set(["config", "calls"]) };
+    case "runtime": return { lit: along(pick((p) => p.kind === "tool" || p.kind === "more" && p.layer === "runtime"), ["process", "listener"]), hidden: new Set(["config", "calls"]) };
+    case "config": return { lit: along(pick((p) => p.layer === "config"), ["running"]), hidden: new Set(["calls"]) };
+    case "needs": {
+      const lit = pick((p) => !!p.warn && p.kind !== "call");
+      for (const p of scene.parts) if (lit.has(p.id)) lit.add(p.owner);
+      return { lit, hidden: new Set() };
+    }
+    case "calls": return { lit: pick((p) => p.kind === "call"), hidden: new Set() };
+  }
+}
+
 /** One sentence about an agent, for the tour caption and the rail. */
 export function agentSummary(scene: MachineScene, id: string): string {
   const parts = scene.parts.filter((p) => p.owner === id);
