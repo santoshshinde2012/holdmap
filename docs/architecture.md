@@ -830,8 +830,11 @@ analyzer insights cached for a minute, and records CPU and attention history. `t
 turns those readings into plain data for each platform's tray limits: the stacked menu-bar
 readings, the native menu's rows, the tooltip, the badge and the popup panel's data.
 `tray/menubar.rs` (macOS) draws the readings with CoreText into a template image beside the
-icon, and `tray/badge.rs` draws the badge into the icon's pixels. When only text changed, an
-open menu's rows are updated in place; it is rebuilt only when rows change.
+icon, gives the status item an autosave name (so a `⌘`-dragged place survives restarts) and
+checks whether macOS shows it (on a screen with a camera housing, items left of it are hidden;
+elsewhere, an occluded item while the menu bar is up), which the window reports as a hint.
+`tray/badge.rs` draws the badge into the icon's pixels. When only text changed, an open menu's
+rows are updated in place; it is rebuilt only when rows change.
 
 The popup panel (`tray/panel.rs`) is a second, small window showing its own page,
 `tray.html` (`src/tray-panel/`), built as a separate entry so it doesn't load the app. It is

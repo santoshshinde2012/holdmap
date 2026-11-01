@@ -38,6 +38,8 @@ export interface SettingsModel {
   agentSettings?: boolean;
   /** Whether the desktop has holdmap's menu-bar / tray icon. */
   tray?: boolean;
+  /** False when macOS hides the menu-bar item for lack of room; null when that can't be told. */
+  trayOnScreen?: boolean | null;
 }
 
 export interface SettingsActions {

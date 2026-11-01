@@ -16,6 +16,7 @@ by [release-please](https://github.com/googleapis/release-please) from
   - **Badge:** when something needs you, a red (look now) or amber (worth a look) count on Windows and Linux, and a dot on macOS.
   - **Panel:** a click (on Linux, **Show panel** in the menu) opens a panel under the icon with how many agents are running, their CPU and dev servers in large type, a chart of the agents' CPU over the last 60 scans, a **Needs you** history grid, **Needs you** with its urgency, ports, dev servers and the busiest agents with their CPU and memory. It updates while open, follows the theme and closes on `Esc` or a click elsewhere. Rows open in the window, and **Stop all…** still opens the reviewed plan there.
   - **Menu:** the right button (any click on Linux) opens the same rows as a native menu.
+  - **Visible, or says why not:** macOS hides menu-bar items when the menu bar is full (behind the app menus, and left of a MacBook's camera notch). holdmap notices, says so once, and **Settings → Appearance → Menu bar** shows how to make room. holdmap also keeps the place you `⌘`-drag its item to.
   - **Honest figures:** CPU appears from the second scan, because it's measured between scans, and a chart once there are two samples; a flat, idle trend draws nothing rather than a row of empty bars. **Needs you** uses the same rules as Home for running agents, ports and approved analyzer findings.
 
 ### Changed

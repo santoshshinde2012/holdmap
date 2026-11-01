@@ -31,10 +31,12 @@ uuid = { version = "1", features = ["v4"] }
 libc.workspace = true
 tokio = { version = "1", features = ["sync", "time"] }
 
-# The tray panel window and its app-hidden check (already in the tree through Tauri's tray).
+# The tray panel window, the app-hidden check and the status item's place and visibility
+# (already in the tree through Tauri's tray).
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSButton", "NSControl", "NSResponder", "NSView", "NSWindow"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSButton", "NSControl", "NSMenu", "NSResponder", "NSScreen", "NSStatusBarButton", "NSStatusItem", "NSView", "NSWindow"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"

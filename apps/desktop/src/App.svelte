@@ -177,6 +177,9 @@
   const topologyAll = $derived(prefs.view === "graph" ? graphAll : filters.all);
   let selectedNode = $state<string | null>(null);
   let config = $state<Config | null>(null);
+  /** Whether macOS shows holdmap's menu-bar item (null: can't tell). */
+  let trayOnScreen = $state<boolean | null>(null);
+  let trayHiddenNoted = false;
   let configError = $state<string | null>(null);
   let configLoading = $state(false);
   let showHistory = $state(false);
@@ -607,7 +610,7 @@
   }
   const portHolder = (port: number) => { const e = snapshot?.entries.find((x) => x.port === port); return e ? `${title(e)}${e.process ? ` (PID ${e.process.pid})` : ""}` : null; };
 
-  const settingsModel = $derived<SettingsModel | null>(config ? { theme: prefs.theme, density: prefs.density, singleKeyShortcuts: prefs.singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, updater: info.updater, appPath: info.appPath, architecture: info.architecture, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length, agentSettings: prefs.inventoryOn, tray: info.tray } : null);
+  const settingsModel = $derived<SettingsModel | null>(config ? { theme: prefs.theme, density: prefs.density, singleKeyShortcuts: prefs.singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, updater: info.updater, appPath: info.appPath, architecture: info.architecture, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length, agentSettings: prefs.inventoryOn, tray: info.tray, trayOnScreen } : null);
   const settingsActions: SettingsActions = {
     setTheme: (t) => { prefs.theme = t; },
     setDensity: (d) => { prefs.density = d; },
@@ -638,6 +641,13 @@
         if (!showSettings) toast("error", "Couldn't load settings", configError, { label: "Open settings", run: () => openSettings() });
       }
     } finally { configLoading = false; }
+  }
+  /** A full menu bar hides holdmap's item without telling anyone: say so once, and in Settings. */
+  function noteTrayStatus(onScreen: boolean | null) {
+    trayOnScreen = onScreen;
+    if (onScreen !== false || trayHiddenNoted) return;
+    trayHiddenNoted = true;
+    toast("info", "macOS is hiding holdmap's menu-bar item", "The menu bar is full. Settings → Appearance shows how to make room.", { label: "Show me", run: () => openSettings("appearance") });
   }
   function openSettings(section: SettingsSection = "general") {
     if (pendingReview) cancelReview();
@@ -1224,6 +1234,7 @@
     let stopScheduler: (() => void) | null = null;
     // Loaded after first paint: the driver pulls in the Security stores, which the first screen does not need.
     void import("./lib/schedule-driver.svelte").then(({ scheduleDriver }) => scheduleDriver()).then((d) => { d.start(); stopScheduler = () => d.dispose(); }).catch((e) => console.error("Couldn't start scheduled scans", e));
+    api.trayStatus().then((s) => noteTrayStatus(s.onScreen)).catch(() => {});
     api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, tray: i.tray, configDir: i.config_dir ?? null, updater: typeof i.updater === "boolean" ? i.updater : null, appPath: i.app_path ?? null, architecture: i.architecture ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; }).catch((e) => toast("error", "Couldn't load app information", String(e)));
     api.hotkeys().then((h) => (hotkeyList = h)).catch(() => {});
     void loadConfig();
@@ -1259,6 +1270,7 @@
         openEntryById(id);
       }),
       api.onEvent<Config>("config-changed", (c) => { config = c; }),
+      api.onEvent<{ onScreen: boolean | null }>("tray-status", (s) => noteTrayStatus(s.onScreen)),
       api.onEvent("refresh", () => refresh()),
       api.onEvent("stop-all-dev", () => { if (!confirm) requestStopAllDev(); }),
       api.onEvent<{ version: string; notes: string | null }>("update-available", (u) => {

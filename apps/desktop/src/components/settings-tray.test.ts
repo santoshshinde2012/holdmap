@@ -55,4 +55,16 @@ describe("Menu bar / tray widget setting", () => {
       cleanup();
     }
   });
+
+  it("says when macOS hides the menu-bar item for lack of room, and how to make room", () => {
+    const hidden = mount({ trayOnScreen: false });
+    expect(hidden.getByText("macOS is hiding holdmap's menu-bar item")).toBeTruthy();
+    expect(hidden.getByText(/The menu bar is full/).textContent).toContain("camera notch");
+    cleanup();
+    for (const trayOnScreen of [true, null, undefined]) {
+      const view = mount({ trayOnScreen });
+      expect(view.queryByText("macOS is hiding holdmap's menu-bar item")).toBeNull();
+      cleanup();
+    }
+  });
 });

@@ -64,6 +64,11 @@ struct Widget {
     shown: TrayView,
     /// One per row of `shown.items`, in [`model::flatten`] order.
     handles: Vec<Handle>,
+    /// Whether macOS shows the menu-bar item (`None`: can't tell, or not macOS).
+    on_screen: Option<bool>,
+    /// The item's place is remembered (macOS), set once the tray is up.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    placed: bool,
 }
 
 /// The widget's state. Only background threads lock it: tray calls wait for the main thread,
@@ -233,6 +238,48 @@ fn render(app: &AppHandle, readings: Option<Readings>, resync: bool) {
     }
     let next = model::view(w.readings.as_ref(), &w.trends, style, Platform::CURRENT);
     apply(app, &tray, &mut w, next, resync);
+    #[cfg(target_os = "macos")]
+    {
+        let placed = w.placed;
+        let on_screen = tray
+            .with_inner_tray_icon(move |t| {
+                let mtm = objc2::MainThreadMarker::new()?;
+                let item = t.ns_status_item()?;
+                if !placed {
+                    menubar::remember_place(&item);
+                }
+                menubar::shown(&item, mtm)
+            })
+            .ok()
+            .flatten();
+        w.placed = true;
+        if on_screen != w.on_screen {
+            w.on_screen = on_screen;
+            // The window says so: a full menu bar hides new items without telling anyone.
+            let _ = app.emit("tray-status", TrayStatus { on_screen });
+        }
+    }
+}
+
+/// Whether macOS shows holdmap's menu-bar item.
+#[derive(Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrayStatus {
+    /// `false` when macOS hides it for lack of room; `null` when that can't be told.
+    on_screen: Option<bool>,
+}
+
+/// The menu-bar item's status, for the window's Settings.
+#[tauri::command]
+pub async fn tray_status(app: AppHandle) -> TrayStatus {
+    let on_screen = app.try_state::<TrayWidget>().and_then(|widget| {
+        widget
+            .widget
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .on_screen
+    });
+    TrayStatus { on_screen }
 }
 
 /// Update the widget from a scan: the agents come from the same scan, the needs from the same
@@ -390,6 +437,8 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
             trends: Trends::default(),
             shown: first,
             handles,
+            on_screen: None,
+            placed: false,
         }),
         insights: Mutex::new(None),
     });

@@ -447,6 +447,13 @@ export async function hotkeys(): Promise<{ id: string; label: string }[]> {
   return call("hotkeys");
 }
 
+/** Whether macOS shows holdmap's menu-bar item: false when a full menu bar hides it, null when
+ * that can't be told (the browser, other platforms, or a hidden menu bar). */
+export async function trayStatus(): Promise<{ onScreen: boolean | null }> {
+  if (!isTauri) return { onScreen: null };
+  return call("tray_status");
+}
+
 /** Switch the global shortcut; resolves to the active label (null when off). */
 export async function setHotkey(preset: string): Promise<string | null> {
   if (!isTauri) {

@@ -165,6 +165,13 @@
               {/snippet}
             </SettingRow>
           </SettingsGroup>
+          {#if model.trayOnScreen === false}
+            <div class="err">
+              <Callout tone="warn" size="sm" title="macOS is hiding holdmap's menu-bar item">
+                The menu bar is full, so macOS puts new items behind the app menus{model.platform === "macos" ? " and the camera notch" : ""}. Hold <Kbd keys={["⌘"]} size="sm" /> and drag a few icons out of the menu bar; holdmap appears, and you can <Kbd keys={["⌘"]} size="sm" />-drag it where you want it. holdmap keeps that place.
+              </Callout>
+            </div>
+          {/if}
           {#if errors.trayStyle}<div class="err"><Callout tone="danger" size="sm">{errors.trayStyle}</Callout></div>{/if}
         {/if}
         {#if model.singleKeyShortcuts}<p class="tip"><Kbd keys={["⇧", "L"]} size="sm" /> cycles the theme while you aren't typing.</p>{/if}

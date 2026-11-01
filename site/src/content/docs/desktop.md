@@ -145,6 +145,14 @@ back a window you closed. On Linux the icon needs a desktop with AppIndicator su
 GNOME, the AppIndicator extension); Linux trays show no tooltip and report no clicks, so the
 panel opens from the menu.
 
+**Don't see holdmap in the menu bar?** When the menu bar is full, macOS puts new items behind
+the frontmost app's menus, and on a MacBook nothing to the left of the camera notch is shown.
+holdmap notices and says so once, and **Settings → Appearance → Menu bar** explains it while it
+lasts. Hold `⌘` and drag a few icons out of the menu bar; holdmap appears, and you can
+`⌘`-drag it where you want it. holdmap keeps that place. On Windows 11, new tray icons start
+in the hidden icons area (`^`): drag holdmap onto the taskbar, or turn it on under
+**Settings → Personalization → Taskbar → Other system tray icons**.
+
 ## Service graph and cluster grouping
 
 Choose **Graph** to see connections between services, or choose **Cluster** in the list's

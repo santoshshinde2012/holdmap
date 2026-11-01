@@ -81,6 +81,7 @@ pub fn run() {
         .invoke_handler(local_window::guard(tauri::generate_handler![
             tray::panel::tray_panel,
             tray::panel::tray_action,
+            tray::tray_status,
             commands::app_info,
             commands::scan,
             commands::topology,

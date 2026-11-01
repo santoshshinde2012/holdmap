@@ -5,6 +5,9 @@
 
 use super::badge::Pixels;
 use super::model::MenuBar;
+use objc2::runtime::NSObjectProtocol;
+use objc2::{sel, MainThreadMarker};
+use objc2_app_kit::{NSMenu, NSStatusItem, NSWindowOcclusionState};
 use std::ffi::c_void;
 
 type Ref = *const c_void;
@@ -322,6 +325,37 @@ pub fn render(icon: &Pixels, bar: &MenuBar) -> Pixels {
         width: pw as u32,
         height: ph as u32,
     }
+}
+
+/// Keep the item where the user ⌘-drags it, across restarts. Without a name macOS forgets the
+/// place, and a new item starts at the far left: the first place it runs out of room.
+pub fn remember_place(item: &NSStatusItem) {
+    item.setAutosaveName(Some(&objc2_foundation::NSString::from_str("holdmap")));
+}
+
+/// Whether macOS shows the item. A full menu bar pushes new items left, behind the frontmost
+/// app's menus, and on a screen with a camera housing nothing left of it is shown. `None` while
+/// the menu bar itself is hidden (fullscreen, or set to hide), when it can't be told.
+pub fn shown(item: &NSStatusItem, mtm: MainThreadMarker) -> Option<bool> {
+    if !NSMenu::menuBarVisible(mtm) {
+        return None;
+    }
+    let window = item.button(mtm)?.window()?;
+    let frame = window.frame();
+    if let Some(screen) = window.screen() {
+        // macOS 12+: the menu bar to the right of the camera housing (empty without one).
+        if screen.respondsToSelector(sel!(auxiliaryTopRightArea)) {
+            let right = screen.auxiliaryTopRightArea();
+            if right.size.width > 0.0 {
+                return Some(frame.origin.x >= right.origin.x - 1.0);
+            }
+        }
+    }
+    Some(
+        window
+            .occlusionState()
+            .contains(NSWindowOcclusionState::Visible),
+    )
 }
 
 #[cfg(test)]
