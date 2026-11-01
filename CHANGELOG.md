@@ -31,6 +31,7 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Fixed
 
+- The tray panel no longer scrolls its whole document when opening a menu-bar section, which displaced the header and footer and left a large blank area. Only the readings scroll; a compact footer keeps Open holdmap, Quick settings, Refresh and Quit available. Native WKWebView checks cover section changes, polling, settings and keyboard focus.
 - Home's Map shows once its layout is final, so its labels no longer jump as it opens, and lays labels out from their real width in the font they're drawn in, so they don't overlap on any platform.
 - `Esc` closes a port's menu, and every other action menu, even in the instant after it opens, before focus has moved into it.
 - Choices such as Home / List / Graph switch at once instead of fading their fill and text together, which passed through frames where the label couldn't be read against its background.

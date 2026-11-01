@@ -65,7 +65,11 @@ describe("Tray panel", () => {
 
   it("opens at the section of the menu-bar item clicked, once per click", async () => {
     const scrolled: string[] = [];
-    Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this.getAttribute("data-section") ?? ""); };
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const section = this.getAttribute("data-section");
+      if (section) scrolled.push(section);
+      return { top: 0 } as DOMRect;
+    });
     let data = { ...demoPanel(), focus: "dev", focusSeq: 1 };
     const view = render(TrayPanel, { load: async () => data, run: vi.fn(), poll: 20 });
     await waitFor(() => expect(scrolled).toEqual(["dev"]));

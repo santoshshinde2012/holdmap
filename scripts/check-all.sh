@@ -59,6 +59,7 @@ if [[ "$(uname -s)" == Linux ]]; then
   xvfb-run -a env HOLDMAP_X11_TEST=1 \
     cargo test -p holdmap-desktop --locked --test hotkey_x11 -- --include-ignored --test-threads=1
 elif [[ "$(uname -s)" == Darwin ]]; then
+  python3 scripts/check-tray-panel-runtime.py
   python3 scripts/check-updater-runtime.py
   python3 scripts/check-screen-recording-runtime.py
   python3 scripts/check-screen-recording-runtime.py --app-ui

@@ -153,8 +153,9 @@ monitor for your agents and dev servers, on macOS, Windows and Linux.
   It keeps updating while it's open, follows your theme and closes when you click elsewhere or
   press `Esc`; the pin button keeps it open. Choose an item, a dev server or an agent to open
   it in the window. **Stop all…** opens the stop plan in the window; nothing is stopped from
-  the panel. The fixed footer keeps **Open holdmap**, **Quit**, **Refresh** and **Quick settings**
-  within reach while the readings scroll. Quick settings offers System / Light / Dark themes,
+  the panel. The fixed header and compact footer stay in place while only the readings scroll,
+  including when switching menu-bar items. The footer offers **Open holdmap** and named icon
+  buttons for **Quick settings**, **Refresh**, and **Quit** (hover for labels). Quick settings offers System / Light / Dark themes,
   the widgets available on your desktop, combining menu-bar items and Dock visibility on macOS,
   and desktop notifications. **All settings** opens the full Settings window. Press `Esc` once
   to return from quick settings to the overview.

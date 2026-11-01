@@ -45,6 +45,12 @@ test("every tray panel row is a keyboard-reachable button", async ({ page }) => 
   expect(names).toContain("Stop all…");
   expect(names.some((n) => n.startsWith(":3000"))).toBe(true);
   expect(names.some((n) => n.startsWith("Claude Code · storefront"))).toBe(true);
+  for (const name of ["Quick settings", "Refresh", "Quit"]) {
+    const button = page.getByRole("button", { name, exact: true });
+    await button.focus();
+    await expect(button).toBeFocused();
+    await expect(button).toBeInViewport();
+  }
 });
 
 for (const height of [480, 600, 720]) {
@@ -65,9 +71,46 @@ for (const height of [480, 600, 720]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
     const { violations } = await new AxeBuilder({ page }).analyze();
     expect(violations.map(v => v.id)).toEqual([]);
-    if (process.env.HOLDMAP_UPDATE_SCREENSHOTS && height === 600) await page.screenshot({ path: "../../docs/screenshots/desktop-tray-settings-dark.png" });
+    if (process.env.HOLDMAP_UPDATE_SCREENSHOTS && height === 600) {
+      await page.locator(".settings").evaluate(el => el.scrollTop = 0);
+      await page.screenshot({ path: "../../docs/screenshots/desktop-tray-settings-dark.png" });
+    }
     await page.keyboard.press("Escape");
     await expect(page.getByRole("button", { name: /Quick settings/ })).toBeFocused();
     await expect(page.locator(".body").first()).toBeVisible();
   });
 }
+
+test("menu-bar section changes scroll only the readings, never the window chrome", async ({ page }) => {
+  const { demoPanel } = await import("../src/lib/tray-panel");
+  await page.setViewportSize({ width: 360, height: 600 });
+  await page.addInitScript((data) => {
+    const fixture = window as unknown as { panelData: typeof data; seenSeq: number; __TAURI_INTERNALS__: unknown };
+    fixture.panelData = data;
+    fixture.__TAURI_INTERNALS__ = { invoke: async (command: string) => {
+      fixture.seenSeq = fixture.panelData.focusSeq;
+      return command === "tray_panel" ? structuredClone(fixture.panelData) : undefined;
+    } };
+  }, demoPanel());
+  await page.goto("/tray.html");
+  await expect(page.getByRole("heading", { name: "holdmap" })).toBeVisible();
+  for (const [i, section] of ["agents", "needs", "dev", "cpu", "top", "agents"].entries()) {
+    await page.evaluate(({ section, seq }) => {
+      const fixture = window as unknown as { panelData: { focus: string; focusSeq: number } };
+      fixture.panelData.focus = section;
+      fixture.panelData.focusSeq = seq;
+    }, { section, seq: i + 1 });
+    await expect.poll(() => page.evaluate(() => (window as unknown as { seenSeq: number }).seenSeq)).toBe(i + 1);
+    await expect(page.locator(`[data-section="${section}"]`)).toBeInViewport();
+    const bounds = await page.evaluate(() => ({
+      head: document.querySelector(".head")!.getBoundingClientRect().top,
+      foot: document.querySelector(".foot")!.getBoundingClientRect().bottom,
+      root: document.scrollingElement!.scrollTop,
+      height: innerHeight,
+    }));
+    expect(bounds.root, section).toBe(0);
+    expect(bounds.head, section).toBe(0);
+    expect(bounds.foot, section).toBe(bounds.height);
+    await expect(page.getByRole("button", { name: "Quit", exact: true })).toBeInViewport();
+  }
+});

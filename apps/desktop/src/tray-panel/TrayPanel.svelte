@@ -2,7 +2,7 @@
   // The tray popup panel: live readings, the agents' CPU history, an attention history and the
   // lists a system monitor's popover shows, for holdmap's own data. Every row runs a tray action
   // id from the data; stops still open the reviewed plan in the main window.
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
   import { applyTheme, savedTheme, THEMES } from "./theme";
   import { prefSet } from "../lib/prefs";
   import { humanBytes } from "../lib/format";
@@ -15,6 +15,8 @@
 
   let data = $state<PanelData | null>(null);
   let failed = $state(false);
+  let readings: HTMLDivElement;
+  let refreshing = false;
   let settingsOpen = $state(false);
   let busy = $state(false);
   let actionError = $state("");
@@ -24,7 +26,7 @@
     busy = true;
     actionError = "";
     try { await run(action); await refresh(); }
-    catch { actionError = "Couldn’t save that setting. Please try again."; }
+    catch { actionError = action === "refresh" ? "Couldn’t refresh. Please try again." : "Couldn’t save that setting. Please try again."; }
     finally { busy = false; }
   }
   async function chooseTheme(next: typeof theme) {
@@ -37,13 +39,14 @@
   let timer: ReturnType<typeof setInterval> | undefined;
 
   async function refresh() {
-    if (document.visibilityState === "hidden") return;
+    if (document.visibilityState === "hidden" || refreshing) return;
+    refreshing = true;
     try {
       data = await load();
       failed = false;
     } catch {
       failed = true;
-    }
+    } finally { refreshing = false; }
   }
   function onKey(e: KeyboardEvent) {
     if (e.key === "Escape" && !e.isComposing) {
@@ -83,7 +86,15 @@
     if (!data?.focus || data.focusSeq === shownSeq) return;
     settingsOpen = false;
     shownSeq = data.focusSeq;
-    document.querySelector(`[data-section="${data.focus}"]`)?.scrollIntoView({ block: "start" });
+    const section = data.focus;
+    // scrollIntoView also scrolls the document (even with overflow:hidden), which moves the
+    // entire popup upward in WKWebView. Only the readings viewport may move. Wait for a
+    // settings-to-overview switch to finish before measuring its section.
+    void tick().then(() => {
+      const target = Array.from(readings.querySelectorAll<HTMLElement>("[data-section]"))
+        .find(el => el.dataset.section === section);
+      if (target) readings.scrollTop += target.getBoundingClientRect().top - readings.getBoundingClientRect().top;
+    });
   });
   async function pin() {
     await run("pin-panel");
@@ -91,7 +102,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} onfocus={() => theme = savedTheme()} onstorage={() => theme = savedTheme()} />
 
 <main class="panel" aria-label="holdmap at a glance">
   <header class="head">
@@ -107,7 +118,7 @@
     </span>
   </header>
 
-  <div class="body" hidden={settingsOpen}>
+  <div class="body" bind:this={readings} hidden={settingsOpen}>
     {#if failed && data}<p class="empty" role="status">Readings may be out of date. Reconnecting…</p>{/if}
     {#if failed && !data}
       <p class="empty">Couldn't read the latest scan. It will try again in a moment.</p>
@@ -283,25 +294,28 @@
         {/if}
         <button type="button" class="setting-row" role="switch" aria-checked={settings.notify} disabled={busy} onclick={() => changeSetting("notify")}><span>Desktop notifications</span><span class="switch" class:checked={settings.notify} aria-hidden="true"></span></button>
       {/if}
-      {#if actionError}<p class="empty" role="alert">{actionError}</p>{/if}
     </section>
   {/if}
 
-  <footer class="foot">
-    <div class="footer-tools">
-      <button id="quick-settings-toggle" type="button" class="settings-toggle" aria-expanded={settingsOpen} onclick={() => settingsOpen = !settingsOpen}>⚙ {settingsOpen ? "Back to overview" : "Quick settings"}</button>
-      <button type="button" class="link" onclick={() => changeSetting("refresh")} disabled={busy}>Refresh</button>
-    </div>
-    <div class="footer-actions">
-    <button type="button" class="btn primary" onclick={() => run("show")}>Open holdmap</button>
-    <button type="button" class="btn" onclick={() => run("quit")}>Quit</button>
-    </div>
+  <footer class="foot" aria-label="Panel actions">
+    {#if actionError}<p class="action-error" role="alert">{actionError}</p>{/if}
+    <button type="button" class="btn primary" onclick={() => run("show")}>Open holdmap <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5" /></svg></button>
+    <span class="footer-divider" aria-hidden="true"></span>
+    <button id="quick-settings-toggle" type="button" class="icon-btn" class:on={settingsOpen} aria-label={settingsOpen ? "Back to overview" : "Quick settings"} title={settingsOpen ? "Back to overview" : "Quick settings"} aria-expanded={settingsOpen} onclick={() => settingsOpen = !settingsOpen}>
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6M16 14v6" /></svg>
+    </button>
+    <button type="button" class="icon-btn" aria-label="Refresh" title="Refresh readings" onclick={() => changeSetting("refresh")} disabled={busy}>
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1" /></svg>
+    </button>
+    <button type="button" class="icon-btn quit" aria-label="Quit" title="Quit holdmap" onclick={() => run("quit")}>
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M12 3v9M7 5.5a8 8 0 1 0 10 0" /></svg>
+    </button>
   </footer>
 </main>
 
 <style>
-  .panel { display: flex; flex-direction: column; height: 100dvh; min-height: 0; overflow: hidden; background: var(--surface); color: var(--text); font-variant-numeric: tabular-nums; }
-  .head { flex-shrink: 0; display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; padding: 28px 16px 8px; -webkit-user-select: none; user-select: none; }
+  .panel { position: fixed; inset: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; background: var(--surface); color: var(--text); font-variant-numeric: tabular-nums; }
+  .head { display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; padding: 26px 16px 10px; border-bottom: 1px solid var(--border); -webkit-user-select: none; user-select: none; }
   .tools { display: flex; justify-content: flex-end; gap: 4px; }
   .icon-btn.on { color: var(--accent); background: var(--accent-soft); }
   .ports { display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: center; }
@@ -319,7 +333,7 @@
   .churn .closed { fill: var(--tone-amber); }
   .logo { border-radius: 4px; }
   h1 { margin: 0; text-align: center; font-size: var(--fs-title); line-height: var(--lh-title); font-weight: var(--fw-semibold); letter-spacing: var(--ls-title); }
-  .body { flex: 1 1 0; min-height: 0; overscroll-behavior: contain; scrollbar-gutter: stable; overflow-y: auto; padding: 4px 16px 12px; }
+  .body { min-height: 0; overscroll-behavior: contain; overflow-y: auto; padding: 4px 16px 12px; }
   .hero { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 0 4px; text-align: center; }
   .figure { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); padding: 10px 2px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .value { display: flex; align-items: baseline; justify-content: center; height: 32px; font-size: var(--fs-display); line-height: var(--lh-display); font-weight: var(--fw-regular); letter-spacing: var(--ls-display); }
@@ -371,11 +385,12 @@
   .link.more { align-self: flex-start; margin-top: 4px; padding-left: 0; }
   .icon-btn { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: var(--r-sm); background: none; color: var(--text-2); cursor: pointer; }
   .icon-btn:hover { background: var(--row-hover); }
-  .foot { flex: 0 0 auto; padding: 8px 16px 12px; border-top: 1px solid var(--border); background: var(--surface); }
-  .footer-actions { display: flex; gap: 8px; }
-  .footer-tools { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .settings-toggle { padding: 4px 0; border: 0; background: none; color: var(--text-2); cursor: pointer; font-size: var(--fs-body-sm); }
-  .settings-toggle:hover { color: var(--accent); }
+  .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 16px 12px; border-top: 1px solid var(--border); background: var(--surface); }
+  .action-error { flex-basis: 100%; margin: 0 0 4px; font-size: var(--fs-body-sm); color: var(--danger); }
+  .footer-divider { width: 1px; height: 20px; margin: 0 2px; background: var(--border); }
+  .foot .icon-btn { width: 30px; height: 32px; flex: none; }
+  .foot svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .quit:hover { color: var(--danger); background: var(--danger-soft, var(--surface-2)); }
   .settings-heading { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
   .settings-heading h2 { margin: 0; font-size: var(--fs-heading); }
   .theme-options { display: flex; gap: 4px; padding: 4px; background: var(--surface-2); border-radius: var(--r-md); }
@@ -388,9 +403,9 @@
   .switch.checked { background: var(--accent); }
   .switch.checked::after { transform: translateX(12px); }
   button:disabled { cursor: wait; opacity: .6; }
-  .settings button:focus-visible, .settings-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .settings button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   .body[hidden] { display: none; }
-  .btn { flex: 1; height: 30px; border: 1px solid var(--input-border); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; font-weight: var(--fw-medium); cursor: pointer; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: 1; height: 32px; border: 1px solid var(--input-border); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; font-weight: var(--fw-medium); cursor: pointer; }
   .btn:hover { border-color: var(--input-border-hover); }
   .btn.primary { flex: 2; border-color: transparent; background: var(--accent); color: var(--accent-fg); }
   .btn.primary:hover { background: var(--accent-hover); }
