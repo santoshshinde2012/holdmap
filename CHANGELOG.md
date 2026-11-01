@@ -6,7 +6,30 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
-## [0.13.0] - 2026-11-01
+## [0.13.1] - 2026-11-01
+
+The first published release after 0.12.0 brings all the features and security fixes prepared
+under the unpublished 0.13.0 tag:
+
+- **3D Home:** agent districts, memory towers, CPU gauges, runtime/configuration layers, lenses and X-ray inspection.
+- **Live menu bar and tray:** configurable readings, charts, attention history and quick settings in a compact panel with a fixed toolbar.
+- **Focused workspaces and capture:** folding Home panels, plus snapshots and recordings of a selected window area.
+- **Security and polish:** patched Windows updater ZIP parsing, removal of advisory exceptions, safe deepmerge tooling, settled map labels and reliable Escape handling.
+- **Analyzer fixes:** empty OSV and skill scans finish with a clear “nothing to check” result.
+
+The dependency updates from PRs #124 and #126 are consolidated here, including sysinfo 0.40.1,
+saphyr-parser 0.3.3, current compatible Rust patches, mediabunny 1.65.0, three.js/types 0.187.0,
+Astro 7.4.4 and lucide-static 1.66.0. Fallible process backend initialization now produces an
+incomplete-collection warning; safety rechecks continue to reject missing process identities.
+The updated recording implementation uses a 175 KiB on-demand JavaScript budget.
+
+The detailed feature notes follow under 0.13.0 below.
+
+### Fixed
+
+- Release CLI builds explicitly use supported macOS 15 runners for Apple silicon and Intel. The immutable 0.13.0 tag could not publish because GitHub cancelled its macOS 14 runner during the final retirement brownout; 0.13.1 ships the 3D Home, tray, capture and security changes prepared for that tag.
+
+## [0.13.0] - 2026-11-01 (unpublished)
 
 ### Added
 

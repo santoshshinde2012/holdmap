@@ -1,6 +1,6 @@
 ---
 title: What's new
-description: "What's new in holdmap 0.13.0: 3D Home, live menu-bar widgets, folding panels and precise area capture."
+description: "What's new in holdmap 0.13.1: 3D Home, live menu-bar widgets, folding panels and precise area capture."
 order: 1.5
 ---
 
@@ -8,9 +8,12 @@ The [changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG
 every change, and [releases](https://github.com/santoshshinde2012/holdmap/releases) has the
 notes for each version.
 
-## 0.13.0
+## 0.13.1
 
-**holdmap 0.13.0** adds new ways to understand your agents and focus your workspace.
+The 0.13.0 tag was not published because its macOS release runner was retired. **0.13.1**
+uses supported runners and ships all the features and security fixes prepared for that tag.
+
+**holdmap 0.13.1** adds new ways to understand your agents and focus your workspace.
 
 - **Home in 3D.** Each agent gets a district with memory towers, CPU gauges, ports, runtime
   and configuration layers. Lenses, exploded views and X-ray reveal the evidence behind

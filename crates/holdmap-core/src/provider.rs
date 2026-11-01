@@ -17,8 +17,8 @@ pub trait SocketProvider: Send + Sync {
 
 /// Captures the process table.
 pub trait ProcessProvider: Send + Sync {
-    /// A snapshot of every process.
-    fn processes(&self) -> ProcessTable;
+    /// A snapshot of every process, or a backend error reported as incomplete collection.
+    fn processes(&self) -> io::Result<ProcessTable>;
 }
 
 /// Published container ports, and whether any runtime answered.
@@ -54,10 +54,12 @@ impl SystemProcesses {
 }
 
 impl ProcessProvider for SystemProcesses {
-    fn processes(&self) -> ProcessTable {
+    fn processes(&self) -> io::Result<ProcessTable> {
         let mut guard = self.sys.lock().unwrap_or_else(|e| e.into_inner());
-        let sys = guard.get_or_insert_with(System::new);
-        ProcessTable::capture_with(sys)
+        if guard.is_none() {
+            *guard = Some(System::new().map_err(io::Error::other)?);
+        }
+        ProcessTable::capture_with(guard.as_mut().expect("initialized above"))
     }
 }
 
@@ -86,8 +88,8 @@ impl SocketProvider for StaticSockets {
 pub struct StaticProcesses(pub ProcessTable);
 
 impl ProcessProvider for StaticProcesses {
-    fn processes(&self) -> ProcessTable {
-        self.0.clone()
+    fn processes(&self) -> io::Result<ProcessTable> {
+        Ok(self.0.clone())
     }
 }
 

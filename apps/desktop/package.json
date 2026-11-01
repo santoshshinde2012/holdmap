@@ -1,7 +1,7 @@
 {
   "name": "holdmap-desktop",
   "private": true,
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "holdmap desktop and tray app",
   "type": "module",
   "license": "MIT OR Apache-2.0",
@@ -29,9 +29,9 @@
     "@tauri-apps/api": "^2",
     "@xyflow/svelte": "^1.7.0",
     "gifenc": "^1.0.3",
-    "mediabunny": "^1.62.0",
+    "mediabunny": "^1.65.0",
     "modern-screenshot": "4.7.0",
-    "three": "0.186.1"
+    "three": "0.187.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
@@ -42,7 +42,7 @@
     "@testing-library/user-event": "^14.6.8",
     "@tsconfig/svelte": "^5",
     "@types/node": "^22.20.5",
-    "@types/three": "0.186.0",
+    "@types/three": "0.187.0",
     "deepmerge": "file:./vendor/deepmerge",
     "jsdom": "^30.1.3",
     "svelte": "^5",

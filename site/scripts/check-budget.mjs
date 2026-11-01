@@ -102,8 +102,9 @@ const rows = [
   ["Run progress JS (on Run)", [...runDockDemoFiles].reduce((n, f) => n + gz(f), 0), 4 * 1024],
   // three.js (~133 KB of WebGL renderer, geometry and materials) plus the scene, layout and stage.
   ["Home 3D JS (on 3D)", [...machine3dDemoFiles].reduce((n, f) => n + gz(f), 0), 168 * 1024],
-  // +2 KB for the capture area picker, loaded when Part of the window is chosen.
-  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 174 * 1024],
+  // +2 KB for the capture area picker; +1 KB for mediabunny 1.65’s updated recording
+  // implementation. These chunks load on demand; the initial-import budget is separate.
+  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 175 * 1024],
   ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];
 
