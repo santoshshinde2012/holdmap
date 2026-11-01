@@ -31,10 +31,14 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Fixed
 
+- Home's Map shows once its layout is final, so its labels no longer jump as it opens, and lays labels out from their real width in the font they're drawn in, so they don't overlap on any platform.
+- `Esc` closes a port's menu, and every other action menu, even in the instant after it opens, before focus has moved into it.
+- Choices such as Home / List / Graph switch at once instead of fading their fill and text together, which passed through frames where the label couldn't be read against its background.
 - The "skill changed since you trusted it" alert in **Needs you** no longer collapses over the first item when the list is long; the list now scrolls inside its panel.
 
 ### Security
 
+- The desktop build no longer uses the npm `deepmerge` package, every release of which is affected by GHSA-gcqx-w48m-w2h4 (prototype poisoning, no fix). A replacement with the same API that never lets a merged key reach a prototype (`apps/desktop/vendor/deepmerge`, see `vendor/README.md`) is installed in its place, so `npm audit` is clean.
 - A recorded area reaches the macOS recorder only after Rust checks it (finite, whole points, at least 32 each way, inside window bounds; nothing but the four sides is accepted), and the recorder still captures only its own window.
 - The panel is its own small page (`tray.html`) in its own window. `local_window::guard` lets that window call only `tray_panel` (read its data) and `tray_action` (run an action id the tray menu also offers), and only from the bundled page; it has no capabilities, and every other command still requires the main window.
 

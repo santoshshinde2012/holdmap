@@ -40,10 +40,16 @@
     else if (e.key === "Tab") close(false);
   }
   function outside(e: PointerEvent) { if (!menu?.contains(e.target as Node) && !anchor.contains(e.target as Node)) close(false); }
+  // Esc closes the menu wherever focus is, including the frame before focus moves into it, and
+  // before the same key reaches anything under the menu (one Esc, one step).
+  function escape(e: KeyboardEvent) {
+    if (e.key !== "Escape" || isComposingKey(e) || e.altKey || e.ctrlKey || e.metaKey) return;
+    e.preventDefault(); e.stopPropagation(); close();
+  }
   function run(fn: () => void) { fn(); close(false); }
 </script>
 
-<svelte:window onpointerdown={outside} onresize={() => close(false)} />
+<svelte:window onpointerdown={outside} onresize={() => close(false)} onkeydowncapture={escape} />
 
 <!-- svelte-ignore a11y_interactive_supports_focus -->
 <div class="menu" role="menu" aria-label=":{entry.port} {name}" tabindex="-1" bind:this={menu} onkeydown={key}

@@ -144,7 +144,9 @@ test("map labels never overlap and remote hosts fold into one expandable chip", 
   await expect(chip).toHaveAttribute("aria-expanded", "false");
   await chip.click();
   await expect(map.getByRole("button", { name: /^Remote host .*2001:db8/ }).first()).toBeVisible();
-  expect(await overlapping()).toEqual([]);
+  // What people see once the expanded group has drawn (the first frame after the DOM update can
+  // still report the previous boxes).
+  await expect.poll(overlapping).toEqual([]);
   const hide = map.getByRole("button", { name: /^Hide 6 remote hosts/ });
   await expect(hide).toHaveAttribute("aria-expanded", "true");
   await hide.click();

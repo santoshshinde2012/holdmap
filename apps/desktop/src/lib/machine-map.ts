@@ -92,11 +92,17 @@ export function radialLayout(agents: Agent[], inner = MAP_RINGS.inner, outer = M
   });
 }
 
-/** A node's label box (node marker included), estimated like `mapBounds`. */
-export function labelBox(n: Placed<FootprintNode>, k = 1): Box {
+/** A label's text width in CSS pixels at scale 1. The map measures it in the font it draws with;
+ *  `estimateWidth` (~7 px a character) stands in where it can't, as in tests. */
+export type TextWidth = (text: string, kind: "label" | "sub" | "agent") => number;
+export const estimateWidth: TextWidth = (text) => text.length * 7.2;
+const textWidth = (n: FootprintNode, width: TextWidth) => Math.max(width(n.label, "label"), n.sub ? width(n.sub, "sub") : 0);
+
+/** A node's label box (node marker included), as `mapBounds` sizes it. */
+export function labelBox(n: Placed<FootprintNode>, k = 1, width: TextWidth = estimateWidth): Box {
   // A count chip is wider than a dot (22 vs 16) and pushes its label out by the difference.
   const dot = n.item.count ? 12 : 8;
-  const w = (14 + (dot - 8) + Math.max(n.item.label.length, n.item.sub?.length ?? 0) * CHAR) * k;
+  const w = (14 + (dot - 8) + textWidth(n.item, width)) * k;
   const top = n.y - 10 * k, h = (n.item.sub ? 28 : 16) * k;
   return Math.cos(n.angle) >= -0.01 ? { x: n.x - dot * k, y: top, w: w + dot * k, h } : { x: n.x - w, y: top, w: w + dot * k, h };
 }
@@ -105,13 +111,13 @@ const overlaps = (a: Box, b: Box, gap: number) => a.x < b.x + b.w && b.x < a.x +
 
 /** Moves footprint nodes apart vertically until no two label boxes overlap (or `rounds` runs
  *  out). Positions change, sides don't, so each label keeps reading away from its agent. */
-export function avoidCollisions(groups: ReturnType<typeof radialLayout>, k = 1, gap = 4, rounds = 80): ReturnType<typeof radialLayout> {
+export function avoidCollisions(groups: ReturnType<typeof radialLayout>, k = 1, gap = 4, rounds = 80, width: TextWidth = estimateWidth): ReturnType<typeof radialLayout> {
   const out = groups.map((g) => ({ ...g, nodes: g.nodes.map((n) => ({ ...n })) }));
   const all = out.flatMap((g) => g.nodes);
   for (let round = 0; round < rounds; round++) {
     let moved = false;
     for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
-      const a = all[i], b = all[j], ba = labelBox(a, k), bb = labelBox(b, k);
+      const a = all[i], b = all[j], ba = labelBox(a, k, width), bb = labelBox(b, k, width);
       if (!overlaps(ba, bb, gap)) continue;
       const [upper, lower] = ba.y <= bb.y ? [a, b] : [b, a];
       const [ub, lb] = upper === a ? [ba, bb] : [bb, ba];
@@ -125,24 +131,24 @@ export function avoidCollisions(groups: ReturnType<typeof radialLayout>, k = 1, 
 }
 
 /** Whether any two label boxes overlap (tests and debugging). */
-export function hasCollisions(groups: ReturnType<typeof radialLayout>, k = 1, gap = 0): boolean {
-  const boxes = groups.flatMap((g) => g.nodes.map((n) => labelBox(n, k)));
+export function hasCollisions(groups: ReturnType<typeof radialLayout>, k = 1, gap = 0, width: TextWidth = estimateWidth): boolean {
+  const boxes = groups.flatMap((g) => g.nodes.map((n) => labelBox(n, k, width)));
   return boxes.some((a, i) => boxes.some((b, j) => j > i && overlaps(a, b, gap)));
 }
 
 export interface Box { x: number; y: number; w: number; h: number }
 const CHAR = 7.2;
 
-/** Fits the view box to what's drawn, labels included (estimated at ~7px per character and scaled
- *  by `k`, the label counter-scale), so edge labels never clip and the map stays centred. */
-export function mapBounds(groups: ReturnType<typeof radialLayout>, k = 1, pad = 24): Box {
+/** Fits the view box to what's drawn, labels included (their widths scaled by `k`, the label
+ *  counter-scale), so edge labels never clip and the map stays centred. */
+export function mapBounds(groups: ReturnType<typeof radialLayout>, k = 1, pad = 24, width: TextWidth = estimateWidth): Box {
   let x0 = -110, x1 = 110, y0 = -40, y1 = 40;
   for (const g of groups) {
-    const half = (Math.max(g.agent.name.length, 10) * CHAR * k) / 2;
+    const half = (Math.max(width(g.agent.name, "agent"), 10 * CHAR) * k) / 2;
     x0 = Math.min(x0, g.x - half); x1 = Math.max(x1, g.x + half);
     y0 = Math.min(y0, g.y - 66 * k); y1 = Math.max(y1, g.y + 66 * k);
     for (const n of g.nodes) {
-      const w = (12 + Math.max(n.item.label.length, n.item.sub?.length ?? 0) * CHAR) * k;
+      const w = (12 + textWidth(n.item, width)) * k;
       const right = Math.cos(n.angle) >= -0.01;
       x0 = Math.min(x0, right ? n.x - 16 * k : n.x - w); x1 = Math.max(x1, right ? n.x + w : n.x + 16 * k);
       y0 = Math.min(y0, n.y - 16 * k); y1 = Math.max(y1, n.y + 22 * k);
