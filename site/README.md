@@ -17,7 +17,8 @@ GitHub Pages project sites cannot publish the host-root `robots.txt`: a file at
 or the sitemap can be submitted directly in Search Console. Search Console submission and
 indexing status are separate from this repository's build and deployment.
 
-With Node.js 22.12 or newer, install both the desktop and site dependencies, then run:
+With Node.js 22.23.4 or newer (the version in `.nvmrc`), install both the desktop and site
+dependencies, then run:
 
 ```sh
 cd apps/desktop
@@ -80,8 +81,9 @@ deployment identity or publish files.
 
 These captures show a production-mode website build at 1440×900, with a 390×900 mobile guide
 view. Release highlights use 1440×1100 desktop and 390×1800 mobile captures so all three cards
-and the publication note fit in one image. The release captures were taken while 0.9.0 was
-being prepared, so they show its pending status. The homepage's sample-data recording is paused on its first frame; no machine is scanned.
+and the publication note fit in one image. The captures show the published 0.13.1 release,
+including 3D Home, tray widgets and area capture. The homepage's sample-data recording is
+paused on its first frame; no machine is scanned.
 After building the site, refresh them with `node scripts/capture-screenshots.mjs` from `site/`.
 The script manages its own preview server and Chromium, waits for content and fonts, and checks
 themes, page errors, overflow and a 600 KB budget for each PNG.
@@ -97,11 +99,11 @@ Homepage, light:
 
 Release highlights and publication status, dark:
 
-![Release highlights show PNG snapshots, the readable graph and capability explorer with pending installer status](../docs/screenshots/site-release-dark.png)
+![Published 0.13.1 highlights show 3D Home, tray widgets and precise area capture](../docs/screenshots/site-release-dark.png)
 
 Release highlights and publication status, light:
 
-![Light-theme release highlights keep the pending release status separate from the published downloads](../docs/screenshots/site-release-light.png)
+![Light-theme 0.13.1 highlights link to the published release notes](../docs/screenshots/site-release-light.png)
 
 Mobile release highlights, light:
 

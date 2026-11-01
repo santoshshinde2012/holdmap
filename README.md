@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <img src="docs/screenshots/desktop-home-3d-light.png" width="860" alt="holdmap Home in 3D: agent districts with CPU and memory readings, runtime and configuration layers, and Needs you (sample data)" />
+</p>
+
+<p align="center">
   <img src="docs/screenshots/desktop-capability-inline-light.png" width="420" alt="MCP & skills: a skill card's details open inline right under it, with Scan with… (sample data)" />
   <img src="docs/screenshots/desktop-security-analyzers-light.png" width="420" alt="Agents → Security → Analyzers: cards with publisher, what each checks, on/off or installed state and one action; all off by default (sample data)" />
 </p>
@@ -63,16 +67,17 @@
   Add any MCP server in three steps: source, tools, review.
 - **Home, maps and graphs.** Agents as Cards or a Map with a Timeline and a **Needs you**
   list, the service graph with clusters, and agent flow.
-- **3D machine (Unreleased).** Home's **3D** layout builds the same agents as a model you can
+- **3D machine.** Home's **3D** layout builds the same agents as a model you can
   take apart: a district per agent with its tower, folders and ports, its processes and the
   configuration found on disk on trays above it, CPU gauges, network ripples and connections that
   move their way. Lenses show one concern at a time, with X-ray, a floor plan and a guided tour.
   Every link comes from what holdmap observed; nothing is joined by name.
-- **Menu bar and tray widget (Unreleased).** Small menu-bar items on macOS like a system
+- **Menu bar and tray widgets.** Small menu-bar items on macOS like a system
   monitor's (agents, what needs you, their CPU, dev servers, a CPU line or per-agent bars) and a
   badge on every OS. A click opens a panel: headline numbers, an agent CPU chart, a Needs you
   history, ports and port changes, and your dev servers and busiest agents. macOS, Windows and
-  Linux; stops still open the reviewed plan.
+  Linux. A fixed toolbar keeps **Open holdmap**, **Quick settings**, **Refresh** and **Quit**
+  within reach while readings scroll; stops still open the reviewed plan.
 - **Local capture.** Records only the holdmap window to MP4/GIF, plus PNG snapshots, of the whole window or a part you choose. Other apps and your desktop are never captured. Nothing is uploaded.
 - **Scriptable.** Every read command takes `--json`. holdmap has no product analytics.
 
@@ -267,8 +272,9 @@ See [SECURITY.md](SECURITY.md) for the full model, limits and how to report a vu
 
 ## Benchmarks & evaluation
 
-Measured on a Linux VM (8 vCPU Xeon, Debian 13). A Mac or Windows PC will differ, so rerun
-the scripts on yours. Details, the environment and how to reproduce are in
+Historical baseline measured with source version **0.9.0** on a Linux VM (8 vCPU Xeon,
+Debian 13); download sizes below are from **v0.9.0**, not the current release.
+A Mac or Windows PC will differ, so rerun the scripts on yours. Details, the environment and how to reproduce are in
 [docs/benchmarks.md](docs/benchmarks.md).
 
 | Measurement | Result |
@@ -303,7 +309,8 @@ scanners are on real skills.
 | [Agents, tools and apps](https://santoshshinde2012.github.io/holdmap/docs/agents/) | Agent inventory, MCP and skills, flow and recording |
 | [Analyzers](https://santoshshinde2012.github.io/holdmap/docs/analyzers/) | Opt-in scanners, presets, sandboxes and findings |
 | [Analyzers, end to end](docs/analyzers.md) | Steps to follow, a 3-minute demo and every screen |
-| [Desktop app](https://santoshshinde2012.github.io/holdmap/docs/desktop/) | Home, graph, shortcuts, capture and first open |
+| [Desktop app](https://santoshshinde2012.github.io/holdmap/docs/desktop/) | Home in Cards, Map or 3D, tray widgets, quick settings, capture and first open |
+| [What's new](https://santoshshinde2012.github.io/holdmap/docs/whats-new/) | Published release highlights and how to upgrade |
 | [MCP for AI agents](https://santoshshinde2012.github.io/holdmap/docs/mcp/) | Client setup, tools and stop confirmation |
 | [Project stacks](https://santoshshinde2012.github.io/holdmap/docs/projects/) | `.holdmap.toml`, `holdmap up` and `down` |
 | [Troubleshooting](https://santoshshinde2012.github.io/holdmap/docs/troubleshooting/) | PATH, hidden ports, updates, environment variables and uninstalling |
