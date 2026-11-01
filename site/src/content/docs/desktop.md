@@ -16,7 +16,7 @@ Release-by-release changes are in [What's new](../whats-new/) and the
 ## Home and first open
 
 **Home** shows agents, listening ports, dev servers, exposed listeners and running MCP servers,
-as **Cards**, a **Map** or, in the current source (**Unreleased**), **3D**. Choose at the top
+as **Cards**, a **Map** or **3D** (available since 0.13.1). Choose at the top
 right or press `V` to cycle; the choice is remembered. Cards list each agent's projects, ports,
 MCP servers and skills; Map draws the same footprint around this computer with a collapsible
 **Timeline**. **Needs you** lists agents on all interfaces, root or elevated access, risky
@@ -31,7 +31,7 @@ Every panel on Home folds away and comes back, and Home remembers how you left i
 header), and each panel in it (click its heading). In 3D the parts list folds to a strip of
 agent buttons.
 
-**Current source (Unreleased):** **3D** builds the same machine as a model you can take apart,
+**3D** builds the same machine as a model you can take apart,
 drawn without perspective, so sizes and spacing read the same at the front and the back. Each
 agent has its own **district** on the board, a street apart from the next: its tower at the
 back, the folders it works in, then the ports it holds along the front edge, with its name on a
@@ -126,7 +126,7 @@ and clicking the Dock icon reopens the same window.
 
 ## Menu bar and tray
 
-**Current source (Unreleased):** holdmap's menu-bar or tray icon works like a small system
+holdmap's menu-bar or tray icon works like a small system
 monitor for your agents and dev servers, on macOS, Windows and Linux.
 
 - **Menu-bar items.** On macOS each reading is its own small menu-bar item, a short label over

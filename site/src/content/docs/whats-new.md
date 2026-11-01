@@ -10,8 +10,9 @@ notes for each version.
 
 ## 0.13.1
 
-The 0.13.0 tag was not published because its macOS release runner was retired. **0.13.1**
-uses supported runners and ships all the features and security fixes prepared for that tag.
+**0.13.1** is the first published release after 0.12.0. It includes the analyzer fixes
+prepared for 0.12.1 and all the features and security fixes prepared for 0.13.0; neither
+intermediate version was published.
 
 **holdmap 0.13.1** adds new ways to understand your agents and focus your workspace.
 
@@ -27,18 +28,13 @@ uses supported runners and ships all the features and security fixes prepared fo
   are remembered.
 - **Capture part of the window.** Draw or select an area for a local PNG or recording, move
   and resize it precisely, and review before saving. [Snapshots](../desktop/#take-a-png-snapshot).
-- **Security and polish.** The build replaces vulnerable deepmerge tooling; map labels settle
-  before showing, fresh menus close with Escape, and theme choices stay readable.
-
-## 0.12.1
-
-**holdmap 0.12.1** is a small fix release.
-
-- **Nothing to check is not a failure.** OSV with no pinned packages, and skill analyzers with no
-  skills, now finish cleanly with a short note on what to add. Real failures still show as
-  failures. [Analyzers](../analyzers/).
-- **MCP tool annotations are documented.** Each tool's description and four safety hints live in
-  one catalog file; see [MCP](../mcp/#tool-annotations). The tool list is unchanged.
+- **Analyzer fixes.** OSV with no pinned packages, and skill analyzers with no skills, finish
+  cleanly with a short note on what to add. Real failures still show as failures.
+  [Analyzers](../analyzers/).
+- **MCP tool annotations are documented.** Each tool's description and four safety hints live
+  in one catalog file; the sixteen-tool list is unchanged. [MCP](../mcp/#tool-annotations).
+- **Security and polish.** The build patches Windows updater ZIP parsing and replaces vulnerable
+  deepmerge tooling; map labels settle before showing, fresh menus close with Escape, and theme choices stay readable.
 
 ## 0.12.0
 

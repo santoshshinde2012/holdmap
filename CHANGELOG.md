@@ -6,6 +6,12 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
+## [Unreleased]
+
+### Documentation
+
+- Align the README and desktop guide with published 0.13.1 features, fold unpublished 0.12.1 fixes into the correct release notes, refresh website screenshots and setup requirements, and label historical benchmark measurements.
+
 ## [0.13.1] - 2026-11-01
 
 The first published release after 0.12.0 brings all the features and security fixes prepared
