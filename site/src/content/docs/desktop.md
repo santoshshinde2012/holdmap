@@ -26,58 +26,79 @@ first. Select an agent once to highlight it everywhere; select it again to open 
 Agents. Counts read **…** until the first scan. On a narrow window the Map and 3D become a list
 of agents, each with its ports and the same **Details** / **Stop…** menu.
 
-**Current source (Unreleased):** **3D** builds the same machine in layers. Agents stand on the
-board with the ports they hold and the folders they work in; their processes float on the
-**Runtime** plate above; MCP servers, skills and instruction files found on disk sit on the
-**Configuration** plate on top (only after **Read MCP config**). Seen from straight above
-(**Top**) it is the Map: the same agents in the same places. When 3D opens, the machine builds up
-from the board, layer by layer; each tower's cap carries its agent's initials.
+Every panel on Home folds away and comes back, and Home remembers how you left it: the summary
+(the chevron at the left of the header), the side column (the panel button at the right of the
+header), and each panel in it (click its heading). In 3D the parts list folds to a strip of
+agent buttons.
 
-- **Assembled / Exploded** (`E`) pulls the plates apart. **X-ray** (`X`) turns solid parts to
-  glass, shows each agent's processes as slices inside its tower, and brings configuration and
-  running beams forward. **Processes** and **Configuration** hide a plate.
-- The parts list beside the canvas has a button for every agent and every part of the selected
-  agent; it is also the keyboard path to everything drawn (`↑`/`↓` move between buttons).
-  Selecting an agent brings its sector forward and fades the rest; selecting it again in the
-  list clears it. On the canvas, click an agent once to select it and again to open it on
-  Agents, or use **Open in Agents** in the details panel. Ports open the same **Details** /
-  **Stop…** menu.
-- The readings across the top come from the same parts that are drawn: CPU (with its recent
-  trend), memory, ports, processes, MCP servers running of configured, skills, **Needs you** and,
-  once recording has been used, **Calls**, for the whole computer or the selected agent. They read
-  **…** until the first scan, and a figure that wasn't collected reads **Not read**, never 0.
-  Readings that count parts are toggles: press one to light up exactly those parts and step the
-  rest back (**MCP running** also lights the process that runs each server); `Esc` lets go.
-- Hover any part for a card with its status and how holdmap knows it. **Focus** hides the
-  summary and **Needs you** so the machine fills Home (the choice is remembered); the `+`, `−`
-  and fit buttons on the right edge zoom without a wheel.
+**Current source (Unreleased):** **3D** builds the same machine as a model you can take apart,
+drawn without perspective, so sizes and spacing read the same at the front and the back. Each
+agent has its own **district** on the board, a street apart from the next: its tower at the
+back, the folders it works in, then the ports it holds along the front edge, with its name on a
+plate below. Its processes stand on a **Runtime** tray over the same district, and the MCP
+servers, skills and instruction files found on disk on a **Configuration** tray above that
+(only after **Read MCP config**). Everything over a district belongs to that agent, so no line
+is needed to say so. **This computer** is the chip at the left end of the board.
+
+- **Shapes and rings mean one thing each.** The icon on a part's top face says what it is
+  (`>_` a shell, `</>` a dev server, a plug an MCP server, a folder, a socket). The ring round a
+  tower's base is its **CPU** gauge: it widens with load and turns orange from 60% and red from
+  80%. Amber ripples spread from a port **open to the network**; a pin marks anything that
+  **needs you**; a red ring circles an agent that does. Solid parts were seen now, faded ones
+  inferred, blueprint ones are files on disk.
+- **Lines carry a direction.** An arrowhead marks the end that receives: a process from its
+  parent, a port from the process that holds it. Dots travel the same way along a connection,
+  up an agent's mast to its remote hosts, and down a green beam from an MCP server to the
+  process running it. Lines that only say ownership (folders, configuration, ports the agent
+  itself holds) appear for the part under the pointer or selected.
+- **Lenses** show one concern at a time: **All**, **Network** (ports, who holds them and where
+  connections go), **Runtime** (processes and their tree), **Config** (what's on disk and what
+  runs it), **Needs you**, and **Calls** once recording has been used. `L` steps through them.
+- **Exploded** (the default) and **Assembled** (`E`) lift the trays straight up or settle them;
+  dashed guides show where each tray came from. **X-ray** (`X`) turns solid parts to glass and
+  shows each agent's processes as slices inside its tower. **Plan** looks straight down at the
+  floor plan.
+- Hover any part to light it and what it's wired to, and dim the rest. Click an agent's tower or
+  district to select it (again to open it on Agents); click a part for its details. The parts
+  list beside the canvas has a button for every agent and part, and is the keyboard path to
+  everything drawn (`↑`/`↓` move between buttons). Ports open the same **Details** / **Stop…**
+  menu.
+- **Details**, above **Needs you** in the side column, holds the readings and the selected part.
+  The readings come from the same parts that are drawn: CPU (with its recent trend), memory,
+  ports, processes, MCP servers running of configured, skills, **Needs you** and, once recording
+  has been used, **Calls**, for the whole computer or the selected agent. They read **…** until
+  the first scan, and a figure that wasn't collected reads **Not read**, never 0. Readings that
+  count parts are toggles: press one to light up exactly those parts; `Esc` lets go.
+- **Focus** hides the summary and the side column so the machine fills Home; the readings and
+  the selected part then ride over the canvas. The `+`, `−` and fit buttons on the right edge
+  zoom without a wheel, and scrolling zooms toward the pointer.
 - **Tour** (`T`) walks through the machine, agents that need you first. Any drag, scroll, click or
   key hands you control, and the tour picks up again after 25 seconds of quiet. It is off with
   reduced motion.
 - Drag to turn, right-drag or Shift-drag to pan, scroll to zoom; with the canvas focused, arrow
-  keys turn, `+` and `−` zoom and `0` resets. `E`, `X`, `T` and `F` (fit) are single-key
+  keys turn, `+` and `−` zoom and `0` resets. `E`, `X`, `L`, `T` and `F` (fit) are single-key
   shortcuts: they follow that setting and leave a focused button alone. `Esc` stops the tour,
   then clears the selected part, then a pressed reading.
 
-With local recording on (**Agents → Flow → Calls**), recorded calls appear in a **Recorded calls**
-lane above the machine, newest at the front: blue for tool calls, violet for model requests, red
-for failures; a call still running breathes. An agent integration reports them, so they stay in
-their lane: no line joins a call to a process or a configured server, even when a name or a PID
-looks the same. **Calls** hides the lane.
+With local recording on (**Agents → Flow → Calls**), recorded calls sit on a **Recorded calls**
+shelf at the right end of the board, newest first: blue for tool calls, violet for model
+requests, red for failures; a call still running breathes. An agent integration reports them,
+so they stay on their shelf, apart from every district: no line joins a call to a process or a
+configured server, even when a name or a PID looks the same.
 
 Every link in 3D comes from what holdmap observed: a process tree, a held listener, an open
 connection, a working folder, or a configuration file of that agent. A configured MCP server is
 drawn as a blueprint part; a green beam joins it to a process only when one of that agent's own
 processes runs it. Nothing is joined by name. 3D needs WebGL 2:
 without it Home shows the Map and says why, and with software-only rendering it asks first. It
-loads only when chosen, redraws only when something changes (plus a slow CPU pulse, off with
-reduced motion), and pauses while the window is hidden.
+loads only when chosen, redraws only when something changes (plus the flows and ripples, still
+with reduced motion), and pauses while the window is hidden.
 
 These screenshots show the Unreleased 3D layout with browser sample data:
 
-![Home as 3D in light theme: agent towers on the board with their ports, processes and configuration above, live readings across the top and the parts list beside it](../../../../docs/screenshots/desktop-home-3d-light.png)
+![Home as 3D in light theme: a district per agent on the board, each with its tower, folders and ports, its runtime and configuration trays lifted above it, Details and Needs you in the side column](../../../../docs/screenshots/desktop-home-3d-light.png)
 
-![Home as 3D, exploded with X-ray in dark theme: the board, Runtime and Configuration plates pulled apart, glass towers showing process slices and a green beam from a running MCP server](../../../../docs/screenshots/desktop-home-3d-xray-dark.png)
+![Home as 3D with X-ray in dark theme: the trays pulled apart with dashed guides, glass towers showing process slices, and a green beam from a running MCP server down to its process](../../../../docs/screenshots/desktop-home-3d-xray-dark.png)
 
 **Copy summary** puts the overview and **Needs you** on the clipboard as plain text for a
 ticket or chat; **Download JSON** saves the same facts as a file. Neither starts a scan, and
@@ -224,6 +245,13 @@ anything wider, such as a whole screen or another window, without recording a fr
 | **Full session** | MP4 (H.264) | 30 minutes | about 4 MB a minute for a mostly still screen, up to about 22 MB a minute with constant motion |
 | **Custom** | MP4, GIF or both | 15 seconds to 1 hour | live estimate in the dialog |
 
+**Area** works as it does for snapshots: **Part of the window** has you choose the area after
+**Choose area…**, and only that part is recorded, framed by a dashed line just outside it (never
+in the video). The macOS app records the area itself, at full resolution, rather than cutting it
+out of a smaller picture of the window. In a browser the area is cut from the shared window's
+frames; if a browser can only record MP4 through MediaRecorder, which can't crop, the MP4 shows
+the whole window and the GIF only the area, and the result says so.
+
 The dialog shows the expected size and when recording will stop before you choose a screen.
 A timer in the title bar replaces the dialog so this window can be part of the capture. It
 shows the time left in the last seconds, then stops by itself and tells you why. A small indicator
@@ -288,6 +316,14 @@ PNG snapshots are separate from video recording. Open the camera button, choose
 - During video recording, **Recording window** replaces the new-source choice. It takes
   a still from the window being recorded without stopping the video. The
   command palette also offers **Snapshot recording window** while that is available.
+
+**Area** takes the **Whole window** or **Part of the window**. For a part, **Choose area…** dims
+the window: drag to draw the area, drag inside it to move it, drag a handle to resize it, or
+click a panel (the 3D canvas, a side panel, the summary, a pane) to take exactly that panel. The
+size shows as you go. Arrow keys move the area a pixel at a time (with Shift, ten), Alt with
+the arrows resizes it, **Enter** captures and **Esc** goes back to the dialog. The picker leaves
+the window before anything is captured, and the PNG is exactly that part, at the window's own
+pixel density. The last area is offered again for the rest of the session.
 
 Review the PNG before saving. Images preserve their aspect ratio within **3840×2160** and
 **32 MiB**. **Download PNG** opens a native save dialog in the desktop app; the browser

@@ -90,8 +90,9 @@ const rows = [
   // +4 KB for skill trust alerts on Home, bounded snoozes and the demo trust API; Risks, Skills
   // and Scheduled scans load on demand. +2 KB for Home's 3D layout loader: the agent helpers it
   // shares with the on-demand 3D view now load as their own small chunks. +1 KB for the menu-bar
-  // items checklist in Settings and the notice naming items macOS hides.
-  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 227 * 1024],
+  // items checklist in Settings and the notice naming items macOS hides. +3 KB for Home's folding
+  // panels (summary, side column, Details above Needs you) and the capture dialogs' area choice.
+  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 230 * 1024],
   ["Snapshot PNG JS (on capture)", [...snapshotDemoFiles].reduce((n, f) => n + gz(f), 0), 40 * 1024],
   ["Capability workspace JS (on inspection)", [...capabilityDemoFiles].reduce((n, f) => n + gz(f), 0), 21 * 1024],
   // The Security view's helpers moved here from the first screen; the trust and risk views load separately.
@@ -101,7 +102,8 @@ const rows = [
   ["Run progress JS (on Run)", [...runDockDemoFiles].reduce((n, f) => n + gz(f), 0), 4 * 1024],
   // three.js (~133 KB of WebGL renderer, geometry and materials) plus the scene, layout and stage.
   ["Home 3D JS (on 3D)", [...machine3dDemoFiles].reduce((n, f) => n + gz(f), 0), 168 * 1024],
-  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 172 * 1024],
+  // +2 KB for the capture area picker, loaded when Part of the window is chosen.
+  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 174 * 1024],
   ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];
 

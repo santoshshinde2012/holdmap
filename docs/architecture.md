@@ -928,19 +928,40 @@ published asset digests and IDs, then publishes the complete `latest.json` index
   only from parent PIDs, listener holders, sockets matched by exact entry ID, working folders and
   each agent's own configuration files; the single configuration ↔ process wire is an MCP
   server's `running` state whose PIDs are that agent's processes. Skill trust attaches by exact
-  skill folder. Opt-in recorded calls (`calls.ts`) are parts in a lane of their own, ordered by
+  skill folder. Opt-in recorded calls (`calls.ts`) are parts on a shelf of their own, ordered by
   reported time, with no wire to any process, agent or configuration; their reported parent is a
-  detail, not a link. `gaugeParts` maps each reading to the exact parts it counts, so pressing a
-  reading lights those parts. `layout.ts` keeps the 2D map's agent angles (the top
-  view is the map) and is keyed by the scene's identity, not resource samples; `camera.ts`,
-  `tour.ts` (a pure function of time) and `labels.ts` are unit-tested. `stage.ts` is the only
-  three.js module: it renders on demand, runs its CPU pulse and connection dots at ≤30 fps,
-  stops while the window is hidden and honours reduced motion. Labels, readings, the parts list
-  and the inspector are DOM, so text uses the shared tokens and stays accessible; the parts list
-  is the canvas's keyboard outline; the hover card repeats only what they already carry.
-  `HomeView` imports the view on demand, skips it on narrow windows and owns Focus (summary and
-  Needs you step aside); the app polls the existing recorder for it only while 3D is shown; without WebGL 2 (or with software rendering unless the viewer opts in) it renders the
-  2D map with the reason. The chunk carries three.js and has its own site budget.
+  detail, not a link. `gaugeParts` maps each reading to the exact parts it counts, and
+  `lensView` names the parts and floors each lens (Network, Runtime, Config, Needs you, Calls)
+  is about. `layout.ts` gives each agent a district on a quarter-unit grid: its tower, folders
+  and ports on the board, its runtime and configuration trays stacked over the same footprint,
+  so ownership needs no wire. Districts stand a street apart in rows of up to eight, and the
+  default view turns only as far as the street allows (tan θ · depth < street), so no district
+  hides its neighbour. The layout is keyed by the scene's identity, not resource samples.
+  `camera.ts` frames boxes exactly for an orthographic view (a box's projection is centred on
+  its centre's, so the fit is the larger of its projected half-extents); it, `tour.ts` (a pure
+  function of time), `labels.ts` (greedy placement with fallback lines for nameplates) and
+  `geometry.ts` (rounded slabs as fans, no shape triangulation) are unit-tested. `stage.ts` is
+  the only three.js module: an orthographic renderer that draws on demand, runs its flows,
+  ripples and pulses at ≤30 fps, stops while the window is hidden and stands them still with
+  reduced motion. Ownership wires appear only for the hovered or selected part; the rest carry
+  arrowheads at the receiving end. Labels, readings, the parts list and the inspector are DOM,
+  so text uses the shared tokens and stays accessible; the parts list is the canvas's keyboard
+  outline. The view hands Home its readings and inspector as a snippet (`ondetails`), which Home
+  renders in its side column above Needs you, so they keep the view's live state while living
+  outside the canvas. `HomeView` imports the view on demand, skips it on narrow windows and owns
+  Focus (summary and side column step aside); the app polls the existing recorder for it only
+  while 3D is shown; without WebGL 2 (or with software rendering unless the viewer opts in) it
+  renders the 2D map with the reason. The chunk carries three.js and has its own site budget.
+- **Folding panels.** `ui/CollapsiblePanel` is a heading holding its disclosure button (the
+  WAI-ARIA pattern), with an optional close button and a remembered state (`pref`). Home's side
+  column, the summary and the 3D parts list fold and come back, each remembered.
+- **Capture areas.** `lib/capture-region.ts` holds an area of the window in CSS pixels and maps it
+  into each capture: snapshots crop the finished PNG (the rendered view and the macOS window
+  capture cover exactly the viewport; a shared window's frame may carry a title bar above it);
+  the macOS recorder takes the area as ScreenCaptureKit's `sourceRect` in window points, after
+  Rust validates it (`StartOptions.region`, whole points, at least 32 each way); the browser
+  recorder crops frames (mediabunny `crop`, canvas `drawImage`). `RegionPicker` loads on demand
+  and leaves the window before anything is captured.
 - **Pure view logic.** `lib/rows.ts` (badges, status, sparklines), `lib/detail.ts` (details pane)
   and `lib/settings.ts` (the Settings contract) are pure and unit-tested, so components depend on
   interfaces rather than on `api.ts`.
