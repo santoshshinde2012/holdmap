@@ -6,7 +6,13 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
-## [0.13.0] - 2026-11-01
+## [0.13.1] - 2026-11-01
+
+### Fixed
+
+- Release CLI builds explicitly use supported macOS 15 runners for Apple silicon and Intel. The immutable 0.13.0 tag could not publish because GitHub cancelled its macOS 14 runner during the final retirement brownout; 0.13.1 ships the 3D Home, tray, capture and security changes prepared for that tag.
+
+## [0.13.0] - 2026-11-01 (unpublished)
 
 ### Added
 

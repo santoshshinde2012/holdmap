@@ -387,6 +387,11 @@ not regenerate CI with this setting. Keep action pins in the config and workflow
 | `npm run tauri signer generate`, then secrets `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` and variable `TAURI_UPDATER_PUBKEY` | In-app updates with signed artifacts and an authenticated release version (optional; keep the private key backed up) |
 | `"npm"` in `publish-jobs` in `dist-workspace.toml`, `dist generate`, secret `NPM_TOKEN`; after restoring the publishing job, pass `--npm-registry-published` to both release-note preparation calls | Publishing the npm package (optional) |
 
+The CLI release matrix pins Apple silicon to `macos-15` and Intel to `macos-15-intel` in
+`dist-workspace.toml`; keep those overrides on supported images when GitHub retires a runner.
+A tag that cannot build remains immutable and unpublished; ship the correction under a new
+patch version rather than moving the failed tag.
+
 **Release steps.** Merging the release PR prepares the version; publishing starts when a
 maintainer pushes its tag.
 
