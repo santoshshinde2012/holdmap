@@ -1,12 +1,31 @@
 ---
 title: What's new
-description: "What's new in holdmap: 0.12.1 makes empty analyzer runs a clean finish; 0.12.0 added guided installs, skill trust and risk scores."
+description: "What's new in holdmap 0.13.0: 3D Home, live menu-bar widgets, folding panels and precise area capture."
 order: 1.5
 ---
 
 The [changelog](https://github.com/santoshshinde2012/holdmap/blob/main/CHANGELOG.md) records
 every change, and [releases](https://github.com/santoshshinde2012/holdmap/releases) has the
 notes for each version.
+
+## 0.13.0
+
+**holdmap 0.13.0** adds new ways to understand your agents and focus your workspace.
+
+- **Home in 3D.** Each agent gets a district with memory towers, CPU gauges, ports, runtime
+  and configuration layers. Lenses, exploded views and X-ray reveal the evidence behind
+  each connection. Cards and Map remain available; WebGL support is checked before 3D opens.
+  [Desktop guide](../desktop/).
+- **Live menu-bar and tray widgets.** Agents, Needs you, CPU and charts stay close at hand.
+  The popup keeps its header and compact action toolbar fixed while readings scroll, and
+  quick settings offers themes, supported widgets and notifications.
+  [Menu bar and tray](../desktop/#menu-bar-and-tray).
+- **A workspace that folds.** Fold Home's summary, side panels and 3D parts list; your choices
+  are remembered.
+- **Capture part of the window.** Draw or select an area for a local PNG or recording, move
+  and resize it precisely, and review before saving. [Snapshots](../desktop/#take-a-png-snapshot).
+- **Security and polish.** The build replaces vulnerable deepmerge tooling; map labels settle
+  before showing, fresh menus close with Escape, and theme choices stay readable.
 
 ## 0.12.1
 

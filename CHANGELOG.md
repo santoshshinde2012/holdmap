@@ -6,7 +6,7 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
-## [Unreleased]
+## [0.13.0] - 2026-11-01
 
 ### Added
 

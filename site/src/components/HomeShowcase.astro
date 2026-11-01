@@ -5,6 +5,8 @@ import Icon from "./Icon.astro";
 import { homePublished, repoUrl, url, version } from "../lib/site";
 import cardsDark from "../../../docs/screenshots/desktop-home-cards-dark.png";
 import cardsLight from "../../../docs/screenshots/desktop-home-cards-light.png";
+import threeDark from "../../../docs/screenshots/desktop-home-3d-xray-dark.png";
+import threeLight from "../../../docs/screenshots/desktop-home-3d-light.png";
 import mapDark from "../../../docs/screenshots/desktop-home-map-dark.png";
 import mapLight from "../../../docs/screenshots/desktop-home-map-light.png";
 import portDark from "../../../docs/screenshots/desktop-home-port-menu-dark.png";
@@ -17,6 +19,7 @@ type Shot = { dark: ImageMetadata; light: ImageMetadata; alt: string };
 const views: { key: string; label: string; icon: string; shot: Shot }[] = [
   { key: "cards", label: "Cards", icon: "LayoutGrid", shot: { dark: cardsDark, light: cardsLight, alt: "Home as Cards: one card per agent with its projects, ports, MCP servers and skills, and a Needs you list beside them." } },
   { key: "map", label: "Map", icon: "Network", shot: { dark: mapDark, light: mapLight, alt: "Home as Map: agents around this computer with their ports and MCP servers, and a Timeline of uptime, ports and MCP below." } },
+  { key: "3d", label: "3D", icon: "Box", shot: { dark: threeDark, light: threeLight, alt: "Home in 3D: a district for each agent, with memory towers, CPU gauges, ports, runtime and configuration layers, and an inspector beside the board." } },
 ];
 // Crops (fractions of the 1440×820 capture) that keep the menu and the plan legible.
 type Crop = Shot & { x: number; y: number; w: number; h: number };
@@ -54,9 +57,9 @@ const wide = "(max-width: 1180px) calc(100vw - 40px), 1100px";
         </div>
       ))}
       <ul class="facts" role="list">
-        <li><strong>Cards or Map.</strong> Toggle at the top right or press <kbd>V</kbd>; the choice is remembered.</li>
+        <li><strong>Cards, Map or 3D.</strong> Toggle at the top right or press <kbd>V</kbd>; the choice is remembered.</li>
         <li><strong>Timeline.</strong> Map adds uptime, ports and MCP over time; <kbd>j</kbd>/<kbd>k</kbd> step through it.</li>
-        <li><strong>Needs you.</strong> Open-to-network ports, conflicts and protected processes, beside both views.</li>
+        <li><strong>Needs you.</strong> Open-to-network ports, conflicts and protected processes, beside your chosen view.</li>
       </ul>
     </div>
 

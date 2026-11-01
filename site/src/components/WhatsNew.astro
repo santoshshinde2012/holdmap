@@ -2,9 +2,9 @@
 import Icon from "./Icon.astro";
 import { releaseHighlightsPublished as released, repoUrl, sourceVersion, url, version } from "../lib/site";
 const highlights = [
-  { icon: "Download", title: "Guided installs, visible runs", text: "Install an analyzer after you see exactly what it fetches and reads, watch each run's progress, and get a sortable results table with exports of what's on screen.", href: url("docs/analyzers/"), link: "Analyzers" },
-  { icon: "Fingerprint", title: "Know when a skill changes", text: "Every skill gets a fingerprint. Holdmap flags skills changed since you trusted them, shows what changed by file name and size, and scores risk per agent and folder.", href: url("docs/analyzers/#skill-trust-and-top-risks"), link: "Skill trust and risks" },
-  { icon: "CalendarClock", title: "New since last run", text: "See what is new and what was fixed after each rescan, schedule offline rescans while the app is open, and fail CI only on new findings.", href: url("docs/whats-new/"), link: "What's new" },
+  { icon: "Box", title: "Your agents, in 3D", text: "Give each agent its own district: memory towers, CPU gauges, ports, runtime and configuration. Switch lenses, pull the layers apart, and inspect the evidence behind each connection.", href: url("docs/desktop/"), link: "Explore 3D Home" },
+  { icon: "Activity", title: "A live menu-bar companion", text: "See agents, CPU and what needs you without opening the app. A compact panel keeps readings, charts and quick settings close, with reviewed actions for your services.", href: url("docs/desktop/#menu-bar-and-tray"), link: "Menu bar and tray" },
+  { icon: "Scan", title: "Capture just what matters", text: "Fold Home panels to focus your workspace. Pick part of the window for a local snapshot or recording, with a precise frame and exports you control.", href: url("docs/desktop/#take-a-png-snapshot"), link: "Snapshots and recordings" },
 ];
 ---
 <section id="whats-new" class="section" aria-labelledby="release-title">
@@ -12,7 +12,7 @@ const highlights = [
     <div class="section-head head-row">
       <div>
         <span class="eyebrow">Release highlights</span>
-        <h2 class="h2" id="release-title">{released ? `${sourceVersion} is here.` : `${sourceVersion} release preparation.`} <span class="soft">Trust the skills your agents load.</span></h2>
+        <h2 class="h2" id="release-title">{released ? `${sourceVersion} is here.` : `${sourceVersion} release preparation.`} <span class="soft">A clearer view of everything running.</span></h2>
       </div>
       <a class="link-arrow" href={url("docs/whats-new/")}>What's new <Icon name="ArrowRight" size={16} /></a>
     </div>
@@ -26,7 +26,7 @@ const highlights = [
         </li>
       ))}
     </ul>
-    <p class="release-note">{sourceVersion} turns skill analyzers into a full workflow: install, run, compare, trust. {released ? <a href={`${repoUrl}/releases/tag/v${sourceVersion}`}>Read the full {sourceVersion} release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
+    <p class="release-note">{sourceVersion} adds 3D Home, a live menu-bar companion, folding panels and precise window-area capture. {released ? <a href={`${repoUrl}/releases/tag/v${sourceVersion}`}>Read the full {sourceVersion} release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
   </div>
 </section>
 
