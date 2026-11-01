@@ -9,16 +9,8 @@ all-features = false
 unmaintained = "workspace"
 # Include transitive Rust soundness advisories, including the Linux GTK dependency chain.
 unsound = "all"
-# Temporary, tracked exceptions. Remove each one as soon as a fixed release exists.
-ignore = [
-  # zip 4.x reaches the build only through tauri-plugin-updater, which uses it on Windows
-  # alone to unpack an update archive after its minisign signature is verified. No updater
-  # release with zip >= 9 exists as of 2026-10-19 (2.14.0, now in use, and 3.0.0-alpha.3 require zip ^4).
-  # Remove these three ignores once one does.
-  { id = "RUSTSEC-2026-0367", reason = "zip SUID/SGID bits: tauri-plugin-updater only, Windows only, after signature verification; no fixed updater release yet" },
-  { id = "RUSTSEC-2026-0368", reason = "zip symlink targets: tauri-plugin-updater only, Windows only, after signature verification; no fixed updater release yet" },
-  { id = "RUSTSEC-2026-0369", reason = "zip permissions via symlinks: tauri-plugin-updater only, Windows only, after signature verification; no fixed updater release yet" },
-]
+# No advisory exceptions remain; the updater now uses the fixed ZIP implementation.
+ignore = []
 
 [licenses]
 confidence-threshold = 0.9
@@ -41,6 +33,8 @@ allow = [
 multiple-versions = "allow"
 wildcards = "deny"
 allow-wildcard-paths = true
+# Also cover the ZIP parser advisories tracked by GitHub before RustSec ingestion.
+deny = [{ name = "zip", version = "<9.0.5" }]
 
 [sources]
 unknown-registry = "deny"
