@@ -208,10 +208,10 @@ relabel the backport as a fixed upstream version. Keep `vendor/glib/` outside th
 workspace and preserve upstream filenames. Remove the override and its verification together
 when the GTK binding family supports a compatible fixed upstream release.
 
-The only advisory ignores are the three `zip` advisories (RUSTSEC-2026-0367/0368/0369) in
-`deny.toml`. `zip` comes in only through `tauri-plugin-updater`, which uses it on Windows to
-unpack an already signature-verified update. Delete them when an updater release moves to
-`zip` 9 or later; don't add others without the same reasoning and an exit condition.
+No advisory exceptions remain. Tauri updater 2.14.1 uses ZIP 9, replacing the vulnerable
+Windows-only ZIP 4 dependency and allowing the three previous RustSec exceptions to be
+removed. `deny.toml` also rejects ZIP versions older than 9.0.5 so GitHub's ZIP parser
+advisories are enforced even before they are added to RustSec.
 
 The desktop also uses audited [global-hotkey 0.8.0 X11 fixes](vendor/README.md) for immediate
 key release, failed-registration rollback and worker error propagation. Its macOS and Windows

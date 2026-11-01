@@ -94,7 +94,7 @@ without it Home shows the Map and says why, and with software-only rendering it 
 loads only when chosen, redraws only when something changes (plus the flows and ripples, still
 with reduced motion), and pauses while the window is hidden.
 
-These screenshots show the Unreleased 3D layout with browser sample data:
+These screenshots show the 3D layout with browser sample data:
 
 ![Home as 3D in light theme: a district per agent on the board, each with its tower, folders and ports, its runtime and configuration trays lifted above it, Details and Needs you in the side column](../../../../docs/screenshots/desktop-home-3d-light.png)
 
@@ -173,6 +173,8 @@ monitor for your agents and dev servers, on macOS, Windows and Linux.
 ![The tray panel in light theme: agents, agent CPU and dev servers, the CPU history chart, the Needs you history and the lists](../../../../docs/screenshots/desktop-tray-panel-light.png)
 
 ![The tray panel in dark theme](../../../../docs/screenshots/desktop-tray-panel-dark.png)
+
+![Quick settings in the tray panel: themes, menu-bar widget switches and a compact action toolbar in dark theme](../../../../docs/screenshots/desktop-tray-settings-dark.png)
 
 The panel and readings come from the same scan as the window and refresh at the **Scan every**
 cadence (at least every 10 seconds while the window is hidden). CPU is measured between scans,

@@ -6,7 +6,7 @@ by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/); see
 [Releasing](CONTRIBUTING.md#releasing).
 
-## [Unreleased]
+## [0.13.0] - 2026-11-01
 
 ### Added
 
@@ -39,6 +39,7 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Security
 
+- Tauri updater 2.14.1 replaces the vulnerable Windows ZIP 4 dependency with ZIP 9.2.1. The three previous RustSec advisory exceptions are removed, and dependency policy rejects ZIP versions below 9.0.5.
 - The desktop build no longer uses the npm `deepmerge` package, every release of which is affected by GHSA-gcqx-w48m-w2h4 (prototype poisoning, no fix). A replacement with the same API that never lets a merged key reach a prototype (`apps/desktop/vendor/deepmerge`, see `vendor/README.md`) is installed in its place, so `npm audit` is clean.
 - A recorded area reaches the macOS recorder only after Rust checks it (finite, whole points, at least 32 each way, inside window bounds; nothing but the four sides is accepted), and the recorder still captures only its own window.
 - The panel is its own small page (`tray.html`) in its own window. `local_window::guard` lets that window call only `tray_panel` (read its data) and `tray_action` (run an action id the tray menu also offers), and only from the bundled page; it has no capabilities, and every other command still requires the main window.

@@ -162,7 +162,7 @@ See [docs/architecture.md](docs/architecture.md) for details.
 
 <!-- release-please updates this source-version marker; download links follow published releases. -->
 <!-- x-release-please-start-version -->
-Source version: **0.12.1**.
+Source version: **0.13.0**.
 <!-- x-release-please-end -->
 Downloads come from the [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest),
 and `main` can be ahead of it ([changelog](CHANGELOG.md)).

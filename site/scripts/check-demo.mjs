@@ -412,10 +412,25 @@ try {
     await page.setViewportSize({ width: 1440, height: 900 });
   });
 
+  await check("Public Home showcase offers a readable 3D preview", async () => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const tab = page.getByRole("tab", { name: "3D", exact: true });
+    await tab.click();
+    const panel = page.locator("#home-3d");
+    await panel.waitFor({ state: "visible" });
+    const image = panel.locator("img:visible").first();
+    await image.scrollIntoViewIfNeeded();
+    await image.evaluate(image => image.decode());
+    if (!(await image.getAttribute("alt"))?.includes("Home in 3D")) throw new Error("3D preview needs descriptive alt text");
+    await page.setViewportSize({ width: 390, height: 900 });
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw new Error("3D preview overflows on mobile");
+    await page.getByRole("tab", { name: "Cards", exact: true }).click();
+  });
+
   const guideBase = new URL("./", page.url());
   const checkGuideImages = async (viewport) => {
     await page.setViewportSize(viewport);
-    for (const [route, count] of [["agents", 16], ["desktop", 17], ["whats-new", 1]]) {
+    for (const [route, count] of [["agents", 16], ["desktop", 18], ["whats-new", 1]]) {
       await page.goto(new URL(`docs/${route}/`, guideBase).href, { waitUntil: "domcontentloaded" });
       const images = page.locator(".prose img");
       if (await images.count() !== count) throw new Error(`${route}: expected ${count} guide screenshots`);

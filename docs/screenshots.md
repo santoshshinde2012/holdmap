@@ -60,6 +60,7 @@ holdmap-desktop --lib menu_bar_preview -- --ignored` (on a Mac).
 | sort right edge | [dark](screenshots/desktop-sort-right-edge-dark.png) | [light](screenshots/desktop-sort-right-edge-light.png) |
 | stop confirm | — | [light](screenshots/desktop-stop-confirm-light.png) |
 | tray panel | [dark](screenshots/desktop-tray-panel-dark.png) | [light](screenshots/desktop-tray-panel-light.png) |
+| tray quick settings | [dark](screenshots/desktop-tray-settings-dark.png) | — |
 
 ## Terminal UI
 

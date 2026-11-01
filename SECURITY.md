@@ -192,10 +192,10 @@ regressions against the actual GLib
 dependency. No GLib advisory is ignored. A clean dependency scan alone does not establish that a
 local patch is safe, and the original advisory is not a false positive.
 
-The only ignored advisories are three `zip` advisories (RUSTSEC-2026-0367/0368/0369) in
-[`deny.toml`](deny.toml). `zip` reaches the build only through `tauri-plugin-updater`, which uses
-it on Windows to unpack an update after its signature is verified. They are removed when an
-updater release moves to `zip` 9 or later.
+No advisory exceptions remain. Tauri updater 2.14.1 uses ZIP 9, replacing the vulnerable
+Windows-only ZIP 4 dependency and allowing the three previous RustSec exceptions to be
+removed. `deny.toml` also rejects ZIP versions older than 9.0.5 so GitHub's ZIP parser
+advisories are enforced even before they are added to RustSec.
 
 ## Verification and limits
 
