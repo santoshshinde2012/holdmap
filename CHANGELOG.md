@@ -17,6 +17,12 @@ under the unpublished 0.13.0 tag:
 - **Security and polish:** patched Windows updater ZIP parsing, removal of advisory exceptions, safe deepmerge tooling, settled map labels and reliable Escape handling.
 - **Analyzer fixes:** empty OSV and skill scans finish with a clear “nothing to check” result.
 
+The dependency updates from PRs #124 and #126 are consolidated here, including sysinfo 0.40.1,
+saphyr-parser 0.3.3, current compatible Rust patches, mediabunny 1.65.0, three.js/types 0.187.0,
+Astro 7.4.4 and lucide-static 1.66.0. Fallible process backend initialization now produces an
+incomplete-collection warning; safety rechecks continue to reject missing process identities.
+The updated recording implementation uses a 175 KiB on-demand JavaScript budget.
+
 The detailed feature notes follow under 0.13.0 below.
 
 ### Fixed

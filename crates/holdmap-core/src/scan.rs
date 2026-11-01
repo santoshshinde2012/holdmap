@@ -176,8 +176,8 @@ impl Scanner {
             (raw, table.join(), containers.map(|h| h.join()))
         });
         let (table, t_procs) = match process_result {
-            Ok(result) => result,
-            Err(_) => {
+            Ok((Ok(table), elapsed)) => (table, elapsed),
+            Ok((Err(_), _)) | Err(_) => {
                 warnings.push("process metadata collection failed; agent and process attribution is incomplete".to_string());
                 (ProcessTable::default(), std::time::Duration::ZERO)
             }
@@ -731,7 +731,7 @@ mod tests {
 
     struct FailingProcesses;
     impl ProcessProvider for FailingProcesses {
-        fn processes(&self) -> ProcessTable {
+        fn processes(&self) -> std::io::Result<ProcessTable> {
             panic!("fixture process provider failed");
         }
     }
@@ -757,6 +757,41 @@ mod tests {
             .any(|warning| warning.contains("process metadata collection failed")));
         let agents = crate::agents::AgentsBuilder::new(&scan).build();
         assert!(agents.agents.is_empty());
+        assert!(agents
+            .limits
+            .iter()
+            .any(|limit| limit.contains("process metadata collection failed")));
+    }
+
+    struct UnavailableProcesses;
+    impl ProcessProvider for UnavailableProcesses {
+        fn processes(&self) -> std::io::Result<ProcessTable> {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "private backend detail",
+            ))
+        }
+    }
+
+    #[test]
+    fn a_process_backend_error_marks_collection_incomplete_without_leaking_details() {
+        let scanner = Scanner::new(
+            Arc::new(StaticSockets(vec![])),
+            Arc::new(UnavailableProcesses),
+            Arc::new(StaticContainers(vec![])),
+        );
+        let scan = scanner
+            .scan(&ScanOptions {
+                all_states: false,
+                docker: false,
+            })
+            .unwrap();
+        assert!(scan.table.is_empty());
+        assert_eq!(
+            scan.snapshot.warnings,
+            ["process metadata collection failed; agent and process attribution is incomplete"]
+        );
+        let agents = crate::agents::AgentsBuilder::new(&scan).build();
         assert!(agents
             .limits
             .iter()

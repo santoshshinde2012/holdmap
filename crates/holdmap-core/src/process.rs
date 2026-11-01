@@ -146,13 +146,21 @@ fn normalize_windows_parentage(processes: &mut HashMap<u32, ProcessInfo>) {
 }
 
 impl ProcessTable {
-    /// Capture all processes visible to the current user.
+    /// Capture processes for a safety recheck. A collection failure returns an empty table,
+    /// so no missing process can be authorized for signalling. Scanners use [`Self::try_capture`]
+    /// or [`Self::capture_with`] to report incomplete collection explicitly.
     pub fn capture() -> Self {
-        Self::capture_with(&mut System::new())
+        Self::try_capture().unwrap_or_default()
+    }
+
+    /// Capture all visible processes, reporting an unavailable system or user backend.
+    pub fn try_capture() -> std::io::Result<Self> {
+        let mut sys = System::new().map_err(std::io::Error::other)?;
+        Self::capture_with(&mut sys)
     }
 
     /// Capture using a long-lived [`System`], so CPU usage is measured since the previous call.
-    pub fn capture_with(sys: &mut System) -> Self {
+    pub fn capture_with(sys: &mut System) -> std::io::Result<Self> {
         sys.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind());
         let mut cache = USERS.lock().unwrap_or_else(|e| e.into_inner());
         let unknown = |c: &UserCache| {
@@ -165,7 +173,7 @@ impl ProcessTable {
             cache.as_ref().map(|c| c.at.elapsed()),
             cache.as_ref().is_some_and(unknown),
         ) {
-            let users = Users::new_with_refreshed_list();
+            let users = Users::new_with_refreshed_list().map_err(std::io::Error::other)?;
             let missing = sys
                 .processes()
                 .values()
@@ -266,12 +274,11 @@ impl ProcessTable {
         #[cfg(unix)]
         {
             t.user_names = users
-                .list()
                 .iter()
                 .map(|u| (**u.id(), u.name().to_string()))
                 .collect();
         }
-        t
+        Ok(t)
     }
 
     /// Build a table from known processes (used by tests and fixtures).
@@ -452,7 +459,7 @@ impl ProcessTable {
 
 /// sysinfo start time for a single pid (seconds since epoch); used as a fallback identity.
 pub fn sysinfo_start_time(pid: u32) -> Option<u64> {
-    let mut sys = System::new();
+    let mut sys = System::new().ok()?;
     let p = Pid::from_u32(pid);
     sys.refresh_processes_specifics(
         ProcessesToUpdate::Some(&[p]),
