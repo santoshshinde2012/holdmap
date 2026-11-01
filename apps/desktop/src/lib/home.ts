@@ -4,7 +4,7 @@
 import { accessHeadline } from "./agents";
 import { configSummary, isUnpinned, launchLine, riskySettings, type ConfigSummary } from "./agent-config";
 import { insightNeeds, type Insights } from "./analyzers";
-import type { AccessLevel, Agent, AgentsReport, PortEntry } from "./types";
+import type { Agent, AgentsReport, PortEntry } from "./types";
 
 export interface Overview {
   agents: number | null;
@@ -90,13 +90,24 @@ export function attention(entries: PortEntry[] | null, report: AgentsReport | nu
   return items.sort((a, b) => (a.severity === b.severity ? (a.title < b.title ? -1 : a.title > b.title ? 1 : 0) : a.severity === "high" ? -1 : 1));
 }
 
-export const ACCESS_LABEL: Record<AccessLevel, string> = { restricted: "Restricted", standard: "Standard", elevated: "Elevated", unknown: "Unknown" };
+export { ACCESS_LABEL } from "./agents";
 
 /** The agent an attention item is about: its target agent, or the agent holding its port. */
 export function attentionAgent(item: AttentionItem, report: AgentsReport | null): string | null {
   if (item.target.view === "agents") return item.target.agentId;
   const entryId = item.target.entryId;
   return report?.agents.find((a) => a.ports.some((p) => p.entry_id === entryId))?.id ?? null;
+}
+
+/** "Needs you" titles by the agent each item belongs to; items about the agent itself come first. */
+export function needsByAgent(items: readonly AttentionItem[], report: AgentsReport | null): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const ordered = [...items].sort((a, b) => Number(b.target.view === "agents") - Number(a.target.view === "agents"));
+  for (const item of ordered) {
+    const id = attentionAgent(item, report);
+    if (id) out.set(id, [...(out.get(id) ?? []), item.title]);
+  }
+  return out;
 }
 
 /** Agents whose attention concerns the agent itself; port and MCP issues belong to their node. */

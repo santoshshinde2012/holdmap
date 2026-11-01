@@ -63,7 +63,17 @@
   Add any MCP server in three steps: source, tools, review.
 - **Home, maps and graphs.** Agents as Cards or a Map with a Timeline and a **Needs you**
   list, the service graph with clusters, and agent flow.
-- **Local capture.** Records only the holdmap window to MP4/GIF, plus PNG snapshots. Other apps and your desktop are never captured. Nothing is uploaded.
+- **3D machine (Unreleased).** Home's **3D** layout builds the same agents as a model you can
+  take apart: a district per agent with its tower, folders and ports, its processes and the
+  configuration found on disk on trays above it, CPU gauges, network ripples and connections that
+  move their way. Lenses show one concern at a time, with X-ray, a floor plan and a guided tour.
+  Every link comes from what holdmap observed; nothing is joined by name.
+- **Menu bar and tray widget (Unreleased).** Small menu-bar items on macOS like a system
+  monitor's (agents, what needs you, their CPU, dev servers, a CPU line or per-agent bars) and a
+  badge on every OS. A click opens a panel: headline numbers, an agent CPU chart, a Needs you
+  history, ports and port changes, and your dev servers and busiest agents. macOS, Windows and
+  Linux; stops still open the reviewed plan.
+- **Local capture.** Records only the holdmap window to MP4/GIF, plus PNG snapshots, of the whole window or a part you choose. Other apps and your desktop are never captured. Nothing is uploaded.
 - **Scriptable.** Every read command takes `--json`. holdmap has no product analytics.
 
 ## Architecture

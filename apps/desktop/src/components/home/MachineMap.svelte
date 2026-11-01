@@ -5,7 +5,8 @@
   import { ACCESS_LABEL } from "../../lib/home";
   import { accessHeadline, monogram } from "../../lib/agents";
   import Icon from "../Icon.svelte";
-  import { MAP_RINGS, MAP_STRETCH, avoidCollisions, mapBounds, type Box, type FootprintNode, type radialLayout } from "../../lib/machine-map";
+  import { onMount } from "svelte";
+  import { MAP_RINGS, MAP_STRETCH, avoidCollisions, estimateWidth, mapBounds, type Box, type FootprintNode, type radialLayout, type TextWidth } from "../../lib/machine-map";
 
   type Group = ReturnType<typeof radialLayout>[number];
   let { groups: laidOut, colors, platform, ports, active, selected, hot, onhover, onselect, onopen, onport }: {
@@ -40,11 +41,43 @@
   // Keep labels legible when the stage is small: counter-scale node bodies (not positions).
   // The view box is then fitted to nodes and labels at that scale, so nothing clips at the edges.
   let w = $state(0), h = $state(0);
-  const base = $derived(mapBounds(laidOut, 1));
+  // Labels are laid out from their real widths in the font they're drawn in, so they never
+  // overlap whatever a platform's text rendering does; measured again once web fonts load.
+  let measure = $state<TextWidth>(estimateWidth);
+  let fontsReady = $state(typeof document === "undefined" || !document.fonts);
+  onMount(() => {
+    let live = true;
+    const update = () => { if (live && svg) measure = fontWidths(svg); };
+    update();
+    void document.fonts?.ready.then(() => { update(); if (live) fontsReady = true; });
+    return () => { live = false; };
+  });
+  // The map shows once its first layout is final (the stage measured, the fonts loaded), so
+  // nothing jumps as it opens and a click lands where the node stays.
+  const settled = $derived(fontsReady && w > 0 && h > 0);
+  function fontWidths(root: Element): TextWidth {
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (!ctx || !root.parentElement) return estimateWidth;
+    // A probe beside the map inherits its family; the sizes and weights are the labels' own tokens.
+    const probe = document.createElement("span");
+    probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap";
+    root.parentElement.appendChild(probe);
+    const font = (size: string, weight: string) => { probe.style.fontSize = size; probe.style.fontWeight = weight; const c = getComputedStyle(probe); return `${c.fontWeight} ${c.fontSize} ${c.fontFamily}`; };
+    const fonts = { label: font("var(--fs-body-sm)", "var(--fw-medium)"), sub: font("var(--fs-caption)", "400"), agent: font("var(--fs-body)", "var(--fw-semibold)") };
+    probe.remove();
+    const cache = new Map<string, number>();
+    return (text, kind) => {
+      const key = `${kind}\n${text}`;
+      let width = cache.get(key);
+      if (width === undefined) { ctx.font = fonts[kind]; width = ctx.measureText(text).width; cache.set(key, width); }
+      return width;
+    };
+  }
+  const base = $derived(mapBounds(laidOut, 1, 24, measure));
   const k = $derived(w && h ? Math.min(1.8, Math.max(1, Math.sqrt(1 / Math.min(w / base.w, h / base.h)))) : 1);
   // Labels are pushed apart at the scale they're drawn at, so none overlap.
-  const groups = $derived(avoidCollisions(laidOut, k));
-  const fit = $derived(mapBounds(groups, k));
+  const groups = $derived(avoidCollisions(laidOut, k, 4, 80, measure));
+  const fit = $derived(mapBounds(groups, k, 24, measure));
 
   // Zoom and pan: a zoom factor and a centre in map units. Selecting an agent focuses its sector;
   // Fit (or clearing the selection) shows everything again.
@@ -53,7 +86,7 @@
   const focusBox = $derived.by<Box | null>(() => {
     const g = groups.find((g) => g.agent.id === selected);
     if (!g) return null;
-    const own = mapBounds([g], k, 40);
+    const own = mapBounds([g], k, 40, measure);
     const x0 = Math.min(own.x, -80), x1 = Math.max(own.x + own.w, 80), y0 = Math.min(own.y, -40), y1 = Math.max(own.y + own.h, 40);
     return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   });
@@ -113,7 +146,7 @@
   <button type="button" aria-label={selected ? "Show every agent" : "Fit the map"} title={selected ? "Show every agent (0)" : "Fit (0)"} onclick={resetView}><Icon name="fit" size={13} /></button>
 </div>
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-<svg bind:this={svg} viewBox="{box.x} {box.y} {box.w} {box.h}" class="map" class:grabbing={!!drag} role="group" aria-label="Machine map. Scroll or press + and − to zoom, drag to pan, 0 to fit." style="--k: {k}" tabindex="0"
+<svg bind:this={svg} viewBox="{box.x} {box.y} {box.w} {box.h}" class="map" class:grabbing={!!drag} role="group" aria-label="Machine map. Scroll or press + and − to zoom, drag to pan, 0 to fit." class:pending={!settled} style="--k: {k}" tabindex="0"
   {onwheel} onpointerdown={ondown} onpointermove={onmove} onpointerup={onup} onpointercancel={onup} onkeydown={mapKey}>
   <defs>
     <radialGradient id="map-glow"><stop offset="0" stop-color="var(--accent)" stop-opacity="0.10" /><stop offset="1" stop-color="var(--accent)" stop-opacity="0" /></radialGradient>
@@ -181,6 +214,7 @@
   .chip-n { text-anchor: middle; font-size: var(--fs-caption); font-weight: var(--fw-semibold); fill: var(--text); pointer-events: none; }
   .body { transform: scale(var(--k)); }
   .map { width: 100%; height: 100%; display: block; font-family: inherit; overflow: visible; }
+  .map.pending { visibility: hidden; }
   .orbit { fill: none; stroke: var(--border); stroke-dasharray: 2 6; }
   .orbit.faint { stroke-dasharray: 1 9; }
   .spoke { stroke: color-mix(in srgb, var(--agent) 50%, transparent); stroke-width: 1.5; }

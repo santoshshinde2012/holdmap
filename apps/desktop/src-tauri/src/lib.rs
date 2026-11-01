@@ -79,6 +79,9 @@ pub fn run() {
         .manage(screen_recording::ScreenRecordingState::default())
         .manage(screen_snapshot::ScreenSnapshotState::default())
         .invoke_handler(local_window::guard(tauri::generate_handler![
+            tray::panel::tray_panel,
+            tray::panel::tray_action,
+            tray::tray_status,
             commands::app_info,
             commands::scan,
             commands::topology,
@@ -189,6 +192,8 @@ pub fn run() {
         })
         .setup(move |app| {
             let handle = app.handle().clone();
+            // Shown in the Dock unless set to run as a menu-bar app (macOS).
+            tray::apply_dock(&handle, app.state::<AppState>().store.config().show_in_dock);
             let tray_ok = match tray::setup_tray(&handle) {
                 Ok(()) => true,
                 Err(e) => {

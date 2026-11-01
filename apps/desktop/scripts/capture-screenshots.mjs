@@ -135,6 +135,21 @@ async function openHome(page, layout = "Cards") {
   return overview;
 }
 
+/** Home → 3D, once the first frame has placed its labels. Software WebGL is accepted for captures. */
+async function openHome3d(page) {
+  await page.getByRole("radio", { name: /^Home/ }).click();
+  const overview = page.getByRole("region", { name: "Overview", exact: true });
+  await overview.getByRole("radiogroup", { name: "Home layout", exact: true }).getByRole("radio", { name: /^3D/ }).click();
+  const parts = overview.getByRole("navigation", { name: "Machine parts", exact: true });
+  const anyway = overview.getByRole("button", { name: "Use 3D anyway", exact: true });
+  await expect(parts.or(anyway)).toBeVisible({ timeout: 15_000 });
+  if (await anyway.isVisible()) await anyway.click();
+  await expect(parts, "3D captures need WebGL 2 in the capture browser").toBeVisible();
+  await expect(overview.getByRole("region", { name: "Live readings: This computer", exact: true })).toContainText("of 7 configured");
+  await expect(overview.locator(".stage3d .lbl").filter({ hasText: "Cursor" }).first()).toBeVisible();
+  return overview;
+}
+
 async function openPortMenu(page) {
   const overview = await openHome(page);
   await card(page, "Cursor").getByRole("button", { name: /^Port 3000 / }).click();
@@ -551,6 +566,15 @@ const captures = [
         const overview = await openHome(page, "Map");
         await expect(overview.getByRole("table", { name: "Agent lanes", exact: true })).toBeVisible();
       } },
+      // A taller window gives the 3D stage room; 1.5× keeps the shaded render within the 1 MB budget.
+      { ...home, viewport: { width: 1440, height: 960 }, deviceScaleFactor: 1.5, name: `desktop-home-3d-${theme}.png`, async prepare(page) { await openHome3d(page); } },
+      { ...home, viewport: { width: 1440, height: 960 }, deviceScaleFactor: 1.5, name: `desktop-home-3d-xray-${theme}.png`, async prepare(page) {
+        const overview = await openHome3d(page);
+        await overview.getByRole("radiogroup", { name: "Assembly", exact: true }).getByRole("radio", { name: /Exploded/ }).click();
+        await overview.getByRole("button", { name: /^X-ray/ }).click();
+        await expect(overview.getByRole("button", { name: /^X-ray/ })).toHaveAttribute("aria-pressed", "true");
+        await expect(overview.locator(".stage3d .lbl.k-plate").first()).toBeVisible();
+      } },
       { ...home, name: `desktop-home-port-menu-${theme}.png`, async prepare(page) { await openPortMenu(page); } },
       { ...home, name: `desktop-home-stop-plan-${theme}.png`, async prepare(page) {
         const { menu } = await openPortMenu(page);
@@ -642,6 +666,14 @@ const captures = [
     await palette.getByRole("combobox").fill("sto");
     await expect(palette.getByRole("option").first()).toBeVisible();
   } },
+  // The tray popup panel is its own page (tray.html), shot at the size the app opens it.
+  ...["light", "dark"].map((theme) => ({
+    name: `desktop-tray-panel-${theme}.png`, theme, path: "/tray.html", viewport: { width: 360, height: 600 },
+    async prepare(page) {
+      await expect(page.getByRole("img", { name: /^Agent CPU over the last \d+ scans/ })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Claude Code listens on all interfaces/ })).toBeVisible();
+    },
+  })),
   { name: "desktop-settings-dark.png", theme: "dark", async prepare(page) {
     await selectPort(page);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -729,8 +761,8 @@ try {
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
       await page.clock.setFixedTime(new Date("2026-10-10T10:00:00Z"));
-      await page.goto(baseURL + (capture.query ?? ""));
-      await expect(page.getByRole("listbox", { name: "Ports in use" }).getByRole("option")).toHaveCount(11);
+      await page.goto(baseURL + (capture.path ?? "") + (capture.query ?? ""));
+      if (!capture.path) await expect(page.getByRole("listbox", { name: "Ports in use" }).getByRole("option")).toHaveCount(11);
       assert.equal(await page.evaluate(() => "__TAURI_INTERNALS__" in window), false, "Screenshots must use browser sample data");
       await page.evaluate(() => document.fonts.ready);
       const target = await capture.prepare(page);

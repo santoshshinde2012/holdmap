@@ -15,16 +15,90 @@ Release-by-release changes are in [What's new](../whats-new/) and the
 
 ## Home and first open
 
-**Home** shows agents, listening ports, dev
-servers, exposed listeners and running MCP servers, as **Cards** or a **Map** (toggle at the
-top right or press `V`; the choice is remembered). Cards list each agent's projects, ports,
+**Home** shows agents, listening ports, dev servers, exposed listeners and running MCP servers,
+as **Cards**, a **Map** or, in the current source (**Unreleased**), **3D**. Choose at the top
+right or press `V` to cycle; the choice is remembered. Cards list each agent's projects, ports,
 MCP servers and skills; Map draws the same footprint around this computer with a collapsible
 **Timeline**. **Needs you** lists agents on all interfaces, root or elevated access, risky
 safety settings, unpinned MCP servers and exposed dev servers. Click any port (a card chip, a
 map node or a timeline pin) for **Details** or **Stop…**; every **Stop…** opens the stop plan
 first. Select an agent once to highlight it everywhere; select it again to open it on
-Agents. Counts read **…** until the first scan. On a narrow window the Map becomes a list
+Agents. Counts read **…** until the first scan. On a narrow window the Map and 3D become a list
 of agents, each with its ports and the same **Details** / **Stop…** menu.
+
+Every panel on Home folds away and comes back, and Home remembers how you left it: the summary
+(the chevron at the left of the header), the side column (the panel button at the right of the
+header), and each panel in it (click its heading). In 3D the parts list folds to a strip of
+agent buttons.
+
+**Current source (Unreleased):** **3D** builds the same machine as a model you can take apart,
+drawn without perspective, so sizes and spacing read the same at the front and the back. Each
+agent has its own **district** on the board, a street apart from the next: its tower at the
+back, the folders it works in, then the ports it holds along the front edge, with its name on a
+plate below. Its processes stand on a **Runtime** tray over the same district, and the MCP
+servers, skills and instruction files found on disk on a **Configuration** tray above that
+(only after **Read MCP config**). Everything over a district belongs to that agent, so no line
+is needed to say so. **This computer** is the chip at the left end of the board.
+
+- **Shapes and rings mean one thing each.** The icon on a part's top face says what it is
+  (`>_` a shell, `</>` a dev server, a plug an MCP server, a folder, a socket). The ring round a
+  tower's base is its **CPU** gauge: it widens with load and turns orange from 60% and red from
+  80%. Amber ripples spread from a port **open to the network**; a pin marks anything that
+  **needs you**; a red ring circles an agent that does. Solid parts were seen now, faded ones
+  inferred, blueprint ones are files on disk.
+- **Lines carry a direction.** An arrowhead marks the end that receives: a process from its
+  parent, a port from the process that holds it. Dots travel the same way along a connection,
+  up an agent's mast to its remote hosts, and down a green beam from an MCP server to the
+  process running it. Lines that only say ownership (folders, configuration, ports the agent
+  itself holds) appear for the part under the pointer or selected.
+- **Lenses** show one concern at a time: **All**, **Network** (ports, who holds them and where
+  connections go), **Runtime** (processes and their tree), **Config** (what's on disk and what
+  runs it), **Needs you**, and **Calls** once recording has been used. `L` steps through them.
+- **Exploded** (the default) and **Assembled** (`E`) lift the trays straight up or settle them;
+  dashed guides show where each tray came from. **X-ray** (`X`) turns solid parts to glass and
+  shows each agent's processes as slices inside its tower. **Plan** looks straight down at the
+  floor plan.
+- Hover any part to light it and what it's wired to, and dim the rest. Click an agent's tower or
+  district to select it (again to open it on Agents); click a part for its details. The parts
+  list beside the canvas has a button for every agent and part, and is the keyboard path to
+  everything drawn (`↑`/`↓` move between buttons). Ports open the same **Details** / **Stop…**
+  menu.
+- **Details**, above **Needs you** in the side column, holds the readings and the selected part.
+  The readings come from the same parts that are drawn: CPU (with its recent trend), memory,
+  ports, processes, MCP servers running of configured, skills, **Needs you** and, once recording
+  has been used, **Calls**, for the whole computer or the selected agent. They read **…** until
+  the first scan, and a figure that wasn't collected reads **Not read**, never 0. Readings that
+  count parts are toggles: press one to light up exactly those parts; `Esc` lets go.
+- **Focus** hides the summary and the side column so the machine fills Home; the readings and
+  the selected part then ride over the canvas. The `+`, `−` and fit buttons on the right edge
+  zoom without a wheel, and scrolling zooms toward the pointer.
+- **Tour** (`T`) walks through the machine, agents that need you first. Any drag, scroll, click or
+  key hands you control, and the tour picks up again after 25 seconds of quiet. It is off with
+  reduced motion.
+- Drag to turn, right-drag or Shift-drag to pan, scroll to zoom; with the canvas focused, arrow
+  keys turn, `+` and `−` zoom and `0` resets. `E`, `X`, `L`, `T` and `F` (fit) are single-key
+  shortcuts: they follow that setting and leave a focused button alone. `Esc` stops the tour,
+  then clears the selected part, then a pressed reading.
+
+With local recording on (**Agents → Flow → Calls**), recorded calls sit on a **Recorded calls**
+shelf at the right end of the board, newest first: blue for tool calls, violet for model
+requests, red for failures; a call still running breathes. An agent integration reports them,
+so they stay on their shelf, apart from every district: no line joins a call to a process or a
+configured server, even when a name or a PID looks the same.
+
+Every link in 3D comes from what holdmap observed: a process tree, a held listener, an open
+connection, a working folder, or a configuration file of that agent. A configured MCP server is
+drawn as a blueprint part; a green beam joins it to a process only when one of that agent's own
+processes runs it. Nothing is joined by name. 3D needs WebGL 2:
+without it Home shows the Map and says why, and with software-only rendering it asks first. It
+loads only when chosen, redraws only when something changes (plus the flows and ripples, still
+with reduced motion), and pauses while the window is hidden.
+
+These screenshots show the Unreleased 3D layout with browser sample data:
+
+![Home as 3D in light theme: a district per agent on the board, each with its tower, folders and ports, its runtime and configuration trays lifted above it, Details and Needs you in the side column](../../../../docs/screenshots/desktop-home-3d-light.png)
+
+![Home as 3D with X-ray in dark theme: the trays pulled apart with dashed guides, glass towers showing process slices, and a green beam from a running MCP server down to its process](../../../../docs/screenshots/desktop-home-3d-xray-dark.png)
 
 **Copy summary** puts the overview and **Needs you** on the clipboard as plain text for a
 ticket or chat; **Download JSON** saves the same facts as a file. Neither starts a scan, and
@@ -42,12 +116,82 @@ shortcuts with their current settings. **Skip** changes nothing.
 ## Close, reopen and quit
 
 When the menu-bar or tray icon is available, closing the desktop window keeps Holdmap
-running, including active schedules and recording. Click the icon to reopen the window,
-or use your configured global shortcut. Choose **Quit holdmap** from the icon's menu to
+running, including active schedules and recording. Choose **Open holdmap** from the icon's
+panel or menu to reopen the window (on Windows, a double click on the icon also opens it), or
+use your configured global shortcut. Choose **Quit holdmap** from the icon's panel or menu to
 exit completely. If the tray is unavailable, closing the window quits the app.
 
 Closing from fullscreen returns to the previous app without leaving an empty black Space,
 and clicking the Dock icon reopens the same window.
+
+## Menu bar and tray
+
+**Current source (Unreleased):** holdmap's menu-bar or tray icon works like a small system
+monitor for your agents and dev servers, on macOS, Windows and Linux.
+
+- **Menu-bar items.** On macOS each reading is its own small menu-bar item, a short label over
+  a value, the way system monitors show them: **AGENTS** and **NEEDS** to start with. Pick more
+  under **Settings → Appearance → Menu bar**: the **holdmap icon**, **Agent CPU**,
+  **Dev servers**, a **CPU history** line and **Agent bars** (one bar of CPU per running agent).
+  **As one item** puts everything you pick side by side in a single item instead. Readings are
+  drawn in the menu bar's own colour; colour appears only when it means something:
+  **NEEDS** turns amber (worth a look) or red (look now), and **CPU** orange from 60% and red
+  from 80%. Each item keeps the place you `⌘`-drag it to, and the right-click menu has the
+  same choices. Linux panels that show labels get the readings as text, for example
+  `8 agents · 1 need you`; there the choice is under **Panel**. Windows tray icons can't show
+  text, so on Windows the figures are in the icon's tooltip.
+- **Badge.** When something needs you, the icon carries a badge. On Windows and Linux it's a
+  disc with the count, red for items to look at now and amber for items worth a look. On
+  macOS the **holdmap icon** item shows a dot in the same colours.
+- **Panel.** Click an item on macOS, or the icon on Windows (on Linux, choose **Show panel**
+  from its menu), for a panel under it, opened at what you clicked: how many agents are
+  running, their CPU and dev servers in large type, a chart of the agents' CPU over the last
+  60 scans, a **Needs you** history (one square per scan: green for all clear, amber for worth
+  a look, red for look now), **Needs you** with its urgency, a ring of the ports in use (blue on
+  this computer only, amber open to the network), a **Port changes** chart (ports opened above
+  the line, closed below), your dev servers, and the busiest agents with their CPU and memory.
+  It keeps updating while it's open, follows your theme and closes when you click elsewhere or
+  press `Esc`; the pin button keeps it open. Choose an item, a dev server or an agent to open
+  it in the window. **Stop all…** opens the stop plan in the window; nothing is stopped from
+  the panel. The fixed header and compact footer stay in place while only the readings scroll,
+  including when switching menu-bar items. The footer offers **Open holdmap** and named icon
+  buttons for **Quick settings**, **Refresh**, and **Quit** (hover for labels). Quick settings offers System / Light / Dark themes,
+  the widgets available on your desktop, combining menu-bar items and Dock visibility on macOS,
+  and desktop notifications. **All settings** opens the full Settings window. Press `Esc` once
+  to return from quick settings to the overview.
+- **Menu.** Right-click an item on macOS or the icon on Windows (any click on Linux) for the
+  same rows as a native menu, with **Show panel**, **Open holdmap**, what the menu bar shows,
+  **Refresh** and **Quit holdmap**.
+- **Menu bar only.** On macOS, turn off **Settings → General → Show in the Dock** to run
+  holdmap from the menu bar alone, without a Dock icon or app menus. The window still opens
+  from the panel, the menu or your global shortcut.
+
+![Every macOS menu-bar item turned on, on a light menu bar: the holdmap icon with a red dot, AGENTS 4, NEEDS 2 in red, CPU 7%, DEV 3, a CPU history line and four agent bars](../../../../docs/screenshots/desktop-menu-bar-light.png)
+
+![The same menu-bar items on a dark menu bar](../../../../docs/screenshots/desktop-menu-bar-dark.png)
+
+![The tray panel in light theme: agents, agent CPU and dev servers, the CPU history chart, the Needs you history and the lists](../../../../docs/screenshots/desktop-tray-panel-light.png)
+
+![The tray panel in dark theme](../../../../docs/screenshots/desktop-tray-panel-dark.png)
+
+The panel and readings come from the same scan as the window and refresh at the **Scan every**
+cadence (at least every 10 seconds while the window is hidden). CPU is measured between scans,
+so it appears from the second scan, and a chart appears once there are two samples. **Needs you**
+follows the same rules as Home for running agents, ports and approved analyzer findings
+(re-read at most once a minute). Items that come from agents' MCP, skill and permission
+settings appear only in the window, after **Read MCP config**. Opening the panel doesn't bring
+back a window you closed. On Linux the icon needs a desktop with AppIndicator support (on
+GNOME, the AppIndicator extension); Linux trays show no tooltip and report no clicks, so the
+panel opens from the menu.
+
+**Don't see holdmap in the menu bar?** When the menu bar is full, macOS puts new items behind
+the frontmost app's menus, and on a MacBook nothing to the left of the camera notch is shown.
+holdmap notices and says so once, and **Settings → Appearance → Menu bar** names the hidden
+items while it lasts. Fewer items help, and **As one item** needs less room than separate ones.
+Hold `⌘` and drag a few icons out of the menu bar; holdmap's items appear, and you can
+`⌘`-drag them where you want them. holdmap keeps those places. On Windows 11, new tray icons start
+in the hidden icons area (`^`): drag holdmap onto the taskbar, or turn it on under
+**Settings → Personalization → Taskbar → Other system tray icons**.
 
 ## Service graph and cluster grouping
 
@@ -105,6 +249,13 @@ anything wider, such as a whole screen or another window, without recording a fr
 | **Share a clip** | GIF, 10 frames a second, up to 800 px wide | 15 seconds | at most 10 MB |
 | **Full session** | MP4 (H.264) | 30 minutes | about 4 MB a minute for a mostly still screen, up to about 22 MB a minute with constant motion |
 | **Custom** | MP4, GIF or both | 15 seconds to 1 hour | live estimate in the dialog |
+
+**Area** works as it does for snapshots: **Part of the window** has you choose the area after
+**Choose area…**, and only that part is recorded, framed by a dashed line just outside it (never
+in the video). The macOS app records the area itself, at full resolution, rather than cutting it
+out of a smaller picture of the window. In a browser the area is cut from the shared window's
+frames; if a browser can only record MP4 through MediaRecorder, which can't crop, the MP4 shows
+the whole window and the GIF only the area, and the result says so.
 
 The dialog shows the expected size and when recording will stop before you choose a screen.
 A timer in the title bar replaces the dialog so this window can be part of the capture. It
@@ -170,6 +321,14 @@ PNG snapshots are separate from video recording. Open the camera button, choose
 - During video recording, **Recording window** replaces the new-source choice. It takes
   a still from the window being recorded without stopping the video. The
   command palette also offers **Snapshot recording window** while that is available.
+
+**Area** takes the **Whole window** or **Part of the window**. For a part, **Choose area…** dims
+the window: drag to draw the area, drag inside it to move it, drag a handle to resize it, or
+click a panel (the 3D canvas, a side panel, the summary, a pane) to take exactly that panel. The
+size shows as you go. Arrow keys move the area a pixel at a time (with Shift, ten), Alt with
+the arrows resizes it, **Enter** captures and **Esc** goes back to the dialog. The picker leaves
+the window before anything is captured, and the PNG is exactly that part, at the window's own
+pixel density. The last area is offered again for the rest of the session.
 
 Review the PNG before saving. Images preserve their aspect ratio within **3840×2160** and
 **32 MiB**. **Download PNG** opens a native save dialog in the desktop app; the browser

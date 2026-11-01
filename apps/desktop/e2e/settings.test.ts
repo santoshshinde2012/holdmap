@@ -68,8 +68,35 @@ test("settings preserve composition, modified navigation and the modal tab order
   await expect(dark).toBeFocused();
   await app.keyboard.press("Tab");
   await expect(settings.getByRole("radio", { name: "Comfortable", exact: true })).toBeFocused();
+  // The menu-bar checklist (every item in the browser preview), then "As one item".
+  for (const item of ["holdmap icon", "Agents", "Needs you", "Agent CPU", "Dev servers", "CPU history", "Agent bars"]) {
+    await app.keyboard.press("Tab");
+    await expect(settings.getByRole("checkbox", { name: new RegExp(`^${item}`) })).toBeFocused();
+  }
+  await app.keyboard.press("Tab");
+  await expect(settings.getByRole("switch", { name: "As one item", exact: true })).toBeFocused();
   await app.keyboard.press("Tab");
   await expect(done).toBeFocused();
+});
+
+test("menu-bar items are saved and kept when Settings reopens", async ({ app }) => {
+  await app.getByRole("button", { name: "Settings", exact: true }).click();
+  let settings = app.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.getByRole("tab", { name: "Appearance", exact: true }).click();
+  await expect(settings.getByRole("heading", { name: "Menu bar", exact: true })).toBeVisible();
+  const history = () => settings.getByRole("checkbox", { name: /^CPU history/ });
+  await expect(settings.getByRole("checkbox", { name: /^Agents/ })).toBeChecked();
+  await expect(history()).not.toBeChecked();
+  await history().check();
+  await expect(settings.getByText("Saved", { exact: true })).toBeVisible();
+  await settings.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(settings).toBeHidden();
+
+  await app.getByRole("button", { name: "Settings", exact: true }).click();
+  settings = app.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.getByRole("tab", { name: "Appearance", exact: true }).click();
+  await expect(history()).toBeChecked();
+  await expect(settings.getByRole("checkbox", { name: /^Needs you/ })).toBeChecked();
 });
 
 test("settings controls retain successful changes across sections and reopening", async ({ app }) => {

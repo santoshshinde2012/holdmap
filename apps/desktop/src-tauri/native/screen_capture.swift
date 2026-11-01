@@ -27,6 +27,8 @@ private struct RecordingOptions {
     var gifFPS = 8
     var gifEdge = 640
     var gifBytes: Int64 = 25 * 1024 * 1024
+    /// Part of the window, in points from its top left; nil records the whole window.
+    var region: CGRect?
     init() {}
     init?(_ raw: Any?) {
         guard let raw else { return }
@@ -43,6 +45,14 @@ private struct RecordingOptions {
         gifFPS = Int(number("gif_fps", 1, 15, Double(gifFPS)))
         gifEdge = Int(number("gif_max_edge", 160, 960, Double(gifEdge)))
         gifBytes = Int64(number("gif_max_bytes", 1024 * 1024, Double(gifByteCeiling), Double(gifBytes)))
+        if let area = values["region"] as? [String: Any] {
+            func side(_ key: String) -> Double? {
+                guard let value = (area[key] as? NSNumber)?.doubleValue, value.isFinite, value >= 0 else { return nil }
+                return value
+            }
+            guard let x = side("x"), let y = side("y"), let w = side("width"), let h = side("height"), w >= 32, h >= 32 else { return nil }
+            region = CGRect(x: x, y: y, width: w, height: h)
+        }
     }
 }
 private let captureQueue = DispatchQueue(label: "holdmap.capture.samples")
@@ -219,7 +229,14 @@ private final class CaptureSession: NSObject, SCStreamDelegate {
             selectedFilter = filter
             let rect = filter.contentRect
             let scale = Double(filter.pointPixelScale)
-            let sourceWidth = rect.width * scale, sourceHeight = rect.height * scale
+            // A chosen area, kept inside the window as it is now; otherwise the whole window.
+            var source = CGRect(origin: .zero, size: rect.size)
+            if let area = options.region {
+                let inside = area.intersection(source)
+                guard !inside.isNull, inside.width >= 32, inside.height >= 32 else { fail("invalid_dimensions"); return }
+                source = inside.integral
+            }
+            let sourceWidth = source.width * scale, sourceHeight = source.height * scale
             guard sourceWidth.isFinite, sourceHeight.isFinite, sourceWidth > 0, sourceHeight > 0 else {
                 fail("invalid_dimensions"); return
             }
@@ -238,6 +255,7 @@ private final class CaptureSession: NSObject, SCStreamDelegate {
             if #available(macOS 15.0, *) { config.captureMicrophone = false }
             config.showsCursor = true
             config.scalesToFit = true
+            if options.region != nil { config.sourceRect = source }
             let next = SCStream(filter: filter, configuration: config, delegate: self)
             try next.addStreamOutput(writerSink, type: .screen, sampleHandlerQueue: captureQueue)
             stream = next

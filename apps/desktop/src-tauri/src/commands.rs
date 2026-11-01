@@ -3,7 +3,6 @@
 
 use crate::confirmation::{validate_fresh, Preview};
 use crate::state::{scan_now, AppState};
-use crate::tray::refresh_tray;
 use holdmap_core::agents::AgentsReport;
 use holdmap_core::history::{self, HistoryEntry};
 use holdmap_core::store::{Config, Store};
@@ -172,11 +171,8 @@ pub async fn scan(
     }
     let max_age = max_age_ms.map_or(FRESH, Duration::from_millis);
     let handle = app.clone();
-    let snapshot = blocking(move || handle.state::<AppState>().snapshot(all, max_age)).await?;
-    // The tray menu is updated on the main thread; don't make the scan wait for it.
-    let (handle, snap) = (app.clone(), snapshot.clone());
-    let _ = app.run_on_main_thread(move || refresh_tray(&handle, &snap));
-    Ok(snapshot)
+    // The watcher refreshes the tray at the same cadence, reusing this scan.
+    blocking(move || handle.state::<AppState>().snapshot(all, max_age)).await
 }
 
 /// Agent footprint from a scan no older than one second, with optional local capability metadata.
@@ -660,12 +656,16 @@ pub async fn unpin(app: AppHandle, port: u16) -> Result<Config, String> {
     .await
 }
 
-/// Scan interval and history length (validated against the core's allowed ranges).
+/// Scan interval, history length, what the menu bar / tray shows and the Dock icon (validated
+/// against the core's allowed values).
 #[tauri::command]
 pub async fn set_preferences(
     app: AppHandle,
     scan_interval_secs: Option<u64>,
     history_limit: Option<usize>,
+    tray_items: Option<Vec<String>>,
+    tray_combined: Option<bool>,
+    show_in_dock: Option<bool>,
 ) -> Result<Config, String> {
     if let Some(s) = scan_interval_secs {
         if !Config::SCAN_INTERVAL.contains(&s) {
@@ -685,7 +685,19 @@ pub async fn set_preferences(
             ));
         }
     }
-    with_store(app, move |store| {
+    if let Some(unknown) = tray_items
+        .iter()
+        .flatten()
+        .find(|i| !Config::TRAY_ITEMS.contains(&i.as_str()))
+    {
+        return Err(format!(
+            "The menu bar can't show \"{unknown}\"; it shows {}",
+            Config::TRAY_ITEMS.join(", ")
+        ));
+    }
+    let restyle = tray_items.is_some() || tray_combined.is_some();
+    let handle = app.clone();
+    let config = with_store(app, move |store| {
         save(store, |c| {
             if let Some(s) = scan_interval_secs {
                 c.scan_interval_secs = s;
@@ -693,9 +705,29 @@ pub async fn set_preferences(
             if let Some(h) = history_limit {
                 c.history_limit = h;
             }
+            if let Some(items) = tray_items {
+                c.tray_items = items;
+            }
+            if let Some(combined) = tray_combined {
+                c.tray_combined = combined;
+            }
+            if let Some(show) = show_in_dock {
+                c.show_in_dock = show;
+            }
         })
     })
-    .await
+    .await?;
+    if let Some(show) = show_in_dock {
+        crate::tray::apply_dock(&handle, show);
+    }
+    if restyle {
+        blocking(move || {
+            crate::tray::restyle(&handle);
+            Ok(())
+        })
+        .await?;
+    }
+    Ok(config)
 }
 
 #[derive(Serialize)]

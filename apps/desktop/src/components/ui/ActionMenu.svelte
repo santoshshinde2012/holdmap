@@ -39,13 +39,19 @@
   function outside(e: PointerEvent) {
     if (open && !menu?.contains(e.target as Node) && !btn?.contains(e.target as Node)) close(false);
   }
+  // While open, Esc closes the menu wherever focus is (focus moves in a frame after opening), and
+  // before the same key reaches anything under it.
+  function escape(e: KeyboardEvent) {
+    if (!open || e.key !== "Escape" || isComposingKey(e) || e.altKey || e.ctrlKey || e.metaKey) return;
+    e.preventDefault(); e.stopPropagation(); close();
+  }
   function run(item: MenuItem) {
     close();
     item.run();
   }
 </script>
 
-<svelte:window onpointerdown={outside} />
+<svelte:window onpointerdown={outside} onkeydowncapture={escape} />
 
 <div class="wrap">
   <IconButton bind:el={btn} icon="more" {label} {size} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} onclick={() => (open ? close() : show())} />

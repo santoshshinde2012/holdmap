@@ -283,3 +283,41 @@ for (const theme of ["dark", "light"]) {
     await expect(app.getByRole("button", { name: "Take snapshot", exact: true })).toBeFocused();
   });
 }
+
+test("a snapshot of part of the window is exactly that part, at the window's pixel density", async ({ app }) => {
+  await app.getByRole("button", { name: "Take snapshot", exact: true }).click();
+  await chooser(app).getByRole("radiogroup", { name: "Snapshot area" }).getByRole("radio", { name: "Part of the window" }).click();
+  await chooser(app).getByRole("button", { name: "Choose area…", exact: true }).click();
+  const picker = app.getByRole("dialog", { name: "Choose an area for the snapshot" });
+  await expect(picker).toBeVisible();
+  await expect(chooser(app)).toHaveCount(0);
+  // Drag an area, then nudge it with an arrow and grow it a pixel with Alt and an arrow.
+  await app.mouse.move(200, 150);
+  await app.mouse.down();
+  await app.mouse.move(520, 330, { steps: 4 });
+  await app.mouse.up();
+  const readout = picker.getByRole("toolbar", { name: "Area" });
+  await expect(readout).toContainText("320 × 180");
+  await app.keyboard.press("ArrowRight");
+  await app.keyboard.press("Alt+ArrowDown");
+  await expect(readout).toContainText("320 × 181");
+  await picker.getByRole("button", { name: "Capture area", exact: true }).click();
+  await expect(picker).toHaveCount(0);
+  await expect(preview(app)).toBeVisible();
+  const scale = await app.evaluate(() => Math.min(2, Math.max(1, devicePixelRatio)));
+  await expect(preview(app)).toContainText(`PNG · ${320 * scale}×${181 * scale}`);
+  const { bytes } = await downloadPng(app);
+  expect(await decodeImage(app, bytes)).toMatchObject({ width: 320 * scale, height: 181 * scale });
+});
+
+test("Esc leaves the area picker without capturing, and the snapshot dialog comes back", async ({ app }) => {
+  await app.getByRole("button", { name: "Take snapshot", exact: true }).click();
+  await chooser(app).getByRole("radiogroup", { name: "Snapshot area" }).getByRole("radio", { name: "Part of the window" }).click();
+  await chooser(app).getByRole("button", { name: "Choose area…", exact: true }).click();
+  const picker = app.getByRole("dialog", { name: "Choose an area for the snapshot" });
+  await expect(picker).toBeVisible();
+  await app.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await expect(chooser(app)).toBeVisible();
+  await expect(preview(app)).toHaveCount(0);
+});

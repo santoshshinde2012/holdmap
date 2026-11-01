@@ -8,6 +8,41 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- Home gets a **3D** layout next to Cards and Map: the same agents as a model you can take apart, drawn without perspective so sizes read the same front to back. Each agent has its own district on the board, a street apart: its tower in a CPU gauge ring (orange from 60%, red from 80%), the folders it works in, and the ports it holds along the front edge, with its name below. Its processes stand on a **Runtime** tray over the district and the MCP servers, skills and instruction files found on disk (after **Read MCP config**) on a **Configuration** tray above that, so everything over a district is that agent's. Each part's top face carries an icon for what it is; amber ripples spread from ports open to the network; pins mark what needs you. Lines carry their direction: arrowheads at the receiving end, dots moving along connections, up each agent's mast to its remote hosts, and down a green beam from a running MCP server to its process; lines that only say ownership appear for the part under the pointer. **Lenses** (All, Network, Runtime, Config, Needs you, Calls; `L`) show one concern at a time. **Exploded** (the default) lifts the trays straight up with dashed guides, **X-ray** shows each agent's processes as slices inside its tower, **Plan** looks straight down at the floor plan, and **Tour** walks through the machine, agents that need you first, handing control back on any input. Hovering lights a part and what it's wired to; the readings and the selected part sit in **Details** above **Needs you**, and pressing a reading lights exactly the parts it counts. With local Calls recording, recorded calls sit on a shelf of their own, never joined to a process or a configured server. Every link comes from a process tree, a held listener, an open connection, a working folder or the agent's own configuration; a configured MCP server joins a process only when that agent's own process runs it, and nothing is joined by name. Without WebGL 2 Home shows the Map and says why; software-only rendering asks first.
+- Every panel on Home folds away and comes back, remembered: the summary, the side column (**Details** and **Needs you**, each under a heading that folds it) and the 3D parts list, which folds to a strip of agent buttons.
+- Snapshots and screen recordings can take **Part of the window**: drag over the window to choose the area (or click a panel to take exactly it), move it, resize it with handles or Alt and the arrows, then capture or record. A snapshot is exactly that part at the window's pixel density. The macOS app records the area itself at full resolution through ScreenCaptureKit's `sourceRect`, framed by a dashed line just outside it; browsers crop the shared window's frames.
+- The desktop menu-bar / tray icon becomes a live widget, like a system monitor's, on macOS, Windows and Linux.
+  - **Menu-bar items:** on macOS each reading is its own small item, a short label over a value like a system monitor's: **AGENTS** and **NEEDS** by default, and **Settings → Appearance → Menu bar** adds the **holdmap icon**, **Agent CPU**, **Dev servers**, a **CPU history** line and **Agent bars** (one bar of CPU per agent), or puts them all in one item (**As one item**). The right-click menu has the same choices. Readings take the menu bar's own colour; colour appears only for state: **NEEDS** amber or red, **CPU** orange from 60% and red from 80%. Linux panels that show labels get the readings as text (**Settings → Appearance → Panel**). Windows tray icons can't show text, so there the figures are in the tooltip.
+  - **Badge:** when something needs you, a red (look now) or amber (worth a look) count on Windows and Linux, and a dot on the macOS **holdmap icon** item.
+  - **Panel:** a click (on Linux, **Show panel** in the menu) opens a panel under the item, at the section that item shows, with how many agents are running, their CPU and dev servers in large type, a chart of the agents' CPU over the last 60 scans, a **Needs you** history grid, **Needs you** with its urgency, a ring of ports on this computer and open to the network, a **Port changes** chart (opened above the line, closed below), dev servers and the busiest agents with their CPU and memory. It updates while open, follows the theme and closes on `Esc` or a click elsewhere unless it's pinned. Rows open in the window, and **Stop all…** still opens the reviewed plan there.
+  - **Menu:** the right button (any click on Linux) opens the same rows as a native menu.
+  - **Menu bar only:** on macOS, **Settings → General → Show in the Dock** turned off runs holdmap without a Dock icon; the window still opens from the panel, the menu or the global shortcut.
+  - **Visible, or says why not:** macOS hides menu-bar items when the menu bar is full (behind the app menus, and left of a MacBook's camera notch). holdmap notices, says so once, and **Settings → Appearance → Menu bar** names the hidden items and how to make room. Each item keeps the place you `⌘`-drag it to.
+  - **Honest figures:** CPU appears from the second scan, because it's measured between scans, and a chart once there are two samples, filling in from the right; an item shows `…` until its figure is known, never 0. **Needs you** uses the same rules as Home for running agents, ports and approved analyzer findings.
+
+### Changed
+
+- `V` cycles Home through Cards, Map and 3D.
+- The 3D view loads on demand with three.js 0.186.1 in its own chunk, under a new 168 KiB site budget; it is not loaded on a phone-sized window.
+- The window's scans no longer refresh the tray on the main thread. The background watcher refreshes it at the same cadence and reuses those scans.
+- On Windows, a click on the tray icon opens the panel; a double click opens the window.
+
+### Fixed
+
+- The tray panel no longer scrolls its whole document when opening a menu-bar section, which displaced the header and footer and left a large blank area. Only the readings scroll; a compact footer keeps Open holdmap, Quick settings, Refresh and Quit available. Native WKWebView checks cover section changes, polling, settings and keyboard focus.
+- Home's Map shows once its layout is final, so its labels no longer jump as it opens, and lays labels out from their real width in the font they're drawn in, so they don't overlap on any platform.
+- `Esc` closes a port's menu, and every other action menu, even in the instant after it opens, before focus has moved into it.
+- Choices such as Home / List / Graph switch at once instead of fading their fill and text together, which passed through frames where the label couldn't be read against its background.
+- The "skill changed since you trusted it" alert in **Needs you** no longer collapses over the first item when the list is long; the list now scrolls inside its panel.
+
+### Security
+
+- The desktop build no longer uses the npm `deepmerge` package, every release of which is affected by GHSA-gcqx-w48m-w2h4 (prototype poisoning, no fix). A replacement with the same API that never lets a merged key reach a prototype (`apps/desktop/vendor/deepmerge`, see `vendor/README.md`) is installed in its place, so `npm audit` is clean.
+- A recorded area reaches the macOS recorder only after Rust checks it (finite, whole points, at least 32 each way, inside window bounds; nothing but the four sides is accepted), and the recorder still captures only its own window.
+- The panel is its own small page (`tray.html`) in its own window. `local_window::guard` lets that window call only `tray_panel` (read its data) and `tray_action` (run an action id the tray menu also offers), and only from the bundled page; it has no capabilities, and every other command still requires the main window.
+
 ## [0.12.1] - 2026-10-27
 
 ### Fixed

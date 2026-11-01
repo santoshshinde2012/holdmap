@@ -1,7 +1,7 @@
 // Contract between the Settings panel and the app: the panel renders and validates, the app
 // persists (Tauri commands) and applies. Every setter resolves when saved or rejects with a
 // user-facing message.
-import type { Config, DesktopHelpDestination } from "./types";
+import type { Config, DesktopHelpDestination, TrayItemId } from "./types";
 import type { Density } from "./rows";
 
 export type Theme = "system" | "light" | "dark";
@@ -36,6 +36,12 @@ export interface SettingsModel {
   scheduledCount?: number;
   /** Opt-in: read agents' MCP, skills and permission settings (names only). */
   agentSettings?: boolean;
+  /** Whether the desktop has holdmap's menu-bar / tray icon. */
+  tray?: boolean;
+  /** False when macOS hides menu-bar items for lack of room; null when that can't be told. */
+  trayOnScreen?: boolean | null;
+  /** The names of the menu-bar items macOS hides. */
+  trayHidden?: string[];
 }
 
 export interface SettingsActions {
@@ -56,6 +62,9 @@ export interface SettingsActions {
   scheduleShutdown?(): void;
   viewSchedules?(): void;
   setAgentSettings?(on: boolean): void;
+  setTrayItems?(items: TrayItemId[]): Promise<void>;
+  setTrayCombined?(on: boolean): Promise<void>;
+  setShowInDock?(on: boolean): Promise<void>;
 }
 
 export const SETTINGS_SECTIONS = [
@@ -74,6 +83,39 @@ export function architectureLabel(architecture: string, platform: string): strin
   if (architecture === "aarch64") return platform === "macos" ? "Apple silicon (ARM64)" : "ARM64 (aarch64)";
   if (architecture === "x86_64") return platform === "macos" ? "Intel (x64)" : "x64 (x86_64)";
   return architecture;
+}
+
+/** `Config::TRAY_ITEMS` in menu-bar order, with what each shows. Linux's panel label holds text
+ * only, so the icon and the bar chart are left out there. */
+export const TRAY_ITEM_OPTIONS: { value: TrayItemId; label: string; description: string; text: boolean }[] = [
+  { value: "icon", label: "holdmap icon", description: "With a dot when something needs you.", text: false },
+  { value: "agents", label: "Agents", description: "How many are running.", text: true },
+  { value: "needs", label: "Needs you", description: "How many items; amber or red when there are some.", text: true },
+  { value: "cpu", label: "Agent CPU", description: "Their CPU together; orange from 60%, red from 80%.", text: true },
+  { value: "dev", label: "Dev servers", description: "How many are running.", text: true },
+  { value: "cpu_history", label: "CPU history", description: "A line of the agents' CPU over recent scans.", text: true },
+  { value: "agent_bars", label: "Agent bars", description: "One bar of CPU per running agent.", text: false },
+];
+
+/** The items this desktop can show. */
+export function trayItemOptions(platform: string): typeof TRAY_ITEM_OPTIONS {
+  return platform === "linux" ? TRAY_ITEM_OPTIONS.filter((o) => o.text) : TRAY_ITEM_OPTIONS;
+}
+
+/** `items` with `item` turned on or off, in menu-bar order. None left keeps the icon, so the
+ * app can still be reached (the backend does the same). */
+export function nextTrayItems(items: readonly string[], item: TrayItemId, on: boolean): TrayItemId[] {
+  const next = TRAY_ITEM_OPTIONS.map((o) => o.value).filter((v) => (v === item ? on : items.includes(v)));
+  return next.length ? next : ["icon"];
+}
+
+/** What the tray widget is called here, or null where nothing can sit beside its icon:
+ * Windows tray icons have no text (figures go in the tooltip) and some Linux desktops have no
+ * tray. The browser preview shows the macOS wording. */
+export function trayWidgetName(platform: string, tray: boolean | undefined): string | null {
+  if (platform === "browser") return "Menu bar";
+  if (!tray || platform === "windows") return null;
+  return platform === "macos" ? "Menu bar" : "Panel";
 }
 
 /** Human summary of the scan cadence, e.g. "every 4 s · every 10 s in the background". */

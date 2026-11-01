@@ -1,13 +1,14 @@
 <script lang="ts">
-  // Home: the same agents as Cards or as a Map (radial footprint plus a collapsible timeline),
-  // with "Needs you" beside both. Hover and selection are shared across cards, map, timeline and
+  // Home: the same agents as Cards, as a Map (radial footprint plus a collapsible timeline) or
+  // as a 3D machine (loaded on demand), with "Needs you" beside each. Hover and selection are shared across cards, map, timeline and
   // attention items, and survive a layout switch. Esc clears the selection.
   import { insightsStore } from "../../lib/insights-store.svelte";
   import { trustStore } from "../../lib/trust-store.svelte";
   import { securityTab } from "../../lib/security-tab.svelte";
   import * as api from "../../lib/api";
   import Icon from "../Icon.svelte";
-  import { SegmentedControl } from "../ui";
+  import { CollapsiblePanel, IconButton, SegmentedControl } from "../ui";
+  import type { Snippet } from "svelte";
   import EmptyPanel from "../ui/EmptyPanel.svelte";
   import ExportActions from "../ui/ExportActions.svelte";
   import { homeReport, homeSummaryText, reportFilename } from "../../lib/report-export";
@@ -18,27 +19,34 @@
   import NeedsList from "./NeedsList.svelte";
   import AgentLanes from "./AgentLanes.svelte";
   import PortMenu from "./PortMenu.svelte";
-  import { attention, attentionAgent, hotAgents, overview, type AttentionItem } from "../../lib/home";
+  import { attention, attentionAgent, hotAgents, needsByAgent, overview, type AttentionItem } from "../../lib/home";
   import { radialLayout, type FootprintNode } from "../../lib/machine-map";
   import { lanes } from "../../lib/agent-lanes";
   import { agentColors } from "../../lib/agents";
   import { HOME_LAYOUTS, HOME_LAYOUT_LABEL, type HomeLayout } from "../../lib/home-layout";
+  import { prefGetBoolean, prefSet } from "../../lib/prefs";
+  import type { ActivitySnapshot, RecordingStatus } from "../../lib/agent-flow/model";
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
   type Section = "overview" | "capabilities" | "insights";
-  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, onopenagent, onopenentry, onview, onsecurity, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent }: {
+  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, singleKeys = true, activity = null, recording = null, onopenagent, onopenentry, onview, onsecurity, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent }: {
     entries: PortEntry[] | null;
     report: AgentsReport | null;
     /** Whether reading agents' MCP/skills/permission files is turned on. */
     inventory?: boolean;
     /** Time of the latest scan. */
     now?: number;
-    /** Cards or Map; the app shell persists it and binds the V shortcut. */
+    /** Cards, Map or 3D; the app shell persists it and binds the V shortcut. */
     layout?: HomeLayout;
     onlayout?: (l: HomeLayout) => void;
     /** Whether the Map's timeline band is open; also persisted by the app shell. */
     timeline?: boolean;
     ontimeline?: (open: boolean) => void;
+    /** The app's single-key shortcuts setting, for the 3D view's E, X, T and F. */
+    singleKeys?: boolean;
+    /** Opt-in recorded calls for the 3D view's calls lane. */
+    activity?: ActivitySnapshot | null;
+    recording?: RecordingStatus | null;
     onopenagent: (id: string, section?: Section) => void;
     onopenentry: (id: string) => void;
     onview: (view: "list" | "agents" | "graph") => void;
@@ -79,7 +87,7 @@
   const idle = $derived(!!report && !!entries && report.agents.length === 0 && entries.length === 0);
   const hot = $derived(hotAgents(needs));
   const colors = $derived(agentColors(report?.agents ?? []));
-  const LAYOUT_ICON: Record<HomeLayout, string> = { cards: "layers", map: "radar" };
+  const LAYOUT_ICON: Record<HomeLayout, string> = { cards: "layers", map: "radar", "3d": "box" };
   const layoutOptions = HOME_LAYOUTS.map((l) => ({ value: l, label: HOME_LAYOUT_LABEL[l], icon: LAYOUT_ICON[l], title: `${HOME_LAYOUT_LABEL[l]} · V` }));
 
   let hovered = $state<string | null>(null);
@@ -122,12 +130,46 @@
   }
   function select(id: string) { setSelected(selected === id ? null : id); }
   function onkeydown(e: KeyboardEvent) { if (e.key === "Escape" && selected) { setSelected(null); e.stopPropagation(); } }
+
+  // The 3D machine and three.js load only when that layout is chosen, and not on a phone-sized
+  // window, where Home shows the list of agents instead (as the Map does).
+  let Machine3D = $state<typeof import("./machine3d/Machine3DView.svelte").default | null>(null);
+  let machine3dError = $state(false);
+  let narrow = $state(false);
+  $effect(() => {
+    const media = matchMedia("(max-width: 760px)");
+    narrow = media.matches;
+    const change = () => (narrow = media.matches);
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  });
+  $effect(() => {
+    if (layout !== "3d" || narrow || Machine3D) return;
+    import("./machine3d/Machine3DView.svelte").then((m) => { Machine3D = m.default; machine3dError = false; }, (e) => { console.error("Couldn't load the 3D view", e); machine3dError = true; });
+  });
+  const spatial = $derived((layout === "map" || layout === "3d") && !idle);
+  // 3D Focus: the summary and Needs you step aside so the machine fills Home (its readings carry
+  // the same figures, and Needs you is one of them). Remembered; ignored on a narrow window.
+  let focus3d = $state(prefGetBoolean("home.3d.focus", false));
+  $effect(() => prefSet("home.3d.focus", focus3d ? "1" : "0"));
+  const focused = $derived(layout === "3d" && focus3d && !narrow && !idle);
+  // Every panel folds away and comes back: the summary, the side column, and each panel in it.
+  let summaryOpen = $state(prefGetBoolean("home.summary.open", true));
+  $effect(() => prefSet("home.summary.open", summaryOpen ? "1" : "0"));
+  let sideOpen = $state(prefGetBoolean("home.side.open", true));
+  $effect(() => prefSet("home.side.open", sideOpen ? "1" : "0"));
+  const side = $derived(sideOpen && !focused);
+  /** The 3D view's readings and selected part, shown above Needs you. */
+  let details3d = $state<Snippet | null>(null);
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="home" id="home-overview" role="region" aria-label="Overview" {onkeydown}>
+<div class="home" class:three={layout === "3d" && !idle} id="home-overview" role="region" aria-label="Overview" {onkeydown}>
   <header class="top">
-    <HomeSummary {stats} />
+    {#if !focused}
+      <IconButton icon={summaryOpen ? "chevron-up" : "chevron-down"} label={summaryOpen ? "Fold the summary" : "Show the summary"} size="sm" aria-expanded={summaryOpen} onclick={() => (summaryOpen = !summaryOpen)} />
+      {#if summaryOpen}<HomeSummary {stats} />{:else}<span class="folded">Summary</span>{/if}
+    {/if}
     <div class="tools">
       {#if layout === "map"}
         <span class="legend" aria-label="Legend">
@@ -138,10 +180,11 @@
         files={[{ label: "Download JSON", filename: reportFilename("overview", Date.now(), "json"), build: () => homeReport(o, needs, report, Date.now()) }]} />
       {#if showInventory}<button type="button" class="inv" onclick={oninventory}><Icon name="plug" size={12} />Read MCP config</button>{/if}
       <SegmentedControl value={layout} options={layoutOptions} label="Home layout" onchange={(l) => onlayout?.(l)} />
+      {#if !focused}<IconButton icon="sidebar" label={sideOpen ? "Hide the side panels" : "Show the side panels"} size="sm" aria-expanded={sideOpen} onclick={() => (sideOpen = !sideOpen)} />{/if}
     </div>
   </header>
 
-  <div class="body" class:map={layout === "map" && !idle}>
+  <div class="body" class:map={spatial} class:three={layout === "3d" && !idle} class:focused={!side}>
     {#key layout}
       <div class="main">
         {#if idle}
@@ -154,34 +197,55 @@
             <p class="clear wait" aria-busy="true">…</p>
           {/if}
         {:else}
-          <div class="stage">
-            <div class="map-wrap">
-              <MachineMap {groups} {colors} platform={report?.platform ?? ""} ports={o.ports} {active} {selected} {hot} onhover={(id) => (hovered = id)} onselect={select} onopen={open} onport={port} />
+          {#snippet machineMap()}
+            <MachineMap {groups} {colors} platform={report?.platform ?? ""} ports={o.ports} {active} {selected} {hot} onhover={(id) => (hovered = id)} onselect={select} onopen={open} onport={port} />
+          {/snippet}
+          <div class="stage" data-capture-area>
+            <div class="map-wrap" class:flush={layout === "3d"}>
+              {#if layout === "map"}
+                {@render machineMap()}
+              {:else if narrow}
+                <!-- The list of agents below stands in on a narrow window. -->
+              {:else if Machine3D}
+                <Machine3D {report} {entries} {hot} needs={needsByAgent(needs, report)} {colors} trust={trustStore.report?.skills ?? []} {selected} {active} {inventory} {singleKeys} {activity} {recording} expanded={focused} onexpand={(on) => (focus3d = on)} {oninventory}
+                  onselectagent={setSelected} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} onport={port} ondetails={side ? (d) => (details3d = d) : undefined} fallback={machineMap} />
+              {:else if machine3dError}
+                <p class="clear">Couldn't load the 3D view. <button type="button" class="inv" onclick={() => onlayout?.("map")}>Show the Map</button></p>
+              {:else}
+                <p class="clear wait" aria-busy="true">Loading 3D…</p>
+              {/if}
             </div>
             <div class="map-list"><MapList {groups} {colors} {active} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} onport={port} /></div>
           </div>
         {/if}
       </div>
     {/key}
-    <aside class="panel" aria-labelledby="home-needs">
-      <h2 id="home-needs">Needs you{#if needs.length}<span class="count">{needs.length}</span>{/if}</h2>
-      {#if trustAlerts.length && onsecurity}
-        <button type="button" class="trust-alert" class:changed={trustChanged > 0} onclick={openSkills} data-trust-alert>
-          <Icon name="hash" size={13} />
-          <span>{#if trustChanged}{trustChanged} skill{trustChanged === 1 ? "" : "s"} changed since you trusted {trustChanged === 1 ? "it" : "them"}{:else}{trustAlerts.length} skill{trustAlerts.length === 1 ? "" : "s"} not trusted yet{/if}</span>
-          <span class="go">Review</span>
-        </button>
+    {#if side}
+    <!-- The side column: in 3D the machine's readings and selected part, then Needs you. Each panel folds away. -->
+    <aside class="side" aria-label="Side panels">
+      {#if layout === "3d" && details3d && !idle}
+        <CollapsiblePanel id="home-details" title="Details" pref="home.details.open">{@render details3d()}</CollapsiblePanel>
       {/if}
-      {#if needs.length}
-        <div class="needs-scroll">
-          <NeedsList items={needs} lit={activeNeeds} onopen={openItem} onstop={stopItem} onhover={(i) => (hovered = i ? attentionAgent(i, report) : null)} />
-        </div>
-      {:else if entries && report}
-        <EmptyPanel compact tone="ok" icon="check" title="All clear" hint="Nothing needs you right now." />
-      {:else}
-        <p class="clear" aria-busy="true">…</p>
-      {/if}
+      <CollapsiblePanel id="home-needs" title="Needs you" count={needs.length} pref="home.needs.open" fill>
+        {#if trustAlerts.length && onsecurity}
+          <button type="button" class="trust-alert" class:changed={trustChanged > 0} onclick={openSkills} data-trust-alert>
+            <Icon name="hash" size={13} />
+            <span>{#if trustChanged}{trustChanged} skill{trustChanged === 1 ? "" : "s"} changed since you trusted {trustChanged === 1 ? "it" : "them"}{:else}{trustAlerts.length} skill{trustAlerts.length === 1 ? "" : "s"} not trusted yet{/if}</span>
+            <span class="go">Review</span>
+          </button>
+        {/if}
+        {#if needs.length}
+          <div class="needs-scroll">
+            <NeedsList items={needs} lit={activeNeeds} onopen={openItem} onstop={stopItem} onhover={(i) => (hovered = i ? attentionAgent(i, report) : null)} />
+          </div>
+        {:else if entries && report}
+          <EmptyPanel compact tone="ok" icon="check" title="All clear" hint="Nothing needs you right now." />
+        {:else}
+          <p class="clear" aria-busy="true">…</p>
+        {/if}
+      </CollapsiblePanel>
     </aside>
+    {/if}
   </div>
 
   {#if layout === "map" && !idle}
@@ -212,18 +276,29 @@
   .inv:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   .body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--sp-4); align-items: start; }
   .body.map { align-items: stretch; height: clamp(340px, 44vh, 560px); }
+  /* The 3D machine takes exactly the height Home has left under its header, so the page never
+     gains a scrollbar that would resize the canvas while it lays out. */
+  .home.three { grid-template-rows: auto minmax(440px, 1fr); align-content: stretch; }
+  .body.map.three { height: auto; min-height: 0; }
+  .body.three.focused { grid-template-columns: minmax(0, 1fr); }
   .main { min-width: 0; min-height: 0; height: 100%; animation: view-in 180ms ease both; }
   @keyframes view-in { from { opacity: 0; transform: translateY(3px); } }
   @media (prefers-reduced-motion: reduce) { .main { animation: none; } }
-  .body:not(.map) .panel { position: sticky; top: 0; max-height: calc(100vh - 220px); }
+  .body:not(.map) .side { position: sticky; top: 0; max-height: calc(100vh - 220px); }
   .wait { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
   .stage { height: 100%; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; min-height: 0; overflow: clip; }
   .map-wrap { width: 100%; height: 100%; padding: var(--sp-2); }
+  .map-wrap.flush { padding: 0; }
   .map-list { display: none; }
-  .panel { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
-  h2 { margin: 0; padding: var(--sp-3) var(--sp-3) var(--sp-2); display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-semibold); color: var(--text); border-bottom: 1px solid var(--border); }
-  .count { padding: 0 7px; border-radius: var(--r-full); background: var(--warn-soft); color: var(--warn); font-size: var(--fs-caption); line-height: var(--lh-caption); font-variant-numeric: tabular-nums; }
+  /* The side column: panels stacked; Details keeps its own height (scrolling past 55%), and
+     Needs you takes the rest, its list scrolling inside it. A folded panel is just its header. */
+  .side { display: flex; flex-direction: column; gap: var(--sp-3); min-height: 0; }
+  .side > :global(.cpanel:first-child:not(:last-child)) { flex: 0 1 auto; max-height: 58%; }
+  .side > :global(.cpanel:first-child:not(:last-child) > .body) { overflow-y: auto; }
+  .side :global(.cpanel > .body > :last-child) { flex: 1 1 auto; min-height: 0; }
+  .side :global(.cpanel > .body > .trust-alert) { margin: var(--sp-2) var(--sp-2) 0; width: auto; }
   .needs-scroll { overflow-y: auto; min-height: 0; }
+  .folded { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; }
   .clear { margin: 0; padding: var(--sp-3); display: flex; align-items: center; gap: var(--sp-2); color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .clear :global(svg) { color: var(--ok); }
   .lanes-empty { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
@@ -231,9 +306,11 @@
   @media (max-width: 860px) {
     .body, .body.map { grid-template-columns: minmax(0, 1fr); height: auto; }
     .body.map .stage { height: 420px; }
-    .body:not(.map) .panel { position: static; }
-    .panel { order: -1; }
-    .panel { max-height: none !important; }
+    .home.three { grid-template-rows: none; align-content: start; }
+    .body.three .stage { height: 560px; }
+    .body:not(.map) .side { position: static; }
+    .side { order: -1; }
+    .side { max-height: none !important; }
   }
   @media (max-width: 760px) {
     .home { padding: var(--sp-3); gap: var(--sp-3); }

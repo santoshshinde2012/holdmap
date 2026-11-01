@@ -19,7 +19,7 @@
   const tiles = $derived(stats.map((s) => ({ id: s.id, label: cap(s.label), value: s.value, of: s.of, tone: s.tone, go: s.go, aria: `${cap(s.label)} ${s.value}${s.of != null ? `/${s.of}` : ""}` })));
 </script>
 
-<div class="home-stats"><StatStrip stats={tiles} label="Summary" compact /></div>
+<div class="home-stats" data-capture-area><StatStrip stats={tiles} label="Summary" compact /></div>
 
 <style>
   .home-stats { flex: 1 1 520px; min-width: 0; }

@@ -27,3 +27,4 @@ export type { MenuItem } from "./ActionMenu.svelte";
 export { default as ActionDock } from "./ActionDock.svelte";
 export { default as ActionPill } from "./ActionPill.svelte";
 export { default as EvidenceChip } from "./EvidenceChip.svelte";
+export { default as CollapsiblePanel } from "./CollapsiblePanel.svelte";

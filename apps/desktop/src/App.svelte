@@ -31,6 +31,7 @@
   import ConfirmDialog, { type Phase } from "./components/ConfirmDialog.svelte";
   import ShortcutsDialog from "./components/ShortcutsDialog.svelte";
   import ScreenRecordDialog from "./components/ScreenRecordDialog.svelte";
+  import type { CaptureRegion } from "./lib/capture-region";
   import SnapshotCapture from "./components/SnapshotCapture.svelte";
   import type { SnapshotCaptureHandle } from "./lib/snapshot-controller";
   import CommandPalette from "./components/CommandPalette.svelte";
@@ -177,6 +178,10 @@
   const topologyAll = $derived(prefs.view === "graph" ? graphAll : filters.all);
   let selectedNode = $state<string | null>(null);
   let config = $state<Config | null>(null);
+  /** Whether macOS shows holdmap's menu-bar item (null: can't tell). */
+  let trayOnScreen = $state<boolean | null>(null);
+  let trayHidden = $state<string[]>([]);
+  let trayHiddenNoted = false;
   let configError = $state<string | null>(null);
   let configLoading = $state(false);
   let showHistory = $state(false);
@@ -199,6 +204,22 @@
   let showRemote = $state(false);
   const capture: ScreenCaptureController = new ScreenCaptureController({ blocked: (): boolean => snapshotCaptureState.open || snapshotCaptureState.busy, modalOpen: (): boolean => modalOpen });
   let snapshotCaptureUi = $state<SnapshotCaptureHandle | undefined>();
+  // Recording part of the window: the dialog steps aside while the area is chosen, then the
+  // recording starts in the same click that confirmed it (screen sharing needs that click).
+  let recordPicking = $state(false);
+  let RegionPicker = $state<typeof import("./components/RegionPicker.svelte").default | null>(null);
+  async function startRecordingFlow() {
+    if (capture.plan.area !== "region") { void capture.begin(); return; }
+    RegionPicker ??= (await import("./components/RegionPicker.svelte")).default;
+    recordPicking = true;
+  }
+  function recordPicked(region: CaptureRegion) {
+    recordPicking = false;
+    capture.setPlan({ ...capture.plan, region });
+    void capture.begin();
+  }
+  /** The area being recorded, framed just outside it so the frame is never in the video. */
+  const recordingArea = $derived(capture.session && capture.activePlan.area === "region" ? capture.activePlan.region ?? null : null);
   let snapshotCaptureState = $state({ open: false, busy: false, hasResult: false });
   let hotkeyList = $state<HotkeyPreset[]>([]);
   let info = $state<{ version: string; platform: string; tray: boolean; configDir: string | null; updater: boolean | null; appPath: string | null; architecture: string | null }>({ version: "", platform: "", tray: false, configDir: null, updater: null, appPath: null, architecture: null });
@@ -390,10 +411,12 @@
   $effect(() => {
     const mode = agentFlowMode;
     const visible = prefs.view === "agents" && mode !== "overview" && !flowPaused;
+    // Home's 3D view draws recorded calls in their own lane, from the same opt-in recorder.
+    const home3d = prefs.view === "home" && prefs.homeLayout === "3d";
     const interval = Math.max(1_000, scanMs);
     untrack(() => { flowLoader.invalidate(); activityLoader.invalidate(); });
-    if (!visible) return;
-    const loader = mode === "connections" ? flowLoader : activityLoader;
+    if (!visible && !home3d) return;
+    const loader = visible && mode === "connections" ? flowLoader : activityLoader;
     untrack(() => { void loader.request(); });
     const timer = setInterval(() => { if (!document.hidden) void loader.request(); }, interval);
     return () => { clearInterval(timer); loader.invalidate(); };
@@ -605,7 +628,7 @@
   }
   const portHolder = (port: number) => { const e = snapshot?.entries.find((x) => x.port === port); return e ? `${title(e)}${e.process ? ` (PID ${e.process.pid})` : ""}` : null; };
 
-  const settingsModel = $derived<SettingsModel | null>(config ? { theme: prefs.theme, density: prefs.density, singleKeyShortcuts: prefs.singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, updater: info.updater, appPath: info.appPath, architecture: info.architecture, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length, agentSettings: prefs.inventoryOn } : null);
+  const settingsModel = $derived<SettingsModel | null>(config ? { theme: prefs.theme, density: prefs.density, singleKeyShortcuts: prefs.singleKeyShortcuts, config, autostart: autostartOn, shortcut, hotkeys: hotkeyList, version: info.version, platform: info.platform, configDir: info.configDir, updater: info.updater, appPath: info.appPath, architecture: info.architecture, powerAvailable: !api.isTauri || ["macos", "linux", "windows"].includes(info.platform), powerDemo: !api.isTauri, scheduledCount: activeSchedules.length, agentSettings: prefs.inventoryOn, tray: info.tray, trayOnScreen, trayHidden } : null);
   const settingsActions: SettingsActions = {
     setTheme: (t) => { prefs.theme = t; },
     setDensity: (d) => { prefs.density = d; },
@@ -615,6 +638,9 @@
     setNotify: async (on, devOnly) => { config = await api.setNotify(on, devOnly); },
     setScanInterval: async (secs) => { config = await api.setPreferences({ scanIntervalSecs: secs }); },
     setHistoryLimit: async (n) => { config = await api.setPreferences({ historyLimit: n }); },
+    setTrayItems: async (items) => { config = await api.setPreferences({ trayItems: items }); },
+    setTrayCombined: async (on) => { config = await api.setPreferences({ trayCombined: on }); },
+    setShowInDock: async (on) => { config = await api.setPreferences({ showInDock: on }); },
     clearHistory: async () => { await api.clearHistory(); historyItems = []; },
     copy: (t, w) => copy(t, w),
     openDesktopHelp: api.openDesktopHelp,
@@ -635,6 +661,15 @@
         if (!showSettings) toast("error", "Couldn't load settings", configError, { label: "Open settings", run: () => openSettings() });
       }
     } finally { configLoading = false; }
+  }
+  /** A full menu bar hides holdmap's items without telling anyone: say so once, and in Settings. */
+  function noteTrayStatus(status: api.TrayStatus) {
+    trayOnScreen = status.onScreen;
+    trayHidden = status.hidden;
+    if (status.onScreen !== false || trayHiddenNoted) return;
+    trayHiddenNoted = true;
+    const what = status.hidden.length ? status.hidden.join(", ") : "holdmap";
+    toast("info", `macOS is hiding ${what} in the menu bar`, "The menu bar is full. Settings → Appearance shows how to make room.", { label: "Show me", run: () => openSettings("appearance") });
   }
   function openSettings(section: SettingsSection = "general") {
     if (pendingReview) cancelReview();
@@ -1221,6 +1256,7 @@
     let stopScheduler: (() => void) | null = null;
     // Loaded after first paint: the driver pulls in the Security stores, which the first screen does not need.
     void import("./lib/schedule-driver.svelte").then(({ scheduleDriver }) => scheduleDriver()).then((d) => { d.start(); stopScheduler = () => d.dispose(); }).catch((e) => console.error("Couldn't start scheduled scans", e));
+    api.trayStatus().then(noteTrayStatus).catch(() => {});
     api.appInfo().then((i) => { shortcut = i.shortcut ?? null; info = { version: i.version, platform: i.platform, tray: i.tray, configDir: i.config_dir ?? null, updater: typeof i.updater === "boolean" ? i.updater : null, appPath: i.app_path ?? null, architecture: i.architecture ?? null }; if (i.platform === "macos") isMac = true; else if (i.platform !== "browser") isMac = false; }).catch((e) => toast("error", "Couldn't load app information", String(e)));
     api.hotkeys().then((h) => (hotkeyList = h)).catch(() => {});
     void loadConfig();
@@ -1245,6 +1281,21 @@
         const e = snapshot?.entries.find((x) => x.port === port);
         if (e) selectEntry(e);
       }),
+      // Tray panel rows: an agent or a "needs you" item opens where the window would show it.
+      api.onEvent<string>("open-agent", (id) => {
+        if (agentsReport?.agents.some((a) => a.id === id)) openAgent(id);
+        else { agentLink = id; prefs.view = "agents"; void loadAgents(); }
+      }),
+      api.onEvent<string>("open-entry", async (id) => {
+        await refresh();
+        clearFilters();
+        openEntryById(id);
+      }),
+      api.onEvent<Config>("config-changed", (c) => { config = c; }),
+      // The tray panel's quick settings: All settings…, and the theme (the window saves it).
+      api.onEvent("open-settings", () => openSettings()),
+      api.onEvent<string>("set-theme", (t) => { if (t === "system" || t === "light" || t === "dark") prefs.theme = t; }),
+      api.onEvent<api.TrayStatus>("tray-status", noteTrayStatus),
       api.onEvent("refresh", () => refresh()),
       api.onEvent("stop-all-dev", () => { if (!confirm) requestStopAllDev(); }),
       api.onEvent<{ version: string; notes: string | null }>("update-available", (u) => {
@@ -1355,9 +1406,9 @@
   <Notices {error} retrying={refreshing} showError={!!error && (!!snapshot || prefs.view !== "list")} hasSnapshot={!!snapshot}
     next={nextSchedule} activeCount={activeSchedules.length} {now} demo={!api.isTauri} onretry={() => refresh(true)} onschedules={openSchedules} />
 
-  <main class="content" class:narrow class:wide={prefs.view === "agents" || prefs.view === "home" || !showSide} style="--pane-w: {prefs.paneWidth}px">
+  <main class="content" data-capture-area class:narrow class:wide={prefs.view === "agents" || prefs.view === "home" || !showSide} style="--pane-w: {prefs.paneWidth}px">
     {#if prefs.view === "graph"}
-      <div class="graph-wrap">
+      <div class="graph-wrap" data-capture-area>
         {#if GraphView}
           <GraphView {graph} {selectedNode} loading={topologyLoading} query={graphQuery} onclearquery={() => (graphQuery = "")} onvisiblechange={(ids) => (graphVisibleIds = ids)} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; }} onselect={selectNode} onstopcluster={requestClusterStop} />
         {:else}
@@ -1365,10 +1416,10 @@
         {/if}
       </div>
     {:else if prefs.view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
+      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} singleKeys={prefs.singleKeyShortcuts} {activity} {recording} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
         onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (prefs.view = v)} onsecurity={() => { prefs.view = "agents"; prefs.agentSection = "insights"; securityTab.value = "findings"; }} oninventory={enableInventory} />
     {:else if prefs.view === "agents"}
-      <div class="graph-wrap agents-wrap">
+      <div class="graph-wrap agents-wrap" data-capture-area>
         {#if AgentsView}
           <AgentsView bind:section={prefs.agentSection} bind:flowSource={prefs.flowSource} bind:picture={prefs.picture} bind:projectReady bind:projectCaption pictureChrome={false} report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
             capabilitiesLoading={agentsRefreshing} capabilitiesError={agentsError} onrefreshcapabilities={() => { void loadAgents(); }}
@@ -1392,7 +1443,7 @@
     {/if}
 
     {#if showSide}
-      <div class="pane-wrap">
+      <div class="pane-wrap" data-capture-area>
         <Splitter bind:width={prefs.paneWidth} min={PANE_MIN} max={prefs.view === "graph" ? Math.min(PANE_MAX, viewportWidth - 600) : PANE_MAX} initial={PANE_DEFAULT} />
         <DetailPane {...detailProps} bind:tab={detailTab} entries={snapshot?.entries ?? []} onselectentry={(e) => selectEntry(e, false)}
           onhide={() => { if (prefs.view === "graph") closeGraphDetails(); else prefs.sideOpen = false; }} />
@@ -1430,8 +1481,14 @@
 {#if showSchedules && !confirm && !shutdown.visible}<SchedulesDialog {schedules} loading={schedulesLoading} error={schedulesError} demo={!api.isTauri} powerAvailable={!api.isTauri || ["macos", "linux", "windows"].includes(info.platform)} entries={snapshot?.entries ?? []} onclose={closeSchedules} onrefresh={() => loadSchedules(true)} oncancel={cancelSchedule} onschedulepower={() => openShutdown("schedule", "schedules")} onscheduleport={(entry) => { closeSchedules(); requestScheduledStop(entry); }} />{/if}
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
 {#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
-{#if capture.dialog}
-  <ScreenRecordDialog phase={capture.dialog} error={capture.error} errorTitle={capture.errorTitle} result={capture.result} busy={capture.busy} starting={capture.starting} supported={!!capture.support.backend} checkingSupport={capture.support.pending} unsupportedReason={capture.support.reason} plan={capture.plan} backend={capture.support.backend} stoppedBy={capture.stoppedBy} onplan={capture.setPlan} onstart={() => void capture.begin()} onclose={capture.close} ondiscard={capture.discardAndClose} />
+{#if recordPicking && RegionPicker}
+  <RegionPicker purpose="recording" confirmLabel="Record area" even initial={capture.plan.region ?? null} onconfirm={recordPicked} oncancel={() => (recordPicking = false)} />
+{/if}
+{#if recordingArea}
+  <div class="recording-area" style="left: {recordingArea.x - 3}px; top: {recordingArea.y - 3}px; width: {recordingArea.width + 6}px; height: {recordingArea.height + 6}px" aria-hidden="true"></div>
+{/if}
+{#if capture.dialog && !recordPicking}
+  <ScreenRecordDialog phase={capture.dialog} error={capture.error} errorTitle={capture.errorTitle} result={capture.result} busy={capture.busy} starting={capture.starting} supported={!!capture.support.backend} checkingSupport={capture.support.pending} unsupportedReason={capture.support.reason} plan={capture.plan} backend={capture.support.backend} stoppedBy={capture.stoppedBy} onplan={capture.setPlan} onstart={() => void startRecordingFlow()} onclose={capture.close} ondiscard={capture.discardAndClose} />
 {/if}
 <SnapshotCapture bind:this={snapshotCaptureUi} session={capture.session} blocked={otherModalOpen} onstatechange={(state) => (snapshotCaptureState = state)} />
 {#if snapshotCaptureState.busy}<span class="sr-only" role="status">Capturing snapshot. Press Escape or use Cancel snapshot capture to cancel.</span>{/if}
@@ -1452,5 +1509,7 @@
 
   .graph-loading { display: grid; place-items: center; height: 100%; color: var(--muted); font-size: var(--fs-body-sm); }
   .graph-wrap { position: relative; min-height: 0; min-width: 0; }
+  /* Around, never over, the part of the window being recorded. */
+  .recording-area { position: fixed; z-index: 2147482000; pointer-events: none; border: 2px dashed var(--danger); border-radius: 4px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface) 70%, transparent); }
 
 </style>

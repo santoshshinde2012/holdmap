@@ -821,6 +821,8 @@ export function accessFacts(a: Agent): AccessFact[] {
   return order.map((t) => a.access.facts.find((f) => f.topic === t) ?? { topic: t, level: "unknown", summary: "Not reported.", evidence: "unknown" });
 }
 
+export const ACCESS_LABEL: Record<AccessLevel, string> = { restricted: "Restricted", standard: "Standard", elevated: "Elevated", unknown: "Unknown" };
+
 /** The single most important access headline for a card. */
 export function accessHeadline(a: Agent): { level: AccessLevel; text: string } {
   const facts = accessFacts(a);

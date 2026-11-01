@@ -1,5 +1,13 @@
+<script lang="ts" module>
+  import type { CaptureRegion } from "../lib/capture-region";
+  /** The last area chosen, offered again for this session. */
+  let lastRegion: CaptureRegion | null = null;
+</script>
+
 <script lang="ts">
   import { onDestroy, tick, untrack } from "svelte";
+  import { cropPng, regionLabel, type CaptureArea } from "../lib/capture-region";
+  import type { SnapshotResult } from "../lib/screen-snapshot";
   import Dialog from "./ui/Dialog.svelte";
   import Button from "./ui/Button.svelte";
   import ActionDock from "./ui/ActionDock.svelte";
@@ -19,6 +27,19 @@
   let capture = $state.raw(initialSnapshotState());
   let support = $state(initialRecordingSupport());
   let choice = $state<SnapshotSource>("app");
+  // The whole window, or a part of it chosen by dragging (applied to whichever source).
+  let area = $state<CaptureArea>("window");
+  let picking = $state(false);
+  let region: CaptureRegion | null = null;
+  /** The area offered again in this dialog (the module keeps it across dialogs). */
+  let remembered = $state(lastRegion);
+  /** Crop a captured PNG to the chosen area. The cropped file is new, so it saves from its own bytes. */
+  async function cropped(result: SnapshotResult, viewport: { width: number; height: number }): Promise<SnapshotResult> {
+    if (!region) return result;
+    const out = await cropPng(result.png.blob, region, viewport);
+    return { ...result, png: { ...result.png, blob: out.blob, bytes: out.blob.size, native: undefined }, width: out.width, height: out.height };
+  }
+  const windowSize = () => ({ width: window.innerWidth, height: window.innerHeight });
   let url = $state<string | null>(null);
   let saving = $state(false);
   let saveError = $state<string | null>(null);
@@ -37,13 +58,18 @@
       const root = document.getElementById("holdmap-capture-root");
       if (!root) throw new Error("The Holdmap view is not available. Reopen the window and try again.");
       const { captureAppSnapshot } = await import("../lib/app-snapshot");
-      return captureAppSnapshot(root, signal);
+      const box = root.getBoundingClientRect();
+      return cropped(await captureAppSnapshot(root, signal), { width: box.width, height: box.height });
     },
-    screen(signal) {
-      if (!support.backend) return Promise.reject(new Error(support.reason || "Screen capture is unavailable in this window."));
-      return captureScreenSnapshot(support.backend, signal);
+    async screen(signal) {
+      if (!support.backend) throw new Error(support.reason || "Screen capture is unavailable in this window.");
+      // The area picker must leave the window before the window is captured.
+      if (region) await settleView(signal);
+      return cropped(await captureScreenSnapshot(support.backend, signal), windowSize());
     },
-    recording: () => provider,
+    recording: () => provider && region
+      ? { captureSnapshot: async (signal: AbortSignal) => cropped(await provider.captureSnapshot(signal), windowSize()) }
+      : provider,
     prepare: settleView,
   }, (next) => (capture = next));
 
@@ -101,6 +127,22 @@
   onDestroy(() => { disposed = true; supportSequence++; controller.dispose(); });
 
   function choose() { choice = "app"; saveError = null; saveMessage = null; controller.choose(); }
+  // The area picker loads when it's first wanted, so the app's first screen doesn't carry it.
+  let Picker = $state<typeof import("./RegionPicker.svelte").default | null>(null);
+  /** Capture now (the whole window), or choose the area first. */
+  async function start() {
+    if (area === "window") { region = null; void controller.capture(choice); return; }
+    Picker ??= (await import("./RegionPicker.svelte")).default;
+    picking = true;
+    controller.close();
+  }
+  function picked(r: CaptureRegion) {
+    picking = false;
+    region = lastRegion = remembered = r;
+    // Still in the click that confirmed the area, as a screen-sharing picker requires.
+    void controller.capture(choice);
+  }
+  function unpicked() { picking = false; controller.show(); }
   async function save() {
     if (!result || saving) return;
     saving = true; saveError = null; saveMessage = null;
@@ -113,6 +155,9 @@
   }
 </script>
 
+{#if picking && Picker}
+  <Picker purpose="snapshot" confirmLabel="Capture area" initial={remembered} onconfirm={picked} oncancel={unpicked} />
+{/if}
 {#if capture.open}
   <div data-snapshot-ui>
     <Dialog title={capture.phase === "ready" ? "Snapshot preview" : "Take snapshot"}
@@ -125,6 +170,13 @@
             ? { value: "recording", label: "Recording window", icon: "video" }
             : { value: "screen", label: "Holdmap window", icon: "monitor", disabled: support.pending || !support.backend },
         ]} onchange={(value) => (choice = value)} />
+        <div class="area">
+          <ActionDock label="Snapshot area" value={area} options={[
+            { value: "window", label: "Whole window", icon: "monitor" },
+            { value: "region", label: "Part of the window", icon: "fit" },
+          ]} onchange={(value) => (area = value)} />
+          {#if area === "region"}<p class="note">Next, drag over the window to choose the area{remembered ? ` (last time ${regionLabel(remembered)})` : ""}, or click a panel to take it whole.</p>{/if}
+        </div>
         <div class="source-note">
           {#if choice === "app"}
             <h3>This Holdmap view</h3>
@@ -153,7 +205,7 @@
         {#if capture.phase === "choose"}
           {#if result}<Button variant="ghost" onclick={() => controller.review()}>Review last snapshot</Button>{/if}
           <Button onclick={() => controller.close()}>Cancel</Button>
-          <Button variant="primary" icon="camera" disabled={choice === "recording" ? !provider : choice === "screen" ? !!provider || !support.backend || support.pending : false} onclick={() => void controller.capture(choice)} data-primary>{choice === "screen" ? "Capture window" : "Capture PNG"}</Button>
+          <Button variant="primary" icon={area === "region" ? "fit" : "camera"} disabled={choice === "recording" ? !provider : choice === "screen" ? !!provider || !support.backend || support.pending : false} onclick={start} data-primary>{area === "region" ? "Choose area…" : choice === "screen" ? "Capture window" : "Capture PNG"}</Button>
         {:else}
           <Button variant="ghost" disabled={saving} onclick={() => controller.discard()}>Discard snapshot</Button>
           <Button disabled={saving} onclick={choose}>New snapshot</Button>
@@ -167,6 +219,8 @@
 
 <style>
   .source-note { padding: var(--sp-4) 0; }
+  .area { display: grid; gap: var(--sp-2); justify-items: start; margin-top: var(--sp-3); }
+  .area .note { margin: 0; }
   h3 { margin: 0 0 var(--sp-2); color: var(--text); font-size: var(--fs-body); font-weight: var(--fw-semibold); }
   p { margin: 0; }
   .source-note p, .note { color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body); overflow-wrap: anywhere; }

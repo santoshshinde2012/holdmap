@@ -3,7 +3,9 @@
 Every capture in `docs/screenshots/`, all with sample data, never a real screen. Regenerate with
 `node apps/desktop/scripts/capture-screenshots.mjs [names…]` (desktop),
 `node site/scripts/capture-screenshots.mjs` (website) and
-`python3 scripts/capture-terminal-screenshots.py` (CLI and TUI).
+`python3 scripts/capture-terminal-screenshots.py` (CLI and TUI). The macOS menu-bar items are
+drawn by the app's own renderer: `HOLDMAP_MENU_BAR_PREVIEW=docs/screenshots cargo test -p
+holdmap-desktop --lib menu_bar_preview -- --ignored` (on a Mac).
 
 ## Desktop: Home
 
@@ -11,6 +13,8 @@ Every capture in `docs/screenshots/`, all with sample data, never a real screen.
 |---|---|---|
 | cards | [dark](screenshots/desktop-home-cards-dark.png) | [light](screenshots/desktop-home-cards-light.png) |
 | map | [dark](screenshots/desktop-home-map-dark.png) | [light](screenshots/desktop-home-map-light.png) |
+| 3d (Unreleased) | [dark](screenshots/desktop-home-3d-dark.png) | [light](screenshots/desktop-home-3d-light.png) |
+| 3d x-ray (Unreleased) | [dark](screenshots/desktop-home-3d-xray-dark.png) | [light](screenshots/desktop-home-3d-xray-light.png) |
 | narrow | [dark](screenshots/desktop-home-narrow-dark.png) | [light](screenshots/desktop-home-narrow-light.png) |
 | narrow map | [dark](screenshots/desktop-home-narrow-map-dark.png) | [light](screenshots/desktop-home-narrow-map-light.png) |
 | port menu | [dark](screenshots/desktop-home-port-menu-dark.png) | [light](screenshots/desktop-home-port-menu-light.png) |
@@ -43,6 +47,7 @@ Every capture in `docs/screenshots/`, all with sample data, never a real screen.
 | folder actions | [dark](screenshots/desktop-folder-actions-dark.png) | [light](screenshots/desktop-folder-actions-light.png) |
 | folder actions narrow | — | [light](screenshots/desktop-folder-actions-narrow-light.png) |
 | graph | [dark](screenshots/desktop-graph-dark.png) | [light](screenshots/desktop-graph-light.png) |
+| menu bar (Unreleased) | [dark](screenshots/desktop-menu-bar-dark.png) | [light](screenshots/desktop-menu-bar-light.png) |
 | overview | [dark](screenshots/desktop-overview-dark.png) | [light](screenshots/desktop-overview-light.png) |
 | schedules | [dark](screenshots/desktop-schedules-dark.png) | [light](screenshots/desktop-schedules-light.png) |
 | screen record | [dark](screenshots/desktop-screen-record-dark.png) | [light](screenshots/desktop-screen-record-light.png) |
@@ -54,6 +59,7 @@ Every capture in `docs/screenshots/`, all with sample data, never a real screen.
 | snapshot | [dark](screenshots/desktop-snapshot-dark.png) | [light](screenshots/desktop-snapshot-light.png) |
 | sort right edge | [dark](screenshots/desktop-sort-right-edge-dark.png) | [light](screenshots/desktop-sort-right-edge-light.png) |
 | stop confirm | — | [light](screenshots/desktop-stop-confirm-light.png) |
+| tray panel | [dark](screenshots/desktop-tray-panel-dark.png) | [light](screenshots/desktop-tray-panel-light.png) |
 
 ## Terminal UI
 

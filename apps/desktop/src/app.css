@@ -236,6 +236,9 @@ kbd {
   white-space: nowrap; cursor: pointer; box-shadow: var(--control-shadow);
   transition: background var(--dur-1) var(--ease), border-color var(--dur-1), color var(--dur-1), box-shadow var(--dur-1);
 }
+/* A choice switches at once: fading its fill and its text together passes through frames where
+   neither reads against the other. */
+.action-pill[role="radio"] { transition: border-color var(--dur-1), box-shadow var(--dur-1); }
 .action-pill:hover:not(:disabled) { background: var(--surface-2); color: var(--text); border-color: var(--input-border-hover); }
 .action-pill.on { background: var(--accent); color: var(--accent-fg); border-color: transparent; box-shadow: none; }
 .action-pill.on:hover:not(:disabled) { background: var(--accent-hover); color: var(--accent-fg); border-color: transparent; }

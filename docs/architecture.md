@@ -758,7 +758,7 @@ flowchart TB
     CMD["commands.rs · Native operations<br/>Validated reads, plans, stops + openers"]
     ST["state.rs<br/>AppState (config, last snapshot)"]
     CF["confirmation.rs<br/>one-use reviewed plans"]
-    TR["tray.rs<br/>menu + top ports"]
+    TR["tray/ · Tray widget<br/>menu-bar readings, popup panel + menu"]
     W["watch.rs · Background scans<br/>Events, notifications + tray refresh"]
     SC["shortcuts.rs<br/>presets, re-registered at runtime"]
     LIB --> CMD & TR & W & SC
@@ -824,8 +824,35 @@ return an error while leaving the previous cache eligible for a retry. Collectio
 scan lock without holding the engine mutex. Folder actions run off-thread and force a fresh
 scan rather than authorizing paths from an old cache. Openers construct localhost URLs or
 resolve port/agent folders in the backend; the webview cannot supply an arbitrary command or URL.
-Tray updates requested by scans use the native event loop rather than creating a thread per
-refresh. Shortcut replacement registers the new shortcut before releasing the working one,
+The tray widget (`tray/`) is refreshed by the watcher after each scan, on the watcher's
+thread: it reuses that scan for the agents report, applies the shared "needs you" rules with
+analyzer insights cached for a minute, and records CPU and attention history. `tray/model.rs`
+turns those readings into plain data for each platform's tray limits: the menu-bar items the
+config picks (`tray_items`, `tray_combined`), the native menu's rows, the tooltip, the badge and
+the popup panel's data. On macOS each item is its own status item (`holdmap-<item>`, autosave
+name `holdmap_<item>`, so a `⌘`-dragged place survives restarts); all of them share one native
+menu. `tray/menubar.rs` draws each item with CoreText and CoreGraphics at 3×: a template image
+when it's plain, so macOS tints it, and the menu bar's own ink plus orange or red when a state is
+flagged. It also checks whether macOS shows each item (on a screen with a camera housing, items
+left of it are hidden; elsewhere, an occluded item while the menu bar is up), which the window
+reports by name. Items are created on the main thread by tauri and must also be dropped there,
+so removed items are released through `run_on_main_thread`. `tray/badge.rs` draws the badge
+into the icon's pixels. When only text changed, an open menu's rows are updated in place; it is
+rebuilt only when rows change. `show_in_dock` switches the activation policy (`Accessory`
+without the Dock icon).
+
+The popup panel (`tray/panel.rs`) is a second, small window showing its own page,
+`tray.html` (`src/tray-panel/`), built as a separate entry so it doesn't load the app. It is
+created on first use, off the main thread, and placed under the icon (above it for a bottom
+taskbar). It polls `tray_panel` once a second while visible and runs rows through
+`tray_action`, which accepts only the action ids the native menu offers. A click on an item
+opens the panel at that item's section (`focus`, with a sequence number so each click scrolls
+once); pinning keeps it open when it loses focus. `local_window::guard`
+lets the `tray` window call those two commands and nothing else, and only while it shows the
+bundled panel page; the window has no capabilities. On macOS the panel is created unfocused,
+and if the app is hidden it is unhidden without activation while the main window is ordered
+out (fully transparent in between), so opening the panel doesn't bring back a closed window.
+Stops always open the reviewed plan in the main window. Shortcut replacement registers the new shortcut before releasing the working one,
 so a collision leaves the previous shortcut active.
 
 `window_lifecycle.rs` intercepts main-window close requests only while a working tray exists.
@@ -894,6 +921,47 @@ published asset digests and IDs, then publishes the complete `latest.json` index
   `AgentsView.svelte` fits those graphs into Svelte Flow; Computer / Footprint / Project are
   exclusive action docks on the Overview toolbar. Folder clicks zoom, then open
   `FolderActions.svelte`. Evidence labels stay observed / inferred / unknown.
+- **Home 3D machine.** `lib/machine3d/` projects the same `AgentsReport` (plus the opt-in
+  inventory, skill trust and Home's attention items) into a pure, bounded scene: parts on three
+  layers (board: agents, held ports, working folders, remote-host groups; runtime: child
+  processes; configuration: MCP definitions, skills, instruction files) and typed wires. Wires come
+  only from parent PIDs, listener holders, sockets matched by exact entry ID, working folders and
+  each agent's own configuration files; the single configuration ↔ process wire is an MCP
+  server's `running` state whose PIDs are that agent's processes. Skill trust attaches by exact
+  skill folder. Opt-in recorded calls (`calls.ts`) are parts on a shelf of their own, ordered by
+  reported time, with no wire to any process, agent or configuration; their reported parent is a
+  detail, not a link. `gaugeParts` maps each reading to the exact parts it counts, and
+  `lensView` names the parts and floors each lens (Network, Runtime, Config, Needs you, Calls)
+  is about. `layout.ts` gives each agent a district on a quarter-unit grid: its tower, folders
+  and ports on the board, its runtime and configuration trays stacked over the same footprint,
+  so ownership needs no wire. Districts stand a street apart in rows of up to eight, and the
+  default view turns only as far as the street allows (tan θ · depth < street), so no district
+  hides its neighbour. The layout is keyed by the scene's identity, not resource samples.
+  `camera.ts` frames boxes exactly for an orthographic view (a box's projection is centred on
+  its centre's, so the fit is the larger of its projected half-extents); it, `tour.ts` (a pure
+  function of time), `labels.ts` (greedy placement with fallback lines for nameplates) and
+  `geometry.ts` (rounded slabs as fans, no shape triangulation) are unit-tested. `stage.ts` is
+  the only three.js module: an orthographic renderer that draws on demand, runs its flows,
+  ripples and pulses at ≤30 fps, stops while the window is hidden and stands them still with
+  reduced motion. Ownership wires appear only for the hovered or selected part; the rest carry
+  arrowheads at the receiving end. Labels, readings, the parts list and the inspector are DOM,
+  so text uses the shared tokens and stays accessible; the parts list is the canvas's keyboard
+  outline. The view hands Home its readings and inspector as a snippet (`ondetails`), which Home
+  renders in its side column above Needs you, so they keep the view's live state while living
+  outside the canvas. `HomeView` imports the view on demand, skips it on narrow windows and owns
+  Focus (summary and side column step aside); the app polls the existing recorder for it only
+  while 3D is shown; without WebGL 2 (or with software rendering unless the viewer opts in) it
+  renders the 2D map with the reason. The chunk carries three.js and has its own site budget.
+- **Folding panels.** `ui/CollapsiblePanel` is a heading holding its disclosure button (the
+  WAI-ARIA pattern), with an optional close button and a remembered state (`pref`). Home's side
+  column, the summary and the 3D parts list fold and come back, each remembered.
+- **Capture areas.** `lib/capture-region.ts` holds an area of the window in CSS pixels and maps it
+  into each capture: snapshots crop the finished PNG (the rendered view and the macOS window
+  capture cover exactly the viewport; a shared window's frame may carry a title bar above it);
+  the macOS recorder takes the area as ScreenCaptureKit's `sourceRect` in window points, after
+  Rust validates it (`StartOptions.region`, whole points, at least 32 each way); the browser
+  recorder crops frames (mediabunny `crop`, canvas `drawImage`). `RegionPicker` loads on demand
+  and leaves the window before anything is captured.
 - **Pure view logic.** `lib/rows.ts` (badges, status, sparklines), `lib/detail.ts` (details pane)
   and `lib/settings.ts` (the Settings contract) are pure and unit-tested, so components depend on
   interfaces rather than on `api.ts`.

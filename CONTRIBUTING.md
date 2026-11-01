@@ -89,6 +89,7 @@ scripts/check-versions.sh
 scripts/check-secrets.sh                     # full Git history and tracked/new source; needs a full clone
 python3 scripts/test-release-security.py    # isolated release input regressions; never publishes
 python3 scripts/check-updater-runtime.py    # macOS: real signed scratch install and relaunch
+python3 scripts/check-tray-panel-runtime.py # macOS: owned WKWebView tray scroll, footer, polling and keyboard regression
 python3 scripts/check-window-lifecycle-runtime.py # interactive macOS: owned close/fullscreen/reopen regression
 python3 scripts/check-screen-recording-runtime.py # macOS: synthetic MP4/GIF/PNG, real WKWebView and binary IPC; needs FFmpeg
 python3 scripts/check-screen-recording-runtime.py --app-ui # macOS: packaged recorder gates + owned app-view PNG; no screen picker
@@ -123,6 +124,13 @@ budget for its unique JavaScript; shared dependencies retain their existing budg
 changes should exercise exact-source grouping, missing coverage, refresh/selection recovery and
 same-name definitions with different scope or project context. Presence, declared enablement,
 runtime candidates and recorded calls remain separate evidence; never join them by name.
+Home's 3D layout (three.js) loads only when chosen and never on a phone-sized window. The
+manifest check keeps it out of Home's Cards and Map and holds its unique JavaScript to a 168 KiB
+gzip budget. Its scene, layout, camera, tour and labels are pure modules under
+`apps/desktop/src/lib/machine3d/` with unit tests; `stage.ts` only renders them. Add a wire there
+only from a process tree, a held listener, a socket, a working folder, a configuration file of that
+agent, or an MCP server's own running PIDs. Recorded calls stay in their own lane with no wires:
+a reported PID, alias or provider never joins a call to a process, agent or configured server.
 Refresh the capability screenshots with the existing capture script's private sample-data build,
 and keep current-source features marked Unreleased until an installer includes them.
 Keyboard changes must preserve input-method composition, native control keys and disabled

@@ -55,6 +55,10 @@
     { value: "session", label: "Full session" },
     { value: "custom", label: "Custom" },
   ];
+  const areas: { value: "window" | "region"; label: string }[] = [
+    { value: "window", label: "Whole window" },
+    { value: "region", label: "Part of the window" },
+  ];
   const formats: { value: FormatChoice; label: string }[] = [
     { value: "mp4", label: "MP4" },
     { value: "gif", label: "GIF" },
@@ -136,6 +140,10 @@
           <SegmentedControl label="Format" size="md" value={formatChoice(plan)} options={formats} onchange={chooseFormat} />
           <Select label="Stop after" size="md" width="150px" value={String(plan.maxDurationMs)} options={lengths} onchange={chooseLength} />
         </div>
+        <div class="row">
+          <SegmentedControl label="Area" size="md" value={plan.area ?? "window"} options={areas} onchange={(area) => onplan({ ...plan, area, region: area === "window" ? null : plan.region ?? null })} />
+          {#if plan.area === "region"}<p class="hint">You'll drag over the window to choose the area next. Only that part is recorded.</p>{/if}
+        </div>
         <ul class="estimate" aria-label="Expected size and length" aria-live="polite">
           {#each lines as line}<li>{line}</li>{/each}
         </ul>
@@ -192,7 +200,7 @@
   {#snippet footer()}
     {#if phase === "confirm"}
       <Button onclick={onclose}>Cancel</Button>
-      {#if supported}<Button variant="primary" icon="video" loading={busy} loadingText={starting ? "Starting recording…" : "Waiting for permission…"} onclick={onstart} data-primary>Start recording</Button>{/if}
+      {#if supported}<Button variant="primary" icon={plan.area === "region" ? "fit" : "video"} loading={busy} loadingText={starting ? "Starting recording…" : "Waiting for permission…"} onclick={onstart} data-primary>{plan.area === "region" ? "Choose area…" : "Start recording"}</Button>{/if}
     {:else if phase === "encoding"}
       <Button onclick={onclose}>Discard recording</Button>
     {:else}

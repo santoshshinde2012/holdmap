@@ -18,7 +18,7 @@ pub fn needs(
     items(entries.as_deref(), report.as_ref(), insights.as_ref())
 }
 
-fn items(
+pub(crate) fn items(
     entries: Option<&[PortEntry]>,
     report: Option<&AgentsReport>,
     insights: Option<&Insights>,

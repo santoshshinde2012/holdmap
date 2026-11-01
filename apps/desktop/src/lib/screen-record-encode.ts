@@ -14,6 +14,7 @@ import {
   type RecordingListener,
 } from "./screen-record";
 import { LEGACY_PLAN, MEMORY_MP4_LIMIT_BYTES, planWantsGif, planWantsMp4, type RecordingPlan } from "./screen-record-plan";
+import { regionInImage } from "./capture-region";
 import { createTrackSource } from "./screen-record-source";
 import type { GifProgress } from "./screen-record-gif";
 import { captureVideoSnapshot, snapshotCancelled, snapshotSignal, type SnapshotResult } from "./screen-snapshot";
@@ -23,8 +24,12 @@ const MAX_MP4_BYTES = MEMORY_MP4_LIMIT_BYTES;
 const SOFT_MP4_MARGIN_BYTES = 8 * 1024 * 1024;
 const FINALIZE_TIMEOUT_MS = 20_000;
 
-type Mp4Options = { bitrate: number; onSizeLimit: () => void };
+/** Part of the source frame to keep, in its pixels. */
+type Crop = { left: number; top: number; width: number; height: number };
+type Mp4Options = { bitrate: number; onSizeLimit: () => void; crop?: Crop | null };
 type Mp4Session = {
+  /** Whether the encoder keeps only the chosen area (MediaRecorder can't). */
+  cropped?: boolean;
   close: () => void;
   cancel: () => void;
   finalize: () => Promise<Blob | null>;
@@ -80,9 +85,11 @@ function attachVideo(stream: MediaStream): Promise<HTMLVideoElement> {
 
 async function startWebCodecsMp4(track: MediaStreamVideoTrack, signal: AbortSignal, options: Mp4Options): Promise<Mp4Session | null> {
   const settings = track.getSettings();
-  const scale = Math.min(1, 1920 / (settings.width || 1280), 1080 / (settings.height || 720));
-  const width = even((settings.width || 1280) * scale, 1280);
-  const height = even((settings.height || 720) * scale, 720);
+  // The encoded size follows the chosen area when there is one.
+  const sourceW = options.crop?.width || settings.width || 1280, sourceH = options.crop?.height || settings.height || 720;
+  const scale = Math.min(1, 1920 / sourceW, 1080 / sourceH);
+  const width = even(sourceW * scale, 1280);
+  const height = even(sourceH * scale, 720);
   const quality = new Quality({ bitrate: options.bitrate });
   if (!await canEncodeVideo("avc", { width, height, frameRate: 30, quality })) return null;
   if (signal.aborted) return null;
@@ -97,7 +104,7 @@ async function startWebCodecsMp4(track: MediaStreamVideoTrack, signal: AbortSign
     latencyMode: "realtime",
     contentHint: "detail",
     sizeChangeBehavior: "contain",
-    transform: { width, height },
+    transform: { width, height, ...(options.crop ? { crop: options.crop } : {}) },
     onEncodedPacket(packet) {
       encodedBytes += packet.byteLength;
       // Stop cleanly before the ceiling so the recording is kept, not discarded.
@@ -130,6 +137,7 @@ async function startWebCodecsMp4(track: MediaStreamVideoTrack, signal: AbortSign
     signal.removeEventListener("abort", cancel);
   }
   return {
+    cropped: !!options.crop,
     close: () => frames.close(),
     cancel: () => { frames.close(); void output.cancel().catch(() => undefined); },
     pause: () => frames.pause(),
@@ -306,6 +314,8 @@ export class ScreenRecording {
   private limitReached = false;
   private gifFailure: string | null = null;
   private notes: string[] = [];
+  /** The chosen area in the shared frame, or null for the whole window. */
+  private crop: Crop | null = null;
   private endedTrack: MediaStreamTrack | null = null;
   private readonly onTrackEnded = () => { if (!this.stopped) this.listener.onEnded(); };
   private readonly listener: RecordingListener;
@@ -443,8 +453,12 @@ export class ScreenRecording {
     this.video = await attachVideo(this.stream);
     const srcW = this.video.videoWidth || 1280;
     const srcH = this.video.videoHeight || 720;
+    // Part of the window: where it falls in the shared frame (scaled, below any title bar).
+    const area = this.plan.area === "region" && this.plan.region
+      ? regionInImage(this.plan.region, { width: window.innerWidth, height: window.innerHeight }, { width: srcW, height: srcH }) : null;
+    this.crop = area ? { left: area.sx, top: area.sy, width: area.sw, height: area.sh } : null;
     if (planWantsGif(this.plan)) {
-      const size = gifSize(srcW, srcH, this.plan.gifMaxEdge);
+      const size = gifSize(this.crop?.width ?? srcW, this.crop?.height ?? srcH, this.plan.gifMaxEdge);
       try {
         this.gif = new GifWorkerSession(this.plan, () => this.gifIsFull());
         const canvas = document.createElement("canvas");
@@ -462,7 +476,8 @@ export class ScreenRecording {
     }
     if (planWantsMp4(this.plan)) {
       try {
-        this.mp4 = await startMp4(track, { bitrate: this.plan.mp4Bitrate, onSizeLimit: () => this.endBecause("size") });
+        this.mp4 = await startMp4(track, { bitrate: this.plan.mp4Bitrate, onSizeLimit: () => this.endBecause("size"), crop: this.crop });
+        if (this.crop && this.mp4 && !this.mp4.cropped) this.notes.push("This browser can't crop video, so the MP4 shows the whole window. The GIF shows only the chosen area.");
       } catch {
         this.mp4 = null;
       }
@@ -479,7 +494,9 @@ export class ScreenRecording {
       if (this.pausedAt === null && this.gifEndedAt === null && now >= this.gifNextAt
         && this.gif?.ready && this.video && this.gifCtx && this.gifCanvas) {
         try {
-          this.gifCtx.drawImage(this.video, 0, 0, this.gifCanvas.width, this.gifCanvas.height);
+          const c = this.crop;
+          if (c) this.gifCtx.drawImage(this.video, c.left, c.top, c.width, c.height, 0, 0, this.gifCanvas.width, this.gifCanvas.height);
+          else this.gifCtx.drawImage(this.video, 0, 0, this.gifCanvas.width, this.gifCanvas.height);
           const { data } = this.gifCtx.getImageData(0, 0, this.gifCanvas.width, this.gifCanvas.height);
           this.gif.add(data, this.gifCanvas.width, this.gifCanvas.height, Math.min(now, this.plan.maxDurationMs));
           this.gifNextAt = Math.max(this.gifNextAt + this.gif.intervalMs, now);
