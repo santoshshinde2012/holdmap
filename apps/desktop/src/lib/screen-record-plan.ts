@@ -1,5 +1,6 @@
 /** What to record and how much: presets, limits and a size estimate, shared by every backend. */
 import { MAX_DURATION_MS } from "./screen-record";
+import type { CaptureArea, CaptureRegion } from "./capture-region";
 
 export type RecordingFormat = "mp4" | "gif";
 export type RecordingPresetId = "clip" | "session" | "custom";
@@ -14,6 +15,9 @@ export type RecordingPlan = {
   gifMaxEdge: number;
   gifMaxBytes: number;
   mp4Bitrate: number;
+  /** The whole window (default), or the part chosen just before recording starts. */
+  area?: CaptureArea;
+  region?: CaptureRegion | null;
 };
 
 const MIB = 1024 * 1024;

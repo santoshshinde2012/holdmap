@@ -31,6 +31,7 @@
   import ConfirmDialog, { type Phase } from "./components/ConfirmDialog.svelte";
   import ShortcutsDialog from "./components/ShortcutsDialog.svelte";
   import ScreenRecordDialog from "./components/ScreenRecordDialog.svelte";
+  import type { CaptureRegion } from "./lib/capture-region";
   import SnapshotCapture from "./components/SnapshotCapture.svelte";
   import type { SnapshotCaptureHandle } from "./lib/snapshot-controller";
   import CommandPalette from "./components/CommandPalette.svelte";
@@ -203,6 +204,22 @@
   let showRemote = $state(false);
   const capture: ScreenCaptureController = new ScreenCaptureController({ blocked: (): boolean => snapshotCaptureState.open || snapshotCaptureState.busy, modalOpen: (): boolean => modalOpen });
   let snapshotCaptureUi = $state<SnapshotCaptureHandle | undefined>();
+  // Recording part of the window: the dialog steps aside while the area is chosen, then the
+  // recording starts in the same click that confirmed it (screen sharing needs that click).
+  let recordPicking = $state(false);
+  let RegionPicker = $state<typeof import("./components/RegionPicker.svelte").default | null>(null);
+  async function startRecordingFlow() {
+    if (capture.plan.area !== "region") { void capture.begin(); return; }
+    RegionPicker ??= (await import("./components/RegionPicker.svelte")).default;
+    recordPicking = true;
+  }
+  function recordPicked(region: CaptureRegion) {
+    recordPicking = false;
+    capture.setPlan({ ...capture.plan, region });
+    void capture.begin();
+  }
+  /** The area being recorded, framed just outside it so the frame is never in the video. */
+  const recordingArea = $derived(capture.session && capture.activePlan.area === "region" ? capture.activePlan.region ?? null : null);
   let snapshotCaptureState = $state({ open: false, busy: false, hasResult: false });
   let hotkeyList = $state<HotkeyPreset[]>([]);
   let info = $state<{ version: string; platform: string; tray: boolean; configDir: string | null; updater: boolean | null; appPath: string | null; architecture: string | null }>({ version: "", platform: "", tray: false, configDir: null, updater: null, appPath: null, architecture: null });
@@ -1386,9 +1403,9 @@
   <Notices {error} retrying={refreshing} showError={!!error && (!!snapshot || prefs.view !== "list")} hasSnapshot={!!snapshot}
     next={nextSchedule} activeCount={activeSchedules.length} {now} demo={!api.isTauri} onretry={() => refresh(true)} onschedules={openSchedules} />
 
-  <main class="content" class:narrow class:wide={prefs.view === "agents" || prefs.view === "home" || !showSide} style="--pane-w: {prefs.paneWidth}px">
+  <main class="content" data-capture-area class:narrow class:wide={prefs.view === "agents" || prefs.view === "home" || !showSide} style="--pane-w: {prefs.paneWidth}px">
     {#if prefs.view === "graph"}
-      <div class="graph-wrap">
+      <div class="graph-wrap" data-capture-area>
         {#if GraphView}
           <GraphView {graph} {selectedNode} loading={topologyLoading} query={graphQuery} onclearquery={() => (graphQuery = "")} onvisiblechange={(ids) => (graphVisibleIds = ids)} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; }} onselect={selectNode} onstopcluster={requestClusterStop} />
         {:else}
@@ -1399,7 +1416,7 @@
       <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} singleKeys={prefs.singleKeyShortcuts} {activity} {recording} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
         onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (prefs.view = v)} onsecurity={() => { prefs.view = "agents"; prefs.agentSection = "insights"; securityTab.value = "findings"; }} oninventory={enableInventory} />
     {:else if prefs.view === "agents"}
-      <div class="graph-wrap agents-wrap">
+      <div class="graph-wrap agents-wrap" data-capture-area>
         {#if AgentsView}
           <AgentsView bind:section={prefs.agentSection} bind:flowSource={prefs.flowSource} bind:picture={prefs.picture} bind:projectReady bind:projectCaption pictureChrome={false} report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
             capabilitiesLoading={agentsRefreshing} capabilitiesError={agentsError} onrefreshcapabilities={() => { void loadAgents(); }}
@@ -1423,7 +1440,7 @@
     {/if}
 
     {#if showSide}
-      <div class="pane-wrap">
+      <div class="pane-wrap" data-capture-area>
         <Splitter bind:width={prefs.paneWidth} min={PANE_MIN} max={prefs.view === "graph" ? Math.min(PANE_MAX, viewportWidth - 600) : PANE_MAX} initial={PANE_DEFAULT} />
         <DetailPane {...detailProps} bind:tab={detailTab} entries={snapshot?.entries ?? []} onselectentry={(e) => selectEntry(e, false)}
           onhide={() => { if (prefs.view === "graph") closeGraphDetails(); else prefs.sideOpen = false; }} />
@@ -1461,8 +1478,14 @@
 {#if showSchedules && !confirm && !shutdown.visible}<SchedulesDialog {schedules} loading={schedulesLoading} error={schedulesError} demo={!api.isTauri} powerAvailable={!api.isTauri || ["macos", "linux", "windows"].includes(info.platform)} entries={snapshot?.entries ?? []} onclose={closeSchedules} onrefresh={() => loadSchedules(true)} oncancel={cancelSchedule} onschedulepower={() => openShutdown("schedule", "schedules")} onscheduleport={(entry) => { closeSchedules(); requestScheduledStop(entry); }} />{/if}
 {#if pinDialog}<PinDialog port={pinDialog.port} label={pinDialog.label} pinned={pinDialog.pinned} inUse={portHolder} onsave={savePin} onunpin={unpinPort} onclose={() => (pinDialog = null)} />{/if}
 {#if showRemote}<RemoteDialog recent={config?.recent_hosts ?? []} onscan={async (h) => { const r = await api.remoteScan(h); config = await api.getConfig(); return r; }} oncopy={copy} onclose={() => (showRemote = false)} />{/if}
-{#if capture.dialog}
-  <ScreenRecordDialog phase={capture.dialog} error={capture.error} errorTitle={capture.errorTitle} result={capture.result} busy={capture.busy} starting={capture.starting} supported={!!capture.support.backend} checkingSupport={capture.support.pending} unsupportedReason={capture.support.reason} plan={capture.plan} backend={capture.support.backend} stoppedBy={capture.stoppedBy} onplan={capture.setPlan} onstart={() => void capture.begin()} onclose={capture.close} ondiscard={capture.discardAndClose} />
+{#if recordPicking && RegionPicker}
+  <RegionPicker purpose="recording" confirmLabel="Record area" even initial={capture.plan.region ?? null} onconfirm={recordPicked} oncancel={() => (recordPicking = false)} />
+{/if}
+{#if recordingArea}
+  <div class="recording-area" style="left: {recordingArea.x - 3}px; top: {recordingArea.y - 3}px; width: {recordingArea.width + 6}px; height: {recordingArea.height + 6}px" aria-hidden="true"></div>
+{/if}
+{#if capture.dialog && !recordPicking}
+  <ScreenRecordDialog phase={capture.dialog} error={capture.error} errorTitle={capture.errorTitle} result={capture.result} busy={capture.busy} starting={capture.starting} supported={!!capture.support.backend} checkingSupport={capture.support.pending} unsupportedReason={capture.support.reason} plan={capture.plan} backend={capture.support.backend} stoppedBy={capture.stoppedBy} onplan={capture.setPlan} onstart={() => void startRecordingFlow()} onclose={capture.close} ondiscard={capture.discardAndClose} />
 {/if}
 <SnapshotCapture bind:this={snapshotCaptureUi} session={capture.session} blocked={otherModalOpen} onstatechange={(state) => (snapshotCaptureState = state)} />
 {#if snapshotCaptureState.busy}<span class="sr-only" role="status">Capturing snapshot. Press Escape or use Cancel snapshot capture to cancel.</span>{/if}
@@ -1483,5 +1506,7 @@
 
   .graph-loading { display: grid; place-items: center; height: 100%; color: var(--muted); font-size: var(--fs-body-sm); }
   .graph-wrap { position: relative; min-height: 0; min-width: 0; }
+  /* Around, never over, the part of the window being recorded. */
+  .recording-area { position: fixed; z-index: 2147482000; pointer-events: none; border: 2px dashed var(--danger); border-radius: 4px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface) 70%, transparent); }
 
 </style>

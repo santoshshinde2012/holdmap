@@ -52,6 +52,8 @@ function nativeOptions(plan: RecordingPlan) {
     gifFps: plan.gifFps,
     gifMaxEdge: plan.gifMaxEdge,
     gifMaxBytes: plan.gifMaxBytes,
+    // Part of the window, in points (CSS pixels): the recorder captures just that, at full resolution.
+    ...(plan.area === "region" && plan.region ? { region: plan.region } : {}),
   };
 }
 

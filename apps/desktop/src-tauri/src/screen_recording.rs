@@ -125,6 +125,49 @@ pub(crate) struct StartOptions {
     gif_fps: Option<u32>,
     gif_max_edge: Option<u32>,
     gif_max_bytes: Option<u64>,
+    region: Option<Region>,
+}
+
+/// Part of the window to record, in points from its top left (the webview's CSS pixels). The
+/// native recorder captures only this rectangle of its own window, at full resolution.
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Region {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+/// The smallest area worth recording, and a bound no window reaches.
+const MIN_REGION: f64 = 32.0;
+const MAX_REGION: f64 = 16_384.0;
+
+impl Region {
+    fn resolve(&self) -> Result<Value, String> {
+        let Region {
+            x,
+            y,
+            width,
+            height,
+        } = *self;
+        let finite = [x, y, width, height].iter().all(|v| v.is_finite());
+        if !finite
+            || x < 0.0
+            || y < 0.0
+            || width < MIN_REGION
+            || height < MIN_REGION
+            || x + width > MAX_REGION
+            || y + height > MAX_REGION
+        {
+            return Err(
+                "Choose an area at least 32 points wide and tall, inside the window.".into(),
+            );
+        }
+        Ok(
+            json!({ "x": x.round(), "y": y.round(), "width": width.round(), "height": height.round() }),
+        )
+    }
 }
 
 impl StartOptions {
@@ -141,6 +184,7 @@ impl StartOptions {
             "gif_fps": self.gif_fps.unwrap_or(8).clamp(1, 15),
             "gif_max_edge": self.gif_max_edge.unwrap_or(640).clamp(160, 960),
             "gif_max_bytes": self.gif_max_bytes.unwrap_or(25 * 1024 * 1024).clamp(1024 * 1024, MAX_BYTES),
+            "region": self.region.as_ref().map(Region::resolve).transpose()?,
         }))
     }
 }
@@ -1162,5 +1206,38 @@ mod tests {
             serde_json::from_value(json!({"mp4": false, "gif": false})).unwrap();
         assert_eq!(none.resolve().unwrap_err(), "Choose MP4, GIF or both.");
         assert!(serde_json::from_value::<StartOptions>(json!({"path": "/tmp/x"})).is_err());
+    }
+
+    #[test]
+    fn a_recorded_area_is_whole_points_inside_the_window_or_refused() {
+        assert_eq!(
+            StartOptions::default().resolve().unwrap()["region"],
+            Value::Null
+        );
+        let part: StartOptions = serde_json::from_value(
+            json!({"region": {"x": 10.4, "y": 20.6, "width": 640.2, "height": 359.8}}),
+        )
+        .unwrap();
+        assert_eq!(
+            part.resolve().unwrap()["region"],
+            json!({"x": 10.0, "y": 21.0, "width": 640.0, "height": 360.0})
+        );
+        for bad in [
+            json!({"x": -1, "y": 0, "width": 100, "height": 100}),
+            json!({"x": 0, "y": 0, "width": 31, "height": 100}),
+            json!({"x": 16_000, "y": 0, "width": 1_000, "height": 100}),
+        ] {
+            let options: StartOptions = serde_json::from_value(json!({ "region": bad })).unwrap();
+            assert!(options.resolve().unwrap_err().starts_with("Choose an area"));
+        }
+        // Not a number, and nothing but the four sides.
+        assert!(serde_json::from_value::<StartOptions>(
+            json!({"region": {"x": 0, "y": 0, "width": "wide", "height": 9}})
+        )
+        .is_err());
+        assert!(serde_json::from_value::<StartOptions>(
+            json!({"region": {"x": 0, "y": 0, "width": 99, "height": 99, "display": 2}})
+        )
+        .is_err());
     }
 }
