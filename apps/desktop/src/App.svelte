@@ -390,10 +390,12 @@
   $effect(() => {
     const mode = agentFlowMode;
     const visible = prefs.view === "agents" && mode !== "overview" && !flowPaused;
+    // Home's 3D view draws recorded calls in their own lane, from the same opt-in recorder.
+    const home3d = prefs.view === "home" && prefs.homeLayout === "3d";
     const interval = Math.max(1_000, scanMs);
     untrack(() => { flowLoader.invalidate(); activityLoader.invalidate(); });
-    if (!visible) return;
-    const loader = mode === "connections" ? flowLoader : activityLoader;
+    if (!visible && !home3d) return;
+    const loader = visible && mode === "connections" ? flowLoader : activityLoader;
     untrack(() => { void loader.request(); });
     const timer = setInterval(() => { if (!document.hidden) void loader.request(); }, interval);
     return () => { clearInterval(timer); loader.invalidate(); };
@@ -1377,7 +1379,7 @@
         {/if}
       </div>
     {:else if prefs.view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
+      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} singleKeys={prefs.singleKeyShortcuts} {activity} {recording} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
         onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (prefs.view = v)} onsecurity={() => { prefs.view = "agents"; prefs.agentSection = "insights"; securityTab.value = "findings"; }} oninventory={enableInventory} />
     {:else if prefs.view === "agents"}
       <div class="graph-wrap agents-wrap">

@@ -15,16 +15,69 @@ Release-by-release changes are in [What's new](../whats-new/) and the
 
 ## Home and first open
 
-**Home** shows agents, listening ports, dev
-servers, exposed listeners and running MCP servers, as **Cards** or a **Map** (toggle at the
-top right or press `V`; the choice is remembered). Cards list each agent's projects, ports,
+**Home** shows agents, listening ports, dev servers, exposed listeners and running MCP servers,
+as **Cards**, a **Map** or, in the current source (**Unreleased**), **3D**. Choose at the top
+right or press `V` to cycle; the choice is remembered. Cards list each agent's projects, ports,
 MCP servers and skills; Map draws the same footprint around this computer with a collapsible
 **Timeline**. **Needs you** lists agents on all interfaces, root or elevated access, risky
 safety settings, unpinned MCP servers and exposed dev servers. Click any port (a card chip, a
 map node or a timeline pin) for **Details** or **Stop…**; every **Stop…** opens the stop plan
 first. Select an agent once to highlight it everywhere; select it again to open it on
-Agents. Counts read **…** until the first scan. On a narrow window the Map becomes a list
+Agents. Counts read **…** until the first scan. On a narrow window the Map and 3D become a list
 of agents, each with its ports and the same **Details** / **Stop…** menu.
+
+**Current source (Unreleased):** **3D** builds the same machine in layers. Agents stand on the
+board with the ports they hold and the folders they work in; their processes float on the
+**Runtime** plate above; MCP servers, skills and instruction files found on disk sit on the
+**Configuration** plate on top (only after **Read MCP config**). Seen from straight above
+(**Top**) it is the Map: the same agents in the same places. When 3D opens, the machine builds up
+from the board, layer by layer; each tower's cap carries its agent's initials.
+
+- **Assembled / Exploded** (`E`) pulls the plates apart. **X-ray** (`X`) turns solid parts to
+  glass, shows each agent's processes as slices inside its tower, and brings configuration and
+  running beams forward. **Processes** and **Configuration** hide a plate.
+- The parts list beside the canvas has a button for every agent and every part of the selected
+  agent; it is also the keyboard path to everything drawn (`↑`/`↓` move between buttons).
+  Selecting an agent brings its sector forward and fades the rest; selecting it again in the
+  list clears it. On the canvas, click an agent once to select it and again to open it on
+  Agents, or use **Open in Agents** in the details panel. Ports open the same **Details** /
+  **Stop…** menu.
+- The readings across the top come from the same parts that are drawn: CPU (with its recent
+  trend), memory, ports, processes, MCP servers running of configured, skills, **Needs you** and,
+  once recording has been used, **Calls**, for the whole computer or the selected agent. They read
+  **…** until the first scan, and a figure that wasn't collected reads **Not read**, never 0.
+  Readings that count parts are toggles: press one to light up exactly those parts and step the
+  rest back (**MCP running** also lights the process that runs each server); `Esc` lets go.
+- Hover any part for a card with its status and how holdmap knows it. **Focus** hides the
+  summary and **Needs you** so the machine fills Home (the choice is remembered); the `+`, `−`
+  and fit buttons on the right edge zoom without a wheel.
+- **Tour** (`T`) walks through the machine, agents that need you first. Any drag, scroll, click or
+  key hands you control, and the tour picks up again after 25 seconds of quiet. It is off with
+  reduced motion.
+- Drag to turn, right-drag or Shift-drag to pan, scroll to zoom; with the canvas focused, arrow
+  keys turn, `+` and `−` zoom and `0` resets. `E`, `X`, `T` and `F` (fit) are single-key
+  shortcuts: they follow that setting and leave a focused button alone. `Esc` stops the tour,
+  then clears the selected part, then a pressed reading.
+
+With local recording on (**Agents → Flow → Calls**), recorded calls appear in a **Recorded calls**
+lane above the machine, newest at the front: blue for tool calls, violet for model requests, red
+for failures; a call still running breathes. An agent integration reports them, so they stay in
+their lane: no line joins a call to a process or a configured server, even when a name or a PID
+looks the same. **Calls** hides the lane.
+
+Every link in 3D comes from what holdmap observed: a process tree, a held listener, an open
+connection, a working folder, or a configuration file of that agent. A configured MCP server is
+drawn as a blueprint part; a green beam joins it to a process only when one of that agent's own
+processes runs it. Nothing is joined by name. 3D needs WebGL 2:
+without it Home shows the Map and says why, and with software-only rendering it asks first. It
+loads only when chosen, redraws only when something changes (plus a slow CPU pulse, off with
+reduced motion), and pauses while the window is hidden.
+
+These screenshots show the Unreleased 3D layout with browser sample data:
+
+![Home as 3D in light theme: agent towers on the board with their ports, processes and configuration above, live readings across the top and the parts list beside it](../../../../docs/screenshots/desktop-home-3d-light.png)
+
+![Home as 3D, exploded with X-ray in dark theme: the board, Runtime and Configuration plates pulled apart, glass towers showing process slices and a green beam from a running MCP server](../../../../docs/screenshots/desktop-home-3d-xray-dark.png)
 
 **Copy summary** puts the overview and **Needs you** on the clipboard as plain text for a
 ticket or chat; **Download JSON** saves the same facts as a file. Neither starts a scan, and

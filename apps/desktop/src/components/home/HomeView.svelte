@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Home: the same agents as Cards or as a Map (radial footprint plus a collapsible timeline),
-  // with "Needs you" beside both. Hover and selection are shared across cards, map, timeline and
+  // Home: the same agents as Cards, as a Map (radial footprint plus a collapsible timeline) or
+  // as a 3D machine (loaded on demand), with "Needs you" beside each. Hover and selection are shared across cards, map, timeline and
   // attention items, and survive a layout switch. Esc clears the selection.
   import { insightsStore } from "../../lib/insights-store.svelte";
   import { trustStore } from "../../lib/trust-store.svelte";
@@ -18,27 +18,34 @@
   import NeedsList from "./NeedsList.svelte";
   import AgentLanes from "./AgentLanes.svelte";
   import PortMenu from "./PortMenu.svelte";
-  import { attention, attentionAgent, hotAgents, overview, type AttentionItem } from "../../lib/home";
+  import { attention, attentionAgent, hotAgents, needsByAgent, overview, type AttentionItem } from "../../lib/home";
   import { radialLayout, type FootprintNode } from "../../lib/machine-map";
   import { lanes } from "../../lib/agent-lanes";
   import { agentColors } from "../../lib/agents";
   import { HOME_LAYOUTS, HOME_LAYOUT_LABEL, type HomeLayout } from "../../lib/home-layout";
+  import { prefGetBoolean, prefSet } from "../../lib/prefs";
+  import type { ActivitySnapshot, RecordingStatus } from "../../lib/agent-flow/model";
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
   type Section = "overview" | "capabilities" | "insights";
-  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, onopenagent, onopenentry, onview, onsecurity, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent }: {
+  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, singleKeys = true, activity = null, recording = null, onopenagent, onopenentry, onview, onsecurity, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent }: {
     entries: PortEntry[] | null;
     report: AgentsReport | null;
     /** Whether reading agents' MCP/skills/permission files is turned on. */
     inventory?: boolean;
     /** Time of the latest scan. */
     now?: number;
-    /** Cards or Map; the app shell persists it and binds the V shortcut. */
+    /** Cards, Map or 3D; the app shell persists it and binds the V shortcut. */
     layout?: HomeLayout;
     onlayout?: (l: HomeLayout) => void;
     /** Whether the Map's timeline band is open; also persisted by the app shell. */
     timeline?: boolean;
     ontimeline?: (open: boolean) => void;
+    /** The app's single-key shortcuts setting, for the 3D view's E, X, T and F. */
+    singleKeys?: boolean;
+    /** Opt-in recorded calls for the 3D view's calls lane. */
+    activity?: ActivitySnapshot | null;
+    recording?: RecordingStatus | null;
     onopenagent: (id: string, section?: Section) => void;
     onopenentry: (id: string) => void;
     onview: (view: "list" | "agents" | "graph") => void;
@@ -79,7 +86,7 @@
   const idle = $derived(!!report && !!entries && report.agents.length === 0 && entries.length === 0);
   const hot = $derived(hotAgents(needs));
   const colors = $derived(agentColors(report?.agents ?? []));
-  const LAYOUT_ICON: Record<HomeLayout, string> = { cards: "layers", map: "radar" };
+  const LAYOUT_ICON: Record<HomeLayout, string> = { cards: "layers", map: "radar", "3d": "box" };
   const layoutOptions = HOME_LAYOUTS.map((l) => ({ value: l, label: HOME_LAYOUT_LABEL[l], icon: LAYOUT_ICON[l], title: `${HOME_LAYOUT_LABEL[l]} · V` }));
 
   let hovered = $state<string | null>(null);
@@ -122,12 +129,35 @@
   }
   function select(id: string) { setSelected(selected === id ? null : id); }
   function onkeydown(e: KeyboardEvent) { if (e.key === "Escape" && selected) { setSelected(null); e.stopPropagation(); } }
+
+  // The 3D machine and three.js load only when that layout is chosen, and not on a phone-sized
+  // window, where Home shows the list of agents instead (as the Map does).
+  let Machine3D = $state<typeof import("./machine3d/Machine3DView.svelte").default | null>(null);
+  let machine3dError = $state(false);
+  let narrow = $state(false);
+  $effect(() => {
+    const media = matchMedia("(max-width: 760px)");
+    narrow = media.matches;
+    const change = () => (narrow = media.matches);
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  });
+  $effect(() => {
+    if (layout !== "3d" || narrow || Machine3D) return;
+    import("./machine3d/Machine3DView.svelte").then((m) => { Machine3D = m.default; machine3dError = false; }, (e) => { console.error("Couldn't load the 3D view", e); machine3dError = true; });
+  });
+  const spatial = $derived((layout === "map" || layout === "3d") && !idle);
+  // 3D Focus: the summary and Needs you step aside so the machine fills Home (its readings carry
+  // the same figures, and Needs you is one of them). Remembered; ignored on a narrow window.
+  let focus3d = $state(prefGetBoolean("home.3d.focus", false));
+  $effect(() => prefSet("home.3d.focus", focus3d ? "1" : "0"));
+  const focused = $derived(layout === "3d" && focus3d && !narrow && !idle);
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="home" id="home-overview" role="region" aria-label="Overview" {onkeydown}>
+<div class="home" class:three={layout === "3d" && !idle} id="home-overview" role="region" aria-label="Overview" {onkeydown}>
   <header class="top">
-    <HomeSummary {stats} />
+    {#if !focused}<HomeSummary {stats} />{/if}
     <div class="tools">
       {#if layout === "map"}
         <span class="legend" aria-label="Legend">
@@ -141,7 +171,7 @@
     </div>
   </header>
 
-  <div class="body" class:map={layout === "map" && !idle}>
+  <div class="body" class:map={spatial} class:three={layout === "3d" && !idle} class:focused>
     {#key layout}
       <div class="main">
         {#if idle}
@@ -154,15 +184,30 @@
             <p class="clear wait" aria-busy="true">…</p>
           {/if}
         {:else}
+          {#snippet machineMap()}
+            <MachineMap {groups} {colors} platform={report?.platform ?? ""} ports={o.ports} {active} {selected} {hot} onhover={(id) => (hovered = id)} onselect={select} onopen={open} onport={port} />
+          {/snippet}
           <div class="stage">
-            <div class="map-wrap">
-              <MachineMap {groups} {colors} platform={report?.platform ?? ""} ports={o.ports} {active} {selected} {hot} onhover={(id) => (hovered = id)} onselect={select} onopen={open} onport={port} />
+            <div class="map-wrap" class:flush={layout === "3d"}>
+              {#if layout === "map"}
+                {@render machineMap()}
+              {:else if narrow}
+                <!-- The list of agents below stands in on a narrow window. -->
+              {:else if Machine3D}
+                <Machine3D {report} {entries} {hot} needs={needsByAgent(needs, report)} {colors} trust={trustStore.report?.skills ?? []} {selected} {active} {inventory} {singleKeys} {activity} {recording} expanded={focused} onexpand={(on) => (focus3d = on)} {oninventory}
+                  onselectagent={setSelected} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} onport={port} fallback={machineMap} />
+              {:else if machine3dError}
+                <p class="clear">Couldn't load the 3D view. <button type="button" class="inv" onclick={() => onlayout?.("map")}>Show the Map</button></p>
+              {:else}
+                <p class="clear wait" aria-busy="true">Loading 3D…</p>
+              {/if}
             </div>
             <div class="map-list"><MapList {groups} {colors} {active} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} onport={port} /></div>
           </div>
         {/if}
       </div>
     {/key}
+    {#if !focused}
     <aside class="panel" aria-labelledby="home-needs">
       <h2 id="home-needs">Needs you{#if needs.length}<span class="count">{needs.length}</span>{/if}</h2>
       {#if trustAlerts.length && onsecurity}
@@ -182,6 +227,7 @@
         <p class="clear" aria-busy="true">…</p>
       {/if}
     </aside>
+    {/if}
   </div>
 
   {#if layout === "map" && !idle}
@@ -212,6 +258,11 @@
   .inv:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   .body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--sp-4); align-items: start; }
   .body.map { align-items: stretch; height: clamp(340px, 44vh, 560px); }
+  /* The 3D machine takes exactly the height Home has left under its header, so the page never
+     gains a scrollbar that would resize the canvas while it lays out. */
+  .home.three { grid-template-rows: auto minmax(440px, 1fr); align-content: stretch; }
+  .body.map.three { height: auto; min-height: 0; }
+  .body.three.focused { grid-template-columns: minmax(0, 1fr); }
   .main { min-width: 0; min-height: 0; height: 100%; animation: view-in 180ms ease both; }
   @keyframes view-in { from { opacity: 0; transform: translateY(3px); } }
   @media (prefers-reduced-motion: reduce) { .main { animation: none; } }
@@ -219,8 +270,12 @@
   .wait { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
   .stage { height: 100%; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; min-height: 0; overflow: clip; }
   .map-wrap { width: 100%; height: 100%; padding: var(--sp-2); }
+  .map-wrap.flush { padding: 0; }
   .map-list { display: none; }
-  .panel { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+  /* A column whose last block (the list or the all-clear note) takes the spare height, so the
+     skill-trust alert above it keeps its own size in the taller Map and 3D layouts. */
+  .panel { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+  .panel > :last-child { flex: 1 1 auto; min-height: 0; }
   h2 { margin: 0; padding: var(--sp-3) var(--sp-3) var(--sp-2); display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-semibold); color: var(--text); border-bottom: 1px solid var(--border); }
   .count { padding: 0 7px; border-radius: var(--r-full); background: var(--warn-soft); color: var(--warn); font-size: var(--fs-caption); line-height: var(--lh-caption); font-variant-numeric: tabular-nums; }
   .needs-scroll { overflow-y: auto; min-height: 0; }
@@ -231,6 +286,8 @@
   @media (max-width: 860px) {
     .body, .body.map { grid-template-columns: minmax(0, 1fr); height: auto; }
     .body.map .stage { height: 420px; }
+    .home.three { grid-template-rows: none; align-content: start; }
+    .body.three .stage { height: 560px; }
     .body:not(.map) .panel { position: static; }
     .panel { order: -1; }
     .panel { max-height: none !important; }

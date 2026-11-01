@@ -415,7 +415,7 @@ try {
   const guideBase = new URL("./", page.url());
   const checkGuideImages = async (viewport) => {
     await page.setViewportSize(viewport);
-    for (const [route, count] of [["agents", 16], ["desktop", 13], ["whats-new", 1]]) {
+    for (const [route, count] of [["agents", 16], ["desktop", 15], ["whats-new", 1]]) {
       await page.goto(new URL(`docs/${route}/`, guideBase).href, { waitUntil: "domcontentloaded" });
       const images = page.locator(".prose img");
       if (await images.count() !== count) throw new Error(`${route}: expected ${count} guide screenshots`);

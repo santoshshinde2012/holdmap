@@ -63,6 +63,11 @@
   Add any MCP server in three steps: source, tools, review.
 - **Home, maps and graphs.** Agents as Cards or a Map with a Timeline and a **Needs you**
   list, the service graph with clusters, and agent flow.
+- **3D machine (Unreleased).** Home's **3D** layout builds the same agents as a model you can
+  take apart: ports and folders on the board, processes on a runtime plate, configuration found on
+  disk on top and recorded calls in a lane of their own, with X-ray, a guided tour, a Focus mode
+  and live readings you can press to light up their parts. Every link comes from what holdmap
+  observed; nothing is joined by name.
 - **Menu bar and tray widget (Unreleased).** Stacked readings beside the icon on macOS (agents,
   their CPU, dev servers, what needs you) and a badge on every OS. A click opens a panel like a
   system monitor's: headline numbers, an agent CPU chart, a Needs you history, and your dev

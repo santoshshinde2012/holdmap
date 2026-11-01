@@ -911,6 +911,26 @@ published asset digests and IDs, then publishes the complete `latest.json` index
   `AgentsView.svelte` fits those graphs into Svelte Flow; Computer / Footprint / Project are
   exclusive action docks on the Overview toolbar. Folder clicks zoom, then open
   `FolderActions.svelte`. Evidence labels stay observed / inferred / unknown.
+- **Home 3D machine.** `lib/machine3d/` projects the same `AgentsReport` (plus the opt-in
+  inventory, skill trust and Home's attention items) into a pure, bounded scene: parts on three
+  layers (board: agents, held ports, working folders, remote-host groups; runtime: child
+  processes; configuration: MCP definitions, skills, instruction files) and typed wires. Wires come
+  only from parent PIDs, listener holders, sockets matched by exact entry ID, working folders and
+  each agent's own configuration files; the single configuration ↔ process wire is an MCP
+  server's `running` state whose PIDs are that agent's processes. Skill trust attaches by exact
+  skill folder. Opt-in recorded calls (`calls.ts`) are parts in a lane of their own, ordered by
+  reported time, with no wire to any process, agent or configuration; their reported parent is a
+  detail, not a link. `gaugeParts` maps each reading to the exact parts it counts, so pressing a
+  reading lights those parts. `layout.ts` keeps the 2D map's agent angles (the top
+  view is the map) and is keyed by the scene's identity, not resource samples; `camera.ts`,
+  `tour.ts` (a pure function of time) and `labels.ts` are unit-tested. `stage.ts` is the only
+  three.js module: it renders on demand, runs its CPU pulse and connection dots at ≤30 fps,
+  stops while the window is hidden and honours reduced motion. Labels, readings, the parts list
+  and the inspector are DOM, so text uses the shared tokens and stays accessible; the parts list
+  is the canvas's keyboard outline; the hover card repeats only what they already carry.
+  `HomeView` imports the view on demand, skips it on narrow windows and owns Focus (summary and
+  Needs you step aside); the app polls the existing recorder for it only while 3D is shown; without WebGL 2 (or with software rendering unless the viewer opts in) it renders the
+  2D map with the reason. The chunk carries three.js and has its own site budget.
 - **Pure view logic.** `lib/rows.ts` (badges, status, sparklines), `lib/detail.ts` (details pane)
   and `lib/settings.ts` (the Settings contract) are pure and unit-tested, so components depend on
   interfaces rather than on `api.ts`.

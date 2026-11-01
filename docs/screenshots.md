@@ -11,6 +11,8 @@ Every capture in `docs/screenshots/`, all with sample data, never a real screen.
 |---|---|---|
 | cards | [dark](screenshots/desktop-home-cards-dark.png) | [light](screenshots/desktop-home-cards-light.png) |
 | map | [dark](screenshots/desktop-home-map-dark.png) | [light](screenshots/desktop-home-map-light.png) |
+| 3d (Unreleased) | [dark](screenshots/desktop-home-3d-dark.png) | [light](screenshots/desktop-home-3d-light.png) |
+| 3d x-ray (Unreleased) | [dark](screenshots/desktop-home-3d-xray-dark.png) | [light](screenshots/desktop-home-3d-xray-light.png) |
 | narrow | [dark](screenshots/desktop-home-narrow-dark.png) | [light](screenshots/desktop-home-narrow-light.png) |
 | narrow map | [dark](screenshots/desktop-home-narrow-map-dark.png) | [light](screenshots/desktop-home-narrow-map-light.png) |
 | port menu | [dark](screenshots/desktop-home-port-menu-dark.png) | [light](screenshots/desktop-home-port-menu-light.png) |
