@@ -1292,6 +1292,9 @@
         openEntryById(id);
       }),
       api.onEvent<Config>("config-changed", (c) => { config = c; }),
+      // The tray panel's quick settings: All settings…, and the theme (the window saves it).
+      api.onEvent("open-settings", () => openSettings()),
+      api.onEvent<string>("set-theme", (t) => { if (t === "system" || t === "light" || t === "dark") prefs.theme = t; }),
       api.onEvent<api.TrayStatus>("tray-status", noteTrayStatus),
       api.onEvent("refresh", () => refresh()),
       api.onEvent("stop-all-dev", () => { if (!confirm) requestStopAllDev(); }),

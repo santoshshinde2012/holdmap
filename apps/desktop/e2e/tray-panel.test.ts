@@ -27,6 +27,7 @@ for (const theme of ["light", "dark"] as const) {
     const { violations } = await new AxeBuilder({ page }).analyze();
     expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
     expect(errors).toEqual([]);
+    if (process.env.HOLDMAP_UPDATE_SCREENSHOTS) await page.screenshot({ path: `../../docs/screenshots/desktop-tray-panel-${theme}.png` });
   });
 }
 
@@ -45,3 +46,28 @@ test("every tray panel row is a keyboard-reachable button", async ({ page }) => 
   expect(names.some((n) => n.startsWith(":3000"))).toBe(true);
   expect(names.some((n) => n.startsWith("Claude Code · storefront"))).toBe(true);
 });
+
+for (const height of [480, 600, 720]) {
+  test(`quick settings and footer fit a ${height}px window`, async ({ page }) => {
+    await page.setViewportSize({ width: 360, height });
+    await page.goto("/tray.html");
+    const footer = page.locator(".foot");
+    expect(Math.abs((await footer.boundingBox())!.y + (await footer.boundingBox())!.height - height)).toBeLessThanOrEqual(1);
+    await page.getByRole("button", { name: /Quick settings/ }).click();
+    await expect(page.getByRole("region", { name: "Quick settings" })).toBeVisible();
+    const notifications = page.getByRole("switch", { name: "Desktop notifications" });
+    await expect(notifications).toBeChecked();
+    await notifications.click();
+    await expect(notifications).not.toBeChecked();
+    await page.getByRole("button", { name: "Dark", exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(page.getByRole("button", { name: "Quit", exact: true })).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
+    const { violations } = await new AxeBuilder({ page }).analyze();
+    expect(violations.map(v => v.id)).toEqual([]);
+    if (process.env.HOLDMAP_UPDATE_SCREENSHOTS && height === 600) await page.screenshot({ path: "../../docs/screenshots/desktop-tray-settings-dark.png" });
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: /Quick settings/ })).toBeFocused();
+    await expect(page.locator(".body").first()).toBeVisible();
+  });
+}

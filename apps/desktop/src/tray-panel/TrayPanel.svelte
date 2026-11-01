@@ -3,6 +3,8 @@
   // lists a system monitor's popover shows, for holdmap's own data. Every row runs a tray action
   // id from the data; stops still open the reviewed plan in the main window.
   import { onDestroy, onMount } from "svelte";
+  import { applyTheme, savedTheme, THEMES } from "./theme";
+  import { prefSet } from "../lib/prefs";
   import { humanBytes } from "../lib/format";
   import {
     attentionCells, attentionSummary, chartPaths, chartTop, churnBars, churnSummary, cpuParts, cpuSummary, cpuText, ringArcs, URGENCY_LABEL,
@@ -13,6 +15,25 @@
 
   let data = $state<PanelData | null>(null);
   let failed = $state(false);
+  let settingsOpen = $state(false);
+  let busy = $state(false);
+  let actionError = $state("");
+  let theme = $state(savedTheme());
+  async function changeSetting(action: string) {
+    if (busy) return;
+    busy = true;
+    actionError = "";
+    try { await run(action); await refresh(); }
+    catch { actionError = "Couldn’t save that setting. Please try again."; }
+    finally { busy = false; }
+  }
+  async function chooseTheme(next: typeof theme) {
+    await changeSetting(`theme:${next}`);
+    if (actionError) return;
+    theme = next;
+    prefSet("theme", next);
+    applyTheme(next);
+  }
   let timer: ReturnType<typeof setInterval> | undefined;
 
   async function refresh() {
@@ -25,7 +46,10 @@
     }
   }
   function onKey(e: KeyboardEvent) {
-    if (e.key === "Escape" && !e.isComposing) void run("hide-panel");
+    if (e.key === "Escape" && !e.isComposing) {
+      if (settingsOpen) { settingsOpen = false; document.getElementById("quick-settings-toggle")?.focus(); }
+      else void run("hide-panel");
+    }
   }
   onMount(() => {
     void refresh();
@@ -57,6 +81,7 @@
   let shownSeq = 0;
   $effect(() => {
     if (!data?.focus || data.focusSeq === shownSeq) return;
+    settingsOpen = false;
     shownSeq = data.focusSeq;
     document.querySelector(`[data-section="${data.focus}"]`)?.scrollIntoView({ block: "start" });
   });
@@ -82,7 +107,8 @@
     </span>
   </header>
 
-  <div class="body">
+  <div class="body" hidden={settingsOpen}>
+    {#if failed && data}<p class="empty" role="status">Readings may be out of date. Reconnecting…</p>{/if}
     {#if failed && !data}
       <p class="empty">Couldn't read the latest scan. It will try again in a moment.</p>
     {/if}
@@ -131,7 +157,7 @@
         {#each data.needs as need (need.action)}
           <li>
             <button type="button" class="row" onclick={() => run(need.action)}>
-              <span class="text">{need.title}</span>
+              <span class="text" title={need.title}>{need.title}</span>
               <span class="pill {need.urgency}">{URGENCY_LABEL[need.urgency]}</span>
             </button>
           </li>
@@ -230,15 +256,52 @@
     {/if}
   </div>
 
+  {#if settingsOpen}
+    <section class="body settings" aria-label="Quick settings">
+      <div class="settings-heading"><h2>Quick settings</h2><button class="link" type="button" onclick={() => run("settings")}>All settings ↗</button></div>
+      <p class="quiet">Make this space work for you.</p>
+      <h3 class="rule">Appearance</h3>
+      <div class="theme-options" role="group" aria-label="Theme">
+        {#each THEMES as choice}
+          <button type="button" aria-pressed={theme === choice} disabled={busy} onclick={() => chooseTheme(choice)}>{choice === "system" ? "System" : choice === "light" ? "Light" : "Dark"}</button>
+        {/each}
+      </div>
+      {#if data?.settings}
+        {@const settings = data.settings}
+        {#if settings.bar}
+          <h3 class="rule">{settings.bar} widgets</h3>
+          {#each settings.items as item (item.action)}
+            <button type="button" class="setting-row" role="switch" aria-checked={item.on} disabled={busy} onclick={() => changeSetting(item.action)}><span>{item.name}</span><span class="switch" class:checked={item.on} aria-hidden="true"></span></button>
+          {/each}
+          {#if settings.combined !== null}
+            <button type="button" class="setting-row" role="switch" aria-checked={settings.combined} disabled={busy} onclick={() => changeSetting("combined")}><span>Combine into one item</span><span class="switch" class:checked={settings.combined} aria-hidden="true"></span></button>
+          {/if}
+        {/if}
+        <h3 class="rule">Preferences</h3>
+        {#if settings.dock !== null}
+          <button type="button" class="setting-row" role="switch" aria-checked={settings.dock} disabled={busy} onclick={() => changeSetting("dock")}><span>Show in the Dock</span><span class="switch" class:checked={settings.dock} aria-hidden="true"></span></button>
+        {/if}
+        <button type="button" class="setting-row" role="switch" aria-checked={settings.notify} disabled={busy} onclick={() => changeSetting("notify")}><span>Desktop notifications</span><span class="switch" class:checked={settings.notify} aria-hidden="true"></span></button>
+      {/if}
+      {#if actionError}<p class="empty" role="alert">{actionError}</p>{/if}
+    </section>
+  {/if}
+
   <footer class="foot">
+    <div class="footer-tools">
+      <button id="quick-settings-toggle" type="button" class="settings-toggle" aria-expanded={settingsOpen} onclick={() => settingsOpen = !settingsOpen}>⚙ {settingsOpen ? "Back to overview" : "Quick settings"}</button>
+      <button type="button" class="link" onclick={() => changeSetting("refresh")} disabled={busy}>Refresh</button>
+    </div>
+    <div class="footer-actions">
     <button type="button" class="btn primary" onclick={() => run("show")}>Open holdmap</button>
     <button type="button" class="btn" onclick={() => run("quit")}>Quit</button>
+    </div>
   </footer>
 </main>
 
 <style>
-  .panel { display: flex; flex-direction: column; height: 100%; background: var(--surface); color: var(--text); font-variant-numeric: tabular-nums; }
-  .head { display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; padding: 28px 16px 8px; -webkit-user-select: none; user-select: none; }
+  .panel { display: flex; flex-direction: column; height: 100dvh; min-height: 0; overflow: hidden; background: var(--surface); color: var(--text); font-variant-numeric: tabular-nums; }
+  .head { flex-shrink: 0; display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; padding: 28px 16px 8px; -webkit-user-select: none; user-select: none; }
   .tools { display: flex; justify-content: flex-end; gap: 4px; }
   .icon-btn.on { color: var(--accent); background: var(--accent-soft); }
   .ports { display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: center; }
@@ -256,9 +319,9 @@
   .churn .closed { fill: var(--tone-amber); }
   .logo { border-radius: 4px; }
   h1 { margin: 0; text-align: center; font-size: var(--fs-title); line-height: var(--lh-title); font-weight: var(--fw-semibold); letter-spacing: var(--ls-title); }
-  .body { flex: 1; overflow-y: auto; padding: 4px 16px 12px; }
-  .hero { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 0 16px; text-align: center; }
-  .figure { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .body { flex: 1 1 0; min-height: 0; overscroll-behavior: contain; scrollbar-gutter: stable; overflow-y: auto; padding: 4px 16px 12px; }
+  .hero { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 0 4px; text-align: center; }
+  .figure { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); padding: 10px 2px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .value { display: flex; align-items: baseline; justify-content: center; height: 32px; font-size: var(--fs-display); line-height: var(--lh-display); font-weight: var(--fw-regular); letter-spacing: var(--ls-display); }
   .value small { font-size: var(--fs-heading); font-weight: var(--fw-regular); margin-left: 2px; color: var(--text-2); }
   .legend { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body-sm); color: var(--text-2); }
@@ -308,7 +371,25 @@
   .link.more { align-self: flex-start; margin-top: 4px; padding-left: 0; }
   .icon-btn { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: var(--r-sm); background: none; color: var(--text-2); cursor: pointer; }
   .icon-btn:hover { background: var(--row-hover); }
-  .foot { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--border); }
+  .foot { flex: 0 0 auto; padding: 8px 16px 12px; border-top: 1px solid var(--border); background: var(--surface); }
+  .footer-actions { display: flex; gap: 8px; }
+  .footer-tools { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .settings-toggle { padding: 4px 0; border: 0; background: none; color: var(--text-2); cursor: pointer; font-size: var(--fs-body-sm); }
+  .settings-toggle:hover { color: var(--accent); }
+  .settings-heading { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+  .settings-heading h2 { margin: 0; font-size: var(--fs-heading); }
+  .theme-options { display: flex; gap: 4px; padding: 4px; background: var(--surface-2); border-radius: var(--r-md); }
+  .theme-options button { flex: 1; padding: 6px; border: 1px solid transparent; border-radius: var(--r-sm); background: none; cursor: pointer; }
+  .theme-options button[aria-pressed="true"] { background: var(--surface); border-color: var(--border-strong); color: var(--accent); }
+  .setting-row { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 36px; padding: 6px 4px; border: 0; border-radius: var(--r-sm); background: none; cursor: pointer; }
+  .setting-row:hover { background: var(--row-hover); }
+  .switch { width: 28px; height: 16px; padding: 2px; border-radius: 12px; background: var(--muted); }
+  .switch::after { content: ""; display: block; width: 12px; height: 12px; border-radius: 50%; background: var(--surface); }
+  .switch.checked { background: var(--accent); }
+  .switch.checked::after { transform: translateX(12px); }
+  button:disabled { cursor: wait; opacity: .6; }
+  .settings button:focus-visible, .settings-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .body[hidden] { display: none; }
   .btn { flex: 1; height: 30px; border: 1px solid var(--input-border); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; font-weight: var(--fw-medium); cursor: pointer; }
   .btn:hover { border-color: var(--input-border-hover); }
   .btn.primary { flex: 2; border-color: transparent; background: var(--accent); color: var(--accent-fg); }

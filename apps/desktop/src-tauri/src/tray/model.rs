@@ -517,6 +517,14 @@ pub enum Action {
     ToggleCombined,
     /// Keep the panel open when it loses focus, or let it close again.
     PinPanel,
+    /// Keep holdmap in the Dock, or run it from the menu bar only (macOS).
+    ToggleDock,
+    /// Turn desktop notifications on or off.
+    ToggleNotify,
+    /// Open the window's Settings.
+    OpenSettings,
+    /// The app's theme: `system`, `light` or `dark`.
+    SetTheme(&'static str),
 }
 
 impl Action {
@@ -527,6 +535,12 @@ impl Action {
             "hide-panel" => Action::HidePanel,
             "pin-panel" => Action::PinPanel,
             "combined" => Action::ToggleCombined,
+            "dock" => Action::ToggleDock,
+            "notify" => Action::ToggleNotify,
+            "settings" => Action::OpenSettings,
+            "theme:system" => Action::SetTheme("system"),
+            "theme:light" => Action::SetTheme("light"),
+            "theme:dark" => Action::SetTheme("dark"),
             "quit" => Action::Quit,
             "refresh" => Action::Refresh,
             "stop-all-dev" => Action::StopAllDev,
@@ -719,6 +733,7 @@ fn controls(choice: &BarChoice, platform: Platform) -> Vec<TrayItem> {
     let mut out = vec![
         item("show-panel", "Show panel", true),
         item("show", "Open holdmap", true),
+        item("settings", "Settings…", true),
     ];
     if platform != Platform::Windows {
         let mut items: Vec<TrayItem> = Item::ALL
@@ -1067,6 +1082,61 @@ pub struct PanelAgent {
     pub action: String,
 }
 
+/// The panel's quick settings: what the menu bar shows and the switches Settings also offers.
+/// Each one carries the [`Action`] id that flips it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelSettings {
+    /// What holds the readings: "Menu bar" (macOS) or "Panel" (Linux); `None` on Windows,
+    /// whose tray icon holds no readings.
+    pub bar: Option<&'static str>,
+    /// The items this desktop can show, in menu-bar order.
+    pub items: Vec<PanelToggle>,
+    /// The items as one menu-bar item (macOS only).
+    pub combined: Option<bool>,
+    /// holdmap's icon in the Dock (macOS only).
+    pub dock: Option<bool>,
+    pub notify: bool,
+}
+
+/// One menu-bar item in the quick settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelToggle {
+    pub name: &'static str,
+    pub on: bool,
+    pub action: String,
+}
+
+/// The quick settings for this desktop.
+pub fn panel_settings(
+    choice: &BarChoice,
+    dock: bool,
+    notify: bool,
+    platform: Platform,
+) -> PanelSettings {
+    let mac = platform == Platform::MacOs;
+    PanelSettings {
+        bar: match platform {
+            Platform::MacOs => Some("Menu bar"),
+            Platform::Linux => Some("Panel"),
+            Platform::Windows => None,
+        },
+        items: Item::ALL
+            .into_iter()
+            .filter(|i| i.shown_on(platform))
+            .map(|i| PanelToggle {
+                name: i.name(),
+                on: choice.items.contains(&i),
+                action: format!("item:{}", i.id()),
+            })
+            .collect(),
+        combined: mac.then_some(choice.combined),
+        dock: mac.then_some(dock),
+        notify,
+    }
+}
+
 /// Everything the popup panel shows. Rows carry the [`Action`] id they trigger, so the panel can
 /// only ask for what the native menu offers (and a stop still opens the window's reviewed plan).
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -1101,6 +1171,7 @@ pub struct PanelData {
     pub focus_seq: u64,
     /// The panel stays open when it loses focus.
     pub pinned: bool,
+    pub settings: PanelSettings,
 }
 
 /// What the panel window adds to the data: the clicked item's section and the pin.
@@ -1112,7 +1183,12 @@ pub struct PanelState {
 }
 
 /// The popup panel's data for `readings` (`None` before the first scan).
-pub fn panel_data(readings: Option<&Readings>, trends: &Trends, state: PanelState) -> PanelData {
+pub fn panel_data(
+    readings: Option<&Readings>,
+    trends: &Trends,
+    state: PanelState,
+    settings: PanelSettings,
+) -> PanelData {
     let Some(r) = readings else {
         return PanelData {
             ready: false,
@@ -1132,6 +1208,7 @@ pub fn panel_data(readings: Option<&Readings>, trends: &Trends, state: PanelStat
             focus: state.focus,
             focus_seq: state.focus_seq,
             pinned: state.pinned,
+            settings,
         };
     };
     let mut agents: Vec<&AgentRow> = r.agents.iter().flatten().collect();
@@ -1191,6 +1268,7 @@ pub fn panel_data(readings: Option<&Readings>, trends: &Trends, state: PanelStat
         focus: state.focus,
         focus_seq: state.focus_seq,
         pinned: state.pinned,
+        settings,
     }
 }
 
@@ -1301,6 +1379,7 @@ mod tests {
                 "agent:agent:42",
                 "show-panel",
                 "show",
+                "settings",
                 "bar",
                 "item:icon",
                 "item:agents",
@@ -1357,6 +1436,11 @@ mod tests {
         );
         assert_eq!(Action::parse("combined"), Some(Action::ToggleCombined));
         assert_eq!(Action::parse("pin-panel"), Some(Action::PinPanel));
+        assert_eq!(Action::parse("settings"), Some(Action::OpenSettings));
+        assert_eq!(Action::parse("dock"), Some(Action::ToggleDock));
+        assert_eq!(Action::parse("notify"), Some(Action::ToggleNotify));
+        assert_eq!(Action::parse("theme:dark"), Some(Action::SetTheme("dark")));
+        assert_eq!(Action::parse("theme:sepia"), None);
         assert_eq!(Action::parse("item:rainbow"), None);
         assert_eq!(Action::parse("focus:99999"), None);
     }
@@ -1553,7 +1637,7 @@ mod tests {
         );
         assert_eq!(v.tooltip, "holdmap\n2 dev servers · 12 ports in use");
         assert_eq!(v.badge, Badge::default());
-        let data = panel_data(Some(&r), &Trends::default(), PanelState::default());
+        let data = panel_data(Some(&r), &Trends::default(), PanelState::default(), quick());
         assert_eq!((data.agents, data.cpu, data.memory), (None, None, None));
         assert!(data.needs.is_none());
     }
@@ -1724,12 +1808,12 @@ mod tests {
             memory: 1024,
         }));
         let mut trends = Trends::default();
-        assert!(!panel_data(None, &trends, PanelState::default()).ready);
+        assert!(!panel_data(None, &trends, PanelState::default(), quick()).ready);
         trends.record(&r);
         let mut quiet = r.clone();
         quiet.needs = Some(vec![]);
         trends.record(&quiet);
-        let data = panel_data(Some(&r), &trends, PanelState::default());
+        let data = panel_data(Some(&r), &trends, PanelState::default(), quick());
         assert!(data.ready);
         assert_eq!((data.ports, data.exposed, data.agents), (12, 2, Some(7)));
         assert_eq!(data.focus, None);
@@ -1772,6 +1856,46 @@ mod tests {
         }
         assert_eq!(Action::parse("show-panel"), Some(Action::ShowPanel));
         assert_eq!(Action::parse("hide-panel"), Some(Action::HidePanel));
+    }
+
+    fn quick() -> PanelSettings {
+        panel_settings(&BarChoice::default(), true, true, Platform::MacOs)
+    }
+
+    #[test]
+    fn quick_settings_offer_what_this_desktop_can_change() {
+        let mac = panel_settings(&BarChoice::default(), false, true, Platform::MacOs);
+        assert_eq!(mac.bar, Some("Menu bar"));
+        let shown: Vec<(&str, bool, &str)> = mac
+            .items
+            .iter()
+            .map(|i| (i.name, i.on, i.action.as_str()))
+            .collect();
+        assert_eq!(shown.len(), Item::ALL.len());
+        assert_eq!(shown[1], ("Agents", true, "item:agents"));
+        assert_eq!(shown[3], ("Agent CPU", false, "item:cpu"));
+        assert_eq!(
+            (mac.combined, mac.dock, mac.notify),
+            (Some(false), Some(false), true)
+        );
+        // Every switch is an action the panel may run.
+        for toggle in &mac.items {
+            assert!(Action::parse(&toggle.action).is_some(), "{}", toggle.action);
+        }
+        // Linux panels hold text only, and have no Dock or "as one item".
+        let linux = panel_settings(&BarChoice::default(), true, false, Platform::Linux);
+        assert_eq!(linux.bar, Some("Panel"));
+        assert!(linux
+            .items
+            .iter()
+            .all(|i| i.name != "holdmap icon" && i.name != "Agent bars"));
+        assert_eq!(
+            (linux.combined, linux.dock, linux.notify),
+            (None, None, false)
+        );
+        // Windows tray icons hold no readings.
+        let windows = panel_settings(&BarChoice::default(), true, true, Platform::Windows);
+        assert_eq!((windows.bar, windows.items.len()), (None, 0));
     }
 
     #[test]

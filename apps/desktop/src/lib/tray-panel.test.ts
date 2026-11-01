@@ -20,7 +20,7 @@ describe("tray panel", () => {
   });
 
   it("draws the newest scan at the right edge and fills in from the right", () => {
-    expect(chartPaths([5], 100, 50)).toEqual({ area: "", line: "" });
+    expect(chartPaths([5], 100, 50)).toEqual({ area: "", line: "", end: null });
     const { line, area } = chartPaths([0, 10], 100, 50, 11);
     // Two samples in 11 slots: the last at x=100, the one before 10 units to its left.
     expect(line).toBe("M90,50L100,0");

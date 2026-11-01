@@ -7,6 +7,19 @@ export type Urgency = "high" | "medium";
 export interface PanelNeed { urgency: Urgency; title: string; action: string }
 export interface PanelDev { port: number; label: string; exposed: boolean; action: string }
 export interface PanelAgent { name: string; place: string | null; cpu: number | null; memory: number; action: string }
+export interface PanelToggle { name: string; on: boolean; action: string }
+
+/** The quick settings (`PanelSettings`): each switch carries the action id that flips it. */
+export interface PanelSettings {
+  /** What holds the readings: "Menu bar" (macOS) or "Panel" (Linux); null on Windows. */
+  bar: string | null;
+  items: PanelToggle[];
+  /** The items as one menu-bar item; null where there's no such choice. */
+  combined: boolean | null;
+  /** holdmap's icon in the Dock; null off macOS. */
+  dock: boolean | null;
+  notify: boolean;
+}
 
 export interface PanelData {
   /** False until the first scan. */
@@ -35,6 +48,26 @@ export interface PanelData {
   focusSeq: number;
   /** The panel stays open when it loses focus. */
   pinned: boolean;
+  settings: PanelSettings;
+}
+
+/** Each quick setting's state by the action id that flips it. */
+export function settingValues(s: PanelSettings): Record<string, boolean> {
+  const values: Record<string, boolean> = Object.fromEntries(s.items.map((i) => [i.action, i.on]));
+  if (s.combined !== null) values.combined = s.combined;
+  if (s.dock !== null) values.dock = s.dock;
+  values.notify = s.notify;
+  return values;
+}
+
+export type StatusTone = "pending" | "ok" | "medium" | "high";
+
+/** The status line at the top: how much needs you, and the most urgent item. */
+export function needsStatus(needs: readonly PanelNeed[] | null): { tone: StatusTone; title: string; detail: string } {
+  if (!needs) return { tone: "pending", title: "Checking…", detail: "Reading agents and ports" };
+  if (!needs.length) return { tone: "ok", title: "All clear", detail: "Nothing needs you right now" };
+  const first = needs.find((n) => n.urgency === "high") ?? needs[0];
+  return { tone: first.urgency, title: `${needs.length} need${needs.length === 1 ? "s" : ""} you`, detail: first.title };
 }
 
 /** The ring's two arcs, as stroke dash arrays on a circle of `circumference`. */
@@ -96,16 +129,18 @@ export function chartTop(samples: readonly number[]): number {
  * SVG paths for the CPU history: the filled area and its top line, right-aligned so the newest
  * scan sits at the right edge and the chart fills in from the right as history grows.
  */
-export function chartPaths(samples: readonly number[], width: number, height: number, slots = HISTORY_CELLS): { area: string; line: string } {
-  if (samples.length < 2) return { area: "", line: "" };
+export function chartPaths(samples: readonly number[], width: number, height: number, slots = HISTORY_CELLS): { area: string; line: string; end: { x: number; y: number } | null } {
+  if (samples.length < 2) return { area: "", line: "", end: null };
   const top = chartTop(samples);
   const step = width / (slots - 1);
   const x0 = width - step * (samples.length - 1);
   const points = samples.map((v, i) => [x0 + i * step, height - (Math.max(0, v) / top) * height] as const);
   const fmt = (n: number) => Number(n.toFixed(2));
   const line = points.map(([x, y], i) => `${i ? "L" : "M"}${fmt(x)},${fmt(y)}`).join("");
-  const area = `${line}L${fmt(points[points.length - 1][0])},${height}L${fmt(x0)},${height}Z`;
-  return { area, line };
+  const [ex, ey] = points[points.length - 1];
+  const area = `${line}L${fmt(ex)},${height}L${fmt(x0)},${height}Z`;
+  // The newest scan, as fractions of the chart, for the marker drawn over it.
+  return { area, line, end: { x: fmt(ex / width), y: fmt(ey / height) } };
 }
 
 export type CellTone = "none" | "ok" | "medium" | "high";
@@ -168,5 +203,26 @@ export function demoPanel(): PanelData {
     focus: null,
     focusSeq: 0,
     pinned: false,
+    settings: {
+      bar: "Menu bar",
+      items: [
+        ["holdmap icon", "icon", false], ["Agents", "agents", true], ["Needs you", "needs", true], ["Agent CPU", "cpu", false],
+        ["Dev servers", "dev", false], ["CPU history", "cpu_history", false], ["Agent bars", "agent_bars", false],
+      ].map(([name, id, on]) => ({ name: name as string, on: on as boolean, action: `item:${id}` })),
+      combined: false,
+      dock: true,
+      notify: true,
+    },
   };
+}
+
+/** The browser preview's `tray_action`: the panel's own controls change the sample data. */
+export function demoAction(data: PanelData, id: string): PanelData {
+  const s = data.settings;
+  if (id === "pin-panel") return { ...data, pinned: !data.pinned };
+  if (id === "notify") return { ...data, settings: { ...s, notify: !s.notify } };
+  if (id === "dock" && s.dock !== null) return { ...data, settings: { ...s, dock: !s.dock } };
+  if (id === "combined" && s.combined !== null) return { ...data, settings: { ...s, combined: !s.combined } };
+  if (id.startsWith("item:")) return { ...data, settings: { ...s, items: s.items.map((i) => (i.action === id ? { ...i, on: !i.on } : i)) } };
+  return data;
 }

@@ -265,10 +265,24 @@ pub async fn tray_panel(app: AppHandle) -> PanelData {
 #[tauri::command]
 pub async fn tray_action(app: AppHandle, id: String) -> Result<(), String> {
     let action = Action::parse(&id).ok_or("Unknown tray action")?;
-    // Rows that lead somewhere close the panel; its own controls keep it open.
+    if matches!(
+        action,
+        Action::ToggleItem(_) | Action::ToggleCombined | Action::ToggleDock | Action::ToggleNotify
+    ) {
+        return tauri::async_runtime::spawn_blocking(move || super::save_setting(&app, action))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    // Rows that lead somewhere close the panel; its own controls and quick settings keep it open.
     if !matches!(
         action,
-        Action::Refresh | Action::PinPanel | Action::ToggleItem(_) | Action::ToggleCombined
+        Action::Refresh
+            | Action::PinPanel
+            | Action::ToggleItem(_)
+            | Action::ToggleCombined
+            | Action::ToggleDock
+            | Action::ToggleNotify
+            | Action::SetTheme(_)
     ) {
         hide(&app);
     }

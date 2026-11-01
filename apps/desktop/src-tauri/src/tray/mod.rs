@@ -471,24 +471,51 @@ pub fn restyle(app: &AppHandle) {
 /// What the popup panel shows now.
 fn panel_data(app: &AppHandle) -> model::PanelData {
     let state = panel::state();
+    let config = app.state::<AppState>().store.config();
+    let settings = model::panel_settings(
+        &BarChoice::from_config(&config.tray_items(), config.tray_combined),
+        config.show_in_dock,
+        config.notify,
+        Platform::CURRENT,
+    );
     match app.try_state::<TrayWidget>() {
         Some(widget) => {
             let w = widget.widget.lock().unwrap_or_else(|e| e.into_inner());
-            model::panel_data(w.readings.as_ref(), &w.trends, state)
+            model::panel_data(w.readings.as_ref(), &w.trends, state, settings)
         }
-        None => model::panel_data(None, &Trends::default(), state),
+        None => model::panel_data(None, &Trends::default(), state, settings),
     }
 }
 
-/// Save a menu-bar change from the menu, tell an open Settings, and redraw.
-fn change_bar(app: &AppHandle, change: impl FnOnce(&mut holdmap_core::store::Config)) {
-    match app.state::<AppState>().store.update_config(change) {
-        Ok((config, _)) => {
-            let _ = app.emit("config-changed", &config);
-        }
-        Err(error) => eprintln!("holdmap: couldn't save the menu bar choice ({error})"),
+/// Persist quick settings before acknowledging them to the panel.
+fn save_setting(app: &AppHandle, action: Action) -> Result<(), String> {
+    let (config, _) = app
+        .state::<AppState>()
+        .store
+        .update_config(|c| match action {
+            Action::ToggleItem(item) => {
+                let mut items: Vec<String> = c.tray_items().into_iter().map(String::from).collect();
+                if let Some(i) = items.iter().position(|i| i == item.id()) {
+                    items.remove(i);
+                } else {
+                    items.push(item.id().into());
+                }
+                c.tray_items = items;
+            }
+            Action::ToggleCombined => c.tray_combined = !c.tray_combined,
+            Action::ToggleDock => c.show_in_dock = !c.show_in_dock,
+            Action::ToggleNotify => c.notify = !c.notify,
+            _ => unreachable!("only setting actions are persisted"),
+        })
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit("config-changed", &config);
+    if matches!(action, Action::ToggleDock) {
+        apply_dock(app, config.show_in_dock);
     }
-    restyle(app);
+    if matches!(action, Action::ToggleItem(_) | Action::ToggleCombined) {
+        restyle(app);
+    }
+    Ok(())
 }
 
 pub fn show_main(app: &AppHandle) {
@@ -554,24 +581,24 @@ fn run(app: &AppHandle, action: Action) {
             show_main(app);
             let _ = app.emit("open-entry", entry);
         }
-        Action::ToggleItem(item) => {
+        Action::ToggleItem(_)
+        | Action::ToggleCombined
+        | Action::ToggleDock
+        | Action::ToggleNotify => {
             let app = app.clone();
             std::thread::spawn(move || {
-                change_bar(&app, |c| {
-                    let mut items: Vec<String> =
-                        c.tray_items().into_iter().map(String::from).collect();
-                    if let Some(i) = items.iter().position(|i| i == item.id()) {
-                        items.remove(i);
-                    } else {
-                        items.push(item.id().into());
-                    }
-                    c.tray_items = items;
-                })
+                if let Err(error) = save_setting(&app, action) {
+                    eprintln!("holdmap: couldn't save the setting ({error})");
+                }
             });
         }
-        Action::ToggleCombined => {
-            let app = app.clone();
-            std::thread::spawn(move || change_bar(&app, |c| c.tray_combined = !c.tray_combined));
+        Action::OpenSettings => {
+            show_main(app);
+            let _ = app.emit("open-settings", ());
+        }
+        // The theme is the window's own choice; it saves it and the panel follows.
+        Action::SetTheme(theme) => {
+            let _ = app.emit("set-theme", theme);
         }
     }
 }
