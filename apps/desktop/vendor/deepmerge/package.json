@@ -1,0 +1,10 @@
+{
+  "name": "@holdmap/deepmerge",
+  "version": "1.0.0",
+  "description": "deepmerge 4.3.1's API without its prototype poisoning, installed as deepmerge for holdmap's build tooling (see vendor/README.md)",
+  "private": true,
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": ["index.js", "index.d.ts"],
+  "license": "MIT"
+}

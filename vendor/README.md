@@ -135,3 +135,25 @@ When a compatible upstream release contains these fixes, remove this patch, snap
 provenance checks and Cargo override together. Until then, preserve upstream source bytes,
 version and licenses; review any further change against the published archive and exact
 documented local diff. These X11 changes do not add Wayland portal support.
+
+## deepmerge for the desktop build
+
+`apps/desktop/vendor/deepmerge/` replaces the npm package `deepmerge` in the desktop app's build
+tooling. Every published `deepmerge` from 4.2.0 to the latest 4.3.1 is affected by
+[GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) (prototype poisoning of
+merged objects), there is no fixed release, and `@sveltejs/vite-plugin-svelte` (7.3.1, the
+latest) depends on it to merge its options.
+
+It is written here, not copied: deepmerge 4.3.1's API and behaviour (`deepmerge(x, y, options)`
+with `arrayMerge`, `clone`, `customMerge` and `isMergeableObject`, and `deepmerge.all`), with
+upstream's type declarations. The differences are the fix: merged keys are defined with
+`Object.defineProperty`, so no key can set a result's prototype; an own `__proto__` key is never
+copied; and, as upstream, keys a target only inherits are never merged.
+
+It is installed under the name `deepmerge`: `apps/desktop/package.json` lists
+`"deepmerge": "file:./vendor/deepmerge"` and overrides every other `deepmerge` with
+`"$deepmerge"`, so the plugin resolves to this copy. The package's own name is
+`@holdmap/deepmerge` 1.0.0, so `npm audit` checks it as the separate code it is.
+`src/lib/deepmerge-vendor.test.ts` pins the behaviour the plugin relies on and the poisoning
+cases. Remove the override and this folder once a fixed `deepmerge` is published or the plugin
+stops depending on it.
