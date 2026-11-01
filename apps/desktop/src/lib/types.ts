@@ -270,12 +270,16 @@ export interface Config {
   /** Global shortcut preset id ("alt-p", "alt-space", "alt-k", "off"). */
   hotkey: string;
   recent_hosts: string[];
-  /** What the menu-bar / tray widget shows beside its icon (absent from older backends). */
-  tray_style?: TrayStyle;
+  /** What the menu bar / tray shows, by item id (absent from older backends). */
+  tray_items?: TrayItemId[];
+  /** All chosen items as one menu-bar item (macOS). */
+  tray_combined?: boolean;
+  /** Keep holdmap's icon in the Dock (macOS); off runs it as a menu-bar app. */
+  show_in_dock?: boolean;
 }
 
-/** `Config::TRAY_STYLES`: the icon and its badge, plus counts, plus the agents' CPU trend. */
-export type TrayStyle = "icon" | "count" | "trend";
+/** `Config::TRAY_ITEMS`, in menu-bar order. */
+export type TrayItemId = "icon" | "agents" | "needs" | "cpu" | "dev" | "cpu_history" | "agent_bars";
 
 export interface HistoryEntry {
   at_ms: number;

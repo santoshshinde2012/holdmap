@@ -656,14 +656,16 @@ pub async fn unpin(app: AppHandle, port: u16) -> Result<Config, String> {
     .await
 }
 
-/// Scan interval, history length and what the tray widget shows (validated against the
-/// core's allowed values).
+/// Scan interval, history length, what the menu bar / tray shows and the Dock icon (validated
+/// against the core's allowed values).
 #[tauri::command]
 pub async fn set_preferences(
     app: AppHandle,
     scan_interval_secs: Option<u64>,
     history_limit: Option<usize>,
-    tray_style: Option<String>,
+    tray_items: Option<Vec<String>>,
+    tray_combined: Option<bool>,
+    show_in_dock: Option<bool>,
 ) -> Result<Config, String> {
     if let Some(s) = scan_interval_secs {
         if !Config::SCAN_INTERVAL.contains(&s) {
@@ -683,15 +685,17 @@ pub async fn set_preferences(
             ));
         }
     }
-    if let Some(t) = tray_style.as_deref() {
-        if !Config::TRAY_STYLES.contains(&t) {
-            return Err(format!(
-                "The menu bar shows one of: {}",
-                Config::TRAY_STYLES.join(", ")
-            ));
-        }
+    if let Some(unknown) = tray_items
+        .iter()
+        .flatten()
+        .find(|i| !Config::TRAY_ITEMS.contains(&i.as_str()))
+    {
+        return Err(format!(
+            "The menu bar can't show \"{unknown}\"; it shows {}",
+            Config::TRAY_ITEMS.join(", ")
+        ));
     }
-    let restyle = tray_style.is_some();
+    let restyle = tray_items.is_some() || tray_combined.is_some();
     let handle = app.clone();
     let config = with_store(app, move |store| {
         save(store, |c| {
@@ -701,12 +705,21 @@ pub async fn set_preferences(
             if let Some(h) = history_limit {
                 c.history_limit = h;
             }
-            if let Some(t) = tray_style {
-                c.tray_style = t;
+            if let Some(items) = tray_items {
+                c.tray_items = items;
+            }
+            if let Some(combined) = tray_combined {
+                c.tray_combined = combined;
+            }
+            if let Some(show) = show_in_dock {
+                c.show_in_dock = show;
             }
         })
     })
     .await?;
+    if let Some(show) = show_in_dock {
+        crate::tray::apply_dock(&handle, show);
+    }
     if restyle {
         blocking(move || {
             crate::tray::restyle(&handle);

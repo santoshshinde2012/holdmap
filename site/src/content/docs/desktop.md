@@ -108,28 +108,41 @@ and clicking the Dock icon reopens the same window.
 **Current source (Unreleased):** holdmap's menu-bar or tray icon works like a small system
 monitor for your agents and dev servers, on macOS, Windows and Linux.
 
-- **Readings beside the icon.** On macOS, small stacked readings sit next to the icon: **AGENTS**,
-  their **CPU**, **DEV** servers and, when something needs you, **NEEDS**. Linux panels that show
-  labels get the same readings as text, for example `8 agents · CPU 4% · 3 dev · 1 need you`.
-  **Settings → Appearance → Menu bar** (**Panel** on Linux) chooses **Icon only**,
-  **Readings** (the default) or **Readings and agent CPU chart**, which adds a small bar chart
-  of the agents' CPU. Windows tray icons can't show text, so on Windows the figures are in the
-  icon's tooltip.
+- **Menu-bar items.** On macOS each reading is its own small menu-bar item, a short label over
+  a value, the way system monitors show them: **AGENTS** and **NEEDS** to start with. Pick more
+  under **Settings → Appearance → Menu bar**: the **holdmap icon**, **Agent CPU**,
+  **Dev servers**, a **CPU history** line and **Agent bars** (one bar of CPU per running agent).
+  **As one item** puts everything you pick side by side in a single item instead. Readings are
+  drawn in the menu bar's own colour; colour appears only when it means something:
+  **NEEDS** turns amber (worth a look) or red (look now), and **CPU** orange from 60% and red
+  from 80%. Each item keeps the place you `⌘`-drag it to, and the right-click menu has the
+  same choices. Linux panels that show labels get the readings as text, for example
+  `8 agents · 1 need you`; there the choice is under **Panel**. Windows tray icons can't show
+  text, so on Windows the figures are in the icon's tooltip.
 - **Badge.** When something needs you, the icon carries a badge. On Windows and Linux it's a
   disc with the count, red for items to look at now and amber for items worth a look. On
-  macOS, where menu-bar icons take the menu bar's own colour, it's a dot.
-- **Panel.** Click the icon on macOS or Windows (on Linux, choose **Show panel** from its menu)
-  for a panel under the icon: how many agents are running, their CPU and dev servers in large
-  type, a chart of the agents' CPU over the last 60 scans, a **Needs you** history (one square
-  per scan: green for all clear, amber for worth a look, red for look now), **Needs you** with
-  its urgency, ports in use and open to the network, your dev servers, and the busiest agents
-  with their CPU and memory. It keeps updating while it's open, follows your theme and closes
-  when you click elsewhere or press `Esc`. Choose an item, a dev server or an agent to open it
-  in the window. **Stop all…** opens the stop plan in the window; nothing is stopped from the
-  panel.
-- **Menu.** Right-click the icon on macOS and Windows (any click on Linux) for the same rows as
-  a native menu, with **Show panel**, **Open holdmap**, the menu-bar choice, **Refresh** and
-  **Quit holdmap**.
+  macOS the **holdmap icon** item shows a dot in the same colours.
+- **Panel.** Click an item on macOS, or the icon on Windows (on Linux, choose **Show panel**
+  from its menu), for a panel under it, opened at what you clicked: how many agents are
+  running, their CPU and dev servers in large type, a chart of the agents' CPU over the last
+  60 scans, a **Needs you** history (one square per scan: green for all clear, amber for worth
+  a look, red for look now), **Needs you** with its urgency, a ring of the ports in use (blue on
+  this computer only, amber open to the network), a **Port changes** chart (ports opened above
+  the line, closed below), your dev servers, and the busiest agents with their CPU and memory.
+  It keeps updating while it's open, follows your theme and closes when you click elsewhere or
+  press `Esc`; the pin button keeps it open. Choose an item, a dev server or an agent to open
+  it in the window. **Stop all…** opens the stop plan in the window; nothing is stopped from
+  the panel.
+- **Menu.** Right-click an item on macOS or the icon on Windows (any click on Linux) for the
+  same rows as a native menu, with **Show panel**, **Open holdmap**, what the menu bar shows,
+  **Refresh** and **Quit holdmap**.
+- **Menu bar only.** On macOS, turn off **Settings → General → Show in the Dock** to run
+  holdmap from the menu bar alone, without a Dock icon or app menus. The window still opens
+  from the panel, the menu or your global shortcut.
+
+![Every macOS menu-bar item turned on, on a light menu bar: the holdmap icon with a red dot, AGENTS 4, NEEDS 2 in red, CPU 7%, DEV 3, a CPU history line and four agent bars](../../../../docs/screenshots/desktop-menu-bar-light.png)
+
+![The same menu-bar items on a dark menu bar](../../../../docs/screenshots/desktop-menu-bar-dark.png)
 
 ![The tray panel in light theme: agents, agent CPU and dev servers, the CPU history chart, the Needs you history and the lists](../../../../docs/screenshots/desktop-tray-panel-light.png)
 
@@ -147,9 +160,10 @@ panel opens from the menu.
 
 **Don't see holdmap in the menu bar?** When the menu bar is full, macOS puts new items behind
 the frontmost app's menus, and on a MacBook nothing to the left of the camera notch is shown.
-holdmap notices and says so once, and **Settings → Appearance → Menu bar** explains it while it
-lasts. Hold `⌘` and drag a few icons out of the menu bar; holdmap appears, and you can
-`⌘`-drag it where you want it. holdmap keeps that place. On Windows 11, new tray icons start
+holdmap notices and says so once, and **Settings → Appearance → Menu bar** names the hidden
+items while it lasts. Fewer items help, and **As one item** needs less room than separate ones.
+Hold `⌘` and drag a few icons out of the menu bar; holdmap's items appear, and you can
+`⌘`-drag them where you want them. holdmap keeps those places. On Windows 11, new tray icons start
 in the hidden icons area (`^`): drag holdmap onto the taskbar, or turn it on under
 **Settings → Personalization → Taskbar → Other system tray icons**.
 

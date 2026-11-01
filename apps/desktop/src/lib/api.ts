@@ -1,7 +1,7 @@
 import type { ActivitySnapshot, AgentFlowReport, RecordingCredentials, RecordingStatus } from "./agent-flow/model";
 import { demoActivity, demoAgentFlow, demoRecordingStatus, startDemoRecording, stopDemoRecording, clearDemoActivity } from "./activity-demo";
 import { liveJson, useLiveCollector } from "./browser-live";
-import type { ActionPlan, AgentsReport, AppInfo, Config, DesktopHelpDestination, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Protocol, Snapshot, StopReport, TrayStyle } from "./types";
+import type { ActionPlan, AgentsReport, AppInfo, Config, DesktopHelpDestination, Explanation, Graph, HistoryEntry, HttpInfo, PortDetails, PortEntry, Protocol, Snapshot, StopReport, TrayItemId } from "./types";
 import { version as pkgVersion } from "../../package.json";
 import type { ShutdownPreview } from "./power";
 import { activeScheduleCount, DemoSchedules, validateScheduleDelay, validateScheduledStops, type ScheduledAction, type ScheduledStopRequest } from "./schedules";
@@ -369,7 +369,7 @@ export async function activitySetup(provider: "codex" | "claude"): Promise<strin
   return "# Browser demo: no local collector is running.\n# Install the desktop app and start recording under Agents > Flow > Calls.\n";
 }
 
-let mockConfig: Config = { pins: [{ port: 3000, label: null }], notify: true, notify_dev_only: true, history_limit: 200, scan_interval_secs: 4, hotkey: "alt-p", recent_hosts: ["devbox", "deploy@staging.internal"], tray_style: "count" };
+let mockConfig: Config = { pins: [{ port: 3000, label: null }], notify: true, notify_dev_only: true, history_limit: 200, scan_interval_secs: 4, hotkey: "alt-p", recent_hosts: ["devbox", "deploy@staging.internal"], tray_items: ["agents", "needs"], tray_combined: false, show_in_dock: true };
 
 // Same labels as src-tauri/src/shortcuts.rs, so browser screenshots match the platform.
 const mac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
@@ -434,12 +434,19 @@ export async function unpin(port: number): Promise<Config> {
   return call("unpin", { port });
 }
 
-export async function setPreferences(p: { scanIntervalSecs?: number; historyLimit?: number; trayStyle?: TrayStyle }): Promise<Config> {
+export async function setPreferences(p: { scanIntervalSecs?: number; historyLimit?: number; trayItems?: TrayItemId[]; trayCombined?: boolean; showInDock?: boolean }): Promise<Config> {
   if (!isTauri) {
     await delay(150);
-    return (mockConfig = { ...mockConfig, scan_interval_secs: p.scanIntervalSecs ?? mockConfig.scan_interval_secs, history_limit: p.historyLimit ?? mockConfig.history_limit, tray_style: p.trayStyle ?? mockConfig.tray_style });
+    return (mockConfig = {
+      ...mockConfig,
+      scan_interval_secs: p.scanIntervalSecs ?? mockConfig.scan_interval_secs,
+      history_limit: p.historyLimit ?? mockConfig.history_limit,
+      tray_items: p.trayItems ?? mockConfig.tray_items,
+      tray_combined: p.trayCombined ?? mockConfig.tray_combined,
+      show_in_dock: p.showInDock ?? mockConfig.show_in_dock,
+    });
   }
-  return call("set_preferences", { scanIntervalSecs: p.scanIntervalSecs ?? null, historyLimit: p.historyLimit ?? null, trayStyle: p.trayStyle ?? null });
+  return call("set_preferences", { scanIntervalSecs: p.scanIntervalSecs ?? null, historyLimit: p.historyLimit ?? null, trayItems: p.trayItems ?? null, trayCombined: p.trayCombined ?? null, showInDock: p.showInDock ?? null });
 }
 
 export async function hotkeys(): Promise<{ id: string; label: string }[]> {
@@ -447,10 +454,11 @@ export async function hotkeys(): Promise<{ id: string; label: string }[]> {
   return call("hotkeys");
 }
 
-/** Whether macOS shows holdmap's menu-bar item: false when a full menu bar hides it, null when
- * that can't be told (the browser, other platforms, or a hidden menu bar). */
-export async function trayStatus(): Promise<{ onScreen: boolean | null }> {
-  if (!isTauri) return { onScreen: null };
+/** Whether macOS shows holdmap's menu-bar items: false when a full menu bar hides any (named in
+ * `hidden`), null when that can't be told (the browser, other platforms, a hidden menu bar). */
+export interface TrayStatus { onScreen: boolean | null; hidden: string[] }
+export async function trayStatus(): Promise<TrayStatus> {
+  if (!isTauri) return { onScreen: null, hidden: [] };
   return call("tray_status");
 }
 

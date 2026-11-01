@@ -827,20 +827,27 @@ resolve port/agent folders in the backend; the webview cannot supply an arbitrar
 The tray widget (`tray/`) is refreshed by the watcher after each scan, on the watcher's
 thread: it reuses that scan for the agents report, applies the shared "needs you" rules with
 analyzer insights cached for a minute, and records CPU and attention history. `tray/model.rs`
-turns those readings into plain data for each platform's tray limits: the stacked menu-bar
-readings, the native menu's rows, the tooltip, the badge and the popup panel's data.
-`tray/menubar.rs` (macOS) draws the readings with CoreText into a template image beside the
-icon, gives the status item an autosave name (so a `⌘`-dragged place survives restarts) and
-checks whether macOS shows it (on a screen with a camera housing, items left of it are hidden;
-elsewhere, an occluded item while the menu bar is up), which the window reports as a hint.
-`tray/badge.rs` draws the badge into the icon's pixels. When only text changed, an open menu's
-rows are updated in place; it is rebuilt only when rows change.
+turns those readings into plain data for each platform's tray limits: the menu-bar items the
+config picks (`tray_items`, `tray_combined`), the native menu's rows, the tooltip, the badge and
+the popup panel's data. On macOS each item is its own status item (`holdmap-<item>`, autosave
+name `holdmap_<item>`, so a `⌘`-dragged place survives restarts); all of them share one native
+menu. `tray/menubar.rs` draws each item with CoreText and CoreGraphics at 3×: a template image
+when it's plain, so macOS tints it, and the menu bar's own ink plus orange or red when a state is
+flagged. It also checks whether macOS shows each item (on a screen with a camera housing, items
+left of it are hidden; elsewhere, an occluded item while the menu bar is up), which the window
+reports by name. Items are created on the main thread by tauri and must also be dropped there,
+so removed items are released through `run_on_main_thread`. `tray/badge.rs` draws the badge
+into the icon's pixels. When only text changed, an open menu's rows are updated in place; it is
+rebuilt only when rows change. `show_in_dock` switches the activation policy (`Accessory`
+without the Dock icon).
 
 The popup panel (`tray/panel.rs`) is a second, small window showing its own page,
 `tray.html` (`src/tray-panel/`), built as a separate entry so it doesn't load the app. It is
 created on first use, off the main thread, and placed under the icon (above it for a bottom
 taskbar). It polls `tray_panel` once a second while visible and runs rows through
-`tray_action`, which accepts only the action ids the native menu offers. `local_window::guard`
+`tray_action`, which accepts only the action ids the native menu offers. A click on an item
+opens the panel at that item's section (`focus`, with a sequence number so each click scrolls
+once); pinning keeps it open when it loses focus. `local_window::guard`
 lets the `tray` window call those two commands and nothing else, and only while it shows the
 bundled panel page; the window has no capabilities. On macOS the panel is created unfocused,
 and if the app is hidden it is unhidden without activation while the main window is ordered

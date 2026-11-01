@@ -1,7 +1,8 @@
 //! The menu-bar / tray widget, on every desktop within what its tray can show ([`model`]):
 //!
-//! - the icon, with an attention badge, and on macOS stacked mini readings beside it
-//!   ([`menubar`]); Linux shows the readings as a panel label;
+//! - macOS: one small menu-bar item per chosen reading (or all of them as one item), drawn like
+//!   a system monitor's ([`menubar`]); Windows: the icon with an attention badge; Linux: the
+//!   icon with the readings as its panel label;
 //! - a popup panel with live readings, histories and lists ([`panel`]), opened by a click on
 //!   macOS and Windows and from the menu on Linux;
 //! - a native menu with the same rows as text.
@@ -13,12 +14,14 @@ mod badge;
 mod menubar;
 mod model;
 pub mod panel;
+#[cfg(all(test, target_os = "macos"))]
+mod preview;
 
 use crate::state::AppState;
 use badge::Pixels;
 use holdmap_analyzers::Insights;
 use holdmap_core::Snapshot;
-use model::{Action, Platform, Readings, Style, TrayItem, TrayView, Trends};
+use model::{Action, BarChoice, Item, Platform, Readings, TrayItem, TrayView, Trends};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::image::Image;
@@ -26,6 +29,7 @@ use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem,
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, Wry};
 
+/// The one tray icon on Windows and Linux; macOS has one per menu-bar item (`holdmap-<item>`).
 const TRAY_ID: &str = "holdmap-tray";
 /// Analyzer results change only when an analyzer runs, so the widget rereads them at most
 /// this often.
@@ -40,7 +44,7 @@ const ICON: &[u8] = include_bytes!("../../icons/tray-template.png");
 #[cfg(not(target_os = "macos"))]
 const ICON: &[u8] = include_bytes!("../../icons/tray.png");
 
-/// A native panel row the widget can change in place.
+/// A native menu row the widget can change in place.
 enum Handle {
     Item(MenuItem<Wry>),
     Check(CheckMenuItem<Wry>),
@@ -57,6 +61,18 @@ impl Handle {
     }
 }
 
+/// A macOS menu-bar item: its tray icon, what it shows and whether macOS shows it.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+struct Slot {
+    id: &'static str,
+    tray: TrayIcon,
+    /// What it was last drawn with (parts, hover text, a dark menu bar).
+    drawn: Option<(Vec<model::Draw>, String, bool)>,
+    /// Its place is remembered (set once it's up).
+    placed: bool,
+    on_screen: Option<bool>,
+}
+
 struct Widget {
     base: Pixels,
     readings: Option<Readings>,
@@ -64,11 +80,12 @@ struct Widget {
     shown: TrayView,
     /// One per row of `shown.items`, in [`model::flatten`] order.
     handles: Vec<Handle>,
-    /// Whether macOS shows the menu-bar item (`None`: can't tell, or not macOS).
-    on_screen: Option<bool>,
-    /// The item's place is remembered (macOS), set once the tray is up.
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-    placed: bool,
+    /// The native menu, shared by every tray icon.
+    menu: Menu<Wry>,
+    /// The menu-bar items (macOS), in the order shown.
+    slots: Vec<Slot>,
+    /// The menu bar is dark (macOS), as last read from it.
+    dark: bool,
 }
 
 /// The widget's state. Only background threads lock it: tray calls wait for the main thread,
@@ -92,7 +109,7 @@ impl TrayWidget {
     }
 }
 
-/// Where a row goes: the panel itself or one of its submenus.
+/// Where a row goes: the menu itself or one of its submenus.
 trait Rows {
     fn add(&self, item: &dyn IsMenuItem<Wry>) -> tauri::Result<()>;
 }
@@ -152,21 +169,122 @@ fn build_menu(app: &AppHandle, items: &[TrayItem]) -> tauri::Result<(Menu<Wry>, 
     Ok((menu, handles))
 }
 
-fn icon(base: &Pixels, b: model::Badge, bar: &model::MenuBar) -> Image<'static> {
-    #[cfg(target_os = "macos")]
-    let p = menubar::render(&badge::with_dot(base, b), bar);
-    #[cfg(not(target_os = "macos"))]
-    let p = {
-        let _ = bar;
-        badge::with_count(base, b)
-    };
+/// The Windows and Linux tray icon: holdmap's icon with the attention count.
+#[cfg(not(target_os = "macos"))]
+fn badge_icon(base: &Pixels, b: model::Badge) -> Image<'static> {
+    let p = badge::with_count(base, b);
     Image::new_owned(p.rgba, p.width, p.height)
 }
 
-/// Show `next`, touching only what changed. Same rows: the panel's text and check marks change
-/// in place, so an open panel stays open and updates live. Different rows: a new panel.
+/// The tray id and the place name of a macOS menu-bar item.
+#[cfg(target_os = "macos")]
+fn tray_id(item: &str) -> String {
+    format!("holdmap-{item}")
+}
+
+#[cfg(target_os = "macos")]
+fn place_name(item: &str) -> String {
+    format!("holdmap_{item}")
+}
+
+/// Every tray icon the menu is attached to.
+fn trays(app: &AppHandle, w: &Widget) -> Vec<TrayIcon> {
+    let mut out: Vec<TrayIcon> = w.slots.iter().map(|s| s.tray.clone()).collect();
+    out.extend(app.tray_by_id(TRAY_ID));
+    out
+}
+
+/// A click on an item opens the panel under it, at that item's section; the right button opens
+/// the menu; on Windows a double click opens the window.
+fn tray_events(builder: TrayIconBuilder<Wry>, section: &'static str) -> TrayIconBuilder<Wry> {
+    builder
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(move |tray, event| match event {
+            TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                rect,
+                ..
+            } => {
+                let app = tray.app_handle().clone();
+                std::thread::spawn(move || panel::toggle(&app, Some(rect), Some(section)));
+            }
+            TrayIconEvent::DoubleClick {
+                button: MouseButton::Left,
+                ..
+            } if Platform::CURRENT == Platform::Windows => show_main(tray.app_handle()),
+            _ => {}
+        })
+}
+
+/// Make the macOS menu-bar items match `bar`: turned-off items go (their place kept), new ones
+/// come (back where they were), changed ones are redrawn.
+#[cfg(target_os = "macos")]
+fn sync_slots(app: &AppHandle, w: &mut Widget, bar: &[model::BarItem]) {
+    let (kept, gone): (Vec<Slot>, Vec<Slot>) = std::mem::take(&mut w.slots)
+        .into_iter()
+        .partition(|slot| bar.iter().any(|b| b.id == slot.id));
+    w.slots = kept;
+    if !gone.is_empty() {
+        let removed: Vec<_> = gone
+            .into_iter()
+            .map(|slot| {
+                menubar::save_place(&place_name(slot.id));
+                let registered = app.remove_tray_by_id(&tray_id(slot.id));
+                (slot, registered)
+            })
+            .collect();
+        // AppKit removes a status item when its last handle is dropped, which must happen on
+        // the main thread (this runs on a background thread from Settings and the menu).
+        let _ = app.run_on_main_thread(move || drop(removed));
+    }
+    let mut slots = Vec::with_capacity(bar.len());
+    for b in bar {
+        let key = (b.parts.clone(), b.tooltip.clone(), w.dark);
+        if let Some(i) = w.slots.iter().position(|s| s.id == b.id) {
+            let mut slot = w.slots.swap_remove(i);
+            if slot.drawn.as_ref() != Some(&key) {
+                let drawn = menubar::render(&w.base, &b.parts, w.dark);
+                let image =
+                    Image::new_owned(drawn.pixels.rgba, drawn.pixels.width, drawn.pixels.height);
+                if slot
+                    .tray
+                    .set_icon_with_as_template(Some(image), drawn.template)
+                    .is_ok()
+                    && slot.tray.set_tooltip(Some(&b.tooltip)).is_ok()
+                {
+                    slot.drawn = Some(key);
+                }
+            }
+            slots.push(slot);
+            continue;
+        }
+        menubar::restore_place(&place_name(b.id));
+        let drawn = menubar::render(&w.base, &b.parts, w.dark);
+        let image = Image::new_owned(drawn.pixels.rgba, drawn.pixels.width, drawn.pixels.height);
+        let builder = TrayIconBuilder::with_id(tray_id(b.id))
+            .icon(image)
+            .icon_as_template(drawn.template)
+            .tooltip(&b.tooltip)
+            .menu(&w.menu);
+        match tray_events(builder, b.section).build(app) {
+            Ok(tray) => slots.push(Slot {
+                id: b.id,
+                tray,
+                drawn: Some(key),
+                placed: false,
+                on_screen: None,
+            }),
+            Err(error) => eprintln!("holdmap: couldn't add a menu-bar item ({error})"),
+        }
+    }
+    w.slots = slots;
+}
+
+/// Show `next`, touching only what changed. Same rows: the menu's text and check marks change
+/// in place, so an open menu stays open and updates live. Different rows: a new menu.
 /// `resync` resets every check mark (the OS toggles one when it's chosen).
-fn apply(app: &AppHandle, tray: &TrayIcon, w: &mut Widget, next: TrayView, resync: bool) {
+fn apply(app: &AppHandle, w: &mut Widget, next: TrayView, resync: bool) {
     let TrayView {
         items,
         bar,
@@ -190,96 +308,135 @@ fn apply(app: &AppHandle, tray: &TrayIcon, w: &mut Widget, next: TrayView, resyn
         }
         w.shown.items = items;
     } else {
-        match build_menu(app, &items)
-            .and_then(|(menu, handles)| tray.set_menu(Some(menu)).map(|()| handles))
-        {
-            Ok(handles) => {
-                w.handles = handles;
-                w.shown.items = items;
+        match build_menu(app, &items) {
+            Ok((menu, handles)) => {
+                if trays(app, w)
+                    .iter()
+                    .all(|t| t.set_menu(Some(menu.clone())).is_ok())
+                {
+                    w.menu = menu;
+                    w.handles = handles;
+                    w.shown.items = items;
+                }
             }
             // What's shown stays recorded as shown, so the next refresh tries again.
-            Err(error) => eprintln!("holdmap: couldn't update the tray panel ({error})"),
+            Err(error) => eprintln!("holdmap: couldn't update the tray menu ({error})"),
         }
     }
-    if w.shown.title != title && tray.set_title(title.as_deref()).is_ok() {
-        w.shown.title = title;
+    #[cfg(target_os = "macos")]
+    sync_slots(app, w, &bar);
+    w.shown.bar = bar;
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        if w.shown.title != title && tray.set_title(title.as_deref()).is_ok() {
+            w.shown.title = title;
+        }
+        if w.shown.tooltip != tooltip && tray.set_tooltip(Some(&tooltip)).is_ok() {
+            w.shown.tooltip = tooltip;
+        }
+        #[cfg(not(target_os = "macos"))]
+        if w.shown.badge != badge && tray.set_icon(Some(badge_icon(&w.base, badge))).is_ok() {
+            w.shown.badge = badge;
+        }
     }
-    if w.shown.tooltip != tooltip && tray.set_tooltip(Some(&tooltip)).is_ok() {
-        w.shown.tooltip = tooltip;
-    }
-    if (w.shown.badge != badge || w.shown.bar != bar)
-        && tray
-            .set_icon_with_as_template(
-                Some(icon(&w.base, badge, &bar)),
-                Platform::CURRENT == Platform::MacOs,
-            )
-            .is_ok()
-    {
-        w.shown.badge = badge;
-        w.shown.bar = bar;
-    }
+    #[cfg(target_os = "macos")]
+    let _ = badge;
 }
 
-fn style(app: &AppHandle) -> Style {
-    Style::parse(app.state::<AppState>().store.config().tray_style())
+/// What the menu bar shows, from the settings.
+fn choice(app: &AppHandle) -> BarChoice {
+    let config = app.state::<AppState>().store.config();
+    BarChoice::from_config(&config.tray_items(), config.tray_combined)
 }
 
 /// Record `readings` (if any) and redraw the widget.
 fn render(app: &AppHandle, readings: Option<Readings>, resync: bool) {
-    let (Some(widget), Some(tray)) = (app.try_state::<TrayWidget>(), app.tray_by_id(TRAY_ID))
-    else {
+    let Some(widget) = app.try_state::<TrayWidget>() else {
         return;
     };
-    let style = style(app);
+    let choice = choice(app);
     let mut w = widget.widget.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(r) = readings {
         w.trends.record(&r);
         w.readings = Some(r);
     }
-    let next = model::view(w.readings.as_ref(), &w.trends, style, Platform::CURRENT);
-    apply(app, &tray, &mut w, next, resync);
     #[cfg(target_os = "macos")]
-    {
-        let placed = w.placed;
-        let on_screen = tray
+    if let Some(first) = w.slots.first() {
+        // Colour needs the menu bar's own look (on macOS 26 it follows the wallpaper).
+        if let Ok(Some(dark)) = first.tray.with_inner_tray_icon(|t| {
+            let mtm = objc2::MainThreadMarker::new()?;
+            let item = t.ns_status_item()?;
+            Some(menubar::dark_menu_bar(&item, mtm))
+        }) {
+            w.dark = dark;
+        }
+    }
+    let next = model::view(w.readings.as_ref(), &w.trends, &choice, Platform::CURRENT);
+    apply(app, &mut w, next, resync);
+    #[cfg(target_os = "macos")]
+    check_slots(app, &mut w);
+}
+
+/// Whether macOS shows each item; the window hears when that changes.
+#[cfg(target_os = "macos")]
+fn check_slots(app: &AppHandle, w: &mut Widget) {
+    let before = status(w);
+    for slot in &mut w.slots {
+        let (placed, name) = (slot.placed, place_name(slot.id));
+        slot.on_screen = slot
+            .tray
             .with_inner_tray_icon(move |t| {
                 let mtm = objc2::MainThreadMarker::new()?;
                 let item = t.ns_status_item()?;
                 if !placed {
-                    menubar::remember_place(&item);
+                    menubar::remember_place(&item, &name);
                 }
                 menubar::shown(&item, mtm)
             })
             .ok()
             .flatten();
-        w.placed = true;
-        if on_screen != w.on_screen {
-            w.on_screen = on_screen;
-            // The window says so: a full menu bar hides new items without telling anyone.
-            let _ = app.emit("tray-status", TrayStatus { on_screen });
-        }
+        slot.placed = true;
+    }
+    let after = status(w);
+    if after != before {
+        // A full menu bar hides new items without telling anyone, so the window says so.
+        let _ = app.emit("tray-status", &after);
     }
 }
 
-/// Whether macOS shows holdmap's menu-bar item.
-#[derive(Clone, Copy, serde::Serialize)]
+/// Whether macOS shows holdmap's menu-bar items.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrayStatus {
-    /// `false` when macOS hides it for lack of room; `null` when that can't be told.
+    /// `false` when macOS hides any of them for lack of room; `null` when that can't be told.
     on_screen: Option<bool>,
+    /// The names of the items macOS hides.
+    hidden: Vec<&'static str>,
 }
 
-/// The menu-bar item's status, for the window's Settings.
+fn status(w: &Widget) -> TrayStatus {
+    let hidden: Vec<&'static str> = w
+        .slots
+        .iter()
+        .filter(|s| s.on_screen == Some(false))
+        .map(|s| Item::parse(s.id).map_or("holdmap", Item::name))
+        .collect();
+    let known = w.slots.iter().any(|s| s.on_screen.is_some());
+    TrayStatus {
+        on_screen: (known || !hidden.is_empty()).then_some(hidden.is_empty()),
+        hidden,
+    }
+}
+
+/// The menu-bar items' status, for the window's Settings.
 #[tauri::command]
 pub async fn tray_status(app: AppHandle) -> TrayStatus {
-    let on_screen = app.try_state::<TrayWidget>().and_then(|widget| {
-        widget
-            .widget
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .on_screen
-    });
-    TrayStatus { on_screen }
+    match app.try_state::<TrayWidget>() {
+        Some(widget) => status(&widget.widget.lock().unwrap_or_else(|e| e.into_inner())),
+        None => TrayStatus {
+            on_screen: None,
+            hidden: Vec::new(),
+        },
+    }
 }
 
 /// Update the widget from a scan: the agents come from the same scan, the needs from the same
@@ -289,9 +446,6 @@ pub fn refresh_tray(app: &AppHandle, snapshot: &Snapshot) {
     let Some(widget) = app.try_state::<TrayWidget>() else {
         return;
     };
-    if app.tray_by_id(TRAY_ID).is_none() {
-        return;
-    }
     let report = app
         .state::<AppState>()
         .with_engine(SHARED_SCAN, |e| e.agents())
@@ -307,35 +461,31 @@ pub fn refresh_tray(app: &AppHandle, snapshot: &Snapshot) {
     );
 }
 
-/// Redraw after the style changed (from the panel or Settings). Blocking: call it off the
-/// main thread.
+/// Redraw after the menu-bar choice changed (from the menu or Settings). Blocking: call it off
+/// the main thread.
 pub fn restyle(app: &AppHandle) {
     render(app, None, true);
 }
 
 /// What the popup panel shows now.
 fn panel_data(app: &AppHandle) -> model::PanelData {
-    let style = style(app);
+    let state = panel::state();
     match app.try_state::<TrayWidget>() {
         Some(widget) => {
             let w = widget.widget.lock().unwrap_or_else(|e| e.into_inner());
-            model::panel_data(w.readings.as_ref(), &w.trends, style)
+            model::panel_data(w.readings.as_ref(), &w.trends, state)
         }
-        None => model::panel_data(None, &Trends::default(), style),
+        None => model::panel_data(None, &Trends::default(), state),
     }
 }
 
-fn set_style(app: &AppHandle, style: Style) {
-    match app
-        .state::<AppState>()
-        .store
-        .update_config(|c| c.tray_style = style.as_str().into())
-    {
-        // Settings, if open, follows the change.
+/// Save a menu-bar change from the menu, tell an open Settings, and redraw.
+fn change_bar(app: &AppHandle, change: impl FnOnce(&mut holdmap_core::store::Config)) {
+    match app.state::<AppState>().store.update_config(change) {
         Ok((config, _)) => {
             let _ = app.emit("config-changed", &config);
         }
-        Err(error) => eprintln!("holdmap: couldn't save the menu bar style ({error})"),
+        Err(error) => eprintln!("holdmap: couldn't save the menu bar choice ({error})"),
     }
     restyle(app);
 }
@@ -344,6 +494,23 @@ pub fn show_main(app: &AppHandle) {
     if let Err(error) = crate::window_lifecycle::show_main(app) {
         eprintln!("holdmap: couldn't show the app window ({error})");
     }
+}
+
+/// Keep holdmap in the Dock, or run it as a menu-bar app (macOS).
+pub fn apply_dock(app: &AppHandle, show: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        let policy = if show {
+            tauri::ActivationPolicy::Regular
+        } else {
+            tauri::ActivationPolicy::Accessory
+        };
+        if let Err(error) = app.set_activation_policy(policy) {
+            eprintln!("holdmap: couldn't change the Dock setting ({error})");
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, show);
 }
 
 fn on_menu(app: &AppHandle, id: &str) {
@@ -359,9 +526,10 @@ fn run(app: &AppHandle, action: Action) {
         Action::Show => show_main(app),
         Action::ShowPanel => {
             let app = app.clone();
-            std::thread::spawn(move || panel::toggle(&app, None));
+            std::thread::spawn(move || panel::toggle(&app, None, None));
         }
         Action::HidePanel => panel::hide(app),
+        Action::PinPanel => panel::toggle_pin(),
         Action::Quit => app.exit(0),
         // Confirmation happens in the window, with the full plan.
         Action::StopAllDev => {
@@ -385,9 +553,24 @@ fn run(app: &AppHandle, action: Action) {
             show_main(app);
             let _ = app.emit("open-entry", entry);
         }
-        Action::Style(style) => {
+        Action::ToggleItem(item) => {
             let app = app.clone();
-            std::thread::spawn(move || set_style(&app, style));
+            std::thread::spawn(move || {
+                change_bar(&app, |c| {
+                    let mut items: Vec<String> =
+                        c.tray_items().into_iter().map(String::from).collect();
+                    if let Some(i) = items.iter().position(|i| i == item.id()) {
+                        items.remove(i);
+                    } else {
+                        items.push(item.id().into());
+                    }
+                    c.tray_items = items;
+                })
+            });
+        }
+        Action::ToggleCombined => {
+            let app = app.clone();
+            std::thread::spawn(move || change_bar(&app, |c| c.tray_combined = !c.tray_combined));
         }
     }
 }
@@ -399,37 +582,45 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         width: image.width(),
         height: image.height(),
     };
-    let first = model::view(None, &Trends::default(), style(app), Platform::CURRENT);
+    let first = model::view(None, &Trends::default(), &choice(app), Platform::CURRENT);
     let (menu, handles) = build_menu(app, &first.items)?;
-    let builder = TrayIconBuilder::with_id(TRAY_ID)
-        .icon(image)
-        .tooltip(&first.tooltip)
-        .menu(&menu);
+    // One handler for every tray icon's menu (several icons share it on macOS).
+    app.on_menu_event(|app, event| on_menu(app, event.id.as_ref()));
+    // macOS: the items claim their places at launch, before the first scan fills them in.
     #[cfg(target_os = "macos")]
-    let builder = builder.icon_as_template(true);
-    builder
-        // macOS and Windows open the popup panel on a click and the menu on the right button;
-        // Windows also opens the window on a double click. Linux trays report no clicks and
-        // open the menu, which starts with "Show panel".
-        .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| on_menu(app, event.id.as_ref()))
-        .on_tray_icon_event(|tray, event| match event {
-            TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                rect,
-                ..
-            } => {
-                let app = tray.app_handle().clone();
-                std::thread::spawn(move || panel::toggle(&app, Some(rect)));
-            }
-            TrayIconEvent::DoubleClick {
-                button: MouseButton::Left,
-                ..
-            } if Platform::CURRENT == Platform::Windows => show_main(tray.app_handle()),
-            _ => {}
-        })
-        .build(app)?;
+    let slots = {
+        let mut slots = Vec::new();
+        for b in &first.bar {
+            let drawn = menubar::render(&base, &b.parts, false);
+            let builder = TrayIconBuilder::with_id(tray_id(b.id))
+                .icon(Image::new_owned(
+                    drawn.pixels.rgba,
+                    drawn.pixels.width,
+                    drawn.pixels.height,
+                ))
+                .icon_as_template(drawn.template)
+                .tooltip(&b.tooltip)
+                .menu(&menu);
+            menubar::restore_place(&place_name(b.id));
+            slots.push(Slot {
+                id: b.id,
+                tray: tray_events(builder, b.section).build(app)?,
+                drawn: Some((b.parts.clone(), b.tooltip.clone(), false)),
+                placed: false,
+                on_screen: None,
+            });
+        }
+        slots
+    };
+    #[cfg(not(target_os = "macos"))]
+    let slots = {
+        let builder = TrayIconBuilder::with_id(TRAY_ID)
+            .icon(image)
+            .tooltip(&first.tooltip)
+            .menu(&menu);
+        tray_events(builder, "top").build(app)?;
+        Vec::new()
+    };
     app.manage(TrayWidget {
         widget: Mutex::new(Widget {
             base,
@@ -437,15 +628,16 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
             trends: Trends::default(),
             shown: first,
             handles,
-            on_screen: None,
-            placed: false,
+            menu,
+            slots,
+            dark: false,
         }),
         insights: Mutex::new(None),
     });
     Ok(())
 }
 
-/// A fresh scan for the panel's Refresh, so it stays useful while the window is hidden.
+/// A fresh scan for the menu's Refresh, so it stays useful while the window is hidden.
 pub fn tray_tick(app: &AppHandle) {
     if let Ok(snapshot) = app
         .state::<AppState>()

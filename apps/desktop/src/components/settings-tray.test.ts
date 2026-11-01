@@ -13,58 +13,76 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 const model: SettingsModel = {
   theme: "dark", density: "comfortable", singleKeyShortcuts: true,
-  config: { pins: [], notify: true, notify_dev_only: true, history_limit: 100, scan_interval_secs: 4, hotkey: "off", recent_hosts: [], tray_style: "count" },
+  config: { pins: [], notify: true, notify_dev_only: true, history_limit: 100, scan_interval_secs: 4, hotkey: "off", recent_hosts: [], tray_items: ["agents", "needs"], tray_combined: false, show_in_dock: true },
   autostart: false, shortcut: null, hotkeys: [], version: "0.12.1", platform: "macos", configDir: null,
   powerAvailable: true, powerDemo: false, tray: true,
 };
-const actions = (setTrayStyle: SettingsActions["setTrayStyle"] = vi.fn(async () => {})): SettingsActions => ({
+const actions = (over: Partial<SettingsActions> = {}): SettingsActions => ({
   setTheme() {}, setDensity() {}, setSingleKeyShortcuts() {}, async setAutostart() {}, async setHotkey() {},
   async setNotify() {}, async setScanInterval() {}, async setHistoryLimit() {}, async clearHistory() {},
-  copy: vi.fn(), shutdown() {}, setTrayStyle,
+  copy: vi.fn(), shutdown() {},
+  setTrayItems: vi.fn(async () => {}), setTrayCombined: vi.fn(async () => {}), setShowInDock: vi.fn(async () => {}),
+  ...over,
 });
-const mount = (override: Partial<SettingsModel> = {}, a = actions()) =>
-  render(SettingsDialog, { model: { ...model, ...override }, actions: a, section: "appearance", onclose() {} });
+const mount = (override: Partial<SettingsModel> = {}, a = actions(), section: "appearance" | "general" = "appearance") =>
+  render(SettingsDialog, { model: { ...model, ...override }, actions: a, section, onclose() {} });
 
 describe("Menu bar / tray widget setting", () => {
-  it("saves what sits beside the icon", async () => {
-    const setTrayStyle = vi.fn(async () => {});
-    const view = mount({}, actions(setTrayStyle));
+  it("ticks the chosen items and saves a change in menu-bar order", async () => {
+    const a = actions();
+    const view = mount({}, a);
     expect(view.getByRole("heading", { name: "Menu bar" })).toBeTruthy();
-    await fireEvent.click(view.getByRole("combobox", { name: "Beside the icon: Readings" }));
-    await fireEvent.click(view.getByRole("option", { name: "Readings and agent CPU chart" }));
-    await waitFor(() => expect(setTrayStyle).toHaveBeenCalledWith("trend"));
+    expect(view.getByRole("group", { name: "Menu bar shows" })).toBeTruthy();
+    expect(view.getByRole("checkbox", { name: /^Agents/ })).toHaveProperty("checked", true);
+    expect(view.getByRole("checkbox", { name: /^Needs you/ })).toHaveProperty("checked", true);
+    expect(view.getByRole("checkbox", { name: /^CPU history/ })).toHaveProperty("checked", false);
+    await fireEvent.click(view.getByRole("checkbox", { name: /^CPU history/ }));
+    await waitFor(() => expect(a.setTrayItems).toHaveBeenCalledWith(["agents", "needs", "cpu_history"]));
+    await fireEvent.click(view.getByRole("switch", { name: "As one item" }));
+    await waitFor(() => expect(a.setTrayCombined).toHaveBeenCalledWith(true));
   });
 
-  it("restores the saved style when the write is rejected", async () => {
-    const setTrayStyle = vi.fn().mockRejectedValue(new Error("Settings are read-only"));
-    const view = mount({}, actions(setTrayStyle));
-    await fireEvent.click(view.getByRole("combobox", { name: "Beside the icon: Readings" }));
-    await fireEvent.click(view.getByRole("option", { name: "Icon only" }));
+  it("restores the saved items when the write is rejected", async () => {
+    const a = actions({ setTrayItems: vi.fn().mockRejectedValue(new Error("Settings are read-only")) });
+    const view = mount({}, a);
+    await fireEvent.click(view.getByRole("checkbox", { name: /^Agent CPU/ }));
     await waitFor(() => expect(view.getByRole("alert").textContent).toContain("Settings are read-only"));
-    expect(view.getByRole("combobox", { name: "Beside the icon: Readings" })).toBeTruthy();
+    expect(view.getByRole("checkbox", { name: /^Agent CPU/ })).toHaveProperty("checked", false);
   });
 
-  it("calls it the panel on Linux and leaves it out where nothing can sit beside the icon", () => {
+  it("offers text items only on Linux, and nothing where the tray holds no text", () => {
     const linux = mount({ platform: "linux" });
     expect(linux.getByRole("heading", { name: "Panel" })).toBeTruthy();
-    expect(linux.getByText(/as a panel label where your desktop shows one/)).toBeTruthy();
+    expect(linux.queryByRole("checkbox", { name: /^holdmap icon/ })).toBeNull();
+    expect(linux.queryByRole("checkbox", { name: /^Agent bars/ })).toBeNull();
+    expect(linux.getByRole("checkbox", { name: /^Agents/ })).toBeTruthy();
+    expect(linux.queryByRole("switch", { name: "As one item" })).toBeNull();
     cleanup();
     for (const override of [{ platform: "windows" }, { platform: "linux", tray: false }]) {
       const view = mount(override);
-      expect(view.queryByRole("combobox", { name: /Beside the icon/ })).toBeNull();
+      expect(view.queryByRole("group", { name: /shows$/ })).toBeNull();
       cleanup();
     }
   });
 
-  it("says when macOS hides the menu-bar item for lack of room, and how to make room", () => {
-    const hidden = mount({ trayOnScreen: false });
-    expect(hidden.getByText("macOS is hiding holdmap's menu-bar item")).toBeTruthy();
+  it("names the items macOS hides and says how to make room", () => {
+    const hidden = mount({ trayOnScreen: false, trayHidden: ["Agents", "Needs you"] });
+    expect(hidden.getByText("macOS is hiding Agents, Needs you in the menu bar")).toBeTruthy();
     expect(hidden.getByText(/The menu bar is full/).textContent).toContain("camera notch");
     cleanup();
     for (const trayOnScreen of [true, null, undefined]) {
       const view = mount({ trayOnScreen });
-      expect(view.queryByText("macOS is hiding holdmap's menu-bar item")).toBeNull();
+      expect(view.queryByText(/macOS is hiding/)).toBeNull();
       cleanup();
     }
+  });
+
+  it("can run holdmap from the menu bar only, on macOS", async () => {
+    const a = actions();
+    const view = mount({}, a, "general");
+    await fireEvent.click(view.getByRole("switch", { name: "Show in the Dock" }));
+    await waitFor(() => expect(a.setShowInDock).toHaveBeenCalledWith(false));
+    cleanup();
+    expect(mount({ platform: "windows" }, actions(), "general").queryByRole("switch", { name: "Show in the Dock" })).toBeNull();
   });
 });

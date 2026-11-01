@@ -41,14 +41,46 @@ describe("Tray panel", () => {
   it("says what it doesn't know yet instead of showing zeros", async () => {
     const empty: PanelData = {
       ...demoPanel(), ready: false, agents: null, cpu: null, memory: null, cpuHistory: [], attentionHistory: [],
-      needs: null, dev: [], stopDev: false, topAgents: [],
+      needs: null, dev: [], stopDev: false, topAgents: [], churn: [],
     };
     const { view } = mount(empty);
     await waitFor(() => expect(view.getByText("Checking agents and ports…")).toBeTruthy());
-    expect(view.getByText("Fills in as holdmap scans")).toBeTruthy();
+    // Both charts wait for scans: the agents' CPU and port changes.
+    expect(view.getAllByText("Fills in as holdmap scans")).toHaveLength(2);
     expect(view.getByText("Agents").previousElementSibling?.textContent).toBe("…");
     expect(view.queryByRole("button", { name: "Stop all…" })).toBeNull();
     expect(view.queryByText("0")).toBeNull();
+  });
+
+  it("keeps itself open with the pin, and shows the pin's state", async () => {
+    let pinned = false;
+    const run = vi.fn((id: string) => { if (id === "pin-panel") pinned = !pinned; });
+    const view = render(TrayPanel, { load: async () => ({ ...demoPanel(), pinned }), run, poll: 60_000 });
+    const pin = await view.findByRole("button", { name: "Keep open" });
+    expect(pin.getAttribute("aria-pressed")).toBe("false");
+    await fireEvent.click(pin);
+    expect(run).toHaveBeenCalledWith("pin-panel");
+    await waitFor(() => expect(view.getByRole("button", { name: "Keep open" }).getAttribute("aria-pressed")).toBe("true"));
+  });
+
+  it("opens at the section of the menu-bar item clicked, once per click", async () => {
+    const scrolled: string[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this.getAttribute("data-section") ?? ""); };
+    let data = { ...demoPanel(), focus: "dev", focusSeq: 1 };
+    const view = render(TrayPanel, { load: async () => data, run: vi.fn(), poll: 20 });
+    await waitFor(() => expect(scrolled).toEqual(["dev"]));
+    // Polls with the same click don't scroll again; a new click does.
+    await new Promise((r) => setTimeout(r, 60));
+    expect(scrolled).toEqual(["dev"]);
+    data = { ...data, focus: "needs", focusSeq: 2 };
+    await waitFor(() => expect(scrolled).toEqual(["dev", "needs"]));
+    view.unmount();
+  });
+
+  it("shows the ports ring and port changes", async () => {
+    const { view } = mount();
+    await waitFor(() => expect(view.getByRole("img", { name: "33 on this computer only, 4 open to the network" })).toBeTruthy());
+    expect(view.getByRole("img", { name: /^In the last 48 scans: \d+ ports opened, \d+ closed\.$/ })).toBeTruthy();
   });
 
   it("calls a quiet machine all clear", async () => {

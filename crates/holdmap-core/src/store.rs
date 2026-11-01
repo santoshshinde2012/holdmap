@@ -75,11 +75,14 @@ pub struct Config {
     pub hotkey: String,
     /// Recently used SSH hosts for the desktop remote view, newest first.
     pub recent_hosts: Vec<String>,
-    /// What the desktop menu-bar / tray widget shows beside its icon: `icon` (the icon and its
-    /// attention badge), `count` (adds readings: agents, their CPU, dev servers and items that
-    /// need you) or `trend` (also adds a mini chart of the agents' CPU). Unknown values read as
-    /// `count`.
-    pub tray_style: String,
+    /// What the desktop menu bar / tray shows, by id from [`Config::TRAY_ITEMS`]: `icon`
+    /// (holdmap's icon and its attention dot), `agents`, `needs`, `cpu` (the agents' CPU), `dev`
+    /// (dev servers), `cpu_history` and `agent_bars`. Read through [`Config::tray_items`].
+    pub tray_items: Vec<String>,
+    /// Show the chosen items as one menu-bar item instead of one each.
+    pub tray_combined: bool,
+    /// Keep holdmap's icon in the Dock (macOS); off runs it as a menu-bar app.
+    pub show_in_dock: bool,
 }
 
 impl Default for Config {
@@ -92,7 +95,9 @@ impl Default for Config {
             scan_interval_secs: 4,
             hotkey: "alt-p".into(),
             recent_hosts: Vec::new(),
-            tray_style: "count".into(),
+            tray_items: vec!["agents".into(), "needs".into()],
+            tray_combined: false,
+            show_in_dock: true,
         }
     }
 }
@@ -104,15 +109,29 @@ impl Config {
     pub const HISTORY_LIMIT: std::ops::RangeInclusive<usize> = 10..=5000;
     /// How many recent SSH hosts are remembered.
     pub const RECENT_HOSTS: usize = 6;
-    /// Tray widget styles, from the quietest.
-    pub const TRAY_STYLES: [&'static str; 3] = ["icon", "count", "trend"];
+    /// Menu-bar / tray items, in the order they are shown.
+    pub const TRAY_ITEMS: [&'static str; 7] = [
+        "icon",
+        "agents",
+        "needs",
+        "cpu",
+        "dev",
+        "cpu_history",
+        "agent_bars",
+    ];
 
-    /// The tray widget style, falling back to `count` for unknown or hand-edited values.
-    pub fn tray_style(&self) -> &str {
-        Self::TRAY_STYLES
+    /// The chosen menu-bar items in [`Config::TRAY_ITEMS`] order, unknown or hand-edited ids
+    /// dropped. Never empty: with none chosen, holdmap's icon stays so the app can be reached.
+    pub fn tray_items(&self) -> Vec<&'static str> {
+        let items: Vec<&'static str> = Self::TRAY_ITEMS
             .into_iter()
-            .find(|s| *s == self.tray_style)
-            .unwrap_or("count")
+            .filter(|item| self.tray_items.iter().any(|chosen| chosen == item))
+            .collect();
+        if items.is_empty() {
+            vec!["icon"]
+        } else {
+            items
+        }
     }
 
     /// Foreground scan interval, clamped to the allowed range.
@@ -1264,26 +1283,25 @@ mod tests {
         assert_eq!(old.hotkey, "alt-p");
         assert!(!old.notify);
         assert_eq!(
-            old.tray_style(),
-            "count",
+            old.tray_items(),
+            ["agents", "needs"],
             "configs from before the tray widget"
         );
-        for style in Config::TRAY_STYLES {
-            let c = Config {
-                tray_style: style.into(),
-                ..Config::default()
-            };
-            assert_eq!(c.tray_style(), style);
-        }
+        assert!(!old.tray_combined && old.show_in_dock);
         let edited = Config {
-            tray_style: "rainbow".into(),
+            tray_items: vec!["dev".into(), "rainbow".into(), "icon".into(), "dev".into()],
             ..Config::default()
         };
         assert_eq!(
-            edited.tray_style(),
-            "count",
-            "unknown styles read as the default"
+            edited.tray_items(),
+            ["icon", "dev"],
+            "known ids only, once each, in menu-bar order"
         );
+        let none = Config {
+            tray_items: vec![],
+            ..Config::default()
+        };
+        assert_eq!(none.tray_items(), ["icon"], "the app stays reachable");
         let mut c = Config {
             scan_interval_secs: 0,
             ..Config::default()

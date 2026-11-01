@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { cadenceText, SETTINGS_SECTIONS, THEME_ICON, THEME_LABEL, TRAY_STYLE_OPTIONS, trayWidgetName } from "./settings";
+import { cadenceText, nextTrayItems, SETTINGS_SECTIONS, THEME_ICON, THEME_LABEL, TRAY_ITEM_OPTIONS, trayItemOptions, trayWidgetName } from "./settings";
 
 describe("settings", () => {
   it("describes the cadence the backend uses (2.5×, at least 10 s)", () => {
@@ -28,7 +28,15 @@ describe("settings", () => {
     expect(trayWidgetName("linux", false)).toBeNull();
     expect(trayWidgetName("macos", undefined)).toBeNull();
     expect(trayWidgetName("browser", false)).toBe("Menu bar");
-    // Same values and order as `Config::TRAY_STYLES`.
-    expect(TRAY_STYLE_OPTIONS.map((o) => o.value)).toEqual(["icon", "count", "trend"]);
+    // Same ids and order as `Config::TRAY_ITEMS`; Linux's label holds text only.
+    expect(TRAY_ITEM_OPTIONS.map((o) => o.value)).toEqual(["icon", "agents", "needs", "cpu", "dev", "cpu_history", "agent_bars"]);
+    expect(trayItemOptions("linux").map((o) => o.value)).toEqual(["agents", "needs", "cpu", "dev", "cpu_history"]);
+    expect(trayItemOptions("macos")).toHaveLength(7);
+  });
+
+  it("turns menu-bar items on and off in menu-bar order, never down to none", () => {
+    expect(nextTrayItems(["needs", "agents"], "icon", true)).toEqual(["icon", "agents", "needs"]);
+    expect(nextTrayItems(["agents", "needs"], "agents", false)).toEqual(["needs"]);
+    expect(nextTrayItems(["needs"], "needs", false)).toEqual(["icon"]);
   });
 });

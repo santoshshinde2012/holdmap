@@ -89,8 +89,9 @@ const rows = [
   ["Open Graph image", statSync(join(dist, "og.png")).size, 300 * 1024],
   // +4 KB for skill trust alerts on Home, bounded snoozes and the demo trust API; Risks, Skills
   // and Scheduled scans load on demand. +2 KB for Home's 3D layout loader: the agent helpers it
-  // shares with the on-demand 3D view now load as their own small chunks.
-  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 226 * 1024],
+  // shares with the on-demand 3D view now load as their own small chunks. +1 KB for the menu-bar
+  // items checklist in Settings and the notice naming items macOS hides.
+  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 227 * 1024],
   ["Snapshot PNG JS (on capture)", [...snapshotDemoFiles].reduce((n, f) => n + gz(f), 0), 40 * 1024],
   ["Capability workspace JS (on inspection)", [...capabilityDemoFiles].reduce((n, f) => n + gz(f), 0), 21 * 1024],
   // The Security view's helpers moved here from the first screen; the trust and risk views load separately.

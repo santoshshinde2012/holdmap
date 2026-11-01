@@ -68,10 +68,11 @@
   disk on top and recorded calls in a lane of their own, with X-ray, a guided tour, a Focus mode
   and live readings you can press to light up their parts. Every link comes from what holdmap
   observed; nothing is joined by name.
-- **Menu bar and tray widget (Unreleased).** Stacked readings beside the icon on macOS (agents,
-  their CPU, dev servers, what needs you) and a badge on every OS. A click opens a panel like a
-  system monitor's: headline numbers, an agent CPU chart, a Needs you history, and your dev
-  servers and busiest agents. macOS, Windows and Linux; stops still open the reviewed plan.
+- **Menu bar and tray widget (Unreleased).** Small menu-bar items on macOS like a system
+  monitor's (agents, what needs you, their CPU, dev servers, a CPU line or per-agent bars) and a
+  badge on every OS. A click opens a panel: headline numbers, an agent CPU chart, a Needs you
+  history, ports and port changes, and your dev servers and busiest agents. macOS, Windows and
+  Linux; stops still open the reviewed plan.
 - **Local capture.** Records only the holdmap window to MP4/GIF, plus PNG snapshots. Other apps and your desktop are never captured. Nothing is uploaded.
 - **Scriptable.** Every read command takes `--json`. holdmap has no product analytics.
 

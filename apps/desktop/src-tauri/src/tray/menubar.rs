@@ -1,13 +1,17 @@
-//! macOS: the menu-bar image. The icon (with its attention dot) and stacked mini readings, a
-//! small label over each value as system monitors show them, drawn with the system font into a
-//! template image so it follows the menu bar's light or dark look. `tray-icon` shows the image
-//! 18 pt high and as wide as its aspect ratio.
+//! macOS: the menu-bar items. Each item is drawn the way system monitors draw theirs: a small
+//! label over one value in a fixed column, a tiny line of recent values, or one bar per agent,
+//! with the system font. An item with nothing to flag is a template image, so macOS tints it for
+//! a light or dark menu bar; one that flags a state (something needs you, CPU running high) is
+//! drawn in colour, with ink read from the menu bar's own appearance. `tray-icon` shows each
+//! image 18 pt high and as wide as its aspect ratio.
 
-use super::badge::Pixels;
-use super::model::MenuBar;
+use super::badge::{self, Pixels};
+use super::model::{Draw, Tone};
+use holdmap_core::attention::Urgency;
 use objc2::runtime::NSObjectProtocol;
 use objc2::{sel, MainThreadMarker};
-use objc2_app_kit::{NSMenu, NSStatusItem, NSWindowOcclusionState};
+use objc2_app_kit::{NSAppearanceCustomization, NSMenu, NSStatusItem, NSWindowOcclusionState};
+use objc2_foundation::{NSString, NSUserDefaults};
 use std::ffi::c_void;
 
 type Ref = *const c_void;
@@ -65,6 +69,14 @@ extern "C" {
     fn CGContextRelease(context: Ref);
     fn CGContextScaleCTM(context: Ref, sx: f64, sy: f64);
     fn CGContextSetRGBFillColor(context: Ref, r: f64, g: f64, b: f64, a: f64);
+    fn CGContextSetRGBStrokeColor(context: Ref, r: f64, g: f64, b: f64, a: f64);
+    fn CGContextSetLineWidth(context: Ref, width: f64);
+    fn CGContextBeginPath(context: Ref);
+    fn CGContextMoveToPoint(context: Ref, x: f64, y: f64);
+    fn CGContextAddLineToPoint(context: Ref, x: f64, y: f64);
+    fn CGContextClosePath(context: Ref);
+    fn CGContextFillPath(context: Ref);
+    fn CGContextStrokePath(context: Ref);
     fn CGContextFillRect(context: Ref, rect: CGRect);
     fn CGContextSetTextPosition(context: Ref, x: f64, y: f64);
 }
@@ -74,39 +86,80 @@ extern "C" {
     static kCTFontAttributeName: Ref;
     static kCTForegroundColorFromContextAttributeName: Ref;
     fn CTFontCreateUIFontForLanguage(kind: u32, size: f64, language: Ref) -> Ref;
-    fn CTFontCreateCopyWithSymbolicTraits(
-        font: Ref,
-        size: f64,
-        matrix: *const c_void,
-        value: u32,
-        mask: u32,
-    ) -> Ref;
     fn CTLineCreateWithAttributedString(s: Ref) -> Ref;
     fn CTLineGetTypographicBounds(line: Ref, a: *mut f64, d: *mut f64, l: *mut f64) -> f64;
     fn CTLineDraw(line: Ref, context: Ref);
 }
 
 /// Pixels per point: drawn at 3× and shown at 18 pt, so it stays sharp on Retina displays.
-const SCALE: f64 = 3.0;
+pub(super) const SCALE: f64 = 3.0;
 /// The menu bar item's height in points.
 const HEIGHT: f64 = 18.0;
+/// A reading: a 7 pt label over a 12 pt value, as system monitors set them.
 const LABEL_SIZE: f64 = 7.0;
-const VALUE_SIZE: f64 = 11.5;
+const VALUE_SIZE: f64 = 12.0;
 /// Baselines from the bottom of the item, in points.
-const VALUE_BASELINE: f64 = 1.6;
-const LABEL_BASELINE: f64 = 11.9;
-const ICON_GAP: f64 = 5.0;
-const COLUMN_GAP: f64 = 7.0;
-const CHART_WIDTH: f64 = 30.0;
-const CHART_HEIGHT: f64 = 13.0;
+const VALUE_BASELINE: f64 = 1.5;
+const LABEL_BASELINE: f64 = 12.2;
+/// A reading's column is at least this wide, so short values don't make a skinny item.
+const MIN_READING: f64 = 28.0;
+/// Charts: 32 pt wide, 14 pt tall above a 2 pt foot.
+const CHART_WIDTH: f64 = 32.0;
+const CHART_HEIGHT: f64 = 14.0;
+const CHART_FOOT: f64 = 2.0;
+/// The line chart's slots: the last scans, one point apart, filling in from the right. (The
+/// panel's chart keeps all 60; at half a point each, a new line here would be a sliver.)
+const CHART_SLOTS: usize = 33;
+const MAX_BAR: f64 = 4.0;
+const BAR_GAP: f64 = 1.5;
 /// A chart's full height is at least this much CPU, so idle stays low.
 const CHART_FLOOR: f32 = 10.0;
-/// `kCTFontUIFontSystem`, `kCTFontBoldTrait`, `kCFStringEncodingUTF8`.
+/// Between the parts of one item (an item showing several readings), and at its edges.
+const PART_GAP: f64 = 6.0;
+const PAD: f64 = 1.0;
+/// `kCTFontUIFontSystem`, `kCFStringEncodingUTF8`.
 const UI_FONT_SYSTEM: u32 = 2;
-const BOLD_TRAIT: u32 = 1 << 1;
 const UTF8: u32 = 0x0800_0100;
 /// `kCGImageAlphaPremultipliedLast` with 32-bit big-endian RGBA.
 const RGBA_PREMULTIPLIED: u32 = 1 | (4 << 12);
+
+/// A colour as CoreGraphics takes it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Ink(f64, f64, f64, f64);
+
+impl Ink {
+    /// The text colour: black for a template (macOS tints it), else the menu bar's label colour.
+    fn text(template: bool, dark: bool) -> Ink {
+        match (template, dark) {
+            (true, _) => Ink(0.0, 0.0, 0.0, 1.0),
+            (false, true) => Ink(1.0, 1.0, 1.0, 0.92),
+            (false, false) => Ink(0.0, 0.0, 0.0, 0.85),
+        }
+    }
+
+    /// The system's orange and red, in their light and dark variants.
+    fn tone(tone: Tone, dark: bool) -> Option<Ink> {
+        match (tone, dark) {
+            (Tone::Plain, _) => None,
+            (Tone::Warning, false) => Some(Ink(1.0, 0.584, 0.0, 1.0)),
+            (Tone::Warning, true) => Some(Ink(1.0, 0.624, 0.039, 1.0)),
+            (Tone::Critical, false) => Some(Ink(1.0, 0.231, 0.188, 1.0)),
+            (Tone::Critical, true) => Some(Ink(1.0, 0.271, 0.227, 1.0)),
+        }
+    }
+
+    fn faded(self, alpha: f64) -> Ink {
+        Ink(self.0, self.1, self.2, self.3 * alpha)
+    }
+
+    fn fill(self, context: Ref) {
+        unsafe { CGContextSetRGBFillColor(context, self.0, self.1, self.2, self.3) }
+    }
+
+    fn stroke(self, context: Ref) {
+        unsafe { CGContextSetRGBStrokeColor(context, self.0, self.1, self.2, self.3) }
+    }
+}
 
 /// A CoreText line in one font, drawn in the context's fill colour.
 struct Line(Ref);
@@ -168,30 +221,12 @@ impl Drop for Line {
     }
 }
 
-/// The system font at `size`, bold when asked.
+/// The system font at `size`.
 struct Font(Ref);
 
 impl Font {
-    fn system(size: f64, bold: bool) -> Font {
-        unsafe {
-            let regular = CTFontCreateUIFontForLanguage(UI_FONT_SYSTEM, size, std::ptr::null());
-            if !bold {
-                return Font(regular);
-            }
-            let heavy = CTFontCreateCopyWithSymbolicTraits(
-                regular,
-                size,
-                std::ptr::null(),
-                BOLD_TRAIT,
-                BOLD_TRAIT,
-            );
-            if heavy.is_null() {
-                Font(regular)
-            } else {
-                CFRelease(regular);
-                Font(heavy)
-            }
-        }
+    fn system(size: f64) -> Font {
+        Font(unsafe { CTFontCreateUIFontForLanguage(UI_FONT_SYSTEM, size, std::ptr::null()) })
     }
 }
 
@@ -229,36 +264,71 @@ fn icon_alpha(icon: &Pixels, size: usize) -> Vec<f32> {
     out
 }
 
-/// The menu-bar template image: `icon` (already badged) and then `bar`'s readings and chart.
-/// With nothing in `bar`, the icon alone.
-pub fn render(icon: &Pixels, bar: &MenuBar) -> Pixels {
-    if bar.readings.is_empty() && bar.chart.is_empty() {
-        return icon.clone();
+/// A part's width in points, with the text it draws (readings only).
+enum Placed {
+    Icon,
+    Reading {
+        label: Line,
+        value: Line,
+        width: f64,
+    },
+    Chart(f64),
+}
+
+fn bars_width(n: usize) -> f64 {
+    if n == 0 {
+        return 8.0;
     }
-    let label_font = Font::system(LABEL_SIZE, true);
-    let value_font = Font::system(VALUE_SIZE, false);
-    let columns: Vec<(Line, Line, f64)> = bar
-        .readings
+    let bar = ((CHART_WIDTH - BAR_GAP * (n as f64 - 1.0)) / n as f64).min(MAX_BAR);
+    bar * n as f64 + BAR_GAP * (n as f64 - 1.0)
+}
+
+/// One menu-bar item, drawn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rendered {
+    pub pixels: Pixels,
+    /// A template image: macOS tints it for the menu bar. Otherwise it's in colour.
+    pub template: bool,
+}
+
+/// The image for an item made of `parts` (`icon` = holdmap's template glyph; `dark` = the menu
+/// bar's appearance, used only when the item needs colour).
+pub fn render(icon: &Pixels, parts: &[Draw], dark: bool) -> Rendered {
+    let template = !parts.iter().any(Draw::coloured);
+    let ink = Ink::text(template, dark);
+    let label_font = Font::system(LABEL_SIZE);
+    let value_font = Font::system(VALUE_SIZE);
+    let placed: Vec<Placed> = parts
         .iter()
-        .map(|m| {
-            let label = Line::new(m.label, label_font.0);
-            let value = Line::new(&m.value, value_font.0);
-            let width = label
-                .width()
-                .max(Line::new(&steady(&m.value), value_font.0).width());
-            (label, value, width)
+        .map(|part| match part {
+            Draw::Icon(_) => Placed::Icon,
+            Draw::Reading { label, value, .. } => {
+                let label = Line::new(label, label_font.0);
+                let width = label
+                    .width()
+                    .max(Line::new(&steady(value), value_font.0).width())
+                    .max(MIN_READING);
+                Placed::Reading {
+                    label,
+                    value: Line::new(value, value_font.0),
+                    width,
+                }
+            }
+            Draw::Line(_) => Placed::Chart(CHART_WIDTH),
+            Draw::Bars(values) => Placed::Chart(bars_width(values.len())),
         })
         .collect();
-    let mut width = HEIGHT + ICON_GAP;
-    for (_, _, w) in &columns {
-        width += w + COLUMN_GAP;
-    }
-    if !bar.chart.is_empty() {
-        width += CHART_WIDTH + COLUMN_GAP;
-    }
-    width -= COLUMN_GAP;
+    let width_of = |p: &Placed| match p {
+        Placed::Icon => HEIGHT,
+        Placed::Reading { width, .. } => *width,
+        Placed::Chart(w) => *w,
+    };
+    let width = PAD * 2.0
+        + placed.iter().map(width_of).sum::<f64>()
+        + PART_GAP * (placed.len().saturating_sub(1)) as f64;
     let (pw, ph) = ((width * SCALE).ceil() as usize, (HEIGHT * SCALE) as usize);
     let mut rgba = vec![0u8; pw * ph * 4];
+    let mut icons = Vec::new();
     unsafe {
         let space = CGColorSpaceCreateDeviceRGB();
         let context = CGBitmapContextCreate(
@@ -272,65 +342,236 @@ pub fn render(icon: &Pixels, bar: &MenuBar) -> Pixels {
         );
         CGColorSpaceRelease(space);
         if context.is_null() {
-            return icon.clone();
+            return Rendered {
+                pixels: icon.clone(),
+                template: true,
+            };
         }
         CGContextScaleCTM(context, SCALE, SCALE);
-        CGContextSetRGBFillColor(context, 0.0, 0.0, 0.0, 1.0);
-        let mut x = HEIGHT + ICON_GAP;
-        for (label, value, w) in &columns {
-            label.draw(context, x, LABEL_BASELINE);
-            value.draw(context, x, VALUE_BASELINE);
-            x += w + COLUMN_GAP;
-        }
-        if !bar.chart.is_empty() {
-            let top = bar.chart.iter().copied().fold(CHART_FLOOR, f32::max) as f64;
-            let n = bar.chart.len() as f64;
-            let gap = 1.0;
-            let bar_width = ((CHART_WIDTH - gap * (n - 1.0)) / n).max(0.5);
-            let bottom = (HEIGHT - CHART_HEIGHT) / 2.0;
-            for (i, v) in bar.chart.iter().enumerate() {
-                let height = (*v as f64 / top * CHART_HEIGHT).clamp(1.0, CHART_HEIGHT);
-                CGContextFillRect(
-                    context,
-                    CGRect {
-                        origin: CGPoint {
-                            x: x + i as f64 * (bar_width + gap),
-                            y: bottom,
-                        },
-                        size: CGSize {
-                            width: bar_width,
-                            height,
-                        },
+        let mut x = PAD;
+        for (part, place) in parts.iter().zip(&placed) {
+            let w = width_of(place);
+            match (part, place) {
+                (Draw::Icon(b), Placed::Icon) => icons.push((x, *b)),
+                (
+                    Draw::Reading { tone, .. },
+                    Placed::Reading {
+                        label,
+                        value,
+                        width,
                     },
-                );
+                ) => {
+                    ink.fill(context);
+                    label.draw(context, x + (width - label.width()) / 2.0, LABEL_BASELINE);
+                    Ink::tone(*tone, dark).unwrap_or(ink).fill(context);
+                    value.draw(context, x + (width - value.width()) / 2.0, VALUE_BASELINE);
+                }
+                (Draw::Line(samples), _) => line_chart(context, x, samples, ink),
+                (Draw::Bars(values), Placed::Chart(w)) => bar_chart(context, x, *w, values, ink),
+                _ => {}
             }
+            x += w + PART_GAP;
         }
-        // `rgba` is the context's backing store, filled by now.
         CGContextRelease(context);
     }
-    // The icon, square at the left, over the drawn readings (template: alpha is all that counts).
-    let side = ph;
-    let alpha = icon_alpha(icon, side);
-    for y in 0..side {
-        for x in 0..side.min(pw) {
-            let i = (y * pw + x) * 4;
-            let a = (alpha[y * side + x] + rgba[i + 3] as f32 * (1.0 - alpha[y * side + x] / 255.0))
-                .round()
-                .min(255.0) as u8;
-            rgba[i..i + 4].copy_from_slice(&[0, 0, 0, a]);
+    // Straight alpha for the PNG `tray-icon` writes (CoreGraphics drew premultiplied).
+    for px in rgba.chunks_mut(4) {
+        let a = px[3] as u32;
+        if a > 0 && a < 255 {
+            for c in &mut px[..3] {
+                *c = ((*c as u32 * 255 + a / 2) / a).min(255) as u8;
+            }
         }
     }
-    Pixels {
-        rgba,
-        width: pw as u32,
-        height: ph as u32,
+    for (x, b) in icons {
+        draw_icon(
+            &mut rgba,
+            pw,
+            icon,
+            b,
+            (x * SCALE).round() as usize,
+            ink,
+            dark,
+        );
+    }
+    Rendered {
+        pixels: Pixels {
+            rgba,
+            width: pw as u32,
+            height: ph as u32,
+        },
+        template,
     }
 }
 
-/// Keep the item where the user ⌘-drags it, across restarts. Without a name macOS forgets the
-/// place, and a new item starts at the far left: the first place it runs out of room.
-pub fn remember_place(item: &NSStatusItem) {
-    item.setAutosaveName(Some(&objc2_foundation::NSString::from_str("holdmap")));
+/// The glyph in `ink` at `left`, with its attention dot in the urgency's colour.
+fn draw_icon(
+    rgba: &mut [u8],
+    pw: usize,
+    icon: &Pixels,
+    b: super::model::Badge,
+    left: usize,
+    ink: Ink,
+    dark: bool,
+) {
+    let side = (HEIGHT * SCALE) as usize;
+    let alpha = icon_alpha(&badge::with_dot(icon, b), side);
+    let tone = match b.urgency {
+        Some(Urgency::High) => Tone::Critical,
+        Some(Urgency::Medium) if b.count > 0 => Tone::Warning,
+        _ => Tone::Plain,
+    };
+    let dot = Ink::tone(tone, dark);
+    // The dot's place, as `badge::with_dot` draws it on the glyph.
+    let r = side as f32 * 0.16;
+    let (cx, cy) = (side as f32 - r, r);
+    for y in 0..side {
+        for x in 0..side.min(pw.saturating_sub(left)) {
+            let a = alpha[y * side + x] / 255.0;
+            if a <= 0.0 {
+                continue;
+            }
+            let in_dot =
+                ((x as f32 + 0.5 - cx).powi(2) + (y as f32 + 0.5 - cy).powi(2)).sqrt() <= r + 0.5;
+            let c = if in_dot { dot.unwrap_or(ink) } else { ink };
+            let i = (y * pw + left + x) * 4;
+            rgba[i..i + 4].copy_from_slice(&[
+                (c.0 * 255.0).round() as u8,
+                (c.1 * 255.0).round() as u8,
+                (c.2 * 255.0).round() as u8,
+                (a as f64 * c.3 * 255.0).round() as u8,
+            ]);
+        }
+    }
+}
+
+/// The last scans as a filled line, newest at the right, over a faint foot the width of the
+/// chart, so a short history reads as filling in rather than as a stray mark.
+fn line_chart(context: Ref, x: f64, samples: &[f32], ink: Ink) {
+    // SAFETY: CoreGraphics calls on the live bitmap context `render` made.
+    unsafe {
+        let samples = &samples[samples.len().saturating_sub(CHART_SLOTS)..];
+        ink.faded(0.35).fill(context);
+        CGContextFillRect(
+            context,
+            CGRect {
+                origin: CGPoint { x, y: CHART_FOOT },
+                size: CGSize {
+                    width: CHART_WIDTH,
+                    height: 1.0,
+                },
+            },
+        );
+        if samples.len() < 2 {
+            return;
+        }
+        let top = samples.iter().copied().fold(CHART_FLOOR, f32::max) as f64;
+        let step = CHART_WIDTH / (CHART_SLOTS - 1) as f64;
+        let x0 = x + CHART_WIDTH - step * (samples.len() - 1) as f64;
+        let at = |i: usize, v: f32| {
+            (
+                x0 + step * i as f64,
+                CHART_FOOT + (v.max(0.0) as f64 / top * CHART_HEIGHT).min(CHART_HEIGHT),
+            )
+        };
+        CGContextBeginPath(context);
+        CGContextMoveToPoint(context, x0, CHART_FOOT);
+        for (i, v) in samples.iter().enumerate() {
+            let (px, py) = at(i, *v);
+            CGContextAddLineToPoint(context, px, py);
+        }
+        CGContextAddLineToPoint(context, x + CHART_WIDTH, CHART_FOOT);
+        CGContextClosePath(context);
+        ink.faded(0.3).fill(context);
+        CGContextFillPath(context);
+        CGContextBeginPath(context);
+        for (i, v) in samples.iter().enumerate() {
+            let (px, py) = at(i, *v);
+            if i == 0 {
+                CGContextMoveToPoint(context, px, py);
+            } else {
+                CGContextAddLineToPoint(context, px, py);
+            }
+        }
+        ink.stroke(context);
+        CGContextSetLineWidth(context, 1.0);
+        CGContextStrokePath(context);
+    }
+}
+
+/// One bar per agent, each at least 1 pt so an idle agent still shows; a faint foot with none.
+fn bar_chart(context: Ref, x: f64, width: f64, values: &[f32], ink: Ink) {
+    // SAFETY: CoreGraphics calls on the live bitmap context `render` made.
+    unsafe {
+        if values.is_empty() {
+            ink.faded(0.35).fill(context);
+            CGContextFillRect(
+                context,
+                CGRect {
+                    origin: CGPoint { x, y: CHART_FOOT },
+                    size: CGSize { width, height: 1.0 },
+                },
+            );
+            return;
+        }
+        let n = values.len() as f64;
+        let bar = (width - BAR_GAP * (n - 1.0)) / n;
+        let top = values.iter().copied().fold(CHART_FLOOR, f32::max) as f64;
+        ink.fill(context);
+        for (i, v) in values.iter().enumerate() {
+            let height = (v.max(0.0) as f64 / top * CHART_HEIGHT).clamp(1.0, CHART_HEIGHT);
+            CGContextFillRect(
+                context,
+                CGRect {
+                    origin: CGPoint {
+                        x: x + i as f64 * (bar + BAR_GAP),
+                        y: CHART_FOOT,
+                    },
+                    size: CGSize { width: bar, height },
+                },
+            );
+        }
+    }
+}
+
+/// Whether the menu bar under this item is dark (on macOS 26 it follows the wallpaper).
+pub fn dark_menu_bar(item: &NSStatusItem, mtm: MainThreadMarker) -> bool {
+    item.button(mtm)
+        .is_some_and(|b| b.effectiveAppearance().name().to_string().contains("Dark"))
+}
+
+/// The name macOS keeps an item's place under: a ⌘-dragged place survives restarts. Without a
+/// name macOS forgets the place, and a new item starts at the far left, the first place it
+/// runs out of room.
+pub fn remember_place(item: &NSStatusItem, name: &str) {
+    item.setAutosaveName(Some(&NSString::from_str(name)));
+}
+
+fn position_key(name: &str) -> objc2::rc::Retained<NSString> {
+    NSString::from_str(&format!("NSStatusItem Preferred Position {name}"))
+}
+
+fn kept_key(name: &str) -> objc2::rc::Retained<NSString> {
+    NSString::from_str(&format!("holdmap kept position {name}"))
+}
+
+/// Before an item is turned off: macOS drops its place when it goes, so keep a copy.
+pub fn save_place(name: &str) {
+    let defaults = NSUserDefaults::standardUserDefaults();
+    if let Some(place) = defaults.objectForKey(&position_key(name)) {
+        // SAFETY: a property-list value read from the same defaults.
+        unsafe { defaults.setObject_forKey(Some(&place), &kept_key(name)) };
+    }
+}
+
+/// Before an item is turned on again: put its kept place back, so it returns where it was.
+pub fn restore_place(name: &str) {
+    let defaults = NSUserDefaults::standardUserDefaults();
+    if let Some(place) = defaults.objectForKey(&kept_key(name)) {
+        // SAFETY: a property-list value read from the same defaults.
+        unsafe { defaults.setObject_forKey(Some(&place), &position_key(name)) };
+        defaults.removeObjectForKey(&kept_key(name));
+    }
 }
 
 /// Whether macOS shows the item. A full menu bar pushes new items left, behind the frontmost
@@ -361,7 +602,7 @@ pub fn shown(item: &NSStatusItem, mtm: MainThreadMarker) -> Option<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tray::model::Mini;
+    use crate::tray::model::Badge;
 
     fn icon() -> Pixels {
         let mut rgba = vec![0u8; 64 * 64 * 4];
@@ -375,81 +616,145 @@ mod tests {
         }
     }
 
-    fn mini(label: &'static str, value: &str) -> Mini {
-        Mini {
+    fn reading(label: &'static str, value: &str, tone: Tone) -> Draw {
+        Draw::Reading {
             label,
             value: value.into(),
-            words: String::new(),
+            tone,
         }
     }
 
     fn ink(p: &Pixels, x0: u32, x1: u32) -> usize {
         (0..p.height)
-            .flat_map(|y| (x0..x1).map(move |x| (x, y)))
+            .flat_map(|y| (x0..x1.min(p.width)).map(move |x| (x, y)))
             .filter(|(x, y)| p.rgba[((y * p.width + x) * 4 + 3) as usize] > 0)
             .count()
     }
 
     #[test]
-    fn the_icon_alone_stays_the_icon() {
-        assert_eq!(render(&icon(), &MenuBar::default()), icon());
-    }
-
-    #[test]
-    fn readings_sit_beside_the_icon_as_a_template_image() {
-        let bar = MenuBar {
-            readings: vec![mini("AGENTS", "8"), mini("CPU", "7%"), mini("DEV", "3")],
-            chart: Vec::new(),
-        };
-        let p = render(&icon(), &bar);
-        assert_eq!(p.height, 54, "18 pt at 3×");
+    fn a_plain_reading_is_a_small_template_like_a_system_monitor_s() {
+        let r = render(&icon(), &[reading("AGENTS", "8", Tone::Plain)], false);
+        assert!(r.template, "nothing to flag: macOS tints it");
+        assert_eq!(r.pixels.height, 54, "18 pt at 3×");
+        let pt = r.pixels.width as f64 / SCALE;
         assert!(
-            p.width > 54 * 3,
-            "three columns beside the icon: {}",
-            p.width
+            (28.0..=36.0).contains(&pt),
+            "about 32 pt, like a Mini widget: {pt}"
         );
-        // Ink beside the icon (the readings), and only black: a template carries alpha.
-        assert!(ink(&p, 70, p.width) > 200);
-        assert!(p.rgba.chunks(4).all(|px| px[..3] == [0, 0, 0]));
-        // The icon's top half is opaque, its bottom half clear, scaled to the item's height.
-        assert_eq!(p.rgba[((5 * p.width + 20) * 4 + 3) as usize], 255);
-        assert_eq!(p.rgba[((50 * p.width + 20) * 4 + 3) as usize], 0);
+        assert!(ink(&r.pixels, 0, r.pixels.width) > 100);
+        assert!(r.pixels.rgba.chunks(4).all(|px| px[..3] == [0, 0, 0]));
     }
 
     #[test]
-    fn columns_keep_their_width_while_numbers_change() {
-        let at = |cpu: &str| {
-            render(
-                &icon(),
-                &MenuBar {
-                    readings: vec![mini("CPU", cpu), mini("DEV", "3")],
-                    chart: Vec::new(),
-                },
-            )
-            .width
+    fn a_flagged_reading_is_drawn_in_colour_for_the_menu_bar_it_sits_on() {
+        let light = render(&icon(), &[reading("NEEDS", "2", Tone::Critical)], false);
+        let dark = render(&icon(), &[reading("NEEDS", "2", Tone::Critical)], true);
+        assert!(!light.template && !dark.template);
+        let red = |p: &Pixels| {
+            p.rgba
+                .chunks(4)
+                .any(|px| px[3] > 200 && px[0] > 200 && px[1] < 120)
+        };
+        assert!(red(&light.pixels) && red(&dark.pixels), "the value is red");
+        // The label stays label-coloured: dark ink on a light bar, light ink on a dark one.
+        let label_ink = |p: &Pixels| {
+            p.rgba
+                .chunks(4)
+                .take(p.width as usize * 12)
+                .filter(|px| px[3] > 128)
+                .map(|px| px[0])
+                .max()
+        };
+        assert!(label_ink(&light.pixels) < Some(60));
+        assert!(label_ink(&dark.pixels) > Some(200));
+    }
+
+    #[test]
+    fn readings_keep_their_width_while_numbers_change() {
+        let at = |v: &str| {
+            render(&icon(), &[reading("CPU", v, Tone::Plain)], false)
+                .pixels
+                .width
         };
         assert_eq!(at("1%"), at("8%"));
         assert_eq!(at("11%"), at("88%"));
     }
 
     #[test]
-    fn the_chart_adds_bars_after_the_readings() {
-        let readings = vec![mini("CPU", "7%")];
-        let plain = render(
+    fn charts_fit_32_pt_and_show_their_shape() {
+        let line = render(
             &icon(),
-            &MenuBar {
-                readings: readings.clone(),
-                chart: Vec::new(),
-            },
+            &[Draw::Line(vec![1.0, 12.0, 4.0, 20.0, 6.0])],
+            false,
         );
-        let charted = render(
+        assert!(line.template);
+        assert_eq!(
+            line.pixels.width,
+            ((CHART_WIDTH + 2.0 * PAD) * SCALE).ceil() as u32
+        );
+        assert!(ink(&line.pixels, 0, line.pixels.width) > 100);
+        // A short history is one point per scan from the right, over the full-width foot.
+        let short = render(
             &icon(),
-            &MenuBar {
-                readings,
-                chart: vec![1.0, 20.0, 5.0, 40.0],
-            },
+            &[Draw::Line(vec![12.0, 4.0, 20.0, 6.0, 9.0])],
+            false,
+        )
+        .pixels;
+        let above_foot = short.height - ((CHART_FOOT + 1.0) * SCALE) as u32;
+        let line_cols = (0..short.width)
+            .filter(|&x| {
+                (0..above_foot).any(|y| short.rgba[((y * short.width + x) * 4 + 3) as usize] > 100)
+            })
+            .count() as f64;
+        assert!((3.5..=5.5).contains(&(line_cols / SCALE)), "{line_cols}");
+        assert!(
+            ink(&short, 0, (2.0 * SCALE) as u32) > 0,
+            "the foot runs the full width"
         );
-        assert!(charted.width > plain.width);
-        assert!(ink(&charted, plain.width + 6, charted.width) > 50);
+        let bars = render(&icon(), &[Draw::Bars(vec![3.0, 9.0, 1.0])], false);
+        let pt = bars.pixels.width as f64 / SCALE;
+        assert!(pt <= CHART_WIDTH + 2.0 * PAD, "{pt}");
+        // An empty chart still draws its foot, so the item isn't invisible.
+        let empty = render(&icon(), &[Draw::Bars(vec![])], false);
+        assert!(ink(&empty.pixels, 0, empty.pixels.width) > 0);
+    }
+
+    #[test]
+    fn the_icon_s_dot_takes_the_urgency_colour() {
+        let calm = render(&icon(), &[Draw::Icon(Badge::default())], false);
+        assert!(calm.template);
+        assert_eq!(
+            calm.pixels.width,
+            ((HEIGHT + 2.0 * PAD) * SCALE).ceil() as u32
+        );
+        let alert = render(
+            &icon(),
+            &[Draw::Icon(Badge {
+                count: 1,
+                urgency: Some(Urgency::Medium),
+            })],
+            false,
+        );
+        assert!(!alert.template);
+        let orange = alert
+            .pixels
+            .rgba
+            .chunks(4)
+            .any(|px| px[3] > 200 && px[0] > 240 && (120..180).contains(&px[1]) && px[2] < 40);
+        assert!(orange, "an amber dot");
+    }
+
+    #[test]
+    fn one_item_lays_its_parts_side_by_side() {
+        let one = render(&icon(), &[reading("AGENTS", "8", Tone::Plain)], false);
+        let both = render(
+            &icon(),
+            &[
+                reading("AGENTS", "8", Tone::Plain),
+                reading("DEV", "3", Tone::Plain),
+            ],
+            false,
+        );
+        assert!(both.pixels.width > one.pixels.width + (MIN_READING * SCALE) as u32);
     }
 }

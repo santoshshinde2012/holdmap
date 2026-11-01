@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attentionCells, attentionSummary, chartPaths, chartTop, cpuParts, cpuSummary, cpuText, demoPanel, HISTORY_CELLS } from "./tray-panel";
+import { attentionCells, attentionSummary, chartPaths, chartTop, churnBars, churnSummary, cpuParts, cpuSummary, cpuText, demoPanel, HISTORY_CELLS, ringArcs } from "./tray-panel";
 
 describe("tray panel", () => {
   it("formats CPU the way the tray menu does", () => {
@@ -41,6 +41,22 @@ describe("tray panel", () => {
     expect(attentionSummary([0, 2, 1])).toBe("Something needed you in 2 of the last 3 scans.");
     expect(cpuSummary([3])).toBe("Agent CPU appears after a few scans.");
     expect(cpuSummary([3, 12.4, 5])).toBe("Agent CPU over the last 3 scans: now 5.0%, peak 12%.");
+  });
+
+  it("splits the ports ring between this computer and the network", () => {
+    expect(ringArcs(30, 10, 100)).toEqual({ local: "75 100", network: "25 100" });
+    expect(ringArcs(0, 0, 100)).toEqual({ local: "0 100", network: "0 100" });
+  });
+
+  it("draws port changes as opened above the line and closed below, newest at the right", () => {
+    expect(churnBars([], 100, 20)).toEqual([]);
+    const bars = churnBars([[2, 0], [0, 1]], 100, 20, 10);
+    expect(bars).toEqual([
+      { x: 80, w: 9, up: 20, down: 0 },
+      { x: 90, w: 9, up: 0, down: 10 },
+    ]);
+    expect(churnSummary([])).toBe("Port changes appear after a few scans.");
+    expect(churnSummary([[2, 0], [1, 1]])).toBe("In the last 2 scans: 3 ports opened, 1 closed.");
   });
 
   it("ships sample data whose rows use tray action ids", () => {

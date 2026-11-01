@@ -5,7 +5,7 @@
   import { onDestroy, onMount } from "svelte";
   import { humanBytes } from "../lib/format";
   import {
-    attentionCells, attentionSummary, chartPaths, chartTop, cpuParts, cpuSummary, cpuText, URGENCY_LABEL,
+    attentionCells, attentionSummary, chartPaths, chartTop, churnBars, churnSummary, cpuParts, cpuSummary, cpuText, ringArcs, URGENCY_LABEL,
     type PanelData,
   } from "../lib/tray-panel";
 
@@ -44,6 +44,26 @@
   const cells = $derived(attentionCells(data?.attentionHistory ?? []));
   const cpu = $derived(cpuParts(data?.cpu ?? null));
   const count = (n: number | null | undefined) => (n === null || n === undefined ? "…" : String(n));
+
+  // The ring: listeners on this computer only, and those open to the network.
+  const RING_R = 18;
+  const RING_C = Number((2 * Math.PI * RING_R).toFixed(2));
+  const arcs = $derived(data?.ready ? ringArcs(data.ports - data.exposed, data.exposed, RING_C) : null);
+  // Port changes: opened above the line, closed below, like a network chart.
+  const CHURN_H = 48;
+  const churn = $derived(churnBars(data?.churn ?? [], CHART_W, CHURN_H / 2 - 2));
+
+  // A click on a menu-bar item opens the panel at that item's section, once per click.
+  let shownSeq = 0;
+  $effect(() => {
+    if (!data?.focus || data.focusSeq === shownSeq) return;
+    shownSeq = data.focusSeq;
+    document.querySelector(`[data-section="${data.focus}"]`)?.scrollIntoView({ block: "start" });
+  });
+  async function pin() {
+    await run("pin-panel");
+    await refresh();
+  }
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -52,9 +72,14 @@
   <header class="head">
     <img class="logo" src="/icon.svg" alt="" width="18" height="18" />
     <h1>holdmap</h1>
-    <button type="button" class="icon-btn" aria-label="Open holdmap" title="Open holdmap" onclick={() => run("show")}>
-      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
-    </button>
+    <span class="tools">
+      <button type="button" class="icon-btn" class:on={data?.pinned} aria-label="Keep open" aria-pressed={!!data?.pinned} title={data?.pinned ? "Kept open: click to let it close" : "Keep open"} onclick={pin}>
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 4h6l-1 6 4 4H6l4-4zM12 14v6" fill={data?.pinned ? "currentColor" : "none"} stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </button>
+      <button type="button" class="icon-btn" aria-label="Open holdmap" title="Open holdmap" onclick={() => run("show")}>
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </button>
+    </span>
   </header>
 
   <div class="body">
@@ -62,7 +87,7 @@
       <p class="empty">Couldn't read the latest scan. It will try again in a moment.</p>
     {/if}
 
-    <section class="hero" aria-label="Now">
+    <section class="hero" aria-label="Now" data-section="top">
       <div class="figure">
         <span class="value">{count(data?.agents)}</span>
         <span class="legend"><i class="dot violet"></i>Agents</span>
@@ -77,7 +102,7 @@
       </div>
     </section>
 
-    <h2 class="rule">Agent CPU history</h2>
+    <h2 class="rule" data-section="cpu">Agent CPU history</h2>
     <figure class="chart" aria-label={cpuSummary(data?.cpuHistory ?? [])} role="img">
       {#if paths.line}
         <svg viewBox="0 0 {CHART_W} {CHART_H}" preserveAspectRatio="none" aria-hidden="true">
@@ -96,7 +121,7 @@
       {#each cells as tone, i (i)}<i class="cell {tone}"></i>{/each}
     </div>
 
-    <h2 class="rule">Needs you</h2>
+    <h2 class="rule" data-section="needs">Needs you</h2>
     {#if !data?.needs}
       <p class="quiet">Checking agents and ports…</p>
     {:else if data.needs.length === 0}
@@ -115,17 +140,45 @@
     {/if}
 
     <h2 class="rule">Ports</h2>
-    <div class="kv"><span>In use</span><span class="num">{data?.ready ? data.ports : "…"}</span></div>
-    <div class="kv">
-      <span>Open to the network</span>
-      {#if data?.ready}
-        <span class="pill {data.exposed ? 'medium' : 'ok'}">{data.exposed ? data.exposed : "None"}</span>
-      {:else}<span class="num">…</span>{/if}
+    <div class="ports">
+      <svg class="ring" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label={data?.ready ? `${data.ports - data.exposed} on this computer only, ${data.exposed} open to the network` : "Ports not read yet"}>
+        <circle cx="24" cy="24" r={RING_R} class="track" />
+        {#if arcs}
+          <circle cx="24" cy="24" r={RING_R} class="local" stroke-dasharray={arcs.local} transform="rotate(-90 24 24)" />
+          <circle cx="24" cy="24" r={RING_R} class="network" stroke-dasharray={arcs.network} stroke-dashoffset={-Number(arcs.local.split(" ")[0])} transform="rotate(-90 24 24)" />
+        {/if}
+      </svg>
+      <div class="ports-rows">
+        <div class="kv"><span><i class="dot local"></i>In use</span><span class="num">{data?.ready ? data.ports : "…"}</span></div>
+        <div class="kv">
+          <span><i class="dot network"></i>Open to the network</span>
+          {#if data?.ready}
+            <span class="pill {data.exposed ? 'medium' : 'ok'}">{data.exposed ? data.exposed : "None"}</span>
+          {:else}<span class="num">…</span>{/if}
+        </div>
+      </div>
     </div>
     <div class="kv"><span>Agent memory</span><span class="num">{data?.memory === null || data?.memory === undefined ? "…" : humanBytes(data.memory)}</span></div>
 
+    <h2 class="rule">Port changes</h2>
+    <figure class="chart churn" role="img" aria-label={churnSummary(data?.churn ?? [])}>
+      {#if churn.length}
+        <svg viewBox="0 0 {CHART_W} {CHURN_H}" preserveAspectRatio="none" aria-hidden="true">
+          <line x1="0" x2={CHART_W} y1={CHURN_H / 2} y2={CHURN_H / 2} class="axis" />
+          {#each churn as bar, i (i)}
+            {#if bar.up}<rect x={bar.x} y={CHURN_H / 2 - bar.up} width={bar.w} height={bar.up} class="opened" />{/if}
+            {#if bar.down}<rect x={bar.x} y={CHURN_H / 2} width={bar.w} height={bar.down} class="closed" />{/if}
+          {/each}
+        </svg>
+        <span class="scale top">opened</span>
+        <span class="scale bottom">closed</span>
+      {:else}
+        <span class="waiting">Fills in as holdmap scans</span>
+      {/if}
+    </figure>
+
     <div class="rule-row">
-      <h2 class="rule">Dev servers</h2>
+      <h2 class="rule" data-section="dev">Dev servers</h2>
       {#if data?.stopDev}
         <button type="button" class="link" onclick={() => run("stop-all-dev")}>Stop all…</button>
       {/if}
@@ -146,7 +199,7 @@
       </ul>
     {/if}
 
-    <h2 class="rule">Top agents</h2>
+    <h2 class="rule" data-section="agents">Top agents</h2>
     {#if data?.agents === 0}
       <p class="quiet">No agents running.</p>
     {:else if data?.topAgents.length}
@@ -185,7 +238,22 @@
 
 <style>
   .panel { display: flex; flex-direction: column; height: 100%; background: var(--surface); color: var(--text); font-variant-numeric: tabular-nums; }
-  .head { display: grid; grid-template-columns: 28px 1fr 28px; align-items: center; padding: 28px 16px 8px; -webkit-user-select: none; user-select: none; }
+  .head { display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; padding: 28px 16px 8px; -webkit-user-select: none; user-select: none; }
+  .tools { display: flex; justify-content: flex-end; gap: 4px; }
+  .icon-btn.on { color: var(--accent); background: var(--accent-soft); }
+  .ports { display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: center; }
+  .ring .track, .ring .local, .ring .network { fill: none; stroke-width: 7; }
+  .ring .track { stroke: var(--surface-3); }
+  .ring .local { stroke: var(--tone-blue); }
+  .ring .network { stroke: var(--tone-amber); }
+  .dot.local { background: var(--tone-blue); margin-right: 6px; }
+  .dot.network { background: var(--tone-amber); margin-right: 6px; }
+  .ports-rows .kv span:first-child { display: inline-flex; align-items: center; }
+  .chart.churn { height: 60px; }
+  .chart.churn svg { height: 48px; }
+  .churn .axis { stroke: var(--border-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .churn .opened { fill: var(--tone-green); }
+  .churn .closed { fill: var(--tone-amber); }
   .logo { border-radius: 4px; }
   h1 { margin: 0; text-align: center; font-size: var(--fs-title); line-height: var(--lh-title); font-weight: var(--fw-semibold); letter-spacing: var(--ls-title); }
   .body { flex: 1; overflow-y: auto; padding: 4px 16px 12px; }

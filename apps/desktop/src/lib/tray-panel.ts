@@ -28,7 +28,43 @@ export interface PanelData {
   /** The busiest agents first. */
   topAgents: PanelAgent[];
   moreAgents: number;
-  style: "icon" | "count" | "trend";
+  /** Listeners opened and closed per scan, oldest first: [opened, closed]. */
+  churn: [number, number][];
+  /** The section to bring into view (the menu-bar item clicked), changing `focusSeq` per click. */
+  focus: string | null;
+  focusSeq: number;
+  /** The panel stays open when it loses focus. */
+  pinned: boolean;
+}
+
+/** The ring's two arcs, as stroke dash arrays on a circle of `circumference`. */
+export function ringArcs(local: number, network: number, circumference: number): { local: string; network: string } {
+  const total = Math.max(local + network, 1);
+  const len = (n: number) => Number(((n / total) * circumference).toFixed(2));
+  return { local: `${len(local)} ${circumference}`, network: `${len(network)} ${circumference}` };
+}
+
+/** Bars for ports opened (up) and closed (down) per scan, right-aligned like the CPU chart. */
+export function churnBars(churn: readonly [number, number][], width: number, half: number, slots = HISTORY_CELLS): { x: number; w: number; up: number; down: number }[] {
+  const recent = churn.slice(-slots);
+  const top = Math.max(1, ...recent.flat());
+  const step = width / slots;
+  const x0 = width - step * recent.length;
+  return recent.map(([opened, closed], i) => ({
+    x: Number((x0 + i * step).toFixed(2)),
+    w: Number(Math.max(1, step - 1).toFixed(2)),
+    up: Number(((opened / top) * half).toFixed(2)),
+    down: Number(((closed / top) * half).toFixed(2)),
+  }));
+}
+
+/** What the port changes chart says, for people who can't see it. */
+export function churnSummary(churn: readonly [number, number][]): string {
+  if (!churn.length) return "Port changes appear after a few scans.";
+  const opened = churn.reduce((n, [o]) => n + o, 0);
+  const closed = churn.reduce((n, [, c]) => n + c, 0);
+  const scans = `${churn.length} scan${churn.length === 1 ? "" : "s"}`;
+  return `In the last ${scans}: ${opened} port${opened === 1 ? "" : "s"} opened, ${closed} closed.`;
 }
 
 /** Cells in the attention history grid: one per scan the panel keeps. */
@@ -128,6 +164,9 @@ export function demoPanel(): PanelData {
       { name: "Gemini CLI", place: "dashboard", cpu: 0.2, memory: 98_566_144, action: "agent:agent:1203" },
     ],
     moreAgents: 0,
-    style: "count",
+    churn: Array.from({ length: 48 }, (_, i): [number, number] => [i % 11 === 3 ? 2 : i % 7 === 0 ? 1 : 0, i % 13 === 6 ? 1 : i % 17 === 9 ? 2 : 0]),
+    focus: null,
+    focusSeq: 0,
+    pinned: false,
   };
 }

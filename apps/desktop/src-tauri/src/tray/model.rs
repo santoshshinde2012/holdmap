@@ -20,8 +20,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 const TREND_LEN: usize = 8;
 /// Scans the panel's history chart and attention grid keep.
 const HISTORY_LEN: usize = 60;
-/// Bars in the menu bar's mini CPU chart.
-const BAR_CHART_LEN: usize = 16;
+/// Agents the menu bar's bar chart shows.
+const BAR_AGENTS: usize = 8;
 /// Agents the panel's table lists, busiest first.
 const PANEL_AGENTS: usize = 5;
 /// Rows each panel section lists before "+N more".
@@ -53,50 +53,109 @@ impl Platform {
     } else {
         Platform::Linux
     };
-
-    /// Windows tray icons are square with no text beside them, so the style choice changes
-    /// nothing there.
-    fn has_style(self) -> bool {
-        self != Platform::Windows
-    }
 }
 
-/// What sits beside the icon (`Config::tray_style`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Style {
-    /// The icon and its badge only.
+/// One menu-bar item, as `Config::TRAY_ITEMS` names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Item {
+    /// holdmap's icon, with a dot when something needs you.
     Icon,
-    /// Adds the readings: agents, their CPU, dev servers and items that need you.
-    Count,
-    /// Also adds a mini chart of the agents' CPU.
-    Trend,
+    Agents,
+    Needs,
+    /// The agents' CPU together.
+    Cpu,
+    Dev,
+    /// A line of the agents' CPU over recent scans.
+    CpuHistory,
+    /// One bar per running agent.
+    AgentBars,
 }
 
-impl Style {
-    pub const ALL: [Style; 3] = [Style::Icon, Style::Count, Style::Trend];
+impl Item {
+    pub const ALL: [Item; 7] = [
+        Item::Icon,
+        Item::Agents,
+        Item::Needs,
+        Item::Cpu,
+        Item::Dev,
+        Item::CpuHistory,
+        Item::AgentBars,
+    ];
 
-    /// Reads a `Config::tray_style()` value (already validated there).
-    pub fn parse(s: &str) -> Style {
-        match s {
-            "icon" => Style::Icon,
-            "trend" => Style::Trend,
-            _ => Style::Count,
+    pub fn parse(id: &str) -> Option<Item> {
+        Self::ALL.into_iter().find(|i| i.id() == id)
+    }
+
+    /// Its id in `Config::tray_items`.
+    pub fn id(self) -> &'static str {
+        match self {
+            Item::Icon => "icon",
+            Item::Agents => "agents",
+            Item::Needs => "needs",
+            Item::Cpu => "cpu",
+            Item::Dev => "dev",
+            Item::CpuHistory => "cpu_history",
+            Item::AgentBars => "agent_bars",
         }
     }
 
-    pub fn as_str(self) -> &'static str {
+    /// Its name in Settings and the menu.
+    pub fn name(self) -> &'static str {
         match self {
-            Style::Icon => "icon",
-            Style::Count => "count",
-            Style::Trend => "trend",
+            Item::Icon => "holdmap icon",
+            Item::Agents => "Agents",
+            Item::Needs => "Needs you",
+            Item::Cpu => "Agent CPU",
+            Item::Dev => "Dev servers",
+            Item::CpuHistory => "CPU history",
+            Item::AgentBars => "Agent bars",
         }
     }
 
-    fn label(self) -> &'static str {
+    /// The panel section a click on it opens.
+    pub fn section(self) -> &'static str {
         match self {
-            Style::Icon => "Icon only",
-            Style::Count => "Readings",
-            Style::Trend => "Readings and agent CPU chart",
+            Item::Icon => "top",
+            Item::Agents | Item::AgentBars => "agents",
+            Item::Needs => "needs",
+            Item::Cpu | Item::CpuHistory => "cpu",
+            Item::Dev => "dev",
+        }
+    }
+
+    /// Whether this desktop can show it: Linux's panel label holds text only, and Windows tray
+    /// icons hold no text at all.
+    pub fn shown_on(self, platform: Platform) -> bool {
+        match platform {
+            Platform::MacOs => true,
+            Platform::Linux => !matches!(self, Item::Icon | Item::AgentBars),
+            Platform::Windows => false,
+        }
+    }
+}
+
+/// What the menu bar shows: which items, and whether as one item (macOS).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BarChoice {
+    pub items: Vec<Item>,
+    pub combined: bool,
+}
+
+impl BarChoice {
+    /// From `Config::tray_items()` (already validated there) and `Config::tray_combined`.
+    pub fn from_config(items: &[&str], combined: bool) -> BarChoice {
+        BarChoice {
+            items: items.iter().filter_map(|id| Item::parse(id)).collect(),
+            combined,
+        }
+    }
+}
+
+impl Default for BarChoice {
+    fn default() -> BarChoice {
+        BarChoice {
+            items: vec![Item::Agents, Item::Needs],
+            combined: false,
         }
     }
 }
@@ -135,6 +194,8 @@ pub struct NeedRow {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Readings {
     pub ports: usize,
+    /// Every listener's entry id, to count what opened and closed since the last scan.
+    pub port_ids: Vec<String>,
     pub exposed: usize,
     pub dev: Vec<DevServer>,
     /// `None` until the agents report is read.
@@ -161,6 +222,7 @@ impl Readings {
         let entries = &snapshot.entries;
         Readings {
             ports: entries.len(),
+            port_ids: entries.iter().map(|e| e.id.clone()).collect(),
             exposed: entries
                 .iter()
                 .filter(|e| e.exposure != Exposure::Loopback)
@@ -222,6 +284,10 @@ pub struct Trends {
     agents: HashMap<String, VecDeque<f32>>,
     /// The most urgent "needs you" item per scan: 0 none, 1 worth a look, 2 look now.
     attention: VecDeque<u8>,
+    /// Listeners opened and closed per scan.
+    churn: VecDeque<[u32; 2]>,
+    /// Listeners in the previous scan (`None` before the first one).
+    ports_seen: Option<HashSet<String>>,
     /// Agents in the previous scan (`None` before the first one).
     seen: Option<HashSet<String>>,
 }
@@ -256,6 +322,13 @@ impl Trends {
         if let Some(needs) = &readings.needs {
             push(&mut self.attention, urgency_level(needs), HISTORY_LEN);
         }
+        let now: HashSet<String> = readings.port_ids.iter().cloned().collect();
+        if let Some(before) = &self.ports_seen {
+            let opened = now.difference(before).count() as u32;
+            let closed = before.difference(&now).count() as u32;
+            push(&mut self.churn, [opened, closed], HISTORY_LEN);
+        }
+        self.ports_seen = Some(now);
         let (Some(agents), Some(total)) = (&readings.agents, readings.cpu()) else {
             return;
         };
@@ -438,7 +511,12 @@ pub enum Action {
     FocusPort(u16),
     OpenAgent(String),
     OpenEntry(String),
-    Style(Style),
+    /// Show or hide one menu-bar item.
+    ToggleItem(Item),
+    /// Show the menu-bar items as one item, or each on its own (macOS).
+    ToggleCombined,
+    /// Keep the panel open when it loses focus, or let it close again.
+    PinPanel,
 }
 
 impl Action {
@@ -447,6 +525,8 @@ impl Action {
             "show" | "more-needs" | "more-dev" | "more-agents" => Action::Show,
             "show-panel" => Action::ShowPanel,
             "hide-panel" => Action::HidePanel,
+            "pin-panel" => Action::PinPanel,
+            "combined" => Action::ToggleCombined,
             "quit" => Action::Quit,
             "refresh" => Action::Refresh,
             "stop-all-dev" => Action::StopAllDev,
@@ -468,11 +548,8 @@ impl Action {
                         .strip_prefix("entry:")
                         .map(|e| Action::OpenEntry(e.into()));
                 }
-                let style = id.strip_prefix("style:")?;
-                return Style::ALL
-                    .into_iter()
-                    .find(|s| s.as_str() == style)
-                    .map(Action::Style);
+                let item = id.strip_prefix("item:")?;
+                return Item::parse(item).map(Action::ToggleItem);
             }
         };
         Some(action)
@@ -504,8 +581,8 @@ pub struct Badge {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrayView {
     pub items: Vec<TrayItem>,
-    /// Readings drawn beside the icon (macOS).
-    pub bar: MenuBar,
+    /// The menu-bar items (macOS), each drawn on its own.
+    pub bar: Vec<BarItem>,
     /// The panel label beside the icon (Linux); `None` shows the icon alone.
     pub title: Option<String>,
     /// Hover text (macOS, Windows).
@@ -517,12 +594,17 @@ fn more(id: &str, n: usize, what: &str) -> Option<TrayItem> {
     (n > 0).then(|| item(id, format!("+{n} more {what} in holdmap…"), true))
 }
 
-fn panel(r: Option<&Readings>, trends: &Trends, style: Style, platform: Platform) -> Vec<TrayItem> {
+fn panel(
+    r: Option<&Readings>,
+    trends: &Trends,
+    choice: &BarChoice,
+    platform: Platform,
+) -> Vec<TrayItem> {
     let mut out = Vec::new();
     let Some(r) = r else {
         out.push(reading("reading-ports", "Scanning…"));
         out.push(TrayItem::Separator);
-        out.extend(controls(style, platform));
+        out.extend(controls(choice, platform));
         return out;
     };
 
@@ -629,31 +711,41 @@ fn panel(r: Option<&Readings>, trends: &Trends, style: Style, platform: Platform
     }
 
     out.push(TrayItem::Separator);
-    out.extend(controls(style, platform));
+    out.extend(controls(choice, platform));
     out
 }
 
-fn controls(style: Style, platform: Platform) -> Vec<TrayItem> {
+fn controls(choice: &BarChoice, platform: Platform) -> Vec<TrayItem> {
     let mut out = vec![
         item("show-panel", "Show panel", true),
         item("show", "Open holdmap", true),
     ];
-    if platform.has_style() {
+    if platform != Platform::Windows {
+        let mut items: Vec<TrayItem> = Item::ALL
+            .into_iter()
+            .filter(|i| i.shown_on(platform))
+            .map(|i| TrayItem::Check {
+                id: format!("item:{}", i.id()),
+                label: i.name().into(),
+                checked: choice.items.contains(&i),
+            })
+            .collect();
+        if platform == Platform::MacOs {
+            items.push(TrayItem::Separator);
+            items.push(TrayItem::Check {
+                id: "combined".into(),
+                label: "As one item".into(),
+                checked: choice.combined,
+            });
+        }
         out.push(TrayItem::Submenu {
-            id: "style".into(),
+            id: "bar".into(),
             label: if platform == Platform::MacOs {
                 "Menu bar shows".into()
             } else {
                 "Panel shows".into()
             },
-            items: Style::ALL
-                .into_iter()
-                .map(|s| TrayItem::Check {
-                    id: format!("style:{}", s.as_str()),
-                    label: s.label().into(),
-                    checked: s == style,
-                })
-                .collect(),
+            items,
         });
     }
     out.push(item("refresh", "Refresh", true));
@@ -670,24 +762,53 @@ fn needs_text(n: usize) -> String {
     format!("{n} need you")
 }
 
-/// One stacked reading beside the icon, like a system monitor's: a small label over a value.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Mini {
-    pub label: &'static str,
-    pub value: String,
-    /// How the reading reads in a sentence (the Linux label), e.g. "8 agents".
-    pub words: String,
+/// How a reading is coloured in the menu bar: plain ink, or a state worth seeing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tone {
+    Plain,
+    Warning,
+    Critical,
 }
 
-/// What macOS draws beside the icon: stacked readings and, with [`Style::Trend`], a mini chart
-/// of the agents' CPU. Empty shows the icon alone.
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct MenuBar {
-    pub readings: Vec<Mini>,
-    pub chart: Vec<f32>,
+/// One part of a menu-bar item.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Draw {
+    /// holdmap's icon, with a dot when something needs you.
+    Icon(Badge),
+    /// A small label over a value, as system monitors show readings.
+    Reading {
+        label: &'static str,
+        value: String,
+        tone: Tone,
+    },
+    /// The agents' CPU over recent scans, oldest first.
+    Line(Vec<f32>),
+    /// One bar per running agent.
+    Bars(Vec<f32>),
 }
 
-impl Eq for MenuBar {}
+impl Draw {
+    /// Whether it needs colour (otherwise it's drawn as a template that follows the menu bar).
+    pub fn coloured(&self) -> bool {
+        match self {
+            Draw::Icon(badge) => badge.count > 0,
+            Draw::Reading { tone, .. } => *tone != Tone::Plain,
+            Draw::Line(_) | Draw::Bars(_) => false,
+        }
+    }
+}
+
+/// One menu-bar item (macOS): its parts, its hover text and the panel section it opens.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BarItem {
+    /// An [`Item::id`], or `combined`.
+    pub id: &'static str,
+    pub parts: Vec<Draw>,
+    pub tooltip: String,
+    pub section: &'static str,
+}
+
+impl Eq for BarItem {}
 
 /// "7%", or "<1%" for a little but not nothing.
 fn bar_cpu(cpu: f32) -> String {
@@ -698,55 +819,142 @@ fn bar_cpu(cpu: f32) -> String {
     }
 }
 
-fn menu_bar(r: Option<&Readings>, trends: &Trends, style: Style) -> MenuBar {
-    let Some(r) = r.filter(|_| style != Style::Icon) else {
-        return MenuBar::default();
-    };
-    let mut readings = Vec::new();
-    if let Some(agents) = &r.agents {
-        readings.push(Mini {
-            label: "AGENTS",
-            value: agents.len().to_string(),
-            words: count(agents.len(), "agent", "agents"),
-        });
-    }
-    if let Some(cpu) = trends.total_cpu(r) {
-        readings.push(Mini {
-            label: "CPU",
-            value: bar_cpu(cpu),
-            words: format!("CPU {}", bar_cpu(cpu)),
-        });
-    }
-    readings.push(Mini {
-        label: "DEV",
-        value: r.dev.len().to_string(),
-        words: format!("{} dev", r.dev.len()),
-    });
-    if let Some(n) = r.needs.as_ref().map(Vec::len).filter(|n| *n > 0) {
-        readings.push(Mini {
-            label: "NEEDS",
-            value: n.to_string(),
-            words: needs_text(n),
-        });
-    }
-    let chart = if style == Style::Trend && trends.total.len() >= 2 {
-        recent(&trends.total, BAR_CHART_LEN).into_iter().collect()
-    } else {
-        Vec::new()
-    };
-    MenuBar { readings, chart }
+/// A reading's value, or "…" until it's known.
+fn known(value: Option<String>) -> String {
+    value.unwrap_or_else(|| "…".into())
 }
 
-/// The Linux panel label: the same readings as a sentence.
-fn label_text(bar: &MenuBar) -> Option<String> {
-    if bar.readings.is_empty() {
-        return None;
+/// One item's part, its hover text and, for the Linux label, its words (`None`: no words).
+fn part(item: Item, r: Option<&Readings>, trends: &Trends) -> (Draw, String, Option<String>) {
+    let agents = r.and_then(|r| r.agents.as_ref());
+    let needs = r.and_then(|r| r.needs.as_ref());
+    let cpu = r.and_then(|r| trends.total_cpu(r));
+    match item {
+        Item::Icon => (Draw::Icon(badge(r)), "holdmap".into(), None),
+        Item::Agents => (
+            Draw::Reading {
+                label: "AGENTS",
+                value: known(agents.map(|a| a.len().to_string())),
+                tone: Tone::Plain,
+            },
+            known(agents.map(|a| count(a.len(), "agent", "agents") + " running")),
+            agents.map(|a| count(a.len(), "agent", "agents")),
+        ),
+        Item::Needs => {
+            let tone = match needs.and_then(|n| n.iter().map(|n| n.urgency).max()) {
+                Some(Urgency::High) => Tone::Critical,
+                Some(Urgency::Medium) => Tone::Warning,
+                None => Tone::Plain,
+            };
+            (
+                Draw::Reading {
+                    label: "NEEDS",
+                    value: known(needs.map(|n| n.len().to_string())),
+                    tone,
+                },
+                match needs.map(Vec::len) {
+                    Some(0) => "Nothing needs you".into(),
+                    Some(n) => needs_text(n),
+                    None => "Checking what needs you".into(),
+                },
+                needs.map(|n| needs_text(n.len())),
+            )
+        }
+        Item::Cpu => (
+            Draw::Reading {
+                label: "CPU",
+                value: known(cpu.map(bar_cpu)),
+                tone: match cpu {
+                    Some(c) if c >= 80.0 => Tone::Critical,
+                    Some(c) if c >= 60.0 => Tone::Warning,
+                    _ => Tone::Plain,
+                },
+            },
+            known(cpu.map(|c| format!("Agent CPU {}", cpu_text(c)))),
+            cpu.map(|c| format!("CPU {}", bar_cpu(c))),
+        ),
+        Item::Dev => {
+            let dev = r.map(|r| r.dev.len());
+            (
+                Draw::Reading {
+                    label: "DEV",
+                    value: known(dev.map(|n| n.to_string())),
+                    tone: Tone::Plain,
+                },
+                known(dev.map(|n| count(n, "dev server", "dev servers") + " running")),
+                dev.map(|n| format!("{n} dev")),
+            )
+        }
+        Item::CpuHistory => {
+            let samples: VecDeque<f32> = trends.total.iter().copied().collect();
+            (
+                Draw::Line(samples.iter().copied().collect()),
+                "Agent CPU over recent scans".into(),
+                sparkline(&recent(&samples, TREND_LEN)),
+            )
+        }
+        Item::AgentBars => {
+            let values: Vec<f32> = agents
+                .map(|a| {
+                    a.iter()
+                        .take(BAR_AGENTS)
+                        .map(|a| trends.agents.get(&a.id).map_or(0.0, |_| a.cpu))
+                        .collect()
+                })
+                .unwrap_or_default();
+            (Draw::Bars(values), "CPU of each running agent".into(), None)
+        }
     }
-    let mut parts: Vec<String> = bar.readings.iter().map(|m| m.words.clone()).collect();
-    if let Some(spark) = sparkline(&bar.chart.iter().copied().collect()) {
-        parts.push(spark);
+}
+
+/// The menu-bar items (macOS): one per chosen item, or all of them as one.
+fn bar_items(r: Option<&Readings>, trends: &Trends, choice: &BarChoice) -> Vec<BarItem> {
+    let made: Vec<(Item, Draw, String)> = choice
+        .items
+        .iter()
+        .map(|&item| {
+            let (draw, tooltip, _) = part(item, r, trends);
+            (item, draw, tooltip)
+        })
+        .collect();
+    if choice.combined {
+        let lines: Vec<String> = std::iter::once("holdmap".to_string())
+            .chain(
+                made.iter()
+                    .filter(|(i, ..)| *i != Item::Icon)
+                    .map(|(_, _, t)| t.clone()),
+            )
+            .collect();
+        return vec![BarItem {
+            id: "combined",
+            parts: made.into_iter().map(|(_, d, _)| d).collect(),
+            tooltip: fit_lines(lines),
+            section: "top",
+        }];
     }
-    Some(parts.join(" · "))
+    made.into_iter()
+        .map(|(item, draw, tooltip)| BarItem {
+            id: item.id(),
+            parts: vec![draw],
+            tooltip: if item == Item::Icon {
+                tooltip
+            } else {
+                format!("holdmap · {tooltip}")
+            },
+            section: item.section(),
+        })
+        .collect()
+}
+
+/// The Linux panel label: the chosen readings as a sentence.
+fn label_text(r: Option<&Readings>, trends: &Trends, choice: &BarChoice) -> Option<String> {
+    let parts: Vec<String> = choice
+        .items
+        .iter()
+        .filter(|i| i.shown_on(Platform::Linux))
+        .filter_map(|&i| part(i, r, trends).2)
+        .collect();
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 /// The hover text, at most [`MAX_TOOLTIP_UNITS`] UTF-16 units (whole lines only).
@@ -805,25 +1013,20 @@ fn badge(r: Option<&Readings>) -> Badge {
 pub fn view(
     readings: Option<&Readings>,
     trends: &Trends,
-    style: Style,
+    choice: &BarChoice,
     platform: Platform,
 ) -> TrayView {
-    let bar = if platform.has_style() {
-        menu_bar(readings, trends, style)
-    } else {
-        MenuBar::default()
-    };
     TrayView {
-        items: panel(readings, trends, style, platform),
+        items: panel(readings, trends, choice, platform),
         title: if platform == Platform::Linux {
-            label_text(&bar)
+            label_text(readings, trends, choice)
         } else {
             None
         },
         bar: if platform == Platform::MacOs {
-            bar
+            bar_items(readings, trends, choice)
         } else {
-            MenuBar::default()
+            Vec::new()
         },
         tooltip: tooltip(readings, trends),
         badge: badge(readings),
@@ -889,11 +1092,26 @@ pub struct PanelData {
     /// The busiest agents first.
     pub top_agents: Vec<PanelAgent>,
     pub more_agents: usize,
-    pub style: &'static str,
+    /// Listeners opened and closed per scan, oldest first.
+    pub churn: Vec<[u32; 2]>,
+    /// The section to bring into view (the menu-bar item clicked), and a count that changes
+    /// with every click so the same section can be brought back.
+    pub focus: Option<&'static str>,
+    pub focus_seq: u64,
+    /// The panel stays open when it loses focus.
+    pub pinned: bool,
+}
+
+/// What the panel window adds to the data: the clicked item's section and the pin.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PanelState {
+    pub focus: Option<&'static str>,
+    pub focus_seq: u64,
+    pub pinned: bool,
 }
 
 /// The popup panel's data for `readings` (`None` before the first scan).
-pub fn panel_data(readings: Option<&Readings>, trends: &Trends, style: Style) -> PanelData {
+pub fn panel_data(readings: Option<&Readings>, trends: &Trends, state: PanelState) -> PanelData {
     let Some(r) = readings else {
         return PanelData {
             ready: false,
@@ -909,7 +1127,10 @@ pub fn panel_data(readings: Option<&Readings>, trends: &Trends, style: Style) ->
             stop_dev: false,
             top_agents: Vec::new(),
             more_agents: 0,
-            style: style.as_str(),
+            churn: Vec::new(),
+            focus: state.focus,
+            focus_seq: state.focus_seq,
+            pinned: state.pinned,
         };
     };
     let mut agents: Vec<&AgentRow> = r.agents.iter().flatten().collect();
@@ -965,7 +1186,10 @@ pub fn panel_data(readings: Option<&Readings>, trends: &Trends, style: Style) ->
                 action: format!("agent:{}", a.id),
             })
             .collect(),
-        style: style.as_str(),
+        churn: trends.churn.iter().copied().collect(),
+        focus: state.focus,
+        focus_seq: state.focus_seq,
+        pinned: state.pinned,
     }
 }
 
@@ -976,6 +1200,7 @@ mod tests {
     fn readings() -> Readings {
         Readings {
             ports: 12,
+            port_ids: vec!["tcp:3000".into(), "tcp:5173".into()],
             exposed: 2,
             dev: vec![
                 DevServer {
@@ -1053,7 +1278,12 @@ mod tests {
     #[test]
     fn the_panel_reads_like_a_monitor_and_every_row_has_an_action() {
         let trends = measured(&readings());
-        let v = view(Some(&readings()), &trends, Style::Count, Platform::MacOs);
+        let v = view(
+            Some(&readings()),
+            &trends,
+            &BarChoice::default(),
+            Platform::MacOs,
+        );
         assert_eq!(
             ids(&v.items),
             [
@@ -1070,10 +1300,15 @@ mod tests {
                 "agent:agent:42",
                 "show-panel",
                 "show",
-                "style",
-                "style:icon",
-                "style:count",
-                "style:trend",
+                "bar",
+                "item:icon",
+                "item:agents",
+                "item:needs",
+                "item:cpu",
+                "item:dev",
+                "item:cpu_history",
+                "item:agent_bars",
+                "combined",
                 "refresh",
                 "quit",
             ]
@@ -1116,90 +1351,163 @@ mod tests {
         );
         assert_eq!(Action::parse("focus:3000"), Some(Action::FocusPort(3000)));
         assert_eq!(
-            Action::parse("style:trend"),
-            Some(Action::Style(Style::Trend))
+            Action::parse("item:cpu_history"),
+            Some(Action::ToggleItem(Item::CpuHistory))
         );
-        assert_eq!(Action::parse("style:rainbow"), None);
+        assert_eq!(Action::parse("combined"), Some(Action::ToggleCombined));
+        assert_eq!(Action::parse("pin-panel"), Some(Action::PinPanel));
+        assert_eq!(Action::parse("item:rainbow"), None);
         assert_eq!(Action::parse("focus:99999"), None);
     }
 
     #[test]
-    fn styles_choose_the_readings_beside_the_icon() {
+    fn each_chosen_item_is_its_own_menu_bar_item_like_a_system_monitor_s() {
         let r = readings();
         let mut trends = Trends::default();
-        let bar = |trends: &Trends, style| view(Some(&r), trends, style, Platform::MacOs).bar;
-        let cells = |b: &MenuBar| -> Vec<String> {
-            b.readings
-                .iter()
-                .map(|m| format!("{} {}", m.label, m.value))
-                .collect()
+        let choice = |items: &[Item], combined| BarChoice {
+            items: items.to_vec(),
+            combined,
         };
-        assert_eq!(bar(&trends, Style::Icon), MenuBar::default());
-        // CPU waits for its first measurement; no chart without the Trend style.
+        let bar = |trends: &Trends, c: &BarChoice| view(Some(&r), trends, c, Platform::MacOs).bar;
+        let reading = |b: &BarItem| match &b.parts[..] {
+            [Draw::Reading { label, value, tone }] => format!("{label} {value} {tone:?}"),
+            other => format!("{other:?}"),
+        };
+        // Defaults: Agents and Needs you, one item each, each opening its own section.
+        let items = bar(&trends, &BarChoice::default());
         assert_eq!(
-            cells(&bar(&trends, Style::Count)),
-            ["AGENTS 1", "DEV 2", "NEEDS 2"]
+            items.iter().map(reading).collect::<Vec<_>>(),
+            ["AGENTS 1 Plain", "NEEDS 2 Critical"]
         );
-        trends.record(&r);
-        trends.record(&r);
         assert_eq!(
-            cells(&bar(&trends, Style::Count)),
-            ["AGENTS 1", "CPU 12%", "DEV 2", "NEEDS 2"]
+            items.iter().map(|b| (b.id, b.section)).collect::<Vec<_>>(),
+            [("agents", "agents"), ("needs", "needs")]
         );
-        assert!(bar(&trends, Style::Count).chart.is_empty());
-        // A chart needs two samples.
-        assert!(bar(&trends, Style::Trend).chart.is_empty());
+        assert_eq!(items[1].tooltip, "holdmap · 2 need you");
+        // CPU waits for its first measurement, then is coloured by load.
+        let cpu = choice(&[Item::Cpu], false);
+        assert_eq!(reading(&bar(&trends, &cpu)[0]), "CPU … Plain");
         trends.record(&r);
-        assert_eq!(bar(&trends, Style::Trend).chart, [12.4, 12.4]);
-        // macOS draws the readings; Linux shows them as a panel label; Windows has neither.
-        let mac = view(Some(&r), &trends, Style::Trend, Platform::MacOs);
-        assert_eq!(mac.title, None);
-        let linux = view(Some(&r), &trends, Style::Trend, Platform::Linux);
-        assert_eq!(linux.bar, MenuBar::default());
+        trends.record(&r);
+        assert_eq!(reading(&bar(&trends, &cpu)[0]), "CPU 12% Plain");
+        let mut busy = r.clone();
+        busy.agents.as_mut().unwrap()[0].cpu = 85.0;
+        assert_eq!(
+            reading(&view(Some(&busy), &trends, &cpu, Platform::MacOs).bar[0]),
+            "CPU 85% Critical"
+        );
+        // Charts: the CPU history and one bar per agent.
+        let charts = bar(
+            &trends,
+            &choice(&[Item::CpuHistory, Item::AgentBars], false),
+        );
+        assert_eq!(charts[0].parts, [Draw::Line(vec![12.4])]);
+        assert_eq!(charts[1].parts, [Draw::Bars(vec![12.4])]);
+        // As one item: every part side by side under one hover text.
+        let one = bar(
+            &trends,
+            &choice(&[Item::Icon, Item::Agents, Item::Dev], true),
+        );
+        assert_eq!(one.len(), 1);
+        assert_eq!((one[0].id, one[0].section), ("combined", "top"));
+        assert_eq!(one[0].parts.len(), 3);
+        assert_eq!(
+            one[0].tooltip,
+            "holdmap\n1 agent running\n2 dev servers running"
+        );
+        // Linux shows the readings as its label (a trend once there are two samples);
+        // Windows has neither.
+        trends.record(&r);
+        let all = choice(&Item::ALL, false);
+        let linux = view(Some(&r), &trends, &all, Platform::Linux);
+        assert!(linux.bar.is_empty());
         assert_eq!(
             linux.title.as_deref(),
-            Some("1 agent · CPU 12% · 2 dev · 2 need you · ██")
+            Some("1 agent · 2 need you · CPU 12% · 2 dev · ██")
         );
-        let windows = view(Some(&r), &trends, Style::Trend, Platform::Windows);
-        assert_eq!((windows.title, windows.bar), (None, MenuBar::default()));
-        // Nothing needs you: no NEEDS reading.
-        let quiet = Readings {
-            agents: Some(vec![]),
-            needs: Some(vec![]),
-            dev: vec![],
-            ..Readings::default()
-        };
-        assert_eq!(
-            cells(&view(Some(&quiet), &trends, Style::Count, Platform::MacOs).bar),
-            ["AGENTS 0", "CPU 0%", "DEV 0"]
-        );
+        let windows = view(Some(&r), &trends, &all, Platform::Windows);
+        assert_eq!((windows.title, windows.bar.len()), (None, 0));
         assert_eq!(bar_cpu(0.2), "<1%");
         assert_eq!(bar_cpu(0.0), "0%");
         assert_eq!(bar_cpu(7.4), "7%");
     }
 
     #[test]
-    fn the_style_menu_checks_the_current_style_and_is_absent_on_windows() {
+    fn before_the_first_scan_the_items_hold_their_places_with_dots() {
+        let v = view(
+            None,
+            &Trends::default(),
+            &BarChoice::default(),
+            Platform::MacOs,
+        );
+        assert_eq!(
+            v.bar.len(),
+            2,
+            "claimed at launch, filled by the first scan"
+        );
+        assert!(v.bar.iter().all(|b| matches!(
+            &b.parts[..],
+            [Draw::Reading { value, .. }] if value == "…"
+        )));
+    }
+
+    #[test]
+    fn the_menu_ticks_the_chosen_items_and_is_absent_on_windows() {
         let trends = Trends::default();
-        let v = view(Some(&readings()), &trends, Style::Trend, Platform::Linux);
-        let checked: Vec<&str> = flatten(&v.items)
-            .into_iter()
-            .filter_map(|i| match i {
-                TrayItem::Check {
-                    id, checked: true, ..
-                } => Some(id.as_str()),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(checked, ["style:trend"]);
-        assert_eq!(label_of(&v.items, "style"), "Panel shows");
-        let win = view(Some(&readings()), &trends, Style::Trend, Platform::Windows);
-        assert!(!ids(&win.items).iter().any(|id| id.starts_with("style")));
+        let checked = |v: &TrayView| -> Vec<String> {
+            flatten(&v.items)
+                .into_iter()
+                .filter_map(|i| match i {
+                    TrayItem::Check {
+                        id, checked: true, ..
+                    } => Some(id.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        let mac = view(
+            Some(&readings()),
+            &trends,
+            &BarChoice {
+                items: vec![Item::Agents, Item::CpuHistory],
+                combined: true,
+            },
+            Platform::MacOs,
+        );
+        assert_eq!(
+            checked(&mac),
+            ["item:agents", "item:cpu_history", "combined"]
+        );
+        assert_eq!(label_of(&mac.items, "bar"), "Menu bar shows");
+        // Linux: text items only, no "as one item" (it always has one indicator).
+        let linux = view(
+            Some(&readings()),
+            &trends,
+            &BarChoice::default(),
+            Platform::Linux,
+        );
+        assert_eq!(label_of(&linux.items, "bar"), "Panel shows");
+        let linux_ids = ids(&linux.items);
+        assert!(!linux_ids.contains(&"item:icon".to_string()));
+        assert!(!linux_ids.contains(&"item:agent_bars".to_string()));
+        assert!(!linux_ids.contains(&"combined".to_string()));
+        let win = view(
+            Some(&readings()),
+            &trends,
+            &BarChoice::default(),
+            Platform::Windows,
+        );
+        assert!(!ids(&win.items).iter().any(|id| id.starts_with("item:")));
     }
 
     #[test]
     fn before_the_first_scan_it_says_so_and_still_offers_the_controls() {
-        let v = view(None, &Trends::default(), Style::Count, Platform::MacOs);
+        let v = view(
+            None,
+            &Trends::default(),
+            &BarChoice::default(),
+            Platform::MacOs,
+        );
         assert_eq!(label_of(&v.items, "reading-ports"), "Scanning…");
         assert_eq!(v.title, None);
         assert_eq!(v.tooltip, "holdmap");
@@ -1214,21 +1522,37 @@ mod tests {
             needs: None,
             ..readings()
         };
-        let v = view(Some(&r), &Trends::default(), Style::Count, Platform::MacOs);
+        let v = view(
+            Some(&r),
+            &Trends::default(),
+            &BarChoice::default(),
+            Platform::MacOs,
+        );
         let ids = ids(&v.items);
         assert!(!ids.contains(&"reading-agents".to_string()));
         assert!(!ids.contains(&"needs".to_string()));
-        let labels: Vec<&str> = v.bar.readings.iter().map(|m| m.label).collect();
-        assert_eq!(labels, ["DEV"]);
+        // Unknown agents and needs read "…", never 0.
+        assert!(v.bar.iter().all(|b| matches!(
+            &b.parts[..],
+            [Draw::Reading { value, .. }] if value == "…"
+        )));
         assert_eq!(
-            view(Some(&r), &Trends::default(), Style::Count, Platform::Linux)
-                .title
-                .as_deref(),
+            view(
+                Some(&r),
+                &Trends::default(),
+                &BarChoice {
+                    items: vec![Item::Agents, Item::Dev],
+                    combined: false
+                },
+                Platform::Linux
+            )
+            .title
+            .as_deref(),
             Some("2 dev")
         );
         assert_eq!(v.tooltip, "holdmap\n2 dev servers · 12 ports in use");
         assert_eq!(v.badge, Badge::default());
-        let data = panel_data(Some(&r), &Trends::default(), Style::Count);
+        let data = panel_data(Some(&r), &Trends::default(), PanelState::default());
         assert_eq!((data.agents, data.cpu, data.memory), (None, None, None));
         assert!(data.needs.is_none());
     }
@@ -1238,7 +1562,7 @@ mod tests {
         let v = view(
             Some(&readings()),
             &Trends::default(),
-            Style::Icon,
+            &BarChoice::default(),
             Platform::Windows,
         );
         assert_eq!(
@@ -1255,7 +1579,7 @@ mod tests {
         let measured = view(
             Some(&readings()),
             &measured(&readings()),
-            Style::Icon,
+            &BarChoice::default(),
             Platform::Windows,
         );
         assert_eq!(
@@ -1269,7 +1593,7 @@ mod tests {
         let r = readings();
         let mut trends = Trends::default();
         trends.record(&r);
-        let primed = view(Some(&r), &trends, Style::Trend, Platform::MacOs);
+        let primed = view(Some(&r), &trends, &BarChoice::default(), Platform::MacOs);
         assert_eq!(
             label_of(&primed.items, "reading-agents"),
             "1 agent · 300.0 MB"
@@ -1288,14 +1612,24 @@ mod tests {
             memory: 1024 * 1024,
         });
         trends.record(&later);
-        let v = view(Some(&later), &trends, Style::Count, Platform::MacOs);
+        let v = view(
+            Some(&later),
+            &trends,
+            &BarChoice::default(),
+            Platform::MacOs,
+        );
         assert_eq!(
             label_of(&v.items, "agent:agent:42"),
             "Claude Code · holdmap   12% · 300.0 MB"
         );
         assert_eq!(label_of(&v.items, "agent:agent:7"), "Codex CLI · 1.0 MB");
         trends.record(&later);
-        let v = view(Some(&later), &trends, Style::Count, Platform::MacOs);
+        let v = view(
+            Some(&later),
+            &trends,
+            &BarChoice::default(),
+            Platform::MacOs,
+        );
         assert_eq!(
             label_of(&v.items, "agent:agent:7"),
             "Codex CLI   0.0% · 1.0 MB"
@@ -1313,7 +1647,12 @@ mod tests {
                 exposed: false,
             })
             .collect();
-        let v = view(Some(&r), &Trends::default(), Style::Count, Platform::MacOs);
+        let v = view(
+            Some(&r),
+            &Trends::default(),
+            &BarChoice::default(),
+            Platform::MacOs,
+        );
         let ids = ids(&v.items);
         assert_eq!(ids.iter().filter(|i| i.starts_with("focus:")).count(), 10);
         assert!(ids.contains(&"more-dev".to_string()));
@@ -1331,7 +1670,12 @@ mod tests {
     fn labels_keep_a_literal_ampersand_and_drop_control_characters() {
         let mut r = readings();
         r.dev[0].label = "R&D\u{1b}[31m api".into();
-        let v = view(Some(&r), &Trends::default(), Style::Count, Platform::MacOs);
+        let v = view(
+            Some(&r),
+            &Trends::default(),
+            &BarChoice::default(),
+            Platform::MacOs,
+        );
         let label = label_of(&v.items, "focus:3000");
         assert!(label.starts_with("● :3000   R&&D"), "{label}");
         assert!(!label.contains('\u{1b}'), "{label}");
@@ -1379,15 +1723,15 @@ mod tests {
             memory: 1024,
         }));
         let mut trends = Trends::default();
-        assert!(!panel_data(None, &trends, Style::Count).ready);
+        assert!(!panel_data(None, &trends, PanelState::default()).ready);
         trends.record(&r);
         let mut quiet = r.clone();
         quiet.needs = Some(vec![]);
         trends.record(&quiet);
-        let data = panel_data(Some(&r), &trends, Style::Trend);
+        let data = panel_data(Some(&r), &trends, PanelState::default());
         assert!(data.ready);
         assert_eq!((data.ports, data.exposed, data.agents), (12, 2, Some(7)));
-        assert_eq!(data.style, "trend");
+        assert_eq!(data.focus, None);
         // Busiest first, five rows, and each opens its agent.
         let names: Vec<&str> = data.top_agents.iter().map(|a| a.name.as_str()).collect();
         assert_eq!(
@@ -1434,14 +1778,19 @@ mod tests {
         let a = view(
             Some(&readings()),
             &Trends::default(),
-            Style::Count,
+            &BarChoice::default(),
             Platform::MacOs,
         );
         let trends = measured(&readings());
         let mut busier = readings();
         busier.ports = 13;
         busier.agents.as_mut().unwrap()[0].cpu = 80.0;
-        let b = view(Some(&busier), &trends, Style::Trend, Platform::MacOs);
+        let b = view(
+            Some(&busier),
+            &trends,
+            &BarChoice::default(),
+            Platform::MacOs,
+        );
         assert_ne!(a.items, b.items);
         assert!(same_rows(&a.items, &b.items));
         // A new dev server is a new row.
@@ -1452,7 +1801,7 @@ mod tests {
             stoppable: true,
             exposed: false,
         });
-        let c = view(Some(&more), &trends, Style::Count, Platform::MacOs);
+        let c = view(Some(&more), &trends, &BarChoice::default(), Platform::MacOs);
         assert!(!same_rows(&a.items, &c.items));
     }
 
@@ -1477,6 +1826,7 @@ mod tests {
             r,
             Readings {
                 ports: 1,
+                port_ids: vec!["tcp:3000".into()],
                 exposed: 1,
                 dev: vec![DevServer {
                     port: 3000,

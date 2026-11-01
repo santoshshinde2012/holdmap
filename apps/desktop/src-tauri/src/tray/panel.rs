@@ -4,7 +4,8 @@
 //! the tray menu also offers); `local_window::guard` enforces both the window and the commands.
 //! Nothing is stopped from here: "Stop all dev servers…" opens the window's reviewed plan.
 
-use super::model::{Action, PanelData};
+use super::model::{Action, PanelData, PanelState};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{
@@ -25,6 +26,31 @@ const REOPEN_GRACE: Duration = Duration::from_millis(350);
 /// Where the tray icon was last clicked (Linux trays don't say).
 static ANCHOR: Mutex<Option<Rect>> = Mutex::new(None);
 static HIDDEN_AT: Mutex<Option<Instant>> = Mutex::new(None);
+/// The section the last clicked item opens, and a count of clicks so the page can bring the
+/// same section back.
+static FOCUS: Mutex<(Option<&'static str>, u64)> = Mutex::new((None, 0));
+/// The panel stays open when it loses focus.
+static PINNED: AtomicBool = AtomicBool::new(false);
+
+/// What the panel page adds to the tray's data.
+pub fn state() -> PanelState {
+    let (focus, focus_seq) = *FOCUS.lock().unwrap_or_else(|e| e.into_inner());
+    PanelState {
+        focus,
+        focus_seq,
+        pinned: PINNED.load(Ordering::Relaxed),
+    }
+}
+
+/// Keep the panel open when it loses focus, or let it close again.
+pub fn toggle_pin() {
+    PINNED.fetch_xor(true, Ordering::Relaxed);
+}
+
+fn focus_on(section: &'static str) {
+    let mut focus = FOCUS.lock().unwrap_or_else(|e| e.into_inner());
+    *focus = (Some(section), focus.1 + 1);
+}
 
 fn hidden_just_now() -> bool {
     HIDDEN_AT
@@ -33,12 +59,17 @@ fn hidden_just_now() -> bool {
         .is_some_and(|at| at.elapsed() < REOPEN_GRACE)
 }
 
-/// Show the panel under the icon at `anchor` (or where it was last), or hide it if it's open.
+/// Show the panel under the item at `anchor` (or where it was last), at `section`, or hide it if
+/// it's open on that section already (another item's click moves it to that item's section).
 /// Blocking: call it off the main thread, since creating a window from an event handler can
 /// deadlock on Windows.
-pub fn toggle(app: &AppHandle, anchor: Option<Rect>) {
+pub fn toggle(app: &AppHandle, anchor: Option<Rect>, section: Option<&'static str>) {
     if anchor.is_some() {
         *ANCHOR.lock().unwrap_or_else(|e| e.into_inner()) = anchor;
+    }
+    let moved = section.is_some_and(|s| state().focus != Some(s));
+    if let Some(section) = section {
+        focus_on(section);
     }
     let window = match app.get_webview_window(LABEL) {
         Some(window) => window,
@@ -51,7 +82,11 @@ pub fn toggle(app: &AppHandle, anchor: Option<Rect>) {
         },
     };
     if window.is_visible().unwrap_or(false) {
-        let _ = window.hide();
+        if moved {
+            place(app, &window);
+        } else {
+            let _ = window.hide();
+        }
         return;
     }
     if anchor.is_some() && hidden_just_now() {
@@ -97,6 +132,10 @@ fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let handle = window.clone();
     window.on_window_event(move |event| {
         if let WindowEvent::Focused(false) = event {
+            // Pinned: it stays open until unpinned or closed.
+            if PINNED.load(Ordering::Relaxed) {
+                return;
+            }
             *HIDDEN_AT.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
             let _ = handle.hide();
         }
@@ -226,7 +265,11 @@ pub async fn tray_panel(app: AppHandle) -> PanelData {
 #[tauri::command]
 pub async fn tray_action(app: AppHandle, id: String) -> Result<(), String> {
     let action = Action::parse(&id).ok_or("Unknown tray action")?;
-    if !matches!(action, Action::Style(_) | Action::Refresh) {
+    // Rows that lead somewhere close the panel; its own controls keep it open.
+    if !matches!(
+        action,
+        Action::Refresh | Action::PinPanel | Action::ToggleItem(_) | Action::ToggleCombined
+    ) {
         hide(&app);
     }
     super::run(&app, action);

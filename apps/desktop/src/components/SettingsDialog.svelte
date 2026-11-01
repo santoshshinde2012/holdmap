@@ -20,8 +20,8 @@
   import type { Density } from "../lib/rows";
   import type { DesktopHelpDestination } from "../lib/types";
   import AnalyzersPanel from "./analyzers/AnalyzersPanel.svelte";
-  import { SETTINGS_SECTIONS, THEME_ICON, TRAY_STYLE_OPTIONS, architectureLabel, cadenceText, trayWidgetName, type SettingsActions, type SettingsModel, type SettingsSection, type Theme } from "../lib/settings";
-  import type { TrayStyle } from "../lib/types";
+  import { SETTINGS_SECTIONS, THEME_ICON, architectureLabel, cadenceText, nextTrayItems, trayItemOptions, trayWidgetName, type SettingsActions, type SettingsModel, type SettingsSection, type Theme } from "../lib/settings";
+  import type { TrayItemId } from "../lib/types";
 
   let { model, actions, onclose, section = $bindable("general") }: { model: SettingsModel; actions: SettingsActions; onclose: () => void; section?: SettingsSection } = $props();
 
@@ -36,8 +36,12 @@
   let agentSettings = $state(untrack(() => !!model.agentSettings));
   let notifyDevOnly = $state(untrack(() => model.config.notify_dev_only));
   let hotkey = $state(untrack(() => model.config.hotkey ?? "alt-p"));
-  let trayStyle = $state<TrayStyle>(untrack(() => model.config.tray_style ?? "count"));
-  const trayName = $derived(actions.setTrayStyle ? trayWidgetName(model.platform, model.tray) : null);
+  const DEFAULT_ITEMS: TrayItemId[] = ["agents", "needs"];
+  let trayItems = $state<TrayItemId[]>(untrack(() => model.config.tray_items ?? DEFAULT_ITEMS));
+  let trayCombined = $state(untrack(() => !!model.config.tray_combined));
+  let showInDock = $state(untrack(() => model.config.show_in_dock ?? true));
+  const trayName = $derived(actions.setTrayItems ? trayWidgetName(model.platform, model.tray) : null);
+  const dockSetting = $derived(!!actions.setShowInDock && (model.platform === "macos" || model.platform === "browser"));
   let confirmClear = $state(false);
   let navEls: HTMLButtonElement[] = $state([]);
   let t: ReturnType<typeof setTimeout> | undefined;
@@ -93,14 +97,16 @@
     if (key === "singleKeyShortcuts") singleKeyShortcuts = model.singleKeyShortcuts;
     if (key === "notify") { notify = model.config.notify; notifyDevOnly = model.config.notify_dev_only; }
     if (key === "hotkey") hotkey = model.config.hotkey ?? "alt-p";
-    if (key === "trayStyle") trayStyle = model.config.tray_style ?? "count";
+    if (key === "trayItems") trayItems = model.config.tray_items ?? DEFAULT_ITEMS;
+    if (key === "trayCombined") trayCombined = !!model.config.tray_combined;
+    if (key === "showInDock") showInDock = model.config.show_in_dock ?? true;
     if (key === "theme") theme = model.theme;
     if (key === "density") density = model.density;
   }
   // Controls may show an optimistic value while saving, then follow the value that
   // actually persisted. A rejected write must restore the previous model value.
   $effect(() => {
-    for (const key of ["autostart", "singleKeyShortcuts", "notify", "hotkey", "trayStyle", "theme", "density"]) if (!busy[key]) followModel(key);
+    for (const key of ["autostart", "singleKeyShortcuts", "notify", "hotkey", "trayItems", "trayCombined", "showInDock", "theme", "density"]) if (!busy[key]) followModel(key);
   });
 </script>
 
@@ -122,8 +128,16 @@
               <Switch labelledby={labelId} describedby={descId} bind:checked={autostart} busy={busy.autostart} onchange={(v) => save("autostart", () => actions.setAutostart(v), v ? "holdmap will start at login" : "Launch at login off")} />
             {/snippet}
           </SettingRow>
+          {#if dockSetting}
+            <SettingRow label="Show in the Dock" description="Off runs holdmap from the menu bar only: no Dock icon or app menus. The window still opens from its panel.">
+              {#snippet children({ labelId, descId })}
+                <Switch labelledby={labelId} describedby={descId} bind:checked={showInDock} busy={busy.showInDock} onchange={(v) => save("showInDock", () => actions.setShowInDock?.(v), v ? "holdmap shows in the Dock" : "holdmap runs from the menu bar")} />
+              {/snippet}
+            </SettingRow>
+          {/if}
         </SettingsGroup>
         {#if errors.autostart}<div class="err"><Callout tone="danger" size="sm">{errors.autostart}</Callout></div>{/if}
+        {#if errors.showInDock}<div class="err"><Callout tone="danger" size="sm">{errors.showInDock}</Callout></div>{/if}
         <SettingsGroup title="Global shortcut" description="Bring holdmap to the front from any app.">
           <SettingRow label="Show holdmap" description={model.shortcut ? `Currently ${model.shortcut}.` : "No global shortcut is active."}>
             {#snippet children()}
@@ -158,21 +172,28 @@
         </SettingsGroup>
         {#if errors.theme || errors.density}<div class="err"><Callout tone="danger" size="sm">{errors.theme ?? errors.density}</Callout></div>{/if}
         {#if trayName}
-          <SettingsGroup title={trayName} description={model.platform === "linux" ? "holdmap's icon carries a badge when something needs you. Its menu opens a panel with live readings, history, what needs you, dev servers and agents." : "holdmap's icon carries a badge when something needs you. Click it for a panel with live readings, history, what needs you, dev servers and agents."}>
-            <SettingRow label="Beside the icon" description={model.platform === "linux" ? "Agents, their CPU, dev servers and what needs you, as a panel label where your desktop shows one." : "Agents, their CPU, dev servers and what needs you, each a small label over its value."}>
-              {#snippet children()}
-                <Select labelHidden label="Beside the icon" width="250px" bind:value={trayStyle} disabled={busy.trayStyle} options={TRAY_STYLE_OPTIONS} onchange={(v) => save("trayStyle", () => actions.setTrayStyle?.(v))} />
-              {/snippet}
-            </SettingRow>
+          <SettingsGroup title={trayName} description={model.platform === "linux" ? "The readings you pick show as holdmap's panel label, where your desktop shows one. Its menu opens a panel with live readings, history, what needs you, dev servers and agents." : "Each reading you pick is a small menu-bar item of its own, as system monitors show them. Click one for a panel with live readings, history, what needs you, dev servers and agents."}>
+            <div class="row-in items" role="group" aria-label={`${trayName} shows`}>
+              {#each trayItemOptions(model.platform) as option (option.value)}
+                <Checkbox label={option.label} description={option.description} checked={trayItems.includes(option.value)} disabled={busy.trayItems} onchange={(v) => { trayItems = nextTrayItems(trayItems, option.value, v); save("trayItems", () => actions.setTrayItems?.(trayItems)); }} />
+              {/each}
+            </div>
+            {#if model.platform !== "linux"}
+              <SettingRow label="As one item" description="All the readings you pick, side by side in one menu-bar item.">
+                {#snippet children({ labelId, descId })}
+                  <Switch labelledby={labelId} describedby={descId} bind:checked={trayCombined} busy={busy.trayCombined} onchange={(v) => save("trayCombined", () => actions.setTrayCombined?.(v))} />
+                {/snippet}
+              </SettingRow>
+            {/if}
           </SettingsGroup>
           {#if model.trayOnScreen === false}
             <div class="err">
-              <Callout tone="warn" size="sm" title="macOS is hiding holdmap's menu-bar item">
-                The menu bar is full, so macOS puts new items behind the app menus{model.platform === "macos" ? " and the camera notch" : ""}. Hold <Kbd keys={["⌘"]} size="sm" /> and drag a few icons out of the menu bar; holdmap appears, and you can <Kbd keys={["⌘"]} size="sm" />-drag it where you want it. holdmap keeps that place.
+              <Callout tone="warn" size="sm" title="macOS is hiding {model.trayHidden?.length ? model.trayHidden.join(', ') : 'holdmap'} in the menu bar">
+                The menu bar is full, so macOS puts new items behind the app menus{model.platform === "macos" ? " and the camera notch" : ""}. Hold <Kbd keys={["⌘"]} size="sm" /> and drag a few icons out of the menu bar, or pick fewer readings here; then <Kbd keys={["⌘"]} size="sm" />-drag holdmap's items where you want them. holdmap keeps those places.
               </Callout>
             </div>
           {/if}
-          {#if errors.trayStyle}<div class="err"><Callout tone="danger" size="sm">{errors.trayStyle}</Callout></div>{/if}
+          {#if errors.trayItems || errors.trayCombined}<div class="err"><Callout tone="danger" size="sm">{errors.trayItems ?? errors.trayCombined}</Callout></div>{/if}
         {/if}
         {#if model.singleKeyShortcuts}<p class="tip"><Kbd keys={["⇧", "L"]} size="sm" /> cycles the theme while you aren't typing.</p>{/if}
       {:else if section === "notifications"}
