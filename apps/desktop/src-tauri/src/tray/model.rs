@@ -789,6 +789,7 @@ pub enum Draw {
 
 impl Draw {
     /// Whether it needs colour (otherwise it's drawn as a template that follows the menu bar).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub fn coloured(&self) -> bool {
         match self {
             Draw::Icon(badge) => badge.count > 0,

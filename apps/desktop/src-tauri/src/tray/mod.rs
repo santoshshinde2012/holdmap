@@ -85,6 +85,7 @@ struct Widget {
     /// The menu-bar items (macOS), in the order shown.
     slots: Vec<Slot>,
     /// The menu bar is dark (macOS), as last read from it.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     dark: bool,
 }
 
