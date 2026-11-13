@@ -16,6 +16,7 @@ import type { SkillTrustView, TrustState } from "../trust";
 import type { AgentCapabilities, AgentMcpServer, AgentsReport, AgentSkill, AgentTool, Evidence, PortEntry } from "../types";
 import type { ActivitySnapshot, RecordingStatus } from "../agent-flow/model";
 import { callParts } from "./calls";
+import { plural } from "../plural";
 
 function memoryFacts(report: AgentsReport | null | undefined, id: string): [string, string][] {
   const memory = memoryFor(report, id);
@@ -103,8 +104,6 @@ export interface SceneInput {
   activity?: ActivitySnapshot | null;
   recording?: RecordingStatus | null;
 }
-
-const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 const pct = (n: number) => `${n < 10 ? n.toFixed(1) : Math.round(n)}%`;
 
 function part(p: Omit<Part, "cpu" | "memory" | "count" | "warn" | "live" | "facts"> & Partial<Pick<Part, "cpu" | "memory" | "count" | "warn" | "live" | "facts">>): Part {

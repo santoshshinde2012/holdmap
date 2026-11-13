@@ -1,0 +1,387 @@
+[
+  {
+    "combine": "merge",
+    "kind": "skills",
+    "product": "cursor",
+    "relative": ".cursor/skills",
+    "scope": "user"
+  },
+  {
+    "combine": "merge",
+    "kind": "skills",
+    "product": "cursor",
+    "relative": ".agents/skills",
+    "scope": "user"
+  },
+  {
+    "combine": "merge",
+    "kind": "skills",
+    "product": "cursor",
+    "relative": ".claude/skills",
+    "scope": "user"
+  },
+  {
+    "combine": "merge",
+    "kind": "skills",
+    "product": "cursor",
+    "relative": ".codex/skills",
+    "scope": "user"
+  },
+  {
+    "combine": "merge",
+    "kind": "mcp_config",
+    "product": "cursor",
+    "relative": ".cursor/mcp.json",
+    "scope": "user"
+  },
+  {
+    "combine": "override",
+    "kind": "settings",
+    "product": "cursor",
+    "relative": ".cursor/cli-config.json",
+    "scope": "user"
+  },
+  {
+    "combine": "merge",
+    "kind": "commands",
+    "product": "cursor",
+    "relative": ".cursor/commands",
+    "scope": "user"
+  },
+  {
+    "combine": "merge",
+    "kind": "subagents",
+    "product": "cursor",
+    "relative": ".cursor/agents",
+    "scope": "user"
+  },
+  {
+    "combine": "join",
+    "kind": "hooks",
+    "product": "cursor",
+    "relative": ".cursor/hooks.json",
+    "scope": "user"
+  },
+  {
+    "combine": "merge",
+    "kind": "skills",
+    "product": "cursor",
+    "relative": ".cursor/skills",
+    "scope": "project"
+  },
+  {
+    "combine": "merge",
+    "kind": "skills",
+    "product": "cursor",
+    "relative": ".agents/skills",
+    "scope": "project"
+  },
+  {
+    "combine": "merge",
+    "kind": "skills",
+    "product": "cursor",
+    "relative": ".claude/skills",
+    "scope": "project"
+  },
+  {
+    "combine": "merge",
+    "kind": "skills",
+    "product": "cursor",
+    "relative": ".codex/skills",
+    "scope": "project"
+  },
+  {
+    "combine": "merge",
+    "kind": "mcp_config",
+    "product": "cursor",
+    "relative": ".cursor/mcp.json",
+    "scope": "project"
+  },
+  {
+    "combine": "join",
+    "kind": "instructions",
+    "product": "cursor",
+    "relative": "AGENTS.md",
+    "scope": "project"
+  },
+  {
+    "combine": "join",
+    "kind": "rules",
+    "product": "cursor",
+    "relative": ".cursor/rules",
+    "scope": "project"
+  },
+  {
+    "combine": "join",
+    "kind": "instructions",
+    "product": "cursor",
+    "relative": ".cursorrules",
+    "scope": "project"
+  },
+  {
+    "combine": "merge",
+    "kind": "commands",
+    "product": "cursor",
+    "relative": ".cursor/commands",
+    "scope": "project"
+  },
+  {
+    "combine": "merge",
+    "kind": "subagents",
+    "product": "cursor",
+    "relative": ".cursor/agents",
+    "scope": "project"
+  },
+  {
+    "combine": "join",
+    "kind": "hooks",
+    "product": "cursor",
+    "relative": ".cursor/hooks.json",
+    "scope": "project"
+  },
+  {
+    "combine": "join",
+    "kind": "rules",
+    "product": "cursor",
+    "relative": "",
+    "scope": "account"
+  },
+  {
+    "combine": "join",
+    "kind": "hooks",
+    "product": "cursor",
+    "relative": "/Library/Application Support/Cursor/hooks.json",
+    "scope": "managed"
+  },
+  {
+    "combine": "merge",
+    "kind": "skills",
+    "product": "claude-code",
+    "relative": "skills",
+    "scope": "user"
+  },
+  {
+    "combine": "merge",
+    "kind": "mcp_config",
+    "product": "claude-code",
+    "relative": ".claude.json",
+    "scope": "user"
+  },
+  {
+    "combine": "join",
+    "kind": "instructions",
+    "product": "claude-code",
+    "relative": "CLAUDE.md",
+    "scope": "user"
+  },
+  {
+    "combine": "join",
+    "kind": "rules",
+    "product": "claude-code",
+    "relative": "rules",
+    "scope": "user"
+  },
+  {
+    "combine": "override",
+    "kind": "settings",
+    "product": "claude-code",
+    "relative": "settings.json",
+    "scope": "user"
+  },
+  {
+    "combine": "merge",
+    "kind": "commands",
+    "product": "claude-code",
+    "relative": "commands",
+    "scope": "user"
+  },
+  {
+    "combine": "merge",
+    "kind": "subagents",
+    "product": "claude-code",
+    "relative": "agents",
+    "scope": "user"
+  },
+  {
+    "combine": "join",
+    "kind": "instructions",
+    "product": "claude-code",
+    "relative": "output-styles",
+    "scope": "user"
+  },
+  {
+    "combine": "merge",
+    "kind": "extensions",
+    "product": "claude-code",
+    "relative": "plugins",
+    "scope": "user"
+  },
+  {
+    "combine": "join",
+    "kind": "agent_memory",
+    "product": "claude-code",
+    "relative": "projects/{project}/memory",
+    "scope": "user"
+  },
+  {
+    "combine": "join",
+    "kind": "agent_memory",
+    "product": "claude-code",
+    "relative": "agent-memory",
+    "scope": "user"
+  },
+  {
+    "combine": "not_config",
+    "kind": "session_data",
+    "product": "claude-code",
+    "relative": "projects",
+    "scope": "user"
+  },
+  {
+    "combine": "not_config",
+    "kind": "session_data",
+    "product": "claude-code",
+    "relative": "history.jsonl",
+    "scope": "user"
+  },
+  {
+    "combine": "not_config",
+    "kind": "session_data",
+    "product": "claude-code",
+    "relative": "file-history",
+    "scope": "user"
+  },
+  {
+    "combine": "not_config",
+    "kind": "session_data",
+    "product": "claude-code",
+    "relative": "paste-cache",
+    "scope": "user"
+  },
+  {
+    "combine": "not_config",
+    "kind": "session_data",
+    "product": "claude-code",
+    "relative": "plans",
+    "scope": "user"
+  },
+  {
+    "combine": "not_config",
+    "kind": "secret_store",
+    "product": "claude-code",
+    "relative": ".credentials.json",
+    "scope": "user"
+  },
+  {
+    "combine": "override",
+    "kind": "settings",
+    "product": "claude-code",
+    "relative": "remote-settings.json",
+    "scope": "managed"
+  },
+  {
+    "combine": "merge",
+    "kind": "skills",
+    "product": "claude-code",
+    "relative": ".claude/skills",
+    "scope": "project"
+  },
+  {
+    "combine": "merge",
+    "kind": "mcp_config",
+    "product": "claude-code",
+    "relative": ".mcp.json",
+    "scope": "project"
+  },
+  {
+    "combine": "join",
+    "kind": "instructions",
+    "product": "claude-code",
+    "relative": "CLAUDE.md",
+    "scope": "project"
+  },
+  {
+    "combine": "join",
+    "kind": "instructions",
+    "product": "claude-code",
+    "relative": ".claude/CLAUDE.md",
+    "scope": "project"
+  },
+  {
+    "combine": "join",
+    "kind": "instructions",
+    "product": "claude-code",
+    "relative": "CLAUDE.local.md",
+    "scope": "local"
+  },
+  {
+    "combine": "join",
+    "kind": "instructions",
+    "product": "claude-code",
+    "relative": "AGENTS.md",
+    "scope": "project"
+  },
+  {
+    "combine": "join",
+    "kind": "rules",
+    "product": "claude-code",
+    "relative": ".claude/rules",
+    "scope": "project"
+  },
+  {
+    "combine": "override",
+    "kind": "settings",
+    "product": "claude-code",
+    "relative": ".claude/settings.json",
+    "scope": "project"
+  },
+  {
+    "combine": "override",
+    "kind": "settings",
+    "product": "claude-code",
+    "relative": ".claude/settings.local.json",
+    "scope": "local"
+  },
+  {
+    "combine": "merge",
+    "kind": "commands",
+    "product": "claude-code",
+    "relative": ".claude/commands",
+    "scope": "project"
+  },
+  {
+    "combine": "merge",
+    "kind": "subagents",
+    "product": "claude-code",
+    "relative": ".claude/agents",
+    "scope": "project"
+  },
+  {
+    "combine": "join",
+    "kind": "instructions",
+    "product": "claude-code",
+    "relative": ".claude/output-styles",
+    "scope": "project"
+  },
+  {
+    "combine": "join",
+    "kind": "agent_memory",
+    "product": "claude-code",
+    "relative": ".claude/agent-memory",
+    "scope": "project"
+  },
+  {
+    "combine": "override",
+    "kind": "settings",
+    "product": "claude-code",
+    "relative": "/Library/Application Support/ClaudeCode/managed-settings.json",
+    "scope": "managed"
+  },
+  {
+    "combine": "join",
+    "kind": "instructions",
+    "product": "claude-code",
+    "relative": "/Library/Application Support/ClaudeCode/CLAUDE.md",
+    "scope": "managed"
+  }
+]

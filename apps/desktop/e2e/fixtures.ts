@@ -19,6 +19,11 @@ export const test = base.extend<{ app: Page }>({
 
 export { expect };
 
+/** The agent chip a narrow window shows instead of cards. */
+export function agentChip(page: Page, name: string): Locator {
+  return page.getByRole("group", { name: "Choose an agent" }).getByRole("button", { name, exact: true });
+}
+
 export async function openAgents(page: Page): Promise<Locator> {
   const tab = page.getByRole("radio", { name: /^Agents/ });
   await tab.click();
@@ -29,6 +34,9 @@ export async function openAgents(page: Page): Promise<Locator> {
 
 export async function openAgentsPicture(page: Page, picture: "Computer" | "Footprint"): Promise<Locator> {
   const search = await openAgents(page);
+  // Below 640px the map sits behind the Map chip.
+  const mapChip = page.getByRole("group", { name: "Choose an agent" }).getByRole("button", { name: "Map", exact: true });
+  if (await mapChip.isVisible() && (await mapChip.getAttribute("aria-pressed")) !== "true") await mapChip.click();
   const radio = page.getByRole("radio", { name: picture, exact: true });
   await radio.click();
   await expect(radio).toHaveAttribute("aria-checked", "true");

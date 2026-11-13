@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, openAgentsPicture, test } from "./fixtures";
+import { agentChip, expect, openAgents, openAgentsPicture, test } from "./fixtures";
 
 // 390 × 844 regressions: layered graph direction, peer chrome, map controls and minimap,
 // and detail tabs. Every check also asserts there is no horizontal scroll.
@@ -79,6 +79,23 @@ for (const theme of ["light", "dark"] as const) {
       }
       const axe = await new AxeBuilder({ page: app }).include("[role=dialog]").analyze();
       expect(axe.violations.map((v) => v.id)).toEqual([]);
+      await noHorizontalScroll(app);
+    });
+
+    test("agents: chips above a full-height inspector, the map behind a toggle", async ({ app }) => {
+      await openAgents(app);
+      const map = app.locator("#agents-overview .map");
+      await expect(map).toBeHidden();
+      await agentChip(app, "Cursor").click();
+      const details = app.getByRole("complementary", { name: "Agent details", exact: true });
+      await expect(details).toBeVisible();
+      const box = (await details.boundingBox())!;
+      // The inspector gets most of the window instead of a bottom sheet over the map.
+      expect(box.height).toBeGreaterThan(844 * 0.5);
+      await expect(app.getByRole("article", { name: "Cursor", exact: true })).toBeHidden();
+      await agentChip(app, "Map").click();
+      await expect(details).toBeHidden();
+      await expect(map).toBeVisible();
       await noHorizontalScroll(app);
     });
 

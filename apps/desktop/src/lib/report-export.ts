@@ -8,6 +8,7 @@ import type { AttentionItem, Overview } from "./home";
 import type { FindingItem, SecuritySummary } from "./security-view";
 import type { Agent, AgentsReport } from "./types";
 import { saveRecording } from "./screen-record-save";
+import { plural } from "./plural";
 
 export const REPORT_SCHEMA = "holdmap-report/1";
 const INFO_URI = "https://github.com/santoshshinde2012/holdmap";
@@ -20,7 +21,6 @@ export function redactHome(path: string): string {
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 /** A local calendar date, for dates the user picked (snooze ends). */
 const localDay = (ms: number) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const num = (n: number | null) => (n === null ? "unknown" : String(n));
 const sevWord = (s: string) => s[0].toUpperCase() + s.slice(1);
 /** One line, no markdown or control characters that could break a pasted list. */

@@ -222,3 +222,41 @@ fn readable_rows_are_a_subset_with_a_reader() {
         }
     }
 }
+
+/// The browser demo's sample locations (apps/desktop/src/lib/mock-places.ts) are checked
+/// against this generated list, so the demo cannot drift from the registry.
+/// Regenerate with `HOLDMAP_UPDATE_FIXTURES=1 cargo test -p holdmap-core demo_location_fixture`.
+fn demo_location_fixture() -> String {
+    let mut rows = Vec::new();
+    for product in ["cursor", "claude-code"] {
+        for spec in specs(product, "macos") {
+            rows.push(serde_json::json!({
+                "product": product,
+                "kind": spec.kind,
+                "scope": spec.scope,
+                "combine": Combine::for_kind(spec.kind),
+                "relative": spec.relative,
+            }));
+        }
+    }
+    let mut text = serde_json::to_string_pretty(&rows).expect("fixture serializes");
+    text.push('\n');
+    text
+}
+
+#[test]
+fn demo_location_fixture_is_current() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../apps/desktop/src/lib/fixtures/location-specs.json"
+    );
+    let fresh = demo_location_fixture();
+    if std::env::var_os("HOLDMAP_UPDATE_FIXTURES").is_some() {
+        std::fs::write(path, &fresh).expect("fixture written");
+    }
+    let saved = std::fs::read_to_string(path).unwrap_or_default();
+    assert_eq!(
+        saved, fresh,
+        "regenerate with HOLDMAP_UPDATE_FIXTURES=1 cargo test -p holdmap-core demo_location_fixture"
+    );
+}

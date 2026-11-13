@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { agentDetails, agentCard, agentHeading, expect, folderNode, openAgents, openAgentsPicture, openProject, test } from "./fixtures";
+import { agentChip, agentDetails, agentCard, agentHeading, expect, folderNode, openAgents, openAgentsPicture, openProject, test } from "./fixtures";
 
 for (const theme of ["light", "dark"] as const) {
   test(`${theme}: agent memory is labeled and passes axe at 390px`, async ({ app }, testInfo) => {
@@ -60,8 +60,10 @@ test("agent locations group documented layers and copy a path", async ({ app }, 
   await locations.screenshot({ path: testInfo.outputPath("agent-locations-dark-390.png") });
   await app.evaluate(() => localStorage.setItem("holdmap.theme", "light"));
   await app.reload();
-  await openAgents(app);
-  await agentHeading(app, "Cursor").click();
+  // Narrow: agent chips replace the cards, and the inspector takes the full height.
+  await app.getByRole("radio", { name: /^Agents/ }).click();
+  await agentChip(app, "Cursor").click();
+  await expect(agentChip(app, "Cursor")).toHaveAttribute("aria-pressed", "true");
   const lightLocations = agentDetails(app).getByRole("region", { name: /Locations & layers/ });
   await expect(lightLocations.getByText("Present").first()).toBeVisible();
   await lightLocations.screenshot({ path: testInfo.outputPath("agent-locations-light-390.png") });

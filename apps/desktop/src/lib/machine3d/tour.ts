@@ -3,6 +3,7 @@
 import { agentPose, EASE, lerpPose, overviewPose, topPose, type Pose } from "./camera";
 import type { MachineLayout } from "./layout";
 import { agentSummary, type MachineScene } from "./scene";
+import { plural } from "../plural";
 
 export interface TourBeat {
   /** Seconds to fly from the previous beat, then to hold. */
@@ -20,7 +21,6 @@ export interface TourFrame { pose: Pose; explode: number; xray: boolean; focus: 
 
 /** At most this many agents get their own stop, so a busy machine still loops in about a minute. */
 export const TOUR_AGENTS = 4;
-const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
 export function tourBeats(scene: MachineScene, layout: MachineLayout, aspect: number): TourBeat[] {
   const running = scene.agents.filter((a) => a.kind === "agent");

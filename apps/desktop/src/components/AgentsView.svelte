@@ -3,6 +3,7 @@
   // over the same observed report (this computer, shared footprint, one source tree). A rail of
   // cards on the left and a column graph of connected nodes on the right.
   import { SvelteFlow, Background, Controls, type NodeTypes, type EdgeTypes } from "@xyflow/svelte";
+  import { noun, plural } from "../lib/plural";
   import "@xyflow/svelte/dist/style.css";
   import AgentCard from "./agents/AgentCard.svelte";
   import AgentDetails from "./agents/AgentDetails.svelte";
@@ -293,11 +294,12 @@
         ? `Components in ${projectLabel} — click the folder again for Reveal / Editor.`
         : "Containers — click a folder to zoom into that source tree.",
   );
-  const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
   const fleet = $derived(fleetMemory(report ? { ...report, agents: visibleAgents, memory: report.memory?.filter((row) => visibleAgents.some((agent) => agent.id === row.agent_id)) } : null));
   const colorOf = (id: string) => (graph ? agentColor(graph, id, agentIds) : "var(--accent)");
   const showMap = $derived(!!visibleAgents.length && (picture !== "project" || (graph?.nodes.length ?? 0) > 0));
   const projectEmpty = $derived(picture === "project" && !(graph?.nodes.length));
+  /** Below 640px the map sits behind the Map chip so the list and inspector get the height. */
+  let mapOpen = $state(false);
 </script>
 
 <div class="agents-root" class:reduced>
@@ -321,7 +323,7 @@
     <div class="flow-body" id="agents-flow"><AgentFlowView {query} {dark} {reduced} {...flowProps} {report} {selectedAgent} {onselectagent} bind:mode={flowSource} sourceChrome={false} /></div>
   {:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="agents" id="agents-overview" class:rail-off={!rail} class:has-details={!!selectedInfo} {onkeydown}>
+<div class="agents" id="agents-overview" class:rail-off={!rail} class:has-details={!!selectedInfo} class:map-open={mapOpen} {onkeydown}>
   {#if !report}
     <div class="empty" aria-busy="true"><Icon name="bot" size={28} /><p>Looking for agents…</p></div>
   {:else if report.agents.length === 0}
@@ -342,6 +344,13 @@
       <header class="rail-head">
         <h2>Agents <span class="n">{visibleAgents.length}{#if visibleAgents.length !== report.agents.length}{" / "}{report.agents.length}{/if}</span></h2>
         <span class="hint" title="↑↓ switches agents · click a folder to zoom into that project · Enter opens a map node">↑↓ to switch agents</span>
+        <!-- Narrow windows: agent chips instead of cards, and the map behind a toggle. -->
+        <div class="chips" role="group" aria-label="Choose an agent">
+          {#each visibleAgents as a (a.id)}
+            <button type="button" class="chip" aria-pressed={a.id === selectedAgent} onclick={() => pick(a.id)}><i style="background: {colorOf(a.id)}" aria-hidden="true"></i>{a.name}</button>
+          {/each}
+          <button type="button" class="chip map-toggle" aria-pressed={mapOpen} onclick={() => { mapOpen = !mapOpen; if (mapOpen && selectedInfo) closeDetails(); }}><Icon name="graph" size={12} />Map</button>
+        </div>
         {#if fleet}
           <div class="fleet-card" aria-label="Fleet memory distribution">
             <div class="fleet-top">
@@ -412,9 +421,9 @@
           {#if widgets && stats && !projectEmpty}
             <div class="stats" aria-live="polite">
               <span class="sr-only">{pictureHint}</span>
-              <span><b>{stats.agents}</b> {stats.agents === 1 ? "agent" : "agents"}</span>
+              <span><b>{stats.agents}</b> {picture === "project" ? noun(stats.agents, "agent in this project", "agents in this project") : noun(stats.agents, "agent")}</span>
               {#if fleet}<span><b>{humanBytes(fleet.total)}</b> memory</span>{/if}
-              {#if picture !== "context"}<span><b>{stats.folders}</b> {stats.folders === 1 ? "folder" : "folders"}</span>{/if}
+              {#if picture !== "context"}<span><b>{stats.folders}</b> {noun(stats.folders, "folder")}</span>{/if}
               {#if picture !== "context"}<span class="opt"><b>{stats.ports}</b> ports &amp; services</span>{/if}
               <span class="opt">{plural(stats.hosts, "remote host")}</span>
               {#if stats.omittedLinks}<span class="opt">+{stats.omittedLinks} unlisted links</span>{/if}
@@ -569,6 +578,28 @@
     .agents.has-details:not(.rail-off) { grid-template-rows: minmax(0, 40%) 1fr; }
     .agents.has-details:not(.rail-off) .map { display: none; }
     .agents.has-details:not(.rail-off) .details { position: static; width: auto; height: auto; border: 0; border-top: 1px solid var(--border); border-radius: 0; box-shadow: none; }
+  }
+  .chips { display: none; }
+  @container (max-width: 640px) {
+    /* One line of fleet memory, agent chips, then the inspector (or the map) at full height. */
+    .agents, .agents:not(.rail-off), .agents.has-details:not(.rail-off) { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+    .rail { border-bottom: 1px solid var(--border); }
+    .rail-head { padding: 8px 10px 6px; gap: 6px; }
+    .hint, .fleet-bar, .fleet-legend, .jump, .rail > .limits { display: none; }
+    /* Nothing selected and the map closed: the cards fill the screen. */
+    .agents:not(.has-details):not(.map-open) { grid-template-rows: minmax(0, 1fr); }
+    .agents.has-details .cards, .agents.map-open .cards { display: none; }
+    .fleet-card { padding: 4px 8px; }
+    .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+    .chip { flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 2px 10px; border: 1px solid var(--border); border-radius: var(--r-full); background: var(--surface); color: var(--text-2); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); cursor: pointer; white-space: nowrap; }
+    .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-softer, var(--surface-2)); color: var(--text); }
+    .chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+    .chip i { width: 7px; height: 7px; border-radius: 50%; }
+    .agents:not(.map-open):not(.rail-off) .map, .agents.has-details:not(.rail-off) .map { display: none; }
+    /* "Hide cards" still gives the map the whole screen. */
+    .agents.rail-off { grid-template-rows: minmax(0, 1fr); }
+    .agents.rail-off.has-details .map { display: none; }
+    .agents.has-details .details, .agents.has-details:not(.rail-off) .details { position: static; width: auto; height: auto; border: 0; border-radius: 0; box-shadow: none; }
   }
   .reduced :global(*) { animation: none !important; transition: none !important; }
 </style>
