@@ -1,7 +1,7 @@
 // Text for agent memory counters and documented locations. Unknown stays unknown:
 // a missing counter is never shown as zero.
 
-import { humanBytes } from "./format";
+import { humanBytes, humanDuration } from "./format";
 import type { Agent, AgentMemoryReport, AgentsReport, CapabilityPlace, ObservedCount } from "./types";
 
 const ROLE: Record<string, string> = {
@@ -87,15 +87,64 @@ export function sharePercent(figure: ObservedCount | undefined): number | null {
   return ppm == null ? null : ppm / 10_000;
 }
 
-export function trendView(trend: AgentMemoryReport["trend"]): { label: string; delta: string | null; why: string | null } {
+export function trendView(trend: AgentMemoryReport["trend"]): {
+  label: string;
+  delta: string | null;
+  why: string | null;
+  sampleCount: number;
+  span: string | null;
+  rule: string;
+} {
   const labels: Record<string, string> = { rising: "Rising", falling: "Falling", flat: "Flat", unknown: "Trend unknown" };
   let delta: string | null = null;
+  let span: string | null = null;
   if (trend.samples.length >= 2) {
-    const change = trend.samples[trend.samples.length - 1].bytes - trend.samples[0].bytes;
+    const first = trend.samples[0];
+    const last = trend.samples[trend.samples.length - 1];
+    const change = last.bytes - first.bytes;
     const sign = change > 0 ? "+" : change < 0 ? "−" : "";
     delta = change === 0 ? "no change" : `${sign}${humanBytes(Math.abs(change))}`;
+    if (last.at_ms > first.at_ms) {
+      span = humanDuration((last.at_ms - first.at_ms) / 1000);
+    }
   }
-  return { label: labels[trend.direction] ?? trend.direction, delta, why: trend.unknown ?? null };
+  return {
+    label: labels[trend.direction] ?? trend.direction,
+    delta,
+    why: trend.unknown ?? null,
+    sampleCount: trend.samples.length,
+    span,
+    rule: trend.rule,
+  };
+}
+
+/** SVG polyline points for retained memory samples on a 72x18 canvas. */
+export function trendSparkline(samples: AgentMemoryReport["trend"]["samples"], width = 72, height = 18): { points: string; lastX: number; lastY: number } | null {
+  if (samples.length < 2) return null;
+  const padX = 2;
+  const padY = 3;
+  const innerW = Math.max(1, width - padX * 2);
+  const innerH = Math.max(1, height - padY * 2);
+  const bytes = samples.map((s) => s.bytes);
+  const minB = Math.min(...bytes);
+  const maxB = Math.max(...bytes);
+  const bSpan = maxB - minB;
+  const minT = samples[0].at_ms;
+  const maxT = samples[samples.length - 1].at_ms;
+  const tSpan = maxT - minT;
+  const coords = samples.map((sample, index) => {
+    const xRatio = tSpan > 0 ? (sample.at_ms - minT) / tSpan : index / (samples.length - 1);
+    const yRatio = bSpan > 0 ? (sample.bytes - minB) / bSpan : 0.5;
+    const x = padX + xRatio * innerW;
+    const y = padY + (1 - yRatio) * innerH;
+    return [Number(x.toFixed(1)), Number(y.toFixed(1))] as const;
+  });
+  const last = coords[coords.length - 1];
+  return {
+    points: coords.map(([x, y]) => `${x},${y}`).join(" "),
+    lastX: last[0],
+    lastY: last[1],
+  };
 }
 
 const ROLE_ORDER = ["agent", "mcp_server", "language_server", "helper", "child"];
@@ -258,14 +307,59 @@ export function memorySummary(agent: Agent, memory: AgentMemoryReport | null): s
   return lines.join("\n");
 }
 
+export interface PlaceEntryView {
+  name: string;
+  kindLabel: string | null;
+  bytes: number | null;
+  modified: string | null;
+}
+
+const ENTRY_KIND_LABEL: Record<string, string> = {
+  directory: "dir",
+  file: "file",
+  symlink: "link",
+  unreadable: "unreadable",
+};
+
+export function placeEntries(place: CapabilityPlace): PlaceEntryView[] {
+  const entries = place.entries ?? [];
+  if (entries.length) {
+    return entries
+      .filter((entry) => Boolean(entry.name))
+      .map((entry) => ({
+        name: entry.name,
+        kindLabel: ENTRY_KIND_LABEL[entry.kind] ?? (entry.kind || null),
+        bytes: entry.bytes ?? null,
+        modified: entry.modified_unix_ms != null ? formatModified(entry.modified_unix_ms) : null,
+      }));
+  }
+  return place.candidates.map((name) => ({
+    name,
+    kindLabel: null,
+    bytes: null,
+    modified: null,
+  }));
+}
+
 export function placesSummary(places: CapabilityPlace[]): string {
   const lines = ["Documented locations. A present file is not proof the agent loaded it."];
   for (const place of [...places].sort((a, b) => a.rank - b.rank || a.path.localeCompare(b.path))) {
-    const where = place.path || place.kind;
-    const size = place.byte_size == null ? "size unknown" : humanBytes(place.byte_size);
-    const count = place.file_count == null ? "count unknown" : `${place.file_count} entries`;
-    const link = place.symlink_target ? ` → ${place.symlink_target}` : "";
-    lines.push(`${PLACE_SCOPE[place.scope] ?? place.scope} ${PLACE_KIND[place.kind] ?? place.kind} (rank ${place.rank}): ${PLACE_STATUS[place.status] ?? place.status} ${where}${link} · ${count} · ${size} · ${formatModified(place.modified_unix_ms)}`);
+    const scope = PLACE_SCOPE[place.scope] ?? place.scope;
+    const kind = PLACE_KIND[place.kind] ?? place.kind;
+    const status = PLACE_STATUS[place.status] ?? place.status;
+    if (!place.path) {
+      const detail = place.kind === "builtin" && place.candidates.length
+        ? ` · ${place.candidates.length} documented ${place.candidates.length === 1 ? "tool" : "tools"}`
+        : "";
+      lines.push(`${scope} ${kind} (rank ${place.rank}): ${status} ${place.kind}${detail}`);
+    } else if (place.status === "missing") {
+      lines.push(`${scope} ${kind} (rank ${place.rank}): ${status} ${place.path} · not on disk`);
+    } else {
+      const size = place.byte_size == null ? "size unknown" : humanBytes(place.byte_size);
+      const count = place.file_count == null ? "count unknown" : `${place.file_count} entries`;
+      const link = place.symlink_target ? ` → ${place.symlink_target}` : "";
+      lines.push(`${scope} ${kind} (rank ${place.rank}): ${status} ${place.path}${link} · ${count} · ${size} · ${formatModified(place.modified_unix_ms)}`);
+    }
     if (place.status_reason) lines.push(`  ${place.status_reason}`);
     if (place.candidates.length) lines.push(`  ${place.candidates.join(", ")}`);
   }

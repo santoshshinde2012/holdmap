@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bytesOrUnknown, filterPlaces, fleetMemory, memorySummary, observed, placesSummary, processNoun, shareText } from "./agent-memory";
+import { bytesOrUnknown, filterPlaces, fleetMemory, memorySummary, observed, placeEntries, placesSummary, processNoun, shareText, trendSparkline, trendView } from "./agent-memory";
 import { mockAgents } from "./mock";
 import type { Agent, AgentMemoryReport, CapabilityPlace } from "./types";
 
@@ -43,25 +43,79 @@ describe("memory figures", () => {
     expect(text).not.toContain("Peak resident: 0");
   });
 
+  it("computes sparkline points and time span only from retained samples", () => {
+    expect(trendSparkline([{ at_ms: 1000, bytes: 100 }])).toBeNull();
+    const spark = trendSparkline([
+      { at_ms: 0, bytes: 100 },
+      { at_ms: 300_000, bytes: 200 },
+      { at_ms: 600_000, bytes: 300 },
+    ]);
+    expect(spark?.points).toBe("2,15 36,9 70,3");
+    const tv = trendView({
+      samples: [
+        { at_ms: 0, bytes: 1024 * 1024 },
+        { at_ms: 600_000, bytes: 2 * 1024 * 1024 },
+      ],
+      direction: "rising",
+      unknown: null,
+      rule: "10% band",
+    });
+    expect(tv.sampleCount).toBe(2);
+    expect(tv.span).toBe("10m");
+    expect(tv.delta).toBe("+1.0 MB");
+  });
+
   it("lists location metadata and not a file body", () => {
-    const places: CapabilityPlace[] = [{
-      id: "claude-code:skills:user:.claude/skills",
-      kind: "skills",
-      scope: "user",
-      rank: 30,
-      path: "/home/dev/.claude/skills",
-      status: "present",
-      file_count: 1,
-      byte_size: 40,
-      candidates: ["review"],
-      present: true,
-      symlink_target: null,
-    }];
+    const edited = Date.UTC(2026, 10, 13, 8, 0, 0);
+    const places: CapabilityPlace[] = [
+      {
+        id: "claude-code:skills:user:.claude/skills",
+        kind: "skills",
+        scope: "user",
+        rank: 30,
+        path: "/home/dev/.claude/skills",
+        status: "present",
+        file_count: 1,
+        byte_size: 40,
+        candidates: ["review"],
+        entries: [{ name: "review", kind: "directory", bytes: null, modified_unix_ms: edited }],
+        present: true,
+        symlink_target: null,
+      },
+      {
+        id: "claude-code:rules:local",
+        kind: "rules",
+        scope: "local",
+        rank: 10,
+        path: "/home/dev/app/.claude/settings.local.json",
+        status: "missing",
+        candidates: [],
+        present: false,
+        symlink_target: null,
+      },
+      {
+        id: "claude-code:builtin",
+        kind: "builtin",
+        scope: "builtin",
+        rank: 50,
+        path: "",
+        status: "present",
+        candidates: ["Read", "Edit"],
+        present: true,
+        symlink_target: null,
+      },
+    ];
     const text = placesSummary(places);
     expect(text).toContain("/home/dev/.claude/skills");
     expect(text).toContain("review");
     expect(text).toContain("not proof");
     expect(text).toContain("modified time unknown");
+    expect(text).toContain("not on disk");
+    expect(text).toContain("2 documented tools");
+    expect(text).not.toContain("Built-in (rank 50): Present builtin · count unknown");
+    const entries = placeEntries(places[0]);
+    expect(entries[0]).toMatchObject({ name: "review", kindLabel: "dir", bytes: null });
+    expect(entries[0].modified).toBeTruthy();
   });
 
   it("sums agent headlines and names the largest without inventing a machine share", () => {

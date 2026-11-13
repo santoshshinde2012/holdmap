@@ -5,7 +5,7 @@ use crate::agents::{
     Agent, AgentCapabilities, AgentKind, AgentProcess, AgentTool, Evidence, ProcessRole, ToolKind,
 };
 use crate::process::tests::{proc, table};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 struct FixedProbe {
@@ -306,7 +306,8 @@ fn location_census_reports_metadata_without_file_bodies_or_followed_links() {
     let missing = places
         .iter()
         .find(|place| {
-            place.path.ends_with(".claude/settings.json") && place.scope == PlaceScope::User
+            Path::new(&place.path).ends_with(Path::new(".claude").join("settings.json"))
+                && place.scope == PlaceScope::User
         })
         .unwrap();
     assert_eq!(missing.status, PlaceStatus::Missing);
@@ -317,6 +318,14 @@ fn location_census_reports_metadata_without_file_bodies_or_followed_links() {
     assert!(places
         .iter()
         .any(|place| place.kind == PlaceKind::Plugin && !place.present));
+    let builtin = places
+        .iter()
+        .find(|place| place.kind == PlaceKind::Builtin)
+        .unwrap();
+    assert!(!builtin.summary_line().contains("count unknown"));
+    assert!(builtin.summary_line().contains("documented tools"));
+    assert!(missing.summary_line().contains("not on disk"));
+    assert!(!missing.summary_line().contains("count unknown"));
     let _ = PathBuf::from(home.path());
 }
 

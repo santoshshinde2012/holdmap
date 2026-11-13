@@ -540,19 +540,19 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT, includeCapabilities = fa
 const DEMO_MACHINE = 16 * 1024 * 1024 * 1024;
 const known = (value: number): ObservedCount => ({ value, unknown: null });
 const missing = (unknown: string): ObservedCount => ({ value: null, unknown });
-const unavailable = (what: string) =>
-  `${what} proc_pid_rusage (RUSAGE_INFO_V4) does not return it. task_for_pid is not used, because it needs a privilege holdmap does not request.`;
+const unavailable = () =>
+  "proc_pid_rusage (RUSAGE_INFO_V4) does not return this counter. task_for_pid is not used, because it needs a privilege holdmap does not request.";
 const PEAKS = "Each process has its own peak. Those peaks are not simultaneous, so holdmap does not add them into a tree peak.";
 
 function demoReading(resident: number, footprint: number, peak: number): Record<string, ObservedCount> {
   return {
     resident: known(resident),
     physical_footprint: known(footprint),
-    private_bytes: missing(unavailable("Private memory:")),
-    shared_bytes: missing(unavailable("Shared memory:")),
+    private_bytes: missing(unavailable()),
+    shared_bytes: missing(unavailable()),
     proportional: missing("Proportional set size is a Linux smaps counter. macOS does not report it."),
-    compressed: missing(unavailable("Compressed memory:")),
-    virtual_bytes: missing(unavailable("Virtual size:")),
+    compressed: missing(unavailable()),
+    virtual_bytes: missing(unavailable()),
     swap_bytes: missing("macOS proc_pid_rusage does not report per-process swap. Compressed memory, which Activity Monitor shows separately, is also not in this call."),
     peak_resident: missing("proc_pid_rusage reports a lifetime peak physical footprint, not a peak resident size."),
     peak_physical: known(peak),
@@ -596,7 +596,6 @@ function demoMemory(agent: Agent): AgentMemoryReport {
     return processes.length ? [{ role, processes: processes.length, scan_bytes: processes.reduce((sum, row) => sum + row.scan_bytes, 0) }] : [];
   });
   const direction = agent.product === "cursor" ? "rising" as const : agent.product === "claude-code" ? "falling" as const : "flat" as const;
-  const previous = direction === "rising" ? agent.memory_bytes * 0.8 : direction === "falling" ? agent.memory_bytes * 1.2 : agent.memory_bytes;
   return {
     agent_id: agent.id, pid: agent.pid, started_at: agent.started_at,
     headline_bytes: agent.memory_bytes, headline_counter: "physical_footprint",
@@ -605,18 +604,34 @@ function demoMemory(agent: Agent): AgentMemoryReport {
     share_ppm: known(Math.round(agent.memory_bytes / DEMO_MACHINE * 1_000_000)),
     resident: known(kept.reduce((sum, row) => sum + (row.reading.resident.value ?? 0), 0)),
     physical_footprint: known(agent.memory_bytes),
-    private_bytes: missing(unavailable("Private memory:")),
-    shared_bytes: missing(unavailable("Shared memory:")),
+    private_bytes: missing(unavailable()),
+    shared_bytes: missing(unavailable()),
     proportional: missing("Proportional set size is a Linux smaps counter. macOS does not report it."),
-    compressed: missing(unavailable("Compressed memory:")),
-    virtual_bytes: missing(unavailable("Virtual size:")),
+    compressed: missing(unavailable()),
+    virtual_bytes: missing(unavailable()),
     swap_bytes: missing("macOS proc_pid_rusage does not report per-process swap. Compressed memory, which Activity Monitor shows separately, is also not in this call."),
     peak_resident: missing(PEAKS),
     peak_physical: missing(PEAKS),
     commit_bytes: missing("Commit charge is a Windows counter. macOS does not report it."),
     groups, processes: kept,
     trend: {
-      samples: [{ at_ms: agent.started_at * 1000, bytes: Math.round(previous) }, { at_ms: Date.now(), bytes: agent.memory_bytes }],
+      samples: direction === "rising"
+        ? [
+            { at_ms: Date.now() - 18 * 60_000, bytes: Math.round(agent.memory_bytes * 0.80) },
+            { at_ms: Date.now() - 12 * 60_000, bytes: Math.round(agent.memory_bytes * 0.87) },
+            { at_ms: Date.now() - 6 * 60_000, bytes: Math.round(agent.memory_bytes * 0.94) },
+            { at_ms: Date.now(), bytes: agent.memory_bytes },
+          ]
+        : direction === "falling"
+          ? [
+              { at_ms: Date.now() - 12 * 60_000, bytes: Math.round(agent.memory_bytes * 1.2) },
+              { at_ms: Date.now() - 6 * 60_000, bytes: Math.round(agent.memory_bytes * 1.09) },
+              { at_ms: Date.now(), bytes: agent.memory_bytes },
+            ]
+          : [
+              { at_ms: Date.now() - 10 * 60_000, bytes: agent.memory_bytes },
+              { at_ms: Date.now(), bytes: agent.memory_bytes },
+            ],
       direction, rule: "Newest versus oldest retained headline sample, using a 10% and 1 MiB band.",
     },
     limits: ["Tree peaks are not added. Each process keeps its own peak.", "Private, shared and compressed memory need task_for_pid, which holdmap does not request."],

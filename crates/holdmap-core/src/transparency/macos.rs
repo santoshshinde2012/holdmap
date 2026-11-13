@@ -38,21 +38,21 @@ pub(super) fn read(pid: u32) -> ProcessReading {
     }
     // SAFETY: proc_pid_rusage returned success, so the V4 struct is initialised.
     let info = unsafe { info.assume_init() };
-    let unavailable = |what: &str| {
-        ObservedU64::unknown(format!(
-            "{what} proc_pid_rusage (RUSAGE_INFO_V4) does not return it. task_for_pid is not used, because it needs a privilege holdmap does not request."
-        ))
+    let unavailable = || {
+        ObservedU64::unknown(
+            "proc_pid_rusage (RUSAGE_INFO_V4) does not return this counter. task_for_pid is not used, because it needs a privilege holdmap does not request.",
+        )
     };
     ProcessReading {
         resident: ObservedU64::observed(info.ri_resident_size),
         physical_footprint: ObservedU64::observed(info.ri_phys_footprint),
-        private_bytes: unavailable("Private memory:"),
-        shared_bytes: unavailable("Shared memory:"),
+        private_bytes: unavailable(),
+        shared_bytes: unavailable(),
         proportional: ObservedU64::unknown(
             "Proportional set size is a Linux smaps counter. macOS does not report it.",
         ),
-        compressed: unavailable("Compressed memory:"),
-        virtual_bytes: unavailable("Virtual size:"),
+        compressed: unavailable(),
+        virtual_bytes: unavailable(),
         swap_bytes: ObservedU64::unknown(
             "macOS proc_pid_rusage does not report per-process swap. Compressed memory, which Activity Monitor shows separately, is also not in this call.",
         ),

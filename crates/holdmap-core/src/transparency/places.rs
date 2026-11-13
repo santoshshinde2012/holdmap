@@ -145,16 +145,50 @@ pub struct CapabilityPlace {
 impl CapabilityPlace {
     /// One text row: layer, rank, status, path, size and day. Not a file body.
     pub fn summary_line(&self) -> String {
-        let where_ = if self.path.is_empty() {
-            self.kind.label().to_string()
-        } else {
-            self.path.clone()
+        let status = match self.status {
+            PlaceStatus::Present => "present",
+            PlaceStatus::Missing => "missing",
+            PlaceStatus::Unreadable => "unreadable",
+            PlaceStatus::Skipped => "skipped",
         };
+        if self.path.is_empty() {
+            let where_ = self.kind.label();
+            let detail = if self.kind == PlaceKind::Builtin && !self.candidates.is_empty() {
+                let noun = if self.candidates.len() == 1 {
+                    "documented tool"
+                } else {
+                    "documented tools"
+                };
+                format!(" · {} {noun}", self.candidates.len())
+            } else {
+                String::new()
+            };
+            return format!(
+                "{} {} rank {} {status}: {where_}{detail}",
+                self.scope.label(),
+                self.kind.label(),
+                self.rank
+            );
+        }
+        let where_ = &self.path;
         let link = self
             .symlink_target
             .as_ref()
             .map(|target| format!(" → {target}"))
             .unwrap_or_default();
+        let link_mark = if self.symlink_target.is_some() {
+            " symlink"
+        } else {
+            ""
+        };
+        if self.status == PlaceStatus::Missing {
+            return format!(
+                "{} {} rank {} {status}{link_mark}: {where_}{link} · not on disk",
+                self.scope.label(),
+                self.kind.label(),
+                self.rank
+            );
+        }
         let count = match self.file_count {
             Some(n) => format!("{n} entries"),
             None => "count unknown".into(),
@@ -167,17 +201,6 @@ impl CapabilityPlace {
             .modified_unix_ms
             .map(utc_day)
             .unwrap_or_else(|| "modified time unknown".into());
-        let status = match self.status {
-            PlaceStatus::Present => "present",
-            PlaceStatus::Missing => "missing",
-            PlaceStatus::Unreadable => "unreadable",
-            PlaceStatus::Skipped => "skipped",
-        };
-        let link_mark = if self.symlink_target.is_some() {
-            " symlink"
-        } else {
-            ""
-        };
         format!(
             "{} {} rank {} {status}{link_mark}: {where_}{link} · {count} · {size} · {when}",
             self.scope.label(),
@@ -315,7 +338,10 @@ fn builtin_place(product: &str) -> CapabilityPlace {
 }
 
 fn stat_place(product: &str, base: &Path, spec: Spec, platform: &str) -> CapabilityPlace {
-    let path = base.join(spec.relative);
+    let path = spec
+        .relative
+        .split('/')
+        .fold(base.to_path_buf(), |acc, part| acc.join(part));
     let id = format!(
         "{product}:{}:{}:{}",
         spec.kind.label(),
