@@ -119,7 +119,7 @@ export function trendView(trend: AgentMemoryReport["trend"]): {
 }
 
 /** SVG polyline points for retained memory samples on a 72x18 canvas. */
-export function trendSparkline(samples: AgentMemoryReport["trend"]["samples"], width = 72, height = 18): { points: string; lastX: number; lastY: number } | null {
+export function trendSparkline(samples: AgentMemoryReport["trend"]["samples"], width = 72, height = 18): { points: string; areaPoints: string; lastX: number; lastY: number; minBytes: number; maxBytes: number } | null {
   if (samples.length < 2) return null;
   const padX = 2;
   const padY = 3;
@@ -139,11 +139,16 @@ export function trendSparkline(samples: AgentMemoryReport["trend"]["samples"], w
     const y = padY + (1 - yRatio) * innerH;
     return [Number(x.toFixed(1)), Number(y.toFixed(1))] as const;
   });
+  const first = coords[0];
   const last = coords[coords.length - 1];
+  const line = coords.map(([x, y]) => `${x},${y}`).join(" ");
   return {
-    points: coords.map(([x, y]) => `${x},${y}`).join(" "),
+    points: line,
+    areaPoints: `${first[0]},${height} ${line} ${last[0]},${height}`,
     lastX: last[0],
     lastY: last[1],
+    minBytes: minB,
+    maxBytes: maxB,
   };
 }
 
@@ -189,8 +194,13 @@ export interface FleetMemory {
   /** Share of machine RAM when every headline can be compared with one machine size. */
   share: string | null;
   top: { id: string; name: string; bytes: number } | null;
+  breakdown: { id: string; name: string; bytes: number; pct: number }[];
   /** True when the total is the process-table headline rather than platform counters. */
   fromProcessTable: boolean;
+}
+
+function withPct<T extends { id: string; name: string; bytes: number }>(rows: T[], total: number) {
+  return rows.map(({ id, name, bytes }) => ({ id, name, bytes, pct: total > 0 ? (bytes / total) * 100 : 0 }));
 }
 
 /** Machine-wide agent memory from the latest report. Unknown machine size leaves the share blank. */
@@ -198,15 +208,9 @@ export function fleetMemory(report: AgentsReport | null | undefined): FleetMemor
   if (!report?.agents.length) return null;
   const rows = report.memory ?? [];
   if (!rows.length) {
-    const ranked = [...report.agents].sort((a, b) => b.memory_bytes - a.memory_bytes);
-    const top = ranked[0];
-    return {
-      total: ranked.reduce((sum, agent) => sum + agent.memory_bytes, 0),
-      count: ranked.length,
-      share: null,
-      top: top ? { id: top.id, name: top.name, bytes: top.memory_bytes } : null,
-      fromProcessTable: true,
-    };
+    const ranked = [...report.agents].sort((a, b) => b.memory_bytes - a.memory_bytes).map((a) => ({ id: a.id, name: a.name, bytes: a.memory_bytes }));
+    const total = ranked.reduce((sum, a) => sum + a.bytes, 0);
+    return { total, count: ranked.length, share: null, top: ranked[0] ?? null, breakdown: withPct(ranked, total), fromProcessTable: true };
   }
   const byId = new Map(report.agents.map((agent) => [agent.id, agent]));
   const ranked = rows
@@ -220,6 +224,7 @@ export function fleetMemory(report: AgentsReport | null | undefined): FleetMemor
     count: ranked.length,
     share: machine && machine > 0 ? `${(total / machine * 100).toFixed(1)}% of machine RAM` : null,
     top: top ? { id: top.id, name: top.name, bytes: top.bytes } : null,
+    breakdown: withPct(ranked, total),
     fromProcessTable: false,
   };
 }

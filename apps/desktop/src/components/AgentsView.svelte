@@ -297,6 +297,7 @@
   );
   const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
   const fleet = $derived(fleetMemory(report ? { ...report, agents: visibleAgents, memory: report.memory?.filter((row) => visibleAgents.some((agent) => agent.id === row.agent_id)) } : null));
+  const colorOf = (id: string) => (graph ? agentColor(graph, id, agentIds) : "var(--accent)");
   const showMap = $derived(!!visibleAgents.length && (picture !== "project" || (graph?.nodes.length ?? 0) > 0));
   const projectEmpty = $derived(picture === "project" && !(graph?.nodes.length));
 </script>
@@ -345,20 +346,45 @@
         <span class="hint" title="↑↓ switches agents · click a folder to zoom into that project · Enter opens a map node">↑↓ to switch agents</span>
         <StatStrip compact label="Agents summary" stats={railStats} />
         {#if fleet}
-          <p class="fleet">
-            <b>{humanBytes(fleet.total)}</b>
-            {fleet.fromProcessTable ? "process-table total" : "across"}
-            {fleet.count === 1 ? "1 agent" : `${fleet.count} agents`}
-            {#if fleet.share}· {fleet.share}{/if}
-            {#if fleet.top}
-              · <button type="button" class="jump" onclick={() => pick(fleet.top!.id)}>{fleet.top.name} uses the most</button>
+          <div class="fleet-card" aria-label="Fleet memory distribution">
+            <div class="fleet-top">
+              <span><b>{humanBytes(fleet.total)}</b> {fleet.fromProcessTable ? "process-table total" : `across ${fleet.count === 1 ? "1 agent" : `${fleet.count} agents`}`}</span>
+              {#if fleet.share}<span class="fleet-share">{fleet.share}</span>{/if}
+            </div>
+            {#if fleet.breakdown.length > 1}
+              <div class="fleet-bar" role="group" aria-label="Memory share by agent">
+                {#each fleet.breakdown as seg (seg.id)}
+                  {@const segColor = colorOf(seg.id)}
+                  <button
+                    type="button"
+                    class="fleet-seg"
+                    class:active={seg.id === selectedAgent}
+                    style="flex-grow: {Math.max(1, seg.bytes)}; background: {segColor}"
+                    title="{seg.name}: {humanBytes(seg.bytes)} ({Math.round(seg.pct)}%)"
+                    aria-label="{seg.name}: {humanBytes(seg.bytes)}"
+                    onclick={() => pick(seg.id)}
+                  ></button>
+                {/each}
+              </div>
+              <div class="fleet-legend">
+                {#each fleet.breakdown.slice(0, 4) as seg (seg.id)}
+                  {@const segColor = colorOf(seg.id)}
+                  <button type="button" class="fleet-chip" class:active={seg.id === selectedAgent} onclick={() => pick(seg.id)}>
+                    <i style="background: {segColor}" aria-hidden="true"></i>
+                    <span>{seg.name}</span>
+                    <b>{humanBytes(seg.bytes)}</b>
+                  </button>
+                {/each}
+              </div>
+            {:else if fleet.top}
+              <button type="button" class="jump" onclick={() => pick(fleet.top!.id)}>{fleet.top.name} uses the most</button>
             {/if}
-          </p>
+          </div>
         {/if}
       </header>
       <div class="cards" id="agent-list">
         {#each visibleAgents as a (a.id)}
-          <AgentCard agent={a} {report} color={graph ? agentColor(graph, a.id, agentIds) : "var(--accent)"} selected={a.id === selectedAgent} onselect={() => pick(a.id)} onnavigate={(id) => pick(id)}
+          <AgentCard agent={a} {report} color={colorOf(a.id)} maxMemory={fleet?.top?.bytes} selected={a.id === selectedAgent} onselect={() => pick(a.id)} onnavigate={(id) => pick(id)}
             now={report.taken_at_ms || Date.now()} />
         {:else}
           <div class="no-matches"><Icon name="search" size={20} /><p>No agents match this search</p><span>Search by name, tool, folder, port or process ID.</span></div>
@@ -445,7 +471,7 @@
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
       <aside class="details" id="agent-details" aria-label="Agent details" onkeydown={detailsKey}>
         {#key a.id}
-          <AgentDetails bind:this={detailsView} agent={a} {report} {entries} color={graph ? agentColor(graph, a.id, agentIds) : "var(--accent)"} onclose={closeDetails}
+          <AgentDetails bind:this={detailsView} agent={a} {report} {entries} color={colorOf(a.id)} onclose={closeDetails}
             {onentry} onreveal={(path) => onreveal(a.id, path)} oneditor={(path) => oneditor(a.id, path)}
             onfolder={(path) => { projectPath = path; openFolder(path, a.id); }} onnavigate={(id) => pick(id, true)}
             oncapabilities={() => { section = "capabilities"; }} oninsights={() => { section = "insights"; }} {oninventory}
@@ -478,9 +504,19 @@
   h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); font-weight: var(--fw-semibold); }
   .n { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--muted); background: var(--surface-2); padding: 0 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
   .hint { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
-  .fleet { margin: 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); overflow-wrap: anywhere; }
-  .fleet b { color: var(--text); font-variant-numeric: tabular-nums; }
-  .jump { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .fleet-card { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
+  .fleet-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 8px; }
+  .fleet-top b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .fleet-share { padding: 1px 7px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
+  .fleet-bar { display: flex; gap: 2px; height: 7px; border-radius: var(--r-full); overflow: hidden; background: var(--surface-2); }
+  .fleet-seg { border: 0; padding: 0; min-width: 6px; border-radius: 2px; cursor: pointer; opacity: 0.86; transition: opacity var(--dur-1) var(--ease); }
+  .fleet-seg:hover, .fleet-seg.active { opacity: 1; }
+  .fleet-legend { display: flex; flex-wrap: wrap; gap: 4px; }
+  .fleet-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border: 1px solid var(--border); border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); font: inherit; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .fleet-chip:hover, .fleet-chip.active { border-color: var(--border-strong); color: var(--text); background: var(--surface); }
+  .fleet-chip i { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+  .fleet-chip b { color: var(--text); font-weight: var(--fw-medium); }
+  .jump { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; justify-self: start; }
   .jump:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
   .cards { flex: 1; min-height: 0; overflow: auto; padding: 4px 12px 12px; display: grid; grid-auto-rows: max-content; align-content: start; gap: 8px; }
   .limits { border-top: 1px solid var(--border); padding: 8px 14px 10px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
