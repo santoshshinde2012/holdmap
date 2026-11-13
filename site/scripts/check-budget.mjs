@@ -106,8 +106,9 @@ const rows = [
   // +2 KB for the capture area picker; +1 KB for mediabunny 1.65’s updated recording
   // implementation. +5 KB for the agent memory panel on the Agents view (counters, groups
   // and export). +4 KB for the locations filters, entry lists and copy action shared with
-  // the capability workspace. These chunks load on demand; the initial-import budget is separate.
-  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 184 * 1024],
+  // the capability workspace. +4 KB for the fleet memory bar, trend sparkline and location
+  // cards. These chunks load on demand; the initial-import budget is separate.
+  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 188 * 1024],
   ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];
 
