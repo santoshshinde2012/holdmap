@@ -101,12 +101,13 @@ enabled = true
         Some(fixture.project.as_path())
     );
     assert_ne!(user.id, project.id);
-    assert_eq!(out.skills.len(), 3);
+    // ~/.codex/skills is not a documented Codex location; it is listed as legacy, not read.
+    assert_eq!(out.skills.len(), 2);
     assert!(out.skills.iter().any(|entry| entry.source_path == skill));
     assert!(!out.skills.iter().any(|entry| entry.name == "too-deep"));
     let encoded = serde_json::to_string(&out).unwrap();
     assert!(
-        !encoded.contains("private-"),
+        !leaks(&encoded),
         "inventory serialized excluded configuration or skill content"
     );
     assert_eq!(out.mcp_servers, fixture.discover("codex").mcp_servers);
@@ -157,7 +158,7 @@ fn claude_private_project_aliases_stay_bound_to_exact_observed_project() {
     let ids: HashSet<_> = out.mcp_servers.iter().map(|entry| &entry.id).collect();
     assert_eq!(ids.len(), out.mcp_servers.len());
     assert!(
-        !serde_json::to_string(&out).unwrap().contains("private-"),
+        !leaks(&serde_json::to_string(&out).unwrap()),
         "inventory serialized excluded private values"
     );
 }
@@ -205,7 +206,7 @@ fn cursor_supports_fixed_compatibility_roots_and_one_category_level() {
         5
     );
     assert!(
-        !serde_json::to_string(&out).unwrap().contains("private-"),
+        !leaks(&serde_json::to_string(&out).unwrap()),
         "inventory serialized excluded private values"
     );
     assert_eq!(fixture.discover("cursor-agent").mcp_servers.len(), 3);
@@ -250,7 +251,7 @@ fn claude_desktop_reads_only_documented_user_mcp_file_not_code_settings_or_skill
             .iter()
             .any(|limit| limit.contains("extensions, connectors and skills")));
         assert!(
-            !serde_json::to_string(&out).unwrap().contains("private-"),
+            !leaks(&serde_json::to_string(&out).unwrap()),
             "inventory must omit desktop command and preference values"
         );
     }
@@ -275,7 +276,7 @@ fn skill_frontmatter_is_optional_bounded_metadata_and_cannot_replace_folder_iden
         Some("Review code and explain the next steps.")
     );
     assert!(
-        !serde_json::to_string(&out).unwrap().contains("private-"),
+        !leaks(&serde_json::to_string(&out).unwrap()),
         "instruction body must not be retained"
     );
     let mut oversized = b"---\ndescription: |\n".to_vec();
@@ -370,7 +371,7 @@ fn project_mcp_inventory_is_collected_before_skill_headers_exhaust_the_shared_bu
         .any(|server| server.name == "project-server" && server.scope == CapabilityScope::Project));
     assert!(out.limits.iter().any(|limit| limit.contains("bound")));
     assert!(
-        !serde_json::to_string(&out).unwrap().contains("private-"),
+        !leaks(&serde_json::to_string(&out).unwrap()),
         "configuration and instruction values must not be exported"
     );
 }
@@ -425,7 +426,7 @@ fn contradictory_switches_remain_unknown_and_sensitive_aliases_or_folders_are_no
         "recognized sensitive aliases, IDs and source paths must not be retained"
     );
     assert!(
-        !serialized.contains("private-"),
+        !leaks(&serialized),
         "configuration and instruction values must not be exported"
     );
 }
@@ -699,7 +700,7 @@ fn windsurf_gemini_copilot_and_cline_project_only_allowed_metadata() {
         .iter()
         .any(|limit| limit.contains("enablement")));
     assert!(
-        !serde_json::to_string(&gemini).unwrap().contains("private-"),
+        !leaks(&serde_json::to_string(&gemini).unwrap()),
         "Gemini inventory must omit settings secrets and endpoints"
     );
 
@@ -753,7 +754,7 @@ fn windsurf_gemini_copilot_and_cline_project_only_allowed_metadata() {
         .iter()
         .any(|skill| { skill.name == "deploy" && skill.scope == CapabilityScope::Project }));
     assert!(
-        !serde_json::to_string(&cline).unwrap().contains("private-"),
+        !leaks(&serde_json::to_string(&cline).unwrap()),
         "Cline inventory must omit commands, env and skill bodies"
     );
 }
@@ -768,7 +769,7 @@ fn gemini_does_not_resolve_overlapping_transport_keys() {
     let out = fixture.discover("gemini");
     assert_eq!(out.mcp_servers.len(), 1);
     assert_eq!(out.mcp_servers[0].transport, McpTransport::Unknown);
-    assert!(!serde_json::to_string(&out).unwrap().contains("private-"));
+    assert!(!leaks(&serde_json::to_string(&out).unwrap()));
 }
 
 #[test]
@@ -804,7 +805,7 @@ fn copilot_cli_accepts_documented_local_and_bare_project_maps_without_resolving_
             .len(),
         3
     );
-    assert!(!serde_json::to_string(&out).unwrap().contains("private-"));
+    assert!(!leaks(&serde_json::to_string(&out).unwrap()));
 
     fixture.put("project/.mcp.json", br#"{"mcpServers":false}"#);
     let invalid = fixture.discover("copilot-cli");
@@ -844,7 +845,7 @@ fn cline_http_and_legacy_sse_follow_its_own_schema() {
     for name in ["other-client-key", "overlap", "malformed-type"] {
         assert_eq!(entry(name).transport, McpTransport::Unknown);
     }
-    assert!(!serde_json::to_string(&out).unwrap().contains("private-"));
+    assert!(!leaks(&serde_json::to_string(&out).unwrap()));
 }
 
 #[test]
@@ -871,7 +872,7 @@ fn jsonc_settings_preserve_strings_and_omit_comments_endpoints_and_other_private
         .mcp_servers
         .iter()
         .any(|entry| entry.name == "portable" && entry.transport == McpTransport::Stdio));
-    assert!(!serde_json::to_string(&vscode).unwrap().contains("private-"));
+    assert!(!leaks(&serde_json::to_string(&vscode).unwrap()));
 
     fixture.put(
         "home/.gemini/settings.json",
@@ -880,7 +881,7 @@ fn jsonc_settings_preserve_strings_and_omit_comments_endpoints_and_other_private
     let gemini = fixture.discover("gemini");
     assert_eq!(gemini.mcp_servers.len(), 1);
     assert_eq!(gemini.mcp_servers[0].transport, McpTransport::Http);
-    assert!(!serde_json::to_string(&gemini).unwrap().contains("private-"));
+    assert!(!leaks(&serde_json::to_string(&gemini).unwrap()));
     fixture.put(
         "home/.gemini/settings.json",
         br#"{"mcpServers":{"remote":{"httpUrl":"https://endpoint-host.invalid/"},}}"#,
@@ -921,7 +922,7 @@ fn jsonc_lexer_keeps_json_grammar_and_strict_formats_fail_closed() {
     );
     let strict = fixture.discover("cursor");
     assert!(strict.mcp_servers.is_empty());
-    assert!(!serde_json::to_string(&strict).unwrap().contains("private-"));
+    assert!(!leaks(&serde_json::to_string(&strict).unwrap()));
 }
 
 #[test]
@@ -942,7 +943,7 @@ fn json_transport_does_not_apply_another_clients_fields_or_infer_from_malformed_
         .mcp_servers
         .iter()
         .all(|entry| entry.transport == McpTransport::Unknown));
-    assert!(!serde_json::to_string(&out).unwrap().contains("private-"));
+    assert!(!leaks(&serde_json::to_string(&out).unwrap()));
 }
 
 #[test]
@@ -973,7 +974,7 @@ fn gemini_and_cursor_untyped_urls_do_not_prove_a_remote_transport() {
         assert_eq!(transport("events"), McpTransport::Sse);
         assert_eq!(transport("negotiated"), McpTransport::Unknown);
         assert_eq!(transport("malformed"), McpTransport::Unknown);
-        assert!(!serde_json::to_string(&out).unwrap().contains("private-"));
+        assert!(!leaks(&serde_json::to_string(&out).unwrap()));
     }
 }
 
@@ -994,7 +995,7 @@ fn clients_with_separate_enablement_settings_do_not_reinterpret_arbitrary_server
         assert!(!out.mcp_servers.is_empty());
         assert!(out.mcp_servers.iter().all(|entry| entry.enabled.is_none()));
         assert!(out.limits.iter().any(|limit| limit.contains("enablement")));
-        assert!(!serde_json::to_string(&out).unwrap().contains("private-"));
+        assert!(!leaks(&serde_json::to_string(&out).unwrap()));
     }
     fixture.put(
         "home/.cline/data/settings/cline_mcp_settings.json",
@@ -1115,7 +1116,7 @@ fn realistic_claude_code_config_reports_launch_policy_and_instruction_metadata_o
     );
     assert!(out.builtin_tools.contains(&"Bash".to_owned()));
     let encoded = serde_json::to_string(&out).unwrap();
-    assert!(!encoded.contains("private-"), "{encoded}");
+    assert!(!leaks(&encoded), "{encoded}");
 }
 
 #[test]
@@ -1214,7 +1215,7 @@ env_http_headers = { "X-Figma-Token" = "FIGMA_TOKEN" }
         .any(|i| i.name == "plan" && i.description.as_deref() == Some("Plan a change")));
     for out in [codex, cursor, gemini] {
         let encoded = serde_json::to_string(&out).unwrap();
-        assert!(!encoded.contains("private-"), "{encoded}");
+        assert!(!leaks(&encoded), "{encoded}");
     }
 }
 
@@ -1238,4 +1239,45 @@ fn the_time_bound_still_stops_the_inventory_and_says_so() {
         HomeCapabilities::new(fixture.home.clone()).time_limit,
         MAX_TIME
     );
+}
+
+/// Whether serialized output carries a `private-` fixture marker. The temp folder on macOS is
+/// `/private/var/...`, and Claude's per-project folder name encodes it as `-private-var-`.
+fn leaks(json: &str) -> bool {
+    json.replace("-private-var-", "").contains("private-")
+}
+
+#[test]
+fn cursor_reader_lists_mdc_rules_and_never_plain_md_files() {
+    let fixture = Fixture::new();
+    fixture.put(
+        "project/.cursor/rules/style.mdc",
+        b"---\ndescription: House style\n---\nprivate-rule-body-fixture",
+    );
+    fixture.put("project/.cursor/rules/notes.md", b"private-notes-fixture");
+    let out = fixture.discover("cursor");
+    let rules: Vec<_> = out
+        .instructions
+        .iter()
+        .filter(|entry| entry.kind == InstructionKind::Rule)
+        .map(|entry| entry.name.as_str())
+        .collect();
+    assert_eq!(rules, ["style"]);
+    let row = out
+        .locations
+        .iter()
+        .find(|place| place.path.ends_with(".cursor/rules"))
+        .unwrap();
+    assert_eq!(row.ignored_count, Some(1));
+    assert!(!leaks(&serde_json::to_string(&out).unwrap()));
+}
+
+#[test]
+fn consent_wording_matches_the_desktop_word_for_word() {
+    let desktop = include_str!("../../../../../apps/desktop/src/lib/consent.ts");
+    assert!(desktop.contains(&format!("CONSENT_LABEL = \"{}\"", super::CONSENT_LABEL)));
+    assert!(desktop.contains(&format!(
+        "CONSENT_SENTENCE = \"{}\"",
+        super::CONSENT_SENTENCE
+    )));
 }

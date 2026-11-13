@@ -46,6 +46,9 @@ pub struct ProcessTable {
     /// Original cmd.exe syntax is private restart state, never a ProcessInfo/UI field.
     #[cfg(windows)]
     windows_cmd: HashMap<u32, crate::history::WindowsCmdRestart>,
+    /// Processes whose memory is sysinfo's resident size because the platform counter
+    /// (macOS physical footprint, Linux VmRSS) could not be read.
+    memory_fallback: HashSet<u32>,
 }
 
 /// Linux cuts a process name (`comm`) to 15 bytes ("npm exec vite p", "containerd-shim"). When
@@ -146,6 +149,17 @@ fn normalize_windows_parentage(processes: &mut HashMap<u32, ProcessInfo>) {
 }
 
 impl ProcessTable {
+    /// True when `pid`'s memory is sysinfo's resident size because the platform counter
+    /// could not be read for it (another user's process, or one that exited mid-scan).
+    pub fn memory_fell_back(&self, pid: u32) -> bool {
+        self.memory_fallback.contains(&pid)
+    }
+
+    /// Mark `pid`'s memory as the resident fallback (fixtures and remote tables).
+    pub fn mark_memory_fallback(&mut self, pid: u32) {
+        self.memory_fallback.insert(pid);
+    }
+
     /// Capture processes for a safety recheck. A collection failure returns an empty table,
     /// so no missing process can be authorized for signalling. Scanners use [`Self::try_capture`]
     /// or [`Self::capture_with`] to report incomplete collection explicitly.
@@ -188,6 +202,7 @@ impl ProcessTable {
             });
         }
         let users = &cache.as_ref().expect("just filled").users;
+        let mut memory_fallback = HashSet::new();
         #[cfg_attr(not(windows), allow(unused_mut))]
         let mut procs: HashMap<u32, ProcessInfo> = sys
             .processes()
@@ -216,6 +231,13 @@ impl ProcessTable {
                     &untruncated_name(&comm, &cmdline, p.exe()).unwrap_or(comm),
                 )
                 .into_owned();
+                // Prefer the OS figure users see (phys_footprint / VmRSS / Working set);
+                // fall back to sysinfo when the platform call can't see this process.
+                let (memory_bytes, platform_counter) =
+                    crate::memory::sample_counted(pid, p.memory());
+                if !platform_counter {
+                    memory_fallback.insert(pid);
+                }
                 ProcessInfo {
                     pid,
                     ppid: p.parent().map(|pp| pp.as_u32()),
@@ -231,9 +253,7 @@ impl ProcessTable {
                     user,
                     start_time,
                     start_token,
-                    // Prefer the OS figure users see (phys_footprint / VmRSS / Working set);
-                    // fall back to sysinfo when the platform call can't see this process.
-                    memory_bytes: crate::memory::sample(pid, p.memory()),
+                    memory_bytes,
                     cpu_percent: p.cpu_usage(),
                 }
             })
@@ -258,8 +278,8 @@ impl ProcessTable {
                 }
             }
         }
-        #[cfg_attr(not(unix), allow(unused_mut))]
         let mut t = Self::from_processes(procs, std::process::id());
+        t.memory_fallback = memory_fallback;
         #[cfg(windows)]
         {
             t.windows_cmd = t
@@ -321,6 +341,7 @@ impl ProcessTable {
             self_uid: None,
             #[cfg(windows)]
             windows_cmd: HashMap::new(),
+            memory_fallback: HashSet::new(),
         };
         t.self_uid = t.procs.get(&self_pid).and_then(|p| p.uid);
         t.self_ancestors = t.ancestors(self_pid).into_iter().collect();

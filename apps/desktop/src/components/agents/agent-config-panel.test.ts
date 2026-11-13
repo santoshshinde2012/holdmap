@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import AgentConfigPanel from "./AgentConfigPanel.svelte";
-import { mockAgents } from "../../lib/mock";
+import { mockAgents } from "../../lib/mock-agents";
 
 afterEach(cleanup);
 
@@ -33,9 +33,9 @@ describe("AgentConfigPanel", () => {
     const oninspect = vi.fn();
     const plain = mockAgents().agents[0];
     const view = render(AgentConfigPanel, { agent: plain, oninspect });
-    await fireEvent.click(view.getByRole("button", { name: "Read configuration" }));
+    await fireEvent.click(view.getByRole("button", { name: "Read local config" }));
     expect(oninspect).toHaveBeenCalledOnce();
-    await fireEvent.click(view.getByRole("button", { name: "Read MCP & skills →" }));
+    await fireEvent.click(view.getByRole("button", { name: "Read local config" }));
     expect(oninspect).toHaveBeenCalledTimes(2);
   });
 });

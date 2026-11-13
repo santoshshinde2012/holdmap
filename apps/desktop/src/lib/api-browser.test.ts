@@ -97,3 +97,13 @@ describe("bounded browser load fixtures", () => {
     expect(sample).toEqual(before);
   });
 });
+
+describe("demo locations", () => {
+  it("adds documented locations only when configuration is read", async () => {
+    const passive = await agents(false);
+    expect(passive.agents.every((agent) => !agent.capabilities?.locations?.length)).toBe(true);
+    const inspected = await agents(true);
+    const cursor = inspected.agents.find((agent) => agent.product === "cursor")!;
+    expect(cursor.capabilities!.locations!.some((place) => place.kind === "rules" && place.ignored_count === 1)).toBe(true);
+  });
+});

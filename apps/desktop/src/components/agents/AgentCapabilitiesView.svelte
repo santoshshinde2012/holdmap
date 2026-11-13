@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import { CONSENT_LABEL } from "../../lib/consent";
   import Icon from "../Icon.svelte";
   import { ActionDock, Button, Callout, Select } from "../ui";
   import StatStrip from "../ui/StatStrip.svelte";
@@ -72,7 +73,7 @@
   const inspected = $derived(scoped.some((agent) => agent.capabilities?.inspected));
   const mcpCount = $derived(inventory.filter((item) => item.kind === "mcp").length);
   const skillCount = $derived(inventory.filter((item) => item.kind === "skill").length);
-  const notRead = "Not read yet: use Read MCP config on Home.";
+  const notRead = `Not read yet: use ${CONSENT_LABEL} on Home.`;
   const capStats = $derived([
     { id: "agents", label: "Agents", value: scoped.length },
     { id: "mcp", label: "MCP servers", value: inspected ? mcpCount : "Not read", title: inspected ? undefined : notRead },

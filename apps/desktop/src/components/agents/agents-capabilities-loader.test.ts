@@ -3,7 +3,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import { tick } from "svelte";
 import AgentsView from "../AgentsView.svelte";
-import { mockAgents } from "../../lib/mock";
+import { mockAgents } from "../../lib/mock-agents";
 
 const workspace = vi.hoisted(() => {
   let reject!: (error: Error) => void;

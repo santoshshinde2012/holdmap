@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DemoAnalyzers } from "./analyzers-demo";
-import { mockAgents } from "./mock";
+import { mockAgents } from "./mock-agents";
 
 describe("browser demo: any MCP analyzer", () => {
   it("is added, listed, mapped, approved and run with sample data only", () => {

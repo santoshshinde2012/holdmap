@@ -2,17 +2,25 @@
   // Documented skills, context/memory, rules, MCP config, commands/prompts and built-ins
   // grouped by documented precedence layer. Present on disk is not proof an agent loaded it.
   import Icon from "../Icon.svelte";
+  import ConsentGate from "../ui/ConsentGate.svelte";
   import ExportActions from "../ui/ExportActions.svelte";
-  import { PLACE_KIND, PLACE_STATUS, filterPlaces, formatModified, placeEntries, placeLayers, placesSummary, type PlaceFilter } from "../../lib/agent-memory";
+  import { PLACE_KIND, PLACE_STATUS, combineText, filterPlaces, placeEntries, placeFacts, placeLayers, placesSummary, type PlaceFilter } from "../../lib/agent-memory";
   import { humanBytes, tildify } from "../../lib/format";
   import type { Agent } from "../../lib/types";
 
   const KIND_ICON: Record<string, string> = {
-    skills: "sparkles",
-    agent_memory: "panel",
+    instructions: "panel",
     rules: "shield",
+    settings: "sliders",
     mcp_config: "plug",
-    instructions: "terminal",
+    skills: "sparkles",
+    commands: "terminal",
+    subagents: "bot",
+    hooks: "zap",
+    extensions: "box",
+    agent_memory: "history",
+    session_data: "clock",
+    secret_store: "lock",
     builtin: "cpu",
     plugin: "box",
   };
@@ -57,15 +65,15 @@
 
   {#if !capabilities?.inspected}
     <div class="gate">
-      <p class="empty">Skills, context, rules, MCP config and built-ins for {agent.name} stay hidden until configuration is read. Reading lists paths, counts and timestamps. It does not open chats or secret values.</p>
+      <p class="empty">Documented locations for {agent.name} (instructions, rules, MCP config, skills, agent memory and session data) are checked when you read local config.</p>
       {#if capabilities?.limits?.length}<p class="why">{capabilities.limits[0]}</p>{/if}
-      {#if oninspect}<button type="button" class="inspect-btn" onclick={oninspect}><Icon name="search" size={12} />Read configuration</button>{/if}
+      {#if oninspect}<ConsentGate onconsent={oninspect} />{/if}
     </div>
   {:else if !places.length}
     <p class="empty">No documented locations were reported for {agent.name}.</p>
     {#if capabilities.limits.length}<p class="why">{capabilities.limits[0]}</p>{/if}
   {:else}
-    <p class="why">A present file is not proof it was loaded. Lower rank = more specific layer; holdmap does not pick a winner.</p>
+    <p class="why">A present file is not proof it was loaded. Layers are listed from most specific to broadest; each row says how its layers combine.</p>
     <div class="filter-bar" role="toolbar" aria-label="Location filters">
       <div class="seg-group">
         <button type="button" aria-pressed={filter === "all"} onclick={() => (filter = "all")}>All <span class="fcount">{places.length}</span></button>
@@ -94,7 +102,6 @@
           <p class="layer-name">
             <i class="node-dot" aria-hidden="true"></i>
             <span>{layer.label}</span>
-            <span class="rank" title="Lower rank is the more specific documented layer. This is not a resolved winner.">Rank {layer.rank}</span>
           </p>
           <ul class="place-list">
             {#each layer.places as place (place.id)}
@@ -104,7 +111,8 @@
                 <div class="place-head">
                   <span class="pills">
                     <span class="kind-ic" aria-hidden="true"><Icon name={KIND_ICON[place.kind] ?? "folder"} size={12} /></span>
-                    <span class="kind">{PLACE_KIND[place.kind] ?? place.kind}</span>
+                    <span class="kind">{place.label || (PLACE_KIND[place.kind] ?? place.kind)}</span>
+                    {#if place.label}<span class="pill">{PLACE_KIND[place.kind] ?? place.kind}</span>{/if}
                     <span class="pill status-{place.status}">{PLACE_STATUS[place.status] ?? place.status}</span>
                     {#if place.symlink_target}<span class="pill status-symlink">Symlink</span>{/if}
                   </span>
@@ -119,7 +127,7 @@
                 {#if place.path}
                   <span class="path mono" title={place.path}>{tildify(place.path)}</span>
                 {:else}
-                  <span class="path muted-desc">{place.kind === "builtin" ? "Built-in tools ship inside the product (no file on disk)." : place.kind === "plugin" ? "Installed plugins and cloud skills (not walked on disk)." : "No filesystem path recorded."}</span>
+                  <span class="path muted-desc">{place.kind === "builtin" ? "Built-in tools ship inside the product (no file on disk)." : place.kind === "plugin" ? "Installed plugins and cloud skills (not walked on disk)." : place.scope === "account" ? "Kept in the account or app settings, not on disk." : "Not documented for this operating system."}</span>
                 {/if}
 
                 {#if place.symlink_target}
@@ -135,7 +143,7 @@
                     {:else if isMissing}
                       <span class="meta">Not found on disk</span>
                     {:else}
-                      <span class="meta">{place.file_count == null ? "count unknown" : `${place.file_count} ${place.file_count === 1 ? "entry" : "entries"}`} · {place.byte_size == null ? "size unknown" : humanBytes(place.byte_size)} · {formatModified(place.modified_unix_ms)}</span>
+                      <span class="meta">{placeFacts(place)}</span>
                     {/if}
                     {#if listed.length}
                       <button type="button" class="entries" aria-expanded={!!open[place.id]} onclick={() => (open[place.id] = !open[place.id])}>
@@ -148,6 +156,8 @@
                 {/if}
 
                 {#if place.status_reason}<span class="why">{place.status_reason}</span>{/if}
+                {#if place.note}<span class="why">{place.note}</span>{/if}
+                {#if combineText(place) && place.path}<span class="why combine">How layers combine: {combineText(place)}{place.custom_home ? ` · custom home from ${place.custom_home}` : ""}</span>{/if}
 
                 {#if listed.length && open[place.id]}
                   <ul class="names">
@@ -185,8 +195,6 @@
   .c-ok { color: var(--ok); font-weight: var(--fw-medium); }
 
   .gate { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: var(--r-md); background: var(--surface-2); }
-  .inspect-btn { justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border-strong); border-radius: var(--r-full); background: var(--surface); color: var(--accent); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); cursor: pointer; }
-  .inspect-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
 
   .empty, .why, .meta { margin: 0; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); overflow-wrap: anywhere; }
 
@@ -217,8 +225,7 @@
   .pills { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; }
   .kind-ic { display: inline-flex; color: var(--muted); flex: none; }
   .kind { color: var(--text); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); }
-  .pill, .rank { font-size: var(--fs-caption); line-height: var(--lh-caption); padding: 0 6px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); flex: none; }
-  .rank { color: var(--muted); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
+  .pill { font-size: var(--fs-caption); line-height: var(--lh-caption); padding: 0 6px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); flex: none; }
   .status-present { background: var(--ok-soft); color: var(--ok); font-weight: var(--fw-medium); }
   .status-missing { background: var(--surface); color: var(--muted); }
   .status-unreadable, .status-skipped { background: var(--warn-soft); color: var(--warn); }

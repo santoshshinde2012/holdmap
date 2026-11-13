@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { MOCK_SNAPSHOT, mockAgents } from "../mock";
+import { MOCK_SNAPSHOT } from "../mock";
+import { mockAgents } from "../mock-agents";
 import { attention, hotAgents, needsByAgent } from "../home";
 import { layoutScene } from "./layout";
 import { labelPriority, labelSize, pickLabels, placeLabels } from "./labels";

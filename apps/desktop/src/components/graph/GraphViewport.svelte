@@ -13,7 +13,8 @@
   const viewport = useViewport();
   const initialized = useNodesInitialized();
   const viewportInitialized = useViewportInitialized();
-  const padding = { top: "24px", bottom: "72px", x: "24px" } as const;
+  // The top padding leaves room for the floating graph chrome.
+  const padding = { top: "84px", bottom: "72px", x: "24px" } as const;
   const readableZoom = .85;
   let fittedKey: string | null = null;
   const revealed = { point: null as Point | null, width: 0, height: 0 };
@@ -42,7 +43,7 @@
         return;
       }
       // Start at the first compact group instead of centring empty space between islands.
-      void flow.setViewport({ x: 24 - bounds.x * readableZoom, y: 24 - bounds.y * readableZoom, zoom: readableZoom }, { duration });
+      void flow.setViewport({ x: 24 - bounds.x * readableZoom, y: 84 - bounds.y * readableZoom, zoom: readableZoom }, { duration });
       if (focus) reveal(focus, duration);
     } else {
       void flow.fitView({ padding, minZoom: readableZoom, maxZoom: 1.1, duration });

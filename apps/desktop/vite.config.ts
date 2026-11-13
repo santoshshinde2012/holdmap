@@ -18,6 +18,8 @@ export default defineConfig({
     fs: { allow: [".", "../../crates/holdmap-analyzers/presets"] },
   },
   envPrefix: ["VITE_", "TAURI_ENV_*"],
+  // The website demo leaves out developer-only pages such as the #ui-gallery UI kit.
+  define: { __HOLDMAP_SITE_DEMO__: JSON.stringify(!!process.env.HOLDMAP_SITE_DEMO) },
   build: {
     target: process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari15",
     // Vite 8 minifies with Oxc (esbuild is no longer bundled).

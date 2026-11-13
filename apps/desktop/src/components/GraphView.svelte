@@ -1,5 +1,4 @@
 <script lang="ts">
-  import StatStrip, { type Stat } from "./ui/StatStrip.svelte";
   import { SvelteFlow, Background, type NodeTypes, type EdgeTypes } from "@xyflow/svelte";
   import "@xyflow/svelte/dist/style.css";
   import { setContext, tick, untrack } from "svelte";
@@ -10,19 +9,23 @@
   import AutoMiniMap from "./graph/AutoMiniMap.svelte";
   import Icon from "./Icon.svelte";
   import { ActionDock, ActionPill, IconButton } from "./ui";
-  import type { Graph, GraphNode } from "../lib/types";
-  import { FORCE_NODE_LIMIT, graphForQuery, graphNodeMatches, layout, layoutModeFor, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Point, type Positions } from "../lib/graph";
+  import type { Agent, Graph, GraphNode } from "../lib/types";
+  import { agentForPids } from "../lib/agent-scope";
+  import { FORCE_NODE_LIMIT, directionForWidth, graphForQuery, graphNodeMatches, layout, layoutModeFor, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Point, type Positions } from "../lib/graph";
   import { prefGet, prefGetBoolean, prefGetChoice, prefSet } from "../lib/prefs";
   import { humanBytes } from "../lib/format";
   import { isComposingKey } from "../lib/keyboard";
 
-  let { graph, selectedNode, dark, reduced, onselect, onstopcluster, all = false, ontoggleall, query = "", onclearquery, onvisiblechange, loading = false }: {
+  let { graph, selectedNode, dark, reduced, onselect, onstopcluster, all = false, ontoggleall, query = "", onclearquery, onvisiblechange, loading = false, agents = [], onopenagent }: {
     all?: boolean; ontoggleall?: () => void;
     graph: Graph | null; selectedNode: string | null; dark: boolean; reduced: boolean;
     onselect: (n: GraphNode | null) => void; onstopcluster: (name: string) => void;
     query?: string; onclearquery?: () => void;
     onvisiblechange?: (ids: string[]) => void;
     loading?: boolean;
+    /** Running agents, so a peer process that belongs to one can open it in Agents. */
+    agents?: Agent[];
+    onopenagent?: (id: string) => void;
   } = $props();
 
   let mode = $state<LayoutMode>(prefGetChoice("layout", ["layered", "force"], "layered"));
@@ -34,6 +37,11 @@
   let optionsTrigger: HTMLButtonElement | undefined = $state();
   let optionsPanel: HTMLDivElement | undefined = $state();
   let width = $state(0), height = $state(0);
+  // The whole section's width (not the canvas, which shrinks when the peer pane docks).
+  let sectionWidth = $state(0);
+  const direction = $derived(directionForWidth(sectionWidth));
+  // The peer pane docks beside the canvas only when there is room; otherwise it floats.
+  const wide = $derived(sectionWidth === 0 || sectionWidth > 900);
   let focusRequest = $state<{ id: string; version: number } | null>(null);
   $effect(() => prefSet("layout", mode));
   $effect(() => prefSet("animate", animate ? "1" : "0"));
@@ -41,7 +49,12 @@
   $effect(() => prefSet("widgets", widgets ? "1" : "0"));
 
   function requestFocus(id: string) { focusRequest = { id, version: (focusRequest?.version ?? 0) + 1 }; }
-  setContext("graph-actions", { stopCluster: (name: string) => onstopcluster(name) });
+  /** A cluster whose members are highlighted from its header; independent of the selection. */
+  let clusterFocus = $state<string | null>(null);
+  setContext("graph-actions", {
+    stopCluster: (name: string) => onstopcluster(name),
+    focusCluster: (id: string) => { clusterFocus = clusterFocus === id ? null : id; },
+  });
   setContext("service-graph-actions", {
     select: (node: GraphNode) => { requestFocus(node.id); onselect(node); },
     focus: requestFocus,
@@ -55,11 +68,11 @@
     return { ...graph, nodes, edges: graph.edges.filter((e) => ids.has(e.from) && ids.has(e.to)) };
   });
   const shown = $derived(graphForQuery(scoped, query));
-  const graphStats = $derived<Stat[]>([
-    { id: "services", label: "Services", value: shown ? shown.nodes.filter((n) => n.kind !== "external").length : null },
-    { id: "links", label: "Links", value: shown ? shown.edges.length : null },
-    { id: "groups", label: "Groups", value: shown ? shown.clusters.length : null, meta: "Compose, k8s, workspaces" },
-    { id: "remote", label: "Remote", value: shown ? shown.edges.filter((e) => e.kind === "outbound").length : null, meta: "outbound connections" },
+  const graphStats = $derived([
+    { id: "services", label: "Services", value: shown ? shown.nodes.filter((n) => n.kind !== "external").length : 0, title: "Services and client processes" },
+    { id: "links", label: "Links", value: shown ? shown.edges.length : 0, title: "Observed connections" },
+    { id: "groups", label: "Groups", value: shown ? shown.clusters.length : 0, title: "Compose, k8s, workspaces" },
+    { id: "remote", label: "Remote", value: shown ? shown.edges.filter((e) => e.kind === "outbound").length : 0, title: "Outbound connections" },
   ]);
   const matches = $derived(shown?.nodes.filter((n) => graphNodeMatches(n, query)).length ?? 0);
   let visibleSignature: string | null = null;
@@ -72,19 +85,37 @@
   });
   const forceLimited = $derived((shown?.nodes.length ?? 0) > FORCE_NODE_LIMIT);
   const effectiveMode = $derived(layoutModeFor(shown?.nodes.length ?? 0, mode));
-  const signature = $derived(shown ? effectiveMode + "|" +
+  const signature = $derived(shown ? effectiveMode + "|" + direction + "|" +
     shown.nodes.map((n) => n.id + "@" + (n.cluster ?? "")).sort().join(",") + "|" +
     shown.edges.map((e) => e.id + "@" + e.from + ">" + e.to).sort().join(",") + "|" +
     shown.clusters.map((c) => c.id + ":" + [...c.nodes].sort().join(",")).sort().join(";") : "");
   const cache: { sig: string; pos: Positions } = { sig: "", pos: new Map() };
   const positions = $derived.by(() => {
     if (!shown) return new Map() as Positions;
-    if (signature !== cache.sig) { cache.pos = layout(shown, effectiveMode); cache.sig = signature; }
+    if (signature !== cache.sig) { cache.pos = layout(shown, effectiveMode, direction); cache.sig = signature; }
     return cache.pos;
   });
+  const focusedCluster = $derived(clusterFocus ? shown?.clusters.find((c) => c.id === clusterFocus) ?? null : null);
   const flow = $derived.by(() => {
     if (!shown) return { nodes: [] as FlowNode[], edges: [] as FlowEdge[] };
-    return toFlow(shown, positions, { focus: hover ?? selectedNode, selectedId: selectedNode, animate: animate && !reduced });
+    const cluster = focusedCluster;
+    const base = toFlow(shown, positions, { focus: cluster ? null : hover ?? selectedNode, selectedId: selectedNode, animate: animate && !reduced, direction: effectiveMode === "layered" ? direction : "LR" });
+    if (!cluster) return base;
+    const members = new Set(cluster.nodes);
+    return {
+      nodes: base.nodes.map((n) => n.type === "cluster"
+        ? { ...n, data: { ...n.data, dim: n.data.cluster?.id !== cluster.id, focused: n.data.cluster?.id === cluster.id } }
+        : { ...n, data: { ...n.data, dim: !members.has(n.id), hl: members.has(n.id) } }),
+      edges: base.edges.map((e) => {
+        const inside = members.has(e.source) && members.has(e.target);
+        return { ...e, data: { ...e.data!, dim: !inside, hl: inside } };
+      }),
+    };
+  });
+  // Selecting a service outside the highlighted cluster ends the highlight.
+  $effect(() => {
+    const id = selectedNode;
+    untrack(() => { if (id && focusedCluster && !focusedCluster.nodes.includes(id)) clusterFocus = null; });
   });
   let nodes = $state.raw<FlowNode[]>([]), edges = $state.raw<FlowEdge[]>([]);
   $effect(() => {
@@ -112,12 +143,25 @@
     const node = shown?.nodes.find((n) => n.is_dev) ?? shown?.nodes[0];
     return node ? positions.get(node.id) ?? null : null;
   });
-  const viewKey = $derived(effectiveMode + "|" + query.trim() + "|" + all + "|" + external);
+  const viewKey = $derived(effectiveMode + "|" + direction + "|" + query.trim() + "|" + all + "|" + external);
   const hasRemote = $derived(graph?.nodes.some((n) => n.kind === "external") ?? false);
   // A lone "External" card with no service beside it is still an empty graph.
   const empty = $derived(!shown?.nodes.some((n) => n.kind !== "external"));
   const peer = $derived(shown?.nodes.find((n) => n.id === selectedNode && n.ports.length === 0) ?? null);
   const peerLinks = $derived(peer ? shown?.edges.filter((edge) => edge.from === peer.id || edge.to === peer.id) ?? [] : []);
+  const peerNeighbors = $derived.by(() => {
+    if (!peer || !shown) return [] as { node: GraphNode; direction: "uses" | "used by" }[];
+    const seen = new Map<string, { node: GraphNode; direction: "uses" | "used by" }>();
+    for (const edge of peerLinks) {
+      const other = edge.from === peer.id ? edge.to : edge.from;
+      const node = shown.nodes.find((n) => n.id === other);
+      if (node && !seen.has(node.id)) seen.set(node.id, { node, direction: edge.from === peer.id ? "uses" : "used by" });
+    }
+    return [...seen.values()];
+  });
+  const peerRemotes = $derived([...new Set(peerLinks.flatMap((edge) => edge.remotes))]);
+  const peerAgent = $derived(peer ? agentForPids(agents, peer.pids) : null);
+  function selectNeighbor(node: GraphNode) { requestFocus(node.id); onselect(node); }
   const legend = [["service", "Service"], ["client", "Client"], ["external", "External host"]];
 
   function closeOptions(restore = false) { optionsOpen = false; if (restore) optionsTrigger?.focus(); }
@@ -156,45 +200,7 @@
 
 <svelte:window onpointerdown={outside} />
 
-<section class="graph" class:reduced id="service-graph" tabindex="-1" aria-label="Service graph">
-  <header class="graph-head">
-    <div class="heading">
-      <span class="graph-mark" aria-hidden="true"><Icon name="graph" size={18} /></span>
-      <div><h2>Service graph</h2><p class="stats">Who talks to whom on this computer{#if loading}<span class="updating" role="status">Updating…</span>{/if}</p></div>
-    </div>
-    <div class="primary-controls" role="toolbar" aria-label="Graph view options">
-      {#if ontoggleall}
-        <ActionPill size="compact" toggle icon="layers" label="All services" pressed={all} title="Include local apps and system services alongside your development services" onclick={ontoggleall} />
-      {/if}
-      <ActionDock hinge={false} animate={false} size="compact" label="Layout" value={effectiveMode}
-        options={[{ value: "layered", label: "Layered", icon: "layers", title: "Arrange services from clients to dependencies" },
-          { value: "force", label: "Force", icon: "radar", title: forceLimited ? "Force is available for up to " + FORCE_NODE_LIMIT + " services. Layered keeps larger graphs responsive." : "Group connected services, with disconnected groups packed nearby", disabled: forceLimited }]}
-        onchange={(v) => (mode = v)} />
-      <div class="options-wrap" onfocusout={leaveOptions}>
-        <button type="button" class="options-trigger" bind:this={optionsTrigger} aria-label="Graph options" aria-expanded={optionsOpen} aria-controls={optionsOpen ? "graph-display-options" : undefined}
-          onclick={() => (optionsOpen = !optionsOpen)} onkeydown={optionsKey}><Icon name="sliders" size={14} /><span>Options</span><Icon name="chevron-down" size={12} /></button>
-        {#if optionsOpen}
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions (Escape dismisses the nonmodal disclosure from its child controls.) -->
-          <div class="options" role="region" aria-label="Graph display options" id="graph-display-options" tabindex="-1" bind:this={optionsPanel} onkeydown={optionsKey}>
-            <div class="options-heading"><strong>Display options</strong><IconButton icon="x" size="sm" label="Close graph options" onclick={() => closeOptions(true)} /></div>
-            <div class="option"><div><strong>Traffic</strong><p>{reduced ? "Off while reduced motion is enabled." : "Animate observed connections."}</p></div><ActionPill size="compact" toggle label="Traffic" pressed={animate && !reduced} disabled={reduced} onclick={() => (animate = !animate)} /></div>
-            <div class="option"><div><strong>External hosts</strong><p>{hasRemote ? "Include observed remote endpoints." : "No remote endpoints in this scan."}</p></div><ActionPill size="compact" toggle label="External" pressed={external && hasRemote} disabled={!hasRemote} title={hasRemote ? "Show outbound connections to remote hosts" : "No outbound connections to remote hosts right now"} onclick={() => (external = !external)} /></div>
-            <div class="option"><div><strong>Legend</strong><p>Show the node and connection key.</p></div><ActionPill size="compact" toggle label="Legend" pressed={widgets} onclick={() => (widgets = !widgets)} /></div>
-          </div>
-        {/if}
-      </div>
-    </div>
-  </header>
-  <div class="graph-summary"><StatStrip compact label="Graph summary" stats={graphStats} /></div>
-  {#if query.trim()}
-    <div class="search-context" role="status">
-      <Icon name="search" size={14} /><span><strong>{matches}</strong> {matches === 1 ? "match" : "matches"}{#if (shown?.nodes.length ?? 0) > matches} · {(shown?.nodes.length ?? 0) - matches} connected neighbours{/if}</span>
-      {#if onclearquery}<button type="button" onclick={onclearquery}>Clear search</button>{/if}
-    </div>
-  {/if}
-  {#if !empty && shown?.edges.length === 0}
-    <div class="connection-note" role="status"><Icon name="info" size={14} /><span>No connections between these services yet. Pan to explore; select a card for details.</span></div>
-  {/if}
+<section class="graph" class:reduced class:has-peer={!!peer} class:wide bind:clientWidth={sectionWidth} id="service-graph" tabindex="-1" aria-label="Service graph">
   <div class="graph-body" bind:clientWidth={width} bind:clientHeight={height} aria-busy={loading || undefined}>
     {#if empty}
       <div class="empty" role="status">
@@ -220,54 +226,119 @@
         onpaneclick={() => onselect(null)}>
         <GraphViewport {viewKey} {focus} {anchor} {width} {height} {reduced} pending={loading} />
         <Background gap={24} size={1} />
-        {#if !peer}<AutoMiniMap {dark} />{/if}
+        <AutoMiniMap {dark} />
       </SvelteFlow>
-      {#if peer}
-        <aside class="peer-inspector" aria-label="Details for {peer.label}">
-          <header><div><span class="eyebrow">{peer.kind === "external" ? "External host" : "Observed process"}</span><h3>{peer.label}</h3></div><IconButton icon="x" label="Close service details" onclick={closePeer} /></header>
-          {#if peer.pids.length}<p class="mono">PID {peer.pids.join(", ")}</p>{/if}
-          {#if peer.pids.length}<p>{peer.cpu_percent.toFixed(1)}% CPU · {humanBytes(peer.memory_bytes)} memory</p>{/if}
-          <p>{peerLinks.length} observed {peerLinks.length === 1 ? "link" : "links"} · No listening ports reported</p>
-          {#each peerLinks.flatMap((edge) => edge.remotes) as remote}<p class="mono remote">{remote}</p>{/each}
-          <small>Connections show observed sockets, not messages or tool calls.</small>
-        </aside>
-      {/if}
     {/if}
-  </div>
-  {#if widgets && !empty}
-    <div class="legend" aria-label="Graph legend">
-      {#each legend as [kind, label]}<span class={"lg lg-" + kind}><i aria-hidden="true"></i>{label}</span>{/each}
-      <span class="lg edge-key"><svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke="currentColor" stroke-width="1.6" /></svg>Uses</span>
-      <span class="lg edge-key"><svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke="currentColor" stroke-width="1.6" stroke-dasharray="4 3" /></svg>Remote</span>
-      <span class="guide">Select a card to inspect</span>
+
+    <!-- Floating chrome: frosted pills over the canvas, matching the Agents map. -->
+    <div class="chrome-host">
+      <div class="chrome">
+        <div class="bar" role="toolbar" aria-label="Graph view options">
+          {#if ontoggleall}
+            <ActionPill size="compact" toggle icon="layers" label="All services" pressed={all} title="Include local apps and system services alongside your development services" onclick={ontoggleall} />
+          {/if}
+          <ActionDock hinge={false} animate={false} size="compact" label="Layout" value={effectiveMode}
+            options={[{ value: "layered", label: "Layered", icon: "layers", title: "Arrange services from clients to dependencies" },
+              { value: "force", label: "Force", icon: "radar", title: forceLimited ? "Force is available for up to " + FORCE_NODE_LIMIT + " services. Layered keeps larger graphs responsive." : "Group connected services, with disconnected groups packed nearby", disabled: forceLimited }]}
+            onchange={(v) => (mode = v)} />
+          <div class="options-wrap" onfocusout={leaveOptions}>
+            <button type="button" class="options-trigger" bind:this={optionsTrigger} aria-label="Graph options" title="Graph options" aria-expanded={optionsOpen} aria-controls={optionsOpen ? "graph-display-options" : undefined}
+              onclick={() => (optionsOpen = !optionsOpen)} onkeydown={optionsKey}><Icon name="sliders" size={13} /><span class="opt-label">Options</span><Icon name="chevron-down" size={11} /></button>
+            {#if optionsOpen}
+              <!-- svelte-ignore a11y_no_noninteractive_element_interactions (Escape dismisses the nonmodal disclosure from its child controls.) -->
+              <div class="options" role="region" aria-label="Graph display options" id="graph-display-options" tabindex="-1" bind:this={optionsPanel} onkeydown={optionsKey}>
+                <div class="options-heading"><strong>Display options</strong><IconButton icon="x" size="sm" label="Close graph options" onclick={() => closeOptions(true)} /></div>
+                <div class="option"><div><strong>Traffic</strong><p>{reduced ? "Off while reduced motion is enabled." : "Animate observed connections."}</p></div><ActionPill size="compact" toggle label="Traffic" pressed={animate && !reduced} disabled={reduced} onclick={() => (animate = !animate)} /></div>
+                <div class="option"><div><strong>External hosts</strong><p>{hasRemote ? "Include observed remote endpoints." : "No remote endpoints in this scan."}</p></div><ActionPill size="compact" toggle label="External" pressed={external && hasRemote} disabled={!hasRemote} title={hasRemote ? "Show outbound connections to remote hosts" : "No outbound connections to remote hosts right now"} onclick={() => (external = !external)} /></div>
+                <div class="option"><div><strong>Legend</strong><p>Show the node and connection key.</p></div><ActionPill size="compact" toggle label="Legend" pressed={widgets} onclick={() => (widgets = !widgets)} /></div>
+              </div>
+            {/if}
+          </div>
+        </div>
+        {#if !empty}
+          <div class="stats" role="group" aria-label="Graph summary">
+            {#each graphStats as stat (stat.id)}<span class="stat stat-{stat.id}" title={stat.title}><b>{stat.value}</b> {stat.label}</span>{/each}
+            {#if loading}<span class="updating" role="status">Updating…</span>{/if}
+          </div>
+        {/if}
+        {#if widgets && !empty}
+          <div class="legend" role="group" aria-label="Graph legend">
+            {#each legend as [kind, label]}<span class={"lg lg-" + kind}><i aria-hidden="true"></i>{label}</span>{/each}
+            <span class="lg edge-key"><svg width="18" height="6" aria-hidden="true"><line x1="0" y1="3" x2="18" y2="3" stroke="currentColor" stroke-width="1.6" /></svg>Uses</span>
+            <span class="lg edge-key"><svg width="18" height="6" aria-hidden="true"><line x1="0" y1="3" x2="18" y2="3" stroke="currentColor" stroke-width="1.6" stroke-dasharray="4 3" /></svg>Remote</span>
+          </div>
+        {/if}
+        {#if query.trim()}
+          <div class="search-context" role="status">
+            <Icon name="search" size={12} /><span><strong>{matches}</strong> {matches === 1 ? "match" : "matches"}{#if (shown?.nodes.length ?? 0) > matches} · {(shown?.nodes.length ?? 0) - matches} connected neighbours{/if}</span>
+            {#if onclearquery}<button type="button" onclick={onclearquery}>Clear search</button>{/if}
+          </div>
+        {/if}
+        {#if focusedCluster}
+          <div class="cluster-focus" role="status">
+            <Icon name="layers" size={12} /><span>Highlighting <strong>{focusedCluster.name}</strong> · {focusedCluster.nodes.length} {focusedCluster.nodes.length === 1 ? "service" : "services"}</span>
+            <button type="button" onclick={() => (clusterFocus = null)}>Clear</button>
+          </div>
+        {/if}
+        {#if !empty && shown?.edges.length === 0}
+          <div class="connection-note" role="status"><Icon name="info" size={12} /><span>No connections between these services yet. Pan to explore; select a card for details.</span></div>
+        {/if}
+      </div>
     </div>
+  </div>
+
+  {#if peer}
+    <aside class="peer-inspector" aria-label="Details for {peer.label}">
+      <header>
+        <span class="peer-tile" aria-hidden="true"><Icon name={peer.kind === "external" ? "globe" : "monitor"} size={16} /></span>
+        <div class="peer-who"><span class="eyebrow">{peer.kind === "external" ? "External host" : "Observed process"}</span><h3>{peer.label}</h3></div>
+        <IconButton icon="x" label="Close service details" onclick={closePeer} />
+      </header>
+      {#if peerAgent && onopenagent}
+        <button type="button" class="peer-agent" onclick={() => onopenagent?.(peerAgent.id)}><Icon name="bot" size={13} /><span>Part of <b>{peerAgent.name}</b></span><span class="go">Open in Agents</span></button>
+      {/if}
+      <section class="peer-sec" aria-labelledby="peer-proc-head">
+        <h4 id="peer-proc-head">Process</h4>
+        {#if peer.pids.length}
+          <p class="mono">PID {peer.pids.join(", ")}</p>
+          <p>{peer.cpu_percent.toFixed(1)}% CPU · {humanBytes(peer.memory_bytes)} memory</p>
+        {:else}
+          <p class="muted">No local process — observed as a connection endpoint.</p>
+        {/if}
+        <p>{peerLinks.length} observed {peerLinks.length === 1 ? "link" : "links"} · No listening ports reported</p>
+      </section>
+      {#if peerNeighbors.length}
+        <section class="peer-sec" aria-labelledby="peer-neighbors-head">
+          <h4 id="peer-neighbors-head">Connected services <span class="n">{peerNeighbors.length}</span></h4>
+          <ul class="neighbors">
+            {#each peerNeighbors as { node, direction } (node.id)}
+              <li><button type="button" class="neighbor" onclick={() => selectNeighbor(node)} title="Select {node.label} on the graph">
+                <span class="nb-main"><span class="nb-label">{node.label}</span><span class="nb-sub">{direction}{node.ports.length ? ` · :${node.ports.map((p) => p.port).join(", :")}` : node.kind === "external" ? " · remote hosts" : ""}</span></span>
+                <Icon name="arrow" size={12} />
+              </button></li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
+      {#if peerRemotes.length}
+        <section class="peer-sec" aria-labelledby="peer-remote-head">
+          <h4 id="peer-remote-head">Remote endpoints <span class="n">{peerRemotes.length}</span></h4>
+          <ul class="remotes">{#each peerRemotes as remote}<li class="mono remote">{remote}</li>{/each}</ul>
+        </section>
+      {/if}
+      <small>Connections show observed sockets, not messages or tool calls.</small>
+    </aside>
   {/if}
 </section>
 
 <style>
-  .graph-summary { padding: 0 16px 10px; border-bottom: 1px solid var(--border); background: var(--surface); }
-  .graph { display: flex; flex-direction: column; position: relative; height: 100%; min-height: 0; min-width: 0; background: var(--bg); container-type: inline-size; outline: none; }
+  .graph { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); position: relative; height: 100%; min-height: 0; min-width: 0; background: var(--bg); container-type: inline-size; outline: none; }
+  /* A container query cannot style its own container, so the docked layout keys off a class. */
+  .graph.has-peer.wide { grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); }
+  .graph.has-peer:not(.wide) .peer-inspector { position: absolute; top: 8px; right: 8px; bottom: 8px; width: min(340px, calc(100% - 16px)); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-md); }
   .graph:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
-  .graph-head { position: relative; display: flex; flex: none; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border); z-index: 6; }
-  .heading { display: flex; gap: 10px; align-items: center; min-width: 0; }
-  .graph-mark { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--accent); }
-  h2, h3, p { margin: 0; }
-  h2 { color: var(--text); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-semibold); }
-  .stats { display: flex; align-items: center; gap: 6px; margin-top: 2px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); font-variant-numeric: tabular-nums; }
-  .stats span { color: var(--faint); }
-  .primary-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
-  .options-wrap { display: inline-flex; }
-  .options-trigger { display: inline-flex; align-items: center; gap: 6px; height: var(--h-sm); padding: 0 10px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font: inherit; font-size: var(--fs-body-sm); cursor: pointer; }
-  .options-trigger:hover, .options-trigger[aria-expanded="true"] { background: var(--surface-2); color: var(--accent); border-color: var(--border-strong); }
-  .options-trigger:focus-visible, .cta:focus-visible, .search-context button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-  .options { position: absolute; top: calc(100% + 6px); right: 12px; width: min(320px, calc(100% - 24px)); box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-md); padding: 12px; color: var(--text); }
-  .options-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; font-size: var(--fs-body); }
-  .option { display: flex; gap: 16px; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); }
-  .option strong { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); }
-  .option p { margin-top: 3px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
-  .search-context { display: flex; flex: none; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--accent-soft); color: var(--text-2); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
-  .search-context button { margin-left: auto; border: 0; background: transparent; padding: 0; color: var(--accent); font: inherit; cursor: pointer; }
-  .graph-body { position: relative; flex: 1; min-height: 0; min-width: 0; }
+  h3, h4, p { margin: 0; }
+  .graph-body { position: relative; min-height: 0; min-width: 0; }
   .graph :global(.svelte-flow) { --xy-background-color: var(--bg); --xy-node-border-radius: 14px; --xy-controls-button-background-color: var(--surface); --xy-controls-button-color: var(--text-2); --xy-controls-button-border-color: var(--border); --xy-minimap-background-color: var(--surface); }
   .graph :global(.svelte-flow__node-service), .graph :global(.svelte-flow__node-cluster) { padding: 0; border: 0; background: transparent; box-shadow: none; width: auto; }
   .graph :global(.svelte-flow__controls) { box-shadow: var(--shadow-sm); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
@@ -275,33 +346,75 @@
   .graph :global(.svelte-flow__controls-button.readable-zoom) { width: 54px; font: inherit; font-size: var(--fs-caption); font-variant-numeric: tabular-nums; border-right: 1px solid var(--border); }
   .graph :global(.svelte-flow__minimap) { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-sm); opacity: .85; }
   .graph :global(.svelte-flow__background) { --xy-background-pattern-color: var(--border); }
-  .legend { display: flex; flex: none; gap: 14px; align-items: center; flex-wrap: wrap; padding: 8px 16px; border-top: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+
+  /* Floating chrome: frosted, hairline and compact so the canvas keeps the room. */
+  .chrome-host { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 6; pointer-events: none; }
+  .chrome { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; max-width: min(100%, 620px); }
+  .chrome > * { pointer-events: auto; }
+  .bar, .stats, .legend, .search-context, .connection-note, .cluster-focus { background: var(--overlay); border: 1px solid var(--border); box-shadow: var(--shadow-sm); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; max-width: 100%; box-sizing: border-box; padding: 3px; border-radius: var(--r-full); }
+  .stats { display: flex; flex-wrap: wrap; gap: 2px 12px; max-width: 100%; box-sizing: border-box; padding: 4px 12px; border-radius: var(--r-full); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stats b { color: var(--text); font-weight: var(--fw-semibold); }
+  .updating { color: var(--accent); font-weight: var(--fw-medium); }
+  .legend { display: flex; flex-wrap: wrap; gap: 2px 12px; max-width: 100%; box-sizing: border-box; padding: 4px 12px; border-radius: var(--r-lg); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .lg { display: inline-flex; align-items: center; gap: 5px; }
   .lg i { width: 10px; height: 10px; border-radius: 3px; border: 1.5px solid var(--border-strong); background: var(--surface); }
   .lg-service i { border-left: 3px solid var(--tone-green); }
   .lg-client i { border-style: dashed; }
   .lg-external i { border-style: dashed; background: var(--surface-2); }
-  .guide { margin-left: auto; color: var(--faint); }
-  .empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); text-align: center; padding: 20px; }
+  .options-wrap { display: inline-flex; }
+  .options-trigger { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: var(--r-full); border: 0; background: transparent; color: var(--text-2); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); cursor: pointer; }
+  .options-trigger:hover, .options-trigger[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
+  .options-trigger:focus-visible, .cta:focus-visible, .search-context button:focus-visible, .cluster-focus button:focus-visible, .neighbor:focus-visible, .peer-agent:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .options { position: absolute; top: calc(100% + 6px); left: 0; z-index: 8; width: min(320px, calc(100cqw - 20px)); box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-md); padding: 12px; color: var(--text); }
+  .options-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; font-size: var(--fs-body); }
+  .option { display: flex; gap: 16px; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); }
+  .option strong { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); }
+  .option p { margin-top: 3px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .search-context, .cluster-focus, .connection-note { display: flex; align-items: center; gap: 6px; max-width: 100%; box-sizing: border-box; padding: 3px 4px 3px 10px; border-radius: var(--r-full); color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .search-context, .cluster-focus { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+  .search-context strong, .cluster-focus strong { color: var(--text); }
+  .search-context button, .cluster-focus button { flex: none; min-height: 22px; padding: 0 8px; border: 0; border-radius: var(--r-full); background: var(--surface); color: var(--accent); font: inherit; font-weight: var(--fw-medium); cursor: pointer; }
+  .connection-note { padding-right: 10px; border-radius: var(--r-lg); color: var(--muted); }
+  .empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); text-align: center; padding: 96px 20px 20px; box-sizing: border-box; }
   .empty .art { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: var(--surface-3); color: var(--muted); }
   .empty h3 { color: var(--text); font-size: var(--fs-title); line-height: var(--lh-title); font-weight: var(--fw-semibold); }
   .empty p { font-size: var(--fs-body); line-height: var(--lh-body); max-width: 360px; text-wrap: pretty; }
   .cta { height: var(--h-sm); padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
-  .connection-note { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--surface-2); color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
-  .peer-inspector { position: absolute; z-index: 5; bottom: 16px; right: 16px; width: min(320px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 16px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--surface); color: var(--text-2); box-shadow: var(--shadow-md); display: grid; gap: 10px; font-size: var(--fs-body-sm); }
-  .peer-inspector header { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
-  .peer-inspector h3 { color: var(--text); font-size: var(--fs-body); line-height: var(--lh-body); overflow-wrap: anywhere; }
+
+  /* Peer details dock on the right like the port details pane and the agent inspector. */
+  .peer-inspector { min-height: 0; overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 14px 16px 18px; border-left: 1px solid var(--border); background: var(--surface); color: var(--text-2); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 12px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); z-index: 7; }
+  .peer-inspector header { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
+  .peer-tile { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--accent); }
+  .peer-who { min-width: 0; display: grid; }
+  .peer-inspector h3 { color: var(--text); font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); font-weight: var(--fw-semibold); overflow-wrap: anywhere; }
   .eyebrow { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .peer-agent { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: var(--r-md); background: var(--accent-softer); color: var(--text-2); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); text-align: left; cursor: pointer; }
+  .peer-agent b { color: var(--text); }
+  .peer-agent .go { margin-left: auto; color: var(--accent); font-weight: var(--fw-semibold); white-space: nowrap; }
+  .peer-agent:hover { background: var(--accent-soft); }
+  .peer-sec { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
+  .peer-sec h4 { display: flex; align-items: center; gap: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--text-2); }
+  .peer-sec .n { margin-left: auto; padding: 0 7px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); }
+  .neighbors, .remotes { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .neighbor { display: flex; align-items: center; gap: 8px; padding: 5px 8px; margin: 0 -8px; width: calc(100% + 16px); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); font: inherit; text-align: left; cursor: pointer; }
+  .neighbor:hover { background: var(--surface-2); color: var(--text); }
+  .nb-main { flex: 1; min-width: 0; display: grid; }
+  .nb-label { color: var(--text); font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nb-sub { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .peer-inspector small { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
-  .peer-inspector .remote { overflow-wrap: anywhere; }
-  @container (max-width: 560px) {
-    .graph-head { padding: 10px 12px; gap: 10px; }
-    .primary-controls { gap: 6px; width: 100%; justify-content: space-between; }
-    .guide, .edge-key { display: none; }
-    .legend { padding: 8px 12px; gap: 12px; }
-    .search-context { padding: 8px 12px; }
+  .peer-inspector .remote { overflow-wrap: anywhere; font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); }
+  @container (max-width: 900px) {
+    .graph.has-peer :global(.svelte-flow__minimap) { display: none; }
+  }
+  @container (max-width: 640px) {
+    .graph.has-peer:not(.wide) .peer-inspector { top: auto; left: 8px; width: auto; max-height: min(58%, 440px); }
+    .graph :global(.svelte-flow__controls) { margin: 8px; }
+    .graph :global(.svelte-flow__controls-button) { width: 30px; height: 30px; }
+    .bar { border-radius: var(--r-lg); }
+    .opt-label, .edge-key, .stat-groups { display: none; }
     .graph :global(.svelte-flow__minimap) { display: none; }
-    .peer-inspector { bottom: 66px; max-height: calc(100% - 82px); }
   }
   .reduced :global(*) { animation: none !important; }
 </style>

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { DemoAnalyzers } from "./analyzers-demo";
 import { attention, overview } from "./home";
-import { mockAgents, MOCK_SNAPSHOT } from "./mock";
+import { MOCK_SNAPSHOT } from "./mock";
+import { mockAgents } from "./mock-agents";
 import { findingItems, securitySummary } from "./security-view";
 import { homeReport, homeSummaryText, redactHome, reportFilename, securityReport, securitySarif, securitySummaryText } from "./report-export";
 

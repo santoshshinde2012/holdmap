@@ -94,7 +94,7 @@
     onnodepointerenter={({ node }) => { if (node.type !== "header") hover = node.id; }} onnodepointerleave={() => { hover = null; }}
     ariaLabelConfig={{ "controls.fitView.ariaLabel": "Fit all capabilities in view", "controls.zoomIn.ariaLabel": "Zoom in on capabilities", "controls.zoomOut.ariaLabel": "Zoom out of capabilities" }}>
     <Background gap={22} size={1.2} />
-    <Controls showLock={false} position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.1, duration: reduced ? 0 : 320 }} />
+    <Controls showLock={false} orientation="horizontal" position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.1, duration: reduced ? 0 : 320 }} />
     <AutoMiniMap {dark} />
     <CapabilityViewport {token} {focus} {hub} {width} {height} {reduced} />
   </SvelteFlow>

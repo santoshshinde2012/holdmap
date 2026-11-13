@@ -9,7 +9,7 @@ for (const theme of ["light", "dark"] as const) {
     await openAgents(app);
     await agentHeading(app, "Cursor").click();
     const details = agentDetails(app);
-    const memory = details.getByRole("region", { name: "Memory" });
+    const memory = details.getByRole("region", { name: "RAM" });
     await expect(memory).toBeVisible();
     await expect(memory).toContainText("% of machine RAM");
     await expect(memory).not.toContainText("0.0% of machine RAM");
@@ -32,10 +32,10 @@ test("agent locations group documented layers and copy a path", async ({ app }, 
   await agentHeading(app, "Cursor").click();
   const details = agentDetails(app);
   const locations = details.getByRole("region", { name: /Locations & layers/ });
-  await expect(locations).toContainText("stay hidden until configuration is read");
-  await locations.getByRole("button", { name: "Read configuration" }).click();
+  await expect(locations).toContainText("checked when you read local config");
+  await details.getByRole("button", { name: "Read local config" }).first().click();
   await expect(locations.locator(".layer-name", { hasText: "Project" }).first()).toBeVisible();
-  await expect(locations.getByText("Rank 20").first()).toBeVisible();
+  await expect(locations.getByText(/closer layer overrides|layers merge|all files load/).first()).toBeVisible();
   await expect(locations.getByText("Present").first()).toBeVisible();
   await expect(locations.getByText("Missing").first()).toBeVisible();
   await locations.getByRole("button", { name: "Present only" }).click();
@@ -47,7 +47,7 @@ test("agent locations group documented layers and copy a path", async ({ app }, 
   await locations.getByRole("button", { name: "Copy path" }).first().click();
   await expect(locations.getByRole("button", { name: "Copied" })).toBeVisible();
   const copied = await app.evaluate(() => navigator.clipboard.readText());
-  expect(copied.startsWith("/Users/dev/code/")).toBe(true);
+  expect(copied).toMatch(/^\/(Users\/dev|Library)\//);
   await expect.poll(async () => locations.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
   await locations.screenshot({ path: testInfo.outputPath("agent-locations-dark-desktop.png") });
   await app.setViewportSize({ width: 390, height: 844 });
@@ -88,7 +88,7 @@ test("Agents shows aggregate resources and inferred MCP servers without listener
   await expect(filesystem).toContainText("52070");
   await expect(filesystem).toContainText("0.1% CPU");
   await expect(cursor).toContainText("+8 more processes");
-  await expect(cursor.getByRole("region", { name: "Memory" })).toBeVisible();
+  await expect(cursor.getByRole("region", { name: "RAM" })).toBeVisible();
 });
 
 const searches = [

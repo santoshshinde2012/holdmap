@@ -3,6 +3,7 @@
   // four fixed counters, chips for ports / MCP / projects, and actions pinned to the bottom so
   // cards in a row line up. Click selects (shared with the map); a second click or Enter opens.
   import Icon from "../Icon.svelte";
+  import { CONSENT_LABEL } from "../../lib/consent";
   import { ACCESS_LABEL, type AttentionItem } from "../../lib/home";
   import { KIND_LABEL, accessHeadline, monogram } from "../../lib/agents";
   import { footprint } from "../../lib/machine-map";
@@ -42,7 +43,7 @@
   function headKey(e: KeyboardEvent) { if (e.key === "Enter" && selected) { e.preventDefault(); onopen(agent.id); } }
 </script>
 
-{#snippet unknown()}<span class="unk" title={model.unknownReason ?? "Not read yet: use Read MCP config at the top of Home to read MCP servers and skills."}>Not read</span>{/snippet}
+{#snippet unknown()}<span class="unk" title={model.unknownReason ?? `Not read yet: use ${CONSENT_LABEL} at the top of Home to read MCP servers and skills.`}>Not read</span>{/snippet}
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <article class="card" style="--agent: {color}" aria-label={agent.name} class:selected class:active={active === agent.id} class:dim={active !== null && active !== agent.id}

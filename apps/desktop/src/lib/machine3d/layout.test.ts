@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { MOCK_SNAPSHOT, mockAgents } from "../mock";
+import { MOCK_SNAPSHOT } from "../mock";
+import { mockAgents } from "../mock-agents";
 import { agentPose, cubicBezier, EASE, fitBox, halfHeight, lerpPose, overviewPose, PHI, projectedHalf, topPose, viewAxes, type Pose } from "./camera";
 import { AGENT_MAX_HEIGHT, bounds, layoutScene, partSize, plateY, sceneTop, SIZE, skyY, STREET, type MachineLayout } from "./layout";
 import { demoActivity } from "../activity-demo";

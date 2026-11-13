@@ -11,12 +11,23 @@
   import { activityContext, activityRows, type ActivityFilter, type ActivityOrder } from "../../../lib/agent-flow/triage";
   import type { AgentFlowProps } from "../../../lib/agent-flow/model";
   import { prefGetBoolean, prefSet } from "../../../lib/prefs";
+  import { agentRuns, scopeFlowReport } from "../../../lib/agent-scope";
+  import type { AgentsReport } from "../../../lib/types";
 
   let { query = "", dark, reduced, flowReport = null, activity = null, recording = null, flowLoading = false, activityLoading = false,
     flowError = null, activityError = null, demo = false, paused = false, onpausechange, onflowmodechange, onrefreshflow, onrefreshactivity,
     onstartrecording, onstoprecording, onclearactivity, onactivitysetup, onclearquery,
-    mode = $bindable("connections"), sourceChrome = true,
-  }: AgentFlowProps & { query?: string; dark: boolean; reduced: boolean; mode?: "connections" | "calls"; sourceChrome?: boolean } = $props();
+    mode = $bindable("connections"), sourceChrome = true, report = null, selectedAgent = null, onselectagent,
+  }: AgentFlowProps & { query?: string; dark: boolean; reduced: boolean; mode?: "connections" | "calls"; sourceChrome?: boolean;
+    /** The agents report, to scope Flow to the selected agent. */
+    report?: AgentsReport | null; selectedAgent?: string | null; onselectagent?: (id: string | null) => void } = $props();
+
+  /** With an agent selected, Flow starts on that agent; Show all widens it without clearing the selection. */
+  let scopedToAgent = $state(true);
+  $effect.pre(() => { void selectedAgent; untrack(() => { scopedToAgent = true; }); });
+  const scopeAgent = $derived(report?.agents.find((a) => a.id === selectedAgent) ?? null);
+  const scope = $derived(scopedToAgent ? scopeAgent : null);
+  const scopedReport = $derived(scope ? scopeFlowReport(flowReport, scope) : flowReport);
 
   let inspector = $state(prefGetBoolean("flow.inspector", true));
   $effect(() => prefSet("flow.inspector", inspector ? "1" : "0"));
@@ -47,13 +58,14 @@
   let order = $state<ActivityOrder>("time");
   let recordingControls = $state<{ openSetup(): void; setupVisible(): boolean }>();
 
-  const allRuns = $derived(activityRuns(activity?.spans ?? []));
+  const everyRun = $derived(activityRuns(activity?.spans ?? []));
+  const allRuns = $derived(scope ? agentRuns(everyRun, scope) : everyRun);
   // Search narrows the picker while retaining the current run and its inspected record.
   const runs = $derived(allRuns.filter((r) => r.id === runId || r.spans.some((s) => activityMatches(s, query))));
   const run = $derived(allRuns.find((r) => r.id === runId) ?? null);
   const rows = $derived(activityRows(run, query, filter, order));
   const context = $derived(activityContext(run, rows, chosen));
-  const windowed = $derived(mode === "calls" ? graphWindow(context, chosen) : { graph: observedGraph(flowReport, query), omitted: 0 });
+  const windowed = $derived(mode === "calls" ? graphWindow(context, chosen) : { graph: observedGraph(scopedReport, query), omitted: 0 });
   const graph = $derived(windowed.graph);
   const loading = $derived(mode === "connections" ? flowLoading : activityLoading);
   const error = $derived(mode === "connections" ? flowError : activityError);
@@ -109,6 +121,15 @@
       {#if viewItems.length}<ActionMenu label="View options" size="sm" placement="down" items={viewItems} />{/if}
     </div>
   </header>
+  {#if scopeAgent}
+    <div class="scope-row">
+      {#if scope}
+        <p class="scope" role="status" data-flow-scope>Scoped to <b>{scope.name}</b> · {mode === "connections" ? `${graph.nodes.length} of ${flowReport?.nodes.length ?? 0} participants` : `${allRuns.length} of ${everyRun.length} ${everyRun.length === 1 ? "run" : "runs"}`}<button type="button" class="link" onclick={() => (scopedToAgent = false)}>Show all</button></p>
+      {:else}
+        <p class="scope wide" role="status" data-flow-scope>Showing every agent<button type="button" class="link" onclick={() => (scopedToAgent = true)}>Scope to {scopeAgent.name}</button>{#if onselectagent}<button type="button" class="link" onclick={() => onselectagent?.(null)}>Clear selection</button>{/if}</p>
+      {/if}
+    </div>
+  {/if}
   {#if error}<div class="load-error" role="status">Updates unavailable. {graph.nodes.length ? "Showing the last available data." : "Refresh to try again."}</div>{/if}
   {#if mode === "calls" && runs.length}
     <div class="run-picker"><label for="agent-flow-run">{run?.kind === "session" ? "Session" : "Run"}</label><select id="agent-flow-run" value={runId ?? ""} onchange={(e) => { runId = e.currentTarget.value; chosen = null; }}>{#each runs as r (r.id)}<option value={r.id}>{runName(r)}</option>{/each}</select>
@@ -144,9 +165,10 @@
   {:else}
     <div class="empty" aria-busy={loading}>
       <Icon name={mode === "calls" ? "activity" : "link"} size={28} />
-      <h2>{loading ? "Loading flow…" : query.trim() ? "No flow matches this search" : mode === "calls" ? "No recorded activity yet" : "No observed connections yet"}</h2>
+      <h2>{loading ? "Loading flow…" : query.trim() ? "No flow matches this search" : scope && (mode === "calls" ? everyRun.length : flowReport?.nodes.length) ? `No ${mode === "calls" ? "recorded calls" : "observed connections"} for ${scope.name}` : mode === "calls" ? "No recorded activity yet" : "No observed connections yet"}</h2>
       <p>{query.trim() ? "Search by agent or tool name, process ID, address or port. Clear your search to see all available data." : mode === "calls" ? "Start recording and connect an integration to see reported calls. Running agents alone do not provide call telemetry." : "Start an agent or tool. Its observed process tree, listeners and live socket relationships appear after a scan."}</p>
-      {#if query.trim() && onclearquery}<ActionPill label="Clear search" onclick={onclearquery} />
+      {#if scope && !query.trim() && (mode === "calls" ? everyRun.length : flowReport?.nodes.length)}<ActionPill label="Show all agents" onclick={() => (scopedToAgent = false)} />
+      {:else if query.trim() && onclearquery}<ActionPill label="Clear search" onclick={onclearquery} />
       {:else if mode === "calls" && !query.trim() && !recordingControls?.setupVisible()}<ActionPill label="Set up recording" onclick={() => { showRecording = true; recordingControls?.openSetup(); }} />{/if}
     </div>
   {/if}
@@ -167,6 +189,12 @@
   .toolbar > :global(.setup), .toolbar > :global(.clear-review), .toolbar > :global(.notice), .toolbar > :global(.status-unavailable) { order: 5; flex-basis: 100%; }
   button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 28px; padding: 4px 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; color: var(--text-2); cursor: pointer; font: inherit; font-size: var(--fs-caption); }
   button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-2); } button:disabled { opacity: .5; cursor: not-allowed; } button:focus-visible, select:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .scope-row { display: flex; padding: 6px 14px; border-bottom: 1px solid var(--border); }
+  .scope { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; padding: 3px 4px 3px 10px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: var(--r-full); background: var(--accent-softer); color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .scope.wide { border-color: var(--border); background: var(--surface); }
+  .scope b { color: var(--text); font-weight: var(--fw-semibold); }
+  .scope .link { min-height: 22px; padding: 0 8px; border: 0; border-radius: var(--r-full); background: var(--surface); color: var(--accent); font-weight: var(--fw-medium); }
+  .scope.wide .link { background: var(--surface-2); }
   .totals, .paused { font-size: var(--fs-caption); color: var(--muted); white-space: nowrap; }
   .load-error { margin: 0; padding: 8px 14px; background: var(--surface-2); color: var(--warn); border-bottom: 1px solid var(--border); font-size: var(--fs-caption); }
   .window-note { margin: 0; padding: 8px 14px; color: var(--muted); background: var(--surface); border-bottom: 1px solid var(--border); font-size: var(--fs-caption); }

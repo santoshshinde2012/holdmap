@@ -214,6 +214,14 @@
     return [...new Set([id, ...graph.edges.filter((e) => e.from === id || e.to === id).flatMap((e) => [e.from, e.to])])];
   });
   const selectedInfo = $derived(report?.agents.find((a) => a.id === selectedAgent) ?? null);
+  /** The details section stays put while ↑/↓ or a card click switches agents, for easy comparison. */
+  let detailTab = $state<"overview" | "capabilities" | "flow" | "security">("overview");
+  // The Flow section reads the same observed connections and recorded calls as the Flow workspace.
+  const selectedInfoId = $derived(selectedInfo?.id ?? null);
+  $effect(() => {
+    if (section !== "overview" || detailTab !== "flow" || !selectedInfoId) return;
+    untrack(() => { flowProps.onrefreshflow?.(); flowProps.onrefreshactivity?.(); });
+  });
   let detailsView = $state<{ focusHeading: () => void } | undefined>();
   let detailsOpener: HTMLElement | null = null;
   /** Select an agent from any surface and reveal its details; the panel takes focus only when asked. */
@@ -310,7 +318,7 @@
       <div class="empty workspace-loading" role="status" aria-busy="true"><Icon name="shield" size={28} /><p>Loading Security…</p></div>
     {/if}
   {:else if section === "flow"}
-    <div class="flow-body" id="agents-flow"><AgentFlowView {query} {dark} {reduced} {...flowProps} bind:mode={flowSource} sourceChrome={false} /></div>
+    <div class="flow-body" id="agents-flow"><AgentFlowView {query} {dark} {reduced} {...flowProps} {report} {selectedAgent} {onselectagent} bind:mode={flowSource} sourceChrome={false} /></div>
   {:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="agents" id="agents-overview" class:rail-off={!rail} class:has-details={!!selectedInfo} {onkeydown}>
@@ -450,7 +458,7 @@
         <RevealNode id={selectedInfo && graph?.nodes.some((n) => n.id === selectedInfo.id) ? selectedInfo.id : null} {reduced} obstacle={() => document.getElementById("agent-details")} />
         <FitOnChange token={sig} focus={null} {reduced} open={!!selectedInfo} {near} obstacle={() => document.getElementById("agent-details")} />
         <Background gap={22} size={1.2} />
-        <Controls showLock={false} position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.1, minZoom: FIT_MIN_ZOOM, duration: reduced ? 0 : 320 }} />
+        <Controls showLock={false} orientation="horizontal" position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.1, minZoom: FIT_MIN_ZOOM, duration: reduced ? 0 : 320 }} />
         <AutoMiniMap {dark} />
       </SvelteFlow>
       {/if}
@@ -460,7 +468,8 @@
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
       <aside class="details" id="agent-details" aria-label="Agent details" onkeydown={detailsKey}>
         {#key a.id}
-          <AgentDetails bind:this={detailsView} agent={a} {report} {entries} color={colorOf(a.id)} onclose={closeDetails}
+          <AgentDetails bind:this={detailsView} bind:tab={detailTab} agent={a} {report} {entries} color={colorOf(a.id)} onclose={closeDetails}
+            flowReport={flowProps.flowReport ?? null} activity={flowProps.activity ?? null} onflow={() => { section = "flow"; }}
             {onentry} onreveal={(path) => onreveal(a.id, path)} oneditor={(path) => oneditor(a.id, path)}
             onfolder={(path) => { projectPath = path; openFolder(path, a.id); }} onnavigate={(id) => pick(id, true)}
             oncapabilities={() => { section = "capabilities"; }} oninsights={() => { section = "insights"; }} {oninventory}
@@ -483,8 +492,8 @@
   .workspace-loading { flex: 1; padding: 24px; box-sizing: border-box; }
   .load-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .agents.rail-off { grid-template-columns: 1fr; }
-  .agents.has-details { grid-template-columns: minmax(280px, 320px) 1fr minmax(340px, 400px); }
-  .agents.rail-off.has-details { grid-template-columns: 1fr minmax(340px, 400px); }
+  .agents.has-details { grid-template-columns: minmax(280px, 320px) 1fr minmax(360px, 430px); }
+  .agents.rail-off.has-details { grid-template-columns: 1fr minmax(360px, 430px); }
   .details { min-width: 0; min-height: 0; overflow: auto; border-left: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-sm); }
   .flow-body { flex: 1; min-height: 0; }
   .agents { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 340px) 1fr; background: var(--bg); }
@@ -547,7 +556,7 @@
   @container (max-width: 1100px) {
     .agents.has-details { grid-template-columns: minmax(260px, 300px) 1fr; }
     .agents.rail-off.has-details { grid-template-columns: 1fr; }
-    .details { position: absolute; top: 8px; right: 8px; bottom: 8px; width: min(380px, calc(100% - 16px)); z-index: 6; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-md); }
+    .details { position: absolute; top: 8px; right: 8px; bottom: 8px; width: min(400px, calc(100% - 16px)); z-index: 6; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-md); }
   }
   @container (max-width: 860px) {
     .agents:not(.rail-off) { grid-template-columns: 1fr; grid-template-rows: minmax(0, 52%) 1fr; }

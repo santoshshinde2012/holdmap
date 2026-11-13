@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import type { ComponentProps } from "svelte";
 import AgentCapabilitiesView from "./AgentCapabilitiesView.svelte";
 import AgentDetails from "./AgentDetails.svelte";
-import { MOCK_SNAPSHOT, mockAgents } from "../../lib/mock";
+import { MOCK_SNAPSHOT } from "../../lib/mock";
+import { mockAgents } from "../../lib/mock-agents";
 import type { AgentsReport } from "../../lib/types";
 
 beforeAll(() => {
@@ -335,10 +336,13 @@ describe("MCP and skills capability explorer", () => {
     const r = mockAgents(), oncapabilities = vi.fn();
     const view = render(AgentDetails, { agent: r.agents[1], report: r, entries: MOCK_SNAPSHOT.entries, color: "var(--accent)", onentry() {}, onreveal() {}, oneditor() {}, onstop() {}, onstopall() {}, oncapabilities });
     expect(oncapabilities).not.toHaveBeenCalled();
-    await fireEvent.click(view.getByRole("button", { name: /^MCP & skills/ }));
+    // The config box's prompt is an explicit opt-in.
+    await fireEvent.click(view.getByRole("button", { name: "Read local config" }));
     expect(oncapabilities).toHaveBeenCalledOnce(); expect(r.agents[1].capabilities).toBeUndefined();
-    // The config box's prompt is the same explicit opt-in.
-    await fireEvent.click(view.getByRole("button", { name: "Read MCP & skills →" }));
+    // Opening the MCP & skills section reads nothing; its buttons are the same opt-in.
+    await fireEvent.click(view.getByRole("tab", { name: /^Config/ }));
+    expect(oncapabilities).toHaveBeenCalledOnce();
+    await fireEvent.click(view.getByRole("button", { name: "Open in MCP & skills" }));
     expect(oncapabilities).toHaveBeenCalledTimes(2); expect(r.agents[1].capabilities).toBeUndefined();
   });
 });

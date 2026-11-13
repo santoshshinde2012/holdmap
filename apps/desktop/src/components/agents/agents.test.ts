@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import AgentCard from "./AgentCard.svelte";
 import AgentDetails from "./AgentDetails.svelte";
 import AgentsView from "../AgentsView.svelte";
-import { MOCK_SNAPSHOT, mockAgents } from "../../lib/mock";
+import { MOCK_SNAPSHOT } from "../../lib/mock";
+import { mockAgents } from "../../lib/mock-agents";
 import type { Agent } from "../../lib/types";
 
 beforeAll(() => {
@@ -101,18 +102,61 @@ describe("agent visibility", () => {
     expect(container.textContent).not.toContain("Private 0 B");
   });
 
-  it("shows omitted folders, links and tools even when their visible lists are empty", () => {
+  it("shows omitted folders, links and tools even when their visible lists are empty", async () => {
     const a = { ...mockAgents().agents[0], folders: [], links: [], tools: [], more_folders: 3, more_links: 5, more_tools: 4 };
-    const { container } = render(AgentDetails, detailProps(a));
+    const { container, getByRole } = render(AgentDetails, detailProps(a));
     expect(container.textContent).toContain("+3 folders not listed");
-    expect(container.textContent).toContain("+5 links not listed");
     expect(container.textContent).toContain("+4 tools not listed");
+    // Links live with the agent's other relationships in the Flow section.
+    await fireEvent.click(getByRole("tab", { name: /^Connections/ }));
+    expect(container.textContent).toContain("+5 links not listed");
+  });
+
+  it("splits the selected agent into Overview, MCP & skills, Flow and Security sections", async () => {
+    const r = mockAgents(), a = r.agents[1];
+    const oncapabilities = vi.fn(), onflow = vi.fn(), oninsights = vi.fn();
+    const view = render(AgentDetails, { ...detailProps(a), report: r, oncapabilities, onflow, oninsights });
+    const tabs = view.getByRole("tablist", { name: "Agent sections" });
+    expect([...tabs.querySelectorAll("[role=tab]")].map((t) => t.textContent?.replace(/\d+/g, "").trim())).toEqual(["Overview", "Config", "Connections", "Findings"]);
+    expect(view.getByRole("tab", { name: /^Overview/ }).getAttribute("aria-selected")).toBe("true");
+    expect(view.getByRole("tabpanel")).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Open in MCP & skills" })).toBeNull();
+    await fireEvent.click(view.getByRole("tab", { name: /^Config/ }));
+    await fireEvent.click(view.getByRole("button", { name: "Open in MCP & skills" }));
+    expect(oncapabilities).toHaveBeenCalledOnce();
+    await fireEvent.click(view.getByRole("tab", { name: /^Connections/ }));
+    expect(view.container.textContent).toContain("Live socket links");
+    await fireEvent.click(view.getByRole("button", { name: "Open in Flow" }));
+    expect(onflow).toHaveBeenCalledOnce();
+    await fireEvent.click(view.getByRole("tab", { name: /^Findings/ }));
+    await fireEvent.click(view.getByRole("button", { name: "Open in Security" }));
+    expect(oninsights).toHaveBeenCalledOnce();
+  });
+
+  it("gives each fact one home: Overview omits relationships, ports and findings", () => {
+    const a = mockAgents().agents[0];
+    const { container } = render(AgentDetails, detailProps(a));
+    expect(container.textContent).not.toContain("Ports it serves");
+    expect(container.textContent).not.toContain("Open findings");
+    expect(container.querySelector(`#section-memory-agent-${a.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`)).toBeTruthy();
+    expect(container.textContent).toContain("RAM");
+  });
+
+  it("lists only this agent's live sockets in Flow", async () => {
+    const { demoAgentFlow } = await import("../../lib/activity-demo");
+    const r = mockAgents(), a = r.agents[1];
+    const view = render(AgentDetails, { ...detailProps(a), report: r, flowReport: demoAgentFlow(r), tab: "flow" });
+    const list = view.container.querySelector(".socket-list")!;
+    expect(list).toBeTruthy();
+    for (const link of a.links) expect(list.textContent).toContain(link.label);
+    const others = r.agents.filter((x) => x.id !== a.id).flatMap((x) => x.links.map((l) => l.label)).filter((l) => !a.links.some((own) => own.label === l));
+    for (const label of others) expect(list.textContent).not.toContain(`${a.name} ↔ ${label}`);
   });
 
   it("can select the parent agent and describes specific binds precisely", async () => {
     const a = mockAgents().agents[0], navigate = vi.fn();
     a.ports[0].exposure = "specific";
-    const { getByRole, container } = render(AgentDetails, { ...detailProps(a), onnavigate: navigate });
+    const { getByRole, container } = render(AgentDetails, { ...detailProps(a), onnavigate: navigate, tab: "flow" });
     await fireEvent.click(getByRole("button", { name: "Cursor 52000" }));
     expect(navigate).toHaveBeenCalledWith("agent:52000");
     expect(container.textContent).toContain("bound to a specific interface");

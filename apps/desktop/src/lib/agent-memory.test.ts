@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { bytesOrUnknown, filterPlaces, fleetMemory, memorySummary, observed, placeEntries, placesSummary, processNoun, shareText, trendSparkline, trendView } from "./agent-memory";
-import { mockAgents } from "./mock";
+import { bytesOrUnknown, filterPlaces, fleetMemory, headlineLabel, memorySummary, observed, placeEntries, placesSummary, processNoun, shareText, trendSparkline, trendView } from "./agent-memory";
+import { mockAgents } from "./mock-agents";
+import * as mockPlaces from "./mock-places";
 import type { Agent, AgentMemoryReport, CapabilityPlace } from "./types";
 
 const unknown = { value: null, unknown: "smaps_rollup was unreadable" };
@@ -112,7 +113,7 @@ describe("memory figures", () => {
     expect(text).toContain("modified time unknown");
     expect(text).toContain("not on disk");
     expect(text).toContain("2 documented tools");
-    expect(text).not.toContain("Built-in (rank 50): Present builtin · count unknown");
+    expect(text).not.toContain("rank");
     const entries = placeEntries(places[0]);
     expect(entries[0]).toMatchObject({ name: "review", kindLabel: "dir", bytes: null });
     expect(entries[0].modified).toBeTruthy();
@@ -126,9 +127,30 @@ describe("memory figures", () => {
     expect(fleet?.top?.name).toBe("Cursor");
     expect(processNoun(1)).toBe("1 process");
     expect(processNoun(2)).toBe("2 processes");
-    const places = mockAgents(undefined, true).agents.find((agent) => agent.product === "cursor")!.capabilities!.locations!;
+    const places = mockAgents(undefined, true, mockPlaces).agents.find((agent) => agent.product === "cursor")!.capabilities!.locations!;
     expect(filterPlaces(places, "present").every((place) => place.status === "present")).toBe(true);
     expect(filterPlaces(places, "skills").every((place) => place.kind === "skills")).toBe(true);
     expect(placesSummary(places)).not.toContain("sk-");
+  });
+
+  it("shows how layers combine, memory index lines and ignored rule files", () => {
+    const base = { candidates: [], present: true, symlink_target: null, status: "present" as const, modified_unix_ms: null };
+    const text = placesSummary([
+      { ...base, id: "a", kind: "agent_memory", scope: "user", rank: 30, label: "Auto memory", combine: "join", path: "/u/.claude/projects/-w/memory", file_count: 2, byte_size: 10, line_count: 236, load_limit_lines: 200 },
+      { ...base, id: "b", kind: "rules", scope: "project", rank: 20, combine: "join", path: "/w/.cursor/rules", file_count: 1, byte_size: 5, ignored_count: 2, candidates: ["style"] },
+      { ...base, id: "c", kind: "secret_store", scope: "user", rank: 30, combine: "not_config", path: "/u/.codex/auth.json" },
+      { ...base, id: "d", kind: "session_data", scope: "user", rank: 30, combine: "not_config", path: "/u/.claude/projects", file_count: 9, byte_size: 900 },
+    ]);
+    expect(text).toContain("User Agent memory (all files load)");
+    expect(text).toContain("MEMORY.md 236 lines, only the first 200 load");
+    expect(text).toContain("2 ignored");
+    expect(text).toContain("/u/.codex/auth.json · present · not opened");
+    expect(text).toContain("User Session data (not configuration)");
+  });
+
+  it("names the headline counter and says when it is mixed", () => {
+    const memory = { headline_counter: "physical_footprint", headline_label: "", headline_mixed: null } as unknown as AgentMemoryReport;
+    expect(headlineLabel(memory)).toBe("Physical footprint");
+    expect(headlineLabel({ ...memory, headline_label: "Mixed: physical footprint and resident (rss)" })).toMatch(/^Mixed/);
   });
 });

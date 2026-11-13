@@ -16,7 +16,18 @@ use crate::process::ProcessTable;
 ///
 /// Returns `fallback` when the platform call fails (other users' processes, zombies).
 pub fn sample(pid: u32, fallback: u64) -> u64 {
-    platform::sample(pid).unwrap_or(fallback)
+    sample_counted(pid, fallback).0
+}
+
+/// Like [`sample`], and whether the platform's own counter was used (`false` = `fallback`).
+///
+/// Windows has no separate counter: sysinfo's working set *is* the platform figure, so it is
+/// always reported as the platform counter there.
+pub fn sample_counted(pid: u32, fallback: u64) -> (u64, bool) {
+    match platform::sample(pid) {
+        Some(bytes) => (bytes, true),
+        None => (fallback, cfg!(target_os = "windows")),
+    }
 }
 
 /// Memory of `root` plus every descendant, and how many of those descendants there are.

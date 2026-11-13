@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { attention, attentionAgent, hotAgents, overview } from "./home";
-import { MOCK_SNAPSHOT, mockAgents } from "./mock";
+import { MOCK_SNAPSHOT } from "./mock";
+import { mockAgents } from "./mock-agents";
 import type { Agent, AgentsReport, PortEntry } from "./types";
 
 const entries = MOCK_SNAPSHOT.entries;
@@ -97,7 +98,8 @@ describe("overview rail and actions", () => {
 describe("unowned dev servers", () => {
   it("lists dev servers no agent started, once", async () => {
     const { unownedDevServers } = await import("./home");
-    const { MOCK_SNAPSHOT, mockAgents } = await import("./mock");
+    const { MOCK_SNAPSHOT } = await import("./mock");
+    const { mockAgents } = await import("./mock-agents");
     const report = mockAgents(undefined, true);
     const owned = new Set(report.agents.flatMap((a) => a.ports.map((p) => p.entry_id)));
     const loose = unownedDevServers(MOCK_SNAPSHOT.entries, report);

@@ -205,31 +205,96 @@ fn trend_needs_two_samples_and_uses_the_published_band() {
 }
 
 #[test]
-fn the_memory_log_keeps_pid_and_bytes_only_and_replaces_a_corrupt_file() {
+fn a_corrupt_memory_log_is_kept_aside_and_reported_not_wiped() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("memory-samples.json");
     std::fs::write(&path, b"{not json").unwrap();
     let log = FileMemoryLog::open(&path);
-    assert!(log.recent(7, 9).is_empty());
-    assert!(log.record(7, 9, 100, 2048));
-    assert!(log.record(7, 8, 100, 1));
+    let outcome = log.record_batch(100, &[("claude-code".into(), 2048)]);
+    assert!(outcome.note.as_deref().unwrap().contains("corrupt"));
     assert_eq!(
-        log.recent(7, 8),
-        vec![MemorySample {
-            at_ms: 100,
-            bytes: 1
-        }]
+        std::fs::read(dir.path().join("memory-samples.corrupt.json")).unwrap(),
+        b"{not json"
     );
     assert_eq!(
-        log.recent(7, 9),
+        outcome.series["claude-code"],
         vec![MemorySample {
             at_ms: 100,
             bytes: 2048
         }]
     );
     let body = std::fs::read_to_string(&path).unwrap();
-    assert!(!body.contains("claude"));
-    assert!(body.contains("2048"));
+    assert!(body.contains("2048") && !body.contains('/'));
+    let again = log.record_batch(200, &[("claude-code".into(), 4096)]);
+    assert_eq!(again.note, None);
+    assert_eq!(again.series["claude-code"].len(), 2);
+}
+
+#[test]
+fn the_memory_log_keeps_a_series_across_restarts_and_caps_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let log = FileMemoryLog::open(dir.path().join("memory-samples.json"));
+    for at in 0..(log::MAX_PER_AGENT as u64 + 5) {
+        log.record_batch(at, &[("codex".into(), at), ("cursor".into(), 1)]);
+    }
+    let last = log.record_batch(10_000, &[("codex".into(), 1)]);
+    assert_eq!(last.series["codex"].len(), log::MAX_PER_AGENT);
+    assert_eq!(last.series["codex"].last().unwrap().at_ms, 10_000);
+    let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .flatten()
+        .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+        .collect();
+    assert!(leftovers.is_empty(), "atomic writes leave no temp files");
+}
+
+#[test]
+fn concurrent_writers_do_not_lose_each_others_samples() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("memory-samples.json");
+    let handles: Vec<_> = (0..6)
+        .map(|writer| {
+            let path = path.clone();
+            std::thread::spawn(move || {
+                let log = FileMemoryLog::open(path);
+                for at in 0..5u64 {
+                    let outcome = log.record_batch(at, &[(format!("agent-{writer}"), at)]);
+                    assert_eq!(outcome.note, None);
+                }
+            })
+        })
+        .collect();
+    for handle in handles {
+        handle.join().unwrap();
+    }
+    let log = FileMemoryLog::open(&path);
+    let outcome = log.record_batch(
+        99,
+        &(0..6)
+            .map(|w| (format!("agent-{w}"), 1))
+            .collect::<Vec<_>>(),
+    );
+    for writer in 0..6 {
+        assert_eq!(
+            outcome.series[&format!("agent-{writer}")].len(),
+            6,
+            "writer {writer}"
+        );
+    }
+}
+
+#[test]
+fn an_older_per_process_log_starts_over_without_a_corruption_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("memory-samples.json");
+    std::fs::write(
+        &path,
+        br#"{"samples":[{"pid":1,"started_at":2,"at_ms":3,"bytes":4}]}"#,
+    )
+    .unwrap();
+    let outcome = FileMemoryLog::open(&path).record_batch(10, &[("gemini".into(), 5)]);
+    assert_eq!(outcome.note, None);
+    assert!(!dir.path().join("memory-samples.corrupt.json").exists());
 }
 
 #[test]
@@ -258,10 +323,9 @@ fn location_census_reports_metadata_without_file_bodies_or_followed_links() {
     std::fs::write(project.join(".claude/settings.local.json"), b"{}").unwrap();
     let places = census(
         "claude-code",
-        &home_dir,
+        &crate::transparency::Homes::defaults(&home_dir, None),
         std::slice::from_ref(&project),
         "linux",
-        None,
     );
     let dumped = serde_json::to_string(&places).unwrap();
     assert!(!dumped.contains("super-secret-token-value"), "{dumped}");
@@ -281,10 +345,15 @@ fn location_census_reports_metadata_without_file_bodies_or_followed_links() {
         )
         .unwrap();
         std::os::unix::fs::symlink(outside.path(), home_dir.join(".codex")).unwrap();
-        let linked = census("codex", &home_dir, &[], "linux", None)
-            .into_iter()
-            .find(|place| place.path.ends_with(".codex/skills"))
-            .unwrap();
+        let linked = census(
+            "codex",
+            &crate::transparency::Homes::defaults(&home_dir, None),
+            &[],
+            "linux",
+        )
+        .into_iter()
+        .find(|place| place.path.ends_with(".codex/skills"))
+        .unwrap();
         assert_eq!(linked.status, PlaceStatus::Skipped);
         assert!(linked.symlink_target.is_none());
         assert!(linked.candidates.is_empty());
@@ -296,7 +365,7 @@ fn location_census_reports_metadata_without_file_bodies_or_followed_links() {
         .find(|place| place.path.ends_with("CLAUDE.md") && place.scope == PlaceScope::Project)
         .unwrap();
     assert!(memory.present);
-    assert_eq!(memory.kind, PlaceKind::AgentMemory);
+    assert_eq!(memory.kind, PlaceKind::Instructions);
     let local = places
         .iter()
         .find(|place| place.path.ends_with("settings.local.json"))
@@ -350,4 +419,34 @@ fn linux_status_text_does_not_treat_rss_file_as_shared_memory() {
     assert_eq!(rollup.private_bytes.get(), Some(3 * 1024));
     assert_eq!(rollup.shared_bytes.get(), Some(4 * 1024));
     assert_eq!(rollup.proportional.get(), Some(4 * 1024));
+}
+
+#[test]
+fn a_refused_platform_counter_makes_the_headline_mixed_with_a_reason() {
+    let agent_proc = process(10, "Cursor", ProcessRole::Agent, 100);
+    let helper = process(11, "Cursor Helper", ProcessRole::Helper, 200);
+    let rows = vec![
+        proc(10, 1, "Cursor", &["Cursor"]),
+        proc(11, 10, "Cursor Helper", &["Cursor"]),
+    ];
+    let mut table = table(rows, 1);
+    let probe = FixedProbe {
+        reading: reading_with(ObservedU64::unknown("fixture")),
+        machine: ObservedU64::observed(1_000_000),
+    };
+    let agent = bare_agent(10, "Cursor", vec![agent_proc, helper], Vec::new());
+    let clean = agent_memory(&agent, &table, &probe, 1);
+    assert_eq!(clean.headline_mixed, None);
+    assert_eq!(clean.headline_label, HeadlineCounter::on_this_os().label());
+    assert!(!clean.headline_meaning.contains("matches Activity Monitor"));
+
+    table.mark_memory_fallback(11);
+    let mixed = agent_memory(&agent, &table, &probe, 1);
+    let helper_row = mixed.processes.iter().find(|row| row.pid == 11).unwrap();
+    assert_eq!(helper_row.counter, HeadlineCounter::Resident);
+    let reason = mixed.headline_mixed.as_deref().unwrap();
+    assert!(reason.contains("1 of 2 processes"), "{reason}");
+    assert!(mixed.headline_label.starts_with("Mixed"));
+    assert!(mixed.limits.iter().any(|limit| limit == reason));
+    assert!(mixed.summary_line().contains("Mixed"));
 }

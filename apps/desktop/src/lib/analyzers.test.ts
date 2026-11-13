@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SANDBOX_LABEL, agentCounts, agentFindings, ago, canRun, countsText, emptyCounts, findingWhere, flaggedAgents, insightNeeds, total, worst, type Insights } from "./analyzers";
 import { DemoAnalyzers } from "./analyzers-demo";
 import { attention, hotAgents } from "./home";
-import { mockAgents } from "./mock";
+import { mockAgents } from "./mock-agents";
 import { InsightsStore, CHANGE_CHECK_MS } from "./insights-store.svelte";
 
 const report = mockAgents(undefined, true);

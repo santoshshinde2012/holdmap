@@ -45,6 +45,7 @@
   import { createAgentSelection } from "./lib/agent-selection.svelte";
   import { agentHash, findLinkedAgent, parseAgentHash } from "./lib/agent-selection";
   import { createAgentReportLoader } from "./lib/agents-live";
+  import { agentForEntry } from "./lib/agent-scope";
   import { createFlowLoader } from "./lib/agent-flow/live";
   import type { AgentFlowMode, AgentFlowReport, ActivitySnapshot, RecordingStatus } from "./lib/agent-flow/model";
   import type { AgentsReport, ActionPlan, Cluster, Config, DesktopHelpDestination, Explanation, Graph, GraphNode, HistoryEntry, HttpInfo, PortDetails, PortEntry, PortEvent, Snapshot, StopReport } from "./lib/types";
@@ -848,6 +849,27 @@
   const cpuTrend = $derived(selected ? usage[selected.id] ?? [] : []);
   const memTrend = $derived(selected ? memUsage[selected.id] ?? [] : []);
   const explaining = $derived(selPort !== null && explainingPort === selPort);
+  /** The running agent that started or serves the selected port, for "Open in Agents". */
+  const selectedOwner = $derived(selected && prefs.view !== "agents" ? agentForEntry(agentsReport?.agents, selected) : null);
+  /** Graph → List with the same port selected (filters cleared only if they would hide it). */
+  function showInList(e: PortEntry) {
+    prefs.view = "list";
+    void tick().then(() => {
+      if (!narrow) prefs.sideOpen = true;
+      openEntry(e);
+      if (!narrow) drawerOpen = false;
+    });
+  }
+  /** List → Graph with the same service selected and its details open. */
+  function showInGraph(e: PortEntry) {
+    selectedId = e.id;
+    const n = nodeForEntry(graph, e.id);
+    if (n) selectedNode = n.id;
+    // A dev-only graph may not include this service; include all so the selection survives.
+    if (n && !n.is_dev && !graphAll) graphAll = true;
+    prefs.view = "graph";
+    void tick().then(() => { if (selectedId === e.id) graphDetailsOpen = true; });
+  }
   /** What the details pane and the details drawer share; each adds its own close and list wiring. */
   const detailProps = $derived({
     entry: selected, explanation, http: selectedHttp, loading: explaining, busy: selected ? !!busy[selected.id] : false, mod, graph,
@@ -855,6 +877,10 @@
     onstop: () => selected && requestStop(selected, false), onschedule: () => selected && requestScheduledStop(selected), onkill: () => selected && requestStop(selected, true),
     onopen: () => selected && open(selected), oncopy: copy, onpin: () => selected && togglePin(selected), onstopcluster: requestClusterStop, onselectnode: (n: GraphNode) => selectNode(n),
     onrestart: () => selected && requestRestart(selected), onreveal: () => selected && reveal(selected), oneditor: () => selected && openEditor(selected),
+    onshowinlist: prefs.view === "graph" ? () => selected && showInList(selected) : undefined,
+    onshowingraph: prefs.view === "list" && selected && (!graph || nodeForEntry(graph, selected.id)) ? () => selected && showInGraph(selected) : undefined,
+    onopenagent: selectedOwner ? () => selectedOwner && openAgent(selectedOwner.id) : undefined,
+    agentName: selectedOwner?.name ?? null,
   });
 
   /** A slow native check owns one request; only the latest follow-up is retained. */
@@ -1410,7 +1436,7 @@
     {#if prefs.view === "graph"}
       <div class="graph-wrap" data-capture-area>
         {#if GraphView}
-          <GraphView {graph} {selectedNode} loading={topologyLoading} query={graphQuery} onclearquery={() => (graphQuery = "")} onvisiblechange={(ids) => (graphVisibleIds = ids)} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; }} onselect={selectNode} onstopcluster={requestClusterStop} />
+          <GraphView {graph} {selectedNode} loading={topologyLoading} query={graphQuery} onclearquery={() => (graphQuery = "")} onvisiblechange={(ids) => (graphVisibleIds = ids)} dark={resolvedTheme === "dark"} {reduced} all={graphAll} ontoggleall={() => { graphAll = !graphAll; }} onselect={selectNode} onstopcluster={requestClusterStop} agents={agentsReport?.agents ?? []} onopenagent={(id) => openAgent(id)} />
         {:else}
           <div class="graph-loading" aria-busy="true">Loading graph…</div>
         {/if}

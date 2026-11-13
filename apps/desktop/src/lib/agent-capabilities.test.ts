@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mockAgents } from "./mock";
+import { mockAgents } from "./mock-agents";
 import { agentMatches } from "./agents";
 import { capabilityContextGroups, capabilityItems, capabilityLabel, capabilityLimits, capabilityMatches, enabledLabel, filterCapabilities, runningMcpItems } from "./agent-capabilities";
 import type { Agent } from "./types";

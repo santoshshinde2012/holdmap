@@ -333,3 +333,28 @@ describe("service card names", () => {
     expect(serviceLabel(many, null)).toBe(`shop-web :1 :2 :3 +2 ${nodeSubtitle(many)}, protected, reachable from the network`);
   });
 });
+
+describe("narrow screens", () => {
+  it("runs the layered layout top to bottom under 640 px", async () => {
+    const { directionForWidth } = await import("./graph");
+    expect(directionForWidth(390)).toBe("TB");
+    expect(directionForWidth(1280)).toBe("LR");
+    expect(directionForWidth(0)).toBe("LR");
+  });
+
+  it("stacks a chain vertically in TB and horizontally in LR", () => {
+    const n = (id: string) => ({ id, label: id, kind: "service", ports: [1], pids: [], cpu_percent: 0, memory_bytes: 0, is_dev: true }) as unknown as Graph["nodes"][number];
+    const g = { nodes: [n("a"), n("b"), n("c")], edges: [{ id: "e1", from: "a", to: "b" }, { id: "e2", from: "b", to: "c" }], clusters: [] } as unknown as Graph;
+    const lr = layered(g, "LR");
+    const tb = layered(g, "TB");
+    const spread = (pos: Map<string, { x: number; y: number }>, axis: "x" | "y") => Math.max(...[...pos.values()].map((p) => p[axis])) - Math.min(...[...pos.values()].map((p) => p[axis]));
+    expect(spread(lr, "x")).toBeGreaterThan(spread(lr, "y"));
+    expect(spread(tb, "y")).toBeGreaterThan(spread(tb, "x"));
+  });
+
+  it("hides the minimap on narrow canvases", () => {
+    const b = { x: 0, y: 0, width: 2000, height: 2000 };
+    expect(needsMiniMap(b, { x: 0, y: 0, zoom: 1 }, 390, 700)).toBe(false);
+    expect(needsMiniMap(b, { x: 0, y: 0, zoom: 1 }, 1000, 700)).toBe(true);
+  });
+});

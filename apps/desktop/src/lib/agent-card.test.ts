@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { cardModel, miniLayout } from "./agent-card";
 import { footprint } from "./machine-map";
-import { MOCK_SNAPSHOT, mockAgents } from "./mock";
+import { MOCK_SNAPSHOT } from "./mock";
+import { mockAgents } from "./mock-agents";
 import { nextLayout } from "./home-layout";
 
 const report = mockAgents(undefined, true);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { capabilityContextGroups, capabilityItems, runningMcpItems } from "./agent-capabilities";
 import { buildCapabilityMap, CAPABILITY_MAP_LIMITS, CAPABILITY_MAP_NODE_HEIGHT, CAPABILITY_MAP_NODE_WIDTH } from "./agent-capability-map";
-import { mockAgents } from "./mock";
+import { mockAgents } from "./mock-agents";
 import type { Agent } from "./types";
 
 const template = mockAgents(undefined, true).agents[0];

@@ -5,7 +5,7 @@ import InsightsWorkspace from "../components/analyzers/InsightsWorkspace.svelte"
 import { inventories } from "./agent-config";
 import { DemoAnalyzers } from "./analyzers-demo";
 import { insightsStore } from "./insights-store.svelte";
-import { mockAgents } from "./mock";
+import { mockAgents } from "./mock-agents";
 
 afterEach(() => { cleanup(); insightsStore.insights = null; insightsStore.analyzers = []; });
 

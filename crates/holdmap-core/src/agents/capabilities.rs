@@ -8,6 +8,7 @@
 //! Inventory is not evidence that a client loaded a definition or invoked a capability.
 
 use super::{access, Evidence};
+use crate::transparency::Homes;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -20,7 +21,8 @@ mod frontmatter;
 mod instructions;
 mod launch;
 mod policy;
-mod reader;
+pub(crate) mod reader;
+mod registry;
 mod runtime;
 
 pub use builtin::builtin_tools;
@@ -31,6 +33,13 @@ pub use runtime::{match_running, McpRunState, McpRuntime};
 
 /// Distinct agent contexts inspected per report; further contexts remain unknown.
 pub const MAX_CAPABILITY_CONTEXTS: usize = 16;
+
+/// The one consent action for reading agent configuration, shared by every surface
+/// (desktop `apps/desktop/src/lib/consent.ts`, the TUI and the MCP text).
+pub const CONSENT_LABEL: &str = "Read local config";
+/// What the consent action promises, word for word on every surface.
+pub const CONSENT_SENTENCE: &str =
+    "Reads names, paths and sizes only. Never file contents, chats or secrets.";
 
 /// Products that share one set of default configuration locations, first member inspected.
 /// Used for agents that aren't running, so each configuration is read once.
@@ -249,6 +258,8 @@ pub struct HomeCapabilities {
     home: PathBuf,
     app_data: Option<PathBuf>,
     time_limit: Duration,
+    /// Documented home overrides (`CODEX_HOME`, ...) from holdmap's own environment.
+    env: Vec<(&'static str, String)>,
 }
 
 impl HomeCapabilities {
@@ -258,6 +269,7 @@ impl HomeCapabilities {
             home,
             app_data: None,
             time_limit: MAX_TIME,
+            env: Vec::new(),
         }
     }
 
@@ -267,6 +279,7 @@ impl HomeCapabilities {
             home,
             app_data: Some(app_data),
             time_limit: MAX_TIME,
+            env: Vec::new(),
         }
     }
 
@@ -333,7 +346,7 @@ impl CapabilityDiscovery for HomeCapabilities {
                 inspected: true,
                 limits: vec![
                     "Configuration and skill file presence do not prove loading, approval, connection or invocation; precedence and effective client policy are not resolved.".into(),
-                    "Only default locations and observed working folders/project roots are considered; custom homes, parent-folder inheritance, managed settings, plugins and cloud skills are not inspected.".into(),
+                    "Only documented locations and observed working folders/project roots are considered; parent-folder inheritance is not resolved. Managed, session-data and secret locations are listed with metadata only; plugins and cloud skills are not walked.".into(),
                     "Skill identity comes from folders; only optional declared name/description from bounded YAML frontmatter are retained. Instructions, validity and enablement are not collected. Skill directories are shallow, with one extra category/.system level only.".into(),
                 ],
                 ..Default::default()
@@ -355,37 +368,21 @@ impl CapabilityDiscovery for HomeCapabilities {
                 inventory.out.limit("Untyped Cursor remote URLs can use HTTP or SSE; their transport is not established without connection negotiation.");
             }
             "windsurf" => {
-                inventory.out.limit("Windsurf inventory covers only legacy ~/.codeium/windsurf/mcp_config.json; newer Devin/Cascade homes, project MCP files and skills are not inspected. Untyped remote endpoints do not establish HTTP versus SSE.");
+                inventory.out.limit("Windsurf MCP definitions are read from ~/.config/devin/mcp_config.json, legacy ~/.codeium/windsurf/mcp_config.json and observed-project .devin/mcp_config.json; rules, workflows and skills are listed by name only. Untyped remote endpoints do not establish HTTP versus SSE.");
             }
             "gemini" => {
-                inventory.out.limit("Gemini CLI inventory covers mcpServers in default ~/.gemini/settings.json and observed-project .gemini/settings.json; custom homes, system settings, enablement policy/state and skill directories are not inspected. Untyped URLs leave HTTP versus SSE unknown.");
+                inventory.out.limit("Gemini CLI MCP definitions are read from ~/.gemini/settings.json and observed-project .gemini/settings.json; system settings, skills and extensions are listed with metadata only, and enablement state is not resolved. Untyped URLs leave HTTP versus SSE unknown.");
             }
             "copilot" => {
                 inventory.out.limit("VS Code Copilot inventory covers observed-project .vscode/mcp.json (servers) and .mcp.json; user/profile config, enablement state and skill directories are not inspected.");
             }
             "copilot-cli" => {
-                inventory.out.limit("Copilot CLI inventory covers default ~/.copilot/mcp-config.json and observed-project .mcp.json/.github/mcp.json; custom homes, enablement settings and skill directories are not inspected. Folder trust, inheritance and precedence are not resolved.");
+                inventory.out.limit("Copilot CLI MCP definitions are read from ~/.copilot/mcp-config.json and observed-project .mcp.json/.github/mcp.json; skills, agents, hooks and session data under ~/.copilot are listed with metadata only. Folder trust, inheritance and precedence are not resolved.");
             }
             "cline" => {
-                inventory.out.limit("Cline inventory covers default ~/.cline/data/settings/cline_mcp_settings.json and shallow .cline/skills directories; custom homes, .agents/.clinerules/.claude compatibility roots and editor globalStorage are not followed.");
+                inventory.out.limit("Cline MCP definitions are read from ~/.cline/data/settings/cline_mcp_settings.json and skills from shallow .cline/skills directories; global rules are listed by name only, and editor globalStorage is not followed.");
             }
             _ => {}
-        }
-        if product == "claude-desktop" {
-            let base = if platform == "macos" {
-                self.home.join("Library/Application Support")
-            } else {
-                self.app_data
-                    .clone()
-                    .unwrap_or_else(|| self.home.join("AppData/Roaming"))
-            };
-            inventory.config(
-                &base.join("Claude/claude_desktop_config.json"),
-                CapabilityScope::User,
-                None,
-                ConfigFormat::JsonMcpServers,
-            );
-            return self.finish(inventory);
         }
         let mut seen = HashSet::new();
         for project in projects {
@@ -401,22 +398,8 @@ impl CapabilityDiscovery for HomeCapabilities {
             }
             inventory.projects.push(project.clone());
         }
-        // Collect MCP definitions before skill metadata can exhaust the shared read budget.
-        inventory.location(&self.home, CapabilityScope::User, None);
-        let projects = inventory.projects.clone();
-        for project in &projects {
-            inventory.location(project, CapabilityScope::Project, Some(project));
-        }
-        inventory.skill_location(&self.home, CapabilityScope::User, None);
-        for project in &projects {
-            inventory.skill_location(project, CapabilityScope::Project, Some(project));
-        }
-        inventory.policy_location(&self.home, CapabilityScope::User);
-        inventory.instruction_location(&self.home, CapabilityScope::User);
-        for project in &projects {
-            inventory.policy_location(project, CapabilityScope::Project);
-            inventory.instruction_location(project, CapabilityScope::Project);
-        }
+        let homes = self.homes(platform);
+        inventory.read_registry(&homes);
         inventory.out.builtin_tools = builtin_tools(product)
             .iter()
             .map(|tool| (*tool).to_owned())
@@ -434,30 +417,36 @@ impl CapabilityDiscovery for HomeCapabilities {
 }
 
 impl HomeCapabilities {
+    /// Folders the shared registry resolves against for `platform`.
+    fn homes(&self, platform: &str) -> Homes {
+        let app_data = match platform {
+            "macos" => Some(self.home.join("Library/Application Support")),
+            "windows" => Some(
+                self.app_data
+                    .clone()
+                    .unwrap_or_else(|| self.home.join("AppData/Roaming")),
+            ),
+            _ => None,
+        };
+        let env = &self.env;
+        Homes::with_overrides(&self.home, app_data, |name| {
+            env.iter()
+                .find(|(key, _)| *key == name)
+                .map(|(_, value)| value.clone())
+        })
+    }
+
     fn finish(&self, mut inventory: Inventory<'_>) -> AgentCapabilities {
         if inventory.out.inspected {
-            let desktop = if inventory.product == "claude-desktop"
-                && matches!(inventory.platform, "macos" | "windows")
-            {
-                Some(if inventory.platform == "macos" {
-                    self.home.join("Library/Application Support")
-                } else {
-                    self.app_data
-                        .clone()
-                        .unwrap_or_else(|| self.home.join("AppData/Roaming"))
-                })
-            } else {
-                None
-            };
+            let homes = self.homes(inventory.platform);
             inventory.out.locations = crate::transparency::census(
                 inventory.product,
-                &self.home,
+                &homes,
                 &inventory.projects,
                 inventory.platform,
-                desktop.as_deref(),
             );
             inventory.out.limit(
-                "Location rows are paths, link targets, counts, sizes and timestamps. File bodies, transcripts and secret values are not read. A present file is not proof the agent loaded it. A lower rank is the more specific documented layer; holdmap does not decide which layer won.",
+                "Location rows are paths, link targets, counts, sizes and timestamps. File bodies, transcripts and secret values are not read. A present file is not proof the agent loaded it. Each row says how its layers combine; holdmap does not decide which layer won.",
             );
         }
         inventory.out
@@ -522,105 +511,6 @@ impl Inventory<'_> {
             }
         }
         true
-    }
-
-    fn location(&mut self, base: &Path, scope: CapabilityScope, project: Option<&Path>) {
-        if !self.bounded() || !self.safe_path(base) {
-            return;
-        }
-        match self.product {
-            "codex" | "codex-desktop" => self.config(
-                &base.join(".codex/config.toml"),
-                scope,
-                project,
-                ConfigFormat::Toml,
-            ),
-            "claude-code" if scope == CapabilityScope::User => {
-                self.config(
-                    &base.join(".claude.json"),
-                    scope,
-                    project,
-                    ConfigFormat::JsonMcpServers,
-                );
-            }
-            "claude-code" => self.config(
-                &base.join(".mcp.json"),
-                scope,
-                project,
-                ConfigFormat::JsonMcpServers,
-            ),
-            "cursor" | "cursor-agent" => self.config(
-                &base.join(".cursor/mcp.json"),
-                scope,
-                project,
-                ConfigFormat::JsonMcpServers,
-            ),
-            "windsurf" if scope == CapabilityScope::User => self.config(
-                &base.join(".codeium/windsurf/mcp_config.json"),
-                scope,
-                project,
-                ConfigFormat::JsonMcpServers,
-            ),
-            "gemini" => self.config(
-                &base.join(".gemini/settings.json"),
-                scope,
-                project,
-                ConfigFormat::JsonMcpServers,
-            ),
-            "copilot" if scope == CapabilityScope::Project => {
-                self.config(
-                    &base.join(".vscode/mcp.json"),
-                    scope,
-                    project,
-                    ConfigFormat::JsonServers,
-                );
-                self.config(
-                    &base.join(".mcp.json"),
-                    scope,
-                    project,
-                    ConfigFormat::JsonCopilot,
-                );
-            }
-            "copilot-cli" if scope == CapabilityScope::User => self.config(
-                &base.join(".copilot/mcp-config.json"),
-                scope,
-                project,
-                ConfigFormat::JsonCopilot,
-            ),
-            "copilot-cli" => {
-                for file in [".mcp.json", ".github/mcp.json"] {
-                    self.config(&base.join(file), scope, project, ConfigFormat::JsonCopilot);
-                }
-            }
-            "cline" if scope == CapabilityScope::User => self.config(
-                &base.join(".cline/data/settings/cline_mcp_settings.json"),
-                scope,
-                project,
-                ConfigFormat::JsonMcpServers,
-            ),
-            _ => {}
-        }
-    }
-
-    fn skill_location(&mut self, base: &Path, scope: CapabilityScope, project: Option<&Path>) {
-        if !self.bounded() || !self.safe_path(base) {
-            return;
-        }
-        let directories: &[&str] = match self.product {
-            "codex" | "codex-desktop" => &[".agents/skills", ".codex/skills"],
-            "claude-code" => &[".claude/skills"],
-            "cursor" | "cursor-agent" => &[
-                ".cursor/skills",
-                ".agents/skills",
-                ".claude/skills",
-                ".codex/skills",
-            ],
-            "cline" => &[".cline/skills"],
-            _ => &[],
-        };
-        for directory in directories {
-            self.skills(&base.join(directory), scope, project, 0);
-        }
     }
 
     fn read_bytes(&mut self, path: &Path, maximum: usize, complete: bool) -> Option<ReadBytes> {
@@ -985,11 +875,16 @@ impl Inventory<'_> {
     }
 }
 
-#[derive(Clone, Copy)]
-enum ConfigFormat {
+/// How an MCP configuration file names its servers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigFormat {
+    /// Codex TOML `[mcp_servers.*]`.
     Toml,
+    /// JSON `mcpServers` object.
     JsonMcpServers,
+    /// VS Code JSON `servers` object.
     JsonServers,
+    /// Copilot JSON `mcpServers` with Copilot's field names.
     JsonCopilot,
 }
 

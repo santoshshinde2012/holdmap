@@ -3,6 +3,7 @@
 use super::agents_view::{access_attention, safe_text, working_folders, wrap_lines};
 use super::app::App;
 use super::{theme, ui};
+use holdmap_core::agents::capabilities::{CONSENT_LABEL, CONSENT_SENTENCE};
 use holdmap_core::agents::*;
 use holdmap_core::engine::tilde;
 use holdmap_core::util::human_bytes;
@@ -423,7 +424,7 @@ fn evidence(value: Evidence) -> &'static str {
 }
 
 fn memory_lines(agent: &Agent, report: &AgentsReport) -> Vec<Line<'static>> {
-    let mut lines = vec![heading("Memory")];
+    let mut lines = vec![heading("RAM")];
     let Some(memory) = report.memory.iter().find(|row| row.agent_id == agent.id) else {
         lines.push(muted(format!(
             "Platform counters were not in this report. Process-table total {}.",
@@ -729,8 +730,13 @@ fn capability_lines(agent: &Agent, inspection_enabled: bool) -> Vec<Line<'static
     } else {
         lines.push(muted(if inspection_enabled {
             "Inspection enabled; no inventory reported for this agent. See coverage below."
+                .to_owned()
         } else {
-            "Not inspected. Press c to inspect local MCP definitions and skill locations."
+            format!(
+                "Not read yet. Press c to {}: {}",
+                CONSENT_LABEL.to_lowercase(),
+                CONSENT_SENTENCE
+            )
         }));
         lines.push(muted(
             "Process scans do not establish configuration, skill loading or use.",
@@ -1042,14 +1048,15 @@ mod tests {
             .join("\n");
         assert!(unavailable.contains("Inspection enabled; no inventory reported"));
         assert!(unavailable.contains("not supported"));
-        assert!(!unavailable.contains("Press c to inspect"));
+        assert!(!unavailable.contains("Press c to read local config"));
         assert!(!unavailable.contains("No MCP definitions or skill files listed"));
         let not_requested = capability_lines(&agent, false)
             .iter()
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(not_requested.contains("Press c to inspect"));
+        assert!(not_requested.contains("Press c to read local config"));
+        assert!(not_requested.contains(CONSENT_SENTENCE));
         for width in [40, 80] {
             let mut app = app(AgentsReport {
                 agents: vec![agent.clone()],
