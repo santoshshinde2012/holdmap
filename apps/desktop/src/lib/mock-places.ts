@@ -1,5 +1,5 @@
-// Sample documented locations for the demo's Cursor and Claude Code. They load only when the
-// demo reads configuration, so the first screen does not carry them.
+// Sample documented locations for the demo's Cursor and Claude Code, added to the report only
+// when the demo reads configuration.
 import type { CapabilityPlace } from "./types";
 
 const COMBINE: Record<string, CapabilityPlace["combine"]> = {

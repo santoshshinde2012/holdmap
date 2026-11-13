@@ -16,6 +16,7 @@ import type { PresetView } from "./analyzer-presets";
 import type { InstallEvent, InstallPlan, InstallRecord } from "./analyzer-install";
 import { attention, type AttentionItem } from "./home";
 import { mockAgents } from "./mock-agents";
+import * as mockPlaces from "./mock-places";
 import { MOCK_SNAPSHOT, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
 /** True inside the Tauri webview. */
@@ -319,9 +320,7 @@ export async function topology(all: boolean): Promise<Graph> {
 export async function agents(includeCapabilities = false): Promise<AgentsReport> {
   if (isTauri) return call("agents", { includeCapabilities });
   if (liveReads()) return liveJson("agents", { capabilities: includeCapabilities });
-  // Sample locations load with the first configuration read, not with the demo shell.
-  const places = includeCapabilities ? await import("./mock-places") : null;
-  const report = mockAgents({ ...MOCK_SNAPSHOT, taken_at_ms: Date.now() }, includeCapabilities, places);
+  const report = mockAgents({ ...MOCK_SNAPSHOT, taken_at_ms: Date.now() }, includeCapabilities, includeCapabilities ? mockPlaces : null);
   return emptyDemo() ? { ...report, agents: [], configured: [] } : report;
 }
 

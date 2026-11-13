@@ -4,7 +4,9 @@
   import Icon from "../Icon.svelte";
   import { agentDomId } from "../../lib/agent-details";
   import ExportActions from "../ui/ExportActions.svelte";
-  import { headlineLabel, memoryFor, memorySummary, processGroups, processNoun, readingBits, sharePercent, shareText, splitCounters, trendSparkline, trendView } from "../../lib/agent-memory";
+  import ProcessTable from "./ProcessTable.svelte";
+  import { processTableRows } from "../../lib/process-table";
+  import { headlineLabel, memoryFor, memorySummary, processGroups, processNoun, sharePercent, shareText, splitCounters, trendSparkline, trendView } from "../../lib/agent-memory";
   import { humanBytes } from "../../lib/format";
   import type { Agent, AgentsReport } from "../../lib/types";
 
@@ -29,14 +31,8 @@
     return sums.map((g) => ({ ...g, exactPct: total ? Math.round((g.bytes / total) * 100) : 0, color: roleColor(g.role) }));
   });
 
-  const maxProcBytes = $derived(
-    memory?.processes.length ? Math.max(1, ...memory.processes.map((p) => p.scan_bytes)) : 1,
-  );
-  const visibleGroups = $derived(
-    roleFilter && groups.some((g) => g.role === roleFilter)
-      ? groups.filter((g) => g.role === roleFilter)
-      : groups,
-  );
+  const allRows = $derived(processTableRows(agent, memory ?? null));
+  const tableRows = $derived(roleFilter && allRows.some((r) => r.role === roleFilter) ? allRows.filter((r) => r.role === roleFilter) : allRows);
 </script>
 
 <section class="mem" id="section-memory-{agentDomId(agent.id)}" aria-labelledby="agent-memory-{agentDomId(agent.id)}">
@@ -53,6 +49,10 @@
     {#if !memory}
       <div class="card">
         <p class="fallback">Platform counters were not in this report. The process-table total is <b>{humanBytes(agent.memory_bytes)}</b>.</p>
+      </div>
+      <div class="tree" id="section-procs-{agentDomId(agent.id)}">
+        <code class="cmd" title={agent.command}>{agent.command}</code>
+        <ProcessTable rows={tableRows} label="{agent.name} processes" color={roleColor} more={agent.more_processes} />
       </div>
     {:else}
       <div class="card hero">
@@ -146,40 +146,14 @@
         <p class="why">No platform counter in this report was observable. The limits below say why.</p>
       {/if}
 
-      <details class="tree" open>
+      <details class="tree" id="section-procs-{agentDomId(agent.id)}" open>
         <summary>
           <span class="sum-left">Processes <span class="count-pill">{processNoun(processCount)}</span></span>
           {#if roleFilter}<span class="filter-tag">{groups.find((g) => g.role === roleFilter)?.label}</span>{/if}
         </summary>
-        {#if visibleGroups.length}
-          <div class="groups">
-            {#each visibleGroups as group (group.role)}
-              <div class="role">
-                <p class="role-name">
-                  <span class="role-title"><i class="dot" style="background: {roleColor(group.role)}" aria-hidden="true"></i>{group.label} <span class="role-count">{processNoun(group.processes.length)}</span></span>
-                  <b>{humanBytes(group.processes.reduce((sum, row) => sum + row.scan_bytes, 0))}</b>
-                </p>
-                <ul>
-                  {#each group.processes as row (row.pid)}
-                    {@const bits = readingBits(row.reading)}
-                    {@const pct = Math.max(4, Math.round((row.scan_bytes / maxProcBytes) * 100))}
-                    <li class:large={row.dominant}>
-                      <span class="proc-bar" style="width: {pct}%; background: {row.dominant ? 'var(--warn)' : (roleColor(group.role))}" aria-hidden="true"></span>
-                      <div class="who-row">
-                        <span class="who">{row.name}</span>
-                        <span class="badges">
-                          {#if row.dominant}<span class="large-pill">Large</span>{/if}
-                          <span class="pid mono">pid {row.pid}</span>
-                        </span>
-                      </div>
-                      <span class="fig"><b class="scan">{humanBytes(row.scan_bytes)}</b>{#if bits}{" · "}{bits}{/if}</span>
-                      {#if row.dominant && row.dominant_reason}<span class="why">{row.dominant_reason}</span>{/if}
-                    </li>
-                  {/each}
-                </ul>
-              </div>
-            {/each}
-          </div>
+        <code class="cmd" title={agent.command}>{agent.command}</code>
+        {#if tableRows.length}
+          <ProcessTable rows={tableRows} label="{agent.name} processes" color={roleColor} more={agent.more_processes} />
         {:else}
           <p class="why">No per-process counters were listed in this report.</p>
         {/if}
@@ -274,23 +248,8 @@
   summary:focus-visible, button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
 
   .limits, .tree { display: grid; gap: 6px; }
-  .groups { display: grid; gap: 8px; }
-  .role { display: grid; gap: 4px; }
-  .role-name { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; align-items: baseline; margin: 0; color: var(--text); font-weight: var(--fw-semibold); }
-  .role-title { display: inline-flex; align-items: center; gap: 6px; }
-  .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-  .role-count { color: var(--muted); font-weight: var(--fw-regular); }
-  .role-name b { font-variant-numeric: tabular-nums; }
 
-  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-  li { position: relative; min-width: 0; display: grid; gap: 3px; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
-  li.large { border-color: color-mix(in srgb, var(--warn) 42%, var(--border)); }
-  .proc-bar { position: absolute; left: 0; bottom: 0; height: 2px; opacity: 0.55; border-radius: 1px; pointer-events: none; }
-  .who-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; min-width: 0; }
-  .who { color: var(--text); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
-  .badges { display: inline-flex; align-items: center; gap: 4px; flex: none; }
-  .large-pill { padding: 0 6px; border-radius: var(--r-full); background: var(--warn-soft); color: var(--warn); font-weight: var(--fw-semibold); }
-  .pid { padding: 0 6px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); flex: none; }
-  .fig, .why { color: var(--muted); overflow-wrap: anywhere; margin: 0; }
-  .scan { color: var(--text); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+  .why { color: var(--muted); overflow-wrap: anywhere; margin: 0; }
+  .cmd { display: block; padding: 6px 8px; border-radius: 8px; background: var(--surface-2); color: var(--text-2); font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree { display: grid; gap: 6px; }
 </style>
