@@ -6,7 +6,7 @@
   const e = $derived(data?.edge);
 </script>
 
-<BaseEdge {id} path={path[0]} interactionWidth={20} style={`stroke: ${data?.chosen ? "var(--accent)" : "var(--border-strong)"}; stroke-width: ${data?.chosen ? 2.5 : 1.5}; ${e?.evidence === "inferred" || e?.kind === "span_parent" ? "stroke-dasharray: 5 4;" : ""}`} />
+<BaseEdge {id} path={path[0]} interactionWidth={20} style={`stroke: ${data?.chosen || data?.near ? "var(--accent)" : "var(--border-strong)"}; stroke-width: ${data?.chosen ? 2.5 : data?.near ? 2 : 1.5}; opacity: ${data?.dim ? 0.3 : 1}; ${e?.evidence === "inferred" || e?.kind === "span_parent" ? "stroke-dasharray: 5 4;" : ""}`} />
 {#if data?.labelled !== false}<EdgeLabel x={path[1]} y={path[2]}><span class="relationship-label" class:chosen={data?.chosen}>{e?.label}</span></EdgeLabel>{/if}
 
 <style>

@@ -26,6 +26,9 @@ describe("design tokens meet WCAG AA", () => {
       expect(contrast(tok(b, "danger-fg"), tok(b, "danger"))).toBeGreaterThanOrEqual(4.5);
       expect(contrast(tok(b, "danger"), tok(b, "surface")), "danger text").toBeGreaterThanOrEqual(4.5);
     });
+    it(`${theme}: agent identity colours read on the surface`, () => {
+      for (let i = 1; i <= 5; i++) expect(contrast(tok(b, `agent-${i}`), tok(b, "surface")), `agent-${i} on surface`).toBeGreaterThanOrEqual(4.5);
+    });
     it(`${theme}: text on tinted rows, chips and callouts`, () => {
       // Translucent tints are composited over the surface they sit on, then checked like solid colours.
       const pairs: [string, string, string][] = [

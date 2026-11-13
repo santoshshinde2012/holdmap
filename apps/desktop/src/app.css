@@ -80,6 +80,8 @@
   --tone-violet: #5925dc; --tone-violet-bg: rgb(122 90 248 / 0.12);
   --tone-amber: #a64206; --tone-amber-bg: rgb(247 144 9 / 0.14);
   --tone-gray: #475467; --tone-gray-bg: rgb(102 112 133 / 0.12);
+  /* Agent identity: never a status colour, so an agent never reads as OK, warning or error. */
+  --agent-1: #0369a1; --agent-2: #0f766e; --agent-3: #a21caf; --agent-4: #4338ca; --agent-5: #be185d;
   color-scheme: light;
 }
 
@@ -131,6 +133,7 @@
   --tone-violet: #b3a4ff; --tone-violet-bg: rgb(179 164 255 / 0.14);
   --tone-amber: #f7b955; --tone-amber-bg: rgb(247 185 85 / 0.13);
   --tone-gray: #a3aab9; --tone-gray-bg: rgb(163 170 185 / 0.12);
+  --agent-1: #38bdf8; --agent-2: #2dd4bf; --agent-3: #e879f9; --agent-4: #818cf8; --agent-5: #f472b6;
   color-scheme: dark;
 }
 

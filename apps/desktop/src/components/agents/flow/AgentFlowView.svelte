@@ -135,7 +135,7 @@
         <FlowInspector {graph} chosen={selected} onclose={closeInspector} />
         {#if mode === "calls" && run}<ActivityTimeline {run} {rows} chosen={selected} onselect={(id) => chosen = id} />
         {:else}
-          <section class="participants" aria-label="Flow participants"><h2>Participants <span>{graph.nodes.length}</span></h2><ul>{#each graph.nodes as n (n.id)}<li><button type="button" class:chosen={selected === n.id} aria-label={nodeDescription(n)} onclick={() => chosen = n.id}><strong>{n.label}</strong><span>{n.sub}</span><small>{n.kind} · {n.evidence}</small></button></li>{/each}</ul></section>
+          <section class="participants" aria-label="Flow participants"><h2>Participants <span>{graph.nodes.length}</span></h2><ul>{#each graph.nodes as n (n.id)}<li><button type="button" class:chosen={selected === n.id} aria-label={nodeDescription(n)} onclick={() => chosen = n.id}><strong><i class="kb k-{n.kind}">{n.kind}</i>{n.label}</strong><span>{n.sub}</span><small>{n.evidence}</small></button></li>{/each}</ul></section>
           <section class="relationships" aria-label="Flow relationships"><h2>Relationships <span>{graph.edges.length}</span></h2><ul>{#each graph.edges as e (e.id)}<li><button type="button" class:chosen={selected === e.id} onclick={() => chosen = e.id}><strong>{graph.nodes.find((n) => n.id === e.from)?.label} {e.kind === "tcp" ? "↔" : "→"} {graph.nodes.find((n) => n.id === e.to)?.label}</strong><span>{e.label} · {e.evidence}</span></button></li>{/each}</ul></section>
         {/if}
       </aside>
@@ -179,6 +179,9 @@
   .participants ul, .relationships ul { list-style: none; margin: 0; padding: 0 8px 10px; }
   .participants button, .relationships button { display: grid; width: 100%; gap: 3px; padding: 9px 6px; border-color: transparent; border-bottom-color: var(--border); border-radius: 7px; background: transparent; text-align: left; justify-content: stretch; }
   .participants strong, .relationships strong { font-size: var(--fs-body-sm); font-weight: var(--fw-medium); overflow-wrap: anywhere; } .participants span, .relationships span, .participants small { color: var(--muted); font-size: var(--fs-caption); overflow-wrap: anywhere; }
+  .participants strong { display: flex; align-items: baseline; gap: 6px; }
+  .kb { --k: var(--text-2); flex: none; padding: 0 6px; border-radius: var(--r-full); background: color-mix(in srgb, var(--k) 12%, var(--surface)); color: var(--k); font-style: normal; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); text-transform: capitalize; }
+  .kb.k-agent { --k: var(--agent-1); } .kb.k-tool { --k: var(--tone-violet); } .kb.k-listener { --k: var(--tone-green); } .kb.k-remote { --k: var(--tone-blue); } .kb.k-skill, .kb.k-model { --k: var(--tone-amber); }
   .participants button.chosen, .relationships button.chosen { border-color: var(--accent); background: var(--accent-soft); }
   .empty { flex: 1; min-height: 120px; padding: 25px 18px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 9px; text-align: center; color: var(--muted); }
   .empty h2 { margin: 0; color: var(--text); font-size: var(--fs-heading); } .empty p { max-width: 440px; margin: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body); }

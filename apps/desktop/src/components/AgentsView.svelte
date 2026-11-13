@@ -18,14 +18,13 @@
   import FolderActions from "./FolderActions.svelte";
   import type { AgentFlowProps } from "../lib/agent-flow/model";
   import { FIT_MIN_ZOOM, FIT_PADDING } from "../lib/flow";
-  import { counts as agentCounts, agentColor, filterAgents, layoutPicture, pictureGraph, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Picture, type Positions } from "../lib/agents";
+  import { agentColor, filterAgents, layoutPicture, pictureGraph, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Picture, type Positions } from "../lib/agents";
   import type { AgentsReport, PortEntry } from "../lib/types";
   import { prefGet, prefGetBoolean, prefSet } from "../lib/prefs";
   import { onDestroy, tick, untrack } from "svelte";
   import { currentFolderOwner, preferredFolderOwner, resolveFolderTarget, type FolderTarget } from "../lib/folders";
   import { isComposingKey } from "../lib/keyboard";
   import { ActionDock, ActionPill, Button } from "./ui";
-  import StatStrip from "./ui/StatStrip.svelte";
   import { fleetMemory } from "../lib/agent-memory";
   import { humanBytes } from "../lib/format";
 
@@ -165,15 +164,6 @@
   const edgeTypes: EdgeTypes = { foot: FootEdge } as unknown as EdgeTypes;
 
   const visibleAgents = $derived(report ? filterAgents(report.agents, query) : []);
-  const railStats = $derived.by(() => {
-    const c = visibleAgents.map(agentCounts);
-    const sum = (k: "ports" | "folders" | "stoppable") => c.reduce((n, x) => n + x[k], 0);
-    return [
-      { id: "folders", label: "Projects", value: sum("folders") },
-      { id: "ports", label: "Ports", value: sum("ports") },
-      { id: "stop", label: "Stoppable", value: sum("stoppable"), tone: sum("stoppable") ? "warn" as const : "plain" as const },
-    ];
-  });
   const agentIds = $derived(report?.agents.map((a) => a.id) ?? []);
   const graph = $derived(report ? pictureGraph({ ...report, agents: visibleAgents }, picture, { recent, folder: projectPath }) : null);
   const sig = $derived(graph ? signature(graph) : "");
@@ -344,7 +334,6 @@
       <header class="rail-head">
         <h2>Agents <span class="n">{visibleAgents.length}{#if visibleAgents.length !== report.agents.length}{" / "}{report.agents.length}{/if}</span></h2>
         <span class="hint" title="↑↓ switches agents · click a folder to zoom into that project · Enter opens a map node">↑↓ to switch agents</span>
-        <StatStrip compact label="Agents summary" stats={railStats} />
         {#if fleet}
           <div class="fleet-card" aria-label="Fleet memory distribution">
             <div class="fleet-top">
@@ -385,7 +374,7 @@
       <div class="cards" id="agent-list">
         {#each visibleAgents as a (a.id)}
           <AgentCard agent={a} {report} color={colorOf(a.id)} maxMemory={fleet?.top?.bytes} selected={a.id === selectedAgent} onselect={() => pick(a.id)} onnavigate={(id) => pick(id)}
-            now={report.taken_at_ms || Date.now()} />
+            onhover={(on) => (hover = on ? a.id : null)} now={report.taken_at_ms || Date.now()} />
         {:else}
           <div class="no-matches"><Icon name="search" size={20} /><p>No agents match this search</p><span>Search by name, tool, folder, port or process ID.</span></div>
         {/each}
@@ -500,7 +489,7 @@
   .flow-body { flex: 1; min-height: 0; }
   .agents { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 340px) 1fr; background: var(--bg); }
   .rail { min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg); }
-  .rail-head { padding: 12px 14px 8px; display: grid; gap: 6px; }
+  .rail-head { padding: 12px 14px 8px; display: grid; gap: 8px; }
   h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); font-weight: var(--fw-semibold); }
   .n { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--muted); background: var(--surface-2); padding: 0 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
   .hint { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
@@ -532,13 +521,15 @@
   .map :global(.svelte-flow__controls) { box-shadow: var(--shadow-sm); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
   .map :global(.svelte-flow__minimap) { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-sm); opacity: 0.72; }
   .map :global(.svelte-flow__background) { --xy-background-pattern-color: var(--border); }
-  .chrome { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: min(100%, 560px); }
-  .bar { display: flex; gap: 6px; align-items: center; width: max-content; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; box-shadow: var(--shadow-sm); }
-  .stats { display: flex; gap: 10px; width: max-content; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-sm); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
-  .stats b { color: var(--text); }
-  .legend { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-sm); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
+  .chrome { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; max-width: min(100%, 560px); }
+  /* Floating map chrome: frosted, hairline, compact, so the graph keeps the room. */
+  .bar, .stats, .legend { background: var(--overlay); border: 1px solid var(--border); box-shadow: var(--shadow-sm); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .bar { display: flex; gap: 4px; align-items: center; width: max-content; padding: 3px; border-radius: var(--r-full); }
+  .stats { display: flex; gap: 4px 12px; width: max-content; padding: 4px 10px; border-radius: var(--r-full); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stats b { color: var(--text); font-weight: var(--fw-semibold); }
+  .legend { display: flex; flex-wrap: wrap; gap: 2px 10px; max-width: 520px; padding: 4px 10px; border-radius: var(--r-lg); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .lg { display: inline-flex; align-items: center; gap: 4px; }
-  .lg-agent { color: var(--accent); }
+  .lg-agent { color: var(--agent-1); }
   .lg-machine { color: var(--tone-blue); }
   .lg-folder :global(svg) { color: var(--tone-amber); }
   .lg-port :global(svg) { color: var(--tone-green); }

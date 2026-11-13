@@ -14,8 +14,9 @@
   import AgentMemoryPanel from "./AgentMemoryPanel.svelte";
   import { evidenceChip } from "../../lib/evidence";
   import { detailStats, factRows } from "../../lib/agent-details";
-  import { humanBytes, humanDuration, tildify } from "../../lib/format";
-  import { EVIDENCE_LABEL, KIND_LABEL, accessHeadline, counts, folderSourceLabel, stoppableEntries, monogram, processRows, startedFrom } from "../../lib/agents";
+  import { humanBytes, tildify } from "../../lib/format";
+  import { EVIDENCE_LABEL, accessHeadline, agentMeta, counts, folderSourceLabel, stoppableEntries, monogram, processRows } from "../../lib/agents";
+  import AgentRelations from "./AgentRelations.svelte";
   import type { Agent, AgentProcess, AgentsReport, PortEntry } from "../../lib/types";
 
   let {
@@ -77,11 +78,7 @@
   const facts = $derived(factRows(agent));
   const stats = $derived(detailStats(agent));
   const cfg = $derived(configSummary(agent));
-  const parent = $derived(report.agents.find((a) => a.id === agent.parent) ?? null);
-  const childAgents = $derived(startedFrom(report, agent.id));
   const tree = $derived(processRows(agent));
-  const up = $derived(agent.started_at ? humanDuration(now / 1000 - agent.started_at) : null);
-  const meta = $derived([KIND_LABEL[agent.kind], agent.vendor !== "unknown" ? agent.vendor : null, `pid ${agent.pid}`, up ? `up ${up}` : null].filter((p): p is string => !!p).join(" · "));
   const entry = (id: string | null) => entries.find((e) => e.id === id) ?? null;
   const stoppable = $derived(stoppableEntries(agent, entries));
   const children = $derived(tree.filter(({ process }) => process.role === "child").map(({ process }) => process));
@@ -105,7 +102,7 @@
     <span class="tile" aria-hidden="true">{monogram(agent.name)}</span>
     <div class="who">
       <h3 class="name" tabindex="-1" bind:this={heading}>{agent.name}</h3>
-      <span class="meta">{meta}</span>
+      <span class="meta">{agentMeta(agent, now)}</span>
     </div>
     {#if onclose}<button type="button" class="x" aria-label="Close agent details" title="Close (Esc)" onclick={onclose}><Icon name="x" size={14} /></button>{/if}
     <span class="pill lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.text}</span>
@@ -125,12 +122,7 @@
     {/each}
   </nav>
 
-  {#if parent || childAgents.length}
-    <p class="relations">
-      {#if parent}<span>Started from {#if onnavigate}<button type="button" onclick={() => onnavigate?.(parent.id)}>{parent.name} <span class="mono">{parent.pid}</span></button>{:else}{parent.name} (pid {parent.pid}){/if}</span>{/if}
-      {#if childAgents.length}<span>Started {#each childAgents as child, i}{#if i}, {/if}{#if onnavigate}<button type="button" onclick={() => onnavigate?.(child.id)}>{child.name} <span class="mono">{child.pid}</span></button>{:else}{child.name} (pid {child.pid}){/if}{/each}</span>{/if}
-    </p>
-  {/if}
+  <AgentRelations {agent} {report} {onnavigate} />
 
   <AgentMemoryPanel {agent} {report} />
 
@@ -156,7 +148,8 @@
               <span class="ic"><Icon name="folder" size={13} /></span>
               <span class="row-main">
                 <span class="row-label">{f.label}{#if f.evidence !== "observed"}<em> · {EVIDENCE_LABEL[f.evidence]}</em>{/if}</span>
-                <span class="row-sub">{tildify(f.path)} · {folderSourceLabel(f.source)}{f.project?.git_branch ? ` · ⎇ ${f.project.git_branch}` : ""}{f.privacy_area ? ` · ${f.privacy_area}` : ""}{f.pids.length ? ` · ${f.pids.length} proc` : ""}</span>
+                <span class="row-sub mono" title={f.path}>{tildify(f.path)}</span>
+                <span class="tags"><span class="tag">{folderSourceLabel(f.source)}</span>{#if f.project?.git_branch}<span class="tag mono branch">⎇ {f.project.git_branch}</span>{/if}{#if f.privacy_area}<span class="tag privacy">{f.privacy_area}</span>{/if}{#if f.pids.length}<span class="tag">{f.pids.length} proc</span>{/if}</span>
                 {#if f.note}<span class="row-note">{f.note}</span>{/if}
               </span>
             </button>
@@ -279,7 +272,7 @@
 <style>
   .details { display: grid; gap: 10px; padding: 14px 16px 18px; min-width: 0; }
   .dhead { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "tile who x" "pill pill pill"; gap: 8px 12px; align-items: center; }
-  .tile { grid-area: tile; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--agent) 16%, var(--surface)); color: var(--agent); font-weight: var(--fw-semibold); font-size: var(--fs-body); }
+  .tile { grid-area: tile; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--agent) 30%, transparent); background: color-mix(in srgb, var(--agent) 12%, var(--surface)); color: var(--agent); font-weight: var(--fw-semibold); font-size: var(--fs-body); }
   .who { grid-area: who; min-width: 0; display: grid; }
   .name { margin: 0; font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; outline: none; }
   .meta { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
@@ -299,11 +292,10 @@
   .jump-nav button:hover { background: var(--surface); color: var(--text); }
   .jump-nav button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 
-  .relations { margin: 0; display: grid; gap: 2px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
-  .relations button { padding: 0; border: 0; background: transparent; color: var(--text-2); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
   .sec-box { display: grid; gap: 8px; padding: 11px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; scroll-margin-top: 10px; }
   h4 { margin: 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--text-2); }
+  h4 :global(svg) { color: var(--agent); }
   .sec-n { margin-left: auto; padding: 0 7px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
 
   .cfg { display: grid; gap: 8px; }
@@ -351,6 +343,11 @@
   .row-label em { font-style: normal; color: var(--warn); font-weight: var(--fw-regular); }
   .row-sub, .row-note { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row-note { white-space: normal; }
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+  .tag { padding: 0 6px; border: 1px solid var(--border); border-radius: var(--r-full); background: var(--surface-2); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-2); white-space: nowrap; }
+  .tag.mono { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); }
+  .tag.branch { color: var(--tone-violet); background: var(--tone-violet-bg); border-color: transparent; }
+  .tag.privacy { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
   .procs li { position: relative; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "n f" "r r"; gap: 1px 8px; padding: 5px 0 6px; border-bottom: 1px solid var(--border); }
   .procs li:last-child { border-bottom: 0; }
   .pbar { position: absolute; left: 0; bottom: 0; height: 2px; border-radius: 1px; background: color-mix(in srgb, var(--agent) 55%, var(--surface)); opacity: 0.7; pointer-events: none; }

@@ -278,11 +278,24 @@ describe("MCP and skills capability explorer", () => {
     expect(view.container.querySelector("img")).toBeNull(); expect(details(view).textContent).toContain(skill.description);
     await tab(view, "Source"); expect(details(view).textContent).toContain("frontend-checks");
   });
+  it("copies a card's source path in one click without opening the card", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const view = mount(), card = view.getByRole("button", { name: frontendSkill() });
+    const copy = card.parentElement!.querySelector<HTMLButtonElement>("button.copy")!;
+    expect(copy.textContent).toContain("Copy path");
+    await fireEvent.click(copy);
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(card.querySelector(".source")!.textContent);
+    await waitFor(() => expect(copy.textContent).toContain("Copied"));
+    expect(card.getAttribute("aria-expanded")).toBe("false");
+  });
   it("opens a card's details inline right after it and closes them with Escape", async () => {
     const view = mount(), card = view.getByRole("button", { name: frontendSkill() });
     card.focus(); await fireEvent.click(card);
     const panel = view.getByRole("region", { name: "Capability details" });
-    expect(card.nextElementSibling).toBe(panel);
+    // The card's grid cell (the card and its Copy path button) is followed directly by the panel.
+    expect(card.parentElement!.nextElementSibling).toBe(panel);
+    expect(card.parentElement!.querySelectorAll("button")).toHaveLength(2);
     expect(card.getAttribute("aria-expanded")).toBe("true");
     expect(card.getAttribute("aria-controls")).toBe(panel.id);
     expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull();
@@ -322,7 +335,10 @@ describe("MCP and skills capability explorer", () => {
     const r = mockAgents(), oncapabilities = vi.fn();
     const view = render(AgentDetails, { agent: r.agents[1], report: r, entries: MOCK_SNAPSHOT.entries, color: "var(--accent)", onentry() {}, onreveal() {}, oneditor() {}, onstop() {}, onstopall() {}, oncapabilities });
     expect(oncapabilities).not.toHaveBeenCalled();
-    await fireEvent.click(view.getByRole("button", { name: /MCP & skills/ }));
+    await fireEvent.click(view.getByRole("button", { name: /^MCP & skills/ }));
     expect(oncapabilities).toHaveBeenCalledOnce(); expect(r.agents[1].capabilities).toBeUndefined();
+    // The config box's prompt is the same explicit opt-in.
+    await fireEvent.click(view.getByRole("button", { name: "Read MCP & skills →" }));
+    expect(oncapabilities).toHaveBeenCalledTimes(2); expect(r.agents[1].capabilities).toBeUndefined();
   });
 });

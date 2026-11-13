@@ -1,8 +1,9 @@
 <script lang="ts">
-  // One agent in the rail: monogram, access headline, footprint counts and resources. Selecting
+  // One agent in the rail: identity header, footprint KPI chips and resource telemetry. Selecting
   // it opens the full picture in the Agents detail panel; the card itself stays compact.
-  import { humanBytes, humanDuration } from "../../lib/format";
-  import { KIND_LABEL, accessHeadline, counts, countsLine, monogram, startedFrom } from "../../lib/agents";
+  import { humanBytes } from "../../lib/format";
+  import { ACCESS_LABEL, accessHeadline, agentMeta, countChips, counts, monogram } from "../../lib/agents";
+  import AgentRelations from "./AgentRelations.svelte";
   import type { Agent, AgentsReport } from "../../lib/types";
 
   let {
@@ -13,6 +14,7 @@
     maxMemory,
     onselect,
     onnavigate,
+    onhover,
     now = Date.now(),
   }: {
     agent: Agent;
@@ -23,6 +25,8 @@
     maxMemory?: number;
     onselect: () => void;
     onnavigate?: (id: string) => void;
+    /** Pointer over / off the card, so the map can light up this agent's footprint. */
+    onhover?: (on: boolean) => void;
     now?: number;
   } = $props();
 
@@ -31,64 +35,58 @@
   $effect(() => { if (selected) el?.scrollIntoView?.({ block: "nearest" }); });
   const head = $derived(accessHeadline(agent));
   const c = $derived(counts(agent));
-  const parent = $derived(report.agents.find((a) => a.id === agent.parent) ?? null);
-  const childAgents = $derived(startedFrom(report, agent.id));
-  const up = $derived(agent.started_at ? humanDuration(now / 1000 - agent.started_at) : null);
-  // Segments wrap as whole units, so a narrow rail never cuts a PID or count in half.
-  const meta = $derived([KIND_LABEL[agent.kind], agent.vendor !== "unknown" ? agent.vendor : null, `pid ${agent.pid}`, up ? `up ${up}` : null].filter((part): part is string => !!part));
-  const nums = $derived([...countsLine(c).split(" · "), `${c.processes} ${c.processes === 1 ? "process" : "processes"}`, `${c.tools} ${c.tools === 1 ? "tool" : "tools"}`]);
   const peakMem = $derived(maxMemory && maxMemory > 0 ? maxMemory : Math.max(1, ...report.agents.map((a) => a.memory_bytes)));
   const memPct = $derived(Math.max(3, Math.min(100, Math.round((agent.memory_bytes / peakMem) * 100))));
 </script>
 
-{#snippet segments(parts: string[])}{#each parts as part, i}{#if i}{" "}{/if}<span class="seg">{i ? "· " : ""}{part}</span>{/each}{/snippet}
-
-<article class="card" bind:this={el} class:on={selected} style="--agent: {color}" aria-label={agent.name}>
+<article class="card" bind:this={el} class:on={selected} style="--agent: {color}" aria-label={agent.name} onpointerenter={() => onhover?.(true)} onpointerleave={() => onhover?.(false)}>
   <button class="head" aria-pressed={selected} aria-controls={selected ? "agent-details" : undefined} onclick={onselect}>
     <span class="tile" aria-hidden="true">{monogram(agent.name)}</span>
     <span class="who">
-      <span class="name">{agent.name}</span>
-      <span class="meta">{@render segments(meta)}</span>
+      <span class="top"><span class="name">{agent.name}</span> <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.level === "elevated" ? head.text : ACCESS_LABEL[head.level]}</span></span>
+      <span class="meta">{agentMeta(agent, now, false)}</span>
     </span>
-    <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.text}</span>
-    <span class="nums">{@render segments(nums)}</span>
-    <span class="resources">
-      <span class="res-line mono">{agent.cpu_percent.toFixed(agent.cpu_percent < 10 ? 1 : 0)}% CPU · {humanBytes(agent.memory_bytes)} total memory</span>
+    <span class="kpis">{#each countChips(c, true) as [n, label]}<span class="kpi"><b>{n}</b> {label}</span> {/each}{#if c.stoppable}<span class="kpi warn"><b>{c.stoppable}</b> stoppable</span>{/if}</span>
+    <span class="res">
+      <span class="mem"><b>{humanBytes(agent.memory_bytes)}</b> <span class="res-sub">total memory</span></span>
+      <span class="cpu">{agent.cpu_percent.toFixed(agent.cpu_percent < 10 ? 1 : 0)}% CPU</span>
       <span class="mem-track" aria-hidden="true"><span class="mem-fill" style="width: {memPct}%"></span></span>
     </span>
   </button>
 
-  {#if parent || childAgents.length}
-    <div class="relations">
-      {#if parent}<span>Started from {#if onnavigate}<button onclick={() => onnavigate?.(parent.id)}>{parent.name} <span class="mono">{parent.pid}</span></button>{:else}{parent.name} (pid {parent.pid}){/if}</span>{/if}
-      {#if childAgents.length}<span>Started {#each childAgents as child, i}{#if i}, {/if}{#if onnavigate}<button onclick={() => onnavigate?.(child.id)}>{child.name} <span class="mono">{child.pid}</span></button>{:else}{child.name} (pid {child.pid}){/if}{/each}</span>{/if}
-    </div>
-  {/if}
+  <AgentRelations {agent} {report} {onnavigate} />
 </article>
 
 <style>
-  .card { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: hidden; transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease); }
-  .card:hover { border-color: var(--border-strong); }
-  .card.on { border-color: var(--agent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent) 16%, transparent); }
+  .card { position: relative; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: hidden; transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease), transform var(--dur-1) var(--ease); }
+  .card::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--agent); opacity: 0; transition: opacity var(--dur-1) var(--ease); }
+  .card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+  .card.on { border-color: color-mix(in srgb, var(--agent) 60%, var(--border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent) 14%, transparent); }
+  .card.on::before { opacity: 1; }
   .head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 14px; }
-  .head { width: 100%; display: grid; grid-template-columns: auto 1fr; grid-template-areas: "tile who" "tile acc" "nums nums" "resources resources"; gap: 3px 10px; padding: 10px 12px; border: 0; background: transparent; text-align: left; cursor: pointer; color: var(--text); }
-  .tile { grid-area: tile; width: 36px; height: 36px; margin-top: 2px; display: grid; place-items: center; border-radius: 10px; background: color-mix(in srgb, var(--agent) 16%, var(--surface)); color: var(--agent); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-semibold); letter-spacing: var(--ls-body); }
-  .who { grid-area: who; min-width: 0; display: grid; }
-  .name { font-weight: var(--fw-semibold); font-size: var(--fs-body); line-height: var(--lh-body); letter-spacing: var(--ls-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta { display: flex; flex-wrap: wrap; column-gap: 0.3em; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
-  .seg { white-space: nowrap; }
-  .acc { grid-area: acc; display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-2); }
-  .acc i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+  .head { width: 100%; display: grid; grid-template-columns: auto 1fr; grid-template-areas: "tile who" "kpis kpis" "res res"; gap: 8px 10px; padding: 11px 12px 10px 13px; border: 0; background: transparent; text-align: left; cursor: pointer; color: var(--text); font: inherit; }
+  .tile { grid-area: tile; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--agent) 30%, transparent); background: color-mix(in srgb, var(--agent) 12%, var(--surface)); color: var(--agent); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-semibold); letter-spacing: var(--ls-body); }
+  .who { grid-area: who; min-width: 0; display: grid; align-content: center; gap: 1px; }
+  .top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .name { min-width: 0; font-weight: var(--fw-semibold); font-size: var(--fs-body); line-height: var(--lh-body); letter-spacing: var(--ls-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acc { flex: none; max-width: 60%; display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 0 7px; border: 1px solid var(--border); border-radius: var(--r-full); background: var(--surface-2); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acc i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: none; }
   .lv-restricted i { background: var(--ok); }
   .lv-standard i { background: var(--tone-blue); }
   .lv-elevated i { background: var(--danger); }
-  .acc.lv-elevated { color: var(--danger); }
-  .lv-unknown i { background: var(--muted); }
-  .nums { grid-area: nums; display: flex; flex-wrap: wrap; column-gap: 0.3em; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
-  .resources { grid-area: resources; display: grid; gap: 4px; margin-top: 2px; }
-  .res-line { font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--text-2); font-variant-numeric: tabular-nums; }
-  .mem-track { height: 3px; border-radius: var(--r-full); background: var(--surface-2); overflow: hidden; }
-  .mem-fill { display: block; height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--agent) 72%, var(--surface)); transition: width var(--dur-2) var(--ease); }
-  .relations { padding: 0 12px 9px; display: grid; gap: 2px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
-  .relations button { padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-2); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .acc.lv-elevated { color: var(--danger); background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+  .kpis { grid-area: kpis; display: flex; flex-wrap: wrap; gap: 4px; }
+  .kpi { display: inline-flex; align-items: baseline; gap: 3px; padding: 1px 7px; border-radius: var(--r-full); background: var(--surface-2); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .kpi b { color: var(--text); font-weight: var(--fw-semibold); }
+  .kpi.warn { background: var(--warn-soft); color: var(--warn); }
+  .kpi.warn b { color: var(--warn); }
+  .res { grid-area: res; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 5px 8px; }
+  .mem { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .mem b { color: var(--text); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-semibold); }
+  .cpu { padding: 0 7px; border: 1px solid var(--border); border-radius: var(--r-full); font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .mem-track { grid-column: 1 / -1; height: 4px; border-radius: var(--r-full); background: var(--surface-2); overflow: hidden; }
+  .mem-fill { display: block; height: 100%; border-radius: inherit; background: var(--agent); opacity: 0.8; transition: width var(--dur-2) var(--ease); }
+  .card > :global(.relations) { padding: 0 12px 9px 13px; }
+  @media (prefers-reduced-motion: reduce) { .card, .card:hover { transition: none; transform: none; } }
 </style>

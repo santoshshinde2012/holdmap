@@ -1,8 +1,8 @@
 <script lang="ts">
   // "What a skill analyzer does": why skills matter for security and what holdmap does (and
-  // doesn't) do when it runs one. Collapsible; remembers being closed for the session.
+  // doesn't) do when it runs one. Collapsed by default; remembers being opened for the session.
   import Icon from "../Icon.svelte";
-  let open = $state(sessionStorage.getItem("holdmap.explainer") !== "closed");
+  let open = $state(sessionStorage.getItem("holdmap.explainer") === "open");
   $effect(() => { sessionStorage.setItem("holdmap.explainer", open ? "open" : "closed"); });
 </script>
 

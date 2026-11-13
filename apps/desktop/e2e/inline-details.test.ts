@@ -35,8 +35,8 @@ for (const t of ["light", "dark"] as const) {
     const panel = workspace(app).getByRole("region", { name: "Capability details", exact: true });
     await expect(panel).toBeVisible();
     await expect(card).toHaveAttribute("aria-expanded", "true");
-    // Anchored: directly after the card, starting below it, with no side panel.
-    expect(await card.evaluate((el) => el.nextElementSibling?.getAttribute("aria-label"))).toBe("Capability details");
+    // Anchored: directly after the card's grid cell (card + Copy path), starting below it, with no side panel.
+    expect(await card.evaluate((el) => el.parentElement?.nextElementSibling?.getAttribute("aria-label"))).toBe("Capability details");
     expect((await panel.boundingBox())!.y).toBeGreaterThan((await card.boundingBox())!.y);
     await expect(app.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
     expect(await host.evaluate((el) => el.scrollTop)).toBe(scroll);

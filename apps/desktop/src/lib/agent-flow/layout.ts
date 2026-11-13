@@ -2,9 +2,11 @@ import type { Edge, Node } from "@xyflow/svelte";
 import type { VisualEdge, VisualGraph, VisualNode } from "./model";
 import { nodeDescription } from "./build";
 
-export type FlowNodeData = { node: VisualNode; chosen: boolean };
+/** `dim`: something else is picked and this node is not next to it. */
+export type FlowNodeData = { node: VisualNode; chosen: boolean; dim?: boolean };
 /** `labelled`: whether the relationship's label is drawn. A busy graph names only the edges you pick or that touch the picked card, so labels never pile up. */
-export type FlowEdgeData = { edge: VisualEdge; chosen: boolean; labelled: boolean };
+/** `near`: the edge touches the picked node; `dim`: something is picked and it does not. */
+export type FlowEdgeData = { edge: VisualEdge; chosen: boolean; labelled: boolean; near?: boolean; dim?: boolean };
 /** Above this many relationships the labels would collide at a readable zoom. */
 export const LABEL_EDGE_LIMIT = 8;
 export type FlowNode = Node<FlowNodeData>;
@@ -34,12 +36,18 @@ export function layoutGraph(graph: VisualGraph, calls: boolean): Map<string, { x
 
 export function toFlow(graph: VisualGraph, positions: Map<string, { x: number; y: number }>, chosen: string | null): { nodes: FlowNode[]; edges: FlowEdge[] } {
   const crowded = graph.edges.length > LABEL_EDGE_LIMIT;
+  // The picked node or edge and everything one hop away stay bright; the rest recede.
+  const pickedEdge = graph.edges.find((e) => e.id === chosen);
+  const lit = chosen ? new Set(pickedEdge ? [pickedEdge.from, pickedEdge.to] : [chosen, ...graph.edges.flatMap((e) => (e.from === chosen ? [e.to] : e.to === chosen ? [e.from] : []))]) : null;
   return {
     nodes: graph.nodes.map((n) => ({ id: n.id, type: "activity", position: positions.get(n.id) ?? { x: 0, y: 0 }, width: 244, height: 78,
-      data: { node: n, chosen: chosen === n.id }, draggable: false, connectable: false,
+      data: { node: n, chosen: chosen === n.id, dim: !!lit && !lit.has(n.id) }, draggable: false, connectable: false,
       ariaLabel: nodeDescription(n), })),
-    edges: graph.edges.map((e) => ({ id: e.id, type: "relationship", source: e.from, target: e.to,
-      data: { edge: e, chosen: chosen === e.id, labelled: !crowded || chosen === e.id || chosen === e.from || chosen === e.to }, selectable: false, focusable: true,
-      ariaLabel: `${e.label}, ${e.kind === "span_parent" ? "reported by integration" : e.evidence}` })),
+    edges: graph.edges.map((e) => {
+      const near = chosen === e.from || chosen === e.to, on = near || chosen === e.id;
+      return { id: e.id, type: "relationship", source: e.from, target: e.to,
+      data: { edge: e, chosen: chosen === e.id, labelled: !crowded || on, near, dim: !!lit && !on }, selectable: false, focusable: true,
+      ariaLabel: `${e.label}, ${e.kind === "span_parent" ? "reported by integration" : e.evidence}` };
+    }),
   };
 }
