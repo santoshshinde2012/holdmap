@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { avoidCollisions, footprint, hasCollisions, mapBounds, radialLayout, remoteGroupId, shorten } from "./machine-map";
-import { mockAgents } from "./mock";
+import { mockAgents } from "./mock-agents";
 
 const report = mockAgents(undefined, true);
 

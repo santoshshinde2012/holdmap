@@ -11,7 +11,7 @@
   import { ActionDock, ActionPill, IconButton } from "./ui";
   import type { Agent, Graph, GraphNode } from "../lib/types";
   import { agentForPids } from "../lib/agent-scope";
-  import { FORCE_NODE_LIMIT, graphForQuery, graphNodeMatches, layout, layoutModeFor, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Point, type Positions } from "../lib/graph";
+  import { FORCE_NODE_LIMIT, directionForWidth, graphForQuery, graphNodeMatches, layout, layoutModeFor, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Point, type Positions } from "../lib/graph";
   import { prefGet, prefGetBoolean, prefGetChoice, prefSet } from "../lib/prefs";
   import { humanBytes } from "../lib/format";
   import { isComposingKey } from "../lib/keyboard";
@@ -37,6 +37,11 @@
   let optionsTrigger: HTMLButtonElement | undefined = $state();
   let optionsPanel: HTMLDivElement | undefined = $state();
   let width = $state(0), height = $state(0);
+  // The whole section's width (not the canvas, which shrinks when the peer pane docks).
+  let sectionWidth = $state(0);
+  const direction = $derived(directionForWidth(sectionWidth));
+  // The peer pane docks beside the canvas only when there is room; otherwise it floats.
+  const wide = $derived(sectionWidth === 0 || sectionWidth > 900);
   let focusRequest = $state<{ id: string; version: number } | null>(null);
   $effect(() => prefSet("layout", mode));
   $effect(() => prefSet("animate", animate ? "1" : "0"));
@@ -80,21 +85,21 @@
   });
   const forceLimited = $derived((shown?.nodes.length ?? 0) > FORCE_NODE_LIMIT);
   const effectiveMode = $derived(layoutModeFor(shown?.nodes.length ?? 0, mode));
-  const signature = $derived(shown ? effectiveMode + "|" +
+  const signature = $derived(shown ? effectiveMode + "|" + direction + "|" +
     shown.nodes.map((n) => n.id + "@" + (n.cluster ?? "")).sort().join(",") + "|" +
     shown.edges.map((e) => e.id + "@" + e.from + ">" + e.to).sort().join(",") + "|" +
     shown.clusters.map((c) => c.id + ":" + [...c.nodes].sort().join(",")).sort().join(";") : "");
   const cache: { sig: string; pos: Positions } = { sig: "", pos: new Map() };
   const positions = $derived.by(() => {
     if (!shown) return new Map() as Positions;
-    if (signature !== cache.sig) { cache.pos = layout(shown, effectiveMode); cache.sig = signature; }
+    if (signature !== cache.sig) { cache.pos = layout(shown, effectiveMode, direction); cache.sig = signature; }
     return cache.pos;
   });
   const focusedCluster = $derived(clusterFocus ? shown?.clusters.find((c) => c.id === clusterFocus) ?? null : null);
   const flow = $derived.by(() => {
     if (!shown) return { nodes: [] as FlowNode[], edges: [] as FlowEdge[] };
     const cluster = focusedCluster;
-    const base = toFlow(shown, positions, { focus: cluster ? null : hover ?? selectedNode, selectedId: selectedNode, animate: animate && !reduced });
+    const base = toFlow(shown, positions, { focus: cluster ? null : hover ?? selectedNode, selectedId: selectedNode, animate: animate && !reduced, direction: effectiveMode === "layered" ? direction : "LR" });
     if (!cluster) return base;
     const members = new Set(cluster.nodes);
     return {
@@ -138,7 +143,7 @@
     const node = shown?.nodes.find((n) => n.is_dev) ?? shown?.nodes[0];
     return node ? positions.get(node.id) ?? null : null;
   });
-  const viewKey = $derived(effectiveMode + "|" + query.trim() + "|" + all + "|" + external);
+  const viewKey = $derived(effectiveMode + "|" + direction + "|" + query.trim() + "|" + all + "|" + external);
   const hasRemote = $derived(graph?.nodes.some((n) => n.kind === "external") ?? false);
   // A lone "External" card with no service beside it is still an empty graph.
   const empty = $derived(!shown?.nodes.some((n) => n.kind !== "external"));
@@ -195,7 +200,7 @@
 
 <svelte:window onpointerdown={outside} />
 
-<section class="graph" class:reduced class:has-peer={!!peer} id="service-graph" tabindex="-1" aria-label="Service graph">
+<section class="graph" class:reduced class:has-peer={!!peer} class:wide bind:clientWidth={sectionWidth} id="service-graph" tabindex="-1" aria-label="Service graph">
   <div class="graph-body" bind:clientWidth={width} bind:clientHeight={height} aria-busy={loading || undefined}>
     {#if empty}
       <div class="empty" role="status">
@@ -328,7 +333,9 @@
 
 <style>
   .graph { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); position: relative; height: 100%; min-height: 0; min-width: 0; background: var(--bg); container-type: inline-size; outline: none; }
-  .graph.has-peer { grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); }
+  /* A container query cannot style its own container, so the docked layout keys off a class. */
+  .graph.has-peer.wide { grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); }
+  .graph.has-peer:not(.wide) .peer-inspector { position: absolute; top: 8px; right: 8px; bottom: 8px; width: min(340px, calc(100% - 16px)); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-md); }
   .graph:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
   h3, h4, p { margin: 0; }
   .graph-body { position: relative; min-height: 0; min-width: 0; }
@@ -399,12 +406,12 @@
   .peer-inspector small { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
   .peer-inspector .remote { overflow-wrap: anywhere; font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); }
   @container (max-width: 900px) {
-    .graph.has-peer { grid-template-columns: minmax(0, 1fr); }
-    .peer-inspector { position: absolute; top: 8px; right: 8px; bottom: 8px; width: min(340px, calc(100% - 16px)); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-md); }
     .graph.has-peer :global(.svelte-flow__minimap) { display: none; }
   }
   @container (max-width: 640px) {
-    .peer-inspector { top: auto; left: 8px; width: auto; max-height: min(58%, 440px); }
+    .graph.has-peer:not(.wide) .peer-inspector { top: auto; left: 8px; width: auto; max-height: min(58%, 440px); }
+    .graph :global(.svelte-flow__controls) { margin: 8px; }
+    .graph :global(.svelte-flow__controls-button) { width: 30px; height: 30px; }
     .bar { border-radius: var(--r-lg); }
     .opt-label, .edge-key, .stat-groups { display: none; }
     .graph :global(.svelte-flow__minimap) { display: none; }

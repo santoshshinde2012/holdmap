@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import AgentConfigPanel from "./AgentConfigPanel.svelte";
-import { mockAgents } from "../../lib/mock";
+import { mockAgents } from "../../lib/mock-agents";
 
 afterEach(cleanup);
 

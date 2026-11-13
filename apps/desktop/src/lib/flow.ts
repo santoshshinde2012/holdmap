@@ -5,7 +5,10 @@
 /** "Fit" never shrinks the map below this: past it nodes are too small to read or hit, so a very narrow pane crops (pan to see the rest). */
 export const FIT_MIN_ZOOM = 0.5;
 
-export const FIT_PADDING = { top: "84px", bottom: "28px", x: "28px" } as const;
+// The bottom padding keeps the horizontal zoom controls (bottom-left) off the nodes.
+export const FIT_PADDING = { top: "84px", bottom: "56px", x: "28px" } as const;
+/** Canvas width (px) under which the minimap is hidden: it would cover nodes. */
+export const MINIMAP_MIN_WIDTH = 640;
 
 /**
  * Whether the minimap is worth showing: only when part of the graph is off-screen. When everything
@@ -19,7 +22,7 @@ export function needsMiniMap(
   h: number,
   slack = 8,
 ): boolean {
-  if (!w || !h || !bounds.width || !bounds.height) return false;
+  if (!w || !h || !bounds.width || !bounds.height || w < MINIMAP_MIN_WIDTH) return false;
   const left = bounds.x * view.zoom + view.x;
   const top = bounds.y * view.zoom + view.y;
   const right = left + bounds.width * view.zoom;

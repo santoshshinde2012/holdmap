@@ -2,7 +2,8 @@
 import { cleanup, fireEvent, render, within } from "@testing-library/svelte";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import HomeView from "./HomeView.svelte";
-import { MOCK_SNAPSHOT, mockAgents } from "../../lib/mock";
+import { MOCK_SNAPSHOT } from "../../lib/mock";
+import { mockAgents } from "../../lib/mock-agents";
 
 beforeAll(() => {
   globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;

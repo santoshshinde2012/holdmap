@@ -7,7 +7,8 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DemoAnalyzers } from "./analyzers-demo";
 import { attention } from "./home";
-import { mockAgents, mockDevServers } from "./mock";
+import { mockDevServers } from "./mock";
+import { mockAgents } from "./mock-agents";
 import type { Insights } from "./analyzers";
 import type { AgentsReport, PortEntry } from "./types";
 

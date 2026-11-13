@@ -5,7 +5,7 @@ use std::io;
 use std::path::Path;
 
 #[cfg(unix)]
-pub(super) fn open(path: &Path) -> io::Result<File> {
+pub(crate) fn open(path: &Path) -> io::Result<File> {
     use std::os::fd::{AsRawFd, FromRawFd};
     use std::os::unix::ffi::OsStrExt;
     use std::os::unix::fs::OpenOptionsExt;
@@ -47,7 +47,7 @@ pub(super) fn open(path: &Path) -> io::Result<File> {
 }
 
 #[cfg(windows)]
-pub(super) fn open(path: &Path) -> io::Result<File> {
+pub(crate) fn open(path: &Path) -> io::Result<File> {
     use std::os::windows::fs::OpenOptionsExt;
     use std::path::{Component, Prefix};
     use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT;
@@ -74,7 +74,7 @@ pub(super) fn open(path: &Path) -> io::Result<File> {
 /// Windows has no public root-relative CreateFile API. Verify the opened handle's fully
 /// resolved path before reading, so a raced parent junction cannot redirect file contents.
 #[cfg(windows)]
-pub(super) fn verify(file: &File, path: &Path) -> io::Result<()> {
+pub(crate) fn verify(file: &File, path: &Path) -> io::Result<()> {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Storage::FileSystem::GetFinalPathNameByHandleW;
 
@@ -119,12 +119,12 @@ fn normalized(path: &str) -> String {
 }
 
 #[cfg(not(windows))]
-pub(super) fn verify(_: &File, _: &Path) -> io::Result<()> {
+pub(crate) fn verify(_: &File, _: &Path) -> io::Result<()> {
     Ok(())
 }
 
 #[cfg(not(any(unix, windows)))]
-pub(super) fn open(_: &Path) -> io::Result<File> {
+pub(crate) fn open(_: &Path) -> io::Result<File> {
     Err(io::ErrorKind::Unsupported.into())
 }
 

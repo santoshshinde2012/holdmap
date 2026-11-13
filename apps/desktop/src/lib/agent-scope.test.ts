@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { mockAgents, MOCK_SNAPSHOT } from "./mock";
+import { MOCK_SNAPSHOT } from "./mock";
+import { mockAgents } from "./mock-agents";
 import { demoActivity, demoAgentFlow } from "./activity-demo";
 import { activityRuns } from "./agent-flow/build";
 import { agentForEntry, agentForPids, agentRuns, agentSocketLinks, scopeFlowReport, spanBelongsTo } from "./agent-scope";

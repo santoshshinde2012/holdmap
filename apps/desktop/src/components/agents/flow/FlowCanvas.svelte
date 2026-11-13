@@ -42,7 +42,7 @@
     onnodeclick={({ node }) => onselect(node.id)} onedgeclick={({ edge }) => onselect(edge.id)} onpaneclick={() => onselect(null)}
     ariaLabelConfig={{ "controls.fitView.ariaLabel": "Fit all relationships in view" }}>
     <Background gap={22} size={1} />
-    <Controls showLock={false} position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.15, duration: reduced ? 0 : 300 }} />
+    <Controls showLock={false} orientation="horizontal" position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.15, duration: reduced ? 0 : 300 }} />
     <AutoMiniMap {dark} />
     <FlowViewport token={signature} {focus} {reduced} />
   </SvelteFlow>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { MOCK_SNAPSHOT, mockAgents } from "./mock";
+import { MOCK_SNAPSHOT } from "./mock";
+import { mockAgents } from "./mock-agents";
 import { footNodeActs, footNodeLabel,
   AGENT_W, FOOT_W, MACHINE_ID, accessFacts, accessHeadline, agentColor, agentMatches, column, columnX, contextGraph, counts, countsLine, edgeGeometry, filterAgents, folderAction, footprintGraph, folderSourceLabel, guessHome, headers,
   layoutContext, layoutFootprint, layoutPicture, layoutProject, monogram, neighbours, parentName, pathContains, pictureColumn, pictureGraph, platformLabel, processRows, projectGraph, resourcesLine, shortLabel, signature, sizeOf, step, stoppableEntries, stoppablePorts, tildePath, toFootFlow,

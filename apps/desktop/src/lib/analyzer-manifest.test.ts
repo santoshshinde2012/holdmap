@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseToml, readManifest } from "./analyzer-manifest";
 import { DemoAnalyzers } from "./analyzers-demo";
-import { mockAgents } from "./mock";
+import { mockAgents } from "./mock-agents";
 
 const MCP = `schema = 1
 id = "example.mcp-scan"

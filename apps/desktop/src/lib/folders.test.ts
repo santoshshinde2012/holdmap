@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { currentFolderOwner, fileManagerLabel, pathWrapParts, resolveFolderTarget } from "./folders";
-import { mockAgents } from "./mock";
+import { mockAgents } from "./mock-agents";
 
 const sharedPath = "/Users/dev/code/shop-web";
 

@@ -369,9 +369,14 @@ fn capabilities_schema() -> Value {
             "more_mcp_servers": count(), "more_skills": count(), "limits": strings(),
             "locations": {"type": "array", "description": "Documented locations. Metadata only; presence is not loading.", "items": {"type": "object", "properties": {
                 "id": {"type": "string"},
-                "kind": {"type": "string", "enum": ["skills", "agent_memory", "rules", "mcp_config", "instructions", "builtin", "plugin"]},
-                "scope": {"type": "string", "enum": ["user", "project", "local", "plugin", "builtin"]},
-                "rank": count(), "path": {"type": "string"},
+                "kind": {"type": "string", "enum": serde_names(&holdmap_core::transparency::PlaceKind::ALL)},
+                "scope": {"type": "string", "enum": serde_names(&holdmap_core::transparency::PlaceScope::ALL)},
+                "rank": count(), "label": {"type": "string"},
+                "combine": {"type": "string", "enum": ["override", "merge", "join", "not_config"]},
+                "note": {"type": ["string", "null"]}, "custom_home": {"type": ["string", "null"]},
+                "ignored_count": {"type": ["integer", "null"]},
+                "line_count": {"type": ["integer", "null"]}, "load_limit_lines": {"type": ["integer", "null"]},
+                "path": {"type": "string"},
                 "symlink_target": {"type": ["string", "null"]},
                 "status": {"type": "string", "enum": ["present", "missing", "unreadable", "skipped"]},
                 "status_reason": {"type": ["string", "null"]},
@@ -389,6 +394,14 @@ fn capabilities_schema() -> Value {
             "limits",
         ],
     )
+}
+
+/// The serde names of a list of unit variants, for a JSON Schema `enum`.
+fn serde_names<T: serde::Serialize>(values: &[T]) -> Vec<Value> {
+    values
+        .iter()
+        .filter_map(|value| serde_json::to_value(value).ok())
+        .collect()
 }
 
 pub(crate) fn output_schema(name: &str) -> Value {

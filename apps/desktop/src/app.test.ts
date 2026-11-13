@@ -36,7 +36,7 @@ const calls = vi.hoisted(() => ({
 }));
 vi.mock("./lib/api", async (orig) => {
   const real = await orig<typeof import("./lib/api")>();
-  const { mockAgents } = await import("./lib/mock");
+  const { mockAgents } = await import("./lib/mock-agents");
   const slow = <T,>(v: T, ms: number) => new Promise<T>((r) => setTimeout(() => r(v), ms));
   const simulatedStop = async (target: string): Promise<StopReport> => {
     calls.stopTargets.push(target);
@@ -631,7 +631,7 @@ describe("App live polling", () => {
 describe("App overview and first run", () => {
   it("answers which agent is running in two clicks from the overview", async () => {
     vi.useFakeTimers();
-    const { mockAgents } = await import("./lib/mock");
+    const { mockAgents } = await import("./lib/mock-agents");
     const agent = mockAgents().agents[0];
     const view = render(App);
     await vi.advanceTimersByTimeAsync(600);

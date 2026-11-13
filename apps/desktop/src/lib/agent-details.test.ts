@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { detailStats, factRows, firstSentence } from "./agent-details";
-import { mockAgents } from "./mock";
+import { mockAgents } from "./mock-agents";
 
 describe("agent details view model", () => {
   it("keeps the first sentence and caps long text", () => {

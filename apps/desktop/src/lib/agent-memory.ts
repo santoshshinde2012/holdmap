@@ -34,6 +34,17 @@ export function shareText(figure: ObservedCount | undefined): string {
   return ppm == null ? `unknown (${unknownReason(figure)})` : `${(ppm / 10_000).toFixed(1)}% of machine RAM`;
 }
 
+const HEADLINE_LABEL: Record<string, string> = {
+  physical_footprint: "Physical footprint",
+  resident: "Resident (RSS)",
+  working_set: "Working set",
+};
+
+/** Which counter the headline is, or "Mixed: …" when some processes fell back. */
+export function headlineLabel(memory: AgentMemoryReport): string {
+  return memory.headline_label || HEADLINE_LABEL[memory.headline_counter] || memory.headline_counter;
+}
+
 export function memoryFor(report: AgentsReport | null | undefined, agentId: string): AgentMemoryReport | null {
   return report?.memory?.find((row) => row.agent_id === agentId) ?? null;
 }
@@ -230,21 +241,39 @@ export function fleetMemory(report: AgentsReport | null | undefined): FleetMemor
 }
 
 export const PLACE_KIND: Record<string, string> = {
-  skills: "Skills",
-  agent_memory: "Context / Memory",
+  instructions: "Instructions",
   rules: "Rules",
+  settings: "Settings",
   mcp_config: "MCP config",
-  instructions: "Commands & prompts",
+  skills: "Skills",
+  commands: "Commands & prompts",
+  subagents: "Subagents",
+  hooks: "Hooks",
+  extensions: "Extensions",
+  agent_memory: "Agent memory",
+  session_data: "Session data",
+  secret_store: "Secrets",
   builtin: "Built-in",
   plugin: "Plugin",
 };
 
 export const PLACE_SCOPE: Record<string, string> = {
+  managed: "Managed",
   local: "Local",
   project: "Project",
   user: "User",
+  system_default: "System default",
   plugin: "Plugin",
+  account: "Account",
   builtin: "Built-in",
+};
+
+/** How files of one kind combine across layers, in plain words. */
+export const PLACE_COMBINE: Record<string, string> = {
+  override: "closer layer overrides",
+  merge: "layers merge",
+  join: "all files load",
+  not_config: "not configuration",
 };
 
 export const PLACE_STATUS: Record<string, string> = {
@@ -254,7 +283,7 @@ export const PLACE_STATUS: Record<string, string> = {
   skipped: "Skipped",
 };
 
-const SCOPE_ORDER = ["local", "project", "user", "plugin", "builtin"];
+const SCOPE_ORDER = ["managed", "local", "project", "user", "system_default", "plugin", "account", "builtin"];
 
 export function formatModified(ms: number | null | undefined): string {
   if (ms == null) return "modified time unknown";
@@ -292,7 +321,7 @@ export function memorySummary(agent: Agent, memory: AgentMemoryReport | null): s
   const lines = [
     `${agent.name} memory`,
     memory
-      ? `Headline ${humanBytes(memory.headline_bytes)} (${memory.headline_meaning})`
+      ? `Headline ${humanBytes(memory.headline_bytes)} · ${headlineLabel(memory)} (${memory.headline_meaning})${memory.headline_mixed ? ` ${memory.headline_mixed}` : ""}`
       : `Headline ${humanBytes(agent.memory_bytes)}. Platform counters were not in this report.`,
   ];
   if (!memory) return lines.join("\n");
@@ -346,27 +375,47 @@ export function placeEntries(place: CapabilityPlace): PlaceEntryView[] {
   }));
 }
 
+/** Size, count and line facts for one present row; secrets get presence only. */
+export function placeFacts(place: CapabilityPlace): string {
+  if (place.kind === "secret_store") return "present · not opened";
+  const count = place.file_count == null ? "count unknown" : `${place.file_count} ${place.file_count === 1 ? "entry" : "entries"}`;
+  const size = place.byte_size == null ? "size unknown" : humanBytes(place.byte_size);
+  const bits = [count, size, formatModified(place.modified_unix_ms)];
+  if (place.line_count != null && place.load_limit_lines != null) {
+    bits.push(place.line_count > place.load_limit_lines
+      ? `MEMORY.md ${place.line_count} lines, only the first ${place.load_limit_lines} load`
+      : `MEMORY.md ${place.line_count} of ${place.load_limit_lines} lines`);
+  }
+  if (place.ignored_count) bits.push(`${place.ignored_count} ignored`);
+  return bits.join(" · ");
+}
+
+export function combineText(place: CapabilityPlace): string {
+  return PLACE_COMBINE[place.combine ?? ""] ?? "";
+}
+
 export function placesSummary(places: CapabilityPlace[]): string {
   const lines = ["Documented locations. A present file is not proof the agent loaded it."];
   for (const place of [...places].sort((a, b) => a.rank - b.rank || a.path.localeCompare(b.path))) {
     const scope = PLACE_SCOPE[place.scope] ?? place.scope;
     const kind = PLACE_KIND[place.kind] ?? place.kind;
     const status = PLACE_STATUS[place.status] ?? place.status;
+    const combine = combineText(place);
+    const head = combine ? `${scope} ${kind} (${combine})` : `${scope} ${kind}`;
     if (!place.path) {
       const detail = place.kind === "builtin" && place.candidates.length
         ? ` · ${place.candidates.length} documented ${place.candidates.length === 1 ? "tool" : "tools"}`
         : "";
-      lines.push(`${scope} ${kind} (rank ${place.rank}): ${status} ${place.kind}${detail}`);
+      lines.push(`${head}: ${status} ${place.label || place.kind}${detail}`);
     } else if (place.status === "missing") {
-      lines.push(`${scope} ${kind} (rank ${place.rank}): ${status} ${place.path} · not on disk`);
+      lines.push(`${head}: ${status} ${place.path} · not on disk`);
     } else {
-      const size = place.byte_size == null ? "size unknown" : humanBytes(place.byte_size);
-      const count = place.file_count == null ? "count unknown" : `${place.file_count} entries`;
       const link = place.symlink_target ? ` → ${place.symlink_target}` : "";
-      lines.push(`${scope} ${kind} (rank ${place.rank}): ${status} ${place.path}${link} · ${count} · ${size} · ${formatModified(place.modified_unix_ms)}`);
+      lines.push(`${head}: ${status} ${place.path}${link} · ${placeFacts(place)}`);
     }
     if (place.status_reason) lines.push(`  ${place.status_reason}`);
-    if (place.candidates.length) lines.push(`  ${place.candidates.join(", ")}`);
+    if (place.note) lines.push(`  ${place.note}`);
+    if (place.candidates.length && place.kind !== "session_data") lines.push(`  ${place.candidates.join(", ")}`);
   }
   return lines.join("\n");
 }

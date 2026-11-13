@@ -78,10 +78,21 @@ export function isolated(g: Graph): Set<string> {
   return new Set(g.nodes.filter((n) => !n.cluster && !linked.has(n.id)).map((n) => n.id));
 }
 
-/** Layered left→right layout inside each observed component. Disconnected services and
- *  clusters are packed together instead of adding long empty ranks to the whole graph. */
-export function layered(g: Graph): Positions {
-  return packComponents(g, "layered");
+/** Rank direction for the layered layout: left→right, or top→bottom on narrow screens. */
+export type LayerDirection = "LR" | "TB";
+
+/** Width (px) under which the layered layout runs top→bottom so nodes are not cut off. */
+export const NARROW_GRAPH_WIDTH = 640;
+
+export function directionForWidth(width: number): LayerDirection {
+  return width > 0 && width < NARROW_GRAPH_WIDTH ? "TB" : "LR";
+}
+
+/** Layered layout inside each observed component (left→right, or top→bottom when narrow).
+ *  Disconnected services and clusters are packed together instead of adding long empty
+ *  ranks to the whole graph. */
+export function layered(g: Graph, direction: LayerDirection = "LR"): Positions {
+  return packComponents(g, "layered", 260, direction);
 }
 
 const COMPONENT_GAP = 40;
@@ -153,19 +164,21 @@ function componentBounds(g: Graph, positions: Positions) {
   return { x, y, width: right - x, height: bottom - y };
 }
 
-function packComponents(g: Graph, mode: LayoutMode, iterations = 260): Positions {
+function packComponents(g: Graph, mode: LayoutMode, iterations = 260, direction: LayerDirection = "LR"): Positions {
   const blocks = connectedComponents(g).map((component) => {
     // Avoid a graph engine/simulation per isolated service, including large all-services scans.
     const positions = component.nodes.length === 1
       ? new Map([[component.nodes[0].id, { x: NODE_W / 2, y: NODE_H / 2 }]])
-      : mode === "force" ? forceConnected(component, iterations) : layeredConnected(component);
+      : mode === "force" ? forceConnected(component, iterations) : layeredConnected(component, direction);
     return { component, positions, bounds: componentBounds(component, positions) };
   });
   if (!blocks.length) return new Map();
   // Tall/wide blocks first makes rows compact; identity breaks ties independently of scan order.
   blocks.sort((a, b) => b.bounds.height - a.bounds.height || b.bounds.width - a.bounds.width || compareId(a.component.nodes[0], b.component.nodes[0]));
   const area = blocks.reduce((sum, b) => sum + (b.bounds.width + COMPONENT_GAP) * (b.bounds.height + COMPONENT_GAP), 0);
-  const columns = Math.max(1, Math.round((Math.sqrt(area * 1.6) + COMPONENT_GAP) / (NODE_W + COMPONENT_GAP)));
+  // A portrait screen packs into fewer, taller columns.
+  const aspect = direction === "TB" ? 0.5 : 1.6;
+  const columns = Math.max(1, Math.round((Math.sqrt(area * aspect) + COMPONENT_GAP) / (NODE_W + COMPONENT_GAP)));
   const rowWidth = Math.max(Math.max(...blocks.map((b) => b.bounds.width)), columns * (NODE_W + COMPONENT_GAP) - COMPONENT_GAP);
   const rows: { x: number; y: number; height: number }[] = [];
   const out: Positions = new Map();
@@ -184,9 +197,11 @@ function packComponents(g: Graph, mode: LayoutMode, iterations = 260): Positions
   return out;
 }
 
-function layeredConnected(g: Graph): Positions {
+function layeredConnected(g: Graph, direction: LayerDirection = "LR"): Positions {
   const d = new dagre.graphlib.Graph({ compound: true, multigraph: false });
-  d.setGraph({ rankdir: "LR", nodesep: 34, ranksep: 110, marginx: 24, marginy: 24 });
+  d.setGraph(direction === "TB"
+    ? { rankdir: "TB", nodesep: 24, ranksep: 70, marginx: 16, marginy: 16 }
+    : { rankdir: "LR", nodesep: 34, ranksep: 110, marginx: 24, marginy: 24 });
   d.setDefaultEdgeLabel(() => ({}));
   const present = new Set(g.nodes.map((n) => n.id));
   for (const c of g.clusters) if (c.nodes.some((id) => present.has(id))) d.setNode(groupId(c.id), {});
@@ -296,8 +311,8 @@ export function separate(pos: Positions, passes = 40, gap = 24) {
   }
 }
 
-export function layout(g: Graph, mode: LayoutMode): Positions {
-  return mode === "force" ? force(g) : layered(g);
+export function layout(g: Graph, mode: LayoutMode, direction: LayerDirection = "LR"): Positions {
+  return mode === "force" ? force(g) : layered(g, direction);
 }
 
 /** Every node reachable downstream (what `id` depends on) and upstream (what depends on it),
@@ -370,6 +385,8 @@ export interface FlowNodeData extends Record<string, unknown> {
   dim: boolean;
   hl: boolean;
   selected: boolean;
+  /** Top→bottom layout: edges leave the bottom and enter the top. */
+  vertical?: boolean;
 }
 
 export interface FlowNode {
@@ -407,6 +424,7 @@ export interface FlowOptions {
   focus?: string | null;
   selectedId?: string | null;
   animate?: boolean;
+  direction?: LayerDirection;
 }
 
 /** Convert a laid-out graph to Svelte Flow nodes (cluster groups first, children relative to
@@ -446,7 +464,7 @@ export function toFlow(g: Graph, pos: Positions, opts: FlowOptions = {}): { node
       ...(o ? { parentId: groupId(n.cluster!) } : {}),
       width: NODE_W,
       height: NODE_H,
-      data: { node: n, dim: !!rel && !rel.nodes.has(n.id), hl: !!rel && rel.nodes.has(n.id), selected: opts.selectedId === n.id },
+      data: { node: n, dim: !!rel && !rel.nodes.has(n.id), hl: !!rel && rel.nodes.has(n.id), selected: opts.selectedId === n.id, vertical: opts.direction === "TB" },
     });
   }
   const edges: FlowEdge[] = g.edges

@@ -16,7 +16,7 @@
 </script>
 
 <div class="node-wrap">
-  <Handle type="target" position={Position.Left} isConnectable={false} aria-hidden="true" />
+  <Handle type="target" position={data.vertical ? Position.Top : Position.Left} isConnectable={false} aria-hidden="true" />
   <button
   type="button"
   class="node nodrag nopan kind-{n.kind}"
@@ -50,7 +50,7 @@
     </span>
   {/if}
   </button>
-  <Handle type="source" position={Position.Right} isConnectable={false} aria-hidden="true" />
+  <Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} isConnectable={false} aria-hidden="true" />
 </div>
 
 <style>

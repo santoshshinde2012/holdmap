@@ -9,6 +9,7 @@ mod counters;
 mod figure;
 #[cfg(target_os = "linux")]
 mod linux;
+pub mod locations;
 mod log;
 #[cfg(target_os = "macos")]
 mod macos;
@@ -19,7 +20,11 @@ mod report;
 mod windows;
 
 pub use figure::ObservedU64;
-pub use log::{persist_trends, persist_trends_default, FileMemoryLog, MemoryLog, NoMemoryLog};
+pub use locations::{Combine, Homes};
+pub use log::{
+    persist_trends, persist_trends_default, trend_key, FileMemoryLog, LogOutcome, MemoryLog,
+    NoMemoryLog,
+};
 pub use places::{census, CapabilityPlace, PlaceEntry, PlaceKind, PlaceScope, PlaceStatus};
 pub use probe::{HostProbe, MemoryProbe, ProcessReading};
 pub use report::{

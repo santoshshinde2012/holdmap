@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import type { ComponentProps } from "svelte";
 import AgentCapabilitiesView from "./AgentCapabilitiesView.svelte";
 import AgentDetails from "./AgentDetails.svelte";
-import { MOCK_SNAPSHOT, mockAgents } from "../../lib/mock";
+import { MOCK_SNAPSHOT } from "../../lib/mock";
+import { mockAgents } from "../../lib/mock-agents";
 import type { AgentsReport } from "../../lib/types";
 
 beforeAll(() => {

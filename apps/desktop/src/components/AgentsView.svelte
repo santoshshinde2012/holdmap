@@ -458,7 +458,7 @@
         <RevealNode id={selectedInfo && graph?.nodes.some((n) => n.id === selectedInfo.id) ? selectedInfo.id : null} {reduced} obstacle={() => document.getElementById("agent-details")} />
         <FitOnChange token={sig} focus={null} {reduced} open={!!selectedInfo} {near} obstacle={() => document.getElementById("agent-details")} />
         <Background gap={22} size={1.2} />
-        <Controls showLock={false} position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.1, minZoom: FIT_MIN_ZOOM, duration: reduced ? 0 : 320 }} />
+        <Controls showLock={false} orientation="horizontal" position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.1, minZoom: FIT_MIN_ZOOM, duration: reduced ? 0 : 320 }} />
         <AutoMiniMap {dark} />
       </SvelteFlow>
       {/if}

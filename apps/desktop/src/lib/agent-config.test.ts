@@ -54,7 +54,7 @@ describe("agent configuration view model", () => {
 describe("configStatus", () => {
   it("separates read, unsupported and turned off", async () => {
     const { configStatus } = await import("./agent-config");
-    const { mockAgents } = await import("./mock");
+    const { mockAgents } = await import("./mock-agents");
     const on = mockAgents(undefined, true).agents;
     expect(configStatus(on.find((a) => a.product === "cursor")!).kind).toBe("read");
     const docker = configStatus(on.find((a) => a.product === "docker-desktop")!);

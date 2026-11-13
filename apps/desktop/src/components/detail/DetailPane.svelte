@@ -184,6 +184,13 @@
 <style>
   .pane { display: flex; flex-direction: column; min-height: 0; height: 100%; background: var(--surface); border-left: 1px solid var(--border); min-width: 0; container-type: inline-size; }
   .pane.drawer { border-left: 0; }
+  /* Narrow panes wrap the tabs into rows so none is cut off behind a hidden scroll. */
+  @container (max-width: 519px) {
+    .pane :global([role="tablist"]) { flex-wrap: wrap; overflow-x: visible; row-gap: 2px; padding-block: 4px; }
+    .pane :global([role="tablist"] > [role="tab"]) { height: 30px; border-radius: var(--r-sm); }
+    .pane :global([role="tablist"] > [role="tab"][aria-selected="true"]) { background: var(--accent-soft); color: var(--accent); }
+    .pane :global([role="tablist"] > .ind) { display: none; }
+  }
   .body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
   .body :global(.sa), .body :global(.vp), .body :global(.content) { min-width: 0; }
   .panel { outline: none; min-width: 0; padding: var(--sp-4) var(--sp-4) var(--sp-5); overflow-wrap: anywhere; }

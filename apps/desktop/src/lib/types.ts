@@ -350,8 +350,12 @@ export interface AgentCapabilities {
 /** A counter that is either an observed integer or an explicit reason it is unknown. */
 export interface ObservedCount { value?: number | null; unknown?: string | null }
 
-export type PlaceKind = "skills" | "agent_memory" | "rules" | "mcp_config" | "instructions" | "builtin" | "plugin";
-export type PlaceScope = "user" | "project" | "local" | "plugin" | "builtin";
+export type PlaceKind =
+  | "instructions" | "rules" | "settings" | "mcp_config" | "skills" | "commands" | "subagents"
+  | "hooks" | "extensions" | "agent_memory" | "session_data" | "secret_store" | "builtin" | "plugin";
+export type PlaceScope = "managed" | "local" | "project" | "user" | "system_default" | "plugin" | "account" | "builtin";
+/** How files of one kind in several layers add up. */
+export type PlaceCombine = "override" | "merge" | "join" | "not_config";
 export type PlaceStatus = "present" | "missing" | "unreadable" | "skipped";
 
 export interface CapabilityPlace {
@@ -359,6 +363,13 @@ export interface CapabilityPlace {
   kind: PlaceKind;
   scope: PlaceScope;
   rank: number;
+  /** Short human name ("CLAUDE.md", "Auto memory"). */
+  label?: string;
+  combine?: PlaceCombine;
+  /** Vendor-documented context. */
+  note?: string | null;
+  /** Environment variable that moved this location's home. */
+  custom_home?: string | null;
   path: string;
   symlink_target?: string | null;
   status: PlaceStatus;
@@ -369,6 +380,11 @@ export interface CapabilityPlace {
   candidates: string[];
   entries?: { name: string; kind: string; bytes?: number | null; modified_unix_ms?: number | null }[];
   present: boolean;
+  /** Files the product ignores here (Cursor .md in .cursor/rules). */
+  ignored_count?: number | null;
+  /** Lines in an auto-memory index (MEMORY.md); the text is never read into holdmap. */
+  line_count?: number | null;
+  load_limit_lines?: number | null;
 }
 
 export type HeadlineCounter = "resident" | "physical_footprint" | "working_set";
@@ -381,6 +397,8 @@ export interface ProcessMemoryRow {
   role: MemoryRole;
   evidence: Evidence;
   scan_bytes: number;
+  /** Which counter scan_bytes is; resident when the platform counter was refused. */
+  counter?: HeadlineCounter;
   reading: Record<string, ObservedCount>;
   dominant: boolean;
   dominant_reason?: string | null;
@@ -393,6 +411,10 @@ export interface AgentMemoryReport {
   headline_bytes: number;
   headline_counter: HeadlineCounter;
   headline_meaning: string;
+  /** Counter name, or "Mixed: …" when some processes fell back. */
+  headline_label?: string;
+  /** Why the headline mixes counters. */
+  headline_mixed?: string | null;
   machine_bytes: ObservedCount;
   share_ppm: ObservedCount;
   resident: ObservedCount;

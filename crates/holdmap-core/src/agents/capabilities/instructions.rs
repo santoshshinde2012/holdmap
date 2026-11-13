@@ -56,71 +56,13 @@ pub struct InstructionFile {
     pub evidence: Evidence,
 }
 
-/// (relative directory or file, kind, accepted extension; `None` = a single memory file).
-type Location = (&'static str, InstructionKind, Option<&'static str>);
-
-fn locations(product: &str, scope: CapabilityScope) -> &'static [Location] {
-    use InstructionKind::*;
-    let user = scope == CapabilityScope::User;
-    match (product, user) {
-        ("claude-code", true) => &[
-            (".claude/CLAUDE.md", Memory, None),
-            (".claude/commands", Command, Some("md")),
-            (".claude/agents", Subagent, Some("md")),
-        ],
-        ("claude-code", false) => &[
-            ("CLAUDE.md", Memory, None),
-            (".claude/CLAUDE.md", Memory, None),
-            (".claude/commands", Command, Some("md")),
-            (".claude/agents", Subagent, Some("md")),
-        ],
-        ("codex" | "codex-desktop", true) => &[
-            (".codex/AGENTS.md", Memory, None),
-            (".codex/prompts", Prompt, Some("md")),
-        ],
-        ("codex" | "codex-desktop", false) => &[("AGENTS.md", Memory, None)],
-        ("cursor" | "cursor-agent", true) => &[(".cursor/commands", Command, Some("md"))],
-        ("cursor" | "cursor-agent", false) => &[
-            ("AGENTS.md", Memory, None),
-            (".cursor/rules", Rule, Some("mdc")),
-            (".cursor/rules", Rule, Some("md")),
-            (".cursor/commands", Command, Some("md")),
-        ],
-        ("gemini", true) => &[
-            (".gemini/GEMINI.md", Memory, None),
-            (".gemini/commands", Command, Some("toml")),
-        ],
-        ("gemini", false) => &[
-            ("GEMINI.md", Memory, None),
-            (".gemini/commands", Command, Some("toml")),
-        ],
-        ("copilot" | "copilot-cli", false) => &[
-            ("AGENTS.md", Memory, None),
-            (".github/copilot-instructions.md", Rule, None),
-            (".github/instructions", Rule, Some("instructions.md")),
-            (".github/prompts", Prompt, Some("prompt.md")),
-        ],
-        ("windsurf", false) => &[(".windsurf/rules", Rule, Some("md"))],
-        ("cline", false) => &[(".clinerules", Rule, Some("md"))],
-        _ => &[],
-    }
-}
-
 impl Inventory<'_> {
-    pub(super) fn instruction_location(&mut self, base: &Path, scope: CapabilityScope) {
-        if !self.bounded() || !self.safe_path(base) {
-            return;
-        }
-        for (relative, kind, extension) in locations(self.product, scope) {
-            let path = base.join(relative);
-            match extension {
-                None => self.memory_file(&path, *kind, scope),
-                Some(extension) => self.instruction_directory(&path, *kind, extension, scope),
-            }
-        }
-    }
-
-    fn memory_file(&mut self, path: &Path, kind: InstructionKind, scope: CapabilityScope) {
+    pub(super) fn memory_file(
+        &mut self,
+        path: &Path,
+        kind: InstructionKind,
+        scope: CapabilityScope,
+    ) {
         if !self.safe_path(path)
             || !std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file())
         {
@@ -134,7 +76,7 @@ impl Inventory<'_> {
         self.instruction(kind, name, None, scope, path);
     }
 
-    fn instruction_directory(
+    pub(super) fn instruction_directory(
         &mut self,
         directory: &Path,
         kind: InstructionKind,

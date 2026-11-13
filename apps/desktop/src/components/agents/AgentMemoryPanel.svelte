@@ -3,7 +3,7 @@
   // retained trend area chart, observable counters, and proportional per-process rows.
   import Icon from "../Icon.svelte";
   import ExportActions from "../ui/ExportActions.svelte";
-  import { memoryFor, memorySummary, processGroups, processNoun, readingBits, sharePercent, shareText, splitCounters, trendSparkline, trendView } from "../../lib/agent-memory";
+  import { headlineLabel, memoryFor, memorySummary, processGroups, processNoun, readingBits, sharePercent, shareText, splitCounters, trendSparkline, trendView } from "../../lib/agent-memory";
   import { humanBytes } from "../../lib/format";
   import type { Agent, AgentsReport } from "../../lib/types";
 
@@ -59,7 +59,11 @@
           <b class="headline-val">{humanBytes(memory.headline_bytes)}</b>
           {#if share != null}<span class="share-pill">{share.toFixed(1)}% of machine RAM</span>{/if}
         </div>
+        <span class="counter-row">
+          <span class="counter-pill" class:mixed={!!memory.headline_mixed}>Counter: {headlineLabel(memory)}</span>
+        </span>
         <span class="meaning">{memory.headline_meaning}</span>
+        {#if memory.headline_mixed}<span class="meaning mixed-why">{memory.headline_mixed}</span>{/if}
 
         {#if share != null}
           <div class="meter-wrap">
@@ -220,6 +224,9 @@
   .card { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; box-shadow: var(--shadow-sm); }
   .fallback { margin: 0; color: var(--text-2); }
   .hero-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; }
+  .counter-row { display: flex; flex-wrap: wrap; gap: 4px; }
+  .counter-pill { font-size: var(--fs-caption); line-height: var(--lh-caption); padding: 0 8px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); font-weight: var(--fw-medium); }
+  .counter-pill.mixed { background: var(--warn-soft); color: var(--warn); }
   .headline-val { font-size: var(--fs-title); line-height: var(--lh-title); letter-spacing: var(--ls-title); font-weight: var(--fw-semibold); color: var(--text); font-variant-numeric: tabular-nums; }
   .meaning { color: var(--muted); overflow-wrap: anywhere; }
   .share-pill { padding: 2px 9px; border-radius: var(--r-full); background: color-mix(in srgb, var(--agent, var(--accent)) 12%, var(--surface)); color: var(--text); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; flex: none; }

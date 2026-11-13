@@ -35,17 +35,26 @@ impl HeadlineCounter {
         }
     }
 
+    /// Short counter name for labels ("Physical footprint").
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Resident => "Resident (RSS)",
+            Self::PhysicalFootprint => "Physical footprint",
+            Self::WorkingSet => "Working set",
+        }
+    }
+
     /// One sentence naming the counter, for every surface.
     pub fn meaning(self) -> &'static str {
         match self {
             Self::Resident => {
-                "Sum of Linux VmRSS samples taken with the process table. This is the agent's memory total."
+                "Sum of resident-size (RSS) samples taken with the process table. Shared pages are counted in every process that maps them."
             }
             Self::PhysicalFootprint => {
-                "Sum of macOS physical-footprint samples taken with the process table. This is the agent's memory total and matches Activity Monitor's Memory column."
+                "Sum of macOS physical-footprint samples taken with the process table. Activity Monitor's Memory column is based on the same counter, but it samples at another moment and groups processes its own way, so the numbers can differ."
             }
             Self::WorkingSet => {
-                "Sum of Windows working-set samples taken with the process table. This is the agent's memory total. It is not the private working set."
+                "Sum of Windows working-set samples taken with the process table. It is not the private working set Task Manager shows by default."
             }
         }
     }
@@ -93,6 +102,9 @@ pub struct ProcessMemoryRow {
     pub evidence: Evidence,
     /// The process-table sample included in the agent headline.
     pub scan_bytes: u64,
+    /// Which counter [`Self::scan_bytes`] is. Resident when the platform counter was refused.
+    #[serde(default = "HeadlineCounter::on_this_os")]
+    pub counter: HeadlineCounter,
     /// Platform counters from a separate read.
     pub reading: ProcessReading,
     /// The process holds at least half of the headline and at least 256 MiB, and it is not
@@ -165,7 +177,7 @@ pub struct MemorySample {
     pub bytes: u64,
 }
 
-const TREND_RULE: &str = "Direction compares the oldest and newest retained headline samples for this process id and start time. Rising or falling needs more than 10% and more than 1 MiB of change. Peaks reported by the OS stay on each process and are not added together.";
+const TREND_RULE: &str = "Direction compares the oldest and newest retained headline samples for this agent and folder, across restarts. Rising or falling needs more than 10% and more than 1 MiB of change. Peaks reported by the OS stay on each process and are not added together.";
 
 impl MemoryTrend {
     /// A trend from one current sample and no history.
@@ -190,7 +202,7 @@ impl MemoryTrend {
             let mut trend = Self::current_only(sample);
             if samples.is_empty() {
                 trend.samples.clear();
-                trend.unknown = Some("No headline sample was recorded for this process.".into());
+                trend.unknown = Some("No headline sample was recorded for this agent.".into());
             }
             return trend;
         }
@@ -228,6 +240,12 @@ pub struct AgentMemoryReport {
     pub headline_counter: HeadlineCounter,
     /// What the headline means on this operating system.
     pub headline_meaning: String,
+    /// Short name of the counter, or "Mixed: …" when some processes fell back.
+    #[serde(default)]
+    pub headline_label: String,
+    /// Why the headline mixes counters, when some processes fell back to resident size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headline_mixed: Option<String>,
     /// Physical RAM of the machine.
     pub machine_bytes: ObservedU64,
     /// `headline_bytes * 1_000_000 / machine_bytes` when the machine size is known and non-zero.
@@ -271,8 +289,13 @@ impl AgentMemoryReport {
             Some(ppm) => format!("{:.1}% of RAM", ppm as f64 / 10_000.0),
             None => format!("share unknown ({})", self.share_ppm.reason()),
         };
+        let counter = if self.headline_label.is_empty() {
+            self.headline_counter.label()
+        } else {
+            &self.headline_label
+        };
         format!(
-            "{} · {share} · resident {} · private {} · shared {}",
+            "{} {counter} · {share} · resident {} · private {} · shared {}",
             crate::util::human_bytes(self.headline_bytes),
             self.resident.bytes_text(),
             self.private_bytes.bytes_text(),
@@ -377,6 +400,11 @@ pub fn agent_memory(
             role,
             evidence,
             scan_bytes: process.memory_bytes,
+            counter: if table.memory_fell_back(process.pid) {
+                HeadlineCounter::Resident
+            } else {
+                HeadlineCounter::on_this_os()
+            },
             reading: probe.reading(process.pid),
             dominant: false,
             dominant_reason: None,
@@ -420,6 +448,21 @@ pub fn agent_memory(
             "A dominant process is a helper, language server, MCP server or child whose sample is at least half the agent total and at least 256 MiB. It is a size comparison, not a verdict that the process is stuck.".into(),
         );
     }
+    let primary = HeadlineCounter::on_this_os();
+    let fell_back = rows.iter().filter(|row| row.counter != primary).count();
+    let headline_mixed = (fell_back > 0).then(|| mixed_reason(primary, fell_back, rows.len()));
+    let headline_label = if fell_back == 0 {
+        primary.label().to_owned()
+    } else {
+        format!(
+            "Mixed: {} and {}",
+            primary.label().to_lowercase(),
+            HeadlineCounter::Resident.label().to_lowercase()
+        )
+    };
+    if let Some(reason) = &headline_mixed {
+        limits.push(reason.clone());
+    }
     let grouped = |pick: fn(&ProcessReading) -> &ObservedU64| {
         sum_observed(
             &rows
@@ -434,8 +477,10 @@ pub fn agent_memory(
         pid: agent.pid,
         started_at: agent.started_at,
         headline_bytes,
-        headline_counter: HeadlineCounter::on_this_os(),
-        headline_meaning: HeadlineCounter::on_this_os().meaning().into(),
+        headline_counter: primary,
+        headline_meaning: primary.meaning().into(),
+        headline_label,
+        headline_mixed,
         machine_bytes,
         share_ppm,
         resident: grouped(|reading| &reading.resident),
@@ -457,6 +502,15 @@ pub fn agent_memory(
         processes: rows,
         limits,
     }
+}
+
+/// Why a headline mixes counters: how many processes fell back, and why that happens.
+fn mixed_reason(primary: HeadlineCounter, fell_back: usize, total: usize) -> String {
+    let noun = if total == 1 { "process" } else { "processes" };
+    format!(
+        "{fell_back} of {total} {noun} used resident size instead of {}: the operating system refused that counter (another user's process, or one that exited during the scan). The total mixes both counters.",
+        primary.label().to_lowercase()
+    )
 }
 
 /// Replace the current-only trend with samples from `log`, including this report's headline.

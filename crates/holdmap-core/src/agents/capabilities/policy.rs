@@ -74,25 +74,13 @@ const SETTINGS: &[(&str, &str, &[&str])] = &[
 ];
 
 impl Inventory<'_> {
-    /// Read the product's separate settings files (those not already read for MCP).
-    pub(super) fn policy_location(&mut self, base: &Path, scope: CapabilityScope) {
-        if !self.bounded() || !self.safe_path(base) {
+    /// Read one separate settings file (not already read for MCP).
+    pub(super) fn policy_file(&mut self, path: &Path, scope: CapabilityScope) {
+        if !self.seen_sources.insert(path.to_owned()) {
             return;
         }
-        let files: &[&str] = match (self.product, scope) {
-            ("claude-code", CapabilityScope::User) => &[".claude/settings.json"],
-            ("claude-code", _) => &[".claude/settings.json", ".claude/settings.local.json"],
-            ("cursor" | "cursor-agent", CapabilityScope::User) => &[".cursor/cli-config.json"],
-            _ => &[],
-        };
-        for file in files {
-            let path = base.join(file);
-            if !self.seen_sources.insert(path.clone()) {
-                continue;
-            }
-            if let Some(value) = self.read_json(&path) {
-                self.json_policy(&value, scope, &path);
-            }
+        if let Some(value) = self.read_json(path) {
+            self.json_policy(&value, scope, path);
         }
     }
 

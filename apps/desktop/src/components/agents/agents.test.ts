@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import AgentCard from "./AgentCard.svelte";
 import AgentDetails from "./AgentDetails.svelte";
 import AgentsView from "../AgentsView.svelte";
-import { MOCK_SNAPSHOT, mockAgents } from "../../lib/mock";
+import { MOCK_SNAPSHOT } from "../../lib/mock";
+import { mockAgents } from "../../lib/mock-agents";
 import type { Agent } from "../../lib/types";
 
 beforeAll(() => {
