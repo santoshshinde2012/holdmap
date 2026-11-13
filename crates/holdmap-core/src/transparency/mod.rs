@@ -4,6 +4,7 @@
 //! Location census is a separate inspector that stats paths and does not read bodies.
 //! Reports share these types across the CLI, MCP server and desktop app.
 
+#[cfg(any(target_os = "linux", test))]
 mod counters;
 mod figure;
 #[cfg(target_os = "linux")]
