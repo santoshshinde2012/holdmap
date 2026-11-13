@@ -177,7 +177,7 @@ test("the 3D machine keeps configuration unknown until it is read", async ({ app
   const overview = app.getByRole("region", { name: "Overview" });
   const readings = overview.getByRole("region", { name: "Live readings: This computer" });
   await expect(readings.getByText("Not read", { exact: true })).toHaveCount(2);
-  await overview.getByRole("button", { name: "Read MCP config" }).first().click();
+  await overview.getByRole("button", { name: "Read local config" }).first().click();
   await expect(readings).toContainText("of 7 configured");
 });
 

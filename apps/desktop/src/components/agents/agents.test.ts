@@ -108,7 +108,7 @@ describe("agent visibility", () => {
     expect(container.textContent).toContain("+3 folders not listed");
     expect(container.textContent).toContain("+4 tools not listed");
     // Links live with the agent's other relationships in the Flow section.
-    await fireEvent.click(getByRole("tab", { name: /^Flow/ }));
+    await fireEvent.click(getByRole("tab", { name: /^Connections/ }));
     expect(container.textContent).toContain("+5 links not listed");
   });
 
@@ -117,20 +117,29 @@ describe("agent visibility", () => {
     const oncapabilities = vi.fn(), onflow = vi.fn(), oninsights = vi.fn();
     const view = render(AgentDetails, { ...detailProps(a), report: r, oncapabilities, onflow, oninsights });
     const tabs = view.getByRole("tablist", { name: "Agent sections" });
-    expect([...tabs.querySelectorAll("[role=tab]")].map((t) => t.textContent?.replace(/\d+/g, "").trim())).toEqual(["Overview", "MCP & skills", "Flow", "Security"]);
+    expect([...tabs.querySelectorAll("[role=tab]")].map((t) => t.textContent?.replace(/\d+/g, "").trim())).toEqual(["Overview", "Config", "Connections", "Findings"]);
     expect(view.getByRole("tab", { name: /^Overview/ }).getAttribute("aria-selected")).toBe("true");
     expect(view.getByRole("tabpanel")).toBeTruthy();
-    expect(view.queryByRole("button", { name: "Open full MCP & skills" })).toBeNull();
-    await fireEvent.click(view.getByRole("tab", { name: /^MCP & skills/ }));
-    await fireEvent.click(view.getByRole("button", { name: "Open full MCP & skills" }));
+    expect(view.queryByRole("button", { name: "Open in MCP & skills" })).toBeNull();
+    await fireEvent.click(view.getByRole("tab", { name: /^Config/ }));
+    await fireEvent.click(view.getByRole("button", { name: "Open in MCP & skills" }));
     expect(oncapabilities).toHaveBeenCalledOnce();
-    await fireEvent.click(view.getByRole("tab", { name: /^Flow/ }));
+    await fireEvent.click(view.getByRole("tab", { name: /^Connections/ }));
     expect(view.container.textContent).toContain("Live socket links");
-    await fireEvent.click(view.getByRole("button", { name: "Open full Flow" }));
+    await fireEvent.click(view.getByRole("button", { name: "Open in Flow" }));
     expect(onflow).toHaveBeenCalledOnce();
-    await fireEvent.click(view.getByRole("tab", { name: /^Security/ }));
-    await fireEvent.click(view.getByRole("button", { name: "Open full Security" }));
+    await fireEvent.click(view.getByRole("tab", { name: /^Findings/ }));
+    await fireEvent.click(view.getByRole("button", { name: "Open in Security" }));
     expect(oninsights).toHaveBeenCalledOnce();
+  });
+
+  it("gives each fact one home: Overview omits relationships, ports and findings", () => {
+    const a = mockAgents().agents[0];
+    const { container } = render(AgentDetails, detailProps(a));
+    expect(container.textContent).not.toContain("Ports it serves");
+    expect(container.textContent).not.toContain("Open findings");
+    expect(container.querySelector(`#section-memory-agent-${a.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`)).toBeTruthy();
+    expect(container.textContent).toContain("RAM");
   });
 
   it("lists only this agent's live sockets in Flow", async () => {
@@ -147,7 +156,7 @@ describe("agent visibility", () => {
   it("can select the parent agent and describes specific binds precisely", async () => {
     const a = mockAgents().agents[0], navigate = vi.fn();
     a.ports[0].exposure = "specific";
-    const { getByRole, container } = render(AgentDetails, { ...detailProps(a), onnavigate: navigate });
+    const { getByRole, container } = render(AgentDetails, { ...detailProps(a), onnavigate: navigate, tab: "flow" });
     await fireEvent.click(getByRole("button", { name: "Cursor 52000" }));
     expect(navigate).toHaveBeenCalledWith("agent:52000");
     expect(container.textContent).toContain("bound to a specific interface");

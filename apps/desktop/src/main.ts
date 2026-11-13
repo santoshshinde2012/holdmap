@@ -2,7 +2,6 @@ import { mount, unmount } from "svelte";
 import "./fonts.css";
 import "./app.css";
 import App from "./App.svelte";
-import Gallery from "./dev/Gallery.svelte";
 import { prefGet } from "./lib/prefs";
 import { isBenignError } from "./lib/recover";
 
@@ -17,21 +16,27 @@ declare global {
   }
 }
 
-function gallery(): Mounted {
+/** The UI kit gallery loads on demand and is left out of the website demo build. */
+async function gallery(): Promise<void> {
   document.documentElement.dataset.theme =
     prefGet("theme") === "dark" ? "dark" : "light";
-  return mount(Gallery, { target });
+  const { default: Gallery } = await import("./dev/Gallery.svelte");
+  mount(Gallery, { target });
 }
 
 function app(): Mounted {
   return mount(App, { target });
 }
 
-function start(): Mounted {
-  return location.hash === "#ui-gallery" ? gallery() : app();
+function start(): Mounted | null {
+  if (!__HOLDMAP_SITE_DEMO__ && location.hash === "#ui-gallery") {
+    void gallery();
+    return null;
+  }
+  return app();
 }
 
-let current: Mounted = start();
+let current: Mounted | null = start();
 let remounting = false;
 
 /**
@@ -45,7 +50,7 @@ function recover(why: string): void {
   console.error("[holdmap] recovering UI after", why);
   window.__holdmapRecovered = why;
   try {
-    unmount(current);
+    if (current) unmount(current);
   } catch (e) {
     console.error("[holdmap] unmount during recover failed", e);
   }

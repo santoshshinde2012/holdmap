@@ -543,7 +543,7 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
         if let Some(memory) = r.memory.iter().find(|memory| memory.agent_id == a.id) {
             let mut first = true;
             for line in memory.breakdown_lines() {
-                let head = if first { label("memory") } else { pad.clone() };
+                let head = if first { label("RAM") } else { pad.clone() };
                 first = false;
                 out.push_str(&format!("{head}{}\n", printable(&line)));
             }

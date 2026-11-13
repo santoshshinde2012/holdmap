@@ -33,9 +33,9 @@ describe("AgentConfigPanel", () => {
     const oninspect = vi.fn();
     const plain = mockAgents().agents[0];
     const view = render(AgentConfigPanel, { agent: plain, oninspect });
-    await fireEvent.click(view.getByRole("button", { name: "Read configuration" }));
+    await fireEvent.click(view.getByRole("button", { name: "Read local config" }));
     expect(oninspect).toHaveBeenCalledOnce();
-    await fireEvent.click(view.getByRole("button", { name: "Read MCP & skills →" }));
+    await fireEvent.click(view.getByRole("button", { name: "Read local config" }));
     expect(oninspect).toHaveBeenCalledTimes(2);
   });
 });

@@ -45,7 +45,7 @@ describe("HomeView cards", () => {
   it("marks unreadable configuration unknown with its reason, never zero", () => {
     const view = render(HomeView, props({ layout: "cards" }));
     const docker = card(view, "Docker Desktop");
-    // One "MCP & skills: Not read" tile, and no per-card button: Home's header offers the single Read MCP config.
+    // One "MCP & skills: Not read" tile, and no per-card button: Home's header offers the single Read local config.
     expect(within(docker).getAllByText("Not read")).toHaveLength(1);
     expect(within(docker).queryByRole("button", { name: "Read config" })).toBeNull();
     expect(docker.querySelector("[title*='not supported']")).not.toBeNull();
@@ -193,10 +193,10 @@ describe("HomeView map", () => {
   it("offers a terse inventory button only while configuration isn't read", async () => {
     const oninventory = vi.fn();
     const off = render(HomeView, props({ report: mockAgents(), oninventory }));
-    await fireEvent.click(off.getByRole("button", { name: "Read MCP config" }));
+    await fireEvent.click(off.getByRole("button", { name: "Read local config" }));
     expect(oninventory).toHaveBeenCalled();
     cleanup();
-    expect(render(HomeView, props({ oninventory })).queryByRole("button", { name: "Read MCP config" })).toBeNull();
+    expect(render(HomeView, props({ oninventory })).queryByRole("button", { name: "Read local config" })).toBeNull();
   });
 
   it("moves between lanes with j/k and between map agents with the arrow keys; Esc clears the selection", async () => {

@@ -135,7 +135,7 @@ pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, 
             human_bytes(agent.memory_bytes),
         ));
         if let Some(summary) = memory_lines.get(agent.id.as_str()) {
-            lines.push(format!("  Memory: {summary}"));
+            lines.push(format!("  RAM: {summary}"));
         }
         if let Some(dominant) = dominant_lines
             .get(agent.id.as_str())

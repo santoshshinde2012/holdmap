@@ -36,3 +36,8 @@ export function detailStats(a: Agent): Stat[] {
     { id: "procs", label: "Processes", value: c.processes, meta: `${a.cpu_percent.toFixed(a.cpu_percent < 10 ? 1 : 0)}% CPU · ${humanBytes(a.memory_bytes)}` },
   ];
 }
+
+/** A safe element-id prefix for an agent (ids can hold ':' and other characters). */
+export function agentDomId(id: string): string {
+  return `agent-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}

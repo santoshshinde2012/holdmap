@@ -2,6 +2,7 @@
   // Documented skills, context/memory, rules, MCP config, commands/prompts and built-ins
   // grouped by documented precedence layer. Present on disk is not proof an agent loaded it.
   import Icon from "../Icon.svelte";
+  import ConsentGate from "../ui/ConsentGate.svelte";
   import ExportActions from "../ui/ExportActions.svelte";
   import { PLACE_KIND, PLACE_STATUS, combineText, filterPlaces, placeEntries, placeFacts, placeLayers, placesSummary, type PlaceFilter } from "../../lib/agent-memory";
   import { humanBytes, tildify } from "../../lib/format";
@@ -64,9 +65,9 @@
 
   {#if !capabilities?.inspected}
     <div class="gate">
-      <p class="empty">Skills, context, rules, MCP config and built-ins for {agent.name} stay hidden until configuration is read. Reading lists paths, counts and timestamps. It does not open chats or secret values.</p>
+      <p class="empty">Documented locations for {agent.name} (instructions, rules, MCP config, skills, agent memory and session data) are checked when you read local config.</p>
       {#if capabilities?.limits?.length}<p class="why">{capabilities.limits[0]}</p>{/if}
-      {#if oninspect}<button type="button" class="inspect-btn" onclick={oninspect}><Icon name="search" size={12} />Read configuration</button>{/if}
+      {#if oninspect}<ConsentGate onconsent={oninspect} />{/if}
     </div>
   {:else if !places.length}
     <p class="empty">No documented locations were reported for {agent.name}.</p>
@@ -194,8 +195,6 @@
   .c-ok { color: var(--ok); font-weight: var(--fw-medium); }
 
   .gate { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: var(--r-md); background: var(--surface-2); }
-  .inspect-btn { justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border-strong); border-radius: var(--r-full); background: var(--surface); color: var(--accent); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); cursor: pointer; }
-  .inspect-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
 
   .empty, .why, .meta { margin: 0; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); overflow-wrap: anywhere; }
 

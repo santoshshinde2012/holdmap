@@ -1271,3 +1271,13 @@ fn cursor_reader_lists_mdc_rules_and_never_plain_md_files() {
     assert_eq!(row.ignored_count, Some(1));
     assert!(!leaks(&serde_json::to_string(&out).unwrap()));
 }
+
+#[test]
+fn consent_wording_matches_the_desktop_word_for_word() {
+    let desktop = include_str!("../../../../../apps/desktop/src/lib/consent.ts");
+    assert!(desktop.contains(&format!("CONSENT_LABEL = \"{}\"", super::CONSENT_LABEL)));
+    assert!(desktop.contains(&format!(
+        "CONSENT_SENTENCE = \"{}\"",
+        super::CONSENT_SENTENCE
+    )));
+}

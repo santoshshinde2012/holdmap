@@ -143,6 +143,7 @@ test("an individual agent service retains scheduling without selecting its other
   await openAgents(page);
   await agentHeading(page, "Cursor").click();
   const cursor = agentDetails(page);
+  await cursor.getByRole("tab", { name: /^Connections/ }).click();
   await cursor.getByTitle("Stop :3000", { exact: true }).click();
   const review = page.getByRole("alertdialog");
   await expect(review.getByRole("combobox", { name: "When", exact: true })).toContainText("Now");

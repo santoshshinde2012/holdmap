@@ -5,6 +5,7 @@
   // around it read the same scene that places the parts. Loaded on demand; without WebGL it shows
   // the 2D map instead.
   import { onMount, tick, untrack, type Snippet } from "svelte";
+  import ConsentGate from "../../ui/ConsentGate.svelte";
   import Icon from "../../Icon.svelte";
   import { ActionDock, ActionPill, Callout, IconButton } from "../../ui";
   import Stage3D from "./Stage3D.svelte";
@@ -322,7 +323,7 @@
         <div class="bar lenses" role="group" aria-label="View">
           <ActionDock value={lens} options={lensOptions} label="Lens" hinge={false} animate={false} size="compact" onchange={pickLens} />
           <ActionPill icon="info" label="Legend" toggle pressed={legend} size="compact" expanded={legend} onclick={() => (legend = !legend)} />
-          {#if !inventory && oninventory && !scene.inspected}<button type="button" class="link" onclick={oninventory}><Icon name="plug" size={12} />Read MCP config</button>{/if}
+          {#if !inventory && oninventory && !scene.inspected}<ConsentGate onconsent={oninventory} compact />{/if}
         </div>
         <div class="bar tools" role="toolbar" aria-label="3D view">
         <ActionDock value={explode ? "exploded" : "assembled"} options={MODES} label="Assembly" hinge={false} animate={false} size="compact" onchange={(v) => { stopTour(); explode = v === "exploded"; }} />

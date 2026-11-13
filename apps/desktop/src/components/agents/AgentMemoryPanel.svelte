@@ -2,6 +2,7 @@
   // Process-tree memory telemetry for one agent: headline footprint, role composition bar,
   // retained trend area chart, observable counters, and proportional per-process rows.
   import Icon from "../Icon.svelte";
+  import { agentDomId } from "../../lib/agent-details";
   import ExportActions from "../ui/ExportActions.svelte";
   import { headlineLabel, memoryFor, memorySummary, processGroups, processNoun, readingBits, sharePercent, shareText, splitCounters, trendSparkline, trendView } from "../../lib/agent-memory";
   import { humanBytes } from "../../lib/format";
@@ -38,9 +39,9 @@
   );
 </script>
 
-<section class="mem" id="section-memory-{agent.id}" aria-labelledby="agent-memory-{agent.id}">
+<section class="mem" id="section-memory-{agentDomId(agent.id)}" aria-labelledby="agent-memory-{agentDomId(agent.id)}">
   <div class="sec-head">
-    <h4 id="agent-memory-{agent.id}"><Icon name="activity" size={13} />Memory</h4>
+    <h4 id="agent-memory-{agentDomId(agent.id)}"><Icon name="activity" size={13} />RAM</h4>
     {#if trend}
       <span class="trend-badge dir-{memory?.trend.direction ?? 'unknown'}" title={trend.rule}>
         <i aria-hidden="true"></i>{trend.label}{#if trend.delta} · {trend.delta}{/if}

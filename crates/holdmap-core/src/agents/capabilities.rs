@@ -34,6 +34,13 @@ pub use runtime::{match_running, McpRunState, McpRuntime};
 /// Distinct agent contexts inspected per report; further contexts remain unknown.
 pub const MAX_CAPABILITY_CONTEXTS: usize = 16;
 
+/// The one consent action for reading agent configuration, shared by every surface
+/// (desktop `apps/desktop/src/lib/consent.ts`, the TUI and the MCP text).
+pub const CONSENT_LABEL: &str = "Read local config";
+/// What the consent action promises, word for word on every surface.
+pub const CONSENT_SENTENCE: &str =
+    "Reads names, paths and sizes only. Never file contents, chats or secrets.";
+
 /// Products that share one set of default configuration locations, first member inspected.
 /// Used for agents that aren't running, so each configuration is read once.
 pub const CONFIG_FAMILIES: &[&[&str]] = &[

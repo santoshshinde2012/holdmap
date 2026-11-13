@@ -36,9 +36,9 @@ test("the map selects on the first click and opens the agent on the second", asy
 
 test("the inventory button adds MCP servers to the cards", async ({ app }) => {
   const overview = await home(app);
-  await overview.getByRole("button", { name: "Read MCP config" }).click();
+  await overview.getByRole("button", { name: "Read local config" }).click();
   await expect(overview.getByRole("button", { name: "MCP filesystem, running, unpinned" })).toBeVisible();
-  await expect(overview.getByRole("button", { name: "Read MCP config" })).toHaveCount(0);
+  await expect(overview.getByRole("button", { name: "Read local config" })).toHaveCount(0);
 });
 
 test("typing in the overview search continues on the port list", async ({ app }) => {

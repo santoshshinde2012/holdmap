@@ -337,12 +337,12 @@ describe("MCP and skills capability explorer", () => {
     const view = render(AgentDetails, { agent: r.agents[1], report: r, entries: MOCK_SNAPSHOT.entries, color: "var(--accent)", onentry() {}, onreveal() {}, oneditor() {}, onstop() {}, onstopall() {}, oncapabilities });
     expect(oncapabilities).not.toHaveBeenCalled();
     // The config box's prompt is an explicit opt-in.
-    await fireEvent.click(view.getByRole("button", { name: "Read MCP & skills →" }));
+    await fireEvent.click(view.getByRole("button", { name: "Read local config" }));
     expect(oncapabilities).toHaveBeenCalledOnce(); expect(r.agents[1].capabilities).toBeUndefined();
     // Opening the MCP & skills section reads nothing; its buttons are the same opt-in.
-    await fireEvent.click(view.getByRole("tab", { name: /^MCP & skills/ }));
+    await fireEvent.click(view.getByRole("tab", { name: /^Config/ }));
     expect(oncapabilities).toHaveBeenCalledOnce();
-    await fireEvent.click(view.getByRole("button", { name: "Open full MCP & skills" }));
+    await fireEvent.click(view.getByRole("button", { name: "Open in MCP & skills" }));
     expect(oncapabilities).toHaveBeenCalledTimes(2); expect(r.agents[1].capabilities).toBeUndefined();
   });
 });

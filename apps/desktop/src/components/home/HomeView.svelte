@@ -3,6 +3,7 @@
   // as a 3D machine (loaded on demand), with "Needs you" beside each. Hover and selection are shared across cards, map, timeline and
   // attention items, and survive a layout switch. Esc clears the selection.
   import { insightsStore } from "../../lib/insights-store.svelte";
+  import ConsentGate from "../ui/ConsentGate.svelte";
   import { trustStore } from "../../lib/trust-store.svelte";
   import { securityTab } from "../../lib/security-tab.svelte";
   import * as api from "../../lib/api";
@@ -178,7 +179,7 @@
       {/if}
       <ExportActions label="Export overview" disabled={!report || !entries} copy={() => homeSummaryText(o, needs, Date.now())}
         files={[{ label: "Download JSON", filename: reportFilename("overview", Date.now(), "json"), build: () => homeReport(o, needs, report, Date.now()) }]} />
-      {#if showInventory}<button type="button" class="inv" onclick={oninventory}><Icon name="plug" size={12} />Read MCP config</button>{/if}
+      {#if showInventory && oninventory}<ConsentGate onconsent={oninventory} compact />{/if}
       <SegmentedControl value={layout} options={layoutOptions} label="Home layout" onchange={(l) => onlayout?.(l)} />
       {#if !focused}<IconButton icon="sidebar" label={sideOpen ? "Hide the side panels" : "Show the side panels"} size="sm" aria-expanded={sideOpen} onclick={() => (sideOpen = !sideOpen)} />{/if}
     </div>

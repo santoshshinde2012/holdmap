@@ -3,6 +3,7 @@
   // how they launch and whether they run now, skills, instruction files, permission rules and
   // safety settings. "Configured" comes from files; "Running" is observed in the process table.
   import Icon from "../Icon.svelte";
+  import ConsentGate from "../ui/ConsentGate.svelte";
   import McpServerList from "./McpServerList.svelte";
   import { DECISION_LABEL, riskySettings } from "../../lib/agent-config";
   import { tildify } from "../../lib/format";
@@ -26,9 +27,9 @@
     <div class="off">
       <Icon name="plug" size={13} />
       <span>MCP servers, skills and tool permissions aren't read yet.</span>
-      {#if oninspect}<button type="button" class="read" onclick={oninspect}>Read MCP &amp; skills →</button>{/if}
+      {#if oninspect}<ConsentGate onconsent={oninspect} compact />{/if}
     </div>
-    <AgentLocations {agent} {oninspect} />
+    <AgentLocations {agent} />
   {:else}
     <h4>MCP servers <span class="n">{servers.length + c.more_mcp_servers}</span></h4>
     {#if servers.length}
@@ -95,9 +96,6 @@
   .builtin em { color: var(--muted); font-style: normal; }
   .off, .none { margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
   .off { padding: 10px; border: 1px dashed var(--border-strong); border-radius: var(--r-md); background: var(--accent-softer); color: var(--text-2); }
-  .read { margin-left: auto; display: inline-flex; align-items: center; min-height: 26px; padding: 2px 10px; border: 0; border-radius: var(--r-full); background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: var(--fw-medium); cursor: pointer; }
-  .read:hover { background: var(--accent-hover); }
-  .read:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
   .link { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
 </style>
