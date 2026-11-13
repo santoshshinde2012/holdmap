@@ -79,7 +79,7 @@ impl PlaceScope {
     }
 }
 
-/// Whether the path could be statted.
+/// Whether the path metadata could be read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PlaceStatus {
@@ -88,7 +88,7 @@ pub enum PlaceStatus {
     Present,
     /// The path is not there.
     Missing,
-    /// The path could not be statted.
+    /// The path metadata could not be read.
     Unreadable,
     /// The path was refused (privacy area, a link in a parent, or a non-absolute path).
     Skipped,
@@ -347,7 +347,10 @@ fn stat_place(product: &str, base: &Path, spec: Spec, platform: &str) -> Capabil
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => place,
         Err(error) => {
             place.status = PlaceStatus::Unreadable;
-            place.status_reason = Some(format!("Could not stat the path ({})", io_reason(&error)));
+            place.status_reason = Some(format!(
+                "Could not inspect the path ({})",
+                io_reason(&error)
+            ));
             place
         }
         Ok(metadata) if is_link(&metadata) => {
@@ -471,7 +474,7 @@ fn fill_present(
         place.byte_size = Some(bytes);
     } else {
         place.status_reason = Some(
-            "Some directory entries could not be statted, so the count and byte size are unknown."
+            "Some directory entries could not be inspected, so the count and byte size are unknown."
                 .into(),
         );
     }
@@ -543,7 +546,7 @@ fn refuse(path: &Path, home: &Path, platform: &str) -> Option<String> {
             }
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
-            Err(_) => return Some("A parent of this path could not be statted.".into()),
+            Err(_) => return Some("A parent of this path could not be inspected.".into()),
         }
     }
     None
@@ -573,7 +576,7 @@ fn io_reason(error: &std::io::Error) -> &'static str {
     match error.kind() {
         std::io::ErrorKind::PermissionDenied => "access denied",
         std::io::ErrorKind::NotFound => "not found",
-        _ => "stat failed",
+        _ => "metadata read failed",
     }
 }
 

@@ -73,7 +73,6 @@
                 <span class="pill status-{place.status}">{PLACE_STATUS[place.status] ?? place.status}</span>
                 {#if place.symlink_target}<span class="pill status-symlink">Symlink</span>{/if}
                 <span class="kind">{PLACE_KIND[place.kind] ?? place.kind}</span>
-                <span class="rank" title="Lower rank is the more specific documented layer.">Rank {place.rank}</span>
               </span>
               {#if place.path}
                 <span class="path mono">{tildify(place.path)}</span>

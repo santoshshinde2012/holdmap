@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { agentDetails, agentCard, agentHeading, expect, folderNode, openAgents, openAgentsPicture, openProject, test } from "./fixtures";
 
 for (const theme of ["light", "dark"] as const) {
-  test(`${theme}: agent memory is labeled and passes axe at 390px`, async ({ app }) => {
+  test(`${theme}: agent memory is labeled and passes axe at 390px`, async ({ app }, testInfo) => {
     await app.evaluate((value) => localStorage.setItem("holdmap.theme", value), theme);
     await app.setViewportSize({ width: 390, height: 844 });
     await app.reload();
@@ -15,7 +15,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(memory).not.toContainText("0.0% of machine RAM");
     await expect(memory).toContainText("Physical footprint");
     await expect(memory.getByText("Platform limits & unavailable metrics")).toBeVisible();
-    await memory.screenshot({ path: `/opt/cursor/artifacts/agent-memory-${theme}-390.png` });
+    await memory.screenshot({ path: testInfo.outputPath(`agent-memory-${theme}-390.png`) });
     await memory.getByText("Platform limits & unavailable metrics").click();
     await expect(memory).toContainText("task_for_pid");
     await expect(memory).toContainText("2 processes");
@@ -26,7 +26,7 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
-test("agent locations group documented layers and copy a path", async ({ app }) => {
+test("agent locations group documented layers and copy a path", async ({ app }, testInfo) => {
   await app.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await openAgents(app);
   await agentHeading(app, "Cursor").click();
@@ -49,17 +49,17 @@ test("agent locations group documented layers and copy a path", async ({ app }) 
   const copied = await app.evaluate(() => navigator.clipboard.readText());
   expect(copied.startsWith("/Users/dev/code/")).toBe(true);
   await expect.poll(async () => locations.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
-  await locations.screenshot({ path: "/opt/cursor/artifacts/agent-locations-dark-desktop.png" });
+  await locations.screenshot({ path: testInfo.outputPath("agent-locations-dark-desktop.png") });
   await app.setViewportSize({ width: 390, height: 844 });
   await expect.poll(async () => locations.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
-  await locations.screenshot({ path: "/opt/cursor/artifacts/agent-locations-dark-390.png" });
+  await locations.screenshot({ path: testInfo.outputPath("agent-locations-dark-390.png") });
   await app.evaluate(() => localStorage.setItem("holdmap.theme", "light"));
   await app.reload();
   await openAgents(app);
   await agentHeading(app, "Cursor").click();
   const lightLocations = agentDetails(app).getByRole("region", { name: /Locations & layers/ });
   await expect(lightLocations.getByText("Present").first()).toBeVisible();
-  await lightLocations.screenshot({ path: "/opt/cursor/artifacts/agent-locations-light-390.png" });
+  await lightLocations.screenshot({ path: testInfo.outputPath("agent-locations-light-390.png") });
   await app.setViewportSize({ width: 1440, height: 1000 });
   await app.getByRole("radio", { name: "MCP & skills", exact: true }).click();
   await app.getByRole("button", { name: "Show processes for Cursor", exact: true }).click();

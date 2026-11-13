@@ -235,7 +235,8 @@ fn the_memory_log_keeps_pid_and_bytes_only_and_replaces_a_corrupt_file() {
 #[test]
 fn location_census_reports_metadata_without_file_bodies_or_followed_links() {
     let home = tempfile::tempdir().unwrap();
-    let skill = home.path().join(".claude/skills/review");
+    let home_dir = home.path().canonicalize().unwrap();
+    let skill = home_dir.join(".claude/skills/review");
     std::fs::create_dir_all(&skill).unwrap();
     std::fs::write(
         skill.join("SKILL.md"),
@@ -243,11 +244,11 @@ fn location_census_reports_metadata_without_file_bodies_or_followed_links() {
     )
     .unwrap();
     std::fs::write(
-        home.path().join(".claude.json"),
+        home_dir.join(".claude.json"),
         b"{\"token\":\"super-secret-token-value\"}",
     )
     .unwrap();
-    let project = home.path().join("work");
+    let project = home_dir.join("work");
     std::fs::create_dir_all(project.join(".claude")).unwrap();
     std::fs::write(
         project.join("CLAUDE.md"),
@@ -257,7 +258,7 @@ fn location_census_reports_metadata_without_file_bodies_or_followed_links() {
     std::fs::write(project.join(".claude/settings.local.json"), b"{}").unwrap();
     let places = census(
         "claude-code",
-        home.path(),
+        &home_dir,
         std::slice::from_ref(&project),
         "linux",
         None,
@@ -279,8 +280,8 @@ fn location_census_reports_metadata_without_file_bodies_or_followed_links() {
             b"super-secret-token-value",
         )
         .unwrap();
-        std::os::unix::fs::symlink(outside.path(), home.path().join(".codex")).unwrap();
-        let linked = census("codex", home.path(), &[], "linux", None)
+        std::os::unix::fs::symlink(outside.path(), home_dir.join(".codex")).unwrap();
+        let linked = census("codex", &home_dir, &[], "linux", None)
             .into_iter()
             .find(|place| place.path.ends_with(".codex/skills"))
             .unwrap();
