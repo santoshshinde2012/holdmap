@@ -1,5 +1,6 @@
 <script lang="ts">
-  // Cluster hull: a translucent group behind its member services, with a stop-cluster action.
+  // Cluster hull: a translucent group behind its member services. Its header highlights the
+  // members on the graph; Stop cluster stays one click away beside it.
   import type { NodeProps, Node } from "@xyflow/svelte";
   import Icon from "../Icon.svelte";
   import { CLUSTER_LABEL, type FlowNodeData } from "../../lib/graph";
@@ -7,16 +8,28 @@
 
   let { data, width, height }: NodeProps<Node<FlowNodeData>> = $props();
   const c = $derived(data.cluster!);
-  const actions = getContext<{ stopCluster: (name: string) => void } | undefined>("graph-actions");
+  const actions = getContext<{ stopCluster: (name: string) => void; focusCluster?: (id: string) => void } | undefined>("graph-actions");
+  const focused = $derived(data.focused === true);
   const icon: Record<string, string> = { compose: "box", kubernetes: "radar", supervisor: "layers", workspace: "folder", git: "branch" };
 </script>
 
-<div class="hull kind-{c.kind}" class:dim={data.dim} class:narrow={(width ?? 0) < 420} style="width: {width}px; height: {height}px">
+<div class="hull kind-{c.kind}" class:dim={data.dim} class:focused class:narrow={(width ?? 0) < 420} style="width: {width}px; height: {height}px">
   <header title="{CLUSTER_LABEL[c.kind]}{c.detail ? ` · ${c.detail}` : ''}{c.root ? ` · ${c.root}` : ''}">
-    <span class="ic"><Icon name={icon[c.kind] ?? "layers"} size={12} /></span>
-    <span class="name">{c.name}</span>
-    <span class="kind">{CLUSTER_LABEL[c.kind]}{c.detail && !c.name.includes(c.detail) ? ` · ${c.detail}` : ""}</span>
-    <span class="count">{data.count}</span>
+    {#if actions?.focusCluster}
+      <button type="button" class="focus nodrag" aria-pressed={focused} title={focused ? "Show every service again" : `Highlight the ${data.count} services in ${c.name}`}
+        onclick={(e) => { e.stopPropagation(); actions.focusCluster?.(c.id); }}>
+        <span class="sr-only">{focused ? "Stop highlighting" : "Highlight"} services in </span>
+        <span class="ic"><Icon name={icon[c.kind] ?? "layers"} size={12} /></span>
+        <span class="name">{c.name}</span>
+        <span class="kind">{CLUSTER_LABEL[c.kind]}{c.detail && !c.name.includes(c.detail) ? ` · ${c.detail}` : ""}</span>
+        <span class="count">{data.count}</span>
+      </button>
+    {:else}
+      <span class="ic"><Icon name={icon[c.kind] ?? "layers"} size={12} /></span>
+      <span class="name">{c.name}</span>
+      <span class="kind">{CLUSTER_LABEL[c.kind]}{c.detail && !c.name.includes(c.detail) ? ` · ${c.detail}` : ""}</span>
+      <span class="count">{data.count}</span>
+    {/if}
     {#if actions}
       <button class="stop nodrag" aria-label="Stop cluster {c.name}" title="Stop every service in {c.name}, dependents first" onclick={(e) => { e.stopPropagation(); actions.stopCluster(c.name); }}>
         <Icon name="stop" size={10} /><span class="sl">Stop cluster</span>
@@ -37,6 +50,11 @@
   .kind-workspace { --hue: var(--tone-green); }
   .kind-git { --hue: var(--tone-gray); }
   .hull.dim { --hue: var(--tone-gray); }
+  .hull.focused { border-style: solid; border-color: color-mix(in srgb, var(--hue) 70%, transparent); background: color-mix(in srgb, var(--hue) 10%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue) 14%, transparent); }
+  .focus { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 28px; margin-left: -6px; padding: 0 6px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .focus:hover { background: color-mix(in srgb, var(--hue) 10%, transparent); }
+  .focus:focus-visible, .stop:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .focused .focus { background: color-mix(in srgb, var(--hue) 14%, transparent); }
   header { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 12px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .ic { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; color: var(--hue); background: color-mix(in srgb, var(--hue) 14%, transparent); }
   .name { font-weight: var(--fw-semibold); color: var(--text); letter-spacing: var(--ls-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

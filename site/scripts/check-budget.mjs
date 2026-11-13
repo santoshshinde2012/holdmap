@@ -107,8 +107,10 @@ const rows = [
   // implementation. +5 KB for the agent memory panel on the Agents view (counters, groups
   // and export). +4 KB for the locations filters, entry lists and copy action shared with
   // the capability workspace. +4 KB for the fleet memory bar, trend sparkline and location
-  // cards. These chunks load on demand; the initial-import budget is separate.
-  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 188 * 1024],
+  // cards. +4 KB for the agent inspector sections (MCP & skills, Flow, Security), Flow agent
+  // scope and the docked graph peer inspector. These chunks load on demand; the
+  // initial-import budget is separate.
+  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 192 * 1024],
   ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];
 

@@ -79,9 +79,10 @@ test("Graph uses the full canvas until an explicit service click and returns foc
   const initialTransform = await viewport.evaluate((element) => getComputedStyle(element).transform);
   const pane = canvas(app).locator(".svelte-flow__pane");
   const paneBounds = (await pane.boundingBox())!;
-  await app.mouse.move(paneBounds.x + 24, paneBounds.y + 24);
+  // Start the pan clear of the floating chrome in the top-left corner.
+  await app.mouse.move(paneBounds.x + paneBounds.width - 24, paneBounds.y + 24);
   await app.mouse.down();
-  await app.mouse.move(paneBounds.x + 24, paneBounds.y + paneBounds.height - 60, { steps: 8 });
+  await app.mouse.move(paneBounds.x + paneBounds.width - 24, paneBounds.y + paneBounds.height - 60, { steps: 8 });
   await app.mouse.up();
   // Flow batches pointer moves in animation frames; capture the completed pan, not its
   // penultimate frame, before asking the app to refresh.
@@ -218,3 +219,67 @@ for (const key of ["Enter", "Space"]) {
     await expectReadableCards(app);
   });
 }
+
+test("Graph chrome floats over the canvas with summary and legend pills", async ({ app }) => {
+  await openGraph(app);
+  const chrome = canvas(app).locator(".chrome-host");
+  await expect(chrome.getByRole("toolbar", { name: "Graph view options", exact: true })).toBeVisible();
+  await expect(chrome.getByRole("group", { name: "Graph summary", exact: true })).toContainText(/\d+ Services/);
+  await expect(chrome.getByRole("group", { name: "Graph legend", exact: true })).toBeVisible();
+  await expect(canvas(app).locator(".graph-head")).toHaveCount(0);
+  // The chrome sits on the canvas, not above it.
+  const [body, bar] = [(await canvas(app).locator(".graph-body").boundingBox())!, (await chrome.locator(".bar").boundingBox())!];
+  expect(bar.y).toBeGreaterThanOrEqual(body.y);
+  expect(bar.y + bar.height).toBeLessThan(body.y + 60);
+});
+
+test("a peer docks on the right with neighbour navigation into port details", async ({ app }) => {
+  await openGraph(app);
+  const search = app.getByLabel("Search services", { exact: true });
+  await search.fill("External");
+  await search.press("Enter");
+  const peer = canvas(app).getByRole("complementary", { name: "Details for External", exact: true });
+  await expect(peer).toBeVisible();
+  const [panel, bounds] = [(await peer.boundingBox())!, (await canvas(app).boundingBox())!];
+  expect(Math.abs(panel.x + panel.width - (bounds.x + bounds.width))).toBeLessThanOrEqual(2);
+  expect(panel.height).toBeGreaterThan(bounds.height * .9);
+  await expect(peer).toContainText("api.openai.com:443");
+  await search.fill("");
+  await peer.getByRole("button", { name: /^ml-service/ }).click();
+  await expect(peer).toHaveCount(0);
+  await expect(details(app, 8000).getByRole("heading", { name: /^ml-service/ })).toBeVisible();
+});
+
+test("Show in List and Show in Graph keep the same port selected across views", async ({ app }) => {
+  await openGraph(app);
+  await canvas(app).getByRole("button", { name: /^shop\-api :3001(?!\d)/ }).click();
+  const pane = details(app, 3001);
+  await pane.getByRole("button", { name: "Show in List", exact: true }).click();
+  await expect(app.getByRole("radio", { name: "List", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(app.getByRole("option", { name: /^Port 3001 tcp,/ })).toHaveAttribute("aria-selected", "true");
+  await expect(pane.getByRole("heading", { name: /^shop-api/ })).toBeVisible();
+  await pane.getByRole("button", { name: "Show in Graph", exact: true }).click();
+  await expect(app.getByRole("radio", { name: /^Graph/ })).toHaveAttribute("aria-checked", "true");
+  await expect(canvas(app).getByRole("button", { name: /^shop\-api :3001(?!\d)/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(pane.getByRole("heading", { name: /^shop-api/ })).toBeVisible();
+});
+
+test("a port an agent started opens that agent from the Graph", async ({ app }) => {
+  await openGraph(app);
+  await canvas(app).getByRole("button", { name: /^shop\-web :3000(?!\d)/ }).click();
+  await details(app, 3000).getByRole("button", { name: /^Open in Agents/ }).click();
+  await expect(app.getByRole("radio", { name: /^Agents/ })).toHaveAttribute("aria-checked", "true");
+  await expect(app.getByRole("complementary", { name: "Agent details", exact: true }).getByRole("heading", { name: "Cursor", exact: true })).toBeVisible();
+});
+
+test("a cluster header highlights its members while Stop cluster stays separate", async ({ app }) => {
+  await openGraph(app);
+  const header = canvas(app).getByRole("button", { name: /^Highlight services in / }).first();
+  const name = (await header.locator(".name").textContent())!.trim();
+  await header.click();
+  await expect(canvas(app).getByRole("button", { name: new RegExp(`^Stop highlighting services in ${name}`) })).toHaveAttribute("aria-pressed", "true");
+  await expect(canvas(app).locator(".cluster-focus")).toContainText(`Highlighting ${name}`);
+  await expect(canvas(app).getByRole("button", { name: `Stop cluster ${name}`, exact: true })).toBeVisible();
+  await canvas(app).locator(".cluster-focus").getByRole("button", { name: "Clear", exact: true }).click();
+  await expect(canvas(app).locator(".cluster-focus")).toHaveCount(0);
+});
