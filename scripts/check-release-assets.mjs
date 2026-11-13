@@ -93,6 +93,7 @@ const required = [
   ...Object.values(desktop).flat(),
   ...Object.values(stable).flat(),
   ...Object.keys(desktop).map((platform) => `holdmap-desktop-${platform}.sha256`),
+  "holdmap-desktop-aliases.sha256",
   "holdmap-installer.sh", "holdmap-installer.ps1", "holdmap-npm-package.tar.gz",
   "source.tar.gz", "source.tar.gz.sha256", "dist-manifest.json", "sha256.sum",
   ...["holdmap", "holdmap-core", "holdmap-activity", "holdmap-mcp", "holdmap-desktop"].map((name) => `${name}.cdx.xml`),
@@ -131,6 +132,7 @@ await Promise.all([
   verifyChecksums("source.tar.gz.sha256", ["source.tar.gz"]),
   verifyChecksums("sha256.sum", globalArchives),
   ...Object.entries(desktop).map(([platform, names]) => verifyChecksums(`holdmap-desktop-${platform}.sha256`, [...names, ...stable[platform]])),
+  verifyChecksums("holdmap-desktop-aliases.sha256", Object.values(stable).flat().sort()),
 ]);
 const manifest = JSON.parse(await readVerified("dist-manifest.json", 1024 * 1024));
 if (manifest.announcement_tag !== tag || manifest.announcement_is_prerelease !== prerelease
