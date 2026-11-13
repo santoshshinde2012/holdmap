@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render } from "@testing-library/svelte";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, within } from "@testing-library/svelte";
 import GraphView from "../GraphView.svelte";
 import { mockTopology } from "../../lib/mock";
 import { FORCE_NODE_LIMIT } from "../../lib/graph";
@@ -94,5 +94,50 @@ describe("graph chrome", () => {
     expect(view.getByText("No services match this search")).toBeTruthy();
     expect(view.container.querySelectorAll(".svelte-flow__edge")).toHaveLength(0);
     expect(view.getAllByRole("button", { name: "Clear search" }).length).toBeGreaterThan(0);
+  });
+});
+
+describe("unified graph chrome and peer inspector", () => {
+  it("floats one toolbar, a compact summary and the legend over the canvas", () => {
+    const view = render(GraphView, { graph: mockTopology(), selectedNode: null, dark: false, reduced: true, onselect() {}, onstopcluster() {}, all: false, ontoggleall() {} });
+    const chrome = view.container.querySelector(".chrome-host")!;
+    expect(chrome).toBeTruthy();
+    expect(chrome.querySelector("[role=toolbar][aria-label='Graph view options']")).toBeTruthy();
+    expect(view.getByRole("group", { name: "Graph summary" }).textContent).toMatch(/\d+ Services/);
+    expect(view.getByRole("group", { name: "Graph legend" })).toBeTruthy();
+    expect(view.container.querySelector(".graph-head")).toBeNull();
+  });
+
+  it("docks the selected peer with clickable neighbours and an agent link", async () => {
+    const graph = mockTopology();
+    const external = graph.nodes.find((n) => n.id === "external")!;
+    const onselect = vi.fn(), onopenagent = vi.fn();
+    const view = render(GraphView, { graph, selectedNode: "external", dark: false, reduced: true, onselect, onstopcluster() {} });
+    const peer = view.getByRole("complementary", { name: `Details for ${external.label}` });
+    expect(peer.textContent).toContain("No listening ports reported");
+    expect(peer.textContent).toContain("api.openai.com:443");
+    await fireEvent.click(within(peer).getByRole("button", { name: /^ml-service/ }));
+    expect(onselect).toHaveBeenCalledWith(expect.objectContaining({ id: "ml" }));
+    cleanup();
+    const client = { ...graph.nodes.find((n) => n.id === "docs")!, id: "client", label: "Browser", ports: [], pids: [4242] };
+    const withClient = { ...graph, nodes: [...graph.nodes, client], edges: [...graph.edges, { id: "client->web", from: "client", to: "web", kind: "local" as const, port: 3000, connections: 1, remotes: [] }] };
+    const agents = [{ id: "agent:1", name: "Cursor", pid: 1, process_ids: [4242], processes: [], tools: [] }] as unknown as import("../../lib/types").Agent[];
+    const second = render(GraphView, { graph: withClient, selectedNode: "client", dark: false, reduced: true, onselect() {}, onstopcluster() {}, agents, onopenagent });
+    await fireEvent.click(second.getByRole("button", { name: /Open in Agents/ }));
+    expect(onopenagent).toHaveBeenCalledWith("agent:1");
+  });
+
+  it("highlights a cluster's members from its header and keeps Stop cluster separate", async () => {
+    const onstopcluster = vi.fn();
+    const view = render(GraphView, { graph: mockTopology(), selectedNode: null, dark: false, reduced: true, onselect() {}, onstopcluster });
+    const header = await view.findByRole("button", { name: /^Highlight services in shop/ });
+    await fireEvent.click(header);
+    expect(view.getByRole("button", { name: /^Stop highlighting services in shop/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(view.container.querySelector(".cluster-focus")?.textContent).toContain("Highlighting shop");
+    expect(onstopcluster).not.toHaveBeenCalled();
+    await fireEvent.click(view.getByRole("button", { name: "Stop cluster shop" }));
+    expect(onstopcluster).toHaveBeenCalledWith("shop");
+    await fireEvent.click(view.getByRole("button", { name: "Clear" }));
+    expect(view.container.querySelector(".cluster-focus")).toBeNull();
   });
 });

@@ -226,7 +226,8 @@ test("typing search closes disappearing selection without stealing focus or repl
 
 test("Overview entry keeps requested agent scope without automatically opening details", async ({ app }) => {
   await openAgents(app); await agentHeading(app, "Cursor").click();
-  await agentDetails(app).getByRole("button", { name: /^MCP & skills/ }).click();
+  await agentDetails(app).getByRole("tab", { name: /^MCP & skills/ }).click();
+  await agentDetails(app).getByRole("button", { name: "Open full MCP & skills", exact: true }).click();
   await expect(view(app, "Explore")).toHaveAttribute("aria-checked", "true");
   await expect(workspace(app).getByRole("button", { name: /^Inspect MCP server/ })).toHaveCount(3);
   await expect(details(app)).toHaveCount(0);

@@ -49,6 +49,10 @@
     onrestart,
     onreveal,
     oneditor,
+    onshowinlist,
+    onshowingraph,
+    onopenagent,
+    agentName = null,
   }: {
     entry: PortEntry | null;
     explanation: Explanation | null;
@@ -84,6 +88,13 @@
     onrestart?: () => void;
     onreveal?: () => void;
     oneditor?: () => void;
+    /** Graph → the same port selected in the List. */
+    onshowinlist?: () => void;
+    /** List → the same service selected on the Graph. */
+    onshowingraph?: () => void;
+    /** The running agent that owns this port, in the Agents view. */
+    onopenagent?: () => void;
+    agentName?: string | null;
   } = $props();
 
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -129,6 +140,13 @@
     <AtAGlance {entries} onselect={onselectentry} {mod} {onhide} />
   {:else}
     <DetailHeader {entry} {pinned} {onpin} {oncopy} {onclose} {onhide} />
+    {#if onshowinlist || onshowingraph || onopenagent}
+      <nav class="xview" aria-label="Open :{entry.port} in another view">
+        {#if onshowingraph}<button type="button" class="xlink" onclick={onshowingraph}><Icon name="graph" size={12} />Show in Graph</button>{/if}
+        {#if onshowinlist}<button type="button" class="xlink" onclick={onshowinlist}><Icon name="list" size={12} />Show in List</button>{/if}
+        {#if onopenagent}<button type="button" class="xlink" onclick={onopenagent} title={agentName ? `Started by ${agentName}` : undefined}><Icon name="bot" size={12} />Open in Agents{#if agentName}<span class="who">· {agentName}</span>{/if}</button>{/if}
+      </nav>
+    {/if}
     <Tabs {tabs} value={active} onchange={(value) => tab = value} {base} label="Details sections" />
     {#key entryId + active}
       <div class="body" in:fade={{ duration: reduced ? 0 : 120 }}>
@@ -175,6 +193,11 @@
   .stop { margin-left: auto; }
   .why { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .why :global(svg) { flex: none; margin-top: 1px; }
+  .xview { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; min-width: 0; flex: none; }
+  .xlink { display: inline-flex; align-items: center; gap: 5px; min-height: 24px; padding: 2px 10px; border: 1px solid var(--border); border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); cursor: pointer; }
+  .xlink:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface); }
+  .xlink:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .xlink .who { color: var(--muted); font-weight: var(--fw-regular); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .scope { margin: 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
 
 </style>
