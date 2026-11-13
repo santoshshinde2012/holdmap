@@ -578,6 +578,16 @@ inspection, clears retained inventory and discards late replies. Bounded file wo
 underway may finish. Desktop/background scans remain on the default strategy. The browser dev bridge propagates the same opt-in; the
 public demo labels sample data.
 
+Process memory is a separate collector (`transparency::MemoryProbe`). Linux reads `VmRSS`,
+`VmSize`, `VmHWM`, `VmSwap` and, when `smaps_rollup` is readable, private, shared and
+proportional bytes. macOS uses `proc_pid_rusage` (`RUSAGE_INFO_V4`) for resident size,
+physical footprint and the lifetime peak footprint. Windows uses process VM counters for the
+working set, virtual size and peak working set, and `PrivateUsage` only as commit charge.
+Counters the call does not return stay unknown. The agent headline remains the process-table
+sample. Location census stats the same documented paths the inventory already knows, plus a
+built-in list and an explicit note that plugin directories are not walked. It does not follow
+symbolic links or read file bodies.
+
 The inventory projects server aliases, declared transport/enablement, scope and source paths
 from supported Codex/Claude Code/Cursor JSON/TOML locations, Claude Desktop's documented
 manual MCP JSON on macOS/Windows, legacy Windsurf's user `mcp_config.json`, Gemini CLI

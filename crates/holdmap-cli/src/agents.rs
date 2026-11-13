@@ -16,8 +16,9 @@ pub struct AgentsArgs {
     /// Show full agent details, including processes and redacted command lines.
     #[arg(short, long)]
     pub wide: bool,
-    /// Opt-in inventory: MCP servers, skills, built-in tools, permission rules and instruction
-    /// files. Env/header names only, never values; never runs or connects to MCP servers.
+    /// Opt-in inventory: MCP servers, skills, built-in tools, permission rules, instruction
+    /// files and the documented locations those files live in. Env/header names only, never
+    /// values; never runs or connects to MCP servers.
     #[arg(long, conflicts_with_all = ["flow", "stop_ports"])]
     pub capabilities: bool,
     /// Show observed process, listener and TCP relationships; no call or payload inference.
@@ -48,8 +49,9 @@ pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
     } else {
         e.agents()
     };
+    holdmap_core::transparency::persist_trends_default(&mut report);
     if let Some(q) = &a.agent {
-        report.agents.retain(|x| x.matches(q));
+        report.retain_matching(q);
     }
     if a.stop_ports {
         return stop_ports(&e, &report, a, docker);
@@ -508,6 +510,22 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
     }
     let label = |s: &str| style::dim(format!("  {s:<10}"));
     let pad = " ".repeat(12);
+    let memory_notes: Vec<(String, String, Vec<String>)> = r
+        .memory
+        .iter()
+        .map(|memory| {
+            (
+                memory.agent_id.clone(),
+                memory.summary_line(),
+                memory
+                    .processes
+                    .iter()
+                    .filter(|row| row.dominant)
+                    .map(|row| format!("{} pid {} · {}", row.name, row.pid, row.role.label()))
+                    .collect(),
+            )
+        })
+        .collect();
     for (i, a) in r.agents.iter().enumerate() {
         if i > 0 {
             out.push('\n');
@@ -538,6 +556,33 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
             paint(printable(&a.name), S::Bold),
             style::dim(printable(&meta.join(" · ")))
         ));
+        if let Some((_, summary, dominant)) = memory_notes.iter().find(|note| note.0 == a.id) {
+            out.push_str(&format!("{}{}\n", label("memory"), printable(summary)));
+            for row in dominant {
+                out.push_str(&format!(
+                    "{}{} {}\n",
+                    pad,
+                    style::dim("large"),
+                    printable(row)
+                ));
+            }
+            if a.capabilities.inspected {
+                let present = a
+                    .capabilities
+                    .locations
+                    .iter()
+                    .filter(|place| place.present)
+                    .count();
+                if !a.capabilities.locations.is_empty() {
+                    out.push_str(&format!(
+                        "{}{} documented locations, {} present (presence is not loading)\n",
+                        label("places"),
+                        a.capabilities.locations.len(),
+                        present
+                    ));
+                }
+            }
+        }
         if let Some(p) = &a.parent {
             if let Some(host) = r.agents.iter().find(|x| &x.id == p) {
                 out.push_str(&format!(
@@ -907,6 +952,7 @@ mod tests {
             platform: "linux".into(),
             taken_at_ms: 0,
             limits: vec!["Chats are never read.".into()],
+            memory: Vec::new(),
         };
         let text = render(&r, false, Some("claude-code"));
         assert!(text.contains("Claude Code  pid 42 · terminal agent · Vendor · you (dev)"));
@@ -942,6 +988,7 @@ mod tests {
                 platform: "linux".into(),
                 taken_at_ms: 0,
                 limits: vec![],
+                memory: Vec::new(),
             },
             false,
             None,

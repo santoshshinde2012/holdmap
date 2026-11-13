@@ -212,6 +212,21 @@ fn agents_schema() -> Value {
         json!({
             "agents": array(agent), "platform": {"type": "string"},
             "taken_at_ms": count(), "limits": strings(),
+            "memory": {"type": "array", "description": "Per-agent memory. A missing counter is unknown with a reason and is not copied from the headline.", "items": {"type": "object", "properties": {
+                "agent_id": {"type": "string"}, "pid": count(), "started_at": count(),
+                "headline_bytes": count(),
+                "headline_counter": {"type": "string", "enum": ["resident", "physical_footprint", "working_set"]},
+                "headline_meaning": {"type": "string"},
+                "machine_bytes": {"type": "object"}, "share_ppm": {"type": "object"},
+                "resident": {"type": "object"}, "physical_footprint": {"type": "object"},
+                "private_bytes": {"type": "object"}, "shared_bytes": {"type": "object"},
+                "proportional": {"type": "object"}, "compressed": {"type": "object"},
+                "virtual_bytes": {"type": "object"}, "swap_bytes": {"type": "object"},
+                "commit_bytes": {"type": "object"},
+                "peak_resident": {"type": "object"}, "peak_physical": {"type": "object"},
+                "groups": {"type": "array"}, "processes": {"type": "array"},
+                "trend": {"type": "object"}, "limits": strings()
+            }}},
             "configured": array(object(
                 json!({"product": {"type": "string"}, "name": {"type": "string"}, "capabilities": capabilities_schema()}),
                 &["product", "name", "capabilities"],
@@ -351,7 +366,19 @@ fn capabilities_schema() -> Value {
                 "key": {"type": "string"}, "value": {"type": "string"}, "scope": {"type": "string"}, "source_path": {"type": "string"}
             }), &["key", "value", "scope", "source_path"])),
             "builtin_tools": strings(),
-            "more_mcp_servers": count(), "more_skills": count(), "limits": strings()
+            "more_mcp_servers": count(), "more_skills": count(), "limits": strings(),
+            "locations": {"type": "array", "description": "Documented locations. Metadata only; presence is not loading.", "items": {"type": "object", "properties": {
+                "id": {"type": "string"},
+                "kind": {"type": "string", "enum": ["skills", "agent_memory", "rules", "mcp_config", "instructions", "builtin", "plugin"]},
+                "scope": {"type": "string", "enum": ["user", "project", "local", "plugin", "builtin"]},
+                "rank": count(), "path": {"type": "string"},
+                "symlink_target": {"type": ["string", "null"]},
+                "status": {"type": "string", "enum": ["present", "missing", "unreadable", "skipped"]},
+                "status_reason": {"type": ["string", "null"]},
+                "file_count": {"type": ["integer", "null"]}, "byte_size": {"type": ["integer", "null"]},
+                "modified_unix_ms": {"type": ["integer", "null"]},
+                "candidates": strings(), "present": {"type": "boolean"}
+            }}}
         }),
         &[
             "inspected",

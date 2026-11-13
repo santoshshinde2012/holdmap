@@ -196,6 +196,9 @@ pub struct AgentCapabilities {
     pub more_skills: usize,
     /// Coverage limits; these never contain file contents or parser errors.
     pub limits: Vec<String>,
+    /// Documented skill, context, rule, MCP and built-in locations. Metadata only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locations: Vec<crate::transparency::CapabilityPlace>,
 }
 
 impl Default for AgentCapabilities {
@@ -211,6 +214,7 @@ impl Default for AgentCapabilities {
             more_mcp_servers: 0,
             more_skills: 0,
             limits: vec!["Capability configuration and skill locations were not inspected.".into()],
+            locations: Vec::new(),
         }
     }
 }
@@ -381,7 +385,7 @@ impl CapabilityDiscovery for HomeCapabilities {
                 None,
                 ConfigFormat::JsonMcpServers,
             );
-            return inventory.out;
+            return self.finish(inventory);
         }
         let mut seen = HashSet::new();
         for project in projects {
@@ -425,6 +429,37 @@ impl CapabilityDiscovery for HomeCapabilities {
             .out
             .skills
             .sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
+        self.finish(inventory)
+    }
+}
+
+impl HomeCapabilities {
+    fn finish(&self, mut inventory: Inventory<'_>) -> AgentCapabilities {
+        if inventory.out.inspected {
+            let desktop = if inventory.product == "claude-desktop"
+                && matches!(inventory.platform, "macos" | "windows")
+            {
+                Some(if inventory.platform == "macos" {
+                    self.home.join("Library/Application Support")
+                } else {
+                    self.app_data
+                        .clone()
+                        .unwrap_or_else(|| self.home.join("AppData/Roaming"))
+                })
+            } else {
+                None
+            };
+            inventory.out.locations = crate::transparency::census(
+                inventory.product,
+                &self.home,
+                &inventory.projects,
+                inventory.platform,
+                desktop.as_deref(),
+            );
+            inventory.out.limit(
+                "Location rows are paths, link targets, counts, sizes and timestamps. File bodies, transcripts and secret values are not read. A present file is not proof the agent loaded it. A lower rank is the more specific documented layer; holdmap does not decide which layer won.",
+            );
+        }
         inventory.out
     }
 }
@@ -1185,7 +1220,7 @@ fn nonempty_key(entry: &serde_json::Map<String, serde_json::Value>, key: &str) -
         .is_some_and(|value| !value.is_empty())
 }
 
-fn safe_name(name: &str) -> bool {
+pub(crate) fn safe_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128
         && name.trim() == name

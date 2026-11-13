@@ -8,6 +8,7 @@
 //   this agent's own processes;
 // - recorded calls stay in their lane: a reported alias or PID never joins a configured server
 //   or a process, so no wire touches a call (see calls.ts).
+import { bytesOrUnknown, memoryFor, shareText } from "../agent-memory";
 import { isUnpinned, launchLine, runState } from "../agent-config";
 import { ACCESS_LABEL, accessHeadline, KIND_LABEL } from "../agents";
 import { humanBytes, tildify } from "../format";
@@ -15,6 +16,16 @@ import type { SkillTrustView, TrustState } from "../trust";
 import type { AgentCapabilities, AgentMcpServer, AgentsReport, AgentSkill, AgentTool, Evidence, PortEntry } from "../types";
 import type { ActivitySnapshot, RecordingStatus } from "../agent-flow/model";
 import { callParts } from "./calls";
+
+function memoryFacts(report: AgentsReport | null | undefined, id: string): [string, string][] {
+  const memory = memoryFor(report, id);
+  if (!memory) return [];
+  return [
+    ["Resident", bytesOrUnknown(memory.resident)],
+    ["Footprint", bytesOrUnknown(memory.physical_footprint)],
+    ["Share", shareText(memory.share_ppm)],
+  ];
+}
 
 export type Layer = "board" | "runtime" | "config" | "calls";
 export type PartKind = "agent" | "dormant" | "project" | "port" | "remote" | "tool" | "mcp" | "skill" | "instructions" | "more" | "call";
@@ -193,6 +204,7 @@ export function buildScene({ report, entries = null, hot = new Set(), needs = ne
       warn: hot.has(a.id) ? mine[0] ?? head.text : null,
       target: { view: "agents", agentId: a.id },
       facts: [["Kind", `${KIND_LABEL[a.kind]} by ${a.vendor}`], ["Access", head.text], ["CPU", pct(a.cpu_percent)], ["Memory", humanBytes(a.memory_bytes)],
+        ...memoryFacts(report, a.id),
         ["Processes", String(a.process_ids.length)], ["PID", String(a.pid)], ...(mine.length ? [["Needs you", mine.join("; ")] as [string, string]] : [])],
     });
     agents.push(agent); parts.push(agent);

@@ -22,6 +22,21 @@ pub struct AgentsReport {
     /// capability inventory only). Empty otherwise.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub configured: Vec<ConfiguredAgent>,
+    /// One memory breakdown per running agent, in the same order as [`Self::agents`].
+    /// Empty for reports built before a collector ran (older saved JSON).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub memory: Vec<crate::transparency::AgentMemoryReport>,
+}
+
+impl AgentsReport {
+    /// Drop running agents that do not match `query`, and the memory rows that belong to them.
+    pub fn retain_matching(&mut self, query: &str) {
+        self.agents.retain(|agent| agent.matches(query));
+        let ids: std::collections::HashSet<&str> =
+            self.agents.iter().map(|agent| agent.id.as_str()).collect();
+        self.memory
+            .retain(|memory| ids.contains(memory.agent_id.as_str()));
+    }
 }
 
 /// An agent that isn't running, known only from its default configuration locations.

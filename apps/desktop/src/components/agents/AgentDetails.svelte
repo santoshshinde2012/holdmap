@@ -12,6 +12,7 @@
   import { scopeLabel } from "../../lib/run-view";
   import { EvidenceChip } from "../ui";
   import StatStrip from "../ui/StatStrip.svelte";
+  import AgentMemoryPanel from "./AgentMemoryPanel.svelte";
   import { evidenceChip } from "../../lib/evidence";
   import { detailStats, factRows } from "../../lib/agent-details";
   import { humanBytes, humanDuration, tildify } from "../../lib/format";
@@ -104,6 +105,7 @@
   </header>
 
   <StatStrip compact label="{agent.name} summary" {stats} />
+  <AgentMemoryPanel {agent} {report} />
 
   <div class="actions" role="group" aria-label="Agent actions">
     {#if oncapabilities}<button type="button" class="act" onclick={oncapabilities}><Icon name="plug" size={12} />MCP &amp; skills{#if agent.capabilities?.inspected} · {agent.capabilities.mcp_servers.length}{/if}</button>{/if}

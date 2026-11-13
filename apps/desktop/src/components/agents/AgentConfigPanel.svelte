@@ -5,7 +5,9 @@
   import Icon from "../Icon.svelte";
   import McpServerList from "./McpServerList.svelte";
   import { DECISION_LABEL, riskySettings } from "../../lib/agent-config";
-  import { tildify } from "../../lib/format";
+  import { placesSummary } from "../../lib/agent-memory";
+  import { humanBytes, tildify } from "../../lib/format";
+  import ExportActions from "../ui/ExportActions.svelte";
   import type { Agent } from "../../lib/types";
 
   let { agent, oninspect }: { agent: Agent; oninspect?: () => void } = $props();
@@ -17,6 +19,7 @@
   const settings = $derived(c?.settings ?? []);
   const risky = $derived(new Set(riskySettings(agent).map((r) => r.setting.key)));
   const builtins = $derived(c?.builtin_tools ?? []);
+  const places = $derived(c?.locations ?? []);
   const decisions = ["allow", "ask", "deny"] as const;
 </script>
 
@@ -62,6 +65,23 @@
       {/if}
     {/each}
     {#if !rules.length && !settings.length}<p class="none">No permission rules or safety settings in the inspected files.</p>{/if}
+    {#if places.length}
+      <h3>Where this agent keeps them <span class="n">{places.length}</span></h3>
+      <p class="none">A present file is not proof it was loaded. Lower rank is the more specific documented layer.</p>
+      <ul class="files">
+        {#each places as place (place.id)}
+          <li>
+            <span class="kind">{place.scope}</span>
+            <span class="name">{place.kind.replaceAll("_", " ")}</span>
+            <span class="desc">{place.status}{place.path ? ` · ${tildify(place.path)}` : ""}{place.symlink_target ? ` → ${tildify(place.symlink_target)}` : ""}</span>
+            <span class="desc">{place.file_count == null ? "count unknown" : `${place.file_count} entries`} · {place.byte_size == null ? "size unknown" : humanBytes(place.byte_size)}</span>
+            {#if place.status_reason}<span class="desc">{place.status_reason}</span>{/if}
+            {#if place.candidates.length}<span class="desc">{place.candidates.slice(0, 8).join(", ")}</span>{/if}
+          </li>
+        {/each}
+      </ul>
+      <ExportActions label="Export locations" copy={() => placesSummary(places)} files={[{ label: "JSON", filename: `${agent.product}-locations.json`, build: () => places }]} />
+    {/if}
     {#if builtins.length}
       <p class="builtin"><span class="label">Built-in</span>{builtins.join(" · ")} <em>(documented, not observed)</em></p>
     {/if}

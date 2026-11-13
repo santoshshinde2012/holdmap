@@ -47,6 +47,7 @@ pub mod stack;
 pub mod store;
 pub mod sys;
 pub mod topology;
+pub mod transparency;
 pub mod tunnel;
 pub mod util;
 pub mod windiag;

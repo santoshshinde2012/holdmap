@@ -1,4 +1,20 @@
+import AxeBuilder from "@axe-core/playwright";
 import { agentDetails, agentCard, agentHeading, expect, folderNode, openAgents, openAgentsPicture, openProject, test } from "./fixtures";
+
+for (const theme of ["light", "dark"] as const) {
+  test(`${theme}: agent memory is labeled and passes axe at 390px`, async ({ app }) => {
+    await app.evaluate((value) => localStorage.setItem("holdmap.theme", value), theme);
+    await app.setViewportSize({ width: 390, height: 844 });
+    await app.reload();
+    await openAgents(app);
+    await agentHeading(app, "Cursor").click();
+    const details = agentDetails(app);
+    await expect(details.getByRole("region", { name: "Memory" })).toBeVisible();
+    await expect(details).toContainText("Platform counters were not in this report");
+    const { violations } = await new AxeBuilder({ page: app }).analyze();
+    expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+  });
+}
 
 test("Agents shows aggregate resources and inferred MCP servers without listeners", async ({ app }) => {
   await openAgentsPicture(app, "Footprint");
@@ -18,6 +34,7 @@ test("Agents shows aggregate resources and inferred MCP servers without listener
   await expect(filesystem).toContainText("52070");
   await expect(filesystem).toContainText("0.1% CPU");
   await expect(cursor).toContainText("+8 more processes");
+  await expect(cursor.getByRole("region", { name: "Memory" })).toBeVisible();
 });
 
 const searches = [

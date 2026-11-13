@@ -74,6 +74,33 @@ describe("agent visibility", () => {
     expect(details.open).toBe(true);
   });
 
+  it("shows unknown memory counters instead of a zero", () => {
+    const a = mockAgents().agents[1];
+    const missing = { value: null, unknown: "not returned" };
+    const report = {
+      ...mockAgents(),
+      memory: [{
+        agent_id: a.id, pid: a.pid, started_at: a.started_at,
+        headline_bytes: a.memory_bytes, headline_counter: "physical_footprint" as const,
+        headline_meaning: "macOS physical footprint",
+        machine_bytes: { value: null, unknown: "machine size was not read" },
+        share_ppm: { value: null, unknown: "machine size was not read" },
+        resident: missing, physical_footprint: { value: a.memory_bytes, unknown: null },
+        private_bytes: { value: null, unknown: "task_for_pid is not used" },
+        shared_bytes: missing, proportional: missing, compressed: missing,
+        virtual_bytes: missing, swap_bytes: missing, commit_bytes: missing,
+        peak_resident: { value: null, unknown: "peaks are not simultaneous" },
+        peak_physical: { value: null, unknown: "peaks are not simultaneous" },
+        groups: [], processes: [], limits: [],
+        trend: { samples: [], direction: "unknown" as const, unknown: "only one sample", rule: "band" },
+      }],
+    };
+    const { container } = render(AgentDetails, { ...detailProps(a), report });
+    expect(container.textContent).toContain("unknown (not returned)");
+    expect(container.textContent).toContain("task_for_pid is not used");
+    expect(container.textContent).not.toContain("Private 0 B");
+  });
+
   it("shows omitted folders, links and tools even when their visible lists are empty", () => {
     const a = { ...mockAgents().agents[0], folders: [], links: [], tools: [], more_folders: 3, more_links: 5, more_tools: 4 };
     const { container } = render(AgentDetails, detailProps(a));
