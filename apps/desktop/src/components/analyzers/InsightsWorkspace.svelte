@@ -153,6 +153,9 @@
       {/if}
     </div>
   {:else}
+    {#if filter.agent && summary.open > exportable.length}
+      <p class="scope" role="status" data-findings-scope>Scoped to <b>{agentNames.get(filter.agent) ?? filter.agent}</b> · {exportable.length} of {summary.open} open<button type="button" class="link" onclick={() => (filter = { ...filter, agent: null })}>Show all</button></p>
+    {/if}
     <FindingsPanel {agents} bind:filter onsetup={() => setTab("analyzers")} />
   {/if}
 </section>
@@ -168,6 +171,9 @@
   .next { color: var(--muted); font-size: var(--fs-caption); white-space: nowrap; }
   .note.alert { color: var(--text); }
   .note { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: var(--fs-caption); }
+  .scope { justify-self: start; display: flex; align-items: center; gap: 6px; margin: 0; padding: 3px 4px 3px 10px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: var(--r-full); background: var(--accent-softer); color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .scope b { color: var(--text); font-weight: var(--fw-semibold); }
+  .scope .link { padding: 0 8px; border-radius: var(--r-full); background: var(--surface); text-decoration: none; font-weight: var(--fw-medium); }
   .link { border: 0; background: none; padding: 0 2px; min-height: 24px; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .graphs { display: grid; align-content: start; gap: 10px; min-width: 0; }
   .ghead { display: flex; align-items: baseline; gap: 10px; }

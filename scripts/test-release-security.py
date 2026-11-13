@@ -679,6 +679,9 @@ else:
             add(name + ".sha256", checksums([name], binary=True))
         for platform, names in desktop.items():
             add("holdmap-desktop-" + platform + ".sha256", checksums(names))
+        # Version-free copies only. The platform lists also contain the versioned installers.
+        alias_names = sorted({name for names in desktop.values() for name in names if version not in name})
+        add("holdmap-desktop-aliases.sha256", checksums(alias_names))
         add("sha256.sum", checksums(cli + ["holdmap-npm-package.tar.gz", "source.tar.gz"], binary=True))
         add("dist-manifest.json", json.dumps({"announcement_tag": "v" + version,
             "announcement_is_prerelease": "-" in version,
@@ -720,7 +723,7 @@ else:
                 result, calls = self.verify(data, draft=draft)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("no release changes made", result.stdout)
-                self.assertEqual(len([call for call in calls if "/releases/assets/" in call[-1]]), 13)
+                self.assertEqual(len([call for call in calls if "/releases/assets/" in call[-1]]), 14)
 
     def test_explicit_draft_state_is_enforced_and_unset_accepts_either_state(self):
         for requested in ["true", "false", None]:
@@ -748,7 +751,7 @@ else:
     def test_missing_platform_or_duplicate_asset_fails(self):
         for name in ["holdmap_0.6.0_aarch64.dmg", "holdmap_0.6.0_x64.dmg", "holdmap-macos-arm64.dmg", "holdmap-windows-x64-setup.exe",
                      "holdmap_0.6.0_amd64.AppImage", "holdmap_0.6.0_x64-setup.exe",
-                     "holdmap-desktop-windows-x64.sha256", "holdmap-installer.sh", "holdmap-core.cdx.xml",
+                     "holdmap-desktop-windows-x64.sha256", "holdmap-desktop-aliases.sha256", "holdmap-installer.sh", "holdmap-core.cdx.xml",
                      "holdmap-aarch64-unknown-linux-gnu.tar.xz.sha256"]:
             with self.subTest(missing=name):
                 data = self.fixture()

@@ -182,11 +182,13 @@ pub async fn agents(
     include_capabilities: Option<bool>,
 ) -> Result<AgentsReport, String> {
     with_engine(&app, move |engine| {
-        if include_capabilities.unwrap_or(false) {
+        let mut report = if include_capabilities.unwrap_or(false) {
             engine.agents_with_capabilities()
         } else {
             engine.agents()
-        }
+        };
+        holdmap_core::transparency::persist_trends_default(&mut report);
+        report
     })
     .await
 }

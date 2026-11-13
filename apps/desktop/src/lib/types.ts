@@ -343,6 +343,73 @@ export interface AgentCapabilities {
   instructions?: InstructionFile[]; tool_rules?: ToolRule[]; settings?: ConfigSetting[];
   /** Documented built-ins for the product; not observed. */
   builtin_tools?: string[];
+  /** Documented locations. Metadata only; presence is not loading. */
+  locations?: CapabilityPlace[];
+}
+
+/** A counter that is either an observed integer or an explicit reason it is unknown. */
+export interface ObservedCount { value?: number | null; unknown?: string | null }
+
+export type PlaceKind = "skills" | "agent_memory" | "rules" | "mcp_config" | "instructions" | "builtin" | "plugin";
+export type PlaceScope = "user" | "project" | "local" | "plugin" | "builtin";
+export type PlaceStatus = "present" | "missing" | "unreadable" | "skipped";
+
+export interface CapabilityPlace {
+  id: string;
+  kind: PlaceKind;
+  scope: PlaceScope;
+  rank: number;
+  path: string;
+  symlink_target?: string | null;
+  status: PlaceStatus;
+  status_reason?: string | null;
+  file_count?: number | null;
+  byte_size?: number | null;
+  modified_unix_ms?: number | null;
+  candidates: string[];
+  entries?: { name: string; kind: string; bytes?: number | null; modified_unix_ms?: number | null }[];
+  present: boolean;
+}
+
+export type HeadlineCounter = "resident" | "physical_footprint" | "working_set";
+export type MemoryRole = "agent" | "helper" | "language_server" | "mcp_server" | "child";
+export type TrendDirection = "rising" | "falling" | "flat" | "unknown";
+
+export interface ProcessMemoryRow {
+  pid: number;
+  name: string;
+  role: MemoryRole;
+  evidence: Evidence;
+  scan_bytes: number;
+  reading: Record<string, ObservedCount>;
+  dominant: boolean;
+  dominant_reason?: string | null;
+}
+
+export interface AgentMemoryReport {
+  agent_id: string;
+  pid: number;
+  started_at: number;
+  headline_bytes: number;
+  headline_counter: HeadlineCounter;
+  headline_meaning: string;
+  machine_bytes: ObservedCount;
+  share_ppm: ObservedCount;
+  resident: ObservedCount;
+  physical_footprint: ObservedCount;
+  private_bytes: ObservedCount;
+  shared_bytes: ObservedCount;
+  proportional: ObservedCount;
+  compressed: ObservedCount;
+  virtual_bytes: ObservedCount;
+  swap_bytes: ObservedCount;
+  peak_resident: ObservedCount;
+  peak_physical: ObservedCount;
+  commit_bytes: ObservedCount;
+  groups: { role: MemoryRole; processes: number; scan_bytes: number }[];
+  processes: ProcessMemoryRow[];
+  trend: { samples: { at_ms: number; bytes: number }[]; direction: TrendDirection; unknown?: string | null; rule: string };
+  limits: string[];
 }
 
 export interface Agent {
@@ -380,4 +447,6 @@ export interface AgentsReport {
   agents: Agent[]; platform: string; taken_at_ms: number; limits: string[];
   /** Agents that aren't running but whose default configuration was readable (opt-in inventory only). */
   configured?: ConfiguredAgent[];
+  /** One breakdown per running agent. Absent on reports saved before collectors ran. */
+  memory?: AgentMemoryReport[];
 }

@@ -422,6 +422,24 @@ fn evidence(value: Evidence) -> &'static str {
     }
 }
 
+fn memory_lines(agent: &Agent, report: &AgentsReport) -> Vec<Line<'static>> {
+    let mut lines = vec![heading("Memory")];
+    let Some(memory) = report.memory.iter().find(|row| row.agent_id == agent.id) else {
+        lines.push(muted(format!(
+            "Platform counters were not in this report. Process-table total {}.",
+            human_bytes(agent.memory_bytes)
+        )));
+        return lines;
+    };
+    for line in memory.breakdown_lines() {
+        lines.push(Line::raw(safe_text(&line)));
+    }
+    for limit in &memory.limits {
+        lines.push(muted(format!("• {}", safe_text(limit))));
+    }
+    lines
+}
+
 fn detail_lines(
     agent: &Agent,
     report: &AgentsReport,
@@ -439,6 +457,8 @@ fn detail_lines(
             parent.pid
         )));
     }
+    lines.push(Line::raw(""));
+    lines.extend(memory_lines(agent, report));
     lines.push(Line::raw(""));
     lines.push(heading("Services & ports"));
     if agent.ports.is_empty() {
@@ -615,6 +635,29 @@ fn capability_lines(agent: &Agent, inspection_enabled: bool) -> Vec<Line<'static
         lines.push(muted(
             "Configuration / installation only; loading and use are unknown.",
         ));
+        if agent.capabilities.locations.is_empty() {
+            lines.push(muted(
+                "No documented locations were reported for this agent.",
+            ));
+        } else {
+            lines.push(muted(
+                "Documented locations. A present file is not proof it was loaded. Lower rank is the more specific layer.",
+            ));
+            let mut places = agent.capabilities.locations.clone();
+            places.sort_by(|a, b| a.rank.cmp(&b.rank).then(a.path.cmp(&b.path)));
+            for place in &places {
+                lines.push(Line::raw(format!("  {}", safe_text(&place.summary_line()))));
+                if let Some(reason) = &place.status_reason {
+                    lines.push(muted(format!("    {}", safe_text(reason))));
+                }
+                if !place.candidates.is_empty() {
+                    lines.push(muted(format!(
+                        "    entries: {}",
+                        safe_text(&place.candidates.join(", "))
+                    )));
+                }
+            }
+        }
         for server in &agent.capabilities.mcp_servers {
             let enabled = match server.enabled {
                 Some(true) => "enabled in configuration",

@@ -54,11 +54,14 @@
   SIGKILL) and check that the port is free. System processes, shells, IDEs and agent hosts
   are protected.
 - **Your agents.** Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider and more:
-  folders, child tools, ports, connections, CPU, memory and access. Every fact is marked as
-  seen, inferred or unknown. You can stop just the services an agent started.
+  folders, child tools, ports, connections, CPU, memory and access. Memory shows the
+  process-table total plus the private, shared, compressed and virtual counters the OS
+  actually exposes, or **unknown** with a reason. Every fact is marked as seen, inferred or
+  unknown. You can stop just the services an agent started.
 - **MCP servers and skills (opt-in).** How each MCP server launches and whether it's pinned
-  or running, plus skills, permission rules and instruction files. holdmap reads names only,
-  never values or file bodies, and never starts an MCP server.
+  or running, plus skills, permission rules and instruction files, and the user, project and
+  local paths those files live in (counts, sizes and times, not bodies). holdmap reads names
+  only, never values or file bodies, and never starts an MCP server.
 - **Analyzers (opt-in).** Scan skills and MCP packages with SkillSpector, the built-in OSV.dev
   lookup, presets (Cisco Skill Scanner, OSV-Scanner, Trivy, Bandit) or any MCP server. Each one
   stays off until you approve exactly what it gets, and runs on a copy in a sandbox. Install

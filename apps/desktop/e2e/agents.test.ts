@@ -1,4 +1,74 @@
+import AxeBuilder from "@axe-core/playwright";
 import { agentDetails, agentCard, agentHeading, expect, folderNode, openAgents, openAgentsPicture, openProject, test } from "./fixtures";
+
+for (const theme of ["light", "dark"] as const) {
+  test(`${theme}: agent memory is labeled and passes axe at 390px`, async ({ app }, testInfo) => {
+    await app.evaluate((value) => localStorage.setItem("holdmap.theme", value), theme);
+    await app.setViewportSize({ width: 390, height: 844 });
+    await app.reload();
+    await openAgents(app);
+    await agentHeading(app, "Cursor").click();
+    const details = agentDetails(app);
+    const memory = details.getByRole("region", { name: "Memory" });
+    await expect(memory).toBeVisible();
+    await expect(memory).toContainText("% of machine RAM");
+    await expect(memory).not.toContainText("0.0% of machine RAM");
+    await expect(memory).toContainText("Physical footprint");
+    await expect(memory.getByText("Platform limits & unavailable metrics")).toBeVisible();
+    await memory.screenshot({ path: testInfo.outputPath(`agent-memory-${theme}-390.png`) });
+    await memory.getByText("Platform limits & unavailable metrics").click();
+    await expect(memory).toContainText("task_for_pid");
+    await expect(memory).toContainText("2 processes");
+    await expect(memory.getByText("Cursor Helper (Plugin)")).toBeVisible();
+    await expect.poll(async () => memory.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    const { violations } = await new AxeBuilder({ page: app }).analyze();
+    expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+  });
+}
+
+test("agent locations group documented layers and copy a path", async ({ app }, testInfo) => {
+  await app.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await openAgents(app);
+  await agentHeading(app, "Cursor").click();
+  const details = agentDetails(app);
+  const locations = details.getByRole("region", { name: /Locations & layers/ });
+  await expect(locations).toContainText("stay hidden until configuration is read");
+  await locations.getByRole("button", { name: "Read configuration" }).click();
+  await expect(locations.locator(".layer-name", { hasText: "Project" }).first()).toBeVisible();
+  await expect(locations.getByText("Rank 20").first()).toBeVisible();
+  await expect(locations.getByText("Present").first()).toBeVisible();
+  await expect(locations.getByText("Missing").first()).toBeVisible();
+  await locations.getByRole("button", { name: "Present only" }).click();
+  await expect(locations.getByText("Missing")).toHaveCount(0);
+  await locations.getByRole("button", { name: "All" }).click();
+  const skills = locations.getByRole("button", { name: /Show \d+ entr/ }).first();
+  await skills.click();
+  await expect(locations.locator(".names li").first()).toBeVisible();
+  await locations.getByRole("button", { name: "Copy path" }).first().click();
+  await expect(locations.getByRole("button", { name: "Copied" })).toBeVisible();
+  const copied = await app.evaluate(() => navigator.clipboard.readText());
+  expect(copied.startsWith("/Users/dev/code/")).toBe(true);
+  await expect.poll(async () => locations.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await locations.screenshot({ path: testInfo.outputPath("agent-locations-dark-desktop.png") });
+  await app.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(async () => locations.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await locations.screenshot({ path: testInfo.outputPath("agent-locations-dark-390.png") });
+  await app.evaluate(() => localStorage.setItem("holdmap.theme", "light"));
+  await app.reload();
+  await openAgents(app);
+  await agentHeading(app, "Cursor").click();
+  const lightLocations = agentDetails(app).getByRole("region", { name: /Locations & layers/ });
+  await expect(lightLocations.getByText("Present").first()).toBeVisible();
+  await lightLocations.screenshot({ path: testInfo.outputPath("agent-locations-light-390.png") });
+  await app.setViewportSize({ width: 1440, height: 1000 });
+  await app.getByRole("radio", { name: "MCP & skills", exact: true }).click();
+  await app.getByRole("button", { name: "Show processes for Cursor", exact: true }).click();
+  await app.getByRole("button", { name: "Inspect agent card Cursor, PID 52000", exact: true }).click();
+  const placed = app.getByRole("region", { name: /Locations & layers/ }).first();
+  await expect(placed).toBeVisible();
+  const { violations } = await new AxeBuilder({ page: app }).include('[id^="agent-locations-"]').analyze();
+  expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+});
 
 test("Agents shows aggregate resources and inferred MCP servers without listeners", async ({ app }) => {
   await openAgentsPicture(app, "Footprint");
@@ -18,6 +88,7 @@ test("Agents shows aggregate resources and inferred MCP servers without listener
   await expect(filesystem).toContainText("52070");
   await expect(filesystem).toContainText("0.1% CPU");
   await expect(cursor).toContainText("+8 more processes");
+  await expect(cursor.getByRole("region", { name: "Memory" })).toBeVisible();
 });
 
 const searches = [

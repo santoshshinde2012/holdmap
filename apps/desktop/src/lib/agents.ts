@@ -4,6 +4,7 @@
 // summaries the agent cards show. No invented communication. No DOM or Svelte imports,
 // so all of it is unit-tested.
 
+import { humanDuration } from "./format";
 import type { AccessFact, AccessLevel, AccessTopic, Agent, AgentKind, AgentPort, PortEntry, AgentProcess, AgentToolKind, AgentsReport, Evidence } from "./types";
 
 export type FootKind = "agent" | "folder" | "tool" | "port" | "service" | "remote" | "more" | "omitted" | "header" | "machine";
@@ -127,8 +128,9 @@ export function processRows(a: Agent): { process: AgentProcess; depth: number }[
   return out;
 }
 
-/** Per-agent accent, cycled: edges and badges share it so each agent's footprint reads as a group. */
-export const AGENT_COLORS = ["var(--accent)", "var(--tone-amber)", "var(--tone-green)", "var(--tone-violet)", "var(--tone-blue)"];
+/** Per-agent identity colour, cycled: edges and badges share it so each agent's footprint reads as a group.
+ *  A dedicated palette, so no agent ever looks like an OK, warning or error status. */
+export const AGENT_COLORS = ["var(--agent-1)", "var(--agent-2)", "var(--agent-3)", "var(--agent-4)", "var(--agent-5)"];
 
 /** "PostgreSQL · container shop-db-1" → "PostgreSQL". */
 export const shortLabel = (label: string) => label.split(" · ")[0] || label;
@@ -835,12 +837,22 @@ export function accessHeadline(a: Agent): { level: AccessLevel; text: string } {
   return { level: "standard", text: a.access.mine ? "Your account's access" : `Runs as ${a.access.user ?? "another user"}` };
 }
 
+/** The card's count chips as [number, noun]: folders, ports, links, then processes and tools when asked. */
+export function countChips(c: Counts, more = false): [number, string][] {
+  const p = (n: number, one: string, many = one + "s"): [number, string] => [n, n === 1 ? one : many];
+  return [p(c.folders, "folder"), p(c.ports, "port"), p(c.links, "link"), ...(more ? [p(c.processes, "process", "processes"), p(c.tools, "tool")] : [])];
+}
+
 /** "1 folder · 2 ports · 3 links · 1 stoppable". */
 export function countsLine(c: Counts): string {
-  const p = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
-  const parts = [p(c.folders, "folder"), p(c.ports, "port"), p(c.links, "link")];
-  if (c.stoppable > 0) parts.push(p(c.stoppable, "stoppable", "stoppable"));
+  const parts = countChips(c).map(([n, w]) => `${n} ${w}`);
+  if (c.stoppable > 0) parts.push(`${c.stoppable} stoppable`);
   return parts.join(" · ");
+}
+
+/** "Agent · Anthropic · pid 51200 · up 2h": who it is, for card and detail headers. */
+export function agentMeta(a: Agent, nowMs: number, vendor = true): string {
+  return [KIND_LABEL[a.kind], vendor && a.vendor !== "unknown" ? a.vendor : null, `pid ${a.pid}`, a.started_at ? `up ${humanDuration(nowMs / 1000 - a.started_at)}` : null].filter(Boolean).join(" · ");
 }
 
 /** Compact resource line for skim surfaces: "520 MB · 3.4% · 15 processes". */

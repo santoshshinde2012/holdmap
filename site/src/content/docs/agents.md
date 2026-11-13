@@ -7,6 +7,23 @@ order: 2
 holdmap finds the **AI coding agents** and **developer tools** on your machine and shows, for
 each one, the folders it works in, the ports and apps it started, the services and hosts it talks
 to, and what the OS says about its access. Every process fact is marked seen, inferred or unknown.
+The memory total is the same process-table sample as the rest of holdmap: Linux resident
+memory (`VmRSS`), macOS physical footprint (Activity Monitor's Memory column), or the Windows
+working set. The agent detail also lists the other counters the operating system actually
+exposes — private, shared, proportional, compressed, virtual, swap, commit — and says
+**unknown** with a reason when a counter is not available. Those counters are never copied
+from the headline, and per-process peaks are not added into a tree peak. A helper, language
+server, MCP server or child that holds at least half of the total and at least 256 MiB is
+called out as large. That is a size comparison, not a claim that the process is stuck.
+
+With `--capabilities` (or **Read configuration** in the app), holdmap also lists the
+documented places an agent loads skills, context files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`),
+rules, MCP configuration and built-in tools. Each row has its layer (user, project, local,
+plugin, built-in), a rank (lower is more specific), the path, a symlink target when the path
+itself is a link, whether it exists, and a file count, byte size and modification time when
+those can be read without following links. File bodies, chats and secret values are not read.
+A file that is present was not necessarily loaded.
+
 Default scans do not inspect chats, agent settings or credential stores. Recognized credentials
 in observed process arguments are redacted for display; redaction is heuristic. Optional recording
 accepts a separate, strictly limited metadata projection from integrations you configure.

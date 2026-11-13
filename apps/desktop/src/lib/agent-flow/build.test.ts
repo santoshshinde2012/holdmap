@@ -32,6 +32,18 @@ describe("observed agent connections", () => {
     const picked = toFlow(busy, layoutGraph(busy, false), "e2").edges.filter((e) => e.data?.labelled).map((e) => e.id);
     expect(picked).toEqual(["e2"]);
   });
+  it("dims what is not next to the picked node or edge and highlights touching edges", () => {
+    const g = observedGraph(report());
+    const none = toFlow(g, layoutGraph(g, false), null);
+    expect(none.nodes.some((n) => n.data.dim) || none.edges.some((e) => e.data?.dim || e.data?.near)).toBe(false);
+    const agent = toFlow(g, layoutGraph(g, false), "agent:123:456");
+    expect(agent.nodes.filter((n) => !n.data.dim).map((n) => n.id).sort()).toEqual(["agent:123:456", "tool:124:457"]);
+    expect(agent.edges.filter((e) => e.data?.near).map((e) => e.id)).toEqual(["parent"]);
+    expect(agent.edges.filter((e) => e.data?.dim).map((e) => e.id)).toEqual(["listener", "socket"]);
+    const edge = toFlow(g, layoutGraph(g, false), "socket");
+    expect(edge.nodes.filter((n) => !n.data.dim).map((n) => n.id).sort()).toEqual(["remote", "tool:124:457"]);
+    expect(edge.edges.filter((e) => !e.data?.dim).map((e) => e.id)).toEqual(["socket"]);
+  });
   it("searches process identity and retains only adjacent relationship context", () => {
     const g = observedGraph(report(), "124");
     expect(g.nodes.map((n) => n.id)).toEqual(["agent:123:456", "tool:124:457", "tcp:3000", "remote"]);

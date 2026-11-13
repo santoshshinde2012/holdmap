@@ -208,11 +208,12 @@ impl App {
                 .map(|engine| {
                     // Attribution can read bounded, allowlisted metadata. Keep that work on
                     // the collector thread and give every view one consistent scan.
-                    let agents = if capability_consent.load(Ordering::Acquire) {
+                    let mut agents = if capability_consent.load(Ordering::Acquire) {
                         engine.agents_with_capabilities()
                     } else {
                         engine.agents()
                     };
+                    holdmap_core::transparency::persist_trends_default(&mut agents);
                     (engine, agents)
                 })
                 .map_err(|e| e.to_string());

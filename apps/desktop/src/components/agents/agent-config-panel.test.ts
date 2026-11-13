@@ -34,6 +34,8 @@ describe("AgentConfigPanel", () => {
     const plain = mockAgents().agents[0];
     const view = render(AgentConfigPanel, { agent: plain, oninspect });
     await fireEvent.click(view.getByRole("button", { name: "Read configuration" }));
-    expect(oninspect).toHaveBeenCalled();
+    expect(oninspect).toHaveBeenCalledOnce();
+    await fireEvent.click(view.getByRole("button", { name: "Read MCP & skills →" }));
+    expect(oninspect).toHaveBeenCalledTimes(2);
   });
 });

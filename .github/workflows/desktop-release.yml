@@ -319,6 +319,8 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.tag }}
           persist-credentials: false
+      - name: Publish the version-free installer checksum
+        run: node scripts/publish-desktop-alias-checksums.mjs
       - name: Restore the release notes from dist-manifest.json
         run: |
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern dist-manifest.json --dir "$RUNNER_TEMP"

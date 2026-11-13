@@ -276,12 +276,20 @@ impl<'a> AgentsBuilder<'a> {
         if !configured.is_empty() {
             limits.push("Agents that aren't running are listed from their default configuration locations only; project files aren't inspected for them.".into());
         }
+        let probe = crate::transparency::HostProbe;
+        let memory = agents
+            .iter()
+            .map(|agent| {
+                crate::transparency::agent_memory(agent, t, &probe, self.scan.snapshot.taken_at_ms)
+            })
+            .collect();
         AgentsReport {
             agents,
             platform: platform.to_string(),
             taken_at_ms: self.scan.snapshot.taken_at_ms,
             limits,
             configured,
+            memory,
         }
     }
 

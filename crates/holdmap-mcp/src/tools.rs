@@ -78,12 +78,30 @@ pub(super) fn ports_result(snapshot: &Snapshot, args: &Value) -> (String, Value)
 /// Present a core report without reconstructing ownership or tool classification in the adapter.
 pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, Value) {
     if let Some(query) = args["agent"].as_str() {
-        report.agents.retain(|agent| agent.matches(query));
+        report.retain_matching(query);
         let q = query.trim().to_lowercase();
         report.configured.retain(|c| {
             c.product.to_lowercase().contains(&q) || c.name.to_lowercase().contains(&q)
         });
     }
+    let memory_lines: std::collections::HashMap<&str, String> = report
+        .memory
+        .iter()
+        .map(|memory| (memory.agent_id.as_str(), memory.summary_line()))
+        .collect();
+    let dominant_lines: std::collections::HashMap<&str, String> = report
+        .memory
+        .iter()
+        .map(|memory| {
+            let names = memory
+                .processes
+                .iter()
+                .filter(|row| row.dominant)
+                .map(|row| format!("{} pid {} ({})", row.name, row.pid, row.role.label()))
+                .collect::<Vec<_>>();
+            (memory.agent_id.as_str(), names.join(", "))
+        })
+        .collect();
     let mut lines = Vec::new();
     for agent in &report.agents {
         let folders: Vec<&str> = agent
@@ -116,6 +134,30 @@ pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, 
             agent.cpu_percent,
             human_bytes(agent.memory_bytes),
         ));
+        if let Some(summary) = memory_lines.get(agent.id.as_str()) {
+            lines.push(format!("  Memory: {summary}"));
+        }
+        if let Some(dominant) = dominant_lines
+            .get(agent.id.as_str())
+            .filter(|line| !line.is_empty())
+        {
+            lines.push(format!(
+                "  Large processes (size comparison, not a hang): {dominant}."
+            ));
+        }
+        if agent.capabilities.inspected && !agent.capabilities.locations.is_empty() {
+            let present = agent
+                .capabilities
+                .locations
+                .iter()
+                .filter(|place| place.present)
+                .count();
+            lines.push(format!(
+                "  Locations: {} documented, {} present. Presence is not loading. Ranks are documented layers, not a resolved winner.",
+                agent.capabilities.locations.len(),
+                present
+            ));
+        }
         lines.push(format!(
             "  {} · {}",
             agent.kind.label(),
@@ -303,11 +345,12 @@ pub(super) fn call(
         }
         "list_agents" => {
             let engine = engine()?;
-            let report = if args["include_capabilities"].as_bool().unwrap_or(false) {
+            let mut report = if args["include_capabilities"].as_bool().unwrap_or(false) {
                 engine.agents_with_capabilities()
             } else {
                 engine.agents()
             };
+            holdmap_core::transparency::persist_trends_default(&mut report);
             Ok(agents_result(report, args))
         }
         "list_analyzers" => Ok(crate::analyzers::list(&analyzer_service())),
