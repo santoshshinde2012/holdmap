@@ -5,9 +5,8 @@
   import Icon from "../Icon.svelte";
   import McpServerList from "./McpServerList.svelte";
   import { DECISION_LABEL, riskySettings } from "../../lib/agent-config";
-  import { placesSummary } from "../../lib/agent-memory";
-  import { humanBytes, tildify } from "../../lib/format";
-  import ExportActions from "../ui/ExportActions.svelte";
+  import { tildify } from "../../lib/format";
+  import AgentLocations from "./AgentLocations.svelte";
   import type { Agent } from "../../lib/types";
 
   let { agent, oninspect }: { agent: Agent; oninspect?: () => void } = $props();
@@ -19,7 +18,6 @@
   const settings = $derived(c?.settings ?? []);
   const risky = $derived(new Set(riskySettings(agent).map((r) => r.setting.key)));
   const builtins = $derived(c?.builtin_tools ?? []);
-  const places = $derived(c?.locations ?? []);
   const decisions = ["allow", "ask", "deny"] as const;
 </script>
 
@@ -28,10 +26,10 @@
     <p class="off">
       <Icon name="plug" size={13} />
       <span>MCP servers, skills and tool permissions aren't read yet.</span>
-      {#if oninspect}<button type="button" class="link" onclick={oninspect}>Read configuration</button>{/if}
     </p>
+    <AgentLocations {agent} {oninspect} />
   {:else}
-    <h3>MCP servers <span class="n">{servers.length + c.more_mcp_servers}</span></h3>
+    <h4>MCP servers <span class="n">{servers.length + c.more_mcp_servers}</span></h4>
     {#if servers.length}
       <McpServerList {servers} />
     {:else}
@@ -39,7 +37,7 @@
     {/if}
 
     {#if c.skills.length || instructions.length}
-      <h3>Skills &amp; instructions <span class="n">{c.skills.length + c.more_skills + instructions.length}</span></h3>
+      <h4>Skills &amp; instructions <span class="n">{c.skills.length + c.more_skills + instructions.length}</span></h4>
       <ul class="files">
         {#each c.skills as k (k.id)}
           <li><span class="kind">skill</span><span class="name">{k.declared_name ?? k.name}</span>{#if k.description}<span class="desc">{k.description}</span>{/if}</li>
@@ -50,7 +48,7 @@
       </ul>
     {/if}
 
-    <h3>Tools &amp; permissions</h3>
+    <h4>Tools &amp; permissions</h4>
     {#if settings.length}
       <ul class="settings">
         {#each settings as st (st.key + st.source_path)}
@@ -65,23 +63,7 @@
       {/if}
     {/each}
     {#if !rules.length && !settings.length}<p class="none">No permission rules or safety settings in the inspected files.</p>{/if}
-    {#if places.length}
-      <h3>Where this agent keeps them <span class="n">{places.length}</span></h3>
-      <p class="none">A present file is not proof it was loaded. Lower rank is the more specific documented layer.</p>
-      <ul class="files">
-        {#each places as place (place.id)}
-          <li>
-            <span class="kind">{place.scope}</span>
-            <span class="name">{place.kind.replaceAll("_", " ")}</span>
-            <span class="desc">{place.status}{place.path ? ` · ${tildify(place.path)}` : ""}{place.symlink_target ? ` → ${tildify(place.symlink_target)}` : ""}</span>
-            <span class="desc">{place.file_count == null ? "count unknown" : `${place.file_count} entries`} · {place.byte_size == null ? "size unknown" : humanBytes(place.byte_size)}</span>
-            {#if place.status_reason}<span class="desc">{place.status_reason}</span>{/if}
-            {#if place.candidates.length}<span class="desc">{place.candidates.slice(0, 8).join(", ")}</span>{/if}
-          </li>
-        {/each}
-      </ul>
-      <ExportActions label="Export locations" copy={() => placesSummary(places)} files={[{ label: "JSON", filename: `${agent.product}-locations.json`, build: () => places }]} />
-    {/if}
+    <AgentLocations {agent} />
     {#if builtins.length}
       <p class="builtin"><span class="label">Built-in</span>{builtins.join(" · ")} <em>(documented, not observed)</em></p>
     {/if}
@@ -90,7 +72,7 @@
 
 <style>
   .config { display: grid; gap: 6px; min-width: 0; }
-  h3 { margin: 8px 0 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--muted); }
+  h4 { margin: 8px 0 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--muted); }
   .n { font-variant-numeric: tabular-nums; color: var(--faint); }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   .name { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); color: var(--text); }

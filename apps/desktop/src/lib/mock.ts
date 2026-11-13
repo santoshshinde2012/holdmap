@@ -1,6 +1,6 @@
 // Labelled sample data for the public website demo, Playwright, unit tests, and `npm run dev ?demo=1`.
 // `npm run dev` without that flag reads this machine through the holdmap CLI.
-import type { AccessFact, ActionPlan, Agent, AgentLink, AgentPort, AgentsReport, BindRisk, ConfiguredAgent, Cluster, Explanation, Graph, GraphEdge, GraphNode, HttpInfo, PortDetails, PortEntry, Snapshot, StopReport } from "./types";
+import type { AccessFact, ActionPlan, Agent, AgentLink, AgentMemoryReport, AgentPort, AgentsReport, BindRisk, CapabilityPlace, ConfiguredAgent, Cluster, Explanation, Graph, GraphEdge, GraphNode, HttpInfo, MemoryRole, ObservedCount, PortDetails, PortEntry, ProcessMemoryRow, Snapshot, StopReport } from "./types";
 import { title } from "./format";
 
 const now = Math.floor(Date.now() / 1000);
@@ -345,7 +345,7 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT, includeCapabilities = fa
     command: "/Applications/Cursor.app/Contents/MacOS/Cursor", started_at: started - 86400, parent: null, memory_bytes: 2.4e9, cpu_percent: 6.2,
     processes: [
       { pid: 52000, ppid: 1, name: "Cursor", command: "/Applications/Cursor.app/Contents/MacOS/Cursor", role: "agent", cwd: "/", memory_bytes: 410e6, cpu_percent: 1.8 },
-      { pid: 52011, ppid: 52000, name: "Cursor Helper (Plugin)", command: "Cursor Helper (Plugin) --type=utility", role: "helper", cwd: "/", memory_bytes: 820e6, cpu_percent: 2.1 },
+      { pid: 52011, ppid: 52000, name: "Cursor Helper (Plugin)", command: "Cursor Helper (Plugin) --type=utility", role: "helper", cwd: "/", memory_bytes: 1.4e9, cpu_percent: 2.1 },
       { pid: 52040, ppid: 52011, name: "zsh", command: "-zsh", role: "child", cwd: shopWeb.root, memory_bytes: 6e6, cpu_percent: 0 },
       { pid: 43000, ppid: 52040, name: "node", command: "node node_modules/.bin/next dev", role: "child", cwd: shopWeb.root, memory_bytes: 412e6, cpu_percent: 1.6 },
       { pid: 52060, ppid: 52011, name: "zsh", command: "-zsh", role: "child", cwd: docs.root, memory_bytes: 6e6, cpu_percent: 0 },
@@ -466,7 +466,8 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT, includeCapabilities = fa
         { id: "cursor:rule:react", kind: "rule", name: "react-conventions", description: "TypeScript and React conventions for the storefront.", scope: "project", source_path: `${shopWeb.root}/.cursor/rules/react-conventions.mdc`, evidence: "observed" },
         { id: "cursor:memory:agents", kind: "memory", name: "AGENTS.md", description: null, scope: "project", source_path: `${shopWeb.root}/AGENTS.md`, evidence: "observed" },
       ],
-      tool_rules: [], settings: [], builtin_tools: [],
+      tool_rules: [], settings: [],       builtin_tools: [],
+      locations: cursorPlaces(shopWeb.root),
       more_mcp_servers: 0, more_skills: 0,
       limits: ["Configuration and skill-file presence do not establish loading, connection or invocation. Arguments, URL paths and queries, and environment or header values are not included. Only declared name/description from bounded skill frontmatter are retained; instructions are not collected or executed."],
     };
@@ -493,6 +494,7 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT, includeCapabilities = fa
       ],
       settings: [{ key: "permissions.defaultMode", value: "acceptEdits", scope: "user", source_path: "/Users/dev/.claude/settings.json" }],
       builtin_tools: ["Bash", "Edit", "Glob", "Grep", "MultiEdit", "NotebookEdit", "Read", "Task", "TodoWrite", "WebFetch", "WebSearch", "Write"],
+      locations: claudePlaces(shopApi.root),
       more_mcp_servers: 0, more_skills: 0, limits: [],
     };
     docker.capabilities = { inspected: false, mcp_servers: [], skills: [], more_mcp_servers: 0, more_skills: 0, limits: ["Capability source discovery is not supported for Docker Desktop."] };
@@ -517,8 +519,10 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT, includeCapabilities = fa
       more_mcp_servers: 0, more_skills: 0, limits: [],
     },
   }] : [];
+  const agents = [claude, cursor, docker].map(live);
   return {
-    agents: [claude, cursor, docker].map(live),
+    agents,
+    memory: agents.map((agent) => demoMemory(agent)),
     ...(configured.length ? { configured } : {}),
     platform: "macos",
     taken_at_ms: s.taken_at_ms,
@@ -531,4 +535,139 @@ export function mockAgents(s: Snapshot = MOCK_SNAPSHOT, includeCapabilities = fa
       "macOS privacy grants (TCC) can't be read without Full Disk Access, and folders it guards aren't inspected.",
     ],
   };
+}
+
+const DEMO_MACHINE = 16 * 1024 * 1024 * 1024;
+const known = (value: number): ObservedCount => ({ value, unknown: null });
+const missing = (unknown: string): ObservedCount => ({ value: null, unknown });
+const unavailable = (what: string) =>
+  `${what} proc_pid_rusage (RUSAGE_INFO_V4) does not return it. task_for_pid is not used, because it needs a privilege holdmap does not request.`;
+const PEAKS = "Each process has its own peak. Those peaks are not simultaneous, so holdmap does not add them into a tree peak.";
+
+function demoReading(resident: number, footprint: number, peak: number): Record<string, ObservedCount> {
+  return {
+    resident: known(resident),
+    physical_footprint: known(footprint),
+    private_bytes: missing(unavailable("Private memory:")),
+    shared_bytes: missing(unavailable("Shared memory:")),
+    proportional: missing("Proportional set size is a Linux smaps counter. macOS does not report it."),
+    compressed: missing(unavailable("Compressed memory:")),
+    virtual_bytes: missing(unavailable("Virtual size:")),
+    swap_bytes: missing("macOS proc_pid_rusage does not report per-process swap. Compressed memory, which Activity Monitor shows separately, is also not in this call."),
+    peak_resident: missing("proc_pid_rusage reports a lifetime peak physical footprint, not a peak resident size."),
+    peak_physical: known(peak),
+    commit_bytes: missing("Commit charge is a Windows counter. macOS does not report it."),
+  };
+}
+
+function demoRow(pid: number, name: string, role: MemoryRole, scan: number, resident: number, footprint: number, dominant = false): ProcessMemoryRow {
+  return {
+    pid, name, role, evidence: role === "mcp_server" || role === "language_server" ? "inferred" : "observed",
+    scan_bytes: scan, reading: demoReading(resident, footprint, Math.round(footprint * 1.15)),
+    dominant,
+    dominant_reason: dominant ? "This process holds at least half of the headline and at least 256 MiB, and it is not the agent process." : null,
+  };
+}
+
+function demoMemory(agent: Agent): AgentMemoryReport {
+  const rows: ProcessMemoryRow[] = agent.product === "cursor"
+    ? [
+        demoRow(52011, "Cursor Helper (Plugin)", "helper", 1.4e9, 1.1e9, 1.4e9, true),
+        demoRow(52000, "Cursor", "agent", 410e6, 380e6, 410e6),
+        demoRow(43000, "node", "child", 412e6, 300e6, 412e6),
+        demoRow(52080, "rust-analyzer", "language_server", 220e6, 180e6, 220e6),
+        demoRow(45173, "node", "child", 180e6, 140e6, 180e6),
+        demoRow(52070, "node", "mcp_server", 32e6, 28e6, 32e6),
+      ]
+    : agent.product === "claude-code"
+      ? [
+          demoRow(51200, "claude", "agent", 240e6, 210e6, 240e6),
+          demoRow(43001, "node", "child", 96e6, 80e6, 96e6),
+          demoRow(51230, "sandbox-exec", "helper", 3e6, 2e6, 3e6),
+        ]
+      : [
+          demoRow(48020, "com.docker.backend", "helper", 420e6, 360e6, 420e6),
+          demoRow(48000, "Docker Desktop", "agent", 180e6, 150e6, 180e6),
+        ];
+  const kept = rows.filter((row) => agent.process_ids.includes(row.pid));
+  const roles: MemoryRole[] = ["agent", "mcp_server", "language_server", "helper", "child"];
+  const groups = roles.flatMap((role) => {
+    const processes = kept.filter((row) => row.role === role);
+    return processes.length ? [{ role, processes: processes.length, scan_bytes: processes.reduce((sum, row) => sum + row.scan_bytes, 0) }] : [];
+  });
+  const direction = agent.product === "cursor" ? "rising" as const : agent.product === "claude-code" ? "falling" as const : "flat" as const;
+  const previous = direction === "rising" ? agent.memory_bytes * 0.8 : direction === "falling" ? agent.memory_bytes * 1.2 : agent.memory_bytes;
+  return {
+    agent_id: agent.id, pid: agent.pid, started_at: agent.started_at,
+    headline_bytes: agent.memory_bytes, headline_counter: "physical_footprint",
+    headline_meaning: "Sum of macOS physical footprints (ri_phys_footprint).",
+    machine_bytes: known(DEMO_MACHINE),
+    share_ppm: known(Math.round(agent.memory_bytes / DEMO_MACHINE * 1_000_000)),
+    resident: known(kept.reduce((sum, row) => sum + (row.reading.resident.value ?? 0), 0)),
+    physical_footprint: known(agent.memory_bytes),
+    private_bytes: missing(unavailable("Private memory:")),
+    shared_bytes: missing(unavailable("Shared memory:")),
+    proportional: missing("Proportional set size is a Linux smaps counter. macOS does not report it."),
+    compressed: missing(unavailable("Compressed memory:")),
+    virtual_bytes: missing(unavailable("Virtual size:")),
+    swap_bytes: missing("macOS proc_pid_rusage does not report per-process swap. Compressed memory, which Activity Monitor shows separately, is also not in this call."),
+    peak_resident: missing(PEAKS),
+    peak_physical: missing(PEAKS),
+    commit_bytes: missing("Commit charge is a Windows counter. macOS does not report it."),
+    groups, processes: kept,
+    trend: {
+      samples: [{ at_ms: agent.started_at * 1000, bytes: Math.round(previous) }, { at_ms: Date.now(), bytes: agent.memory_bytes }],
+      direction, rule: "Newest versus oldest retained headline sample, using a 10% and 1 MiB band.",
+    },
+    limits: ["Tree peaks are not added. Each process keeps its own peak.", "Private, shared and compressed memory need task_for_pid, which holdmap does not request."],
+  };
+}
+
+function place(partial: Pick<CapabilityPlace, "id" | "kind" | "scope" | "rank" | "path" | "status" | "present"> & Partial<CapabilityPlace>): CapabilityPlace {
+  return {
+    symlink_target: partial.symlink_target ?? null,
+    status_reason: partial.status_reason ?? null,
+    file_count: partial.file_count ?? null,
+    byte_size: partial.byte_size ?? null,
+    modified_unix_ms: partial.modified_unix_ms === undefined ? Date.now() - 86_400_000 : partial.modified_unix_ms,
+    candidates: partial.candidates ?? [],
+    entries: partial.entries ?? [],
+    id: partial.id,
+    kind: partial.kind,
+    scope: partial.scope,
+    rank: partial.rank,
+    path: partial.path,
+    status: partial.status,
+    present: partial.present,
+  };
+}
+
+function cursorPlaces(project: string): CapabilityPlace[] {
+  const edited = Date.now() - 3_600_000;
+  return [
+    place({ id: "cursor:local:skills", kind: "skills", scope: "local", rank: 10, path: `${project}/.cursor/skills`, status: "missing", present: false, status_reason: "The documented local skills directory is not there." }),
+    place({ id: "cursor:project:skills", kind: "skills", scope: "project", rank: 20, path: `${project}/.agents/skills`, status: "present", present: true, file_count: 1, byte_size: 2048, modified_unix_ms: edited, candidates: ["frontend-checks"], entries: [{ name: "frontend-checks", kind: "directory", bytes: null, modified_unix_ms: edited }] }),
+    place({ id: "cursor:project:rules", kind: "rules", scope: "project", rank: 20, path: `${project}/.cursor/rules`, status: "present", present: true, file_count: 1, byte_size: 860, modified_unix_ms: edited, candidates: ["react-conventions.mdc"], entries: [{ name: "react-conventions.mdc", kind: "file", bytes: 860, modified_unix_ms: edited }] }),
+    place({ id: "cursor:project:context", kind: "agent_memory", scope: "project", rank: 20, path: `${project}/AGENTS.md`, status: "present", present: true, file_count: 1, byte_size: 640, modified_unix_ms: edited, candidates: ["AGENTS.md"] }),
+    place({ id: "cursor:project:mcp", kind: "mcp_config", scope: "project", rank: 20, path: `${project}/.cursor/mcp.json`, status: "present", present: true, file_count: 1, byte_size: 420, modified_unix_ms: edited, candidates: ["filesystem", "legacy-browser"] }),
+    place({ id: "cursor:user:skills", kind: "skills", scope: "user", rank: 30, path: "/Users/dev/.cursor/skills", status: "present", present: true, symlink_target: "/Users/dev/.agents/skills", file_count: 1, byte_size: 1800, modified_unix_ms: edited, candidates: ["code-review"], entries: [{ name: "code-review", kind: "symlink", bytes: null, modified_unix_ms: edited }] }),
+    place({ id: "cursor:user:mcp", kind: "mcp_config", scope: "user", rank: 30, path: "/Users/dev/.cursor/mcp.json", status: "present", present: true, file_count: 1, byte_size: 300, modified_unix_ms: edited, candidates: ["github"] }),
+    place({ id: "cursor:user:prompts", kind: "instructions", scope: "user", rank: 30, path: "/Users/dev/.cursor/commands", status: "unreadable", present: false, status_reason: "The directory could not be stated." }),
+    place({ id: "cursor:plugin", kind: "plugin", scope: "plugin", rank: 40, path: "/Users/dev/.cursor/extensions", status: "skipped", present: false, status_reason: "Plugin and marketplace installs are not walked." }),
+    place({ id: "cursor:builtin", kind: "builtin", scope: "builtin", rank: 50, path: "", status: "present", present: true, modified_unix_ms: null, candidates: ["Read", "Edit", "Grep"] }),
+  ];
+}
+
+function claudePlaces(project: string): CapabilityPlace[] {
+  const edited = Date.now() - 7_200_000;
+  return [
+    place({ id: "claude:project:skills", kind: "skills", scope: "project", rank: 20, path: `${project}/.claude/skills`, status: "present", present: true, file_count: 1, byte_size: 1500, modified_unix_ms: edited, candidates: ["release-check"], entries: [{ name: "release-check", kind: "directory", bytes: null, modified_unix_ms: edited }] }),
+    place({ id: "claude:project:context", kind: "agent_memory", scope: "project", rank: 20, path: `${project}/CLAUDE.md`, status: "present", present: true, file_count: 1, byte_size: 900, modified_unix_ms: edited, candidates: ["CLAUDE.md"] }),
+    place({ id: "claude:project:mcp", kind: "mcp_config", scope: "project", rank: 20, path: `${project}/.mcp.json`, status: "present", present: true, file_count: 1, byte_size: 280, modified_unix_ms: edited, candidates: ["filesystem"] }),
+    place({ id: "claude:project:rules", kind: "rules", scope: "project", rank: 20, path: `${project}/.claude/settings.json`, status: "present", present: true, file_count: 1, byte_size: 640, modified_unix_ms: edited, candidates: ["permissions"] }),
+    place({ id: "claude:user:commands", kind: "instructions", scope: "user", rank: 30, path: "/Users/dev/.claude/commands", status: "present", present: true, file_count: 1, byte_size: 400, modified_unix_ms: edited, candidates: ["ship.md"], entries: [{ name: "ship.md", kind: "file", bytes: 400, modified_unix_ms: edited }] }),
+    place({ id: "claude:user:mcp", kind: "mcp_config", scope: "user", rank: 30, path: "/Users/dev/.claude.json", status: "present", present: true, file_count: 1, byte_size: 1100, modified_unix_ms: edited, candidates: ["github", "linear"] }),
+    place({ id: "claude:privacy", kind: "agent_memory", scope: "user", rank: 30, path: "/Users/dev/Library/Application Support/Claude/claude_desktop_config.json", status: "skipped", present: false, status_reason: "The path is in a macOS privacy area holdmap does not open." }),
+    place({ id: "claude:builtin", kind: "builtin", scope: "builtin", rank: 50, path: "", status: "present", present: true, modified_unix_ms: null, candidates: ["Bash", "Read", "Edit", "WebSearch"] }),
+  ];
 }

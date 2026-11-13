@@ -510,22 +510,6 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
     }
     let label = |s: &str| style::dim(format!("  {s:<10}"));
     let pad = " ".repeat(12);
-    let memory_notes: Vec<(String, String, Vec<String>)> = r
-        .memory
-        .iter()
-        .map(|memory| {
-            (
-                memory.agent_id.clone(),
-                memory.summary_line(),
-                memory
-                    .processes
-                    .iter()
-                    .filter(|row| row.dominant)
-                    .map(|row| format!("{} pid {} · {}", row.name, row.pid, row.role.label()))
-                    .collect(),
-            )
-        })
-        .collect();
     for (i, a) in r.agents.iter().enumerate() {
         if i > 0 {
             out.push('\n');
@@ -556,30 +540,33 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
             paint(printable(&a.name), S::Bold),
             style::dim(printable(&meta.join(" · ")))
         ));
-        if let Some((_, summary, dominant)) = memory_notes.iter().find(|note| note.0 == a.id) {
-            out.push_str(&format!("{}{}\n", label("memory"), printable(summary)));
-            for row in dominant {
-                out.push_str(&format!(
-                    "{}{} {}\n",
-                    pad,
-                    style::dim("large"),
-                    printable(row)
-                ));
+        if let Some(memory) = r.memory.iter().find(|memory| memory.agent_id == a.id) {
+            let mut first = true;
+            for line in memory.breakdown_lines() {
+                let head = if first { label("memory") } else { pad.clone() };
+                first = false;
+                out.push_str(&format!("{head}{}\n", printable(&line)));
             }
-            if a.capabilities.inspected {
-                let present = a
-                    .capabilities
-                    .locations
-                    .iter()
-                    .filter(|place| place.present)
-                    .count();
-                if !a.capabilities.locations.is_empty() {
-                    out.push_str(&format!(
-                        "{}{} documented locations, {} present (presence is not loading)\n",
-                        label("places"),
-                        a.capabilities.locations.len(),
-                        present
-                    ));
+        }
+        if a.capabilities.inspected && !a.capabilities.locations.is_empty() {
+            let present = a
+                .capabilities
+                .locations
+                .iter()
+                .filter(|place| place.present)
+                .count();
+            out.push_str(&format!(
+                "{}{} documented locations, {} present (presence is not loading)\n",
+                label("places"),
+                a.capabilities.locations.len(),
+                present
+            ));
+            let mut places = a.capabilities.locations.clone();
+            places.sort_by(|a, b| a.rank.cmp(&b.rank).then(a.path.cmp(&b.path)));
+            for place in &places {
+                out.push_str(&format!("{}{}\n", pad, printable(&place.summary_line())));
+                if let Some(reason) = &place.status_reason {
+                    out.push_str(&format!("{}{}\n", pad, style::dim(printable(reason))));
                 }
             }
         }

@@ -7,6 +7,7 @@
   import CapabilityCatalog from "./capabilities/CapabilityCatalog.svelte";
   import CapabilityComparison from "./capabilities/CapabilityComparison.svelte";
   import CapabilityInspector from "./capabilities/CapabilityInspector.svelte";
+  import AgentLocations from "./AgentLocations.svelte";
   import { agentColor, monogram } from "../../lib/agents";
   import { humanBytes } from "../../lib/format";
   import { trustStore } from "../../lib/trust-store.svelte";
@@ -284,7 +285,9 @@
         {#snippet actions()}{#if onsecurity}<Button size="xs" variant="secondary" icon="hash" onclick={() => { onsecurity?.(); securityTab.value = "skills"; }}>Review skills</Button>{/if}{/snippet}
       </Callout>
     {/if}
-    <p class="agent-hint">Found files don't show what this process loaded.</p><Button size="sm" variant="ghost" icon="info" onclick={() => openPanel("coverage")}>View coverage</Button></div>
+    <p class="agent-hint">Found files don't show what this process loaded.</p>
+    <AgentLocations agent={active} oninspect={onretry} />
+    <Button size="sm" variant="ghost" icon="info" onclick={() => openPanel("coverage")}>View coverage</Button></div>
   {/if}
 {/snippet}
 

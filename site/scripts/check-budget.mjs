@@ -92,7 +92,8 @@ const rows = [
   // shares with the on-demand 3D view now load as their own small chunks. +1 KB for the menu-bar
   // items checklist in Settings and the notice naming items macOS hides. +3 KB for Home's folding
   // panels (summary, side column, Details above Needs you) and the capture dialogs' area choice.
-  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 230 * 1024],
+  // +2 KB for the agent details memory summary and the locations layer list, which travel with the Agents view.
+  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 232 * 1024],
   ["Snapshot PNG JS (on capture)", [...snapshotDemoFiles].reduce((n, f) => n + gz(f), 0), 40 * 1024],
   ["Capability workspace JS (on inspection)", [...capabilityDemoFiles].reduce((n, f) => n + gz(f), 0), 21 * 1024],
   // The Security view's helpers moved here from the first screen; the trust and risk views load separately.
@@ -104,8 +105,9 @@ const rows = [
   ["Home 3D JS (on 3D)", [...machine3dDemoFiles].reduce((n, f) => n + gz(f), 0), 168 * 1024],
   // +2 KB for the capture area picker; +1 KB for mediabunny 1.65’s updated recording
   // implementation. +5 KB for the agent memory panel on the Agents view (counters, groups
-  // and export). These chunks load on demand; the initial-import budget is separate.
-  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 180 * 1024],
+  // and export). +4 KB for the locations filters, entry lists and copy action shared with
+  // the capability workspace. These chunks load on demand; the initial-import budget is separate.
+  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 184 * 1024],
   ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];
 

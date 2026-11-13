@@ -26,6 +26,8 @@
   import { isComposingKey } from "../lib/keyboard";
   import { ActionDock, ActionPill, Button } from "./ui";
   import StatStrip from "./ui/StatStrip.svelte";
+  import { fleetMemory } from "../lib/agent-memory";
+  import { humanBytes } from "../lib/format";
 
   let {
     report,
@@ -294,6 +296,7 @@
         : "Containers — click a folder to zoom into that source tree.",
   );
   const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
+  const fleet = $derived(fleetMemory(report ? { ...report, agents: visibleAgents, memory: report.memory?.filter((row) => visibleAgents.some((agent) => agent.id === row.agent_id)) } : null));
   const showMap = $derived(!!visibleAgents.length && (picture !== "project" || (graph?.nodes.length ?? 0) > 0));
   const projectEmpty = $derived(picture === "project" && !(graph?.nodes.length));
 </script>
@@ -341,6 +344,17 @@
         <h2>Agents <span class="n">{visibleAgents.length}{#if visibleAgents.length !== report.agents.length}{" / "}{report.agents.length}{/if}</span></h2>
         <span class="hint" title="↑↓ switches agents · click a folder to zoom into that project · Enter opens a map node">↑↓ to switch agents</span>
         <StatStrip compact label="Agents summary" stats={railStats} />
+        {#if fleet}
+          <p class="fleet">
+            <b>{humanBytes(fleet.total)}</b>
+            {fleet.fromProcessTable ? "process-table total" : "across"}
+            {fleet.count === 1 ? "1 agent" : `${fleet.count} agents`}
+            {#if fleet.share}· {fleet.share}{/if}
+            {#if fleet.top}
+              · <button type="button" class="jump" onclick={() => pick(fleet.top!.id)}>{fleet.top.name} uses the most</button>
+            {/if}
+          </p>
+        {/if}
       </header>
       <div class="cards" id="agent-list">
         {#each visibleAgents as a (a.id)}
@@ -376,6 +390,7 @@
             <div class="stats" aria-live="polite">
               <span class="sr-only">{pictureHint}</span>
               <span><b>{stats.agents}</b> {stats.agents === 1 ? "agent" : "agents"}</span>
+              {#if fleet}<span><b>{humanBytes(fleet.total)}</b> memory</span>{/if}
               {#if picture !== "context"}<span><b>{stats.folders}</b> {stats.folders === 1 ? "folder" : "folders"}</span>{/if}
               {#if picture !== "context"}<span class="opt"><b>{stats.ports}</b> ports &amp; services</span>{/if}
               <span class="opt">{plural(stats.hosts, "remote host")}</span>
@@ -463,6 +478,10 @@
   h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); font-weight: var(--fw-semibold); }
   .n { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--muted); background: var(--surface-2); padding: 0 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
   .hint { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
+  .fleet { margin: 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); overflow-wrap: anywhere; }
+  .fleet b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .jump { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .jump:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
   .cards { flex: 1; min-height: 0; overflow: auto; padding: 4px 12px 12px; display: grid; grid-auto-rows: max-content; align-content: start; gap: 8px; }
   .limits { border-top: 1px solid var(--border); padding: 8px 14px 10px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .limits summary { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; cursor: pointer; color: var(--text-2); }

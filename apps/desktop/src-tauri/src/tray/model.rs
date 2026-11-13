@@ -642,8 +642,13 @@ fn panel(
                     cpu_with_trend(cpu, &recent(&trends.total, TREND_LEN))
                 )
             });
+            let largest = (agents.len() > 1)
+                .then(|| agents.iter().max_by_key(|agent| agent.memory))
+                .flatten()
+                .map(|agent| format!(" · {} uses the most", agent.name))
+                .unwrap_or_default();
             format!(
-                "{}{} · {}",
+                "{}{} · {}{largest}",
                 count(agents.len(), "agent", "agents"),
                 cpu.unwrap_or_default(),
                 human_bytes(memory)
@@ -1706,6 +1711,11 @@ mod tests {
         assert_eq!(
             label_of(&v.items, "agent:agent:42"),
             "Claude Code · holdmap   12% · 300.0 MB"
+        );
+        assert!(
+            label_of(&v.items, "reading-agents").contains("Claude Code uses the most"),
+            "{}",
+            label_of(&v.items, "reading-agents")
         );
         assert_eq!(label_of(&v.items, "agent:agent:7"), "Codex CLI · 1.0 MB");
         trends.record(&later);

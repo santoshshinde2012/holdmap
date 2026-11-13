@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bytesOrUnknown, memorySummary, observed, placesSummary, shareText } from "./agent-memory";
+import { bytesOrUnknown, filterPlaces, fleetMemory, memorySummary, observed, placesSummary, processNoun, shareText } from "./agent-memory";
+import { mockAgents } from "./mock";
 import type { Agent, AgentMemoryReport, CapabilityPlace } from "./types";
 
 const unknown = { value: null, unknown: "smaps_rollup was unreadable" };
@@ -60,5 +61,20 @@ describe("memory figures", () => {
     expect(text).toContain("/home/dev/.claude/skills");
     expect(text).toContain("review");
     expect(text).toContain("not proof");
+    expect(text).toContain("modified time unknown");
+  });
+
+  it("sums agent headlines and names the largest without inventing a machine share", () => {
+    const report = mockAgents();
+    const fleet = fleetMemory(report);
+    expect(fleet?.fromProcessTable).toBe(false);
+    expect(fleet?.share).toMatch(/2\d\.\d% of machine RAM/);
+    expect(fleet?.top?.name).toBe("Cursor");
+    expect(processNoun(1)).toBe("1 process");
+    expect(processNoun(2)).toBe("2 processes");
+    const places = mockAgents(undefined, true).agents.find((agent) => agent.product === "cursor")!.capabilities!.locations!;
+    expect(filterPlaces(places, "present").every((place) => place.status === "present")).toBe(true);
+    expect(filterPlaces(places, "skills").every((place) => place.kind === "skills")).toBe(true);
+    expect(placesSummary(places)).not.toContain("sk-");
   });
 });

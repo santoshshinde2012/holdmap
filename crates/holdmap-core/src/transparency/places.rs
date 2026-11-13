@@ -142,6 +142,68 @@ pub struct CapabilityPlace {
     pub present: bool,
 }
 
+impl CapabilityPlace {
+    /// One text row: layer, rank, status, path, size and day. Not a file body.
+    pub fn summary_line(&self) -> String {
+        let where_ = if self.path.is_empty() {
+            self.kind.label().to_string()
+        } else {
+            self.path.clone()
+        };
+        let link = self
+            .symlink_target
+            .as_ref()
+            .map(|target| format!(" → {target}"))
+            .unwrap_or_default();
+        let count = match self.file_count {
+            Some(n) => format!("{n} entries"),
+            None => "count unknown".into(),
+        };
+        let size = match self.byte_size {
+            Some(n) => crate::util::human_bytes(n),
+            None => "size unknown".into(),
+        };
+        let when = self
+            .modified_unix_ms
+            .map(utc_day)
+            .unwrap_or_else(|| "modified time unknown".into());
+        let status = match self.status {
+            PlaceStatus::Present => "present",
+            PlaceStatus::Missing => "missing",
+            PlaceStatus::Unreadable => "unreadable",
+            PlaceStatus::Skipped => "skipped",
+        };
+        let link_mark = if self.symlink_target.is_some() {
+            " symlink"
+        } else {
+            ""
+        };
+        format!(
+            "{} {} rank {} {status}{link_mark}: {where_}{link} · {count} · {size} · {when}",
+            self.scope.label(),
+            self.kind.label(),
+            self.rank
+        )
+    }
+}
+
+/// Calendar day in UTC for a Unix millisecond timestamp.
+fn utc_day(unix_ms: u64) -> String {
+    let days = unix_ms / 1000 / 86_400;
+    // Howard Hinnant's `civil_from_days`, shifted so day 0 is 1970-01-01.
+    let z = days as i64 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = if month <= 2 { y + 1 } else { y };
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
 #[derive(Clone, Copy)]
 enum Form {
     File,
@@ -704,5 +766,16 @@ fn project_specs(product: &str) -> Vec<Spec> {
             Form::NamedFiles(&["md"]),
         )],
         _ => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::utc_day;
+
+    #[test]
+    fn unix_epoch_and_a_later_day_format_in_utc() {
+        assert_eq!(utc_day(0), "1970-01-01");
+        assert_eq!(utc_day(1_700_000_000_000), "2023-11-14");
     }
 }

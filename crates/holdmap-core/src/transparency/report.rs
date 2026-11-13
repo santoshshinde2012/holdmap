@@ -279,6 +279,77 @@ impl AgentMemoryReport {
             self.shared_bytes.bytes_text()
         )
     }
+
+    /// Role totals and every process, largest scan sample first.
+    ///
+    /// Unknown platform counters are left off each process line. The summary line already
+    /// says which tree-level counters are unknown, and a missing counter is not printed as zero.
+    pub fn breakdown_lines(&self) -> Vec<String> {
+        let mut lines = vec![self.summary_line()];
+        let trend = match self.trend.direction {
+            TrendDirection::Rising => "rising",
+            TrendDirection::Falling => "falling",
+            TrendDirection::Flat => "flat",
+            TrendDirection::Unknown => "unknown",
+        };
+        let why = self
+            .trend
+            .unknown
+            .as_deref()
+            .map(|reason| format!(" ({reason})"))
+            .unwrap_or_default();
+        lines.push(format!("trend {trend}{why}"));
+        for group in &self.groups {
+            let noun = if group.processes == 1 {
+                "process"
+            } else {
+                "processes"
+            };
+            lines.push(format!(
+                "{}: {} {noun} · {}",
+                group.role.label(),
+                group.processes,
+                crate::util::human_bytes(group.scan_bytes)
+            ));
+        }
+        let mut rows: Vec<&ProcessMemoryRow> = self.processes.iter().collect();
+        rows.sort_by(|a, b| b.scan_bytes.cmp(&a.scan_bytes).then(a.pid.cmp(&b.pid)));
+        for row in rows {
+            let mut bits = Vec::new();
+            for (label, figure) in [
+                ("resident", &row.reading.resident),
+                ("footprint", &row.reading.physical_footprint),
+                ("private", &row.reading.private_bytes),
+                ("swap", &row.reading.swap_bytes),
+                ("peak", &row.reading.peak_physical),
+            ] {
+                if let Some(value) = figure.get() {
+                    bits.push(format!("{label} {}", crate::util::human_bytes(value)));
+                }
+            }
+            if row.dominant {
+                bits.push("large".into());
+            }
+            let extra = if bits.is_empty() {
+                String::new()
+            } else {
+                format!(" · {}", bits.join(" · "))
+            };
+            lines.push(format!(
+                "{} pid {} · {} · {}{extra}",
+                row.name,
+                row.pid,
+                row.role.label(),
+                crate::util::human_bytes(row.scan_bytes)
+            ));
+            if row.dominant {
+                if let Some(reason) = &row.dominant_reason {
+                    lines.push(format!("  {reason}"));
+                }
+            }
+        }
+        lines
+    }
 }
 
 const DOMINANT_BYTES: u64 = 256 * 1024 * 1024;
