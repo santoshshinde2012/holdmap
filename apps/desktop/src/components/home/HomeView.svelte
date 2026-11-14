@@ -111,7 +111,7 @@
     { id: "ports", value: o.ports, label: "listening", go: () => onview("list") },
     { id: "dev", value: o.devServers, label: "dev servers", go: () => onview("list") },
     { id: "exposed", value: o.exposed, label: "exposed", tone: o.exposed ? "warn" : undefined, go: () => onview("list") },
-    ...(skillSec ? [{ id: "skill-findings", value: skillSec.open, label: skillSec.skills ? `skill findings · ${skillSec.skills} ${skillSec.skills === 1 ? "skill" : "skills"}` : "skill findings", tone: skillSec.open ? "warn" : "ok", go: () => onsecurity?.() ?? onview("agents") } satisfies SummaryStat] : []),
+    ...(skillSec ? [{ id: "skill-findings", value: skillSec.open, label: "skill findings", meta: skillSec.skills ? `in ${skillSec.skills} ${skillSec.skills === 1 ? "skill" : "skills"}` : undefined, tone: skillSec.open ? "warn" : "ok", go: () => onsecurity?.() ?? onview("agents") } satisfies SummaryStat] : []),
     ...(o.mcpConfigured !== null ? [{ id: "mcp", value: o.mcpRunning, of: o.mcpConfigured, label: "MCP running", go: () => onview("agents") } satisfies SummaryStat] : []),
   ]);
   const showInventory = $derived(!inventory && !!oninventory && (report?.agents ?? []).some((a) => !a.capabilities));

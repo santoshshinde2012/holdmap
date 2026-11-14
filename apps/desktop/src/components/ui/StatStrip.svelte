@@ -43,7 +43,7 @@
   .strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
   .compact { grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); }
   /* A phone-width strip keeps two-word labels on one line: three tiles a row, not five squeezed ones. */
-  @media (max-width: 480px) { .compact:not(.has-lead) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 480px) { .compact:not(.has-lead) { grid-template-columns: repeat(3, minmax(0, 1fr)); } .compact:not(.has-lead) .tile:last-child:nth-child(3n + 2) { grid-column: span 2; } }
   .strip.has-lead { grid-template-columns: minmax(0, 2fr) repeat(var(--n), minmax(0, 1fr)); }
   @media (max-width: 720px) { .strip.has-lead { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); } .lead { grid-column: 1 / -1; } }
   .tile { display: grid; align-content: start; gap: 4px; padding: 12px 16px; min-width: 0; border: 0; background: var(--surface); font: inherit; color: inherit; text-align: left; box-shadow: -1px 0 0 var(--border), 0 -1px 0 var(--border); }
