@@ -12,6 +12,14 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 /// Create (or truncate) a regular single-link file without following a final link. Unix
 /// checks ownership and enforces 0600; Windows inherits the parent directory's ACL.
 pub fn create_private(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    let file = open_private(path)?;
+    file.set_len(0)?;
+    Ok(file)
+}
+
+/// [`create_private`] without truncating, for lock files: on Windows, truncating a file that
+/// another handle has locked fails, so every waiter would give up instead of waiting its turn.
+pub fn open_private(path: &std::path::Path) -> std::io::Result<std::fs::File> {
     let mut o = std::fs::OpenOptions::new();
     o.write(true).create(true);
     #[cfg(unix)]
@@ -23,7 +31,6 @@ pub fn create_private(path: &std::path::Path) -> std::io::Result<std::fs::File> 
         check_owned_file(&f)?;
         // `mode` only applies to new files; tighten one left over from an older version.
         f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-        f.set_len(0)?;
         Ok(f)
     }
     #[cfg(not(unix))]
@@ -49,7 +56,6 @@ pub fn create_private(path: &std::path::Path) -> std::io::Result<std::fs::File> 
                 "private files must be regular files",
             ));
         }
-        f.set_len(0)?;
         Ok(f)
     }
 }

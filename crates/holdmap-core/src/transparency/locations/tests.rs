@@ -208,14 +208,20 @@ fn resolve_expands_bases_and_the_claude_project_folder() {
 
 #[test]
 fn overrides_accept_only_absolute_control_free_paths() {
+    // An absolute path on this OS; "/opt/codex" has no drive, so Windows treats it as relative.
+    let codex = if cfg!(windows) {
+        r"C:\opt\codex"
+    } else {
+        "/opt/codex"
+    };
     let env = |name: &str| match name {
-        "CODEX_HOME" => Some("/opt/codex".to_owned()),
+        "CODEX_HOME" => Some(codex.to_owned()),
         "CLAUDE_CONFIG_DIR" => Some("relative/claude".to_owned()),
-        "COPILOT_HOME" => Some("/bad\npath".to_owned()),
+        "COPILOT_HOME" => Some(format!("{codex}\nbad")),
         _ => None,
     };
     let homes = Homes::with_overrides(Path::new("/home/a"), None, env);
-    assert_eq!(homes.codex, PathBuf::from("/opt/codex"));
+    assert_eq!(homes.codex, PathBuf::from(codex));
     assert_eq!(homes.claude, PathBuf::from("/home/a/.claude"));
     assert_eq!(homes.copilot, PathBuf::from("/home/a/.copilot"));
     assert_eq!(homes.override_for(Base::CodexHome), Some("CODEX_HOME"));

@@ -12,7 +12,7 @@
 
 use super::report::MemorySample;
 use crate::store::Store;
-use crate::util::{create_private, create_private_dir};
+use crate::util::{create_private_dir, open_private};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::io::Write;
@@ -113,7 +113,7 @@ impl FileMemoryLog {
     }
 
     fn lock(&self) -> Option<std::fs::File> {
-        let file = create_private(&self.sibling(".lock")).ok()?;
+        let file = open_private(&self.sibling(".lock")).ok()?;
         let deadline = Instant::now() + LOCK_WAIT;
         loop {
             match file.try_lock() {

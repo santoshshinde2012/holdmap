@@ -13,7 +13,8 @@ fn homes(home: &Path) -> Homes {
 fn find<'a>(places: &'a [CapabilityPlace], tail: &str) -> &'a CapabilityPlace {
     places
         .iter()
-        .find(|place| place.path.ends_with(tail))
+        // Windows paths use backslashes; the fixtures name rows with slashes.
+        .find(|place| place.path.replace('\\', "/").ends_with(tail))
         .unwrap_or_else(|| panic!("no row ending {tail}"))
 }
 

@@ -444,6 +444,11 @@ fn a_refused_platform_counter_makes_the_headline_mixed_with_a_reason() {
     let mixed = agent_memory(&agent, &table, &probe, 1);
     let helper_row = mixed.processes.iter().find(|row| row.pid == 11).unwrap();
     assert_eq!(helper_row.counter, HeadlineCounter::Resident);
+    if HeadlineCounter::on_this_os() == HeadlineCounter::Resident {
+        // Linux's headline is already resident size, so the fallback is the same counter.
+        assert_eq!(mixed.headline_mixed, None);
+        return;
+    }
     let reason = mixed.headline_mixed.as_deref().unwrap();
     assert!(reason.contains("1 of 2 processes"), "{reason}");
     assert!(mixed.headline_label.starts_with("Mixed"));
