@@ -81,6 +81,7 @@
 </script>
 
 <!-- A listbox needs options: while loading or empty the container is a plain region so assistive tech isn't told about a list with nothing in it. -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex (tabindex is only set while the role is listbox, which is interactive) -->
 <div class="list {density}" id="port-list" role={hasRows ? "listbox" : undefined} aria-label={hasRows ? "Ports in use" : undefined} aria-activedescendant={hasRows && selectedId ? "row-" + selectedId : undefined} tabindex={hasRows ? 0 : undefined} bind:this={listEl}>
   {#if error && !snapshot}
     <EmptyState tone="err" title="Couldn't read the socket table">

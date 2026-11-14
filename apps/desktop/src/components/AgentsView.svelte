@@ -313,6 +313,7 @@
 {#snippet limits(items: string[], open: boolean)}
   <details class="limits" {open}>
     <summary><Icon name="info" size={12} />What this can and can't see</summary>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex (the list scrolls, so it takes focus for keyboard scrolling: axe scrollable-region-focusable) -->
     <ul tabindex="0" aria-label="What this can and can't see">{#each items as l}<li>{l}</li>{/each}</ul>
   </details>
 {/snippet}
