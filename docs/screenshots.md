@@ -48,6 +48,7 @@ holdmap-desktop --lib menu_bar_preview -- --ignored` (on a Mac).
 | folder actions narrow | — | [light](screenshots/desktop-folder-actions-narrow-light.png) |
 | graph | [dark](screenshots/desktop-graph-dark.png) | [light](screenshots/desktop-graph-light.png) |
 | menu bar (Unreleased) | [dark](screenshots/desktop-menu-bar-dark.png) | [light](screenshots/desktop-menu-bar-light.png) |
+| menu bar compact (Unreleased) | [dark](screenshots/desktop-menu-bar-compact-dark.png) | [light](screenshots/desktop-menu-bar-compact-light.png) |
 | overview | [dark](screenshots/desktop-overview-dark.png) | [light](screenshots/desktop-overview-light.png) |
 | schedules | [dark](screenshots/desktop-schedules-dark.png) | [light](screenshots/desktop-schedules-light.png) |
 | screen record | [dark](screenshots/desktop-screen-record-dark.png) | [light](screenshots/desktop-screen-record-light.png) |

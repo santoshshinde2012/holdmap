@@ -13,7 +13,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 const model: SettingsModel = {
   theme: "dark", density: "comfortable", singleKeyShortcuts: true,
-  config: { pins: [], notify: true, notify_dev_only: true, history_limit: 100, scan_interval_secs: 4, hotkey: "off", recent_hosts: [], tray_items: ["agents", "needs"], tray_combined: false, show_in_dock: true },
+  config: { pins: [], notify: true, notify_dev_only: true, history_limit: 100, scan_interval_secs: 4, hotkey: "off", recent_hosts: [], tray_items: ["agents", "needs"], tray_combined: false, tray_compact: false, show_in_dock: true },
   autostart: false, shortcut: null, hotkeys: [], version: "0.12.1", platform: "macos", configDir: null,
   powerAvailable: true, powerDemo: false, tray: true,
 };
@@ -21,7 +21,7 @@ const actions = (over: Partial<SettingsActions> = {}): SettingsActions => ({
   setTheme() {}, setDensity() {}, setSingleKeyShortcuts() {}, async setAutostart() {}, async setHotkey() {},
   async setNotify() {}, async setScanInterval() {}, async setHistoryLimit() {}, async clearHistory() {},
   copy: vi.fn(), shutdown() {},
-  setTrayItems: vi.fn(async () => {}), setTrayCombined: vi.fn(async () => {}), setShowInDock: vi.fn(async () => {}),
+  setTrayItems: vi.fn(async () => {}), setTrayCombined: vi.fn(async () => {}), setTrayCompact: vi.fn(async () => {}), setShowInDock: vi.fn(async () => {}),
   ...over,
 });
 const mount = (override: Partial<SettingsModel> = {}, a = actions(), section: "appearance" | "general" = "appearance") =>
@@ -34,12 +34,23 @@ describe("Menu bar / tray widget setting", () => {
     expect(view.getByRole("heading", { name: "Menu bar" })).toBeTruthy();
     expect(view.getByRole("group", { name: "Menu bar shows" })).toBeTruthy();
     expect(view.getByRole("checkbox", { name: /^Agents/ })).toHaveProperty("checked", true);
-    expect(view.getByRole("checkbox", { name: /^Needs you/ })).toHaveProperty("checked", true);
+    expect(view.getByRole("checkbox", { name: /^Alerts/ })).toHaveProperty("checked", true);
     expect(view.getByRole("checkbox", { name: /^CPU history/ })).toHaveProperty("checked", false);
     await fireEvent.click(view.getByRole("checkbox", { name: /^CPU history/ }));
     await waitFor(() => expect(a.setTrayItems).toHaveBeenCalledWith(["agents", "needs", "cpu_history"]));
     await fireEvent.click(view.getByRole("switch", { name: "As one item" }));
     await waitFor(() => expect(a.setTrayCombined).toHaveBeenCalledWith(true));
+  });
+
+  it("is compact by default: the icon and two readings, with every reading one switch away", async () => {
+    const a = actions();
+    const view = mount({ config: { ...model.config, tray_compact: undefined } }, a);
+    const compact = view.getByRole("switch", { name: "Compact menu bar" });
+    expect(compact.getAttribute("aria-checked")).toBe("true");
+    expect(view.queryByRole("switch", { name: "As one item" })).toBeNull();
+    expect(view.getByRole("checkbox", { name: /^Agent RAM/ })).toHaveProperty("checked", false);
+    await fireEvent.click(compact);
+    await waitFor(() => expect(a.setTrayCompact).toHaveBeenCalledWith(false));
   });
 
   it("restores the saved items when the write is rejected", async () => {

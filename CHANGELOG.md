@@ -8,6 +8,11 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Changed
+
+- The macOS menu bar starts compact: one item with the holdmap icon (a dot when something needs you) and two readings; **Every reading** brings back one item per reading. Labels read **ALERTS** and **SERVERS**, and a new **Agent RAM** reading is available.
+- The tray panel is clearer: Agents, RAM and CPU tiles, **Stop all…** in the Dev servers header, top agents by RAM with their project instead of a PID, developer tools such as Docker Desktop listed apart from AI agents, and readings that never slide under the header.
+
 ### Documentation
 
 - Align the README and desktop guide with published 0.13.1 features, fold unpublished 0.12.1 fixes into the correct release notes, refresh website screenshots and setup requirements, and label historical benchmark measurements.

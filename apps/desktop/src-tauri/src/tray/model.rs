@@ -7,7 +7,7 @@
 //! (AppIndicator) shows the readings as a panel label but no tooltip and opens the menu on any
 //! click; Windows shows a tooltip but no text, so its figures live in the tooltip and the badge.
 
-use holdmap_core::agents::AgentsReport;
+use holdmap_core::agents::{Agent, AgentKind, AgentsReport};
 use holdmap_core::attention::{AttentionItem, Target, Urgency};
 use holdmap_core::model::Exposure;
 use holdmap_core::util::{count, human_bytes, printable};
@@ -64,6 +64,8 @@ pub enum Item {
     Needs,
     /// The agents' CPU together.
     Cpu,
+    /// The agents' RAM together.
+    Ram,
     Dev,
     /// A line of the agents' CPU over recent scans.
     CpuHistory,
@@ -72,11 +74,12 @@ pub enum Item {
 }
 
 impl Item {
-    pub const ALL: [Item; 7] = [
+    pub const ALL: [Item; 8] = [
         Item::Icon,
         Item::Agents,
         Item::Needs,
         Item::Cpu,
+        Item::Ram,
         Item::Dev,
         Item::CpuHistory,
         Item::AgentBars,
@@ -93,6 +96,7 @@ impl Item {
             Item::Agents => "agents",
             Item::Needs => "needs",
             Item::Cpu => "cpu",
+            Item::Ram => "ram",
             Item::Dev => "dev",
             Item::CpuHistory => "cpu_history",
             Item::AgentBars => "agent_bars",
@@ -104,8 +108,9 @@ impl Item {
         match self {
             Item::Icon => "holdmap icon",
             Item::Agents => "Agents",
-            Item::Needs => "Needs you",
+            Item::Needs => "Alerts",
             Item::Cpu => "Agent CPU",
+            Item::Ram => "Agent RAM",
             Item::Dev => "Dev servers",
             Item::CpuHistory => "CPU history",
             Item::AgentBars => "Agent bars",
@@ -116,7 +121,7 @@ impl Item {
     pub fn section(self) -> &'static str {
         match self {
             Item::Icon => "top",
-            Item::Agents | Item::AgentBars => "agents",
+            Item::Agents | Item::AgentBars | Item::Ram => "agents",
             Item::Needs => "needs",
             Item::Cpu | Item::CpuHistory => "cpu",
             Item::Dev => "dev",
@@ -134,20 +139,39 @@ impl Item {
     }
 }
 
-/// What the menu bar shows: which items, and whether as one item (macOS).
+/// What the menu bar shows: which items, whether as one item, and whether compact (macOS).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BarChoice {
     pub items: Vec<Item>,
     pub combined: bool,
+    /// One item: the icon (its dot stands for alerts) and at most [`COMPACT_READINGS`] of the
+    /// chosen readings. The full choice is kept for when compact is turned off.
+    pub compact: bool,
 }
 
+/// Readings a compact menu bar shows beside the icon (`Config::COMPACT_READINGS`).
+pub const COMPACT_READINGS: usize = holdmap_core::store::Config::COMPACT_READINGS;
+
 impl BarChoice {
-    /// From `Config::tray_items()` (already validated there) and `Config::tray_combined`.
-    pub fn from_config(items: &[&str], combined: bool) -> BarChoice {
+    /// From `Config::tray_items()` (already validated there), `Config::tray_combined` and
+    /// `Config::tray_compact`.
+    pub fn from_config(items: &[&str], combined: bool, compact: bool) -> BarChoice {
         BarChoice {
             items: items.iter().filter_map(|id| Item::parse(id)).collect(),
             combined,
+            compact,
         }
+    }
+
+    /// The readings a compact item shows beside the icon, in menu-bar order. The icon's dot
+    /// already says when something needs you, so Alerts is not repeated as a number.
+    pub fn compact_readings(&self) -> Vec<Item> {
+        self.items
+            .iter()
+            .copied()
+            .filter(|i| !matches!(i, Item::Icon | Item::Needs))
+            .take(COMPACT_READINGS)
+            .collect()
     }
 }
 
@@ -156,6 +180,7 @@ impl Default for BarChoice {
         BarChoice {
             items: vec![Item::Agents, Item::Needs],
             combined: false,
+            compact: true,
         }
     }
 }
@@ -180,6 +205,9 @@ pub struct AgentRow {
     pub place: Option<String>,
     pub cpu: f32,
     pub memory: u64,
+    /// A developer tool that sits beside agents (Docker Desktop), not an AI agent: listed on its
+    /// own and left out of the agents' count, CPU and RAM.
+    pub tool: bool,
 }
 
 /// One "needs you" row.
@@ -243,12 +271,10 @@ impl Readings {
                     .map(|a| AgentRow {
                         id: a.id.clone(),
                         name: a.name.clone(),
-                        place: a.folders.first().map(|f| f.label.clone()).or_else(|| {
-                            let twins = r.agents.iter().filter(|b| b.name == a.name).count();
-                            (twins > 1).then(|| format!("PID {}", a.pid))
-                        }),
+                        place: agent_place(a, &r.agents),
                         cpu: a.cpu_percent,
                         memory: a.memory_bytes,
+                        tool: a.kind == AgentKind::Tool,
                     })
                     .collect()
             }),
@@ -265,12 +291,60 @@ impl Readings {
         }
     }
 
-    fn cpu(&self) -> Option<f32> {
-        // Folded from +0.0: an empty float `sum()` is -0.0, which would print as "-0%".
+    /// The AI agents (developer tools left out), once the agents report is read.
+    pub fn ai_agents(&self) -> Option<Vec<&AgentRow>> {
         self.agents
             .as_ref()
+            .map(|a| a.iter().filter(|a| !a.tool).collect())
+    }
+
+    fn cpu(&self) -> Option<f32> {
+        // Folded from +0.0: an empty float `sum()` is -0.0, which would print as "-0%".
+        self.ai_agents()
             .map(|a| a.iter().fold(0.0, |total, a| total + a.cpu))
     }
+
+    /// The AI agents' RAM together, as the Agents view counts it.
+    fn ram(&self) -> Option<u64> {
+        self.ai_agents().map(|a| a.iter().map(|a| a.memory).sum())
+    }
+}
+
+/// What tells an agent apart in a row: its first folder, else its own working folder's name
+/// (not the home folder or `/`), else the agent it was started from, else its PID when another
+/// agent shares its name.
+fn agent_place(a: &Agent, all: &[Agent]) -> Option<String> {
+    if let Some(folder) = a.folders.first() {
+        return Some(folder.label.clone());
+    }
+    let home = dirs_home();
+    let cwd = a
+        .processes
+        .iter()
+        .find(|p| p.pid == a.pid)
+        .and_then(|p| p.cwd.as_deref())
+        .filter(|cwd| cwd.parent().is_some() && home.as_deref() != Some(*cwd))
+        .and_then(|cwd| cwd.file_name())
+        .map(|name| name.to_string_lossy().into_owned());
+    if cwd.is_some() {
+        return cwd;
+    }
+    if let Some(parent) = a
+        .parent
+        .as_ref()
+        .and_then(|id| all.iter().find(|b| &b.id == id))
+    {
+        return Some(format!("in {}", parent.name));
+    }
+    let twins = all.iter().filter(|b| b.name == a.name).count();
+    (twins > 1).then(|| format!("PID {}", a.pid))
+}
+
+/// The account's home folder, so a working folder that is just `~` isn't shown as a project.
+fn dirs_home() -> Option<std::path::PathBuf> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_absolute())
 }
 
 /// Recent CPU samples: all agents together, and each agent by id.
@@ -515,6 +589,8 @@ pub enum Action {
     ToggleItem(Item),
     /// Show the menu-bar items as one item, or each on its own (macOS).
     ToggleCombined,
+    /// The compact menu bar (icon and two readings), or every chosen item (macOS).
+    ToggleCompact,
     /// Keep the panel open when it loses focus, or let it close again.
     PinPanel,
     /// Keep holdmap in the Dock, or run it from the menu bar only (macOS).
@@ -535,6 +611,7 @@ impl Action {
             "hide-panel" => Action::HidePanel,
             "pin-panel" => Action::PinPanel,
             "combined" => Action::ToggleCombined,
+            "compact" => Action::ToggleCompact,
             "dock" => Action::ToggleDock,
             "notify" => Action::ToggleNotify,
             "settings" => Action::OpenSettings,
@@ -631,7 +708,7 @@ fn panel(
             r.exposed
         ),
     ));
-    if let Some(agents) = &r.agents {
+    if let Some(agents) = r.ai_agents() {
         let label = if agents.is_empty() {
             "No agents running".to_string()
         } else {
@@ -700,7 +777,8 @@ fn panel(
         }
     }
 
-    if let Some(agents) = r.agents.as_ref().filter(|a| !a.is_empty()) {
+    let tools: Vec<&AgentRow> = r.agents.iter().flatten().filter(|a| a.tool).collect();
+    if let Some(agents) = r.ai_agents().filter(|a| !a.is_empty()) {
         out.push(TrayItem::Separator);
         out.push(reading("agents", format!("Agents · {}", agents.len())));
         for a in agents.iter().take(MAX_AGENTS) {
@@ -728,6 +806,17 @@ fn panel(
             "agents",
         ));
     }
+    for t in tools.iter().take(MAX_AGENTS) {
+        out.push(item(
+            format!("agent:{}", t.id),
+            clip(&format!(
+                "{} (developer tool) · {}",
+                t.name,
+                human_bytes(t.memory)
+            )),
+            true,
+        ));
+    }
 
     out.push(TrayItem::Separator);
     out.extend(controls(choice, platform));
@@ -752,6 +841,11 @@ fn controls(choice: &BarChoice, platform: Platform) -> Vec<TrayItem> {
             .collect();
         if platform == Platform::MacOs {
             items.push(TrayItem::Separator);
+            items.push(TrayItem::Check {
+                id: "compact".into(),
+                label: "Compact (icon and two readings)".into(),
+                checked: choice.compact,
+            });
             items.push(TrayItem::Check {
                 id: "combined".into(),
                 label: "As one item".into(),
@@ -779,7 +873,11 @@ fn controls(choice: &BarChoice, platform: Platform) -> Vec<TrayItem> {
 }
 
 fn needs_text(n: usize) -> String {
-    format!("{n} need you")
+    if n == 1 {
+        "1 alert needs you".into()
+    } else {
+        format!("{n} alerts need you")
+    }
 }
 
 /// How a reading is coloured in the menu bar: plain ink, or a state worth seeing.
@@ -840,6 +938,20 @@ fn bar_cpu(cpu: f32) -> String {
     }
 }
 
+/// "2.4G", "512M": bytes short enough for a menu-bar reading.
+fn bar_bytes(bytes: u64) -> String {
+    const GB: f64 = 1024.0 * 1024.0 * 1024.0;
+    const MB: f64 = 1024.0 * 1024.0;
+    let b = bytes as f64;
+    if b >= 10.0 * GB {
+        format!("{:.0}G", b / GB)
+    } else if b >= GB {
+        format!("{:.1}G", b / GB)
+    } else {
+        format!("{:.0}M", b / MB)
+    }
+}
+
 /// A reading's value, or "…" until it's known.
 fn known(value: Option<String>) -> String {
     value.unwrap_or_else(|| "…".into())
@@ -847,7 +959,8 @@ fn known(value: Option<String>) -> String {
 
 /// One item's part, its hover text and, for the Linux label, its words (`None`: no words).
 fn part(item: Item, r: Option<&Readings>, trends: &Trends) -> (Draw, String, Option<String>) {
-    let agents = r.and_then(|r| r.agents.as_ref());
+    let agents = r.and_then(Readings::ai_agents);
+    let agents = agents.as_ref();
     let needs = r.and_then(|r| r.needs.as_ref());
     let cpu = r.and_then(|r| trends.total_cpu(r));
     match item {
@@ -869,7 +982,7 @@ fn part(item: Item, r: Option<&Readings>, trends: &Trends) -> (Draw, String, Opt
             };
             (
                 Draw::Reading {
-                    label: "NEEDS",
+                    label: "ALERTS",
                     value: known(needs.map(|n| n.len().to_string())),
                     tone,
                 },
@@ -894,11 +1007,23 @@ fn part(item: Item, r: Option<&Readings>, trends: &Trends) -> (Draw, String, Opt
             known(cpu.map(|c| format!("Agent CPU {}", cpu_text(c)))),
             cpu.map(|c| format!("CPU {}", bar_cpu(c))),
         ),
+        Item::Ram => {
+            let ram = r.and_then(Readings::ram);
+            (
+                Draw::Reading {
+                    label: "RAM",
+                    value: known(ram.map(bar_bytes)),
+                    tone: Tone::Plain,
+                },
+                known(ram.map(|b| format!("Agent RAM {}", human_bytes(b)))),
+                ram.map(|b| format!("RAM {}", human_bytes(b))),
+            )
+        }
         Item::Dev => {
             let dev = r.map(|r| r.dev.len());
             (
                 Draw::Reading {
-                    label: "DEV",
+                    label: "SERVERS",
                     value: known(dev.map(|n| n.to_string())),
                     tone: Tone::Plain,
                 },
@@ -930,6 +1055,28 @@ fn part(item: Item, r: Option<&Readings>, trends: &Trends) -> (Draw, String, Opt
 
 /// The menu-bar items (macOS): one per chosen item, or all of them as one.
 fn bar_items(r: Option<&Readings>, trends: &Trends, choice: &BarChoice) -> Vec<BarItem> {
+    if choice.compact {
+        let readings = choice.compact_readings();
+        let mut parts = vec![Draw::Icon(badge(r))];
+        let mut lines = vec!["holdmap".to_string()];
+        for &item in &readings {
+            let (draw, tooltip, _) = part(item, r, trends);
+            parts.push(draw);
+            lines.push(tooltip);
+        }
+        // The dot's meaning, in words: it never shows a count.
+        lines.push(match r.and_then(|r| r.needs.as_ref()).map(Vec::len) {
+            Some(0) => "Nothing needs you".into(),
+            Some(n) => needs_text(n),
+            None => "Checking what needs you".into(),
+        });
+        return vec![BarItem {
+            id: "compact",
+            parts,
+            tooltip: fit_lines(lines),
+            section: "top",
+        }];
+    }
     let made: Vec<(Item, Draw, String)> = choice
         .items
         .iter()
@@ -987,12 +1134,16 @@ fn tooltip(r: Option<&Readings>, trends: &Trends) -> String {
             count(r.dev.len(), "dev server", "dev servers"),
             count(r.ports, "port", "ports")
         ));
-        if let Some(agents) = r.agents.as_ref().filter(|a| !a.is_empty()) {
+        if let Some(agents) = r.ai_agents().filter(|a| !a.is_empty()) {
             let cpu = trends
                 .total_cpu(r)
                 .map(|cpu| format!(" · CPU {}", cpu_text(cpu)));
+            let ram = r
+                .ram()
+                .map(|b| format!(" · RAM {}", human_bytes(b)))
+                .unwrap_or_default();
             lines.push(format!(
-                "{}{}",
+                "{}{}{ram}",
                 count(agents.len(), "agent", "agents"),
                 cpu.unwrap_or_default()
             ));
@@ -1099,6 +1250,8 @@ pub struct PanelSettings {
     pub items: Vec<PanelToggle>,
     /// The items as one menu-bar item (macOS only).
     pub combined: Option<bool>,
+    /// The compact menu bar: the icon and at most two readings (macOS only).
+    pub compact: Option<bool>,
     /// holdmap's icon in the Dock (macOS only).
     pub dock: Option<bool>,
     pub notify: bool,
@@ -1137,6 +1290,7 @@ pub fn panel_settings(
             })
             .collect(),
         combined: mac.then_some(choice.combined),
+        compact: mac.then_some(choice.compact),
         dock: mac.then_some(dock),
         notify,
     }
@@ -1165,9 +1319,12 @@ pub struct PanelData {
     pub dev: Vec<PanelDev>,
     /// Whether "Stop all dev servers…" has anything to stop.
     pub stop_dev: bool,
-    /// The busiest agents first.
+    /// The AI agents using the most RAM first (a steady order: CPU changes every scan).
     pub top_agents: Vec<PanelAgent>,
     pub more_agents: usize,
+    /// Developer tools running beside the agents (Docker Desktop), largest first. Not agents:
+    /// left out of the count, CPU and RAM.
+    pub tools: Vec<PanelAgent>,
     /// Listeners opened and closed per scan, oldest first.
     pub churn: Vec<[u32; 2]>,
     /// The section to bring into view (the menu-bar item clicked), and a count that changes
@@ -1209,6 +1366,7 @@ pub fn panel_data(
             stop_dev: false,
             top_agents: Vec::new(),
             more_agents: 0,
+            tools: Vec::new(),
             churn: Vec::new(),
             focus: state.focus,
             focus_seq: state.focus_seq,
@@ -1216,19 +1374,30 @@ pub fn panel_data(
             settings,
         };
     };
-    let mut agents: Vec<&AgentRow> = r.agents.iter().flatten().collect();
-    agents.sort_by(|a, b| {
-        b.cpu
-            .total_cmp(&a.cpu)
-            .then_with(|| b.memory.cmp(&a.memory))
-    });
+    let by_ram = |a: &&AgentRow, b: &&AgentRow| {
+        b.memory
+            .cmp(&a.memory)
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.id.cmp(&b.id))
+    };
+    let mut agents: Vec<&AgentRow> = r.ai_agents().unwrap_or_default();
+    agents.sort_by(by_ram);
+    let mut tools: Vec<&AgentRow> = r.agents.iter().flatten().filter(|a| a.tool).collect();
+    tools.sort_by(by_ram);
+    let row = |a: &AgentRow| PanelAgent {
+        name: printable(&a.name).into_owned(),
+        place: a.place.as_deref().map(|p| printable(p).into_owned()),
+        cpu: trends.agents.get(&a.id).map(|_| a.cpu),
+        memory: a.memory,
+        action: format!("agent:{}", a.id),
+    };
     PanelData {
         ready: true,
         ports: r.ports,
         exposed: r.exposed,
-        agents: r.agents.as_ref().map(Vec::len),
+        agents: r.ai_agents().map(|a| a.len()),
         cpu: trends.total_cpu(r),
-        memory: r.agents.as_ref().map(|a| a.iter().map(|a| a.memory).sum()),
+        memory: r.ram(),
         cpu_history: trends.total.iter().copied().collect(),
         attention_history: trends.attention.iter().copied().collect(),
         needs: r.needs.as_ref().map(|needs| {
@@ -1258,17 +1427,8 @@ pub fn panel_data(
             .collect(),
         stop_dev: r.dev.iter().any(|d| d.stoppable),
         more_agents: agents.len().saturating_sub(PANEL_AGENTS),
-        top_agents: agents
-            .into_iter()
-            .take(PANEL_AGENTS)
-            .map(|a| PanelAgent {
-                name: printable(&a.name).into_owned(),
-                place: a.place.as_deref().map(|p| printable(p).into_owned()),
-                cpu: trends.agents.get(&a.id).map(|_| a.cpu),
-                memory: a.memory,
-                action: format!("agent:{}", a.id),
-            })
-            .collect(),
+        top_agents: agents.into_iter().take(PANEL_AGENTS).map(&row).collect(),
+        tools: tools.into_iter().take(PANEL_AGENTS).map(row).collect(),
         churn: trends.churn.iter().copied().collect(),
         focus: state.focus,
         focus_seq: state.focus_seq,
@@ -1306,6 +1466,7 @@ mod tests {
                 place: Some("holdmap".into()),
                 cpu: 12.4,
                 memory: 300 * 1024 * 1024,
+                tool: false,
             }]),
             needs: Some(vec![
                 NeedRow {
@@ -1390,9 +1551,11 @@ mod tests {
                 "item:agents",
                 "item:needs",
                 "item:cpu",
+                "item:ram",
                 "item:dev",
                 "item:cpu_history",
                 "item:agent_bars",
+                "compact",
                 "combined",
                 "refresh",
                 "quit",
@@ -1457,23 +1620,24 @@ mod tests {
         let choice = |items: &[Item], combined| BarChoice {
             items: items.to_vec(),
             combined,
+            compact: false,
         };
         let bar = |trends: &Trends, c: &BarChoice| view(Some(&r), trends, c, Platform::MacOs).bar;
         let reading = |b: &BarItem| match &b.parts[..] {
             [Draw::Reading { label, value, tone }] => format!("{label} {value} {tone:?}"),
             other => format!("{other:?}"),
         };
-        // Defaults: Agents and Needs you, one item each, each opening its own section.
-        let items = bar(&trends, &BarChoice::default());
+        // Not compact: Agents and Alerts, one item each, each opening its own section.
+        let items = bar(&trends, &choice(&[Item::Agents, Item::Needs], false));
         assert_eq!(
             items.iter().map(reading).collect::<Vec<_>>(),
-            ["AGENTS 1 Plain", "NEEDS 2 Critical"]
+            ["AGENTS 1 Plain", "ALERTS 2 Critical"]
         );
         assert_eq!(
             items.iter().map(|b| (b.id, b.section)).collect::<Vec<_>>(),
             [("agents", "agents"), ("needs", "needs")]
         );
-        assert_eq!(items[1].tooltip, "holdmap · 2 need you");
+        assert_eq!(items[1].tooltip, "holdmap · 2 alerts need you");
         // CPU waits for its first measurement, then is coloured by load.
         let cpu = choice(&[Item::Cpu], false);
         assert_eq!(reading(&bar(&trends, &cpu)[0]), "CPU … Plain");
@@ -1513,7 +1677,7 @@ mod tests {
         assert!(linux.bar.is_empty());
         assert_eq!(
             linux.title.as_deref(),
-            Some("1 agent · 2 need you · CPU 12% · 2 dev · ██")
+            Some("1 agent · 2 alerts need you · CPU 12% · RAM 300.0 MB · 2 dev · ██")
         );
         let windows = view(Some(&r), &trends, &all, Platform::Windows);
         assert_eq!((windows.title, windows.bar.len()), (None, 0));
@@ -1523,11 +1687,74 @@ mod tests {
     }
 
     #[test]
+    fn the_compact_menu_bar_is_one_item_the_icon_and_two_readings() {
+        let r = readings();
+        let mut trends = Trends::default();
+        trends.record(&r);
+        trends.record(&r);
+        // The default: the icon (its dot says something needs you) and the agents' count.
+        let one = view(Some(&r), &trends, &BarChoice::default(), Platform::MacOs).bar;
+        assert_eq!(one.len(), 1);
+        assert_eq!((one[0].id, one[0].section), ("compact", "top"));
+        assert!(matches!(
+            one[0].parts[0],
+            Draw::Icon(Badge { count: 2, .. })
+        ));
+        assert!(matches!(
+            &one[0].parts[1..],
+            [Draw::Reading {
+                label: "AGENTS",
+                ..
+            }]
+        ));
+        assert_eq!(
+            one[0].tooltip,
+            "holdmap\n1 agent running\n2 alerts need you"
+        );
+        // Everything chosen still fits: the first two readings, Alerts folded into the dot.
+        let all = BarChoice {
+            items: Item::ALL.to_vec(),
+            combined: false,
+            compact: true,
+        };
+        let labels: Vec<&str> = view(Some(&r), &trends, &all, Platform::MacOs).bar[0]
+            .parts
+            .iter()
+            .filter_map(|p| match p {
+                Draw::Reading { label, .. } => Some(*label),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(labels, ["AGENTS", "CPU"]);
+        assert_eq!(all.compact_readings(), [Item::Agents, Item::Cpu]);
+        // Only the icon chosen: the icon alone.
+        let icon = BarChoice {
+            items: vec![Item::Icon],
+            combined: false,
+            compact: true,
+        };
+        assert_eq!(
+            view(Some(&r), &trends, &icon, Platform::MacOs).bar[0]
+                .parts
+                .len(),
+            1
+        );
+        // RAM reads short enough for the menu bar.
+        assert_eq!(bar_bytes(300 * 1024 * 1024), "300M");
+        assert_eq!(bar_bytes(2_576_980_378), "2.4G");
+        assert_eq!(bar_bytes(12 * 1024 * 1024 * 1024), "12G");
+        assert_eq!(Action::parse("compact"), Some(Action::ToggleCompact));
+    }
+
+    #[test]
     fn before_the_first_scan_the_items_hold_their_places_with_dots() {
         let v = view(
             None,
             &Trends::default(),
-            &BarChoice::default(),
+            &BarChoice {
+                compact: false,
+                ..BarChoice::default()
+            },
             Platform::MacOs,
         );
         assert_eq!(
@@ -1561,6 +1788,7 @@ mod tests {
             &BarChoice {
                 items: vec![Item::Agents, Item::CpuHistory],
                 combined: true,
+                compact: false,
             },
             Platform::MacOs,
         );
@@ -1615,7 +1843,10 @@ mod tests {
         let v = view(
             Some(&r),
             &Trends::default(),
-            &BarChoice::default(),
+            &BarChoice {
+                compact: false,
+                ..BarChoice::default()
+            },
             Platform::MacOs,
         );
         let ids = ids(&v.items);
@@ -1632,7 +1863,8 @@ mod tests {
                 &Trends::default(),
                 &BarChoice {
                     items: vec![Item::Agents, Item::Dev],
-                    combined: false
+                    combined: false,
+                    compact: false,
                 },
                 Platform::Linux
             )
@@ -1664,7 +1896,7 @@ mod tests {
         );
         assert_eq!(
             v.tooltip,
-            "holdmap\n2 dev servers · 12 ports in use\n1 agent\n2 need you"
+            "holdmap\n2 dev servers · 12 ports in use\n1 agent · RAM 300.0 MB\n2 alerts need you"
         );
         let measured = view(
             Some(&readings()),
@@ -1674,7 +1906,7 @@ mod tests {
         );
         assert_eq!(
             measured.tooltip,
-            "holdmap\n2 dev servers · 12 ports in use\n1 agent · CPU 12%\n2 need you"
+            "holdmap\n2 dev servers · 12 ports in use\n1 agent · CPU 12% · RAM 300.0 MB\n2 alerts need you"
         );
     }
 
@@ -1700,6 +1932,7 @@ mod tests {
             place: None,
             cpu: 0.0,
             memory: 1024 * 1024,
+            tool: false,
         });
         trends.record(&later);
         let v = view(
@@ -1808,15 +2041,24 @@ mod tests {
     }
 
     #[test]
-    fn the_popup_panel_lists_busiest_agents_first_with_their_actions() {
+    fn the_popup_panel_lists_agents_by_ram_with_their_actions_and_tools_apart() {
         let mut r = readings();
         r.agents.as_mut().unwrap().extend((0..6).map(|i| AgentRow {
             id: format!("agent:{i}"),
             name: format!("Codex {i}"),
             place: None,
-            cpu: i as f32,
-            memory: 1024,
+            cpu: 6.0 - i as f32,
+            memory: 1024 * (i + 1),
+            tool: false,
         }));
+        r.agents.as_mut().unwrap().push(AgentRow {
+            id: "agent:900".into(),
+            name: "Docker Desktop".into(),
+            place: Some("Data".into()),
+            cpu: 30.0,
+            memory: 600 * 1024 * 1024,
+            tool: true,
+        });
         let mut trends = Trends::default();
         assert!(!panel_data(None, &trends, PanelState::default(), quick()).ready);
         trends.record(&r);
@@ -1827,12 +2069,16 @@ mod tests {
         assert!(data.ready);
         assert_eq!((data.ports, data.exposed, data.agents), (12, 2, Some(7)));
         assert_eq!(data.focus, None);
-        // Busiest first, five rows, and each opens its agent.
+        // Most RAM first (a steady order), five rows, and each opens its agent. Docker Desktop
+        // is a developer tool: listed on its own, not counted as an agent.
         let names: Vec<&str> = data.top_agents.iter().map(|a| a.name.as_str()).collect();
         assert_eq!(
             names,
             ["Claude Code", "Codex 5", "Codex 4", "Codex 3", "Codex 2"]
         );
+        assert_eq!(data.tools.len(), 1);
+        assert_eq!(data.tools[0].name, "Docker Desktop");
+        assert_eq!(data.memory, Some(300 * 1024 * 1024 + 1024 * 21));
         assert_eq!(data.more_agents, 2);
         assert_eq!(data.top_agents[0].action, "agent:agent:42");
         assert_eq!(data.top_agents[0].cpu, Some(12.4));

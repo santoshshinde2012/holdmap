@@ -64,6 +64,7 @@ export interface SettingsActions {
   setAgentSettings?(on: boolean): void;
   setTrayItems?(items: TrayItemId[]): Promise<void>;
   setTrayCombined?(on: boolean): Promise<void>;
+  setTrayCompact?(on: boolean): Promise<void>;
   setShowInDock?(on: boolean): Promise<void>;
 }
 
@@ -90,8 +91,9 @@ export function architectureLabel(architecture: string, platform: string): strin
 export const TRAY_ITEM_OPTIONS: { value: TrayItemId; label: string; description: string; text: boolean }[] = [
   { value: "icon", label: "holdmap icon", description: "With a dot when something needs you.", text: false },
   { value: "agents", label: "Agents", description: "How many are running.", text: true },
-  { value: "needs", label: "Needs you", description: "How many items; amber or red when there are some.", text: true },
+  { value: "needs", label: "Alerts", description: "How many items need you; amber or red when there are some.", text: true },
   { value: "cpu", label: "Agent CPU", description: "Their CPU together; orange from 60%, red from 80%.", text: true },
+  { value: "ram", label: "Agent RAM", description: "Their memory together, as the Agents view counts it.", text: true },
   { value: "dev", label: "Dev servers", description: "How many are running.", text: true },
   { value: "cpu_history", label: "CPU history", description: "A line of the agents' CPU over recent scans.", text: true },
   { value: "agent_bars", label: "Agent bars", description: "One bar of CPU per running agent.", text: false },

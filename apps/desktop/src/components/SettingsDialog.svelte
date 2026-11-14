@@ -39,6 +39,7 @@
   const DEFAULT_ITEMS: TrayItemId[] = ["agents", "needs"];
   let trayItems = $state<TrayItemId[]>(untrack(() => model.config.tray_items ?? DEFAULT_ITEMS));
   let trayCombined = $state(untrack(() => !!model.config.tray_combined));
+  let trayCompact = $state(untrack(() => model.config.tray_compact ?? true));
   let showInDock = $state(untrack(() => model.config.show_in_dock ?? true));
   const trayName = $derived(actions.setTrayItems ? trayWidgetName(model.platform, model.tray) : null);
   const dockSetting = $derived(!!actions.setShowInDock && (model.platform === "macos" || model.platform === "browser"));
@@ -99,6 +100,7 @@
     if (key === "hotkey") hotkey = model.config.hotkey ?? "alt-p";
     if (key === "trayItems") trayItems = model.config.tray_items ?? DEFAULT_ITEMS;
     if (key === "trayCombined") trayCombined = !!model.config.tray_combined;
+    if (key === "trayCompact") trayCompact = model.config.tray_compact ?? true;
     if (key === "showInDock") showInDock = model.config.show_in_dock ?? true;
     if (key === "theme") theme = model.theme;
     if (key === "density") density = model.density;
@@ -106,7 +108,7 @@
   // Controls may show an optimistic value while saving, then follow the value that
   // actually persisted. A rejected write must restore the previous model value.
   $effect(() => {
-    for (const key of ["autostart", "singleKeyShortcuts", "notify", "hotkey", "trayItems", "trayCombined", "showInDock", "theme", "density"]) if (!busy[key]) followModel(key);
+    for (const key of ["autostart", "singleKeyShortcuts", "notify", "hotkey", "trayItems", "trayCombined", "trayCompact", "showInDock", "theme", "density"]) if (!busy[key]) followModel(key);
   });
 </script>
 
@@ -172,13 +174,20 @@
         </SettingsGroup>
         {#if errors.theme || errors.density}<div class="err"><Callout tone="danger" size="sm">{errors.theme ?? errors.density}</Callout></div>{/if}
         {#if trayName}
-          <SettingsGroup title={trayName} description={model.platform === "linux" ? "The readings you pick show as holdmap's panel label, where your desktop shows one. Its menu opens a panel with live readings, history, what needs you, dev servers and agents." : "Each reading you pick is a small menu-bar item of its own, as system monitors show them. Click one for a panel with live readings, history, what needs you, dev servers and agents."}>
+          <SettingsGroup title={trayName} description={model.platform === "linux" ? "The readings you pick show as holdmap's panel label, where your desktop shows one. Its menu opens a panel with live readings, history, what needs you, dev servers and agents." : "Compact shows holdmap's icon, with a dot when something needs you, and the first two readings you pick. Turn it off to give each reading its own menu-bar item. Click any of them for a panel with what needs you, dev servers, agents and history."}>
+            {#if model.platform !== "linux"}
+              <SettingRow label="Compact menu bar" description="The icon and at most two readings, in one item. Saves menu-bar room.">
+                {#snippet children({ labelId, descId })}
+                  <Switch labelledby={labelId} describedby={descId} bind:checked={trayCompact} busy={busy.trayCompact} onchange={(v) => save("trayCompact", () => actions.setTrayCompact?.(v))} />
+                {/snippet}
+              </SettingRow>
+            {/if}
             <div class="row-in items" role="group" aria-label={`${trayName} shows`}>
-              {#each trayItemOptions(model.platform) as option (option.value)}
+              {#each trayItemOptions(model.platform).filter((o) => !(trayCompact && model.platform !== "linux" && (o.value === "icon" || o.value === "needs"))) as option (option.value)}
                 <Checkbox label={option.label} description={option.description} checked={trayItems.includes(option.value)} disabled={busy.trayItems} onchange={(v) => { trayItems = nextTrayItems(trayItems, option.value, v); save("trayItems", () => actions.setTrayItems?.(trayItems)); }} />
               {/each}
             </div>
-            {#if model.platform !== "linux"}
+            {#if model.platform !== "linux" && !trayCompact}
               <SettingRow label="As one item" description="All the readings you pick, side by side in one menu-bar item.">
                 {#snippet children({ labelId, descId })}
                   <Switch labelledby={labelId} describedby={descId} bind:checked={trayCombined} busy={busy.trayCombined} onchange={(v) => save("trayCombined", () => actions.setTrayCombined?.(v))} />
@@ -193,7 +202,7 @@
               </Callout>
             </div>
           {/if}
-          {#if errors.trayItems || errors.trayCombined}<div class="err"><Callout tone="danger" size="sm">{errors.trayItems ?? errors.trayCombined}</Callout></div>{/if}
+          {#if errors.trayItems || errors.trayCombined || errors.trayCompact}<div class="err"><Callout tone="danger" size="sm">{errors.trayItems ?? errors.trayCombined ?? errors.trayCompact}</Callout></div>{/if}
         {/if}
         {#if model.singleKeyShortcuts}<p class="tip"><Kbd keys={["⇧", "L"]} size="sm" /> cycles the theme while you aren't typing.</p>{/if}
       {:else if section === "notifications"}

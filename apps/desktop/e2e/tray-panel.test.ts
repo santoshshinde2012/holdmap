@@ -24,6 +24,22 @@ for (const theme of ["light", "dark"] as const) {
       expect(await row.evaluate((el) => el.getBoundingClientRect().right <= innerWidth)).toBe(true);
     }
 
+    // The first reading starts below the header, not under it; no stray chart scale words.
+    const gap = await page.evaluate(() => document.querySelector(".body > *")!.getBoundingClientRect().top - document.querySelector(".head")!.getBoundingClientRect().bottom);
+    expect(gap).toBeGreaterThanOrEqual(0);
+    expect(await page.evaluate(() => [...document.querySelectorAll("svg text, .scale")].map((el) => el.textContent?.trim()).filter((t) => t === "closed" || t === "opened"))).toEqual([]);
+    // "Stop all…" sits in the section header, apart from the server rows it acts on.
+    const stopAll = page.getByRole("button", { name: "Stop all…" });
+    expect(await stopAll.evaluate((el) => !!el.closest("li, ul"))).toBe(false);
+    // Docker Desktop is a developer tool, not an agent; long names keep their full text in a tooltip.
+    await expect(page.getByText("Developer tools")).toBeVisible();
+    for (const row of await page.locator(".trow").all()) expect(await row.getAttribute("title")).toBeTruthy();
+    // Icon-only buttons say what they do, both to screen readers and on hover.
+    const unlabelled = await page.evaluate(() => [...document.querySelectorAll("button")]
+      .filter((b) => !b.textContent?.trim() && !(b.getAttribute("aria-label") && b.getAttribute("title")))
+      .map((b) => b.outerHTML.slice(0, 80)));
+    expect(unlabelled).toEqual([]);
+
     const { violations } = await new AxeBuilder({ page }).analyze();
     expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
     expect(errors).toEqual([]);
@@ -65,6 +81,11 @@ for (const height of [480, 600, 720]) {
     await expect(notifications).toBeChecked();
     await notifications.click();
     await expect(notifications).not.toBeChecked();
+    const compact = page.getByRole("button", { name: "Compact", exact: true });
+    await expect(compact).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Every reading", exact: true }).click();
+    await expect(page.getByRole("switch", { name: /Combine|one item/ })).toBeVisible();
+    await compact.click();
     await page.getByRole("button", { name: "Dark", exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await expect(page.getByRole("button", { name: "Quit", exact: true })).toBeInViewport();

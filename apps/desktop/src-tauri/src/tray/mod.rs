@@ -346,7 +346,11 @@ fn apply(app: &AppHandle, w: &mut Widget, next: TrayView, resync: bool) {
 /// What the menu bar shows, from the settings.
 fn choice(app: &AppHandle) -> BarChoice {
     let config = app.state::<AppState>().store.config();
-    BarChoice::from_config(&config.tray_items(), config.tray_combined)
+    BarChoice::from_config(
+        &config.tray_items(),
+        config.tray_combined,
+        config.tray_compact,
+    )
 }
 
 /// Record `readings` (if any) and redraw the widget.
@@ -473,7 +477,11 @@ fn panel_data(app: &AppHandle) -> model::PanelData {
     let state = panel::state();
     let config = app.state::<AppState>().store.config();
     let settings = model::panel_settings(
-        &BarChoice::from_config(&config.tray_items(), config.tray_combined),
+        &BarChoice::from_config(
+            &config.tray_items(),
+            config.tray_combined,
+            config.tray_compact,
+        ),
         config.show_in_dock,
         config.notify,
         Platform::CURRENT,
@@ -503,6 +511,7 @@ fn save_setting(app: &AppHandle, action: Action) -> Result<(), String> {
                 c.tray_items = items;
             }
             Action::ToggleCombined => c.tray_combined = !c.tray_combined,
+            Action::ToggleCompact => c.tray_compact = !c.tray_compact,
             Action::ToggleDock => c.show_in_dock = !c.show_in_dock,
             Action::ToggleNotify => c.notify = !c.notify,
             _ => unreachable!("only setting actions are persisted"),
@@ -512,7 +521,10 @@ fn save_setting(app: &AppHandle, action: Action) -> Result<(), String> {
     if matches!(action, Action::ToggleDock) {
         apply_dock(app, config.show_in_dock);
     }
-    if matches!(action, Action::ToggleItem(_) | Action::ToggleCombined) {
+    if matches!(
+        action,
+        Action::ToggleItem(_) | Action::ToggleCombined | Action::ToggleCompact
+    ) {
         restyle(app);
     }
     Ok(())
@@ -583,6 +595,7 @@ fn run(app: &AppHandle, action: Action) {
         }
         Action::ToggleItem(_)
         | Action::ToggleCombined
+        | Action::ToggleCompact
         | Action::ToggleDock
         | Action::ToggleNotify => {
             let app = app.clone();

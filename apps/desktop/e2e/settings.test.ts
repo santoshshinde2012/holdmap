@@ -68,13 +68,13 @@ test("settings preserve composition, modified navigation and the modal tab order
   await expect(dark).toBeFocused();
   await app.keyboard.press("Tab");
   await expect(settings.getByRole("radio", { name: "Comfortable", exact: true })).toBeFocused();
-  // The menu-bar checklist (every item in the browser preview), then "As one item".
-  for (const item of ["holdmap icon", "Agents", "Needs you", "Agent CPU", "Dev servers", "CPU history", "Agent bars"]) {
+  // "Compact menu bar" first, then the readings it picks from (the icon and its alert dot are fixed there).
+  await app.keyboard.press("Tab");
+  await expect(settings.getByRole("switch", { name: "Compact menu bar", exact: true })).toBeFocused();
+  for (const item of ["Agents", "Agent CPU", "Agent RAM", "Dev servers", "CPU history", "Agent bars"]) {
     await app.keyboard.press("Tab");
     await expect(settings.getByRole("checkbox", { name: new RegExp(`^${item}`) })).toBeFocused();
   }
-  await app.keyboard.press("Tab");
-  await expect(settings.getByRole("switch", { name: "As one item", exact: true })).toBeFocused();
   await app.keyboard.press("Tab");
   await expect(done).toBeFocused();
 });
@@ -96,7 +96,17 @@ test("menu-bar items are saved and kept when Settings reopens", async ({ app }) 
   settings = app.getByRole("dialog", { name: "Settings", exact: true });
   await settings.getByRole("tab", { name: "Appearance", exact: true }).click();
   await expect(history()).toBeChecked();
-  await expect(settings.getByRole("checkbox", { name: /^Needs you/ })).toBeChecked();
+  await expect(settings.getByRole("checkbox", { name: /^Agents/ })).toBeChecked();
+
+  // Every reading: the icon, Alerts and "As one item" come back, and the choice is kept.
+  await settings.getByRole("switch", { name: "Compact menu bar", exact: true }).click();
+  await expect(settings.getByRole("checkbox", { name: /^Alerts/ })).toBeChecked();
+  await expect(settings.getByRole("switch", { name: "As one item", exact: true })).toBeVisible();
+  await settings.getByRole("button", { name: "Done", exact: true }).click();
+  await app.getByRole("button", { name: "Settings", exact: true }).click();
+  settings = app.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.getByRole("tab", { name: "Appearance", exact: true }).click();
+  await expect(settings.getByRole("switch", { name: "Compact menu bar", exact: true })).toHaveAttribute("aria-checked", "false");
 });
 
 test("settings controls retain successful changes across sections and reopening", async ({ app }) => {

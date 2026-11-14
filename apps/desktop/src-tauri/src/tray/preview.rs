@@ -31,6 +31,7 @@ fn sample(scan: usize) -> Readings {
         place: place.map(Into::into),
         cpu: wave * share,
         memory,
+        tool: false,
     };
     Readings {
         ports: 37,
@@ -112,10 +113,11 @@ fn blend(canvas: &mut Pixels, item: &menubar::Rendered, x: u32, y: u32, dark: bo
     }
 }
 
-fn strip(icon: &Pixels, readings: &Readings, trends: &Trends, dark: bool) -> Pixels {
+fn strip(icon: &Pixels, readings: &Readings, trends: &Trends, dark: bool, compact: bool) -> Pixels {
     let choice = BarChoice {
         items: Item::ALL.to_vec(),
         combined: false,
+        compact,
     };
     let view = model::view(Some(readings), trends, &choice, Platform::MacOs);
     let items: Vec<menubar::Rendered> = view
@@ -177,8 +179,10 @@ fn menu_bar_preview() {
     }
     let now = sample(scans - 1);
     for (look, dark) in [("light", false), ("dark", true)] {
-        let path = Path::new(&dir).join(format!("desktop-menu-bar-{look}.png"));
-        write_png(&path, &strip(&icon, &now, &trends, dark));
-        println!("wrote {}", path.display());
+        for (name, compact) in [("menu-bar", false), ("menu-bar-compact", true)] {
+            let path = Path::new(&dir).join(format!("desktop-{name}-{look}.png"));
+            write_png(&path, &strip(&icon, &now, &trends, dark, compact));
+            println!("wrote {}", path.display());
+        }
     }
 }

@@ -76,11 +76,16 @@ pub struct Config {
     /// Recently used SSH hosts for the desktop remote view, newest first.
     pub recent_hosts: Vec<String>,
     /// What the desktop menu bar / tray shows, by id from [`Config::TRAY_ITEMS`]: `icon`
-    /// (holdmap's icon and its attention dot), `agents`, `needs`, `cpu` (the agents' CPU), `dev`
-    /// (dev servers), `cpu_history` and `agent_bars`. Read through [`Config::tray_items`].
+    /// (holdmap's icon and its attention dot), `agents`, `needs`, `cpu` (the agents' CPU), `ram`
+    /// (the agents' RAM), `dev` (dev servers), `cpu_history` and `agent_bars`. Read through
+    /// [`Config::tray_items`].
     pub tray_items: Vec<String>,
     /// Show the chosen items as one menu-bar item instead of one each.
     pub tray_combined: bool,
+    /// Compact menu bar (the default): holdmap's icon, its attention dot and at most
+    /// [`Config::COMPACT_READINGS`] of the chosen readings, as one item. Off shows every chosen
+    /// item. Configs written before this setting load compact.
+    pub tray_compact: bool,
     /// Keep holdmap's icon in the Dock (macOS); off runs it as a menu-bar app.
     pub show_in_dock: bool,
 }
@@ -97,6 +102,7 @@ impl Default for Config {
             recent_hosts: Vec::new(),
             tray_items: vec!["agents".into(), "needs".into()],
             tray_combined: false,
+            tray_compact: true,
             show_in_dock: true,
         }
     }
@@ -110,15 +116,19 @@ impl Config {
     /// How many recent SSH hosts are remembered.
     pub const RECENT_HOSTS: usize = 6;
     /// Menu-bar / tray items, in the order they are shown.
-    pub const TRAY_ITEMS: [&'static str; 7] = [
+    pub const TRAY_ITEMS: [&'static str; 8] = [
         "icon",
         "agents",
         "needs",
         "cpu",
+        "ram",
         "dev",
         "cpu_history",
         "agent_bars",
     ];
+
+    /// Readings a compact menu bar shows beside the icon.
+    pub const COMPACT_READINGS: usize = 2;
 
     /// The chosen menu-bar items in [`Config::TRAY_ITEMS`] order, unknown or hand-edited ids
     /// dropped. Never empty: with none chosen, holdmap's icon stays so the app can be reached.
@@ -1288,6 +1298,10 @@ mod tests {
             "configs from before the tray widget"
         );
         assert!(!old.tray_combined && old.show_in_dock);
+        assert!(
+            old.tray_compact,
+            "older configs load with the compact menu bar"
+        );
         let edited = Config {
             tray_items: vec!["dev".into(), "rainbow".into(), "icon".into(), "dev".into()],
             ..Config::default()
