@@ -1,6 +1,7 @@
 //! Assigns processes to the nearest recognised agent root.
 
 use super::{catalog, AgentDetector, AgentProduct};
+use crate::model::ProcessInfo;
 use crate::process::ProcessTable;
 use std::collections::{HashMap, HashSet};
 
@@ -8,6 +9,21 @@ use std::collections::{HashMap, HashSet};
 enum UserIdentity<'a> {
     Uid(u32),
     Name(&'a str),
+}
+
+/// How well a process stands for its product when extra roots are folded together: the
+/// app's own executable first, then a bundled tool (an updater such as Squirrel's `ShipIt`
+/// lives under `Contents/Frameworks`), then helper processes.
+fn root_rank(p: &ProcessInfo) -> u8 {
+    if catalog::norm(&p.name).contains("helper") {
+        return 2;
+    }
+    let bundled_tool = p.exe.as_deref().is_some_and(|exe| {
+        let exe = exe.to_string_lossy();
+        exe.contains("/Contents/Frameworks/")
+            || (exe.contains(".app/Contents/") && !exe.contains(".app/Contents/MacOS/"))
+    });
+    u8::from(bundled_tool)
 }
 
 /// Agent roots and, for every process under one, the root it belongs to.
@@ -35,12 +51,8 @@ pub(super) fn assign(
     // away from its main process: fold extra roots of the same product and user into one.
     let mut alias: HashMap<u32, u32> = HashMap::new();
     let mut primary: HashMap<(&str, UserIdentity<'_>), u32> = HashMap::new();
-    let is_helper = |pid: u32| {
-        t.get(pid)
-            .is_some_and(|p| catalog::norm(&p.name).contains("helper"))
-    };
     let mut ordered = roots.clone();
-    ordered.sort_by_key(|(pid, _)| (is_helper(*pid), *pid));
+    ordered.sort_by_key(|(pid, _)| (t.get(*pid).map_or(2, root_rank), *pid));
     for (pid, prod) in &ordered {
         if !prod.kind.folds_helpers() {
             continue;

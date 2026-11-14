@@ -339,6 +339,40 @@ fn editor_helpers_merge_only_with_a_known_matching_account() {
 }
 
 #[test]
+fn the_app_executable_is_the_agent_not_its_bundled_updater() {
+    let app = |pid, name: &str, exe: &str| {
+        let mut p = proc(pid, 1, name, &[exe]);
+        p.exe = Some(PathBuf::from(exe));
+        p
+    };
+    let scan =
+        scan_of(
+            vec![
+            // Squirrel's updater starts first, so it has the lower PID.
+            app(
+                50,
+                "ShipIt",
+                "/Applications/Cursor.app/Contents/Frameworks/Squirrel.framework/Resources/ShipIt",
+            ),
+            app(80, "Cursor", "/Applications/Cursor.app/Contents/MacOS/Cursor"),
+            proc(81, 80, "Cursor Helper (Renderer)", &["Cursor Helper (Renderer)"]),
+        ],
+            vec![],
+            "macos",
+        );
+    let report = agents_builder(&scan)
+        .with_home(None)
+        .with_project_detection(false)
+        .build();
+    assert_eq!(report.agents.len(), 1, "one Cursor");
+    let cursor = &report.agents[0];
+    assert_eq!(cursor.pid, 80, "the app, not ShipIt, stands for Cursor");
+    let mut pids = cursor.process_ids.clone();
+    pids.sort_unstable();
+    assert_eq!(pids, [50, 80, 81]);
+}
+
+#[test]
 fn developer_tool_helpers_fold_and_keep_upstream_port_and_folder_controls() {
     let workspace = PathBuf::from("/fixture/tool-workspace");
     let scan = scan_of(
