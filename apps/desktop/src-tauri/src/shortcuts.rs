@@ -156,14 +156,17 @@ pub fn apply_and_save(
                 .map_err(|error| {
                     format!(
                         "couldn't register {}: another app may be using it ({error})",
-                        label(next).unwrap()
+                        label(next).unwrap_or(next)
                     )
                 })
         },
         |previous| {
             gs.unregister(shortcut(previous).expect("registered shortcut preset"))
                 .map_err(|error| {
-                    format!("couldn't unregister {} ({error})", label(previous).unwrap())
+                    format!(
+                        "couldn't unregister {} ({error})",
+                        label(previous).unwrap_or(previous)
+                    )
                 })
         },
         save,

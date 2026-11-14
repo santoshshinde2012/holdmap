@@ -208,6 +208,41 @@ fn trend_needs_two_samples_and_uses_the_published_band() {
 }
 
 #[test]
+fn a_locked_memory_log_skips_one_sample_without_waiting_or_writing() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("memory-samples.json");
+    let log = FileMemoryLog::open(&path).with_lock_wait(std::time::Duration::from_millis(20));
+    assert_eq!(
+        log.record_batch(50, &[("claude-code".into(), 1024)]).note,
+        None
+    );
+    let before = std::fs::read(&path).unwrap();
+    let held = std::fs::File::create(dir.path().join("memory-samples.lock")).unwrap();
+    held.lock().unwrap();
+    let started = std::time::Instant::now();
+    let outcome = log.record_batch(100, &[("claude-code".into(), 2048)]);
+    assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    assert!(outcome.note.as_deref().unwrap().contains("was not kept"));
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    drop(held);
+    assert_eq!(
+        log.record_batch(200, &[("claude-code".into(), 4096)]).note,
+        None
+    );
+}
+
+#[test]
+fn a_memory_log_in_an_unwritable_place_reports_instead_of_failing() {
+    let dir = tempfile::tempdir().unwrap();
+    // A plain file where the log's folder should be: nothing under it can be created.
+    let blocker = dir.path().join("not-a-dir");
+    std::fs::write(&blocker, b"x").unwrap();
+    let log = FileMemoryLog::open(blocker.join("memory-samples.json"));
+    let outcome = log.record_batch(100, &[("claude-code".into(), 2048)]);
+    assert!(outcome.note.is_some());
+}
+
+#[test]
 fn a_corrupt_memory_log_is_kept_aside_and_reported_not_wiped() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("memory-samples.json");

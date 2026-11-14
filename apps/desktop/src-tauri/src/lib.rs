@@ -235,7 +235,12 @@ pub fn run() {
             }
         })
         .build(context)
-        .expect("error while building holdmap")
+        .unwrap_or_else(|error| {
+            // Nothing is on screen yet, so say why on stderr (and in Console.app) and exit
+            // with a failure code instead of a panic backtrace.
+            eprintln!("holdmap couldn't start: {error}");
+            std::process::exit(1)
+        })
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 screen_recording::cleanup_exit(app);

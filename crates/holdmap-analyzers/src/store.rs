@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 /// File-backed stores.
 #[derive(Debug)]
@@ -241,19 +241,21 @@ impl crate::consent::UserManifestStore for FileStore {
 /// Largest user manifest read back from disk.
 pub const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
 
+// A panic while the lock is held cannot leave a half-written file (writes are atomic),
+// so a poisoned lock is recovered instead of failing every later read.
 impl ConsentStore for FileStore {
     fn grant(&self, analyzer: &str) -> Option<Grant> {
         self.read::<BTreeMap<String, Grant>>("grants.json")
             .remove(analyzer)
     }
     fn record(&self, grant: Grant) -> io::Result<()> {
-        let _guard = self.lock.lock().unwrap();
+        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         let mut grants: BTreeMap<String, Grant> = self.read("grants.json");
         grants.insert(grant.analyzer.clone(), grant);
         self.write("grants.json", &grants)
     }
     fn revoke(&self, analyzer: &str) -> io::Result<bool> {
-        let _guard = self.lock.lock().unwrap();
+        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         let mut grants: BTreeMap<String, Grant> = self.read("grants.json");
         let existed = grants.remove(analyzer).is_some();
         self.write("grants.json", &grants)?;
@@ -300,7 +302,7 @@ impl crate::consent::SecretIndex for FileStore {
             .unwrap_or_default()
     }
     fn mark_secret(&self, analyzer: &str, name: &str, stored: bool) -> io::Result<()> {
-        let _guard = self.lock.lock().unwrap();
+        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         let mut all: BTreeMap<String, Vec<String>> = self.read("secret-names.json");
         crate::consent::mark_in(all.entry(analyzer.into()).or_default(), name, stored);
         all.retain(|_, names| !names.is_empty());
@@ -313,7 +315,7 @@ impl ReviewStore for FileStore {
         self.read("reviews.json")
     }
     fn set_review(&self, fingerprint: &str, review: Option<Review>) -> io::Result<()> {
-        let _guard = self.lock.lock().unwrap();
+        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         let mut reviews: BTreeMap<String, Review> = self.read("reviews.json");
         match review {
             Some(r) => reviews.insert(fingerprint.into(), r),
@@ -328,7 +330,7 @@ impl crate::schedule::ScheduleStore for FileStore {
         self.read("schedule.json")
     }
     fn set_schedule(&self, schedule: &crate::schedule::Schedule) -> io::Result<()> {
-        let _guard = self.lock.lock().unwrap();
+        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         self.write("schedule.json", schedule)
     }
 }
@@ -341,7 +343,7 @@ impl crate::trust::TrustStore for FileStore {
         &self,
         records: &BTreeMap<String, crate::trust::TrustRecord>,
     ) -> io::Result<()> {
-        let _guard = self.lock.lock().unwrap();
+        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         self.write("trust.json", records)
     }
 }

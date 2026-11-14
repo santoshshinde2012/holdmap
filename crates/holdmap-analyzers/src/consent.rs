@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 /// The user's approval of one analyzer, pinned to exactly what they saw.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -169,23 +169,30 @@ pub struct MemoryStore {
 
 impl crate::schedule::ScheduleStore for MemoryStore {
     fn schedule(&self) -> crate::schedule::Schedule {
-        self.schedule.lock().unwrap().clone().unwrap_or_default()
+        self.schedule
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+            .unwrap_or_default()
     }
     fn set_schedule(&self, schedule: &crate::schedule::Schedule) -> io::Result<()> {
-        *self.schedule.lock().unwrap() = Some(schedule.clone());
+        *self.schedule.lock().unwrap_or_else(PoisonError::into_inner) = Some(schedule.clone());
         Ok(())
     }
 }
 
 impl crate::trust::TrustStore for MemoryStore {
     fn trust_records(&self) -> BTreeMap<String, crate::trust::TrustRecord> {
-        self.trust.lock().unwrap().clone()
+        self.trust
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
     fn set_trust_records(
         &self,
         records: &BTreeMap<String, crate::trust::TrustRecord>,
     ) -> io::Result<()> {
-        *self.trust.lock().unwrap() = records.clone();
+        *self.trust.lock().unwrap_or_else(PoisonError::into_inner) = records.clone();
         Ok(())
     }
 }
@@ -198,7 +205,7 @@ impl ToolPinStore for MemoryStore {
     ) -> Option<crate::mcp_tools::ToolSnapshot> {
         self.tools
             .lock()
-            .unwrap()
+            .unwrap_or_else(PoisonError::into_inner)
             .get(&(analyzer.to_string(), slot))
             .cloned()
     }
@@ -208,7 +215,7 @@ impl ToolPinStore for MemoryStore {
         slot: ToolSlot,
         snapshot: Option<&crate::mcp_tools::ToolSnapshot>,
     ) -> io::Result<()> {
-        let mut all = self.tools.lock().unwrap();
+        let mut all = self.tools.lock().unwrap_or_else(PoisonError::into_inner);
         let key = (analyzer.to_string(), slot);
         match snapshot {
             Some(s) => all.insert(key, s.clone()),
@@ -220,30 +227,44 @@ impl ToolPinStore for MemoryStore {
 
 impl UserManifestStore for MemoryStore {
     fn user_manifests(&self) -> Vec<String> {
-        self.manifests.lock().unwrap().values().cloned().collect()
+        self.manifests
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .values()
+            .cloned()
+            .collect()
     }
     fn add_user_manifest(&self, id: &str, text: &str) -> io::Result<()> {
         self.manifests
             .lock()
-            .unwrap()
+            .unwrap_or_else(PoisonError::into_inner)
             .insert(id.into(), text.into());
         Ok(())
     }
     fn remove_user_manifest(&self, id: &str) -> io::Result<bool> {
-        Ok(self.manifests.lock().unwrap().remove(id).is_some())
+        Ok(self
+            .manifests
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(id)
+            .is_some())
     }
 }
 
 impl crate::catalog::CatalogStore for MemoryStore {
     fn catalog(&self, slot: crate::catalog::CatalogSlot) -> Option<crate::catalog::SignedCatalog> {
-        self.catalogs.lock().unwrap().get(&(slot as u8)).cloned()
+        self.catalogs
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&(slot as u8))
+            .cloned()
     }
     fn set_catalog(
         &self,
         slot: crate::catalog::CatalogSlot,
         catalog: Option<&crate::catalog::SignedCatalog>,
     ) -> io::Result<()> {
-        let mut all = self.catalogs.lock().unwrap();
+        let mut all = self.catalogs.lock().unwrap_or_else(PoisonError::into_inner);
         match catalog {
             Some(c) => all.insert(slot as u8, c.clone()),
             None => all.remove(&(slot as u8)),
@@ -256,13 +277,13 @@ impl SecretIndex for MemoryStore {
     fn secret_names(&self, analyzer: &str) -> Vec<String> {
         self.secrets
             .lock()
-            .unwrap()
+            .unwrap_or_else(PoisonError::into_inner)
             .get(analyzer)
             .cloned()
             .unwrap_or_default()
     }
     fn mark_secret(&self, analyzer: &str, name: &str, stored: bool) -> io::Result<()> {
-        let mut all = self.secrets.lock().unwrap();
+        let mut all = self.secrets.lock().unwrap_or_else(PoisonError::into_inner);
         mark_in(all.entry(analyzer.into()).or_default(), name, stored);
         Ok(())
     }
@@ -270,45 +291,61 @@ impl SecretIndex for MemoryStore {
 
 impl ConsentStore for MemoryStore {
     fn grant(&self, analyzer: &str) -> Option<Grant> {
-        self.grants.lock().unwrap().get(analyzer).cloned()
+        self.grants
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(analyzer)
+            .cloned()
     }
     fn record(&self, grant: Grant) -> io::Result<()> {
         self.grants
             .lock()
-            .unwrap()
+            .unwrap_or_else(PoisonError::into_inner)
             .insert(grant.analyzer.clone(), grant);
         Ok(())
     }
     fn revoke(&self, analyzer: &str) -> io::Result<bool> {
-        Ok(self.grants.lock().unwrap().remove(analyzer).is_some())
+        Ok(self
+            .grants
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(analyzer)
+            .is_some())
     }
 }
 
 impl ResultStore for MemoryStore {
     fn latest(&self, analyzer: &str) -> Option<AnalyzerResult> {
-        self.results.lock().unwrap().get(analyzer).cloned()
+        self.results
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(analyzer)
+            .cloned()
     }
     fn save(&self, result: &AnalyzerResult) -> io::Result<()> {
         self.results
             .lock()
-            .unwrap()
+            .unwrap_or_else(PoisonError::into_inner)
             .insert(result.analyzer.clone(), result.clone());
         Ok(())
     }
     fn forget(&self, analyzer: &str) -> io::Result<()> {
-        self.results.lock().unwrap().remove(analyzer);
+        self.results
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(analyzer);
         Ok(())
     }
     fn history(&self, analyzer: &str) -> Vec<RunRecord> {
         self.history
             .lock()
-            .unwrap()
+            .unwrap_or_else(PoisonError::into_inner)
             .get(analyzer)
             .cloned()
             .unwrap_or_default()
     }
     fn append_history(&self, record: &RunRecord) -> io::Result<()> {
-        let mut all = self.history.lock().unwrap();
+        let mut all = self.history.lock().unwrap_or_else(PoisonError::into_inner);
         push_history(
             all.entry(record.analyzer.clone()).or_default(),
             record.clone(),
@@ -319,10 +356,13 @@ impl ResultStore for MemoryStore {
 
 impl ReviewStore for MemoryStore {
     fn reviews(&self) -> BTreeMap<String, Review> {
-        self.reviews.lock().unwrap().clone()
+        self.reviews
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
     fn set_review(&self, fingerprint: &str, review: Option<Review>) -> io::Result<()> {
-        let mut reviews = self.reviews.lock().unwrap();
+        let mut reviews = self.reviews.lock().unwrap_or_else(PoisonError::into_inner);
         match review {
             Some(r) => reviews.insert(fingerprint.into(), r),
             None => reviews.remove(fingerprint),

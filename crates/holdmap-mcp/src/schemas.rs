@@ -142,9 +142,10 @@ fn preview_schema() -> Value {
     schema["properties"]["confirmation_id"] =
         json!({"type": "string", "minLength": 1, "maxLength": 128});
     schema["properties"]["confirmation_expires_in_s"] = json!({"type": "integer", "enum": [300]});
+    // plan_schema() is a static literal whose "required" is always an array.
     schema["required"]
         .as_array_mut()
-        .unwrap()
+        .expect("plan schema lists required fields")
         .extend([json!("confirmation_id"), json!("confirmation_expires_in_s")]);
     schema
 }
