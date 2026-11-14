@@ -1,7 +1,7 @@
 // View model for the selected-agent detail panel: the summary tiles and short access rows. Long
 // explanations stay available as a tooltip; the panel shows one plain sentence per topic.
 import { LEVEL_LABEL, TOPIC_LABEL, accessFacts, counts } from "./agents";
-import { humanBytes } from "./format";
+import { cpuLabel, humanBytes } from "./format";
 import type { Stat } from "../components/ui/StatStrip.svelte";
 import type { AccessLevel, Agent } from "./types";
 
@@ -33,7 +33,7 @@ export function detailStats(a: Agent): Stat[] {
     { id: "folders", label: "Folders", value: c.folders },
     { id: "ports", label: "Ports", value: c.ports },
     { id: "links", label: "Links", value: c.links },
-    { id: "procs", label: "Processes", value: c.processes, meta: `${a.cpu_percent.toFixed(a.cpu_percent < 10 ? 1 : 0)}% CPU · ${humanBytes(a.memory_bytes)}` },
+    { id: "procs", label: "Processes", value: c.processes, meta: `${cpuLabel(a)} · ${humanBytes(a.memory_bytes)}` },
   ];
 }
 

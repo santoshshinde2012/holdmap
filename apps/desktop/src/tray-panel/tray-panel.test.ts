@@ -132,3 +132,34 @@ describe("Tray quick settings", () => {
     expect(view.getByRole("switch", { name: "Desktop notifications" }).getAttribute("aria-checked")).toBe("true");
   });
 });
+
+describe("Tray panel edge cases", () => {
+  it("says it is offline, with a retry, instead of checking forever", async () => {
+    let fail = true;
+    const load = vi.fn(async () => { if (fail) throw new Error("no backend"); return demoPanel(); });
+    const view = render(TrayPanel, { load, run: vi.fn(), poll: 60_000 });
+    await waitFor(() => expect(view.container.querySelector(".head .status")?.textContent).toBe("Can't read holdmap"));
+    expect(view.container.textContent).not.toContain("Checking agents and ports…");
+    expect(view.container.textContent).not.toContain("Looking for agents…");
+    expect(view.getAllByText("Shows up after the next scan.")).toHaveLength(3);
+    fail = false;
+    await fireEvent.click(view.getByRole("button", { name: "Try now" }));
+    await waitFor(() => expect(view.container.querySelector(".head .status")?.textContent).toBe("2 need you"));
+    expect(view.queryByRole("button", { name: "Try now" })).toBeNull();
+  });
+
+  it("calls zero agents zero, and lists many agents with the rest behind one link", async () => {
+    const zero = mount({ ...demoPanel(), agents: 0, topAgents: [], tools: [], moreAgents: 0 }).view;
+    await waitFor(() => expect(zero.getByText("No agents running.")).toBeTruthy());
+    cleanup();
+    const many = Array.from({ length: 5 }, (_, i) => ({ name: `Agent ${i} with a very long product name indeed`, place: `a-very-long-folder-name-number-${i}`, cpu: i, memory: (5 - i) << 20, action: `agent:${i}` }));
+    const { view, run } = mount({ ...demoPanel(), agents: 25, topAgents: many, moreAgents: 20 });
+    await waitFor(() => expect(view.getByRole("button", { name: "+20 more in holdmap" })).toBeTruthy());
+    const rows = view.getAllByRole("button").filter((b) => b.classList.contains("trow") && !b.classList.contains("tool"));
+    expect(rows).toHaveLength(5);
+    // The full name and folder stay in the tooltip when the row truncates them.
+    expect(rows[0].getAttribute("title")).toBe("Agent 0 with a very long product name indeed · a-very-long-folder-name-number-0: 5.0 MB RAM, CPU 0.0%");
+    await fireEvent.click(view.getByRole("button", { name: "+20 more in holdmap" }));
+    expect(run).toHaveBeenCalledWith("show");
+  });
+});

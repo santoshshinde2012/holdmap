@@ -159,31 +159,26 @@ pub fn flow(scan: &Scan, agents: &AgentsReport) -> AgentFlowReport {
         .iter()
         .map(|s| super::network::norm(s.local_addr))
         .collect();
-    let mut sockets: Vec<&RawSocket> = scan
+    // Only established TCP sockets with a known peer take part; each keeps its peer.
+    let mut sockets: Vec<(&RawSocket, IpAddr, u16)> = scan
         .raw
         .iter()
-        .filter(|s| {
-            s.protocol == Protocol::Tcp
-                && s.state == SocketState::Established
-                && s.remote_addr.is_some()
-                && s.remote_port.is_some()
-        })
+        .filter(|s| s.protocol == Protocol::Tcp && s.state == SocketState::Established)
+        .filter_map(|s| Some((s, s.remote_addr?, s.remote_port?)))
         .collect();
     // Prefer the client side when both sides are captured. This counts a connection once
     // and retains its source process, including connections within the same agent.
-    sockets.sort_by_key(|s| {
-        let target = find_listener(
-            &listeners,
-            s.remote_addr.expect("remote address"),
-            s.remote_port.expect("remote port"),
-        );
-        (target.is_none(), connection_key(s), sorted_pids(&s.pids))
+    sockets.sort_by_key(|&(s, addr, port)| {
+        let target = find_listener(&listeners, addr, port);
+        (
+            target.is_none(),
+            connection_key(s, addr, port),
+            sorted_pids(&s.pids),
+        )
     });
     let mut seen = HashSet::new();
     let mut oversized = 0;
-    for socket in sockets {
-        let remote_addr = socket.remote_addr.expect("remote address");
-        let remote_port = socket.remote_port.expect("remote port");
+    for (socket, remote_addr, remote_port) in sockets {
         let target = find_listener(&listeners, remote_addr, remote_port);
         let source_pids = sorted_pids(&socket.pids);
         let own_local = find_listener(&listeners, socket.local_addr, socket.local_port)
@@ -207,14 +202,15 @@ pub fn flow(scan: &Scan, agents: &AgentsReport) -> AgentFlowReport {
         {
             continue;
         }
-        if !seen.insert(connection_key(socket)) {
+        if !seen.insert(connection_key(socket, remote_addr, remote_port)) {
             continue;
         }
         if source_pids.len() > MAX_SOCKET_HOLDERS {
             oversized += 1;
-            projection
-                .omitted_edges
-                .insert(format!("shared:{}", connection_key(socket)));
+            projection.omitted_edges.insert(format!(
+                "shared:{}",
+                connection_key(socket, remote_addr, remote_port)
+            ));
             continue;
         }
         let from = projection.socket_owner(socket, &source_pids);
@@ -370,8 +366,8 @@ impl<'a> Projection<'a> {
             } else {
                 AgentFlowNodeKind::Process
             },
-            label: label(&if root {
-                agent.expect("root agent").name.clone()
+            label: label(&if let Some(a) = agent.filter(|_| root) {
+                a.name.clone()
             } else {
                 classification
                     .as_ref()
@@ -412,8 +408,9 @@ impl<'a> Projection<'a> {
             .iter()
             .filter_map(|p| self.owners.get(p).map(|a| a.id.clone()))
             .collect();
-        let agent_id =
-            (agent_ids.len() == 1).then(|| agent_ids.iter().next().expect("one agent").clone());
+        let agent_id = (agent_ids.len() == 1)
+            .then(|| agent_ids.first().cloned())
+            .flatten();
         let node = self.node(AgentFlowNode {
             id,
             kind: AgentFlowNodeKind::Listener,
@@ -610,13 +607,10 @@ fn endpoint(address: IpAddr, port: u16) -> String {
     }
 }
 
-fn connection_key(socket: &RawSocket) -> String {
+fn connection_key(socket: &RawSocket, remote_addr: IpAddr, remote_port: u16) -> String {
     let mut ends = [
         endpoint(socket.local_addr, socket.local_port),
-        endpoint(
-            socket.remote_addr.expect("TCP peer"),
-            socket.remote_port.expect("TCP peer port"),
-        ),
+        endpoint(remote_addr, remote_port),
     ];
     ends.sort();
     format!("{}|{}", ends[0], ends[1])

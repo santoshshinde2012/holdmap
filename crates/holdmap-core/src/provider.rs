@@ -51,6 +51,24 @@ impl SystemProcesses {
         S.get_or_init(|| Arc::new(SystemProcesses::default()))
             .clone()
     }
+
+    /// Before the first scan, take a CPU sample and wait the platform's minimum interval, so
+    /// that scan reports CPU use over the interval instead of zero. Does nothing once a sample
+    /// exists, so long-lived frontends and repeat calls pay nothing.
+    pub fn prime_cpu(&self) {
+        {
+            let mut guard = self.sys.lock().unwrap_or_else(|e| e.into_inner());
+            if guard.is_some() {
+                return;
+            }
+            let Ok(mut sys) = System::new() else {
+                return;
+            };
+            crate::process::refresh_for_cpu(&mut sys);
+            *guard = Some(sys);
+        }
+        std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+    }
 }
 
 impl ProcessProvider for SystemProcesses {

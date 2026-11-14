@@ -1,9 +1,10 @@
 <script lang="ts">
   // One agent in the rail: identity header, footprint KPI chips and resource telemetry. Selecting
   // it opens the full picture in the Agents detail panel; the card itself stays compact.
-  import { humanBytes } from "../../lib/format";
+  import { agentMemoryText, memoryFor } from "../../lib/memory-text";
   import { ACCESS_LABEL, accessHeadline, agentMeta, countChips, counts, monogram } from "../../lib/agents";
   import AgentRelations from "./AgentRelations.svelte";
+  import { cpuLabel } from "../../lib/format";
   import type { Agent, AgentsReport } from "../../lib/types";
 
   let {
@@ -43,13 +44,13 @@
   <button class="head" aria-pressed={selected} aria-controls={selected ? "agent-details" : undefined} onclick={onselect}>
     <span class="tile" aria-hidden="true">{monogram(agent.name)}</span>
     <span class="who">
-      <span class="top"><span class="name">{agent.name}</span> <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.level === "elevated" ? head.text : ACCESS_LABEL[head.level]}</span></span>
+      <span class="top"><span class="name">{agent.name}</span> <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{ACCESS_LABEL[head.level]}</span></span>
       <span class="meta">{agentMeta(agent, now, false)}</span>
     </span>
     <span class="kpis">{#each countChips(c, true) as [n, label]}<span class="kpi"><b>{n}</b> {label}</span> {/each}{#if c.stoppable}<span class="kpi warn"><b>{c.stoppable}</b> stoppable</span>{/if}</span>
     <span class="res">
-      <span class="mem"><b>{humanBytes(agent.memory_bytes)}</b> <span class="res-sub">total memory</span></span>
-      <span class="cpu">{agent.cpu_percent.toFixed(agent.cpu_percent < 10 ? 1 : 0)}% CPU</span>
+      <span class="mem"><b>{agentMemoryText(agent, memoryFor(report, agent.id))}</b> <span class="res-sub">RAM</span></span>
+      <span class="cpu" title={agent.cpu_unknown ?? undefined}>{cpuLabel(agent)}</span>
       <span class="mem-track" aria-hidden="true"><span class="mem-fill" style="width: {memPct}%"></span></span>
     </span>
   </button>

@@ -111,6 +111,8 @@ pub fn serve_with_observer<R: BufRead, W: Write>(
     mut output: W,
     observer: &mut dyn ToolCallObserver,
 ) -> io::Result<()> {
+    // Take the first CPU sample now, so the first agent listing doesn't report 0% CPU.
+    std::thread::spawn(|| holdmap_core::provider::SystemProcesses::shared().prime_cpu());
     let mut session = Session::default();
     let mut observer = observer::BestEffortObserver::new(observer);
     while let Some(frame) = read_frame(&mut input)? {
@@ -386,7 +388,7 @@ fn tool_response(id: Value, result: Result<(String, Value), ToolError>, name: &s
             json!({
                 "content": [
                     {"type": "text", "text": summary},
-                    {"type": "text", "text": serde_json::to_string_pretty(&data).unwrap_or_default()}
+                    {"type": "text", "text": serde_json::to_string(&data).unwrap_or_default()}
                 ],
                 "structuredContent": data,
                 "isError": false
@@ -405,7 +407,7 @@ fn tool_response(id: Value, result: Result<(String, Value), ToolError>, name: &s
             json!({
                 "content": [
                     {"type": "text", "text": message},
-                    {"type": "text", "text": serde_json::to_string_pretty(&data).unwrap_or_default()}
+                    {"type": "text", "text": serde_json::to_string(&data).unwrap_or_default()}
                 ],
                 "structuredContent": data,
                 "isError": true

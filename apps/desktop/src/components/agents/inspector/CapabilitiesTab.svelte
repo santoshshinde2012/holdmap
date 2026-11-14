@@ -9,7 +9,7 @@
   import { tildify } from "../../../lib/format";
   import type { Agent, AgentMcpServer } from "../../../lib/types";
 
-  let { agent, base, oninspect, onopen }: { agent: Agent; base: string; oninspect?: () => void; onopen?: () => void } = $props();
+  let { agent, base, oninspect, onopen, onreveal }: { agent: Agent; base: string; oninspect?: () => void; onopen?: () => void; onreveal?: (path: string) => void } = $props();
 
   const caps = $derived(agent.capabilities);
   const total = $derived(caps?.inspected ? caps.mcp_servers.length + caps.more_mcp_servers + caps.skills.length + caps.more_skills : null);
@@ -78,7 +78,7 @@
 <!-- Where it lives: every documented location, closest layer first. -->
 <details class="sec-box where" open>
   <summary><Icon name="layers" size={13} />Where it lives</summary>
-  <AgentLocations {agent} {oninspect} />
+  <AgentLocations {agent} {onreveal} />
 </details>
 <OpenFull label="Open in MCP & skills" icon="plug" {onopen} />
 

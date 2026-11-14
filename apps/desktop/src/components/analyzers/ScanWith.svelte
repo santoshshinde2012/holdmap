@@ -37,7 +37,7 @@
 
 <section class="scan" aria-label="Scan with analyzers">
   <h4>Scan with…</h4>
-  {#if counts && total(counts)}<p class="found">Open findings: {countsText(counts, 3)}{#if onsecurity} · <button type="button" class="link" onclick={onsecurity}>Open Security</button>{/if}</p>{/if}
+  {#if counts && total(counts)}<p class="found">Open findings: {countsText(counts, 3)}{#if onsecurity}{" "}· <button type="button" class="link" onclick={onsecurity}>Open Security</button>{/if}</p>{/if}
   {#if !scanners.length}
     <p class="muted">No analyzer for {kind === "skill" ? "skills" : "MCP packages"} yet.{#if onsettings} <button type="button" class="link" onclick={onsettings}>Add one</button>{/if}</p>
   {:else}

@@ -22,7 +22,7 @@ fn call(msg: Value) -> Value {
         // Compare the serialized contract directly without dumping live process data.
         assert_eq!(
             text,
-            serde_json::to_string_pretty(&response["result"]["structuredContent"]).unwrap()
+            serde_json::to_string(&response["result"]["structuredContent"]).unwrap()
         );
     }
     response

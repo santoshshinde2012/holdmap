@@ -96,7 +96,12 @@ pub fn run(a: &SshArgs) -> Result<u8> {
         let mut g = e.topology();
         g.retain_dev();
         if json {
-            println!("{}", exporter("json").unwrap().export(&g));
+            println!(
+                "{}",
+                exporter("json")
+                    .expect("the JSON exporter is built in")
+                    .export(&g)
+            );
         } else {
             println!(
                 "{} {}",

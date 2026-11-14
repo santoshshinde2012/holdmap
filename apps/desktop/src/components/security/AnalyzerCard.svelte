@@ -17,7 +17,7 @@
   <div class="tags">
     <span>{card.target}</span>
     {#if card.network.length}<span title="Contacts {card.network.join(', ')}"><Icon name="globe" size={11} />Network</span>{:else}<span><Icon name="lock" size={11} />Offline</span>{/if}
-    {#if card.lastRun}<span>{ago(card.lastRun)}{#if card.open} · {card.open} open{/if}</span>{/if}
+    {#if card.lastRun}<span>{ago(card.lastRun)}{#if card.open}{" "}· {card.open} open{/if}</span>{/if}
   </div>
   {#if step}<p class="step ph-{step.phase}" class:empty={step.phase === "done" && step.subjects === 0} role="status" data-card-step>{stepLabel(step)}</p>{/if}
   <div class="foot">

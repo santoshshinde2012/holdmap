@@ -52,7 +52,7 @@
           <span class="sum">Runs in the background. You can keep working.</span>
           <Button size="xs" variant="danger-outline" icon="stop" onclick={() => r.cancel()}>Cancel</Button>
         {:else}
-          <span class="sum">{r.summary}{#if scheduler.driver?.enabled && scheduler.driver.nextMs} · Next scheduled scan {untilLabel(scheduler.driver.nextMs, Date.now())}{/if}</span>
+          <span class="sum">{r.summary}{#if scheduler.driver?.enabled && scheduler.driver.nextMs}{" "}· Next scheduled scan {untilLabel(scheduler.driver.nextMs, Date.now())}{/if}</span>
           {#if onresults}<Button size="xs" variant="secondary" icon="list" onclick={onresults}>View results</Button>{/if}
         {/if}
       </footer>

@@ -3,6 +3,10 @@
 
 import { humanBytes, humanDuration } from "./format";
 import type { Agent, AgentMemoryReport, AgentsReport, CapabilityPlace, ObservedCount } from "./types";
+import { observed } from "./memory-text";
+
+// Home's cards need only the headline text, so it lives in a small module of its own.
+export { agentMemoryText, memoryFor, observed } from "./memory-text";
 
 const ROLE: Record<string, string> = {
   agent: "Agent",
@@ -12,11 +16,6 @@ const ROLE: Record<string, string> = {
   child: "Other processes",
 };
 
-/** The observed integer, only when a reason was not also recorded. */
-export function observed(figure: ObservedCount | undefined): number | null {
-  if (!figure || figure.unknown || figure.value == null) return null;
-  return figure.value;
-}
 
 export function unknownReason(figure: ObservedCount | undefined): string {
   if (figure?.unknown) return figure.unknown;
@@ -45,9 +44,6 @@ export function headlineLabel(memory: AgentMemoryReport): string {
   return memory.headline_label || HEADLINE_LABEL[memory.headline_counter] || memory.headline_counter;
 }
 
-export function memoryFor(report: AgentsReport | null | undefined, agentId: string): AgentMemoryReport | null {
-  return report?.memory?.find((row) => row.agent_id === agentId) ?? null;
-}
 
 const COUNTERS: { key: keyof AgentMemoryReport; label: string }[] = [
   { key: "resident", label: "Resident" },

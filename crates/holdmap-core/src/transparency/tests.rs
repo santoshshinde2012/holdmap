@@ -43,6 +43,7 @@ fn bare_agent(pid: u32, name: &str, processes: Vec<AgentProcess>, tools: Vec<Age
         parent: None,
         memory_bytes: processes.iter().map(|p| p.memory_bytes).sum(),
         cpu_percent: 0.0,
+        cpu_unknown: None,
         processes: processes.clone(),
         more_processes: 0,
         process_ids: processes.iter().map(|p| p.pid).collect(),
@@ -74,6 +75,7 @@ fn process(pid: u32, name: &str, role: ProcessRole, memory: u64) -> AgentProcess
         cwd: None,
         memory_bytes: memory,
         cpu_percent: 0.0,
+        cpu_unknown: None,
     }
 }
 
@@ -128,6 +130,7 @@ fn an_mcp_child_is_grouped_separately_and_a_zero_machine_is_not_a_share() {
         ports: Vec::new(),
         memory_bytes: 20,
         cpu_percent: 0.0,
+        cpu_unknown: None,
     };
     let mut rows = vec![
         proc(4, 1, "claude", &["claude"]),
@@ -202,6 +205,41 @@ fn trend_needs_two_samples_and_uses_the_published_band() {
         },
     ]);
     assert_eq!(falling.direction, TrendDirection::Falling);
+}
+
+#[test]
+fn a_locked_memory_log_skips_one_sample_without_waiting_or_writing() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("memory-samples.json");
+    let log = FileMemoryLog::open(&path).with_lock_wait(std::time::Duration::from_millis(20));
+    assert_eq!(
+        log.record_batch(50, &[("claude-code".into(), 1024)]).note,
+        None
+    );
+    let before = std::fs::read(&path).unwrap();
+    let held = std::fs::File::create(dir.path().join("memory-samples.lock")).unwrap();
+    held.lock().unwrap();
+    let started = std::time::Instant::now();
+    let outcome = log.record_batch(100, &[("claude-code".into(), 2048)]);
+    assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    assert!(outcome.note.as_deref().unwrap().contains("was not kept"));
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    drop(held);
+    assert_eq!(
+        log.record_batch(200, &[("claude-code".into(), 4096)]).note,
+        None
+    );
+}
+
+#[test]
+fn a_memory_log_in_an_unwritable_place_reports_instead_of_failing() {
+    let dir = tempfile::tempdir().unwrap();
+    // A plain file where the log's folder should be: nothing under it can be created.
+    let blocker = dir.path().join("not-a-dir");
+    std::fs::write(&blocker, b"x").unwrap();
+    let log = FileMemoryLog::open(blocker.join("memory-samples.json"));
+    let outcome = log.record_batch(100, &[("claude-code".into(), 2048)]);
+    assert!(outcome.note.is_some());
 }
 
 #[test]
@@ -456,4 +494,59 @@ fn a_refused_platform_counter_makes_the_headline_mixed_with_a_reason() {
     assert!(mixed.headline_label.starts_with("Mixed"));
     assert!(mixed.limits.iter().any(|limit| limit == reason));
     assert!(mixed.summary_line().contains("Mixed"));
+}
+
+#[test]
+fn a_tree_with_no_memory_reading_is_unknown_not_zero() {
+    let agent = bare_agent(
+        20,
+        "Docker Desktop",
+        vec![process(20, "com.docker.vmnetd", ProcessRole::Agent, 0)],
+        Vec::new(),
+    );
+    let mut row = proc(20, 1, "com.docker.vmnetd", &["com.docker.vmnetd"]);
+    row.memory_bytes = 0;
+    let mut table = table(vec![row], 1);
+    table.mark_memory_fallback(20);
+    let probe = FixedProbe {
+        reading: ProcessReading::all_unknown("proc_pid_rusage failed (access denied)"),
+        machine: ObservedU64::observed(1_000_000),
+    };
+    let report = agent_memory(&agent, &table, &probe, 1);
+    assert!(report.headline_unknown());
+    assert_eq!(report.headline_text(), "unknown");
+    let line = report.summary_line();
+    assert!(line.starts_with("unknown"), "{line}");
+    assert!(line.contains("access denied"), "{line}");
+    assert!(!line.contains("0 B"), "{line}");
+    let lines = report.breakdown_lines();
+    assert!(lines.iter().all(|l| !l.contains("0 B")), "{lines:?}");
+}
+
+#[test]
+fn counters_with_the_same_unknown_reason_are_explained_once() {
+    let agent = bare_agent(
+        10,
+        "Cursor",
+        vec![process(10, "Cursor", ProcessRole::Agent, 100)],
+        Vec::new(),
+    );
+    let table = table(vec![proc(10, 1, "Cursor", &["Cursor"])], 1);
+    let probe = FixedProbe {
+        reading: reading_with(ObservedU64::observed(4096)),
+        machine: ObservedU64::observed(1_000_000),
+    };
+    let report = agent_memory(&agent, &table, &probe, 1);
+    assert!(!report.headline_unknown());
+    let line = report.summary_line();
+    assert!(line.contains("resident 4.0 KB"), "{line}");
+    assert!(
+        line.contains("private and shared unknown (not exposed by this fixture)"),
+        "{line}"
+    );
+    assert_eq!(
+        line.matches("not exposed by this fixture").count(),
+        1,
+        "{line}"
+    );
 }

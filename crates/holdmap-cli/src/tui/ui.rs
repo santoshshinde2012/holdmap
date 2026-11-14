@@ -210,12 +210,18 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
     .alignment(Alignment::Right);
     // Stats are listed most-important first; on a narrow terminal the tail is dropped whole
     // rather than cut mid-word under the filter chips.
+    // The filter chips are dropped whole when they would overlap the tabs; the footer and
+    // `?` still list their keys.
     let fixed: usize = spans.iter().map(Span::width).sum();
-    let budget = usize::from(area.width).saturating_sub(fixed + right.width() + 1);
-    spans.extend(fit_spans(stats, budget));
+    let width = usize::from(area.width);
+    let show_right = fixed + right.width() < width;
+    let reserved = if show_right { right.width() + 1 } else { 0 };
+    spans.extend(fit_spans(stats, width.saturating_sub(fixed + reserved)));
     let left = Line::from(spans);
     f.render_widget(Paragraph::new(left), area);
-    f.render_widget(Paragraph::new(right), area);
+    if show_right {
+        f.render_widget(Paragraph::new(right), area);
+    }
 }
 
 fn draw_search(f: &mut Frame, app: &App, area: Rect) {
@@ -519,7 +525,7 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
             human_duration(now_secs().saturating_sub(p.start_time)),
         ));
         if p.memory_bytes > 0 {
-            lines.push(kv("Memory", human_bytes(p.memory_bytes)));
+            lines.push(kv("RAM", human_bytes(p.memory_bytes)));
         }
         lines.push(Line::raw(""));
         if let Some(pr) = &e.project {
@@ -1002,6 +1008,28 @@ mod tests {
         assert!(!visible.contains("TCP+UDP"));
         assert!(!visible.contains("sorted by"));
         assert!(app.table_area.width > 0);
+    }
+
+    #[test]
+    fn narrow_header_keeps_every_tab_whole_instead_of_overlapping_the_filters() {
+        use super::super::app::{App, Tab};
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+        for (width, chips) in [(60u16, false), (120, true)] {
+            let mut app = App::empty(false);
+            app.tab = Tab::Ports;
+            let mut terminal = Terminal::new(TestBackend::new(width, 20)).unwrap();
+            terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
+            let buffer = terminal.backend().buffer();
+            let header: String = (0..width)
+                .map(|x| buffer.cell((x, 0)).unwrap().symbol().to_owned())
+                .collect();
+            assert!(
+                header.contains("Ports") && header.contains("Graph") && header.contains("Agents"),
+                "{header}"
+            );
+            assert_eq!(header.contains("Listening"), chips, "{header}");
+        }
     }
 
     #[test]

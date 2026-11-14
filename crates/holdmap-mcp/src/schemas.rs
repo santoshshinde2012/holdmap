@@ -142,9 +142,10 @@ fn preview_schema() -> Value {
     schema["properties"]["confirmation_id"] =
         json!({"type": "string", "minLength": 1, "maxLength": 128});
     schema["properties"]["confirmation_expires_in_s"] = json!({"type": "integer", "enum": [300]});
+    // plan_schema() is a static literal whose "required" is always an array.
     schema["required"]
         .as_array_mut()
-        .unwrap()
+        .expect("plan schema lists required fields")
         .extend([json!("confirmation_id"), json!("confirmation_expires_in_s")]);
     schema
 }
@@ -157,7 +158,8 @@ fn agents_schema() -> Value {
             "kind": {"type": "string", "enum": ["mcp_server", "dev_server", "shell", "command"]},
             "cwd": {"type": ["string", "null"]},
             "evidence": {"type": "string", "enum": ["observed", "inferred", "unknown"]},
-            "ports": array(port()), "memory_bytes": count(), "cpu_percent": {"type": "number"}
+            "ports": array(port()), "memory_bytes": count(), "cpu_percent": {"type": "number"},
+            "cpu_unknown": {"type": "string", "description": "Present only when the OS refused the CPU reading: why it is unknown. cpu_percent is then not a measurement."}
         }),
         &[
             "pid",
@@ -183,6 +185,7 @@ fn agents_schema() -> Value {
             "ports": {"type": "array", "items": {"type": "object"}},
             "links": {"type": "array", "items": {"type": "object"}},
             "access": {"type": "object"}, "memory_bytes": count(), "cpu_percent": {"type": "number"},
+            "cpu_unknown": {"type": "string", "description": "Present only when the OS refused the CPU reading: why it is unknown. cpu_percent is then not a measurement."},
             "more_processes": count(), "more_tools": count(), "more_folders": count(), "more_links": count()
         }),
         &[

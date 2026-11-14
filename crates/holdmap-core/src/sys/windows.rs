@@ -199,6 +199,11 @@ fn graceful_signal(
     }
 }
 
+/// sysinfo reads CPU time with the same query rights it needs for the process at all.
+pub fn cpu_readable(_pid: u32) -> bool {
+    true
+}
+
 /// Always false: Windows has no zombie processes.
 pub fn is_zombie(_pid: u32) -> bool {
     false

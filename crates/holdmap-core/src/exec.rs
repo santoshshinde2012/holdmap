@@ -31,6 +31,8 @@ struct Run<'a> {
     report: StopReport,
     progress: &'a mut dyn FnMut(&str),
     ok: bool,
+    /// Processes the OS wouldn't let holdmap signal, named in the error.
+    denied: Vec<String>,
 }
 
 impl Run<'_> {
@@ -91,6 +93,7 @@ impl Run<'_> {
                 )),
                 Err(SignalError::PermissionDenied) => {
                     self.ok = false;
+                    self.denied.push(format!("{} (PID {})", pr.name, pr.pid));
                     self.log(format!(
                         "permission denied signalling {} ({})",
                         pr.name, pr.pid
@@ -134,6 +137,16 @@ impl Run<'_> {
                         self.log(format!("sent SIGKILL to {} ({})", pr.name, pr.pid))
                     }
                     Err(SignalError::NotFound) => {}
+                    Err(SignalError::PermissionDenied) => {
+                        let who = format!("{} (PID {})", pr.name, pr.pid);
+                        if !self.denied.contains(&who) {
+                            self.denied.push(who);
+                        }
+                        self.log(format!(
+                            "permission denied signalling {} ({})",
+                            pr.name, pr.pid
+                        ))
+                    }
                     Err(e) => self.log(format!("SIGKILL to {} ({}) failed: {e}", pr.name, pr.pid)),
                 }
             }
@@ -171,6 +184,7 @@ pub fn execute(plan: &ActionPlan, progress: &mut dyn FnMut(&str)) -> StopReport 
         report,
         progress,
         ok: true,
+        denied: Vec::new(),
     };
     if let Some(b) = &plan.blocked {
         run.report.error = Some(b.message.clone());
@@ -262,12 +276,15 @@ pub fn execute(plan: &ActionPlan, progress: &mut dyn FnMut(&str)) -> StopReport 
         }
     }
     let ok = run.ok;
+    let denied = std::mem::take(&mut run.denied);
     let mut report = run.report;
     report.freed = all_free;
     report.success = ok && all_free;
     report.elapsed_ms = started.elapsed().as_millis() as u64;
     if !report.success {
-        report.error = Some(if !all_free {
+        report.error = Some(if !denied.is_empty() {
+            denied_message(&denied)
+        } else if !all_free {
             let ports: Vec<String> = report
                 .ports_still_busy
                 .iter()
@@ -283,6 +300,14 @@ pub fn execute(plan: &ActionPlan, progress: &mut dyn FnMut(&str)) -> StopReport 
         });
     }
     report
+}
+
+/// Permission is the cause to name, with what to do next, ahead of "port still in use".
+fn denied_message(denied: &[String]) -> String {
+    format!(
+        "The system didn't let holdmap stop {}. It belongs to another user or to the system. Stop it from its own app, or with sudo in a terminal.",
+        denied.join(", ")
+    )
 }
 
 fn signal_authorized(process: &ProcRef, table: &ProcessTable, allow_protected: bool) -> bool {
@@ -417,6 +442,17 @@ fn socket_unit_processes_authorized(
 mod tests {
     use super::*;
     use crate::process::tests::{proc, table};
+
+    #[test]
+    fn a_denied_stop_names_the_process_and_the_next_step() {
+        let text = denied_message(&["vmnetd (PID 512)".into(), "dockerd (PID 600)".into()]);
+        assert!(
+            text.contains("vmnetd (PID 512), dockerd (PID 600)"),
+            "{text}"
+        );
+        assert!(text.contains("another user or to the system"), "{text}");
+        assert!(text.contains("sudo"), "{text}");
+    }
 
     #[test]
     fn security_execution_rechecks_identity_and_new_session_protection() {

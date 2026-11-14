@@ -92,7 +92,9 @@
   const cells = $derived(attentionCells(data?.attentionHistory ?? []));
   const cpu = $derived(cpuParts(data?.cpu ?? null));
   const ram = $derived(bytesParts(data?.memory ?? null));
-  const status = $derived(needsStatus(data?.needs ?? null));
+  // Never read anything: say so everywhere, instead of "Checking…" forever.
+  const offline = $derived(failed && !data);
+  const status = $derived(needsStatus(data?.needs ?? null, offline));
   const tools = $derived(data?.tools ?? []);
   const count = (n: number | null | undefined) => (n === null || n === undefined ? "…" : String(n));
 
@@ -145,8 +147,8 @@
 
   <div class="body" class:fade-top={fadeTop} class:fade-bottom={fadeBottom} bind:this={readings} onscroll={measure} hidden={settingsOpen}>
     {#if failed && data}<p class="notice" role="status">Readings may be out of date. Reconnecting…</p>{/if}
-    {#if failed && !data}
-      <p class="notice">Couldn't read the latest scan. It will try again in a moment.</p>
+    {#if offline}
+      <p class="notice" role="status">Couldn't reach holdmap's scanner. It tries again on its own. <button type="button" class="link" onclick={() => void refresh(true)}>Try now</button></p>
     {/if}
 
     <section class="hero" aria-label="Now" data-section="top">
@@ -175,7 +177,7 @@
         {#if data?.needs?.length}<span class="count {status.tone}">{data.needs.length}</span>{/if}
       </div>
       {#if !data?.needs}
-        <p class="quiet">Checking agents and ports…</p>
+        <p class="quiet">{offline ? "Shows up after the next scan." : "Checking agents and ports…"}</p>
       {:else if data.needs.length === 0}
         <p class="clear"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m5 12 4.5 4.5L19 7" /></svg><span>All clear. Nothing needs you right now.</span></p>
       {:else}
@@ -214,6 +216,8 @@
             </li>
           {/each}
         </ul>
+      {:else if offline}
+        <p class="quiet">Shows up after the next scan.</p>
       {/if}
     </section>
 
@@ -263,7 +267,7 @@
           {/if}
         </div>
       {:else}
-        <p class="quiet">Looking for agents…</p>
+        <p class="quiet">{offline ? "Shows up after the next scan." : "Looking for agents…"}</p>
       {/if}
     </section>
 

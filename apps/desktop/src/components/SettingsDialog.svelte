@@ -366,7 +366,8 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (max-width: 720px) {
     .layout { grid-template-columns: 1fr; gap: var(--sp-4); min-height: 0; }
-    .nav { flex-direction: row; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--border); padding-bottom: var(--sp-2); }
+    /* A horizontal scroller has no automatic minimum height, so the tall panel squeezed the tab row to a sliver. */
+    .nav { flex-direction: row; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--border); padding-bottom: var(--sp-2); min-height: calc(var(--h-md) + var(--sp-2) + 1px); flex: none; }
     .nav button { flex: none; }
   }
 </style>

@@ -2,7 +2,7 @@
 
 use holdmap_core::agents::{AgentsReport, Evidence, FolderSource};
 use holdmap_core::topology::GraphExporter;
-use holdmap_core::util::{count, human_bytes};
+use holdmap_core::util::count;
 use holdmap_core::{
     ephemeral_port, port_busy, probe_tcp, tcp_accepting, Engine, Filter, ProbeResult, Protocol,
     ScanOptions, Snapshot, StopOptions, Target,
@@ -111,7 +111,7 @@ pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, 
             .map(|folder| folder.label.as_str())
             .collect();
         lines.push(format!(
-            "{} (pid {}): {}; {}; {}; {}; {}; {:.1}% CPU; {}",
+            "{} (pid {}): {}; {}; {}; {}; {}; {}; {}",
             agent.name,
             agent.pid,
             if folders.is_empty() {
@@ -131,8 +131,8 @@ pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, 
                 "process",
                 "processes"
             ),
-            agent.cpu_percent,
-            human_bytes(agent.memory_bytes),
+            agent.cpu_text(),
+            report.memory_text(agent),
         ));
         if let Some(summary) = memory_lines.get(agent.id.as_str()) {
             lines.push(format!("  RAM: {summary}"));

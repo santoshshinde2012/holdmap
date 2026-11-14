@@ -204,6 +204,8 @@ pub struct AgentRow {
     /// PID when it shares a name and has no folder.
     pub place: Option<String>,
     pub cpu: f32,
+    /// False when the OS refused this agent's CPU time, so `cpu` is not a measurement.
+    pub cpu_known: bool,
     pub memory: u64,
     /// A developer tool that sits beside agents (Docker Desktop), not an AI agent: listed on its
     /// own and left out of the agents' count, CPU and RAM.
@@ -273,6 +275,7 @@ impl Readings {
                         name: a.name.clone(),
                         place: agent_place(a, &r.agents),
                         cpu: a.cpu_percent,
+                        cpu_known: a.cpu_unknown.is_none(),
                         memory: a.memory_bytes,
                         tool: a.kind == AgentKind::Tool,
                     })
@@ -1387,7 +1390,11 @@ pub fn panel_data(
     let row = |a: &AgentRow| PanelAgent {
         name: printable(&a.name).into_owned(),
         place: a.place.as_deref().map(|p| printable(p).into_owned()),
-        cpu: trends.agents.get(&a.id).map(|_| a.cpu),
+        cpu: trends
+            .agents
+            .get(&a.id)
+            .filter(|_| a.cpu_known)
+            .map(|_| a.cpu),
         memory: a.memory,
         action: format!("agent:{}", a.id),
     };
@@ -1465,6 +1472,7 @@ mod tests {
                 name: "Claude Code".into(),
                 place: Some("holdmap".into()),
                 cpu: 12.4,
+                cpu_known: true,
                 memory: 300 * 1024 * 1024,
                 tool: false,
             }]),
@@ -1931,6 +1939,7 @@ mod tests {
             name: "Codex CLI".into(),
             place: None,
             cpu: 0.0,
+            cpu_known: true,
             memory: 1024 * 1024,
             tool: false,
         });
@@ -2048,6 +2057,7 @@ mod tests {
             name: format!("Codex {i}"),
             place: None,
             cpu: 6.0 - i as f32,
+            cpu_known: true,
             memory: 1024 * (i + 1),
             tool: false,
         }));
@@ -2056,7 +2066,18 @@ mod tests {
             name: "Docker Desktop".into(),
             place: Some("Data".into()),
             cpu: 30.0,
+            cpu_known: true,
             memory: 600 * 1024 * 1024,
+            tool: true,
+        });
+        // Docker's root helper: the OS refuses its CPU time, so it never reads as a measured 0%.
+        r.agents.as_mut().unwrap().push(AgentRow {
+            id: "agent:550".into(),
+            name: "Docker Desktop".into(),
+            place: Some("PID 550".into()),
+            cpu: 0.0,
+            cpu_known: false,
+            memory: 0,
             tool: true,
         });
         let mut trends = Trends::default();
@@ -2076,8 +2097,10 @@ mod tests {
             names,
             ["Claude Code", "Codex 5", "Codex 4", "Codex 3", "Codex 2"]
         );
-        assert_eq!(data.tools.len(), 1);
+        assert_eq!(data.tools.len(), 2);
         assert_eq!(data.tools[0].name, "Docker Desktop");
+        assert_eq!(data.tools[0].cpu, Some(30.0));
+        assert_eq!(data.tools[1].cpu, None, "unreadable CPU is unknown, not 0%");
         assert_eq!(data.memory, Some(300 * 1024 * 1024 + 1024 * 21));
         assert_eq!(data.more_agents, 2);
         assert_eq!(data.top_agents[0].action, "agent:agent:42");

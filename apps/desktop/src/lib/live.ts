@@ -64,6 +64,21 @@ export function freshness(ago: number | null, scanSecs: number): { text: string;
 }
 
 /**
+ * The title bar's live dot for the current view. Home reads both the ports scan and the
+ * agents lookup, Agents reads the agents lookup, the other views read the ports scan; a
+ * failed source says so instead of "Live" or "starting…".
+ */
+export function headerStatus(view: string, scanError: string | null, agentsError: string | null, retrying: boolean, fresh: { text: string; stale: boolean }): { text: string; stale: boolean } {
+  const failed = view === "agents" ? agentsError : view === "home" ? scanError ?? agentsError : scanError;
+  return failed ? { text: retrying ? "Retrying…" : "Scan failed", stale: true } : fresh;
+}
+
+/** An error's message for people: no "Error:" prefix from String(e). */
+export function errorText(e: unknown): string {
+  return String(e instanceof Error ? e.message : e).replace(/^(?:[A-Za-z]*Error:\s*)+/, "");
+}
+
+/**
  * Seconds since the data was last known good: since the newest snapshot, or since the start
  * of a scan still in flight (a scan that's merely running doesn't make the data stale).
  */

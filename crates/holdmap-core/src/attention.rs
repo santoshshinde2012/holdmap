@@ -234,8 +234,11 @@ impl AttentionRule for WideAccess {
                     id: format!("elevated:{}", a.id),
                     rule: RuleId::Elevated,
                     severity: Urgency::Medium,
-                    title: format!("{}: {text}", a.name),
-                    detail: "Started with flags that skip approvals or the sandbox.".into(),
+                    title: format!("{} has wider access than usual", a.name),
+                    detail: format!(
+                        "{}: started with flags that skip approvals or the sandbox.",
+                        text.strip_suffix(": wider than usual").unwrap_or(&text)
+                    ),
                     target: agent_target(a),
                     stop: None,
                 })

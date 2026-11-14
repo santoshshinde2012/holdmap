@@ -73,6 +73,20 @@ export function httpSummary(h: HttpInfo): string {
   return s;
 }
 
+/** CPU as people read it: "3.5%" under 10, "12%" above, or "unknown" when the OS refused it. */
+export function cpuReading(p: { cpu_percent: number; cpu_unknown?: string | null }): string {
+  if (p.cpu_unknown) return "unknown";
+  return `${p.cpu_percent.toFixed(p.cpu_percent < 10 ? 1 : 0)}%`;
+}
+
+/** "3.5% CPU", or "CPU unknown" when the OS refused the reading. */
+export const cpuLabel = (p: { cpu_percent: number; cpu_unknown?: string | null }): string => (p.cpu_unknown ? "CPU unknown" : `${cpuReading(p)} CPU`);
+
+/** "up 2h 5m", or null when the start time couldn't be read (another user's process reports 0). */
+export function upFor(startedAt: number, nowMs: number): string | null {
+  return startedAt > 0 ? `up ${humanDuration(nowMs / 1000 - startedAt)}` : null;
+}
+
 export function uptime(e: PortEntry, nowMs = Date.now()): string | null {
   if (!e.process?.start_time) return null;
   return humanDuration(nowMs / 1000 - e.process.start_time);

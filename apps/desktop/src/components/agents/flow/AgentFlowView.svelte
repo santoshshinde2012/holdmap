@@ -173,7 +173,7 @@
     </div>
   {/if}
   {#if showLimits && canLimit}
-    <details class="limits"><summary><Icon name="info" size={12} />Visibility limits{#if mode === "connections" && flowReport && (flowReport.omitted_nodes || flowReport.omitted_edges)} · {flowReport.omitted_nodes} participants and {flowReport.omitted_edges} relationships omitted{/if}</summary><ul>{#each limits as limit}<li>{limit}</li>{/each}</ul></details>
+    <details class="limits"><summary><Icon name="info" size={12} />Visibility limits{#if mode === "connections" && flowReport && (flowReport.omitted_nodes || flowReport.omitted_edges)}{" "}· {flowReport.omitted_nodes} participants and {flowReport.omitted_edges} relationships omitted{/if}</summary><ul>{#each limits as limit}<li>{limit}</li>{/each}</ul></details>
   {/if}
 </section>
 

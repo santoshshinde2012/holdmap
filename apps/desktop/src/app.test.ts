@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Regression for the blinking details pane: every scan used to throw the explanations away, so
 // the selected port's Overview fell back to its skeleton until `explain` answered again.
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { cleanup, fireEvent, render, within } from "@testing-library/svelte";
 import type { ActionPlan, Explanation, HttpInfo, Snapshot, StopReport } from "./lib/types";
 import type { ScheduledStopRequest } from "./lib/schedules";
@@ -10,7 +10,7 @@ import { MOCK_SNAPSHOT } from "./lib/mock";
 import "./components/AgentsView.svelte";
 
 const calls = vi.hoisted(() => ({
-  explain: 0, http: 0, scan: 0, scanDelayMs: 0,
+  explain: 0, http: 0, scan: 0, scanDelayMs: 0, liveHeader: false,
   scanModes: [] as boolean[],
   scanError: null as string | null,
   scanReply: null as Snapshot | null,
@@ -28,6 +28,7 @@ const calls = vi.hoisted(() => ({
   planCalls: 0,
   historyFailureAt: 0,
   stopFailureAt: 0,
+  stopError: null as string | null,
   restarts: 0,
   deferPlan: false,
   planPending: [] as { target: string; result: ActionPlan; resolve: (value: ActionPlan) => void }[],
@@ -46,6 +47,8 @@ vi.mock("./lib/api", async (orig) => {
   };
   return {
     ...real,
+    // A test of the live title bar reads as the desktop app; the others keep the examples build.
+    usesSampleData: () => !calls.liveHeader && real.usesSampleData(),
     // Each scan is a fresh object graph, with the memory figure changing like a real poll.
     scan: async (all: boolean) => {
       calls.scan++;
@@ -69,7 +72,7 @@ vi.mock("./lib/api", async (orig) => {
       const result = await real.plan(target, force, allowProtected);
       return calls.deferPlan ? new Promise<ActionPlan>((resolve) => calls.planPending.push({ target, result, resolve })) : result;
     },
-    stop: async (target: string) => { calls.stopCalls++; return simulatedStop(target); },
+    stop: async (target: string) => { calls.stopCalls++; if (calls.stopError) throw calls.stopError; return simulatedStop(target); },
     stopMany: async (agentId: string, requests: ScheduledStopRequest[]) => {
       calls.stopManyCalls.push({ agentId, requests });
       if (calls.stopManyError) throw new Error(calls.stopManyError);
@@ -118,6 +121,7 @@ afterEach(() => {
   calls.httpPending = [];
   calls.events.clear();
   calls.scanDelayMs = 0;
+  calls.liveHeader = false;
   calls.scanModes = [];
   calls.scanError = null;
   calls.scanReply = null;
@@ -133,6 +137,7 @@ afterEach(() => {
   calls.planCalls = 0;
   calls.historyFailureAt = 0;
   calls.stopFailureAt = 0;
+  calls.stopError = null;
   calls.restarts = 0;
   calls.deferPlan = false;
   calls.planPending = [];
@@ -329,6 +334,49 @@ describe("App action review freshness", () => {
     expect(calls.stopTargets).toHaveLength(0);
   });
 
+  it("offers Start again on the stop toast, which starts the reviewed service from its recording", async () => {
+    vi.useFakeTimers();
+    // jsdom has no Web Animations; the toast stack's flip asks for them when a second toast arrives.
+    const proto = Element.prototype as unknown as { getAnimations?: () => Animation[] };
+    const had = proto.getAnimations;
+    proto.getAnimations ??= () => [];
+    onTestFinished(() => { proto.getAnimations = had; });
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    await fireEvent.click(rowAction(view.container, 3000, "stop"));
+    await vi.advanceTimersByTimeAsync(100);
+    await fireEvent.click(view.getByRole("button", { name: /^Stop :3000/ }));
+    await vi.advanceTimersByTimeAsync(1100);
+    const toast = view.container.querySelector<HTMLElement>(".toast.ok")!;
+    expect(toast.textContent).toContain("Port 3000 is free");
+    await fireEvent.click(within(toast).getByRole("button", { name: "Start again" }));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(calls.restarts).toBe(1);
+    expect(view.container.textContent).toContain("Restarted :3000");
+  });
+
+  it("explains a stop the native side refused and keeps the app usable", async () => {
+    vi.useFakeTimers();
+    calls.stopError = "Error: The system didn't let holdmap stop node (PID 43000). Stop it from its own app, or with sudo in a terminal.";
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    await fireEvent.click(rowAction(view.container, 3000, "stop"));
+    await vi.advanceTimersByTimeAsync(100);
+    await fireEvent.click(view.getByRole("button", { name: /^Stop :3000/ }));
+    await vi.advanceTimersByTimeAsync(300);
+    const dialog = view.container.ownerDocument.querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]')!;
+    expect(dialog).toBeTruthy();
+    // The reason and the next step, without the "Error:" prefix the IPC string carried.
+    expect(dialog.textContent).toContain("didn't let holdmap stop node (PID 43000)");
+    expect(dialog.textContent).toContain("with sudo");
+    expect(dialog.textContent).not.toContain("Error: The system");
+    expect(calls.stopTargets).toHaveLength(0);
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(view.container.ownerDocument.querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
+    expect(rowAction(view.container, 3000, "stop")).toBeTruthy();
+  });
+
   it("ignores a plan completed after its review was cancelled with Escape", async () => {
     vi.useFakeTimers();
     calls.deferPlan = true;
@@ -409,6 +457,7 @@ describe("App live polling", () => {
   });
 
   it("stays Live while a slow scan is in flight, and says how old the data is only when stalled", async () => {
+    calls.liveHeader = true;
     vi.useFakeTimers();
     const { container } = render(App);
     await vi.advanceTimersByTimeAsync(600);
@@ -424,6 +473,7 @@ describe("App live polling", () => {
   });
 
   it("retains rows and details after a failed scan, and offers a visible retry that cannot be duplicated", async () => {
+    calls.liveHeader = true;
     vi.useFakeTimers();
     const view = render(App);
     await vi.advanceTimersByTimeAsync(600);
@@ -644,6 +694,24 @@ describe("App overview and first run", () => {
     expect(localStorage.getItem("holdmap.view")).toBe("agents");
   });
 
+  it("explains a first scan that failed on Home's cards, with a retry, instead of an endless …", async () => {
+    vi.useFakeTimers();
+    calls.liveHeader = true;
+    calls.scanError = "holdmap CLI not found";
+    localStorage.setItem("holdmap.view", "home");
+    localStorage.setItem("holdmap.home.layout", "cards");
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(view.container.textContent).toContain("Couldn't look up the agents");
+    expect(view.container.querySelector(".live")!.textContent!.trim()).toBe("Scan failed");
+    calls.scanError = null;
+    const scans = calls.scan;
+    await fireEvent.click(view.getAllByRole("button", { name: "Try again" }).at(-1)!);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(calls.scan).toBeGreaterThan(scans);
+    expect(view.container.textContent).not.toContain("Couldn't look up the agents");
+  });
+
   it("flips Home between cards and map with V and remembers the choice", async () => {
     vi.useFakeTimers();
     localStorage.setItem("holdmap.view", "home");
@@ -687,5 +755,15 @@ describe("App overview and first run", () => {
     await fireEvent.click(view.getByRole("button", { name: "Start" }));
     await vi.advanceTimersByTimeAsync(300);
     expect(view.getByRole("region", { name: "Overview" })).toBeTruthy();
+  });
+});
+
+describe("App title bar on the examples build", () => {
+  it("says Sample data instead of Live", async () => {
+    vi.useFakeTimers();
+    const { container } = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(container.querySelector(".live")!.textContent!.trim()).toBe("Sample data");
+    vi.useRealTimers();
   });
 });

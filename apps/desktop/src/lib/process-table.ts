@@ -33,7 +33,7 @@ export function processTableRows(agent: Agent, memory: AgentMemoryReport | null)
     const role = row?.role ?? (p.role === "agent" ? "agent" : p.role === "child" ? "child" : "helper");
     rows.push({
       pid: p.pid, name: p.name, role, roleLabel: roleLabel(role), depth,
-      bytes: row?.scan_bytes ?? p.memory_bytes, cpu: p.cpu_percent, command: p.command,
+      bytes: row?.scan_bytes ?? p.memory_bytes, cpu: p.cpu_unknown ? null : p.cpu_percent, command: p.command,
       dominant: !!row?.dominant, dominantReason: row?.dominant_reason ?? null, bits: readingBits(row?.reading),
     });
   }

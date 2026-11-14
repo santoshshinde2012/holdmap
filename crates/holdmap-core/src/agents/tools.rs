@@ -298,6 +298,7 @@ pub(super) fn collect<'a>(
                 ports: held,
                 memory_bytes: process.memory_bytes,
                 cpu_percent: process.cpu_percent,
+                cpu_unknown: None,
             }
         })
         .collect();

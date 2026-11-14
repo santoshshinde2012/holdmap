@@ -54,7 +54,7 @@
   <h4 id="sched-h">Scheduled scans</h4>
   <p class="sub">
     {#if status?.schedule.enabled}
-      On · {intervalLabel(status.schedule.every_hours).toLowerCase()} · next {untilLabel(status.next_ms, Date.now())}{#if status.power === "battery" && status.schedule.skip_on_battery} · paused on battery{/if}
+      On · {intervalLabel(status.schedule.every_hours).toLowerCase()} · next {untilLabel(status.next_ms, Date.now())}{#if status.power === "battery" && status.schedule.skip_on_battery}{" "}· paused on battery{/if}
     {:else}
       Off. Nothing runs unless you start it.
     {/if}

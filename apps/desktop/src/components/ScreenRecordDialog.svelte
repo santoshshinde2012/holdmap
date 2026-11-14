@@ -173,7 +173,7 @@
       {/if}
     </div>
     {#if previewError}<p class="waiting">This window cannot play the MP4 preview. You can still save the file and open it in a video player.</p>{/if}
-    <p class="meta">{formatClock(result.durationMs)} · {result.width}×{result.height}{#if result.mp4} · MP4 {humanBytes(result.mp4.bytes)}{/if}{#if result.gif} · GIF {humanBytes(result.gif.bytes)}{/if}</p>
+    <p class="meta">{formatClock(result.durationMs)} · {result.width}×{result.height}{#if result.mp4}{" "}· MP4 {humanBytes(result.mp4.bytes)}{/if}{#if result.gif}{" "}· GIF {humanBytes(result.gif.bytes)}{/if}</p>
     {#if stoppedBy}<div class="gap"><Callout tone="info" title="Stopped automatically">{limitNote[stoppedBy]}</Callout></div>{/if}
     {#if result.warnings.length}
       <div class="gap"><Callout tone="warn" title="Partial export">

@@ -232,11 +232,19 @@
     onselectagent(id);
     if (focusDetails) queueMicrotask(() => detailsView?.focusHeading());
   }
+  // Opened from Home or ⌘K, the view switch drops focus on the page: give it to the details.
+  $effect(() => {
+    if (!detailsView || !selectedInfoId) return;
+    void tick().then(() => { if (!document.activeElement?.closest(".agents-wrap, [role=dialog]")) detailsView?.focusHeading(); });
+  });
   function closeDetails() {
+    const at = visibleAgents.findIndex((x) => x.id === selectedAgent);
     onselectagent(null);
     const back = detailsOpener;
     detailsOpener = null;
-    if (back?.isConnected) back.focus({ preventScroll: true });
+    if (back?.isConnected && back !== document.body) back.focus({ preventScroll: true });
+    // No opener on this view: return to the agent's own card in the list.
+    else if (at >= 0) void tick().then(() => document.querySelectorAll<HTMLElement>("#agents-overview .rail .card > .head")[at]?.focus({ preventScroll: true }));
   }
   function detailsKey(ev: KeyboardEvent) {
     if (ev.key !== "Escape" || isComposingKey(ev)) return;
@@ -313,6 +321,7 @@
 {#snippet limits(items: string[], open: boolean)}
   <details class="limits" {open}>
     <summary><Icon name="info" size={12} />What this can and can't see</summary>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex (the list scrolls, so it takes focus for keyboard scrolling: axe scrollable-region-focusable) -->
     <ul tabindex="0" aria-label="What this can and can't see">{#each items as l}<li>{l}</li>{/each}</ul>
   </details>
 {/snippet}
@@ -339,7 +348,14 @@
   {:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="agents" id="agents-overview" class:rail-off={!rail} class:has-details={!!selectedInfo} class:map-open={mapOpen} {onkeydown}>
-  {#if !report}
+  {#if !report && capabilitiesError}
+    <div class="empty" role="alert">
+      <Icon name="alert" size={28} />
+      <p>Couldn't look up the agents</p>
+      <span>{capabilitiesError}</span>
+      {#if onrefreshcapabilities}<Button size="sm" onclick={onrefreshcapabilities} loading={capabilitiesLoading} loadingText="Trying again…">Try again</Button>{/if}
+    </div>
+  {:else if !report}
     <div class="empty" aria-busy="true"><Icon name="bot" size={28} /><p>Looking for agents…</p></div>
   {:else if report.agents.length === 0}
     <div class="empty">
@@ -431,7 +447,7 @@
             <div class="stats" aria-live="polite">
               <span class="sr-only">{pictureHint}</span>
               <span><b>{stats.agents}</b> {picture === "project" ? noun(stats.agents, "agent in this project", "agents in this project") : noun(stats.agents, "agent")}</span>
-              {#if fleet}<span><b>{humanBytes(fleet.total)}</b> memory</span>{/if}
+              {#if fleet}<span><b>{humanBytes(fleet.total)}</b> RAM</span>{/if}
               {#if picture !== "context"}<span><b>{stats.folders}</b> {noun(stats.folders, "folder")}</span>{/if}
               {#if picture !== "context"}<span class="opt"><b>{stats.ports}</b> ports &amp; services</span>{/if}
               <span class="opt">{plural(stats.hosts, "remote host")}</span>
@@ -566,6 +582,7 @@
   .empty { grid-column: 1 / -1; height: 100%; display: grid; place-content: center; justify-items: center; gap: 6px; color: var(--muted); text-align: center; }
   .empty p { margin: 6px 0 0; color: var(--text); font-weight: var(--fw-semibold); }
   .empty span { font-size: var(--fs-body); line-height: var(--lh-body); max-width: 380px; }
+  .empty :global(.ui-btn) { margin-top: 8px; }
   .empty .limits { margin-top: 12px; max-width: 460px; text-align: left; }
   .no-matches { padding: 20px 4px; display: grid; gap: 6px; justify-items: center; text-align: center; color: var(--muted); }
   .no-matches p { margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text); }

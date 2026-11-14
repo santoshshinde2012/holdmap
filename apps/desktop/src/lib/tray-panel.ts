@@ -70,7 +70,8 @@ export function settingValues(s: PanelSettings): Record<string, boolean> {
 export type StatusTone = "pending" | "ok" | "medium" | "high";
 
 /** The status line at the top: how much needs you, and the most urgent item. */
-export function needsStatus(needs: readonly PanelNeed[] | null): { tone: StatusTone; title: string; detail: string } {
+export function needsStatus(needs: readonly PanelNeed[] | null, offline = false): { tone: StatusTone; title: string; detail: string } {
+  if (!needs && offline) return { tone: "medium", title: "Can't read holdmap", detail: "Trying again every few seconds" };
   if (!needs) return { tone: "pending", title: "Checking…", detail: "Reading agents and ports" };
   if (!needs.length) return { tone: "ok", title: "All clear", detail: "Nothing needs you right now" };
   const first = needs.find((n) => n.urgency === "high") ?? needs[0];

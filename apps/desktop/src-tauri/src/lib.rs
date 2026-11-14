@@ -20,6 +20,7 @@ mod capture_file;
 mod capture_lease;
 mod commands;
 mod confirmation;
+mod error_log;
 mod local_window;
 mod needs;
 mod power;
@@ -192,12 +193,17 @@ pub fn run() {
         })
         .setup(move |app| {
             let handle = app.handle().clone();
+            error_log::init(app.state::<AppState>().store.dir());
             // Shown in the Dock unless set to run as a menu-bar app (macOS).
             tray::apply_dock(&handle, app.state::<AppState>().store.config().show_in_dock);
             let tray_ok = match tray::setup_tray(&handle) {
                 Ok(()) => true,
                 Err(e) => {
                     eprintln!("holdmap: tray unavailable ({e}); closing the window quits");
+                    error_log::record(
+                        "tray",
+                        &format!("unavailable ({e}); closing the window quits"),
+                    );
                     false
                 }
             };
@@ -212,6 +218,7 @@ pub fn run() {
             if tray_ok && shortcuts::started_hidden() {
                 if let Err(error) = window_lifecycle::hide_main(&handle) {
                     eprintln!("holdmap: couldn't start in the tray ({error})");
+                    error_log::record("tray", &format!("couldn't start in the tray ({error})"));
                 }
             }
             update::spawn_check(handle.clone());
@@ -235,7 +242,12 @@ pub fn run() {
             }
         })
         .build(context)
-        .expect("error while building holdmap")
+        .unwrap_or_else(|error| {
+            // Nothing is on screen yet, so say why on stderr (and in Console.app) and exit
+            // with a failure code instead of a panic backtrace.
+            eprintln!("holdmap couldn't start: {error}");
+            std::process::exit(1)
+        })
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 screen_recording::cleanup_exit(app);

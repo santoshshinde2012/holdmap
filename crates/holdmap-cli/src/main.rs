@@ -518,17 +518,24 @@ fn main() -> ExitCode {
             {
                 return ExitCode::from(exit::OK);
             }
+            let mut said = e.to_string();
             eprintln!(
                 "{} {}",
                 style::paint("error:", style::S::BoldRed),
-                holdmap_core::util::printable(&e.to_string())
+                holdmap_core::util::printable(&said)
             );
             for cause in e.chain().skip(1) {
+                // Context often already quotes its cause ("can't read x: denied"); say it once.
+                let text = cause.to_string();
+                if said.contains(&text) {
+                    continue;
+                }
                 eprintln!(
                     "  {} {}",
                     style::dim("caused by:"),
-                    holdmap_core::util::printable(&cause.to_string())
+                    holdmap_core::util::printable(&text)
                 );
+                said = text;
             }
             ExitCode::from(
                 if e.downcast_ref::<project_policy::ProtectionRefusal>()

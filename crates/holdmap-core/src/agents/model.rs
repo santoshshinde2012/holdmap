@@ -37,6 +37,15 @@ impl AgentsReport {
         self.memory
             .retain(|memory| ids.contains(memory.agent_id.as_str()));
     }
+
+    /// An agent's memory as text: its size, or `unknown` when none of its processes gave a
+    /// reading (another account's process, for example), so a zero is never shown as a size.
+    pub fn memory_text(&self, agent: &Agent) -> String {
+        match self.memory.iter().find(|row| row.agent_id == agent.id) {
+            Some(memory) => memory.headline_text(),
+            None => crate::util::human_bytes(agent.memory_bytes),
+        }
+    }
 }
 
 /// An agent that isn't running, known only from its default configuration locations.
@@ -89,6 +98,9 @@ pub struct Agent {
     pub memory_bytes: u64,
     /// CPU (percent of one core) of the agent and everything under it.
     pub cpu_percent: f32,
+    /// Why the CPU total is unknown: the OS refused every one of its processes' CPU time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu_unknown: Option<String>,
     /// Its processes: the agent, what it started, then its product helpers.
     pub processes: Vec<AgentProcess>,
     /// Processes not listed.
@@ -151,6 +163,9 @@ pub struct AgentProcess {
     pub memory_bytes: u64,
     /// CPU percent of one core.
     pub cpu_percent: f32,
+    /// Why the CPU reading is unknown (the OS refused it); `None` when it was measured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu_unknown: Option<String>,
 }
 
 /// What a running child process appears to do.
@@ -202,9 +217,20 @@ pub struct AgentTool {
     pub memory_bytes: u64,
     /// CPU percent of one core.
     pub cpu_percent: f32,
+    /// Why the CPU reading is unknown (the OS refused it); `None` when it was measured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu_unknown: Option<String>,
 }
 
 impl Agent {
+    /// A measured CPU percentage, or an explicit unknown with the reason it is unavailable.
+    pub fn cpu_text(&self) -> String {
+        match &self.cpu_unknown {
+            Some(reason) => format!("CPU unknown ({reason})"),
+            None => format!("{:.1}% CPU", self.cpu_percent),
+        }
+    }
+
     /// Match identity, owned PID, folder, tool/capability names or retained skill purpose,
     /// without searching command lines or raw configuration values.
     pub fn matches(&self, query: &str) -> bool {

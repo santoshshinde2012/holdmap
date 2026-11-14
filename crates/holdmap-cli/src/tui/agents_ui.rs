@@ -272,21 +272,18 @@ fn draw_list(f: &mut Frame, app: &mut App, area: Rect) {
         ]);
         let subtitle = Line::from(Span::styled(
             format!(
-                "PID {} · {} ports · {} tools",
+                "PID {} · {} · {}",
                 agent.pid,
-                agent.ports.len(),
-                agent.tools.len() + agent.more_tools
+                holdmap_core::util::count(agent.ports.len(), "port", "ports"),
+                holdmap_core::util::count(agent.tools.len() + agent.more_tools, "tool", "tools")
             ),
             theme::muted(),
         ));
         let mut cells = vec![Cell::from(vec![name, subtitle])];
         if !compact {
             cells.push(Cell::from(vec![
-                Line::raw(human_bytes(agent.memory_bytes)),
-                Line::from(Span::styled(
-                    format!("{:.1}% CPU", agent.cpu_percent),
-                    theme::muted(),
-                )),
+                Line::raw(report.memory_text(agent)),
+                Line::from(Span::styled(agent.cpu_text(), theme::muted())),
             ]));
         }
         Row::new(cells).height(2)
@@ -343,9 +340,9 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
         )),
         Line::from(Span::styled(
             format!(
-                "{} · {:.1}% CPU · {folders} working folder{} · {tools} tool{}",
+                "{} · {} · {folders} working folder{} · {tools} tool{}",
                 human_bytes(agent.memory_bytes),
-                agent.cpu_percent,
+                agent.cpu_text(),
                 if folders == 1 { "" } else { "s" },
                 if tools == 1 { "" } else { "s" }
             ),
@@ -901,6 +898,7 @@ mod tests {
             ports: Vec::new(),
             memory_bytes: 0,
             cpu_percent: 0.0,
+            cpu_unknown: None,
         }];
         agent.more_tools = 2;
         agent.folders = vec![AgentFolder {
@@ -971,6 +969,7 @@ mod tests {
             ports: Vec::new(),
             memory_bytes: 0,
             cpu_percent: 0.0,
+            cpu_unknown: None,
         }];
         agent.capabilities = AgentCapabilities {
             inspected: true,

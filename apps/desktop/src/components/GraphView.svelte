@@ -272,7 +272,7 @@
         {/if}
         {#if query.trim()}
           <div class="search-context" role="status">
-            <Icon name="search" size={12} /><span><strong>{matches}</strong> {matches === 1 ? "match" : "matches"}{#if (shown?.nodes.length ?? 0) > matches} · {plural((shown?.nodes.length ?? 0) - matches, "connected neighbour")}{/if}</span>
+            <Icon name="search" size={12} /><span><strong>{matches}</strong> {matches === 1 ? "match" : "matches"}{#if (shown?.nodes.length ?? 0) > matches}{" "}· {plural((shown?.nodes.length ?? 0) - matches, "connected neighbour")}{/if}</span>
             {#if onclearquery}<button type="button" onclick={onclearquery}>Clear search</button>{/if}
           </div>
         {/if}

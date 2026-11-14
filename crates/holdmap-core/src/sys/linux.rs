@@ -173,6 +173,11 @@ pub fn start_token(pid: u32) -> Option<u64> {
     stat_fields(pid)?.get(19)?.parse().ok()
 }
 
+/// `/proc/<pid>/stat` is readable for every process, so CPU time always is.
+pub fn cpu_readable(_pid: u32) -> bool {
+    true
+}
+
 /// True when the process is a zombie (exited, not yet reaped).
 pub fn is_zombie(pid: u32) -> bool {
     stat_fields(pid)

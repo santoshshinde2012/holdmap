@@ -5,6 +5,8 @@
     value: number | null;
     of?: number | null;
     label: string;
+    /** A short line under the value ("in 3 skills"). */
+    meta?: string;
     tone?: "warn" | "ok";
     go: () => void;
   }
@@ -16,7 +18,7 @@
   import StatStrip from "../ui/StatStrip.svelte";
   let { stats }: { stats: SummaryStat[] } = $props();
   const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-  const tiles = $derived(stats.map((s) => ({ id: s.id, label: cap(s.label), value: s.value, of: s.of, tone: s.tone, go: s.go, aria: `${cap(s.label)} ${s.value}${s.of != null ? `/${s.of}` : ""}` })));
+  const tiles = $derived(stats.map((s) => ({ id: s.id, label: cap(s.label), value: s.value, of: s.of, tone: s.tone, go: s.go, meta: s.meta, aria: `${cap(s.label)} ${s.value}${s.of != null ? `/${s.of}` : ""}${s.meta ? ` ${s.meta}` : ""}` })));
 </script>
 
 <div class="home-stats" data-capture-area><StatStrip stats={tiles} label="Summary" compact /></div>

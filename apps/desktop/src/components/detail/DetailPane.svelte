@@ -175,7 +175,7 @@
           <Button size="sm" variant={stop?.overridable ? "danger-outline" : "danger"} icon="stop" kbd={entry.container ? undefined : "⌫"} loading={busy} loadingText="Stopping…" disabled={loading || (!stopReady && !stop?.overridable)} onclick={onstop}>{entry.container ? "Stop container…" : "Stop…"}</Button>
         </div>
       </div>
-      {#if stopReason}<p class="why"><Icon name={stop?.overridable || entry.protected ? "shield" : "lock"} size={13} /><span>{stopReason}{#if stop?.overridable} — review an explicit override to stop it.{/if}</span></p>
+      {#if stopReason}<p class="why"><Icon name={stop?.overridable || entry.protected ? "shield" : "lock"} size={13} /><span>{stopReason}{#if stop?.overridable}{" "}— review an explicit override to stop it.{/if}</span></p>
       {:else}<p class="scope">Stops the port owner; keeps this computer running.</p>{/if}
     </footer>
   {/if}

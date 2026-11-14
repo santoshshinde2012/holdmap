@@ -123,7 +123,7 @@
     {#if tab === "overview"}
       <OverviewTab {agent} {report} {base} {onreveal} {oneditor} {onfolder} oninspect={inspect} />
     {:else if tab === "capabilities"}
-      <CapabilitiesTab {agent} {base} oninspect={inspect} onopen={oncapabilities} />
+      <CapabilitiesTab {agent} {base} oninspect={inspect} onopen={oncapabilities} {onreveal} />
     {:else if tab === "flow"}
       <FlowTab {agent} {report} {entries} {base} {pids} {runs} {flowReport} {activity} {onentry} {onstop} {onnavigate} onopen={onflow} />
     {:else}

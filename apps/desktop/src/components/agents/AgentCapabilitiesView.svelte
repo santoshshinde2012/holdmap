@@ -10,7 +10,7 @@
   import CapabilityInspector from "./capabilities/CapabilityInspector.svelte";
   import AgentLocations from "./AgentLocations.svelte";
   import { agentColor, monogram } from "../../lib/agents";
-  import { humanBytes } from "../../lib/format";
+  import { cpuLabel, humanBytes } from "../../lib/format";
   import { trustStore } from "../../lib/trust-store.svelte";
   import { securityTab } from "../../lib/security-tab.svelte";
   import { isComposingKey } from "../../lib/keyboard";
@@ -279,7 +279,7 @@
   {#if active}
     <div class="inspector"><span class="eyebrow">Agent process</span><h3 class="inspector-title" tabindex="-1" bind:this={inspectorHeading}>{active.name}</h3><p class="detail-intro">PID {active.pid} · {active.vendor}</p>
     <div class="agent-counts"><span><Icon name="plug" size={15} /><b>{active.capabilities?.inspected ? active.capabilities.mcp_servers.length : "—"}</b>MCP</span><span><Icon name="sparkles" size={15} /><b>{active.capabilities?.inspected ? active.capabilities.skills.length : "—"}</b>Skills</span></div>
-    <dl><div><dt>Inventory</dt><dd>{active.capabilities?.inspected ? "Inspected" : "Not inspected"}</dd></div><div><dt>Resources</dt><dd>{active.cpu_percent.toFixed(1)}% CPU · {humanBytes(active.memory_bytes)}</dd></div></dl>
+    <dl><div><dt>Inventory</dt><dd>{active.capabilities?.inspected ? "Inspected" : "Not inspected"}</dd></div><div><dt>Resources</dt><dd>{cpuLabel(active)} · {humanBytes(active.memory_bytes)}</dd></div></dl>
     {#if trustStore.forAgent(active.product).length}
       {@const untrusted = trustStore.forAgent(active.product)}
       <Callout tone="warn" size="sm" title="Skill trust">{untrusted.length} skill{untrusted.length === 1 ? "" : "s"} changed since trusted or not trusted yet: {untrusted.map((t) => t.subject.name).join(", ")}.
@@ -427,6 +427,7 @@
   dl { display: grid; gap: 17px; margin: 24px 0; } dl > div { display: grid; gap: 5px; } dt { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); } dd { margin: 0; color: var(--text-2); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); overflow-wrap: anywhere; }
   .notice { display: flex; align-items: center; gap: 8px; padding: 8px 16px; } .empty { flex: 1; display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; text-align: center; padding: 24px; color: var(--muted); } .empty h3 { color: var(--text-2); } .empty p { max-width: 480px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   @container (max-width: 1180px) { .workspace.has-details { grid-template-columns: 235px minmax(0, 1fr); } .details { position: absolute; z-index: 6; top: 10px; right: 10px; bottom: 10px; width: min(350px, calc(100% - 20px)); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); } .workspace-head { padding-inline: 14px; } .workspace-title p { display: none; } }
+  @container (max-width: 480px) { .workspace-title { width: 100%; } .cap-stats { flex: 1 1 100%; max-width: none; margin-left: 0; } .cap-stats :global(.strip) { grid-template-columns: repeat(4, minmax(0, 1fr)); } .cap-stats :global(.tile) { padding: 8px 10px; } }
   @container (max-width: 960px) { .workspace-head { padding: 10px 12px; flex-wrap: wrap; gap: 8px; } .workspace-title { gap: 8px; } .title-icon { width: 30px; height: 30px; border-radius: 9px; } .head-actions { margin-left: auto; } .workspace, .workspace.has-details { grid-template-columns: minmax(0, 1fr); } .rail { display: none; } .rail.is-open { display: block; position: absolute; z-index: 6; top: 10px; left: 10px; bottom: 10px; width: min(330px, calc(100% - 20px)); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); } .browse-button { display: grid; } .map-tools { padding: 10px 12px; gap: 9px; } .view-controls { margin-left: auto; } .map-empty { bottom: 60px; width: calc(100% - 28px); padding: 12px; } .coverage-panel { top: 96px; max-height: calc(100% - 110px); } .tools-empty { margin: 15px; padding: 20px; } }
   @container (max-width: 560px) { .map-context { width: 100%; } .view-controls { margin-left: 0; } .result-summary { padding-inline: 12px; } .evidence-footer { padding: 8px 12px; } }
 </style>

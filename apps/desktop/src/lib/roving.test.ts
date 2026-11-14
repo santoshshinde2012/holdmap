@@ -18,9 +18,9 @@ describe("roving focus", () => {
     expect(nextIndex(0, "Home", 3, { disabled: [true, false, false] })).toBe(1);
   });
   it("type-ahead finds the next match after the current item", () => {
-    const l = ["Grouped", "Cluster", "Port", "Newest", "Memory"];
+    const l = ["Grouped", "Cluster", "Port", "Newest", "RAM"];
     expect(typeahead(l, "p", 0)).toBe(2);
-    expect(typeahead(l, "M", 0)).toBe(4);
+    expect(typeahead(l, "R", 0)).toBe(4);
     expect(typeahead(l, "z", 0)).toBeNull();
     expect(typeahead(l, "", 0)).toBeNull();
   });

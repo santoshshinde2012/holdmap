@@ -2284,22 +2284,22 @@
    }
   },
   {
-   "id": "unpinned:agent:2",
-   "rule": "unpinned",
+   "id": "elevated:agent:2",
+   "rule": "elevated",
    "severity": "medium",
-   "title": "Wide Agent: 1 MCP server isn't pinned",
-   "detail": "filesystem (npx @modelcontextprotocol/server-filesystem) can change on the next launch.",
+   "title": "Wide Agent has wider access than usual",
+   "detail": "Approvals: started with flags that skip approvals or the sandbox.",
    "target": {
     "view": "agents",
     "agentId": "agent:2"
    }
   },
   {
-   "id": "elevated:agent:2",
-   "rule": "elevated",
+   "id": "unpinned:agent:2",
+   "rule": "unpinned",
    "severity": "medium",
-   "title": "Wide Agent: Approvals: wider than usual",
-   "detail": "Started with flags that skip approvals or the sandbox.",
+   "title": "Wide Agent: 1 MCP server isn't pinned",
+   "detail": "filesystem (npx @modelcontextprotocol/server-filesystem) can change on the next launch.",
    "target": {
     "view": "agents",
     "agentId": "agent:2"

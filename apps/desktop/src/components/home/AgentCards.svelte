@@ -7,6 +7,8 @@
   import HomeAgentCard from "./HomeAgentCard.svelte";
   import { attentionAgent, unownedDevServers, type AttentionItem } from "../../lib/home";
   import { cardModel } from "../../lib/agent-card";
+  import { agentPlace } from "../../lib/agents";
+  import { agentMemoryText, memoryFor } from "../../lib/memory-text";
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
   let { report, entries, needs, colors, now, selected, active, onhover, onselect, onopen, onport, onstop }: {
@@ -41,7 +43,7 @@
 <section class="cards" aria-label="Agents" bind:this={root} {onkeydown}>
   {#each report.agents as a (a.id)}
     <HomeAgentCard agent={a} model={cardModel(a, entries)} needs={needs.filter((n) => attentionAgent(n, report) === a.id)} findings={agentCounts(insightsStore.insights, a.product)} color={colors.get(a.id) ?? "var(--accent)"}
-      {now} selected={selected === a.id} {active} {onhover} {onselect} {onopen} {onport} {onstop} />
+      {now} place={agentPlace(a, report.agents)} twin={report.agents.some((b) => b !== a && b.name === a.name)} memory={agentMemoryText(a, memoryFor(report, a.id))} selected={selected === a.id} {active} {onhover} {onselect} {onopen} {onport} {onstop} />
   {/each}
   {#if loose.length}
     <article class="loose" aria-label="Unowned dev servers">

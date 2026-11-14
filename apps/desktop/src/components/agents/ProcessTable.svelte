@@ -32,7 +32,7 @@
         <tr class:large={row.dominant} title={row.command || undefined}>
           <th scope="row" style="padding-left: {tree ? row.depth * 10 + 4 : 4}px">
             <span class="pname"><i style="background: {color(row.role)}" aria-hidden="true"></i>{row.name}</span>
-            <span class="psub mono">pid {row.pid} · {row.roleLabel}{#if row.dominant} · Large{/if}</span>
+            <span class="psub mono">pid {row.pid} · {row.roleLabel}{#if row.dominant}{" "}· Large{/if}</span>
             {#if row.bits}<span class="psub">{row.bits}</span>{/if}
             {#if row.dominant && row.dominantReason}<span class="psub why">{row.dominantReason}</span>{/if}
           </th>

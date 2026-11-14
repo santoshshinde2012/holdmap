@@ -41,7 +41,7 @@
       </div>
       <p class="note">Change these any time in Settings. Scans stay on this computer.</p>
     </section>
-    <p class="tips"><kbd>{mod}</kbd><kbd>K</kbd> opens every command.{#if tray} Closing the window keeps holdmap in the {platform === "macos" ? "menu bar" : "system tray"}{#if shortcut}; <kbd>{shortcut}</kbd> brings it back{/if}.{/if}</p>
+    <p class="tips"><kbd>{mod}</kbd><kbd>K</kbd> opens every command.{#if tray}{" "}Closing the window keeps holdmap in the {platform === "macos" ? "menu bar" : "system tray"}{#if shortcut}; <kbd>{shortcut}</kbd> brings it back{/if}.{/if}</p>
   </div>
   {#snippet footer()}
     <Button onclick={onskip}>Skip</Button>

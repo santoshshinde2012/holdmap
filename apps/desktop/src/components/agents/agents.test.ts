@@ -56,7 +56,7 @@ describe("agent visibility", () => {
     expect(container.textContent).toContain("15 processes");
     expect(container.textContent).toContain("5 tools");
     expect(container.textContent).toContain("6.2% CPU");
-    expect(container.textContent).toContain("total memory");
+    expect(container.querySelector(".res-sub")?.textContent).toBe("RAM");
     expect(container.querySelector(".body")).toBeNull();
   });
 
@@ -206,5 +206,17 @@ describe("agent visibility", () => {
     await fireEvent.click(view.getByRole("button", { name: "Legend" }));
     expect(view.container.querySelector(".legend")).toBeNull();
     expect(view.getByRole("button", { name: "Legend" }).getAttribute("aria-pressed")).toBe("false");
+  });
+});
+
+describe("AgentsView when the lookup fails", () => {
+  it("says why and offers to try again instead of looking forever", async () => {
+    const retry = vi.fn();
+    const { container, getByRole } = render(AgentsView, { report: null, capabilitiesError: "holdmap isn't installed", onrefreshcapabilities: retry, entries: [], selectedAgent: null, dark: false, reduced: true, onselectagent() {}, onentry() {}, ...actions });
+    expect(getByRole("alert").textContent).toContain("Couldn't look up the agents");
+    expect(container.textContent).toContain("holdmap isn't installed");
+    expect(container.textContent).not.toContain("Looking for agents");
+    await fireEvent.click(getByRole("button", { name: "Try again" }));
+    expect(retry).toHaveBeenCalledOnce();
   });
 });
