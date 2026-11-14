@@ -61,3 +61,38 @@ describe("palette commands", () => {
     expect([nextProto("any"), nextProto("tcp"), nextProto("udp")]).toEqual(["tcp", "udp", "any"]);
   });
 });
+
+describe("palette agent and place commands", () => {
+  const agents = [
+    { id: "a", name: "Codex CLI", memory_bytes: 200 << 20, place: "api", stoppable: true },
+    { id: "b", name: "Codex CLI", memory_bytes: 900 << 20, place: "web", stoppable: false },
+  ];
+  it("goes to Home and the Agents sections (Agents itself is ⇧A), but not to the view already open", () => {
+    const act = actions();
+    const cmds = appCommands(state({ view: "home" }), act);
+    expect(cmds.map((c) => c.id)).toEqual(expect.arrayContaining(["go-capabilities", "go-flow", "go-insights"]));
+    expect(cmds.some((c) => c.id === "go-home")).toBe(false);
+    cmds.find((c) => c.id === "go-capabilities")!.run();
+    expect(act.go).toHaveBeenCalledWith("capabilities");
+    expect(cmds.find((c) => c.id === "go-insights")!.title).toBe("Go to Security");
+  });
+  it("names the agent using the most RAM and opens it", () => {
+    const act = actions();
+    const top = appCommands(state({ agents }), act).find((c) => c.id === "agent-top-ram")!;
+    expect(top.title).toBe("Most RAM: Codex CLI");
+    expect(top.subtitle).toBe("900 MB");
+    top.run();
+    expect(act.openAgent).toHaveBeenCalledWith("b");
+  });
+  it("opens each agent, told apart by its place, and offers a reviewed stop only when it has ports to stop", () => {
+    const act = actions();
+    const cmds = appCommands(state({ agents }), act);
+    expect(cmds.find((c) => c.id === "agent-a")!.subtitle).toBe("200 MB RAM · api");
+    expect(cmds.find((c) => c.id === "agent-b")!.subtitle).toBe("900 MB RAM · web");
+    const stop = cmds.find((c) => c.id === "agent-stop-a")!;
+    expect(stop.subtitle).toBe("asks first");
+    stop.run();
+    expect(act.stopAgent).toHaveBeenCalledWith("a");
+    expect(cmds.some((c) => c.id === "agent-stop-b")).toBe(false);
+  });
+});

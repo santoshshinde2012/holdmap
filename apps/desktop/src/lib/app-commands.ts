@@ -1,7 +1,7 @@
 // The command palette's catalogue. A pure function of what the app shows right now; every
 // command runs through an action the app supplies, so stops still open the reviewed plan.
 import type { View } from "../components/shell/ViewToolbar.svelte";
-import { canOpen, title, type Filters } from "./format";
+import { canOpen, humanBytes, title, type Filters } from "./format";
 import type { Command } from "./palette";
 import type { Density } from "./rows";
 import { formatClock } from "./screen-record";
@@ -37,6 +37,8 @@ export interface CommandState {
   singleKeys: boolean;
   /** Port-list groups the user collapsed (their rows are out of keyboard reach). */
   collapsedGroups?: number;
+  /** Agents found, each with what tells it apart from a same-named one. */
+  agents?: { id: string; name: string; memory_bytes: number; place: string | null; stoppable: boolean }[];
 }
 
 export interface CommandActions {
@@ -76,7 +78,20 @@ export interface CommandActions {
   toggleAutostart: () => void;
   clearGraphQuery: () => void;
   expandGroups?: () => void;
+  /** Home, or an Agents section. */
+  go?: (view: "home" | AgentSection) => void;
+  openAgent?: (id: string) => void;
+  /** Opens the reviewed stop for an agent's ports; never stops directly. */
+  stopAgent?: (id: string) => void;
 }
+
+type AgentSection = "overview" | "capabilities" | "flow" | "insights";
+const PLACES: [View | AgentSection, string, string, string][] = [
+  ["home", "Home", "radar", "needs"],
+  ["capabilities", "MCP & skills", "plug", "servers tools instructions"],
+  ["flow", "Flow", "branch", "connections calls"],
+  ["insights", "Security", "shield", "findings analyzers"],
+];
 
 /** Ports beyond this many are reachable by search, not listed one by one. */
 const PORT_COMMANDS_MAX = 60;
@@ -101,6 +116,15 @@ export function appCommands(st: CommandState, act: CommandActions): Command[] {
       cmds.push({ id: `stop-${e.id}`, group: "Actions", icon: "stop", danger: true, title: `Stop :${e.port}  ${title(e)}`, subtitle: s?.id === e.id ? "selected · asks first" : "asks first", boost, keywords: `kill ${e.port} ${e.label}`, run: () => act.stop(e) });
     if (canOpen(e))
       cmds.push({ id: `open-${e.id}`, group: "Actions", icon: "external", title: `Open :${e.port} in browser`, subtitle: title(e), boost, keywords: `browser ${e.port}`, run: () => act.openInBrowser(e) });
+  }
+  if (act.go) for (const [v, name, icon, keywords] of PLACES) if (v !== st.view) cmds.push({ id: `go-${v}`, group: "View", icon, title: `Go to ${name}`, keywords, run: () => act.go!(v as "home" | AgentSection) });
+  const agents = [...st.agents ?? []].sort((a, b) => b.memory_bytes - a.memory_bytes);
+  const top = agents[0];
+  if (top?.memory_bytes && act.openAgent) cmds.push({ id: "agent-top-ram", group: "Actions", icon: "activity", title: `Most RAM: ${top.name}`, subtitle: humanBytes(top.memory_bytes), keywords: "memory heaviest agent", boost: 2, run: () => act.openAgent!(top.id) });
+  for (const a of agents.slice(0, PORT_COMMANDS_MAX)) {
+    const sub = `${humanBytes(a.memory_bytes)} RAM${a.place ? ` · ${a.place}` : ""}`;
+    if (act.openAgent) cmds.push({ id: `agent-${a.id}`, group: "View", icon: "bot", title: `Open ${a.name}`, subtitle: sub, keywords: `agent ${a.name} ${a.place ?? ""}`, run: () => act.openAgent!(a.id) });
+    if (act.stopAgent && a.stoppable) cmds.push({ id: `agent-stop-${a.id}`, group: "Actions", icon: "stop", danger: true, title: `Stop ${a.name}'s ports`, subtitle: "asks first", keywords: `kill agent ${a.name} ${a.place ?? ""}`, run: () => act.stopAgent!(a.id) });
   }
   if (st.powerAvailable) cmds.push({ id: "schedule-shutdown", group: "Actions", icon: "clock", title: st.native ? "Schedule computer shutdown…" : "Schedule shutdown simulation…", subtitle: "This computer · review first", keywords: "power shutdown schedule timer hour", run: act.scheduleShutdown });
   if (q) cmds.unshift({ id: "check", group: "Ports", icon: "search", title: `Check port ${q}`, subtitle: "who's using it?", keywords: `${q} why explain`, run: () => act.checkPort(q) });

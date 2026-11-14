@@ -41,7 +41,7 @@
   import ReviewPendingDialog from "./components/ReviewPendingDialog.svelte";
   import SettingsUnavailableDialog from "./components/SettingsUnavailableDialog.svelte";
   import * as api from "./lib/api";
-  import { agentMatches, filterAgents, stoppableEntries } from "./lib/agents";
+  import { agentMatches, agentPlace, filterAgents, stoppableEntries } from "./lib/agents";
   import { createAgentSelection } from "./lib/agent-selection.svelte";
   import { agentHash, findLinkedAgent, parseAgentHash } from "./lib/agent-selection";
   import { createAgentReportLoader } from "./lib/agents-live";
@@ -1195,6 +1195,7 @@
     filters, sideOpen: prefs.sideOpen, selectedGraphNode, version: info.version, platform: info.platform,
     recording: { active: !!capture.session, elapsedMs: capture.elapsed, hasResult: !!capture.result, checking: capture.support.pending, supported: !!capture.support.backend },
     snapshotHasResult: snapshotCaptureState.hasResult, notify: !!config?.notify, density: prefs.density, autostart: autostartOn, graphQuery, singleKeys: prefs.singleKeyShortcuts, collapsedGroups: prefs.collapsed.size,
+    agents: agentsReport?.agents.map((a) => ({ id: a.id, name: a.name, memory_bytes: a.memory_bytes, place: agentPlace(a, agentsReport!.agents), stoppable: stoppableEntries(a, snapshot?.entries ?? []).length > 0 })),
   }, {
     stopCluster: (name) => void requestClusterStop(name), stopAllDev: () => void requestStopAllDev(), installUpdate: () => void installUpdate(), togglePin: (e) => void togglePin(e),
     goToPort: (e) => { prefs.view = "list"; clearFilters(); selectEntry(e); }, stop: (e) => void requestStop(e, false), openInBrowser: (e) => void open(e),
@@ -1205,6 +1206,8 @@
     pinWithLabel: openPin, remote: () => (showRemote = true), history: () => void openHistory(), stopRecording: () => void capture.finish(), openRecording: capture.open,
     snapshot: () => snapshotCaptureUi?.show(), snapshotRecording: () => void snapshotCaptureUi?.captureRecording(), toggleNotify: () => void toggleNotify(),
     toggleDensity: () => { prefs.density = prefs.density === "compact" ? "comfortable" : "compact"; }, toggleAutostart: () => void toggleAutostart(), clearGraphQuery: () => (graphQuery = ""), expandGroups: () => (prefs.collapsed = new Set()),
+    go: (v) => { if (v === "home") prefs.view = "home"; else { prefs.view = "agents"; prefs.agentSection = v; } },
+    openAgent: (id) => openAgent(id), stopAgent: (id) => void requestStopAgentPorts(id),
   }));
 
   function onKey(e: KeyboardEvent) {

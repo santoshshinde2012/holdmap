@@ -4,7 +4,7 @@
 // summaries the agent cards show. No invented communication. No DOM or Svelte imports,
 // so all of it is unit-tested.
 
-import { humanDuration } from "./format";
+import { cpuReading, humanBytes, humanDuration } from "./format";
 import type { AccessFact, AccessLevel, AccessTopic, Agent, AgentKind, AgentPort, PortEntry, AgentProcess, AgentToolKind, AgentsReport, Evidence } from "./types";
 
 export type FootKind = "agent" | "folder" | "tool" | "port" | "service" | "remote" | "more" | "omitted" | "header" | "machine";
@@ -188,8 +188,7 @@ export function footprintGraph(r: AgentsReport, opts: GraphOptions = {}): FootGr
   const base = { entryId: null, path: null, evidence: "observed" as Evidence, tone: null as Tone, agent: null };
 
   for (const a of r.agents) {
-    const mem = a.memory_bytes >= 1 << 30 ? `${(a.memory_bytes / (1 << 30)).toFixed(1)} GB` : `${Math.round(a.memory_bytes / (1 << 20))} MB`;
-    node({ ...base, id: a.id, kind: "agent", label: a.name, sub: `${KIND_LABEL[a.kind]} · pid ${a.pid} · ${mem}`, agent: a }, a.id);
+    node({ ...base, id: a.id, kind: "agent", label: a.name, sub: `${KIND_LABEL[a.kind]} · pid ${a.pid} · ${humanBytes(a.memory_bytes)}`, agent: a }, a.id);
   }
   // Ports first, so a dev server that another agent uses stays a "port" node.
   for (const a of r.agents) {
@@ -357,8 +356,7 @@ export function projectGraph(r: AgentsReport, path: string, opts: GraphOptions =
   };
   const folderId = `folder:${path}`;
   for (const { agent: a, folder: f } of used) {
-    const mem = a.memory_bytes >= 1 << 30 ? `${(a.memory_bytes / (1 << 30)).toFixed(1)} GB` : `${Math.round(a.memory_bytes / (1 << 20))} MB`;
-    node({ ...base, id: a.id, kind: "agent", label: a.name, sub: `${KIND_LABEL[a.kind]} · pid ${a.pid} · ${mem}`, agent: a }, a.id);
+    node({ ...base, id: a.id, kind: "agent", label: a.name, sub: `${KIND_LABEL[a.kind]} · pid ${a.pid} · ${humanBytes(a.memory_bytes)}`, agent: a }, a.id);
     node({
       ...base,
       id: folderId,
@@ -869,15 +867,8 @@ export function agentPlace(a: Agent, all: readonly Agent[]): string | null {
 /** Compact resource line for skim surfaces: "520 MB · 3.4% · 15 processes". */
 export function resourcesLine(a: Agent): string {
   const procs = counts(a).processes;
-  const cpu = a.cpu_percent > 0 ? `${a.cpu_percent < 10 ? a.cpu_percent.toFixed(1) : Math.round(a.cpu_percent)}%` : null;
-  // Match CLI human_bytes style roughly for the card (KB/MB/GB).
-  const mem = a.memory_bytes >= 1 << 30
-    ? `${(a.memory_bytes / (1 << 30)).toFixed(a.memory_bytes >= 10 * (1 << 30) ? 0 : 1)} GB`
-    : a.memory_bytes >= 1 << 20
-      ? `${Math.round(a.memory_bytes / (1 << 20))} MB`
-      : a.memory_bytes >= 1 << 10
-        ? `${Math.round(a.memory_bytes / (1 << 10))} KB`
-        : `${a.memory_bytes} B`;
+  const cpu = a.cpu_percent > 0 && !a.cpu_unknown ? cpuReading(a) : null;
+  const mem = humanBytes(a.memory_bytes);
   return [mem, cpu, procs ? `${procs} process${procs === 1 ? "" : "es"}` : null].filter(Boolean).join(" · ");
 }
 
