@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Regression for the blinking details pane: every scan used to throw the explanations away, so
 // the selected port's Overview fell back to its skeleton until `explain` answered again.
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { cleanup, fireEvent, render, within } from "@testing-library/svelte";
 import type { ActionPlan, Explanation, HttpInfo, Snapshot, StopReport } from "./lib/types";
 import type { ScheduledStopRequest } from "./lib/schedules";
@@ -330,6 +330,27 @@ describe("App action review freshness", () => {
     expect(view.getByRole("alertdialog")).toBe(reviewed);
     expect(view.queryByRole("button", { name: /Stop :3000/ })).toBeNull();
     expect(calls.stopTargets).toHaveLength(0);
+  });
+
+  it("offers Start again on the stop toast, which starts the reviewed service from its recording", async () => {
+    vi.useFakeTimers();
+    // jsdom has no Web Animations; the toast stack's flip asks for them when a second toast arrives.
+    const proto = Element.prototype as unknown as { getAnimations?: () => Animation[] };
+    const had = proto.getAnimations;
+    proto.getAnimations ??= () => [];
+    onTestFinished(() => { proto.getAnimations = had; });
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    await fireEvent.click(rowAction(view.container, 3000, "stop"));
+    await vi.advanceTimersByTimeAsync(100);
+    await fireEvent.click(view.getByRole("button", { name: /^Stop :3000/ }));
+    await vi.advanceTimersByTimeAsync(1100);
+    const toast = view.container.querySelector<HTMLElement>(".toast.ok")!;
+    expect(toast.textContent).toContain("Port 3000 is free");
+    await fireEvent.click(within(toast).getByRole("button", { name: "Start again" }));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(calls.restarts).toBe(1);
+    expect(view.container.textContent).toContain("Restarted :3000");
   });
 
   it("ignores a plan completed after its review was cancelled with Escape", async () => {

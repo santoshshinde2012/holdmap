@@ -1010,18 +1010,22 @@
         if (!c.entry) { selectedId = null; selectedNode = null; graphDetailsOpen = false; }
         if (prefs.view === "agents") loadAgents();
         const restart = restartCommand(c);
-        if (c.restart && c.entry && !queue.length) {
-          const port = c.entry.port;
+        const entry = c.entry, rootPid = entry && !queue.length ? restartRootPid(entry, c.plan) : null;
+        // Starts the reviewed service again from its recording: the stop toast's undo.
+        const startAgain = async (stopped: string) => {
+          if (!entry) return;
           try {
-            const pid = restartRootPid(c.entry, c.plan);
-            if (pid === null) throw new Error("Couldn't identify one recorded process from the reviewed stop plan. Choose a recording in Recently stopped or use the service's normal launcher.");
-            const s = await api.restartStopped(port, c.entry.protocol, pid);
-            setTimeout(() => { if (confirm === c) confirm = null; }, 600);
-            toast("ok", `Restarted :${port}`, `${s.command} (PID ${s.pid}) · log ${s.log}`);
+            if (rootPid === null) throw new Error("Couldn't identify one recorded process from the reviewed stop plan. Choose a recording in Recently stopped or use the service's normal launcher.");
+            const s = await api.restartStopped(entry.port, entry.protocol, rootPid);
+            toast("ok", `Restarted :${entry.port}`, `${s.command} (PID ${s.pid}) · log ${s.log}`);
+            setTimeout(() => refresh(), 1200);
           } catch (err) {
-            setTimeout(() => { if (confirm === c) confirm = null; }, 600);
-            toast("error", `Stopped :${port}, but couldn't start it again`, String(err), { label: "Restart…", run: openHistory });
+            toast("error", `${stopped}, but couldn't start it again`, String(err), { label: "Restart…", run: openHistory });
           }
+        };
+        if (c.restart && entry && !queue.length) {
+          setTimeout(() => { if (confirm === c) confirm = null; }, 600);
+          await startAgain(`Stopped :${entry.port}`);
           return;
         }
         setTimeout(() => {
@@ -1029,7 +1033,7 @@
           toast("ok",
             queue.length ? `${what} are free` : c.entry ? `Port ${c.entry.port} is free` : c.cluster ? `Cluster ${c.cluster.name} stopped` : "Dev servers stopped",
             `${what} stopped in ${seconds(c.report?.elapsed_ms ?? r.elapsed_ms)}${reports.some((report) => report.escalated) ? " (needed SIGKILL)" : ""}`,
-            restart && c.entry && !queue.length ? { label: "Copy restart command", run: () => copy(restart, "Restart command") } : { label: "Restart…", run: openHistory });
+            rootPid !== null ? { label: "Start again", run: () => void startAgain(`Port ${entry!.port} is free`) } : restart && entry && !queue.length ? { label: "Copy restart command", run: () => copy(restart, "Restart command") } : { label: "Restart…", run: openHistory });
         }, 900);
       } else {
         c.phase = "failed";
