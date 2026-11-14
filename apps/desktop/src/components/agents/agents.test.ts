@@ -56,7 +56,7 @@ describe("agent visibility", () => {
     expect(container.textContent).toContain("15 processes");
     expect(container.textContent).toContain("5 tools");
     expect(container.textContent).toContain("6.2% CPU");
-    expect(container.textContent).toContain("total memory");
+    expect(container.querySelector(".res-sub")?.textContent).toBe("RAM");
     expect(container.querySelector(".body")).toBeNull();
   });
 

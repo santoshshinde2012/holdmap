@@ -56,7 +56,7 @@ function agentItems(agent: Agent): AttentionItem[] {
   }
   const head = accessHeadline(agent);
   if (agent.access.root) items.push({ id: `root:${agent.id}`, rule: "root", severity: "high", title: `${agent.name} runs as root`, detail: "Everything it starts gets administrator rights.", target });
-  else if (head.level === "elevated") items.push({ id: `elevated:${agent.id}`, rule: "elevated", severity: "medium", title: `${agent.name}: ${head.text}`, detail: "Started with flags that skip approvals or the sandbox.", target });
+  else if (head.level === "elevated") items.push({ id: `elevated:${agent.id}`, rule: "elevated", severity: "medium", title: `${agent.name} has wider access than usual`, detail: `${head.text.replace(/: wider than usual$/, "")}: started with flags that skip approvals or the sandbox.`, target });
   for (const { setting, why } of riskySettings(agent)) {
     items.push({ id: `settings:${agent.id}:${setting.key}`, rule: "settings", severity: "medium", title: `${agent.name} ${why}`, detail: `${setting.key} = ${setting.value} in ${setting.source_path.split("/").slice(-2).join("/")}`, target });
   }

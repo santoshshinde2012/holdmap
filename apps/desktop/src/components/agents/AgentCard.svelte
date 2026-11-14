@@ -49,7 +49,7 @@
     </span>
     <span class="kpis">{#each countChips(c, true) as [n, label]}<span class="kpi"><b>{n}</b> {label}</span> {/each}{#if c.stoppable}<span class="kpi warn"><b>{c.stoppable}</b> stoppable</span>{/if}</span>
     <span class="res">
-      <span class="mem"><b>{agentMemoryText(agent, memoryFor(report, agent.id))}</b> <span class="res-sub">total memory</span></span>
+      <span class="mem"><b>{agentMemoryText(agent, memoryFor(report, agent.id))}</b> <span class="res-sub">RAM</span></span>
       <span class="cpu" title={agent.cpu_unknown ?? undefined}>{cpuLabel(agent)}</span>
       <span class="mem-track" aria-hidden="true"><span class="mem-fill" style="width: {memPct}%"></span></span>
     </span>
