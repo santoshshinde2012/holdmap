@@ -62,6 +62,7 @@ impl MemoryLog for NoMemoryLog {
 #[derive(Debug, Clone)]
 pub struct FileMemoryLog {
     path: PathBuf,
+    lock_wait: Duration,
 }
 
 enum Loaded {
@@ -74,14 +75,21 @@ impl FileMemoryLog {
     pub fn open_default() -> Option<Self> {
         let dir = Store::default_dir();
         create_private_dir(&dir).ok()?;
-        Some(Self {
-            path: dir.join("memory-samples.json"),
-        })
+        Some(Self::open(dir.join("memory-samples.json")))
     }
 
     /// A log at `path`'s file. The parent directory must already exist.
     pub fn open(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into() }
+        Self {
+            path: path.into(),
+            lock_wait: LOCK_WAIT,
+        }
+    }
+
+    /// How long a write waits for another writer before it skips this scan's sample.
+    pub fn with_lock_wait(mut self, wait: Duration) -> Self {
+        self.lock_wait = wait;
+        self
     }
 
     fn sibling(&self, suffix: &str) -> PathBuf {
@@ -114,7 +122,7 @@ impl FileMemoryLog {
 
     fn lock(&self) -> Option<std::fs::File> {
         let file = open_private(&self.sibling(".lock")).ok()?;
-        let deadline = Instant::now() + LOCK_WAIT;
+        let deadline = Instant::now() + self.lock_wait;
         loop {
             match file.try_lock() {
                 Ok(()) => return Some(file),
@@ -155,12 +163,27 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
         out.write_all(bytes)?;
         out.sync_all()?;
         drop(out);
-        std::fs::rename(&tmp, path)
+        rename_replacing(&tmp, path)
     })();
     if result.is_err() {
         let _ = std::fs::remove_file(&tmp);
     }
     result
+}
+
+/// Rename `from` over `to`. Windows refuses to replace a file that a scanner such as Defender
+/// has open for a moment, so it retries briefly there; other platforms rename once.
+fn rename_replacing(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut tries = if cfg!(windows) { 20 } else { 1 };
+    loop {
+        tries -= 1;
+        match std::fs::rename(from, to) {
+            Err(err) if tries > 0 && err.kind() == std::io::ErrorKind::PermissionDenied => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            result => return result,
+        }
+    }
 }
 
 impl MemoryLog for FileMemoryLog {

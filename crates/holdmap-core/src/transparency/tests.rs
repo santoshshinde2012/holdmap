@@ -256,7 +256,9 @@ fn concurrent_writers_do_not_lose_each_others_samples() {
         .map(|writer| {
             let path = path.clone();
             std::thread::spawn(move || {
-                let log = FileMemoryLog::open(path);
+                // Slow CI disks (fsync on Windows) can keep six writers queued past the default.
+                let log =
+                    FileMemoryLog::open(path).with_lock_wait(std::time::Duration::from_secs(30));
                 for at in 0..5u64 {
                     let outcome = log.record_batch(at, &[(format!("agent-{writer}"), at)]);
                     assert_eq!(outcome.note, None);
