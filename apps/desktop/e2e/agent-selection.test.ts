@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { agentCard, agentHeading, expect, openAgents, test } from "./fixtures";
+import { agentCard, agentDetails, agentHeading, expect, openAgents, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 // One selection everywhere: list, Computer map node, Home radial map and ↑/↓ all select the same
@@ -111,4 +111,13 @@ test("a mid-size window pans the selected node clear of the floating details pan
       return n.x + n.width <= d.x || n.x >= d.x + d.width || n.y + n.height <= d.y || n.y >= d.y + d.height ? "clear" : "overlaps";
     }).toBe("clear");
   }
+});
+
+test("an agent opened from Home takes focus in its details, and Escape returns to its card", async ({ app }) => {
+  await app.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: "Home", exact: true }).click();
+  await app.getByRole("button", { name: "Open Cursor" }).first().click();
+  await expect(app.locator("h3.name", { hasText: "Cursor" })).toBeFocused();
+  await app.keyboard.press("Escape");
+  await expect(agentDetails(app)).toHaveCount(0);
+  await expect(app.locator("#agents-overview .rail .card > .head").filter({ hasText: "Cursor" }).first()).toBeFocused();
 });

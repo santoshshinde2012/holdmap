@@ -232,11 +232,24 @@
     onselectagent(id);
     if (focusDetails) queueMicrotask(() => detailsView?.focusHeading());
   }
+  // Opened from Home or ⌘K, the view switch drops focus on the page: give it to the details.
+  $effect(() => {
+    if (!detailsView || !selectedInfoId) return;
+    const lost = () => { const at = document.activeElement; return !at || at === document.body || !at.isConnected || !at.closest(".agents-wrap, [role=dialog]"); };
+    const claim = () => { if (lost()) detailsView?.focusHeading(); };
+    // Once the view has settled (the map mounts after the panel), and once more after that.
+    void tick().then(claim);
+    const t = setTimeout(claim, 250);
+    return () => clearTimeout(t);
+  });
   function closeDetails() {
+    const at = visibleAgents.findIndex((x) => x.id === selectedAgent);
     onselectagent(null);
     const back = detailsOpener;
     detailsOpener = null;
-    if (back?.isConnected) back.focus({ preventScroll: true });
+    if (back?.isConnected && back !== document.body) back.focus({ preventScroll: true });
+    // No opener on this view: return to the agent's own card in the list.
+    else if (at >= 0) void tick().then(() => document.querySelectorAll<HTMLElement>("#agents-overview .rail .card > .head")[at]?.focus({ preventScroll: true }));
   }
   function detailsKey(ev: KeyboardEvent) {
     if (ev.key !== "Escape" || isComposingKey(ev)) return;
