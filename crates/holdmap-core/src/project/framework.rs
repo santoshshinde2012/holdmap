@@ -74,7 +74,13 @@ const SIGNATURES: &[Sig] = &[
     sig(&["gatsby develop", "gatsby serve"], "Gatsby", C::DevServer),
     sig(&["storybook"], "Storybook", C::DevServer),
     sig(
-        &["expo start", "@expo/cli", "metro"],
+        &[
+            "expo start",
+            "@expo/cli",
+            "expo/bin/cli",
+            "expo-cli",
+            "metro",
+        ],
         "Expo / Metro",
         C::DevServer,
     ),
@@ -263,6 +269,8 @@ const DEP_FRAMEWORKS: &[(&str, &str, C)] = &[
     ("astro", "Astro", C::DevServer),
     ("@remix-run/dev", "Remix", C::DevServer),
     ("@angular/core", "Angular", C::DevServer),
+    // Before Vite: an Expo app often lists vite/vitest for its web or test tooling.
+    ("expo", "Expo / Metro", C::DevServer),
     ("vite", "Vite", C::DevServer),
     ("react-scripts", "Create React App", C::DevServer),
     ("@nestjs/core", "NestJS", C::AppServer),

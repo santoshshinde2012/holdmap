@@ -384,4 +384,41 @@ mod tests {
         let p = proc(1, 0, "node", &["node", "node_modules/.bin/vite", "dev"]);
         assert_eq!(detect_framework(&p, Some(&d)).unwrap().name, "SvelteKit");
     }
+
+    #[test]
+    fn expo_cli_is_not_reported_as_vite() {
+        let d = ProjectDetails {
+            info: ProjectInfo {
+                name: "mobile".into(),
+                root: "/m".into(),
+                kind: "package.json".into(),
+                git_branch: None,
+                workspace: None,
+                git_root: None,
+            },
+            deps: vec!["expo".into(), "react-native".into(), "vite".into()],
+        };
+        // `npx expo start` runs node_modules/expo/bin/cli; vite/vitest are only test tooling.
+        let cli = proc(
+            1,
+            0,
+            "node",
+            &[
+                "node",
+                "/m/node_modules/.bin/../expo/bin/cli",
+                "start",
+                "--port",
+                "8081",
+            ],
+        );
+        assert_eq!(
+            detect_framework(&cli, Some(&d)).unwrap().name,
+            "Expo / Metro"
+        );
+        let generic = proc(1, 0, "node", &["node", "server.js"]);
+        assert_eq!(
+            detect_framework(&generic, Some(&d)).unwrap().name,
+            "Expo / Metro"
+        );
+    }
 }
