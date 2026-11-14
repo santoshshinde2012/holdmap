@@ -7,6 +7,7 @@ import { SANDBOX_LABEL, SEVERITY_ORDER, STATE_LABEL, countsText, emptyCounts, to
 import type { AgentsReport } from "./types";
 import { inventories } from "./agent-config";
 import { productLabel } from "./run-view";
+import { plural } from "./plural";
 
 export type StageKind = "sources" | "projection" | "sandbox" | "analyzer" | "parser" | "findings" | "surface";
 export type NodeStatus = "ok" | "warn" | "error" | "idle";
@@ -44,8 +45,6 @@ export const STAGE_LABEL: Record<StageKind, string> = {
   findings: "Findings",
   surface: "Shown in",
 };
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 function openCounts(result: AnalyzerResult | null): SeverityCounts {
   const c = emptyCounts();

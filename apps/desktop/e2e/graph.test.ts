@@ -224,7 +224,7 @@ test("Graph chrome floats over the canvas with summary and legend pills", async 
   await openGraph(app);
   const chrome = canvas(app).locator(".chrome-host");
   await expect(chrome.getByRole("toolbar", { name: "Graph view options", exact: true })).toBeVisible();
-  await expect(chrome.getByRole("group", { name: "Graph summary", exact: true })).toContainText(/\d+ Services/);
+  await expect(chrome.getByRole("group", { name: "Graph summary", exact: true })).toContainText(/\d+ services?/);
   await expect(chrome.getByRole("group", { name: "Graph legend", exact: true })).toBeVisible();
   await expect(canvas(app).locator(".graph-head")).toHaveCount(0);
   // The chrome sits on the canvas, not above it.

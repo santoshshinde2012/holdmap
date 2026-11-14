@@ -641,6 +641,7 @@
     setHistoryLimit: async (n) => { config = await api.setPreferences({ historyLimit: n }); },
     setTrayItems: async (items) => { config = await api.setPreferences({ trayItems: items }); },
     setTrayCombined: async (on) => { config = await api.setPreferences({ trayCombined: on }); },
+    setTrayCompact: async (on) => { config = await api.setPreferences({ trayCompact: on }); },
     setShowInDock: async (on) => { config = await api.setPreferences({ showInDock: on }); },
     clearHistory: async () => { await api.clearHistory(); historyItems = []; },
     copy: (t, w) => copy(t, w),

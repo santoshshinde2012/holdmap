@@ -267,7 +267,11 @@ pub async fn tray_action(app: AppHandle, id: String) -> Result<(), String> {
     let action = Action::parse(&id).ok_or("Unknown tray action")?;
     if matches!(
         action,
-        Action::ToggleItem(_) | Action::ToggleCombined | Action::ToggleDock | Action::ToggleNotify
+        Action::ToggleItem(_)
+            | Action::ToggleCombined
+            | Action::ToggleCompact
+            | Action::ToggleDock
+            | Action::ToggleNotify
     ) {
         return tauri::async_runtime::spawn_blocking(move || super::save_setting(&app, action))
             .await
@@ -280,6 +284,7 @@ pub async fn tray_action(app: AppHandle, id: String) -> Result<(), String> {
             | Action::PinPanel
             | Action::ToggleItem(_)
             | Action::ToggleCombined
+            | Action::ToggleCompact
             | Action::ToggleDock
             | Action::ToggleNotify
             | Action::SetTheme(_)

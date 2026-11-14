@@ -1,7 +1,9 @@
-//! macOS memory counters from `proc_pid_rusage`.
+//! macOS memory counters from `proc_pid_rusage` and `proc_pidinfo`.
 //!
 //! Activity Monitor's Memory column is `ri_phys_footprint`. Resident size and the lifetime
 //! peak footprint come from the same call (`RUSAGE_INFO_V4`, which includes the V0 fields).
+//! Virtual size is `pti_virtual_size` from `proc_pidinfo(PROC_PIDTASKINFO)`, the call `ps` and
+//! Activity Monitor use (`struct proc_taskinfo` in xnu's `bsd/sys/proc_info.h`).
 //! Compressed, private and shared bytes are the columns Activity Monitor reads through
 //! `task_info`, and that needs `task_for_pid`. holdmap does not request that privilege, so
 //! those counters stay unknown instead of being guessed from the footprint.
@@ -52,7 +54,7 @@ pub(super) fn read(pid: u32) -> ProcessReading {
             "Proportional set size is a Linux smaps counter. macOS does not report it.",
         ),
         compressed: unavailable(),
-        virtual_bytes: unavailable(),
+        virtual_bytes: virtual_size(pid as libc::c_int),
         swap_bytes: ObservedU64::unknown(
             "macOS proc_pid_rusage does not report per-process swap. Compressed memory, which Activity Monitor shows separately, is also not in this call.",
         ),
@@ -64,6 +66,30 @@ pub(super) fn read(pid: u32) -> ProcessReading {
             "Commit charge is a Windows counter. macOS does not report it.",
         ),
     }
+}
+
+/// Virtual address-space size from the task info `ps` reads. Other users' processes refuse it.
+fn virtual_size(pid: libc::c_int) -> ObservedU64 {
+    let mut info = MaybeUninit::<libc::proc_taskinfo>::zeroed();
+    let size = std::mem::size_of::<libc::proc_taskinfo>() as libc::c_int;
+    // SAFETY: the buffer is the proc_taskinfo layout libc declares, and `size` tells the kernel
+    // how much it may write. A short or failed write leaves the buffer unused.
+    let written = unsafe {
+        libc::proc_pidinfo(
+            pid,
+            libc::PROC_PIDTASKINFO,
+            0,
+            info.as_mut_ptr().cast(),
+            size,
+        )
+    };
+    if written != size {
+        return ObservedU64::unknown(
+            "proc_pidinfo (PROC_PIDTASKINFO) was refused for this process, as it is for other users' processes.",
+        );
+    }
+    // SAFETY: the kernel wrote the whole struct.
+    ObservedU64::observed(unsafe { info.assume_init() }.pti_virtual_size)
 }
 
 pub(super) fn machine_bytes() -> ObservedU64 {
@@ -86,4 +112,26 @@ pub(super) fn machine_bytes() -> ObservedU64 {
         );
     }
     ObservedU64::observed(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_this_processs_virtual_size_and_keeps_privileged_counters_unknown() {
+        let reading = read(std::process::id());
+        let virtual_bytes = reading
+            .virtual_bytes
+            .get()
+            .expect("own task info is readable");
+        let resident = reading.resident.get().expect("own rusage is readable");
+        assert!(virtual_bytes >= resident, "{virtual_bytes} < {resident}");
+        assert!(reading.compressed.get().is_none());
+        assert!(reading.private_bytes.get().is_none());
+        // launchd belongs to root; without privileges its task info is refused, never guessed.
+        if unsafe { libc::geteuid() } != 0 {
+            assert!(virtual_size(1).get().is_none());
+        }
+    }
 }

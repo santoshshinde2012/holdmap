@@ -10,3 +10,5 @@ vendor/global-hotkey-x11.patch -text whitespace=-blank-at-eol
 # Signed analyzer catalog and the manifests it is built from: exact bytes on every platform.
 crates/holdmap-analyzers/catalog/** -text
 crates/holdmap-analyzers/manifests/** -text
+# Generated fixture compared byte-for-byte with Rust output: LF on every platform.
+apps/desktop/src/lib/fixtures/location-specs.json text eol=lf

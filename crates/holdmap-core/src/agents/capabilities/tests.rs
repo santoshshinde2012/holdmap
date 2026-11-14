@@ -1266,7 +1266,7 @@ fn cursor_reader_lists_mdc_rules_and_never_plain_md_files() {
     let row = out
         .locations
         .iter()
-        .find(|place| place.path.ends_with(".cursor/rules"))
+        .find(|place| place.path.replace('\\', "/").ends_with(".cursor/rules"))
         .unwrap();
     assert_eq!(row.ignored_count, Some(1));
     assert!(!leaks(&serde_json::to_string(&out).unwrap()));

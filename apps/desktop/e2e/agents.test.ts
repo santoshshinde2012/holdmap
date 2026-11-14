@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { agentDetails, agentCard, agentHeading, expect, folderNode, openAgents, openAgentsPicture, openProject, test } from "./fixtures";
+import { agentChip, agentDetails, agentCard, agentHeading, expect, folderNode, openAgents, openAgentsPicture, openProject, test } from "./fixtures";
 
 for (const theme of ["light", "dark"] as const) {
   test(`${theme}: agent memory is labeled and passes axe at 390px`, async ({ app }, testInfo) => {
@@ -18,7 +18,12 @@ for (const theme of ["light", "dark"] as const) {
     await memory.screenshot({ path: testInfo.outputPath(`agent-memory-${theme}-390.png`) });
     await memory.getByText("Platform limits & unavailable metrics").click();
     await expect(memory).toContainText("task_for_pid");
-    await expect(memory).toContainText("2 processes");
+    await expect(memory).toContainText("6 processes");
+    // One process table: sort by RAM puts the largest helper first.
+    const table = memory.getByRole("table", { name: "Cursor processes" });
+    await table.getByRole("button", { name: "RAM" }).click();
+    await expect(table.getByRole("columnheader", { name: /RAM/ })).toHaveAttribute("aria-sort", "descending");
+    await expect(table.getByRole("rowheader").first()).toContainText("Cursor Helper (Plugin)");
     await expect(memory.getByText("Cursor Helper (Plugin)")).toBeVisible();
     await expect.poll(async () => memory.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
     const { violations } = await new AxeBuilder({ page: app }).analyze();
@@ -55,8 +60,10 @@ test("agent locations group documented layers and copy a path", async ({ app }, 
   await locations.screenshot({ path: testInfo.outputPath("agent-locations-dark-390.png") });
   await app.evaluate(() => localStorage.setItem("holdmap.theme", "light"));
   await app.reload();
-  await openAgents(app);
-  await agentHeading(app, "Cursor").click();
+  // Narrow: agent chips replace the cards, and the inspector takes the full height.
+  await app.getByRole("radio", { name: /^Agents/ }).click();
+  await agentChip(app, "Cursor").click();
+  await expect(agentChip(app, "Cursor")).toHaveAttribute("aria-pressed", "true");
   const lightLocations = agentDetails(app).getByRole("region", { name: /Locations & layers/ });
   await expect(lightLocations.getByText("Present").first()).toBeVisible();
   await lightLocations.screenshot({ path: testInfo.outputPath("agent-locations-light-390.png") });

@@ -140,6 +140,11 @@ pub const CATALOG: &[AgentProduct] = &[
         ..product("kiro", "Kiro", "AWS", AgentKind::Ide)
     },
     AgentProduct {
+        bundles: &["Zed.app", "Zed Preview.app"],
+        names: &["zed", "zed-editor"],
+        ..product("zed", "Zed", "Zed Industries", AgentKind::Ide)
+    },
+    AgentProduct {
         names: &["claude"],
         paths: &[
             "/@anthropic-ai/claude-code/",

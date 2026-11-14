@@ -1,5 +1,6 @@
 <script lang="ts">
   import { SvelteFlow, Background, type NodeTypes, type EdgeTypes } from "@xyflow/svelte";
+  import { noun, plural } from "../lib/plural";
   import "@xyflow/svelte/dist/style.css";
   import { setContext, tick, untrack } from "svelte";
   import ServiceNode from "./graph/ServiceNode.svelte";
@@ -68,12 +69,13 @@
     return { ...graph, nodes, edges: graph.edges.filter((e) => ids.has(e.from) && ids.has(e.to)) };
   });
   const shown = $derived(graphForQuery(scoped, query));
+  // Zero counts are hidden (services always show); every label agrees with its number.
   const graphStats = $derived([
-    { id: "services", label: "Services", value: shown ? shown.nodes.filter((n) => n.kind !== "external").length : 0, title: "Services and client processes" },
-    { id: "links", label: "Links", value: shown ? shown.edges.length : 0, title: "Observed connections" },
-    { id: "groups", label: "Groups", value: shown ? shown.clusters.length : 0, title: "Compose, k8s, workspaces" },
-    { id: "remote", label: "Remote", value: shown ? shown.edges.filter((e) => e.kind === "outbound").length : 0, title: "Outbound connections" },
-  ]);
+    { id: "services", value: shown ? shown.nodes.filter((n) => n.kind !== "external").length : 0, one: "service", title: "Services and client processes" },
+    { id: "links", value: shown ? shown.edges.length : 0, one: "link", title: "Observed connections" },
+    { id: "groups", value: shown ? shown.clusters.length : 0, one: "group", title: "Compose, k8s, workspaces" },
+    { id: "remote", value: shown ? shown.edges.filter((e) => e.kind === "outbound").length : 0, one: "remote link", title: "Outbound connections" },
+  ].filter((stat) => stat.id === "services" || stat.value > 0));
   const matches = $derived(shown?.nodes.filter((n) => graphNodeMatches(n, query)).length ?? 0);
   let visibleSignature: string | null = null;
   $effect(() => {
@@ -257,7 +259,7 @@
         </div>
         {#if !empty}
           <div class="stats" role="group" aria-label="Graph summary">
-            {#each graphStats as stat (stat.id)}<span class="stat stat-{stat.id}" title={stat.title}><b>{stat.value}</b> {stat.label}</span>{/each}
+            {#each graphStats as stat (stat.id)}<span class="stat stat-{stat.id}" title={stat.title}><b>{stat.value}</b> {noun(stat.value, stat.one)}</span>{/each}
             {#if loading}<span class="updating" role="status">Updating…</span>{/if}
           </div>
         {/if}
@@ -270,7 +272,7 @@
         {/if}
         {#if query.trim()}
           <div class="search-context" role="status">
-            <Icon name="search" size={12} /><span><strong>{matches}</strong> {matches === 1 ? "match" : "matches"}{#if (shown?.nodes.length ?? 0) > matches} · {(shown?.nodes.length ?? 0) - matches} connected neighbours{/if}</span>
+            <Icon name="search" size={12} /><span><strong>{matches}</strong> {matches === 1 ? "match" : "matches"}{#if (shown?.nodes.length ?? 0) > matches} · {plural((shown?.nodes.length ?? 0) - matches, "connected neighbour")}{/if}</span>
             {#if onclearquery}<button type="button" onclick={onclearquery}>Clear search</button>{/if}
           </div>
         {/if}

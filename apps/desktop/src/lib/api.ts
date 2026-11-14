@@ -16,6 +16,7 @@ import type { PresetView } from "./analyzer-presets";
 import type { InstallEvent, InstallPlan, InstallRecord } from "./analyzer-install";
 import { attention, type AttentionItem } from "./home";
 import { mockAgents } from "./mock-agents";
+import * as mockPlaces from "./mock-places";
 import { MOCK_SNAPSHOT, mockDetails, mockExplain, mockHttp, mockPlan, mockStop, mockTopology } from "./mock";
 
 /** True inside the Tauri webview. */
@@ -319,9 +320,7 @@ export async function topology(all: boolean): Promise<Graph> {
 export async function agents(includeCapabilities = false): Promise<AgentsReport> {
   if (isTauri) return call("agents", { includeCapabilities });
   if (liveReads()) return liveJson("agents", { capabilities: includeCapabilities });
-  // Sample locations load with the first configuration read, not with the demo shell.
-  const places = includeCapabilities ? await import("./mock-places") : null;
-  const report = mockAgents({ ...MOCK_SNAPSHOT, taken_at_ms: Date.now() }, includeCapabilities, places);
+  const report = mockAgents({ ...MOCK_SNAPSHOT, taken_at_ms: Date.now() }, includeCapabilities, includeCapabilities ? mockPlaces : null);
   return emptyDemo() ? { ...report, agents: [], configured: [] } : report;
 }
 
@@ -372,7 +371,7 @@ export async function activitySetup(provider: "codex" | "claude"): Promise<strin
   return "# Browser demo: no local collector is running.\n# Install the desktop app and start recording under Agents > Flow > Calls.\n";
 }
 
-let mockConfig: Config = { pins: [{ port: 3000, label: null }], notify: true, notify_dev_only: true, history_limit: 200, scan_interval_secs: 4, hotkey: "alt-p", recent_hosts: ["devbox", "deploy@staging.internal"], tray_items: ["agents", "needs"], tray_combined: false, show_in_dock: true };
+let mockConfig: Config = { pins: [{ port: 3000, label: null }], notify: true, notify_dev_only: true, history_limit: 200, scan_interval_secs: 4, hotkey: "alt-p", recent_hosts: ["devbox", "deploy@staging.internal"], tray_items: ["agents", "needs"], tray_combined: false, tray_compact: true, show_in_dock: true };
 
 // Same labels as src-tauri/src/shortcuts.rs, so browser screenshots match the platform.
 const mac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
@@ -437,7 +436,7 @@ export async function unpin(port: number): Promise<Config> {
   return call("unpin", { port });
 }
 
-export async function setPreferences(p: { scanIntervalSecs?: number; historyLimit?: number; trayItems?: TrayItemId[]; trayCombined?: boolean; showInDock?: boolean }): Promise<Config> {
+export async function setPreferences(p: { scanIntervalSecs?: number; historyLimit?: number; trayItems?: TrayItemId[]; trayCombined?: boolean; trayCompact?: boolean; showInDock?: boolean }): Promise<Config> {
   if (!isTauri) {
     await delay(150);
     return (mockConfig = {
@@ -446,10 +445,11 @@ export async function setPreferences(p: { scanIntervalSecs?: number; historyLimi
       history_limit: p.historyLimit ?? mockConfig.history_limit,
       tray_items: p.trayItems ?? mockConfig.tray_items,
       tray_combined: p.trayCombined ?? mockConfig.tray_combined,
+      tray_compact: p.trayCompact ?? mockConfig.tray_compact,
       show_in_dock: p.showInDock ?? mockConfig.show_in_dock,
     });
   }
-  return call("set_preferences", { scanIntervalSecs: p.scanIntervalSecs ?? null, historyLimit: p.historyLimit ?? null, trayItems: p.trayItems ?? null, trayCombined: p.trayCombined ?? null, showInDock: p.showInDock ?? null });
+  return call("set_preferences", { scanIntervalSecs: p.scanIntervalSecs ?? null, historyLimit: p.historyLimit ?? null, trayItems: p.trayItems ?? null, trayCombined: p.trayCombined ?? null, trayCompact: p.trayCompact ?? null, showInDock: p.showInDock ?? null });
 }
 
 export async function hotkeys(): Promise<{ id: string; label: string }[]> {

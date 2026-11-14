@@ -89,6 +89,24 @@ bounded results stay unknown. This is not a security audit.
 Reported activity requires separate opt-in instrumentation; aliases or skill names alone never
 join inventory to process ownership or recorded calls, and do not authorize actions.
 
+### list_agents fields
+
+Memory has the process-table headline plus separate OS counters: resident, physical footprint,
+private, shared, proportional, compressed, virtual, swap and commit. A counter the OS did not
+return is unknown with a reason; it is never copied from another counter. Tree peaks are not
+summed. Likely MCP processes do not confirm a handshake or invocation.
+
+With `include_capabilities: true`, location rows are paths, symlink targets, existence, file
+counts, byte sizes and modification times for documented locations (skills, context files,
+rules, MCP config, built-ins). Capability results are aliases, transport, enablement, scope,
+source paths, runner and package name with pinning, remote host, environment and header names
+(never values), whether one of the agent's processes runs each stdio server now, permission
+allow/ask/deny rules, documented safety settings, instruction-file names (rules, commands,
+prompts, subagents, AGENTS.md) with frontmatter descriptions, sanitized skill names and purposes,
+and documented built-in tools. Ranks are documented layers, not a resolved winner. The inventory
+never connects to servers or executes commands; skill instructions, chats, transcripts and
+credential values are not retained. Recent folders do not prove current work.
+
 ## Read structured results
 
 Modern clients receive a `structuredContent` JSON object and each tool's `outputSchema`.
@@ -163,6 +181,10 @@ mod tests {
             "account-wide history",
             "dry_run: true",
             "get_topology",
+            // Moved here from list_agents' description, which now points at this guide.
+            "never copied from another counter",
+            "Tree peaks are not",
+            "Ranks are documented layers",
         ] {
             assert!(text.contains(phrase), "missing guidance: {phrase}");
         }

@@ -1,6 +1,7 @@
 // The tray popup panel's data (`PanelData` in src-tauri/src/tray/model.rs) and the pure helpers
 // that turn it into what the panel draws. Rows carry the tray action id they run; the panel can
 // call nothing else (`local_window::guard`).
+import { humanBytes } from "./format";
 
 export type Urgency = "high" | "medium";
 
@@ -16,6 +17,8 @@ export interface PanelSettings {
   items: PanelToggle[];
   /** The items as one menu-bar item; null where there's no such choice. */
   combined: boolean | null;
+  /** The compact menu bar (the icon and at most two readings); null off macOS. */
+  compact: boolean | null;
   /** holdmap's icon in the Dock; null off macOS. */
   dock: boolean | null;
   notify: boolean;
@@ -26,10 +29,11 @@ export interface PanelData {
   ready: boolean;
   ports: number;
   exposed: number;
-  /** Null until the agents report is read. */
+  /** AI agents, null until the agents report is read. Developer tools are not counted. */
   agents: number | null;
   /** The agents' CPU together (percent of one core), once measured between two scans. */
   cpu: number | null;
+  /** The AI agents' RAM together, as the Agents view counts it. */
   memory: number | null;
   /** The agents' CPU per scan, oldest first. */
   cpuHistory: number[];
@@ -38,9 +42,11 @@ export interface PanelData {
   needs: PanelNeed[] | null;
   dev: PanelDev[];
   stopDev: boolean;
-  /** The busiest agents first. */
+  /** The AI agents using the most RAM first (a steady order). */
   topAgents: PanelAgent[];
   moreAgents: number;
+  /** Developer tools running beside the agents (Docker Desktop): listed apart, not counted. */
+  tools: PanelAgent[];
   /** Listeners opened and closed per scan, oldest first: [opened, closed]. */
   churn: [number, number][];
   /** The section to bring into view (the menu-bar item clicked), changing `focusSeq` per click. */
@@ -55,6 +61,7 @@ export interface PanelData {
 export function settingValues(s: PanelSettings): Record<string, boolean> {
   const values: Record<string, boolean> = Object.fromEntries(s.items.map((i) => [i.action, i.on]));
   if (s.combined !== null) values.combined = s.combined;
+  if (s.compact !== null) values.compact = s.compact;
   if (s.dock !== null) values.dock = s.dock;
   values.notify = s.notify;
   return values;
@@ -68,6 +75,35 @@ export function needsStatus(needs: readonly PanelNeed[] | null): { tone: StatusT
   if (!needs.length) return { tone: "ok", title: "All clear", detail: "Nothing needs you right now" };
   const first = needs.find((n) => n.urgency === "high") ?? needs[0];
   return { tone: first.urgency, title: `${needs.length} need${needs.length === 1 ? "s" : ""} you`, detail: first.title };
+}
+
+/** A byte count split into its number and unit, so the unit can be set smaller ("2.5", "GB"). */
+export function bytesParts(bytes: number | null): { value: string; unit: string } {
+  if (bytes === null) return { value: "…", unit: "" };
+  const [value, unit = ""] = humanBytes(bytes).split(" ");
+  return { value, unit };
+}
+
+/** A row's name with what tells it apart: "Cursor · typeglass". */
+export function agentLabel(a: Pick<PanelAgent, "name" | "place">): string {
+  return a.place ? `${a.name} · ${a.place}` : a.name;
+}
+
+/** The full row, for its tooltip and screen readers: "Cursor · typeglass: 2.4 GB RAM, CPU 3.1%". */
+export function agentSummary(a: PanelAgent): string {
+  const cpu = a.cpu === null ? "CPU not measured yet" : `CPU ${cpuText(a.cpu)}`;
+  return `${agentLabel(a)}: ${humanBytes(a.memory)} RAM, ${cpu}`;
+}
+
+/** A small CPU sparkline for the headline tile: one polyline across `width` × `height`. */
+export function sparkPath(samples: readonly number[], width: number, height: number, slots = 30): string {
+  const recent = samples.slice(-slots);
+  if (recent.length < 2) return "";
+  const top = chartTop(recent);
+  const step = width / (slots - 1);
+  const x0 = width - step * (recent.length - 1);
+  const fmt = (n: number) => Number(n.toFixed(2));
+  return recent.map((v, i) => `${i ? "L" : "M"}${fmt(x0 + i * step)},${fmt(height - (Math.max(0, v) / top) * (height - 1) - 0.5)}`).join("");
 }
 
 /** The ring's two arcs, as stroke dash arrays on a circle of `circumference`. */
@@ -179,7 +215,7 @@ export function demoPanel(): PanelData {
     exposed: 4,
     agents: 4,
     cpu: 7.4,
-    memory: 2_684_354_560,
+    memory: 1_771_464_294,
     cpuHistory: Array.from({ length: 48 }, (_, i) => Number(wave(i).toFixed(1))),
     attentionHistory: Array.from({ length: 48 }, (_, i) => (i > 30 && i < 36 ? 1 : i === 41 ? 2 : i > 41 ? 1 : 0)),
     needs: [
@@ -193,12 +229,13 @@ export function demoPanel(): PanelData {
     ],
     stopDev: true,
     topAgents: [
+      { name: "Cursor", place: "storefront-monorepo-with-a-long-name", cpu: 2.1, memory: 1_181_116_006, action: "agent:agent:811" },
       { name: "Claude Code", place: "storefront", cpu: 4.2, memory: 301_989_888, action: "agent:agent:4242" },
-      { name: "Cursor", place: null, cpu: 2.1, memory: 1_181_116_006, action: "agent:agent:811" },
       { name: "Codex CLI", place: "api", cpu: 0.9, memory: 189_792_256, action: "agent:agent:977" },
       { name: "Gemini CLI", place: "dashboard", cpu: 0.2, memory: 98_566_144, action: "agent:agent:1203" },
     ],
     moreAgents: 0,
+    tools: [{ name: "Docker Desktop", place: null, cpu: 1.4, memory: 575_668_224, action: "agent:agent:3301" }],
     churn: Array.from({ length: 48 }, (_, i): [number, number] => [i % 11 === 3 ? 2 : i % 7 === 0 ? 1 : 0, i % 13 === 6 ? 1 : i % 17 === 9 ? 2 : 0]),
     focus: null,
     focusSeq: 0,
@@ -206,10 +243,11 @@ export function demoPanel(): PanelData {
     settings: {
       bar: "Menu bar",
       items: [
-        ["holdmap icon", "icon", false], ["Agents", "agents", true], ["Needs you", "needs", true], ["Agent CPU", "cpu", false],
-        ["Dev servers", "dev", false], ["CPU history", "cpu_history", false], ["Agent bars", "agent_bars", false],
+        ["holdmap icon", "icon", false], ["Agents", "agents", true], ["Alerts", "needs", true], ["Agent CPU", "cpu", false],
+        ["Agent RAM", "ram", false], ["Dev servers", "dev", false], ["CPU history", "cpu_history", false], ["Agent bars", "agent_bars", false],
       ].map(([name, id, on]) => ({ name: name as string, on: on as boolean, action: `item:${id}` })),
       combined: false,
+      compact: true,
       dock: true,
       notify: true,
     },
@@ -223,6 +261,7 @@ export function demoAction(data: PanelData, id: string): PanelData {
   if (id === "notify") return { ...data, settings: { ...s, notify: !s.notify } };
   if (id === "dock" && s.dock !== null) return { ...data, settings: { ...s, dock: !s.dock } };
   if (id === "combined" && s.combined !== null) return { ...data, settings: { ...s, combined: !s.combined } };
+  if (id === "compact" && s.compact !== null) return { ...data, settings: { ...s, compact: !s.compact } };
   if (id.startsWith("item:")) return { ...data, settings: { ...s, items: s.items.map((i) => (i.action === id ? { ...i, on: !i.on } : i)) } };
   return data;
 }

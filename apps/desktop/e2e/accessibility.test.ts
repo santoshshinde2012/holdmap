@@ -134,7 +134,8 @@ test("phone width: view controls wrap onto rows instead of scrolling sideways", 
     expect(box && box.x >= 0 && box.x + box.width <= 390, `${name} fits the window`).toBe(true);
   }
   expect(await toolbar.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
-  // The agent cards stack above the map instead of squeezing it into a sliver.
+  // The agent cards fill the screen; the Map chip brings the map in below the chips, full width.
+  await app.getByRole("group", { name: "Choose an agent" }).getByRole("button", { name: "Map", exact: true }).click();
   const rail = await app.getByRole("complementary", { name: "Agents" }).boundingBox();
   const map = await app.locator("#agents-overview .map").boundingBox();
   expect(rail && map && map.y >= rail.y + rail.height - 1 && map.width > 300).toBe(true);

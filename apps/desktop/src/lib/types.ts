@@ -274,12 +274,14 @@ export interface Config {
   tray_items?: TrayItemId[];
   /** All chosen items as one menu-bar item (macOS). */
   tray_combined?: boolean;
+  /** Compact menu bar: the icon and at most two readings, as one item (macOS). */
+  tray_compact?: boolean;
   /** Keep holdmap's icon in the Dock (macOS); off runs it as a menu-bar app. */
   show_in_dock?: boolean;
 }
 
 /** `Config::TRAY_ITEMS`, in menu-bar order. */
-export type TrayItemId = "icon" | "agents" | "needs" | "cpu" | "dev" | "cpu_history" | "agent_bars";
+export type TrayItemId = "icon" | "agents" | "needs" | "cpu" | "ram" | "dev" | "cpu_history" | "agent_bars";
 
 export interface HistoryEntry {
   at_ms: number;

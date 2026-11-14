@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Overview: a compact summary of the selected agent (RAM, access, folders, configuration,
-  // tools and processes). Relationships, ports and findings live in their own tabs.
+  // Overview: a compact summary of the selected agent (RAM with its process table, access,
+  // folders, configuration and tools). Relationships, ports and findings live in their own tabs.
   import Icon from "../../Icon.svelte";
   import AgentMemoryPanel from "../AgentMemoryPanel.svelte";
   import AgentConfigPanel from "../AgentConfigPanel.svelte";
@@ -9,9 +9,9 @@
   import { evidenceChip } from "../../../lib/evidence";
   import { factRows } from "../../../lib/agent-details";
   import { configSummary } from "../../../lib/agent-config";
-  import { humanBytes, tildify } from "../../../lib/format";
-  import { EVIDENCE_LABEL, counts, folderSourceLabel, processRows } from "../../../lib/agents";
-  import type { Agent, AgentProcess, AgentsReport } from "../../../lib/types";
+  import { tildify } from "../../../lib/format";
+  import { EVIDENCE_LABEL, folderSourceLabel } from "../../../lib/agents";
+  import type { Agent, AgentsReport } from "../../../lib/types";
 
   let { agent, report, base, onreveal, oneditor, onfolder, oninspect }: {
     agent: Agent;
@@ -40,26 +40,11 @@
     ...(agent.folders.length || agent.more_folders ? [["folders", "Folders"]] : []),
     ["procs", "Processes"],
   ] as const);
-  const c = $derived(counts(agent));
   const facts = $derived(factRows(agent));
   const cfg = $derived(configSummary(agent));
-  const tree = $derived(processRows(agent));
-  const children = $derived(tree.filter(({ process }) => process.role === "child").map(({ process }) => process));
-  const maxProcMem = $derived(Math.max(1, ...tree.map(({ process }) => process.memory_bytes)));
-  function role(p: AgentProcess): string {
-    return p.role === "helper" ? "helper" : p.role === "child" ? "tool / app it started" : "agent";
-  }
 </script>
 
-{#snippet procRow(p: AgentProcess, sub: string, depth: number)}
-  {@const pct = Math.max(4, Math.round((p.memory_bytes / maxProcMem) * 100))}
-  <li style="padding-left: {depth * 10}px" title={p.command}>
-    <span class="pname">{p.name} <span class="mono pid">{p.pid}</span></span>
-    <span class="prole">{sub}{#if p.cwd} · {tildify(p.cwd)}{/if}</span>
-    <span class="pfig mono">{p.cpu_percent.toFixed(p.cpu_percent < 10 ? 1 : 0)}% · {humanBytes(p.memory_bytes)}</span>
-    <span class="pbar" style="width: {pct}%" aria-hidden="true"></span>
-  </li>
-{/snippet}
+
 
 <nav class="jump-nav" aria-label="Jump to section">
   {#each jumpTabs as [key, label] (key)}
@@ -121,21 +106,6 @@
 
 <AgentTools tools={agent.tools ?? []} more={agent.more_tools ?? 0} />
 
-<section class="sec-box" id="section-procs-{base}" aria-labelledby="procs-head-{base}">
-  <h4 id="procs-head-{base}"><Icon name="cpu" size={13} />Processes <span class="sec-n">{c.processes}</span></h4>
-  <code class="cmd" title={agent.command}>{agent.command}</code>
-  {#if children.length}
-    <p class="group-label">Tools &amp; apps it started ({children.length})</p>
-    <ul class="procs">
-      {#each children as p (p.pid)}{@render procRow(p, p.command || role(p), 0)}{/each}
-    </ul>
-  {/if}
-  <p class="group-label">Agent &amp; helpers</p>
-  <ul class="procs">
-    {#each tree.filter(({ process }) => process.role !== "child") as { process: p, depth } (p.pid)}{@render procRow(p, role(p), depth)}{/each}
-    {#if agent.more_processes}<li class="more">+{agent.more_processes} more processes</li>{/if}
-  </ul>
-</section>
 
 <style>
   .jump-nav { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); }
@@ -150,7 +120,6 @@
   .cfg-sum { display: inline-flex; align-items: center; gap: 6px; }
   .cfg summary > span:last-child { font-weight: var(--fw-regular); color: var(--muted); }
   .cfg summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
-  .group-label { margin: 4px 0 0; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-weight: var(--fw-medium); }
   .facts { margin: 0; display: grid; }
   .fact { display: grid; grid-template-columns: 80px 1fr; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--border); }
   .fact:first-child { border-top: 0; padding-top: 0; }
@@ -184,14 +153,6 @@
   .tag.mono { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); }
   .tag.branch { color: var(--tone-violet); background: var(--tone-violet-bg); border-color: transparent; }
   .tag.privacy { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
-  .procs li { position: relative; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "n f" "r r"; gap: 1px 8px; padding: 5px 0 6px; border-bottom: 1px solid var(--border); }
-  .procs li:last-child { border-bottom: 0; }
-  .pbar { position: absolute; left: 0; bottom: 0; height: 2px; border-radius: 1px; background: color-mix(in srgb, var(--agent) 55%, var(--surface)); opacity: 0.7; pointer-events: none; }
-  .pname { grid-area: n; font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-medium); }
-  .pfig { grid-area: f; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
-  .prole { grid-area: r; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
-  .pid { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-regular); }
-  .cmd { display: block; padding: 6px 8px; border-radius: 8px; background: var(--surface-2); color: var(--text-2); font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .more { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .act:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 </style>

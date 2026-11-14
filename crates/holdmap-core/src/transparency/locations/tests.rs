@@ -12,6 +12,14 @@ const PRODUCTS: &[&str] = &[
     "copilot-cli",
     "windsurf",
     "cline",
+    "kiro",
+    "opencode",
+    "amp",
+    "goose",
+    "aider",
+    "qwen",
+    "crush",
+    "zed",
 ];
 const PLATFORMS: &[&str] = &["macos", "linux", "windows"];
 
@@ -200,14 +208,20 @@ fn resolve_expands_bases_and_the_claude_project_folder() {
 
 #[test]
 fn overrides_accept_only_absolute_control_free_paths() {
+    // An absolute path on this OS; "/opt/codex" has no drive, so Windows treats it as relative.
+    let codex = if cfg!(windows) {
+        r"C:\opt\codex"
+    } else {
+        "/opt/codex"
+    };
     let env = |name: &str| match name {
-        "CODEX_HOME" => Some("/opt/codex".to_owned()),
+        "CODEX_HOME" => Some(codex.to_owned()),
         "CLAUDE_CONFIG_DIR" => Some("relative/claude".to_owned()),
-        "COPILOT_HOME" => Some("/bad\npath".to_owned()),
+        "COPILOT_HOME" => Some(format!("{codex}\nbad")),
         _ => None,
     };
     let homes = Homes::with_overrides(Path::new("/home/a"), None, env);
-    assert_eq!(homes.codex, PathBuf::from("/opt/codex"));
+    assert_eq!(homes.codex, PathBuf::from(codex));
     assert_eq!(homes.claude, PathBuf::from("/home/a/.claude"));
     assert_eq!(homes.copilot, PathBuf::from("/home/a/.copilot"));
     assert_eq!(homes.override_for(Base::CodexHome), Some("CODEX_HOME"));
@@ -220,5 +234,114 @@ fn readable_rows_are_a_subset_with_a_reader() {
         for row in readable(product, "macos") {
             assert_ne!(row.reader, Reader::None);
         }
+    }
+}
+
+/// The browser demo's sample locations (apps/desktop/src/lib/mock-places.ts) are checked
+/// against this generated list, so the demo cannot drift from the registry.
+/// Regenerate with `HOLDMAP_UPDATE_FIXTURES=1 cargo test -p holdmap-core demo_location_fixture`.
+fn demo_location_fixture() -> String {
+    let mut rows = Vec::new();
+    for product in ["cursor", "claude-code"] {
+        for spec in specs(product, "macos") {
+            rows.push(serde_json::json!({
+                "product": product,
+                "kind": spec.kind,
+                "scope": spec.scope,
+                "combine": Combine::for_kind(spec.kind),
+                "relative": spec.relative,
+            }));
+        }
+    }
+    let mut text = serde_json::to_string_pretty(&rows).expect("fixture serializes");
+    text.push('\n');
+    text
+}
+
+#[test]
+fn demo_location_fixture_is_current() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../apps/desktop/src/lib/fixtures/location-specs.json"
+    );
+    let fresh = demo_location_fixture();
+    if std::env::var_os("HOLDMAP_UPDATE_FIXTURES").is_some() {
+        std::fs::write(path, &fresh).expect("fixture written");
+    }
+    let saved = std::fs::read_to_string(path).unwrap_or_default();
+    assert_eq!(
+        saved, fresh,
+        "regenerate with HOLDMAP_UPDATE_FIXTURES=1 cargo test -p holdmap-core demo_location_fixture"
+    );
+}
+
+#[test]
+fn smaller_agents_list_their_documented_files_and_read_only_mcp_servers_json() {
+    let kiro = specs("kiro", "macos");
+    assert!(has(&kiro, ".kiro/steering") && has(&kiro, ".kiro/settings/mcp.json"));
+    let readers: Vec<_> = kiro
+        .iter()
+        .filter(|row| matches!(row.reader, Reader::Mcp(_)))
+        .map(|row| row.scope)
+        .collect();
+    assert_eq!(readers, [PlaceScope::User, PlaceScope::Project]);
+
+    // Formats holdmap doesn't parse are listed, never read.
+    for product in ["opencode", "amp", "goose", "crush", "aider", "zed"] {
+        for platform in PLATFORMS {
+            assert!(
+                !specs(product, platform)
+                    .iter()
+                    .any(|row| matches!(row.reader, Reader::Mcp(_))),
+                "{product} {platform}"
+            );
+        }
+    }
+    let qwen = specs("qwen", "linux");
+    assert!(qwen
+        .iter()
+        .any(|row| row.relative == "/etc/qwen-code/settings.json"
+            && row.scope == PlaceScope::Managed));
+    assert!(qwen
+        .iter()
+        .any(|row| row.relative == ".qwen/QWEN.local.md" && row.scope == PlaceScope::Local));
+
+    // Secrets and history are presence or size only.
+    let aider = specs("aider", "macos");
+    let env = aider.iter().find(|row| row.relative == ".env").unwrap();
+    assert_eq!(
+        (env.kind, env.form),
+        (PlaceKind::SecretStore, Form::SecretStore)
+    );
+    assert!(aider
+        .iter()
+        .filter(|row| row.relative.contains("history"))
+        .all(|row| row.form == Form::SessionData));
+    let goose = specs("goose", "linux");
+    assert!(goose
+        .iter()
+        .any(|row| row.relative == "goose/secrets.yaml" && row.form == Form::SecretStore));
+}
+
+#[test]
+fn goose_and_zed_move_to_appdata_on_windows_and_opencode_has_a_managed_folder() {
+    let goose = specs("goose", "windows");
+    assert!(goose
+        .iter()
+        .any(|row| row.base == Base::AppData && row.relative == "Block/goose/config/config.yaml"));
+    assert!(specs("zed", "windows")
+        .iter()
+        .any(|row| row.base == Base::AppData && row.relative == "Zed/AGENTS.md"));
+    assert!(specs("zed", "macos")
+        .iter()
+        .any(|row| row.base == Base::XdgConfig && row.relative == "zed/AGENTS.md"));
+    for (platform, path) in [
+        ("macos", "/Library/Application Support/opencode"),
+        ("linux", "/etc/opencode"),
+        ("windows", r"C:\ProgramData\opencode"),
+    ] {
+        assert!(specs("opencode", platform)
+            .iter()
+            .any(|row| row.scope == PlaceScope::Managed && row.relative == path));
     }
 }

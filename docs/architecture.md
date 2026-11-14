@@ -581,7 +581,8 @@ public demo labels sample data.
 Process memory is a separate collector (`transparency::MemoryProbe`). Linux reads `VmRSS`,
 `VmSize`, `VmHWM`, `VmSwap` and, when `smaps_rollup` is readable, private, shared and
 proportional bytes. macOS uses `proc_pid_rusage` (`RUSAGE_INFO_V4`) for resident size,
-physical footprint and the lifetime peak footprint. Windows uses process VM counters for the
+physical footprint and the lifetime peak footprint, and `proc_pidinfo` (`PROC_PIDTASKINFO`)
+for virtual size; other users' processes refuse that call, so their virtual size stays unknown. Windows uses process VM counters for the
 working set, virtual size and peak working set, and `PrivateUsage` only as commit charge.
 Counters the call does not return stay unknown. The agent headline remains the process-table
 sample. Location census stats the same documented paths the inventory already knows, plus a

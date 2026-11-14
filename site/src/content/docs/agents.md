@@ -28,8 +28,9 @@ Default scans do not inspect chats, agent settings or credential stores. Recogni
 in observed process arguments are redacted for display; redaction is heuristic. Optional recording
 accepts a separate, strictly limited metadata projection from integrations you configure.
 
-Recognized products include Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider,
-Cline, Goose, Docker Desktop, OrbStack, Podman Desktop and others.
+Recognized products include Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Kiro,
+Zed, Aider, Cline, Goose, opencode, Amp, Qwen Code, Crush, and developer tools such as Docker
+Desktop, OrbStack and Podman Desktop, which are counted apart from AI agents.
 
 The live demo uses the same interface with sample data.
 
@@ -251,6 +252,13 @@ folder history.
 | GitHub Copilot (VS Code) | Observed-project `.vscode/mcp.json` (`servers`) and `.mcp.json` | Not inspected |
 | Copilot CLI | `~/.copilot/mcp-config.json`, observed-project `.mcp.json` and `.github/mcp.json`; project maps can be bare or wrapped in `mcpServers` | Not inspected |
 | Cline | `~/.cline/data/settings/cline_mcp_settings.json` | `.cline/skills` under home and observed projects |
+| Kiro | `~/.kiro/settings/mcp.json` and `<project>/.kiro/settings/mcp.json` (`mcpServers`) | Not inspected |
+| Qwen Code | `~/.qwen/settings.json` and `<project>/.qwen/settings.json` (`mcpServers` only) | Not inspected |
+
+For opencode, Amp, Goose, Aider, Crush and Zed, the location census lists the documented files
+(settings, instruction files, skills, plugins) without parsing them: their MCP settings use other
+formats (`mcp`, `amp.mcpServers`, Goose extensions, `context_servers`). Secret files such as
+Aider's `.env` and Goose's `secrets.yaml` are only noted as present.
 
 Skill directories are shallow, with one extra category or `.system` level. Custom config homes
 (`GEMINI_CLI_HOME`, `COPILOT_HOME`, `CLINE_DIR`, `CLINE_MCP_SETTINGS_PATH`, Aider

@@ -14,14 +14,25 @@ describe("Tray panel", () => {
     const { view } = mount();
     await waitFor(() => expect(view.getByText("Claude Code listens on all interfaces")).toBeTruthy());
     expect(view.getByRole("heading", { name: "holdmap" })).toBeTruthy();
-    expect(view.getByText("Agents").previousElementSibling?.textContent).toBe("4");
-    expect(view.getByText("Dev servers", { selector: ".legend" }).previousElementSibling?.textContent).toBe("3");
+    const tile = (label: string) => view.getByText(label, { selector: ".label" }).parentElement!;
+    expect(tile("Agents").querySelector(".value")?.textContent).toBe("4");
+    expect(tile("Agents").querySelector(".sub")?.textContent).toBe("+1 dev tool");
+    expect(tile("RAM").querySelector(".value")?.textContent).toBe("1.6GB");
+    expect(tile("CPU").querySelector(".value")?.textContent).toBe("7.4%");
+    expect(view.container.querySelector(".head .status")?.textContent).toBe("2 need you");
     expect(view.getByRole("img", { name: /Agent CPU over the last 48 scans/ })).toBeTruthy();
     expect(view.getByRole("img", { name: /Something needed you in \d+ of the last 48 scans/ })).toBeTruthy();
     expect(view.getByText("Look now")).toBeTruthy();
     expect(view.getByText("Worth a look")).toBeTruthy();
     expect(view.getByRole("button", { name: /:5173 Vite · dashboard Network/ })).toBeTruthy();
-    expect(view.getByRole("button", { name: "Claude Code · storefront CPU 4.2% memory 288 MB" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Claude Code · storefront CPU 4.2% RAM 288 MB" })).toBeTruthy();
+    // Most RAM first; a long folder name truncates and the full row is in the tooltip.
+    const rows = view.getAllByRole("button").filter((b) => b.classList.contains("trow"));
+    expect(rows.map((r) => r.querySelector("b")?.textContent ?? r.querySelector(".name")?.textContent)).toEqual(["Cursor", "Claude Code", "Codex CLI", "Gemini CLI", "Docker Desktop"]);
+    expect(rows[0].getAttribute("title")).toBe("Cursor · storefront-monorepo-with-a-long-name: 1.1 GB RAM, CPU 2.1%");
+    // Docker Desktop is a developer tool, listed apart and said so.
+    expect(view.getByText("Developer tools")).toBeTruthy();
+    expect(rows[4].getAttribute("title")).toContain("(developer tool)");
   });
 
   it("runs each row's tray action, and Escape closes the panel", async () => {
@@ -47,7 +58,7 @@ describe("Tray panel", () => {
     await waitFor(() => expect(view.getByText("Checking agents and ports…")).toBeTruthy());
     // Both charts wait for scans: the agents' CPU and port changes.
     expect(view.getAllByText("Fills in as holdmap scans")).toHaveLength(2);
-    expect(view.getByText("Agents").previousElementSibling?.textContent).toBe("…");
+    expect(view.getByText("Agents", { selector: ".label" }).parentElement!.querySelector(".value")?.textContent).toBe("…");
     expect(view.queryByRole("button", { name: "Stop all…" })).toBeNull();
     expect(view.queryByText("0")).toBeNull();
   });

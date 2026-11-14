@@ -29,9 +29,9 @@ describe("settings", () => {
     expect(trayWidgetName("macos", undefined)).toBeNull();
     expect(trayWidgetName("browser", false)).toBe("Menu bar");
     // Same ids and order as `Config::TRAY_ITEMS`; Linux's label holds text only.
-    expect(TRAY_ITEM_OPTIONS.map((o) => o.value)).toEqual(["icon", "agents", "needs", "cpu", "dev", "cpu_history", "agent_bars"]);
-    expect(trayItemOptions("linux").map((o) => o.value)).toEqual(["agents", "needs", "cpu", "dev", "cpu_history"]);
-    expect(trayItemOptions("macos")).toHaveLength(7);
+    expect(TRAY_ITEM_OPTIONS.map((o) => o.value)).toEqual(["icon", "agents", "needs", "cpu", "ram", "dev", "cpu_history", "agent_bars"]);
+    expect(trayItemOptions("linux").map((o) => o.value)).toEqual(["agents", "needs", "cpu", "ram", "dev", "cpu_history"]);
+    expect(trayItemOptions("macos")).toHaveLength(8);
   });
 
   it("turns menu-bar items on and off in menu-bar order, never down to none", () => {

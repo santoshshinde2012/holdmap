@@ -62,6 +62,13 @@ fn lists_tools_with_annotations() {
             "{} lacks a description",
             tool["name"]
         );
+        // Clients send every description with every request; detail belongs in the guide.
+        assert!(
+            description.chars().count() <= 600,
+            "{}'s description is {} characters; move detail to holdmap://guide",
+            tool["name"],
+            description.chars().count()
+        );
         for hint in [
             "readOnlyHint",
             "destructiveHint",

@@ -667,6 +667,7 @@ pub async fn set_preferences(
     history_limit: Option<usize>,
     tray_items: Option<Vec<String>>,
     tray_combined: Option<bool>,
+    tray_compact: Option<bool>,
     show_in_dock: Option<bool>,
 ) -> Result<Config, String> {
     if let Some(s) = scan_interval_secs {
@@ -697,7 +698,7 @@ pub async fn set_preferences(
             Config::TRAY_ITEMS.join(", ")
         ));
     }
-    let restyle = tray_items.is_some() || tray_combined.is_some();
+    let restyle = tray_items.is_some() || tray_combined.is_some() || tray_compact.is_some();
     let handle = app.clone();
     let config = with_store(app, move |store| {
         save(store, |c| {
@@ -712,6 +713,9 @@ pub async fn set_preferences(
             }
             if let Some(combined) = tray_combined {
                 c.tray_combined = combined;
+            }
+            if let Some(compact) = tray_compact {
+                c.tray_compact = compact;
             }
             if let Some(show) = show_in_dock {
                 c.show_in_dock = show;

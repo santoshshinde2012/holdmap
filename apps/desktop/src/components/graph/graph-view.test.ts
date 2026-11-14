@@ -103,7 +103,7 @@ describe("unified graph chrome and peer inspector", () => {
     const chrome = view.container.querySelector(".chrome-host")!;
     expect(chrome).toBeTruthy();
     expect(chrome.querySelector("[role=toolbar][aria-label='Graph view options']")).toBeTruthy();
-    expect(view.getByRole("group", { name: "Graph summary" }).textContent).toMatch(/\d+ Services/);
+    expect(view.getByRole("group", { name: "Graph summary" }).textContent).toMatch(/\d+ services?/);
     expect(view.getByRole("group", { name: "Graph legend" })).toBeTruthy();
     expect(view.container.querySelector(".graph-head")).toBeNull();
   });
