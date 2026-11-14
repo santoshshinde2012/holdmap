@@ -29,6 +29,11 @@
   let fadeTop = $state(false);
   let fadeBottom = $state(false);
 
+  // Row and footer actions open holdmap; a failure says so in the footer instead of vanishing.
+  function go(action: string) {
+    actionError = "";
+    Promise.resolve(run(action)).catch(() => (actionError = "Couldn’t reach holdmap. Please try again."));
+  }
   async function changeSetting(action: string) {
     if (busy) return;
     busy = true;
@@ -63,7 +68,7 @@
   function onKey(e: KeyboardEvent) {
     if (e.key === "Escape" && !e.isComposing) {
       if (settingsOpen) { settingsOpen = false; document.getElementById("quick-settings-toggle")?.focus(); }
-      else void run("hide-panel");
+      else go("hide-panel");
     }
   }
   function measure() {
@@ -126,8 +131,8 @@
     });
   });
   async function pin() {
-    await run("pin-panel");
-    await refresh(true);
+    try { await run("pin-panel"); await refresh(true); }
+    catch { actionError = "Couldn’t pin the panel. Please try again."; }
   }
 </script>
 
@@ -184,7 +189,7 @@
         <ul class="rows">
           {#each data.needs as need (need.action)}
             <li>
-              <button type="button" class="row" onclick={() => run(need.action)}>
+              <button type="button" class="row" onclick={() => go(need.action)}>
                 <span class="text" title={need.title}>{need.title}</span>
                 <span class="pill {need.urgency}">{URGENCY_LABEL[need.urgency]}</span>
               </button>
@@ -199,7 +204,7 @@
         <h2 id="sec-dev">Dev servers</h2>
         {#if data?.ready && data.dev.length}<span class="count">{data.dev.length}</span>{/if}
         {#if data?.stopDev}
-          <button type="button" class="sec-action" title="Opens holdmap to review what will stop before anything does" onclick={() => run("stop-all-dev")}>Stop all…</button>
+          <button type="button" class="sec-action" title="Opens holdmap to review what will stop before anything does" onclick={() => go("stop-all-dev")}>Stop all…</button>
         {/if}
       </div>
       {#if data?.ready && data.dev.length === 0}
@@ -208,7 +213,7 @@
         <ul class="rows">
           {#each data.dev as dev (dev.port)}
             <li>
-              <button type="button" class="row" title={`:${dev.port} ${dev.label}`} onclick={() => run(dev.action)}>
+              <button type="button" class="row" title={`:${dev.port} ${dev.label}`} onclick={() => go(dev.action)}>
                 <span class="port">:{dev.port}</span>
                 <span class="text">{dev.label}</span>
                 <span class="pill {dev.exposed ? 'medium' : 'gray'}">{dev.exposed ? "Network" : "Local"}</span>
@@ -239,7 +244,7 @@
             {#each data?.topAgents ?? [] as agent (agent.action)}
               {@const usage = agent.cpu === null ? "…" : cpuText(agent.cpu)}
               <li>
-                <button type="button" class="trow" title={agentSummary(agent)} onclick={() => run(agent.action)}>
+                <button type="button" class="trow" title={agentSummary(agent)} onclick={() => go(agent.action)}>
                   <span class="name"><b>{agent.name}</b>{#if agent.place}{" "}<span class="place">· {agent.place}</span>{/if}</span>
                   <span class="c num"><span class="sr-only">CPU</span>{" "}{usage}</span>
                   <span class="c num strong"><span class="sr-only">RAM</span>{" "}{humanBytes(agent.memory)}</span>
@@ -248,7 +253,7 @@
             {/each}
           </ul>
           {#if data?.moreAgents}
-            <button type="button" class="link more" onclick={() => run("show")}>+{data.moreAgents} more in holdmap</button>
+            <button type="button" class="link more" onclick={() => go("show")}>+{data.moreAgents} more in holdmap</button>
           {/if}
           {#if tools.length}
             <p class="tools-label" id="dev-tools">Developer tools <span class="hint">not agents, not counted above</span></p>
@@ -256,7 +261,7 @@
               {#each tools as tool (tool.action)}
                 {@const usage = tool.cpu === null ? "…" : cpuText(tool.cpu)}
                 <li>
-                  <button type="button" class="trow tool" title={`${agentSummary(tool)} (developer tool)`} onclick={() => run(tool.action)}>
+                  <button type="button" class="trow tool" title={`${agentSummary(tool)} (developer tool)`} onclick={() => go(tool.action)}>
                     <span class="name">{agentLabel(tool)}</span>
                     <span class="c num"><span class="sr-only">CPU</span>{" "}{usage}</span>
                     <span class="c num"><span class="sr-only">RAM</span>{" "}{humanBytes(tool.memory)}</span>
@@ -331,7 +336,7 @@
 
   {#if settingsOpen}
     <section class="body settings" aria-label="Quick settings">
-      <div class="settings-heading"><h2>Quick settings</h2><button class="link" type="button" onclick={() => run("settings")}>All settings ↗</button></div>
+      <div class="settings-heading"><h2>Quick settings</h2><button class="link" type="button" onclick={() => go("settings")}>All settings ↗</button></div>
       <h3 class="sub-head">Appearance</h3>
       <div class="segmented" role="group" aria-label="Theme">
         {#each THEMES as choice}
@@ -367,14 +372,14 @@
 
   <footer class="foot" aria-label="Panel actions">
     {#if actionError}<p class="action-error" role="alert">{actionError}</p>{/if}
-    <button type="button" class="btn primary" onclick={() => run("show")}>Open holdmap <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5" /></svg></button>
+    <button type="button" class="btn primary" onclick={() => go("show")}>Open holdmap <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5" /></svg></button>
     <button id="quick-settings-toggle" type="button" class="icon-btn" class:on={settingsOpen} aria-label={settingsOpen ? "Back to overview" : "Quick settings"} title={settingsOpen ? "Back to overview" : "Quick settings"} aria-expanded={settingsOpen} onclick={() => settingsOpen = !settingsOpen}>
       <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6M16 14v6" /></svg>
     </button>
     <button type="button" class="icon-btn" aria-label="Refresh" title="Refresh readings" onclick={() => changeSetting("refresh")} disabled={busy}>
       <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1" /></svg>
     </button>
-    <button type="button" class="icon-btn quit" aria-label="Quit" title="Quit holdmap" onclick={() => run("quit")}>
+    <button type="button" class="icon-btn quit" aria-label="Quit" title="Quit holdmap" onclick={() => go("quit")}>
       <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M12 3v9M7 5.5a8 8 0 1 0 10 0" /></svg>
     </button>
   </footer>

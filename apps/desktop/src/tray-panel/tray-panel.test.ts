@@ -148,6 +148,15 @@ describe("Tray panel edge cases", () => {
     expect(view.queryByRole("button", { name: "Try now" })).toBeNull();
   });
 
+  it("says so in the footer when an action can't reach holdmap", async () => {
+    const run = vi.fn(async () => { throw "holdmap isn't running"; });
+    const view = render(TrayPanel, { load: async () => demoPanel(), run, poll: 60_000 });
+    const open = await view.findByRole("button", { name: /Open holdmap/ });
+    await fireEvent.click(open);
+    await waitFor(() => expect(view.getByRole("alert").textContent).toBe("Couldn’t reach holdmap. Please try again."));
+    expect(run).toHaveBeenCalledWith("show");
+  });
+
   it("calls zero agents zero, and lists many agents with the rest behind one link", async () => {
     const zero = mount({ ...demoPanel(), agents: 0, topAgents: [], tools: [], moreAgents: 0 }).view;
     await waitFor(() => expect(zero.getByText("No agents running.")).toBeTruthy());
