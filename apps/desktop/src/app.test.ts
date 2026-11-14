@@ -28,6 +28,7 @@ const calls = vi.hoisted(() => ({
   planCalls: 0,
   historyFailureAt: 0,
   stopFailureAt: 0,
+  stopError: null as string | null,
   restarts: 0,
   deferPlan: false,
   planPending: [] as { target: string; result: ActionPlan; resolve: (value: ActionPlan) => void }[],
@@ -71,7 +72,7 @@ vi.mock("./lib/api", async (orig) => {
       const result = await real.plan(target, force, allowProtected);
       return calls.deferPlan ? new Promise<ActionPlan>((resolve) => calls.planPending.push({ target, result, resolve })) : result;
     },
-    stop: async (target: string) => { calls.stopCalls++; return simulatedStop(target); },
+    stop: async (target: string) => { calls.stopCalls++; if (calls.stopError) throw calls.stopError; return simulatedStop(target); },
     stopMany: async (agentId: string, requests: ScheduledStopRequest[]) => {
       calls.stopManyCalls.push({ agentId, requests });
       if (calls.stopManyError) throw new Error(calls.stopManyError);
@@ -136,6 +137,7 @@ afterEach(() => {
   calls.planCalls = 0;
   calls.historyFailureAt = 0;
   calls.stopFailureAt = 0;
+  calls.stopError = null;
   calls.restarts = 0;
   calls.deferPlan = false;
   calls.planPending = [];
@@ -351,6 +353,28 @@ describe("App action review freshness", () => {
     await vi.advanceTimersByTimeAsync(50);
     expect(calls.restarts).toBe(1);
     expect(view.container.textContent).toContain("Restarted :3000");
+  });
+
+  it("explains a stop the native side refused and keeps the app usable", async () => {
+    vi.useFakeTimers();
+    calls.stopError = "Error: The system didn't let holdmap stop node (PID 43000). Stop it from its own app, or with sudo in a terminal.";
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    await fireEvent.click(rowAction(view.container, 3000, "stop"));
+    await vi.advanceTimersByTimeAsync(100);
+    await fireEvent.click(view.getByRole("button", { name: /^Stop :3000/ }));
+    await vi.advanceTimersByTimeAsync(300);
+    const dialog = view.container.ownerDocument.querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]')!;
+    expect(dialog).toBeTruthy();
+    // The reason and the next step, without the "Error:" prefix the IPC string carried.
+    expect(dialog.textContent).toContain("didn't let holdmap stop node (PID 43000)");
+    expect(dialog.textContent).toContain("with sudo");
+    expect(dialog.textContent).not.toContain("Error: The system");
+    expect(calls.stopTargets).toHaveLength(0);
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(view.container.ownerDocument.querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
+    expect(rowAction(view.container, 3000, "stop")).toBeTruthy();
   });
 
   it("ignores a plan completed after its review was cancelled with Escape", async () => {

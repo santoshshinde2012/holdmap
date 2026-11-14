@@ -1041,7 +1041,7 @@
       }
     } catch (e) {
       c.phase = "failed";
-      c.report = { target: c.plan.target, success: false, freed: false, ports_still_busy: [], signalled: [], escalated: false, survivors: [], elapsed_ms: 0, log: [], error: String(e) };
+      c.report = { target: c.plan.target, success: false, freed: false, ports_still_busy: [], signalled: [], escalated: false, survivors: [], elapsed_ms: 0, log: [], error: errorText(e) };
     } finally {
       delete busy[key];
       refresh();

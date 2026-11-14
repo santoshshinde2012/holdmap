@@ -44,6 +44,10 @@ sharing or the system screen recorder. If capture is denied, check this app's Sc
 permission in System Settings. “Holdmap can only record its own window” means the window is
 minimized or hidden: bring it forward and try again. Holdmap never records anything else. See [screen recording](../desktop/#record-the-screen).
 
+**Something failed in the desktop app.** Every failure the app reports, and any crash, is
+also written to `logs/holdmap.log` in the settings folder (see Uninstall below). Passwords and
+tokens are masked and your home folder shows as `~`, so you can attach it to an issue.
+
 **The MCP client can't start holdmap.** Use the full path in its config, see
 [MCP setup](../mcp/#set-it-up).
 
