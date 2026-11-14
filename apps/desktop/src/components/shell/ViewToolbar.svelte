@@ -115,7 +115,7 @@
       {#if filtersActive}<Button size="sm" variant="ghost" icon="x" onclick={onclearfilters}>Clear</Button>{/if}
       <div class="spacer"></div>
       {#if !narrow}<IconButton icon="panel" size="sm" pressed={sideOpen} label={sideOpen ? "Hide details pane" : "Show details pane"} kbd={singleKeys ? "B" : undefined} onclick={() => (sideOpen = !sideOpen)} />{/if}
-      <Select size="sm" prefix="Sort" label="Sort by" labelHidden bind:value={sort} width="168px" options={[{ value: "group", label: "Grouped", description: "By kind: dev, containers, databases…" }, { value: "cluster", label: "Cluster", description: "Compose project, workspace, supervisor" }, { value: "port", label: "Port", description: "Lowest port number first" }, { value: "newest", label: "Newest", description: "Most recently seen first" }, { value: "memory", label: "Memory", description: "Highest memory use first" }]} />
+      <Select size="sm" prefix="Sort" label="Sort by" labelHidden bind:value={sort} width="168px" options={[{ value: "group", label: "Grouped", description: "By kind: dev, containers, databases…" }, { value: "cluster", label: "Cluster", description: "Compose project, workspace, supervisor" }, { value: "port", label: "Port", description: "Lowest port number first" }, { value: "newest", label: "Newest", description: "Most recently seen first" }, { value: "memory", label: "RAM", description: "Most RAM first" }]} />
     {:else if view === "graph"}
       <div class="spacer"></div>
       {#if graphQuery}<Button size="sm" variant="ghost" icon="x" onclick={() => (graphQuery = "")}>Clear search</Button>{/if}

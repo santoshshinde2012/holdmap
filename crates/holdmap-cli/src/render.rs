@@ -89,7 +89,7 @@ pub fn list_table_with(
             col("USER"),
             rcol("UPTIME"),
             rcol("CPU"),
-            rcol("MEM"),
+            rcol("RAM"),
             flex("COMMAND", 10),
         ]);
     }
@@ -433,7 +433,7 @@ pub fn inspect_entry(e: &PortEntry) -> String {
             } else {
                 human_bytes(mem)
             };
-            rows.push(("Memory".into(), label));
+            rows.push(("RAM".into(), label));
         }
     } else if e.container.is_none() {
         rows.push(("Owner".into(), dim("not visible (another user / root)")));

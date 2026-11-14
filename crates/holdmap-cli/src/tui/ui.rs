@@ -525,7 +525,7 @@ fn draw_details(f: &mut Frame, app: &mut App, area: Rect) {
             human_duration(now_secs().saturating_sub(p.start_time)),
         ));
         if p.memory_bytes > 0 {
-            lines.push(kv("Memory", human_bytes(p.memory_bytes)));
+            lines.push(kv("RAM", human_bytes(p.memory_bytes)));
         }
         lines.push(Line::raw(""));
         if let Some(pr) = &e.project {

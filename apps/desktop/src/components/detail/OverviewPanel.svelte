@@ -31,7 +31,7 @@
     if (uptime(entry)) out.push({ label: "Uptime", value: uptime(entry)!, sub: p?.start_time ? `since ${startedShort(p.start_time)}` : undefined, icon: "clock" });
     const memBytes = entry.app_memory_bytes || (node && node.pids.length > 1 ? node.memory_bytes : p?.memory_bytes) || 0;
     const helpers = entry.helper_count || (node && node.pids.length > 1 ? node.pids.length - 1 : 0);
-    if (memBytes) out.push({ label: "Memory", value: humanBytes(memBytes), sub: helpers > 0 ? `${helpers} helper${helpers === 1 ? "" : "s"}` : (node && node.pids.length > 1 ? `${node.pids.length} processes` : undefined), icon: "activity", trend: memTrend, range: true });
+    if (memBytes) out.push({ label: "RAM", value: humanBytes(memBytes), sub: helpers > 0 ? `${helpers} helper${helpers === 1 ? "" : "s"}` : (node && node.pids.length > 1 ? `${node.pids.length} processes` : undefined), icon: "activity", trend: memTrend, range: true });
     if (p && p.cpu_percent !== undefined) out.push({ label: "CPU", value: `${(node?.cpu_percent ?? p.cpu_percent).toFixed(1)}%`, icon: "cpu", trend: cpuTrend });
     const c = details?.connections;
     // Shown from the start (as "–" until the lazy details land) so the tiles never reflow.

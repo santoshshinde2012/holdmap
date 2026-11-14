@@ -69,7 +69,7 @@ export const chapters: Chapter[] = [
       kv("Command", "node ~/code/shop-web/node_modules/.bin/next dev"),
       kv("Working dir", "~/code/shop-web"),
       kv("Uptime", "2h 3m"),
-      kv("Memory", "1.2 GB · 3 helpers"),
+      kv("RAM", "1.2 GB · 3 helpers"),
       kv("Project", "shop-web (~/code/shop-web, package.json) · branch <v>feat/checkout</v>"),
       kv("Framework", "Next.js (DevServer)"),
       kv("Ancestry", "node (43000) ← npm (42999) ← zsh (42960) ← launchd (1)"),

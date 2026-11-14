@@ -202,7 +202,7 @@ export function buildScene({ report, entries = null, hot = new Set(), needs = ne
       count: a.process_ids.length, slices: a.processes.slice(0, 16).map((p) => p.cpu_percent),
       warn: hot.has(a.id) ? mine[0] ?? head.text : null,
       target: { view: "agents", agentId: a.id },
-      facts: [["Kind", `${KIND_LABEL[a.kind]} by ${a.vendor}`], ["Access", head.text], ["CPU", a.cpu_unknown ? "unknown" : pct(a.cpu_percent)], ["Memory", humanBytes(a.memory_bytes)],
+      facts: [["Kind", `${KIND_LABEL[a.kind]} by ${a.vendor}`], ["Access", head.text], ["CPU", a.cpu_unknown ? "unknown" : pct(a.cpu_percent)], ["RAM", humanBytes(a.memory_bytes)],
         ...memoryFacts(report, a.id),
         ["Processes", String(a.process_ids.length)], ["PID", String(a.pid)], ...(mine.length ? [["Needs you", mine.join("; ")] as [string, string]] : [])],
     });
@@ -216,7 +216,7 @@ export function buildScene({ report, entries = null, hot = new Set(), needs = ne
       parts.push(part({
         id, kind: "tool", layer: "runtime", owner: a.id, label: t.name, sub: `${TOOL_LABEL[t.kind]} · PID ${t.pid}`, evidence: t.evidence, live: true, variant: t.kind,
         cpu: t.cpu_percent, memory: t.memory_bytes, target: { view: "agents", agentId: a.id },
-        facts: [["Kind", TOOL_LABEL[t.kind]], ["PID", String(t.pid)], ["CPU", t.cpu_unknown ? "unknown" : pct(t.cpu_percent)], ["Memory", humanBytes(t.memory_bytes)],
+        facts: [["Kind", TOOL_LABEL[t.kind]], ["PID", String(t.pid)], ["CPU", t.cpu_unknown ? "unknown" : pct(t.cpu_percent)], ["RAM", humanBytes(t.memory_bytes)],
           ...(t.cwd ? [["Folder", tildify(t.cwd)] as [string, string]] : []), ...(t.ports.length ? [["Ports", t.ports.map((p) => `:${p}`).join(", ")] as [string, string]] : []),
           ["How it's known", t.evidence === "observed" ? "Seen in the process table" : "Classified from its name and command"]],
       }));
@@ -338,12 +338,12 @@ export function readings(scene: MachineScene, focus: string | null = null, scann
   const needs = scene.parts.filter((p) => p.warn && p.kind !== "call" && mine(p)).length;
   const config = !scene.inspected;
   if (!scanned) {
-    const label = { cpu: "CPU", memory: "Memory", ports: "Ports", runtime: "Processes", mcp: "MCP running", skills: "Skills", needs: "Needs you" } as const;
+    const label = { cpu: "CPU", memory: "RAM", ports: "Ports", runtime: "Processes", mcp: "MCP running", skills: "Skills", needs: "Needs you" } as const;
     return (Object.keys(label) as (keyof typeof label)[]).map((id) => ({ id, label: label[id], value: "…", sub: "first scan" }));
   }
   return [
     { id: "cpu", label: "CPU", value: pct(cpu), sub: focus ? "this agent" : plural(agents.length, "agent"), ratio: Math.min(1, cpu / 100) },
-    { id: "memory", label: "Memory", value: humanBytes(memory), sub: focus ? "this agent" : "all agents" },
+    { id: "memory", label: "RAM", value: humanBytes(memory), sub: focus ? "this agent" : "all agents" },
     { id: "ports", label: "Ports", value: String(ports.length), sub: exposed ? `${exposed} exposed` : "local only", tone: exposed ? "warn" : undefined },
     { id: "runtime", label: "Processes", value: String(tools.length), sub: `${tools.filter((t) => t.variant === "mcp_server").length} MCP · ${tools.filter((t) => t.variant === "dev_server").length} dev` },
     { id: "mcp", label: "MCP running", value: config ? null : String(runningMcp), sub: config ? "opt-in, off" : `of ${mcp.length} configured`, ratio: mcp.length ? runningMcp / mcp.length : undefined, tone: runningMcp ? "ok" : undefined },

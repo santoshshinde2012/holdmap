@@ -27,7 +27,7 @@ test.describe("narrow docked details", () => {
     await expectContained(details, tabs);
 
     const metrics = details.getByLabel("Port activity", { exact: true });
-    await expect(metrics).toContainText("Memory");
+    await expect(metrics).toContainText("RAM");
     await expect(metrics).toContainText("CPU");
     await expect(metrics).toContainText("Connections");
     // Wait for a second scan so the layout includes actual resource trend lines.
@@ -118,7 +118,7 @@ test.describe("narrow docked details", () => {
     }
     await select.press("End");
     await select.press("Enter");
-    await expect(select).toContainText("Memory");
+    await expect(select).toContainText("RAM");
     await expect(select).toBeFocused();
     await expect(popup).toHaveCount(0);
   });
