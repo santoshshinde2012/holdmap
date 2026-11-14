@@ -6,14 +6,14 @@ import { mockAgents } from "../../lib/mock-agents";
 import * as places from "../../lib/mock-places";
 
 afterEach(cleanup);
-const inspected = () => mockAgents(undefined, true, places).agents.find((a) => a.capabilities?.inspected && a.capabilities.locations.some((p) => p.present && p.path))!;
+const inspected = () => mockAgents(undefined, true, places).agents.find((a) => a.capabilities?.inspected && (a.capabilities.locations ?? []).some((p) => p.present && p.path))!;
 
 describe("AgentLocations", () => {
   it("shows a present location's folder in one click, and offers nothing to show for a missing one", async () => {
     const agent = inspected();
     const onreveal = vi.fn();
     const view = render(AgentLocations, { agent, onreveal });
-    const present = agent.capabilities!.locations.find((p) => p.present && p.path)!;
+    const present = (agent.capabilities!.locations ?? []).find((p) => p.present && p.path)!;
     const row = [...view.container.querySelectorAll<HTMLElement>(".place")].find((li) => li.querySelector(".path")?.getAttribute("title") === present.path)!;
     await fireEvent.click(within(row).getByRole("button", { name: "Show in folder" }));
     expect(onreveal).toHaveBeenCalledExactlyOnceWith(present.path);

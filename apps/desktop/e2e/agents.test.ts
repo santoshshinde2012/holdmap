@@ -83,7 +83,7 @@ test("Agents shows aggregate resources and inferred MCP servers without listener
   await expect(agentHeading(app, "Cursor")).toContainText("15 processes");
   await expect(agentHeading(app, "Cursor")).toContainText("5 tools");
   await expect(agentHeading(app, "Cursor")).toContainText("6.2% CPU");
-  await expect(agentHeading(app, "Cursor")).toContainText("2.2 GB total memory");
+  await expect(agentHeading(app, "Cursor")).toContainText("2.2 GB RAM");
   await expect(agentHeading(app, "Claude Code")).toContainText("3 processes");
   await expect(agentHeading(app, "Docker Desktop")).toContainText("6 processes");
 
