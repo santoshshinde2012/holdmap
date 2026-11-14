@@ -1,7 +1,7 @@
 <script lang="ts">
   // One agent in the rail: identity header, footprint KPI chips and resource telemetry. Selecting
   // it opens the full picture in the Agents detail panel; the card itself stays compact.
-  import { humanBytes } from "../../lib/format";
+  import { agentMemoryText, memoryFor } from "../../lib/agent-memory";
   import { ACCESS_LABEL, accessHeadline, agentMeta, countChips, counts, monogram } from "../../lib/agents";
   import AgentRelations from "./AgentRelations.svelte";
   import type { Agent, AgentsReport } from "../../lib/types";
@@ -48,7 +48,7 @@
     </span>
     <span class="kpis">{#each countChips(c, true) as [n, label]}<span class="kpi"><b>{n}</b> {label}</span> {/each}{#if c.stoppable}<span class="kpi warn"><b>{c.stoppable}</b> stoppable</span>{/if}</span>
     <span class="res">
-      <span class="mem"><b>{humanBytes(agent.memory_bytes)}</b> <span class="res-sub">total memory</span></span>
+      <span class="mem"><b>{agentMemoryText(agent, memoryFor(report, agent.id))}</b> <span class="res-sub">total memory</span></span>
       <span class="cpu">{agent.cpu_percent.toFixed(agent.cpu_percent < 10 ? 1 : 0)}% CPU</span>
       <span class="mem-track" aria-hidden="true"><span class="mem-fill" style="width: {memPct}%"></span></span>
     </span>

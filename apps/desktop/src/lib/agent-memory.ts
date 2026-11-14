@@ -45,6 +45,13 @@ export function headlineLabel(memory: AgentMemoryReport): string {
   return memory.headline_label || HEADLINE_LABEL[memory.headline_counter] || memory.headline_counter;
 }
 
+/** An agent's memory as text: its size, or "unknown" when no process in its tree gave a
+ * reading (another account's process), so a zero is never shown as a size. */
+export function agentMemoryText(agent: Agent, memory: AgentMemoryReport | null): string {
+  const none = !!memory && memory.processes.length > 0 && memory.processes.every((row) => row.scan_bytes === 0 && observed(row.reading?.resident) === null && observed(row.reading?.physical_footprint) === null);
+  return none ? "unknown" : humanBytes(agent.memory_bytes);
+}
+
 export function memoryFor(report: AgentsReport | null | undefined, agentId: string): AgentMemoryReport | null {
   return report?.memory?.find((row) => row.agent_id === agentId) ?? null;
 }

@@ -376,11 +376,15 @@ impl AgentMemoryReport {
             } else {
                 "processes"
             };
+            let bytes = if self.headline_unknown() {
+                "unknown".to_owned()
+            } else {
+                crate::util::human_bytes(group.scan_bytes)
+            };
             lines.push(format!(
-                "{}: {} {noun} · {}",
+                "{}: {} {noun} · {bytes}",
                 group.role.label(),
                 group.processes,
-                crate::util::human_bytes(group.scan_bytes)
             ));
         }
         let mut rows: Vec<&ProcessMemoryRow> = self.processes.iter().collect();
@@ -406,12 +410,16 @@ impl AgentMemoryReport {
             } else {
                 format!(" · {}", bits.join(" · "))
             };
+            let bytes = if row.scan_bytes == 0 && row.reading.resident.get().is_none() {
+                "unknown".to_owned()
+            } else {
+                crate::util::human_bytes(row.scan_bytes)
+            };
             lines.push(format!(
-                "{} pid {} · {} · {}{extra}",
+                "{} pid {} · {} · {bytes}{extra}",
                 row.name,
                 row.pid,
                 row.role.label(),
-                crate::util::human_bytes(row.scan_bytes)
             ));
             if row.dominant {
                 if let Some(reason) = &row.dominant_reason {

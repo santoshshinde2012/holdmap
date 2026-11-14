@@ -481,6 +481,8 @@ fn a_tree_with_no_memory_reading_is_unknown_not_zero() {
     assert!(line.starts_with("unknown"), "{line}");
     assert!(line.contains("access denied"), "{line}");
     assert!(!line.contains("0 B"), "{line}");
+    let lines = report.breakdown_lines();
+    assert!(lines.iter().all(|l| !l.contains("0 B")), "{lines:?}");
 }
 
 #[test]

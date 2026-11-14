@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bytesOrUnknown, filterPlaces, fleetMemory, headlineLabel, memorySummary, observed, placeEntries, placesSummary, processNoun, shareText, trendSparkline, trendView } from "./agent-memory";
+import { agentMemoryText, bytesOrUnknown, filterPlaces, fleetMemory, headlineLabel, memorySummary, observed, placeEntries, placesSummary, processNoun, shareText, trendSparkline, trendView } from "./agent-memory";
 import { mockAgents } from "./mock-agents";
 import * as mockPlaces from "./mock-places";
 import type { Agent, AgentMemoryReport, CapabilityPlace } from "./types";
@@ -152,5 +152,19 @@ describe("memory figures", () => {
     const memory = { headline_counter: "physical_footprint", headline_label: "", headline_mixed: null } as unknown as AgentMemoryReport;
     expect(headlineLabel(memory)).toBe("Physical footprint");
     expect(headlineLabel({ ...memory, headline_label: "Mixed: physical footprint and resident (rss)" })).toMatch(/^Mixed/);
+  });
+});
+
+describe("agentMemoryText", () => {
+  const agent = { memory_bytes: 0 } as unknown as import("./types").Agent;
+  const unknown = { value: null, unknown: "proc_pid_rusage failed (access denied)" };
+  const row = (scan: number, resident: { value: number | null; unknown?: string | null }) => ({ pid: 1, name: "vmnetd", role: "agent", evidence: "observed", scan_bytes: scan, reading: { resident, physical_footprint: resident }, dominant: false });
+  it("says unknown when no process gave a reading, never 0 B", () => {
+    const memory = { processes: [row(0, unknown)] } as unknown as import("./types").AgentMemoryReport;
+    expect(agentMemoryText(agent, memory)).toBe("unknown");
+  });
+  it("keeps a real reading", () => {
+    const memory = { processes: [row(2048, { value: 2048, unknown: null })] } as unknown as import("./types").AgentMemoryReport;
+    expect(agentMemoryText({ memory_bytes: 2048 } as unknown as import("./types").Agent, memory)).toBe("2.0 KB");
   });
 });
