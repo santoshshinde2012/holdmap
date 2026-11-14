@@ -302,22 +302,37 @@
   let mapOpen = $state(false);
 </script>
 
+{#snippet chunkState(icon: string, name: string, retry?: () => void)}
+  <!-- A lazy workspace: loading, or (with retry) why it couldn't load. -->
+  <div class="empty workspace-loading" role={retry ? "alert" : "status"} aria-busy={!retry}>
+    <Icon name={icon} size={28} /><p>{retry ? `Couldn't load ${name}` : `Loading ${name}…`}</p>
+    {#if retry}<span>Try again, or reload the app if it still won't open.</span><div class="load-actions"><Button size="sm" onclick={retry}>Try again</Button><Button size="sm" variant="ghost" onclick={() => window.location.reload()}>Reload app</Button></div>{/if}
+  </div>
+{/snippet}
+
+{#snippet limits(items: string[], open: boolean)}
+  <details class="limits" {open}>
+    <summary><Icon name="info" size={12} />What this can and can't see</summary>
+    <ul tabindex="0" aria-label="What this can and can't see">{#each items as l}<li>{l}</li>{/each}</ul>
+  </details>
+{/snippet}
+
 <div class="agents-root" class:reduced>
   {#if section === "capabilities"}
     {#if CapabilityWorkspace}
       <CapabilityWorkspace {report} {query} {selectedAgent} {dark} {reduced} loading={capabilitiesLoading} error={capabilitiesError} demo={flowProps.demo} {onselectagent} onclearquery={flowProps.onclearquery} onretry={onrefreshcapabilities} onrecordedcalls={() => { flowSource = "calls"; section = "flow"; }} {onsettings} onsecurity={() => { section = "insights"; }} />
     {:else if capabilityChunkError}
-      <div class="empty workspace-loading" role="alert"><Icon name="plug" size={28} /><p>Couldn't load MCP &amp; skills</p><span>Try again, or reload the app if the workspace still won't open.</span><div class="load-actions"><Button size="sm" onclick={loadCapabilityWorkspace}>Try again</Button><Button size="sm" variant="ghost" onclick={() => window.location.reload()}>Reload app</Button></div></div>
+      {@render chunkState("plug", "MCP & skills", loadCapabilityWorkspace)}
     {:else}
-      <div class="empty workspace-loading" role="status" aria-busy="true"><Icon name="plug" size={28} /><p>Loading MCP &amp; skills…</p></div>
+      {@render chunkState("plug", "MCP & skills")}
     {/if}
   {:else if section === "insights"}
     {#if SecurityWorkspace}
       <SecurityWorkspace {report} {selectedAgent} {inventory} {onselectagent} {onsettings} {oninventory} />
     {:else if securityChunkError}
-      <div class="empty workspace-loading" role="alert"><Icon name="shield" size={28} /><p>Couldn't load Security</p><div class="load-actions"><Button size="sm" onclick={loadSecurityWorkspace}>Try again</Button><Button size="sm" variant="ghost" onclick={() => window.location.reload()}>Reload app</Button></div></div>
+      {@render chunkState("shield", "Security", loadSecurityWorkspace)}
     {:else}
-      <div class="empty workspace-loading" role="status" aria-busy="true"><Icon name="shield" size={28} /><p>Loading Security…</p></div>
+      {@render chunkState("shield", "Security")}
     {/if}
   {:else if section === "flow"}
     <div class="flow-body" id="agents-flow"><AgentFlowView {query} {dark} {reduced} {...flowProps} {report} {selectedAgent} {onselectagent} bind:mode={flowSource} sourceChrome={false} /></div>
@@ -332,10 +347,7 @@
       <p>No agents or developer tools running</p>
       <span>Start Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider, Docker Desktop or another tool: its folders, the ports and apps it started, connections and access show up here.</span>
       {#if report.limits.length}
-        <details class="limits" open>
-          <summary><Icon name="info" size={12} />What this can and can't see</summary>
-          <ul tabindex="0" aria-label="What this can and can't see">{#each report.limits as l}<li>{l}</li>{/each}</ul>
-        </details>
+        {@render limits(report.limits, true)}
       {/if}
     </div>
   {:else}
@@ -396,10 +408,7 @@
           <div class="no-matches"><Icon name="search" size={20} /><p>No agents match this search</p><span>Search by name, tool, folder, port or process ID.</span></div>
         {/each}
       </div>
-      <details class="limits">
-        <summary><Icon name="info" size={12} />What this can and can't see</summary>
-        <ul tabindex="0" aria-label="What this can and can't see">{#each report.limits as l}<li>{l}</li>{/each}</ul>
-      </details>
+      {@render limits(report.limits, false)}
     </aside>
     {/if}
     <div class="map">
