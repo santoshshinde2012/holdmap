@@ -235,12 +235,7 @@
   // Opened from Home or ⌘K, the view switch drops focus on the page: give it to the details.
   $effect(() => {
     if (!detailsView || !selectedInfoId) return;
-    const lost = () => { const at = document.activeElement; return !at || at === document.body || !at.isConnected || !at.closest(".agents-wrap, [role=dialog]"); };
-    const claim = () => { if (lost()) detailsView?.focusHeading(); };
-    // Once the view has settled (the map mounts after the panel), and once more after that.
-    void tick().then(claim);
-    const t = setTimeout(claim, 250);
-    return () => clearTimeout(t);
+    void tick().then(() => { if (!document.activeElement?.closest(".agents-wrap, [role=dialog]")) detailsView?.focusHeading(); });
   });
   function closeDetails() {
     const at = visibleAgents.findIndex((x) => x.id === selectedAgent);
