@@ -69,7 +69,7 @@ fn record_stop(store: &Store, entries: &[HistoryEntry], report: StopReport) -> S
     let history_error = store
         .record(entries)
         .err()
-        .map(|error| holdmap_core::redact::line(&error.to_string()));
+        .map(|error| crate::error_log::user_error("history", error.to_string()));
     Stopped {
         report,
         history_error,
@@ -111,7 +111,10 @@ async fn blocking<T: Send + 'static>(
 ) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(f)
         .await
-        .map_err(|e| format!("background task failed: {e}"))?
+        .map_err(|e| format!("background task failed: {e}"))
+        .and_then(|result| result)
+        // The one way out for blocking commands: logged, with secrets and $HOME hidden.
+        .map_err(|error| crate::error_log::user_error("command", error))
 }
 
 /// File locks, private-file validation, parsing and fsync must not block the native UI.
