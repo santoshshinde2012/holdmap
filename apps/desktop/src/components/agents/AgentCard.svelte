@@ -44,7 +44,7 @@
   <button class="head" aria-pressed={selected} aria-controls={selected ? "agent-details" : undefined} onclick={onselect}>
     <span class="tile" aria-hidden="true">{monogram(agent.name)}</span>
     <span class="who">
-      <span class="top"><span class="name">{agent.name}</span> <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{head.level === "elevated" ? head.text : ACCESS_LABEL[head.level]}</span></span>
+      <span class="top"><span class="name">{agent.name}</span> <span class="acc lv-{head.level}" title={head.text}><i aria-hidden="true"></i>{ACCESS_LABEL[head.level]}</span></span>
       <span class="meta">{agentMeta(agent, now, false)}</span>
     </span>
     <span class="kpis">{#each countChips(c, true) as [n, label]}<span class="kpi"><b>{n}</b> {label}</span> {/each}{#if c.stoppable}<span class="kpi warn"><b>{c.stoppable}</b> stoppable</span>{/if}</span>

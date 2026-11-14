@@ -447,7 +447,7 @@
             <div class="stats" aria-live="polite">
               <span class="sr-only">{pictureHint}</span>
               <span><b>{stats.agents}</b> {picture === "project" ? noun(stats.agents, "agent in this project", "agents in this project") : noun(stats.agents, "agent")}</span>
-              {#if fleet}<span><b>{humanBytes(fleet.total)}</b> memory</span>{/if}
+              {#if fleet}<span><b>{humanBytes(fleet.total)}</b> RAM</span>{/if}
               {#if picture !== "context"}<span><b>{stats.folders}</b> {noun(stats.folders, "folder")}</span>{/if}
               {#if picture !== "context"}<span class="opt"><b>{stats.ports}</b> ports &amp; services</span>{/if}
               <span class="opt">{plural(stats.hosts, "remote host")}</span>
