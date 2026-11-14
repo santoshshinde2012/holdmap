@@ -6,6 +6,7 @@
   import ExportActions from "../ui/ExportActions.svelte";
   import { PLACE_KIND, PLACE_STATUS, combineText, filterPlaces, placeEntries, placeFacts, placeLayers, placesSummary, type PlaceFilter } from "../../lib/agent-memory";
   import { humanBytes, tildify } from "../../lib/format";
+  import { createCopy } from "../../lib/use-copy.svelte";
   import type { Agent } from "../../lib/types";
 
   const KIND_ICON: Record<string, string> = {
@@ -25,11 +26,13 @@
     plugin: "box",
   };
 
-  let { agent, oninspect }: { agent: Agent; oninspect?: () => void } = $props();
+  /** `onreveal` shows a present location's folder in Finder / Explorer (the app validates the path). */
+  let { agent, oninspect, onreveal }: { agent: Agent; oninspect?: () => void; onreveal?: (path: string) => void } = $props();
   const capabilities = $derived(agent.capabilities);
   const places = $derived(capabilities?.locations ?? []);
   let filter = $state<PlaceFilter>("all");
-  let copied = $state<string | null>(null);
+  const clip = createCopy();
+  $effect(() => () => clip.dispose());
   let open = $state<Record<string, boolean>>({});
   const shown = $derived(filterPlaces(places, filter));
   const layers = $derived(placeLayers(shown));
@@ -37,19 +40,6 @@
   const missingCount = $derived(places.filter((p) => p.status === "missing").length);
 
   const kindFilters = Object.entries(PLACE_KIND) as [PlaceFilter, string][];
-
-
-
-  async function copyPath(path: string) {
-    try {
-      await navigator.clipboard.writeText(path);
-      copied = path;
-      setTimeout(() => { if (copied === path) copied = null; }, 1600);
-    } catch {
-      copied = null;
-    }
-  }
-
 
 </script>
 
@@ -116,10 +106,15 @@
                     <span class="pill status-{place.status}">{PLACE_STATUS[place.status] ?? place.status}</span>
                     {#if place.symlink_target}<span class="pill status-symlink">Symlink</span>{/if}
                   </span>
+                  {#if place.path && place.present && onreveal}
+                    <button type="button" class="copy" onclick={() => onreveal(place.path)}>
+                      <Icon name="folder" size={11} /><span>Show in folder</span>
+                    </button>
+                  {/if}
                   {#if place.path}
-                    <button type="button" class="copy" onclick={() => copyPath(place.path)} aria-label={copied === place.path ? "Copied" : "Copy path"}>
-                      <Icon name={copied === place.path ? "check" : "copy"} size={11} />
-                      <span>{copied === place.path ? "Copied" : "Copy path"}</span>
+                    <button type="button" class="copy" onclick={() => clip.copy(place.path)} aria-label={clip.copied === place.path ? "Copied" : "Copy path"}>
+                      <Icon name={clip.copied === place.path ? "check" : "copy"} size={11} />
+                      <span>{clip.copied === place.path ? "Copied" : "Copy path"}</span>
                     </button>
                   {/if}
                 </div>
@@ -221,7 +216,7 @@
   .place-present { border-left: 2px solid var(--ok); }
   .place-missing { padding: 6px 9px; border-style: dashed; background: var(--surface-2); opacity: 0.82; }
 
-  .place-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+  .place-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .pills { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; }
   .kind-ic { display: inline-flex; color: var(--muted); flex: none; }
   .kind { color: var(--text); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); }
@@ -230,7 +225,8 @@
   .status-missing { background: var(--surface); color: var(--muted); }
   .status-unreadable, .status-skipped { background: var(--warn-soft); color: var(--warn); }
   .status-symlink { background: var(--accent-soft); color: var(--accent); }
-  .copy { margin-left: auto; flex: none; }
+  .copy { flex: none; }
+  .copy:first-of-type { margin-left: auto; }
 
   .path { min-width: 0; overflow-wrap: anywhere; color: var(--text); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); }
   .path.muted-desc { font-family: var(--font); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-2); }

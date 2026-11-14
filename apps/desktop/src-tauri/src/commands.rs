@@ -586,7 +586,41 @@ fn agent_folder(
     Ok(want)
 }
 
-/// Open an agent's folder in Finder / Explorer (path must appear on that agent).
+/// The folder to show for one of an agent's documented locations (its instructions, rules,
+/// MCP config, skills, memory or session data): the location itself, or the folder that holds
+/// a file location. Only a location the capability read reported as present qualifies.
+fn agent_location_folder(
+    report: &AgentsReport,
+    agent_id: &str,
+    path: &str,
+) -> Result<std::path::PathBuf, String> {
+    let want = std::path::PathBuf::from(path);
+    if !want.is_absolute() {
+        return Err("Location path must be absolute".into());
+    }
+    let agent = report
+        .agents
+        .iter()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| format!("No agent `{agent_id}` in the current scan"))?;
+    let listed = agent
+        .capabilities
+        .locations
+        .iter()
+        .any(|l| l.present && !l.path.is_empty() && std::path::Path::new(&l.path) == want);
+    if !listed {
+        return Err("That path isn't one of this agent's folders or reported locations".into());
+    }
+    if want.is_dir() {
+        return Ok(want);
+    }
+    want.parent()
+        .map(std::path::Path::to_path_buf)
+        .ok_or_else(|| "That location has no folder to show".into())
+}
+
+/// Open an agent's folder, or the folder of one of its documented locations, in Finder /
+/// Explorer (the path must appear on that agent).
 #[tauri::command]
 pub async fn reveal_agent_folder(
     app: AppHandle,
@@ -595,7 +629,12 @@ pub async fn reveal_agent_folder(
 ) -> Result<(), String> {
     blocking(move || {
         let dir = app.state::<AppState>().with_engine(Duration::ZERO, |e| {
-            agent_folder(&e.agents(), &agent_id, &path)
+            // Footprint folders first (no config read); then the locations the user already
+            // chose to read with "Read local config".
+            agent_folder(&e.agents(), &agent_id, &path).or_else(|folder_err| {
+                agent_location_folder(&e.agents_with_capabilities(), &agent_id, &path)
+                    .map_err(|_| folder_err)
+            })
         })??;
         holdmap_core::util::reveal(&dir).map_err(|e| e.to_string())
     })
@@ -973,6 +1012,51 @@ mod tests {
             .with_home(None)
             .with_project_detection(false)
             .build()
+    }
+
+    fn place(path: &str, present: bool) -> holdmap_core::transparency::CapabilityPlace {
+        serde_json::from_value(serde_json::json!({
+            "id": path, "kind": "instructions", "scope": "project", "rank": 1, "path": path,
+            "status": if present { "present" } else { "missing" }, "candidates": [], "entries": [], "present": present,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_location_reveals_its_folder_only_when_the_capability_read_reported_it() {
+        let dir = std::env::temp_dir().join(format!("holdmap-location-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("CLAUDE.md");
+        std::fs::write(&file, "").unwrap();
+        let (dir_s, file_s) = (
+            dir.to_string_lossy().into_owned(),
+            file.to_string_lossy().into_owned(),
+        );
+        let gone = dir.join("AGENTS.md").to_string_lossy().into_owned();
+        let mut report = folders("/holdmap-fixture-elsewhere");
+        report.agents[0].capabilities.locations = vec![
+            place(&file_s, true),
+            place(&dir_s, true),
+            place(&gone, false),
+        ];
+        let id = report.agents[0].id.clone();
+        assert_eq!(
+            agent_location_folder(&report, &id, &file_s).unwrap(),
+            dir,
+            "a file shows its folder"
+        );
+        assert_eq!(agent_location_folder(&report, &id, &dir_s).unwrap(), dir);
+        assert!(
+            agent_location_folder(&report, &id, &gone).is_err(),
+            "a missing location has nothing to show"
+        );
+        assert!(
+            agent_location_folder(&report, &id, "/etc").is_err(),
+            "only reported locations"
+        );
+        assert!(agent_location_folder(&report, &id, "CLAUDE.md").is_err());
+        assert!(agent_location_folder(&report, "agent:unknown", &file_s).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
