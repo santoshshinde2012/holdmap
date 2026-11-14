@@ -80,3 +80,26 @@ describe("dataAge / shouldPoll", () => {
     expect(shouldPoll({ ...base, pushed: false, takenAtMs: 9_900 })).toBe(true);
   });
 });
+
+import { errorText, headerStatus } from "./live";
+describe("headerStatus", () => {
+  const ok = { text: "Live", stale: false };
+  it("says a failed source failed on the view that reads it", () => {
+    expect(headerStatus("home", null, "no CLI", false, ok)).toEqual({ text: "Scan failed", stale: true });
+    expect(headerStatus("home", "scan broke", null, true, ok)).toEqual({ text: "Retrying…", stale: true });
+    expect(headerStatus("agents", null, "no CLI", false, ok)).toEqual({ text: "Scan failed", stale: true });
+    expect(headerStatus("list", "scan broke", null, false, ok)).toEqual({ text: "Scan failed", stale: true });
+  });
+  it("keeps the live reading when the view's own source is fine", () => {
+    expect(headerStatus("agents", "scan broke", null, false, ok)).toBe(ok);
+    expect(headerStatus("list", null, "no CLI", false, ok)).toBe(ok);
+  });
+});
+describe("errorText", () => {
+  it("drops the Error: prefix String(e) adds", () => {
+    expect(errorText(new Error("holdmap isn't installed"))).toBe("holdmap isn't installed");
+    expect(errorText("Error: spawn holdmap ENOENT")).toBe("spawn holdmap ENOENT");
+    expect(errorText("TypeError: Error: nested")).toBe("nested");
+    expect(errorText("plain")).toBe("plain");
+  });
+});

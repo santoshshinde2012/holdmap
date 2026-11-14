@@ -35,10 +35,10 @@ test("one top-level heading, and dialogs add no extra banner or footer landmarks
   await expect(app.getByRole("contentinfo")).toHaveCount(1);
 });
 
-test("the Live indicator keeps a name and a tooltip on a narrow window", async ({ app }) => {
+test("the live indicator keeps a name and a tooltip on a narrow window", async ({ app }) => {
   await app.setViewportSize({ width: 390, height: 844 });
   const live = app.locator(".titlebar .live");
-  await expect(live).toContainText("Live");
+  await expect(live).toContainText("Sample data");
   await live.hover();
   await expect(app.getByRole("tooltip")).toBeVisible();
 });

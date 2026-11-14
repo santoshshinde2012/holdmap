@@ -2,7 +2,7 @@
   import { insightsStore } from "./lib/insights-store.svelte";
   import { total as findingsTotal } from "./lib/analyzers";
   import { onMount, tick, untrack } from "svelte";
-  import { dataAge, freshness, pruned, share, shouldPoll, withKey } from "./lib/live";
+  import { dataAge, errorText, freshness, headerStatus, pruned, share, shouldPoll, withKey } from "./lib/live";
   import PortList from "./components/list/PortList.svelte";
   import TitleBar from "./components/shell/TitleBar.svelte";
   import ViewToolbar from "./components/shell/ViewToolbar.svelte";
@@ -304,7 +304,7 @@
         if (manual && !disposed) toast("info", "Refreshed", `${next.entries.length} port${next.entries.length === 1 ? "" : "s"} · scanned in ${next.scan_ms} ms`);
       }
     } catch (e) {
-      if (!disposed && filters.all === all) error = String(e);
+      if (!disposed && filters.all === all) error = errorText(e);
     } finally {
       refreshing = false;
       manualRefresh = false;
@@ -395,8 +395,9 @@
       await pullAgents();
       agentsError = null;
     } catch (e) {
-      agentsError = String(e);
-      if (prefs.view === "agents" && prefs.agentSection !== "capabilities") toast("error", "Couldn't look up the agents", String(e));
+      agentsError = errorText(e);
+      // With nothing to show, Home and Agents explain the failure in place; a toast is for stale data.
+      if (agentsReport && prefs.view === "agents" && prefs.agentSection !== "capabilities") toast("error", "Couldn't look up the agents", agentsError);
     } finally { agentsRefreshing = false; }
   }
   const flowLoader = createFlowLoader(api.agentFlow,
@@ -926,10 +927,15 @@
     return () => { active = false; clearTimeout(t); };
   });
 
+  const toastTimers = new Map<number, ReturnType<typeof setTimeout>>();
   function toast(kind: Toast["kind"], text: string, detail?: string, action?: Toast["action"]) {
-    const id = ++toastSeq;
-    toasts = [...toasts, { id, kind, text, detail, action }].slice(-4);
-    setTimeout(() => (toasts = toasts.filter((t) => t.id !== id)), kind === "error" ? 9000 : action ? 8000 : 3200);
+    detail = detail === undefined ? undefined : errorText(detail);
+    // The same message again replaces the one on screen and restarts its timer instead of stacking.
+    const same = toasts.find((t) => t.kind === kind && t.text === text);
+    const id = same?.id ?? ++toastSeq;
+    toasts = same ? toasts.map((t) => (t.id === id ? { id, kind, text, detail, action } : t)) : [...toasts, { id, kind, text, detail, action }].slice(-4);
+    clearTimeout(toastTimers.get(id));
+    toastTimers.set(id, setTimeout(() => { toastTimers.delete(id); toasts = toasts.filter((t) => t.id !== id); }, kind === "error" ? 9000 : action ? 8000 : 3200));
   }
 
   async function requestStop(entry: PortEntry, force: boolean, allowProtected = false, options: { agentId?: string; intent?: "combined" | "now" | "schedule" } = {}) {
@@ -1400,6 +1406,8 @@
   /** What the title-bar search filters, only while it is rendered. */
   const searchTarget = $derived(searchControls(prefs.view, prefs.agentSection));
   const fresh = $derived(freshness(ago, scanMs / 1000));
+  // The examples build says so in the title bar instead of claiming "Live".
+  const live = $derived(api.usesSampleData() ? { text: "Sample data", stale: false } : headerStatus(prefs.view, error, agentsError, prefs.view === "agents" ? agentsRefreshing : refreshing || agentsRefreshing, fresh));
   const themeIcon = $derived(THEME_ICON[prefs.theme]);
 </script>
 
@@ -1408,8 +1416,8 @@
 <div id="holdmap-capture-root" class="capture-viewport">
 <div class="app" class:mac={isMac}>
   <TitleBar
-    liveText={prefs.view !== "agents" && prefs.view !== "home" && error ? refreshing ? "Retrying…" : "Scan failed" : fresh.text}
-    liveStale={fresh.stale || (prefs.view !== "agents" && prefs.view !== "home" && !!error)}
+    liveText={live.text}
+    liveStale={live.stale}
     livePulse={prefs.view === "agents" ? agentsRefreshing : refreshing}
     {modK} {mod} singleKeys={prefs.singleKeyShortcuts} {refreshing} {manualRefresh}
     recordingMs={capture.session ? capture.elapsed : null}
@@ -1443,7 +1451,7 @@
         {/if}
       </div>
     {:else if prefs.view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} singleKeys={prefs.singleKeyShortcuts} {activity} {recording} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
+      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} {agentsError} onretryagents={() => void loadAgents()} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} singleKeys={prefs.singleKeyShortcuts} {activity} {recording} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
         onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (prefs.view = v)} onsecurity={() => { prefs.view = "agents"; prefs.agentSection = "insights"; securityTab.value = "findings"; }} oninventory={enableInventory} />
     {:else if prefs.view === "agents"}
       <div class="graph-wrap agents-wrap" data-capture-area>

@@ -10,7 +10,7 @@ import { MOCK_SNAPSHOT } from "./lib/mock";
 import "./components/AgentsView.svelte";
 
 const calls = vi.hoisted(() => ({
-  explain: 0, http: 0, scan: 0, scanDelayMs: 0,
+  explain: 0, http: 0, scan: 0, scanDelayMs: 0, liveHeader: false,
   scanModes: [] as boolean[],
   scanError: null as string | null,
   scanReply: null as Snapshot | null,
@@ -46,6 +46,8 @@ vi.mock("./lib/api", async (orig) => {
   };
   return {
     ...real,
+    // A test of the live title bar reads as the desktop app; the others keep the examples build.
+    usesSampleData: () => !calls.liveHeader && real.usesSampleData(),
     // Each scan is a fresh object graph, with the memory figure changing like a real poll.
     scan: async (all: boolean) => {
       calls.scan++;
@@ -118,6 +120,7 @@ afterEach(() => {
   calls.httpPending = [];
   calls.events.clear();
   calls.scanDelayMs = 0;
+  calls.liveHeader = false;
   calls.scanModes = [];
   calls.scanError = null;
   calls.scanReply = null;
@@ -409,6 +412,7 @@ describe("App live polling", () => {
   });
 
   it("stays Live while a slow scan is in flight, and says how old the data is only when stalled", async () => {
+    calls.liveHeader = true;
     vi.useFakeTimers();
     const { container } = render(App);
     await vi.advanceTimersByTimeAsync(600);
@@ -424,6 +428,7 @@ describe("App live polling", () => {
   });
 
   it("retains rows and details after a failed scan, and offers a visible retry that cannot be duplicated", async () => {
+    calls.liveHeader = true;
     vi.useFakeTimers();
     const view = render(App);
     await vi.advanceTimersByTimeAsync(600);
@@ -687,5 +692,15 @@ describe("App overview and first run", () => {
     await fireEvent.click(view.getByRole("button", { name: "Start" }));
     await vi.advanceTimersByTimeAsync(300);
     expect(view.getByRole("region", { name: "Overview" })).toBeTruthy();
+  });
+});
+
+describe("App title bar on the examples build", () => {
+  it("says Sample data instead of Live", async () => {
+    vi.useFakeTimers();
+    const { container } = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(container.querySelector(".live")!.textContent!.trim()).toBe("Sample data");
+    vi.useRealTimers();
   });
 });

@@ -340,7 +340,14 @@
   {:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="agents" id="agents-overview" class:rail-off={!rail} class:has-details={!!selectedInfo} class:map-open={mapOpen} {onkeydown}>
-  {#if !report}
+  {#if !report && capabilitiesError}
+    <div class="empty" role="alert">
+      <Icon name="alert" size={28} />
+      <p>Couldn't look up the agents</p>
+      <span>{capabilitiesError}</span>
+      {#if onrefreshcapabilities}<Button size="sm" onclick={onrefreshcapabilities} loading={capabilitiesLoading} loadingText="Trying again…">Try again</Button>{/if}
+    </div>
+  {:else if !report}
     <div class="empty" aria-busy="true"><Icon name="bot" size={28} /><p>Looking for agents…</p></div>
   {:else if report.agents.length === 0}
     <div class="empty">
@@ -567,6 +574,7 @@
   .empty { grid-column: 1 / -1; height: 100%; display: grid; place-content: center; justify-items: center; gap: 6px; color: var(--muted); text-align: center; }
   .empty p { margin: 6px 0 0; color: var(--text); font-weight: var(--fw-semibold); }
   .empty span { font-size: var(--fs-body); line-height: var(--lh-body); max-width: 380px; }
+  .empty :global(.ui-btn) { margin-top: 8px; }
   .empty .limits { margin-top: 12px; max-width: 460px; text-align: left; }
   .no-matches { padding: 20px 4px; display: grid; gap: 6px; justify-items: center; text-align: center; color: var(--muted); }
   .no-matches p { margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text); }

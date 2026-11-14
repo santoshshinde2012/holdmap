@@ -245,3 +245,13 @@ describe("HomeView map", () => {
     expect(view.getByRole("button", { name: /^Timeline/ }).getAttribute("aria-expanded")).toBe("false");
   });
 });
+
+describe("HomeView when the agents lookup fails", () => {
+  it("explains it on the cards with a retry, not an endless …", async () => {
+    const retry = vi.fn();
+    const view = render(HomeView, props({ layout: "cards", report: null, agentsError: "holdmap isn't installed", onretryagents: retry }));
+    expect(view.container.textContent).toContain("Couldn't look up the agents");
+    await fireEvent.click(within(view.container).getByRole("button", { name: "Try again" }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
+});

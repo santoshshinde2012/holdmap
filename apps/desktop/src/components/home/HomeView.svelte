@@ -8,7 +8,7 @@
   import { securityTab } from "../../lib/security-tab.svelte";
   import * as api from "../../lib/api";
   import Icon from "../Icon.svelte";
-  import { CollapsiblePanel, IconButton, SegmentedControl } from "../ui";
+  import { Button, CollapsiblePanel, IconButton, SegmentedControl } from "../ui";
   import type { Snippet } from "svelte";
   import EmptyPanel from "../ui/EmptyPanel.svelte";
   import ExportActions from "../ui/ExportActions.svelte";
@@ -30,7 +30,7 @@
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
   type Section = "overview" | "capabilities" | "insights";
-  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, singleKeys = true, activity = null, recording = null, onopenagent, onopenentry, onview, onsecurity, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent }: {
+  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, singleKeys = true, activity = null, recording = null, onopenagent, onopenentry, onview, onsecurity, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent, agentsError = null, onretryagents }: {
     entries: PortEntry[] | null;
     report: AgentsReport | null;
     /** Whether reading agents' MCP/skills/permission files is turned on. */
@@ -60,6 +60,9 @@
     /** The app's shared selected agent, so a pick here is still selected on Agents. */
     selectedAgent?: string | null;
     onselectagent?: (id: string | null) => void;
+    /** Why the agents lookup failed, while there's no report to show. */
+    agentsError?: string | null;
+    onretryagents?: () => void;
   } = $props();
 
   const o = $derived(overview(entries, report));
@@ -194,6 +197,10 @@
           {#if report}
             <AgentCards {report} {entries} {needs} {colors} {now} {selected} {active} onhover={(id) => (hovered = id)} onselect={select}
               onopen={(id) => onopenagent(id)} onport={port} onstop={onstopagent} />
+          {:else if agentsError}
+            <EmptyPanel icon="alert" title="Couldn't look up the agents" hint={agentsError}>
+              {#if onretryagents}<Button size="sm" onclick={onretryagents}>Try again</Button>{/if}
+            </EmptyPanel>
           {:else}
             <p class="clear wait" aria-busy="true">…</p>
           {/if}
