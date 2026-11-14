@@ -40,7 +40,7 @@
     <h4 id="agent-memory-{agentDomId(agent.id)}"><Icon name="activity" size={13} />RAM</h4>
     {#if trend}
       <span class="trend-badge dir-{memory?.trend.direction ?? 'unknown'}" title={trend.rule}>
-        <i aria-hidden="true"></i>{trend.label}{#if trend.delta} · {trend.delta}{/if}
+        <i aria-hidden="true"></i>{trend.label}{trend.delta ? ` · ${trend.delta}` : ""}
       </span>
     {/if}
   </div>

@@ -58,7 +58,7 @@
     <h4 id="agent-locations-{agent.id}"><Icon name="layers" size={13} />Locations &amp; layers <span class="n">{places.length}</span></h4>
     {#if capabilities?.inspected && places.length}
       <span class="counts-summary">
-        <span class="c-ok">{presentCount} present</span>{#if missingCount} · <span>{missingCount} not found</span>{/if}
+        <span class="c-ok">{presentCount} present</span>{#if missingCount}{" "}· <span>{missingCount} not found</span>{/if}
       </span>
     {/if}
   </div>

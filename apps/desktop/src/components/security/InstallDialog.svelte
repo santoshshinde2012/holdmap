@@ -34,7 +34,7 @@
           <div><dt>Package</dt><dd><code>{plan.package || "—"}</code></dd></div>
           <div><dt>Version</dt><dd>{plan.version || "unknown"}</dd></div>
           <div><dt>Source</dt><dd>{plan.source || "unknown"}</dd></div>
-          <div><dt>Installed with</dt><dd>{METHOD_LABEL[plan.method]}{#if plan.toolchain}{#if plan.toolchain.path} · <code>{redactHome(plan.toolchain.path)}</code>{:else} · <span class="warn">not found</span>{/if}{/if}</dd></div>
+          <div><dt>Installed with</dt><dd>{METHOD_LABEL[plan.method]}{#if plan.toolchain}{#if plan.toolchain.path}{" "}· <code>{redactHome(plan.toolchain.path)}</code>{:else}{" "}· <span class="warn">not found</span>{/if}{/if}</dd></div>
           <div class="wide"><dt>Installs into</dt><dd><code>{redactHome(plan.target_dir)}</code><small>holdmap's own folder · no admin rights · nothing system-wide · your shell config isn't changed</small></dd></div>
           <div class="wide"><dt>Network during install</dt><dd>{plan.network.length ? plan.network.join(", ") : "none"}</dd></div>
           <div class="wide"><dt>Checked by</dt><dd>{plan.verification || "unknown"}</dd></div>
@@ -58,7 +58,7 @@
 
         {#if !reviewing}
           <div class="progress ph-{s.phase}" role="status" aria-live="polite" data-install-status={s.phase}>
-            <span class="t">{#if d.busy}<span class="spin" aria-hidden="true"></span>{:else}<Icon name={s.phase === "done" ? "check" : s.phase === "cancelled" ? "x" : "alert"} size={14} />{/if}{PHASE_LABEL[s.phase]}{#if s.phase === "done" && s.record} · version {s.record.version}{/if}</span>
+            <span class="t">{#if d.busy}<span class="spin" aria-hidden="true"></span>{:else}<Icon name={s.phase === "done" ? "check" : s.phase === "cancelled" ? "x" : "alert"} size={14} />{/if}{PHASE_LABEL[s.phase]}{#if s.phase === "done" && s.record}{" "}· version {s.record.version}{/if}</span>
             {#if s.reason}<p class="reason">{s.reason}</p>{/if}
             {#if s.phase === "done" && s.record}
               <p class="reason">Verified <code>{redactHome(s.record.binary)}</code> · SHA-256 <code title={s.record.sha256}>{s.record.sha256.slice(0, 12)}…</code>. Next: review its permissions and turn it on.</p>

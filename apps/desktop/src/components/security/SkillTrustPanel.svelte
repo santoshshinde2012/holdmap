@@ -55,17 +55,17 @@
             <Icon name={open === s.subject.id ? "chevron-down" : "chevron"} size={12} />
             <span class="name">{s.subject.name}</span>
             <span class="pill">{TRUST_LABEL[s.state]}</span>
-            <span class="meta">{names(s.subject.agents)}{#if s.changed_since_last_scan} · changed since last check{/if}</span>
+            <span class="meta">{names(s.subject.agents)}{#if s.changed_since_last_scan}{" "}· changed since last check{/if}</span>
             <span class="meta">{s.file_count} files · {bytes(s.total_bytes)}</span>
           </button>
           {#if open === s.subject.id}
             <div class="body" {id}>
               <dl>
-                <div><dt>Source</dt><dd>{s.subject.scope ? `${s.subject.scope} skill` : "Skill"} · {names(s.subject.agents) || "unknown agent"}{#if s.subject.dir} · <code>{tildify(s.subject.dir)}</code>{/if}</dd></div>
+                <div><dt>Source</dt><dd>{s.subject.scope ? `${s.subject.scope} skill` : "Skill"} · {names(s.subject.agents) || "unknown agent"}{#if s.subject.dir}{" "}· <code>{tildify(s.subject.dir)}</code>{/if}</dd></div>
                 <div><dt>Fingerprint</dt><dd><code title={s.sha256 ?? undefined}>{shortHash(s.sha256)}</code>{#if s.partial} <span class="sub">(first files only; large folder)</span>{/if}</dd></div>
                 <div><dt>Last modified</dt><dd>{when(s.modified_ms)}</dd></div>
                 <div><dt>First seen</dt><dd>{when(s.first_seen_ms)}</dd></div>
-                <div><dt>Trusted</dt><dd>{when(s.trusted_ms)}{#if s.reason} · {s.reason}{/if}</dd></div>
+                <div><dt>Trusted</dt><dd>{when(s.trusted_ms)}{#if s.reason}{" "}· {s.reason}{/if}</dd></div>
               </dl>
               {#if s.error}<p class="err"><Icon name="alert" size={12} />{s.error}</p>{/if}
               {#if s.changes}
