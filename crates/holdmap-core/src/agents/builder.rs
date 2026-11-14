@@ -338,6 +338,7 @@ impl<'a> AgentsBuilder<'a> {
                 cwd: p.cwd.clone(),
                 memory_bytes: p.memory_bytes,
                 cpu_percent: p.cpu_percent,
+                cpu_unknown: t.cpu_unknown(p.pid).map(str::to_owned),
             })
             .collect();
         processes.sort_by_key(|p| {
@@ -353,6 +354,10 @@ impl<'a> AgentsBuilder<'a> {
         let more_processes = processes.len().saturating_sub(MAX_PROCESSES);
         let memory_bytes = procs.iter().map(|p| p.memory_bytes).sum();
         let cpu_percent = procs.iter().map(|p| p.cpu_percent).sum();
+        // Unknown only when no process was measured; otherwise the sum of the measured ones.
+        let cpu_unknown = (!procs.is_empty()
+            && procs.iter().all(|p| t.cpu_unknown(p.pid).is_some()))
+        .then(|| crate::process::CPU_UNREADABLE.to_owned());
         processes.truncate(MAX_PROCESSES);
 
         let (mut folders, more_folders, mut listed) = footprint::folders(
@@ -406,7 +411,7 @@ impl<'a> AgentsBuilder<'a> {
             .map(|p| p.pid)
             .collect();
         let ports = network::ports(self.scan, &set, &helper_pids);
-        let (tools, more_tools) = tools::collect(
+        let (mut tools, more_tools) = tools::collect(
             procs
                 .iter()
                 .copied()
@@ -415,6 +420,9 @@ impl<'a> AgentsBuilder<'a> {
             &self.scan.snapshot.entries,
             self.tool_classifier,
         );
+        for tool in &mut tools {
+            tool.cpu_unknown = t.cpu_unknown(tool.pid).map(str::to_owned);
+        }
         let (links, more_links, remote_hosts) =
             network::links(self.scan, &set, &ports, local_addrs);
         let ancestors: Vec<&ProcessInfo> = t
@@ -443,6 +451,7 @@ impl<'a> AgentsBuilder<'a> {
             parent,
             memory_bytes,
             cpu_percent,
+            cpu_unknown,
             processes,
             more_processes,
             process_ids: pids.to_vec(),

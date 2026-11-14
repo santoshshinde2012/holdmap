@@ -108,6 +108,7 @@ pub(super) fn test_agent(pid: u32, name: &str) -> Agent {
         parent: None,
         memory_bytes: 64 * 1024 * 1024,
         cpu_percent: 1.0,
+        cpu_unknown: None,
         processes: Vec::new(),
         more_processes: 0,
         process_ids: vec![pid],

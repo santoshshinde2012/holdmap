@@ -79,6 +79,9 @@ pub struct TreeProcess {
     pub memory_bytes: u64,
     /// CPU percent of one core.
     pub cpu_percent: f32,
+    /// Why the CPU reading is unknown (the OS refused it); `None` when it was measured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu_unknown: Option<String>,
 }
 
 /// The listening process in context.
@@ -239,6 +242,7 @@ fn node(t: &ProcessTable, pid: u32, depth: usize) -> Option<TreeProcess> {
         depth,
         memory_bytes: p.memory_bytes,
         cpu_percent: p.cpu_percent,
+        cpu_unknown: t.cpu_unknown(pid).map(str::to_owned),
     })
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeStep, groupOf, httpSummary, humanBytes, humanDuration, matches, stopTarget, type Filters } from "./format";
+import { cpuLabel, cpuReading, describeStep, groupOf, httpSummary, humanBytes, humanDuration, matches, stopTarget, upFor, type Filters } from "./format";
 import { MOCK_SNAPSHOT, mockDevServers, mockHttp, mockPlan } from "./mock";
 
 const base: Filters = { query: "", all: false, proto: "any", dev: false, mine: false, exposed: false };
@@ -86,5 +86,21 @@ describe("stop all dev servers (mock)", () => {
     expect(plan.summary).toContain(`Stop ${dev.length} dev servers`);
     const sig = plan.steps.find((s) => s.action === "signal_processes");
     expect(sig && sig.action === "signal_processes" ? sig.processes.length : 0).toBe(dev.length);
+  });
+});
+
+describe("readings the OS refused", () => {
+  it("says CPU unknown instead of a measured-looking 0.0%", () => {
+    expect(cpuReading({ cpu_percent: 3.456 })).toBe("3.5%");
+    expect(cpuReading({ cpu_percent: 12.4 })).toBe("12%");
+    expect(cpuLabel({ cpu_percent: 0 })).toBe("0.0% CPU");
+    expect(cpuLabel({ cpu_percent: 0, cpu_unknown: "refused" })).toBe("CPU unknown");
+    expect(cpuReading({ cpu_percent: 0, cpu_unknown: "refused" })).toBe("unknown");
+  });
+
+  it("leaves out the uptime when the start time is unknown", () => {
+    const now = 1_000_000 * 1000;
+    expect(upFor(now / 1000 - 3600, now)).toBe("up 1h 0m");
+    expect(upFor(0, now)).toBeNull();
   });
 });

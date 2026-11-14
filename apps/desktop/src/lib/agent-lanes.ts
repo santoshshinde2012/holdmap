@@ -45,19 +45,20 @@ function bar(e: PortEntry | undefined, id: string, port: number, label: string, 
 export function lanes(report: AgentsReport | null, entries: PortEntry[] | null, now: number): Lane[] {
   const byId = new Map((entries ?? []).map((e) => [e.id, e]));
   const out: Lane[] = (report?.agents ?? []).map((agent) => {
-    const start = agent.started_at * 1000;
+    // Another user's process can report no start time (0): leave it off the time scale.
+    const start = agent.started_at > 0 ? agent.started_at * 1000 : null;
     return {
       id: agent.id,
       agent,
       start,
-      uptime: humanDuration(Math.max(0, now - start) / 1000),
+      uptime: start === null ? null : humanDuration(Math.max(0, now - start) / 1000),
       bars: agent.ports.flatMap((p) => bar(byId.get(p.entry_id), p.entry_id, p.port, p.framework ?? p.label, p.exposure === "all_interfaces")).sort((a, b) => a.start - b.start),
       mcp: (agent.capabilities?.mcp_servers ?? []).filter((s) => s.enabled !== false).map((s) => ({
         id: s.id, name: s.name, running: s.runtime?.state === "running",
         warn: isUnpinned(s),
       })),
     };
-  }).sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+  }).sort((a, b) => (a.start ?? Number.MAX_SAFE_INTEGER) - (b.start ?? Number.MAX_SAFE_INTEGER));
   const loose = unownedDevServers(entries, report);
   if (loose.length) {
     out.push({ id: "unowned", agent: null, start: null, uptime: null, mcp: [],

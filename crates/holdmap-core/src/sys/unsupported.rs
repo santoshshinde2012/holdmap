@@ -13,6 +13,10 @@ pub fn list_sockets() -> io::Result<Vec<RawSocket>> {
 pub fn start_token(_pid: u32) -> Option<u64> {
     None
 }
+/// Nothing is measured on this platform.
+pub fn cpu_readable(_pid: u32) -> bool {
+    false
+}
 /// Always false on this platform.
 pub fn is_zombie(_pid: u32) -> bool {
     false

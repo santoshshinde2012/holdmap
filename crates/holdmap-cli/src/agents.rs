@@ -373,7 +373,7 @@ fn render_overview(r: &AgentsReport) -> String {
             format!("pid {}", a.pid),
             a.kind.label().to_string(),
             r.memory_text(a),
-            format!("{:.1}% CPU", a.cpu_percent),
+            a.cpu_text(),
         ];
         if a.access.root {
             meta.push("root account".into());
@@ -531,7 +531,7 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
             who,
             count(procs, "process", "processes"),
             r.memory_text(a),
-            format!("{:.1}% CPU", a.cpu_percent),
+            a.cpu_text(),
         ]);
         let stoppable = a.stoppable_ports().count();
         if stoppable > 0 {
@@ -895,6 +895,7 @@ mod tests {
             parent: None,
             memory_bytes: 1 << 20,
             cpu_percent: 0.0,
+            cpu_unknown: None,
             processes: vec![],
             more_processes: 0,
             process_ids: vec![pid],
@@ -1003,6 +1004,7 @@ mod tests {
                 ports: vec![],
                 memory_bytes: 1024,
                 cpu_percent: 1.0,
+                cpu_unknown: None,
             },
             AgentTool {
                 pid: 44,
@@ -1015,6 +1017,7 @@ mod tests {
                 ports: vec![5173],
                 memory_bytes: 1024,
                 cpu_percent: 1.0,
+                cpu_unknown: None,
             },
         ];
         a.more_tools = 2;

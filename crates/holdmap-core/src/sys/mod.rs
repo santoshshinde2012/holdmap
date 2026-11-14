@@ -79,6 +79,12 @@ pub fn start_token(pid: u32) -> Option<u64> {
     imp::start_token(pid)
 }
 
+/// False when the OS refuses holdmap the CPU time of `pid` (another user's process on macOS),
+/// so a CPU reading of zero would be a guess, not a measurement.
+pub fn cpu_readable(pid: u32) -> bool {
+    imp::cpu_readable(pid)
+}
+
 /// Deliver `sig` to `pid` only if it is still the same process (`expected_token`).
 pub fn signal(pid: u32, expected_token: u64, sig: Sig) -> Result<(), SignalError> {
     imp::signal(pid, expected_token, sig)
@@ -102,5 +108,26 @@ pub fn platform_name() -> &'static str {
         "windows"
     } else {
         "unknown"
+    }
+}
+
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
+mod cpu_tests {
+    #[test]
+    fn this_process_cpu_time_is_readable() {
+        assert!(super::cpu_readable(std::process::id()));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_refuses_another_users_cpu_time() {
+        // launchd (PID 1) runs as root; an unprivileged test can't read its task info.
+        // SAFETY: geteuid has no preconditions.
+        if unsafe { libc::geteuid() } != 0 {
+            assert!(!super::cpu_readable(1));
+        }
     }
 }

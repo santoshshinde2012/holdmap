@@ -53,6 +53,28 @@ pub fn start_token(pid: u32) -> Option<u64> {
     crate::process::sysinfo_start_time(pid)
 }
 
+/// True when `proc_pidinfo(PROC_PIDTASKINFO)` describes `pid`. sysinfo reads CPU time through
+/// the same call, and macOS refuses it for other users' processes (root daemons), so their CPU
+/// would read 0.0% without being measured.
+pub fn cpu_readable(pid: u32) -> bool {
+    if pid == 0 || pid > i32::MAX as u32 {
+        return false;
+    }
+    let mut info = MaybeUninit::<libc::proc_taskinfo>::zeroed();
+    let size = std::mem::size_of::<libc::proc_taskinfo>() as libc::c_int;
+    // SAFETY: buffer is sized for proc_taskinfo; libproc writes at most `size` bytes.
+    let n = unsafe {
+        libc::proc_pidinfo(
+            pid as libc::c_int,
+            libc::PROC_PIDTASKINFO,
+            0,
+            info.as_mut_ptr().cast(),
+            size,
+        )
+    };
+    n == size
+}
+
 /// True when the process is a zombie (exited, not yet reaped).
 pub fn is_zombie(pid: u32) -> bool {
     // SZOMB == 5 in <sys/proc.h>.

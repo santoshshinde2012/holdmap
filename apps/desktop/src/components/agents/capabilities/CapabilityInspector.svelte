@@ -4,7 +4,7 @@
   import { capabilityChip } from "../../../lib/evidence";
   import { enabledLabel, scopeLabel, type CapabilitySelection } from "../../../lib/agent-capabilities";
   import { EVIDENCE_LABEL } from "../../../lib/agents";
-  import { humanBytes } from "../../../lib/format";
+  import { cpuLabel, humanBytes } from "../../../lib/format";
   import { isComposingKey } from "../../../lib/keyboard";
   import { nextIndex } from "../../../lib/roving";
   import type { AgentMcpServer, AgentSkill } from "../../../lib/types";
@@ -56,7 +56,7 @@
           <div><dt>Process ID</dt><dd><code>{item.tool.pid}</code></dd></div>
           {#if item.tool.cwd}<div><dt>Working folder</dt><dd class="path">{item.tool.cwd}</dd></div>{/if}
           <div><dt>Listening ports</dt><dd>{item.tool.ports.length ? item.tool.ports.map(port => ":" + port).join(", ") : "None"}</dd></div>
-          <div><dt>Resources</dt><dd>{item.tool.cpu_percent.toFixed(1)}% CPU · {humanBytes(item.tool.memory_bytes)}</dd></div>
+          <div><dt>Resources</dt><dd>{cpuLabel(item.tool)} · {humanBytes(item.tool.memory_bytes)}</dd></div>
         {:else}
           <div><dt>Source file</dt><dd class="path">{item.sourcePath}</dd></div>
           <div><dt>Scope</dt><dd>{scopeLabel[item.scope]}</dd></div>

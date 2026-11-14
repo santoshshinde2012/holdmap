@@ -111,7 +111,7 @@ pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, 
             .map(|folder| folder.label.as_str())
             .collect();
         lines.push(format!(
-            "{} (pid {}): {}; {}; {}; {}; {}; {:.1}% CPU; {}",
+            "{} (pid {}): {}; {}; {}; {}; {}; {}; {}",
             agent.name,
             agent.pid,
             if folders.is_empty() {
@@ -131,7 +131,7 @@ pub(super) fn agents_result(mut report: AgentsReport, args: &Value) -> (String, 
                 "process",
                 "processes"
             ),
-            agent.cpu_percent,
+            agent.cpu_text(),
             report.memory_text(agent),
         ));
         if let Some(summary) = memory_lines.get(agent.id.as_str()) {

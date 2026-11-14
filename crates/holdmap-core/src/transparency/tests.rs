@@ -43,6 +43,7 @@ fn bare_agent(pid: u32, name: &str, processes: Vec<AgentProcess>, tools: Vec<Age
         parent: None,
         memory_bytes: processes.iter().map(|p| p.memory_bytes).sum(),
         cpu_percent: 0.0,
+        cpu_unknown: None,
         processes: processes.clone(),
         more_processes: 0,
         process_ids: processes.iter().map(|p| p.pid).collect(),
@@ -74,6 +75,7 @@ fn process(pid: u32, name: &str, role: ProcessRole, memory: u64) -> AgentProcess
         cwd: None,
         memory_bytes: memory,
         cpu_percent: 0.0,
+        cpu_unknown: None,
     }
 }
 
@@ -128,6 +130,7 @@ fn an_mcp_child_is_grouped_separately_and_a_zero_machine_is_not_a_share() {
         ports: Vec::new(),
         memory_bytes: 20,
         cpu_percent: 0.0,
+        cpu_unknown: None,
     };
     let mut rows = vec![
         proc(4, 1, "claude", &["claude"]),

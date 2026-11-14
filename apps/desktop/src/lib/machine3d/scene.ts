@@ -202,7 +202,7 @@ export function buildScene({ report, entries = null, hot = new Set(), needs = ne
       count: a.process_ids.length, slices: a.processes.slice(0, 16).map((p) => p.cpu_percent),
       warn: hot.has(a.id) ? mine[0] ?? head.text : null,
       target: { view: "agents", agentId: a.id },
-      facts: [["Kind", `${KIND_LABEL[a.kind]} by ${a.vendor}`], ["Access", head.text], ["CPU", pct(a.cpu_percent)], ["Memory", humanBytes(a.memory_bytes)],
+      facts: [["Kind", `${KIND_LABEL[a.kind]} by ${a.vendor}`], ["Access", head.text], ["CPU", a.cpu_unknown ? "unknown" : pct(a.cpu_percent)], ["Memory", humanBytes(a.memory_bytes)],
         ...memoryFacts(report, a.id),
         ["Processes", String(a.process_ids.length)], ["PID", String(a.pid)], ...(mine.length ? [["Needs you", mine.join("; ")] as [string, string]] : [])],
     });
@@ -216,7 +216,7 @@ export function buildScene({ report, entries = null, hot = new Set(), needs = ne
       parts.push(part({
         id, kind: "tool", layer: "runtime", owner: a.id, label: t.name, sub: `${TOOL_LABEL[t.kind]} · PID ${t.pid}`, evidence: t.evidence, live: true, variant: t.kind,
         cpu: t.cpu_percent, memory: t.memory_bytes, target: { view: "agents", agentId: a.id },
-        facts: [["Kind", TOOL_LABEL[t.kind]], ["PID", String(t.pid)], ["CPU", pct(t.cpu_percent)], ["Memory", humanBytes(t.memory_bytes)],
+        facts: [["Kind", TOOL_LABEL[t.kind]], ["PID", String(t.pid)], ["CPU", t.cpu_unknown ? "unknown" : pct(t.cpu_percent)], ["Memory", humanBytes(t.memory_bytes)],
           ...(t.cwd ? [["Folder", tildify(t.cwd)] as [string, string]] : []), ...(t.ports.length ? [["Ports", t.ports.map((p) => `:${p}`).join(", ")] as [string, string]] : []),
           ["How it's known", t.evidence === "observed" ? "Seen in the process table" : "Classified from its name and command"]],
       }));

@@ -10,7 +10,7 @@
   import CapabilityInspector from "./capabilities/CapabilityInspector.svelte";
   import AgentLocations from "./AgentLocations.svelte";
   import { agentColor, monogram } from "../../lib/agents";
-  import { humanBytes } from "../../lib/format";
+  import { cpuLabel, humanBytes } from "../../lib/format";
   import { trustStore } from "../../lib/trust-store.svelte";
   import { securityTab } from "../../lib/security-tab.svelte";
   import { isComposingKey } from "../../lib/keyboard";
@@ -279,7 +279,7 @@
   {#if active}
     <div class="inspector"><span class="eyebrow">Agent process</span><h3 class="inspector-title" tabindex="-1" bind:this={inspectorHeading}>{active.name}</h3><p class="detail-intro">PID {active.pid} · {active.vendor}</p>
     <div class="agent-counts"><span><Icon name="plug" size={15} /><b>{active.capabilities?.inspected ? active.capabilities.mcp_servers.length : "—"}</b>MCP</span><span><Icon name="sparkles" size={15} /><b>{active.capabilities?.inspected ? active.capabilities.skills.length : "—"}</b>Skills</span></div>
-    <dl><div><dt>Inventory</dt><dd>{active.capabilities?.inspected ? "Inspected" : "Not inspected"}</dd></div><div><dt>Resources</dt><dd>{active.cpu_percent.toFixed(1)}% CPU · {humanBytes(active.memory_bytes)}</dd></div></dl>
+    <dl><div><dt>Inventory</dt><dd>{active.capabilities?.inspected ? "Inspected" : "Not inspected"}</dd></div><div><dt>Resources</dt><dd>{cpuLabel(active)} · {humanBytes(active.memory_bytes)}</dd></div></dl>
     {#if trustStore.forAgent(active.product).length}
       {@const untrusted = trustStore.forAgent(active.product)}
       <Callout tone="warn" size="sm" title="Skill trust">{untrusted.length} skill{untrusted.length === 1 ? "" : "s"} changed since trusted or not trusted yet: {untrusted.map((t) => t.subject.name).join(", ")}.

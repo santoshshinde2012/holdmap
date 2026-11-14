@@ -30,6 +30,7 @@ fn sample(scan: usize) -> Readings {
         name: name.into(),
         place: place.map(Into::into),
         cpu: wave * share,
+        cpu_known: true,
         memory,
         tool: false,
     };

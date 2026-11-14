@@ -140,7 +140,7 @@ export interface ActionPlan {
 /** Who is connected to a listening port (holdmap_core::details::Connections). */
 export interface Peer { address: string; connections: number; local: boolean; process: string | null; pid: number | null }
 export interface Connections { total: number; established: number; by_state: Record<string, number>; peers: Peer[]; more_peers: number }
-export interface TreeProcess { pid: number; name: string; command: string; depth: number; memory_bytes: number; cpu_percent: number }
+export interface TreeProcess { pid: number; name: string; command: string; depth: number; memory_bytes: number; cpu_percent: number; cpu_unknown?: string | null }
 export interface ProcessTree { ancestors: TreeProcess[]; process: TreeProcess; children: TreeProcess[]; more_children: number }
 export type RiskLevel = "low" | "medium" | "high";
 export interface BindRisk { level: RiskLevel; title: string; explanation: string; fix: string | null }
@@ -316,13 +316,13 @@ export type AccessLevel = "restricted" | "standard" | "elevated" | "unknown";
 export type AccessTopic = "user" | "sandbox" | "approvals" | "network" | "privacy";
 export type AgentToolKind = "mcp_server" | "dev_server" | "shell" | "command";
 
-export interface AgentProcess { pid: number; ppid: number | null; name: string; command: string; role: ProcessRole; cwd: string | null; memory_bytes: number; cpu_percent: number }
+export interface AgentProcess { pid: number; ppid: number | null; name: string; command: string; role: ProcessRole; cwd: string | null; memory_bytes: number; cpu_percent: number; cpu_unknown?: string | null }
 export interface AgentFolder { path: string; label: string; project: ProjectInfo | null; source: FolderSource; evidence: Evidence; pids: number[]; privacy_area: string | null; note: string | null }
 export interface AgentPort { entry_id: string; port: number; protocol: Protocol; exposure: Exposure; pid: number | null; process: string | null; label: string; role: PortRole; project: string | null; framework: string | null }
 export interface AgentLink { id: string; kind: LinkKind; label: string; address: string; port: number; connections: number; entry_id: string | null; process: string | null; pid: number | null; service: string | null }
 export interface AccessFact { topic: AccessTopic; level: AccessLevel; summary: string; evidence: Evidence }
 export interface AgentAccess { user: string | null; uid: number | null; root: boolean; mine: boolean; facts: AccessFact[] }
-export interface AgentTool { pid: number; ppid: number | null; name: string; kind: AgentToolKind; command: string; cwd: string | null; evidence: Evidence; ports: number[]; memory_bytes: number; cpu_percent: number }
+export interface AgentTool { pid: number; ppid: number | null; name: string; kind: AgentToolKind; command: string; cwd: string | null; evidence: Evidence; ports: number[]; memory_bytes: number; cpu_percent: number; cpu_unknown?: string | null }
 
 export type CapabilityScope = "user" | "project" | "local";
 export type McpRunner = "npx" | "uvx" | "docker" | "interpreter" | "binary";
@@ -449,6 +449,8 @@ export interface Agent {
   parent: string | null;
   memory_bytes: number;
   cpu_percent: number;
+  /** Why the CPU total is unknown: the OS refused every one of its processes' CPU time. */
+  cpu_unknown?: string | null;
   processes: AgentProcess[];
   /** Every owned process ID, including processes omitted from the display list. */
   process_ids: number[];

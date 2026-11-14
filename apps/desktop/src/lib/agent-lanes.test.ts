@@ -34,3 +34,16 @@ describe("agent lanes", () => {
     expect(oldest(ls, now)).toBeLessThan(now);
   });
 });
+
+describe("an agent with no readable start time", () => {
+  it("stays off the time scale instead of stretching it back to 1970", () => {
+    const root = { ...report.agents[0], id: "agent:550", started_at: 0 };
+    const ls = lanes({ ...report, agents: [...report.agents, root] }, MOCK_SNAPSHOT.entries, now);
+    const lane = ls.find((l) => l.id === "agent:550")!;
+    expect(lane.start).toBeNull();
+    expect(lane.uptime).toBeNull();
+    expect(oldest(ls, now)).toBe(oldest(lanes(report, MOCK_SNAPSHOT.entries, now), now));
+    // Known starts first; the unknown one sits after them, before the unowned lane.
+    expect(ls.filter((l) => l.agent).at(-1)?.id).toBe("agent:550");
+  });
+});

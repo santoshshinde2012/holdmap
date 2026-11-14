@@ -373,6 +373,62 @@ fn the_app_executable_is_the_agent_not_its_bundled_updater() {
 }
 
 #[test]
+fn cpu_the_os_refuses_is_unknown_with_a_reason_not_zero() {
+    let app = |pid, ppid, name: &str| {
+        let mut p = proc(pid, ppid, name, &[name]);
+        p.exe = Some(PathBuf::from(format!(
+            "/Applications/Cursor.app/Contents/MacOS/{name}"
+        )));
+        p.cpu_percent = 0.0;
+        p
+    };
+    let mut scan = scan_of(
+        vec![app(80, 1, "Cursor"), app(81, 80, "Cursor Helper")],
+        vec![],
+        "macos",
+    );
+    let build = |scan: &Scan| {
+        agents_builder(scan)
+            .with_home(None)
+            .with_project_detection(false)
+            .build()
+    };
+    let measured = build(&scan);
+    assert_eq!(
+        measured.agents[0].cpu_unknown, None,
+        "measured idle is a real 0.0%"
+    );
+    assert_eq!(measured.agents[0].cpu_text(), "0.0% CPU");
+
+    // One refused process: the total is the measured part, and that process says why.
+    scan.table.mark_cpu_unreadable(81);
+    let partial = build(&scan);
+    let cursor = &partial.agents[0];
+    assert_eq!(cursor.cpu_unknown, None);
+    let helper = cursor.processes.iter().find(|p| p.pid == 81).unwrap();
+    assert_eq!(
+        helper.cpu_unknown.as_deref(),
+        Some(crate::process::CPU_UNREADABLE)
+    );
+
+    // Every process refused: the agent's CPU is unknown, never a measured-looking zero.
+    scan.table.mark_cpu_unreadable(80);
+    let refused = build(&scan);
+    assert_eq!(
+        refused.agents[0].cpu_unknown.as_deref(),
+        Some(crate::process::CPU_UNREADABLE)
+    );
+    assert!(refused.agents[0].cpu_text().starts_with("CPU unknown ("));
+    let json = serde_json::to_value(&refused.agents[0]).unwrap();
+    assert_eq!(json["cpu_unknown"], crate::process::CPU_UNREADABLE);
+    // A measured agent leaves the field out, so older readers see the same JSON.
+    assert!(serde_json::to_value(&measured.agents[0])
+        .unwrap()
+        .get("cpu_unknown")
+        .is_none());
+}
+
+#[test]
 fn developer_tool_helpers_fold_and_keep_upstream_port_and_folder_controls() {
     let workspace = PathBuf::from("/fixture/tool-workspace");
     let scan = scan_of(

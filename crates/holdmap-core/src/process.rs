@@ -49,7 +49,13 @@ pub struct ProcessTable {
     /// Processes whose memory is sysinfo's resident size because the platform counter
     /// (macOS physical footprint, Linux VmRSS) could not be read.
     memory_fallback: HashSet<u32>,
+    /// Processes whose CPU time the OS would not report (see [`crate::sys::cpu_readable`]).
+    cpu_unreadable: HashSet<u32>,
 }
+
+/// Why a CPU reading is unknown rather than zero: the OS refused to report it.
+pub const CPU_UNREADABLE: &str =
+    "The system doesn't let holdmap read CPU time for another user's process.";
 
 /// Linux cuts a process name (`comm`) to 15 bytes ("npm exec vite p", "containerd-shim"). When
 /// argv[0] or the executable starts with that prefix, return the full name instead, so labels
@@ -161,6 +167,16 @@ impl ProcessTable {
         self.memory_fallback.contains(&pid)
     }
 
+    /// Why `pid`'s CPU reading is unknown, or `None` when it was measured.
+    pub fn cpu_unknown(&self, pid: u32) -> Option<&'static str> {
+        self.cpu_unreadable.contains(&pid).then_some(CPU_UNREADABLE)
+    }
+
+    /// Mark `pid`'s CPU time as unreadable (fixtures and remote tables).
+    pub fn mark_cpu_unreadable(&mut self, pid: u32) {
+        self.cpu_unreadable.insert(pid);
+    }
+
     /// Mark `pid`'s memory as the resident fallback (fixtures and remote tables).
     pub fn mark_memory_fallback(&mut self, pid: u32) {
         self.memory_fallback.insert(pid);
@@ -209,6 +225,7 @@ impl ProcessTable {
         }
         let users = &cache.as_ref().expect("just filled").users;
         let mut memory_fallback = HashSet::new();
+        let mut cpu_unreadable = HashSet::new();
         #[cfg_attr(not(windows), allow(unused_mut))]
         let mut procs: HashMap<u32, ProcessInfo> = sys
             .processes()
@@ -243,6 +260,9 @@ impl ProcessTable {
                     crate::memory::sample_counted(pid, p.memory());
                 if !platform_counter {
                     memory_fallback.insert(pid);
+                }
+                if !crate::sys::cpu_readable(pid) {
+                    cpu_unreadable.insert(pid);
                 }
                 ProcessInfo {
                     pid,
@@ -286,6 +306,7 @@ impl ProcessTable {
         }
         let mut t = Self::from_processes(procs, std::process::id());
         t.memory_fallback = memory_fallback;
+        t.cpu_unreadable = cpu_unreadable;
         #[cfg(windows)]
         {
             t.windows_cmd = t
@@ -348,6 +369,7 @@ impl ProcessTable {
             #[cfg(windows)]
             windows_cmd: HashMap::new(),
             memory_fallback: HashSet::new(),
+            cpu_unreadable: HashSet::new(),
         };
         t.self_uid = t.procs.get(&self_pid).and_then(|p| p.uid);
         t.self_ancestors = t.ancestors(self_pid).into_iter().collect();

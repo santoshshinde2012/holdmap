@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from "../Icon.svelte";
   import { EVIDENCE_LABEL, TOOL_LABEL } from "../../lib/agents";
-  import { humanBytes, tildify } from "../../lib/format";
+  import { cpuLabel, humanBytes, tildify } from "../../lib/format";
   import type { AgentTool } from "../../lib/types";
 
   let { tools, more = 0 }: { tools: AgentTool[]; more?: number } = $props();
@@ -20,7 +20,7 @@
           </div>
           <span class="meta">{TOOL_LABEL[tool.kind]}{#if tool.evidence !== "observed"}{" · "}<span class="evidence">{EVIDENCE_LABEL[tool.evidence]}</span>{/if}{#if tool.ports.length}{" · :"}{tool.ports.join(", :")}{:else if tool.kind === "mcp_server"}{" · no listening port"}{/if}</span>
           {#if tool.cwd}<span class="meta path" title={tool.cwd}>{tildify(tool.cwd)}</span>{/if}
-          <span class="meta mono">{tool.cpu_percent.toFixed(tool.cpu_percent < 10 ? 1 : 0)}% CPU · {humanBytes(tool.memory_bytes)}</span>
+          <span class="meta mono" title={tool.cpu_unknown ?? undefined}>{cpuLabel(tool)} · {humanBytes(tool.memory_bytes)}</span>
           {#if tool.command}<details><summary>Command</summary><code>{tool.command}</code></details>{/if}
         </li>
       {/each}
