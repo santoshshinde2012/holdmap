@@ -42,6 +42,23 @@ describe("HomeView cards", () => {
     expect(view.queryByRole("table", { name: "Agent lanes" })).toBeNull();
   });
 
+  it("answers who uses the most RAM on the card itself, and tells same-named agents apart", () => {
+    const report = mockAgents(undefined, true);
+    const cursor = report.agents.find((a) => a.name === "Cursor")!;
+    const twin = { ...cursor, id: "agent:9", pid: 9, folders: [], parent: null, started_at: 0, cpu_unknown: "The system refused it." };
+    const view = render(HomeView, props({ layout: "cards", report: { ...report, agents: [...report.agents, twin] } }));
+    const first = card(view, `Cursor \\(${cursor.folders[0].label}\\)`);
+    expect(within(first).getByText("RAM")).toBeTruthy();
+    expect(within(first).getByText(/\d (KB|MB|GB)$/)).toBeTruthy();
+    expect(within(first).getByText(/^\d+(\.\d)?%$/)).toBeTruthy();
+    // The twin has no folder or parent: its PID tells it apart, its CPU says unknown, and an
+    // unreadable start time leaves the uptime out instead of "up 20000d".
+    const second = card(view, "Cursor \\(PID 9\\)");
+    expect(within(second).getByText("PID 9")).toBeTruthy();
+    expect(within(second).getByText("unknown")).toBeTruthy();
+    expect(second.textContent).not.toMatch(/up \d+d/);
+  });
+
   it("marks unreadable configuration unknown with its reason, never zero", () => {
     const view = render(HomeView, props({ layout: "cards" }));
     const docker = card(view, "Docker Desktop");

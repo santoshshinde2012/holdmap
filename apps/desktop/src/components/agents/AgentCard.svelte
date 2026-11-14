@@ -1,7 +1,7 @@
 <script lang="ts">
   // One agent in the rail: identity header, footprint KPI chips and resource telemetry. Selecting
   // it opens the full picture in the Agents detail panel; the card itself stays compact.
-  import { agentMemoryText, memoryFor } from "../../lib/agent-memory";
+  import { agentMemoryText, memoryFor } from "../../lib/memory-text";
   import { ACCESS_LABEL, accessHeadline, agentMeta, countChips, counts, monogram } from "../../lib/agents";
   import AgentRelations from "./AgentRelations.svelte";
   import { cpuLabel } from "../../lib/format";

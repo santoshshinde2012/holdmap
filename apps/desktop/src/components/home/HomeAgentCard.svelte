@@ -8,12 +8,18 @@
   import { KIND_LABEL, accessHeadline, monogram } from "../../lib/agents";
   import { footprint } from "../../lib/machine-map";
   import { miniLayout, type CardModel } from "../../lib/agent-card";
-  import { humanDuration } from "../../lib/format";
+  import { cpuReading, upFor } from "../../lib/format";
   import type { Agent } from "../../lib/types";
   import { countsText, total, worst, type SeverityCounts } from "../../lib/analyzers";
 
-  let { agent, model, needs, findings = null, color, now, selected, active, onhover, onselect, onopen, onport, onstop }: {
+  let { agent, model, needs, findings = null, color, now, place = null, twin = false, memory, selected, active, onhover, onselect, onopen, onport, onstop }: {
     agent: Agent;
+    /** What tells it apart from a same-named agent (a folder, its parent, or its PID). */
+    place?: string | null;
+    /** Another agent has the same name, so its accessible name carries `place` too. */
+    twin?: boolean;
+    /** Its RAM as text ("2.4 GB", or "unknown" when no process gave a reading). */
+    memory: string;
     model: CardModel;
     /** Attention items about this agent. */
     needs: AttentionItem[];
@@ -34,12 +40,12 @@
   } = $props();
 
   const head = $derived(accessHeadline(agent));
-  const up = $derived(humanDuration(Math.max(0, now / 1000 - agent.started_at)));
+  const up = $derived(upFor(agent.started_at, now));
   const mini = $derived(miniLayout(footprint(agent, 16), 44));
   const high = $derived(needs.some((n) => n.severity === "high"));
   const exposed = $derived(model.ports.filter((p) => p.warn).length);
   const found = $derived(findings && total(findings) ? findings : null);
-  const label = $derived(`${agent.name}, ${ACCESS_LABEL[head.level]}${needs.length ? `, ${needs.length} need you` : ""}`);
+  const label = $derived(`${agent.name}${twin && place ? ` (${place})` : ""}, ${ACCESS_LABEL[head.level]}${needs.length ? `, ${needs.length} need you` : ""}`);
   function headKey(e: KeyboardEvent) { if (e.key === "Enter" && selected) { e.preventDefault(); onopen(agent.id); } }
 </script>
 
@@ -52,7 +58,7 @@
     <span class="tile" aria-hidden="true">{monogram(agent.name)}</span>
     <button type="button" class="head" data-card aria-pressed={selected} aria-label={label}
       onclick={() => (selected ? onopen(agent.id) : onselect(agent.id))} onkeydown={headKey} onfocus={() => onhover(agent.id)} onblur={() => onhover(null)}>{agent.name}</button>
-    <small class="meta"><span>{KIND_LABEL[agent.kind]}</span><span>{`up ${up}`}</span></small>
+    <small class="meta"><span>{KIND_LABEL[agent.kind]}</span>{#if place}<span class="place" title={place}>{place}</span>{/if}{#if up}<span>{up}</span>{/if}</small>
     <span class="tags">
       {#if needs.length}<span class="badge" class:high title={needs.map((n) => n.title).join("\n")}><Icon name="alert" size={11} />{needs.length}</span>{/if}
       {#if found}<span class="badge find sev-{worst(found)}" title="Open analyzer findings: {countsText(found, 5)}"><Icon name="shield" size={11} /><span class="sr-only">Analyzer findings: </span>{total(found)}</span>{/if}
@@ -77,6 +83,8 @@
       {/each}
     </svg>
     <dl class="ctrs">
+      <div title="RAM of {agent.name} and everything it started"><dt><Icon name="activity" size={12} />RAM</dt><dd>{memory}</dd></div>
+      <div title={agent.cpu_unknown ?? "CPU of one core, summed over its processes"}><dt><Icon name="cpu" size={12} />CPU</dt><dd class:muted={!!agent.cpu_unknown}>{cpuReading(agent)}</dd></div>
       <div><dt><Icon name="folder" size={12} />Projects</dt><dd>{model.projects.length}</dd></div>
       <div class:warn={exposed > 0}><dt><Icon name="plug" size={12} />Ports</dt><dd>{model.ports.length}{#if exposed}<small>{`${exposed} exposed`}</small>{/if}</dd></div>
       {#if model.mcp === null && model.skills === null}
@@ -123,6 +131,8 @@
   .tile { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; background: color-mix(in srgb, var(--agent) 16%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--agent) 30%, transparent); color: var(--agent); font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
   .meta { grid-area: meta; display: flex; flex-wrap: wrap; column-gap: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
   .meta span { white-space: nowrap; }
+  .meta .place { min-width: 0; overflow: hidden; text-overflow: ellipsis; max-width: 16ch; }
+  dd.muted { color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-title); font-weight: var(--fw-medium); }
   .meta span + span::before { content: "·"; margin-right: 6px; color: var(--faint); }
   .tags { grid-area: tags; display: flex; align-items: center; gap: 6px; flex: none; }
   .lv, .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: var(--r-full); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); white-space: nowrap; background: var(--surface-2); color: var(--text-2); }

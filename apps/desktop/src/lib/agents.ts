@@ -855,6 +855,17 @@ export function agentMeta(a: Agent, nowMs: number, vendor = true): string {
   return [KIND_LABEL[a.kind], vendor && a.vendor !== "unknown" ? a.vendor : null, `pid ${a.pid}`, a.started_at ? `up ${humanDuration(nowMs / 1000 - a.started_at)}` : null].filter(Boolean).join(" · ");
 }
 
+/**
+ * What tells an agent apart from others of the same product, as the tray does: its first
+ * folder, the agent that started it, or its PID when it shares a name and has neither.
+ */
+export function agentPlace(a: Agent, all: readonly Agent[]): string | null {
+  if (a.folders[0]) return a.folders[0].label;
+  const parent = a.parent ? all.find((b) => b.id === a.parent) : undefined;
+  if (parent) return `in ${parent.name}`;
+  return all.filter((b) => b.name === a.name).length > 1 ? `PID ${a.pid}` : null;
+}
+
 /** Compact resource line for skim surfaces: "520 MB · 3.4% · 15 processes". */
 export function resourcesLine(a: Agent): string {
   const procs = counts(a).processes;
