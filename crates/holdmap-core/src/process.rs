@@ -100,6 +100,12 @@ fn without_leaked_env(mut cmd: Vec<String>) -> Vec<String> {
     cmd
 }
 
+/// Refresh every process once so the next capture measures CPU since now (sysinfo reports
+/// zero CPU on a process's first sample).
+pub(crate) fn refresh_for_cpu(sys: &mut System) {
+    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind());
+}
+
 fn refresh_kind() -> ProcessRefreshKind {
     // Threads never own sockets separately from their process, and walking every
     // `/proc/<pid>/task` directory was the single largest cost of a scan on Linux.
