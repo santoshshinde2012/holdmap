@@ -749,6 +749,64 @@ fn project_file_errors_are_reported_with_the_path() {
 }
 
 #[test]
+fn a_missing_project_file_is_one_clear_error() {
+    let out = hm()
+        .args(["up", "--file", "/nonexistent/holdmap-test.toml"])
+        .assert()
+        .code(2)
+        .get_output()
+        .stderr
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    assert!(
+        text.contains("can't read /nonexistent/holdmap-test.toml"),
+        "{text}"
+    );
+    // The cause is already in the message, so it isn't repeated as "caused by".
+    assert!(!text.contains("caused by"), "{text}");
+}
+
+#[test]
+fn bad_input_and_broken_state_never_panic() {
+    let dir = home();
+    // A plain file where holdmap's state folder should be.
+    let blocked = dir.path().join("state-is-a-file");
+    std::fs::write(&blocked, b"x").unwrap();
+    std::fs::write(dir.path().join(".holdmap.toml"), "not = [toml").unwrap();
+    let cases: &[&[&str]] = &[
+        &["--bogus"],
+        &["nosuch"],
+        &["wait", "1", "--timeout", "1"],
+        &["agents", "999999"],
+        &["pins"],
+        &["history"],
+        &["status"],
+        &["list", "--json"],
+    ];
+    for args in cases {
+        let out = hm()
+            .current_dir(dir.path())
+            .env("HOLDMAP_HOME", &blocked)
+            .env_remove("HOME")
+            .env("RUST_BACKTRACE", "1")
+            .args(*args)
+            .timeout(Duration::from_secs(30))
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            !stderr.contains("panicked") && !stderr.contains("stack backtrace"),
+            "{args:?}: {stderr}"
+        );
+        assert!(
+            matches!(out.status.code(), Some(0..=4)),
+            "{args:?}: {:?}",
+            out.status
+        );
+    }
+}
+
+#[test]
 fn init_project_writes_a_valid_file() {
     let dir = home();
     hm().current_dir(dir.path())
