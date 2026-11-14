@@ -252,7 +252,12 @@ impl<'a> AgentsBuilder<'a> {
             }
             if missing_folders > 0 {
                 limits.push(format!(
-                    "{missing_folders} agent-owned processes have no readable working directory."
+                    "{} no readable working directory.",
+                    crate::util::count(
+                        missing_folders,
+                        "agent-owned process has",
+                        "agent-owned processes have"
+                    )
                 ));
             }
         }

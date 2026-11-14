@@ -37,6 +37,15 @@ impl AgentsReport {
         self.memory
             .retain(|memory| ids.contains(memory.agent_id.as_str()));
     }
+
+    /// An agent's memory as text: its size, or `unknown` when none of its processes gave a
+    /// reading (another account's process, for example), so a zero is never shown as a size.
+    pub fn memory_text(&self, agent: &Agent) -> String {
+        match self.memory.iter().find(|row| row.agent_id == agent.id) {
+            Some(memory) => memory.headline_text(),
+            None => crate::util::human_bytes(agent.memory_bytes),
+        }
+    }
 }
 
 /// An agent that isn't running, known only from its default configuration locations.

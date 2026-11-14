@@ -6,7 +6,7 @@ use crate::style::{self, bold, paint, S};
 use anyhow::{bail, Context, Result};
 use holdmap_core::agents::{AccessLevel, AgentsReport, Evidence, FolderSource, LinkKind, PortRole};
 use holdmap_core::engine::tilde;
-use holdmap_core::util::{count, human_bytes, printable};
+use holdmap_core::util::{count, printable};
 use holdmap_core::{execute, Engine, Exposure, ScanOptions};
 
 #[derive(clap::Args, Debug, Default)]
@@ -39,6 +39,8 @@ pub struct AgentsArgs {
 }
 
 pub fn run(a: &AgentsArgs, docker: bool) -> Result<u8> {
+    // A single scan would report 0% CPU for every agent.
+    holdmap_core::provider::SystemProcesses::shared().prime_cpu();
     let e = Engine::new(&ScanOptions {
         all_states: false,
         docker,
@@ -370,7 +372,7 @@ fn render_overview(r: &AgentsReport) -> String {
         let mut meta = vec![
             format!("pid {}", a.pid),
             a.kind.label().to_string(),
-            human_bytes(a.memory_bytes),
+            r.memory_text(a),
             format!("{:.1}% CPU", a.cpu_percent),
         ];
         if a.access.root {
@@ -402,7 +404,7 @@ fn render_overview(r: &AgentsReport) -> String {
                     "{} ({source}){}",
                     style::one_line(&printable(&f.label), 44),
                     if more > 0 {
-                        format!(" +{more} folders")
+                        format!(" +{}", count(more, "folder", "folders"))
                     } else {
                         String::new()
                     }
@@ -528,7 +530,7 @@ pub fn render(r: &AgentsReport, wide: bool, query: Option<&str>) -> String {
         meta.extend([
             who,
             count(procs, "process", "processes"),
-            human_bytes(a.memory_bytes),
+            r.memory_text(a),
             format!("{:.1}% CPU", a.cpu_percent),
         ]);
         let stoppable = a.stoppable_ports().count();

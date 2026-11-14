@@ -283,8 +283,38 @@ pub struct AgentMemoryReport {
 }
 
 impl AgentMemoryReport {
-    /// One line for text surfaces: headline, share of RAM, and how many counters are unknown.
+    /// True when no process in the tree gave a memory reading: every process-table sample is
+    /// zero and its platform read failed, so the zero headline is not a measurement.
+    pub fn headline_unknown(&self) -> bool {
+        !self.processes.is_empty()
+            && self.processes.iter().all(|row| {
+                row.scan_bytes == 0
+                    && row.reading.resident.get().is_none()
+                    && row.reading.physical_footprint.get().is_none()
+            })
+    }
+
+    /// The headline as text: a size, or `unknown` when no process gave a reading.
+    pub fn headline_text(&self) -> String {
+        if self.headline_unknown() {
+            "unknown".into()
+        } else {
+            crate::util::human_bytes(self.headline_bytes)
+        }
+    }
+
+    /// One line for text surfaces: headline, share of RAM, the tree counters, and why any of
+    /// them are unknown. Counters that share a reason are named together so it is said once.
     pub fn summary_line(&self) -> String {
+        if self.headline_unknown() {
+            let reason = self
+                .processes
+                .iter()
+                .map(|row| row.reading.resident.reason())
+                .find(|reason| !reason.is_empty())
+                .unwrap_or("the operating system returned no memory counter");
+            return format!("unknown: no process in this tree gave a memory reading ({reason})");
+        }
         let share = match self.share_ppm.get() {
             Some(ppm) => format!("{:.1}% of RAM", ppm as f64 / 10_000.0),
             None => format!("share unknown ({})", self.share_ppm.reason()),
@@ -294,13 +324,31 @@ impl AgentMemoryReport {
         } else {
             &self.headline_label
         };
-        format!(
-            "{} {counter} · {share} · resident {} · private {} · shared {}",
-            crate::util::human_bytes(self.headline_bytes),
-            self.resident.bytes_text(),
-            self.private_bytes.bytes_text(),
-            self.shared_bytes.bytes_text()
-        )
+        let mut parts = vec![
+            format!(
+                "{} {counter}",
+                crate::util::human_bytes(self.headline_bytes)
+            ),
+            share,
+        ];
+        let mut unknown: Vec<(Vec<&str>, &str)> = Vec::new();
+        for (label, figure) in [
+            ("resident", &self.resident),
+            ("private", &self.private_bytes),
+            ("shared", &self.shared_bytes),
+        ] {
+            match figure.get() {
+                Some(value) => parts.push(format!("{label} {}", crate::util::human_bytes(value))),
+                None => match unknown.iter_mut().find(|(_, why)| *why == figure.reason()) {
+                    Some((labels, _)) => labels.push(label),
+                    None => unknown.push((vec![label], figure.reason())),
+                },
+            }
+        }
+        for (labels, why) in unknown {
+            parts.push(format!("{} unknown ({why})", labels.join(" and ")));
+        }
+        parts.join(" · ")
     }
 
     /// Role totals and every process, largest scan sample first.

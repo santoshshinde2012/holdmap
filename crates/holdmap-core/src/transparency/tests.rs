@@ -457,3 +457,56 @@ fn a_refused_platform_counter_makes_the_headline_mixed_with_a_reason() {
     assert!(mixed.limits.iter().any(|limit| limit == reason));
     assert!(mixed.summary_line().contains("Mixed"));
 }
+
+#[test]
+fn a_tree_with_no_memory_reading_is_unknown_not_zero() {
+    let agent = bare_agent(
+        20,
+        "Docker Desktop",
+        vec![process(20, "com.docker.vmnetd", ProcessRole::Agent, 0)],
+        Vec::new(),
+    );
+    let mut row = proc(20, 1, "com.docker.vmnetd", &["com.docker.vmnetd"]);
+    row.memory_bytes = 0;
+    let mut table = table(vec![row], 1);
+    table.mark_memory_fallback(20);
+    let probe = FixedProbe {
+        reading: ProcessReading::all_unknown("proc_pid_rusage failed (access denied)"),
+        machine: ObservedU64::observed(1_000_000),
+    };
+    let report = agent_memory(&agent, &table, &probe, 1);
+    assert!(report.headline_unknown());
+    assert_eq!(report.headline_text(), "unknown");
+    let line = report.summary_line();
+    assert!(line.starts_with("unknown"), "{line}");
+    assert!(line.contains("access denied"), "{line}");
+    assert!(!line.contains("0 B"), "{line}");
+}
+
+#[test]
+fn counters_with_the_same_unknown_reason_are_explained_once() {
+    let agent = bare_agent(
+        10,
+        "Cursor",
+        vec![process(10, "Cursor", ProcessRole::Agent, 100)],
+        Vec::new(),
+    );
+    let table = table(vec![proc(10, 1, "Cursor", &["Cursor"])], 1);
+    let probe = FixedProbe {
+        reading: reading_with(ObservedU64::observed(4096)),
+        machine: ObservedU64::observed(1_000_000),
+    };
+    let report = agent_memory(&agent, &table, &probe, 1);
+    assert!(!report.headline_unknown());
+    let line = report.summary_line();
+    assert!(line.contains("resident 4.0 KB"), "{line}");
+    assert!(
+        line.contains("private and shared unknown (not exposed by this fixture)"),
+        "{line}"
+    );
+    assert_eq!(
+        line.matches("not exposed by this fixture").count(),
+        1,
+        "{line}"
+    );
+}

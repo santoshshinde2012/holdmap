@@ -272,17 +272,17 @@ fn draw_list(f: &mut Frame, app: &mut App, area: Rect) {
         ]);
         let subtitle = Line::from(Span::styled(
             format!(
-                "PID {} · {} ports · {} tools",
+                "PID {} · {} · {}",
                 agent.pid,
-                agent.ports.len(),
-                agent.tools.len() + agent.more_tools
+                holdmap_core::util::count(agent.ports.len(), "port", "ports"),
+                holdmap_core::util::count(agent.tools.len() + agent.more_tools, "tool", "tools")
             ),
             theme::muted(),
         ));
         let mut cells = vec![Cell::from(vec![name, subtitle])];
         if !compact {
             cells.push(Cell::from(vec![
-                Line::raw(human_bytes(agent.memory_bytes)),
+                Line::raw(report.memory_text(agent)),
                 Line::from(Span::styled(
                     format!("{:.1}% CPU", agent.cpu_percent),
                     theme::muted(),
