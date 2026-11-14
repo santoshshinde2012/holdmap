@@ -670,6 +670,24 @@ describe("App overview and first run", () => {
     expect(localStorage.getItem("holdmap.view")).toBe("agents");
   });
 
+  it("explains a first scan that failed on Home's cards, with a retry, instead of an endless …", async () => {
+    vi.useFakeTimers();
+    calls.liveHeader = true;
+    calls.scanError = "holdmap CLI not found";
+    localStorage.setItem("holdmap.view", "home");
+    localStorage.setItem("holdmap.home.layout", "cards");
+    const view = render(App);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(view.container.textContent).toContain("Couldn't look up the agents");
+    expect(view.container.querySelector(".live")!.textContent!.trim()).toBe("Scan failed");
+    calls.scanError = null;
+    const scans = calls.scan;
+    await fireEvent.click(view.getAllByRole("button", { name: "Try again" }).at(-1)!);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(calls.scan).toBeGreaterThan(scans);
+    expect(view.container.textContent).not.toContain("Couldn't look up the agents");
+  });
+
   it("flips Home between cards and map with V and remembers the choice", async () => {
     vi.useFakeTimers();
     localStorage.setItem("holdmap.view", "home");

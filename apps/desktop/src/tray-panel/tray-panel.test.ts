@@ -141,6 +141,7 @@ describe("Tray panel edge cases", () => {
     await waitFor(() => expect(view.container.querySelector(".head .status")?.textContent).toBe("Can't read holdmap"));
     expect(view.container.textContent).not.toContain("Checking agents and ports…");
     expect(view.container.textContent).not.toContain("Looking for agents…");
+    expect(view.getAllByText("Shows up after the next scan.")).toHaveLength(3);
     fail = false;
     await fireEvent.click(view.getByRole("button", { name: "Try now" }));
     await waitFor(() => expect(view.container.querySelector(".head .status")?.textContent).toBe("2 need you"));

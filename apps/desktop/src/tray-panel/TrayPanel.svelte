@@ -216,6 +216,8 @@
             </li>
           {/each}
         </ul>
+      {:else if offline}
+        <p class="quiet">Shows up after the next scan.</p>
       {/if}
     </section>
 
