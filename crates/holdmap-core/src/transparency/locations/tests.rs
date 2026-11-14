@@ -12,6 +12,14 @@ const PRODUCTS: &[&str] = &[
     "copilot-cli",
     "windsurf",
     "cline",
+    "kiro",
+    "opencode",
+    "amp",
+    "goose",
+    "aider",
+    "qwen",
+    "crush",
+    "zed",
 ];
 const PLATFORMS: &[&str] = &["macos", "linux", "windows"];
 
@@ -259,4 +267,75 @@ fn demo_location_fixture_is_current() {
         saved, fresh,
         "regenerate with HOLDMAP_UPDATE_FIXTURES=1 cargo test -p holdmap-core demo_location_fixture"
     );
+}
+
+#[test]
+fn smaller_agents_list_their_documented_files_and_read_only_mcp_servers_json() {
+    let kiro = specs("kiro", "macos");
+    assert!(has(&kiro, ".kiro/steering") && has(&kiro, ".kiro/settings/mcp.json"));
+    let readers: Vec<_> = kiro
+        .iter()
+        .filter(|row| matches!(row.reader, Reader::Mcp(_)))
+        .map(|row| row.scope)
+        .collect();
+    assert_eq!(readers, [PlaceScope::User, PlaceScope::Project]);
+
+    // Formats holdmap doesn't parse are listed, never read.
+    for product in ["opencode", "amp", "goose", "crush", "aider", "zed"] {
+        for platform in PLATFORMS {
+            assert!(
+                !specs(product, platform)
+                    .iter()
+                    .any(|row| matches!(row.reader, Reader::Mcp(_))),
+                "{product} {platform}"
+            );
+        }
+    }
+    let qwen = specs("qwen", "linux");
+    assert!(qwen
+        .iter()
+        .any(|row| row.relative == "/etc/qwen-code/settings.json"
+            && row.scope == PlaceScope::Managed));
+    assert!(qwen
+        .iter()
+        .any(|row| row.relative == ".qwen/QWEN.local.md" && row.scope == PlaceScope::Local));
+
+    // Secrets and history are presence or size only.
+    let aider = specs("aider", "macos");
+    let env = aider.iter().find(|row| row.relative == ".env").unwrap();
+    assert_eq!(
+        (env.kind, env.form),
+        (PlaceKind::SecretStore, Form::SecretStore)
+    );
+    assert!(aider
+        .iter()
+        .filter(|row| row.relative.contains("history"))
+        .all(|row| row.form == Form::SessionData));
+    let goose = specs("goose", "linux");
+    assert!(goose
+        .iter()
+        .any(|row| row.relative == "goose/secrets.yaml" && row.form == Form::SecretStore));
+}
+
+#[test]
+fn goose_and_zed_move_to_appdata_on_windows_and_opencode_has_a_managed_folder() {
+    let goose = specs("goose", "windows");
+    assert!(goose
+        .iter()
+        .any(|row| row.base == Base::AppData && row.relative == "Block/goose/config/config.yaml"));
+    assert!(specs("zed", "windows")
+        .iter()
+        .any(|row| row.base == Base::AppData && row.relative == "Zed/AGENTS.md"));
+    assert!(specs("zed", "macos")
+        .iter()
+        .any(|row| row.base == Base::XdgConfig && row.relative == "zed/AGENTS.md"));
+    for (platform, path) in [
+        ("macos", "/Library/Application Support/opencode"),
+        ("linux", "/etc/opencode"),
+        ("windows", r"C:\ProgramData\opencode"),
+    ] {
+        assert!(specs("opencode", platform)
+            .iter()
+            .any(|row| row.scope == PlaceScope::Managed && row.relative == path));
+    }
 }
