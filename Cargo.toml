@@ -18,7 +18,7 @@ rust-version = "1.95"
 license = "MIT OR Apache-2.0"
 authors = ["Santosh Shinde"]
 repository = "https://github.com/santoshshinde2012/holdmap"
-homepage = "https://github.com/santoshshinde2012/holdmap"
+homepage = "https://santoshshinde2012.github.io/holdmap/"
 keywords = ["port", "agents", "process", "developer-tools", "mcp"]
 categories = ["command-line-utilities", "development-tools", "network-programming"]
 
