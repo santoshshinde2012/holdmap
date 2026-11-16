@@ -8,10 +8,28 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+### Added
+
+- Agents show where they keep their instructions, rules, skills, MCP config and memory, from one documented registry that now also covers Kiro, opencode, Amp, Goose, Aider, Qwen Code, Crush and Zed. **Show in folder** opens each place; file contents are never read.
+- Agent RAM uses each platform's own counters (on macOS the physical footprint that Activity Monitor shows; on Linux `smaps_rollup`), with a saved trend in `memory-samples.json` and **unknown** with a reason when the system won't share a figure.
+- The agent inspector has tabs (Overview, Config, Connections, Findings) with one consent step before reading configuration, a sortable process table, and a Flow view scoped to the selected agent. Graph has floating controls and a docked inspector.
+- `⌘K` jumps to any agent, or to the one using the most RAM; after a stop, **Start again** undoes it.
+- The desktop app keeps a private error log (`logs/holdmap.log`, owner-only, rotated at 512 KB) with secrets masked and the home folder shown as `~`.
+
 ### Changed
 
 - The macOS menu bar starts compact: one item with the holdmap icon (a dot when something needs you) and two readings; **Every reading** brings back one item per reading. Labels read **ALERTS** and **SERVERS**, and a new **Agent RAM** reading is available.
 - The tray panel is clearer: Agents, RAM and CPU tiles, **Stop all…** in the Dev servers header, top agents by RAM with their project instead of a PID, developer tools such as Docker Desktop listed apart from AI agents, and readings that never slide under the header.
+- Home cards show RAM and CPU and tell same-named agents apart; failed scans say so with **Try again** instead of loading forever; "RAM" is used everywhere, including the CLI, TUI and website.
+
+### Fixed
+
+- The CLI and MCP measure CPU on the first scan instead of reporting 0%; CPU the system won't share reads **unknown**.
+- Cursor is no longer shown as its updater, and Expo projects are no longer labelled Vite.
+- Rust code recovers from poisoned locks instead of panicking; the CLI explains an error once and exits 2 on bad input; a stop the OS refuses says which processes and what to do next.
+- A corrupt `memory-samples.json` is kept aside and a new one started; a locked one skips a single sample; writes are atomic and retry a briefly blocked rename on Windows.
+- Tray actions that can't reach holdmap say so in the panel footer instead of failing silently.
+- 390 px layouts on Home, MCP & skills and Settings, and TUI tabs at narrow widths.
 
 ### Documentation
 
