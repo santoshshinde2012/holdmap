@@ -17,7 +17,7 @@ pub struct StopOrder {
 
 /// Order `ids` so that every node comes before the nodes it depends on.
 pub fn stop_order(g: &Graph, ids: &[String]) -> StopOrder {
-    let set: HashSet<&str> = ids.iter().map(|s| s.as_str()).collect();
+    let set: HashSet<&str> = ids.iter().map(std::string::String::as_str).collect();
     // dependents_left[n] = number of not-yet-stopped nodes in the set that depend on n.
     let mut dependents_left: HashMap<&str, usize> = ids.iter().map(|i| (i.as_str(), 0)).collect();
     let mut deps_of: HashMap<&str, BTreeSet<&str>> = HashMap::new();
@@ -54,7 +54,7 @@ pub fn stop_order(g: &Graph, ids: &[String]) -> StopOrder {
                 // Cycle: break it at the remaining node that comes first.
                 let n = ids
                     .iter()
-                    .map(|s| s.as_str())
+                    .map(std::string::String::as_str)
                     .find(|n| !done.contains(n))
                     .expect("remaining node");
                 cyclic.push(n.to_string());

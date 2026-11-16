@@ -100,14 +100,14 @@ fn blend(canvas: &mut Pixels, item: &menubar::Rendered, x: u32, y: u32, dark: bo
         for col in 0..p.width {
             let s = ((row * p.width + col) * 4) as usize;
             let (rgb, alpha) = if item.template {
-                (ink, p.rgba[s + 3] as f32 / 255.0 * ink[3])
+                (ink, f32::from(p.rgba[s + 3]) / 255.0 * ink[3])
             } else {
-                let [r, g, b, a] = [0, 1, 2, 3].map(|k| p.rgba[s + k] as f32);
+                let [r, g, b, a] = [0, 1, 2, 3].map(|k| f32::from(p.rgba[s + k]));
                 ([r, g, b, 1.0], a / 255.0)
             };
             let d = (((y + row) * canvas.width + x + col) * 4) as usize;
             for (k, ink) in rgb.iter().take(3).enumerate() {
-                let under = canvas.rgba[d + k] as f32;
+                let under = f32::from(canvas.rgba[d + k]);
                 canvas.rgba[d + k] = (ink * alpha + under * (1.0 - alpha)).round() as u8;
             }
         }

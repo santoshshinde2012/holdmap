@@ -50,7 +50,7 @@ pub(super) fn ports_result(snapshot: &Snapshot, args: &Value) -> (String, Value)
             json!({
                 "port": x.port, "protocol": x.protocol, "addresses": x.addresses, "pid": x.pid,
                 "process": x.process.as_ref().map(|p| p.name.clone()),
-                "command": x.process.as_ref().map(|p| p.command()),
+                "command": x.process.as_ref().map(holdmap_core::ProcessInfo::command),
                 "label": x.label, "framework": x.framework.as_ref().map(|f| f.name.clone()),
                 "project": x.project.as_ref().map(|p| json!({"name": p.name, "root": p.root, "branch": p.git_branch})),
                 "container": x.container.as_ref().map(|c| json!({"name": c.name, "image": c.image})),

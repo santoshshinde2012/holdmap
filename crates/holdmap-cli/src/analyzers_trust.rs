@@ -49,8 +49,13 @@ pub fn csv(headers: &[&str], rows: &[Vec<String>]) -> String {
         }
     };
     let mut out = String::new();
-    for row in std::iter::once(headers.iter().map(|h| h.to_string()).collect::<Vec<_>>())
-        .chain(rows.iter().cloned())
+    for row in std::iter::once(
+        headers
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>(),
+    )
+    .chain(rows.iter().cloned())
     {
         out.push_str(&row.iter().map(|c| cell(c)).collect::<Vec<_>>().join(","));
         out.push('\n');

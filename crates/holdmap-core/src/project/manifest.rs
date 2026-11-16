@@ -76,7 +76,7 @@ impl ManifestRegistry {
         self.parsers
             .iter()
             .find(|p| dir.join(p.marker()).is_file())
-            .map(|b| b.as_ref())
+            .map(std::convert::AsRef::as_ref)
     }
 }
 
@@ -243,7 +243,7 @@ fn toml_deps(text: &str) -> Vec<String> {
 fn text_deps(text: &str) -> Vec<String> {
     text.split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_' || c == '/' || c == '.'))
         .filter(|w| w.len() > 2)
-        .map(|w| w.to_ascii_lowercase())
+        .map(str::to_ascii_lowercase)
         .collect()
 }
 

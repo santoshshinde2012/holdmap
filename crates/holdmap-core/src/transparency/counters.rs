@@ -47,7 +47,7 @@ pub(crate) fn parse_proc_counters(text: &str) -> ProcCounters {
         let digits: String = rest
             .chars()
             .skip_while(|c| !c.is_ascii_digit())
-            .take_while(|c| c.is_ascii_digit())
+            .take_while(char::is_ascii_digit)
             .collect();
         if let Ok(kb) = digits.parse::<u64>() {
             values.push((key, kb));

@@ -7,7 +7,9 @@ use tempfile::TempDir;
 const UNKNOWN_SESSION: &str = "This capture session is no longer available.";
 
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|error| error.into_inner())
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 pub(crate) struct Session {

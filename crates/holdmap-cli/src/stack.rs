@@ -626,7 +626,9 @@ pub fn status(a: &StatusArgs, docker: bool) -> Result<u8> {
                 ),
                 Cell::new(holder.map(|h| h.label.clone()).unwrap_or_default(), S::Dim),
                 Cell::new(
-                    h.as_ref().map(|h| h.summary()).unwrap_or_default(),
+                    h.as_ref()
+                        .map(holdmap_core::http::HttpInfo::summary)
+                        .unwrap_or_default(),
                     match h {
                         Some(h) if h.healthy() => S::Plain,
                         Some(_) => S::Yellow,

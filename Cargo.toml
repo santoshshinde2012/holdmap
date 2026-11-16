@@ -49,6 +49,9 @@ unsafe_op_in_unsafe_fn = "warn"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+# A small, reviewed slice of clippy::pedantic: mechanical, behaviour-neutral and worth keeping.
+cast_lossless = "warn"
+redundant_closure_for_method_calls = "warn"
 
 [profile.release]
 lto = "thin"

@@ -325,7 +325,7 @@ pub fn parse_ps(text: &str) -> ProcessTable {
         let (Ok(pid), Ok(ppid)) = (pid.parse::<u32>(), ppid.parse::<u32>()) else {
             continue;
         };
-        let cmdline: Vec<String> = it.map(|s| s.to_string()).collect();
+        let cmdline: Vec<String> = it.map(std::string::ToString::to_string).collect();
         let name = cmdline
             .first()
             .map(|c| c.rsplit('/').next().unwrap_or(c).to_string())

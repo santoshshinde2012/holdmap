@@ -103,7 +103,7 @@ fn fill_listing(place: &mut CapabilityPlace, path: &Path, metadata: &Metadata, f
         entry
             .as_ref()
             .ok()
-            .map(|entry| entry.file_name())
+            .map(std::fs::DirEntry::file_name)
             .unwrap_or_default()
     });
     for entry in children {

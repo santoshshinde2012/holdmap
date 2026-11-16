@@ -270,7 +270,10 @@ mod tests {
             id: id.into(),
             kind: SubjectKind::Skill,
             name: id.into(),
-            agents: agents.iter().map(|a| a.to_string()).collect(),
+            agents: agents
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
             dir: Some(dir.into()),
             scope: Some("user".into()),
         }

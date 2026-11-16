@@ -498,7 +498,7 @@ impl Engine {
                 .unwrap_or_else(|| {
                     steps
                         .first()
-                        .map(|s| s.describe())
+                        .map(types::Step::describe)
                         .unwrap_or_else(|| "Nothing to do.".into())
                 }),
         };

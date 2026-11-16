@@ -57,7 +57,10 @@ impl SystemProcesses {
     /// exists, so long-lived frontends and repeat calls pay nothing.
     pub fn prime_cpu(&self) {
         {
-            let mut guard = self.sys.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = self
+                .sys
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if guard.is_some() {
                 return;
             }
@@ -73,7 +76,10 @@ impl SystemProcesses {
 
 impl ProcessProvider for SystemProcesses {
     fn processes(&self) -> io::Result<ProcessTable> {
-        let mut guard = self.sys.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self
+            .sys
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if guard.is_none() {
             *guard = Some(System::new().map_err(io::Error::other)?);
         }

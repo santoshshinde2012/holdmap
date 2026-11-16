@@ -203,7 +203,7 @@ fn choose_destination<R: Runtime>(
 fn remember(saved: &Mutex<Vec<PathBuf>>, path: &Path) {
     let mut saved = saved
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     saved.retain(|known| known != path);
     saved.push(path.to_path_buf());
     if saved.len() > MAX_REMEMBERED {
@@ -294,7 +294,7 @@ pub(crate) async fn reveal_saved_recording<R: Runtime>(
     let known = state
         .saved
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .contains(&requested);
     if !known {
         return Err("Only a recording saved in this session can be shown.".into());

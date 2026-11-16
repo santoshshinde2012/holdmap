@@ -35,7 +35,10 @@ fn req(analyzers: &[&str], confirmed: bool) -> ScheduleRequest {
     ScheduleRequest {
         enabled: true,
         every_hours: 24,
-        analyzers: analyzers.iter().map(|s| s.to_string()).collect(),
+        analyzers: analyzers
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect(),
         mcp_opt_in: vec![],
         skip_on_battery: true,
         notify: true,

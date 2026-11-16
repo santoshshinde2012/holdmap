@@ -223,7 +223,7 @@ fn bench_hashing_hundreds_of_skills() {
             d
         })
         .collect();
-    let refs: Vec<&Path> = dirs.iter().map(|d| d.as_path()).collect();
+    let refs: Vec<&Path> = dirs.iter().map(std::path::PathBuf::as_path).collect();
     let trust = SkillTrust::new(Arc::new(MemoryStore::default()));
     let r = report(&refs);
     let start = std::time::Instant::now();

@@ -58,7 +58,7 @@ async fn with_session<T: Send + 'static>(
         let mut session = state
             .session
             .lock()
-            .unwrap_or_else(|error| error.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         operation(&mut session)
     })
     .await

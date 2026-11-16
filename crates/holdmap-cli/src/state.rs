@@ -261,7 +261,7 @@ pub fn restart(a: &RestartArgs, docker: bool) -> Result<u8> {
     }
     let Some(entry) = store()
         .last_matching(a.port, Some(Protocol::Tcp), None)?
-        .filter(|h| h.restartable())
+        .filter(holdmap_core::history::HistoryEntry::restartable)
     else {
         bail!(
             "port {} is free and holdmap has no record it can safely restart (see `holdmap history`)",

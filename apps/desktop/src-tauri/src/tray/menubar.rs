@@ -248,7 +248,7 @@ fn steady(value: &str) -> String {
 /// Alpha of `icon` (square) scaled to `size` × `size`, sampled bilinearly.
 fn icon_alpha(icon: &Pixels, size: usize) -> Vec<f32> {
     let (w, h) = (icon.width as usize, icon.height as usize);
-    let at = |x: usize, y: usize| icon.rgba[(y.min(h - 1) * w + x.min(w - 1)) * 4 + 3] as f32;
+    let at = |x: usize, y: usize| f32::from(icon.rgba[(y.min(h - 1) * w + x.min(w - 1)) * 4 + 3]);
     let mut out = vec![0.0; size * size];
     for y in 0..size {
         for x in 0..size {
@@ -376,10 +376,10 @@ pub fn render(icon: &Pixels, parts: &[Draw], dark: bool) -> Rendered {
     }
     // Straight alpha for the PNG `tray-icon` writes (CoreGraphics drew premultiplied).
     for px in rgba.chunks_mut(4) {
-        let a = px[3] as u32;
+        let a = u32::from(px[3]);
         if a > 0 && a < 255 {
             for c in &mut px[..3] {
-                *c = ((*c as u32 * 255 + a / 2) / a).min(255) as u8;
+                *c = ((u32::from(*c) * 255 + a / 2) / a).min(255) as u8;
             }
         }
     }
@@ -439,7 +439,7 @@ fn draw_icon(
                 (c.0 * 255.0).round() as u8,
                 (c.1 * 255.0).round() as u8,
                 (c.2 * 255.0).round() as u8,
-                (a as f64 * c.3 * 255.0).round() as u8,
+                (f64::from(a) * c.3 * 255.0).round() as u8,
             ]);
         }
     }
@@ -465,13 +465,13 @@ fn line_chart(context: Ref, x: f64, samples: &[f32], ink: Ink) {
         if samples.len() < 2 {
             return;
         }
-        let top = samples.iter().copied().fold(CHART_FLOOR, f32::max) as f64;
+        let top = f64::from(samples.iter().copied().fold(CHART_FLOOR, f32::max));
         let step = CHART_WIDTH / (CHART_SLOTS - 1) as f64;
         let x0 = x + CHART_WIDTH - step * (samples.len() - 1) as f64;
         let at = |i: usize, v: f32| {
             (
                 x0 + step * i as f64,
-                CHART_FOOT + (v.max(0.0) as f64 / top * CHART_HEIGHT).min(CHART_HEIGHT),
+                CHART_FOOT + (f64::from(v.max(0.0)) / top * CHART_HEIGHT).min(CHART_HEIGHT),
             )
         };
         CGContextBeginPath(context);
@@ -516,10 +516,10 @@ fn bar_chart(context: Ref, x: f64, width: f64, values: &[f32], ink: Ink) {
         }
         let n = values.len() as f64;
         let bar = (width - BAR_GAP * (n - 1.0)) / n;
-        let top = values.iter().copied().fold(CHART_FLOOR, f32::max) as f64;
+        let top = f64::from(values.iter().copied().fold(CHART_FLOOR, f32::max));
         ink.fill(context);
         for (i, v) in values.iter().enumerate() {
-            let height = (v.max(0.0) as f64 / top * CHART_HEIGHT).clamp(1.0, CHART_HEIGHT);
+            let height = (f64::from(v.max(0.0)) / top * CHART_HEIGHT).clamp(1.0, CHART_HEIGHT);
             CGContextFillRect(
                 context,
                 CGRect {
@@ -636,7 +636,7 @@ mod tests {
         let r = render(&icon(), &[reading("AGENTS", "8", Tone::Plain)], false);
         assert!(r.template, "nothing to flag: macOS tints it");
         assert_eq!(r.pixels.height, 54, "18 pt at 3×");
-        let pt = r.pixels.width as f64 / SCALE;
+        let pt = f64::from(r.pixels.width) / SCALE;
         assert!(
             (28.0..=36.0).contains(&pt),
             "about 32 pt, like a Mini widget: {pt}"
@@ -712,7 +712,7 @@ mod tests {
             "the foot runs the full width"
         );
         let bars = render(&icon(), &[Draw::Bars(vec![3.0, 9.0, 1.0])], false);
-        let pt = bars.pixels.width as f64 / SCALE;
+        let pt = f64::from(bars.pixels.width) / SCALE;
         assert!(pt <= CHART_WIDTH + 2.0 * PAD, "{pt}");
         // An empty chart still draws its foot, so the item isn't invisible.
         let empty = render(&icon(), &[Draw::Bars(vec![])], false);

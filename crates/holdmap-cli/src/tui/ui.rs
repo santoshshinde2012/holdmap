@@ -1000,7 +1000,7 @@ mod tests {
             .buffer()
             .content
             .iter()
-            .map(|cell| cell.symbol())
+            .map(ratatui::buffer::Cell::symbol)
             .collect::<String>();
         assert!(visible.contains("missing-service"));
         assert!(visible.contains("No services match this search. Press Esc to clear it."));
@@ -1070,7 +1070,7 @@ mod tests {
                 .buffer()
                 .content
                 .iter()
-                .map(|cell| cell.symbol())
+                .map(ratatui::buffer::Cell::symbol)
                 .collect::<String>();
             assert!(visible.contains("cancel"), "{width}x{height}: {visible}");
             assert!(visible.contains("HIGH RISK"), "{width}x{height}: {visible}");
@@ -1090,7 +1090,7 @@ mod tests {
                 .buffer()
                 .content
                 .iter()
-                .map(|cell| cell.symbol())
+                .map(ratatui::buffer::Cell::symbol)
                 .collect::<String>();
             assert!(
                 visible.contains("Unique final warning"),

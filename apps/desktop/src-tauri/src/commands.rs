@@ -256,7 +256,7 @@ pub async fn plan(
         .state::<AppState>()
         .confirmations
         .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .preview(target, force, allow_protected, plan))
 }
 
@@ -278,7 +278,7 @@ pub async fn stop(
             .state::<AppState>()
             .confirmations
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take(&confirmation_id, &target, force, allow_protected)?;
         let engine = scan_now(false, docker)?;
         let (parsed, opts) = stop_request(&target, force, allow_protected);
@@ -321,7 +321,7 @@ pub async fn stop_many(
             let mut confirmations = state
                 .confirmations
                 .lock()
-                .unwrap_or_else(|error| error.into_inner());
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             crate::stop_batch::take(&mut confirmations, &requests)?
         };
         let engine = scan_now(false, state.docker())?;

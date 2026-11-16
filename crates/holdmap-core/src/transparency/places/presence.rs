@@ -183,7 +183,7 @@ pub(super) fn deep(
             return;
         };
         let mut children: Vec<_> = read.flatten().collect();
-        children.sort_by_key(|entry| entry.file_name());
+        children.sort_by_key(std::fs::DirEntry::file_name);
         for entry in children {
             visited += 1;
             if visited > super::MAX_ENTRIES {

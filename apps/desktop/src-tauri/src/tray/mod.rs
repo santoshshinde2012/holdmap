@@ -98,7 +98,10 @@ pub struct TrayWidget {
 
 impl TrayWidget {
     fn insights(&self, app: &AppHandle) -> Insights {
-        let mut cached = self.insights.lock().unwrap_or_else(|e| e.into_inner());
+        let mut cached = self
+            .insights
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some((at, insights)) = cached.as_ref() {
             if at.elapsed() < INSIGHTS_MAX_AGE {
                 return insights.clone();
@@ -359,7 +362,10 @@ fn render(app: &AppHandle, readings: Option<Readings>, resync: bool) {
         return;
     };
     let choice = choice(app);
-    let mut w = widget.widget.lock().unwrap_or_else(|e| e.into_inner());
+    let mut w = widget
+        .widget
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(r) = readings {
         w.trends.record(&r);
         w.readings = Some(r);
@@ -436,7 +442,12 @@ fn status(w: &Widget) -> TrayStatus {
 #[tauri::command]
 pub async fn tray_status(app: AppHandle) -> TrayStatus {
     match app.try_state::<TrayWidget>() {
-        Some(widget) => status(&widget.widget.lock().unwrap_or_else(|e| e.into_inner())),
+        Some(widget) => status(
+            &widget
+                .widget
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        ),
         None => TrayStatus {
             on_screen: None,
             hidden: Vec::new(),
@@ -453,7 +464,7 @@ pub fn refresh_tray(app: &AppHandle, snapshot: &Snapshot) {
     };
     let report = app
         .state::<AppState>()
-        .with_engine(SHARED_SCAN, |e| e.agents())
+        .with_engine(SHARED_SCAN, holdmap_core::Engine::agents)
         .ok();
     let needs = report.as_ref().map(|r| {
         let insights = widget.insights(app);
@@ -488,7 +499,10 @@ fn panel_data(app: &AppHandle) -> model::PanelData {
     );
     match app.try_state::<TrayWidget>() {
         Some(widget) => {
-            let w = widget.widget.lock().unwrap_or_else(|e| e.into_inner());
+            let w = widget
+                .widget
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             model::panel_data(w.readings.as_ref(), &w.trends, state, settings)
         }
         None => model::panel_data(None, &Trends::default(), state, settings),

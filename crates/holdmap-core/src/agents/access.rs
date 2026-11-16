@@ -40,7 +40,7 @@ fn has_flag(args: &[String], names: &[&str]) -> Option<String> {
     args.iter()
         .take_while(|a| a.as_str() != "--")
         .find(|a| names.contains(&a.as_str()))
-        .map(|a| a.to_string())
+        .map(std::string::ToString::to_string)
 }
 
 /// The account: root, you or another user.

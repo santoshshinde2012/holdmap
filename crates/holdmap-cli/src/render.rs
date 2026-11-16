@@ -166,7 +166,8 @@ pub fn list_table_with(
                     S::Dim,
                 ));
                 r.push(Cell::new(
-                    p.map(|p| p.command()).unwrap_or_default(),
+                    p.map(holdmap_core::ProcessInfo::command)
+                        .unwrap_or_default(),
                     S::Dim,
                 ));
             }
