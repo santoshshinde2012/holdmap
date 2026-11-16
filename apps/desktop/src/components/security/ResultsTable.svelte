@@ -62,18 +62,24 @@
 
 <style>
   .wrap { overflow: auto; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
-  table { width: 100%; border-collapse: collapse; font-size: var(--fs-body-sm); }
+  table { width: 100%; min-width: 980px; table-layout: fixed; border-collapse: collapse; font-size: var(--fs-body-sm); }
   th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: var(--fw-semibold); color: var(--text-2); border-bottom: 1px solid var(--border); white-space: nowrap; }
-  th button { display: inline-flex; align-items: center; gap: 4px; width: 100%; padding: 8px 10px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+  th button { display: inline-flex; align-items: center; gap: 4px; width: 100%; height: 36px; padding: 0 10px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
   th button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
-  td { padding: 6px 10px; border-top: 1px solid var(--border); vertical-align: top; color: var(--text); }
+  td { height: 40px; padding: 0 10px; border-top: 1px solid var(--border); vertical-align: middle; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   tr:first-child td { border-top: 0; }
-  td.x, th.x { width: 28px; padding: 4px; }
-  .msg { min-width: 200px; }
-  .dir { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+  td.x, th.x { width: 36px; padding: 0 4px; text-align: center; }
+  th:nth-child(2) { width: 92px; }
+  th:nth-child(3) { width: 72px; }
+  th:nth-child(5) { width: 148px; }
+  th:nth-child(6) { width: 120px; }
+  th:nth-child(7) { width: 168px; }
+  th:nth-child(8) { width: 176px; }
+  .msg { min-width: 0; }
+  .dir { color: var(--text-2); }
   .closed td { color: var(--text-2); }
   .open td { background: var(--surface-2); }
-  .detail td { background: var(--surface-2); padding: 8px 14px 14px 38px; }
+  .detail td { height: auto; background: var(--surface-2); padding: 8px 14px 14px 38px; overflow: visible; white-space: normal; }
   code { font-family: var(--mono); font-size: var(--fs-mono-sm); }
   small { color: var(--muted); }
   .fix { margin: 8px 0 0; color: var(--text-2); }

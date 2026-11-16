@@ -20,7 +20,7 @@
 
 <style>
   /* Each kind has its own hue on the icon and a left rail, so a busy map scans by type. */
-  .flow-node { --k: var(--muted); width: 244px; height: 78px; display: flex; align-items: center; gap: 10px; box-sizing: border-box; padding: 10px 12px 10px 13px; border-radius: 12px; border: 1px solid var(--border-strong); border-left: 3px solid var(--k); background: var(--surface); box-shadow: var(--shadow-sm); color: var(--text); cursor: pointer; transition: opacity var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease); }
+  .flow-node { --k: var(--muted); width: 244px; height: 78px; display: flex; align-items: center; gap: 10px; box-sizing: border-box; padding: 10px 12px 10px 13px; border-radius: 12px; border: 1px solid var(--border-strong); border-left: 3px solid var(--k); background: var(--surface); box-shadow: var(--shadow-sm); color: var(--text); cursor: pointer; overflow: hidden; transition: opacity var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease); }
   .k-agent { --k: var(--agent-1); } .k-tool { --k: var(--tone-violet); } .k-listener { --k: var(--tone-green); } .k-remote { --k: var(--tone-blue); } .k-skill, .k-model { --k: var(--tone-amber); }
   .chosen { border-color: var(--k); box-shadow: 0 0 0 3px color-mix(in srgb, var(--k) 22%, transparent), var(--shadow-sm); }
   .dim { opacity: 0.38; }

@@ -12,7 +12,8 @@
   let limits = $state<Record<string, number>>({});
 </script>
 
-<div class="groups">
+<div class="sheet">
+  <div class="cols" aria-hidden="true"><span></span><span>Severity</span><span>Finding</span><span>Skill</span><span>Agent</span><span>Path</span><span>Analyzer</span></div>
   {#each groups as g (g.key)}
     {@const limit = limits[g.key] ?? PAGE_SIZE}
     <section class="group" aria-label="{g.label} findings">
@@ -36,11 +37,12 @@
 </div>
 
 <style>
-  .groups { display: grid; gap: 12px; }
-  .group { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
-  header { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+  .sheet { overflow: auto; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
+  .group + .group { border-top: 1px solid var(--border); }
+  header { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface-2); box-sizing: border-box; }
   h4 { margin: 0; font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
   .n { color: var(--muted); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; }
+  .cols { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: 16px 72px minmax(160px, 1.5fr) minmax(96px, 0.7fr) minmax(108px, 0.8fr) minmax(140px, 1fr) 104px; column-gap: 12px; align-items: center; min-width: 920px; min-height: 28px; padding: 0 14px; box-sizing: border-box; color: var(--muted); font-size: var(--fs-caption); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; border-bottom: 1px solid var(--border); background: var(--surface-2); }
   ul { list-style: none; margin: 0; padding: 0; }
   .more { display: flex; gap: 8px; align-items: center; justify-content: center; margin: 0; padding: 8px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--fs-caption); }
   .more button { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; padding: 3px 10px; cursor: pointer; }
