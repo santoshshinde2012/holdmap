@@ -19,12 +19,12 @@
 </div>
 
 <style>
-  .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .search { flex: 1 1 220px; display: flex; align-items: center; gap: 6px; height: var(--h-sm, 28px); padding: 0 10px; border: 1px solid var(--input-border, var(--border)); border-radius: var(--r-md); background: var(--surface); color: var(--muted); }
+  .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: var(--h-sm); }
+  .search { flex: 1 1 240px; display: flex; align-items: center; gap: 6px; height: var(--h-sm); padding: 0 10px; border: 1px solid var(--input-border, var(--border)); border-radius: var(--r-md); background: var(--surface); color: var(--muted); box-sizing: border-box; }
   .search:focus-within { outline: 2px solid var(--ring); outline-offset: 1px; }
   input[type="search"] { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text); font: inherit; font-size: var(--fs-body-sm); }
-  select { height: var(--h-sm, 28px); padding: 0 8px; border: 1px solid var(--input-border, var(--border)); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-body-sm); }
+  select { height: var(--h-sm); padding: 0 8px; border: 1px solid var(--input-border, var(--border)); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-body-sm); box-sizing: border-box; }
   select:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-  .closed { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); font-size: var(--fs-body-sm); }
-  .n { margin: 0 4px 0 auto; color: var(--muted); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; }
+  .closed { display: inline-flex; align-items: center; gap: 6px; height: var(--h-sm); color: var(--text-2); font-size: var(--fs-body-sm); white-space: nowrap; }
+  .n { margin: 0 4px 0 auto; color: var(--muted); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
 </style>

@@ -94,7 +94,7 @@
 
 <style>
   .trust { display: grid; gap: 10px; min-width: 0; }
-  .bar { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 32px; }
   .bar :global(.ui-btn) { margin-left: auto; }
   h3 { margin: 0; font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
   h4 { margin: 4px 0 0; font-size: var(--fs-caption); font-weight: var(--fw-semibold); }

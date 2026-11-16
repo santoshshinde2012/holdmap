@@ -162,7 +162,7 @@
 
 <style>
   .ws { --scroll-pad-bottom: 20px; display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; align-content: start; gap: 16px; height: 100%; min-height: 0; padding: 20px 24px; box-sizing: border-box; overflow: auto; max-width: 1280px; margin: 0 auto; width: 100%; }
-  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; min-height: 36px; }
   h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-title); font-weight: var(--fw-semibold); }
   .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
   /* Six views don't fit a phone width: the tab strip scrolls sideways instead of overflowing. */
@@ -180,5 +180,6 @@
   .ghead :global(.ui-btn) { margin-left: auto; }
   h3 { margin: 0; font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
   .sub { margin: 0; color: var(--muted); font-size: var(--fs-caption); }
-  .frame { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
+  .frame { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--bg); overflow: hidden; }
+  .frame :global(.canvas) { border: 0; border-radius: 0; }
 </style>

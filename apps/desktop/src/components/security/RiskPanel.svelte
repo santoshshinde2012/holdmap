@@ -59,10 +59,10 @@
         <tbody>
           {#each shown as e (e.scope + e.key)}
             <tr>
-              <td><span class="sev-pill {pill[e.band]}">{BAND_LABEL[e.band]}</span> <span class="pts">{e.points}</span></td>
+              <td class="risk"><span class="sev-pill {pill[e.band]}">{BAND_LABEL[e.band]}</span><span class="pts">{e.points}</span></td>
               <td class="key">{#if e.scope === "folder"}<code>{label(e)}</code>{:else}{label(e)}{/if}</td>
               <td class="kind">{e.scope === "agent" ? "Agent" : "Folder"}</td>
-              <td><span>{explain(e)}</span>{#if e.top.length}<ul class="top">{#each e.top as t (t.fingerprint)}<li><span class="sev-pill {t.severity}">{t.severity}</span> {t.title}</li>{/each}</ul>{/if}</td>
+              <td class="why"><span class="because">{explain(e)}</span>{#if e.top.length}<ul class="top">{#each e.top.slice(0, 3) as t (t.fingerprint)}<li><span class="sev-pill {t.severity}">{t.severity}</span><span>{t.title}</span></li>{/each}{#if e.top.length > 3}<li class="rest">+{e.top.length - 3} more</li>{/if}</ul>{/if}</td>
             </tr>
           {/each}
         </tbody>
@@ -73,20 +73,28 @@
 
 <style>
   .risks { display: grid; gap: 10px; min-width: 0; }
-  .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 32px; }
   .bar :global(.seg) { margin-left: auto; }
   h3 { margin: 0; font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); }
   .sub { display: flex; gap: 6px; align-items: baseline; margin: 0; color: var(--muted); font-size: var(--fs-caption); }
   .err { display: flex; gap: 6px; align-items: center; margin: 0; color: var(--danger); font-size: var(--fs-caption); }
   .tw { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: var(--fs-caption); }
-  th, td { padding: 8px 12px; text-align: left; vertical-align: top; border-top: 1px solid var(--border); }
-  thead th { border-top: 0; color: var(--muted); font-weight: var(--fw-semibold); white-space: nowrap; }
+  table { width: 100%; min-width: 720px; table-layout: fixed; border-collapse: collapse; font-size: var(--fs-caption); }
+  th, td { padding: 10px 12px; text-align: left; vertical-align: middle; border-top: 1px solid var(--border); }
+  thead th { height: 36px; padding-top: 0; padding-bottom: 0; border-top: 0; color: var(--muted); font-weight: var(--fw-semibold); white-space: nowrap; }
+  th:nth-child(1) { width: 148px; }
+  th:nth-child(3) { width: 84px; }
+  th:nth-child(4) { width: 46%; }
   th button { display: inline-flex; gap: 4px; align-items: center; min-height: 24px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
   th button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-  td:first-child { white-space: nowrap; }
-  .pts { color: var(--muted); font-variant-numeric: tabular-nums; }
-  .key { overflow-wrap: anywhere; min-width: 120px; }
+  .risk { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .pts { min-width: 3ch; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+  .key { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .kind { color: var(--muted); }
-  .top { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; color: var(--muted); }
+  .why { vertical-align: top; }
+  .because { display: block; min-height: 18px; line-height: var(--lh-caption); }
+  .top { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; color: var(--muted); }
+  .top li { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; align-items: center; min-height: 20px; }
+  .top li span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .top li.rest { display: block; padding-left: 80px; color: var(--muted); }
 </style>

@@ -27,9 +27,10 @@
     <Icon name={open ? "chevron-down" : "chevron"} size={12} />
     <span class="sev-pill {f.severity}">{f.severity}</span>
     <span class="title">{#if item.isNew}<span class="new-pill">New</span> {/if}{f.title}</span>
-    <span class="meta"><span class="skill">{item.subject?.name ?? f.subject}</span>{#if item.agents.length}<span class="ag">{item.agents.join(", ")}</span>{/if}{#if item.where}<code>{item.where}</code>{/if}</span>
-    <span class="by">{item.analyzerName}</span>
-    {#if f.state !== "open"}<span class="st">{f.state === "snoozed" && f.until_ms ? `snoozed ${untilText(f.until_ms)}` : f.state}</span>{/if}
+    <span class="skill" title={item.subject?.name ?? f.subject}>{item.subject?.name ?? f.subject}</span>
+    <span class="ag" title={item.agents.join(", ") || "No agent"}>{item.agents.length ? item.agents.join(", ") : "—"}</span>
+    <span class="where" title={item.where ?? "No path"}>{#if item.where}<code>{item.where}</code>{:else}—{/if}</span>
+    <span class="by" title={item.analyzerName}>{item.analyzerName}{#if f.state !== "open"} <span class="st">{f.state === "snoozed" && f.until_ms ? `snoozed ${untilText(f.until_ms)}` : f.state}</span>{/if}</span>
   </button>
   {#if open}
     <div class="body" {id}>
@@ -65,14 +66,16 @@
 <style>
   .f { border-top: 1px solid var(--border); }
   .f:first-child { border-top: 0; }
-  .head { display: grid; grid-template-columns: 12px auto minmax(0, 1.4fr) minmax(0, 1fr) auto auto; align-items: center; gap: 10px; width: 100%; padding: 9px 14px; border: 0; background: none; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+  /* One grid for every finding so skill, agent, path and analyzer sit on the same columns. */
+  .head { display: grid; grid-template-columns: 16px 72px minmax(160px, 1.5fr) minmax(96px, 0.7fr) minmax(108px, 0.8fr) minmax(140px, 1fr) 104px; align-items: center; column-gap: 12px; width: 100%; min-width: 920px; min-height: 40px; padding: 8px 14px; border: 0; background: none; color: var(--text); text-align: left; font: inherit; cursor: pointer; box-sizing: border-box; }
   .head:hover { background: var(--row-hover); }
   .head:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
   .open .head { background: var(--surface-2); }
-  .title { font-size: var(--fs-body-sm); font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta { display: flex; gap: 8px; min-width: 0; color: var(--muted); font-size: var(--fs-caption); overflow: hidden; white-space: nowrap; }
-  .meta > * { overflow: hidden; text-overflow: ellipsis; }
-  .by, .st { color: var(--muted); font-size: var(--fs-caption); white-space: nowrap; }
+  .head > :global(svg) { justify-self: center; }
+  .sev-pill { justify-self: start; }
+  .title { font-size: var(--fs-body-sm); font-weight: var(--fw-medium); }
+  .title, .skill, .ag, .where, .by, .st { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .skill, .ag, .where, .by, .st { color: var(--muted); font-size: var(--fs-caption); }
   .st { text-transform: capitalize; }
   .closed .title { color: var(--text-2); }
   code { font-family: var(--mono); font-size: var(--fs-mono-sm); }

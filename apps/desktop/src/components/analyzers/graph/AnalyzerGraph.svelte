@@ -104,7 +104,7 @@
   {:else}
     <div class="canvas" style="height: {height}px">
       <SvelteFlow bind:nodes bind:edges {nodeTypes} colorMode={dark ? "dark" : "light"}
-        fitView fitViewOptions={{ padding: 0.08, maxZoom: 1 }} minZoom={0.2} maxZoom={1.6}
+        fitView fitViewOptions={{ padding: 0.18, maxZoom: 1.35 }} minZoom={0.2} maxZoom={1.6}
         nodesDraggable={false} nodesConnectable={false} nodesFocusable={false} edgesFocusable={false} elementsSelectable={false} deleteKey={null}
         proOptions={{ hideAttribution: true }}
         ariaLabelConfig={{ "controls.fitView.ariaLabel": "Fit the graph in view", "controls.zoomIn.ariaLabel": "Zoom in", "controls.zoomOut.ariaLabel": "Zoom out" }}>
