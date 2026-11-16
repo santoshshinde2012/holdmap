@@ -63,8 +63,9 @@
   .capability-card:hover { border-color: var(--border-strong); border-top-color: var(--k); background: var(--row-hover); transform: translateY(-1px); }
   .capability-card.selected { border-color: var(--k); box-shadow: 0 0 0 1px var(--k); }
   .capability-card:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
-  .card-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .card-title b { flex: 1; font-size: var(--fs-body); line-height: var(--lh-body); overflow-wrap: anywhere; }
+  .card-title { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 34px; }
+  .card-title b { flex: 1; min-width: 0; font-size: var(--fs-body); line-height: var(--lh-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card-title :global(.badge) { flex: none; }
   .card-title > :global(svg) { color: var(--muted); }
   .symbol { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 11px; background: color-mix(in srgb, var(--k) 12%, var(--surface)); color: var(--k); }
   .purpose { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); overflow-wrap: anywhere; min-height: 3lh; }
