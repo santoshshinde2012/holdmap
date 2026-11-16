@@ -87,7 +87,7 @@ fn boxed_inline_value_slices_initialize_and_transfer_owned_values() {
     // GValue initialization requires zero-filled destinations. The optimized CI step
     // perturbs fresh malloc storage so this does not depend on a fortunate allocator state.
     for expected in [vec![], vec!["single"], vec!["first", "middle", "last"]] {
-        let values: Vec<glib::Value> = expected.iter().map(|s| s.to_value()).collect();
+        let values: Vec<glib::Value> = expected.iter().map(glib::ToValue::to_value).collect();
         let ptr = <glib::Value as ToGlibContainerFromSlice<
             '_,
             *mut glib::gobject_ffi::GValue,
