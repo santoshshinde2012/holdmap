@@ -211,6 +211,7 @@ describe("helpers", () => {
     expect(nodeSubtitle({ ...ollama, label: "Ollama", framework: { name: "Ollama", category: "app" }, kind: "service", subtitle: "Ollama", container: null })).toBe("");
     expect(nodeSubtitle({ ...ollama, label: "shop-web", framework: { name: "Next.js", category: "dev_server" }, kind: "service", subtitle: "Next.js" })).toBe("Next.js");
     expect(nodeSubtitle({ ...ollama, kind: "external", label: "External", framework: null, subtitle: null })).toBe("Internet & remote hosts");
+    expect(nodeSubtitle({ ...ollama, kind: "client", label: "Google Chrome Helper", framework: { name: "Browser", category: "app" }, project: "web", subtitle: "web" })).toBe("Browser · web · client");
   });
 });
 

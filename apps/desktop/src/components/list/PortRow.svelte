@@ -10,6 +10,7 @@
   import { tooltip } from "../../lib/tooltip";
   import type { PortEntry } from "../../lib/types";
   import { canOpen, title } from "../../lib/format";
+  import type { SocketBundle } from "../../lib/port-list";
   import { entryMemory, memLabel, memoryHint, rowBadges, rowFramework, rowLabel, rowMeta, rowStatus, type Density } from "../../lib/rows";
 
   let {
@@ -26,6 +27,8 @@
     density = "comfortable",
     posinset,
     setsize,
+    more = null,
+    ontogglebundle = () => {},
   }: {
     entry: PortEntry;
     pinned?: boolean;
@@ -38,6 +41,9 @@
     setsize?: number;
     selected: boolean;
     busy: boolean;
+    /** Other sockets of this same process, folded onto this row. */
+    more?: SocketBundle | null;
+    ontogglebundle?: () => void;
     onselect: () => void;
     onstop: () => void;
     onopen: () => void;
@@ -98,6 +104,10 @@
   <span class="name">
     <FrameworkIcon {entry} size={tile} />
     <span class="title" use:tooltip={{ text: title(entry), onlyIfTruncated: true }}>{title(entry)}</span>
+    {#if more}
+      <span class="sockets" role="presentation" title={more.open ? "Show just one row for this process" : "Show every socket from this process"}
+        onclick={(ev) => { ev.stopPropagation(); ontogglebundle(); }}>{more.open ? `Hide ${more.count}` : `${more.count} more`}</span>
+    {/if}
     {#if fw}<span class="fw">{fw}</span>{/if}
     {#if pinned}<span class="star" use:tooltip={"Pinned"}><Icon name="star" size={11} /></span>{/if}
   </span>
@@ -176,6 +186,8 @@
   .title { font-size: var(--fs-body); line-height: var(--lh-body); letter-spacing: var(--ls-body); font-weight: var(--fw-medium); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
   .row.dim .title { color: var(--text-2); }
   .fw { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 10 auto; min-width: 0; }
+  .sockets { flex: none; color: var(--accent); font-size: var(--fs-caption); line-height: var(--lh-caption); cursor: pointer; }
+  .sockets:hover { text-decoration: underline; }
   .star { display: inline-flex; flex: none; color: var(--warn); }
   .star :global(svg) { fill: currentColor; }
 

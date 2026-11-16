@@ -41,10 +41,15 @@ test("the inventory button adds MCP servers to the cards", async ({ app }) => {
   await expect(overview.getByRole("button", { name: "Read local config" })).toHaveCount(0);
 });
 
-test("typing in the overview search continues on the port list", async ({ app }) => {
-  await home(app);
-  await app.getByLabel("Search ports", { exact: true }).fill("vite");
+test("Home search filters agents, and a port number opens the list", async ({ app }) => {
+  const overview = await home(app);
+  const search = app.getByLabel("Search agents", { exact: true });
+  await search.fill("claude");
+  await expect(overview.getByRole("article", { name: "Claude Code" }).first()).toBeVisible();
+  await expect(overview.getByRole("article", { name: "Docker Desktop" })).toHaveCount(0);
+  await search.fill("3000");
   await expect(app.getByRole("listbox", { name: "Ports in use" })).toBeVisible();
+  await expect(app.getByLabel("Search ports", { exact: true })).toHaveValue("3000");
 });
 
 for (const layout of ["cards", "map"] as const) for (const width of [390, 1024, 1280, 1440]) {

@@ -7,7 +7,7 @@
   import PortRow from "./PortRow.svelte";
   import { Button } from "../ui";
   import type { Density } from "../../lib/rows";
-  import type { PortSection, PortStats, Sort } from "../../lib/port-list";
+  import type { PortSection, PortStats, SocketBundle, Sort } from "../../lib/port-list";
   import type { Explanation, PortEntry, Snapshot } from "../../lib/types";
 
   let {
@@ -43,6 +43,9 @@
     onstop,
     onopen,
     onpin,
+    hidden = new Set(),
+    bundleMore = new Map(),
+    ontogglebundle = () => {},
   }: {
     listEl?: HTMLDivElement;
     snapshot: Snapshot | null;
@@ -76,6 +79,10 @@
     onstop: (e: PortEntry) => void;
     onopen: (e: PortEntry) => void;
     onpin: (e: PortEntry) => void;
+    /** Sockets folded into another row of the same process. */
+    hidden?: ReadonlySet<string>;
+    bundleMore?: ReadonlyMap<string, SocketBundle>;
+    ontogglebundle?: (key: string) => void;
   } = $props();
   const hasRows = $derived(!!snapshot && ordered.length > 0);
 </script>
@@ -146,9 +153,12 @@
         {#if !isCollapsed}
           <div class="lrows" id="grp-{s.id}" role="presentation">
             {#each s.items as e (e.id)}
-              <PortRow entry={e} {density} pinned={pins.has(e.port)} links={links.get(e.id) ?? 0} usage={usage[e.id] ?? []} selected={e.id === selectedId} busy={!!busy[e.id]}
-                posinset={ordered.indexOf(e) + 1} setsize={ordered.length}
-                onselect={() => { onselect(e); listEl?.focus({ preventScroll: true }); }} onstop={() => onstop(e)} onopen={() => onopen(e)} onpin={() => onpin(e)} />
+              {#if !hidden.has(e.id)}
+                <PortRow entry={e} {density} pinned={pins.has(e.port)} links={links.get(e.id) ?? 0} usage={usage[e.id] ?? []} selected={e.id === selectedId} busy={!!busy[e.id]}
+                  more={bundleMore.get(e.id) ?? null} ontogglebundle={() => { const bundle = bundleMore.get(e.id); if (bundle) ontogglebundle(bundle.key); }}
+                  posinset={ordered.indexOf(e) + 1} setsize={ordered.length}
+                  onselect={() => { onselect(e); listEl?.focus({ preventScroll: true }); }} onstop={() => onstop(e)} onopen={() => onopen(e)} onpin={() => onpin(e)} />
+              {/if}
             {/each}
           </div>
         {/if}

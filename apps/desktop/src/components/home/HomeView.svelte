@@ -23,20 +23,22 @@
   import { attention, attentionAgent, hotAgents, needsByAgent, overview, type AttentionItem } from "../../lib/home";
   import { radialLayout, type FootprintNode } from "../../lib/machine-map";
   import { lanes } from "../../lib/agent-lanes";
-  import { agentColors } from "../../lib/agents";
+  import { agentColors, agentMatches } from "../../lib/agents";
   import { HOME_LAYOUTS, HOME_LAYOUT_LABEL, type HomeLayout } from "../../lib/home-layout";
   import { prefGetBoolean, prefSet } from "../../lib/prefs";
   import type { ActivitySnapshot, RecordingStatus } from "../../lib/agent-flow/model";
   import type { AgentsReport, PortEntry } from "../../lib/types";
 
   type Section = "overview" | "capabilities" | "insights";
-  let { entries, report, inventory = false, now = Date.now(), layout = "cards", onlayout, timeline = true, ontimeline, singleKeys = true, activity = null, recording = null, onopenagent, onopenentry, onview, onsecurity, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent, agentsError = null, onretryagents }: {
+  let { entries, report, inventory = false, now = Date.now(), layout = "cards", query = "", onlayout, timeline = true, ontimeline, singleKeys = true, activity = null, recording = null, onopenagent, onopenentry, onview, onsecurity, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent, agentsError = null, onretryagents }: {
     entries: PortEntry[] | null;
     report: AgentsReport | null;
     /** Whether reading agents' MCP/skills/permission files is turned on. */
     inventory?: boolean;
     /** Time of the latest scan. */
     now?: number;
+    /** Home's own search: agents, folders and PIDs. A port number is handled by the app shell. */
+    query?: string;
     /** Cards, Map or 3D; the app shell persists it and binds the V shortcut. */
     layout?: HomeLayout;
     onlayout?: (l: HomeLayout) => void;
@@ -85,12 +87,14 @@
   });
   /** Remote-host groups the user expanded on the map. */
   let expanded = $state<ReadonlySet<string>>(new Set());
-  const groups = $derived(radialLayout(report?.agents ?? [], undefined, undefined, undefined, undefined, expanded));
-  const rows = $derived(lanes(report, entries, now));
+  /** Search filters what is drawn. Headline counts stay for the whole machine. */
+  const shown = $derived(report ? { ...report, agents: report.agents.filter((a) => agentMatches(a, query)) } : null);
+  const groups = $derived(radialLayout(shown?.agents ?? [], undefined, undefined, undefined, undefined, expanded));
+  const rows = $derived(lanes(shown, entries, now));
   /** Nothing observed at all: the first minute on a quiet machine. One calm message instead of empty cards or a bare map. */
   const idle = $derived(!!report && !!entries && report.agents.length === 0 && entries.length === 0);
   const hot = $derived(hotAgents(needs));
-  const colors = $derived(agentColors(report?.agents ?? []));
+  const colors = $derived(agentColors(shown?.agents ?? []));
   const LAYOUT_ICON: Record<HomeLayout, string> = { cards: "layers", map: "radar", "3d": "box" };
   const layoutOptions = HOME_LAYOUTS.map((l) => ({ value: l, label: HOME_LAYOUT_LABEL[l], icon: LAYOUT_ICON[l], title: `${HOME_LAYOUT_LABEL[l]} · V` }));
 
@@ -113,7 +117,7 @@
     { id: "agents", value: o.agents, label: "agents", go: () => onview("agents") },
     { id: "ports", value: o.ports, label: "listening", go: () => onview("list") },
     { id: "dev", value: o.devServers, label: "dev servers", go: () => onview("list") },
-    { id: "exposed", value: o.exposed, label: "exposed", tone: o.exposed ? "warn" : undefined, go: () => onview("list") },
+    { id: "exposed", value: o.exposedDev, label: "exposed dev", meta: o.exposedOther ? `${o.exposedOther} system` : undefined, tone: o.exposedDev ? "warn" : undefined, go: () => onview("list") },
     ...(skillSec ? [{ id: "skill-findings", value: skillSec.open, label: "skill findings", meta: skillSec.skills ? `in ${skillSec.skills} ${skillSec.skills === 1 ? "skill" : "skills"}` : undefined, tone: skillSec.open ? "warn" : "ok", go: () => onsecurity?.() ?? onview("agents") } satisfies SummaryStat] : []),
     ...(o.mcpConfigured !== null ? [{ id: "mcp", value: o.mcpRunning, of: o.mcpConfigured, label: "MCP running", go: () => onview("agents") } satisfies SummaryStat] : []),
   ]);
@@ -193,9 +197,11 @@
       <div class="main">
         {#if idle}
           <EmptyPanel icon="bot" title="No agents or dev servers running" hint="Start Claude Code, Cursor, Codex or a dev server and it shows up here within a few seconds." />
+        {:else if query.trim() && shown && shown.agents.length === 0}
+          <EmptyPanel icon="search" title="No matching agents" hint={`No agent, folder or PID matches “${query.trim()}”.`} />
         {:else if layout === "cards"}
-          {#if report}
-            <AgentCards {report} {entries} {needs} {colors} {now} {selected} {active} onhover={(id) => (hovered = id)} onselect={select}
+          {#if shown}
+            <AgentCards report={shown} {entries} {needs} {colors} {now} {selected} {active} onhover={(id) => (hovered = id)} onselect={select}
               onopen={(id) => onopenagent(id)} onport={port} onstop={onstopagent} />
           {:else if agentsError}
             <EmptyPanel icon="alert" title="Couldn't look up the agents" hint={agentsError}>
@@ -215,7 +221,7 @@
               {:else if narrow}
                 <!-- The list of agents below stands in on a narrow window. -->
               {:else if Machine3D}
-                <Machine3D {report} {entries} {hot} needs={needsByAgent(needs, report)} {colors} trust={trustStore.report?.skills ?? []} {selected} {active} {inventory} {singleKeys} {activity} {recording} expanded={focused} onexpand={(on) => (focus3d = on)} {oninventory}
+                <Machine3D report={shown} {entries} {hot} needs={needsByAgent(needs, report)} {colors} trust={trustStore.report?.skills ?? []} {selected} {active} {inventory} {singleKeys} {activity} {recording} expanded={focused} onexpand={(on) => (focus3d = on)} {oninventory}
                   onselectagent={setSelected} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} onport={port} ondetails={side ? (d) => (details3d = d) : undefined} fallback={machineMap} />
               {:else if machine3dError}
                 <p class="clear">Couldn't load the 3D view. <button type="button" class="inv" onclick={() => onlayout?.("map")}>Show the Map</button></p>
@@ -246,7 +252,7 @@
           <div class="needs-scroll">
             <NeedsList items={needs} lit={activeNeeds} onopen={openItem} onstop={stopItem} onhover={(i) => (hovered = i ? attentionAgent(i, report) : null)} />
           </div>
-        {:else if entries && report}
+        {:else if entries && report && !trustAlerts.length}
           <EmptyPanel compact tone="ok" icon="check" title="All clear" hint="Nothing needs you right now." />
         {:else}
           <p class="clear" aria-busy="true">…</p>

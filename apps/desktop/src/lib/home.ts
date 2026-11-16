@@ -12,6 +12,10 @@ export interface Overview {
   ports: number | null;
   /** Listeners reachable from other machines (bound to all interfaces). */
   exposed: number | null;
+  /** Exposed dev servers: the ones a person can usually stop. */
+  exposedDev: number | null;
+  /** Exposed listeners that are not dev servers (AirPlay, browsers, system services). */
+  exposedOther: number | null;
   /** Configured MCP servers across inspected agents; null when none were inspected. */
   mcpConfigured: number | null;
   /** Of those, the ones an agent's process runs right now. */
@@ -41,6 +45,8 @@ export function overview(entries: PortEntry[] | null, report: AgentsReport | nul
     devServers: entries ? entries.filter((e) => e.is_dev).length : null,
     ports: entries ? entries.length : null,
     exposed: entries ? entries.filter((e) => e.exposure === "all_interfaces").length : null,
+    exposedDev: entries ? entries.filter((e) => e.exposure === "all_interfaces" && e.is_dev).length : null,
+    exposedOther: entries ? entries.filter((e) => e.exposure === "all_interfaces" && !e.is_dev).length : null,
     mcpConfigured: summaries.length ? summaries.reduce((n, s) => n + s.mcp, 0) : null,
     mcpRunning: summaries.length ? summaries.reduce((n, s) => n + s.running, 0) : null,
   };

@@ -52,7 +52,7 @@
   import { localLinkCounts, nodeForEntry } from "./lib/graph";
   import { appCommands, nextProto } from "./lib/app-commands";
   import { seconds, stopTarget, title, url, canOpen, type Filters } from "./lib/format";
-  import { clearedFilters, filtersActive as isFiltering, portSections, portStats, queryPort as parseQueryPort, reachablePorts, visiblePorts } from "./lib/port-list";
+  import { bundleView, clearedFilters, filtersActive as isFiltering, portSections, portStats, queryPort as parseQueryPort, reachablePorts, visiblePorts } from "./lib/port-list";
   import { prefGet, prefSet } from "./lib/prefs";
   import { AppPrefs, PANE_DEFAULT, PANE_MAX, PANE_MIN } from "./lib/app-prefs.svelte";
   import { commandForShell } from "./lib/shell";
@@ -155,6 +155,9 @@
     history.replaceState(history.state, "", want || at.pathname + at.search);
   });
   let agentQuery = $state("");
+  /** Home search. A bare port number leaves Home and opens that port on the list. */
+  let homeQuery = $state("");
+  let expandedBundles = $state<Set<string>>(new Set());
   let agentsRefreshing = $state(false);
   let agentsError = $state<string | null>(null);
   let agentsStarted = $state(0);
@@ -267,8 +270,14 @@
 
   const visible = $derived(visiblePorts(snapshot?.entries ?? [], filters, prefs.sort));
   const sections = $derived(portSections(visible, pins, prefs.sort, graph));
-  /** Rows the keyboard can reach: everything except collapsed sections (untitled sections never collapse). */
-  const ordered = $derived(reachablePorts(sections, prefs.collapsed));
+  const bundles = $derived(bundleView(sections, expandedBundles, filters.query.trim() !== ""));
+  /** Rows the keyboard can reach: everything except collapsed sections and sockets folded into one process. */
+  const ordered = $derived(reachablePorts(sections, prefs.collapsed, bundles.hidden));
+  function toggleBundle(key: string) {
+    const next = new Set(expandedBundles);
+    if (!next.delete(key)) next.add(key);
+    expandedBundles = next;
+  }
   const sectionOf = (id: string) => sections.find((s) => s.items.some((e) => e.id === id));
   function setCollapsed(id: string, on: boolean) { if (prefs.collapsed.has(id) !== on) prefs.collapsed = toggled(prefs.collapsed, id); }
   // A graph selection must not depend on hidden List filters or collapsed groups.
@@ -1163,8 +1172,14 @@
       } catch (e) { toast("error", "Couldn't apply a setting", String(e)); }
     }
   }
-  // Home has no list of its own: typing in its search box continues on the port list.
-  $effect(() => { if (prefs.view === "home" && filters.query) prefs.view = "list"; });
+  // A port number typed on Home opens the list. Names, folders and PIDs stay on Home and filter the cards.
+  $effect(() => {
+    const port = parseQueryPort(homeQuery);
+    if (prefs.view !== "home" || port === null) return;
+    filters.query = String(port);
+    homeQuery = "";
+    prefs.view = "list";
+  });
   /** Home → one agent, in a single click: the Agents view with that agent selected. */
   function openAgent(id: string, section: "overview" | "capabilities" | "insights" = "overview") {
     const a = agentsReport?.agents.find((x) => x.id === id);
@@ -1199,7 +1214,7 @@
   }, {
     stopCluster: (name) => void requestClusterStop(name), stopAllDev: () => void requestStopAllDev(), installUpdate: () => void installUpdate(), togglePin: (e) => void togglePin(e),
     goToPort: (e) => { prefs.view = "list"; clearFilters(); selectEntry(e); }, stop: (e) => void requestStop(e, false), openInBrowser: (e) => void open(e),
-    scheduleShutdown: () => void openShutdown("schedule"), checkPort: (port) => { filters.query = String(port); }, refresh: () => void refresh(true), schedules: openSchedules,
+    scheduleShutdown: () => void openShutdown("schedule"), checkPort: (port) => { filters.query = String(port); prefs.view = "list"; }, refresh: () => void refresh(true), schedules: openSchedules,
     findFree: (near) => void findFree(near), setFilters: (patch) => Object.assign(filters, patch), toggleAllSockets: () => { filters.all = !filters.all; void refresh(); }, clearFilters,
     setTheme: (t) => (prefs.theme = t), setSort: (s) => (prefs.sort = s), help: () => (showHelp = true), toggleSide: () => void toggleSide(),
     toggleGraph: () => toggleView("graph"), toggleAgents: () => toggleView("agents"), settings: (section) => openSettings(section), downloads: () => void openDesktopHelp("downloads"),
@@ -1437,7 +1452,7 @@
     onpalette={() => (showPalette = true)} onrefresh={() => refresh(true)} onstoprecording={() => void capture.finish()}
     onhistory={openHistory} onschedules={openSchedules} onremote={() => (showRemote = true)} ontheme={cycleTheme} onsettings={() => openSettings()}>
     {#snippet searchbox()}
-      <SearchBox view={prefs.view} capabilities={prefs.agentSection === "capabilities"} controls={searchTarget} singleKeys={prefs.singleKeyShortcuts} bind:input={search} bind:agentQuery bind:graphQuery bind:portQuery={filters.query} />
+      <SearchBox view={prefs.view} capabilities={prefs.agentSection === "capabilities"} controls={searchTarget} singleKeys={prefs.singleKeyShortcuts} bind:input={search} bind:agentQuery bind:graphQuery bind:portQuery={filters.query} bind:homeQuery />
     {/snippet}
   </TitleBar>
 
@@ -1458,7 +1473,7 @@
         {/if}
       </div>
     {:else if prefs.view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} agentsError={agentsError ?? (agentsReport ? null : error)} onretryagents={() => refresh(true)} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} singleKeys={prefs.singleKeyShortcuts} {activity} {recording} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
+      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} query={homeQuery} agentsError={agentsError ?? (agentsReport ? null : error)} onretryagents={() => refresh(true)} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} singleKeys={prefs.singleKeyShortcuts} {activity} {recording} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
         onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (prefs.view = v)} onsecurity={() => { prefs.view = "agents"; prefs.agentSection = "insights"; securityTab.value = "findings"; }} oninventory={enableInventory} />
     {:else if prefs.view === "agents"}
       <div class="graph-wrap agents-wrap" data-capture-area>
@@ -1478,7 +1493,7 @@
         {/if}
       </div>
     {:else}
-    <PortList bind:listEl {snapshot} {error} {refreshing} {sections} {ordered} collapsed={prefs.collapsed} sort={prefs.sort} density={prefs.density} {pins} links={linkCount} {usage} {selectedId} {busy}
+    <PortList bind:listEl {snapshot} {error} {refreshing} {sections} {ordered} collapsed={prefs.collapsed} sort={prefs.sort} density={prefs.density} {pins} links={linkCount} {usage} {selectedId} {busy} hidden={bundles.hidden} bundleMore={bundles.more} ontogglebundle={toggleBundle}
       query={filters.query} {queryPort} {filtersActive} {stats} {checkingPort} {freePort} {portCheckError}
       onretry={() => refresh(true)} oncheckagain={() => portCheckRetry++} onclearfilters={clearFilters} onfindfree={findFree} oncopy={copy} onpinfree={() => openPin(null)}
       ontogglesection={setCollapsed} onselect={(e) => selectEntry(e)} onstop={(e) => requestStop(e, false)} onopen={open} onpin={togglePin} />

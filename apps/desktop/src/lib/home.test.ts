@@ -17,11 +17,13 @@ describe("overview", () => {
     expect(o.ports).toBe(entries.length);
     expect(o.devServers).toBe(entries.filter((e) => e.is_dev).length);
     expect(o.exposed).toBe(entries.filter((e) => e.exposure === "all_interfaces").length);
+    expect(o.exposedDev).toBe(entries.filter((e) => e.exposure === "all_interfaces" && e.is_dev).length);
+    expect(o.exposedOther).toBe(entries.filter((e) => e.exposure === "all_interfaces" && !e.is_dev).length);
     expect(o.agents).toBe(report.agents.length);
   });
 
   it("keeps missing data unknown instead of zero", () => {
-    expect(overview(null, null)).toEqual({ agents: null, devServers: null, ports: null, exposed: null, mcpConfigured: null, mcpRunning: null });
+    expect(overview(null, null)).toEqual({ agents: null, devServers: null, ports: null, exposed: null, exposedDev: null, exposedOther: null, mcpConfigured: null, mcpRunning: null });
   });
 });
 

@@ -3,7 +3,7 @@
   import { TextField } from "../ui";
   import type { View } from "./ViewToolbar.svelte";
 
-  let { view, capabilities, singleKeys, controls, input = $bindable(), agentQuery = $bindable(), graphQuery = $bindable(), portQuery = $bindable() }: {
+  let { view, capabilities, singleKeys, controls, input = $bindable(), agentQuery = $bindable(), graphQuery = $bindable(), portQuery = $bindable(), homeQuery = $bindable("") }: {
     view: View;
     /** Id of the results this field filters, when they are on screen (aria-controls must resolve). */
     controls?: string;
@@ -14,11 +14,16 @@
     agentQuery: string;
     graphQuery: string;
     portQuery: string;
+    /** Home filters agents, folders and PIDs. A port number is sent to the list by the shell. */
+    homeQuery?: string;
   } = $props();
   const hint = $derived(singleKeys ? "/" : undefined);
 </script>
 
-{#if view === "agents"}
+{#if view === "home"}
+  <TextField bind:input bind:value={homeQuery} type="search" variant="filled" icon="search" label="Search agents" labelHidden
+    placeholder="Search agents, folders, PIDs…" clearable kbdHint={hint} spellcheck="false" autocomplete="off" aria-controls={controls} />
+{:else if view === "agents"}
   <TextField bind:input bind:value={agentQuery} type="search" variant="filled" icon="search" label="Search agents" labelHidden
     placeholder={capabilities ? "Search MCP, skills, sources, PIDs…" : "Search agents, tools, folders, PIDs…"} clearable kbdHint={hint}
     spellcheck="false" autocomplete="off" aria-controls={controls} />

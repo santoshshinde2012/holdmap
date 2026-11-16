@@ -87,7 +87,9 @@
       <div title={agent.cpu_unknown ?? "CPU of one core, summed over its processes"}><dt><Icon name="cpu" size={12} />CPU</dt><dd class:muted={!!agent.cpu_unknown}>{cpuReading(agent)}</dd></div>
       <div><dt><Icon name="folder" size={12} />Projects</dt><dd>{model.projects.length}</dd></div>
       <div class:warn={exposed > 0}><dt><Icon name="plug" size={12} />Ports</dt><dd>{model.ports.length}{#if exposed}<small>{`${exposed} exposed`}</small>{/if}</dd></div>
-      {#if model.mcp === null && model.skills === null}
+      {#if model.configOff}
+        <!-- Inventory is off: one consent action in the header, not a "Not read" row on every card. -->
+      {:else if model.mcp === null && model.skills === null}
         <div class="wide" title={model.unknownReason ?? undefined}><dt><Icon name="server" size={12} />MCP &amp; skills</dt><dd>{@render unknown()}</dd></div>
       {:else}
         <div title={model.unknownReason ?? undefined}><dt><Icon name="server" size={12} />MCP</dt>
