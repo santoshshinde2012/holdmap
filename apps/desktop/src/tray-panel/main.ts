@@ -19,6 +19,12 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => appl
 addEventListener("storage", () => applyTheme());
 addEventListener("focus", () => applyTheme());
 
+// Anything the panel didn't catch is logged, never left as a silent unhandled rejection.
+addEventListener("unhandledrejection", (e) => {
+  e.preventDefault();
+  console.error("[holdmap tray]", e.reason);
+});
+
 let demo = demoPanel();
 // `npm run dev` without ?demo=1: this machine's agents through the Vite live collector (dev only).
 const live = !inApp && import.meta.env.DEV && useLiveCollector() ? import("../lib/tray-live").then((m) => m.liveTrayLoader(demo)) : null;
