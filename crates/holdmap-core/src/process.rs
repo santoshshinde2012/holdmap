@@ -752,7 +752,7 @@ pub(crate) mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn untruncated_name_recovers_linux_comm_names() {
-        let v = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let v = |a: &[&str]| a.iter().map(ToString::to_string).collect::<Vec<_>>();
         // A retitled npm process: the whole title is argv[0].
         let npm = v(&["npm exec vite preview --port 4173"]);
         assert_eq!(
