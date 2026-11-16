@@ -5,8 +5,8 @@ before features. Report security problems privately as described in [SECURITY.md
 
 ## Setup
 
-You need Rust stable (selected by `rust-toolchain.toml`, minimum 1.95) and Node.js 22.12 or newer for the
-desktop app and website, matching CI. Linux desktop builds also need
+You need Rust stable (selected by `rust-toolchain.toml`, minimum 1.95) and Node.js 22.23.4 or newer on the 22 line
+(or 24.15 or newer) for the desktop app and website, matching CI. Linux desktop builds also need
 `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev`.
 If you use nvm, run `nvm use` from the repository root to select the version in `.nvmrc`.
 
