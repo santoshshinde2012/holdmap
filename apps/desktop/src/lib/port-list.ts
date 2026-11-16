@@ -34,9 +34,47 @@ export function portSections(visible: readonly PortEntry[], pins: ReadonlySet<nu
   return [...head, ...GROUPS.map((g) => ({ ...g, id: g.id as string, items: rest.filter((e) => groupOf(e) === g.id) }))].filter((g) => g.items.length);
 }
 
-/** Rows the keyboard can reach: collapsed titled sections are skipped (untitled ones never collapse). */
-export function reachablePorts(sections: readonly PortSection[], collapsed: ReadonlySet<string>): PortEntry[] {
-  return sections.flatMap((s) => (s.title && collapsed.has(s.id) ? [] : s.items));
+/** Rows the keyboard can reach: collapsed titled sections are skipped (untitled ones never collapse).
+ *  `hidden` drops sockets folded into another row of the same process. */
+export function reachablePorts(sections: readonly PortSection[], collapsed: ReadonlySet<string>, hidden: ReadonlySet<string> = new Set()): PortEntry[] {
+  return sections.flatMap((s) => (s.title && collapsed.has(s.id) ? [] : s.items.filter((e) => !hidden.has(e.id))));
+}
+
+/** Fold key for repeated non-dev sockets of one process. Dev servers, containers and databases stay one row each. */
+export function socketBundleKey(e: PortEntry): string | null {
+  if (e.is_dev || e.container) return null;
+  const group = groupOf(e);
+  if (group === "dev" || group === "data" || group === "containers") return null;
+  const pid = e.process?.pid ?? e.pid;
+  return pid ? String(pid) : null;
+}
+
+export interface SocketBundle { key: string; count: number; open: boolean }
+export interface BundleView { hidden: Set<string>; more: Map<string, SocketBundle> }
+
+/**
+ * Three or more non-dev sockets of one process collapse onto the first row.
+ * A search shows every match. `expanded` keys are process ids the user opened.
+ */
+export function bundleView(sections: readonly PortSection[], expanded: ReadonlySet<string>, searching: boolean): BundleView {
+  const hidden = new Set<string>();
+  const more = new Map<string, SocketBundle>();
+  if (searching) return { hidden, more };
+  for (const section of sections) {
+    const groups = new Map<string, PortEntry[]>();
+    for (const entry of section.items) {
+      const key = socketBundleKey(entry);
+      if (!key) continue;
+      groups.set(key, [...(groups.get(key) ?? []), entry]);
+    }
+    for (const [key, group] of groups) {
+      if (group.length < 3) continue;
+      const open = expanded.has(key);
+      more.set(group[0].id, { key, count: group.length - 1, open });
+      if (!open) for (const entry of group.slice(1)) hidden.add(entry.id);
+    }
+  }
+  return { hidden, more };
 }
 
 export function portStats(entries: readonly PortEntry[]): PortStats {

@@ -128,9 +128,27 @@ export function processRows(a: Agent): { process: AgentProcess; depth: number }[
   return out;
 }
 
-/** Per-agent identity colour, cycled: edges and badges share it so each agent's footprint reads as a group.
- *  A dedicated palette, so no agent ever looks like an OK, warning or error status. */
+/** Per-agent identity colour. A dedicated palette, so no agent ever looks like an OK, warning or error status.
+ *  The same product keeps one colour (two Claude sessions match; Codex does not look like Claude).
+ *  Agents with no name, as in tests, still take the next palette slot in order. */
 export const AGENT_COLORS = ["var(--agent-1)", "var(--agent-2)", "var(--agent-3)", "var(--agent-4)", "var(--agent-5)"];
+
+/** Known products get fixed slots so a hash cannot paint Claude and Codex the same. */
+const PRODUCT_COLOR: Record<string, number> = {
+  "Claude Code": 0,
+  "Codex CLI": 1,
+  "Cursor": 2,
+  "Cursor Agent": 3,
+  "Docker Desktop": 4,
+};
+
+function colorSlot(name: string): number {
+  const known = PRODUCT_COLOR[name];
+  if (known !== undefined) return known;
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 33 + name.charCodeAt(i)) >>> 0;
+  return hash % AGENT_COLORS.length;
+}
 
 /** "PostgreSQL · container shop-db-1" → "PostgreSQL". */
 export const shortLabel = (label: string) => label.split(" · ")[0] || label;
@@ -741,8 +759,8 @@ export interface FootFlowOptions {
 }
 
 /** Every agent's colour by id, in report order: one source for cards, map and timeline. */
-export function agentColors(agents: readonly { id: string }[]): Map<string, string> {
-  return new Map(agents.map((a, i) => [a.id, AGENT_COLORS[i % AGENT_COLORS.length]]));
+export function agentColors(agents: readonly { id: string; name?: string }[]): Map<string, string> {
+  return new Map(agents.map((a, i) => [a.id, AGENT_COLORS[(a.name ? colorSlot(a.name) : i) % AGENT_COLORS.length]]));
 }
 
 /** The agent's colour, by its position in the report. */
@@ -854,14 +872,20 @@ export function agentMeta(a: Agent, nowMs: number, vendor = true): string {
 }
 
 /**
- * What tells an agent apart from others of the same product, as the tray does: its first
- * folder, the agent that started it, or its PID when it shares a name and has neither.
+ * What tells an agent apart from others of the same product: its first folder, the agent
+ * that started it, or its PID. A folder shared by two sessions of the same name is not
+ * enough, so the PID is added (`framesleuth · PID 22475`).
  */
 export function agentPlace(a: Agent, all: readonly Agent[]): string | null {
-  if (a.folders[0]) return a.folders[0].label;
+  const sameName = all.filter((b) => b.name === a.name);
+  const folder = a.folders[0]?.label;
+  if (folder) {
+    const shared = sameName.filter((b) => b.folders[0]?.label === folder).length > 1;
+    return shared ? `${folder} · PID ${a.pid}` : folder;
+  }
   const parent = a.parent ? all.find((b) => b.id === a.parent) : undefined;
   if (parent) return `in ${parent.name}`;
-  return all.filter((b) => b.name === a.name).length > 1 ? `PID ${a.pid}` : null;
+  return sameName.length > 1 ? `PID ${a.pid}` : null;
 }
 
 /** Compact resource line for skim surfaces: "520 MB · 3.4% · 15 processes". */
@@ -883,8 +907,13 @@ export function folderSourceLabel(source: Agent["folders"][number]["source"]): s
   return source === "agent" ? "working dir" : source === "child" ? "child cwd" : "recent";
 }
 
-/** Monogram for an agent tile: "Claude Code" → "CC", "Cursor" → "Cu". */
+/** Monogram for an agent tile: "Claude Code" → "CC", "Cursor" → "Cu".
+ *  Codex CLI would also be "CC" (C from Codex, C from CLI), so it takes "Cx". */
+const MONOGRAM: Record<string, string> = { "Codex CLI": "Cx" };
+
 export function monogram(name: string): string {
+  const known = MONOGRAM[name];
+  if (known) return known;
   const words = name.split(/\s+/).filter(Boolean);
   if (words.length > 1) return (words[0][0] + words[1][0]).toUpperCase();
   return name.slice(0, 2);

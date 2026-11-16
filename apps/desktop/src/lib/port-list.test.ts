@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MOCK_SNAPSHOT } from "./mock";
-import { clearedFilters, filtersActive, portSections, portStats, queryPort, reachablePorts, visiblePorts } from "./port-list";
+import { bundleView, clearedFilters, filtersActive, portSections, portStats, queryPort, reachablePorts, visiblePorts } from "./port-list";
 import type { Filters } from "./format";
 
 const none: Filters = { query: "", all: false, proto: "any", dev: false, mine: false, exposed: false };
@@ -32,6 +32,20 @@ describe("port list view model", () => {
     const sections = portSections(visiblePorts(entries, none, "group"), new Set(), "group", null);
     const reach = reachablePorts(sections, new Set([sections[0].id]));
     expect(reach.length).toBe(sections.slice(1).reduce((n, s) => n + s.items.length, 0));
+  });
+
+  it("folds repeated non-dev sockets of one process until they are opened or searched", () => {
+    const base = entries.find((e) => e.process && !e.is_dev)!;
+    const clones = [0, 1, 2, 3].map((i) => ({ ...base, id: `bundle-${i}`, port: 41000 + i, is_dev: false, container: null, protected: false, is_mine: true, framework: null, process: { ...base.process!, pid: 4242, name: "Chrome Helper" } }));
+    const sections = portSections(clones, new Set(), "group", null);
+    const folded = bundleView(sections, new Set(), false);
+    expect(folded.hidden.size).toBe(3);
+    expect(folded.more.get(clones[0].id)).toMatchObject({ key: "4242", count: 3, open: false });
+    expect(reachablePorts(sections, new Set(), folded.hidden).map((e) => e.id)).toEqual([clones[0].id]);
+    expect(bundleView(sections, new Set(["4242"]), false).hidden.size).toBe(0);
+    expect(bundleView(sections, new Set(), true).hidden.size).toBe(0);
+    const devs = clones.map((e) => ({ ...e, is_dev: true }));
+    expect(bundleView(portSections(devs, new Set(), "group", null), new Set(), false).hidden.size).toBe(0);
   });
 
   it("counts, port queries and filter state", () => {

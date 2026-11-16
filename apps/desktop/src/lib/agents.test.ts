@@ -229,6 +229,7 @@ describe("cards", () => {
 
   it("helpers", () => {
     expect(monogram("Claude Code")).toBe("CC");
+    expect(monogram("Codex CLI")).toBe("Cx");
     expect(monogram("Cursor")).toBe("Cu");
     expect(shortLabel("PostgreSQL · container shop-db-1")).toBe("PostgreSQL");
     expect(tildePath("/Users/dev/code/x", "/Users/dev")).toBe("~/code/x");
@@ -374,5 +375,21 @@ describe("agent colours", () => {
     const { agentColors, AGENT_COLORS } = await import("./agents");
     const m = agentColors([{ id: "a" }, { id: "b" }]);
     expect([m.get("a"), m.get("b")]).toEqual([AGENT_COLORS[0], AGENT_COLORS[1]]);
+  });
+
+  it("gives one product one colour, and Codex a different colour from Claude", async () => {
+    const { agentColors, agentPlace } = await import("./agents");
+    const m = agentColors([
+      { id: "1", name: "Claude Code" },
+      { id: "2", name: "Claude Code" },
+      { id: "3", name: "Codex CLI" },
+    ]);
+    expect(m.get("1")).toBe(m.get("2"));
+    expect(m.get("1")).not.toBe(m.get("3"));
+    const base = report().agents.find((agent) => agent.folders[0])!;
+    const a = { ...base, id: "a", pid: 11, folders: [{ ...base.folders[0], label: "framesleuth" }] };
+    const b = { ...a, id: "b", pid: 22 };
+    expect(agentPlace(a, [a, b])).toBe("framesleuth · PID 11");
+    expect(agentPlace(a, [a])).toBe("framesleuth");
   });
 });

@@ -217,14 +217,13 @@ impl<'a> TopologyBuilder<'a> {
         let framework = crate::project::detect_framework(p, project.as_ref());
         let pids = self.tree_pids(root);
         let (cpu, mem) = self.usage(&pids);
-        let label = project
+        // Name the process, not the project it was started in. A browser sitting in a
+        // repo called "web" is Chrome (or "Browser"), not another copy of the dev server.
+        let label = p.name.clone();
+        let subtitle = project
             .as_ref()
             .map(|d| d.info.name.clone())
-            .unwrap_or_else(|| p.name.clone());
-        let subtitle = framework
-            .as_ref()
-            .map(|f| f.name.clone())
-            .or_else(|| Some(p.name.clone()))
+            .or_else(|| framework.as_ref().map(|f| f.name.clone()))
             .filter(|s| *s != label);
         let protected = self.policy.protection(p, t).is_protected();
         let is_dev = project.is_some() && !protected

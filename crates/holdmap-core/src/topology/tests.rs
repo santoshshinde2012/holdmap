@@ -184,6 +184,9 @@ fn builds_service_graph_with_dependencies() {
     assert!(web.pids.contains(&21));
     let worker = g.node("svc:50").unwrap();
     assert_eq!(worker.kind, NodeKind::Client);
+    // Clients are the process, not the project folder they were started in.
+    assert_eq!(worker.label, "node");
+    assert_eq!(worker.subtitle.as_deref(), Some("worker"));
 
     let e = edge(&g, "svc:20", "svc:30").expect("web → api");
     assert_eq!((e.kind, e.port, e.connections), (EdgeKind::Local, 8080, 1));

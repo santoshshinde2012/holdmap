@@ -59,6 +59,21 @@ describe("HomeView cards", () => {
     expect(second.textContent).not.toMatch(/up \d+d/);
   });
 
+  it("filters cards from the home search without changing the summary", () => {
+    const view = render(HomeView, props({ layout: "cards", query: "claude code" }));
+    expect(view.getAllByRole("article", { name: "Claude Code" }).length).toBeGreaterThan(0);
+    expect(view.queryByRole("article", { name: "Docker Desktop" })).toBeNull();
+    expect(view.getByRole("button", { name: /^Agents / })).toBeTruthy();
+  });
+
+  it("leaves MCP off the cards until config is turned on", () => {
+    const report = mockAgents(undefined, true);
+    const off = { ...report, agents: report.agents.map((a) => ({ ...a, capabilities: undefined })) };
+    const view = render(HomeView, props({ layout: "cards", report: off, oninventory: vi.fn() }));
+    expect(view.container.textContent).not.toContain("Not read");
+    expect(view.getByRole("button", { name: "Read local config" })).toBeTruthy();
+  });
+
   it("marks unreadable configuration unknown with its reason, never zero", () => {
     const view = render(HomeView, props({ layout: "cards" }));
     const docker = card(view, "Docker Desktop");
