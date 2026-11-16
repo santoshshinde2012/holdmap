@@ -261,7 +261,10 @@ mod tests {
             ppid: Some(parent),
             name: name.into(),
             exe: None,
-            cmdline: command.iter().map(|s| s.to_string()).collect(),
+            cmdline: command
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
             cwd: None,
             uid: Some(1000),
             user: Some("dev".into()),

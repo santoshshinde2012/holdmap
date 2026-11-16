@@ -39,7 +39,7 @@ pub(super) fn machine_bytes() -> ObservedU64 {
         let Some(rest) = line.strip_prefix("MemTotal:") else {
             continue;
         };
-        let digits: String = rest.chars().filter(|c| c.is_ascii_digit()).collect();
+        let digits: String = rest.chars().filter(char::is_ascii_digit).collect();
         return digits
             .parse::<u64>()
             .map(|kb| ObservedU64::observed(kb.saturating_mul(1024)))

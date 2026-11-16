@@ -238,7 +238,7 @@ impl Session {
                     observer.completed(&ToolCallCompleted {
                         call_id,
                         finished_at_ms: holdmap_core::util::now_ms(),
-                        duration_ms: began.elapsed().as_millis().min(u64::MAX as u128) as u64,
+                        duration_ms: began.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
                         output_bytes: serde_json::to_vec(&response)
                             .map_or(0, |bytes| bytes.len() as u64),
                         outcome: if error_code.is_some() {

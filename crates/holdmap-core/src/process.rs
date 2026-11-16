@@ -198,7 +198,9 @@ impl ProcessTable {
     /// Capture using a long-lived [`System`], so CPU usage is measured since the previous call.
     pub fn capture_with(sys: &mut System) -> std::io::Result<Self> {
         sys.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind());
-        let mut cache = USERS.lock().unwrap_or_else(|e| e.into_inner());
+        let mut cache = USERS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let unknown = |c: &UserCache| {
             sys.processes().values().any(|p| {
                 p.user_id()
@@ -266,7 +268,7 @@ impl ProcessTable {
                 }
                 ProcessInfo {
                     pid,
-                    ppid: p.parent().map(|pp| pp.as_u32()),
+                    ppid: p.parent().map(sysinfo::Pid::as_u32),
                     name,
                     exe: p.exe().map(PathBuf::from),
                     cmdline,
@@ -515,7 +517,7 @@ pub fn sysinfo_start_time(pid: u32) -> Option<u64> {
         true,
         ProcessRefreshKind::nothing().without_tasks(),
     );
-    sys.process(p).map(|p| p.start_time())
+    sys.process(p).map(sysinfo::Process::start_time)
 }
 
 #[cfg(test)]
@@ -542,12 +544,12 @@ pub(crate) mod tests {
             ppid: Some(ppid),
             name: name.into(),
             exe: None,
-            cmdline: cmd.iter().map(|s| s.to_string()).collect(),
+            cmdline: cmd.iter().map(std::string::ToString::to_string).collect(),
             cwd: None,
             uid: Some(1000),
             user: Some("dev".into()),
             start_time: 1_700_000_000,
-            start_token: 1000 + pid as u64,
+            start_token: 1000 + u64::from(pid),
             memory_bytes: 1024,
             cpu_percent: 0.0,
         }
@@ -724,7 +726,11 @@ pub(crate) mod tests {
 
     #[test]
     fn retitled_processes_do_not_leak_their_environment() {
-        let v = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let v = |a: &[&str]| {
+            a.iter()
+                .map(std::string::ToString::to_string)
+                .collect::<Vec<_>>()
+        };
         let next = v(&[
             "next-server (v16.3.6)",
             "npm_package_x=^0.45.3",
@@ -746,7 +752,7 @@ pub(crate) mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn untruncated_name_recovers_linux_comm_names() {
-        let v = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let v = |a: &[&str]| a.iter().map(ToString::to_string).collect::<Vec<_>>();
         // A retitled npm process: the whole title is argv[0].
         let npm = v(&["npm exec vite preview --port 4173"]);
         assert_eq!(

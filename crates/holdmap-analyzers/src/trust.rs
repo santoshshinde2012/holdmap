@@ -141,7 +141,7 @@ impl Walk<'_> {
             return Ok(());
         }
         let mut entries: Vec<_> = fs::read_dir(dir)?.filter_map(Result::ok).collect();
-        entries.sort_by_key(|e| e.file_name());
+        entries.sort_by_key(std::fs::DirEntry::file_name);
         for entry in entries {
             if self.files.len() >= self.limits.max_files {
                 self.partial = true;

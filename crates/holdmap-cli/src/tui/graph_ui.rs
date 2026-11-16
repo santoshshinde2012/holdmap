@@ -212,7 +212,12 @@ fn draw_node(f: &mut Frame, app: &mut App, area: Rect) {
         lines.push(kv("tunnel", t.target.clone()));
     }
     if !n.pids.is_empty() {
-        let pids: Vec<String> = n.pids.iter().take(6).map(|p| p.to_string()).collect();
+        let pids: Vec<String> = n
+            .pids
+            .iter()
+            .take(6)
+            .map(std::string::ToString::to_string)
+            .collect();
         let more = n.pids.len().saturating_sub(6);
         lines.push(kv(
             "pids",

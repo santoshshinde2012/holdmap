@@ -129,13 +129,15 @@ impl ProjectCache {
             inner = self
                 .ready
                 .wait_timeout(inner, left)
-                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .0;
         }
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn start(self: &Arc<Self>, inner: &mut Inner, key: Key) {

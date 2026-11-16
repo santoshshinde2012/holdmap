@@ -34,7 +34,9 @@ static PINNED: AtomicBool = AtomicBool::new(false);
 
 /// What the panel page adds to the tray's data.
 pub fn state() -> PanelState {
-    let (focus, focus_seq) = *FOCUS.lock().unwrap_or_else(|e| e.into_inner());
+    let (focus, focus_seq) = *FOCUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     PanelState {
         focus,
         focus_seq,
@@ -48,14 +50,16 @@ pub fn toggle_pin() {
 }
 
 fn focus_on(section: &'static str) {
-    let mut focus = FOCUS.lock().unwrap_or_else(|e| e.into_inner());
+    let mut focus = FOCUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     *focus = (Some(section), focus.1 + 1);
 }
 
 fn hidden_just_now() -> bool {
     HIDDEN_AT
         .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .is_some_and(|at| at.elapsed() < REOPEN_GRACE)
 }
 
@@ -65,7 +69,9 @@ fn hidden_just_now() -> bool {
 /// deadlock on Windows.
 pub fn toggle(app: &AppHandle, anchor: Option<Rect>, section: Option<&'static str>) {
     if anchor.is_some() {
-        *ANCHOR.lock().unwrap_or_else(|e| e.into_inner()) = anchor;
+        *ANCHOR
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = anchor;
     }
     let moved = section.is_some_and(|s| state().focus != Some(s));
     if let Some(section) = section {
@@ -136,7 +142,9 @@ fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
             if PINNED.load(Ordering::Relaxed) {
                 return;
             }
-            *HIDDEN_AT.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
+            *HIDDEN_AT
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Instant::now());
             let _ = handle.hide();
         }
     });
@@ -146,7 +154,9 @@ fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
 /// Under a menu-bar icon, above a taskbar icon, centred on it and kept on its screen. Without a
 /// known icon position (Linux), the top-right corner.
 fn place(app: &AppHandle, window: &WebviewWindow) {
-    let anchor = *ANCHOR.lock().unwrap_or_else(|e| e.into_inner());
+    let anchor = *ANCHOR
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let monitor = anchor
         .and_then(|r| {
             let p = r.position.to_physical::<f64>(1.0);
@@ -157,8 +167,14 @@ fn place(app: &AppHandle, window: &WebviewWindow) {
         return;
     };
     let scale = monitor.scale_factor();
-    let (mx, my) = (monitor.position().x as f64, monitor.position().y as f64);
-    let (mw, mh) = (monitor.size().width as f64, monitor.size().height as f64);
+    let (mx, my) = (
+        f64::from(monitor.position().x),
+        f64::from(monitor.position().y),
+    );
+    let (mw, mh) = (
+        f64::from(monitor.size().width),
+        f64::from(monitor.size().height),
+    );
     let (w, h, margin) = (WIDTH * scale, HEIGHT * scale, MARGIN * scale);
     let (x, y) = match anchor {
         Some(r) => {

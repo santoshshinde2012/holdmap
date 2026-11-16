@@ -62,7 +62,10 @@ pub fn reference() -> String {
             sub = sub.find_subcommand(name).expect("subcommand");
         }
         let name = path.join(" ");
-        let about = sub.get_about().map(|a| a.to_string()).unwrap_or_default();
+        let about = sub
+            .get_about()
+            .map(std::string::ToString::to_string)
+            .unwrap_or_default();
         let aliases: Vec<_> = sub.get_visible_aliases().collect();
         let alias = if aliases.is_empty() {
             String::new()
@@ -183,7 +186,7 @@ fn readme_flags_exist() {
     let readme = std::fs::read_to_string(repo_root().join("README.md")).unwrap();
     let mut known: std::collections::BTreeSet<String> = ["--help", "--version"]
         .iter()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
     let root = Cli::command();
     let mut stack = vec![&root];

@@ -352,7 +352,7 @@ pub fn stage(from: &Path, to: &Path, limits: StagingLimits) -> io::Result<Staged
     while let Some((src, dst)) = stack.pop() {
         fs::create_dir_all(&dst)?;
         let mut entries: Vec<_> = fs::read_dir(&src)?.filter_map(Result::ok).collect();
-        entries.sort_by_key(|e| e.file_name());
+        entries.sort_by_key(std::fs::DirEntry::file_name);
         for entry in entries {
             let meta = entry.metadata()?; // DirEntry::metadata does not follow symlinks.
             let name = entry.file_name();

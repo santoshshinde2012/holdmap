@@ -140,7 +140,7 @@ fn keycode(connection: &RustConnection, keysym: u32) -> Keycode {
         .unwrap();
     let index = mapping
         .keysyms
-        .chunks(mapping.keysyms_per_keycode as usize)
+        .chunks(usize::from(mapping.keysyms_per_keycode))
         .position(|symbols| symbols.contains(&keysym))
         .expect("fixture keysym mapped");
     setup.min_keycode + u8::try_from(index).unwrap()

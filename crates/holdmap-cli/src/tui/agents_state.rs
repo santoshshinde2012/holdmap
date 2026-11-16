@@ -166,7 +166,7 @@ impl App {
         let targets = reviewed
             .plans()
             .iter()
-            .map(|p| p.target())
+            .map(super::super::agent_actions::ReviewedAgentPort::target)
             .collect::<Vec<_>>()
             .join(", ");
         let headline = format!(

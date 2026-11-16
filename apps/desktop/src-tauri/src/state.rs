@@ -80,12 +80,21 @@ impl AppState {
         collect: impl FnOnce(bool, bool) -> Result<Engine, String>,
         read: impl FnOnce(&Engine) -> T,
     ) -> Result<T, String> {
-        let _one_at_a_time = self.scan_lock.lock().unwrap_or_else(|e| e.into_inner());
-        let last = *self.last_scan.lock().unwrap_or_else(|e| e.into_inner());
+        let _one_at_a_time = self
+            .scan_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let last = *self
+            .last_scan
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let all = all.unwrap_or_else(|| last.is_some_and(|scan| scan.all));
         let docker = self.docker();
         if reusable(last, all, docker, max_age, Instant::now()) {
-            let engine = self.engine.lock().unwrap_or_else(|e| e.into_inner());
+            let engine = self
+                .engine
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(engine) = engine.as_ref() {
                 return Ok(read(engine));
             }
@@ -95,9 +104,15 @@ impl AppState {
         // A failed refresh returns the error and leaves the previous cache due for a retry.
         let fresh = collect(all, docker)?;
         let at = Instant::now();
-        let mut engine = self.engine.lock().unwrap_or_else(|e| e.into_inner());
+        let mut engine = self
+            .engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         *engine = Some(fresh);
-        *self.last_scan.lock().unwrap_or_else(|e| e.into_inner()) =
+        *self
+            .last_scan
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
             Some(CachedScan { at, all, docker });
         Ok(read(engine.as_ref().ok_or("no scan yet")?))
     }

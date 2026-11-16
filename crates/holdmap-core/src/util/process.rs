@@ -636,7 +636,7 @@ pub fn spawn_detached(
     if let Some(token) = crate::sys::start_token(child.id()).filter(|token| *token != 0) {
         DETACHED
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(child.id(), token);
     }
     Ok(child)
@@ -661,7 +661,9 @@ impl WindowsStdioInheritance {
         static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let mut guard = Self {
             handles: Vec::with_capacity(3),
-            _lock: LOCK.lock().unwrap_or_else(|error| error.into_inner()),
+            _lock: LOCK
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
         };
         let mut seen = Vec::with_capacity(3);
         for kind in [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
@@ -715,7 +717,9 @@ pub(crate) static DETACHED: std::sync::Mutex<std::collections::BTreeMap<u32, u64
 
 /// Was `pid` started detached by this process (see [`spawn_detached`])?
 pub fn started_detached(pid: u32) -> bool {
-    let mut records = DETACHED.lock().unwrap_or_else(|e| e.into_inner());
+    let mut records = DETACHED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let Some(token) = records.get(&pid).copied() else {
         return false;
     };
@@ -731,7 +735,9 @@ pub(crate) fn detached_processes(
     processes: &std::collections::HashMap<u32, crate::model::ProcessInfo>,
 ) -> std::collections::HashSet<u32> {
     retained_detached(
-        &mut DETACHED.lock().unwrap_or_else(|e| e.into_inner()),
+        &mut DETACHED
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
         processes,
         crate::sys::start_token,
     )

@@ -25,7 +25,7 @@ pub fn label(preset: &str) -> Option<&'static str> {
 pub fn registered() -> Option<String> {
     REGISTERED
         .lock()
-        .unwrap_or_else(|error| error.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .and_then(label)
         .map(str::to_owned)
 }
@@ -147,7 +147,9 @@ pub fn apply_and_save(
         .map(|entry| entry.0)
         .ok_or_else(|| format!("unknown shortcut preset {preset:?}"))?;
     let gs = app.global_shortcut();
-    let mut active = REGISTERED.lock().unwrap_or_else(|error| error.into_inner());
+    let mut active = REGISTERED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     replace_saved_registration(
         &mut active,
         (preset != "off").then_some(preset),

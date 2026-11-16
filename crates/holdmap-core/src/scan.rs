@@ -173,7 +173,11 @@ impl Scanner {
             });
             let t = Instant::now();
             let raw = (self.sockets.sockets(), t.elapsed());
-            (raw, table.join(), containers.map(|h| h.join()))
+            (
+                raw,
+                table.join(),
+                containers.map(std::thread::ScopedJoinHandle::join),
+            )
         });
         let (table, t_procs) = match process_result {
             Ok((Ok(table), elapsed)) => (table, elapsed),
@@ -233,7 +237,7 @@ impl Scanner {
 }
 
 fn exposure(addrs: &[IpAddr]) -> Exposure {
-    if addrs.iter().any(|a| a.is_unspecified()) {
+    if addrs.iter().any(std::net::IpAddr::is_unspecified) {
         Exposure::AllInterfaces
     } else if addrs.iter().all(is_loopback) {
         Exposure::Loopback
@@ -681,7 +685,7 @@ fn token_matches(tok: &str, e: &PortEntry) -> bool {
     }
     if let Ok(p) = t.parse::<u16>() {
         // A bare number matches the port exactly, or the PID.
-        return p == e.port || e.pid == Some(p as u32);
+        return p == e.port || e.pid == Some(u32::from(p));
     }
     if let Some((a, b)) = parse_range(&t) {
         return (a..=b).contains(&e.port);

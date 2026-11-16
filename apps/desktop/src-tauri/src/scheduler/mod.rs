@@ -56,7 +56,10 @@ pub async fn schedule_shutdown(
     }
     let app = window.app_handle().clone();
     let scheduler = app.state::<SchedulerState>();
-    let mut queue = scheduler.queue.lock().unwrap_or_else(|e| e.into_inner());
+    let mut queue = scheduler
+        .queue
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     queue.capacity()?;
     let reserved = app
         .state::<PowerState>()
@@ -95,14 +98,14 @@ pub async fn schedule_stops(
         app.state::<SchedulerState>()
             .queue
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .capacity()?;
         let state = app.state::<AppState>();
         let plans = {
             let mut confirmations = state
                 .confirmations
                 .lock()
-                .unwrap_or_else(|e| e.into_inner());
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             requests
                 .iter()
                 .map(|r| {
@@ -136,7 +139,7 @@ pub async fn schedule_stops(
             .state::<SchedulerState>()
             .queue
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
                 Operation::Stops { plans, agent },
                 label,

@@ -84,7 +84,7 @@ pub fn check_value(value: &Secret) -> Result<(), SecretError> {
             "the key is longer than {MAX_SECRET_LEN} bytes"
         )));
     }
-    if v.chars().any(|c| c.is_control()) {
+    if v.chars().any(char::is_control) {
         return Err(SecretError::Invalid(
             "the key contains control characters or line breaks".into(),
         ));

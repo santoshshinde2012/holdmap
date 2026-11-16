@@ -71,7 +71,10 @@ impl PowerState {
         hostname: String,
         now: Instant,
     ) -> Result<ShutdownPreview, String> {
-        let mut state = self.confirmations.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self
+            .confirmations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if state.in_flight || state.requested || state.scheduled_id.is_some() {
             return Err("A shutdown request is already in progress.".into());
         }
@@ -107,7 +110,10 @@ impl PowerState {
         execute: impl FnOnce(&CommandSpec) -> Result<(), RequestFailure>,
     ) -> Result<ShutdownRequested, String> {
         let command = {
-            let mut state = self.confirmations.lock().unwrap_or_else(|e| e.into_inner());
+            let mut state = self
+                .confirmations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if state.in_flight || state.requested || state.scheduled_id.is_some() {
                 return Err("A shutdown request is already in progress.".into());
             }
@@ -133,7 +139,10 @@ impl PowerState {
         &self,
         result: Result<(), RequestFailure>,
     ) -> Result<ShutdownRequested, String> {
-        let mut state = self.confirmations.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self
+            .confirmations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.in_flight = false;
         match result {
             Ok(()) => {
@@ -160,7 +169,10 @@ pub(crate) struct ScheduledShutdown {
 
 impl PowerState {
     pub(crate) fn reserve(&self, id: &str, now: Instant) -> Result<ScheduledShutdown, String> {
-        let mut state = self.confirmations.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self
+            .confirmations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if state.in_flight || state.requested || state.scheduled_id.is_some() {
             return Err("A shutdown request or schedule is already in progress.".into());
         }
@@ -182,7 +194,10 @@ impl PowerState {
     }
 
     pub(crate) fn release(&self, reserved: &ScheduledShutdown) {
-        let mut state = self.confirmations.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self
+            .confirmations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if state.scheduled_id.as_deref() == Some(&reserved.id) {
             state.scheduled_id = None;
         }
@@ -194,7 +209,10 @@ impl PowerState {
         execute: impl FnOnce(&CommandSpec) -> Result<(), RequestFailure>,
     ) -> Result<ShutdownRequested, String> {
         {
-            let mut state = self.confirmations.lock().unwrap_or_else(|e| e.into_inner());
+            let mut state = self
+                .confirmations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if state.in_flight
                 || state.requested
                 || state.scheduled_id.as_deref() != Some(&reserved.id)

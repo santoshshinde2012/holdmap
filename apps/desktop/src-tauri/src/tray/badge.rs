@@ -64,10 +64,11 @@ fn disc(p: &mut Pixels, cx: f32, cy: f32, r: f32, gap: f32, rgb: [u8; 3]) {
             }
             let i = ((y * p.width + x) * 4) as usize;
             let fill = coverage(x, y, cx, cy, r);
-            let kept = p.rgba[i + 3] as f32 * (1.0 - cut) / 255.0;
+            let kept = f32::from(p.rgba[i + 3]) * (1.0 - cut) / 255.0;
             let alpha = fill + kept * (1.0 - fill);
             for (c, paint) in rgb.iter().enumerate() {
-                let over = *paint as f32 * fill + p.rgba[i + c] as f32 * kept * (1.0 - fill);
+                let over =
+                    f32::from(*paint) * fill + f32::from(p.rgba[i + c]) * kept * (1.0 - fill);
                 p.rgba[i + c] = if alpha > 0.0 {
                     (over / alpha).round() as u8
                 } else {
@@ -93,7 +94,7 @@ fn text(p: &mut Pixels, s: &str, cx: f32, cy: f32, scale: u32) {
     let left = (cx - w as f32 / 2.0).round() as i64;
     let top = (cy - (5 * scale) as f32 / 2.0).round() as i64;
     for (g, rows) in glyphs.iter().enumerate() {
-        let gx = left + (g as u32 * 4 * scale) as i64;
+        let gx = left + i64::from(g as u32 * 4 * scale);
         for (row, bits) in rows.iter().enumerate() {
             for col in 0..3 {
                 if bits & (0b100 >> col) == 0 {
@@ -101,9 +102,11 @@ fn text(p: &mut Pixels, s: &str, cx: f32, cy: f32, scale: u32) {
                 }
                 for dy in 0..scale {
                     for dx in 0..scale {
-                        let x = gx + (col * scale + dx) as i64;
-                        let y = top + (row as u32 * scale + dy) as i64;
-                        if (0..p.width as i64).contains(&x) && (0..p.height as i64).contains(&y) {
+                        let x = gx + i64::from(col * scale + dx);
+                        let y = top + i64::from(row as u32 * scale + dy);
+                        if (0..i64::from(p.width)).contains(&x)
+                            && (0..i64::from(p.height)).contains(&y)
+                        {
                             let i = ((y as u32 * p.width + x as u32) * 4) as usize;
                             p.rgba[i..i + 4].copy_from_slice(&[255, 255, 255, 255]);
                         }

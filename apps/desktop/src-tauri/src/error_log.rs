@@ -29,7 +29,7 @@ pub(crate) fn init(dir: &Path) {
         let message = info
             .payload()
             .downcast_ref::<&str>()
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
             .unwrap_or_else(|| "unknown panic".into());
         record("panic", &format!("{message}{place}"));

@@ -135,7 +135,7 @@ pub fn diff(prev: &Snapshot, next: &Snapshot) -> Vec<PortEvent> {
             });
         }
     }
-    out.sort_by_key(|e| e.port());
+    out.sort_by_key(PortEvent::port);
     out
 }
 

@@ -1673,7 +1673,7 @@ regressions use fixtures. CI runs the Rust and native tests on Linux, macOS and 
 the browser suite on Linux. `scripts/check-all.sh` reproduces the full checks on a developer's
 host with its native desktop dependencies installed.
 
-Use Rust 1.95+ and Node.js 22.12+ (`nvm use`), with the native dependencies listed in
+Use Rust 1.95+ and Node.js 22.23.4+ or 24.15+ (`nvm use`), with the native dependencies listed in
 [CONTRIBUTING.md](../CONTRIBUTING.md). `cargo test --locked` checks core, CLI/TUI, MCP and activity
 default workspace members. Desktop `npm run check`, `npm test` and `npm run test:e2e` check
 types, pure view logic and production UI flows. Site checks build the shared demo and verify

@@ -154,7 +154,7 @@ impl SchedulerState {
     pub(super) fn list(&self) -> Vec<ScheduledAction> {
         self.queue
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .jobs
             .iter()
             .map(|j| j.public.clone())
@@ -166,7 +166,10 @@ impl SchedulerState {
         id: &str,
         release: impl FnOnce(&Operation),
     ) -> Result<ScheduledAction, String> {
-        let mut queue = self.queue.lock().unwrap_or_else(|e| e.into_inner());
+        let mut queue = self
+            .queue
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let job = queue
             .jobs
             .iter_mut()
@@ -201,7 +204,10 @@ impl SchedulerState {
     ) {
         let now = clock();
         let claimed = {
-            let mut queue = self.queue.lock().unwrap_or_else(|e| e.into_inner());
+            let mut queue = self
+                .queue
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let next = queue.jobs.iter_mut().find(|j| {
                 j.public.status == ScheduleStatus::Pending && (j.due(now) || j.timing_problem(now))
             });
@@ -225,7 +231,10 @@ impl SchedulerState {
         };
         let prepared = prepare(&operation);
         let dispatch_allowed = {
-            let mut queue = self.queue.lock().unwrap_or_else(|e| e.into_inner());
+            let mut queue = self
+                .queue
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let Some(job) = queue.jobs.iter_mut().find(|j| j.public.id == id) else {
                 return;
             };
@@ -266,11 +275,17 @@ impl SchedulerState {
         };
         changed();
         if !dispatch_allowed {
-            self.queue.lock().unwrap_or_else(|e| e.into_inner()).prune();
+            self.queue
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .prune();
             return;
         }
         let outcome = dispatch(&operation, prepared.expect("successful preflight"));
-        let mut queue = self.queue.lock().unwrap_or_else(|e| e.into_inner());
+        let mut queue = self
+            .queue
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(job) = queue.jobs.iter_mut().find(|j| j.public.id == id) {
             match outcome {
                 Ok(message) => job.status(ScheduleStatus::Completed, message),

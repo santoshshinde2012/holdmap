@@ -159,7 +159,10 @@ impl crate::consent::ToolPinStore for FileStore {
     ) -> io::Result<()> {
         let name = Self::tools_name(analyzer, slot)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "not an analyzer id"))?;
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self
+            .lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         match snapshot {
             Some(s) => self.write(&name, s),
             None => match fs::remove_file(self.dir.join(&name)) {
@@ -179,7 +182,10 @@ impl crate::catalog::CatalogStore for FileStore {
         slot: crate::catalog::CatalogSlot,
         catalog: Option<&crate::catalog::SignedCatalog>,
     ) -> io::Result<()> {
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self
+            .lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         match catalog {
             Some(c) => self.write(Self::catalog_name(slot), c),
             None => match fs::remove_file(self.dir.join(Self::catalog_name(slot))) {
@@ -211,7 +217,10 @@ impl crate::consent::UserManifestStore for FileStore {
     }
     fn add_user_manifest(&self, id: &str, text: &str) -> io::Result<()> {
         let name = Self::manifest_name(id)?;
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self
+            .lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = self.dir.join("manifests");
         private_dir(&self.dir)?;
         private_dir(&dir)?;
@@ -229,7 +238,10 @@ impl crate::consent::UserManifestStore for FileStore {
     }
     fn remove_user_manifest(&self, id: &str) -> io::Result<bool> {
         let name = Self::manifest_name(id)?;
-        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self
+            .lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         match fs::remove_file(self.dir.join("manifests").join(name)) {
             Ok(()) => Ok(true),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),

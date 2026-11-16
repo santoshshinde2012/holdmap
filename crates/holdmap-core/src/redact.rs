@@ -14,7 +14,7 @@ fn sensitive(key: &str) -> bool {
     let k: String = key
         .trim_start_matches('-')
         .chars()
-        .filter(|c| c.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .collect::<String>()
         .to_ascii_lowercase();
     if k.is_empty() {
@@ -1035,7 +1035,7 @@ mod tests {
     }
 
     fn v(a: &[&str]) -> Vec<String> {
-        a.iter().map(|s| s.to_string()).collect()
+        a.iter().map(std::string::ToString::to_string).collect()
     }
 
     #[test]

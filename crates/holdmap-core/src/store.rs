@@ -327,7 +327,9 @@ impl Store {
     }
 
     fn transaction(&self) -> io::Result<Transaction> {
-        let local = TRANSACTIONS.lock().unwrap_or_else(|e| e.into_inner());
+        let local = TRANSACTIONS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         crate::util::create_private_dir(&self.dir)?;
         #[cfg(unix)]
         let file = {

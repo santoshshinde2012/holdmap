@@ -233,7 +233,7 @@ fn list_files(root: &Path, cap: usize) -> Vec<String> {
             continue;
         };
         let mut entries: Vec<_> = entries.flatten().collect();
-        entries.sort_by_key(|e| e.file_name());
+        entries.sort_by_key(std::fs::DirEntry::file_name);
         for e in entries {
             let Ok(meta) = e.path().symlink_metadata() else {
                 continue;
@@ -444,7 +444,7 @@ pub fn suggest(tool: &ToolInfo, remote: bool) -> Suggestion {
     let missing = required
         .iter()
         .filter(|r| !args.contains_key(**r))
-        .map(|r| r.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
     Suggestion {
         tool: tool.name.clone(),
@@ -507,7 +507,7 @@ pub fn suggest_output(tool: &ToolInfo) -> Option<OutputMapping> {
             words
                 .iter()
                 .find(|w| fields.contains_key(**w))
-                .map(|w| w.to_string())
+                .map(std::string::ToString::to_string)
         };
         let rule_id = pick(&["rule_id", "ruleId", "rule", "code", "check", "id", "type"])?;
         if !valid_key(list) {

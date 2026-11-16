@@ -504,7 +504,10 @@ impl AnalyzerService {
 
     /// Which catalog is in use, and any verified update waiting for review.
     pub fn catalog_status(&self) -> CatalogStatus {
-        let active = self.catalog.read().unwrap_or_else(|e| e.into_inner());
+        let active = self
+            .catalog
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         CatalogStatus {
             version: active.catalog.version,
             published: active.catalog.published.clone(),
@@ -529,7 +532,10 @@ impl AnalyzerService {
 
     /// Verify a catalog file the user supplied and stage it for review.
     pub fn stage_catalog(&self, offered: &SignedCatalog) -> Result<CatalogDiff, ServiceError> {
-        let active = self.catalog.read().unwrap_or_else(|e| e.into_inner());
+        let active = self
+            .catalog
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         Ok(crate::catalog::stage(
             self.stores.catalog.as_ref(),
             &self.catalog_key,
@@ -541,7 +547,10 @@ impl AnalyzerService {
     /// Apply the staged catalog. Analyzers whose manifest changed ask for approval again.
     pub fn accept_catalog(&self) -> Result<CatalogStatus, ServiceError> {
         {
-            let mut active = self.catalog.write().unwrap_or_else(|e| e.into_inner());
+            let mut active = self
+                .catalog
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let new = crate::catalog::accept(
                 self.stores.catalog.as_ref(),
                 &self.catalog_key,
@@ -649,7 +658,7 @@ impl AnalyzerService {
     fn signed(&self) -> Arc<Vec<AnalyzerManifest>> {
         self.catalog
             .read()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .manifests
             .clone()
     }
@@ -871,7 +880,7 @@ impl AnalyzerService {
             } else {
                 ENV_NAMES
                     .iter()
-                    .map(|n| n.to_string())
+                    .map(std::string::ToString::to_string)
                     .chain(self.secret_status(m).into_iter().map(|s| {
                         if s.stored {
                             format!(

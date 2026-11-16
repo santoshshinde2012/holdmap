@@ -386,7 +386,7 @@ fn stop_order_puts_dependents_first() {
     let g = TopologyBuilder::new(&acme(tmp.path())).build();
     let all: Vec<String> = ["svc:40", "svc:45", "svc:30", "svc:20", "svc:50"]
         .iter()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
     let o = stop_order(&g, &all);
     let pos = |id: &str| o.order.iter().position(|x| x == id).unwrap();
@@ -413,7 +413,10 @@ fn stop_order_breaks_cycles_deterministically() {
         edges: vec![mk("a", "b"), mk("b", "a"), mk("c", "a")],
         ..Default::default()
     };
-    let ids: Vec<String> = ["a", "b", "c"].iter().map(|s| s.to_string()).collect();
+    let ids: Vec<String> = ["a", "b", "c"]
+        .iter()
+        .map(std::string::ToString::to_string)
+        .collect();
     let o = stop_order(&g, &ids);
     assert_eq!(o.order, ["c", "a", "b"]);
     assert_eq!(o.cyclic, ["a"]);

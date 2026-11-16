@@ -229,7 +229,7 @@ mod tests {
                 workspace: None,
                 git_root: None,
             },
-            deps: deps.iter().map(|d| d.to_string()).collect(),
+            deps: deps.iter().map(std::string::ToString::to_string).collect(),
         };
         let next = project("package.json", "/Users/me/SellerAgent", &["next", "react"]);
         let pg = "/Users/me/.vscode/extensions/ms-ossdata.vscode-pgsql-1.32.0-darwin-arm64/pgsqltoolsservice/v3.7.2/OSX/pgsqltoolsservice/ossdbtoolsservice_main";
