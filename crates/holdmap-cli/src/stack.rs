@@ -61,7 +61,7 @@ pub struct DownArgs {
     #[arg(short, long)]
     pub force: bool,
     /// Grace period before escalating to SIGKILL.
-    #[arg(short, long, default_value = "5s", value_parser = humantime::parse_duration)]
+    #[arg(short, long, default_value = "5s", value_parser = holdmap_activity::timefmt::parse_duration)]
     pub timeout: Duration,
 }
 
@@ -419,7 +419,7 @@ fn up_one(stack: &Stack, s: &stack::Service, a: &UpArgs, docker: bool) -> Result
                 "  {} {} didn't accept connections on :{port} within {} (PID {} is still running; see {}).",
                 style::warn_mark(),
                 bold(&s.name),
-                humantime::format_duration(timeout),
+                holdmap_activity::timefmt::format_duration(timeout),
                 child.id(),
                 tilde(&log)
             );

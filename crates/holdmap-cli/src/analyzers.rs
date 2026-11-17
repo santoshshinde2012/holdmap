@@ -977,10 +977,9 @@ fn render_list(list: &[AnalyzerView]) -> String {
                 "  last run: {} subject(s), {} open finding(s), {}\n",
                 run.subjects,
                 run.open.total(),
-                dim(humantime::format_rfc3339_seconds(
+                dim(holdmap_activity::timefmt::format_rfc3339_seconds(
                     std::time::UNIX_EPOCH + std::time::Duration::from_millis(run.run_at_ms)
-                )
-                .to_string())
+                ))
             ));
         }
         if a.state == AnalyzerState::Approved {

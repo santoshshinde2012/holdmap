@@ -34,7 +34,6 @@ anyhow = "1"
 sysinfo = { version = "0.40", default-features = false, features = ["system", "user"] }
 netstat2 = "0.11"
 libc = "0.2"
-humantime = "2"
 tempfile = "3"
 toml = { version = "1", default-features = false, features = ["parse", "serde", "std"] }
 sha2 = "0.11"

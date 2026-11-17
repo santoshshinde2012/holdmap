@@ -49,7 +49,7 @@ pub struct RestartArgs {
     #[arg(short, long)]
     pub yes: bool,
     /// How long to wait for the port to accept connections again.
-    #[arg(short, long, default_value = "30s", value_parser = humantime::parse_duration)]
+    #[arg(short, long, default_value = "30s", value_parser = holdmap_activity::timefmt::parse_duration)]
     pub timeout: Duration,
 }
 
@@ -223,7 +223,7 @@ fn start(entry: &HistoryEntry, timeout: Duration) -> Result<u8> {
         "{} port {} isn't accepting connections after {}; see {}",
         style::warn_mark(),
         entry.port,
-        humantime::format_duration(timeout),
+        holdmap_activity::timefmt::format_duration(timeout),
         tilde(&log)
     );
     Ok(crate::exit::BUSY)

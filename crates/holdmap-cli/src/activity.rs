@@ -29,7 +29,7 @@ enum ActivityCommand {
         #[arg(long)]
         json: bool,
         /// Stop automatically after this duration (1 second to 24 hours).
-        #[arg(long, value_parser = humantime::parse_duration)]
+        #[arg(long, value_parser = holdmap_activity::timefmt::parse_duration)]
         duration: Option<Duration>,
     },
     /// Read metadata from the recorder named by HOLDMAP_ACTIVITY_ENDPOINT and TOKEN.

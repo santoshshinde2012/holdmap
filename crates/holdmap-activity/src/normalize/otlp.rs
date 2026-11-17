@@ -275,7 +275,7 @@ fn log_span(
         if timestamp.len() > 40 {
             return None;
         }
-        humantime::parse_rfc3339(timestamp)
+        crate::timefmt::parse_rfc3339(timestamp)
             .ok()?
             .duration_since(std::time::UNIX_EPOCH)
             .ok()?

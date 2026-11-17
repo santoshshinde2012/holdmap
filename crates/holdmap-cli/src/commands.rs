@@ -610,7 +610,7 @@ pub fn wait(a: &WaitArgs) -> Result<u8> {
                 eprintln!(
                     "{} timed out after {} waiting for port {}",
                     style::err_mark(),
-                    humantime::format_duration(a.timeout),
+                    holdmap_activity::timefmt::format_duration(a.timeout),
                     a.port
                 );
             }

@@ -17,6 +17,7 @@ mod tests;
 
 pub mod client;
 pub mod integrations;
+pub mod timefmt;
 
 pub use dto::*;
 pub use normalize::{normalize_hook, pseudonymize_id};

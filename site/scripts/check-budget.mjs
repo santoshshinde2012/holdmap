@@ -93,7 +93,8 @@ const rows = [
   // items checklist in Settings and the notice naming items macOS hides. +3 KB for Home's folding
   // panels (summary, side column, Details above Needs you) and the capture dialogs' area choice.
   // +2 KB for the agent details memory summary and the locations layer list, which travel with the Agents view.
-  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 232 * 1024],
+  // +1 KB for the shared agent section chrome (underline tabs, section bars, flow column).
+  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 233 * 1024],
   ["Snapshot PNG JS (on capture)", [...snapshotDemoFiles].reduce((n, f) => n + gz(f), 0), 40 * 1024],
   ["Capability workspace JS (on inspection)", [...capabilityDemoFiles].reduce((n, f) => n + gz(f), 0), 21 * 1024],
   // The Security view's helpers moved here from the first screen; the trust and risk views load separately.
@@ -109,8 +110,8 @@ const rows = [
   // the capability workspace. +4 KB for the fleet memory bar, trend sparkline and location
   // cards. +4 KB for the agent inspector sections (MCP & skills, Flow, Security), Flow agent
   // scope and the docked graph peer inspector. These chunks load on demand; the
-  // initial-import budget is separate.
-  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 192 * 1024],
+  // initial-import budget is separate. +1 KB for the capability cards and the phone finding rows.
+  ["Demo JS (optional features/workers)", deferredDemoJs.reduce((n, f) => n + gz(f), 0), 193 * 1024],
   ["Largest hero video (one is loaded)", Math.max(...videos.map((f) => statSync(f).size)), 2.5 * 1024 * 1024],
 ];
 

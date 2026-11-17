@@ -21,7 +21,6 @@ hex.workspace = true
 getrandom.workspace = true
 subtle.workspace = true
 httparse.workspace = true
-humantime.workspace = true
 
 [dev-dependencies]
 toml.workspace = true
