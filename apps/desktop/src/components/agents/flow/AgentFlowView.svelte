@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
   import { isComposingKey } from "../../../lib/keyboard";
-  import { ActionDock, ActionMenu, ActionPill, EvidenceChip, type MenuItem } from "../../ui";
+  import { ActionDock, ActionMenu, ActionPill, EvidenceChip, SegmentedControl, type MenuItem } from "../../ui";
   import Icon from "../../Icon.svelte";
   import FlowCanvas from "./FlowCanvas.svelte";
   import FlowInspector from "./FlowInspector.svelte";
@@ -86,6 +86,19 @@
     ...(mode === "calls" ? [{ id: "recording", icon: "activity", label: "Recording controls", checked: showRecording, run: () => (showRecording = !showRecording) }] : []),
   ]);
   const sourceTotals = $derived(mode === "connections" ? `${graph.nodes.length} participants · ${graph.edges.length} relationships` : `${calls} tool calls${skills ? ` · ${skills} skill ${skills === 1 ? "activation" : "activations"}` : ""} · ${activity?.spans.length ?? 0} spans`);
+  const kindOrder = ["agent", "tool", "process", "listener", "remote", "model", "skill", "handoff", "step", "unknown"];
+  const kindLabel: Record<string, string> = { agent: "Agents", tool: "Tools", process: "Processes", listener: "Listeners", remote: "Remote hosts", unknown: "Unresolved", model: "Models", handoff: "Handoffs", step: "Steps", skill: "Skills" };
+  const participantGroups = $derived.by(() => {
+    const buckets = new Map<string, typeof graph.nodes>();
+    for (const n of graph.nodes) {
+      const list = buckets.get(n.kind);
+      if (list) list.push(n);
+      else buckets.set(n.kind, [n]);
+    }
+    return [...buckets.entries()]
+      .sort((a, b) => (kindOrder.indexOf(a[0]) + 1 || 99) - (kindOrder.indexOf(b[0]) + 1 || 99))
+      .map(([kind, nodes]) => ({ kind, label: kindLabel[kind] ?? kind, nodes }));
+  });
   const runName = (r: typeof runs[number]) => `${r.spans.find((s) => s.kind === "agent")?.name ?? r.spans[0]?.name ?? r.label} · ${r.label.toLowerCase()} · ${r.calls} tool ${r.calls === 1 ? "call" : "calls"}${r.skills ? ` · ${r.skills} skill ${r.skills === 1 ? "activation" : "activations"}` : ""}`;
   $effect(() => { if (!allRuns.some((r) => r.id === runId)) runId = runs[0]?.id ?? null; });
   $effect.pre(() => {
@@ -103,7 +116,7 @@
 <section class="flow-view" class:reduced aria-label="Agent flow">
   <header class="toolbar">
     {#if sourceChrome}
-      <ActionDock label="Flow data source" value={mode} options={[{ value: "connections", label: "Connections", icon: "link" }, { value: "calls", label: "Calls", icon: "activity" }]} onchange={change} />
+      <SegmentedControl label="Flow data source" value={mode} options={[{ value: "connections", label: "Connections", title: "Observed process trees, listeners and live sockets" }, { value: "calls", label: "Calls", title: "Recorded tool calls from configured agents" }]} onchange={change} />
     {/if}
     <div class="source">
       <EvidenceChip tone={demo ? "unknown" : mode === "connections" ? "seen" : "configured"} label={sourceLabel} detail={sourceHint} />
@@ -156,8 +169,19 @@
         <FlowInspector {graph} chosen={selected} onclose={closeInspector} />
         {#if mode === "calls" && run}<ActivityTimeline {run} {rows} chosen={selected} onselect={(id) => chosen = id} />
         {:else}
-          <section class="participants" aria-label="Flow participants"><h2>Participants <span>{graph.nodes.length}</span></h2><ul>{#each graph.nodes as n (n.id)}<li><button type="button" class:chosen={selected === n.id} aria-label={nodeDescription(n)} onclick={() => chosen = n.id}><strong><i class="kb k-{n.kind}">{n.kind}</i>{n.label}</strong><span>{n.sub}</span><small>{n.evidence}</small></button></li>{/each}</ul></section>
-          <section class="relationships" aria-label="Flow relationships"><h2>Relationships <span>{graph.edges.length}</span></h2><ul>{#each graph.edges as e (e.id)}<li><button type="button" class:chosen={selected === e.id} onclick={() => chosen = e.id}><strong>{graph.nodes.find((n) => n.id === e.from)?.label} {e.kind === "tcp" ? "↔" : "→"} {graph.nodes.find((n) => n.id === e.to)?.label}</strong><span>{e.label} · {e.evidence}</span></button></li>{/each}</ul></section>
+          <div class="lists">
+            <section class="participants" aria-label="Flow participants">
+              <h2>Participants <span>{graph.nodes.length}</span></h2>
+              {#each participantGroups as g (g.kind)}
+                <h3>{g.label} <span>{g.nodes.length}</span></h3>
+                <ul>{#each g.nodes as n (n.id)}<li><button type="button" class:chosen={selected === n.id} aria-label={nodeDescription(n)} onclick={() => chosen = n.id}><strong><i class="kb k-{n.kind}">{n.kind}</i><b>{n.label}</b></strong><span>{n.sub}</span></button></li>{/each}</ul>
+              {/each}
+            </section>
+            <section class="relationships" aria-label="Flow relationships">
+              <h2>Relationships <span>{graph.edges.length}</span></h2>
+              <ul>{#each graph.edges as e (e.id)}<li><button type="button" class:chosen={selected === e.id} onclick={() => chosen = e.id}><strong>{graph.nodes.find((n) => n.id === e.from)?.label} {e.kind === "tcp" ? "↔" : "→"} {graph.nodes.find((n) => n.id === e.to)?.label}</strong><span>{e.label} · {e.evidence}</span></button></li>{/each}</ul>
+            </section>
+          </div>
         {/if}
       </aside>
       {/if}
@@ -180,9 +204,9 @@
 <style>
   .flow-view { min-height: 0; height: 100%; display: flex; flex-direction: column; color: var(--text); container-type: inline-size; background: var(--bg); }
   .toolbar, .run-picker, .activity-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
-  .toolbar { gap: 10px; }
+  .toolbar { gap: 10px; min-height: 46px; padding: 8px 16px; background: var(--surface); }
   .toolbar > :global(.dock) { order: 0; }
-  .source { order: 1; display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 160px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .source { order: 1; display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 160px; color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .paused { order: 2; }
   .toolbar > :global(.recording-bar) { order: 3; padding: 0; border: 0; flex: none; }
   .toolbar-actions { order: 4; display: flex; align-items: center; gap: 6px; margin-left: auto; }
@@ -199,25 +223,35 @@
   .load-error { margin: 0; padding: 8px 14px; background: var(--surface-2); color: var(--warn); border-bottom: 1px solid var(--border); font-size: var(--fs-caption); }
   .window-note { margin: 0; padding: 8px 14px; color: var(--muted); background: var(--surface); border-bottom: 1px solid var(--border); font-size: var(--fs-caption); }
   .run-picker label, .activity-controls label { font-size: var(--fs-caption); font-weight: var(--fw-semibold); } .run-picker select, .activity-controls select { max-width: min(650px, 80%); min-width: 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); font: inherit; font-size: var(--fs-caption); } .run-picker span, .shown-count { color: var(--muted); font-size: var(--fs-caption); }
-  .workspace { flex: 1; min-height: 180px; display: grid; grid-template-columns: minmax(0, 1fr) 330px; }
+  .workspace { flex: 1; min-height: 180px; display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
   .workspace.full { grid-template-columns: minmax(0, 1fr); }
   .failed-count { color: var(--danger) !important; }
-  .companion { overflow: auto; min-height: 0; border-left: 1px solid var(--border); background: var(--surface); }
-  .participants h2, .relationships h2 { margin: 0; padding: 12px 14px 6px; font-size: var(--fs-body-sm); } h2 span { color: var(--muted); font-weight: var(--fw-regular); }
-  .participants ul, .relationships ul { list-style: none; margin: 0; padding: 0 8px 10px; }
-  .participants button, .relationships button { display: grid; width: 100%; gap: 3px; padding: 9px 6px; border-color: transparent; border-bottom-color: var(--border); border-radius: 7px; background: transparent; text-align: left; justify-content: stretch; }
-  .participants strong, .relationships strong { font-size: var(--fs-body-sm); font-weight: var(--fw-medium); overflow-wrap: anywhere; } .participants span, .relationships span, .participants small { color: var(--muted); font-size: var(--fs-caption); overflow-wrap: anywhere; }
-  .participants strong { display: flex; align-items: baseline; gap: 6px; }
+  .companion { display: flex; flex-direction: column; overflow: hidden; min-height: 0; border-left: 1px solid var(--border); background: var(--surface); }
+  .companion :global(.inspector) { position: static; flex: none; max-height: 42%; margin: 10px 10px 0; overflow: auto; }
+  .companion :global(.timeline) { flex: 1; min-height: 0; overflow: auto; }
+  .lists { flex: 1; min-height: 0; display: grid; grid-template-rows: minmax(0, 1.2fr) minmax(140px, 0.8fr); }
+  .participants, .relationships { min-height: 0; overflow: auto; }
+  .relationships { border-top: 1px solid var(--border); }
+  .participants h2, .relationships h2 { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 12px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: var(--fs-body-sm); }
+  .participants h3 { position: sticky; top: 37px; z-index: 1; display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 12px 2px; background: var(--surface); color: var(--muted); font-size: var(--fs-caption); font-weight: var(--fw-semibold); }
+  h2 span, h3 span { color: var(--muted); font-weight: var(--fw-regular); }
+  .participants ul, .relationships ul { list-style: none; margin: 0; padding: 4px 6px 8px; }
+  .participants button, .relationships button { display: grid; width: 100%; gap: 1px; min-height: 0; padding: 6px 8px; border: 0; border-radius: 8px; background: transparent; box-shadow: none; text-align: left; justify-content: stretch; }
+  .participants button:hover, .relationships button:hover { background: var(--row-hover); border-color: transparent; }
+  .participants strong, .relationships strong { font-size: var(--fs-body-sm); font-weight: var(--fw-medium); overflow-wrap: anywhere; } .participants span, .relationships span { color: var(--muted); font-size: var(--fs-caption); overflow-wrap: anywhere; }
+  .participants strong { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+  .participants strong b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: inherit; }
+  .relationships strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .kb { --k: var(--text-2); flex: none; padding: 0 6px; border-radius: var(--r-full); background: color-mix(in srgb, var(--k) 12%, var(--surface)); color: var(--k); font-style: normal; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); text-transform: capitalize; }
   .kb.k-agent { --k: var(--agent-1); } .kb.k-tool { --k: var(--tone-violet); } .kb.k-listener { --k: var(--tone-green); } .kb.k-remote { --k: var(--tone-blue); } .kb.k-skill, .kb.k-model { --k: var(--tone-amber); }
   .participants button.chosen, .relationships button.chosen { border-color: var(--accent); background: var(--accent-soft); }
   .empty { flex: 1; min-height: 120px; padding: 25px 18px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 9px; text-align: center; color: var(--muted); }
   .empty h2 { margin: 0; color: var(--text); font-size: var(--fs-heading); } .empty p { max-width: 440px; margin: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body); }
   .limits { border-top: 1px solid var(--border); padding: 8px 14px; font-size: var(--fs-caption); color: var(--muted); } .limits summary { display: flex; gap: 6px; align-items: center; min-height: 24px; color: var(--text-2); cursor: pointer; } .limits ul { margin: 8px 0; padding-left: 18px; max-height: 110px; overflow: auto; }
-  @container (max-width: 940px) {
-    .workspace:not(.full) { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 42%) minmax(0, 1fr); overflow: hidden; }
-    .companion { overflow: auto; border-left: 0; border-top: 1px solid var(--border); }
-    .companion :global(.inspector) { max-height: calc(100% - 24px); box-sizing: border-box; overflow: auto; }
+  @container (max-width: 760px) {
+    .workspace:not(.full) { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(240px, 1.35fr) minmax(180px, 1fr); overflow: hidden; }
+    .companion { border-left: 0; border-top: 1px solid var(--border); }
+    .lists { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
     .totals { display: none; }
   }
   .reduced :global(*) { animation: none !important; transition: none !important; }

@@ -1478,7 +1478,7 @@
     {:else if prefs.view === "agents"}
       <div class="graph-wrap agents-wrap" data-capture-area>
         {#if AgentsView}
-          <AgentsView bind:section={prefs.agentSection} bind:flowSource={prefs.flowSource} bind:picture={prefs.picture} bind:projectReady bind:projectCaption pictureChrome={false} report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
+          <AgentsView bind:section={prefs.agentSection} bind:flowSource={prefs.flowSource} bind:picture={prefs.picture} bind:projectReady bind:projectCaption report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
             capabilitiesLoading={agentsRefreshing} capabilitiesError={agentsError} onrefreshcapabilities={() => { void loadAgents(); }}
             onselectagent={(id) => { const a = agentsReport?.agents.find((a) => a.id === id); if (a && !agentMatches(a, agentQuery)) agentQuery = ""; agentSelection.select(id, agentsReport?.agents); }} onentry={openEntry}
             onreveal={revealAgentFolder} oneditor={openAgentFolder}

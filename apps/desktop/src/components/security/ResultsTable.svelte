@@ -5,6 +5,7 @@
   import IconButton from "../ui/IconButton.svelte";
   import FindingPlace from "./FindingPlace.svelte";
   import { redactHome } from "../../lib/report-export";
+  import { tooltip } from "../../lib/tooltip";
   import { PAGE_SIZE, type FindingItem, type SortKey, type SortSpec } from "../../lib/security-view";
 
   let { items, sort = $bindable() }: { items: FindingItem[]; sort: SortSpec } = $props();
@@ -45,8 +46,8 @@
           <td class="msg">{#if i.isNew}<span class="new-pill">New</span> {/if}{i.finding.title}{#if i.finding.state !== "open"} <small>({i.finding.state})</small>{/if}</td>
           <td>{i.agents.length ? i.agents.join(", ") : "unknown"}</td>
           <td>{i.subject?.name ?? i.finding.subject}</td>
-          <td class="dir" title={i.folder ? redactHome(i.folder) : "holdmap couldn't confirm the folder"}>{short(i.folder)}</td>
-          <td class="dir">{#if i.where}<code>{i.where}</code>{:else}unknown{/if}</td>
+          <td class="dir"><span class="clip" use:tooltip={{ text: i.folder ? redactHome(i.folder) : "holdmap couldn't confirm the folder", mono: !!i.folder, onlyIfTruncated: true }}>{short(i.folder)}</span></td>
+          <td class="dir">{#if i.where}<code class="clip" use:tooltip={{ text: i.where, mono: true, onlyIfTruncated: true }}>{i.where}</code>{:else}<span class="clip">unknown</span>{/if}</td>
           <td class="x">{#if i.path}<IconButton size="xs" icon="copy" label="Copy path of {i.finding.title}" onclick={() => copy(i.path + (i.finding.location.line ? `:${i.finding.location.line}` : ""))} />{/if}</td>
         </tr>
         {#if open}
@@ -62,7 +63,7 @@
 
 <style>
   .wrap { overflow: auto; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
-  table { width: 100%; min-width: 980px; table-layout: fixed; border-collapse: collapse; font-size: var(--fs-body-sm); }
+  table { width: 100%; min-width: 1040px; table-layout: fixed; border-collapse: collapse; font-size: var(--fs-body-sm); }
   th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: var(--fw-semibold); color: var(--text-2); border-bottom: 1px solid var(--border); white-space: nowrap; }
   th button { display: inline-flex; align-items: center; gap: 4px; width: 100%; height: 36px; padding: 0 10px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
   th button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
@@ -73,10 +74,12 @@
   th:nth-child(3) { width: 72px; }
   th:nth-child(5) { width: 148px; }
   th:nth-child(6) { width: 120px; }
-  th:nth-child(7) { width: 168px; }
-  th:nth-child(8) { width: 176px; }
+  th:nth-child(7) { width: 200px; }
+  th:nth-child(8) { width: 210px; }
   .msg { min-width: 0; }
   .dir { color: var(--text-2); }
+  /* Table cells ignore text-overflow, so the path lives in a block that can ellipsis inside the column. */
+  .clip { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .closed td { color: var(--text-2); }
   .open td { background: var(--surface-2); }
   .detail td { height: auto; background: var(--surface-2); padding: 8px 14px 14px 38px; overflow: visible; white-space: normal; }

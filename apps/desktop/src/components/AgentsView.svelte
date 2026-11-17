@@ -25,7 +25,7 @@
   import { onDestroy, tick, untrack } from "svelte";
   import { currentFolderOwner, preferredFolderOwner, resolveFolderTarget, type FolderTarget } from "../lib/folders";
   import { isComposingKey } from "../lib/keyboard";
-  import { ActionDock, ActionPill, Button } from "./ui";
+  import { ActionPill, Button, SegmentedControl } from "./ui";
   import { fleetMemory } from "../lib/agent-memory";
   import { humanBytes } from "../lib/format";
 
@@ -42,7 +42,6 @@
     picture = $bindable<Picture>("context"),
     projectReady = $bindable(false),
     projectCaption = $bindable(""),
-    pictureChrome = true,
     onselectagent,
     onentry,
     onreveal,
@@ -72,8 +71,6 @@
     picture?: Picture;
     projectReady?: boolean;
     projectCaption?: string;
-    /** When false the Computer / Footprint / Project dock lives on the app toolbar. */
-    pictureChrome?: boolean;
     onselectagent: (id: string | null) => void;
     onentry: (e: PortEntry) => void;
     onreveal: (agentId: string, path: string) => void | Promise<void | boolean>;
@@ -344,8 +341,20 @@
       {@render chunkState("shield", "Security")}
     {/if}
   {:else if section === "flow"}
-    <div class="flow-body" id="agents-flow"><AgentFlowView {query} {dark} {reduced} {...flowProps} {report} {selectedAgent} {onselectagent} bind:mode={flowSource} sourceChrome={false} /></div>
+    <div class="flow-body" id="agents-flow"><AgentFlowView {query} {dark} {reduced} {...flowProps} {report} {selectedAgent} {onselectagent} bind:mode={flowSource} /></div>
   {:else}
+<header class="section-bar">
+  <SegmentedControl label="Map picture" bind:value={picture} options={[
+    { value: "context", label: "Computer", title: "Context: this computer, the agents on it, and systems they talk to" },
+    { value: "footprint", label: "Footprint", title: "Containers: folders, tools, ports and hosts across every agent" },
+    { value: "project", label: "Project", title: projectPath ? `Components in ${projectLabel}` : "Select a folder on Footprint to see that source tree", disabled: !projectPath },
+  ]} />
+  <div class="section-actions">
+    <ActionPill toggle icon="sidebar" label={rail ? "Hide cards" : "Show cards"} pressed={rail} title={rail ? "Hide agent cards so the map uses the full width" : "Show agent cards"} onclick={() => (rail = !rail)} />
+    {#if picture !== "context"}<ActionPill toggle icon="history" label="Recent projects" pressed={recent} title="Show projects the agent opened recently (from its own project list), not only where it works now" onclick={() => (recent = !recent)} />{/if}
+    <ActionPill toggle icon="layers" label="Legend" pressed={widgets} title="Show or hide the legend and counts" onclick={() => (widgets = !widgets)} />
+  </div>
+</header>
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="agents" id="agents-overview" class:rail-off={!rail} class:has-details={!!selectedInfo} class:map-open={mapOpen} {onkeydown}>
   {#if !report && capabilitiesError}
@@ -431,18 +440,6 @@
       {#if visibleAgents.length || projectPath}
       <div class="chrome-host">
         <div class="chrome">
-          <div class="bar" role="toolbar" aria-label="Agents map options">
-            {#if pictureChrome}
-              <ActionDock size="compact" hinge={false} animate={false} label="Map picture" bind:value={picture} options={[
-                { value: "context", label: "Computer", icon: "monitor", title: "Context: this computer, the agents on it, and systems they talk to" },
-                { value: "footprint", label: "Footprint", icon: "layers", title: "Containers: folders, tools, ports and hosts across every agent" },
-                { value: "project", label: "Project", icon: "folder", title: projectPath ? `Components in ${projectLabel}` : "Select a folder on Footprint to see that source tree", disabled: !projectPath },
-              ]} />
-            {/if}
-            <ActionPill size="compact" toggle icon="sidebar" label={rail ? "Hide cards" : "Show cards"} pressed={rail} title={rail ? "Hide agent cards so the map uses the full width" : "Show agent cards"} onclick={() => (rail = !rail)} />
-            {#if picture !== "context"}<ActionPill size="compact" toggle icon="history" label="Recent projects" pressed={recent} title="Show projects the agent opened recently (from its own project list), not only where it works now" onclick={() => (recent = !recent)} />{/if}
-            <ActionPill size="compact" toggle icon="layers" label="Legend" pressed={widgets} title="Show or hide the legend and counts" onclick={() => (widgets = !widgets)} />
-          </div>
           {#if widgets && stats && !projectEmpty}
             <div class="stats" aria-live="polite">
               <span class="sr-only">{pictureHint}</span>
@@ -530,9 +527,11 @@
   .agents.rail-off.has-details { grid-template-columns: 1fr minmax(360px, 430px); }
   .details { min-width: 0; min-height: 0; overflow: auto; border-left: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-sm); }
   .flow-body { flex: 1; min-height: 0; }
+  .section-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; min-height: 46px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex: none; }
+  .section-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
   .agents { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 340px) 1fr; background: var(--bg); }
   .rail { min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg); }
-  .rail-head { padding: 12px 14px 8px; display: grid; gap: 8px; }
+  .rail-head { padding: 12px 16px 8px; display: grid; gap: 8px; }
   h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-heading); line-height: var(--lh-heading); letter-spacing: var(--ls-heading); font-weight: var(--fw-semibold); }
   .n { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--muted); background: var(--surface-2); padding: 0 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
   .hint { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
@@ -550,12 +549,12 @@
   .fleet-chip b { color: var(--text); font-weight: var(--fw-medium); }
   .jump { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; justify-self: start; }
   .jump:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
-  .cards { flex: 1; min-height: 0; overflow: auto; padding: 4px 12px 12px; display: grid; grid-auto-rows: max-content; align-content: start; gap: 8px; }
+  .cards { flex: 1; min-height: 0; overflow: auto; padding: 4px 16px 16px; display: grid; grid-auto-rows: max-content; align-content: start; gap: 10px; }
   .limits { border-top: 1px solid var(--border); padding: 8px 14px 10px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .limits summary { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; cursor: pointer; color: var(--text-2); }
   .limits ul { margin: 6px 0 0; padding-left: 16px; display: grid; gap: 3px; max-height: 160px; overflow: auto; }
   .map { position: relative; min-width: 0; min-height: 0; }
-  .chrome-host { position: absolute; top: 10px; left: 10px; z-index: 5; pointer-events: none; }
+  .chrome-host { position: absolute; top: 16px; left: 16px; z-index: 5; pointer-events: none; }
   .chrome-host .bar, .chrome-host .stats, .chrome-host .legend { pointer-events: auto; }
   .map :global(.svelte-flow) { --xy-background-color: var(--bg); --xy-controls-button-background-color: var(--surface); --xy-controls-button-color: var(--text-2); --xy-controls-button-border-color: var(--border); --xy-minimap-background-color: var(--surface); }
   .map :global(.svelte-flow__node-agent), .map :global(.svelte-flow__node-foot), .map :global(.svelte-flow__node-header) { padding: 0; border: 0; background: transparent; box-shadow: none; width: auto; border-radius: 14px; }
@@ -607,6 +606,8 @@
   }
   .chips { display: none; }
   @container (max-width: 640px) {
+    .section-bar { min-height: 0; padding: 4px 12px; gap: 4px 8px; }
+    .section-actions :global(.action-pill) { height: var(--h-xs); padding: 0 9px; }
     /* One line of fleet memory, agent chips, then the inspector (or the map) at full height. */
     .agents, .agents:not(.rail-off), .agents.has-details:not(.rail-off) { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
     .rail { border-bottom: 1px solid var(--border); }

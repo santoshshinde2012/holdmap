@@ -31,10 +31,12 @@ export interface GraphNode {
 export interface GraphEdge { id: string; from: string; to: string; label: string | null; active: boolean; severity: Severity | null }
 export interface Graph { nodes: GraphNode[]; edges: GraphEdge[] }
 
-export const NODE_W = 210;
-export const NODE_H = 104;
+export const NODE_W = 236;
+export const NODE_H = 112;
 const COL = NODE_W + 64;
-const ROW = NODE_H + 28;
+const ROW = NODE_H + 20;
+/** Space between an analyzer card and the agent cards it covers, wide enough for the edge label. */
+const OVERVIEW_GAP = 200;
 
 export const STAGE_LABEL: Record<StageKind, string> = {
   sources: "Inventory",
@@ -248,9 +250,9 @@ export function buildOverview(views: AnalyzerView[], insights: Insights | null, 
     const open = openCounts(r);
     nodes.push({
       id: `analyzer:${v.id}`, kind: "analyzer", title: v.name,
-      subtitle: r ? (total(open) ? `${total(open)} open · ${countsText(open)}` : "No open findings") : v.state === "approved" ? "Not run yet" : STATE_LABEL[v.state],
+      subtitle: r ? (total(open) ? `${total(open)} open · ${countsText(open, 4)}` : "No open findings") : v.state === "approved" ? "Not run yet" : STATE_LABEL[v.state],
       status: v.state === "approved" ? (r?.status === "failed" ? "error" : total(open) ? "warn" : "ok") : v.state === "changed" ? "warn" : "idle",
-      badges: [STATE_LABEL[v.state], v.kind === "mcp" ? "MCP" : v.kind === "cli" ? "CLI" : "built-in"],
+      badges: [...(r || v.state === "approved" ? [STATE_LABEL[v.state]] : []), v.kind === "mcp" ? "MCP" : v.kind === "cli" ? "CLI" : "built-in"],
       lines: [
         { label: "State", value: STATE_LABEL[v.state] },
         { label: "Kind", value: v.kind },
@@ -272,7 +274,7 @@ export function buildOverview(views: AnalyzerView[], insights: Insights | null, 
       const kinds = subjects.some((s) => s.kind === "package") ? "item" : "skill";
       edges.push({
         id: `e:${v.id}:${p}`, from: `analyzer:${v.id}`, to: `agent:${p}`,
-        label: `${plural(subjects.length, kinds)}${total(c) ? ` · ${countsText(c, 1)}` : ""}`,
+        label: `${plural(subjects.length, kinds)}${total(c) ? ` · ${countsText(c, 2)}` : ""}`,
         active: true, severity: worst(c),
       });
     }
@@ -282,12 +284,12 @@ export function buildOverview(views: AnalyzerView[], insights: Insights | null, 
     const covered = edges.filter((e) => e.to === `agent:${p}`).length;
     nodes.push({
       id: `agent:${p}`, kind: "agent", title: agentNames.get(p) ?? p,
-      subtitle: covered ? `${plural(covered, "analyzer")} · ${total(c) ? countsText(c) : "no open findings"}` : "Not covered by an analyzer",
+      subtitle: covered ? `${plural(covered, "analyzer")} · ${total(c) ? countsText(c, 3) : "no open findings"}` : "Not covered by an analyzer",
       status: !covered ? "idle" : (worst(c) === "critical" || worst(c) === "high") ? "error" : total(c) ? "warn" : "ok",
       badges: [],
       lines: [{ label: "Analyzers", value: edges.filter((e) => e.to === `agent:${p}`).map((e) => e.from.slice("analyzer:".length)).join(", ") || "none" }, ...SEVERITY_ORDER.filter((s) => c[s]).map((s) => ({ label: s, value: String(c[s]) }))],
       counts: c,
-      position: { x: COL * 2, y: (i - (products.length - 1) / 2) * ROW },
+      position: { x: NODE_W + OVERVIEW_GAP, y: (i - (products.length - 1) / 2) * ROW },
       width: NODE_W, height: NODE_H,
     });
   });
@@ -297,4 +299,17 @@ export function buildOverview(views: AnalyzerView[], insights: Insights | null, 
 /** Plain-text reading order for screen readers and the narrow layout. */
 export function readingOrder(g: Graph): GraphNode[] {
   return [...g.nodes].sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y);
+}
+
+/** Pixel size of the laid-out cards, used to size the canvas so fit-to-view does not shrink them. */
+export function graphSpan(g: Graph): { width: number; height: number } {
+  if (!g.nodes.length) return { width: 0, height: 0 };
+  let top = Infinity, bottom = -Infinity, left = Infinity, right = -Infinity;
+  for (const n of g.nodes) {
+    top = Math.min(top, n.position.y);
+    bottom = Math.max(bottom, n.position.y + n.height);
+    left = Math.min(left, n.position.x);
+    right = Math.max(right, n.position.x + n.width);
+  }
+  return { width: right - left, height: bottom - top };
 }

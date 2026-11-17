@@ -71,7 +71,7 @@
   }
   $effect(() => {
     // Re-measure whenever the controls change (view, section, picture, filters) or the window resizes.
-    void [view, agentSection, picture, flowSource, filters, filtersActive, sideOpen, projectCaption, stats, narrow];
+    void [view, agentSection, picture, flowSource, filters, filtersActive, sideOpen, projectReady, projectCaption, stats, narrow];
     void measure();
   });
   $effect(() => {
@@ -87,23 +87,13 @@
 </script>
 
 <nav aria-label="Views">
-<div class="toolbar" class:stacked={narrow || crowded} bind:this={bar} role="toolbar" aria-label="View and filters">
+<div class="toolbar" class:stacked={narrow || crowded || view === "agents"} bind:this={bar} role="toolbar" aria-label="View and filters">
   <ActionDock hinge={false} animate={false} label="View" bind:value={view} options={[{ value: "home", label: "Home", icon: "radar", title: "Overview: what is running and what needs a look" }, { value: "list", label: "List", icon: "list", title: singleKeys ? "Port list (G)" : "Port list" }, { value: "graph", label: "Graph", icon: "graph", count: graphEdges || null, countLabel: linksLabel(graphEdges), title: singleKeys ? "Service graph (G)" : "Service graph" }, { value: "agents", label: "Agents", icon: "bot", count: agentCount || null, countLabel: agentCount !== null ? `${agentCount} agents and tools` : undefined, title: singleKeys ? "Agents, tools and apps (⇧A)" : "Agents, tools and apps" }]} />
   <!-- Narrow windows: the active view's controls wrap onto their own rows instead of scrolling sideways. -->
   {#if view !== "home"}
   <div class="row" class:agents={view === "agents"}>
     {#if view === "agents"}
-      <ActionDock size={dock} hinge={!narrow} label="Agents workspace" bind:value={agentSection} options={[{ value: "overview", label: "Overview", icon: "bot", title: "Agents, resources and access" }, { value: "capabilities", label: "MCP & skills", icon: "plug", title: "MCP servers and skills your agents can load" }, { value: "flow", label: "Flow", icon: "branch", title: "Connections and recorded calls" }, { value: "insights", label: "Security", icon: "shield", count: securityCount || undefined, countLabel: securityCount ? `${securityCount} open findings` : undefined, title: "Security: analyzers and their findings" }]} />
-      {#if agentSection === "overview"}
-        <ActionDock size={dock} hinge={!narrow} label="Map picture" bind:value={picture} options={[
-          { value: "context", label: "Computer", icon: "monitor", title: "Context: this computer, the agents on it, and systems they talk to" },
-          { value: "footprint", label: "Footprint", icon: "layers", title: "Containers: folders, tools, ports and hosts across every agent" },
-          { value: "project", label: "Project", icon: "folder", title: projectReady ? `Components in ${projectCaption || "the selected source tree"}` : "Select a folder on Footprint to see that source tree", disabled: !projectReady },
-        ]} />
-      {/if}
-      {#if agentSection === "flow"}
-        <ActionDock size={dock} hinge={!narrow} label="Flow data source" bind:value={flowSource} options={[{ value: "connections", label: "Connections", icon: "link", title: "Observed process trees, listeners and live sockets" }, { value: "calls", label: "Calls", icon: "activity", title: "Recorded tool calls from configured agents" }]} />
-      {/if}
+      <ActionDock appearance="tabs" hinge={false} animate={false} label="Agents workspace" bind:value={agentSection} options={[{ value: "overview", label: "Overview", icon: "bot", title: "Agents, resources and access" }, { value: "capabilities", label: "MCP & skills", icon: "plug", title: "MCP servers and skills your agents can load" }, { value: "flow", label: "Flow", icon: "branch", title: "Connections and recorded calls" }, { value: "insights", label: "Security", icon: "shield", count: securityCount || undefined, countLabel: securityCount ? `${securityCount} open findings` : undefined, title: "Security: analyzers and their findings" }]} />
     {/if}
     {#if view === "list"}
       <ActionDock size={dock} hinge={!narrow} label="Socket states" value={filters.all ? "all" : "listen"} options={[{ value: "listen", label: "Listening" }, { value: "all", label: "All sockets", title: `Include established, TIME_WAIT…${singleKeys ? " (A)" : ""}` }]} onchange={(v) => { filters.all = v === "all"; onsocketschange(); }} />
@@ -136,17 +126,13 @@
   .row { display: contents; }
   .toolbar.stacked { flex-wrap: wrap; overflow-x: visible; white-space: normal; row-gap: 6px; }
   .toolbar.stacked .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--sp-2); flex: 1 1 100%; min-width: 0; }
-  /* Three levels, three looks: View is filled pills; the Agents workspace reads as quiet tabs with
-     a tinted active tab and an accent underline; the map picture / flow source is a compact
-     segmented track. Roles, roving focus and keys stay ActionDock's. */
-  .row.agents > :global(.dock:first-child .action-pill) { border-color: transparent; background: transparent; box-shadow: none; border-radius: var(--r-md); color: var(--muted); }
-  .row.agents > :global(.dock:first-child .action-pill:hover:not(:disabled)) { background: var(--surface-2); border-color: transparent; color: var(--text); }
-  .row.agents > :global(.dock:first-child .action-pill.on) { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
-  .row.agents > :global(.dock:first-child .action-pill.on:hover:not(:disabled)) { background: var(--accent-soft); color: var(--accent); }
-  .row.agents > :global(.dock:first-child .action-pill.on .count) { background: var(--accent); color: var(--accent-fg); }
-  .row.agents > :global(.dock + .dock) { padding: 2px; border: 1px solid var(--border); border-radius: var(--r-full); background: var(--surface-2); gap: 2px; }
-  .row.agents > :global(.dock + .dock .hinge) { display: none; }
-  .row.agents > :global(.dock + .dock .action-pill) { height: var(--h-xs); padding: 0 10px; font-size: var(--fs-caption); line-height: var(--lh-caption); border-color: transparent; background: transparent; box-shadow: none; color: var(--muted); }
-  .row.agents > :global(.dock + .dock .action-pill:hover:not(:disabled)) { background: transparent; border-color: transparent; color: var(--text); }
-  .row.agents > :global(.dock + .dock .action-pill.on), .row.agents > :global(.dock + .dock .action-pill.on:hover:not(:disabled)) { background: var(--surface); color: var(--text); border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+  /* Agents sections are one tab row under the view pills. The underline sits on the toolbar edge. */
+  .row.agents { display: flex; align-items: stretch; gap: 8px; flex: 1 1 100%; min-width: 0; margin: 2px calc(-1 * var(--sp-4)) -8px; padding: 0 var(--sp-2) 0 var(--sp-4); border-top: 1px solid var(--border); }
+  .row.agents > :global(.dock) { align-self: stretch; }
+  .row.agents > :global(.btn) { align-self: center; margin-right: var(--sp-2); }
+  /* A phone already stacks the view pills, the section tabs and the page header. Keep that stack short so the page keeps the window. */
+  @media (max-width: 640px) {
+    .toolbar.stacked { padding-top: 4px; padding-bottom: 4px; row-gap: 2px; }
+    .row.agents :global(.tab) { height: 34px; }
+  }
 </style>

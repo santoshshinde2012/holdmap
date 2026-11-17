@@ -36,13 +36,13 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="canvas" {onkeydown} aria-label={calls ? "Reported call relationships" : "Observed process connections"}>
   <SvelteFlow bind:nodes bind:edges {nodeTypes} {edgeTypes} colorMode={dark ? "dark" : "light"}
-    fitView fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.15 }} minZoom={0.12} maxZoom={1.8}
+    fitView fitViewOptions={{ padding: { ...FIT_PADDING, bottom: "76px" }, maxZoom: 1.15 }} minZoom={0.12} maxZoom={1.8}
     nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} deleteKey={null}
     onlyRenderVisibleElements={nodes.length > 120} proOptions={{ hideAttribution: true }}
     onnodeclick={({ node }) => onselect(node.id)} onedgeclick={({ edge }) => onselect(edge.id)} onpaneclick={() => onselect(null)}
     ariaLabelConfig={{ "controls.fitView.ariaLabel": "Fit all relationships in view" }}>
     <Background gap={22} size={1} />
-    <Controls showLock={false} orientation="horizontal" position="bottom-left" fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1.15, duration: reduced ? 0 : 300 }} />
+    <Controls showLock={false} orientation="horizontal" position="bottom-left" fitViewOptions={{ padding: { ...FIT_PADDING, bottom: "76px" }, maxZoom: 1.15, duration: reduced ? 0 : 300 }} />
     <AutoMiniMap {dark} />
     <FlowViewport token={signature} {focus} {reduced} />
   </SvelteFlow>
@@ -54,6 +54,6 @@
   .canvas :global(.svelte-flow) { --xy-background-color: var(--bg); --xy-controls-button-background-color: var(--surface); --xy-controls-button-color: var(--text-2); --xy-controls-button-border-color: var(--border); --xy-minimap-background-color: var(--surface); }
   .canvas :global(.svelte-flow__node-activity) { padding: 0; border: 0; background: transparent; box-shadow: none; border-radius: 12px; }
   .canvas :global(.svelte-flow__node:focus-visible), .canvas :global(.svelte-flow__edge:focus-visible) { outline: 2px solid var(--ring); outline-offset: 3px; }
-  .canvas :global(.svelte-flow__controls) { border: 1px solid var(--border); border-radius: 9px; overflow: hidden; box-shadow: var(--shadow-sm); }
-  .map-note { position: absolute; top: 12px; left: 12px; max-width: calc(100% - 24px); pointer-events: none; padding: 6px 9px; border: 1px solid var(--border); background: var(--surface); border-radius: 7px; color: var(--muted); font-size: var(--fs-caption); box-shadow: var(--shadow-sm); }
+  .canvas :global(.svelte-flow__controls) { z-index: 5; margin: 0 0 10px 10px; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; box-shadow: var(--shadow-sm); }
+  .map-note { position: absolute; top: 16px; left: 16px; max-width: calc(100% - 32px); pointer-events: none; padding: 6px 10px; border: 1px solid var(--border); background: var(--surface); border-radius: 7px; color: var(--muted); font-size: var(--fs-caption); box-shadow: var(--shadow-sm); }
 </style>

@@ -47,4 +47,8 @@
   .more { display: flex; gap: 8px; align-items: center; justify-content: center; margin: 0; padding: 8px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--fs-caption); }
   .more button { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; padding: 3px 10px; cursor: pointer; }
   .more button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  @media (max-width: 640px) {
+    .sheet { max-width: 100%; }
+    .cols { display: none; }
+  }
 </style>
