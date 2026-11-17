@@ -24,7 +24,18 @@
   const flow = $derived(toFlow(graph, positions, chosen));
   let nodes = $state.raw<FNode[]>([]);
   let edges = $state.raw<FEdge[]>([]);
-  $effect(() => { nodes = flow.nodes; edges = flow.edges; });
+  $effect(() => {
+    const nextNodes = flow.nodes;
+    const nextEdges = flow.edges;
+    nodes = nextNodes;
+    edges = nextEdges;
+    // Relationships are skipped until both ends have measured handles, and that measurement
+    // does not itself redraw them. Reapply after the nodes mount so a filter still shows its links.
+    const refresh = () => { edges = nextEdges.map((edge) => ({ ...edge })); };
+    const first = setTimeout(refresh, 60);
+    const settled = setTimeout(refresh, 400);
+    return () => { clearTimeout(first); clearTimeout(settled); };
+  });
   function onkeydown(event: KeyboardEvent) {
     if (event.key !== "Enter" && event.key !== " ") return;
     const target = (event.target as HTMLElement)?.closest?.(".svelte-flow__node, .svelte-flow__edge");

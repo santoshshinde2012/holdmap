@@ -126,7 +126,7 @@ try {
     await frame.getByRole("button", { name: "Port 3000 Next.js", exact: true }).waitFor();
   });
   await check("Every header control opens its surface, closes with Escape and restores focus", async () => {
-    for (const [button, dialog] of [["Commands", "Command palette"], ["Recently stopped", "Recently stopped"], [/^Scheduled actions/, "Scheduled actions"], ["Remote host…", "Remote host"], ["Settings", "Settings"]]) {
+    for (const [button, dialog] of [["Commands", "Command palette"], ["Settings", "Settings"]]) {
       const control = frame.getByRole("button", { name: button, exact: true });
       await control.click();
       const surface = frame.getByRole("dialog", { name: dialog, exact: true });
@@ -134,6 +134,16 @@ try {
       await page.keyboard.press("Escape");
       await surface.waitFor({ state: "detached", timeout: 5000 });
       if (!(await control.evaluate((element) => element === document.activeElement))) throw new Error(`${dialog} must return focus to its header button`);
+    }
+    const menu = frame.getByRole("button", { name: "History, schedules, remote", exact: true });
+    for (const [item, dialog] of [["Recently stopped", "Recently stopped"], [/^Scheduled actions/, "Scheduled actions"], ["Remote host…", "Remote host"]]) {
+      await menu.click();
+      await frame.getByRole("menuitem", { name: item, exact: true }).click();
+      const surface = frame.getByRole("dialog", { name: dialog, exact: true });
+      await surface.waitFor({ timeout: 5000 });
+      await page.keyboard.press("Escape");
+      await surface.waitFor({ state: "detached", timeout: 5000 });
+      if (!(await menu.evaluate((element) => element === document.activeElement))) throw new Error(`${dialog} must return focus to its header button`);
     }
     const refresh = frame.getByRole("button", { name: "Refresh", exact: true });
     await refresh.click();
@@ -165,7 +175,10 @@ try {
     await review.getByRole("button", { name: "Done", exact: true }).click();
     const banner = frame.getByRole("region", { name: "Active scheduled actions", exact: true });
     await banner.getByText("Stop :3000/tcp").waitFor({ timeout: 5000 });
-    await frame.getByRole("button", { name: /^Scheduled actions \(1 active\)$/ }).waitFor();
+    const menu = frame.getByRole("button", { name: "History, schedules, remote", exact: true });
+    await menu.click();
+    await frame.getByRole("menuitem", { name: "Scheduled actions (1 active)", exact: true }).waitFor();
+    await page.keyboard.press("Escape");
     await banner.getByRole("button", { name: "View / cancel", exact: true }).click();
     const manager = frame.getByRole("dialog", { name: "Scheduled actions", exact: true });
     await manager.getByRole("button", { name: "Cancel Stop :3000/tcp", exact: true }).click();
@@ -308,7 +321,9 @@ try {
     const timeline = flow.getByRole("region", { name: "Recorded activity timeline", exact: true });
     await flow.getByRole("radio", { name: "Failed", exact: true }).click();
     await flow.getByText("1 of 10 records shown", { exact: true }).waitFor();
-    if (await timeline.getByRole("button").count() !== 1 || await flow.locator(".flow-node").count() !== 5 || await flow.locator(".svelte-flow__edge").count() !== 4) throw new Error("Failure diagnosis must retain only the failed record and its reported parents");
+    await flow.locator(".svelte-flow__edge").nth(3).waitFor({ state: "attached" });
+    const edgeBox = await flow.locator(".svelte-flow__edge-path").first().boundingBox();
+    if (await timeline.getByRole("button").count() !== 1 || await flow.locator(".flow-node").count() !== 5 || await flow.locator(".svelte-flow__edge").count() !== 4 || !edgeBox || edgeBox.width + edgeBox.height < 8) throw new Error("Failure diagnosis must retain only the failed record and its reported parents");
     await timeline.getByRole("button").click();
     const inspector = flow.getByRole("region", { name: "Selected relationship details", exact: true });
     await inspector.getByText("Failed", { exact: true }).waitFor();
