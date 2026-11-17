@@ -522,8 +522,10 @@ open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../age
 inventory. Explore leads with declared skill purposes; Map retains observed
 source relationships; Compare keeps exact definitions and their contexts separate. Matching
 process observations group without becoming a verified session. Select a card with a click,
-**Enter** or **Space** for **Purpose**, **Source**, **Evidence** and **Activity**. Close or press
-**Esc** to return focus without changing the selected context. Nothing is selected automatically.
+**Enter** or **Space** and its inspector opens in the right sidebar, on **Purpose**, **Source**,
+**Evidence** and **Activity**. On a narrower window the sidebar covers the catalog until you
+close it. Close or press **Esc** to return focus without changing the selected context. Nothing
+is selected automatically.
 **Tools** explains **Catalog not reported** rather than showing zero tools. **Filters** and
 **Coverage** open on request, and narrow windows keep dismissible agent/details drawers.
 See the [capability guide](../agents/#mcp-and-skills) for supported locations and limits.

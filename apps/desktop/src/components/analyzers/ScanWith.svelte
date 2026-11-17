@@ -59,7 +59,7 @@
 </section>
 
 <style>
-  .scan { display: grid; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .scan { display: grid; gap: 8px; max-width: 760px; margin-top: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
   h4, p { margin: 0; } h4 { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

@@ -64,7 +64,7 @@ matching known account, and do not establish current work by a particular runnin
   before anything opens.
   Search by agent, folder, tool, exact PID (`pid:51200`) or explicit port (`port:3001`). A port
   search includes both the listener owner and agents connected to it.
-  Choosing **Agents** reveals **Overview**, **MCP & skills** and **Flow** as action pills on the same toolbar row.
+  Choosing **Agents** reveals **Overview**, **MCP & skills**, **Flow** and **Security** as tabs.
   **Overview** then reveals **Computer**, **Footprint** and **Project**; **Flow** reveals
   **Connections** and **Calls**. The **MCP & skills** workspace uses the
   explicit inspection described below. Computer is this machine, the agents running on it, and observed
@@ -145,9 +145,9 @@ process observations:
 | --- | --- |
 | ![Capability map places declared MCP sources left of observed agent contexts and skill sources to the right, with runtime candidates separate below](../../../../docs/screenshots/desktop-capabilities-dark.png) | ![The selected skill's Purpose tab explains declared purpose and why file presence does not establish activation](../../../../docs/screenshots/desktop-skills-dark.png) |
 
-| Details open inline | Security: analyzers |
+| Details in the sidebar | Security: analyzers |
 | --- | --- |
-| ![Selecting a skill card opens its details directly under it, with Purpose, Source, Evidence and Activity tabs and Scan with…](../../../../docs/screenshots/desktop-capability-inline-dark.png) | ![The Security tab lists analyzers and presets with their on/off and installed state; all are off by default](../../../../docs/screenshots/desktop-security-analyzers-dark.png) |
+| ![Selecting a skill card opens its details in the right sidebar, with Purpose, Source, Evidence and Activity tabs and Scan with…](../../../../docs/screenshots/desktop-capability-inline-dark.png) | ![The Security tab lists analyzers and presets with their on/off and installed state; all are off by default](../../../../docs/screenshots/desktop-security-analyzers-dark.png) |
 
 ![Agents → Security: open findings by severity, last scan and coverage; findings grouped by severity, one expanded to its fix, location, analyzer and evidence, with Mark reviewed, Snooze and Rescan](../../../../docs/screenshots/desktop-security-findings-dark.png)
 
@@ -189,9 +189,9 @@ Choose a context to scope **Explore** and **Map** to its matching process observ
 **Process details** lets you inspect one original PID instead; **Show all** clears that scope.
 **Compare** has its own **Left context** and **Right context** selectors over all observed
 contexts, even when Explore or Map was scoped to one context. Search, type and definition
-filters still narrow the comparison; selecting a row opens the same exact-source inspector.
+filters still narrow the comparison; selecting a row opens the same exact-source inspector in the right sidebar.
 
-Select a card to open its inspector:
+Select a card to open its inspector in the right sidebar. On a narrow window the sidebar covers the catalog until you close it:
 
 | Section | What it explains |
 | --- | --- |

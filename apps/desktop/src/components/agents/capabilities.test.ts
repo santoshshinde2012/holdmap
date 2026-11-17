@@ -18,7 +18,7 @@ const report = () => mockAgents(undefined, true);
 const mount = (r: AgentsReport | null = report(), extras: Partial<ComponentProps<typeof AgentCapabilitiesView>> = {}) => render(AgentCapabilitiesView, { report: r, selectedAgent: "agent:52000", reduced: true, onselectagent: vi.fn(), ...extras });
 const cursorMcp = (name: string) => `Inspect MCP server ${name}, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.cursor/mcp.json`;
 const frontendSkill = (name = "frontend-checks") => `Inspect skill ${name}, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md`;
-// Details open inline (a region by the clicked card or row); the map canvas keeps its side panel.
+// Capability details open in the right sidebar. An agent process still opens under its row.
 const details = (view: ReturnType<typeof mount>) => view.queryByRole("region", { name: "Capability details" }) ?? view.getByRole("complementary", { name: "Capability details" });
 const noDetails = (view: ReturnType<typeof mount>) => !view.queryByRole("region", { name: "Capability details" }) && !view.queryByRole("complementary", { name: "Capability details" });
 const tab = (view: ReturnType<typeof mount>, name: string) => fireEvent.click(view.getByRole("tab", { name }));
@@ -290,16 +290,16 @@ describe("MCP and skills capability explorer", () => {
     await waitFor(() => expect(copy.textContent).toContain("Copied"));
     expect(card.getAttribute("aria-expanded")).toBe("false");
   });
-  it("opens a card's details inline right after it and closes them with Escape", async () => {
+  it("opens a card's details in the right sidebar and closes them with Escape", async () => {
     const view = mount(), card = view.getByRole("button", { name: frontendSkill() });
     card.focus(); await fireEvent.click(card);
-    const panel = view.getByRole("region", { name: "Capability details" });
-    // The card's grid cell (the card and its Copy path button) is followed directly by the panel.
-    expect(card.parentElement!.nextElementSibling).toBe(panel);
+    const panel = view.getByRole("complementary", { name: "Capability details" });
+    expect(card.parentElement!.nextElementSibling).not.toBe(panel);
     expect(card.parentElement!.querySelectorAll("button")).toHaveLength(2);
     expect(card.getAttribute("aria-expanded")).toBe("true");
-    expect(card.getAttribute("aria-controls")).toBe(panel.id);
-    expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull();
+    expect(card.getAttribute("aria-controls")).toBe("capability-details");
+    expect(panel.id).toBe("capability-details");
+    expect(view.queryByRole("region", { name: "Capability details" })).toBeNull();
     await waitFor(() => expect(panel.textContent).toContain("Scan with…"));
     await fireEvent.keyDown(view.getByRole("heading", { name: "frontend-checks" }), { key: "Escape" });
     expect(noDetails(view)).toBe(true);

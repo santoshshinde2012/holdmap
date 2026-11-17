@@ -38,7 +38,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/desktop-capability-inline-light.png" width="420" alt="MCP & skills: a skill card's details open inline right under it, with Scan with… (sample data)" />
+  <img src="docs/screenshots/desktop-capability-inline-light.png" width="420" alt="MCP & skills: a skill card opens its details in the right sidebar, with Scan with… (sample data)" />
   <img src="docs/screenshots/desktop-security-analyzers-light.png" width="420" alt="Agents → Security → Analyzers: cards with publisher, what each checks, on/off or installed state and one action; all off by default (sample data)" />
 </p>
 

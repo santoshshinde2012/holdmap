@@ -123,7 +123,10 @@ async function openAgents(page, picture = "Footprint") {
   const choice = page.getByRole("radio", { name: picture, exact: true });
   await choice.click();
   await expect(choice).toHaveAttribute("aria-checked", "true");
-  if (picture === "Footprint") await expect(page.getByRole("button", { name: /^MCP server Filesystem MCP,/ })).toBeVisible();
+  // At phone width the map is hidden until Map is opened, so the footprint node is absent.
+  if (picture === "Footprint" && await page.getByRole("button", { name: "Map", exact: true }).count() === 0) {
+    await expect(page.getByRole("button", { name: /^MCP server Filesystem MCP,/ })).toBeVisible();
+  }
   if (picture === "Computer") await expect(page.getByRole("group", { name: /^This computer,/ })).toBeVisible();
 }
 
@@ -269,7 +272,7 @@ async function openCapabilities(page, mode = "map") {
     await views.getByRole("radio", { name: "Explore", exact: true }).click();
     await workspace.getByRole("radio", { name: /^Skills/ }).click();
     const catalog = workspace.getByRole("region", { name: "Capability catalog", exact: true });
-    await expect(catalog.getByRole("button")).toHaveCount(3);
+    await expect(catalog.getByRole("button", { name: /^Inspect / })).toHaveCount(3);
     await expect(catalog).toContainText("Check UI behavior, accessibility and responsive layouts");
     await expect(page.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
     await assertFits();
@@ -279,10 +282,10 @@ async function openCapabilities(page, mode = "map") {
     await views.getByRole("radio", { name: "Explore", exact: true }).click();
     const card = workspace.getByRole("button", { name: /^Inspect skill frontend-checks,/ });
     await card.click();
-    const detail = workspace.getByRole("region", { name: "Capability details", exact: true });
+    const detail = page.getByRole("complementary", { name: "Capability details", exact: true });
     await expect(detail.getByRole("heading", { name: "frontend-checks", exact: true })).toBeFocused();
     await expect(detail.getByRole("region", { name: "Scan with analyzers" })).toBeVisible();
-    await expect(page.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
+    await expect(card).toHaveAttribute("aria-expanded", "true");
     await assertFits();
     return;
   }

@@ -5,7 +5,7 @@ const cursorMcp = (name: string) => `Inspect MCP server ${name}, Project scope. 
 const frontendSkill = "Inspect skill frontend-checks, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md";
 const claudeFilesystem = "Inspect MCP server filesystem, Project scope. Agents: Claude Code (PID 51200). Project: /Users/dev/code/shop-api. Source: /Users/dev/code/shop-api/.mcp.json";
 const workspace = (page: Page) => page.getByRole("region", { name: "MCP and skills workspace", exact: true });
-// Details open inline next to the clicked card, row or process; the Map canvas keeps a side panel.
+// Capability details open in the right sidebar. A process still opens under its row.
 const details = (page: Page) => page.getByRole("region", { name: "Capability details", exact: true }).or(page.getByRole("complementary", { name: "Capability details", exact: true }));
 const graph = (page: Page) => page.getByRole("region", { name: "Agent capability graph", exact: true });
 const view = (page: Page, name: "Explore" | "Map" | "Compare") => workspace(page).getByRole("radiogroup", { name: "Capability view", exact: true }).getByRole("radio", { name, exact: true });

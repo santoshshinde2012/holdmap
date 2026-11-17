@@ -5,15 +5,11 @@
   import { capabilityLabel, capabilityItems, filterCapabilities, projectShort, scopeLabel, type CapabilityContextGroup, type CapabilityItem, type InventoryKind, type InventoryState } from "../../../lib/agent-capabilities";
   import type { CapabilityScope } from "../../../lib/types";
 
-  import type { Snippet } from "svelte";
-  let { groups, query, kind, scope, enablement, selectedId, onselect, oncontextchange, detail }: {
+  let { groups, query, kind, scope, enablement, selectedId, onselect, oncontextchange }: {
     groups: CapabilityContextGroup[]; query: string; kind: InventoryKind | "running" | "tools";
     scope: "all" | CapabilityScope; enablement: InventoryState; selectedId: string | null; onselect: (id: string) => void; oncontextchange: (agentIds: string[]) => void;
-    /** The open row's details, rendered inline under it. */
-    detail?: Snippet;
   } = $props();
-  const uid = $props.id();
-  const panelId = uid + "-detail";
+  const panelId = "capability-details";
   let leftId = $state("");
   let rightId = $state("");
   let leftAnchor = $state("");
@@ -60,12 +56,11 @@
     {#if !rows.length}<div class="empty"><h4>No matches</h4><p>Try another search or filter.</p></div>{/if}
     <div class="rows">
       {#each rows as row (row.item.id)}
-        <button class="comparison-row" class:selected={selectedId === row.item.id} data-capability-id={row.item.id} aria-expanded={selectedId === row.item.id} aria-controls={selectedId === row.item.id && detail ? panelId : undefined} aria-label={capabilityLabel(row.item).replace(/^Inspect /, "Inspect compared ")} onclick={() => onselect(row.item.id)}>
+        <button class="comparison-row" class:selected={selectedId === row.item.id} data-capability-id={row.item.id} aria-expanded={selectedId === row.item.id} aria-controls={selectedId === row.item.id ? panelId : undefined} aria-label={capabilityLabel(row.item).replace(/^Inspect /, "Inspect compared ")} onclick={() => onselect(row.item.id)}>
           <span class="identity"><b><Icon name={row.item.kind === "skill" ? "sparkles" : "plug"} size={15} />{row.item.name}</b><small>{scopeLabel[row.item.scope]} · {row.item.sourcePath}</small><small>{row.left && row.right ? "In both" : row.left ? "Left only" : "Right only"}</small></span>
           <span class="presence"><small>{left?.name}</small><span>{row.left ? "Found" : "Not found"}</span></span>
           <span class="presence"><small>{right?.name}</small><span>{row.right ? "Found" : "Not found"}</span></span>
         </button>
-        {#if detail && selectedId === row.item.id}<div class="inline-detail" id={panelId} role="region" aria-label="Capability details">{@render detail()}</div>{/if}
       {/each}
     </div>
     <div class="note"><Icon name="info" size={15} /><p>“Not found” means not reported, not proof of absence. Same names at different paths stay separate.</p></div>
@@ -81,7 +76,6 @@
   .context-notes { display: flex; gap: 12px 20px; flex-wrap: wrap; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
   .summary { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); margin: 18px 0 12px; }
   .rows { display: grid; gap: 9px; }
-  .inline-detail { border: 1px solid var(--accent); border-radius: 12px; background: var(--surface); margin-top: -4px; }
   .comparison-row { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1fr); gap: 14px; width: 100%; border: 1px solid var(--border); border-radius: 12px; padding: 15px; text-align: left; background: var(--surface); color: var(--text-2); font: inherit; cursor: pointer; }
   .comparison-row:hover { background: var(--row-hover); border-color: var(--border-strong); } .comparison-row.selected { border-color: var(--accent); }
   .comparison-row:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }

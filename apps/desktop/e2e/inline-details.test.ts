@@ -25,20 +25,20 @@ async function capabilities(page: Page) {
 }
 
 for (const t of ["light", "dark"] as const) {
-  test(`${t}: a card's details open inline under it, keep scroll and close with Esc`, async ({ app }) => {
+  test(`${t}: a card's details open in the right sidebar, keep scroll and close with Esc`, async ({ app }) => {
     await theme(app, t);
     await capabilities(app);
     const host = workspace(app).locator(".canvas-host");
     const card = workspace(app).getByRole("button", { name: frontendSkill, exact: true });
     const scroll = await host.evaluate((el) => el.scrollTop);
     await card.focus(); await card.press("Enter");
-    const panel = workspace(app).getByRole("region", { name: "Capability details", exact: true });
+    const panel = workspace(app).getByRole("complementary", { name: "Capability details", exact: true });
     await expect(panel).toBeVisible();
     await expect(card).toHaveAttribute("aria-expanded", "true");
-    // Anchored: directly after the card's grid cell (card + Copy path), starting below it, with no side panel.
-    expect(await card.evaluate((el) => el.parentElement?.nextElementSibling?.getAttribute("aria-label"))).toBe("Capability details");
-    expect((await panel.boundingBox())!.y).toBeGreaterThan((await card.boundingBox())!.y);
-    await expect(app.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
+    const cardBox = (await card.boundingBox())!;
+    const panelBox = (await panel.boundingBox())!;
+    expect(panelBox.x).toBeGreaterThan(cardBox.x);
+    expect(panelBox.x + panelBox.width).toBeGreaterThan(cardBox.x + cardBox.width);
     expect(await host.evaluate((el) => el.scrollTop)).toBe(scroll);
     await expect(panel.getByRole("heading", { name: "frontend-checks", exact: true })).toBeFocused();
     await expect(panel.getByRole("region", { name: "Scan with analyzers" })).toBeVisible();

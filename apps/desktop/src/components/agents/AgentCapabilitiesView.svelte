@@ -64,10 +64,10 @@
   const chosen = $derived<CapabilitySelection | null>(visible.find((item) => item.id === picked) ?? running.find((item) => item.id === picked) ?? null);
   const showAgent = $derived(inspectingAgent && !!active);
   const showDetails = $derived(!!chosen || showAgent);
-  // Details open next to what was clicked: a card or compare row expands in place, an agent
-  // opens under its process in the rail. Only the map canvas (and a hidden rail) uses the side panel.
+  // A selected capability opens in the right sidebar. An agent still opens under its process
+  // when the rail is on screen; the map and a hidden rail use the sidebar for that too.
   const agentInline = $derived(showAgent && !overlayRail && view !== "map");
-  const asidePanel = $derived(view === "map" ? showDetails : showAgent && overlayRail);
+  const asidePanel = $derived(!!chosen || (view === "map" && showDetails) || (showAgent && overlayRail));
   const inspected = $derived(scoped.some((agent) => agent.capabilities?.inspected));
   const mcpCount = $derived(inventory.filter((item) => item.kind === "mcp").length);
   const skillCount = $derived(inventory.filter((item) => item.kind === "skill").length);
@@ -262,10 +262,6 @@
 {#snippet capInspector()}
   {#if chosen && report}{#key chosen.id}<CapabilityInspector bind:this={inspector} item={chosen} takenAt={report.taken_at_ms} onselectagent={selectAgent} {onrecordedcalls} oncoverage={() => openPanel("coverage")} {onsettings} {onsecurity} />{/key}{/if}
 {/snippet}
-{#snippet capDetail()}
-  <div class="inline-head"><span>Details</span><Button variant="ghost" size="xs" icon="x" aria-label="Close capability details" title="Close (Esc)" onclick={closeDetails} /></div>
-  {@render capInspector()}
-{/snippet}
 {#snippet agentDetail()}
   {#if active}
     <div class="inspector"><span class="eyebrow">Agent process</span><h3 class="inspector-title" tabindex="-1" bind:this={inspectorHeading}>{active.name}</h3><p class="detail-intro">PID {active.pid} · {active.vendor}</p>
@@ -339,13 +335,13 @@
       <div class="map-area">
         <div class="canvas-host" class:scrollable={view !== "map" || kind === "tools"}>
           <div hidden={view !== "compare" || kind === "tools"}>
-            <CapabilityComparison groups={contexts} {query} {kind} {scope} {enablement} selectedId={chosen?.id ?? null} onselect={toggleItem} oncontextchange={compareContexts} detail={view === "compare" && chosen ? capDetail : undefined} />
+            <CapabilityComparison groups={contexts} {query} {kind} {scope} {enablement} selectedId={chosen?.id ?? null} onselect={toggleItem} oncontextchange={compareContexts} />
           </div>
           {#if kind === "tools"}
             <div class="tools-empty"><span class="empty-icon"><Icon name="terminal" size={27} /></span><h3>Tool catalog not reported</h3><p>Config files don't list each tool, so the count is unknown, not zero.</p><p>Check the agent's own tool settings, or open recorded calls to see what was used.</p><div class="empty-actions"><button onclick={() => { kind = "mcp"; enablement = "all"; }}>Explore MCP definitions</button><button onclick={() => openPanel("coverage")}>View coverage</button>{#if onrecordedcalls}<button onclick={onrecordedcalls}>Open recorded calls</button>{/if}</div></div>
           {:else if view !== "compare"}
             {#if view === "map"}<CapabilityMap bind:this={canvas} agents={scoped} contextGroups={mapContexts} items={visible} {running} {agentIds} selectedAgent={context?.representative.id ?? selectedAgent} selectedId={chosen?.id ?? (showAgent ? active?.id ?? null : null)} filtered={narrowed} {dark} {reduced} onselect={select} onselectagent={selectMapAgent} />
-            {:else}<CapabilityCatalog items={visible} {running} selectedId={chosen?.id ?? null} onselect={toggleItem} detail={chosen ? capDetail : undefined} />{/if}
+            {:else}<CapabilityCatalog items={visible} {running} selectedId={chosen?.id ?? null} onselect={toggleItem} />{/if}
             {#if !visible.length && !running.length}
               <div class="map-empty" class:catalog-empty={view === "explore"} role="status"><span class="empty-icon"><Icon name={loading ? "refresh" : narrowed ? "search" : "plug"} size={21} /></span><div><h3>{loading ? "Inspecting capability sources…" : kind === "running" ? query.trim() ? "No runtime matches" : "No runtime candidates" : narrowed ? "No inventory matches" : inspected ? "No entries reported" : "Inventory not inspected"}</h3><p>{kind === "running" ? "No MCP server processes. Remote or idle servers may not run locally." : narrowed ? "Try another name, purpose, path or scope." : "Only supported sources are read."}</p><div class="empty-actions">{#if filtered}<button onclick={reset}>Reset filters</button>{/if}{#if query.trim() && onclearquery}<button onclick={onclearquery}>Clear search</button>{/if}{#if active || context}<button onclick={() => selectAgent(null)}>View all agents</button>{/if}<button onclick={() => openPanel("coverage")}>View coverage</button>{#if kind !== "running" && !inspected && !loading && onretry}<button onclick={onretry}>Inspect sources</button>{/if}</div></div></div>
             {/if}
@@ -354,8 +350,8 @@
         <div class="evidence-footer"><Icon name="info" size={13} /><span>Found in config isn't the same as loaded or used.</span><button onclick={() => openPanel("coverage")}>About coverage</button></div>
       </div>
       {#if asidePanel}
-        <aside class="details" aria-label="Capability details" bind:this={detailsElement} onfocusout={leaveDetails}>
-          <header class="rail-head"><button class="back" onclick={closeDetails}><Icon name="arrow-left" size={14} />Back to capabilities</button><Button variant="ghost" size="xs" icon="x" aria-label="Close capability details" onclick={closeDetails} /></header>
+        <aside class="details" id="capability-details" aria-label="Capability details" bind:this={detailsElement} onfocusout={leaveDetails}>
+          <div class="side-close"><Button variant="ghost" size="xs" icon="x" aria-label="Close capability details" title="Close (Esc)" onclick={closeDetails} /></div>
           {#if chosen}{@render capInspector()}{:else if active}{@render agentDetail()}{/if}
         </aside>
       {/if}
@@ -384,7 +380,7 @@
   .head-actions { display: flex; align-items: center; gap: 6px; flex: none; margin-left: auto; }
   .preview { color: var(--tone-blue); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-full); padding: 2px 7px; }
   .workspace { display: grid; grid-template-columns: 250px minmax(0, 1fr); flex: 1; min-height: 0; position: relative; }
-  .workspace.has-details { grid-template-columns: 240px minmax(0, 1fr) 320px; }
+  .workspace.has-details { grid-template-columns: 240px minmax(0, 1fr) 380px; }
   .rail, .details { background: var(--surface); min-width: 0; overflow: auto; overscroll-behavior: contain; } .rail { border-right: 1px solid var(--border); } .details { border-left: 1px solid var(--border); }
   .rail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; padding: 10px 16px; border-bottom: 1px solid var(--border); } .rail-head h3 { display: flex; gap: 8px; align-items: center; } .rail-head h3 span, .rail-hint { color: var(--muted); font-weight: var(--fw-medium); font-size: var(--fs-caption); }
   .agent-list { display: grid; gap: 6px; padding: 10px; } .agent-choice { display: flex; width: 100%; align-items: center; gap: 9px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; background: var(--surface); color: var(--text-2); text-align: left; box-shadow: var(--shadow-sm); }
@@ -397,10 +393,9 @@
   .process-toggle { display: flex; align-items: center; gap: 4px; padding: 0 9px; border: 0; border-left: 1px solid var(--border); background: var(--surface-2); color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); } .process-toggle:hover { color: var(--text); }
   .process-list { grid-column: 1 / -1; }
   .agent-inline { margin: 2px 0 6px; border: 1px solid var(--accent); border-radius: 8px; background: var(--surface); } .agent-inline .inspector { padding: 12px; } .agent-inline .agent-counts { margin-top: 12px; } .agent-inline dl { margin: 14px 0; gap: 10px; }
-  .inline-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 0 18px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .side-close { position: sticky; top: 0; z-index: 2; display: flex; justify-content: flex-end; padding: 6px 8px 0 16px; background: var(--surface); }
   .process-list { padding: 5px; border-top: 1px solid var(--border); display: grid; gap: 3px; } .process-choice { display: flex; gap: 8px; align-items: center; justify-content: space-between; width: 100%; padding: 8px 5px; background: var(--surface); color: var(--text-2); border: 0; border-radius: 5px; font-size: var(--fs-caption); line-height: var(--lh-caption); } .process-choice:hover { background: var(--row-hover); } .process-choice[aria-pressed="true"] { background: var(--row-selected); } .process-choice code { color: var(--muted); }
   .rail-note { padding: 2px 14px 16px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
-  .back { display: flex; align-items: center; gap: 6px; border: 0; padding: 4px 0; color: var(--text-2); background: transparent; font-size: var(--fs-body-sm); }
   .map-area { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .browse-button { display: none; border: 1px solid var(--border); border-radius: var(--r-sm); width: 30px; height: 30px; flex: none; place-items: center; color: var(--text-2); background: var(--surface); }
   .all-link { display: flex; gap: 4px; align-items: center; border: 0; background: transparent; color: var(--accent); font-size: var(--fs-caption); }
@@ -422,7 +417,7 @@
   .detail-intro, .agent-hint { margin-top: 12px; color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); } .agent-counts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 20px; } .agent-counts > span { display: grid; grid-template-columns: auto 1fr; gap: 6px; padding: 12px; background: var(--surface-2); border-radius: 10px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); } .agent-counts b { color: var(--text); font-size: var(--fs-heading); }
   dl { display: grid; gap: 17px; margin: 24px 0; } dl > div { display: grid; gap: 5px; } dt { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); } dd { margin: 0; color: var(--text-2); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); overflow-wrap: anywhere; }
   .notice { display: flex; align-items: center; gap: 8px; padding: 8px 16px; } .empty { flex: 1; display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; text-align: center; padding: 24px; color: var(--muted); } .empty h3 { color: var(--text-2); } .empty p { max-width: 480px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
-  @container (max-width: 1180px) { .workspace.has-details { grid-template-columns: 235px minmax(0, 1fr); } .details { position: absolute; z-index: 6; top: 10px; right: 10px; bottom: 10px; width: min(350px, calc(100% - 20px)); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); } }
+  @container (max-width: 1080px) { .workspace.has-details { grid-template-columns: 220px minmax(0, 1fr); } .details { position: absolute; z-index: 6; top: 0; right: 0; bottom: 0; width: min(400px, 100%); border-left: 1px solid var(--border); box-shadow: -16px 0 40px rgb(0 0 0 / 0.14); } }
   @container (max-width: 960px) { .who { display: grid; } .head-actions { margin-left: auto; } .workspace, .workspace.has-details { grid-template-columns: minmax(0, 1fr); } .rail { display: none; } .rail.is-open { display: block; position: absolute; z-index: 6; top: 10px; left: 10px; bottom: 10px; width: min(330px, calc(100% - 20px)); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); } .browse-button { display: grid; } .map-empty { bottom: 60px; width: calc(100% - 28px); padding: 12px; } .coverage-panel { top: 96px; max-height: calc(100% - 110px); } .tools-empty { margin: 15px; padding: 20px; } }
   @container (max-width: 560px) { .context { flex: 1 1 100%; } .result-summary { flex: 1 1 100%; white-space: normal; } .evidence-footer { padding: 8px 12px; } }
 </style>

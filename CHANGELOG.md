@@ -18,6 +18,7 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ### Changed
 
+- Agents Overview, MCP & skills, Flow and Security share one tab row. A selected skill or MCP server opens in a right sidebar; a narrow window turns that sidebar into a drawer, and Escape returns to the card.
 - The macOS menu bar starts compact: one item with the holdmap icon (a dot when something needs you) and two readings; **Every reading** brings back one item per reading. Labels read **ALERTS** and **SERVERS**, and a new **Agent RAM** reading is available.
 - The tray panel is clearer: Agents, RAM and CPU tiles, **Stop all…** in the Dev servers header, top agents by RAM with their project instead of a PID, developer tools such as Docker Desktop listed apart from AI agents, and readings that never slide under the header.
 - Home cards show RAM and CPU and tell same-named agents apart; failed scans say so with **Try again** instead of loading forever; "RAM" is used everywhere, including the CLI, TUI and website.

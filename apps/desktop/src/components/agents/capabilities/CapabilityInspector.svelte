@@ -35,9 +35,14 @@
   }
 </script>
 
-<div class="inspector">
-  <span class="eyebrow"><EvidenceChip {...chip} /></span>
-  <h3 tabindex="-1" bind:this={heading}><span class="symbol"><Icon name={item.kind === "skill" ? "sparkles" : item.kind === "mcp" ? "plug" : "cpu"} size={20} /></span>{item.name}</h3>
+<div class="inspector kind-{item.kind}">
+  <header class="mast">
+    <span class="symbol"><Icon name={item.kind === "skill" ? "sparkles" : item.kind === "mcp" ? "plug" : "cpu"} size={18} /></span>
+    <div class="mast-copy">
+      <span class="eyebrow"><EvidenceChip {...chip} /></span>
+      <h3 tabindex="-1" bind:this={heading}>{item.name}</h3>
+    </div>
+  </header>
   <div class="tabs" role="tablist" tabindex="-1" aria-label="Capability inspection" onkeydown={key}>
     {#each tabs as entry, index (entry.id)}
       <button id={`${prefix}-${entry.id}`} role="tab" aria-selected={tab === entry.id} aria-controls={`${prefix}-panel`} tabindex={tab === entry.id ? 0 : -1} bind:this={tabButtons[index]} onclick={() => tab = entry.id}>{entry.label}</button>
@@ -45,13 +50,19 @@
   </div>
   <div class="panel" id={`${prefix}-panel`} role="tabpanel" aria-labelledby={`${prefix}-${tab}`} tabindex="0">
     {#if tab === "purpose"}
-      <h4>{skill ? "Declared purpose" : "What this is"}</h4>
-      <p>{skill ? skill.description || "No description in the skill header." : mcp ? "An MCP server defined in this agent's config. Its tools aren't reported." : "A process that looks like an MCP server. Not linked to any config entry."}</p>
-      <h4>Why it's listed</h4>
-      <p>{skill ? "This SKILL.md is in a source the agent reads. The description is the author's claim." : mcp ? "Found in a supported config file, with its name, scope and transport." : "Process evidence only. A similar name doesn't make it the configured server."}</p>
+      <div class="split">
+        <div>
+          <h4>{skill ? "Declared purpose" : "What this is"}</h4>
+          <p class="lead">{skill ? skill.description || "No description in the skill header." : mcp ? "An MCP server defined in this agent's config. Its tools aren't reported." : "A process that looks like an MCP server. Not linked to any config entry."}</p>
+        </div>
+        <div class="note">
+          <h4>Why it's listed</h4>
+          <p>{skill ? "This SKILL.md is in a source the agent reads. The description is the author's claim." : mcp ? "Found in a supported config file, with its name, scope and transport." : "Process evidence only. A similar name doesn't make it the configured server."}</p>
+        </div>
+      </div>
     {:else if tab === "source"}
       <h4>Source &amp; context</h4>
-      <dl>
+      <dl class="sheet">
         {#if item.kind === "running"}
           <div><dt>Process ID</dt><dd><code>{item.tool.pid}</code></dd></div>
           {#if item.tool.cwd}<div><dt>Working folder</dt><dd class="path">{item.tool.cwd}</dd></div>{/if}
@@ -85,23 +96,38 @@
 </div>
 
 <style>
-  .inspector { padding: 20px 18px; }
+  .inspector { --k: var(--accent); container-type: inline-size; padding: 0 20px 18px; }
+  .kind-skill { --k: var(--tone-amber); }
+  .kind-running { --k: var(--tone-green); }
+  .inspector::before { content: ""; display: block; height: 3px; margin: 0 -20px 16px; background: var(--k); }
   h3, h4, p { margin: 0; }
-  .eyebrow { display: block; margin-bottom: 12px; }
-  h3 { display: flex; align-items: center; gap: 10px; font-size: var(--fs-heading); line-height: var(--lh-heading); overflow-wrap: anywhere; outline: none; }
-  .symbol { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 11px; background: var(--accent-soft); color: var(--accent); }
-  .tabs { display: flex; gap: 3px; margin: 22px -5px 18px; padding-bottom: 9px; border-bottom: 1px solid var(--border); }
-  .tabs button { flex: 1; min-width: 0; padding: 7px 3px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: var(--fs-caption); cursor: pointer; }
-  .tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+  .mast { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+  .mast-copy { display: grid; gap: 4px; min-width: 0; }
+  .eyebrow { display: block; }
+  h3 { font-size: var(--fs-title); line-height: var(--lh-title); letter-spacing: var(--ls-title); overflow-wrap: anywhere; outline: none; }
+  .symbol { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px; background: color-mix(in srgb, var(--k) 14%, var(--surface)); color: var(--k); }
+  .tabs { display: flex; gap: 2px; margin: 14px 0 16px; border-bottom: 1px solid var(--border); }
+  .tabs button { flex: none; height: 34px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: inherit; font-size: var(--fs-body-sm); cursor: pointer; }
+  .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--k); font-weight: var(--fw-semibold); }
   button:focus-visible, .panel:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-  .panel { border-radius: 4px; }
-  h4 { margin-top: 20px; margin-bottom: 9px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); } h4:first-child { margin-top: 0; }
+  .panel { max-width: 760px; border-radius: 4px; }
+  .split { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(200px, 0.8fr); gap: 14px; align-items: start; }
+  .note { padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--k) 8%, var(--surface-2)); }
+  h4 { margin-bottom: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); font-weight: var(--fw-semibold); }
+  .lead { font-size: var(--fs-body); line-height: var(--lh-title); color: var(--text); }
   p, dd { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); overflow-wrap: anywhere; color: var(--text-2); }
-  p + p { margin-top: 14px; }
   .muted { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
-  dl { display: grid; gap: 17px; margin: 15px 0; } dl > div { display: grid; gap: 5px; }
-  dt { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); } dd { margin: 0; }
+  dl { display: grid; gap: 14px; margin: 8px 0; }
+  dl.sheet { gap: 0; margin: 4px 0 8px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
+  dl.sheet > div { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 12px; align-items: start; padding: 10px 12px; }
+  dl.sheet > div + div { border-top: 1px solid var(--border); }
+  dt { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); padding-top: 2px; } dd { margin: 0; }
   code, .path { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); }
-  .owner { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; width: 100%; border: 0; padding: 5px 0; text-align: left; color: var(--text-2); background: transparent; font: inherit; font-size: var(--fs-body-sm); cursor: pointer; }
-  .owner code { color: var(--muted); } .owner :global(svg) { margin-left: auto; }
+  .owner { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; width: 100%; border: 1px solid var(--border); border-radius: 8px; margin-top: 6px; padding: 6px 8px; text-align: left; color: var(--text); background: var(--surface-2); font: inherit; font-size: var(--fs-body-sm); cursor: pointer; }
+  .owner:first-child { margin-top: 0; }
+  .owner code { color: var(--muted); } .owner :global(svg) { margin-left: auto; color: var(--muted); }
+  .owner:hover { border-color: var(--border-strong); }
+  @container (max-width: 560px) {
+    .split, dl.sheet > div { grid-template-columns: 1fr; gap: 4px; }
+  }
 </style>
