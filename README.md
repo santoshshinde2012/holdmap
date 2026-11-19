@@ -74,6 +74,8 @@
   take apart: a district per agent with its tower, folders and ports, its processes and the
   configuration found on disk on trays above it, CPU gauges, network ripples and connections that
   move their way. Lenses show one concern at a time, with X-ray, a floor plan and a guided tour.
+  A selected part opens that agent's Overview, MCP & skills, Flow, Results or Security,
+  and a skill or MCP server opens that item.
   Every link comes from what holdmap observed; nothing is joined by name.
 - **Menu bar and tray widgets.** Small menu-bar items on macOS like a system
   monitor's (agents, what needs you, their CPU, dev servers, a CPU line or per-agent bars) and a

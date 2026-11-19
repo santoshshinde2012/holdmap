@@ -9,6 +9,7 @@
 // - recorded calls stay in their lane: a reported alias or PID never joins a configured server
 //   or a process, so no wire touches a call (see calls.ts).
 import { bytesOrUnknown, memoryFor, shareText } from "../agent-memory";
+import { capabilityItemId, runningCapabilityId } from "../agent-capabilities";
 import { isUnpinned, launchLine, runState } from "../agent-config";
 import { ACCESS_LABEL, accessHeadline, KIND_LABEL } from "../agents";
 import { humanBytes, tildify } from "../format";
@@ -57,6 +58,8 @@ export interface Part {
   /** An agent's drawn processes' CPU, revealed as slices inside the tower in X-ray. */
   slices?: number[];
   target: PartTarget;
+  /** Catalog id opened in MCP & skills, for one server, skill, or running MCP process. */
+  capabilityId?: string;
   /** Inspector rows, already worded. */
   facts: [string, string][];
 }
@@ -127,6 +130,7 @@ function mcpPart(owner: string, s: AgentMcpServer): Part {
     sub: `${run.label} · ${launchLine(s)}`, evidence: "configured", live: run.tone === "ok", variant: run.tone,
     warn: unpinned ? "Fetches its code without a pinned version, so it can change on the next launch" : null,
     target: { view: "agents", agentId: owner },
+    capabilityId: capabilityItemId("mcp", s),
     facts: [["Run state", `${run.label}. ${run.detail}`], ["Launch", launchLine(s)], ["Transport", s.transport], ["Scope", SCOPE_LABEL[s.scope]], ["Source", tildify(s.source_path)],
       ...(s.env_names?.length ? [["Environment names", s.env_names.join(", ")] as [string, string]] : [])],
   });
@@ -138,6 +142,7 @@ function skillPart(owner: string, s: AgentSkill, trust: ReadonlyMap<string, Skil
     id: `${owner}:skill:${s.id}`, kind: "skill", layer: "config", owner, label: s.declared_name || s.name,
     sub: t ? (t.state === "trusted" ? "Trusted" : TRUST_WARN[t.state] ?? "Couldn't read") : `${SCOPE_LABEL[s.scope]} skill`,
     evidence: "configured", variant: t?.state ?? "file", warn: t ? TRUST_WARN[t.state] ?? null : null, target: { view: "agents", agentId: owner },
+    capabilityId: capabilityItemId("skill", s),
     facts: [["Purpose", s.description ?? "No description declared"], ["Scope", SCOPE_LABEL[s.scope]], ["File", tildify(s.source_path)],
       ["Activation", "Unknown: a skill file on disk doesn't prove it was loaded"]],
   });
@@ -216,6 +221,7 @@ export function buildScene({ report, entries = null, hot = new Set(), needs = ne
       parts.push(part({
         id, kind: "tool", layer: "runtime", owner: a.id, label: t.name, sub: `${TOOL_LABEL[t.kind]} · PID ${t.pid}`, evidence: t.evidence, live: true, variant: t.kind,
         cpu: t.cpu_percent, memory: t.memory_bytes, target: { view: "agents", agentId: a.id },
+        capabilityId: t.kind === "mcp_server" ? runningCapabilityId(t.pid) : undefined,
         facts: [["Kind", TOOL_LABEL[t.kind]], ["PID", String(t.pid)], ["CPU", t.cpu_unknown ? "unknown" : pct(t.cpu_percent)], ["RAM", humanBytes(t.memory_bytes)],
           ...(t.cwd ? [["Folder", tildify(t.cwd)] as [string, string]] : []), ...(t.ports.length ? [["Ports", t.ports.map((p) => `:${p}`).join(", ")] as [string, string]] : []),
           ["How it's known", t.evidence === "observed" ? "Seen in the process table" : "Classified from its name and command"]],
@@ -420,5 +426,5 @@ export function agentSummary(scene: MachineScene, id: string): string {
   const mcp = parts.filter((p) => p.kind === "mcp"), running = mcp.filter((m) => m.live).length;
   const bits = [n("tool") && plural(n("tool"), "process", "processes"), n("port") && plural(n("port"), "port"),
     mcp.length && `${mcp.length} MCP configured${running ? `, ${running} running` : ""}`, n("skill") && plural(n("skill"), "skill")].filter(Boolean);
-  return bits.join(" · ") || "Nothing else drawn";
+  return bits.join(" · ") || "No ports or processes";
 }

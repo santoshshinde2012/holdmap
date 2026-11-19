@@ -49,21 +49,19 @@ for (const t of ["light", "dark"] as const) {
     await expect(card).toHaveAttribute("aria-expanded", "false");
   });
 
-  test(`${t}: process details open under the process row`, async ({ app }) => {
+  test(`${t}: a process opens the existing agent details screen`, async ({ app }) => {
     await theme(app, t);
     await capabilities(app);
     const toggle = app.getByRole("button", { name: "Show processes for Cursor", exact: true });
     await toggle.click();
     await expect(app.getByRole("button", { name: "Hide processes for Cursor", exact: true })).toHaveAttribute("aria-expanded", "true");
-    const row = app.getByRole("button", { name: "Inspect agent card Cursor, PID 52000", exact: true });
-    await row.click();
-    const panel = app.getByRole("complementary", { name: "Capability agents" }).getByRole("region", { name: "Capability details", exact: true });
-    await expect(panel).toContainText("PID 52000");
-    expect(await row.evaluate((el) => el.nextElementSibling?.getAttribute("aria-label"))).toBe("Capability details");
-    await axe(app, "#agent-capabilities");
-    await app.keyboard.press("Escape");
-    await expect(panel).toHaveCount(0);
-    await expect(row).toBeFocused();
+    await app.getByRole("button", { name: "Inspect agent card Cursor, PID 52000", exact: true }).click();
+    await expect(app.getByRole("radio", { name: "Overview", exact: true })).toHaveAttribute("aria-checked", "true");
+    const details = app.getByRole("complementary", { name: "Agent details", exact: true });
+    await expect(details.getByRole("heading", { name: "Cursor", exact: true })).toBeVisible();
+    await expect(details).toContainText("52000");
+    await expect(app.getByRole("complementary", { name: "Capability details" })).toHaveCount(0);
+    await axe(app, "#agent-details");
   });
 
   test(`${t}: Security is one click away, with analyzers and their install state`, async ({ app }) => {

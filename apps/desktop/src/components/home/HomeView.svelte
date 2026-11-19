@@ -27,9 +27,8 @@
   import { HOME_LAYOUTS, HOME_LAYOUT_LABEL, type HomeLayout } from "../../lib/home-layout";
   import { prefGetBoolean, prefSet } from "../../lib/prefs";
   import type { ActivitySnapshot, RecordingStatus } from "../../lib/agent-flow/model";
+  import type { AgentJump } from "../../lib/agent-jump";
   import type { AgentsReport, PortEntry } from "../../lib/types";
-
-  type Section = "overview" | "capabilities" | "insights";
   let { entries, report, inventory = false, now = Date.now(), layout = "cards", query = "", onlayout, timeline = true, ontimeline, singleKeys = true, activity = null, recording = null, onopenagent, onopenentry, onview, onsecurity, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent, agentsError = null, onretryagents }: {
     entries: PortEntry[] | null;
     report: AgentsReport | null;
@@ -50,7 +49,7 @@
     /** Opt-in recorded calls for the 3D view's calls lane. */
     activity?: ActivitySnapshot | null;
     recording?: RecordingStatus | null;
-    onopenagent: (id: string, section?: Section) => void;
+    onopenagent: (id: string, jump?: AgentJump, capabilityId?: string) => void;
     onopenentry: (id: string) => void;
     onview: (view: "list" | "agents" | "graph") => void;
     /** Opens Security → Findings (the skill-security tile). */
@@ -222,7 +221,7 @@
                 <!-- The list of agents below stands in on a narrow window. -->
               {:else if Machine3D}
                 <Machine3D report={shown} {entries} {hot} needs={needsByAgent(needs, report)} {colors} trust={trustStore.report?.skills ?? []} {selected} {active} {inventory} {singleKeys} {activity} {recording} expanded={focused} onexpand={(on) => (focus3d = on)} {oninventory}
-                  onselectagent={setSelected} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} onport={port} ondetails={side ? (d) => (details3d = d) : undefined} fallback={machineMap} />
+                  onselectagent={setSelected} onhover={(id) => (hovered = id)} onopenagent={(id, jump, capabilityId) => onopenagent(id, jump, capabilityId)} onport={port} ondetails={side ? (d) => (details3d = d) : undefined} fallback={machineMap} />
               {:else if machine3dError}
                 <p class="clear">Couldn't load the 3D view. <button type="button" class="inv" onclick={() => onlayout?.("map")}>Show the Map</button></p>
               {:else}
@@ -308,8 +307,11 @@
      Needs you takes the rest, its list scrolling inside it. A folded panel is just its header. */
   .side { display: flex; flex-direction: column; gap: var(--sp-3); min-height: 0; }
   .side > :global(.cpanel:first-child:not(:last-child)) { flex: 0 1 auto; max-height: 58%; }
-  .side > :global(.cpanel:first-child:not(:last-child) > .body) { overflow-y: auto; }
+  .side > :global(.cpanel:first-child:not(:last-child) > .body) { overflow-y: auto; flex: 1 1 auto; min-height: 0; }
   .side :global(.cpanel > .body > :last-child) { flex: 1 1 auto; min-height: 0; }
+  /* The selected part keeps its own height and the panel scrolls, so the readings aren't crushed under the fact list. */
+  .side :global(.cpanel > .body > .inspector.flat),
+  .side :global(.cpanel > .body > .readings.flat) { flex: 0 0 auto; min-height: auto; overflow: visible; }
   .side :global(.cpanel > .body > .trust-alert) { margin: var(--sp-2) var(--sp-2) 0; width: auto; }
   .needs-scroll { overflow-y: auto; min-height: 0; }
   .folded { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; }

@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Overview: a compact summary of the selected agent (RAM with its process table, access,
-  // folders, configuration and tools). Relationships, ports and findings live in their own tabs.
+  // This agent's own picture: memory, access, folders and the processes it is running.
+  // Servers, skills and file locations stay behind Configuration. Flow and Security are other screens.
   import Icon from "../../Icon.svelte";
   import AgentMemoryPanel from "../AgentMemoryPanel.svelte";
   import AgentConfigPanel from "../AgentConfigPanel.svelte";
@@ -95,7 +95,7 @@
 
 <div class="sec-box" id="section-config-{base}">
   {#if cfg}
-    <details class="cfg" open>
+    <details class="cfg">
       <summary><span class="cfg-sum"><Icon name="sliders" size={13} />Configuration</span> <span>{cfg.running}/{cfg.mcp} MCP running · {cfg.skills + cfg.instructions} skills · {cfg.rules} rules</span></summary>
       <AgentConfigPanel {agent} />
     </details>

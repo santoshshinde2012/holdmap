@@ -959,7 +959,14 @@ published asset digests and IDs, then publishes the complete `latest.json` index
   so text uses the shared tokens and stays accessible; the parts list is the canvas's keyboard
   outline. The view hands Home its readings and inspector as a snippet (`ondetails`), which Home
   renders in its side column above Needs you, so they keep the view's live state while living
-  outside the canvas. `HomeView` imports the view on demand, skips it on narrow windows and owns
+  outside the canvas. `agent-jump.ts` names the screen each part kind opens (a skill or MCP
+  server to MCP & skills, a process or remote host to Flow, a recorded call to the calls
+  timeline, everything else to that agent's Overview). The inspector leads with those doors,
+  and a second click on the same part takes the same route. A skill, MCP server, or running
+  MCP process also carries its catalog id (`capabilityItemId` / `runningCapabilityId`);
+  `agent-focus.svelte.ts` holds that id until the capability workspace is on screen, which
+  then opens that card and clears the request. A recorded call clears the agent
+  selection, because calls are not attributed to an agent and a leftover scope would hide them. `HomeView` imports the view on demand, skips it on narrow windows and owns
   Focus (summary and side column step aside); the app polls the existing recorder for it only
   while 3D is shown; without WebGL 2 (or with software rendering unless the viewer opts in) it
   renders the 2D map with the reason. The chunk carries three.js and has its own site budget.

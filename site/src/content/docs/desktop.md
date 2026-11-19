@@ -39,6 +39,11 @@ plate below. Its processes stand on a **Runtime** tray over the same district, a
 servers, skills and instruction files found on disk on a **Configuration** tray above that
 (only after **Read MCP config**). Everything over a district belongs to that agent, so no line
 is needed to say so. **This computer** is the chip at the left end of the board.
+Select a part and Details offers **Overview**, **MCP & skills**, **Flow**, **Results** and
+**Security** for that agent. A second click on the same part opens the screen it belongs to.
+A skill or MCP server opens that item in the MCP & skills sidebar, an MCP process opens its
+running card, another process or a remote host opens Flow, and a recorded call opens the
+calls timeline.
 
 - **Shapes and rings mean one thing each.** The icon on a part's top face says what it is
   (`>_` a shell, `</>` a dev server, a plug an MCP server, a folder, a socket). The ring round a

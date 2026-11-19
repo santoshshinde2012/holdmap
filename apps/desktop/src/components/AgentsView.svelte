@@ -212,14 +212,7 @@
     return [...new Set([id, ...graph.edges.filter((e) => e.from === id || e.to === id).flatMap((e) => [e.from, e.to])])];
   });
   const selectedInfo = $derived(report?.agents.find((a) => a.id === selectedAgent) ?? null);
-  /** The details section stays put while ↑/↓ or a card click switches agents, for easy comparison. */
-  let detailTab = $state<"overview" | "capabilities" | "flow" | "security">("overview");
-  // The Flow section reads the same observed connections and recorded calls as the Flow workspace.
   const selectedInfoId = $derived(selectedInfo?.id ?? null);
-  $effect(() => {
-    if (section !== "overview" || detailTab !== "flow" || !selectedInfoId) return;
-    untrack(() => { flowProps.onrefreshflow?.(); flowProps.onrefreshactivity?.(); });
-  });
   let detailsView = $state<{ focusHeading: () => void } | undefined>();
   let detailsOpener: HTMLElement | null = null;
   /** Select an agent from any surface and reveal its details; the panel takes focus only when asked. */
@@ -326,7 +319,7 @@
 <div class="agents-root" class:reduced>
   {#if section === "capabilities"}
     {#if CapabilityWorkspace}
-      <CapabilityWorkspace {report} {query} {selectedAgent} {dark} {reduced} loading={capabilitiesLoading} error={capabilitiesError} demo={flowProps.demo} {onselectagent} onclearquery={flowProps.onclearquery} onretry={onrefreshcapabilities} onrecordedcalls={() => { flowSource = "calls"; section = "flow"; }} {onsettings} onsecurity={() => { section = "insights"; }} />
+      <CapabilityWorkspace {report} {query} {selectedAgent} {dark} {reduced} loading={capabilitiesLoading} error={capabilitiesError} demo={flowProps.demo} {onselectagent} onopendetails={() => { section = "overview"; }} onclearquery={flowProps.onclearquery} onretry={onrefreshcapabilities} onrecordedcalls={() => { flowSource = "calls"; section = "flow"; }} {onsettings} onsecurity={() => { section = "insights"; }} />
     {:else if capabilityChunkError}
       {@render chunkState("plug", "MCP & skills", loadCapabilityWorkspace)}
     {:else}
@@ -499,10 +492,10 @@
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
       <aside class="details" id="agent-details" aria-label="Agent details" onkeydown={detailsKey}>
         {#key a.id}
-          <AgentDetails bind:this={detailsView} bind:tab={detailTab} agent={a} {report} {entries} color={colorOf(a.id)} onclose={closeDetails}
-            flowReport={flowProps.flowReport ?? null} activity={flowProps.activity ?? null} onflow={() => { section = "flow"; }}
+          <AgentDetails bind:this={detailsView} agent={a} {report} {entries} color={colorOf(a.id)} onclose={closeDetails}
+            onflow={() => { section = "flow"; }}
             {onentry} onreveal={(path) => onreveal(a.id, path)} oneditor={(path) => oneditor(a.id, path)}
-            onfolder={(path) => { projectPath = path; openFolder(path, a.id); }} onnavigate={(id) => pick(id, true)}
+            onfolder={(path) => { projectPath = path; openFolder(path, a.id); }}
             oncapabilities={() => { section = "capabilities"; }} oninsights={() => { section = "insights"; }} {oninventory}
             onstop={(entry) => onstop(entry, a.id)} onstopall={() => onstopall(a.id)} now={report.taken_at_ms || Date.now()} />
         {/key}

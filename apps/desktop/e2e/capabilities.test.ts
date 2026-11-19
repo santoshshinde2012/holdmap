@@ -5,7 +5,7 @@ const cursorMcp = (name: string) => `Inspect MCP server ${name}, Project scope. 
 const frontendSkill = "Inspect skill frontend-checks, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md";
 const claudeFilesystem = "Inspect MCP server filesystem, Project scope. Agents: Claude Code (PID 51200). Project: /Users/dev/code/shop-api. Source: /Users/dev/code/shop-api/.mcp.json";
 const workspace = (page: Page) => page.getByRole("region", { name: "MCP and skills workspace", exact: true });
-// Capability details open in the right sidebar. A process still opens under its row.
+// A skill or MCP server opens in the right sidebar. A process opens the agent details screen.
 const details = (page: Page) => page.getByRole("region", { name: "Capability details", exact: true }).or(page.getByRole("complementary", { name: "Capability details", exact: true }));
 const graph = (page: Page) => page.getByRole("region", { name: "Agent capability graph", exact: true });
 const view = (page: Page, name: "Explore" | "Map" | "Compare") => workspace(page).getByRole("radiogroup", { name: "Capability view", exact: true }).getByRole("radio", { name, exact: true });
@@ -226,7 +226,6 @@ test("typing search closes disappearing selection without stealing focus or repl
 
 test("Overview entry keeps requested agent scope without automatically opening details", async ({ app }) => {
   await openAgents(app); await agentHeading(app, "Cursor").click();
-  await agentDetails(app).getByRole("tab", { name: /^Config/ }).click();
   await agentDetails(app).getByRole("button", { name: "Open in MCP & skills", exact: true }).click();
   await expect(view(app, "Explore")).toHaveAttribute("aria-checked", "true");
   await expect(workspace(app).getByRole("button", { name: /^Inspect MCP server/ })).toHaveCount(3);

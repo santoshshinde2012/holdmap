@@ -3,15 +3,19 @@
   // It is also the accessible outline of the canvas: everything drawn is reachable here, and
   // ↑/↓ move between buttons.
   import Icon from "../../Icon.svelte";
+  import { partDestination } from "../../../lib/agent-jump";
   import { agentSummary, LAYER_LABEL, PART_KIND_LABEL, type Layer, type MachineScene, type Part } from "../../../lib/machine3d/scene";
 
-  let { scene, colors, focus, selected, collapsed = false, ontoggle, onagent, onpart, onhover }: {
+  let { scene, colors, focus, selected, query = "", onquery, collapsed = false, ontoggle, onagent, onpart, onhover }: {
     scene: MachineScene;
     colors: ReadonlyMap<string, string>;
     /** The agent whose parts are listed (selected, or the owner of the selected part). */
     focus: string | null;
     /** Selected part or agent id. */
     selected: string | null;
+    /** Filters the list and lights matching parts in the picture. */
+    query?: string;
+    onquery?: (query: string) => void;
     /** Folded to a strip of agent buttons, so the canvas gets the width. */
     collapsed?: boolean;
     ontoggle?: () => void;
@@ -22,11 +26,29 @@
 
   const LAYERS: Layer[] = ["runtime", "board", "config"];
   const ICON: Record<Part["kind"], string> = { agent: "bot", dormant: "bot", project: "folder", port: "plug", remote: "globe", tool: "terminal", mcp: "server", skill: "sparkles", instructions: "list", more: "more", call: "activity" };
-  const own = $derived(focus ? scene.parts.filter((p) => p.owner === focus && p.kind !== "agent" && p.kind !== "dormant") : []);
+  const q = $derived(query.trim().toLowerCase());
+  const hit = (p: Part) => `${p.label} ${p.sub ?? ""}`.toLowerCase().includes(q);
+  const agents = $derived(!q ? scene.agents : scene.agents.filter((a) => a.label.toLowerCase().includes(q) || scene.parts.some((p) => p.owner === a.id && hit(p))));
+  const shared = $derived.by(() => {
+    const n = new Map<string, number>();
+    for (const a of scene.agents) n.set(a.label, (n.get(a.label) ?? 0) + 1);
+    return n;
+  });
+  const pidOf = (a: Part) => a.facts.find(([k]) => k === "PID")?.[1];
+  /** Two agents can share a product name. The PID is what tells them apart. */
+  const who = (a: Part) => ((shared.get(a.label) ?? 0) > 1 && pidOf(a) ? `${a.label} ${pidOf(a)}` : a.label);
+  const about = (a: Part) => {
+    const summary = a.kind === "dormant" ? "Not running" : agentSummary(scene, a.id);
+    const pid = pidOf(a);
+    return (shared.get(a.label) ?? 0) > 1 && pid ? `PID ${pid} · ${summary}` : summary;
+  };
+  const named = $derived(!!focus && agents.some((a) => a.id === focus && a.label.toLowerCase().includes(q)));
+  const own = $derived(focus ? scene.parts.filter((p) => p.owner === focus && p.kind !== "agent" && p.kind !== "dormant" && (!q || named || hit(p))) : []);
   const groups = $derived(LAYERS.map((layer) => ({ layer, parts: own.filter((p) => p.layer === layer) })).filter((g) => g.parts.length));
   let nav = $state<HTMLElement>();
 
   function key(e: KeyboardEvent) {
+    if (e.target instanceof HTMLElement && e.target.closest("input, textarea")) return;
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
     const buttons = [...(nav?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
     const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -40,6 +62,12 @@
 <nav class="rail" class:collapsed aria-label="Machine parts" bind:this={nav} onkeydown={key}>
   <div class="head">
     {#if !collapsed}<h3>Agents</h3>{/if}
+    {#if !collapsed}
+      <label class="find">
+        <span class="sr-only">Find a part</span>
+        <input type="search" placeholder="Find a port, skill, process…" value={query} oninput={(e) => onquery?.(e.currentTarget.value)} />
+      </label>
+    {/if}
     {#if ontoggle}
       <button type="button" class="fold" aria-expanded={!collapsed} title={collapsed ? "Show the parts list" : "Fold the parts list"} onclick={ontoggle}>
         <Icon name="sidebar" size={14} /><span class="sr-only">{collapsed ? "Show the parts list" : "Fold the parts list"}</span>
@@ -49,25 +77,26 @@
   {#if collapsed}
     <!-- Folded: one button per agent, in its colour, named for screen readers and tooltips. -->
     <ul class="dots">
-      {#each scene.agents as a (a.id)}
+      {#each agents as a (a.id)}
         <li>
-          <button type="button" class="dotbtn" class:on={focus === a.id} class:dormant={a.kind === "dormant"} aria-pressed={focus === a.id} title={a.label}
+          <button type="button" class="dotbtn" class:on={focus === a.id} class:dormant={a.kind === "dormant"} aria-pressed={focus === a.id} title={who(a)}
             style="--agent: {colors.get(a.id) ?? 'var(--muted)'}" onclick={() => onagent(a.id)} onmouseenter={() => onhover(a.id)} onmouseleave={() => onhover(null)}>
-            <i aria-hidden="true"></i><span class="sr-only">{a.label}</span>{#if a.warn}<span class="dot" aria-hidden="true"></span>{/if}
+            <i aria-hidden="true"></i><span class="sr-only">{who(a)}</span>{#if a.warn}<span class="dot" aria-hidden="true"></span>{/if}
           </button>
         </li>
       {/each}
     </ul>
   {:else}
   <ul>
-    {#each scene.agents as a (a.id)}
+    {#each agents as a (a.id)}
       <li>
         <!-- The visible text is the accessible name (WCAG 2.5.3); extra context is screen-reader text. -->
         <button type="button" class="agent" class:on={focus === a.id} class:dormant={a.kind === "dormant"} class:warn={!!a.warn} aria-pressed={focus === a.id}
           style="--agent: {colors.get(a.id) ?? 'var(--muted)'}"
+          title={selected === a.id ? `${partDestination(a.kind, a.variant).label}. Click again.` : undefined}
           onclick={() => onagent(a.id)} onmouseenter={() => onhover(a.id)} onmouseleave={() => onhover(null)} onfocus={() => onhover(a.id)} onblur={() => onhover(null)}>
           <i aria-hidden="true"></i>
-          <span class="t"><b>{a.label}</b>{" "}<small>{a.kind === "dormant" ? "Not running" : agentSummary(scene, a.id)}</small></span>
+          <span class="t"><b>{a.label}</b>{" "}<small>{about(a)}</small></span>
           {#if a.warn}<span class="dot" aria-hidden="true"></span><span class="sr-only">, needs you</span>{/if}
         </button>
         {#if focus === a.id && groups.length}
@@ -78,7 +107,9 @@
                 {#each g.parts as p (p.id)}
                   <li>
                     <button type="button" class="part" class:on={selected === p.id} class:warn={!!p.warn} class:ghost={p.evidence === "configured" && !p.live} aria-pressed={selected === p.id}
-                      aria-haspopup={p.kind === "port" ? "menu" : undefined} onclick={(e) => onpart(p, e.currentTarget)}>
+                      aria-haspopup={p.kind === "port" ? "menu" : undefined}
+                      title={selected === p.id ? `${partDestination(p.kind, p.variant).label}. Click again.` : undefined}
+                      onclick={(e) => onpart(p, e.currentTarget)}>
                       <Icon name={ICON[p.kind]} size={12} />
                       <!-- Separate space nodes keep words apart in the computed name. -->
                       <span class="t"><b><span class="sr-only">{PART_KIND_LABEL[p.kind]}</span>{" "}{p.label}</b>{#if p.sub}{" "}<small>{p.sub}</small>{/if}</span>
@@ -94,6 +125,7 @@
       </li>
     {/each}
   </ul>
+  {#if q && !agents.length}<p class="omitted">Nothing matches.</p>{/if}
   {#if scene.omittedAgents}<p class="omitted">+{scene.omittedAgents} more on Agents</p>{/if}
   {/if}
 </nav>
@@ -101,8 +133,10 @@
 <style>
   .rail { min-height: 0; overflow-y: auto; padding: var(--sp-2); border-right: 1px solid var(--border); background: var(--surface); }
   .rail.collapsed { padding: var(--sp-2) 6px; }
-  .head { display: flex; align-items: center; gap: 4px; }
-  .head h3 { flex: 1; }
+  .head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px; }
+  .find { grid-column: 1 / -1; display: block; min-width: 0; margin: 0 var(--sp-1) var(--sp-1); }
+  .find input { width: 100%; min-height: 28px; padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  .find input:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   .fold { display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 0; padding: 0; margin-left: auto; color: var(--muted); }
   .collapsed .fold { margin: 0 auto; }
   .fold:hover { color: var(--text); }

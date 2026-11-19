@@ -12,13 +12,14 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 - Agents show where they keep their instructions, rules, skills, MCP config and memory, from one documented registry that now also covers Kiro, opencode, Amp, Goose, Aider, Qwen Code, Crush and Zed. **Show in folder** opens each place; file contents are never read.
 - Agent RAM uses each platform's own counters (on macOS the physical footprint that Activity Monitor shows; on Linux `smaps_rollup`), with a saved trend in `memory-samples.json` and **unknown** with a reason when the system won't share a figure.
-- The agent inspector has tabs (Overview, Config, Connections, Findings) with one consent step before reading configuration, a sortable process table, and a Flow view scoped to the selected agent. Graph has floating controls and a docked inspector.
+- The agent details screen shows who the agent is, its resources and the ports it serves, with one consent step before reading configuration and a sortable process table. MCP & skills, Flow and Security open from there, already scoped to that agent. Graph has floating controls and a docked inspector.
 - `⌘K` jumps to any agent, or to the one using the most RAM; after a stop, **Start again** undoes it.
 - The desktop app keeps a private error log (`logs/holdmap.log`, owner-only, rotated at 512 KB) with secrets masked and the home folder shown as `~`.
 
 ### Changed
 
-- Agents Overview, MCP & skills, Flow and Security share one tab row. A selected skill or MCP server opens in a right sidebar; a narrow window turns that sidebar into a drawer, and Escape returns to the card.
+- Agents Overview, MCP & skills, Flow and Security share one tab row. On MCP & skills the view and its type filters sit on separate rows, so All, MCP servers, Skills, Tools and Running stay one group. A selected skill or MCP server opens in a right sidebar; a narrow window turns that sidebar into a drawer, and Escape returns to the card.
+- Home's 3D view frames the parts that are actually drawn. Selecting one opens that agent's Overview, MCP & skills, Flow, Results or Security. A second click goes straight there, and a skill or MCP server opens that item. An agent process on MCP & skills opens the existing agent details screen.
 - The macOS menu bar starts compact: one item with the holdmap icon (a dot when something needs you) and two readings; **Every reading** brings back one item per reading. Labels read **ALERTS** and **SERVERS**, and a new **Agent RAM** reading is available.
 - The tray panel is clearer: Agents, RAM and CPU tiles, **Stop all…** in the Dev servers header, top agents by RAM with their project instead of a PID, developer tools such as Docker Desktop listed apart from AI agents, and readings that never slide under the header.
 - Home cards show RAM and CPU and tell same-named agents apart; failed scans say so with **Try again** instead of loading forever; "RAM" is used everywhere, including the CLI, TUI and website.

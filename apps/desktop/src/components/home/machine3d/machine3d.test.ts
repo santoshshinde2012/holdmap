@@ -59,6 +59,14 @@ describe("3D parts list", () => {
     expect(document.activeElement).not.toBe(port);
   });
 
+  it("keeps only the agents and parts a search matches", () => {
+    const view = render(PartsRail, { scene, colors, focus: cursor.id, selected: null, query: ":3000", onagent: vi.fn(), onpart: vi.fn(), onhover: vi.fn() });
+    const nav = view.getByRole("navigation", { name: "Machine parts" });
+    expect(within(nav).getByRole("button", { name: /^Port :3000/ })).toBeTruthy();
+    expect(within(nav).queryByRole("button", { name: /^Codex CLI Not running/ })).toBeNull();
+    expect(within(nav).getByRole("searchbox", { name: "Find a part" })).toBeTruthy();
+  });
+
   it("lists only agents until one is in focus", () => {
     const view = render(PartsRail, { scene, colors, focus: null, selected: null, onagent: vi.fn(), onpart: vi.fn(), onhover: vi.fn() });
     expect(view.queryByRole("heading", { name: "Runtime" })).toBeNull();
@@ -80,18 +88,29 @@ describe("3D part inspector", () => {
     expect(skill.getByText(/doesn't prove it was loaded/)).toBeTruthy();
   });
 
-  it("opens port actions and the agent, and has nothing to open for an agent that isn't running", async () => {
+  it("opens port actions and a door for every agent screen", async () => {
     const onport = vi.fn(), onopenagent = vi.fn();
     const port = part((p) => p.kind === "port" && p.owner === cursor.id);
     const view = render(PartInspector, { part: port, onclose: vi.fn(), onopenagent, onport });
     await fireEvent.click(view.getByRole("button", { name: "Port actions…" }));
     expect(onport).toHaveBeenCalledWith(cursor.ports[0].entry_id, expect.any(HTMLElement));
-    await fireEvent.click(view.getByRole("button", { name: "Open in Agents" }));
-    expect(onopenagent).toHaveBeenCalledWith(cursor.id);
+    await fireEvent.click(view.getByRole("button", { name: /^Open overview/ }));
+    expect(onopenagent).toHaveBeenCalledWith(cursor.id, "overview");
+    expect(view.getByRole("button", { name: "MCP & skills" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Flow" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Results" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Security" })).toBeTruthy();
+    cleanup();
+    const mcp = render(PartInspector, { part: part((p) => p.kind === "mcp"), onclose: vi.fn(), onopenagent, onport: vi.fn() });
+    const mcpPart = part((p) => p.kind === "mcp");
+    await fireEvent.click(mcp.getByRole("button", { name: /^Open this server/ }));
+    expect(onopenagent).toHaveBeenCalledWith(mcpPart.owner, "capabilities", mcpPart.capabilityId);
+    expect(mcp.getByRole("button", { name: /^Open this server/ })).toBeTruthy();
+    expect(mcp.queryAllByRole("button", { name: "MCP & skills" })).toHaveLength(0);
     cleanup();
     const dormant = render(PartInspector, { part: part((p) => p.kind === "dormant"), onclose: vi.fn(), onopenagent: vi.fn(), onport: vi.fn() });
     expect(dormant.getByText("Configuration found")).toBeTruthy();
-    expect(dormant.queryByRole("button", { name: "Open in Agents" })).toBeNull();
+    expect(dormant.getByRole("button", { name: /^Open MCP & skills/ })).toBeTruthy();
   });
 });
 
@@ -136,6 +155,7 @@ describe("3D gauges", () => {
     const view = render(PartInspector, { part: call, onclose: vi.fn(), onopenagent: vi.fn(), onport: vi.fn() });
     expect(view.getByText("Reported")).toBeTruthy();
     expect(view.getByText(/isn't tied to a process or a configured server/)).toBeTruthy();
-    expect(view.queryByRole("button", { name: "Open in Agents" })).toBeNull();
+    expect(view.getByRole("button", { name: /^Recorded calls/ })).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Overview" })).toBeNull();
   });
 });

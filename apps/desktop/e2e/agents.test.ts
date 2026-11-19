@@ -39,6 +39,7 @@ test("agent locations group documented layers and copy a path", async ({ app }, 
   const locations = details.getByRole("region", { name: /Locations & layers/ });
   await expect(locations).toContainText("checked when you read local config");
   await details.getByRole("button", { name: "Read local config" }).first().click();
+  await details.locator("summary", { hasText: "Configuration" }).click();
   await expect(locations.locator(".layer-name", { hasText: "Project" }).first()).toBeVisible();
   await expect(locations.getByText(/closer layer overrides|layers merge|all files load/).first()).toBeVisible();
   await expect(locations.getByText("Present").first()).toBeVisible();
@@ -64,6 +65,7 @@ test("agent locations group documented layers and copy a path", async ({ app }, 
   await app.getByRole("radio", { name: /^Agents/ }).click();
   await agentChip(app, "Cursor").click();
   await expect(agentChip(app, "Cursor")).toHaveAttribute("aria-pressed", "true");
+  await agentDetails(app).locator("summary", { hasText: "Configuration" }).click();
   const lightLocations = agentDetails(app).getByRole("region", { name: /Locations & layers/ });
   await expect(lightLocations.getByText("Present").first()).toBeVisible();
   await lightLocations.screenshot({ path: testInfo.outputPath("agent-locations-light-390.png") });
@@ -71,6 +73,7 @@ test("agent locations group documented layers and copy a path", async ({ app }, 
   await app.getByRole("radio", { name: "MCP & skills", exact: true }).click();
   await app.getByRole("button", { name: "Show processes for Cursor", exact: true }).click();
   await app.getByRole("button", { name: "Inspect agent card Cursor, PID 52000", exact: true }).click();
+  await agentDetails(app).locator("summary", { hasText: "Configuration" }).click();
   const placed = app.getByRole("region", { name: /Locations & layers/ }).first();
   await expect(placed).toBeVisible();
   const { violations } = await new AxeBuilder({ page: app }).include('[id^="agent-locations-"]').analyze();

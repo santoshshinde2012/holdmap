@@ -22,7 +22,7 @@ import {
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { roundedOutline as outline, roundedPlane, roundedSlab } from "./geometry";
 import { clampPose, EASE, halfHeight, lerpPose, posesEqual, type Pose } from "./camera";
-import { GAUGE_RADIUS, partSize, plateY, skyY, type District, type MachineLayout, type Placed, type Rect, type Size } from "./layout";
+import { GAUGE_RADIUS, mastY, partSize, plateY, skyY, type District, type MachineLayout, type Placed, type Rect, type Size } from "./layout";
 import { monogram } from "../agents";
 import type { Layer, MachineScene, Part, Wire } from "./scene";
 import { mixRgb, toHex, type Rgb, type StageColors } from "./theme";
@@ -39,6 +39,8 @@ export interface StageView {
   reduced: boolean;
   /** Parts a lens or a clicked reading lights up; everything else steps back. */
   highlight?: ReadonlySet<string> | null;
+  /** When set, only this agent's parts stay. The rest of the machine is hidden. */
+  solo?: string | null;
 }
 
 export type Support = "ok" | "slow" | "none";
@@ -548,7 +550,10 @@ export class MachineStage {
 
   /** Base height: the board, a floor at the current explode amount, or the sky for remote hosts. */
   private baseY(item: Pick<Item, "part" | "to">): number {
-    if (item.part.kind === "remote") return skyY(this.explode.value);
+    if (item.part.kind === "remote") {
+      const district = this.layout?.districts.get(item.part.owner);
+      return district ? mastY(district, this.explode.value) : skyY(this.explode.value);
+    }
     return item.to.layer !== "board" ? plateY(item.to.layer, this.explode.value) + SLAB : 0;
   }
 
@@ -561,6 +566,7 @@ export class MachineStage {
   private targetOpacity(item: Item): number {
     const v = this.view;
     const tower = item.part.kind === "agent" || item.part.kind === "dormant";
+    if (v.solo && item.part.owner !== v.solo) return 0;
     if (v.hidden.has(item.part.layer) && !tower) return 0;
     // A lens or a clicked reading: its parts stay lit, towers stay as landmarks, the rest steps back.
     if (v.highlight) return v.highlight.has(item.part.id) ? 1 : tower ? 0.35 : 0.1;
@@ -1058,6 +1064,11 @@ export class MachineStage {
   }
 
   private wireWanted(w: WireItem): boolean {
+    if (this.view.solo) {
+      const from = this.items.get(w.wire.from)?.part.owner;
+      const to = this.items.get(w.wire.to)?.part.owner;
+      if (from !== this.view.solo && to !== this.view.solo) return false;
+    }
     if (!w.demand) return true;
     const { hovered, selected } = this.view;
     return [hovered, selected].some((id) => id === w.wire.from || id === w.wire.to);
@@ -1385,7 +1396,7 @@ export class MachineStage {
     const ex = this.explode.value;
     for (const f of this.floors) {
       const y = plateY(f.layer, ex);
-      const show = !this.view.hidden.has(f.layer);
+      const show = !this.view.hidden.has(f.layer) && !(this.view.solo && this.view.solo !== f.district.id);
       f.slab.position.y = y;
       f.rim.position.y = y + SLAB + 0.002;
       f.slab.visible = f.rim.visible = show;
@@ -1397,7 +1408,7 @@ export class MachineStage {
     if (this.shelf) {
       const y = plateY("calls", ex);
       this.shelf.slab.position.y = y; this.shelf.rim.position.y = y + SLAB + 0.002;
-      this.shelf.slab.visible = this.shelf.rim.visible = !this.view.hidden.has("calls");
+      this.shelf.slab.visible = this.shelf.rim.visible = !this.view.hidden.has("calls") && !this.view.solo;
     }
     const key = Math.round(ex * 100);
     if (key === this.guidesAt || !this.layout) return;

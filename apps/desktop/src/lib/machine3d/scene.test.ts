@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MOCK_SNAPSHOT } from "../mock";
 import { mockAgents } from "../mock-agents";
 import { attention, hotAgents, needsByAgent } from "../home";
+import { capabilityItemId, runningCapabilityId } from "../agent-capabilities";
 import { agentSummary, buildScene, gaugeParts, readings, SCENE_LIMITS } from "./scene";
 import { CALL_LIMIT } from "./calls";
 import { partChip } from "./describe";
@@ -52,6 +53,10 @@ describe("3D machine scene", () => {
     for (const w of s.wires.filter((w) => w.kind === "config")) expect(s.agents.map((a) => a.id)).toContain(w.from);
     // Every running wire comes from a server whose run state says running.
     for (const w of running) expect(s.parts.find((p) => p.id === w.from)).toMatchObject({ kind: "mcp", live: true });
+    const server = s.parts.find((p) => p.id === `${cursor.id}:mcp:${fs.id}`)!;
+    expect(server.capabilityId).toBe(capabilityItemId("mcp", fs));
+    const process = s.parts.find((p) => p.id === `${cursor.id}:tool:${fs.runtime!.pids[0]}`)!;
+    expect(process.capabilityId).toBe(runningCapabilityId(fs.runtime!.pids[0]));
   });
 
   it("never joins a same-named server across agents", () => {

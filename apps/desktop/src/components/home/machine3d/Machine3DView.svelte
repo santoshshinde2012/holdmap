@@ -16,6 +16,7 @@
   import { layoutScene, type MachineLayout } from "../../../lib/machine3d/layout";
   import { agentPose, overviewPose, partPose, topPose } from "../../../lib/machine3d/camera";
   import { webglSupport, type StageView, type Support } from "../../../lib/machine3d/stage";
+  import { partJump, type AgentJump } from "../../../lib/agent-jump";
   import { prefGetBoolean, prefSet } from "../../../lib/prefs";
   import { shortcutContext } from "../../../lib/keyboard";
   import type { SkillTrustView } from "../../../lib/trust";
@@ -49,7 +50,7 @@
     oninventory?: () => void;
     onselectagent: (id: string | null) => void;
     onhover: (id: string | null) => void;
-    onopenagent: (id: string) => void;
+    onopenagent: (id: string, jump?: AgentJump, capabilityId?: string) => void;
     onport: (entryId: string, anchor: HTMLElement) => void;
     /** Home shows the readings and the selected part in its side column, above Needs you; the
      *  view hands it that content as a snippet (null while there's nothing to show). */
@@ -94,7 +95,14 @@
   let lens = $state<Lens>("all");
   $effect(() => { if (lens === "calls" && !scene.calls) lens = "all"; });
   const lensed = $derived(lensView(scene, lens));
-  const hidden = $derived<ReadonlySet<Layer>>(lensed.hidden);
+  // A typed find lights matching parts and brings their floors back, so a search isn't hidden by a lens.
+  let find = $state("");
+  const found = $derived.by(() => {
+    const q = find.trim().toLowerCase();
+    if (!q) return null;
+    return new Set(scene.parts.filter((p) => `${p.label} ${p.sub ?? ""}`.toLowerCase().includes(q)).map((p) => p.id));
+  });
+  const hidden = $derived<ReadonlySet<Layer>>(found ? new Set() : lensed.hidden);
   const LENS_ICON: Record<Lens, string> = { all: "layers", network: "globe", runtime: "cpu", config: "plug", needs: "alert", calls: "activity" };
   const lensOptions = $derived(LENSES.filter((l) => l !== "calls" || scene.calls).map((l) => ({ value: l, label: LENS_LABEL[l], icon: LENS_ICON[l], title: `${LENS_TITLE[l]} · L` })));
   let legend = $state(prefGetBoolean("home.3d.legend", true));
@@ -112,7 +120,10 @@
   const inspected = $derived(part ?? (selectedAgent ? scene.parts.find((p) => p.id === selectedAgent) ?? null : null));
   // A pressed reading lights up exactly the parts it counts (for the agent in focus, if any).
   let gauge = $state<Gauge | null>(null);
-  const highlight = $derived(gauge ? gaugeParts(scene, gauge, focus) : lensed.lit);
+  const highlight = $derived(found ?? (gauge ? gaugeParts(scene, gauge, focus) : lensed.lit));
+  /** Hide every agent except the one in focus, so one district fills the picture. */
+  let solo = $state(false);
+  $effect(() => { if (!focus) solo = false; });
   function pickGauge(next: Gauge | null) {
     stopTour();
     gauge = next;
@@ -121,7 +132,7 @@
     if (lit && scene.parts.some((p) => lit.has(p.id) && hidden.has(p.layer))) lens = "all";
   }
   function pickLens(next: Lens) { stopTour(); gauge = null; lens = next; }
-  const view = $derived<StageView>({ explode: explode ? 1 : 0, xray, focus: focus ?? active, selected: inspected?.id ?? null, hovered: hoverPart, hidden, reduced, highlight });
+  const view = $derived<StageView>({ explode: explode ? 1 : 0, xray, focus: focus ?? active, selected: inspected?.id ?? null, hovered: hoverPart, hidden, reduced, highlight, solo: solo && focus ? focus : null });
 
   // Fly only on an explicit change (selection, angle, explode, Fit, the first agent scan), so a
   // scan never pulls the camera away from where the viewer turned it. Recorded calls can arrive
@@ -173,17 +184,29 @@
 
   // ---------- actions ----------
   function stopTour() { if (tour) { tour = false; fit++; } }
+  function go(p: Part) {
+    // A recorded call isn't an agent's part, so it opens the calls timeline without selecting one.
+    const jump = partJump(p.kind, p.variant);
+    if (p.capabilityId) onopenagent(p.kind === "call" ? "" : p.owner, jump, p.capabilityId);
+    else onopenagent(p.kind === "call" ? "" : p.owner, jump);
+  }
   function pickAgent(id: string) {
     stopTour();
     const agent = scene.agents.find((a) => a.id === id);
     if (!agent) return;
-    if (agent.kind === "dormant") { partId = partId === id ? null : id; onselectagent(null); return; }
+    if (agent.kind === "dormant") {
+      if (partId === id) { go(agent); return; }
+      partId = id; onselectagent(null); return;
+    }
+    // First click selects. The next click on the same agent opens its overview.
+    if (selectedAgent === id && !partId) { go(agent); return; }
     partId = null;
-    onselectagent(selectedAgent === id ? null : id);
+    onselectagent(id);
   }
   function pickPart(p: Part, anchor: HTMLElement) {
     stopTour();
     if (p.kind === "agent" || p.kind === "dormant") { pickAgent(p.id); return; }
+    if (partId === p.id) { go(p); return; }
     partId = p.id;
     if (selectedAgent !== p.owner && scene.agents.find((a) => a.id === p.owner)?.kind === "agent") onselectagent(p.owner);
     if (p.target?.view === "list") onport(p.target.entryId, anchor);
@@ -194,8 +217,8 @@
     if (!id) { if (partId || selectedAgent) { partId = null; onselectagent(null); } return; }
     const p = scene.parts.find((x) => x.id === id);
     if (!p) return;
-    // Like the map: a selected agent opens on Agents with a second click.
-    if (p.kind === "agent" && selectedAgent === p.id && !partId) { onopenagent(p.id); return; }
+    // A second click opens the screen this part belongs to: overview, MCP & skills, flow, or calls.
+    if ((p.kind === "agent" && selectedAgent === p.id && !partId) || (p.kind !== "agent" && partId === p.id)) { go(p); return; }
     // The port menu anchors to where the part was clicked, once the anchor has moved there.
     anchorAt = at;
     void tick().then(() => pickPart(p, pointAnchor!));
@@ -273,8 +296,14 @@
 <svelte:window onkeydowncapture={onkey} />
 
 {#snippet details()}
-  <Readings flat readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
-  {#if inspected}<PartInspector flat part={inspected} onclose={clear} {onopenagent} {onport} />{/if}
+  <!-- The doors come first: the readings are long, and the way out of the picture has to be on screen. -->
+  {#if inspected}
+    <PartInspector flat part={inspected} onclose={clear} {onopenagent} {onport}>
+      <Readings flat readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
+    </PartInspector>
+  {:else}
+    <Readings flat readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
+  {/if}
 {/snippet}
 
 <div class="m3d" class:folded={!railOpen}>
@@ -295,11 +324,17 @@
       <div class="fallback-map">{@render fallback()}</div>
     </div>
   {:else}
-    <PartsRail {scene} {colors} {focus} selected={inspected?.id ?? null} collapsed={!railOpen} ontoggle={() => (railOpen = !railOpen)} onagent={pickAgent} onpart={pickPart} onhover={onhover} />
+    <PartsRail {scene} {colors} {focus} query={find} onquery={(q) => { find = q; if (q.trim()) gauge = null; }} selected={inspected?.id ?? null} collapsed={!railOpen} ontoggle={() => (railOpen = !railOpen)} onagent={pickAgent} onpart={pickPart} onhover={onhover} />
     <div class="viewport" class:xray bind:this={viewport} data-capture-area>
       <Stage3D bind:this={stage3d} {scene} {layout} {colors} {view} {flight} {tour} {insets} onpick={onpick} onhover={(id) => (hoverPart = id)} onfail={(reason) => (failure = reason)}
         oncaption={(c) => (caption = c)} ontourfocus={(id) => (tourFocus = id)} onreset={() => { stopTour(); top = false; clear(); fit++; }} />
       <span class="anchor" bind:this={pointAnchor} style="left: {anchorAt.x}px; top: {anchorAt.y}px" aria-hidden="true"></span>
+      {#if sideDetails && !inventory && oninventory && !scene.inspected}
+        <!-- The side column already holds the readings, so the missing floors get the top of the picture. -->
+        <div class="hud ask" data-inset>
+          <ConsentGate onconsent={oninventory} />
+        </div>
+      {/if}
       {#if !sideDetails}
         <!-- Without Home's side column (Focus, or no host), the readings ride along the top. -->
         <div class="hud top" data-inset>
@@ -323,7 +358,7 @@
         <div class="bar lenses" role="group" aria-label="View">
           <ActionDock value={lens} options={lensOptions} label="Lens" hinge={false} animate={false} size="compact" onchange={pickLens} />
           <ActionPill icon="info" label="Legend" toggle pressed={legend} size="compact" expanded={legend} onclick={() => (legend = !legend)} />
-          {#if !inventory && oninventory && !scene.inspected}<ConsentGate onconsent={oninventory} compact />{/if}
+          {#if !sideDetails && !inventory && oninventory && !scene.inspected}<ConsentGate onconsent={oninventory} compact />{/if}
         </div>
         <div class="bar tools" role="toolbar" aria-label="3D view">
         <ActionDock value={explode ? "exploded" : "assembled"} options={MODES} label="Assembly" hinge={false} animate={false} size="compact" onchange={(v) => { stopTour(); explode = v === "exploded"; }} />
@@ -331,6 +366,7 @@
         <ActionPill icon="hash" label="Plan" toggle pressed={top} size="compact" title="Look straight down: the floor plan, one district per agent" onclick={() => { stopTour(); top = !top; }} />
         <ActionPill icon="play" label="Tour" toggle pressed={tour} size="compact" kbd="T" disabled={reduced || !hasParts} title={reduced ? "The tour is off while reduced motion is on" : "Walk through the machine; any input hands you control"} onclick={() => (tour = !tour)} />
         {#if onexpand}<ActionPill icon="sidebar" label="Focus" toggle pressed={expanded} size="compact" title={expanded ? "Show the summary and Needs you again" : "Hide the summary and Needs you so the machine fills Home"} onclick={() => onexpand?.(!expanded)} />{/if}
+        {#if focus}<ActionPill icon="bot" label={solo ? "All agents" : "Only this"} toggle pressed={solo} size="compact" title={solo ? "Show every agent again" : "Hide every agent except the one in focus"} onclick={() => { stopTour(); solo = !solo; }} />{/if}
         </div>
         </div>
       </div>
@@ -363,6 +399,8 @@
   .hud { position: absolute; pointer-events: none; z-index: 1; }
   .hud > :global(*) { pointer-events: auto; }
   .top { top: 10px; left: 10px; right: 10px; }
+  .ask { top: 10px; left: 10px; right: 64px; }
+  .ask :global(.consent) { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface) 92%, transparent); }
   .bottom { left: 10px; right: 10px; bottom: 10px; display: grid; gap: 6px; justify-items: start; }
   .row { justify-self: stretch; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; }
   .row .tools { margin-left: auto; flex-wrap: nowrap; }
@@ -393,7 +431,8 @@
      so each button keeps its accessible name, and its tooltip still shows it. */
   /* Lenses show their icons only first; each keeps its name as visually hidden text and in its tooltip. */
   @container (max-width: 1200px) {
-    .lenses :global([role="radio"] > span) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+    /* The lens in use keeps its name; the others stay icons so the bar still fits. */
+    .lenses :global([role="radio"]:not([aria-checked="true"]) > span) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   }
   @container (max-width: 1000px) {
     .m3d:not(.folded) { grid-template-columns: 180px minmax(0, 1fr); }

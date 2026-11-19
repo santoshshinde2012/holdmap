@@ -66,10 +66,27 @@ export function plateY(layer: Layer, explode: number): number {
   const [a, b] = PLATE[layer];
   return a + (b - a) * Math.min(1, Math.max(0, explode));
 }
-/** Where remote hosts float: above the top floor, at the head of their agent's mast. */
+/** Where remote hosts float when an agent actually has a configuration floor. */
 export const skyY = (explode: number) => plateY("config", explode) + 1.7;
 /** Highest point drawn (labels included) at an explode amount. */
 export const sceneTop = (explode: number) => skyY(explode) + 0.9;
+/** The mast head for one district: just above the highest floor that district actually has,
+ *  so an agent with no configuration doesn't leave a storey of empty sky in the picture. */
+export function mastY(district: District, explode: number): number {
+  if (district.floors.config) return skyY(explode);
+  if (district.floors.runtime) return plateY("runtime", explode) + 1.45;
+  return AGENT_MAX_HEIGHT + 1.05;
+}
+/** The top of what's drawn, not the theoretical sky. The overview frames this. */
+export function occupiedTop(layout: MachineLayout, explode: number): number {
+  let top = AGENT_MAX_HEIGHT + 0.5;
+  for (const d of layout.districts.values()) {
+    if (d.floors.runtime) top = Math.max(top, plateY("runtime", explode) + 1.15);
+    if (d.floors.config) top = Math.max(top, plateY("config", explode) + 1.15);
+    if (d.mast) top = Math.max(top, mastY(d, explode) + 0.45);
+  }
+  return top;
+}
 
 /** Grid snap, district padding, the street between districts and the gap between rows. */
 const GRID = 0.25;
@@ -222,5 +239,5 @@ const LABEL_ROOM = 1.4;
 /** The model's bounds at an explode amount: the board, the floors and the sky above them. */
 export function bounds(layout: MachineLayout, explode: number): { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number } {
   const { board } = layout;
-  return { x0: board.x0 - LABEL_ROOM, x1: board.x1 + LABEL_ROOM, y0: -0.36, y1: sceneTop(explode), z0: board.z0, z1: board.z1 };
+  return { x0: board.x0 - LABEL_ROOM, x1: board.x1 + LABEL_ROOM, y0: -0.36, y1: occupiedTop(layout, explode), z0: board.z0, z1: board.z1 };
 }
