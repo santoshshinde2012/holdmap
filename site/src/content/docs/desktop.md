@@ -41,9 +41,8 @@ servers, skills and instruction files found on disk on a **Configuration** tray 
 is needed to say so. **This computer** is the chip at the left end of the board.
 Select a part and Details offers **Overview**, **MCP & skills**, **Flow**, **Results** and
 **Security** for that agent. A second click on the same part opens the screen it belongs to.
-A skill or MCP server opens that item in the MCP & skills sidebar, an MCP process opens its
-running card, another process or a remote host opens Flow, and a recorded call opens the
-calls timeline.
+A skill, MCP server or running MCP process opens that item in the MCP & skills sidebar.
+Another process or a remote host opens Flow, and a recorded call opens the calls timeline.
 
 - **Shapes and rings mean one thing each.** The icon on a part's top face says what it is
   (`>_` a shell, `</>` a dev server, a plug an MCP server, a folder, a socket). The ring round a
@@ -506,10 +505,15 @@ The command palette keeps its active result valid as running services change.
 ## Agents map
 
 **Agents** (`⇧A`) shows each AI coding agent and developer tool that is running (Claude Code,
-Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider, Docker Desktop, OrbStack and others). Cards
-skim memory, CPU, process count, stoppable ports and parent; expand for folders (with source
+Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider, Docker Desktop, OrbStack and others).
+**Overview**, **MCP & skills**, **Flow** and **Security** are the screens under Agents.
+Cards skim memory, CPU, process count, stoppable ports and parent; expand for folders (with source
 labels), ports and apps it started, child processes as tools & apps, connections, and access: the
 account it runs as, sandbox and approval flags, network listeners, and macOS-protected folders.
+Select an agent and its details open beside the map: who it is, its memory and access, the
+folders and processes it is running, and the ports it serves. **Open in MCP & skills**,
+**Open in Flow** and **Open in Security** open those screens already scoped to that agent.
+Once local config has been read, servers, skills and file locations stay behind **Configuration**.
 Each fact is marked seen, inferred or unknown. From a card you can reveal a folder, open it in your
 editor, or stop the unprotected ports that agent started. The map zooms
 Computer → Footprint → Project from the same observed processes, sockets and folders; it does not invent communication
@@ -523,14 +527,16 @@ observed process arguments are redacted for display; redaction is heuristic. Rem
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
 `holdmap agents` and `holdmap agents AGENT --stop-ports` do the same in a terminal.
 
-**MCP & skills** has **Explore**, **Map** and **Compare** views over the opt-in
-inventory. Explore leads with declared skill purposes; Map retains observed
-source relationships; Compare keeps exact definitions and their contexts separate. Matching
-process observations group without becoming a verified session. Select a card with a click,
-**Enter** or **Space** and its inspector opens in the right sidebar, on **Purpose**, **Source**,
-**Evidence** and **Activity**. On a narrower window the sidebar covers the catalog until you
-close it. Close or press **Esc** to return focus without changing the selected context. Nothing
-is selected automatically.
+**MCP & skills** has **Explore**, **Map** and **Compare** on the first header row, with
+**Filters**, **Coverage** and **Recorded calls**. **All**, **MCP servers**, **Skills**,
+**Tools** and **Running** stay together on the row below. Explore leads with declared skill
+purposes; Map retains observed source relationships; Compare keeps exact definitions and their
+contexts separate. Matching process observations group without becoming a verified session.
+Select a skill or MCP server with a click, **Enter** or **Space** and its inspector opens in
+the right sidebar, on **Purpose**, **Source**, **Evidence** and **Activity**. A process in
+that list opens the agent details screen. On a narrower window the sidebar covers the catalog
+until you close it. Close or press **Esc** to return focus without changing the selected
+context. Nothing is selected automatically.
 **Tools** explains **Catalog not reported** rather than showing zero tools. **Filters** and
 **Coverage** open on request, and narrow windows keep dismissible agent/details drawers.
 See the [capability guide](../agents/#mcp-and-skills) for supported locations and limits.

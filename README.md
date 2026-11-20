@@ -57,7 +57,8 @@
   folders, child tools, ports, connections, CPU, memory and access. Memory shows the
   process-table total plus the private, shared, compressed and virtual counters the OS
   actually exposes, or **unknown** with a reason. Every fact is marked as seen, inferred or
-  unknown. You can stop just the services an agent started.
+  unknown. The agent details screen shows who it is and the ports it serves, and opens
+  MCP & skills, Flow and Security for that agent. You can stop just the services an agent started.
 - **MCP servers and skills (opt-in).** How each MCP server launches and whether it's pinned
   or running, plus skills, permission rules and instruction files, and the user, project and
   local paths those files live in (counts, sizes and times, not bodies). holdmap reads names
