@@ -94,7 +94,8 @@ const rows = [
   // panels (summary, side column, Details above Needs you) and the capture dialogs' area choice.
   // +2 KB for the agent details memory summary and the locations layer list, which travel with the Agents view.
   // +1 KB for the shared agent section chrome (underline tabs, section bars, flow column).
-  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 233 * 1024],
+  // +3 KB for the shared fold used by Needs you, details and the first screen.
+  ["Live demo JS (initial imports)", [...initialDemoFiles].reduce((n, f) => n + gz(f), 0), 236 * 1024],
   ["Snapshot PNG JS (on capture)", [...snapshotDemoFiles].reduce((n, f) => n + gz(f), 0), 40 * 1024],
   ["Capability workspace JS (on inspection)", [...capabilityDemoFiles].reduce((n, f) => n + gz(f), 0), 21 * 1024],
   // The Security view's helpers moved here from the first screen; the trust and risk views load separately.
@@ -103,7 +104,8 @@ const rows = [
   ["Analyzer install JS (on Install…)", [...installDemoFiles].reduce((n, f) => n + gz(f), 0), 8 * 1024],
   ["Run progress JS (on Run)", [...runDockDemoFiles].reduce((n, f) => n + gz(f), 0), 4 * 1024],
   // three.js (~133 KB of WebGL renderer, geometry and materials) plus the scene, layout and stage.
-  ["Home 3D JS (on 3D)", [...machine3dDemoFiles].reduce((n, f) => n + gz(f), 0), 168 * 1024],
+  // +4 KB for the single-agent picture and the folding readings in its details.
+  ["Home 3D JS (on 3D)", [...machine3dDemoFiles].reduce((n, f) => n + gz(f), 0), 172 * 1024],
   // +2 KB for the capture area picker; +1 KB for mediabunny 1.65’s updated recording
   // implementation. +5 KB for the agent memory panel on the Agents view (counters, groups
   // and export). +4 KB for the locations filters, entry lists and copy action shared with

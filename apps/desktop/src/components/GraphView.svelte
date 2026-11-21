@@ -354,7 +354,7 @@
 
   /* Floating chrome: frosted, hairline and compact so the canvas keeps the room. */
   .chrome-host { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 6; pointer-events: none; }
-  .chrome { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; max-width: 100%; }
+  .chrome { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; max-width: 100%; container-type: inline-size; }
   .chrome > * { pointer-events: auto; }
   .bar, .legend, .search-context, .connection-note, .cluster-focus { background: var(--overlay); border: 1px solid var(--border); box-shadow: var(--shadow-sm); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   .bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; max-width: 100%; box-sizing: border-box; padding: 3px; border-radius: var(--r-full); }
@@ -371,7 +371,12 @@
   .options-trigger { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: var(--r-full); border: 0; background: transparent; color: var(--text-2); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); cursor: pointer; }
   .options-trigger:hover, .options-trigger[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
   .options-trigger:focus-visible, .cta:focus-visible, .search-context button:focus-visible, .cluster-focus button:focus-visible, .neighbor:focus-visible, .peer-agent:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-  .options { position: absolute; top: calc(100% + 6px); left: 0; z-index: 8; width: min(320px, calc(100cqw - 20px)); box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-md); padding: 12px; color: var(--text); }
+  .options { position: absolute; top: calc(100% + 6px); left: 0; z-index: 8; width: min(320px, calc(100cqw - 20px)); max-width: calc(100cqw - 8px); box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-md); padding: 12px; color: var(--text); }
+  /* On a phone the menu hangs from the toolbar, not from a button that sits at the right edge. */
+  @media (max-width: 720px) {
+    .options-wrap { position: static; }
+    .options { width: min(320px, calc(100cqw - 8px)); }
+  }
   .options-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; font-size: var(--fs-body); }
   .option { display: flex; gap: 16px; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); }
   .option strong { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); }

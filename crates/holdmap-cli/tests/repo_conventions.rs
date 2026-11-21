@@ -93,9 +93,10 @@ fn naming_problem(path: &str) -> Option<String> {
     };
     let bad = |rule: &str| Some(format!("{path}: {rule}"));
 
-    // Names fixed by external tools or GitHub.
+    // Names fixed by external tools or GitHub. FUNDING.yml must keep that exact name.
     if path.starts_with("apps/desktop/src-tauri/icons/")
         || name.starts_with('.')
+        || path == ".github/FUNDING.yml"
         || matches!(
             name,
             "Cargo.toml" | "Cargo.lock" | "package.json" | "package-lock.json" | "tsconfig.json"
@@ -177,6 +178,7 @@ fn naming_rules_catch_common_mistakes() {
     assert!(naming_problem("docs/USER_GUIDE.md").is_some());
     assert!(naming_problem("docs/screenshots/ui-list.png").is_some());
     assert!(naming_problem("scripts/demo_servers.sh").is_some());
+    assert!(naming_problem(".github/FUNDING.yml").is_none());
     assert!(naming_problem("NOTES.md").is_some());
     assert!(naming_problem("apps/desktop/src/lib/rows.test.ts").is_none());
     assert!(naming_problem("site/src/components/port_rail.astro").is_some());

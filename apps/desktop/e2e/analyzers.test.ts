@@ -35,10 +35,7 @@ test("findings reach Needs you, the agent card and the Insights tab, and can be 
   await openAgents(app);
   await agentHeading(app, "Claude Code").click();
   const card = agentDetails(app);
-  // Findings have one home in the inspector: the Findings section.
-  await card.getByRole("tab", { name: /^Findings/ }).click();
-  await expect(card.getByRole("heading", { name: "Findings for Claude Code", exact: true })).toBeVisible();
-  await expect(card.getByLabel("Open findings by severity")).toContainText("high1");
+  // Findings open on Security, scoped to this agent.
   await card.getByRole("button", { name: "Open in Security", exact: true }).click();
 
   const tab = app.getByRole("region", { name: "Security workspace" });

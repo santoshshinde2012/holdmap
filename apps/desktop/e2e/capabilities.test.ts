@@ -144,10 +144,11 @@ test("context selection scopes definitions while PID expansion keeps inspection 
   await app.getByRole("button", { name: "Show processes for Cursor", exact: true }).click();
   const root = app.getByRole("button", { name: "Inspect agent card Cursor, PID 52000", exact: true });
   await root.click();
-  await expect(details(app).getByRole("heading", { name: "Cursor", exact: true })).toBeVisible();
+  // A process leaves MCP & skills and opens that agent's details.
+  await expect(app.getByRole("radio", { name: "Overview", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(agentDetails(app).getByRole("heading", { name: "Cursor", exact: true })).toBeVisible();
   await app.keyboard.press("Escape");
-  await expect(details(app)).toHaveCount(0); await expect(root).toBeFocused();
-  await expect(app.getByRole("radio", { name: "MCP & skills", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(agentDetails(app)).toHaveCount(0);
 });
 
 test("Map cards retain native Enter/Space activation and exact focus return", async ({ app }) => {
