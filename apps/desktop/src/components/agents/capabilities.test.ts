@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import type { ComponentProps } from "svelte";
 import AgentCapabilitiesView from "./AgentCapabilitiesView.svelte";
 import AgentDetails from "./AgentDetails.svelte";
+import { agentFocus } from "../../lib/agent-focus.svelte";
+import { capabilityItems } from "../../lib/agent-capabilities";
 import { MOCK_SNAPSHOT } from "../../lib/mock";
 import { mockAgents } from "../../lib/mock-agents";
 import type { AgentsReport } from "../../lib/types";
@@ -13,12 +15,12 @@ beforeAll(() => {
   Element.prototype.scrollIntoView ??= vi.fn();
   window.matchMedia ??= ((media: string) => ({ matches: false, media, addEventListener() {}, removeEventListener() {} })) as unknown as typeof matchMedia;
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); agentFocus.capabilityId = null; agentFocus.kind = null; vi.restoreAllMocks(); });
 const report = () => mockAgents(undefined, true);
 const mount = (r: AgentsReport | null = report(), extras: Partial<ComponentProps<typeof AgentCapabilitiesView>> = {}) => render(AgentCapabilitiesView, { report: r, selectedAgent: "agent:52000", reduced: true, onselectagent: vi.fn(), ...extras });
 const cursorMcp = (name: string) => `Inspect MCP server ${name}, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.cursor/mcp.json`;
 const frontendSkill = (name = "frontend-checks") => `Inspect skill ${name}, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md`;
-// Details open inline (a region by the clicked card or row); the map canvas keeps its side panel.
+// A skill or MCP server opens in the right sidebar. An agent process uses the agent details screen.
 const details = (view: ReturnType<typeof mount>) => view.queryByRole("region", { name: "Capability details" }) ?? view.getByRole("complementary", { name: "Capability details" });
 const noDetails = (view: ReturnType<typeof mount>) => !view.queryByRole("region", { name: "Capability details" }) && !view.queryByRole("complementary", { name: "Capability details" });
 const tab = (view: ReturnType<typeof mount>, name: string) => fireEvent.click(view.getByRole("tab", { name }));
@@ -36,6 +38,16 @@ function repeatedRoots(): AgentsReport {
 }
 
 describe("MCP and skills capability explorer", () => {
+  it("opens the server or skill a 3D part named, and only that one", async () => {
+    const item = capabilityItems(report().agents).find((row) => row.kind === "skill" && row.name === "frontend-checks")!;
+    agentFocus.capabilityId = item.id;
+    agentFocus.kind = "skill";
+    const view = mount();
+    await waitFor(() => expect(view.getByRole("heading", { name: "frontend-checks" })).toBeTruthy());
+    expect(details(view).textContent).toContain("Check UI behavior, accessibility and responsive layouts");
+    expect(view.getByRole("radio", { name: /^Skills/ }).getAttribute("aria-checked")).toBe("true");
+    expect(agentFocus.capabilityId).toBeNull();
+  });
   it("starts with purpose cards and no automatic inspector or expanded disclosures", () => {
     const view = mount(report(), { selectedAgent: null });
     expect(view.getByRole("radio", { name: "Explore" }).getAttribute("aria-checked")).toBe("true");
@@ -290,16 +302,16 @@ describe("MCP and skills capability explorer", () => {
     await waitFor(() => expect(copy.textContent).toContain("Copied"));
     expect(card.getAttribute("aria-expanded")).toBe("false");
   });
-  it("opens a card's details inline right after it and closes them with Escape", async () => {
+  it("opens a card's details in the right sidebar and closes them with Escape", async () => {
     const view = mount(), card = view.getByRole("button", { name: frontendSkill() });
     card.focus(); await fireEvent.click(card);
-    const panel = view.getByRole("region", { name: "Capability details" });
-    // The card's grid cell (the card and its Copy path button) is followed directly by the panel.
-    expect(card.parentElement!.nextElementSibling).toBe(panel);
+    const panel = view.getByRole("complementary", { name: "Capability details" });
+    expect(card.parentElement!.nextElementSibling).not.toBe(panel);
     expect(card.parentElement!.querySelectorAll("button")).toHaveLength(2);
     expect(card.getAttribute("aria-expanded")).toBe("true");
-    expect(card.getAttribute("aria-controls")).toBe(panel.id);
-    expect(view.queryByRole("complementary", { name: "Capability details" })).toBeNull();
+    expect(card.getAttribute("aria-controls")).toBe("capability-details");
+    expect(panel.id).toBe("capability-details");
+    expect(view.queryByRole("region", { name: "Capability details" })).toBeNull();
     await waitFor(() => expect(panel.textContent).toContain("Scan with…"));
     await fireEvent.keyDown(view.getByRole("heading", { name: "frontend-checks" }), { key: "Escape" });
     expect(noDetails(view)).toBe(true);
@@ -307,8 +319,9 @@ describe("MCP and skills capability explorer", () => {
     await fireEvent.click(card); await fireEvent.click(card);
     expect(noDetails(view)).toBe(true);
   });
-  it("lists contexts by project folder and opens an agent under its process row", async () => {
-    const view = mount();
+  it("lists contexts by project folder and opens an agent in the existing details screen", async () => {
+    const onselectagent = vi.fn(), onopendetails = vi.fn();
+    const view = mount(report(), { onselectagent, onopendetails });
     const cursor = view.getByRole("button", { name: /^Explore context Cursor,/ });
     expect(cursor.textContent).toContain("docs +1");
     expect(cursor.textContent).not.toContain("/Users/dev/code");
@@ -316,12 +329,10 @@ describe("MCP and skills capability explorer", () => {
     await fireEvent.click(view.getByRole("button", { name: "Show processes for Cursor" }));
     const row = view.getByRole("button", { name: "Inspect agent card Cursor, PID 52000" });
     row.focus(); await fireEvent.click(row);
-    const panel = view.getByRole("region", { name: "Capability details" });
-    expect(row.nextElementSibling).toBe(panel);
-    expect(panel.textContent).toContain("PID 52000");
-    await fireEvent.keyDown(panel, { key: "Escape" });
+    expect(onselectagent).toHaveBeenCalledWith("agent:52000");
+    expect(onopendetails).toHaveBeenCalledOnce();
     expect(noDetails(view)).toBe(true);
-    expect(document.activeElement).toBe(row);
+    expect(row.nextElementSibling).toBeNull();
   });
   it("labels Compare contexts by name and project folder only", async () => {
     const view = mount(report(), { selectedAgent: null });
@@ -339,9 +350,7 @@ describe("MCP and skills capability explorer", () => {
     // The config box's prompt is an explicit opt-in.
     await fireEvent.click(view.getByRole("button", { name: "Read local config" }));
     expect(oncapabilities).toHaveBeenCalledOnce(); expect(r.agents[1].capabilities).toBeUndefined();
-    // Opening the MCP & skills section reads nothing; its buttons are the same opt-in.
-    await fireEvent.click(view.getByRole("tab", { name: /^Config/ }));
-    expect(oncapabilities).toHaveBeenCalledOnce();
+    // The details screen does not read config by itself. Opening MCP & skills is the same opt-in.
     await fireEvent.click(view.getByRole("button", { name: "Open in MCP & skills" }));
     expect(oncapabilities).toHaveBeenCalledTimes(2); expect(r.agents[1].capabilities).toBeUndefined();
   });

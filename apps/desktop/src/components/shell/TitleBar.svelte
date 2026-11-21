@@ -2,7 +2,7 @@
   // App title bar: brand, the view's search field, live status and the everyday tools. Capture
   // tools live in the status bar; only an active recording shows here, because it's live state.
   import type { Snippet } from "svelte";
-  import { IconButton } from "../ui";
+  import { ActionMenu, IconButton } from "../ui";
   import { formatClock } from "../../lib/screen-record";
   import { tooltip } from "../../lib/tooltip";
 
@@ -94,9 +94,11 @@
       </div>
     {/if}
     <div class="cluster">
-      <IconButton icon="history" label="Recently stopped" kbd={singleKeys ? "H" : undefined} onclick={onhistory} />
-      <IconButton icon="clock" label={scheduleCount ? `Scheduled actions (${scheduleCount} active)` : "Scheduled actions"} badge={scheduleCount || undefined} onclick={onschedules} bind:el={schedulesTrigger} />
-      <IconButton icon="server" label="Remote host…" onclick={onremote} />
+      <ActionMenu bind:el={schedulesTrigger} label="History, schedules, remote" placement="down" badge={scheduleCount || undefined} items={[
+        { id: "history", label: "Recently stopped", icon: "history", hint: singleKeys ? "H" : undefined, run: onhistory },
+        { id: "schedules", label: scheduleCount ? `Scheduled actions (${scheduleCount} active)` : "Scheduled actions", icon: "clock", run: onschedules },
+        { id: "remote", label: "Remote host…", icon: "server", run: onremote },
+      ]} />
     </div>
     <div class="cluster">
       <IconButton icon={themeIcon} label="Theme: {themeLabel}" kbd={singleKeys ? ["⇧", "L"] : undefined} onclick={ontheme} />

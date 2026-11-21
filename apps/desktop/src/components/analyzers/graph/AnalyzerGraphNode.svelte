@@ -36,7 +36,7 @@
 
 <style>
   .wrap { position: relative; width: var(--w); height: var(--h); }
-  .card { width: 100%; height: 100%; box-sizing: border-box; display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--border-strong); border-left: 3px solid var(--tone, var(--border-strong)); border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease); }
+  .card { width: 100%; height: 100%; box-sizing: border-box; display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border-strong); border-left: 3px solid var(--tone, var(--border-strong)); border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); font: inherit; text-align: left; cursor: pointer; overflow: hidden; transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease); }
   .card:hover { box-shadow: var(--shadow-md); }
   .card:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
   .card.selected { box-shadow: 0 0 0 2px var(--tone, var(--accent)), var(--shadow-md); }
@@ -50,8 +50,9 @@
   .copy { display: grid; gap: 2px; min-width: 0; flex: 1; }
   .stage { color: var(--muted); font-size: var(--fs-caption); font-weight: var(--fw-medium); }
   strong { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-semibold); }
-  strong, .sub, em { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .sub { color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+  strong, .sub, em { min-width: 0; overflow: hidden; }
+  strong, em { white-space: nowrap; text-overflow: ellipsis; }
+  .sub { color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; }
   .badges { display: flex; gap: 4px; min-width: 0; margin-top: 2px; }
   em { font-style: normal; font-size: var(--fs-label); padding: 0 6px; border: 1px solid var(--border); border-radius: var(--r-full); color: var(--muted); max-width: 100%; }
   .bar { display: flex; height: 6px; margin-top: 4px; border-radius: 3px; overflow: hidden; background: var(--surface-2); }

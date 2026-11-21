@@ -775,7 +775,7 @@ fn actual_codex_otel_031_wire_fixture_projects_without_sensitive_fields() {
     assert_eq!(span.status, ActivityStatus::Ok);
     assert_eq!(span.duration_ms, Some(1234));
     assert!(span.session_id.is_some());
-    let expected = humantime::parse_rfc3339("2026-10-11T12:00:00.123Z")
+    let expected = crate::timefmt::parse_rfc3339("2026-10-11T12:00:00.123Z")
         .unwrap()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()

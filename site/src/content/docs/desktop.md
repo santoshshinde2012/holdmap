@@ -28,8 +28,10 @@ of agents, each with its ports and the same **Details** / **Stop…** menu.
 
 Every panel on Home folds away and comes back, and Home remembers how you left it: the summary
 (the chevron at the left of the header), the side column (the panel button at the right of the
-header), and each panel in it (click its heading). In 3D the parts list folds to a strip of
-agent buttons.
+header), and each panel in it (click its heading). Inside **Details**, the readings and the
+facts fold on their own. Each **Needs you** row opens its explanation in the row. In 3D the
+parts list folds to a strip of agent buttons. When the side column is hidden, the selected
+agent's details sit beside the picture and fold to a strip; Home remembers that too.
 
 **3D** builds the same machine as a model you can take apart,
 drawn without perspective, so sizes and spacing read the same at the front and the back. Each
@@ -39,6 +41,11 @@ plate below. Its processes stand on a **Runtime** tray over the same district, a
 servers, skills and instruction files found on disk on a **Configuration** tray above that
 (only after **Read MCP config**). Everything over a district belongs to that agent, so no line
 is needed to say so. **This computer** is the chip at the left end of the board.
+The first click on an agent fills the canvas with that district. **All agents** brings the whole machine back.
+Select a part and Details offers **Overview**, **MCP & skills**, **Flow**, **Results** and
+**Security** for that agent. A second click on the same part opens the screen it belongs to.
+A skill, MCP server or running MCP process opens that item in the MCP & skills sidebar.
+Another process or a remote host opens Flow, and a recorded call opens the calls timeline.
 
 - **Shapes and rings mean one thing each.** The icon on a part's top face says what it is
   (`>_` a shell, `</>` a dev server, a plug an MCP server, a folder, a socket). The ring round a
@@ -59,18 +66,23 @@ is needed to say so. **This computer** is the chip at the left end of the board.
   shows each agent's processes as slices inside its tower. **Plan** looks straight down at the
   floor plan.
 - Hover any part to light it and what it's wired to, and dim the rest. Click an agent's tower or
-  district to select it (again to open it on Agents); click a part for its details. The parts
+  district once and the picture becomes that agent alone, with **All agents** to return; click it
+  again to open it on Agents. Click a part for its details. The parts
   list beside the canvas has a button for every agent and part, and is the keyboard path to
   everything drawn (`↑`/`↓` move between buttons). Ports open the same **Details** / **Stop…**
-  menu.
+  menu. **Calls** stay with the whole computer, so an agent's picture leaves that lens out.
 - **Details**, above **Needs you** in the side column, holds the readings and the selected part.
+  When the side column is hidden, those same readings and the selected part sit in a column beside
+  the picture instead.
   The readings come from the same parts that are drawn: CPU (with its recent trend), memory,
-  ports, processes, MCP servers running of configured, skills, **Needs you** and, once recording
-  has been used, **Calls**, for the whole computer or the selected agent. They read **…** until
+  ports, processes, MCP servers running of configured, skills and **Needs you**, for the whole
+  computer or the selected agent. **Calls** appear once recording has been used, and only on the
+  whole computer. They read **…** until
   the first scan, and a figure that wasn't collected reads **Not read**, never 0. Readings that
   count parts are toggles: press one to light up exactly those parts; `Esc` lets go.
-- **Focus** hides the summary and the side column so the machine fills Home; the readings and
-  the selected part then ride over the canvas. The `+`, `−` and fit buttons on the right edge
+- **Focus** hides the summary and the side column so the machine fills Home. The selected agent's
+  details stay beside the picture and fold away without leaving the agent. With nothing selected,
+  the readings ride over the canvas. The `+`, `−` and fit buttons on the right edge
   zoom without a wheel, and scrolling zooms toward the pointer.
 - **Tour** (`T`) walks through the machine, agents that need you first. Any drag, scroll, click or
   key hands you control, and the tour picks up again after 25 seconds of quiet. It is off with
@@ -147,12 +159,11 @@ monitor for your agents and dev servers, on macOS, Windows and Linux.
   macOS the **holdmap icon** item shows a dot in the same colours.
 - **Panel.** Click an item on macOS, or the icon on Windows (on Linux, choose **Show panel**
   from its menu), for a panel under it, opened at what you clicked: how many agents are
-  running (developer tools such as Docker Desktop are counted apart), their RAM and CPU in large type, a chart of the agents' CPU over the last
+  running (developer tools such as Docker Desktop are counted apart), their RAM and CPU in large type, and the counts for ports, the network, needs you and dev servers. Choosing a count scrolls to that reading. Below the counts: **Needs you** with its urgency, your dev servers with **Stop all…** in their header, then the agents using the most RAM. Each agent row has a bar for its share of that RAM, with its project and CPU beside it (long names shorten, hover for the full row). Developer tools are listed on their own and are not counted as agents. Further down, a chart of the agents' CPU over the last
   60 scans, a **Needs you** history (one square per scan: green for all clear, amber for worth
-  a look, red for look now), **Needs you** with its urgency, a ring of the ports in use (blue on
-  this computer only, amber open to the network), a **Port changes** chart (ports opened above
-  the line, closed below), your dev servers with **Stop all…** in their header, the agents using the most RAM with their
-  project and CPU (long names shorten, hover for the full row), and developer tools on their own.
+  a look, red for look now), a ring of the ports in use (blue on
+  this computer only, amber open to the network), and a **Port changes** chart (ports opened above
+  the line, closed below).
   It keeps updating while it's open, follows your theme and closes when you click elsewhere or
   press `Esc`; the pin button keeps it open. Choose an item, a dev server or an agent to open
   it in the window. **Stop all…** opens the stop plan in the window; nothing is stopped from
@@ -212,9 +223,9 @@ extension name, not the inherited project — the same identity as the [list and
 view](../agents/). A card's location is a layout choice; only the displayed links represent
 observed connections.
 
-The graph opens with the full canvas under summary tiles: services, links, groups and
-remote (outbound) connections. Disconnected services and separate clusters are packed into compact
-groups in both layouts.
+The graph opens with one toolbar over the canvas: **All services**, the layout, **Options**, and
+the counts for services, links, groups and remote (outbound) connections. The legend stays its own
+key. Disconnected services and separate clusters are packed into compact groups in both layouts.
 
 The new **Search services** field searches displayed names, projects, ports and PIDs.
 Use `port:3000` or `:3000` for an exact port, and `pid:43000` for an exact PID. Multiple
@@ -501,10 +512,15 @@ The command palette keeps its active result valid as running services change.
 ## Agents map
 
 **Agents** (`⇧A`) shows each AI coding agent and developer tool that is running (Claude Code,
-Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider, Docker Desktop, OrbStack and others). Cards
-skim memory, CPU, process count, stoppable ports and parent; expand for folders (with source
+Codex, Cursor, Copilot, Gemini CLI, Windsurf, Aider, Docker Desktop, OrbStack and others).
+**Overview**, **MCP & skills**, **Flow** and **Security** are the screens under Agents.
+Cards skim memory, CPU, process count, stoppable ports and parent; expand for folders (with source
 labels), ports and apps it started, child processes as tools & apps, connections, and access: the
 account it runs as, sandbox and approval flags, network listeners, and macOS-protected folders.
+Select an agent and its details open beside the map: who it is, its memory and access, the
+folders and processes it is running, and the ports it serves. **Open in MCP & skills**,
+**Open in Flow** and **Open in Security** open those screens already scoped to that agent.
+Once local config has been read, servers, skills and file locations stay behind **Configuration**.
 Each fact is marked seen, inferred or unknown. From a card you can reveal a folder, open it in your
 editor, or stop the unprotected ports that agent started. The map zooms
 Computer → Footprint → Project from the same observed processes, sockets and folders; it does not invent communication
@@ -518,12 +534,16 @@ observed process arguments are redacted for display; redaction is heuristic. Rem
 open its details. `↑` `↓` switch agents. See [Agents, tools and apps](../agents/) for the full guide.
 `holdmap agents` and `holdmap agents AGENT --stop-ports` do the same in a terminal.
 
-**MCP & skills** has **Explore**, **Map** and **Compare** views over the opt-in
-inventory. Explore leads with declared skill purposes; Map retains observed
-source relationships; Compare keeps exact definitions and their contexts separate. Matching
-process observations group without becoming a verified session. Select a card with a click,
-**Enter** or **Space** for **Purpose**, **Source**, **Evidence** and **Activity**. Close or press
-**Esc** to return focus without changing the selected context. Nothing is selected automatically.
+**MCP & skills** has **Explore**, **Map** and **Compare** on the first header row, with
+**Filters**, **Coverage** and **Recorded calls**. **All**, **MCP servers**, **Skills**,
+**Tools** and **Running** stay together on the row below. Explore leads with declared skill
+purposes; Map retains observed source relationships; Compare keeps exact definitions and their
+contexts separate. Matching process observations group without becoming a verified session.
+Select a skill or MCP server with a click, **Enter** or **Space** and its inspector opens in
+the right sidebar, on **Purpose**, **Source**, **Evidence** and **Activity**. A process in
+that list opens the agent details screen. On a narrower window the sidebar covers the catalog
+until you close it. Close or press **Esc** to return focus without changing the selected
+context. Nothing is selected automatically.
 **Tools** explains **Catalog not reported** rather than showing zero tools. **Filters** and
 **Coverage** open on request, and narrow windows keep dismissible agent/details drawers.
 See the [capability guide](../agents/#mcp-and-skills) for supported locations and limits.

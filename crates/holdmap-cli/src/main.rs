@@ -275,7 +275,7 @@ pub struct StopArgs {
     #[arg(short = 'n', long)]
     pub dry_run: bool,
     /// Grace period before escalating to SIGKILL.
-    #[arg(short, long, default_value = "5s", value_parser = humantime::parse_duration)]
+    #[arg(short, long, default_value = "5s", value_parser = holdmap_activity::timefmt::parse_duration)]
     pub timeout: Duration,
     /// Also allow stopping soft-protected processes and project `protect` ports.
     #[arg(long)]
@@ -313,13 +313,13 @@ pub struct WaitArgs {
     #[arg(value_parser = parse_port)]
     pub port: u16,
     /// Give up after this long (exit code 1).
-    #[arg(short, long, default_value = "30s", value_parser = humantime::parse_duration)]
+    #[arg(short, long, default_value = "30s", value_parser = holdmap_activity::timefmt::parse_duration)]
     pub timeout: Duration,
     /// Wait until the port is free instead.
     #[arg(long)]
     pub free: bool,
     /// Polling interval.
-    #[arg(long, default_value = "200ms", value_parser = humantime::parse_duration)]
+    #[arg(long, default_value = "200ms", value_parser = holdmap_activity::timefmt::parse_duration)]
     pub interval: Duration,
     /// Print nothing; just use the exit code.
     #[arg(short, long)]
@@ -344,7 +344,7 @@ pub struct RunArgs {
     #[arg(long)]
     pub fallback: bool,
     /// Grace period before escalating to SIGKILL.
-    #[arg(short, long, default_value = "5s", value_parser = humantime::parse_duration)]
+    #[arg(short, long, default_value = "5s", value_parser = holdmap_activity::timefmt::parse_duration)]
     pub timeout: Duration,
     /// Name of the environment variable to set (default PORT).
     #[arg(long, default_value = "PORT")]

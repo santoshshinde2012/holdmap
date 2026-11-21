@@ -5,7 +5,7 @@ const cursorMcp = (name: string) => `Inspect MCP server ${name}, Project scope. 
 const frontendSkill = "Inspect skill frontend-checks, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md";
 const claudeFilesystem = "Inspect MCP server filesystem, Project scope. Agents: Claude Code (PID 51200). Project: /Users/dev/code/shop-api. Source: /Users/dev/code/shop-api/.mcp.json";
 const workspace = (page: Page) => page.getByRole("region", { name: "MCP and skills workspace", exact: true });
-// Details open inline next to the clicked card, row or process; the Map canvas keeps a side panel.
+// A skill or MCP server opens in the right sidebar. A process opens the agent details screen.
 const details = (page: Page) => page.getByRole("region", { name: "Capability details", exact: true }).or(page.getByRole("complementary", { name: "Capability details", exact: true }));
 const graph = (page: Page) => page.getByRole("region", { name: "Agent capability graph", exact: true });
 const view = (page: Page, name: "Explore" | "Map" | "Compare") => workspace(page).getByRole("radiogroup", { name: "Capability view", exact: true }).getByRole("radio", { name, exact: true });
@@ -144,10 +144,11 @@ test("context selection scopes definitions while PID expansion keeps inspection 
   await app.getByRole("button", { name: "Show processes for Cursor", exact: true }).click();
   const root = app.getByRole("button", { name: "Inspect agent card Cursor, PID 52000", exact: true });
   await root.click();
-  await expect(details(app).getByRole("heading", { name: "Cursor", exact: true })).toBeVisible();
+  // A process leaves MCP & skills and opens that agent's details.
+  await expect(app.getByRole("radio", { name: "Overview", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(agentDetails(app).getByRole("heading", { name: "Cursor", exact: true })).toBeVisible();
   await app.keyboard.press("Escape");
-  await expect(details(app)).toHaveCount(0); await expect(root).toBeFocused();
-  await expect(app.getByRole("radio", { name: "MCP & skills", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(agentDetails(app)).toHaveCount(0);
 });
 
 test("Map cards retain native Enter/Space activation and exact focus return", async ({ app }) => {
@@ -226,7 +227,6 @@ test("typing search closes disappearing selection without stealing focus or repl
 
 test("Overview entry keeps requested agent scope without automatically opening details", async ({ app }) => {
   await openAgents(app); await agentHeading(app, "Cursor").click();
-  await agentDetails(app).getByRole("tab", { name: /^Config/ }).click();
   await agentDetails(app).getByRole("button", { name: "Open in MCP & skills", exact: true }).click();
   await expect(view(app, "Explore")).toHaveAttribute("aria-checked", "true");
   await expect(workspace(app).getByRole("button", { name: /^Inspect MCP server/ })).toHaveCount(3);

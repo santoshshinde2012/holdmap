@@ -1,4 +1,10 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
+
+async function openStopped(app: Page) {
+  await app.getByRole("button", { name: "History, schedules, remote", exact: true }).click();
+  await app.getByRole("menuitem", { name: "Recently stopped", exact: true }).click();
+}
 
 test("live Restart requires a reviewed stop and completes the bound browser simulation", async ({ app }) => {
   await app.getByRole("option", { name: /^Port 3000 tcp,/ }).click();
@@ -10,7 +16,7 @@ test("live Restart requires a reviewed stop and completes the bound browser simu
   await review.getByRole("button", { name: "Restart :3000", exact: true }).click();
   await expect(review).toHaveCount(0);
   await expect(app.getByText("Restarted :3000", { exact: true })).toBeVisible();
-  await app.getByRole("button", { name: "Recently stopped", exact: true }).click();
+  await openStopped(app);
   await expect(app.getByRole("dialog", { name: "Recently stopped", exact: true })).toContainText(":3000");
 });
 
@@ -23,8 +29,8 @@ test("stopped-service history copies the original command, restarts, and clears 
   await review.getByRole("button", { name: "Stop :3000", exact: true }).click();
   await expect(review).toHaveCount(0);
 
-  const trigger = app.getByRole("button", { name: "Recently stopped", exact: true });
-  await trigger.click();
+  const trigger = app.getByRole("button", { name: "History, schedules, remote", exact: true });
+  await openStopped(app);
   const history = app.getByRole("dialog", { name: "Recently stopped", exact: true });
   await expect(history).toContainText(":3000");
   await expect(history.getByRole("button", { name: "Restart", exact: true })).toBeEnabled();
@@ -34,7 +40,7 @@ test("stopped-service history copies the original command, restarts, and clears 
   await expect(history).toHaveCount(0);
   await expect(app.getByText("Restarted :3000", { exact: true })).toBeVisible();
 
-  await trigger.click();
+  await openStopped(app);
   await history.getByRole("button", { name: "Clear history…", exact: true }).click();
   await expect(history).toContainText("Clear all 1 entries?");
   await history.getByRole("button", { name: "Keep", exact: true }).click();

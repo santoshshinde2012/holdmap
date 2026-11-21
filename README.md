@@ -39,7 +39,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/desktop-capability-inline-light.png" width="420" alt="MCP & skills: a skill card's details open inline right under it, with Scan with… (sample data)" />
+  <img src="docs/screenshots/desktop-capability-inline-light.png" width="420" alt="MCP & skills: a skill card opens its details in the right sidebar, with Scan with… (sample data)" />
   <img src="docs/screenshots/desktop-security-analyzers-light.png" width="420" alt="Agents → Security → Analyzers: cards with publisher, what each checks, on/off or installed state and one action; all off by default (sample data)" />
 </p>
 
@@ -58,7 +58,8 @@
   folders, child tools, ports, connections, CPU, memory and access. Memory shows the
   process-table total plus the private, shared, compressed and virtual counters the OS
   actually exposes, or **unknown** with a reason. Every fact is marked as seen, inferred or
-  unknown. You can stop just the services an agent started.
+  unknown. The agent details screen shows who it is and the ports it serves, and opens
+  MCP & skills, Flow and Security for that agent. You can stop just the services an agent started.
 - **MCP servers and skills (opt-in).** How each MCP server launches and whether it's pinned
   or running, plus skills, permission rules and instruction files, and the user, project and
   local paths those files live in (counts, sizes and times, not bodies). holdmap reads names
@@ -74,7 +75,10 @@
 - **3D machine.** Home's **3D** layout builds the same agents as a model you can
   take apart: a district per agent with its tower, folders and ports, its processes and the
   configuration found on disk on trays above it, CPU gauges, network ripples and connections that
-  move their way. Lenses show one concern at a time, with X-ray, a floor plan and a guided tour.
+  move their way. Click an agent and that district fills the picture, with a way back to every
+  agent. Lenses show one concern at a time, with X-ray, a floor plan and a guided tour.
+  A selected part opens that agent's Overview, MCP & skills, Flow, Results or Security,
+  and a skill or MCP server opens that item.
   Every link comes from what holdmap observed; nothing is joined by name.
 - **Menu bar and tray widgets.** Small menu-bar items on macOS like a system
   monitor's (agents, what needs you, their CPU, dev servers, a CPU line or per-agent bars) and a
@@ -171,7 +175,7 @@ See [docs/architecture.md](docs/architecture.md) for details.
 
 <!-- release-please updates this source-version marker; download links follow published releases. -->
 <!-- x-release-please-start-version -->
-Source version: **0.13.1**.
+Source version: **0.14.0**.
 <!-- x-release-please-end -->
 Downloads come from the [latest published release](https://github.com/santoshshinde2012/holdmap/releases/latest),
 and `main` can be ahead of it ([changelog](CHANGELOG.md)).

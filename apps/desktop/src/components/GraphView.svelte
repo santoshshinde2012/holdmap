@@ -9,7 +9,7 @@
   import GraphViewport from "./graph/GraphViewport.svelte";
   import AutoMiniMap from "./graph/AutoMiniMap.svelte";
   import Icon from "./Icon.svelte";
-  import { ActionDock, ActionPill, IconButton } from "./ui";
+  import { ActionDock, ActionPill, FoldSection, IconButton } from "./ui";
   import type { Agent, Graph, GraphNode } from "../lib/types";
   import { agentForPids } from "../lib/agent-scope";
   import { FORCE_NODE_LIMIT, directionForWidth, graphForQuery, graphNodeMatches, layout, layoutModeFor, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Point, type Positions } from "../lib/graph";
@@ -145,7 +145,7 @@
     const node = shown?.nodes.find((n) => n.is_dev) ?? shown?.nodes[0];
     return node ? positions.get(node.id) ?? null : null;
   });
-  const viewKey = $derived(effectiveMode + "|" + direction + "|" + query.trim() + "|" + all + "|" + external);
+  const viewKey = $derived(effectiveMode + "|" + direction + "|" + query.trim() + "|" + all + "|" + external + "|" + (shown?.nodes.map((n) => n.id).sort().join(",") ?? ""));
   const hasRemote = $derived(graph?.nodes.some((n) => n.kind === "external") ?? false);
   // A lone "External" card with no service beside it is still an empty graph.
   const empty = $derived(!shown?.nodes.some((n) => n.kind !== "external"));
@@ -226,7 +226,7 @@
         ariaLabelConfig={{ "controls.ariaLabel": "Graph navigation", "controls.zoomIn.ariaLabel": "Zoom in on services", "controls.zoomOut.ariaLabel": "Zoom out of services" }}
         onnodepointerenter={({ node }) => { if (node.type === "service") hover = node.id; }} onnodepointerleave={() => (hover = null)}
         onpaneclick={() => onselect(null)}>
-        <GraphViewport {viewKey} {focus} {anchor} {width} {height} {reduced} pending={loading} />
+        <GraphViewport {viewKey} {focus} {anchor} {width} {height} {reduced} pending={loading && !graph} />
         <Background gap={24} size={1} />
         <AutoMiniMap {dark} />
       </SvelteFlow>
@@ -256,13 +256,13 @@
               </div>
             {/if}
           </div>
+          {#if !empty}
+            <div class="stats" role="group" aria-label="Graph summary">
+              {#each graphStats as stat (stat.id)}<span class="stat stat-{stat.id}" title={stat.title}><b>{stat.value}</b> {noun(stat.value, stat.one)}</span>{/each}
+              {#if loading}<span class="updating" role="status">Updating…</span>{/if}
+            </div>
+          {/if}
         </div>
-        {#if !empty}
-          <div class="stats" role="group" aria-label="Graph summary">
-            {#each graphStats as stat (stat.id)}<span class="stat stat-{stat.id}" title={stat.title}><b>{stat.value}</b> {noun(stat.value, stat.one)}</span>{/each}
-            {#if loading}<span class="updating" role="status">Updating…</span>{/if}
-          </div>
-        {/if}
         {#if widgets && !empty}
           <div class="legend" role="group" aria-label="Graph legend">
             {#each legend as [kind, label]}<span class={"lg lg-" + kind}><i aria-hidden="true"></i>{label}</span>{/each}
@@ -299,8 +299,8 @@
       {#if peerAgent && onopenagent}
         <button type="button" class="peer-agent" onclick={() => onopenagent?.(peerAgent.id)}><Icon name="bot" size={13} /><span>Part of <b>{peerAgent.name}</b></span><span class="go">Open in Agents</span></button>
       {/if}
-      <section class="peer-sec" aria-labelledby="peer-proc-head">
-        <h4 id="peer-proc-head">Process</h4>
+      <div class="peer-sec">
+        <FoldSection id="peer-process" title="Process">
         {#if peer.pids.length}
           <p class="mono">PID {peer.pids.join(", ")}</p>
           <p>{peer.cpu_percent.toFixed(1)}% CPU · {humanBytes(peer.memory_bytes)} memory</p>
@@ -308,10 +308,11 @@
           <p class="muted">No local process — observed as a connection endpoint.</p>
         {/if}
         <p>{peerLinks.length} observed {peerLinks.length === 1 ? "link" : "links"} · No listening ports reported</p>
-      </section>
+        </FoldSection>
+      </div>
       {#if peerNeighbors.length}
-        <section class="peer-sec" aria-labelledby="peer-neighbors-head">
-          <h4 id="peer-neighbors-head">Connected services <span class="n">{peerNeighbors.length}</span></h4>
+        <div class="peer-sec">
+          <FoldSection id="peer-neighbors" title="Connected services" count={peerNeighbors.length}>
           <ul class="neighbors">
             {#each peerNeighbors as { node, direction } (node.id)}
               <li><button type="button" class="neighbor" onclick={() => selectNeighbor(node)} title="Select {node.label} on the graph">
@@ -320,13 +321,15 @@
               </button></li>
             {/each}
           </ul>
-        </section>
+          </FoldSection>
+        </div>
       {/if}
       {#if peerRemotes.length}
-        <section class="peer-sec" aria-labelledby="peer-remote-head">
-          <h4 id="peer-remote-head">Remote endpoints <span class="n">{peerRemotes.length}</span></h4>
+        <div class="peer-sec">
+          <FoldSection id="peer-remote" title="Remote endpoints" count={peerRemotes.length}>
           <ul class="remotes">{#each peerRemotes as remote}<li class="mono remote">{remote}</li>{/each}</ul>
-        </section>
+          </FoldSection>
+        </div>
       {/if}
       <small>Connections show observed sockets, not messages or tool calls.</small>
     </aside>
@@ -339,7 +342,7 @@
   .graph.has-peer.wide { grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); }
   .graph.has-peer:not(.wide) .peer-inspector { position: absolute; top: 8px; right: 8px; bottom: 8px; width: min(340px, calc(100% - 16px)); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-md); }
   .graph:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
-  h3, h4, p { margin: 0; }
+  h3, p { margin: 0; }
   .graph-body { position: relative; min-height: 0; min-width: 0; }
   .graph :global(.svelte-flow) { --xy-background-color: var(--bg); --xy-node-border-radius: 14px; --xy-controls-button-background-color: var(--surface); --xy-controls-button-color: var(--text-2); --xy-controls-button-border-color: var(--border); --xy-minimap-background-color: var(--surface); }
   .graph :global(.svelte-flow__node-service), .graph :global(.svelte-flow__node-cluster) { padding: 0; border: 0; background: transparent; box-shadow: none; width: auto; }
@@ -351,11 +354,11 @@
 
   /* Floating chrome: frosted, hairline and compact so the canvas keeps the room. */
   .chrome-host { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 6; pointer-events: none; }
-  .chrome { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; max-width: min(100%, 620px); }
+  .chrome { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; max-width: 100%; container-type: inline-size; }
   .chrome > * { pointer-events: auto; }
-  .bar, .stats, .legend, .search-context, .connection-note, .cluster-focus { background: var(--overlay); border: 1px solid var(--border); box-shadow: var(--shadow-sm); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .bar, .legend, .search-context, .connection-note, .cluster-focus { background: var(--overlay); border: 1px solid var(--border); box-shadow: var(--shadow-sm); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   .bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; max-width: 100%; box-sizing: border-box; padding: 3px; border-radius: var(--r-full); }
-  .stats { display: flex; flex-wrap: wrap; gap: 2px 12px; max-width: 100%; box-sizing: border-box; padding: 4px 12px; border-radius: var(--r-full); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stats { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: center; margin-left: auto; max-width: 100%; box-sizing: border-box; padding: 0 10px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
   .stats b { color: var(--text); font-weight: var(--fw-semibold); }
   .updating { color: var(--accent); font-weight: var(--fw-medium); }
   .legend { display: flex; flex-wrap: wrap; gap: 2px 12px; max-width: 100%; box-sizing: border-box; padding: 4px 12px; border-radius: var(--r-lg); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
@@ -364,11 +367,16 @@
   .lg-service i { border-left: 3px solid var(--tone-green); }
   .lg-client i { border-style: dashed; }
   .lg-external i { border-style: dashed; background: var(--surface-2); }
-  .options-wrap { display: inline-flex; }
+  .options-wrap { position: relative; display: inline-flex; }
   .options-trigger { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: var(--r-full); border: 0; background: transparent; color: var(--text-2); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); cursor: pointer; }
   .options-trigger:hover, .options-trigger[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
   .options-trigger:focus-visible, .cta:focus-visible, .search-context button:focus-visible, .cluster-focus button:focus-visible, .neighbor:focus-visible, .peer-agent:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-  .options { position: absolute; top: calc(100% + 6px); left: 0; z-index: 8; width: min(320px, calc(100cqw - 20px)); box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-md); padding: 12px; color: var(--text); }
+  .options { position: absolute; top: calc(100% + 6px); left: 0; z-index: 8; width: min(320px, calc(100cqw - 20px)); max-width: calc(100cqw - 8px); box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-md); padding: 12px; color: var(--text); }
+  /* On a phone the menu hangs from the toolbar, not from a button that sits at the right edge. */
+  @media (max-width: 720px) {
+    .options-wrap { position: static; }
+    .options { width: min(320px, calc(100cqw - 8px)); }
+  }
   .options-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; font-size: var(--fs-body); }
   .option { display: flex; gap: 16px; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); }
   .option strong { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); }
@@ -396,8 +404,6 @@
   .peer-agent .go { margin-left: auto; color: var(--accent); font-weight: var(--fw-semibold); white-space: nowrap; }
   .peer-agent:hover { background: var(--accent-soft); }
   .peer-sec { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
-  .peer-sec h4 { display: flex; align-items: center; gap: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--text-2); }
-  .peer-sec .n { margin-left: auto; padding: 0 7px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
   .muted { color: var(--muted); }
   .neighbors, .remotes { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
   .neighbor { display: flex; align-items: center; gap: 8px; padding: 5px 8px; margin: 0 -8px; width: calc(100% + 16px); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); font: inherit; text-align: left; cursor: pointer; }
@@ -416,6 +422,7 @@
     .graph :global(.svelte-flow__controls-button) { width: 30px; height: 30px; }
     .bar { border-radius: var(--r-lg); }
     .opt-label, .edge-key, .stat-groups { display: none; }
+    .stats { flex: 1 1 100%; margin-left: 0; padding: 2px 8px 4px; }
     .graph :global(.svelte-flow__minimap) { display: none; }
   }
   .reduced :global(*) { animation: none !important; }

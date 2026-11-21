@@ -10,9 +10,8 @@
   import IconButton from "./IconButton.svelte";
   import { isComposingKey } from "../../lib/keyboard";
 
-  let { items, label = "More actions", size = "md", placement = "up" }: { items: MenuItem[]; label?: string; size?: "sm" | "md"; placement?: "up" | "down" } = $props();
+  let { items, label = "More actions", size = "md", placement = "up", badge, el = $bindable() }: { items: MenuItem[]; label?: string; size?: "sm" | "md"; placement?: "up" | "down"; badge?: number; el?: HTMLButtonElement } = $props();
   let open = $state(false);
-  let btn: HTMLButtonElement | undefined = $state();
   let menu: HTMLDivElement | undefined = $state();
   const id = `menu-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -23,7 +22,7 @@
   }
   function close(focus = true) {
     open = false;
-    if (focus) btn?.focus();
+    if (focus) el?.focus();
   }
   function onkey(e: KeyboardEvent) {
     if (isComposingKey(e) || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -37,7 +36,7 @@
     else if (e.key === "Tab") close(false);
   }
   function outside(e: PointerEvent) {
-    if (open && !menu?.contains(e.target as Node) && !btn?.contains(e.target as Node)) close(false);
+    if (open && !menu?.contains(e.target as Node) && !el?.contains(e.target as Node)) close(false);
   }
   // While open, Esc closes the menu wherever focus is (focus moves in a frame after opening), and
   // before the same key reaches anything under it.
@@ -54,13 +53,13 @@
 <svelte:window onpointerdown={outside} onkeydowncapture={escape} />
 
 <div class="wrap">
-  <IconButton bind:el={btn} icon="more" {label} {size} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} onclick={() => (open ? close() : show())} />
+  <IconButton bind:el icon="more" {label} {size} {badge} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} onclick={() => (open ? close() : show())} />
   {#if open}
     <!-- svelte-ignore a11y_interactive_supports_focus -->
     <div class="menu" class:down={placement === "down"} role="menu" {id} aria-label={label} tabindex="-1" bind:this={menu} onkeydown={onkey}>
       {#each items as item (item.id)}
         <button type="button" role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"} aria-checked={item.checked} tabindex="-1" onclick={() => run(item)}>
-          <Icon name={item.checked === undefined ? item.icon : item.checked ? "check" : item.icon} size={14} /><span class="l">{item.label}</span>{#if item.hint}<span class="h">{item.hint}</span>{/if}
+          <Icon name={item.checked === undefined ? item.icon : item.checked ? "check" : item.icon} size={14} /><span class="l">{item.label}</span>{#if item.hint}<span class="h" aria-hidden="true">{item.hint}</span>{/if}
         </button>
       {/each}
     </div>

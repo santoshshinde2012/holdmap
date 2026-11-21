@@ -604,7 +604,7 @@ print(json.dumps(responses[args[-1]]))
 
 class CompleteReleaseAssetTests(unittest.TestCase):
     def setUp(self):
-        sandbox = tempfile.TemporaryDirectory(prefix="holdmap-release-completeness-test-")
+        sandbox = tempfile.TemporaryDirectory(prefix="holdmap-release-completeness-test-", ignore_cleanup_errors=True)
         self.addCleanup(sandbox.cleanup)
         self.root = Path(sandbox.name)
         self.state = self.root / "github.json"

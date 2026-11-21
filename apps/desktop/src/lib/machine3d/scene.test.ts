@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { MOCK_SNAPSHOT } from "../mock";
 import { mockAgents } from "../mock-agents";
 import { attention, hotAgents, needsByAgent } from "../home";
+import { capabilityItemId, runningCapabilityId } from "../agent-capabilities";
 import { agentSummary, buildScene, gaugeParts, readings, SCENE_LIMITS } from "./scene";
+import { componentScene } from "./preview";
+import { layoutScene } from "./layout";
 import { CALL_LIMIT } from "./calls";
 import { partChip } from "./describe";
 import { demoActivity } from "../activity-demo";
@@ -52,6 +55,10 @@ describe("3D machine scene", () => {
     for (const w of s.wires.filter((w) => w.kind === "config")) expect(s.agents.map((a) => a.id)).toContain(w.from);
     // Every running wire comes from a server whose run state says running.
     for (const w of running) expect(s.parts.find((p) => p.id === w.from)).toMatchObject({ kind: "mcp", live: true });
+    const server = s.parts.find((p) => p.id === `${cursor.id}:mcp:${fs.id}`)!;
+    expect(server.capabilityId).toBe(capabilityItemId("mcp", fs));
+    const process = s.parts.find((p) => p.id === `${cursor.id}:tool:${fs.runtime!.pids[0]}`)!;
+    expect(process.capabilityId).toBe(runningCapabilityId(fs.runtime!.pids[0]));
   });
 
   it("never joins a same-named server across agents", () => {
@@ -160,6 +167,7 @@ describe("3D machine scene", () => {
     expect(partChip(calls[0])).toMatchObject({ label: "Reported" });
     // The reading appears with recording; failed calls don't count as Needs you.
     expect(readings(s).find((r) => r.id === "calls")).toMatchObject({ value: String(calls.length), sub: "recording" });
+    expect(readings(s, report.agents[0].id).some((r) => r.id === "calls")).toBe(false);
     expect(readings(s).find((r) => r.id === "needs")!.value).toBe(readings(scene()).find((r) => r.id === "needs")!.value);
     expect(readings(scene()).some((r) => r.id === "calls")).toBe(false);
   });
@@ -185,5 +193,30 @@ describe("3D machine scene", () => {
     // Scoped to an agent, except calls, which belong to no agent.
     for (const id of gaugeParts(s, "ports", cursor.id)) expect(id.startsWith(`${cursor.id}:`)).toBe(true);
     expect(gaugeParts(s, "calls", cursor.id)).toEqual(gaugeParts(s, "calls"));
+  });
+});
+
+describe("component details", () => {
+  it("draws one agent's district and drops a connection that leaves it", () => {
+    const s = scene();
+    const docker = report.agents.find((a) => a.product === "docker-desktop")!;
+    const view = componentScene(s, docker.id)!;
+    expect(view.focus).toBe(docker.id);
+    expect(view.scene.agents.map((a) => a.id)).toEqual([docker.id]);
+    expect(view.scene.parts.every((p) => p.id === docker.id || p.owner === docker.id)).toBe(true);
+    expect(view.scene.wires.every((w) => view.scene.parts.some((p) => p.id === w.from) && view.scene.parts.some((p) => p.id === w.to))).toBe(true);
+    const port = s.parts.find((p) => p.kind === "port" && p.owner === docker.id)!;
+    expect(componentScene(s, port.id)!.focus).toBe(docker.id);
+    expect(layoutScene(view.scene).districts.has(docker.id)).toBe(true);
+  });
+
+  it("keeps a recorded call on its own, with a place to draw it", () => {
+    const s = scene(report, { activity: demoActivity() });
+    const call = s.parts.find((p) => p.kind === "call")!;
+    const view = componentScene(s, call.id)!;
+    expect(view.focus).toBeNull();
+    expect(view.scene.parts.map((p) => p.id)).toEqual([call.id]);
+    expect(view.scene.agents).toHaveLength(0);
+    expect(layoutScene(view.scene).parts.has(call.id)).toBe(true);
   });
 });

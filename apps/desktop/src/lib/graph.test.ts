@@ -272,6 +272,52 @@ describe("disconnected services", () => {
     expectSeparated(layeredPositions);
   });
 
+  it("seats a client beside the workspace it calls", () => {
+    const graph = makeSparse(6);
+    graph.clusters = [{ ...g.clusters[0], id: "app", nodes: graph.nodes.slice(0, 5).map((n) => n.id) }];
+    graph.nodes = graph.nodes.map((node, index) => ({ ...node, cluster: index < 5 ? "app" : null }));
+    graph.edges = [{ ...g.edges[0], id: "call", from: graph.nodes[5].id, to: graph.nodes[0].id }];
+    const positions = force(graph);
+    const client = positions.get(graph.nodes[5].id)!;
+    const members = graph.nodes.slice(0, 5).map((n) => positions.get(n.id)!);
+    const minX = Math.min(...members.map((p) => p.x));
+    expect(client.x).toBeLessThan(minX);
+    expect(minX - client.x).toBeLessThanOrEqual(NODE_W + 140);
+    expectSeparated(positions);
+  });
+
+  it("keeps services that share a picture with a workspace in a compact grid", () => {
+    const graph = makeSparse(10);
+    graph.clusters = [{ ...g.clusters[0], id: "app", nodes: graph.nodes.slice(0, 6).map((n) => n.id) }];
+    graph.nodes = graph.nodes.map((node, index) => ({ ...node, cluster: index < 6 ? "app" : null }));
+    const stray = graph.nodes.slice(6);
+    graph.edges = [
+      { ...g.edges[0], id: "into", from: stray[0].id, to: graph.nodes[0].id },
+      { ...g.edges[0], id: "s0", from: stray[0].id, to: stray[1].id },
+      { ...g.edges[0], id: "s1", from: stray[1].id, to: stray[2].id },
+      { ...g.edges[0], id: "s2", from: stray[2].id, to: stray[3].id },
+    ];
+    const positions = force(graph);
+    const size = bounds(positions);
+    expect(size.width).toBeLessThan(1600);
+    expect(size.height).toBeLessThan(900);
+    expectSeparated(positions);
+    for (const edge of graph.edges) expect(positions.get(edge.from)!.x).toBeLessThan(positions.get(edge.to)!.x);
+  });
+
+  it("packs a workspace of sibling services into a compact board", () => {
+    const graph = makeSparse(12);
+    const cluster = { ...g.clusters[0], id: "app", name: "app", nodes: graph.nodes.map((n) => n.id) };
+    graph.clusters = [cluster];
+    graph.nodes = graph.nodes.map((node) => ({ ...node, cluster: "app" }));
+    const positions = force(graph);
+    const size = bounds(positions);
+    expect(size.width).toBeLessThan(1200);
+    expect(size.height).toBeLessThan(700);
+    expect(size.width / size.height).toBeGreaterThan(1);
+    expectSeparated(positions);
+  });
+
   it.each([layered, force])("packs disconnected cluster hulls without covering another cluster or loose service (%#)", (layout) => {
     const graph = makeSparse(9);
     const cluster = g.clusters[0];
@@ -325,6 +371,14 @@ describe("disconnected services", () => {
 
 describe("service card names", () => {
   // WCAG 2.5.3: the name contains the card's words in reading order, then icon-only facts.
+  it("marks a repeated service name so the card can lead with its port", () => {
+    const graph = { ...g, nodes: g.nodes.slice(0, 3).map((node, index) => ({ ...node, id: `same-${index}`, label: index < 2 ? "typeglass" : "other", cluster: null })), edges: [], clusters: [] };
+    const flow = toFlow(graph, layered(graph));
+    const cards = flow.nodes.filter((node) => node.type === "service");
+    expect(cards.filter((node) => node.data.shared).map((node) => node.id).sort()).toEqual(graph.nodes.slice(0, 2).map((node) => node.id).sort());
+    expect(cards.find((node) => node.data.node?.label === "other")?.data.shared).toBe(false);
+  });
+
   it("reads the visible words first, then protection, exposure and usage", () => {
     const web = g.nodes.find((n) => n.label === "shop-web")!;
     const name = serviceLabel(web, { cpu: "3.9%", memory: "1.1 GB" });

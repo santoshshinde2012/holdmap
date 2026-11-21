@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import CollapsiblePanel from "./CollapsiblePanel.svelte";
+import FoldSection from "./FoldSection.svelte";
 
 afterEach(() => { cleanup(); localStorage.clear(); });
 const body = createRawSnippet(() => ({ render: () => "<p>Inside</p>" }));
@@ -31,5 +32,20 @@ describe("CollapsiblePanel", () => {
     expect(closed).toBe(1);
     cleanup();
     expect(render(CollapsiblePanel, { id: "d", title: "Details", children: body }).queryByRole("button", { name: "Close Details" })).toBeNull();
+  });
+});
+
+describe("FoldSection", () => {
+  it("opens its facts in place and folds them away", async () => {
+    const view = render(FoldSection, { id: "facts", title: "Facts", count: 2, children: body });
+    const toggle = view.getByRole("button", { name: /Facts/ });
+    expect(view.getByRole("region", { name: /Facts/ })).toBeTruthy();
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(view.getByText("Inside")).toBeTruthy();
+    await fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(view.queryByText("Inside")).toBeNull();
+    await fireEvent.click(toggle);
+    expect(view.getByText("Inside")).toBeTruthy();
   });
 });

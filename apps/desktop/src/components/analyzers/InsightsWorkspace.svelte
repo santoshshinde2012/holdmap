@@ -6,6 +6,7 @@
   // lib/security-runs.svelte.ts. Analyzers stay off until approved in their permissions sheet.
   import { untrack } from "svelte";
   import Icon from "../Icon.svelte";
+  import ActionPill from "../ui/ActionPill.svelte";
   import Button from "../ui/Button.svelte";
   import IconButton from "../ui/IconButton.svelte";
   import SegmentedControl from "../ui/SegmentedControl.svelte";
@@ -100,10 +101,14 @@
 
 <section id="agent-insights" class="ws" aria-label="Security workspace">
   <header class="head">
-    <h2><Icon name="shield" size={16} />Security</h2>
+    <div class="tabs"><SegmentedControl bind:value={() => tab, setTab} label="Security view" options={[{ value: "findings", label: "Findings", count: summary.open || null, countLabel: `${summary.open} open` }, { value: "results", label: "Results" }, { value: "risks", label: "Risks" }, { value: "skills", label: "Skills", count: trustAlerts || null, countLabel: `${trustAlerts} need a look` }, { value: "analyzers", label: "Analyzers" }, { value: "graph", label: "Pipeline" }]} /></div>
     <div class="tools">
-      <div class="tabs"><SegmentedControl bind:value={() => tab, setTab} label="Security view" options={[{ value: "findings", label: "Findings", count: summary.open || null, countLabel: `${summary.open} open` }, { value: "results", label: "Results", icon: "list" }, { value: "risks", label: "Risks", icon: "activity" }, { value: "skills", label: "Skills", icon: "hash", count: trustAlerts || null, countLabel: `${trustAlerts} need a look` }, { value: "analyzers", label: "Analyzers", icon: "shield" }, { value: "graph", label: "Pipeline", icon: "branch" }]} /></div>
-      {#if tab === "findings" || tab === "results"}
+      <ActionPill icon="refresh" label="Rescan" disabled={!approved.length || securityRuns.busy} title={approved.length ? undefined : "Turn on an analyzer first"} onclick={() => securityRuns.start(approved)} />
+      {#if nextScan}<span class="next" title="Scheduled scans run only while holdmap is open">Next scan {untilLabel(nextScan, Date.now())}</span>{/if}
+      {#if onsettings}<IconButton icon="sliders" label="Analyzer settings" size="sm" onclick={onsettings} />{/if}
+    </div>
+    {#if tab === "findings" || tab === "results"}
+      <div class="exports">
         <ExportActions label="Export findings" disabled={!insightsStore.insights} copy={() => securitySummaryText(exportable, summary, Date.now())}
           files={[
             { label: "Download JSON", filename: reportFilename("security", Date.now(), "json"), build: () => securityReport(exportable, summary, Date.now(), included) },
@@ -111,22 +116,22 @@
             { label: "Download CSV", filename: reportFilename("security", Date.now(), "csv"), build: () => securityCsv(exportable) },
             { label: "Download Markdown", filename: reportFilename("security", Date.now(), "md"), build: () => securityMarkdown(exportable, summary, Date.now(), included) },
           ]} />
-      {/if}
-      <Button size="sm" variant="primary" icon="refresh" disabled={!approved.length} loading={securityRuns.busy} onclick={() => securityRuns.start(approved)} title={approved.length ? undefined : "Turn on an analyzer first"}>Rescan</Button>
-      {#if nextScan}<span class="next" title="Scheduled scans run only while holdmap is open">Next scan {untilLabel(nextScan, Date.now())}</span>{/if}
-      {#if onsettings}<IconButton icon="sliders" label="Analyzer settings" size="sm" onclick={onsettings} />{/if}
-    </div>
+      </div>
+    {/if}
   </header>
+  <div class="body">
 
   <SecuritySummary {summary} active={filter.severities} ontoggle={toggleSeverity} />
-  <SkillExplainer />
 
-  {#if !inventory}
-    <p class="note"><Icon name="info" size={12} />Stopped agents aren't scanned.{#if oninventory}<button type="button" class="link" onclick={oninventory}>Turn on inventory</button>{/if}</p>
-  {/if}
-
-  {#if trustAlerts && tab !== "skills"}
-    <p class="note alert" role="status"><Icon name="alert" size={12} />{trustAlerts} skill{trustAlerts === 1 ? "" : "s"} changed or not trusted yet.<button type="button" class="link" onclick={() => setTab("skills")}>Review skills</button></p>
+  {#if !inventory || (trustAlerts && tab !== "skills")}
+    <div class="status">
+      {#if !inventory}
+        <p class="note"><Icon name="info" size={12} />Stopped agents aren't scanned.{#if oninventory}<button type="button" class="link" onclick={oninventory}>Turn on inventory</button>{/if}</p>
+      {/if}
+      {#if trustAlerts && tab !== "skills"}
+        <p class="note alert" role="status"><Icon name="alert" size={12} />{trustAlerts} skill{trustAlerts === 1 ? "" : "s"} changed or not trusted yet.<button type="button" class="link" onclick={() => setTab("skills")}>Review skills</button></p>
+      {/if}
+    </div>
   {/if}
 
   {#if tab === "analyzers"}
@@ -158,17 +163,24 @@
     {/if}
     <FindingsPanel {agents} bind:filter onsetup={() => setTab("analyzers")} />
   {/if}
+  <SkillExplainer />
+  </div>
 </section>
 
+
 <style>
-  .ws { --scroll-pad-bottom: 20px; display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; align-content: start; gap: 16px; height: 100%; min-height: 0; padding: 20px 24px; box-sizing: border-box; overflow: auto; max-width: 1280px; margin: 0 auto; width: 100%; }
-  .head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; min-height: 36px; }
-  h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-title); font-weight: var(--fw-semibold); }
-  .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .ws { --scroll-pad-bottom: 20px; display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--bg); }
+  .head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; width: 100%; min-width: 0; min-height: 46px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex: none; box-sizing: border-box; }
+  .body { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; align-content: start; gap: 16px; padding: 20px 16px 24px; box-sizing: border-box; width: 100%; min-width: 0; }
+  .body > :global(*) { min-width: 0; max-width: 100%; }
+  .tools { display: flex; align-items: center; gap: 6px; margin-left: auto; min-width: 0; }
+  .exports { flex: 1 1 100%; display: flex; justify-content: flex-end; width: 100%; max-width: 100%; min-width: 0; }
+  .exports :global(.export) { width: 100%; max-width: 100%; justify-content: flex-end; }
   /* Six views don't fit a phone width: the tab strip scrolls sideways instead of overflowing. */
-  .tabs { max-width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 1px; }
+  .tabs { max-width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .tabs::-webkit-scrollbar { display: none; }
   .next { color: var(--muted); font-size: var(--fs-caption); white-space: nowrap; }
+  .status { display: grid; gap: 8px; }
   .note.alert { color: var(--text); }
   .note { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: var(--fs-caption); }
   .scope { justify-self: start; display: flex; align-items: center; gap: 6px; margin: 0; padding: 3px 4px 3px 10px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: var(--r-full); background: var(--accent-softer); color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); }

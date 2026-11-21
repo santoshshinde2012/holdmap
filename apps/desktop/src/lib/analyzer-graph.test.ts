@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOverview, buildPipeline, readingOrder } from "./analyzer-graph";
+import { buildOverview, buildPipeline, graphSpan, NODE_H, NODE_W, readingOrder } from "./analyzer-graph";
 import type { AnalyzerResult, AnalyzerView, Insights, Preview } from "./analyzers";
 import type { AgentsReport } from "./types";
 
@@ -77,11 +77,30 @@ describe("analyzer overview graph", () => {
     const report = { agents: [{ id: "a1", product: "cursor", name: "Cursor" }, { id: "a2", product: "claude-code", name: "Claude Code" }, { id: "a3", product: "codex", name: "Codex" }] } as unknown as AgentsReport;
     const insights: Insights = { results: [result], open: { critical: 0, high: 1, medium: 0, low: 1, info: 0 } };
     const g = buildOverview([view(), view({ id: "holdmap.osv", name: "OSV", kind: "builtin", state: "not_approved", mcp: null })], insights, report);
-    expect(g.edges.map((e) => [e.to, e.label])).toEqual([["agent:claude-code", "1 skill · 1 high"], ["agent:cursor", "2 skills · 1 high, …"]]);
+    expect(g.edges.map((e) => [e.to, e.label])).toEqual([["agent:claude-code", "1 skill · 1 high"], ["agent:cursor", "2 skills · 1 high, 1 low"]]);
     const codex = g.nodes.find((n) => n.id === "agent:codex")!;
     expect(codex.subtitle).toBe("Not covered by an analyzer");
     const cursor = g.nodes.find((n) => n.id === "agent:cursor")!;
     expect(cursor.status).toBe("error");
     expect(g.nodes.find((n) => n.id === "analyzer:holdmap.osv")?.subtitle).toBe("Off");
+  });
+
+  it("places agents one label-width from the analyzers, without overlapping cards", () => {
+    const report = { agents: [{ id: "a1", product: "cursor", name: "Cursor" }, { id: "a2", product: "claude-code", name: "Claude Code" }, { id: "a3", product: "codex", name: "Codex" }] } as unknown as AgentsReport;
+    const insights: Insights = { results: [result], open: { critical: 0, high: 1, medium: 0, low: 1, info: 0 } };
+    const g = buildOverview([view(), view({ id: "holdmap.osv", name: "OSV", kind: "builtin", state: "not_approved", mcp: null })], insights, report);
+    const agent = g.nodes.find((n) => n.kind === "agent")!;
+    const analyzer = g.nodes.find((n) => n.kind === "analyzer")!;
+    const gap = agent.position.x - (analyzer.position.x + analyzer.width);
+    expect(gap).toBeGreaterThanOrEqual(160);
+    expect(gap).toBeLessThanOrEqual(240);
+    for (const n of g.nodes) for (const m of g.nodes) {
+      if (n.id >= m.id) continue;
+      const overlapX = n.position.x < m.position.x + m.width && m.position.x < n.position.x + n.width;
+      const overlapY = n.position.y < m.position.y + m.height && m.position.y < n.position.y + n.height;
+      expect(overlapX && overlapY, `${n.id} overlaps ${m.id}`).toBe(false);
+    }
+    expect(graphSpan(g).height).toBeLessThanOrEqual(NODE_H + (g.nodes.filter((n) => n.kind === "agent").length - 1) * (NODE_H + 28));
+    expect(g.nodes.every((n) => n.width === NODE_W && n.height === NODE_H)).toBe(true);
   });
 });

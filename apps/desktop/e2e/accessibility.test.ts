@@ -129,10 +129,12 @@ test("phone width: view controls wrap onto rows instead of scrolling sideways", 
   await app.setViewportSize({ width: 390, height: 844 });
   await app.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: /^Agents/ }).click();
   const toolbar = app.getByRole("toolbar", { name: "View and filters" });
-  for (const name of ["View", "Agents workspace", "Map picture"]) {
+  for (const name of ["View", "Agents workspace"]) {
     const box = await toolbar.getByRole("radiogroup", { name, exact: true }).boundingBox();
     expect(box && box.x >= 0 && box.x + box.width <= 390, `${name} fits the window`).toBe(true);
   }
+  const picture = await app.getByRole("radiogroup", { name: "Map picture", exact: true }).boundingBox();
+  expect(picture && picture.x >= 0 && picture.x + picture.width <= 390, "Map picture fits the window").toBe(true);
   expect(await toolbar.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
   // The agent cards fill the screen; the Map chip brings the map in below the chips, full width.
   await app.getByRole("group", { name: "Choose an agent" }).getByRole("button", { name: "Map", exact: true }).click();

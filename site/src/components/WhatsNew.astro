@@ -2,9 +2,9 @@
 import Icon from "./Icon.astro";
 import { releaseHighlightsPublished as released, repoUrl, sourceVersion, url, version } from "../lib/site";
 const highlights = [
-  { icon: "Box", title: "Your agents, in 3D", text: "Give each agent its own district: memory towers, CPU gauges, ports, runtime and configuration. Switch lenses, pull the layers apart, and inspect the evidence behind each connection.", href: url("docs/desktop/"), link: "Explore 3D Home" },
-  { icon: "Activity", title: "A live menu-bar companion", text: "See agents, CPU and what needs you without opening the app. A compact panel keeps readings, charts and quick settings close, with reviewed actions for your services.", href: url("docs/desktop/#menu-bar-and-tray"), link: "Menu bar and tray" },
-  { icon: "Scan", title: "Capture just what matters", text: "Fold Home panels to focus your workspace. Pick part of the window for a local snapshot or recording, with a precise frame and exports you control.", href: url("docs/desktop/#take-a-png-snapshot"), link: "Snapshots and recordings" },
+  { icon: "Box", title: "One agent, the whole picture", text: "Click an agent in 3D and that district fills the canvas. All agents brings the machine back. A second click opens Overview, MCP and skills, Flow or Security.", href: url("docs/desktop/"), link: "Explore 3D Home" },
+  { icon: "Layers", title: "Details that fold in place", text: "Readings, facts, access, ports and graph connections fold on the same screen. Each Needs you row opens its explanation in the row.", href: url("docs/desktop/"), link: "See the desktop" },
+  { icon: "Activity", title: "A numbered menu bar", text: "Ports, Network, Needs and Dev stay on screen. Choosing a count scrolls to that reading, and each agent shows its share of the RAM.", href: url("docs/desktop/#menu-bar-and-tray"), link: "Menu bar and tray" },
 ];
 ---
 <section id="whats-new" class="section" aria-labelledby="release-title">
@@ -26,7 +26,7 @@ const highlights = [
         </li>
       ))}
     </ul>
-    <p class="release-note">{sourceVersion} adds 3D Home, a live menu-bar companion, folding panels and precise window-area capture. {released ? <a href={`${repoUrl}/releases/tag/v${sourceVersion}`}>Read the full {sourceVersion} release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
+    <p class="release-note">{sourceVersion} opens one agent in 3D, folds details in place, and keeps the menu bar a numbered view. {released ? <a href={`${repoUrl}/releases/tag/v${sourceVersion}`}>Read the full {sourceVersion} release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
   </div>
 </section>
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MOCK_SNAPSHOT } from "../mock";
 import { mockAgents } from "../mock-agents";
 import { agentPose, cubicBezier, EASE, fitBox, halfHeight, lerpPose, overviewPose, PHI, projectedHalf, topPose, viewAxes, type Pose } from "./camera";
-import { AGENT_MAX_HEIGHT, bounds, layoutScene, partSize, plateY, sceneTop, SIZE, skyY, STREET, type MachineLayout } from "./layout";
+import { AGENT_MAX_HEIGHT, bounds, layoutScene, mastY, occupiedTop, partSize, plateY, sceneTop, SIZE, skyY, STREET, type MachineLayout } from "./layout";
 import { demoActivity } from "../activity-demo";
 import { buildScene, lensView, type MachineScene, type Part } from "./scene";
 
@@ -156,6 +156,12 @@ describe("3D machine layout", () => {
     expect(plateY("calls", 1)).toBe(0);
     expect(skyY(1)).toBeGreaterThan(plateY("config", 1));
     expect(sceneTop(1)).toBeGreaterThan(sceneTop(0));
+    // The picture stops at what's drawn. An agent with no configuration floor keeps its
+    // remote hosts next to the floors it has, instead of up in the theoretical sky.
+    const d = [...layout.districts.values()][0];
+    expect(mastY({ ...d, floors: { runtime: null, config: null } }, 1)).toBeLessThan(plateY("runtime", 1));
+    expect(mastY({ ...d, floors: { runtime: { x0: 0, x1: 1, z0: 0, z1: 1 }, config: null } }, 1)).toBeLessThan(skyY(1));
+    expect(occupiedTop(layout, 1)).toBeLessThanOrEqual(sceneTop(1));
   });
 });
 

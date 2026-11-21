@@ -25,20 +25,20 @@ async function capabilities(page: Page) {
 }
 
 for (const t of ["light", "dark"] as const) {
-  test(`${t}: a card's details open inline under it, keep scroll and close with Esc`, async ({ app }) => {
+  test(`${t}: a card's details open in the right sidebar, keep scroll and close with Esc`, async ({ app }) => {
     await theme(app, t);
     await capabilities(app);
     const host = workspace(app).locator(".canvas-host");
     const card = workspace(app).getByRole("button", { name: frontendSkill, exact: true });
     const scroll = await host.evaluate((el) => el.scrollTop);
     await card.focus(); await card.press("Enter");
-    const panel = workspace(app).getByRole("region", { name: "Capability details", exact: true });
+    const panel = workspace(app).getByRole("complementary", { name: "Capability details", exact: true });
     await expect(panel).toBeVisible();
     await expect(card).toHaveAttribute("aria-expanded", "true");
-    // Anchored: directly after the card's grid cell (card + Copy path), starting below it, with no side panel.
-    expect(await card.evaluate((el) => el.parentElement?.nextElementSibling?.getAttribute("aria-label"))).toBe("Capability details");
-    expect((await panel.boundingBox())!.y).toBeGreaterThan((await card.boundingBox())!.y);
-    await expect(app.getByRole("complementary", { name: "Capability details", exact: true })).toHaveCount(0);
+    const cardBox = (await card.boundingBox())!;
+    const panelBox = (await panel.boundingBox())!;
+    expect(panelBox.x).toBeGreaterThan(cardBox.x);
+    expect(panelBox.x + panelBox.width).toBeGreaterThan(cardBox.x + cardBox.width);
     expect(await host.evaluate((el) => el.scrollTop)).toBe(scroll);
     await expect(panel.getByRole("heading", { name: "frontend-checks", exact: true })).toBeFocused();
     await expect(panel.getByRole("region", { name: "Scan with analyzers" })).toBeVisible();
@@ -49,21 +49,19 @@ for (const t of ["light", "dark"] as const) {
     await expect(card).toHaveAttribute("aria-expanded", "false");
   });
 
-  test(`${t}: process details open under the process row`, async ({ app }) => {
+  test(`${t}: a process opens the existing agent details screen`, async ({ app }) => {
     await theme(app, t);
     await capabilities(app);
     const toggle = app.getByRole("button", { name: "Show processes for Cursor", exact: true });
     await toggle.click();
     await expect(app.getByRole("button", { name: "Hide processes for Cursor", exact: true })).toHaveAttribute("aria-expanded", "true");
-    const row = app.getByRole("button", { name: "Inspect agent card Cursor, PID 52000", exact: true });
-    await row.click();
-    const panel = app.getByRole("complementary", { name: "Capability agents" }).getByRole("region", { name: "Capability details", exact: true });
-    await expect(panel).toContainText("PID 52000");
-    expect(await row.evaluate((el) => el.nextElementSibling?.getAttribute("aria-label"))).toBe("Capability details");
-    await axe(app, "#agent-capabilities");
-    await app.keyboard.press("Escape");
-    await expect(panel).toHaveCount(0);
-    await expect(row).toBeFocused();
+    await app.getByRole("button", { name: "Inspect agent card Cursor, PID 52000", exact: true }).click();
+    await expect(app.getByRole("radio", { name: "Overview", exact: true })).toHaveAttribute("aria-checked", "true");
+    const details = app.getByRole("complementary", { name: "Agent details", exact: true });
+    await expect(details.getByRole("heading", { name: "Cursor", exact: true })).toBeVisible();
+    await expect(details).toContainText("52000");
+    await expect(app.getByRole("complementary", { name: "Capability details" })).toHaveCount(0);
+    await axe(app, "#agent-details");
   });
 
   test(`${t}: Security is one click away, with analyzers and their install state`, async ({ app }) => {

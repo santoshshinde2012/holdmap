@@ -81,8 +81,8 @@ deployment identity or publish files.
 
 These captures show a production-mode website build at 1440×900, with a 390×900 mobile guide
 view. Release highlights use 1440×1100 desktop and 390×1800 mobile captures so all three cards
-and the publication note fit in one image. The captures show the published 0.13.1 release,
-including 3D Home, tray widgets and area capture. The homepage's sample-data recording is
+and the publication note fit in one image. The captures show the 0.14.0 release,
+including one agent in 3D, details that fold in place and a numbered menu bar. The homepage's sample-data recording is
 paused on its first frame; no machine is scanned.
 After building the site, refresh them with `node scripts/capture-screenshots.mjs` from `site/`.
 The script manages its own preview server and Chromium, waits for content and fonts, and checks
@@ -99,11 +99,11 @@ Homepage, light:
 
 Release highlights and publication status, dark:
 
-![Published 0.13.1 highlights show 3D Home, tray widgets and precise area capture](../docs/screenshots/site-release-dark.png)
+![0.14.0 highlights show one agent in 3D, details that fold in place and a numbered menu bar](../docs/screenshots/site-release-dark.png)
 
 Release highlights and publication status, light:
 
-![Light-theme 0.13.1 highlights link to the published release notes](../docs/screenshots/site-release-light.png)
+![Light-theme 0.14.0 highlights link to the release notes](../docs/screenshots/site-release-light.png)
 
 Mobile release highlights, light:
 

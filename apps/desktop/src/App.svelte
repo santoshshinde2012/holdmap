@@ -11,6 +11,8 @@
   import { securityRuns } from "./lib/security-runs.svelte";
   import { installDialog } from "./lib/install-dialog.svelte";
   import { securityTab } from "./lib/security-tab.svelte";
+  import { agentFocus } from "./lib/agent-focus.svelte";
+  import type { AgentJump } from "./lib/agent-jump";
   import HomeView from "./components/home/HomeView.svelte";
   import { nextLayout } from "./lib/home-layout";
   import FirstRun from "./components/FirstRun.svelte";
@@ -1180,13 +1182,29 @@
     homeQuery = "";
     prefs.view = "list";
   });
-  /** Home → one agent, in a single click: the Agents view with that agent selected. */
-  function openAgent(id: string, section: "overview" | "capabilities" | "insights" = "overview") {
-    const a = agentsReport?.agents.find((x) => x.id === id);
-    if (a && !agentMatches(a, agentQuery)) agentQuery = "";
-    prefs.agentSection = section;
+  /** Home, and a second click in 3D, open this agent on the screen the part belongs to. */
+  function openAgent(id: string, jump: AgentJump = "overview", capabilityId?: string) {
+    // Recorded calls are not an agent's. A leftover selection would scope the timeline to
+    // that agent and hide every call that isn't attributed to it.
+    if (jump === "calls") agentSelection.select(null);
+    else {
+      const known = id && agentsReport?.agents.some((x) => x.id === id) ? id : "";
+      if (known) {
+        const a = agentsReport!.agents.find((x) => x.id === known)!;
+        if (!agentMatches(a, agentQuery) || capabilityId) agentQuery = "";
+        agentSelection.select(known, agentsReport?.agents);
+      }
+    }
+    // A named server or skill waits until MCP & skills is on screen, then opens that card.
+    // Any other destination drops the request so the sidebar does not return on its own.
+    agentFocus.capabilityId = jump === "capabilities" ? capabilityId ?? null : null;
+    agentFocus.kind = jump === "capabilities" && capabilityId ? (capabilityId.startsWith("running:") ? "running" : capabilityId.startsWith("skill:") ? "skill" : "mcp") : null;
+    if (jump === "calls") { prefs.flowSource = "calls"; prefs.agentSection = "flow"; }
+    else if (jump === "flow") { prefs.flowSource = "connections"; prefs.agentSection = "flow"; }
+    else if (jump === "findings" || jump === "results" || jump === "risks" || jump === "skills") { prefs.agentSection = "insights"; securityTab.value = jump; }
+    else if (jump === "insights") prefs.agentSection = "insights";
+    else if (jump === "overview" || jump === "capabilities") prefs.agentSection = jump;
     prefs.view = "agents";
-    agentSelection.select(id, agentsReport?.agents);
   }
   function openEntryById(id: string) {
     const e = snapshot?.entries.find((x) => x.id === id);
@@ -1478,7 +1496,7 @@
     {:else if prefs.view === "agents"}
       <div class="graph-wrap agents-wrap" data-capture-area>
         {#if AgentsView}
-          <AgentsView bind:section={prefs.agentSection} bind:flowSource={prefs.flowSource} bind:picture={prefs.picture} bind:projectReady bind:projectCaption pictureChrome={false} report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
+          <AgentsView bind:section={prefs.agentSection} bind:flowSource={prefs.flowSource} bind:picture={prefs.picture} bind:projectReady bind:projectCaption report={agentsReport} query={agentQuery} entries={snapshot?.entries ?? []} {selectedAgent} selectedEntry={drawerOpen ? selectedId : null} dark={resolvedTheme === "dark"} {reduced} platform={info.platform}
             capabilitiesLoading={agentsRefreshing} capabilitiesError={agentsError} onrefreshcapabilities={() => { void loadAgents(); }}
             onselectagent={(id) => { const a = agentsReport?.agents.find((a) => a.id === id); if (a && !agentMatches(a, agentQuery)) agentQuery = ""; agentSelection.select(id, agentsReport?.agents); }} onentry={openEntry}
             onreveal={revealAgentFolder} oneditor={openAgentFolder}

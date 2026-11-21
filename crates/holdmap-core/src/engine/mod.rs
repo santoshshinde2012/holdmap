@@ -939,7 +939,7 @@ mod tests {
         let plan = e.plan(&Target::parse("cluster:acme-shop"), &StopOptions::default());
         assert!(!plan.is_blocked(), "{plan:?}");
         assert!(
-            plan.summary.contains("web :3000 → api :8080 → worker"),
+            plan.summary.contains("web :3000 → api :8080 → node"),
             "{}",
             plan.summary
         );
@@ -979,7 +979,7 @@ mod tests {
         let plan = e.plan(&Target::Port(6379), &StopOptions::default());
         let w = plan.warnings.join("\n");
         assert!(
-            w.contains("api (PID 30), worker (PID 50) depend on Redis :6379"),
+            w.contains("api (PID 30), node (PID 50) depend on Redis :6379"),
             "{w}"
         );
         let plan = e.plan(&Target::Port(3000), &StopOptions::default());

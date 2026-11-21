@@ -19,6 +19,16 @@ export const pathName = (path: string): string => path.replace(/[/\\]+$/, "").sp
 const compareText = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
 const sortedUnique = (values: string[]): string[] => [...new Set(values)].sort(compareText);
 
+/** The catalog id for one declaration. Shared by the capability workspace and the 3D part that opens it. */
+export function capabilityItemId(kind: "mcp" | "skill", definition: AgentMcpServer | AgentSkill): string {
+  return definitionId(kind, definition);
+}
+
+/** The catalog id for one observed MCP process. */
+export function runningCapabilityId(pid: number): string {
+  return `running:${pid}`;
+}
+
 function definitionId(kind: "mcp" | "skill", definition: AgentMcpServer | AgentSkill): string {
   const metadata = kind === "mcp"
     ? [(definition as AgentMcpServer).transport, (definition as AgentMcpServer).enabled ?? null]
@@ -96,7 +106,7 @@ export function capabilityItems(agents: Agent[]): CapabilityItem[] {
     for (const kind of ["mcp", "skill"] as const) {
       const definitions = kind === "mcp" ? agent.capabilities.mcp_servers : agent.capabilities.skills;
       for (const definition of definitions) {
-        const id = definitionId(kind, definition);
+        const id = capabilityItemId(kind, definition);
         const existing = rows.get(id);
         if (existing) { if (!existing.owners.some((owner) => owner.id === agent.id)) existing.owners.push(agent); }
         else rows.set(id, { id, kind, name: kind === "skill" ? (definition as AgentSkill).declared_name || definition.name : definition.name, scope: definition.scope, sourcePath: definition.source_path, projectPath: definition.project_path, definition, owners: [agent] });
@@ -113,7 +123,7 @@ export function runningMcpItems(agents: Agent[]): RunningMcpItem[] {
     if (tool.kind !== "mcp_server") continue;
     const existing = rows.get(tool.pid);
     if (existing) { if (!existing.owners.some((owner) => owner.id === agent.id)) existing.owners.push(agent); }
-    else rows.set(tool.pid, { id: `running:${tool.pid}`, kind: "running", name: tool.name, owners: [agent], tool });
+    else rows.set(tool.pid, { id: runningCapabilityId(tool.pid), kind: "running", name: tool.name, owners: [agent], tool });
   }
   return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name) || a.tool.pid - b.tool.pid);
 }

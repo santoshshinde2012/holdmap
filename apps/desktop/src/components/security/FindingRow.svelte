@@ -91,6 +91,17 @@
   .snooze select, .snooze input { height: 24px; padding: 0 6px; border: 1px solid var(--input-border, var(--border)); border-radius: var(--r-md); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-caption); }
   .snooze select:focus-visible, .snooze input:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   .reason:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  /* A phone can't hold seven columns. Stack the same fields so the row stays inside the page. */
+  @media (max-width: 640px) {
+    .head { min-width: 0; grid-template-columns: 16px auto minmax(0, 1fr); grid-template-areas: "chev sev title" "chev skill ag" "chev where by"; row-gap: 2px; align-items: start; }
+    .head > :global(svg) { grid-area: chev; align-self: center; }
+    .sev-pill { grid-area: sev; }
+    .title { grid-area: title; }
+    .skill { grid-area: skill; }
+    .ag { grid-area: ag; }
+    .where { grid-area: where; }
+    .by { grid-area: by; }
+  }
   .note { margin: 0; color: var(--text-2); font-size: var(--fs-body-sm); }
   .note b { color: var(--text); font-weight: var(--fw-semibold); margin-right: 4px; }
 </style>

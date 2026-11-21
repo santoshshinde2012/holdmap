@@ -2,7 +2,7 @@
 // the tour and the tests share one definition of "looking at" something. The view is
 // orthographic, like an architectural model: sizes and spacing read the same at the front and
 // the back, and nothing is foreshortened. A pose's distance sets how much fits (see halfHeight).
-import { AGENT_MAX_HEIGHT, bounds, partSize, plateY, sceneTop, type MachineLayout } from "./layout";
+import { AGENT_MAX_HEIGHT, bounds, mastY, partSize, plateY, type MachineLayout } from "./layout";
 import type { MachineScene } from "./scene";
 
 /** Spherical camera around a target: theta around the vertical axis (0 = from the front, +z), phi above the ground. */
@@ -65,7 +65,7 @@ export function topPose(layout: MachineLayout, aspect: number): Pose {
 export function agentPose(layout: MachineLayout, id: string, explode: number, aspect: number): Pose {
   const d = layout.districts.get(id);
   if (!d) return overviewPose(layout, explode, aspect);
-  const top = d.mast ? sceneTop(explode) : d.floors.config ? plateY("config", explode) + 1.4 : d.floors.runtime ? plateY("runtime", explode) + 1.4 : AGENT_MAX_HEIGHT + 0.8;
+  const top = d.mast ? mastY(d, explode) + 0.4 : d.floors.config ? plateY("config", explode) + 1.4 : d.floors.runtime ? plateY("runtime", explode) + 1.4 : AGENT_MAX_HEIGHT + 0.8;
   return fitBox({ x0: d.x0 - 0.4, x1: d.x1 + 0.4, y0: -0.36, y1: top, z0: d.z0 - 0.4, z1: d.z1 + 0.6 }, layout.theta, layout.phi, aspect, 1.12);
 }
 

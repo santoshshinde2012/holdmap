@@ -148,6 +148,7 @@
 
       <details class="tree" id="section-procs-{agentDomId(agent.id)}" open>
         <summary>
+          <span class="chev" aria-hidden="true"><Icon name="chevron-down" size={14} /></span>
           <span class="sum-left">Processes <span class="count-pill">{processNoun(processCount)}</span></span>
           {#if roleFilter}<span class="filter-tag">{groups.find((g) => g.role === roleFilter)?.label}</span>{/if}
         </summary>
@@ -161,7 +162,7 @@
 
       {#if counters.unknown.length || memory.limits.length}
         <details class="limits">
-          <summary>Platform limits &amp; unavailable metrics <span class="count-pill">{counters.unknown.length}</span></summary>
+          <summary><span class="chev" aria-hidden="true"><Icon name="chevron-down" size={14} /></span><span class="sum-left">Platform limits &amp; unavailable metrics <span class="count-pill">{counters.unknown.length}</span></span></summary>
           {#if counters.unknown.length}
             <dl class="limits-dl">
               {#each counters.unknown as row (row.label)}
@@ -241,7 +242,11 @@
   dd.unknown { color: var(--muted); font-variant-numeric: normal; font-weight: var(--fw-regular); font-size: var(--fs-caption); line-height: var(--lh-caption); }
 
   details { min-width: 0; }
-  summary { cursor: pointer; color: var(--text-2); font-weight: var(--fw-semibold); display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 2px; }
+  summary { cursor: pointer; color: var(--text-2); font-weight: var(--fw-semibold); display: flex; align-items: center; gap: 6px; padding: 4px 2px; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  .chev { display: inline-flex; color: var(--muted); transition: transform 160ms ease; }
+  details:not([open]) .chev { transform: rotate(-90deg); }
+  @media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
   .sum-left { display: inline-flex; align-items: center; gap: 6px; }
   .count-pill { padding: 0 7px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
   .filter-tag { padding: 0 7px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent); font-weight: var(--fw-medium); }

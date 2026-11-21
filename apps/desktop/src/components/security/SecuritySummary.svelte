@@ -16,7 +16,7 @@
     <span class="k">Open findings</span>
     <span class="row">
       <b class="big">{summary.open}</b>
-      {#each SEVERITY_ORDER.filter((s) => s !== "info" || summary.counts.info) as s (s)}
+      {#each SEVERITY_ORDER.filter((s) => summary.counts[s]) as s (s)}
         <button type="button" class="sev sev-{s}" class:on={active.includes(s)} class:zero={!summary.counts[s]} aria-pressed={active.includes(s)} onclick={() => ontoggle?.(s)}>
           <i aria-hidden="true"></i>{summary.counts[s]} <span>{cap(s)}</span>
         </button>

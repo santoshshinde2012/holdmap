@@ -14,7 +14,7 @@ pub struct WatchArgs {
     #[arg(short, long)]
     pub all: bool,
     /// Polling interval.
-    #[arg(short, long, default_value = "1s", value_parser = humantime::parse_duration)]
+    #[arg(short, long, default_value = "1s", value_parser = holdmap_activity::timefmt::parse_duration)]
     pub interval: Duration,
     /// Stop after this many polls (default: run until interrupted).
     #[arg(long, hide = true)]

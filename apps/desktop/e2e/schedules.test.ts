@@ -56,7 +56,10 @@ async function reviewPort(page: Page) {
 
 async function viewSchedules(page: Page, review?: Locator) {
   if (review) await review.getByRole("button", { name: "View scheduled actions", exact: true }).click();
-  else await page.getByRole("button", { name: /^Scheduled actions(?: \(\d+ active\))?$/, exact: false }).click();
+  else {
+    await page.getByRole("button", { name: "History, schedules, remote", exact: true }).click();
+    await page.getByRole("menuitem", { name: /^Scheduled actions(?: \(\d+ active\))?$/ }).click();
+  }
   const dialog = page.getByRole("dialog", { name: "Scheduled actions", exact: true });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -143,7 +146,6 @@ test("an individual agent service retains scheduling without selecting its other
   await openAgents(page);
   await agentHeading(page, "Cursor").click();
   const cursor = agentDetails(page);
-  await cursor.getByRole("tab", { name: /^Connections/ }).click();
   await cursor.getByTitle("Stop :3000", { exact: true }).click();
   const review = page.getByRole("alertdialog");
   await expect(review.getByRole("combobox", { name: "When", exact: true })).toContainText("Now");
@@ -231,7 +233,8 @@ test("a due browser schedule completes without removing ports or recording a rea
   await manager.getByRole("button", { name: "Done", exact: true }).click();
   await expect(page.getByRole("option", { name: /^Port 3000 tcp,/ })).toBeVisible();
   await expect(page.getByRole("region", { name: "Active scheduled actions", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Recently stopped", exact: true }).click();
+  await page.getByRole("button", { name: "History, schedules, remote", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Recently stopped", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Recently stopped", exact: true }).getByText("Nothing yet", { exact: true })).toBeVisible();
 });
 
@@ -284,7 +287,8 @@ test("scheduled actions are discoverable from commands and remote inspection rem
   await expect(manager).toContainText("for the computer running Holdmap");
   await expect(manager).toContainText("No scheduled actions");
   await manager.getByRole("button", { name: "Done", exact: true }).click();
-  await page.getByRole("button", { name: "Remote host…", exact: true }).click();
+  await page.getByRole("button", { name: "History, schedules, remote", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Remote host…", exact: true }).click();
   const remote = page.getByRole("dialog", { name: "Remote host", exact: true });
   await remote.getByRole("button", { name: "devbox", exact: true }).click();
   await page.clock.runFor(1_000);

@@ -3,6 +3,7 @@
   import { PROVIDER_LABEL, SOURCE_LABEL, STATUS_LABEL } from "../../../lib/agent-flow/model";
   import { activityStatus, duration, isIncomplete, payloadSize } from "../../../lib/agent-flow/build";
   import Icon from "../../Icon.svelte";
+  import FoldSection from "../../ui/FoldSection.svelte";
   let { graph, chosen, onclose }: { graph: VisualGraph; chosen: string | null; onclose: () => void } = $props();
   const node: VisualNode | undefined = $derived(graph.nodes.find((n) => n.id === chosen));
   const edge: VisualEdge | undefined = $derived(graph.edges.find((e) => e.id === chosen));
@@ -15,6 +16,7 @@
     <header><h3>{node?.label ?? edge?.label}</h3><button type="button" aria-label="Close relationship details" onclick={onclose}><Icon name="x" size={14} /></button></header>
     {#if node?.observed}
       {@const n = node.observed}
+      <FoldSection id="flow-node" title="Facts">
       <dl><dt>Type</dt><dd>{n.kind}</dd><dt>Evidence</dt><dd>{n.evidence}</dd>
         {#if n.pid != null}<dt>Process ID</dt><dd>{n.pid}</dd>{/if}
         {#if n.protocol}<dt>Protocol</dt><dd>{n.protocol.toUpperCase()}</dd>{/if}
@@ -22,14 +24,17 @@
         {#if n.port != null}<dt>Port</dt><dd>{n.port}</dd>{/if}
         {#if n.tool_kind}<dt>Tool role</dt><dd>{n.tool_kind.replaceAll("_", " ")}</dd>{/if}
       </dl>
+      </FoldSection>
       <p>{n.evidence === "observed" ? "Observed in the operating system snapshot." : n.evidence === "inferred" ? "The tool role is inferred from process metadata. It does not prove a tool invocation." : "This identity could not be resolved from the snapshot."}</p>
     {:else if node?.span}
       {@const s = node.span}
+      <FoldSection id="flow-span" title="Facts">
       <dl><dt>Type</dt><dd>{s.kind === "skill" ? "Skill activation" : s.kind}</dd><dt>Status</dt><dd>{activityStatus(s)}</dd><dt>Provider</dt><dd>{PROVIDER_LABEL[s.provider]}</dd><dt>Source</dt><dd>{SOURCE_LABEL[s.source]}</dd><dt>Duration</dt><dd>{duration(s)}</dd>
         <dt>Serialized input</dt><dd>{payloadSize(s.input_bytes)}</dd><dt>Serialized output</dt><dd>{payloadSize(s.output_bytes)}</dd>
         {#if s.pid != null}<dt>Reported PID</dt><dd>{s.pid} · unverified</dd>{/if}
         {#if s.mcp_server}<dt>MCP server</dt><dd>{s.mcp_server} · reported alias</dd>{/if}
       </dl>
+      </FoldSection>
       {#if s.kind === "tool" || s.kind === "model"}
         <div class="payload" aria-label="Reported serialized payload sizes"><span>Input<strong>{s.input_bytes == null ? "Unknown" : payloadSize(s.input_bytes)}</strong></span><i aria-hidden="true">→</i><span>{s.kind === "tool" ? "Tool" : "Model"}<strong>{STATUS_LABEL[s.status]}</strong></span><i aria-hidden="true">→</i><span>Result<strong>{s.output_bytes == null ? "Unknown" : payloadSize(s.output_bytes)}</strong></span></div>
       {/if}
@@ -38,9 +43,11 @@
       {#if s.mcp_server}<p>This alias does not establish a connection to a configured MCP server or a running process. Configuration and recorded usage are separate evidence.</p>{/if}
       <p>Reported by the configured integration. Sizes describe reported serialized payloads, not network traffic. Only allowlisted metadata is retained; prompt and tool-argument fields are excluded. Names are sanitized source labels.</p>
     {:else if edge}
+      <FoldSection id="flow-edge" title="Facts">
       <dl><dt>From</dt><dd>{from?.label ?? "Unknown"}</dd><dt>To</dt><dd>{to?.label ?? "Unknown"}</dd><dt>Evidence</dt><dd>{edge.kind === "span_parent" ? "Integration reported" : edge.evidence}</dd>
         {#if edge.observed?.kind === "tcp"}<dt>Live sockets</dt><dd>{edge.observed.connections}</dd><dt>Observed source PIDs</dt><dd>{edge.observed.source_pids.join(", ") || "Unavailable"}</dd>{/if}
       </dl>
+      </FoldSection>
       <p>{edge.kind === "tcp" ? "A live TCP socket relationship. Direction, messages and transferred bytes cannot be determined from this snapshot." : edge.kind === "parent" ? "A parent and child relationship observed in the process tree. It does not identify individual tool calls." : edge.kind === "owns_listener" ? "The operating system reports that this process holds the listening socket." : "The integration supplied this parent span ID. Session membership and event order alone never create this relationship."}</p>
     {/if}
   </section>

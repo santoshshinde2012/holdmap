@@ -64,7 +64,7 @@ matching known account, and do not establish current work by a particular runnin
   before anything opens.
   Search by agent, folder, tool, exact PID (`pid:51200`) or explicit port (`port:3001`). A port
   search includes both the listener owner and agents connected to it.
-  Choosing **Agents** reveals **Overview**, **MCP & skills** and **Flow** as action pills on the same toolbar row.
+  Choosing **Agents** reveals **Overview**, **MCP & skills**, **Flow** and **Security** as tabs.
   **Overview** then reveals **Computer**, **Footprint** and **Project**; **Flow** reveals
   **Connections** and **Calls**. The **MCP & skills** workspace uses the
   explicit inspection described below. Computer is this machine, the agents running on it, and observed
@@ -87,7 +87,11 @@ matching known account, and do not establish current work by a particular runnin
   review; failures stop remaining plans and show what completed. Agent sessions stay running.
 
 Select an agent from the list, a map node, the Home map, **↑/↓** or search and its details open
-beside the map; the selection stays across tabs, pictures, reloads (`#agent=` link) and restarts.
+beside the map. That screen shows who the agent is, its memory and access, the folders and
+processes it is running, and the ports it serves. **Open in MCP & skills**, **Open in Flow**
+and **Open in Security** open those screens already scoped to the agent. Once local config has
+been read, servers, skills and file locations stay behind **Configuration**. The selection stays
+across tabs, pictures, reloads (`#agent=` link) and restarts.
 **Esc**, **✕** or a click on empty canvas clears it. In a mid-size window the details float over
 the map's right edge and the map fits into the space left; in a narrow one the agent list and the
 details stack, and closing the details brings the map back.
@@ -117,9 +121,12 @@ is `holdmap agents --capabilities`, optionally with `--json`; the terminal Agent
 **c**; MCP clients can call `list_agents` with `include_capabilities: true`. Ordinary scans do
 not inspect those files.
 
-The **Explore / Map / Compare** capability explorer has an inspector with **Purpose**,
-**Source**, **Evidence** and **Activity** sections. It uses the same opt-in
-inventory: it does not add supported discovery locations, client adapters or tool catalogs.
+The **Explore / Map / Compare** control sits on the first header row, with **Filters**,
+**Coverage** and **Recorded calls**. **All**, **MCP servers**, **Skills**, **Tools** and
+**Running** stay together on the row below. A skill or MCP server opens an inspector with
+**Purpose**, **Source**, **Evidence** and **Activity** in the right sidebar. A process opens
+the agent details screen. The explorer uses the same opt-in inventory: it does not add
+supported discovery locations, client adapters or tool catalogs.
 
 ### Four kinds of evidence
 
@@ -127,7 +134,7 @@ inventory: it does not add supported discovery locations, client adapters or too
 | --- | --- | --- | --- |
 | **Configured MCP server** | MCP & skills | A server alias was found in a supported config file, with declared transport, scope, source path and any explicit enabled flag. | Whether this running client loaded it, approved it, connected to it or called a tool. |
 | **Skill file** | MCP & skills | A `SKILL.md` file exists in a supported skill directory. Its source, scope, project relationship and folder name preserve the observed identity; optional declared name and purpose describe the file. | Whether the skill is valid, trusted, enabled, offered to the model or activated. |
-| **Running child tool** | Overview / Connections | The OS observed a process and its parent. A known executable signature can suggest an MCP server. | Its configured alias, negotiated transport and individual calls. |
+| **Running child tool** | Agent details and Flow | The OS observed a process and its parent. A known executable signature can suggest an MCP server. The process list on MCP & skills opens that agent's details screen. | Its configured alias, negotiated transport and individual calls. Connections and recorded calls stay on Flow. |
 | **Recorded usage** | Flow → Calls | A configured integration explicitly reported a tool event, MCP alias or Claude skill activation. | Uninstrumented usage, authenticated process ownership and completion of an activated skill. |
 
 Nothing is launched, connected, installed or enabled by inventory inspection. Calls never joins
@@ -145,9 +152,9 @@ process observations:
 | --- | --- |
 | ![Capability map places declared MCP sources left of observed agent contexts and skill sources to the right, with runtime candidates separate below](../../../../docs/screenshots/desktop-capabilities-dark.png) | ![The selected skill's Purpose tab explains declared purpose and why file presence does not establish activation](../../../../docs/screenshots/desktop-skills-dark.png) |
 
-| Details open inline | Security: analyzers |
+| Details in the sidebar | Security: analyzers |
 | --- | --- |
-| ![Selecting a skill card opens its details directly under it, with Purpose, Source, Evidence and Activity tabs and Scan with…](../../../../docs/screenshots/desktop-capability-inline-dark.png) | ![The Security tab lists analyzers and presets with their on/off and installed state; all are off by default](../../../../docs/screenshots/desktop-security-analyzers-dark.png) |
+| ![Selecting a skill card opens its details in the right sidebar, with Purpose, Source, Evidence and Activity tabs and Scan with…](../../../../docs/screenshots/desktop-capability-inline-dark.png) | ![The Security tab lists analyzers and presets with their on/off and installed state; all are off by default](../../../../docs/screenshots/desktop-security-analyzers-dark.png) |
 
 ![Agents → Security: open findings by severity, last scan and coverage; findings grouped by severity, one expanded to its fix, location, analyzer and evidence, with Mark reviewed, Snooze and Rescan](../../../../docs/screenshots/desktop-security-findings-dark.png)
 
@@ -179,19 +186,19 @@ permissions sheet in Settings. **Pipeline** draws which analyzer covers which ag
   context was not inspected or its inventory is partial.
 
 Matching process contexts group when their client identity and account, observed folder-source
-context, exact inventory and coverage agree. **Process details** reveals the original agent
-roots and PIDs. The group is
+context, exact inventory and coverage agree. **Show processes** lists the original agent
+roots and PIDs. Choosing a process opens the agent details screen. The group is
 not a verified conversation, session or effective-policy identity. Shared definitions count
 once in the combined inventory only when their source identity and projected metadata match.
 Counts describe observed definitions and agent roots, not active skills or callable tools.
 
 Choose a context to scope **Explore** and **Map** to its matching process observations.
-**Process details** lets you inspect one original PID instead; **Show all** clears that scope.
+**Show processes** lists each PID; choosing one opens the agent details screen. **Show all** clears that scope.
 **Compare** has its own **Left context** and **Right context** selectors over all observed
 contexts, even when Explore or Map was scoped to one context. Search, type and definition
-filters still narrow the comparison; selecting a row opens the same exact-source inspector.
+filters still narrow the comparison; selecting a row opens the same exact-source inspector in the right sidebar.
 
-Select a card to open its inspector:
+Select a card to open its inspector in the right sidebar. On a narrow window the sidebar covers the catalog until you close it:
 
 | Section | What it explains |
 | --- | --- |
