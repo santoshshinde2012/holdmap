@@ -355,8 +355,8 @@ export function readings(scene: MachineScene, focus: string | null = null, scann
     { id: "mcp", label: "MCP running", value: config ? null : String(runningMcp), sub: config ? "opt-in, off" : `of ${mcp.length} configured`, ratio: mcp.length ? runningMcp / mcp.length : undefined, tone: runningMcp ? "ok" : undefined },
     { id: "skills", label: "Skills", value: config ? null : String(skills.length), sub: config ? "opt-in, off" : flagged ? `${flagged} to review` : "files found", tone: flagged ? "warn" : undefined },
     { id: "needs", label: "Needs you", value: String(needs), sub: needs ? "marked in amber" : "all clear", tone: needs ? "warn" : "ok" },
-    // Calls aren't any agent's: the reading stays machine-wide, and appears only once recording has been used.
-    ...(scene.calls || scene.recording ? [{ id: "calls" as const, label: "Calls", value: String(scene.calls), sub: scene.recording ? "recording" : "recording off",
+    // Calls belong to the computer. An agent's figures leave them out; the machine shows them once recording has been used.
+    ...(!focus && (scene.calls || scene.recording) ? [{ id: "calls" as const, label: "Calls", value: String(scene.calls), sub: scene.recording ? "recording" : "recording off",
       tone: scene.parts.some((p) => p.kind === "call" && p.warn) ? "warn" as const : undefined }] : []),
   ];
 }

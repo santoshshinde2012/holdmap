@@ -12,6 +12,7 @@
   const sub = $derived(nodeSubtitle(n));
   const exposed = $derived(n.ports.some((p) => p.exposure === "all_interfaces"));
   const usage = $derived(n.kind !== "external" && n.pids.length ? { cpu: `${n.cpu_percent.toFixed(n.cpu_percent < 10 ? 1 : 0)}%`, memory: bytes(n.memory_bytes) } : null);
+  const byPort = $derived(!!data.shared && n.ports.length > 0);
   const actions = getContext<{ select: (node: typeof n) => void; focus: (id: string) => void }>("service-graph-actions");
 </script>
 
@@ -33,14 +34,23 @@
   <FrameworkIcon node={n} size={34} />
   <span class="body">
     <span class="top">
-      <span class="label">{n.label}</span>
+      {#if byPort}
+        <span class="label port-title mono">:{n.ports[0].port}</span>
+        {#if n.ports.length > 1}<span class="more">+{n.ports.length - 1}</span>{/if}
+      {:else}
+        <span class="label">{n.label}</span>
+      {/if}
       {#if n.protected}<span class="lock" title="Protected"><Icon name="lock" size={11} /></span>{/if}
       {#if exposed}<span class="exp" title="Reachable from the network"><Icon name="globe" size={11} /></span>{/if}
     </span>
     <span class="ports">
-      {#each n.ports.slice(0, 3) as p}<span class="port mono">:{p.port}</span>{/each}
-      {#if n.ports.length > 3}<span class="more">+{n.ports.length - 3}</span>{/if}
-      {#if sub}<span class="sub">{sub}</span>{/if}
+      {#if byPort}
+        <span class="sub">{n.label}{sub ? ` · ${sub}` : ""}</span>
+      {:else}
+        {#each n.ports.slice(0, 3) as p}<span class="port mono">:{p.port}</span>{/each}
+        {#if n.ports.length > 3}<span class="more">+{n.ports.length - 3}</span>{/if}
+        {#if sub}<span class="sub">{sub}</span>{/if}
+      {/if}
     </span>
   </span>
   {#if usage}
@@ -75,6 +85,7 @@
   .body { flex: 1; min-width: 0; display: grid; gap: 4px; }
   .top { display: flex; align-items: center; gap: 5px; min-width: 0; }
   .label { font-weight: var(--fw-semibold); font-size: var(--fs-body); line-height: var(--lh-body); letter-spacing: var(--ls-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .port-title { color: var(--accent); letter-spacing: var(--ls-mono); font-size: var(--fs-mono); line-height: var(--lh-mono); }
   .lock, .exp { display: inline-flex; align-items: center; padding: 2px; border-radius: 5px; background: var(--surface-2); }
   .lock { color: var(--muted); }
   .exp { color: var(--warn); background: var(--warn-soft); }

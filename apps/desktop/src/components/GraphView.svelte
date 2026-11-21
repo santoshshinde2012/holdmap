@@ -145,7 +145,7 @@
     const node = shown?.nodes.find((n) => n.is_dev) ?? shown?.nodes[0];
     return node ? positions.get(node.id) ?? null : null;
   });
-  const viewKey = $derived(effectiveMode + "|" + direction + "|" + query.trim() + "|" + all + "|" + external);
+  const viewKey = $derived(effectiveMode + "|" + direction + "|" + query.trim() + "|" + all + "|" + external + "|" + (shown?.nodes.map((n) => n.id).sort().join(",") ?? ""));
   const hasRemote = $derived(graph?.nodes.some((n) => n.kind === "external") ?? false);
   // A lone "External" card with no service beside it is still an empty graph.
   const empty = $derived(!shown?.nodes.some((n) => n.kind !== "external"));
@@ -226,7 +226,7 @@
         ariaLabelConfig={{ "controls.ariaLabel": "Graph navigation", "controls.zoomIn.ariaLabel": "Zoom in on services", "controls.zoomOut.ariaLabel": "Zoom out of services" }}
         onnodepointerenter={({ node }) => { if (node.type === "service") hover = node.id; }} onnodepointerleave={() => (hover = null)}
         onpaneclick={() => onselect(null)}>
-        <GraphViewport {viewKey} {focus} {anchor} {width} {height} {reduced} pending={loading} />
+        <GraphViewport {viewKey} {focus} {anchor} {width} {height} {reduced} pending={loading && !graph} />
         <Background gap={24} size={1} />
         <AutoMiniMap {dark} />
       </SvelteFlow>
@@ -256,13 +256,13 @@
               </div>
             {/if}
           </div>
+          {#if !empty}
+            <div class="stats" role="group" aria-label="Graph summary">
+              {#each graphStats as stat (stat.id)}<span class="stat stat-{stat.id}" title={stat.title}><b>{stat.value}</b> {noun(stat.value, stat.one)}</span>{/each}
+              {#if loading}<span class="updating" role="status">Updating…</span>{/if}
+            </div>
+          {/if}
         </div>
-        {#if !empty}
-          <div class="stats" role="group" aria-label="Graph summary">
-            {#each graphStats as stat (stat.id)}<span class="stat stat-{stat.id}" title={stat.title}><b>{stat.value}</b> {noun(stat.value, stat.one)}</span>{/each}
-            {#if loading}<span class="updating" role="status">Updating…</span>{/if}
-          </div>
-        {/if}
         {#if widgets && !empty}
           <div class="legend" role="group" aria-label="Graph legend">
             {#each legend as [kind, label]}<span class={"lg lg-" + kind}><i aria-hidden="true"></i>{label}</span>{/each}
@@ -351,11 +351,11 @@
 
   /* Floating chrome: frosted, hairline and compact so the canvas keeps the room. */
   .chrome-host { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 6; pointer-events: none; }
-  .chrome { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; max-width: min(100%, 620px); }
+  .chrome { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; max-width: 100%; }
   .chrome > * { pointer-events: auto; }
-  .bar, .stats, .legend, .search-context, .connection-note, .cluster-focus { background: var(--overlay); border: 1px solid var(--border); box-shadow: var(--shadow-sm); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .bar, .legend, .search-context, .connection-note, .cluster-focus { background: var(--overlay); border: 1px solid var(--border); box-shadow: var(--shadow-sm); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   .bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; max-width: 100%; box-sizing: border-box; padding: 3px; border-radius: var(--r-full); }
-  .stats { display: flex; flex-wrap: wrap; gap: 2px 12px; max-width: 100%; box-sizing: border-box; padding: 4px 12px; border-radius: var(--r-full); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stats { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: center; margin-left: auto; max-width: 100%; box-sizing: border-box; padding: 0 10px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; }
   .stats b { color: var(--text); font-weight: var(--fw-semibold); }
   .updating { color: var(--accent); font-weight: var(--fw-medium); }
   .legend { display: flex; flex-wrap: wrap; gap: 2px 12px; max-width: 100%; box-sizing: border-box; padding: 4px 12px; border-radius: var(--r-lg); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
@@ -364,7 +364,7 @@
   .lg-service i { border-left: 3px solid var(--tone-green); }
   .lg-client i { border-style: dashed; }
   .lg-external i { border-style: dashed; background: var(--surface-2); }
-  .options-wrap { display: inline-flex; }
+  .options-wrap { position: relative; display: inline-flex; }
   .options-trigger { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: var(--r-full); border: 0; background: transparent; color: var(--text-2); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); cursor: pointer; }
   .options-trigger:hover, .options-trigger[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
   .options-trigger:focus-visible, .cta:focus-visible, .search-context button:focus-visible, .cluster-focus button:focus-visible, .neighbor:focus-visible, .peer-agent:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
@@ -416,6 +416,7 @@
     .graph :global(.svelte-flow__controls-button) { width: 30px; height: 30px; }
     .bar { border-radius: var(--r-lg); }
     .opt-label, .edge-key, .stat-groups { display: none; }
+    .stats { flex: 1 1 100%; margin-left: 0; padding: 2px 8px 4px; }
     .graph :global(.svelte-flow__minimap) { display: none; }
   }
   .reduced :global(*) { animation: none !important; }

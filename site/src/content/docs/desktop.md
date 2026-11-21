@@ -29,7 +29,8 @@ of agents, each with its ports and the same **Details** / **Stop…** menu.
 Every panel on Home folds away and comes back, and Home remembers how you left it: the summary
 (the chevron at the left of the header), the side column (the panel button at the right of the
 header), and each panel in it (click its heading). In 3D the parts list folds to a strip of
-agent buttons.
+agent buttons. When the side column is hidden, the selected agent's details sit beside the
+picture and fold to a strip; Home remembers that too.
 
 **3D** builds the same machine as a model you can take apart,
 drawn without perspective, so sizes and spacing read the same at the front and the back. Each
@@ -63,18 +64,23 @@ Another process or a remote host opens Flow, and a recorded call opens the calls
   shows each agent's processes as slices inside its tower. **Plan** looks straight down at the
   floor plan.
 - Hover any part to light it and what it's wired to, and dim the rest. Click an agent's tower or
-  district to select it (again to open it on Agents); click a part for its details. The parts
+  district once and the picture becomes that agent alone, with **All agents** to return; click it
+  again to open it on Agents. Click a part for its details. The parts
   list beside the canvas has a button for every agent and part, and is the keyboard path to
   everything drawn (`↑`/`↓` move between buttons). Ports open the same **Details** / **Stop…**
-  menu.
+  menu. **Calls** stay with the whole computer, so an agent's picture leaves that lens out.
 - **Details**, above **Needs you** in the side column, holds the readings and the selected part.
+  When the side column is hidden, those same readings and the selected part sit in a column beside
+  the picture instead.
   The readings come from the same parts that are drawn: CPU (with its recent trend), memory,
-  ports, processes, MCP servers running of configured, skills, **Needs you** and, once recording
-  has been used, **Calls**, for the whole computer or the selected agent. They read **…** until
+  ports, processes, MCP servers running of configured, skills and **Needs you**, for the whole
+  computer or the selected agent. **Calls** appear once recording has been used, and only on the
+  whole computer. They read **…** until
   the first scan, and a figure that wasn't collected reads **Not read**, never 0. Readings that
   count parts are toggles: press one to light up exactly those parts; `Esc` lets go.
-- **Focus** hides the summary and the side column so the machine fills Home; the readings and
-  the selected part then ride over the canvas. The `+`, `−` and fit buttons on the right edge
+- **Focus** hides the summary and the side column so the machine fills Home. The selected agent's
+  details stay beside the picture and fold away without leaving the agent. With nothing selected,
+  the readings ride over the canvas. The `+`, `−` and fit buttons on the right edge
   zoom without a wheel, and scrolling zooms toward the pointer.
 - **Tour** (`T`) walks through the machine, agents that need you first. Any drag, scroll, click or
   key hands you control, and the tour picks up again after 25 seconds of quiet. It is off with
@@ -216,9 +222,9 @@ extension name, not the inherited project — the same identity as the [list and
 view](../agents/). A card's location is a layout choice; only the displayed links represent
 observed connections.
 
-The graph opens with the full canvas under summary tiles: services, links, groups and
-remote (outbound) connections. Disconnected services and separate clusters are packed into compact
-groups in both layouts.
+The graph opens with one toolbar over the canvas: **All services**, the layout, **Options**, and
+the counts for services, links, groups and remote (outbound) connections. The legend stays its own
+key. Disconnected services and separate clusters are packed into compact groups in both layouts.
 
 The new **Search services** field searches displayed names, projects, ports and PIDs.
 Use `port:3000` or `:3000` for an exact port, and `pid:43000` for an exact PID. Multiple

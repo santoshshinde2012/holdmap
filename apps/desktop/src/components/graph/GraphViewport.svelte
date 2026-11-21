@@ -13,10 +13,11 @@
   const viewport = useViewport();
   const initialized = useNodesInitialized();
   const viewportInitialized = useViewportInitialized();
-  // The top padding leaves room for the floating graph chrome.
-  const padding = { top: "84px", bottom: "72px", x: "24px" } as const;
   const readableZoom = .85;
+  // A picture that still fits with readable cards opens whole. Below this, sit on one card at readableZoom.
+  const fitFloor = .78;
   let fittedKey: string | null = null;
+  let fitToken = 0;
   const revealed = { point: null as Point | null, width: 0, height: 0 };
 
   function reveal(point: Point, duration: number) {
@@ -28,6 +29,15 @@
     void flow.setCenter(point.x, point.y, { zoom: Math.max(readableZoom, view.zoom), duration });
   }
 
+  // fitView queues a second layout pass that drops the camera update. setViewport applies it directly.
+  function place(zoom: number, duration: number) {
+    const bounds = flow.getNodesBounds(flow.getNodes());
+    if (bounds.width < 2 || bounds.height < 2) return;
+    const x = 24 + ((width - 48) - bounds.width * zoom) / 2 - bounds.x * zoom;
+    const y = 84 + ((height - 168) - bounds.height * zoom) / 2 - bounds.y * zoom;
+    void flow.setViewport({ x, y, zoom }, { duration });
+  }
+
   function readable(reset = false) {
     const duration = reduced ? 0 : 250;
     const point = focus ?? anchor;
@@ -36,30 +46,47 @@
       return;
     }
     const bounds = flow.getNodesBounds(flow.getNodes());
-    if (bounds.width * readableZoom > width - 48 || bounds.height * readableZoom > height - 96) {
-      if (width < 600 && point) {
-        // A narrow canvas starts on a complete service card, with its links available by pan.
-        void flow.setCenter(point.x, point.y, { zoom: readableZoom, duration });
-        return;
-      }
-      // Start at the first compact group instead of centring empty space between islands.
-      void flow.setViewport({ x: 24 - bounds.x * readableZoom, y: 84 - bounds.y * readableZoom, zoom: readableZoom }, { duration });
-      if (focus) reveal(focus, duration);
-    } else {
-      void flow.fitView({ padding, minZoom: readableZoom, maxZoom: 1.1, duration });
+    const fitZoom = Math.min(1.1, (width - 48) / Math.max(bounds.width, 1), (height - 168) / Math.max(bounds.height, 1));
+    if (fitZoom >= fitFloor) {
+      place(Math.min(fitZoom, 1.1), duration);
+      return;
     }
+    // Too wide to read all at once: open on a real service card, centered, instead of
+    // the empty corner of the bounds (that corner is blank when a group is a cloud).
+    if (point) {
+      void flow.setCenter(point.x, point.y, { zoom: readableZoom, duration });
+      if (focus) reveal(focus, duration);
+      return;
+    }
+    place(readableZoom, duration);
+  }
+
+  function fitAll() {
+    const duration = reduced ? 0 : 250;
+    const bounds = flow.getNodesBounds(flow.getNodes());
+    const zoom = Math.max(.08, Math.min(1.1, (width - 48) / Math.max(bounds.width, 1), (height - 168) / Math.max(bounds.height, 1)));
+    place(zoom, duration);
   }
 
   $effect(() => {
     const ready = initialized.current && viewportInitialized.current && !pending;
     const key = viewKey;
     if (!ready || width <= 0 || height <= 0 || fittedKey === key) return;
-    // Measured nodes are ready: one frame, with cancellation, replaces the delayed double fit.
-    const frame = requestAnimationFrame(() => untrack(() => {
+    // A later layout pass supersedes this one. Cancelling the frame on every width
+    // change dropped the opening fit while the canvas was still settling.
+    const token = ++fitToken;
+    let tries = 0;
+    const attempt = () => untrack(() => {
+      if (token !== fitToken || fittedKey === key) return;
+      const bounds = flow.getNodesBounds(flow.getNodes());
+      if ((bounds.width < 2 || bounds.height < 2) && tries++ < 8) {
+        requestAnimationFrame(attempt);
+        return;
+      }
       fittedKey = key;
       readable();
-    }));
-    return () => cancelAnimationFrame(frame);
+    });
+    requestAnimationFrame(attempt);
   });
   $effect(() => {
     const point = focus;
@@ -77,7 +104,7 @@
   <ControlButton class="readable-zoom" aria-label="{Math.round(viewport.current.zoom * 100)}%, reset to readable size" title="Reset to readable size" onclick={() => readable(true)}>
     {Math.round(viewport.current.zoom * 100)}%
   </ControlButton>
-  <ControlButton aria-label="Fit all services in view" title="Fit all services in view" onclick={() => void flow.fitView({ padding, minZoom: .08, maxZoom: 1.1, duration: reduced ? 0 : 250 })}>
+  <ControlButton aria-label="Fit all services in view" title="Fit all services in view" onclick={fitAll}>
     <Icon name="fit" size={16} />
   </ControlButton>
 </Controls>

@@ -74,7 +74,8 @@
 - **3D machine.** Home's **3D** layout builds the same agents as a model you can
   take apart: a district per agent with its tower, folders and ports, its processes and the
   configuration found on disk on trays above it, CPU gauges, network ripples and connections that
-  move their way. Lenses show one concern at a time, with X-ray, a floor plan and a guided tour.
+  move their way. Click an agent and that district fills the picture, with a way back to every
+  agent. Lenses show one concern at a time, with X-ray, a floor plan and a guided tour.
   A selected part opens that agent's Overview, MCP & skills, Flow, Results or Security,
   and a skill or MCP server opens that item.
   Every link comes from what holdmap observed; nothing is joined by name.

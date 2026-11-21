@@ -286,8 +286,164 @@ function forceConnected(g: Graph, iterations: number): Positions {
     }
     temp = Math.max(2, temp * 0.97);
   }
-  separate(pos, 60);
+  // A workspace of sibling services has almost no edges between them, so repulsion
+  // leaves a cloud whose corner is empty. Seat those siblings on a board; a real
+  // dependency chain keeps the positions the simulation already gave it.
+  settleLooseClusters(pos, g);
+  packStrays(pos, g);
+  seatLeaves(pos, g);
+  for (let pass = 0; pass < 6; pass++) {
+    separate(pos, 24);
+    if (!nudgeDownstream(pos, g)) break;
+  }
   return pos;
+}
+
+/** Seat a cluster on a compact board when its members are peers, not a dependency chain. */
+function settleLooseClusters(pos: Positions, g: Graph) {
+  const byId = new Map(g.nodes.map((n) => [n.id, n]));
+  const stepX = NODE_W + 32;
+  const stepY = NODE_H + 20;
+  for (const cluster of g.clusters) {
+    const members = cluster.nodes.filter((id) => pos.has(id));
+    if (members.length < 3) continue;
+    const member = new Set(members);
+    const internal = g.edges.filter((e) => e.from !== e.to && member.has(e.from) && member.has(e.to)).length;
+    if (internal >= members.length - 1) continue;
+    const ordered = [...members].sort((a, b) => {
+      const la = byId.get(a)?.label ?? a, lb = byId.get(b)?.label ?? b;
+      return la < lb ? -1 : la > lb ? 1 : a < b ? -1 : a > b ? 1 : 0;
+    });
+    const cols = Math.ceil(Math.sqrt(ordered.length));
+    const rows = Math.ceil(ordered.length / cols);
+    const cx = ordered.reduce((sum, id) => sum + pos.get(id)!.x, 0) / ordered.length;
+    const cy = ordered.reduce((sum, id) => sum + pos.get(id)!.y, 0) / ordered.length;
+    const originX = cx - ((cols - 1) * stepX) / 2;
+    const originY = cy - ((rows - 1) * stepY) / 2;
+    ordered.forEach((id, index) => {
+      const p = pos.get(id)!;
+      p.x = originX + (index % cols) * stepX;
+      p.y = originY + Math.floor(index / cols) * stepY;
+    });
+  }
+}
+
+/** Other services in the same picture sit in a grid under the workspace, not a cloud around it. */
+function packStrays(pos: Positions, g: Graph) {
+  const board = looseMembers(pos, g);
+  if (!board.size) return;
+  const degree = new Map<string, number>();
+  for (const id of pos.keys()) degree.set(id, 0);
+  for (const e of g.edges) {
+    if (e.from === e.to || !pos.has(e.from) || !pos.has(e.to)) continue;
+    degree.set(e.from, (degree.get(e.from) ?? 0) + 1);
+    degree.set(e.to, (degree.get(e.to) ?? 0) + 1);
+  }
+  const byId = new Map(g.nodes.map((n) => [n.id, n]));
+  const strays = [...pos.keys()].filter((id) => !board.has(id) && (degree.get(id) ?? 0) !== 1);
+  if (!strays.length) return;
+  const stepX = NODE_W + 32;
+  const stepY = NODE_H + 20;
+  const cols = Math.max(1, Math.ceil(Math.sqrt(strays.length)));
+  const left = Math.min(...[...board].map((id) => pos.get(id)!.x));
+  const below = Math.max(...[...board].map((id) => pos.get(id)!.y)) + stepY + 28;
+  strays.sort((a, b) => {
+    const la = byId.get(a)?.label ?? a, lb = byId.get(b)?.label ?? b;
+    return la < lb ? -1 : la > lb ? 1 : a < b ? -1 : a > b ? 1 : 0;
+  }).forEach((id, index) => {
+    const p = pos.get(id)!;
+    p.x = left + (index % cols) * stepX;
+    p.y = below + Math.floor(index / cols) * stepY;
+  });
+}
+
+function looseMembers(pos: Positions, g: Graph): Set<string> {
+  const ids = new Set<string>();
+  for (const cluster of g.clusters) {
+    const members = cluster.nodes.filter((id) => pos.has(id));
+    if (members.length < 3) continue;
+    const member = new Set(members);
+    const internal = g.edges.filter((e) => e.from !== e.to && member.has(e.from) && member.has(e.to)).length;
+    if (internal >= members.length - 1) continue;
+    for (const id of members) ids.add(id);
+  }
+  return ids;
+}
+
+/** Put a leaf caller or remote host one hop from the service it actually touches,
+ *  outside a workspace board so the link stays short. */
+function seatLeaves(pos: Positions, g: Graph) {
+  const clusterOf = new Map(g.nodes.map((n) => [n.id, n.cluster]));
+  const degree = new Map<string, number>();
+  for (const id of pos.keys()) degree.set(id, 0);
+  const edges = g.edges.filter((e) => e.from !== e.to && pos.has(e.from) && pos.has(e.to));
+  for (const e of edges) {
+    degree.set(e.from, (degree.get(e.from) ?? 0) + 1);
+    degree.set(e.to, (degree.get(e.to) ?? 0) + 1);
+  }
+  const hop = NODE_W + 96;
+  const row = NODE_H + 20;
+  for (const e of edges) {
+    if ((degree.get(e.from) ?? 0) !== 1 || (degree.get(e.to) ?? 0) !== 1) continue;
+    if (clusterOf.get(e.from) || clusterOf.get(e.to)) continue;
+    const a = pos.get(e.from)!, b = pos.get(e.to)!;
+    b.x = a.x + hop;
+    b.y = a.y;
+  }
+  const spanOf = new Map<string, { min: number; max: number }>();
+  for (const cluster of g.clusters) {
+    const xs = cluster.nodes.filter((id) => pos.has(id)).map((id) => pos.get(id)!.x);
+    if (xs.length) spanOf.set(cluster.id, { min: Math.min(...xs), max: Math.max(...xs) });
+  }
+  type Seat = { id: string; y: number };
+  const columns = new Map<string, { side: "left" | "right"; x: number; seats: Seat[] }>();
+  const add = (key: string, side: "left" | "right", x: number, id: string, y: number) => {
+    const bag = columns.get(key) ?? { side, x, seats: [] };
+    bag.seats.push({ id, y });
+    columns.set(key, bag);
+  };
+  for (const e of edges) {
+    const fromDeg = degree.get(e.from) ?? 0, toDeg = degree.get(e.to) ?? 0;
+    const fromC = clusterOf.get(e.from) ?? null, toC = clusterOf.get(e.to) ?? null;
+    if (fromDeg === 1 && toDeg === 1 && !fromC && !toC) continue;
+    if (fromDeg === 1 && !fromC && (toC || toDeg > 1)) {
+      const span = toC ? spanOf.get(toC) : undefined;
+      const anchor = pos.get(e.to)!;
+      add((toC ?? e.to) + "|left", "left", (span ? span.min : anchor.x) - hop, e.from, anchor.y);
+    } else if (toDeg === 1 && !toC && (fromC || fromDeg > 1)) {
+      const span = fromC ? spanOf.get(fromC) : undefined;
+      const anchor = pos.get(e.from)!;
+      add((fromC ?? e.from) + "|right", "right", (span ? span.max : anchor.x) + hop, e.to, anchor.y);
+    }
+  }
+  for (const bag of columns.values()) {
+    const seats = bag.seats.sort((a, b) => a.y - b.y || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    let last = -Infinity;
+    for (const seat of seats) {
+      let y = seat.y;
+      if (y < last + row) y = last + row;
+      last = y;
+      const p = pos.get(seat.id)!;
+      p.x = bag.x;
+      p.y = y;
+    }
+  }
+}
+
+/** Keep each observed link pointing to the right, with a gap a card can sit in. */
+function nudgeDownstream(pos: Positions, g: Graph): boolean {
+  const board = looseMembers(pos, g);
+  let moved = false;
+  for (const e of g.edges) {
+    const a = pos.get(e.from), b = pos.get(e.to);
+    if (!a || !b || e.from === e.to || a.x < b.x) continue;
+    // A workspace board stays put. The outside service steps aside so the link still reads left to right.
+    if (board.has(e.to) && !board.has(e.from)) a.x = b.x - (NODE_W + 36);
+    else if (!board.has(e.to)) b.x = a.x + NODE_W + 36;
+    else continue;
+    moved = true;
+  }
+  return moved;
 }
 
 /** Push overlapping node boxes apart (a few relaxation passes). */
@@ -390,6 +546,8 @@ export interface FlowNodeData extends Record<string, unknown> {
   dim: boolean;
   hl: boolean;
   selected: boolean;
+  /** Another service on this graph uses the same name, so the port is the way to tell them apart. */
+  shared?: boolean;
   /** Top→bottom layout: edges leave the bottom and enter the top. */
   vertical?: boolean;
 }
@@ -436,6 +594,8 @@ export interface FlowOptions {
  *  their group) and edges. */
 export function toFlow(g: Graph, pos: Positions, opts: FlowOptions = {}): { nodes: FlowNode[]; edges: FlowEdge[] } {
   const rel = opts.focus ? related(g, opts.focus) : null;
+  const labelCount = new Map<string, number>();
+  for (const n of g.nodes) labelCount.set(n.label, (labelCount.get(n.label) ?? 0) + 1);
   const nodes: FlowNode[] = [];
   const origin = new Map<string, Point>();
   for (const c of g.clusters) {
@@ -469,7 +629,7 @@ export function toFlow(g: Graph, pos: Positions, opts: FlowOptions = {}): { node
       ...(o ? { parentId: groupId(n.cluster!) } : {}),
       width: NODE_W,
       height: NODE_H,
-      data: { node: n, dim: !!rel && !rel.nodes.has(n.id), hl: !!rel && rel.nodes.has(n.id), selected: opts.selectedId === n.id, vertical: opts.direction === "TB" },
+      data: { node: n, dim: !!rel && !rel.nodes.has(n.id), hl: !!rel && rel.nodes.has(n.id), selected: opts.selectedId === n.id, shared: (labelCount.get(n.label) ?? 0) > 1, vertical: opts.direction === "TB" },
     });
   }
   const edges: FlowEdge[] = g.edges

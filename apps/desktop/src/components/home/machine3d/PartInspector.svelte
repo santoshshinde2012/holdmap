@@ -22,6 +22,9 @@
   const chip = $derived(partChip(part));
   const go = $derived(partDestination(part.kind, part.variant));
   const others = $derived(part.kind === "call" ? [] : AGENT_DOORS.filter((door) => door.jump !== go.jump));
+  /** A remote group lists hosts. Addresses are the fact, not a short label, so they get their own rows. */
+  const hosts = $derived(part.kind === "remote" ? part.facts.filter(([k]) => k !== "Names" && k !== "More") : []);
+  const hostNotes = $derived(part.kind === "remote" ? part.facts.filter(([k]) => k === "Names" || k === "More").map(([, v]) => v) : []);
   let portBtn = $state<HTMLButtonElement>();
 
   function open(jump: AgentJump) {
@@ -60,7 +63,17 @@
     {/if}
   </div>
   {@render children?.()}
-  {#if part.facts.length}
+  {#if hosts.length}
+    <ul class="hosts" aria-label="Observed hosts">
+      {#each hosts as [address, connections], i (i)}
+        <li>
+          <span class="addr">{address}</span>
+          <span class="count">{connections}</span>
+        </li>
+      {/each}
+    </ul>
+    {#each hostNotes as note, i (i)}<p class="note">{note}</p>{/each}
+  {:else if part.facts.length}
     <dl>
       {#each part.facts as [k, v], i (i)}<div><dt>{k}</dt><dd>{v}</dd></div>{/each}
     </dl>
@@ -80,10 +93,16 @@
   .chips { margin: 8px 0 0; }
   .warn { display: flex; gap: 6px; align-items: flex-start; margin: 6px 0; padding: 6px 8px; border-radius: var(--r-md); background: var(--warn-soft); color: var(--warn); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .warn :global(svg) { flex: none; margin-top: 2px; }
-  dl { margin: 6px 0 0; display: grid; gap: 4px; }
+  dl, .hosts { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--border); }
+  dl { display: grid; gap: 4px; }
   dl div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; }
   dt { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   dd { margin: 0; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--text); overflow-wrap: anywhere; }
+  .hosts { list-style: none; padding-left: 0; padding-right: 0; display: grid; gap: 4px; }
+  .hosts li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 6px 8px; border-radius: var(--r-sm); background: var(--surface-2); }
+  .addr { min-width: 0; font-family: var(--mono); font-size: var(--fs-mono); line-height: var(--lh-mono); letter-spacing: var(--ls-mono); color: var(--text); overflow-wrap: anywhere; }
+  .count { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 1px; }
+  .note { margin: 8px 2px 0; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
   .acts { display: grid; gap: 6px; margin-top: 10px; }
   .menu, .go, .act { font: inherit; cursor: pointer; }
   .menu { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 32px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--r-md); background: var(--surface); color: var(--text); font-size: var(--fs-body-sm); font-weight: var(--fw-medium); }

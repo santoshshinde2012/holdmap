@@ -168,6 +168,9 @@
   const side = $derived(sideOpen && !focused);
   /** The 3D view's readings and selected part, shown above Needs you. */
   let details3d = $state<Snippet | null>(null);
+  let detailsOpen = $state(prefGetBoolean("home.details.open", true));
+  // Choosing an agent opens this panel, so the click always lands on its details.
+  $effect(() => { if (layout === "3d" && side && selected) detailsOpen = true; });
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -237,7 +240,7 @@
     <!-- The side column: in 3D the machine's readings and selected part, then Needs you. Each panel folds away. -->
     <aside class="side" aria-label="Side panels">
       {#if layout === "3d" && details3d && !idle}
-        <CollapsiblePanel id="home-details" title="Details" pref="home.details.open">{@render details3d()}</CollapsiblePanel>
+        <CollapsiblePanel id="home-details" title="Details" pref="home.details.open" bind:open={detailsOpen}>{@render details3d()}</CollapsiblePanel>
       {/if}
       <CollapsiblePanel id="home-needs" title="Needs you" count={needs.length} pref="home.needs.open" fill>
         {#if trustAlerts.length && onsecurity}

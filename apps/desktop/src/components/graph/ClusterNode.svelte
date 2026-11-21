@@ -41,8 +41,8 @@
 <style>
   .hull {
     --hue: var(--accent);
-    box-sizing: border-box; border-radius: 20px; border: 1.5px dashed color-mix(in srgb, var(--hue) 45%, transparent);
-    background: color-mix(in srgb, var(--hue) 6%, transparent); transition: opacity var(--dur-2) var(--ease);
+    box-sizing: border-box; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--hue) 38%, var(--border));
+    background: color-mix(in srgb, var(--hue) 7%, transparent); transition: opacity var(--dur-2) var(--ease);
   }
   .kind-compose { --hue: var(--tone-blue); }
   .kind-kubernetes { --hue: var(--tone-violet); }
@@ -55,7 +55,13 @@
   .focus:hover { background: color-mix(in srgb, var(--hue) 10%, transparent); }
   .focus:focus-visible, .stop:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   .focused .focus { background: color-mix(in srgb, var(--hue) 14%, transparent); }
-  header { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 12px; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
+  header {
+    display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 12px;
+    font-size: var(--fs-body-sm); line-height: var(--lh-body-sm);
+    background: color-mix(in srgb, var(--hue) 10%, var(--surface));
+    border-bottom: 1px solid color-mix(in srgb, var(--hue) 18%, var(--border));
+    border-radius: 17px 17px 0 0;
+  }
   .ic { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; color: var(--hue); background: color-mix(in srgb, var(--hue) 14%, transparent); }
   .name { font-weight: var(--fw-semibold); color: var(--text); letter-spacing: var(--ls-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .kind { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }

@@ -959,7 +959,10 @@ published asset digests and IDs, then publishes the complete `latest.json` index
   so text uses the shared tokens and stays accessible; the parts list is the canvas's keyboard
   outline. The view hands Home its readings and inspector as a snippet (`ondetails`), which Home
   renders in its side column above Needs you, so they keep the view's live state while living
-  outside the canvas. `agent-jump.ts` names the screen each part kind opens (a skill or MCP
+  outside the canvas. Choosing an agent opens that panel. When the side column is closed,
+  `componentScene` draws that one district and the same inspector docks beside the canvas;
+  folding it (`home.3d.dossier`) keeps the agent and does not cover the model. Recorded calls
+  stay on the whole-computer picture, so an agent's readings and lenses leave them out. `agent-jump.ts` names the screen each part kind opens (a skill or MCP
   server to MCP & skills, a process or remote host to Flow, a recorded call to the calls
   timeline, everything else to that agent's Overview). The inspector leads with those doors,
   and a second click on the same part takes the same route. A skill, MCP server, or running
@@ -972,7 +975,7 @@ published asset digests and IDs, then publishes the complete `latest.json` index
   renders the 2D map with the reason. The chunk carries three.js and has its own site budget.
 - **Folding panels.** `ui/CollapsiblePanel` is a heading holding its disclosure button (the
   WAI-ARIA pattern), with an optional close button and a remembered state (`pref`). Home's side
-  column, the summary and the 3D parts list fold and come back, each remembered.
+  column, the summary, the 3D parts list and the 3D details column fold and come back, each remembered.
 - **Capture areas.** `lib/capture-region.ts` holds an area of the window in CSS pixels and maps it
   into each capture: snapshots crop the finished PNG (the rendered view and the macOS window
   capture cover exactly the viewport; a shared window's frame may carry a title bar above it);

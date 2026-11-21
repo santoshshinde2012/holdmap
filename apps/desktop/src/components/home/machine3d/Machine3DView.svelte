@@ -12,9 +12,10 @@
   import PartsRail from "./PartsRail.svelte";
   import Readings from "./Readings.svelte";
   import PartInspector from "./PartInspector.svelte";
-  import { buildScene, gaugeParts, LENS_LABEL, LENS_TITLE, LENSES, lensView, readings, type Gauge, type Lens, type Layer, type Part } from "../../../lib/machine3d/scene";
+  import { buildScene, agentSummary, gaugeParts, LENS_LABEL, LENS_TITLE, LENSES, lensView, readings, type Gauge, type Lens, type Layer, type Part } from "../../../lib/machine3d/scene";
+  import { componentScene } from "../../../lib/machine3d/preview";
   import { layoutScene, type MachineLayout } from "../../../lib/machine3d/layout";
-  import { agentPose, overviewPose, partPose, topPose } from "../../../lib/machine3d/camera";
+  import { agentPose, overviewPose, topPose } from "../../../lib/machine3d/camera";
   import { webglSupport, type StageView, type Support } from "../../../lib/machine3d/stage";
   import { partJump, type AgentJump } from "../../../lib/agent-jump";
   import { prefGetBoolean, prefSet } from "../../../lib/prefs";
@@ -76,12 +77,6 @@
 
   // ---------- scene ----------
   const scene = $derived(buildScene({ report, entries, hot, needs, trust, activity, recording }));
-  // Layout keeps its identity across scans whose parts didn't change.
-  let layoutCache: MachineLayout | null = null;
-  const layout = $derived.by(() => {
-    if (layoutCache?.signature !== scene.signature) layoutCache = layoutScene(scene);
-    return layoutCache;
-  });
 
   // ---------- view state ----------
   // Pulled apart reads best: every floor clear of the one below. Assembled is the compact view.
@@ -93,7 +88,6 @@
   let tour = $state(false);
   // One concern at a time: a lens lights its parts and sets aside the floors in its way.
   let lens = $state<Lens>("all");
-  $effect(() => { if (lens === "calls" && !scene.calls) lens = "all"; });
   const lensed = $derived(lensView(scene, lens));
   // A typed find lights matching parts and brings their floors back, so a search isn't hidden by a lens.
   let find = $state("");
@@ -121,9 +115,18 @@
   // A pressed reading lights up exactly the parts it counts (for the agent in focus, if any).
   let gauge = $state<Gauge | null>(null);
   const highlight = $derived(found ?? (gauge ? gaugeParts(scene, gauge, focus) : lensed.lit));
-  /** Hide every agent except the one in focus, so one district fills the picture. */
-  let solo = $state(false);
-  $effect(() => { if (!focus) solo = false; });
+  /** One agent, drawn the way the whole machine is: its district, floors and parts, and nothing else. */
+  const agentView = $derived(focus ? componentScene(scene, focus) : null);
+  const stageScene = $derived(agentView?.scene ?? scene);
+  let layoutCache: MachineLayout | null = null;
+  const layout = $derived.by(() => {
+    if (layoutCache?.signature !== stageScene.signature) layoutCache = layoutScene(stageScene);
+    return layoutCache;
+  });
+  const agentName = $derived(agentView?.focus ? scene.agents.find((a) => a.id === agentView.focus)?.label ?? "" : "");
+  // Recorded calls belong to the whole machine, so an agent's screen doesn't offer that lens.
+  const lenses = $derived(lensOptions.filter((l) => l.value !== "calls" || !agentView));
+  $effect(() => { if (lens === "calls" && (!scene.calls || agentView)) lens = "all"; });
   function pickGauge(next: Gauge | null) {
     stopTour();
     gauge = next;
@@ -132,7 +135,7 @@
     if (lit && scene.parts.some((p) => lit.has(p.id) && hidden.has(p.layer))) lens = "all";
   }
   function pickLens(next: Lens) { stopTour(); gauge = null; lens = next; }
-  const view = $derived<StageView>({ explode: explode ? 1 : 0, xray, focus: focus ?? active, selected: inspected?.id ?? null, hovered: hoverPart, hidden, reduced, highlight, solo: solo && focus ? focus : null });
+  const view = $derived<StageView>({ explode: explode ? 1 : 0, xray, focus: focus ?? active, selected: inspected?.id ?? null, hovered: hoverPart, hidden, reduced, highlight });
 
   // Fly only on an explicit change (selection, angle, explode, Fit, the first agent scan), so a
   // scan never pulls the camera away from where the viewer turned it. Recorded calls can arrive
@@ -140,15 +143,13 @@
   const hasParts = $derived(scene.parts.length > 0);
   const scanned = $derived(!!report);
   const flight = $derived.by(() => {
-    const key = [partId, selectedAgent, explode, top, fit, scanned];
+    // Reading the layout here keeps the camera on the picture that is actually drawn.
+    const l = layout;
+    const key = [agentView?.focus ?? "", explode, top, fit, scanned, l.signature];
     void key;
     return untrack(() => {
-      const l = layout, s = scene, ex = explode ? 1 : 0, id = partId, agent = selectedAgent, isTop = top;
-      const target = id ? s.parts.find((p) => p.id === id) : null;
-      return { pose: (aspect: number) => isTop ? topPose(l, aspect)
-        : target && target.kind !== "dormant" ? partPose(l, s, target.id, ex, aspect)
-          : target ? agentPose(l, target.id, ex, aspect)
-            : agent ? agentPose(l, agent, ex, aspect) : overviewPose(l, ex, aspect), instant: !scanned };
+      const ex = explode ? 1 : 0, agent = agentView?.focus ?? null, isTop = top;
+      return { pose: (aspect: number) => isTop ? topPose(l, aspect) : agent ? agentPose(l, agent, ex, aspect) : overviewPose(l, ex, aspect), instant: !scanned };
     });
   });
 
@@ -237,7 +238,7 @@
     if (c.blocked || c.editing) return;
     if (e.key === "Escape" && c.navigation && (partId || tour || gauge)) { e.stopPropagation(); if (tour) stopTour(); else if (partId) partId = null; else gauge = null; return; }
     if (!singleKeys || !c.navigation || c.control) return;
-    const nextLens = () => { const all = lensOptions.map((o) => o.value); pickLens(all[(all.indexOf(lens) + 1) % all.length]); };
+    const nextLens = () => { const all = lenses.map((o) => o.value); pickLens(all[(all.indexOf(lens) + 1) % all.length]); };
     const act: Record<string, () => void> = { e: () => { stopTour(); explode = !explode; }, x: () => { stopTour(); xray = !xray }, t: () => { if (!reduced && hasParts) tour = !tour; }, f: () => { stopTour(); top = false; fit++; }, l: nextLens };
     const fn = act[e.key];
     if (!fn) return;
@@ -282,8 +283,12 @@
   // The parts list folds to a strip of agent buttons; remembered.
   let railOpen = $state(prefGetBoolean("home.3d.rail", true));
   $effect(() => prefSet("home.3d.rail", railOpen ? "1" : "0"));
-  // Details live in Home's side column; in Focus (no side column) the selected part floats over the canvas.
+  // One details surface. Home's side column holds it when that column is open. Otherwise the same
+  // dossier sits beside the picture, and folds away without leaving the agent.
   const sideDetails = $derived(!!ondetails && !expanded);
+  let dossierOpen = $state(prefGetBoolean("home.3d.dossier", true));
+  $effect(() => prefSet("home.3d.dossier", dossierOpen ? "1" : "0"));
+  const ownDossier = $derived(!!inspected && !sideDetails);
   $effect(() => {
     const host = ondetails;
     if (!host) return;
@@ -299,14 +304,14 @@
   <!-- The doors come first: the readings are long, and the way out of the picture has to be on screen. -->
   {#if inspected}
     <PartInspector flat part={inspected} onclose={clear} {onopenagent} {onport}>
-      <Readings flat readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
+      <Readings flat titled={inspected.id !== focus} readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
     </PartInspector>
   {:else}
     <Readings flat readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
   {/if}
 {/snippet}
 
-<div class="m3d" class:folded={!railOpen}>
+<div class="m3d" class:folded={!railOpen} class:open={ownDossier && dossierOpen} class:peek={ownDossier && !dossierOpen}>
   {#if support === "pending"}
     <p class="wait" aria-busy="true">Starting 3D…</p>
   {:else if !usable}
@@ -326,19 +331,23 @@
   {:else}
     <PartsRail {scene} {colors} {focus} query={find} onquery={(q) => { find = q; if (q.trim()) gauge = null; }} selected={inspected?.id ?? null} collapsed={!railOpen} ontoggle={() => (railOpen = !railOpen)} onagent={pickAgent} onpart={pickPart} onhover={onhover} />
     <div class="viewport" class:xray bind:this={viewport} data-capture-area>
-      <Stage3D bind:this={stage3d} {scene} {layout} {colors} {view} {flight} {tour} {insets} onpick={onpick} onhover={(id) => (hoverPart = id)} onfail={(reason) => (failure = reason)}
+      <Stage3D bind:this={stage3d} scene={stageScene} {layout} {colors} {view} {flight} {tour} {insets} onpick={onpick} onhover={(id) => (hoverPart = id)} onfail={(reason) => (failure = reason)}
         oncaption={(c) => (caption = c)} ontourfocus={(id) => (tourFocus = id)} onreset={() => { stopTour(); top = false; clear(); fit++; }} />
       <span class="anchor" bind:this={pointAnchor} style="left: {anchorAt.x}px; top: {anchorAt.y}px" aria-hidden="true"></span>
-      {#if sideDetails && !inventory && oninventory && !scene.inspected}
-        <!-- The side column already holds the readings, so the missing floors get the top of the picture. -->
-        <div class="hud ask" data-inset>
-          <ConsentGate onconsent={oninventory} />
-        </div>
-      {/if}
-      {#if !sideDetails}
-        <!-- Without Home's side column (Focus, or no host), the readings ride along the top. -->
+      {#if agentView || !sideDetails || (sideDetails && !inventory && oninventory && !scene.inspected)}
         <div class="hud top" data-inset>
-          <Readings readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
+          {#if agentView}
+            <div class="screen">
+              <button type="button" class="back" onclick={() => { stopTour(); clear(); }}><Icon name="arrow-left" size={14} />All agents</button>
+              <span class="who"><i style="background: {colors.get(agentView.focus!) ?? 'var(--muted)'}" aria-hidden="true"></i><span><b>{agentName}</b> <small>{agentSummary(scene, agentView.focus!)}</small></span></span>
+            </div>
+          {/if}
+          {#if sideDetails && !inventory && oninventory && !scene.inspected}
+            <div class="ask"><ConsentGate onconsent={oninventory} /></div>
+          {/if}
+          {#if !sideDetails && !inspected}
+            <Readings readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
+          {/if}
         </div>
       {/if}
       <!-- One overlay along the bottom: the legend (or tour caption) across the width, then the
@@ -351,12 +360,12 @@
             <li><i class="solid"></i>Seen now</li><li><i class="faded"></i>Inferred</li><li><i class="blue"></i>On disk</li>
             <li><i class="gauge"></i>CPU</li><li><i class="beam"></i>MCP running</li><li><i class="flow"></i>Connection</li>
             <li><i class="ripple"></i>Open to network</li><li><i class="pin"></i>Needs you</li>
-            {#if scene.calls}<li><i class="call"></i>Reported call</li>{/if}
+            {#if stageScene.calls}<li><i class="call"></i>Reported call</li>{/if}
           </ul>
         {/if}
         <div class="row">
         <div class="bar lenses" role="group" aria-label="View">
-          <ActionDock value={lens} options={lensOptions} label="Lens" hinge={false} animate={false} size="compact" onchange={pickLens} />
+          <ActionDock value={lens} options={lenses} label="Lens" hinge={false} animate={false} size="compact" onchange={pickLens} />
           <ActionPill icon="info" label="Legend" toggle pressed={legend} size="compact" expanded={legend} onclick={() => (legend = !legend)} />
           {#if !sideDetails && !inventory && oninventory && !scene.inspected}<ConsentGate onconsent={oninventory} compact />{/if}
         </div>
@@ -366,7 +375,6 @@
         <ActionPill icon="hash" label="Plan" toggle pressed={top} size="compact" title="Look straight down: the floor plan, one district per agent" onclick={() => { stopTour(); top = !top; }} />
         <ActionPill icon="play" label="Tour" toggle pressed={tour} size="compact" kbd="T" disabled={reduced || !hasParts} title={reduced ? "The tour is off while reduced motion is on" : "Walk through the machine; any input hands you control"} onclick={() => (tour = !tour)} />
         {#if onexpand}<ActionPill icon="sidebar" label="Focus" toggle pressed={expanded} size="compact" title={expanded ? "Show the summary and Needs you again" : "Hide the summary and Needs you so the machine fills Home"} onclick={() => onexpand?.(!expanded)} />{/if}
-        {#if focus}<ActionPill icon="bot" label={solo ? "All agents" : "Only this"} toggle pressed={solo} size="compact" title={solo ? "Show every agent again" : "Hide every agent except the one in focus"} onclick={() => { stopTour(); solo = !solo; }} />{/if}
         </div>
         </div>
       </div>
@@ -375,18 +383,49 @@
         <IconButton icon="minus" label="Zoom out" kbd="−" size="sm" onclick={() => stage3d?.zoomBy(1.25)} />
         <IconButton icon="fit" label="Fit" kbd="F" size="sm" onclick={() => { stopTour(); top = false; fit++; }} />
       </div>
-      {#if inspected && !sideDetails}
-        <div class="hud side" data-inset="right" style="top: {insets.top + 6}px; bottom: {insets.bottom + 6}px">
-          <PartInspector part={inspected} onclose={clear} {onopenagent} {onport} />
-        </div>
-      {/if}
     </div>
+    {#if inspected && ownDossier && dossierOpen}
+      <aside class="dossier" aria-label="Details">
+        <div class="dhead">
+          <button type="button" class="fold" aria-expanded="true" aria-controls="m3d-dossier" title="Fold details" onclick={() => (dossierOpen = false)}>
+            <Icon name="chevron-down" size={14} /><span>Details</span>
+          </button>
+        </div>
+        <div class="dbody" id="m3d-dossier">
+          <PartInspector flat part={inspected} onclose={clear} {onopenagent} {onport}>
+            <Readings flat titled={inspected.id !== focus} readings={figures} {scope} cpu={cpuHistory.get(readingFocus ?? "") ?? []} active={gauge} onpick={pickGauge} />
+          </PartInspector>
+        </div>
+      </aside>
+    {:else if ownDossier}
+      <div class="peek-col">
+        <button type="button" class="fold" aria-expanded="false" title="Show details" onclick={() => (dossierOpen = true)}>
+          <Icon name="chevron-down" size={14} /><span class="sr-only">Show details</span>
+        </button>
+      </div>
+    {/if}
   {/if}
 </div>
 
 <style>
   .m3d { position: relative; display: grid; grid-template-columns: 216px minmax(0, 1fr); height: 100%; min-height: 0; container-type: inline-size; }
+  .m3d.open { grid-template-columns: 216px minmax(0, 1fr) 300px; }
+  .m3d.peek { grid-template-columns: 216px minmax(0, 1fr) 44px; }
   .m3d.folded { grid-template-columns: 44px minmax(0, 1fr); }
+  .m3d.folded.open { grid-template-columns: 44px minmax(0, 1fr) 300px; }
+  .m3d.folded.peek { grid-template-columns: 44px minmax(0, 1fr) 44px; }
+  /* The dossier sits beside the picture and scrolls on its own. Folding it keeps the agent. */
+  .dossier { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--surface); }
+  .dhead { display: flex; align-items: center; padding: 6px 8px 0; flex: none; }
+  .dbody { min-height: 0; overflow: auto; }
+  .dossier :global(header) { position: sticky; top: 0; z-index: 1; margin: 0 -10px; padding: 0 10px 6px; background: var(--surface); }
+  .fold { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 0 8px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--muted); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); cursor: pointer; }
+  .fold:hover { background: var(--row-hover); color: var(--text); }
+  .fold:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .fold :global(svg) { transition: transform 160ms ease; }
+  .peek-col .fold :global(svg) { transform: rotate(-90deg); }
+  @media (prefers-reduced-motion: reduce) { .fold :global(svg) { transition: none; } }
+  .peek-col { display: flex; justify-content: center; padding-top: 8px; border-left: 1px solid var(--border); background: var(--surface); }
   .wait { margin: 0; padding: var(--sp-4); color: var(--muted); grid-column: 1 / -1; }
   .fallback { grid-column: 1 / -1; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; height: 100%; }
   .note { padding: var(--sp-2) var(--sp-2) 0; }
@@ -398,13 +437,22 @@
   .anchor { position: absolute; width: 1px; height: 1px; pointer-events: none; }
   .hud { position: absolute; pointer-events: none; z-index: 1; }
   .hud > :global(*) { pointer-events: auto; }
-  .top { top: 10px; left: 10px; right: 10px; }
-  .ask { top: 10px; left: 10px; right: 64px; }
+  .top { top: 10px; left: 10px; right: 10px; display: grid; gap: 6px; justify-items: start; min-width: 0; }
+  .top :global(.readings) { width: 100%; max-width: 100%; min-width: 0; justify-self: stretch; }
+  .screen { display: flex; align-items: center; gap: 8px; max-width: min(100%, 480px); min-height: 40px; padding: 4px 12px 4px 4px; border: 1px solid var(--border); border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: var(--shadow-sm); }
+  .back { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 10px; border: 0; border-radius: var(--r-md); background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); cursor: pointer; flex: none; }
+  .back:hover { background: var(--row-hover); }
+  .back:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .who i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .who > span { display: grid; min-width: 0; }
+  .who b, .who small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who b { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-semibold); }
+  .who small { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
   .ask :global(.consent) { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface) 92%, transparent); }
   .bottom { left: 10px; right: 10px; bottom: 10px; display: grid; gap: 6px; justify-items: start; }
   .row { justify-self: stretch; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; }
   .row .tools { margin-left: auto; flex-wrap: nowrap; }
-  .side { right: 52px; display: flex; align-items: flex-end; }
   /* Zoom sits on the right edge, clear of the readings above and the controls below. */
   .zoom { right: 10px; top: 50%; transform: translateY(-50%); display: grid; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: var(--r-lg);
     background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-sm); }
@@ -434,8 +482,14 @@
     /* The lens in use keeps its name; the others stay icons so the bar still fits. */
     .lenses :global([role="radio"]:not([aria-checked="true"]) > span) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   }
+  @container (max-width: 1100px) {
+    .m3d.open { grid-template-columns: 168px minmax(0, 1fr) 272px; }
+    .m3d.peek { grid-template-columns: 168px minmax(0, 1fr) 44px; }
+    .m3d.folded.open { grid-template-columns: 44px minmax(0, 1fr) 272px; }
+    .m3d.folded.peek { grid-template-columns: 44px minmax(0, 1fr) 44px; }
+  }
   @container (max-width: 1000px) {
-    .m3d:not(.folded) { grid-template-columns: 180px minmax(0, 1fr); }
+    .m3d:not(.folded):not(.open) { grid-template-columns: 180px minmax(0, 1fr); }
     .tools :global(.action-pill > span) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   }
 </style>

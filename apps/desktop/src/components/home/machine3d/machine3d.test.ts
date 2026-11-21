@@ -112,6 +112,17 @@ describe("3D part inspector", () => {
     expect(dormant.getByText("Configuration found")).toBeTruthy();
     expect(dormant.getByRole("button", { name: /^Open MCP & skills/ })).toBeTruthy();
   });
+
+  it("lists each remote host on its own row, with the address free of the connection count", () => {
+    const remote = part((p) => p.kind === "remote" && p.owner === cursor.id);
+    const view = render(PartInspector, { part: remote, onclose: vi.fn(), onopenagent: vi.fn(), onport: vi.fn() });
+    const list = view.getByRole("list", { name: "Observed hosts" });
+    const row = within(list).getByText("[2001:db8:4700:4408::ac40:9bd1]:443").closest("li")!;
+    expect(row.querySelector(".addr")?.textContent).toBe("[2001:db8:4700:4408::ac40:9bd1]:443");
+    expect(row.querySelector(".count")?.textContent).toBe("2 connections");
+    expect(view.getByText("Shown by address; holdmap doesn't look names up")).toBeTruthy();
+    expect(view.container.querySelector("dl")).toBeNull();
+  });
 });
 
 describe("3D readings", () => {
