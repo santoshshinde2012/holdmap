@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { useSvelteFlow, useStore } from "@xyflow/svelte";
+  import { pinnedView, tooWide } from "../../../lib/flow-camera";
   import { FIT_PADDING } from "../../../lib/flow";
   let { token, focus, reduced }: { token: string; focus: { x: number; y: number } | null; reduced: boolean } = $props();
   const flow = useSvelteFlow();
@@ -13,9 +14,9 @@
     if (!width || !height) return;
     const fit = () => untrack(() => {
       const bounds = flow.getNodesBounds(flow.getNodes());
-      if (bounds.width * READABLE_ZOOM > width - 56 || bounds.height * READABLE_ZOOM > height - 112) {
-        // Keep the starting participants readable. Fit-all remains available in Controls.
-        void flow.setViewport({ x: 28 - bounds.x * READABLE_ZOOM, y: 84 - bounds.y * READABLE_ZOOM, zoom: READABLE_ZOOM }, { duration: reduced ? 0 : 250 });
+      // 56px and 112px are the side and vertical chrome. Past them, sit on the first participants.
+      if (tooWide(bounds, { width, height }, READABLE_ZOOM, 56, 112)) {
+        void flow.setViewport(pinnedView(bounds, READABLE_ZOOM, { x: 28, y: 84 }), { duration: reduced ? 0 : 250 });
       } else {
         void flow.fitView({ padding: FIT_PADDING, duration: reduced ? 0 : 250, maxZoom: 1.15 });
       }

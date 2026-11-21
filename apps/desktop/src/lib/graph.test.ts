@@ -239,12 +239,36 @@ describe("disconnected services", () => {
     }
   };
 
+  it("fills the strip beside a tall group instead of leaving it empty", () => {
+    const graph = makeSparse(7);
+    graph.clusters = [{ ...g.clusters[0], id: "app", nodes: graph.nodes.slice(0, 4).map((n) => n.id) }];
+    graph.nodes = graph.nodes.map((node, index) => ({ ...node, cluster: index < 4 ? "app" : null }));
+    const positions = layered(graph);
+    const members = graph.nodes.slice(0, 4).map((node) => positions.get(node.id)!);
+    const top = Math.min(...members.map((point) => point.y));
+    const bottom = Math.max(...members.map((point) => point.y));
+    const right = Math.max(...members.map((point) => point.x));
+    const beside = graph.nodes.slice(4).filter((node) => {
+      const point = positions.get(node.id)!;
+      return point.x > right && point.y >= top && point.y <= bottom;
+    });
+    expect(beside.length).toBeGreaterThan(0);
+    expectSeparated(positions);
+  });
+
   it.each([layered, force])("packs loose services beside connected components without a long empty rank (%#)", (layout) => {
     const extra = ["a", "b", "c", "d", "e"].map((id, i) => ({ ...g.nodes.find((n) => n.id === "docs")!, id, label: id, ports: [{ ...g.nodes[0].ports[0], port: 9000 + i, entry_id: `x${i}` }] }));
     const gg = { ...g, nodes: [...g.nodes, ...extra] };
     const p = layout(gg);
-    const rows = new Set(extra.map((n) => p.get(n.id)!.y));
-    expect(rows.size).toBeLessThan(extra.length);
+    const loose = extra.map((n) => p.get(n.id)!).sort((a, b) => a.y - b.y || a.x - b.x);
+    const main = gg.nodes.filter((n) => !extra.some((e) => e.id === n.id)).map((n) => p.get(n.id)!);
+    // A row, or a filled strip beside the group. Cards stay a step apart, not a rank apart.
+    for (let i = 1; i < loose.length; i++) {
+      const gap = loose[i].y - loose[i - 1].y;
+      expect(gap === 0 || gap <= NODE_H + 120).toBe(true);
+    }
+    expect(Math.max(...loose.map((point) => point.x))).toBeLessThan(Math.max(...main.map((point) => point.x)) + NODE_W * 3);
+    expect(Math.max(...loose.map((point) => point.y))).toBeLessThan(Math.max(...main.map((point) => point.y)) + NODE_H * 3);
     expect(p.size).toBe(gg.nodes.length);
     expectSeparated(p);
   });

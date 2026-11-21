@@ -5,6 +5,7 @@
   // whole graph shows beside or above it; a docked panel just resizes the pane instead.
   import { untrack } from "svelte";
   import { useSvelteFlow } from "@xyflow/svelte";
+  import { fitZoom } from "../../lib/flow-camera";
   import { FIT_MIN_ZOOM, FIT_PADDING } from "../../lib/flow";
   let { token, focus, reduced, open = false, obstacle = () => null, near = [] }: { token: string; focus: { x: number; y: number } | null; reduced: boolean; open?: boolean; obstacle?: () => HTMLElement | null; near?: string[] } = $props();
   const flow = useSvelteFlow();
@@ -33,7 +34,7 @@
     if (!pane || all.length === 0) return false;
     const b = flow.getNodesBounds(all);
     const px = (v: string) => parseFloat(v) || 0;
-    const zoom = Math.min((pane.width - px(p.left) - px(p.right)) / Math.max(b.width, 1), (pane.height - px(p.top) - px(p.bottom)) / Math.max(b.height, 1));
+    const zoom = fitZoom(b, pane.width - px(p.left) - px(p.right), pane.height - px(p.top) - px(p.bottom));
     return zoom < COVERED_MIN_ZOOM;
   }
   /** What to fit: the whole map, or (a panel is open and the whole map would be too small to read) just the picked agent and what it touches. */

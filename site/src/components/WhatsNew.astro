@@ -2,7 +2,7 @@
 import Icon from "./Icon.astro";
 import { releaseHighlightsPublished as released, repoUrl, sourceVersion, url, version } from "../lib/site";
 const highlights = [
-  { icon: "Box", title: "One agent, the whole picture", text: "Click an agent in 3D and that district fills the canvas. All agents brings the machine back. A second click opens Overview, MCP and skills, Flow or Security.", href: url("docs/desktop/"), link: "Explore 3D Home" },
+  { icon: "LayoutGrid", title: "One card per agent", text: "Home shows each agent once, with its projects, ports, MCP servers and skills. The Agents map is the spatial picture of the same report.", href: url("docs/desktop/"), link: "Open Home" },
   { icon: "Layers", title: "Details that fold in place", text: "Readings, facts, access, ports and graph connections fold on the same screen. Each Needs you row opens its explanation in the row.", href: url("docs/desktop/"), link: "See the desktop" },
   { icon: "Activity", title: "A numbered menu bar", text: "Ports, Network, Needs and Dev stay on screen. Choosing a count scrolls to that reading, and each agent shows its share of the RAM.", href: url("docs/desktop/#menu-bar-and-tray"), link: "Menu bar and tray" },
 ];
@@ -26,7 +26,7 @@ const highlights = [
         </li>
       ))}
     </ul>
-    <p class="release-note">{sourceVersion} opens one agent in 3D, folds details in place, and keeps the menu bar a numbered view. {released ? <a href={`${repoUrl}/releases/tag/v${sourceVersion}`}>Read the full {sourceVersion} release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
+    <p class="release-note">{sourceVersion} shows Home as cards, folds details in place, and keeps the menu bar a numbered view. {released ? <a href={`${repoUrl}/releases/tag/v${sourceVersion}`}>Read the full {sourceVersion} release notes</a> : <Fragment>Installers are pending; downloads remain on the published v{version} release. <a href={`${repoUrl}/blob/main/CHANGELOG.md`}>Read the changelog</a></Fragment>}.</p>
   </div>
 </section>
 

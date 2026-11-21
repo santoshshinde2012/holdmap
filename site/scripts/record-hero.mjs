@@ -97,11 +97,9 @@ const keys = (k, ms = 900) => p.evaluate(([k, ms]) => window.__keys(k, ms), [k, 
 const show = (xy) => p.evaluate(([x, y]) => window.__cur.show(x, y), xy);
 const t0 = Date.now();
 
-// Home Cards → Map → a port's menu → Stop… → the reviewed plan → the port freed → Agents' MCP &
-// skills, then back to Home Cards so encode-hero.sh can dissolve the last frame into the first.
-const portNode = () => M
-  ? p.getByRole("button", { name: "Port 3000 Next.js", exact: true }).first()
-  : p.locator('svg[aria-label="Machine map"] [role="button"][aria-label*=":3000"]').first();
+// Home Cards → a port's menu → Stop… → the reviewed plan → the port freed → Agents' MCP &
+// skills, then back to Home so encode-hero.sh can dissolve the last frame into the first.
+const portNode = () => p.getByRole("article", { name: M ? "Claude Code" : "Cursor", exact: true }).getByRole("button", { name: M ? "Port 3001 Express" : "Port 3000 Next.js", exact: true });
 // Bring the target into view by easing its scrollers over `ms` on the fake clock, so the video
 // shows the movement (the toolbar scrolls sideways on narrow windows, the page vertically).
 const reveal = async (loc, ms = 600) => {
@@ -132,23 +130,15 @@ const choose = async (loc, ms = 750) => { await reveal(loc); await move(await ce
 
 mark("home");
 await hold(1500);
-// The first card in view: Cursor's :3000 beside the map on desktop, Claude Code's :3001 on phones.
+// The first card in view: Cursor's :3000 on desktop, Claude Code's :3001 on phones.
 const chip = p.getByRole("article", { name: M ? "Claude Code" : "Cursor", exact: true }).getByRole("button", { name: M ? "Port 3001 Express" : "Port 3000 Next.js", exact: true });
 await show(M ? [VW * 0.62, VH * 0.6] : [VW * 0.66, VH * 0.62]);
 await hold(250);
 await move(await center(chip), 900);
 await hold(1300);
 
-mark("map");
-const layout = p.getByRole("radiogroup", { name: "Home layout", exact: true });
-if (M) await choose(layout.getByRole("radio", { name: "Map", exact: true }));
-else {
-  await keys(["V"], 900);
-  await hold(200);
-  await p.keyboard.press("v");
-}
-await until(async () => (await layout.getByRole("radio", { name: "Map", exact: true }).getAttribute("aria-checked")) === "true");
-await hold(1700);
+mark("menu");
+await hold(400);
 await choose(portNode());
 const menu = p.getByRole("menu");
 await until(async () => (await menu.count()) > 0);
@@ -162,7 +152,7 @@ await hold(2600);
 await choose(plan.locator("[data-primary]").first(), 800);
 const dismiss = p.getByRole("button", { name: "Dismiss notification" });
 await until(async () => (await dismiss.count()) > 0, 6000);
-await until(async () => (await p.getByRole("button", { name: /^Port 3000 / }).count()) === 0 && (await plan.count()) === 0, 6000);
+await until(async () => (await portNode().count()) === 0 && (await plan.count()) === 0, 6000);
 await hold(1800);
 await choose(dismiss.first(), 650);
 await until(async () => (await dismiss.count()) === 0);
@@ -186,15 +176,13 @@ await hold(2800);
 // Back to the opening frame: Home, Cards and no hover.
 await choose(views.getByRole("radio", { name: "Home", exact: true }), 700);
 await until(async () => (await p.locator("#home-overview").count()) > 0);
-await hold(300);
-await choose(layout.getByRole("radio", { name: "Cards", exact: true }), 650);
-await hold(300);
+await hold(600);
 await p.mouse.move(-1, -1);
 await p.evaluate(() => { window.__cur.hide(); for (const s of document.querySelectorAll("*")) if (s.scrollTop || s.scrollLeft) s.scrollTo(0, 0); });
 await hold(900);
 mark("end");
 if (await p.locator('[role="alertdialog"]').count()) throw new Error("The simulated stop dialog remained open.");
-if ((await p.getByRole("radiogroup", { name: "Home layout", exact: true }).getByRole("radio", { name: "Cards", exact: true }).getAttribute("aria-checked")) !== "true") throw new Error("The tour must end on Home Cards.");
+if ((await p.locator("section[aria-label='Agents'] article.card").count()) === 0) throw new Error("The tour must end on Home cards.");
 if (errors.length) throw new Error(`Browser errors during the tour: ${errors.join("; ")}`);
 writeFileSync(`${dir}/meta.json`, JSON.stringify({ variant, theme, VW, VH, DPR, FPS, frames: frame, marks }, null, 1));
 console.log(variant, theme, frame, "frames in", ((Date.now() - t0) / 1000).toFixed(0), "s", JSON.stringify(marks));

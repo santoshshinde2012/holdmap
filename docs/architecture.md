@@ -780,9 +780,9 @@ flowchart TB
     APP["App.svelte · Presentation root<br/>wires state, views and dialogs"]
     APPLIB["App logic (pure / runes)<br/>lib/app-prefs.svelte.ts · app-commands.ts · app-shortcuts.ts"]
     SHELL["components/shell/<br/>TitleBar · ViewToolbar · SearchBox · Notices · StatusBar"]
-    HOME["components/home/<br/>HomeView · AgentCards · MachineMap · MapList · AgentLanes · NeedsList<br/>Pure view models: lib/home.ts · agent-card.ts · machine-map.ts · agent-lanes.ts"]
+    HOME["components/home/<br/>HomeView · AgentCards · NeedsList<br/>Pure view models: lib/home.ts · agent-card.ts · footprint.ts"]
     GV["GraphView.svelte<br/>@xyflow/svelte"]
-    AV["AgentsView.svelte<br/>agent cards + C4 pictures<br/>(lib/agents.ts: context / footprint / project)"]
+    AV["AgentsView.svelte<br/>agent cards + C4 pictures<br/>(lib/agent-picture.ts: context / footprint / project)"]
     NODES["components/graph/<br/>ServiceNode · ClusterNode · TrafficEdge · FitOnChange"]
     AGNODES["components/agents/<br/>AgentNode · FootNode · AgentTools"]
     LG["lib/graph.ts<br/>dagre layered · force · toFlow · related · sections"]
@@ -926,56 +926,16 @@ published asset digests and IDs, then publishes the complete `latest.json` index
   hinged action docks, not nested segmented tracks; independent toggles use the same pill with a
   soft fill. Feature components compose them and use the shared design tokens for local controls.
   Open the app with `#ui-gallery` to see every control in both themes.
-- **Agents C4 pictures.** `lib/agents.ts` builds three zoom levels from the same `AgentsReport`
+- **Agents C4 pictures.** `lib/agent-picture.ts` builds three zoom levels from the same `AgentsReport`
   (never invented peers): Computer context (this machine, agents, observed remotes), Footprint
   containers (folders, tools, ports, hosts), and Project components (one source tree).
   `AgentsView.svelte` fits those graphs into Svelte Flow; Computer / Footprint / Project are
   exclusive action docks on the Overview toolbar. Folder clicks zoom, then open
   `FolderActions.svelte`. Evidence labels stay observed / inferred / unknown.
-- **Home 3D machine.** `lib/machine3d/` projects the same `AgentsReport` (plus the opt-in
-  inventory, skill trust and Home's attention items) into a pure, bounded scene: parts on three
-  layers (board: agents, held ports, working folders, remote-host groups; runtime: child
-  processes; configuration: MCP definitions, skills, instruction files) and typed wires. Wires come
-  only from parent PIDs, listener holders, sockets matched by exact entry ID, working folders and
-  each agent's own configuration files; the single configuration ↔ process wire is an MCP
-  server's `running` state whose PIDs are that agent's processes. Skill trust attaches by exact
-  skill folder. Opt-in recorded calls (`calls.ts`) are parts on a shelf of their own, ordered by
-  reported time, with no wire to any process, agent or configuration; their reported parent is a
-  detail, not a link. `gaugeParts` maps each reading to the exact parts it counts, and
-  `lensView` names the parts and floors each lens (Network, Runtime, Config, Needs you, Calls)
-  is about. `layout.ts` gives each agent a district on a quarter-unit grid: its tower, folders
-  and ports on the board, its runtime and configuration trays stacked over the same footprint,
-  so ownership needs no wire. Districts stand a street apart in rows of up to eight, and the
-  default view turns only as far as the street allows (tan θ · depth < street), so no district
-  hides its neighbour. The layout is keyed by the scene's identity, not resource samples.
-  `camera.ts` frames boxes exactly for an orthographic view (a box's projection is centred on
-  its centre's, so the fit is the larger of its projected half-extents); it, `tour.ts` (a pure
-  function of time), `labels.ts` (greedy placement with fallback lines for nameplates) and
-  `geometry.ts` (rounded slabs as fans, no shape triangulation) are unit-tested. `stage.ts` is
-  the only three.js module: an orthographic renderer that draws on demand, runs its flows,
-  ripples and pulses at ≤30 fps, stops while the window is hidden and stands them still with
-  reduced motion. Ownership wires appear only for the hovered or selected part; the rest carry
-  arrowheads at the receiving end. Labels, readings, the parts list and the inspector are DOM,
-  so text uses the shared tokens and stays accessible; the parts list is the canvas's keyboard
-  outline. The view hands Home its readings and inspector as a snippet (`ondetails`), which Home
-  renders in its side column above Needs you, so they keep the view's live state while living
-  outside the canvas. Choosing an agent opens that panel. When the side column is closed,
-  `componentScene` draws that one district and the same inspector docks beside the canvas;
-  folding it (`home.3d.dossier`) keeps the agent and does not cover the model. Recorded calls
-  stay on the whole-computer picture, so an agent's readings and lenses leave them out. `agent-jump.ts` names the screen each part kind opens (a skill or MCP
-  server to MCP & skills, a process or remote host to Flow, a recorded call to the calls
-  timeline, everything else to that agent's Overview). The inspector leads with those doors,
-  and a second click on the same part takes the same route. A skill, MCP server, or running
-  MCP process also carries its catalog id (`capabilityItemId` / `runningCapabilityId`);
-  `agent-focus.svelte.ts` holds that id until the capability workspace is on screen, which
-  then opens that card and clears the request. A recorded call clears the agent
-  selection, because calls are not attributed to an agent and a leftover scope would hide them. `HomeView` imports the view on demand, skips it on narrow windows and owns
-  Focus (summary and side column step aside); the app polls the existing recorder for it only
-  while 3D is shown; without WebGL 2 (or with software rendering unless the viewer opts in) it
-  renders the 2D map with the reason. The chunk carries three.js and has its own site budget.
+- **Home cards.** `HomeView` shows one card per agent (`AgentCards`, `agent-card.ts`) and Needs you. `lib/footprint.ts` builds the small constellation on a card: projects, ports, MCP servers and remote hosts. The spatial picture of the same `AgentsReport` is the Agents map, so Home does not keep a second map. `agent-focus.svelte.ts` holds a capability id until the capability workspace is on screen, then opens that card and clears the request. A recorded call clears the agent selection, because calls are not attributed to an agent.
 - **Folding panels.** `ui/CollapsiblePanel` is a heading holding its disclosure button (the
   WAI-ARIA pattern), with an optional close button and a remembered state (`pref`). Home's side
-  column, the summary, the 3D parts list and the 3D details column fold and come back, each remembered.
+  column and the summary fold and come back, each remembered.
   Inside Details, the readings and the facts fold on their own (`home.details.readings`, `home.details.facts`).
   A Needs you row opens its explanation in place.
 - **Capture areas.** `lib/capture-region.ts` holds an area of the window in CSS pixels and maps it

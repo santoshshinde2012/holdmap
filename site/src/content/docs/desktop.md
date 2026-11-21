@@ -15,110 +15,25 @@ Release-by-release changes are in [What's new](../whats-new/) and the
 
 ## Home and first open
 
-**Home** shows agents, listening ports, dev servers, exposed listeners and running MCP servers,
-as **Cards**, a **Map** or **3D** (available since 0.13.1). Choose at the top
-right or press `V` to cycle; the choice is remembered. Cards list each agent's projects, ports,
-MCP servers and skills; Map draws the same footprint around this computer with a collapsible
-**Timeline**. **Needs you** lists agents on all interfaces, root or elevated access, risky
-safety settings, unpinned MCP servers and exposed dev servers. Click any port (a card chip, a
-map node or a timeline pin) for **Details** or **Stop…**; every **Stop…** opens the stop plan
-first. Select an agent once to highlight it everywhere; select it again to open it on
-Agents. Counts read **…** until the first scan. On a narrow window the Map and 3D become a list
-of agents, each with its ports and the same **Details** / **Stop…** menu.
+**Home** shows agents, listening ports, dev servers, exposed listeners and running MCP servers
+as **Cards**. Each card lists that agent's projects, ports, MCP servers and skills. **Needs you**
+lists agents on all interfaces, root or elevated access, risky safety settings, unpinned MCP
+servers and exposed dev servers. Click a port chip for **Details** or **Stop…**; every **Stop…**
+opens the stop plan first. Select an agent once to highlight it; open it to land on Agents.
+Counts read **…** until the first scan. The spatial picture of the same agents is the Agents map.
+Selecting an agent there shows that agent alone.
 
 Every panel on Home folds away and comes back, and Home remembers how you left it: the summary
 (the chevron at the left of the header), the side column (the panel button at the right of the
-header), and each panel in it (click its heading). Inside **Details**, the readings and the
-facts fold on their own. Each **Needs you** row opens its explanation in the row. In 3D the
-parts list folds to a strip of agent buttons. When the side column is hidden, the selected
-agent's details sit beside the picture and fold to a strip; Home remembers that too.
+header), and each panel in it (click its heading). Each **Needs you** row opens its explanation
+in the row.
 
-**3D** builds the same machine as a model you can take apart,
-drawn without perspective, so sizes and spacing read the same at the front and the back. Each
-agent has its own **district** on the board, a street apart from the next: its tower at the
-back, the folders it works in, then the ports it holds along the front edge, with its name on a
-plate below. Its processes stand on a **Runtime** tray over the same district, and the MCP
-servers, skills and instruction files found on disk on a **Configuration** tray above that
-(only after **Read MCP config**). Everything over a district belongs to that agent, so no line
-is needed to say so. **This computer** is the chip at the left end of the board.
-The first click on an agent fills the canvas with that district. **All agents** brings the whole machine back.
-Select a part and Details offers **Overview**, **MCP & skills**, **Flow**, **Results** and
-**Security** for that agent. A second click on the same part opens the screen it belongs to.
-A skill, MCP server or running MCP process opens that item in the MCP & skills sidebar.
-Another process or a remote host opens Flow, and a recorded call opens the calls timeline.
-
-- **Shapes and rings mean one thing each.** The icon on a part's top face says what it is
-  (`>_` a shell, `</>` a dev server, a plug an MCP server, a folder, a socket). The ring round a
-  tower's base is its **CPU** gauge: it widens with load and turns orange from 60% and red from
-  80%. Amber ripples spread from a port **open to the network**; a pin marks anything that
-  **needs you**; a red ring circles an agent that does. Solid parts were seen now, faded ones
-  inferred, blueprint ones are files on disk.
-- **Lines carry a direction.** An arrowhead marks the end that receives: a process from its
-  parent, a port from the process that holds it. Dots travel the same way along a connection,
-  up an agent's mast to its remote hosts, and down a green beam from an MCP server to the
-  process running it. Lines that only say ownership (folders, configuration, ports the agent
-  itself holds) appear for the part under the pointer or selected.
-- **Lenses** show one concern at a time: **All**, **Network** (ports, who holds them and where
-  connections go), **Runtime** (processes and their tree), **Config** (what's on disk and what
-  runs it), **Needs you**, and **Calls** once recording has been used. `L` steps through them.
-- **Exploded** (the default) and **Assembled** (`E`) lift the trays straight up or settle them;
-  dashed guides show where each tray came from. **X-ray** (`X`) turns solid parts to glass and
-  shows each agent's processes as slices inside its tower. **Plan** looks straight down at the
-  floor plan.
-- Hover any part to light it and what it's wired to, and dim the rest. Click an agent's tower or
-  district once and the picture becomes that agent alone, with **All agents** to return; click it
-  again to open it on Agents. Click a part for its details. The parts
-  list beside the canvas has a button for every agent and part, and is the keyboard path to
-  everything drawn (`↑`/`↓` move between buttons). Ports open the same **Details** / **Stop…**
-  menu. **Calls** stay with the whole computer, so an agent's picture leaves that lens out.
-- **Details**, above **Needs you** in the side column, holds the readings and the selected part.
-  When the side column is hidden, those same readings and the selected part sit in a column beside
-  the picture instead.
-  The readings come from the same parts that are drawn: CPU (with its recent trend), memory,
-  ports, processes, MCP servers running of configured, skills and **Needs you**, for the whole
-  computer or the selected agent. **Calls** appear once recording has been used, and only on the
-  whole computer. They read **…** until
-  the first scan, and a figure that wasn't collected reads **Not read**, never 0. Readings that
-  count parts are toggles: press one to light up exactly those parts; `Esc` lets go.
-- **Focus** hides the summary and the side column so the machine fills Home. The selected agent's
-  details stay beside the picture and fold away without leaving the agent. With nothing selected,
-  the readings ride over the canvas. The `+`, `−` and fit buttons on the right edge
-  zoom without a wheel, and scrolling zooms toward the pointer.
-- **Tour** (`T`) walks through the machine, agents that need you first. Any drag, scroll, click or
-  key hands you control, and the tour picks up again after 25 seconds of quiet. It is off with
-  reduced motion.
-- Drag to turn, right-drag or Shift-drag to pan, scroll to zoom; with the canvas focused, arrow
-  keys turn, `+` and `−` zoom and `0` resets. `E`, `X`, `L`, `T` and `F` (fit) are single-key
-  shortcuts: they follow that setting and leave a focused button alone. `Esc` stops the tour,
-  then clears the selected part, then a pressed reading.
-
-With local recording on (**Agents → Flow → Calls**), recorded calls sit on a **Recorded calls**
-shelf at the right end of the board, newest first: blue for tool calls, violet for model
-requests, red for failures; a call still running breathes. An agent integration reports them,
-so they stay on their shelf, apart from every district: no line joins a call to a process or a
-configured server, even when a name or a PID looks the same.
-
-Every link in 3D comes from what holdmap observed: a process tree, a held listener, an open
-connection, a working folder, or a configuration file of that agent. A configured MCP server is
-drawn as a blueprint part; a green beam joins it to a process only when one of that agent's own
-processes runs it. Nothing is joined by name. 3D needs WebGL 2:
-without it Home shows the Map and says why, and with software-only rendering it asks first. It
-loads only when chosen, redraws only when something changes (plus the flows and ripples, still
-with reduced motion), and pauses while the window is hidden.
-
-These screenshots show the 3D layout with browser sample data:
-
-![Home as 3D in light theme: a district per agent on the board, each with its tower, folders and ports, its runtime and configuration trays lifted above it, Details and Needs you in the side column](../../../../docs/screenshots/desktop-home-3d-light.png)
-
-![Home as 3D with X-ray in dark theme: the trays pulled apart with dashed guides, glass towers showing process slices, and a green beam from a running MCP server down to its process](../../../../docs/screenshots/desktop-home-3d-xray-dark.png)
 
 **Copy summary** puts the overview and **Needs you** on the clipboard as plain text for a
 ticket or chat; **Download JSON** saves the same facts as a file. Neither starts a scan, and
 neither includes command lines, environment values, prompts or folder paths.
 
 ![Home as Cards in dark theme: agent cards with projects, ports, MCP servers and skills, and Needs you](../../../../docs/screenshots/desktop-home-cards-dark.png)
-
-![Home as Map in light theme: agents around this computer with the Timeline below](../../../../docs/screenshots/desktop-home-map-light.png)
 
 ![A port's menu on Home in dark theme, with Details and Stop…](../../../../docs/screenshots/desktop-home-port-menu-dark.png)
 
@@ -340,7 +255,7 @@ PNG snapshots are separate from video recording. Open the camera button, choose
 
 **Area** takes the **Whole window** or **Part of the window**. For a part, **Choose area…** dims
 the window: drag to draw the area, drag inside it to move it, drag a handle to resize it, or
-click a panel (the 3D canvas, a side panel, the summary, a pane) to take exactly that panel. The
+click a panel (a side panel, the summary, a pane) to take exactly that panel. The
 size shows as you go. Arrow keys move the area a pixel at a time (with Shift, ten), Alt with
 the arrows resizes it, **Enter** captures and **Esc** goes back to the dialog. The picker leaves
 the window before anything is captured, and the PNG is exactly that part, at the window's own

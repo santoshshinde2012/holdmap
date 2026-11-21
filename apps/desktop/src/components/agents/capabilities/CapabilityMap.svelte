@@ -8,7 +8,7 @@
   import AutoMiniMap from "../../graph/AutoMiniMap.svelte";
   import CapabilityViewport from "./CapabilityViewport.svelte";
   import Icon from "../../Icon.svelte";
-  import { agentColor } from "../../../lib/agents";
+  import { agentColor } from "../../../lib/agent-picture";
   import { capabilityLabel, type CapabilityContextGroup, type CapabilityItem, type RunningMcpItem } from "../../../lib/agent-capabilities";
   import { buildCapabilityMap, type CapabilityGraphNode } from "../../../lib/agent-capability-map";
   import { FIT_PADDING } from "../../../lib/flow";

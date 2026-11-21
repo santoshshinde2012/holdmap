@@ -38,7 +38,7 @@ function repeatedRoots(): AgentsReport {
 }
 
 describe("MCP and skills capability explorer", () => {
-  it("opens the server or skill a 3D part named, and only that one", async () => {
+  it("opens the server or skill a caller named, and only that one", async () => {
     const item = capabilityItems(report().agents).find((row) => row.kind === "skill" && row.name === "frontend-checks")!;
     agentFocus.capabilityId = item.id;
     agentFocus.kind = "skill";

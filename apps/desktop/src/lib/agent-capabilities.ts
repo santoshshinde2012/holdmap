@@ -19,7 +19,7 @@ export const pathName = (path: string): string => path.replace(/[/\\]+$/, "").sp
 const compareText = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
 const sortedUnique = (values: string[]): string[] => [...new Set(values)].sort(compareText);
 
-/** The catalog id for one declaration. Shared by the capability workspace and the 3D part that opens it. */
+/** The catalog id for one declaration. Shared by the capability workspace and whoever opens it. */
 export function capabilityItemId(kind: "mcp" | "skill", definition: AgentMcpServer | AgentSkill): string {
   return definitionId(kind, definition);
 }

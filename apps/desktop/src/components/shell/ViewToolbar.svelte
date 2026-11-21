@@ -4,7 +4,7 @@
   import { tick } from "svelte";
   import { ActionDock, Button, FilterChip, IconButton, Select } from "../ui";
   import { linksLabel } from "../../lib/graph";
-  import type { Picture } from "../../lib/agents";
+  import type { Picture } from "../../lib/agent-picture";
   import type { Filters } from "../../lib/format";
   import type { PortStats, Sort } from "../../lib/port-list";
 

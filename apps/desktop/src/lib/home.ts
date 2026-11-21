@@ -115,8 +115,3 @@ export function needsByAgent(items: readonly AttentionItem[], report: AgentsRepo
   }
   return out;
 }
-
-/** Agents whose attention concerns the agent itself; port and MCP issues belong to their node. */
-export function hotAgents(items: AttentionItem[]): Set<string> {
-  return new Set(items.flatMap((i) => (i.target.view === "agents" && (i.rule === "root" || i.rule === "elevated" || i.rule === "settings" || (i.rule === "analyzer" && i.severity === "high")) ? [i.target.agentId] : [])));
-}

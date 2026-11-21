@@ -2,6 +2,7 @@
   import { untrack } from "svelte";
   import { Controls, ControlButton, useNodesInitialized, useSvelteFlow, useViewport, useViewportInitialized } from "@xyflow/svelte";
   import Icon from "../Icon.svelte";
+  import { cardInside, centeredView, clampZoom, fitZoom } from "../../lib/flow-camera";
   import { NODE_H, NODE_W, type Point } from "../../lib/graph";
 
   let { viewKey, focus, anchor, width, height, reduced, pending = false }: {
@@ -22,20 +23,17 @@
 
   function reveal(point: Point, duration: number) {
     const view = flow.getViewport();
-    const x = point.x * view.zoom + view.x, y = point.y * view.zoom + view.y;
-    if (view.zoom >= readableZoom && x - NODE_W * view.zoom / 2 >= 20
-      && x + NODE_W * view.zoom / 2 <= width - 20
-      && y - NODE_H * view.zoom / 2 >= 20 && y + NODE_H * view.zoom / 2 <= height - 64) return;
+    // 20px keeps a card off the canvas edge. 64px keeps it above the zoom controls.
+    if (cardInside(view, point, { width: NODE_W, height: NODE_H }, { width, height }, { left: 20, right: 20, top: 20, bottom: 64 }, readableZoom)) return;
     void flow.setCenter(point.x, point.y, { zoom: Math.max(readableZoom, view.zoom), duration });
   }
 
   // fitView queues a second layout pass that drops the camera update. setViewport applies it directly.
+  // 24px and 84px clear the side edge and the toolbar; 168px is that top inset plus the controls.
   function place(zoom: number, duration: number) {
     const bounds = flow.getNodesBounds(flow.getNodes());
     if (bounds.width < 2 || bounds.height < 2) return;
-    const x = 24 + ((width - 48) - bounds.width * zoom) / 2 - bounds.x * zoom;
-    const y = 84 + ((height - 168) - bounds.height * zoom) / 2 - bounds.y * zoom;
-    void flow.setViewport({ x, y, zoom }, { duration });
+    void flow.setViewport(centeredView(bounds, zoom, { left: 24, top: 84, width: width - 48, height: height - 168 }), { duration });
   }
 
   function readable(reset = false) {
@@ -46,9 +44,9 @@
       return;
     }
     const bounds = flow.getNodesBounds(flow.getNodes());
-    const fitZoom = Math.min(1.1, (width - 48) / Math.max(bounds.width, 1), (height - 168) / Math.max(bounds.height, 1));
-    if (fitZoom >= fitFloor) {
-      place(Math.min(fitZoom, 1.1), duration);
+    const opening = Math.min(1.1, fitZoom(bounds, width - 48, height - 168));
+    if (opening >= fitFloor) {
+      place(Math.min(opening, 1.1), duration);
       return;
     }
     // Too wide to read all at once: open on a real service card, centered, instead of
@@ -64,8 +62,7 @@
   function fitAll() {
     const duration = reduced ? 0 : 250;
     const bounds = flow.getNodesBounds(flow.getNodes());
-    const zoom = Math.max(.08, Math.min(1.1, (width - 48) / Math.max(bounds.width, 1), (height - 168) / Math.max(bounds.height, 1)));
-    place(zoom, duration);
+    place(clampZoom(fitZoom(bounds, width - 48, height - 168), 0.08, 1.1), duration);
   }
 
   $effect(() => {

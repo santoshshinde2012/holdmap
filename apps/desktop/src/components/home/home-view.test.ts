@@ -14,15 +14,13 @@ beforeAll(() => {
 });
 afterEach(cleanup);
 
-const props = (over: Record<string, unknown> = {}) => ({ entries: MOCK_SNAPSHOT.entries, report: mockAgents(undefined, true), layout: "map" as "map" | "cards", onopenagent: vi.fn(), onopenentry: vi.fn(), onview: vi.fn(), ...over });
+const props = (over: Record<string, unknown> = {}) => ({ entries: MOCK_SNAPSHOT.entries, report: mockAgents(undefined, true), onopenagent: vi.fn(), onopenentry: vi.fn(), onview: vi.fn(), ...over });
 const card = (view: View, name: string) => within(view.container).getByRole("button", { name: new RegExp(`^${name}, `) }).closest("article")!;
 type View = { container: HTMLElement };
-const mapAgent = (view: View, name: string) => view.container.querySelector<SVGGElement>(`.map g.agent[aria-label^="${name},"]`)!;
-const lane = (view: View, name: string) => within(view.container).getAllByRole("button", { name: new RegExp(`^${name}, up `) })[0];
 
 describe("HomeView on a quiet machine", () => {
-  it.each(["cards", "map"] as const)("shows one calm message in the %s layout instead of an empty canvas", (layout) => {
-    const view = render(HomeView, props({ layout, entries: [], report: { ...mockAgents(undefined, true), agents: [], configured: [] } }));
+  it("shows one calm message instead of an empty canvas", () => {
+    const view = render(HomeView, props({ entries: [], report: { ...mockAgents(undefined, true), agents: [], configured: [] } }));
     expect(within(view.container).getByText("No agents or dev servers running")).toBeTruthy();
     expect(view.container.querySelector(".map")).toBeNull();
     expect(view.queryByRole("table", { name: "Agent lanes" })).toBeNull();
@@ -31,7 +29,7 @@ describe("HomeView on a quiet machine", () => {
 
 describe("HomeView cards", () => {
   it("shows one card per agent with fixed counters, chips and an inline attention badge", () => {
-    const p = props({ layout: "cards" });
+    const p = props();
     const view = render(HomeView, p);
     expect(view.container.querySelectorAll("section[aria-label='Agents'] article.card")).toHaveLength(p.report.agents.length);
     const cursor = card(view, "Cursor");
@@ -46,7 +44,7 @@ describe("HomeView cards", () => {
     const report = mockAgents(undefined, true);
     const cursor = report.agents.find((a) => a.name === "Cursor")!;
     const twin = { ...cursor, id: "agent:9", pid: 9, folders: [], parent: null, started_at: 0, cpu_unknown: "The system refused it." };
-    const view = render(HomeView, props({ layout: "cards", report: { ...report, agents: [...report.agents, twin] } }));
+    const view = render(HomeView, props({ report: { ...report, agents: [...report.agents, twin] } }));
     const first = card(view, `Cursor \\(${cursor.folders[0].label}\\)`);
     expect(within(first).getByText("RAM")).toBeTruthy();
     expect(within(first).getByText(/\d (KB|MB|GB)$/)).toBeTruthy();
@@ -60,7 +58,7 @@ describe("HomeView cards", () => {
   });
 
   it("filters cards from the home search without changing the summary", () => {
-    const view = render(HomeView, props({ layout: "cards", query: "claude code" }));
+    const view = render(HomeView, props({ query: "claude code" }));
     expect(view.getAllByRole("article", { name: "Claude Code" }).length).toBeGreaterThan(0);
     expect(view.queryByRole("article", { name: "Docker Desktop" })).toBeNull();
     expect(view.getByRole("button", { name: /^Agents / })).toBeTruthy();
@@ -69,13 +67,13 @@ describe("HomeView cards", () => {
   it("leaves MCP off the cards until config is turned on", () => {
     const report = mockAgents(undefined, true);
     const off = { ...report, agents: report.agents.map((a) => ({ ...a, capabilities: undefined })) };
-    const view = render(HomeView, props({ layout: "cards", report: off, oninventory: vi.fn() }));
+    const view = render(HomeView, props({ report: off, oninventory: vi.fn() }));
     expect(view.container.textContent).not.toContain("Not read");
     expect(view.getByRole("button", { name: "Read local config" })).toBeTruthy();
   });
 
   it("marks unreadable configuration unknown with its reason, never zero", () => {
-    const view = render(HomeView, props({ layout: "cards" }));
+    const view = render(HomeView, props());
     const docker = card(view, "Docker Desktop");
     // One "MCP & skills: Not read" tile, and no per-card button: Home's header offers the single Read local config.
     expect(within(docker).getAllByText("Not read")).toHaveLength(1);
@@ -84,20 +82,9 @@ describe("HomeView cards", () => {
     expect(docker.textContent).not.toMatch(/Not supported|No project folder/);
   });
 
-  it("keeps the selection when switching between cards and map", async () => {
-    const p = props({ layout: "cards" });
-    const view = render(HomeView, p);
-    await fireEvent.click(within(view.container).getByRole("button", { name: /^Claude Code, / }));
-    expect(card(view, "Claude Code").classList.contains("selected")).toBe(true);
-    expect(card(view, "Cursor").classList.contains("dim")).toBe(true);
-    await view.rerender({ ...p, layout: "map" });
-    expect(mapAgent(view, "Claude Code").getAttribute("aria-pressed")).toBe("true");
-    expect(lane(view, "Claude Code").closest(".lane")!.classList.contains("active")).toBe(true);
-  });
-
   it("opens agents and ports from cards and sends stop through the plan", async () => {
     const onstopagent = vi.fn();
-    const p = props({ layout: "cards", onstopagent });
+    const p = props({ onstopagent });
     const view = render(HomeView, p);
     const docker = p.report.agents.find((a) => a.product === "docker-desktop")!;
     await fireEvent.click(view.getByRole("button", { name: "Open Docker Desktop" }));
@@ -111,7 +98,7 @@ describe("HomeView cards", () => {
 
   it("stops a port from a card chip through the stop plan, never directly", async () => {
     const onstopentry = vi.fn();
-    const p = props({ layout: "cards", onstopentry });
+    const p = props({ onstopentry });
     const view = render(HomeView, p);
     const cursor = p.report.agents.find((a) => a.product === "cursor")!;
     const port = cursor.ports[0];
@@ -127,7 +114,7 @@ describe("HomeView cards", () => {
   it("stops an unowned dev server from its card and offers no stop without an owner", async () => {
     const onstopentry = vi.fn();
     const entries = MOCK_SNAPSHOT.entries.map((e) => (e.port === 8125 ? { ...e, process: null, container: null, pid: null } : e));
-    const view = render(HomeView, props({ layout: "cards", onstopentry, entries }));
+    const view = render(HomeView, props({ onstopentry, entries }));
     const loose = view.getByRole("article", { name: "Unowned dev servers" });
     await fireEvent.click(within(loose).getByRole("button", { name: /^Port 8125 / }));
     expect((within(view.getByRole("menu")).getByRole("menuitem", { name: /^Stop…/ }) as HTMLButtonElement).disabled).toBe(true);
@@ -138,84 +125,17 @@ describe("HomeView cards", () => {
     expect(onstopentry).toHaveBeenCalledWith(entries.find((e) => e.port === 8000)!.id);
   });
 
-  it("offers the layout toggle as a radio group", async () => {
-    const onlayout = vi.fn();
-    const view = render(HomeView, props({ layout: "cards", onlayout }));
-    const group = view.getByRole("radiogroup", { name: "Home layout" });
-    await fireEvent.click(within(group).getByRole("radio", { name: /^Map/ }));
-    expect(onlayout).toHaveBeenCalledWith("map");
-  });
-});
-
-describe("HomeView map", () => {
-  it("selects an agent in the map and lights it in the lanes; a second click opens it", async () => {
-    const p = props();
-    const view = render(HomeView, p);
-    const claude = p.report.agents.find((a) => a.product === "claude-code")!;
-    await fireEvent.click(mapAgent(view, "Claude Code"));
-    expect(mapAgent(view, "Claude Code").getAttribute("aria-pressed")).toBe("true");
-    expect(lane(view, "Claude Code").closest(".lane")!.classList.contains("active")).toBe(true);
-    expect(lane(view, "Cursor").closest(".lane")!.classList.contains("dim")).toBe(true);
-    await fireEvent.click(mapAgent(view, "Claude Code"));
-    expect(p.onopenagent).toHaveBeenCalledWith(claude.id);
-  });
-
-  it("hovering a lane highlights the same agent in the map and its attention items", async () => {
-    const view = render(HomeView, props());
-    await fireEvent.mouseEnter(lane(view, "Docker Desktop").closest(".lane")!);
-    expect(mapAgent(view, "Cursor").closest(".cluster")!.classList.contains("dim")).toBe(true);
-    expect(mapAgent(view, "Docker Desktop").closest(".cluster")!.classList.contains("dim")).toBe(false);
-    const items = [...view.container.querySelectorAll(".needs li")];
-    expect(items.some((li) => !li.classList.contains("dim") && li.textContent!.includes("Docker Desktop"))).toBe(true);
-    expect(items.some((li) => li.classList.contains("dim") && li.textContent!.includes("Cursor"))).toBe(true);
-  });
-
-  it("lists each agent's ports in the narrow-screen map with the same Details and Stop…", async () => {
-    const onstopentry = vi.fn();
-    const p = props({ onstopentry });
-    const view = render(HomeView, p);
-    const cursor = p.report.agents.find((a) => a.product === "cursor")!;
-    const port = cursor.ports[0];
-    const list = view.getByRole("list", { name: `${cursor.name} ports` });
-    const chip = within(list).getByRole("button", { name: new RegExp(`^Port ${port.port}`) });
-    expect(chip.getAttribute("aria-haspopup")).toBe("menu");
-    await fireEvent.click(chip);
-    await fireEvent.click(within(view.getByRole("menu")).getByRole("menuitem", { name: "Stop…" }));
-    expect(onstopentry).toHaveBeenCalledWith(port.entry_id);
-  });
-
-  it("gives map port nodes and timeline pins Details and Stop…, both through the plan", async () => {
-    const onstopentry = vi.fn();
-    const p = props({ onstopentry });
-    const view = render(HomeView, p);
-    const cursor = p.report.agents.find((a) => a.product === "cursor")!;
-    const port = cursor.ports[0];
-    await fireEvent.click(view.container.querySelector(`.map g.sat[aria-label^="Port :${port.port}"]`)!);
-    await fireEvent.click(within(view.getByRole("menu")).getByRole("menuitem", { name: "Details" }));
-    expect(p.onopenentry).toHaveBeenCalledWith(port.entry_id);
-    await fireEvent.keyDown(view.container.querySelector(`.map g.sat[aria-label^="Port :${port.port}"]`)!, { key: "Enter" });
-    await fireEvent.click(within(view.getByRole("menu")).getByRole("menuitem", { name: "Stop…" }));
-    expect(onstopentry).toHaveBeenCalledWith(port.entry_id);
-    const pin = within(view.getByRole("table", { name: "Agent lanes" })).getByRole("button", { name: new RegExp(`^Port ${port.port} `) });
-    await fireEvent.click(pin);
-    await fireEvent.click(within(view.getByRole("menu")).getByRole("menuitem", { name: "Stop…" }));
-    expect(onstopentry).toHaveBeenCalledTimes(2);
-  });
-
   it("keeps Needs you compact: detail only on expand, and stop always goes through the plan", async () => {
     const onstopagent = vi.fn();
     const onstopentry = vi.fn();
     const view = render(HomeView, props({ onstopagent, onstopentry }));
     const title = view.getByRole("button", { name: "Docker Desktop is listening on all interfaces" });
     expect(view.queryByText(/can be reached from other machines/)).toBeNull();
-    expect(title.getAttribute("title")).toBeNull();
     await fireEvent.click(title);
     expect(title.getAttribute("aria-expanded")).toBe("true");
     expect(view.getByText(/can be reached from other machines/)).toBeTruthy();
     await fireEvent.click(title);
     expect(title.getAttribute("aria-expanded")).toBe("false");
-    expect(view.queryByText(/can be reached from other machines/)).toBeNull();
-    await fireEvent.click(title);
     const stops = view.getAllByRole("button", { name: /^Review stop plan:/ });
     for (const b of stops) await fireEvent.click(b);
     expect(onstopagent.mock.calls.length + onstopentry.mock.calls.length).toBe(stops.length);
@@ -235,41 +155,12 @@ describe("HomeView map", () => {
     cleanup();
     expect(render(HomeView, props({ oninventory })).queryByRole("button", { name: "Read local config" })).toBeNull();
   });
-
-  it("moves between lanes with j/k and between map agents with the arrow keys; Esc clears the selection", async () => {
-    const view = render(HomeView, props());
-    const first = lane(view, "Docker Desktop");
-    first.focus();
-    await fireEvent.keyDown(first, { key: "j" });
-    expect(document.activeElement).not.toBe(first);
-    const a = mapAgent(view, "Claude Code");
-    a.focus();
-    await fireEvent.keyDown(a, { key: "ArrowRight" });
-    expect(document.activeElement).not.toBe(a);
-    await fireEvent.keyDown(document.activeElement!, { key: "Enter" });
-    expect(view.container.querySelector('.map g.agent[aria-pressed="true"]')).not.toBeNull();
-    await fireEvent.keyDown(view.getByRole("region", { name: "Overview" }), { key: "Escape" });
-    expect(view.container.querySelector('.map g.agent[aria-pressed="true"]')).toBeNull();
-  });
-
-  it("collapses the timeline band through its toggle", async () => {
-    const ontimeline = vi.fn();
-    const p = props({ ontimeline });
-    const view = render(HomeView, p);
-    const toggle = view.getByRole("button", { name: /^Timeline/ });
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    await fireEvent.click(toggle);
-    expect(ontimeline).toHaveBeenCalledWith(false);
-    await view.rerender({ ...p, timeline: false });
-    expect(view.queryByRole("table", { name: "Agent lanes" })).toBeNull();
-    expect(view.getByRole("button", { name: /^Timeline/ }).getAttribute("aria-expanded")).toBe("false");
-  });
 });
 
 describe("HomeView when the agents lookup fails", () => {
   it("explains it on the cards with a retry, not an endless …", async () => {
     const retry = vi.fn();
-    const view = render(HomeView, props({ layout: "cards", report: null, agentsError: "holdmap isn't installed", onretryagents: retry }));
+    const view = render(HomeView, props({ report: null, agentsError: "holdmap isn't installed", onretryagents: retry }));
     expect(view.container.textContent).toContain("Couldn't look up the agents");
     await fireEvent.click(within(view.container).getByRole("button", { name: "Try again" }));
     expect(retry).toHaveBeenCalledOnce();

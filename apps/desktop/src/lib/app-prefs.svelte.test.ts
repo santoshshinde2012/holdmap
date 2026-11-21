@@ -15,38 +15,28 @@ describe("app prefs", () => {
 
   it("starts from documented defaults", () => {
     const { prefs, stop } = create();
-    expect([prefs.view, prefs.theme, prefs.sort, prefs.homeLayout, prefs.homeTimeline, prefs.inventoryOn, prefs.paneWidth, prefs.sideOpen])
-      .toEqual(["list", "system", "group", "cards", true, false, PANE_DEFAULT, true]);
+    expect([prefs.view, prefs.theme, prefs.sort, prefs.inventoryOn, prefs.paneWidth, prefs.sideOpen])
+      .toEqual(["list", "system", "group", false, PANE_DEFAULT, true]);
     stop();
   });
 
   it("reads saved choices, ignores bad ones and clamps the pane", () => {
     localStorage.setItem("holdmap.view", "home");
     localStorage.setItem("holdmap.theme", "neon");
-    localStorage.setItem("holdmap.home.layout", "map");
     localStorage.setItem("holdmap.pane", "9999");
     localStorage.setItem("holdmap.agents.picture", "project");
     const { prefs, stop } = create();
-    expect([prefs.view, prefs.theme, prefs.homeLayout, prefs.paneWidth, prefs.picture]).toEqual(["home", "system", "map", PANE_MAX, "context"]);
-    stop();
-  });
-
-  it("restores the 3D Home layout", () => {
-    localStorage.setItem("holdmap.home.layout", "3d");
-    const { prefs, stop } = create();
-    expect(prefs.homeLayout).toBe("3d");
+    expect([prefs.view, prefs.theme, prefs.paneWidth, prefs.picture]).toEqual(["home", "system", PANE_MAX, "context"]);
     stop();
   });
 
   it("writes every change back", () => {
     const { prefs, stop } = create();
     prefs.view = "agents";
-    prefs.homeTimeline = false;
     prefs.collapsed = new Set(["apps"]);
     prefs.singleKeyShortcuts = false;
     flushSync();
     expect(localStorage.getItem("holdmap.view")).toBe("agents");
-    expect(localStorage.getItem("holdmap.home.timeline")).toBe("0");
     expect(localStorage.getItem("holdmap.collapsed")).toBe('["apps"]');
     expect(localStorage.getItem("holdmap.singleKeyShortcuts")).toBe("0");
     stop();

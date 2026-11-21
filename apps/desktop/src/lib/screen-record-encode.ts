@@ -101,7 +101,12 @@ async function startWebCodecsMp4(track: MediaStreamVideoTrack, signal: AbortSign
   const frames = createTrackSource(track, {
     codec: "avc",
     quality,
+    // Realtime keeps a long recording from buffering every frame until Stop.
+    // Chrome's default realtime H.264 encoder accepts those frames and then never emits
+    // output or dequeue events until flush, so the file stops after a few frames.
+    // An explicit software encoder keeps frames moving for the whole recording.
     latencyMode: "realtime",
+    hardwareAcceleration: "prefer-software",
     contentHint: "detail",
     sizeChangeBehavior: "contain",
     transform: { width, height, ...(options.crop ? { crop: options.crop } : {}) },

@@ -1,54 +1,34 @@
 <script lang="ts">
-  // Home: the same agents as Cards, as a Map (radial footprint plus a collapsible timeline) or
-  // as a 3D machine (loaded on demand), with "Needs you" beside each. Hover and selection are shared across cards, map, timeline and
-  // attention items, and survive a layout switch. Esc clears the selection.
+  // Home: one card per agent, with Needs you beside them. The Agents view is the spatial map
+  // of the same report, so Home does not draw a second map or a 3D machine.
   import { insightsStore } from "../../lib/insights-store.svelte";
   import ConsentGate from "../ui/ConsentGate.svelte";
   import { trustStore } from "../../lib/trust-store.svelte";
   import { securityTab } from "../../lib/security-tab.svelte";
   import * as api from "../../lib/api";
   import Icon from "../Icon.svelte";
-  import { Button, CollapsiblePanel, IconButton, SegmentedControl } from "../ui";
-  import type { Snippet } from "svelte";
+  import { Button, CollapsiblePanel, IconButton } from "../ui";
   import EmptyPanel from "../ui/EmptyPanel.svelte";
   import ExportActions from "../ui/ExportActions.svelte";
   import { homeReport, homeSummaryText, reportFilename } from "../../lib/report-export";
   import HomeSummary, { type SummaryStat } from "./HomeSummary.svelte";
   import AgentCards from "./AgentCards.svelte";
-  import MachineMap from "./MachineMap.svelte";
-  import MapList from "./MapList.svelte";
   import NeedsList from "./NeedsList.svelte";
-  import AgentLanes from "./AgentLanes.svelte";
   import PortMenu from "./PortMenu.svelte";
-  import { attention, attentionAgent, hotAgents, needsByAgent, overview, type AttentionItem } from "../../lib/home";
-  import { radialLayout, type FootprintNode } from "../../lib/machine-map";
-  import { lanes } from "../../lib/agent-lanes";
+  import { attention, attentionAgent, overview, type AttentionItem } from "../../lib/home";
   import { agentColors, agentMatches } from "../../lib/agents";
-  import { HOME_LAYOUTS, HOME_LAYOUT_LABEL, type HomeLayout } from "../../lib/home-layout";
   import { prefGetBoolean, prefSet } from "../../lib/prefs";
-  import type { ActivitySnapshot, RecordingStatus } from "../../lib/agent-flow/model";
   import type { AgentJump } from "../../lib/agent-jump";
   import type { AgentsReport, PortEntry } from "../../lib/types";
-  let { entries, report, inventory = false, now = Date.now(), layout = "cards", query = "", onlayout, timeline = true, ontimeline, singleKeys = true, activity = null, recording = null, onopenagent, onopenentry, onview, onsecurity, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent, agentsError = null, onretryagents }: {
+  let { entries, report, inventory = false, now = Date.now(), query = "", onopenagent, onopenentry, onview, onsecurity, oninventory, onstopentry, onstopagent, selectedAgent = null, onselectagent, agentsError = null, onretryagents }: {
     entries: PortEntry[] | null;
     report: AgentsReport | null;
     /** Whether reading agents' MCP/skills/permission files is turned on. */
     inventory?: boolean;
     /** Time of the latest scan. */
     now?: number;
-    /** Home's own search: agents, folders and PIDs. A port number is handled by the app shell. */
+    /** Home search: agents, folders and PIDs. A port number is handled by the app shell. */
     query?: string;
-    /** Cards, Map or 3D; the app shell persists it and binds the V shortcut. */
-    layout?: HomeLayout;
-    onlayout?: (l: HomeLayout) => void;
-    /** Whether the Map's timeline band is open; also persisted by the app shell. */
-    timeline?: boolean;
-    ontimeline?: (open: boolean) => void;
-    /** The app's single-key shortcuts setting, for the 3D view's E, X, T and F. */
-    singleKeys?: boolean;
-    /** Opt-in recorded calls for the 3D view's calls lane. */
-    activity?: ActivitySnapshot | null;
-    recording?: RecordingStatus | null;
     onopenagent: (id: string, jump?: AgentJump, capabilityId?: string) => void;
     onopenentry: (id: string) => void;
     onview: (view: "list" | "agents" | "graph") => void;
@@ -84,18 +64,11 @@
     );
     return () => { live = false; };
   });
-  /** Remote-host groups the user expanded on the map. */
-  let expanded = $state<ReadonlySet<string>>(new Set());
   /** Search filters what is drawn. Headline counts stay for the whole machine. */
   const shown = $derived(report ? { ...report, agents: report.agents.filter((a) => agentMatches(a, query)) } : null);
-  const groups = $derived(radialLayout(shown?.agents ?? [], undefined, undefined, undefined, undefined, expanded));
-  const rows = $derived(lanes(shown, entries, now));
-  /** Nothing observed at all: the first minute on a quiet machine. One calm message instead of empty cards or a bare map. */
+  /** Nothing observed at all: the first minute on a quiet machine. */
   const idle = $derived(!!report && !!entries && report.agents.length === 0 && entries.length === 0);
-  const hot = $derived(hotAgents(needs));
   const colors = $derived(agentColors(shown?.agents ?? []));
-  const LAYOUT_ICON: Record<HomeLayout, string> = { cards: "layers", map: "radar", "3d": "box" };
-  const layoutOptions = HOME_LAYOUTS.map((l) => ({ value: l, label: HOME_LAYOUT_LABEL[l], icon: LAYOUT_ICON[l], title: `${HOME_LAYOUT_LABEL[l]} · V` }));
 
   let hovered = $state<string | null>(null);
   let localSelected = $state<string | null>(null);
@@ -122,12 +95,10 @@
   ]);
   const showInventory = $derived(!inventory && !!oninventory && (report?.agents ?? []).some((a) => !a.capabilities));
 
-  function open(t: FootprintNode["target"]) {
-    if (t.view === "expand") { const next = new Set(expanded); if (!next.delete(t.groupId)) next.add(t.groupId); expanded = next; }
-    else if (t.view === "list") onopenentry(t.entryId);
+  function open(t: AttentionItem["target"]) {
+    if (t.view === "list") onopenentry(t.entryId);
     else onopenagent(t.agentId);
   }
-  // Analyzer findings open the agent's Insights tab; everything else opens the agent or port.
   function openItem(i: AttentionItem) { if (i.rule === "analyzer" && i.target.view === "agents") onopenagent(i.target.agentId, "insights"); else open(i.target); }
   function stopItem(i: AttentionItem) { if (i.stop?.kind === "entry") onstopentry?.(i.stop.entryId); else if (i.stop) onstopagent?.(i.stop.agentId); }
   let portMenu = $state<{ entry: PortEntry; anchor: HTMLElement | SVGElement } | null>(null);
@@ -138,110 +109,44 @@
   function select(id: string) { setSelected(selected === id ? null : id); }
   function onkeydown(e: KeyboardEvent) { if (e.key === "Escape" && selected) { setSelected(null); e.stopPropagation(); } }
 
-  // The 3D machine and three.js load only when that layout is chosen, and not on a phone-sized
-  // window, where Home shows the list of agents instead (as the Map does).
-  let Machine3D = $state<typeof import("./machine3d/Machine3DView.svelte").default | null>(null);
-  let machine3dError = $state(false);
-  let narrow = $state(false);
-  $effect(() => {
-    const media = matchMedia("(max-width: 760px)");
-    narrow = media.matches;
-    const change = () => (narrow = media.matches);
-    media.addEventListener("change", change);
-    return () => media.removeEventListener("change", change);
-  });
-  $effect(() => {
-    if (layout !== "3d" || narrow || Machine3D) return;
-    import("./machine3d/Machine3DView.svelte").then((m) => { Machine3D = m.default; machine3dError = false; }, (e) => { console.error("Couldn't load the 3D view", e); machine3dError = true; });
-  });
-  const spatial = $derived((layout === "map" || layout === "3d") && !idle);
-  // 3D Focus: the summary and Needs you step aside so the machine fills Home (its readings carry
-  // the same figures, and Needs you is one of them). Remembered; ignored on a narrow window.
-  let focus3d = $state(prefGetBoolean("home.3d.focus", false));
-  $effect(() => prefSet("home.3d.focus", focus3d ? "1" : "0"));
-  const focused = $derived(layout === "3d" && focus3d && !narrow && !idle);
-  // Every panel folds away and comes back: the summary, the side column, and each panel in it.
   let summaryOpen = $state(prefGetBoolean("home.summary.open", true));
   $effect(() => prefSet("home.summary.open", summaryOpen ? "1" : "0"));
   let sideOpen = $state(prefGetBoolean("home.side.open", true));
   $effect(() => prefSet("home.side.open", sideOpen ? "1" : "0"));
-  const side = $derived(sideOpen && !focused);
-  /** The 3D view's readings and selected part, shown above Needs you. */
-  let details3d = $state<Snippet | null>(null);
-  let detailsOpen = $state(prefGetBoolean("home.details.open", true));
-  // Choosing an agent opens this panel, so the click always lands on its details.
-  $effect(() => { if (layout === "3d" && side && selected) detailsOpen = true; });
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="home" class:three={layout === "3d" && !idle} id="home-overview" role="region" aria-label="Overview" {onkeydown}>
+<div class="home" id="home-overview" role="region" aria-label="Overview" {onkeydown}>
   <header class="top">
-    {#if !focused}
-      <IconButton icon={summaryOpen ? "chevron-up" : "chevron-down"} label={summaryOpen ? "Fold the summary" : "Show the summary"} size="sm" aria-expanded={summaryOpen} onclick={() => (summaryOpen = !summaryOpen)} />
-      {#if summaryOpen}<HomeSummary {stats} />{:else}<span class="folded">Summary</span>{/if}
-    {/if}
+    <IconButton icon={summaryOpen ? "chevron-up" : "chevron-down"} label={summaryOpen ? "Fold the summary" : "Show the summary"} size="sm" aria-expanded={summaryOpen} onclick={() => (summaryOpen = !summaryOpen)} />
+    {#if summaryOpen}<HomeSummary {stats} />{:else}<span class="folded">Summary</span>{/if}
     <div class="tools">
-      {#if layout === "map"}
-        <span class="legend" aria-label="Legend">
-          <span><i class="k project"></i>Project</span><span><i class="k port"></i>Port</span><span><i class="k mcp"></i>MCP</span><span><i class="k remote"></i>Remote</span><span><i class="k warn"></i>Needs you</span>
-        </span>
-      {/if}
       <ExportActions label="Export overview" disabled={!report || !entries} copy={() => homeSummaryText(o, needs, Date.now())}
         files={[{ label: "Download JSON", filename: reportFilename("overview", Date.now(), "json"), build: () => homeReport(o, needs, report, Date.now()) }]} />
       {#if showInventory && oninventory}<ConsentGate onconsent={oninventory} compact />{/if}
-      <SegmentedControl value={layout} options={layoutOptions} label="Home layout" onchange={(l) => onlayout?.(l)} />
-      {#if !focused}<IconButton icon="sidebar" label={sideOpen ? "Hide the side panels" : "Show the side panels"} size="sm" aria-expanded={sideOpen} onclick={() => (sideOpen = !sideOpen)} />{/if}
+      <IconButton icon="sidebar" label={sideOpen ? "Hide the side panels" : "Show the side panels"} size="sm" aria-expanded={sideOpen} onclick={() => (sideOpen = !sideOpen)} />
     </div>
   </header>
 
-  <div class="body" class:map={spatial} class:three={layout === "3d" && !idle} class:focused={!side}>
-    {#key layout}
-      <div class="main">
-        {#if idle}
-          <EmptyPanel icon="bot" title="No agents or dev servers running" hint="Start Claude Code, Cursor, Codex or a dev server and it shows up here within a few seconds." />
-        {:else if query.trim() && shown && shown.agents.length === 0}
-          <EmptyPanel icon="search" title="No matching agents" hint={`No agent, folder or PID matches “${query.trim()}”.`} />
-        {:else if layout === "cards"}
-          {#if shown}
-            <AgentCards report={shown} {entries} {needs} {colors} {now} {selected} {active} onhover={(id) => (hovered = id)} onselect={select}
-              onopen={(id) => onopenagent(id)} onport={port} onstop={onstopagent} />
-          {:else if agentsError}
-            <EmptyPanel icon="alert" title="Couldn't look up the agents" hint={agentsError}>
-              {#if onretryagents}<Button size="sm" onclick={onretryagents}>Try again</Button>{/if}
-            </EmptyPanel>
-          {:else}
-            <p class="clear wait" aria-busy="true">…</p>
-          {/if}
-        {:else}
-          {#snippet machineMap()}
-            <MachineMap {groups} {colors} platform={report?.platform ?? ""} ports={o.ports} {active} {selected} {hot} onhover={(id) => (hovered = id)} onselect={select} onopen={open} onport={port} />
-          {/snippet}
-          <div class="stage" data-capture-area>
-            <div class="map-wrap" class:flush={layout === "3d"}>
-              {#if layout === "map"}
-                {@render machineMap()}
-              {:else if narrow}
-                <!-- The list of agents below stands in on a narrow window. -->
-              {:else if Machine3D}
-                <Machine3D report={shown} {entries} {hot} needs={needsByAgent(needs, report)} {colors} trust={trustStore.report?.skills ?? []} {selected} {active} {inventory} {singleKeys} {activity} {recording} expanded={focused} onexpand={(on) => (focus3d = on)} {oninventory}
-                  onselectagent={setSelected} onhover={(id) => (hovered = id)} onopenagent={(id, jump, capabilityId) => onopenagent(id, jump, capabilityId)} onport={port} ondetails={side ? (d) => (details3d = d) : undefined} fallback={machineMap} />
-              {:else if machine3dError}
-                <p class="clear">Couldn't load the 3D view. <button type="button" class="inv" onclick={() => onlayout?.("map")}>Show the Map</button></p>
-              {:else}
-                <p class="clear wait" aria-busy="true">Loading 3D…</p>
-              {/if}
-            </div>
-            <div class="map-list"><MapList {groups} {colors} {active} onhover={(id) => (hovered = id)} onopenagent={(id) => onopenagent(id)} onport={port} /></div>
-          </div>
-        {/if}
-      </div>
-    {/key}
-    {#if side}
-    <!-- The side column: in 3D the machine's readings and selected part, then Needs you. Each panel folds away. -->
-    <aside class="side" aria-label="Side panels">
-      {#if layout === "3d" && details3d && !idle}
-        <CollapsiblePanel id="home-details" title="Details" bind:open={detailsOpen} onremember={(open) => prefSet("home.details.open", open ? "1" : "0")}>{@render details3d()}</CollapsiblePanel>
+  <div class="body" class:focused={!sideOpen}>
+    <div class="main">
+      {#if idle}
+        <EmptyPanel icon="bot" title="No agents or dev servers running" hint="Start Claude Code, Cursor, Codex or a dev server and it shows up here within a few seconds." />
+      {:else if query.trim() && shown && shown.agents.length === 0}
+        <EmptyPanel icon="search" title="No matching agents" hint={`No agent, folder or PID matches “${query.trim()}”.`} />
+      {:else if shown}
+        <AgentCards report={shown} {entries} {needs} {colors} {now} {selected} {active} onhover={(id) => (hovered = id)} onselect={select}
+          onopen={(id) => onopenagent(id)} onport={port} onstop={onstopagent} />
+      {:else if agentsError}
+        <EmptyPanel icon="alert" title="Couldn't look up the agents" hint={agentsError}>
+          {#if onretryagents}<Button size="sm" onclick={onretryagents}>Try again</Button>{/if}
+        </EmptyPanel>
+      {:else}
+        <p class="clear wait" aria-busy="true">…</p>
       {/if}
+    </div>
+    {#if sideOpen}
+    <aside class="side" aria-label="Side panels">
       <CollapsiblePanel id="home-needs" title="Needs you" count={needs.length} pref="home.needs.open" fill>
         {#if trustAlerts.length && onsecurity}
           <button type="button" class="trust-alert" class:changed={trustChanged > 0} onclick={openSkills} data-trust-alert>
@@ -264,80 +169,26 @@
     {/if}
   </div>
 
-  {#if layout === "map" && !idle}
-    {#if rows.length}
-      <AgentLanes lanes={rows} {now} {colors} {active} open={timeline} ontoggle={() => ontimeline?.(!timeline)} onhover={(id) => (hovered = id)} onselect={select} onopenagent={(id) => onopenagent(id)} onport={port} />
-    {:else}
-      <p class="clear lanes-empty" aria-busy={!report}>{report ? "No agents" : "…"}</p>
-    {/if}
-  {/if}
   {#each portMenu ? [portMenu] : [] as m (m.entry.id)}
     <PortMenu entry={m.entry} anchor={m.anchor} ondetails={() => onopenentry(m.entry.id)} onstop={() => onstopentry?.(m.entry.id)} onclose={() => (portMenu = null)} />
   {/each}
 </div>
 
 <style>
-  /* max-content rows: the header sets a min-height, and auto rows would hold it to that once the
-     body overflows, letting a wrapped summary run under the panel on narrow screens. */
   .home { overflow-y: auto; min-height: 0; padding: var(--sp-4) var(--sp-5) var(--sp-6); display: grid; grid-auto-rows: max-content; gap: var(--sp-4); align-content: start; width: 100%; max-width: 1680px; margin: 0 auto; }
   .top { display: flex; align-items: center; gap: var(--sp-2) var(--sp-4); flex-wrap: wrap; min-height: 30px; }
   .tools { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; justify-content: flex-end; }
-  .legend { display: flex; gap: var(--sp-3); flex-wrap: wrap; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); }
-  .legend span { display: inline-flex; align-items: center; gap: 5px; }
-  .k { display: inline-block; width: 9px; height: 9px; border: 1.5px solid var(--text-2); }
-  .k.project { border-radius: 2.5px; } .k.port { border-radius: 50%; background: var(--text-2); } .k.mcp { transform: rotate(45deg) scale(0.85); border-radius: 1.5px; } .k.remote { border-radius: 50%; }
-  .k.warn { border-color: var(--warn); border-radius: 50%; box-shadow: 0 0 0 3px var(--warn-soft); }
-  .inv { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--r-md); background: var(--surface); color: var(--accent); font: inherit; font-size: var(--fs-caption); font-weight: var(--fw-medium); cursor: pointer; }
-  .inv:hover { background: var(--accent-softer); }
-  .inv:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   .body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--sp-4); align-items: start; }
-  .body.map { align-items: stretch; height: clamp(340px, 44vh, 560px); }
-  /* The 3D machine takes exactly the height Home has left under its header, so the page never
-     gains a scrollbar that would resize the canvas while it lays out. */
-  .home.three { grid-template-rows: auto minmax(440px, 1fr); align-content: stretch; }
-  .body.map.three { height: auto; min-height: 0; }
-  .body.three.focused { grid-template-columns: minmax(0, 1fr); }
-  .main { min-width: 0; min-height: 0; height: 100%; animation: view-in 180ms ease both; }
-  @keyframes view-in { from { opacity: 0; transform: translateY(3px); } }
-  @media (prefers-reduced-motion: reduce) { .main { animation: none; } }
-  .body:not(.map) .side { position: sticky; top: 0; max-height: calc(100vh - 220px); }
-  .wait { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
-  .stage { height: 100%; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; min-height: 0; overflow: clip; }
-  .map-wrap { width: 100%; height: 100%; padding: var(--sp-2); }
-  .map-wrap.flush { padding: 0; }
-  .map-list { display: none; }
-  /* The side column: panels stacked; Details keeps its own height (scrolling past 55%), and
-     Needs you takes the rest, its list scrolling inside it. A folded panel is just its header. */
-  .side { display: flex; flex-direction: column; gap: var(--sp-3); min-height: 0; }
-  .side > :global(.cpanel:first-child:not(:last-child)) { flex: 0 1 auto; max-height: 58%; }
-  .side > :global(.cpanel:first-child:not(:last-child) > .body) { overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+  .body.focused { grid-template-columns: minmax(0, 1fr); }
+  .main { min-width: 0; min-height: 0; }
+  .side { position: sticky; top: 0; max-height: calc(100vh - 220px); display: flex; flex-direction: column; gap: var(--sp-3); min-height: 0; }
   .side :global(.cpanel > .body > :last-child) { flex: 1 1 auto; min-height: 0; }
-  /* The selected part keeps its own height and the panel scrolls, so the readings aren't crushed under the fact list. */
-  .side :global(.cpanel > .body > .inspector.flat),
-  .side :global(.cpanel > .body > .readings.flat) { flex: 0 0 auto; min-height: auto; overflow: visible; }
   .side :global(.cpanel > .body > .trust-alert) { margin: var(--sp-2) var(--sp-2) 0; width: auto; }
   .needs-scroll { overflow-y: auto; min-height: 0; }
   .folded { color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; }
   .clear { margin: 0; padding: var(--sp-3); display: flex; align-items: center; gap: var(--sp-2); color: var(--muted); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .clear :global(svg) { color: var(--ok); }
-  .lanes-empty { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
-  @media (max-width: 1100px) { .body { grid-template-columns: minmax(0, 1fr) 280px; } .body.map { height: clamp(300px, 38vh, 480px); } }
-  @media (max-width: 860px) {
-    .body, .body.map { grid-template-columns: minmax(0, 1fr); height: auto; }
-    .body.map .stage { height: 420px; }
-    .home.three { grid-template-rows: none; align-content: start; }
-    .body.three .stage { height: 560px; }
-    .body:not(.map) .side { position: static; }
-    .side { order: -1; }
-    .side { max-height: none !important; }
-  }
-  @media (max-width: 760px) {
-    .home { padding: var(--sp-3); gap: var(--sp-3); }
-    .legend { display: none; }
-    .body.map .stage { height: auto; }
-    .map-wrap { display: none; }
-    .map-list { display: block; }
-  }
+  .wait { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
   .trust-alert { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-caption); text-align: left; cursor: pointer; }
   .trust-alert.changed { border-color: var(--danger-soft); }
   .trust-alert.changed :global(svg) { color: var(--danger); }
@@ -345,4 +196,9 @@
   .trust-alert:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   .trust-alert span:first-of-type { flex: 1; min-width: 0; }
   .trust-alert .go { color: var(--accent); }
+  @media (max-width: 1100px) { .body { grid-template-columns: minmax(0, 1fr) 280px; } }
+  @media (max-width: 860px) {
+    .body { grid-template-columns: minmax(0, 1fr); }
+    .side { position: static; order: -1; max-height: none; }
+  }
 </style>

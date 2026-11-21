@@ -712,25 +712,16 @@ describe("App overview and first run", () => {
     expect(view.container.textContent).not.toContain("Couldn't look up the agents");
   });
 
-  it("flips Home between cards and map with V and remembers the choice", async () => {
+  it("opens Home as cards, with Needs you and no second picture", async () => {
     vi.useFakeTimers();
     localStorage.setItem("holdmap.view", "home");
-    localStorage.removeItem("holdmap.home.layout");
     const view = render(App);
     await vi.advanceTimersByTimeAsync(600);
-    const group = view.getByRole("radiogroup", { name: "Home layout" });
-    expect(within(group).getByRole("radio", { name: /^Cards/ }).getAttribute("aria-checked")).toBe("true");
-    await fireEvent.keyDown(window, { key: "v" });
-    await vi.advanceTimersByTimeAsync(50);
-    expect(within(group).getByRole("radio", { name: /^Map/ }).getAttribute("aria-checked")).toBe("true");
-    expect(localStorage.getItem("holdmap.home.layout")).toBe("map");
-    expect(view.getByRole("table", { name: "Agent lanes" })).toBeTruthy();
-    await fireEvent.click(view.getByRole("button", { name: /^Timeline/ }));
-    await vi.advanceTimersByTimeAsync(50);
-    expect(localStorage.getItem("holdmap.home.timeline")).toBe("0");
-    expect(view.queryByRole("table", { name: "Agent lanes" })).toBeNull();
-    await fireEvent.click(within(group).getByRole("radio", { name: /^Cards/ }));
-    expect(localStorage.getItem("holdmap.home.layout")).toBe("cards");
+    expect(view.getByRole("region", { name: "Overview" })).toBeTruthy();
+    expect(view.container.querySelector("section[aria-label='Agents'] article.card")).toBeTruthy();
+    expect(view.queryByRole("radiogroup", { name: "Home layout" })).toBeNull();
+    expect(view.container.querySelector(".map")).toBeNull();
+    expect(view.container.querySelector(".stage3d")).toBeNull();
   });
 
   it("offers the welcome once, and skipping changes nothing else", async () => {

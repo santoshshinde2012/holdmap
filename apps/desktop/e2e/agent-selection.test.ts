@@ -50,13 +50,11 @@ test("↑/↓ moves the shared selection", async ({ app }) => {
   await expect(details(app).getByRole("heading", { name: "Cursor", exact: true })).toBeVisible();
 });
 
-test("the Home radial map shares the selection with Agents", async ({ app }) => {
-  await app.evaluate(() => localStorage.setItem("holdmap.home.layout", "map"));
-  await app.reload();
+test("a Home card shares the selection with Agents", async ({ app }) => {
   await app.getByRole("radio", { name: /^Home/ }).click();
-  const node = app.getByRole("group", { name: /^Machine map/ }).getByRole("button", { name: /^Claude Code, / });
-  await node.click();
-  await expect(node).toHaveAttribute("aria-pressed", "true");
+  const card = app.getByRole("button", { name: /^Claude Code, / }).first();
+  await card.click();
+  await expect(card).toHaveAttribute("aria-pressed", "true");
   await openAgents(app);
   await expectSelected(app, "Claude Code", 51200);
 });

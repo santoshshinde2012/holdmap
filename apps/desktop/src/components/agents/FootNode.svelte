@@ -4,7 +4,8 @@
   // focusable svelte-flow wrapper carries the accessible name (footNodeLabel).
   import { Handle, Position, type NodeProps, type Node } from "@xyflow/svelte";
   import Icon from "../Icon.svelte";
-  import { EVIDENCE_LABEL, footNodeActs, type FootFlowData } from "../../lib/agents";
+  import { EVIDENCE_LABEL } from "../../lib/agents";
+  import { footNodeActs, type FootFlowData } from "../../lib/agent-picture";
 
   let { data }: NodeProps<Node<FootFlowData>> = $props();
   const n = $derived(data.node);

@@ -76,9 +76,7 @@ const analyzerGraphFiles = onDemandFeature("src/components/analyzers/graph/analy
 const securityDemoFiles = onDemandFeature("src/components/analyzers/InsightsWorkspace.svelte", "Security workspace");
 const installDemoFiles = new Set([...onDemandFeature("src/components/security/InstallDialog.svelte", "Analyzer install"), ...onDemandFeature("src/lib/analyzer-install-demo.ts", "Analyzer install demo")]);
 const runDockDemoFiles = onDemandFeature("src/components/security/RunDock.svelte", "Run progress");
-// Home → 3D carries three.js; it must never load with Home's Cards or Map.
-const machine3dDemoFiles = onDemandFeature("src/components/home/machine3d/Machine3DView.svelte", "Home 3D");
-const deferredDemoJs = demoJs.filter((file) => !initialDemoFiles.has(file) && !snapshotDemoFiles.has(file) && !capabilityDemoFiles.has(file) && !analyzerGraphFiles.has(file) && !securityDemoFiles.has(file) && !installDemoFiles.has(file) && !runDockDemoFiles.has(file) && !machine3dDemoFiles.has(file));
+const deferredDemoJs = demoJs.filter((file) => !initialDemoFiles.has(file) && !snapshotDemoFiles.has(file) && !capabilityDemoFiles.has(file) && !analyzerGraphFiles.has(file) && !securityDemoFiles.has(file) && !installDemoFiles.has(file) && !runDockDemoFiles.has(file));
 const videos = files(join(dist, "hero")).filter((f) => /\.(mp4|webm)$/.test(f));
 
 const rows = [
@@ -88,8 +86,7 @@ const rows = [
   ["Largest image", Math.max(...images.map((f) => statSync(f).size)), 260 * 1024],
   ["Open Graph image", statSync(join(dist, "og.png")).size, 300 * 1024],
   // +4 KB for skill trust alerts on Home, bounded snoozes and the demo trust API; Risks, Skills
-  // and Scheduled scans load on demand. +2 KB for Home's 3D layout loader: the agent helpers it
-  // shares with the on-demand 3D view now load as their own small chunks. +1 KB for the menu-bar
+  // and Scheduled scans load on demand. +1 KB for the menu-bar
   // items checklist in Settings and the notice naming items macOS hides. +3 KB for Home's folding
   // panels (summary, side column, Details above Needs you) and the capture dialogs' area choice.
   // +2 KB for the agent details memory summary and the locations layer list, which travel with the Agents view.
@@ -103,9 +100,6 @@ const rows = [
   ["Analyzer graphs JS (on Pipeline)", [...analyzerGraphFiles].reduce((n, f) => n + gz(f), 0), 12 * 1024],
   ["Analyzer install JS (on Install…)", [...installDemoFiles].reduce((n, f) => n + gz(f), 0), 8 * 1024],
   ["Run progress JS (on Run)", [...runDockDemoFiles].reduce((n, f) => n + gz(f), 0), 4 * 1024],
-  // three.js (~133 KB of WebGL renderer, geometry and materials) plus the scene, layout and stage.
-  // +4 KB for the single-agent picture and the folding readings in its details.
-  ["Home 3D JS (on 3D)", [...machine3dDemoFiles].reduce((n, f) => n + gz(f), 0), 172 * 1024],
   // +2 KB for the capture area picker; +1 KB for mediabunny 1.65’s updated recording
   // implementation. +5 KB for the agent memory panel on the Agents view (counters, groups
   // and export). +4 KB for the locations filters, entry lists and copy action shared with

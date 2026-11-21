@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { cardModel, miniLayout } from "./agent-card";
-import { footprint } from "./machine-map";
+import { footprint } from "./footprint";
 import { MOCK_SNAPSHOT } from "./mock";
 import { mockAgents } from "./mock-agents";
-import { nextLayout } from "./home-layout";
 
 const report = mockAgents(undefined, true);
 const by = (p: string) => report.agents.find((a) => a.product === p)!;
@@ -41,9 +40,4 @@ describe("agent card model", () => {
     }
   });
 
-  it("cycles through the Home layouts", () => {
-    expect(nextLayout("cards")).toBe("map");
-    expect(nextLayout("map")).toBe("3d");
-    expect(nextLayout("3d")).toBe("cards");
-  });
 });

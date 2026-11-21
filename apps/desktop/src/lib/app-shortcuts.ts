@@ -34,7 +34,7 @@ export type KeyIntent =
   | { do: "blur-search" | "agents-clear-query" | "agents-deselect" | "clear-filters" | "list-deselect" }
   | { do: "agents-pick-from-search" | "list-pick-from-search" | "open-drawer" }
   | { do: "stop"; force: boolean }
-  | { do: "open" | "copy-url" | "toggle-all-sockets" | "cycle-proto" | "toggle-dev" | "toggle-mine" | "toggle-exposed" | "cycle-theme" | "toggle-side" | "toggle-graph" | "toggle-home-layout" | "toggle-agents" | "history" | "pin" | "pin-label" | "stop-cluster" | "help" };
+  | { do: "open" | "copy-url" | "toggle-all-sockets" | "cycle-proto" | "toggle-dev" | "toggle-mine" | "toggle-exposed" | "cycle-theme" | "toggle-side" | "toggle-graph" | "toggle-agents" | "history" | "pin" | "pin-label" | "stop-cluster" | "help" };
 
 /** What a key press means, and whether the browser's default is suppressed. Null: let it through.
  * An intent the app finds nothing to do for (B with nothing selected) also lets the key through. */
@@ -102,7 +102,6 @@ export function decideKey(key: string, shift: boolean, c: KeyContext, st: KeySta
     case "L": return yes({ do: "cycle-theme" });
     case "b": return yes({ do: "toggle-side" });
     case "g": return yes({ do: "toggle-graph" });
-    case "v": return st.view === "home" ? yes({ do: "toggle-home-layout" }) : null;
     case "A": return yes({ do: "toggle-agents" });
     case "h": return yes({ do: "history" });
     case "V": return yes({ do: "toggle-record" });

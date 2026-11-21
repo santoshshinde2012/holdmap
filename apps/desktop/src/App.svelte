@@ -14,7 +14,6 @@
   import { agentFocus } from "./lib/agent-focus.svelte";
   import type { AgentJump } from "./lib/agent-jump";
   import HomeView from "./components/home/HomeView.svelte";
-  import { nextLayout } from "./lib/home-layout";
   import FirstRun from "./components/FirstRun.svelte";
   import { firstRunPlan, type FirstRunChoices } from "./lib/onboarding";
   import { UsageHistory, toggled, usageRecord } from "./lib/rows";
@@ -424,11 +423,9 @@
   $effect(() => {
     const mode = agentFlowMode;
     const visible = prefs.view === "agents" && mode !== "overview" && !flowPaused;
-    // Home's 3D view draws recorded calls in their own lane, from the same opt-in recorder.
-    const home3d = prefs.view === "home" && prefs.homeLayout === "3d";
     const interval = Math.max(1_000, scanMs);
     untrack(() => { flowLoader.invalidate(); activityLoader.invalidate(); });
-    if (!visible && !home3d) return;
+    if (!visible) return;
     const loader = visible && mode === "connections" ? flowLoader : activityLoader;
     untrack(() => { void loader.request(); });
     const timer = setInterval(() => { if (!document.hidden) void loader.request(); }, interval);
@@ -1182,7 +1179,7 @@
     homeQuery = "";
     prefs.view = "list";
   });
-  /** Home, and a second click in 3D, open this agent on the screen the part belongs to. */
+  /** Opens this agent on the screen the caller asked for. */
   function openAgent(id: string, jump: AgentJump = "overview", capabilityId?: string) {
     // Recorded calls are not an agent's. A leftover selection would scope the timeline to
     // that agent and hide every call that isn't attributed to it.
@@ -1304,7 +1301,6 @@
       case "cycle-theme": cycleTheme(); break;
       case "toggle-side": return toggleSide();
       case "toggle-graph": toggleView("graph"); break;
-      case "toggle-home-layout": prefs.homeLayout = nextLayout(prefs.homeLayout); break;
       case "toggle-agents": toggleView("agents"); break;
       case "history": void openHistory(); break;
       case "pin": if (s) void togglePin(s); break;
@@ -1491,7 +1487,7 @@
         {/if}
       </div>
     {:else if prefs.view === "home"}
-      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} query={homeQuery} agentsError={agentsError ?? (agentsReport ? null : error)} onretryagents={() => refresh(true)} inventory={prefs.inventoryOn} layout={prefs.homeLayout} onlayout={(l) => (prefs.homeLayout = l)} timeline={prefs.homeTimeline} ontimeline={(open) => (prefs.homeTimeline = open)} singleKeys={prefs.singleKeyShortcuts} {activity} {recording} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
+      <HomeView entries={snapshot?.entries ?? null} report={agentsReport} query={homeQuery} agentsError={agentsError ?? (agentsReport ? null : error)} onretryagents={() => refresh(true)} inventory={prefs.inventoryOn} now={snapshot?.taken_at_ms ?? Date.now()} onopenagent={openAgent} {selectedAgent} onselectagent={(id) => agentSelection.select(id, agentsReport?.agents)}
         onstopentry={(id) => { const e = snapshot?.entries.find((x) => x.id === id); if (e) void requestStop(e, false); }} onstopagent={(id) => void requestStopAgentPorts(id)} onopenentry={openEntryById} onview={(v) => (prefs.view = v)} onsecurity={() => { prefs.view = "agents"; prefs.agentSection = "insights"; securityTab.value = "findings"; }} oninventory={enableInventory} />
     {:else if prefs.view === "agents"}
       <div class="graph-wrap agents-wrap" data-capture-area>
@@ -1581,6 +1577,8 @@
   .content.narrow, .content.wide { grid-template-columns: 1fr; }
   .pane-wrap { position: relative; min-height: 0; min-width: 0; }
   .content :global(.reveal-side) { position: absolute; top: 12px; right: 12px; z-index: 6; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+  /* The corner button sits over the list. Inset the rows so uptime stays clear of it while scrolling. */
+  .content:has(:global(.reveal-side)) :global(#port-list) { padding-right: 28px; }
 
   .graph-loading { display: grid; place-items: center; height: 100%; color: var(--muted); font-size: var(--fs-body-sm); }
   .graph-wrap { position: relative; min-height: 0; min-width: 0; }
