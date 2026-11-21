@@ -163,9 +163,16 @@ async function openPortMenu(page) {
 
 async function openFolderActions(page) {
   await openAgents(page);
-  await page.getByRole("button", { name: /^Folder shop-web,.*Zooms into this project/ }).click();
-  await expect(page.getByRole("radio", { name: "Project", exact: true })).toHaveAttribute("aria-checked", "true");
-  await page.getByRole("button", { name: /^Folder shop-web,.*\. Opens folder actions$/ }).click();
+  const zoom = page.getByRole("button", { name: /^Folder shop-web,.*Zooms into this project/ });
+  if (await zoom.count()) {
+    await zoom.click();
+    await expect(page.getByRole("radio", { name: "Project", exact: true })).toHaveAttribute("aria-checked", "true");
+    await page.getByRole("button", { name: /^Folder shop-web,.*\. Opens folder actions$/ }).click();
+  } else {
+    // A narrow window hides the map, so the agent's folder row opens the same dialog.
+    await heading(page, "Cursor").click();
+    await page.getByRole("button", { name: "Folder actions for /Users/dev/code/shop-web", exact: true }).click();
+  }
   const dialog = page.getByRole("dialog", { name: "Folder actions", exact: true });
   await expect(dialog).toContainText("/Users/dev/code/shop-web");
   await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
@@ -309,9 +316,7 @@ async function openCapabilities(page, mode = "map") {
     await assertFits();
     return;
   }
-  await page.getByRole("button", { name: "Inspect capabilities for Cursor, PID 52000", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Capability details", exact: true }).getByRole("heading", { name: "Cursor", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Close capability details", exact: true }).click();
+  // A process opens that agent's details screen, so this shot stays on the skill.
   await page.getByRole("radio", { name: /^Skills/ }).click();
   await page.getByRole("button", { name: "Inspect skill frontend-checks, Project scope. Agents: Cursor (PID 52000). Project: /Users/dev/code/shop-web. Source: /Users/dev/code/shop-web/.agents/skills/frontend-checks/SKILL.md", exact: true }).press("Enter");
   const detail = page.getByRole("complementary", { name: "Capability details", exact: true });
@@ -422,13 +427,12 @@ const walkthrough = [
     await expect(page.getByText(/skill findings/i).first()).toBeVisible();
   } },
   { name: "agent-summary", async prepare(page) {
-    await securityTab(page, /^Findings/);
-    await page.getByRole("radio", { name: /^Overview/ }).click();
     await openAgents(page);
     await heading(page, "Claude Code").click();
-    const list = page.locator("[data-agent-skill-findings]");
-    await expect(list).toBeVisible();
-    await list.scrollIntoViewIfNeeded();
+    await page.getByRole("button", { name: "Open in Security", exact: true }).click();
+    const scope = page.locator("[data-findings-scope]");
+    await expect(scope).toContainText("Claude Code");
+    await scope.scrollIntoViewIfNeeded();
   } },
   { name: "pipeline", async prepare(page) {
     await openAnalyzerGraph(page, true);

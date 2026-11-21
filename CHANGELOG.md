@@ -8,6 +8,8 @@ by [release-please](https://github.com/googleapis/release-please) from
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-21
+
 ### Added
 
 - Agents show where they keep their instructions, rules, skills, MCP config and memory, from one documented registry that now also covers Kiro, opencode, Amp, Goose, Aider, Qwen Code, Crush and Zed. **Show in folder** opens each place; file contents are never read.

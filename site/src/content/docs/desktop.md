@@ -41,6 +41,7 @@ plate below. Its processes stand on a **Runtime** tray over the same district, a
 servers, skills and instruction files found on disk on a **Configuration** tray above that
 (only after **Read MCP config**). Everything over a district belongs to that agent, so no line
 is needed to say so. **This computer** is the chip at the left end of the board.
+The first click on an agent fills the canvas with that district. **All agents** brings the whole machine back.
 Select a part and Details offers **Overview**, **MCP & skills**, **Flow**, **Results** and
 **Security** for that agent. A second click on the same part opens the screen it belongs to.
 A skill, MCP server or running MCP process opens that item in the MCP & skills sidebar.
