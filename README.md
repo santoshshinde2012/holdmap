@@ -82,10 +82,11 @@
   Every link comes from what holdmap observed; nothing is joined by name.
 - **Menu bar and tray widgets.** Small menu-bar items on macOS like a system
   monitor's (agents, what needs you, their CPU, dev servers, a CPU line or per-agent bars) and a
-  badge on every OS. A click opens a panel: headline numbers, an agent CPU chart, a Needs you
-  history, ports and port changes, and your dev servers and busiest agents. macOS, Windows and
-  Linux. A fixed toolbar keeps **Open holdmap**, **Quick settings**, **Refresh** and **Quit**
-  within reach while readings scroll; stops still open the reviewed plan.
+  badge on every OS. A click opens a numbered panel: agents, RAM and CPU, then Ports, Network,
+  Needs and Dev. Choosing a count scrolls to that reading, and each top agent shows its share of
+  the RAM. Needs you, dev servers and the activity charts stay. macOS, Windows and Linux. A fixed
+  toolbar keeps **Open holdmap**, **Quick settings**, **Refresh** and **Quit** within reach while
+  readings scroll; stops still open the reviewed plan.
 - **Local capture.** Records only the holdmap window to MP4/GIF, plus PNG snapshots, of the whole window or a part you choose. Other apps and your desktop are never captured. Nothing is uploaded.
 - **Scriptable.** Every read command takes `--json`. holdmap has no product analytics.
 

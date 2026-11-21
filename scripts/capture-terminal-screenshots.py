@@ -565,10 +565,21 @@ def capture_agent_views(binary: Path, base: Path, env: dict[str, str], children:
         terminal.write("/\x15" + query + "\rjk\x1b[H\x1b[F")
         terminal.wait_for(owned_frame, "the agent navigation and restored exact PID query")
         # Scroll to the inferred, port-less tool in the narrow layout while keeping identity pinned.
+        # At 80 columns the tool name wraps, so the match ignores the line break.
         if columns < 100:
-            terminal.write("\x1b[6~")
-            terminal.wait_for(lambda text: "server-filesystem" in text and "Gemini CLI" in text,
-                              "the narrow running-tool details")
+            def narrow_tool(text: str) -> bool:
+                return "server-filesystem" in text.replace("\n", "") and "Gemini CLI" in text
+            shown = False
+            for _ in range(6):
+                terminal.write("\x1b[6~")
+                try:
+                    terminal.wait_for(narrow_tool, "the narrow running-tool details", timeout=2)
+                except RuntimeError:
+                    continue
+                shown = True
+                break
+            if not shown:
+                raise RuntimeError("Timed out waiting for the narrow running-tool details; no unfiltered transcript was saved")
         else:
             terminal.wait_for(lambda text: "server-filesystem" in text,
                               "the wide running-tool details")
