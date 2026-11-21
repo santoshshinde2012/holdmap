@@ -28,9 +28,10 @@ of agents, each with its ports and the same **Details** / **Stop…** menu.
 
 Every panel on Home folds away and comes back, and Home remembers how you left it: the summary
 (the chevron at the left of the header), the side column (the panel button at the right of the
-header), and each panel in it (click its heading). In 3D the parts list folds to a strip of
-agent buttons. When the side column is hidden, the selected agent's details sit beside the
-picture and fold to a strip; Home remembers that too.
+header), and each panel in it (click its heading). Inside **Details**, the readings and the
+facts fold on their own. Each **Needs you** row opens its explanation in the row. In 3D the
+parts list folds to a strip of agent buttons. When the side column is hidden, the selected
+agent's details sit beside the picture and fold to a strip; Home remembers that too.
 
 **3D** builds the same machine as a model you can take apart,
 drawn without perspective, so sizes and spacing read the same at the front and the back. Each
@@ -157,12 +158,11 @@ monitor for your agents and dev servers, on macOS, Windows and Linux.
   macOS the **holdmap icon** item shows a dot in the same colours.
 - **Panel.** Click an item on macOS, or the icon on Windows (on Linux, choose **Show panel**
   from its menu), for a panel under it, opened at what you clicked: how many agents are
-  running (developer tools such as Docker Desktop are counted apart), their RAM and CPU in large type, a chart of the agents' CPU over the last
+  running (developer tools such as Docker Desktop are counted apart), their RAM and CPU in large type, and the counts for ports, the network, needs you and dev servers. Choosing a count scrolls to that reading. Below the counts: **Needs you** with its urgency, your dev servers with **Stop all…** in their header, then the agents using the most RAM. Each agent row has a bar for its share of that RAM, with its project and CPU beside it (long names shorten, hover for the full row). Developer tools are listed on their own and are not counted as agents. Further down, a chart of the agents' CPU over the last
   60 scans, a **Needs you** history (one square per scan: green for all clear, amber for worth
-  a look, red for look now), **Needs you** with its urgency, a ring of the ports in use (blue on
-  this computer only, amber open to the network), a **Port changes** chart (ports opened above
-  the line, closed below), your dev servers with **Stop all…** in their header, the agents using the most RAM with their
-  project and CPU (long names shorten, hover for the full row), and developer tools on their own.
+  a look, red for look now), a ring of the ports in use (blue on
+  this computer only, amber open to the network), and a **Port changes** chart (ports opened above
+  the line, closed below).
   It keeps updating while it's open, follows your theme and closes when you click elsewhere or
   press `Esc`; the pin button keeps it open. Choose an item, a dev server or an agent to open
   it in the window. **Stop all…** opens the stop plan in the window; nothing is stopped from

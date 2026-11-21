@@ -19,14 +19,15 @@
 <ul class="needs">
   {#each items as item (item.id)}
     {@const expanded = !!open[item.id]}
-    <li class="sev-{item.severity}" class:dim={lit !== null && !lit.has(item.id)} onmouseenter={() => onhover(item)} onmouseleave={() => onhover(null)}>
-      <button type="button" class="title" aria-expanded={expanded} aria-controls="need-{item.id}" title={item.detail}
+    <li class="sev-{item.severity}" class:open={expanded} class:dim={lit !== null && !lit.has(item.id)} onmouseenter={() => onhover(item)} onmouseleave={() => onhover(null)}>
+      <button type="button" class="title" aria-expanded={expanded} aria-controls="need-{item.id}"
         onclick={() => (open = { ...open, [item.id]: !expanded })} onfocus={() => onhover(item)} onblur={() => onhover(null)}>
+        <span class="chev" aria-hidden="true"><Icon name="chevron-down" size={14} /></span>
         <span class="dot" aria-hidden="true"></span><span class="t">{item.title}</span>
       </button>
       <span class="acts">
         {#if item.stop}<button type="button" class="act" onclick={() => onstop(item)} aria-label="Review stop plan: {item.title}"><Icon name="stop" size={11} />Stop…</button>{/if}
-        <button type="button" class="act icon" onclick={() => onopen(item)} aria-label="Open: {item.title}" use:tooltip={{ text: "Open details", placement: "bottom" }}><Icon name="chevron" size={12} /></button>
+        <button type="button" class="act icon" onclick={() => onopen(item)} aria-label="Open: {item.title}" use:tooltip={{ text: "Open details", placement: "bottom" }}><Icon name="arrow" size={12} /></button>
       </span>
       {#if expanded}<p class="detail" id="need-{item.id}">{item.detail}</p>{/if}
     </li>
@@ -39,8 +40,11 @@
   li:last-child { border-bottom: 0; }
   li { transition: opacity 160ms ease; }
   li.dim { opacity: 0.9; }
-  li:hover, li:focus-within { background: var(--row-hover); }
-  .title { min-height: 24px; display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: var(--sp-2); align-items: start; border: 0; background: none; padding: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+  li:hover, li:focus-within, li.open { background: var(--row-hover); }
+  .title { min-height: 24px; display: grid; grid-template-columns: 14px 8px minmax(0, 1fr); gap: var(--sp-2); align-items: start; border: 0; background: none; padding: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+  .chev { display: inline-flex; margin-top: 2px; color: var(--muted); transition: transform 160ms ease; }
+  .title[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+  @media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
   .dot { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--warn); }
   .sev-high .dot { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
   .t { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
@@ -50,5 +54,5 @@
   .act.icon { width: 24px; padding: 0; justify-content: center; }
   .act:hover { color: var(--text); border-color: var(--border-strong); }
   button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-radius: var(--r-sm); }
-  .detail { grid-column: 1 / -1; margin: 2px 0 0 15px; color: var(--muted); font-size: var(--fs-caption); line-height: var(--lh-caption); overflow-wrap: anywhere; }
+  .detail { grid-column: 1 / -1; margin: 2px 0 2px 22px; color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); overflow-wrap: anywhere; }
 </style>

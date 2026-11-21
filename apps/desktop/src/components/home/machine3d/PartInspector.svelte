@@ -7,6 +7,8 @@
   import { partChip } from "../../../lib/machine3d/describe";
   import { PART_KIND_LABEL, type Part } from "../../../lib/machine3d/scene";
   import { AGENT_DOORS, partDestination, type AgentJump } from "../../../lib/agent-jump";
+  import { prefGetBoolean, prefSet } from "../../../lib/prefs";
+  import { tooltip } from "../../../lib/tooltip";
 
   let { part, flat = false, onclose, onopenagent, onport, children }: {
     part: Part;
@@ -25,6 +27,13 @@
   /** A remote group lists hosts. Addresses are the fact, not a short label, so they get their own rows. */
   const hosts = $derived(part.kind === "remote" ? part.facts.filter(([k]) => k !== "Names" && k !== "More") : []);
   const hostNotes = $derived(part.kind === "remote" ? part.facts.filter(([k]) => k === "Names" || k === "More").map(([, v]) => v) : []);
+  const factCount = $derived(hosts.length || part.facts.length);
+  // The readings and the facts are long. Each folds on its own, and Home remembers that, so the
+  // doors stay within reach.
+  let readingsOpen = $state(prefGetBoolean("home.details.readings", true));
+  let factsOpen = $state(prefGetBoolean("home.details.facts", true));
+  $effect(() => prefSet("home.details.readings", readingsOpen ? "1" : "0"));
+  $effect(() => prefSet("home.details.facts", factsOpen ? "1" : "0"));
   let portBtn = $state<HTMLButtonElement>();
 
   function open(jump: AgentJump) {
@@ -49,7 +58,7 @@
       {@const entryId = part.target.entryId}
       <button type="button" class="menu" bind:this={portBtn} aria-haspopup="menu" onclick={() => onport(entryId, portBtn!)}>Port actions…<Icon name="chevron-down" size={14} /></button>
     {/if}
-    <button type="button" class="go" title={part.kind === "call" ? go.hint : `${go.hint}. Click the part again to open this.`} onclick={() => open(go.jump)}>
+    <button type="button" class="go" onclick={() => open(go.jump)}>
       <Icon name={go.icon} size={15} />
       <span class="go-copy"><b>{go.label}</b>{" "}<small>{go.hint}</small></span>
       <Icon name="arrow" size={14} />
@@ -57,26 +66,44 @@
     {#if others.length}
       <div class="more">
         {#each others as door (door.jump)}
-          <button type="button" class="act" title={door.title} onclick={() => open(door.jump)}><Icon name={door.icon} size={12} />{door.label}</button>
+          <button type="button" class="act" use:tooltip={{ text: door.title, placement: "bottom" }} onclick={() => open(door.jump)}><Icon name={door.icon} size={12} />{door.label}</button>
         {/each}
       </div>
     {/if}
   </div>
-  {@render children?.()}
-  {#if hosts.length}
-    <ul class="hosts" aria-label="Observed hosts">
-      {#each hosts as [address, connections], i (i)}
-        <li>
-          <span class="addr">{address}</span>
-          <span class="count">{connections}</span>
-        </li>
-      {/each}
-    </ul>
-    {#each hostNotes as note, i (i)}<p class="note">{note}</p>{/each}
-  {:else if part.facts.length}
-    <dl>
-      {#each part.facts as [k, v], i (i)}<div><dt>{k}</dt><dd>{v}</dd></div>{/each}
-    </dl>
+  {#if children}
+    <section class="block">
+      <button type="button" class="fold" aria-expanded={readingsOpen} aria-controls="part-readings-{part.id}" onclick={() => (readingsOpen = !readingsOpen)}>
+        <span class="chev" aria-hidden="true"><Icon name="chevron-down" size={14} /></span><span>Readings</span>
+      </button>
+      {#if readingsOpen}<div id="part-readings-{part.id}">{@render children()}</div>{/if}
+    </section>
+  {/if}
+  {#if factCount}
+    <section class="block">
+      <button type="button" class="fold" aria-expanded={factsOpen} aria-controls="part-facts-{part.id}" onclick={() => (factsOpen = !factsOpen)}>
+        <span class="chev" aria-hidden="true"><Icon name="chevron-down" size={14} /></span><span>{hosts.length ? "Hosts" : "Facts"}</span><span class="n">{factCount}</span>
+      </button>
+      {#if factsOpen}
+        <div id="part-facts-{part.id}">
+          {#if hosts.length}
+            <ul class="hosts" aria-label="Observed hosts">
+              {#each hosts as [address, connections], i (i)}
+                <li>
+                  <span class="addr">{address}</span>
+                  <span class="count">{connections}</span>
+                </li>
+              {/each}
+            </ul>
+            {#each hostNotes as note, i (i)}<p class="note">{note}</p>{/each}
+          {:else}
+            <dl>
+              {#each part.facts as [k, v], i (i)}<div><dt>{k}</dt><dd>{v}</dd></div>{/each}
+            </dl>
+          {/if}
+        </div>
+      {/if}
+    </section>
   {/if}
 </section>
 
@@ -93,7 +120,15 @@
   .chips { margin: 8px 0 0; }
   .warn { display: flex; gap: 6px; align-items: flex-start; margin: 6px 0; padding: 6px 8px; border-radius: var(--r-md); background: var(--warn-soft); color: var(--warn); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
   .warn :global(svg) { flex: none; margin-top: 2px; }
-  dl, .hosts { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--border); }
+  .block { margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
+  .fold { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 28px; padding: 2px 4px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-2); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); letter-spacing: var(--ls-label); text-transform: uppercase; cursor: pointer; text-align: left; }
+  .fold:hover { background: var(--row-hover); color: var(--text); }
+  .fold:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .chev { display: inline-flex; color: var(--muted); transition: transform 160ms ease; }
+  .fold[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+  @media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
+  .n { margin-left: auto; color: var(--muted); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; letter-spacing: normal; text-transform: none; }
+  dl, .hosts { margin: 4px 0 0; }
   dl { display: grid; gap: 4px; }
   dl div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; }
   dt { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }

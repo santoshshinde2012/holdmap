@@ -29,7 +29,7 @@ test("switching agents keeps the same details screen", async ({ app }) => {
   await expect(agentDetails(app).getByRole("button", { name: "Open in Security", exact: true })).toBeVisible();
   await agentHeading(app, "Claude Code").focus();
   await app.keyboard.press("ArrowDown");
-  await expect(agentDetails(app).getByRole("heading", { level: 3 })).not.toHaveText("Claude Code");
+  await expect(agentDetails(app).getByRole("heading", { name: "Claude Code", exact: true })).toHaveCount(0);
   await expect(agentDetails(app).getByRole("region", { name: "RAM" })).toBeVisible();
 });
 

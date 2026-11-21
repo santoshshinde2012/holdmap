@@ -976,6 +976,8 @@ published asset digests and IDs, then publishes the complete `latest.json` index
 - **Folding panels.** `ui/CollapsiblePanel` is a heading holding its disclosure button (the
   WAI-ARIA pattern), with an optional close button and a remembered state (`pref`). Home's side
   column, the summary, the 3D parts list and the 3D details column fold and come back, each remembered.
+  Inside Details, the readings and the facts fold on their own (`home.details.readings`, `home.details.facts`).
+  A Needs you row opens its explanation in place.
 - **Capture areas.** `lib/capture-region.ts` holds an area of the window in CSS pixels and maps it
   into each capture: snapshots crop the finished PNG (the rendered view and the macOS window
   capture cover exactly the viewport; a shared window's frame may carry a title bar above it);

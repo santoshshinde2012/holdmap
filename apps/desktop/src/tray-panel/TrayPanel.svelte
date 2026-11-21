@@ -71,6 +71,17 @@
       else go("hide-panel");
     }
   }
+  function scrollTo(section: string) {
+    void tick().then(() => {
+      if (!readings) return;
+      if (section === "top") { readings.scrollTop = 0; measure(); return; }
+      const target = Array.from(readings.querySelectorAll<HTMLElement>("[data-section]")).find((el) => el.dataset.section === section);
+      if (!target) return;
+      const offset = target.getBoundingClientRect().top - readings.getBoundingClientRect().top;
+      readings.scrollTop = Math.max(0, readings.scrollTop + offset - 8);
+      measure();
+    });
+  }
   function measure() {
     if (!readings) return;
     fadeTop = readings.scrollTop > 2;
@@ -102,6 +113,9 @@
   const status = $derived(needsStatus(data?.needs ?? null, offline));
   const tools = $derived(data?.tools ?? []);
   const count = (n: number | null | undefined) => (n === null || n === undefined ? "…" : String(n));
+  // The bar under an agent is its share of the RAM among the rows actually shown.
+  const memPeak = $derived(Math.max(1, ...(data?.topAgents ?? []).map((a) => a.memory), ...tools.map((t) => t.memory)));
+  const share = (memory: number) => (memory <= 0 ? 0 : Math.round((memory / memPeak) * 100));
 
   // The ring: listeners on this computer only, and those open to the network.
   const RING_R = 15;
@@ -121,14 +135,7 @@
     // scrollIntoView also scrolls the document (even with overflow:hidden), which moves the
     // entire popup upward in WKWebView. Only the readings viewport may move, and the section's
     // heading lands at the top with a little room above it.
-    void tick().then(() => {
-      const target = Array.from(readings.querySelectorAll<HTMLElement>("[data-section]"))
-        .find(el => el.dataset.section === section);
-      if (!target) return;
-      const offset = target.getBoundingClientRect().top - readings.getBoundingClientRect().top;
-      readings.scrollTop = section === "top" ? 0 : Math.max(0, readings.scrollTop + offset - 8);
-      measure();
-    });
+    scrollTo(section);
   });
   async function pin() {
     try { await run("pin-panel"); await refresh(true); }
@@ -176,6 +183,13 @@
       </div>
     </section>
 
+    <section class="figures" aria-label="All readings">
+      <button type="button" class="fig" onclick={() => scrollTo("ports")}><span>Ports</span><b>{data?.ready ? data.ports : "…"}</b></button>
+      <button type="button" class="fig" onclick={() => scrollTo("ports")}><span>Network</span><b>{data?.ready ? data.exposed : "…"}</b></button>
+      <button type="button" class="fig" onclick={() => scrollTo("needs")}><span>Needs</span><b>{data?.needs ? data.needs.length : "…"}</b></button>
+      <button type="button" class="fig" onclick={() => scrollTo("dev")}><span>Dev</span><b>{data?.ready ? data.dev.length : "…"}</b></button>
+    </section>
+
     <section class="sec" aria-labelledby="sec-needs" data-section="needs">
       <div class="sec-head">
         <h2 id="sec-needs">Needs you</h2>
@@ -190,7 +204,7 @@
           {#each data.needs as need (need.action)}
             <li>
               <button type="button" class="row" onclick={() => go(need.action)}>
-                <span class="text" title={need.title}>{need.title}</span>
+                <span class="text wrap">{need.title}</span>
                 <span class="pill {need.urgency}">{URGENCY_LABEL[need.urgency]}</span>
               </button>
             </li>
@@ -245,7 +259,10 @@
               {@const usage = agent.cpu === null ? "…" : cpuText(agent.cpu)}
               <li>
                 <button type="button" class="trow" title={agentSummary(agent)} onclick={() => go(agent.action)}>
-                  <span class="name"><b>{agent.name}</b>{#if agent.place}{" "}<span class="place">· {agent.place}</span>{/if}</span>
+                  <span class="name">
+                    <span class="who"><b>{agent.name}</b>{#if agent.place}{" "}<span class="place">· {agent.place}</span>{/if}</span>
+                    <span class="meter" aria-hidden="true"><i style="width: {share(agent.memory)}%"></i></span>
+                  </span>
                   <span class="c num"><span class="sr-only">CPU</span>{" "}{usage}</span>
                   <span class="c num strong"><span class="sr-only">RAM</span>{" "}{humanBytes(agent.memory)}</span>
                 </button>
@@ -262,7 +279,10 @@
                 {@const usage = tool.cpu === null ? "…" : cpuText(tool.cpu)}
                 <li>
                   <button type="button" class="trow tool" title={`${agentSummary(tool)} (developer tool)`} onclick={() => go(tool.action)}>
-                    <span class="name">{agentLabel(tool)}</span>
+                    <span class="name">
+                      <span class="who">{agentLabel(tool)}</span>
+                      <span class="meter" aria-hidden="true"><i style="width: {share(tool.memory)}%"></i></span>
+                    </span>
                     <span class="c num"><span class="sr-only">CPU</span>{" "}{usage}</span>
                     <span class="c num"><span class="sr-only">RAM</span>{" "}{humanBytes(tool.memory)}</span>
                   </button>
@@ -297,7 +317,7 @@
       </div>
 
       <h3 class="sub-head">Ports</h3>
-      <div class="ports">
+      <div class="ports" data-section="ports">
         <svg class="ring" viewBox="0 0 40 40" width="40" height="40" role="img" aria-label={data?.ready ? `${data.ports - data.exposed} on this computer only, ${data.exposed} open to the network` : "Ports not read yet"}>
           <circle cx="20" cy="20" r={RING_R} class="track" />
           {#if arcs}
@@ -411,6 +431,14 @@
   .body[hidden] { display: none; }
   .notice { margin: 0 0 8px; padding: 6px 10px; border-radius: var(--r-sm); background: var(--tone-amber-bg); color: var(--tone-amber); font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); }
 
+  /* The four counts jump to the reading they summarize. */
+  .figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+  .fig { display: grid; gap: 1px; min-width: 0; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .fig:hover { background: var(--row-hover); border-color: var(--border-strong); }
+  .fig:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .fig span { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
+  .fig b { font-size: var(--fs-heading); line-height: var(--lh-heading); font-weight: var(--fw-semibold); color: var(--text); }
+
   /* Summary tiles. */
   .hero { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .tile { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 10px 8px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); }
@@ -441,9 +469,11 @@
   /* Rows. */
   .rows { list-style: none; margin: 0; padding: 0; }
   .row, .trow { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 8px; margin: 0 -8px; width: calc(100% + 16px); border: 0; border-radius: var(--r-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .row:has(.wrap) { align-items: flex-start; }
   .row:hover, .trow:hover { background: var(--row-hover); }
   .row:focus-visible, .trow:focus-visible, .link:focus-visible, .btn:focus-visible, .icon-btn:focus-visible, .sec-action:focus-visible, .settings button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   .text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .text.wrap { white-space: normal; overflow: visible; text-overflow: unset; overflow-wrap: anywhere; }
   .port { flex: none; min-width: 44px; font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); color: var(--text-2); }
   .pill { flex: none; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); letter-spacing: var(--ls-caption); }
   .pill.ok { background: var(--tone-green-bg); color: var(--tone-green); }
@@ -461,10 +491,14 @@
   .c { text-align: right; white-space: nowrap; }
   .num { color: var(--text-2); }
   .num.strong { color: var(--text); font-weight: var(--fw-medium); }
-  .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .name b { font-weight: var(--fw-medium); }
   .place { color: var(--muted); }
-  .trow.tool .name { color: var(--text-2); }
+  .meter { display: block; height: 3px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+  .trow.tool .who { color: var(--text-2); }
+  .trow.tool .meter i { background: var(--muted); }
   .tools-label { margin: 10px 0 2px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--text-2); }
   .link { border: 0; background: none; padding: 2px 4px; color: var(--accent); font: inherit; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); cursor: pointer; border-radius: var(--r-xs); }
   .link.more { align-self: flex-start; margin-top: 4px; padding-left: 0; }

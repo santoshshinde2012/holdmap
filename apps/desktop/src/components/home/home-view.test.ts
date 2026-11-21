@@ -208,9 +208,14 @@ describe("HomeView map", () => {
     const view = render(HomeView, props({ onstopagent, onstopentry }));
     const title = view.getByRole("button", { name: "Docker Desktop is listening on all interfaces" });
     expect(view.queryByText(/can be reached from other machines/)).toBeNull();
+    expect(title.getAttribute("title")).toBeNull();
     await fireEvent.click(title);
     expect(title.getAttribute("aria-expanded")).toBe("true");
     expect(view.getByText(/can be reached from other machines/)).toBeTruthy();
+    await fireEvent.click(title);
+    expect(title.getAttribute("aria-expanded")).toBe("false");
+    expect(view.queryByText(/can be reached from other machines/)).toBeNull();
+    await fireEvent.click(title);
     const stops = view.getAllByRole("button", { name: /^Review stop plan:/ });
     for (const b of stops) await fireEvent.click(b);
     expect(onstopagent.mock.calls.length + onstopentry.mock.calls.length).toBe(stops.length);

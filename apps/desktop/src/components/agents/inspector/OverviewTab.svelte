@@ -5,7 +5,7 @@
   import AgentMemoryPanel from "../AgentMemoryPanel.svelte";
   import AgentConfigPanel from "../AgentConfigPanel.svelte";
   import AgentTools from "../AgentTools.svelte";
-  import { EvidenceChip } from "../../ui";
+  import { EvidenceChip, FoldSection } from "../../ui";
   import { evidenceChip } from "../../../lib/evidence";
   import { factRows } from "../../../lib/agent-details";
   import { configSummary } from "../../../lib/agent-config";
@@ -42,6 +42,7 @@
   ] as const);
   const facts = $derived(factRows(agent));
   const cfg = $derived(configSummary(agent));
+  let factOpen = $state<Record<string, boolean>>({});
 </script>
 
 
@@ -54,21 +55,29 @@
 
 <AgentMemoryPanel {agent} {report} />
 
-<section class="sec-box" id="section-access-{base}" aria-labelledby="access-head-{base}">
-  <h4 id="access-head-{base}"><Icon name="lock" size={13} />Access</h4>
-  <dl class="facts">
-    {#each facts as f (f.topic)}
-      <div class="fact lv-{f.level}" title={f.full}>
-        <dt>{f.label}</dt>
-        <dd><span class="lv">{f.levelText}</span><span class="sum">{f.text}</span>{#if f.inferred && f.level !== "unknown"}<EvidenceChip {...evidenceChip("inferred")} />{/if}</dd>
-      </div>
-    {/each}
-  </dl>
+<section class="sec-box" id="section-access-{base}">
+  <FoldSection id="access-{base}" title="Access" count={facts.length}>
+    <dl class="facts">
+      {#each facts as f (f.topic)}
+        {@const more = f.full !== f.text}
+        {@const expanded = !!factOpen[f.topic]}
+        <div class="fact lv-{f.level}">
+          <dt>{f.label}</dt>
+          <dd>
+            <span class="lv">{f.levelText}</span>
+            <span class="sum">{expanded ? f.full : f.text}</span>
+            {#if f.inferred && f.level !== "unknown"}<EvidenceChip {...evidenceChip("inferred")} />{/if}
+            {#if more}<button type="button" class="more" aria-expanded={expanded} onclick={() => (factOpen = { ...factOpen, [f.topic]: !expanded })}>{expanded ? "Show less" : "Show the rest"}</button>{/if}
+          </dd>
+        </div>
+      {/each}
+    </dl>
+  </FoldSection>
 </section>
 
 {#if agent.folders.length || agent.more_folders}
-  <section class="sec-box" id="section-folders-{base}" aria-labelledby="folders-head-{base}">
-    <h4 id="folders-head-{base}"><Icon name="folder" size={13} />Folders <span class="sec-n">{agent.folders.length}</span></h4>
+  <section class="sec-box" id="section-folders-{base}">
+    <FoldSection id="folders-{base}" title="Folders" count={agent.folders.length}>
     <ul class="rows">
       {#each agent.folders as f (f.path)}
         <li class="folder">
@@ -87,16 +96,17 @@
           </div>
         </li>
       {/each}
-      {#if agent.more_folders}<li class="more">+{agent.more_folders} folders not listed</li>{/if}
+      {#if agent.more_folders}<li class="more-folders">+{agent.more_folders} folders not listed</li>{/if}
     </ul>
     {#if folderError}<p class="folder-error" role="alert">{folderError}</p>{/if}
+    </FoldSection>
   </section>
 {/if}
 
 <div class="sec-box" id="section-config-{base}">
   {#if cfg}
     <details class="cfg">
-      <summary><span class="cfg-sum"><Icon name="sliders" size={13} />Configuration</span> <span>{cfg.running}/{cfg.mcp} MCP running · {cfg.skills + cfg.instructions} skills · {cfg.rules} rules</span></summary>
+      <summary><span class="chev" aria-hidden="true"><Icon name="chevron-down" size={14} /></span><span class="cfg-sum"><Icon name="sliders" size={13} />Configuration</span> <span>{cfg.running}/{cfg.mcp} MCP running · {cfg.skills + cfg.instructions} skills · {cfg.rules} rules</span></summary>
       <AgentConfigPanel {agent} />
     </details>
   {:else}
@@ -113,12 +123,14 @@
   .jump-nav button:hover { background: var(--surface); color: var(--text); }
   .jump-nav button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   .sec-box { display: grid; gap: 8px; padding: 11px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; scroll-margin-top: 10px; }
-  h4 { margin: 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--text-2); }
-  .sec-n { margin-left: auto; padding: 0 7px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
   .cfg { display: grid; gap: 8px; }
-  .cfg summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--text-2); }
+  .cfg summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--text-2); list-style: none; }
+  .cfg summary::-webkit-details-marker { display: none; }
+  .cfg .chev { display: inline-flex; color: var(--muted); transition: transform 160ms ease; }
+  .cfg:not([open]) .chev { transform: rotate(-90deg); }
+  @media (prefers-reduced-motion: reduce) { .cfg .chev { transition: none; } }
   .cfg-sum { display: inline-flex; align-items: center; gap: 6px; }
-  .cfg summary > span:last-child { font-weight: var(--fw-regular); color: var(--muted); }
+  .cfg summary > span:last-child { margin-left: auto; font-weight: var(--fw-regular); color: var(--muted); }
   .cfg summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
   .facts { margin: 0; display: grid; }
   .fact { display: grid; grid-template-columns: 80px 1fr; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--border); }
@@ -130,6 +142,9 @@
   .fact.lv-restricted .lv { color: var(--ok); }
   .fact.lv-unknown .lv { color: var(--muted); }
   .sum { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-2); }
+  .more { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); cursor: pointer; }
+  .more:hover { text-decoration: underline; }
+  .more:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
   .folder { display: grid; gap: 2px; }
   .row-btn { width: 100%; display: flex; gap: 8px; align-items: flex-start; padding: 4px 6px; margin: 0 -6px; border: 0; border-radius: 8px; background: transparent; text-align: left; color: var(--text); font: inherit; }
@@ -153,6 +168,6 @@
   .tag.mono { font-family: var(--mono); font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); }
   .tag.branch { color: var(--tone-violet); background: var(--tone-violet-bg); border-color: transparent; }
   .tag.privacy { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
-  .more { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
+  .more-folders { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--muted); }
   .act:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 </style>

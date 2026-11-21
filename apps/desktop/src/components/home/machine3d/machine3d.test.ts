@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, within } from "@testing-library/svelte";
+import { createRawSnippet } from "svelte";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import HomeView from "../HomeView.svelte";
 import PartsRail from "./PartsRail.svelte";
@@ -18,7 +19,7 @@ beforeAll(() => {
   window.matchMedia ??= ((media: string) => ({ matches: false, media, addEventListener() {}, removeEventListener() {} })) as unknown as typeof matchMedia;
   Element.prototype.scrollIntoView ??= vi.fn();
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.clear(); });
 
 const report = mockAgents(undefined, true);
 /** What Home passes in: agents that need you themselves, and every "Needs you" title by agent. */
@@ -122,6 +123,27 @@ describe("3D part inspector", () => {
     expect(row.querySelector(".count")?.textContent).toBe("2 connections");
     expect(view.getByText("Shown by address; holdmap doesn't look names up")).toBeTruthy();
     expect(view.container.querySelector("dl")).toBeNull();
+  });
+
+  it("folds the readings and the host list, and brings each back", async () => {
+    const remote = part((p) => p.kind === "remote" && p.owner === cursor.id);
+    const view = render(PartInspector, {
+      part: remote, onclose: vi.fn(), onopenagent: vi.fn(), onport: vi.fn(),
+      children: createRawSnippet(() => ({ render: () => "<p>CPU 4</p>" })),
+    });
+    const readings = view.getByRole("button", { name: "Readings" });
+    const hosts = view.getByRole("button", { name: /^Hosts/ });
+    expect(readings.getAttribute("aria-expanded")).toBe("true");
+    expect(view.getByText("CPU 4")).toBeTruthy();
+    await fireEvent.click(readings);
+    expect(readings.getAttribute("aria-expanded")).toBe("false");
+    expect(view.queryByText("CPU 4")).toBeNull();
+    await fireEvent.click(readings);
+    expect(view.getByText("CPU 4")).toBeTruthy();
+    await fireEvent.click(hosts);
+    expect(view.queryByRole("list", { name: "Observed hosts" })).toBeNull();
+    await fireEvent.click(hosts);
+    expect(view.getByRole("list", { name: "Observed hosts" })).toBeTruthy();
   });
 });
 

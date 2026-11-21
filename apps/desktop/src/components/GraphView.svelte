@@ -9,7 +9,7 @@
   import GraphViewport from "./graph/GraphViewport.svelte";
   import AutoMiniMap from "./graph/AutoMiniMap.svelte";
   import Icon from "./Icon.svelte";
-  import { ActionDock, ActionPill, IconButton } from "./ui";
+  import { ActionDock, ActionPill, FoldSection, IconButton } from "./ui";
   import type { Agent, Graph, GraphNode } from "../lib/types";
   import { agentForPids } from "../lib/agent-scope";
   import { FORCE_NODE_LIMIT, directionForWidth, graphForQuery, graphNodeMatches, layout, layoutModeFor, toFlow, type FlowEdge, type FlowNode, type LayoutMode, type Point, type Positions } from "../lib/graph";
@@ -299,8 +299,8 @@
       {#if peerAgent && onopenagent}
         <button type="button" class="peer-agent" onclick={() => onopenagent?.(peerAgent.id)}><Icon name="bot" size={13} /><span>Part of <b>{peerAgent.name}</b></span><span class="go">Open in Agents</span></button>
       {/if}
-      <section class="peer-sec" aria-labelledby="peer-proc-head">
-        <h4 id="peer-proc-head">Process</h4>
+      <div class="peer-sec">
+        <FoldSection id="peer-process" title="Process">
         {#if peer.pids.length}
           <p class="mono">PID {peer.pids.join(", ")}</p>
           <p>{peer.cpu_percent.toFixed(1)}% CPU · {humanBytes(peer.memory_bytes)} memory</p>
@@ -308,10 +308,11 @@
           <p class="muted">No local process — observed as a connection endpoint.</p>
         {/if}
         <p>{peerLinks.length} observed {peerLinks.length === 1 ? "link" : "links"} · No listening ports reported</p>
-      </section>
+        </FoldSection>
+      </div>
       {#if peerNeighbors.length}
-        <section class="peer-sec" aria-labelledby="peer-neighbors-head">
-          <h4 id="peer-neighbors-head">Connected services <span class="n">{peerNeighbors.length}</span></h4>
+        <div class="peer-sec">
+          <FoldSection id="peer-neighbors" title="Connected services" count={peerNeighbors.length}>
           <ul class="neighbors">
             {#each peerNeighbors as { node, direction } (node.id)}
               <li><button type="button" class="neighbor" onclick={() => selectNeighbor(node)} title="Select {node.label} on the graph">
@@ -320,13 +321,15 @@
               </button></li>
             {/each}
           </ul>
-        </section>
+          </FoldSection>
+        </div>
       {/if}
       {#if peerRemotes.length}
-        <section class="peer-sec" aria-labelledby="peer-remote-head">
-          <h4 id="peer-remote-head">Remote endpoints <span class="n">{peerRemotes.length}</span></h4>
+        <div class="peer-sec">
+          <FoldSection id="peer-remote" title="Remote endpoints" count={peerRemotes.length}>
           <ul class="remotes">{#each peerRemotes as remote}<li class="mono remote">{remote}</li>{/each}</ul>
-        </section>
+          </FoldSection>
+        </div>
       {/if}
       <small>Connections show observed sockets, not messages or tool calls.</small>
     </aside>
@@ -339,7 +342,7 @@
   .graph.has-peer.wide { grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); }
   .graph.has-peer:not(.wide) .peer-inspector { position: absolute; top: 8px; right: 8px; bottom: 8px; width: min(340px, calc(100% - 16px)); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-md); }
   .graph:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
-  h3, h4, p { margin: 0; }
+  h3, p { margin: 0; }
   .graph-body { position: relative; min-height: 0; min-width: 0; }
   .graph :global(.svelte-flow) { --xy-background-color: var(--bg); --xy-node-border-radius: 14px; --xy-controls-button-background-color: var(--surface); --xy-controls-button-color: var(--text-2); --xy-controls-button-border-color: var(--border); --xy-minimap-background-color: var(--surface); }
   .graph :global(.svelte-flow__node-service), .graph :global(.svelte-flow__node-cluster) { padding: 0; border: 0; background: transparent; box-shadow: none; width: auto; }
@@ -396,8 +399,6 @@
   .peer-agent .go { margin-left: auto; color: var(--accent); font-weight: var(--fw-semibold); white-space: nowrap; }
   .peer-agent:hover { background: var(--accent-soft); }
   .peer-sec { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
-  .peer-sec h4 { display: flex; align-items: center; gap: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--text-2); }
-  .peer-sec .n { margin-left: auto; padding: 0 7px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
   .muted { color: var(--muted); }
   .neighbors, .remotes { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
   .neighbor { display: flex; align-items: center; gap: 8px; padding: 5px 8px; margin: 0 -8px; width: calc(100% + 16px); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); font: inherit; text-align: left; cursor: pointer; }

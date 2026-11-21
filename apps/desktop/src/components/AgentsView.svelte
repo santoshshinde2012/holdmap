@@ -493,7 +493,7 @@
       <aside class="details" id="agent-details" aria-label="Agent details" onkeydown={detailsKey}>
         {#key a.id}
           <AgentDetails bind:this={detailsView} agent={a} {report} {entries} color={colorOf(a.id)} onclose={closeDetails}
-            onflow={() => { section = "flow"; }}
+            onflow={() => { flowSource = "connections"; section = "flow"; }}
             {onentry} onreveal={(path) => onreveal(a.id, path)} oneditor={(path) => oneditor(a.id, path)}
             onfolder={(path) => { projectPath = path; openFolder(path, a.id); }}
             oncapabilities={() => { section = "capabilities"; }} oninsights={() => { section = "insights"; }} {oninventory}

@@ -240,7 +240,7 @@
     <!-- The side column: in 3D the machine's readings and selected part, then Needs you. Each panel folds away. -->
     <aside class="side" aria-label="Side panels">
       {#if layout === "3d" && details3d && !idle}
-        <CollapsiblePanel id="home-details" title="Details" pref="home.details.open" bind:open={detailsOpen}>{@render details3d()}</CollapsiblePanel>
+        <CollapsiblePanel id="home-details" title="Details" bind:open={detailsOpen} onremember={(open) => prefSet("home.details.open", open ? "1" : "0")}>{@render details3d()}</CollapsiblePanel>
       {/if}
       <CollapsiblePanel id="home-needs" title="Needs you" count={needs.length} pref="home.needs.open" fill>
         {#if trustAlerts.length && onsecurity}

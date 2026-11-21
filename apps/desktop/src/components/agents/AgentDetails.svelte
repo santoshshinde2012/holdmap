@@ -5,6 +5,7 @@
   import StatStrip from "../ui/StatStrip.svelte";
   import OpenFull from "./inspector/OpenFull.svelte";
   import OverviewTab from "./inspector/OverviewTab.svelte";
+  import { FoldSection } from "../ui";
   import { agentDomId, detailStats } from "../../lib/agent-details";
   import { accessHeadline, agentMeta, monogram, stoppableEntries } from "../../lib/agents";
   import type { Agent, AgentsReport, PortEntry } from "../../lib/types";
@@ -88,8 +89,8 @@
   <OverviewTab {agent} {report} {base} {onreveal} {oneditor} {onfolder} oninspect={inspect} />
 
   {#if agent.ports.length}
-    <section class="sec-box" aria-labelledby="ports-head-{base}">
-      <h4 id="ports-head-{base}"><Icon name="server" size={13} />Ports it serves <span class="sec-n">{agent.ports.length}</span></h4>
+    <section class="sec-box" id="ports-{base}">
+      <FoldSection id="ports-head-{base}" title="Ports it serves" count={agent.ports.length}>
       <ul class="rows">
         {#each agent.ports as p (`${p.port}/${p.protocol}`)}
           {@const e = entryFor(p.entry_id)}
@@ -106,6 +107,7 @@
           </li>
         {/each}
       </ul>
+      </FoldSection>
     </section>
   {/if}
 </div>
@@ -129,8 +131,6 @@
   .actions { display: flex; flex-wrap: wrap; gap: 6px; }
   .go { display: grid; gap: 6px; }
   .sec-box { display: grid; gap: 8px; padding: 11px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; }
-  h4 { margin: 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--text-2); }
-  .sec-n { margin-left: auto; padding: 0 7px; border-radius: var(--r-full); background: var(--surface-2); color: var(--muted); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
   .port-row { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 4px; }
   .row-btn { width: 100%; display: flex; gap: 8px; align-items: flex-start; padding: 4px 6px; margin: 0 -6px; border: 0; border-radius: 8px; background: transparent; text-align: left; color: var(--text); font: inherit; }

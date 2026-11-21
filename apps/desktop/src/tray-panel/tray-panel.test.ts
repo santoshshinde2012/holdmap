@@ -19,6 +19,10 @@ describe("Tray panel", () => {
     expect(tile("Agents").querySelector(".sub")?.textContent).toBe("+1 dev tool");
     expect(tile("RAM").querySelector(".value")?.textContent).toBe("1.6GB");
     expect(tile("CPU").querySelector(".value")?.textContent).toBe("7.4%");
+    const readings = view.getByRole("region", { name: "All readings" });
+    expect(readings.textContent).toContain("37");
+    expect(readings.textContent).toContain("4");
+    expect(view.getByRole("button", { name: /^Ports/ })).toBeTruthy();
     expect(view.container.querySelector(".head .status")?.textContent).toBe("2 need you");
     expect(view.getByRole("img", { name: /Agent CPU over the last 48 scans/ })).toBeTruthy();
     expect(view.getByRole("img", { name: /Something needed you in \d+ of the last 48 scans/ })).toBeTruthy();
@@ -28,7 +32,7 @@ describe("Tray panel", () => {
     expect(view.getByRole("button", { name: "Claude Code · storefront CPU 4.2% RAM 288 MB" })).toBeTruthy();
     // Most RAM first; a long folder name truncates and the full row is in the tooltip.
     const rows = view.getAllByRole("button").filter((b) => b.classList.contains("trow"));
-    expect(rows.map((r) => r.querySelector("b")?.textContent ?? r.querySelector(".name")?.textContent)).toEqual(["Cursor", "Claude Code", "Codex CLI", "Gemini CLI", "Docker Desktop"]);
+    expect(rows.map((r) => (r.querySelector("b")?.textContent ?? r.querySelector(".who")?.textContent)?.trim())).toEqual(["Cursor", "Claude Code", "Codex CLI", "Gemini CLI", "Docker Desktop"]);
     expect(rows[0].getAttribute("title")).toBe("Cursor · storefront-monorepo-with-a-long-name: 1.1 GB RAM, CPU 2.1%");
     // Docker Desktop is a developer tool, listed apart and said so.
     expect(view.getByText("Developer tools")).toBeTruthy();
@@ -170,5 +174,29 @@ describe("Tray panel edge cases", () => {
     expect(rows[0].getAttribute("title")).toBe("Agent 0 with a very long product name indeed · a-very-long-folder-name-number-0: 5.0 MB RAM, CPU 0.0%");
     await fireEvent.click(view.getByRole("button", { name: "+20 more in holdmap" }));
     expect(run).toHaveBeenCalledWith("show");
+    expect(view.getByRole("button", { name: "+20 more in holdmap" })).toBeTruthy();
+    const fullest = view.getAllByRole("button").filter((b) => b.classList.contains("trow")).map((b) => b.querySelector(".meter i")?.getAttribute("style") ?? "");
+    expect(fullest.some((style) => style.includes("100%"))).toBe(true);
+  });
+
+  it("jumps from a count to that reading, and sizes each RAM bar by the rows on screen", async () => {
+    const scrolled: string[] = [];
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const section = this.getAttribute("data-section");
+      if (section) scrolled.push(section);
+      return { top: 0 } as DOMRect;
+    });
+    const { view, run } = mount();
+    await waitFor(() => expect(view.getByText("Claude Code listens on all interfaces")).toBeTruthy());
+    await fireEvent.click(view.getByRole("button", { name: /^Needs/ }));
+    await fireEvent.click(view.getByRole("button", { name: /^Dev/ }));
+    await fireEvent.click(view.getByRole("button", { name: /^Ports/ }));
+    expect(scrolled).toEqual(["needs", "dev", "ports"]);
+    const cursor = view.getByRole("button", { name: /^Cursor/ });
+    expect(cursor.querySelector(".meter i")?.getAttribute("style")).toContain("100%");
+    expect(cursor.textContent).toContain("1.1 GB");
+    await fireEvent.click(cursor);
+    expect(run).toHaveBeenCalledWith("agent:agent:811");
+    expect(view.queryByRole("radio", { name: "3D" })).toBeNull();
   });
 });

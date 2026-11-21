@@ -7,7 +7,7 @@
   import Icon from "../Icon.svelte";
   import { prefGetBoolean, prefSet } from "../../lib/prefs";
 
-  let { id, title, count = null, tone = "warn", pref, open = $bindable(true), fill = false, onclose, actions, children }: {
+  let { id, title, count = null, tone = "warn", pref, onremember, open = $bindable(true), fill = false, onclose, actions, children }: {
     /** Prefix for the heading and body ids. */
     id: string;
     title: string;
@@ -16,6 +16,8 @@
     tone?: "warn" | "ok" | "neutral";
     /** Remembers the open state under this preference. */
     pref?: string;
+    /** Called only when the viewer toggles the heading, not when the owner opens the panel. */
+    onremember?: (open: boolean) => void;
     open?: boolean;
     /** Open, the body takes the panel's spare height (a list that scrolls inside it). */
     fill?: boolean;
@@ -34,7 +36,7 @@
 <section class="cpanel" class:closed={!open} class:fill aria-labelledby="{id}-h" data-capture-area>
   <header>
     <h2 id="{id}-h">
-      <button type="button" class="toggle" aria-expanded={open} aria-controls="{id}-b" title="{open ? 'Collapse' : 'Expand'} {title}" onclick={() => (open = !open)}>
+      <button type="button" class="toggle" aria-expanded={open} aria-controls="{id}-b" title="{open ? 'Collapse' : 'Expand'} {title}" onclick={() => { open = !open; onremember?.(open); }}>
         <span class="chev" aria-hidden="true"><Icon name="chevron-down" size={14} /></span>
         <span class="t">{title}</span>{#if count}{" "}<span class="count {tone}">{count}</span>{/if}
       </button>
